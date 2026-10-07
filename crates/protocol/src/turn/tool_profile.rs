@@ -14,5 +14,8 @@ pub struct ToolProfileSnapshot {
     pub revision: String,
     pub definition_digest: String,
     pub tool_names: Vec<ToolName>,
+    /// User exclusions also apply to deferred discovery, nested calls and delegation.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub disabled_tools: Vec<ToolName>,
     pub parallel_tool_calls: bool,
 }

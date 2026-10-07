@@ -259,6 +259,9 @@ fn turn_input_items_preserve_ordered_text_context_image_and_skill_shapes() {
             name: "Git commit abc1234".into(),
             content: "diff --git a/file b/file".into(),
         },
+        InputItem::ToolSelection {
+            disabled: vec![ash_protocol::ToolName::new("shell-command").unwrap()],
+        },
         InputItem::Image {
             url: "https://example.test/image.png".into(),
         },
@@ -286,6 +289,7 @@ fn turn_input_items_preserve_ordered_text_context_image_and_skill_shapes() {
                 "name": "Git commit abc1234",
                 "content": "diff --git a/file b/file"
             },
+            {"type":"toolSelection", "disabled":["shell-command"]},
             {"type": "image", "url": "https://example.test/image.png"},
             {"type":"instruction", "path":"/workspace/.ash/instructions/review.md"},
             {
@@ -545,7 +549,7 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(!typescript.contains(r#""turn/start": { method: "turn/start" }"#));
     assert!(!typescript.contains(r#""turn/shell/start": { method: "turn/shell/start" }"#));
     assert!(typescript.contains(
-        r#"export type InputItem = { "type": "issue", number: number, } | { "type": "text", text: string, } | { "type": "context", name: string, content: string, } | { "type": "audioAttachment", attachment: AudioAttachmentRef, } | { "type": "audio", url: string, } | { "type": "imageAttachment", attachment: ImageAttachmentRef, } | { "type": "image", url: string, } | { "type": "instruction", path: string, } | { "type": "skill", skill: SkillRef, };"#
+        r#"export type InputItem = { "type": "issue", number: number, } | { "type": "text", text: string, } | { "type": "context", name: string, content: string, } | { "type": "toolSelection", disabled: Array<ToolName>, } | { "type": "audioAttachment", attachment: AudioAttachmentRef, } | { "type": "audio", url: string, } | { "type": "imageAttachment", attachment: ImageAttachmentRef, } | { "type": "image", url: string, } | { "type": "instruction", path: string, } | { "type": "skill", skill: SkillRef, };"#
     ));
     assert!(!typescript.contains("InputItemKind"));
     assert!(typescript.contains(r#"{ "type": "userImage""#));

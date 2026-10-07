@@ -33,7 +33,11 @@ impl ToolSearchEmbeddingRuntime {
         }
     }
 
-    pub(super) fn search(&self, query: &ToolSearchQuery) -> Result<ToolSearchResult, String> {
+    pub(super) fn search(
+        &self,
+        query: &ToolSearchQuery,
+        excluded: &[ToolName],
+    ) -> Result<ToolSearchResult, String> {
         let query_request = EmbeddingRequest::new(vec![query.text().to_owned()])
             .map_err(|error| error.to_string())?;
         let query_response = self
@@ -66,7 +70,9 @@ impl ToolSearchEmbeddingRuntime {
                 .then_with(|| left_name.cmp(right_name))
         });
         let semantic_ranking = ranked.into_iter().map(|(name, _)| name).collect::<Vec<_>>();
-        Ok(self.registry.search_hybrid(query, &semantic_ranking))
+        Ok(self
+            .registry
+            .search_hybrid_excluding(query, &semantic_ranking, excluded))
     }
 
     fn embed_documents(&self) -> Result<Vec<EmbeddedTool>, String> {

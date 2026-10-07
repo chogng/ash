@@ -1518,3 +1518,47 @@ fn code_mode_only_keeps_model_tools_stable_across_third_party_catalog_changes() 
         assert_eq!(serde_json::to_value(&request.tools).unwrap(), initial_tools);
     }
 }
+
+#[test]
+fn large_mcp_catalog_preserves_selectable_members_and_rejects_ambiguous_names() {
+    let mcp = || {
+        ToolPort::mcp(
+            Arc::new(FakeTools::catalog(
+                "external",
+                16,
+                ActionSource::McpServer,
+                "server",
+            )),
+            Arc::new(AskPolicy),
+        )
+    };
+    let combined = combine_tool_ports(vec![mcp()]).unwrap().unwrap();
+    assert_eq!(combined.catalog.len(), 18);
+    for index in 0..16 {
+        let name = format!("external_{index}");
+        let entry = combined
+            .catalog
+            .iter()
+            .find(|tool| tool.name == name)
+            .unwrap();
+        assert_eq!(entry.source, ToolSourceDto::Mcp);
+        assert_eq!(
+            entry.exposure,
+            ash_app_server_protocol::protocol::agent::ToolExposureDto::Deferred
+        );
+    }
+    assert!(
+        combine_tool_ports(vec![
+            mcp(),
+            ToolPort::local(
+                Arc::new(FakeTools::new(
+                    "external_7",
+                    ActionSource::BuiltInTool,
+                    "local"
+                )),
+                Arc::new(AskPolicy)
+            )
+        ])
+        .is_err()
+    );
+}

@@ -2772,6 +2772,7 @@ fn agent_capabilities_read_reports_unconfigured_local_execution() {
         serde_json::json!({"jsonrpc":"2.0","id":2,"method":"agent/capabilities/read","params":{}}),
     );
     assert_eq!(response["result"]["tools"], serde_json::json!([]));
+    assert_eq!(response["result"]["toolSets"], serde_json::json!([]));
     assert_eq!(response["result"]["localProcessSandboxConfigured"], false);
     assert_eq!(response["result"]["sandboxBackends"], serde_json::json!([]));
     assert_eq!(
@@ -8348,4 +8349,76 @@ fn start_plan_rate_limits_report_the_current_plan_and_token_bucket_for_both_regi
         );
         assert_eq!(changed["error"]["message"], "AccountChanged");
     }
+}
+
+#[test]
+fn typed_tool_selection_freezes_the_model_surface_and_replays_through_rpc() {
+    let model = Arc::new(RecordingModel::default());
+    let server = server_with_model(model.clone())
+        .with_tool_service(Arc::new(ShellTestTool), Arc::new(ShellTestPolicy));
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let session = create_session(&server, &mut connection, 2, "tools-session");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let root = create_thread(&server, &mut connection, 3, "tools-root", session_id, 1);
+    let thread_id = root["result"]["value"]["threadId"].as_str().unwrap();
+    let mut request = serde_json::json!({
+        "jsonrpc":"2.0", "id":4, "method":"session/request",
+        "params":{"commandId":"tools-turn", "sessionId":session_id,
+          "request":{"type":"startTurn", "expectedSequence":1, "threadId":thread_id, "toolMode":"direct",
+            "input":[{"type":"text", "text":"hello"},{"type":"toolSelection", "disabled":["shell-command"]}]}}
+    });
+    let started = call(&server, &mut connection, request.clone());
+    assert!(started.get("error").is_none(), "{started}");
+    wait_for_latest_turn(&server, thread_id, TurnStatus::Completed);
+    assert!(model.requests()[0].tools.is_empty());
+    assert!(!model_request_contains_text(
+        &model.requests()[0],
+        "shell-command"
+    ));
+    let snapshot = server
+        .threads()
+        .read_thread(&ash_protocol::ThreadId::new(thread_id).unwrap())
+        .unwrap();
+    assert_eq!(
+        snapshot.turns[0]
+            .tool_profile
+            .as_ref()
+            .unwrap()
+            .disabled_tools,
+        [ash_protocol::ToolName::new("shell-command").unwrap()]
+    );
+    request["id"] = serde_json::json!(5);
+    let replayed = call(&server, &mut connection, request.clone());
+    assert!(replayed.get("error").is_none(), "{replayed}");
+    assert_eq!(model.requests().len(), 1);
+    for (id, input) in [
+        (
+            6,
+            serde_json::json!([{"type":"text", "text":"hello"}, {"type":"toolSelection", "disabled":["shell-command", "shell-command"]}]),
+        ),
+        (
+            7,
+            serde_json::json!([{"type":"toolSelection", "disabled":[]}]),
+        ),
+    ] {
+        request["id"] = serde_json::json!(id);
+        request["params"]["commandId"] = serde_json::json!(format!("invalid-tools-{id}"));
+        request["params"]["request"]["expectedSequence"] = serde_json::json!(snapshot.sequence);
+        request["params"]["request"]["input"] = input;
+        assert!(
+            call(&server, &mut connection, request.clone())
+                .get("error")
+                .is_some()
+        );
+    }
+    assert_eq!(model.requests().len(), 1);
+    assert_eq!(
+        server
+            .threads()
+            .read_thread(&ash_protocol::ThreadId::new(thread_id).unwrap())
+            .unwrap()
+            .sequence,
+        snapshot.sequence
+    );
 }

@@ -26,6 +26,7 @@ interface AttachContextHost {
 	readonly container: HTMLElement;
 	readonly focusInput: () => void;
 	readonly supportsImages: () => boolean;
+	readonly getDisabledTools?: () => Promise<readonly string[]>;
 }
 
 type ContextSourceItem = IQuickPickItem & (
@@ -66,7 +67,7 @@ export class AttachContextAction extends Disposable {
 				this.instantiation.createInstance(GitHubContextValuePick, 'issue'),
 				this.instantiation.createInstance(GitHubContextValuePick, 'pullRequest'),
 				this.instantiation.createInstance(TerminalContext),
-				this.instantiation.createInstance(ToolsContextPickerPick),
+				this.instantiation.createInstance(ToolsContextPickerPick, await this.host.getDisabledTools?.() ?? []),
 				this.instantiation.createInstance(SymbolsContextPickerPick),
 				this.instantiation.createInstance(SearchViewResultChatContextPick),
 				this.instantiation.createInstance(ChatInstructionsPickerPick, this.navigation.getActiveConversation()?.sessionId),

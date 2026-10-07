@@ -55,6 +55,8 @@ use crate::protocol::agent::AgentThread;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::agent::AgentToolCapabilityDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::agent::AgentToolSetCapabilityDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::agent::SandboxDiagnosticDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::agent::SandboxNetworkModeDto;
@@ -5501,6 +5503,7 @@ typescript_bindings! {
     SandboxNetworkModeDto,
     SandboxReadinessDto,
     AgentToolCapabilityDto,
+    AgentToolSetCapabilityDto,
     ToolAuthorityDto,
     ToolExposureDto,
     ToolSourceDto,

@@ -1392,3 +1392,24 @@ fn retirement_requires_confirmed_calendar_dates_but_allows_an_undated_announceme
         assert!(info.validate().is_err(), "accepted {date}");
     }
 }
+
+#[test]
+fn tool_selection_round_trips_and_legacy_profiles_default_to_all_enabled() {
+    let selection = json!({"type":"toolSelection", "disabled":["weather", "server__lookup"]});
+    let input: UserInput = serde_json::from_value(selection.clone()).unwrap();
+    assert_eq!(serde_json::to_value(input).unwrap(), selection);
+    assert!(
+        serde_json::from_value::<UserInput>(json!({"type":"toolSelection", "disabled":[""]}))
+            .is_err()
+    );
+    let legacy = json!({"id":"coding", "revision":"coding-v1", "definitionDigest":format!("sha256:{}", "a".repeat(64)), "toolNames":["weather"], "parallelToolCalls":true});
+    let mut profile: ToolProfileSnapshot = serde_json::from_value(legacy.clone()).unwrap();
+    assert!(profile.disabled_tools.is_empty());
+    assert_eq!(serde_json::to_value(&profile).unwrap(), legacy);
+    profile.disabled_tools = vec![ToolName::new("weather").unwrap()];
+    assert_eq!(
+        serde_json::from_value::<ToolProfileSnapshot>(serde_json::to_value(&profile).unwrap())
+            .unwrap(),
+        profile
+    );
+}

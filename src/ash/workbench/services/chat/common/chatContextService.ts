@@ -6,8 +6,8 @@ import type { IQuickInputService } from '../../../../platform/quickinput/common/
 export interface ResolvedChatContext {
 	readonly name: string;
 	readonly content: string;
-	/** Images hold a URL; instructions hold an authorized backend catalog path. */
-	readonly kind?: 'image' | 'instruction';
+	/** Images hold a URL; instructions hold an authorized backend path; tool selections hold a JSON array of disabled names. */
+	readonly kind?: 'image' | 'instruction' | 'toolSelection';
 }
 
 export interface ChatContextAttachment {

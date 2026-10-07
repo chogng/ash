@@ -30,6 +30,10 @@ pub enum UserInput {
         name: String,
         content: String,
     },
+    /// Narrows this Turn's tool surface without granting execution authority.
+    ToolSelection {
+        disabled: Vec<crate::ToolName>,
+    },
     ImageAttachment {
         attachment: ImageAttachmentRef,
     },

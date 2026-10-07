@@ -371,3 +371,41 @@ instructionTest('Sessions instruction context is available before its first turn
 	await expect(chat.getByRole('list', { name: 'Attached context' })).toContainText('review');
 	await expect(chat.locator('.stanza-editor-input')).toBeFocused();
 });
+
+for (const surface of ['Workbench', 'Sessions']) {
+	test(`${surface} tool selection controls the backend catalog and removal restores tools`, async ({ target, workbench }) => {
+		test.skip(target.appServerMode !== 'required', 'Requires the backend tool catalog.');
+		const page = surface === 'Sessions' ? await workbench.openAgentsWindow(target.kind) : workbench.page;
+		if (surface === 'Workbench' && !await page.locator('.ash-chat-view-pane').isVisible()) {
+			await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		}
+		const chat = page.locator(surface === 'Sessions' ? '.ash-sessions-chat-slot.active:visible' : '.ash-chat-view-pane .ash-chat:visible');
+		const picker = page.getByRole('dialog');
+		const openTools = async (): Promise<void> => {
+			await chat.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+			await picker.getByRole('option', { name: 'Tools…', exact: true }).click();
+		};
+		await openTools();
+		await picker.getByRole('option', { name: 'Configure tools…', exact: true }).click();
+		await picker.getByRole('combobox').fill('read_file');
+		await picker.getByRole('option', { name: /^read_file(?:\s|$)/ }).press('Enter');
+		await expect(picker.getByRole('option', { name: /^read_file(?:\s|$)/ })).toContainText('Disabled');
+		await picker.getByRole('option', { name: 'Apply tool selection', exact: true }).click();
+		await expect(chat.getByRole('list', { name: 'Attached context' })).toContainText('Tool selection: 1 disabled');
+		await openTools();
+		await picker.getByRole('combobox').fill('read_file');
+		await expect(picker.getByRole('option', { name: /^read_file(?:\s|$)/ })).toHaveCount(0);
+		await picker.getByRole('option', { name: 'Configure tools…', exact: true }).click();
+		await picker.getByRole('combobox').fill('read_file');
+		await expect(picker.getByRole('option', { name: /^read_file(?:\s|$)/ })).toContainText('Disabled');
+		await page.keyboard.press('Escape');
+		await expect(picker.getByRole('combobox')).toHaveAttribute('placeholder', 'Search attachments');
+		await page.keyboard.press('Escape');
+		await chat.getByRole('button', { name: 'Remove Tool selection: 1 disabled', exact: true }).click();
+		await openTools();
+		await picker.getByRole('combobox').fill('read_file');
+		await expect(picker.getByRole('option', { name: /^read_file(?:\s|$)/ })).toHaveCount(1);
+		await page.keyboard.press('Escape');
+		await page.keyboard.press('Escape');
+	});
+}

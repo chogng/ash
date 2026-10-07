@@ -73,6 +73,18 @@ JSON 命名按完整接口契约推广；当前统一范围是模型声明、目
 `utils/image` 的 `PromptImageDetailLimits` 表达，Core 在附件准备时选择相应限制；token 累计由
 Core 的状态归并执行，精确费用累计由 `model-accounting` 计算，Core 负责提交新结果。
 
+## 当前聊天的工具选择
+
+`UserInput::ToolSelection` 传递禁用工具名。Core 接受 Turn 时将它冻结到
+`ToolProfileSnapshot.disabled_tools`；它不进入用户消息正文，也不授予执行权限。
+每次输入最多携带一份选择，最多 4096 个不重复的有效工具名。省略选择使用该请求的工具配置；
+旧历史缺失 `disabled_tools` 时按空列表读取。
+
+禁用名单同时约束直接调用、延迟发现、Code Mode 嵌套调用、MCP 统一入口和子 Agent 委派。
+运行中的 Turn 不接受 steering 更改工具选择；新的选择随下一次 Turn 生效。
+桌面选择保留在当前聊天的草稿中，发送后继续使用，移除“工具选择”附件恢复全部可用工具。
+剩余工具仍执行原有的沙箱、权限与审批检查。
+
 ## 消息阶段与循环决策
 
 `AssistantMessage` 保存一次调用内的消息 ID、正文与可选 `MessagePhase`；`Message` 的阶段用于

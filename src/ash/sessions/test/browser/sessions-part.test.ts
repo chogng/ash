@@ -1,3 +1,4 @@
+import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
 import { createTestFileService, registerTestComponentServices, createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
 import { IGitHubService as ISessionsGitHubService } from '../../contrib/github/browser/githubService.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
@@ -258,9 +259,14 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	Object.defineProperty(dom.window.performance, 'getEntriesByType', { value: () => [] });
 	services.registerInstance(ILifecycleService, resources.add(services.createInstance(BrowserLifecycleService, { ownerWindow: dom.window as unknown as Window, onError: (error: unknown) => { throw error; } })));
 	const inputs: InstanceType<typeof NewChatInputWidget>[] = [];
-	const cowork = resources.add(services.createInstance(CoworkPaneFactory));
 	using editorServices = createTestEditorServices(undefined, services, dom.window.document);
-	const part = registerTestComponentServices(editorServices).createInstance(SessionsPart, dom.window.document.body, {
+	const paneServices = registerTestComponentServices(editorServices);
+	paneServices.registerInstance(IEditorService, {
+		onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [],
+		openEditor: async () => { throw new Error('Unexpected editor navigation'); }, focusActiveEditor: () => { },
+	});
+	const cowork = resources.add(paneServices.createInstance(CoworkPaneFactory));
+	const part = paneServices.createInstance(SessionsPart, dom.window.document.body, {
 		sessionService,
 		chatService,
 		contextMenuService,
@@ -269,7 +275,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 		notifications,
 		commandService,
 		createInputPart: (container, delegate, model) => {
-			const input = services.createInstance(NewChatInputWidget, container, delegate, model);
+			const input = paneServices.createInstance(NewChatInputWidget, container, delegate, model);
 			inputs.push(input);
 			return input;
 		},
@@ -313,7 +319,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	assert.equal(part.domNode.querySelectorAll(".ash-sessions-chat-slot").length, 1);
 	assert.ok(part.domNode.querySelector('.ash-sessions-chat-view.single-chat'));
 	const retainedInput = part.domNode.querySelector('.ash-chat-input-part');
-	const draft = { mode: 'plan' as const, text: 'Keep this Chat draft', contexts: [{ id: 'chat-file', kind: 'file', name: 'chat.txt', content: 'Chat context' }] };
+	const draft = { mode: 'plan' as const, text: 'Keep this Chat draft', contexts: [{ id: 'chat-file', kind: 'file', name: 'chat.txt', content: 'Chat context' }, { id: 'tool-selection', kind: 'toolSelection', name: 'Tool selection: 1 disabled', content: '["read_file"]' }] };
 	part.restoreDraft(draft);
 	const selected = viewService.activeSelection!;
 	assert.equal(selected.kind, 'untitled');

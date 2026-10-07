@@ -17,6 +17,8 @@ import { IClipboardService } from '../../../../../platform/clipboard/common/clip
 import { GitHubIssueState, IGitHubService, type GitHubRepository } from '../../../../../platform/github/common/githubService.js';
 import { filterQuickPickItems } from '../../../../../platform/quickinput/browser/quickInputList.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
+import type { AgentToolCapability, AgentToolSetCapability } from '../../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
+import { createToolSelectionAttachment, showToolsPicker, toolSetLabel } from './chatToolPicker.js';
 import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
 import { IChatService } from '../../../../services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
@@ -35,11 +37,18 @@ export interface ChatContextSource {
 	asAttachment(signal: AbortSignal): Promise<ChatContextSelection | undefined>;
 }
 
+interface ToolReferencePick extends IQuickPickItem {
+	readonly configure?: true;
+	readonly tool?: AgentToolCapability;
+	readonly set?: AgentToolSetCapability;
+}
+
 export class ToolsContextPickerPick implements ChatContextSource {
 	public readonly icon = Lxicon.settings;
 	public get label(): string { return localize('chat.context.tools', 'Tools…'); }
 
 	constructor(
+		private readonly disabled: readonly string[] = [],
 		@IAgentCapabilitiesService private readonly capabilities: IAgentCapabilitiesService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 	) { }
@@ -48,22 +57,32 @@ export class ToolsContextPickerPick implements ChatContextSource {
 
 	public async asAttachment(signal: AbortSignal): Promise<ChatContextSelection | undefined> {
 		if (!this.isEnabled() || signal.aborted) { return undefined; }
-		let catalog: ReturnType<IAgentCapabilitiesService['read']> | undefined;
-		const selected = await pickChatContextItem(this.quickInput, localize('chat.context.selectTool', 'Search available tools by name, description or source'), async query => {
-			catalog ??= this.capabilities.read();
-			const tools = (await catalog).tools.filter(tool => tool.exposure !== 'hidden');
-			return filterQuickPickItems(tools.map(tool => ({ label: tool.name, description: tool.sourceDetails.join(' › '), detail: tool.description, tool })), query);
+		const catalog = await this.capabilities.read();
+		if (signal.aborted) { return undefined; }
+		const selected = await pickChatContextItem<ToolReferencePick>(this.quickInput, localize('chat.context.selectTool', 'Search available tools by name, description or source'), async query => {
+			const tools = catalog.tools.filter(tool => tool.exposure !== 'hidden' && !this.disabled.includes(tool.name));
+			const sets = catalog.toolSets.filter(set => set.tools.some(name => !this.disabled.includes(name)));
+			const references: ToolReferencePick[] = [
+				...tools.map(tool => ({ label: tool.name, description: tool.sourceDetails.join(' › '), detail: tool.description, tool })),
+				...sets.map(set => ({ label: toolSetLabel(set), description: localize('chat.tools.set', 'Tool set'), detail: set.tools.filter(name => !this.disabled.includes(name)).join(', '), set })),
+			];
+			return [...filterQuickPickItems(references, query), { label: localize('chat.tools.configure', 'Configure tools…'), configure: true, alwaysShow: true }];
 		}, signal);
 		if (signal.aborted || !selected || selected.kind === 'back') { return undefined; }
-		const tool = selected.item.tool;
-		const name = localize('chat.context.toolName', 'Tool: {0}', tool.name);
-		// A tool reference guides the model; execution authority remains with the backend's current catalog and policy.
-		const content = JSON.stringify(tool, null, 2);
+		if (selected.item.configure) {
+			const disabled = await showToolsPicker(this.quickInput, catalog, this.disabled, signal);
+			return disabled && !signal.aborted ? { attachment: createToolSelectionAttachment(disabled), acceptInBackground: false } : undefined;
+		}
+		const { tool, set } = selected.item;
+		if (!tool && !set) { return undefined; }
+		const name = tool ? localize('chat.context.toolName', 'Tool: {0}', tool.name) : localize('chat.tools.setName', 'Tool set: {0}', toolSetLabel(set!));
+		// References describe enabled tools; only the separate typed selection narrows execution.
+		const content = JSON.stringify(tool ?? { ...set, tools: set!.tools.filter(name => !this.disabled.includes(name)) }, null, 2);
 		return {
 			acceptInBackground: selected.background,
 			attachment: {
-				id: `tool:${tool.name}`, kind: 'tool', name,
-				resource: URI.from({ scheme: Schemas.internal, authority: 'agent-tools', query: new URLSearchParams({ name: tool.name }).toString() }),
+				id: tool ? `tool:${tool.name}` : `tool-set:${set!.id}`, kind: tool ? 'tool' : 'toolSet', name,
+				resource: URI.from({ scheme: Schemas.internal, authority: 'agent-tools', query: new URLSearchParams({ name: tool?.name ?? set!.id }).toString() }),
 				resolve: async () => ({ name, content }),
 			},
 		};

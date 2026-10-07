@@ -149,8 +149,9 @@ impl SearchIndex {
         &self,
         entries: &[RegisteredTool],
         query: &ToolSearchQuery,
+        excluded: &[ToolName],
     ) -> Vec<(usize, u64)> {
-        self.search_with_limit(entries, query, query.limit().get())
+        self.search_with_limit(entries, query, query.limit().get(), excluded)
     }
 
     pub(super) fn search_with_limit(
@@ -158,13 +159,20 @@ impl SearchIndex {
         entries: &[RegisteredTool],
         query: &ToolSearchQuery,
         limit: usize,
+        excluded: &[ToolName],
     ) -> Vec<(usize, u64)> {
         let mut ranked = match query.syntax() {
-            ToolSearchQuerySyntax::NaturalLanguage => {
-                self.search_bm25(entries, query.text(), limit)
-            }
+            ToolSearchQuerySyntax::NaturalLanguage => self.search_bm25(
+                entries,
+                query.text(),
+                limit
+                    .saturating_add(excluded.len())
+                    .min(entries.len().max(1)),
+            ),
             ToolSearchQuerySyntax::Regex => self.search_regex(entries, query.text()),
         };
+        // Disabled matches must not consume the caller's requested result slots.
+        ranked.retain(|(index, _)| !excluded.contains(entries[*index].definition.name()));
         ranked.sort_by(|(left_index, left_score), (right_index, right_score)| {
             right_score.cmp(left_score).then_with(|| {
                 entries[*left_index]

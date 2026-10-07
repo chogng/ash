@@ -712,7 +712,8 @@ for (const locale of ['en', 'zh-CN']) {
 		await picker.getByRole('option', { name: chinese ? '工具…' : 'Tools…', exact: true }).click();
 		await expect(picker.getByRole('option', { name: /internal_broker/ })).toHaveCount(0);
 		await picker.getByRole('combobox').fill('docs-server');
-		await expect(picker.getByRole('option', { name: /connector_search/ })).toHaveCount(1);
+		await expect(picker.getByRole('option', { name: /^connector_search(?:\s|$)/ })).toHaveCount(1);
+		await picker.getByRole('combobox').fill('connector_search');
 		await page.keyboard.press('Control+Enter');
 		await picker.getByRole('option', { name: chinese ? '工具…' : 'Tools…', exact: true }).click();
 		await picker.getByRole('combobox').fill('source document');
@@ -746,3 +747,60 @@ test('unavailable tools stay hidden and catalog failure returns focus without at
 	await expect(page.getByRole('list', { name: 'Attached context' })).toBeHidden();
 	await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
 });
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`tool selection toggles sets and members, discards cancellation and survives send in ${locale}`, async ({ page }) => {
+		await page.goto(`/chatInput.html?locale=${locale}`);
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const chinese = locale === 'zh-CN';
+		const add = page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true });
+		const picker = page.getByRole('dialog');
+		const toolsLabel = chinese ? '工具…' : 'Tools…';
+		const configureLabel = chinese ? '配置工具…' : 'Configure tools…';
+		const applyLabel = chinese ? '应用工具选择' : 'Apply tool selection';
+		const attachments = page.getByRole('list', { name: chinese ? '已添加的上下文' : 'Attached context' });
+		const openSelection = async (): Promise<void> => {
+			await add.press('Enter');
+			await picker.getByRole('option', { name: toolsLabel, exact: true }).click();
+			await picker.getByRole('option', { name: configureLabel, exact: true }).click();
+		};
+		await openSelection();
+		await picker.getByRole('combobox').fill('read_file');
+		await picker.getByRole('option', { name: /^read_file(?:\s|$)/ }).click();
+		await expect(picker.getByRole('option', { name: /^read_file(?:\s|$)/ })).toContainText(chinese ? '已禁用' : 'Disabled');
+		await picker.getByRole('combobox').fill('directory');
+		await expect(picker.getByRole('option', { name: /directory/ })).toContainText(chinese ? '部分启用' : 'Partly enabled');
+		await picker.getByRole('option', { name: /directory/ }).click();
+		await expect(picker.getByRole('option', { name: /directory/ })).toContainText(chinese ? '已启用' : 'Enabled');
+		await picker.getByRole('option', { name: /directory/ }).click();
+		await picker.getByRole('option', { name: applyLabel, exact: true }).click();
+		await expect(attachments).toContainText(chinese ? '工具选择：已禁用 2 个' : 'Tool selection: 2 disabled');
+		await openSelection();
+		await picker.getByRole('combobox').fill('directory');
+		await picker.getByRole('option', { name: /directory/ }).click();
+		await page.keyboard.press('Escape');
+		await expect(attachments).toContainText(chinese ? '工具选择：已禁用 2 个' : 'Tool selection: 2 disabled');
+		await expect(picker.getByRole('combobox')).toHaveAttribute('placeholder', chinese ? '搜索附件' : 'Search attachments');
+		await page.keyboard.press('Escape');
+		await expect(picker).toHaveCount(0);
+		await page.evaluate(() => window.ashChatInputIntegration.restoreCapturedDraft());
+		const message = page.getByRole('textbox', { name: 'Chat message', exact: true });
+		await message.fill('Use only enabled tools');
+		await page.locator('[data-action-id="ash.chat.input.send"] button').press('Enter');
+		await expect(page.getByLabel('Submission')).toContainText('toolSelection');
+		const submitted = JSON.parse((await page.getByLabel('Submission').textContent())!);
+		expect(JSON.parse(submitted[0].content)).toEqual(['read_file', 'write_file']);
+		await expect(attachments.getByRole('listitem')).toHaveCount(1);
+		await add.press('Enter');
+		await picker.getByRole('option', { name: toolsLabel, exact: true }).click();
+		await picker.getByRole('combobox').fill('read_file');
+		await expect(picker.getByRole('option', { name: /^read_file(?:\s|$)/ })).toHaveCount(0);
+		await page.keyboard.press('Escape');
+		await page.keyboard.press('Escape');
+		await attachments.getByRole('button', { name: /^(Remove|移除)/ }).click();
+		await openSelection();
+		await picker.getByRole('combobox').fill('read_file');
+		await expect(picker.getByRole('option', { name: /^read_file(?:\s|$)/ })).toContainText(chinese ? '已启用' : 'Enabled');
+		await page.keyboard.press('Escape');
+	});
+}

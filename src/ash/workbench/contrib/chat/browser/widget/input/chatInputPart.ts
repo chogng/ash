@@ -26,6 +26,7 @@ import type { IContextViewService } from "../../../../../../platform/contextview
 import type { ModelCatalogEntry } from "../../../../../services/chat/common/chatService.js";
 import type { ChatAgent } from '../../../../../services/chat/common/chatService.js';
 import { AttachContextAction } from '../../actions/chatContextActions.js';
+import { createToolSelectionAttachment } from '../../actions/chatToolPicker.js';
 import { DefaultChatAttachmentWidget, ImageAttachmentWidget } from '../../attachments/chatAttachmentWidgets.js';
 import { status as announceStatus } from '../../../../../../base/browser/ui/aria/aria.js';
 import { ChatAttachmentModel } from '../../attachments/chatAttachmentModel.js';
@@ -184,7 +185,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 					if (type === AccessibleViewType.View && this.attachmentModel.size === 0) { return undefined; }
 					return new AccessibleContentProvider(AccessibleViewProviderId.SessionsChat, { type }, () => {
 						const names = this.attachmentModel.attachments.map(attachment => attachment.name).join('\n');
-						return type === AccessibleViewType.View ? names : localize('chat.context.help', 'Chat context\nUse Add context to search recent and workspace files, attach files or images, read an image from the clipboard, take a screenshot, select a session, issue or pull request, choose Files & Folders to include a directory, add open editors including unsaved text, or select another context source. Type to search, use arrow keys to choose, Enter to attach, Ctrl or Command+Enter to attach and keep searching, and Escape to cancel. Use Go back to return to the previous picker. Directory attachments include their path and file list. Session and GitHub attachments capture their content when selected. Terminal attaches selected text or recent output. Symbols attach their source range, including unsaved edits. Search Results attaches the completed search and its match locations. These attachments keep the content captured when selected; their source button returns to the terminal, code or Search view. Tools attaches the selected tool name, description and source. Its source button opens Tools settings. Calls use the current tool catalog and execution permissions. Instructions selects from the authorized user and directory catalog; the backend loads the current instruction when sending. Its source button opens the instruction file. Browser screenshots ask you to choose a screen, window or tab and can be cancelled. GitHub pickers let you choose an account and repository, paste a link, enter a number or load more items. Use Tab to reach the source and Remove buttons on each attachment; Enter opens its source. Removing an attachment focuses the next attachment or returns to the message. Attachments can be sent without text and remain in the draft when sending fails.') + '\n' + names;
+						return type === AccessibleViewType.View ? names : localize('chat.context.help', 'Chat context\nUse Add context to search recent and workspace files, attach files or images, read an image from the clipboard, take a screenshot, select a session, issue or pull request, choose Files & Folders to include a directory, add open editors including unsaved text, or select another context source. Type to search, use arrow keys to choose, Enter to attach, Ctrl or Command+Enter to attach and keep searching, and Escape to cancel. Use Go back to return to the previous picker. Directory attachments include their path and file list. Session and GitHub attachments capture their content when selected. Terminal attaches selected text or recent output. Symbols attach their source range, including unsaved edits. Search Results attaches the completed search and its match locations. These attachments keep the content captured when selected; their source button returns to the terminal, code or Search view. Tools attaches an enabled tool or tool set. Choose Configure tools, use Enter to toggle a tool or set, then choose Apply to save for this chat. Escape discards changes. Selection applies to the next request and is retained after sending; remove its attachment to reset. Steering cannot change a running request’s selection. A tool reference’s source button opens Tools settings. Calls use the current tool catalog and execution permissions. Instructions selects from the authorized user and directory catalog; the backend loads the current instruction when sending. Its source button opens the instruction file. Browser screenshots ask you to choose a screen, window or tab and can be cancelled. GitHub pickers let you choose an account and repository, paste a link, enter a number or load more items. Use Tab to reach the source and Remove buttons on each attachment; Enter opens its source. Removing an attachment focuses the next attachment or returns to the message. Attachments can be sent without text and remain in the draft when sending fails.') + '\n' + names;
 					}, () => focused.isConnected ? focused.focus() : this.focus(), AccessibilityVerbositySettingId.Chat);
 				},
 			}));
@@ -235,7 +236,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		try {
 			await operation;
 			for (const context of contexts) {
-				if (this.attachmentModel.attachments.includes(context)) this.attachmentModel.delete(context.id);
+				if (context.kind !== 'toolSelection' && this.attachmentModel.attachments.includes(context)) this.attachmentModel.delete(context.id);
 			}
 			this.renderAttachments();
 		} catch (error) {
@@ -299,7 +300,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				kind: context.kind,
 				name: context.name,
 				resource: context.resource ? URI.parse(context.resource) : undefined,
-				resolve: async () => ({ name: context.name, content: context.content, ...(context.kind === 'image' || context.kind === 'instruction' ? { kind: context.kind } : {}) }),
+				resolve: async () => ({ name: context.name, content: context.content, ...(context.kind === 'image' || context.kind === 'instruction' || context.kind === 'toolSelection' ? { kind: context.kind } : {}) }),
 			});
 		}
 		this.draftRevision++;
@@ -314,7 +315,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		const localCommand = intent.kind === 'command' && intent.binding.origin === 'local';
 		if (this.submitting || this.state.phase === 'submitting' || (this.state.phase === 'loading' && !localCommand)) return;
 		if (value !== undefined) this.input.value = value;
-		if (!this.input.value.trim() && this.attachmentModel.size === 0) return;
+		if (!this.input.value.trim() && !this.attachmentModel.attachments.some(attachment => attachment.kind !== 'toolSelection')) return;
 		this.submitting = true;
 		this.renderToolbar();
 		try {
@@ -376,7 +377,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 
 	private renderToolbar(): void {
 		const input = parseSlashCommandInput(this.input.value, this.slashCommands);
-		const canSubmitIntent = input.kind === "message" ? input.text.trim().length > 0 || this.attachmentModel.size > 0 : this.input.value.trim().length > 0;
+		const canSubmitIntent = input.kind === "message" ? input.text.trim().length > 0 || this.attachmentModel.attachments.some(attachment => attachment.kind !== 'toolSelection') : this.input.value.trim().length > 0;
 		const localCommand = input.kind === 'command' && input.binding.origin === 'local';
 		const state: ChatInputToolbarState = {
 			mode: this.mode,
@@ -487,7 +488,12 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			id: 'ash.chat.input.attach', label: localize('chat.context.add', 'Add context'), tooltip: localize('chat.context.add', 'Add context'), icon: Lxicon.add, enabled: true,
 			run: () => {
 				// The command creates the picker owner only when this composer opens it.
-				this.attachContext.value ??= this.instantiationService.createInstance(AttachContextAction, { container: this.inputContainer, target: this, focusInput: () => this.focus(), supportsImages: () => this.supportsImages() });
+				this.attachContext.value ??= this.instantiationService.createInstance(AttachContextAction, {
+					container: this.inputContainer, target: this, focusInput: () => this.focus(), supportsImages: () => this.supportsImages(), getDisabledTools: async () => {
+						const selection = this.attachmentModel.attachments.find(attachment => attachment.kind === 'toolSelection');
+						return selection ? JSON.parse((await selection.resolve()).content) as string[] : [];
+					}
+				});
 				return this.attachContext.value.run();
 			},
 		});

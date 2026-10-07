@@ -154,7 +154,7 @@ test('Sandbox diagnostics render Chinese readiness and preserve backend reasons 
 	using panel = new AgentCapabilitiesSettings(root, {
 		isAvailable: true,
 		read: async () => ({
-			tools: [], localProcessSandboxConfigured: true, sandboxBackends: ['mxc'], directoryGrantsReadable: false,
+			toolSets: [], tools: [], localProcessSandboxConfigured: true, sandboxBackends: ['mxc'], directoryGrantsReadable: false,
 			sandboxDiagnostics: [{ backend: 'mxc', network: 'managed', readiness: { type: 'unsupported', reason: '<script>diagnostic</script>' } }]
 		}),
 	}, { onDidChangeConnectionState: Event.None } as IRemoteAgentService,
@@ -883,7 +883,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		read: async () => {
 			capabilityReads++;
 			return {
-				tools: [{ name: 'read_file', description: 'Read a file.', source: 'local', sourceDetails: ['ash-app-server'], exposure: 'direct', authority: 'directoryRead' }],
+				toolSets: [], tools: [{ name: 'read_file', description: 'Read a file.', source: 'local', sourceDetails: ['ash-app-server'], exposure: 'direct', authority: 'directoryRead' }],
 				localProcessSandboxConfigured: true,
 				sandboxBackends: ['mxc'],
 				sandboxDiagnostics: [{ backend: 'mxc', network: 'managed', readiness: { type: 'unsupported', reason: '<script>diagnostic</script>' } }],

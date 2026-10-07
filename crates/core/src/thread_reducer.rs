@@ -2285,6 +2285,7 @@ fn turn_skill_activations_match(
         | ash_protocol::UserInput::Image { .. }
         | ash_protocol::UserInput::LocalImage { .. }
         | ash_protocol::UserInput::Mention { .. } => None,
+        ash_protocol::UserInput::ToolSelection { .. } => None,
     });
     selected
         .zip(activated_skills.iter().filter(|activation| {

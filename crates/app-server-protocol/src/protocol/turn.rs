@@ -26,6 +26,11 @@ pub enum InputItem {
         name: String,
         content: String,
     },
+    /// Frozen when a Turn is accepted; steering cannot change this selection.
+    ToolSelection {
+        #[schemars(length(max = 4096))]
+        disabled: Vec<ash_protocol::ToolName>,
+    },
     AudioAttachment {
         attachment: AudioAttachmentRef,
     },

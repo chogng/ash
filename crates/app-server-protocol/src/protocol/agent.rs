@@ -90,11 +90,22 @@ pub struct AgentToolCapabilityDto {
     pub authority: ToolAuthorityDto,
 }
 
+/// One source-owned group from the same catalog snapshot as its member tools.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentToolSetCapabilityDto {
+    pub id: String,
+    pub source: ToolSourceDto,
+    pub source_id: String,
+    pub tools: Vec<String>,
+}
+
 /// A snapshot of registered tools and configured local process isolation.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentCapabilitiesReadResult {
     pub tools: Vec<AgentToolCapabilityDto>,
+    pub tool_sets: Vec<AgentToolSetCapabilityDto>,
     pub local_process_sandbox_configured: bool,
     pub sandbox_backends: Vec<String>,
     pub sandbox_diagnostics: Vec<SandboxDiagnosticDto>,

@@ -10,6 +10,7 @@ export function createAppServerAgentCapabilitiesApi(connection: AppServerProtoco
 		read: async (): Promise<AgentCapabilitiesSnapshot> => {
 			const result = await appServerRequest(connection, 'agent/capabilities/read', {});
 			return {
+				toolSets: result.toolSets.map(set => ({ ...set, tools: [...set.tools] })),
 				tools: result.tools.map(tool => ({
 					name: tool.name,
 					description: tool.description,

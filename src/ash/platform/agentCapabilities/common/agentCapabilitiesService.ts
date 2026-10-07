@@ -15,10 +15,18 @@ export interface AgentToolCapability {
 
 export interface AgentCapabilitiesSnapshot {
 	readonly tools: readonly AgentToolCapability[];
+	readonly toolSets: readonly AgentToolSetCapability[];
 	readonly localProcessSandboxConfigured: boolean;
 	readonly sandboxBackends: readonly string[];
 	readonly sandboxDiagnostics: readonly SandboxDiagnostic[];
 	readonly directoryGrantsReadable: boolean;
+}
+
+export interface AgentToolSetCapability {
+	readonly id: string;
+	readonly source: ToolSource;
+	readonly sourceId: string;
+	readonly tools: readonly string[];
 }
 
 export interface SandboxDiagnostic {

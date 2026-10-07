@@ -120,7 +120,7 @@ test('Sessions Models switches control the model picker visibility preference', 
 	using workspace = new WorkspaceContextService({ id: 'sessions-preferences', folders: [] });
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IRemoteAgentService, { connectionState: 'connected', connection: { kind: 'local', generation: 1 }, onDidChangeConnectionState: Event.None, onDidChangeConnection: Event.None, reconnect: async () => ({ kind: 'alreadyConnected' }), rollbackRuntime: async () => ({ kind: 'cancelled' }) });
-	services.registerInstance(ITraceSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, configured: null, recording: { type: 'disabled' } }), configure: async () => {} });
+	services.registerInstance(ITraceSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, configured: null, recording: { type: 'disabled' } }), configure: async () => { } });
 	services.registerInstance(IFileDialogService, { showOpenDialog: async () => undefined, showSaveDialog: async () => undefined, pickFileToSave: async () => undefined, showSaveConfirm: async () => 2 });
 	services.registerInstance(IChatSessionNavigationService, { getActiveConversation: () => undefined, getConversations: () => [], captureActiveDraft: async () => undefined, openConversation: async () => { }, appendToActiveDraft: () => { } });
 	services.registerInstance(IEditorService, {} as IEditorService);
@@ -128,13 +128,13 @@ test('Sessions Models switches control the model picker visibility preference', 
 	services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, fallback) => fallback });
 	const { IPreferencesService } = await import('../../../workbench/services/preferences/common/preferences.js');
 	services.registerInstance(IPreferencesService, { openSettings: category => preferences.open(category) } as import('../../../workbench/services/preferences/common/preferences.js').IPreferencesService);
-	services.registerInstance(IAccountService, { onDidChangeAccounts: Event.None, onDidCompleteLogin: Event.None, read: async () => ({ revision: 1n, accounts: [] }), startLogin: async () => { throw new Error('Not used'); }, cancelLogin: async () => {}, logout: async () => {} });
+	services.registerInstance(IAccountService, { onDidChangeAccounts: Event.None, onDidCompleteLogin: Event.None, read: async () => ({ revision: 1n, accounts: [] }), startLogin: async () => { throw new Error('Not used'); }, cancelLogin: async () => { }, logout: async () => { } });
 	services.registerInstance(IGitHubService, { listAccounts: async () => [] } as unknown as IGitHubService);
-	services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async () => {}, cancel: async () => {} });
+	services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async () => { }, cancel: async () => { } });
 	using githubReview = services.createInstance(GitHubReviewModel);
 	services.registerInstance(IGitHubReviewModel, githubReview);
 	services.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
-	services.registerInstance(IAgentCapabilitiesService, { isAvailable: true, read: async () => ({ tools: [{ name: 'read_file', description: 'Read authorized files', source: 'local', sourceDetails: ['Ash'], exposure: 'direct', authority: 'directoryRead' }], localProcessSandboxConfigured: false, sandboxBackends: [], directoryGrantsReadable: false, sandboxDiagnostics: [] }) });
+	services.registerInstance(IAgentCapabilitiesService, { isAvailable: true, read: async () => ({ toolSets: [], tools: [{ name: 'read_file', description: 'Read authorized files', source: 'local', sourceDetails: ['Ash'], exposure: 'direct', authority: 'directoryRead' }], localProcessSandboxConfigured: false, sandboxBackends: [], directoryGrantsReadable: false, sandboxDiagnostics: [] }) });
 	services.registerInstance(IDirPermissionsService, { onDidChangePermissions: Event.None } as import('../../../platform/dirPermissions/common/dirPermissionsService.js').IDirPermissionsService);
 	using preferences = services.createInstance(SessionsPreferences, window.document.body, () => { });
 	const opened = preferences.open();

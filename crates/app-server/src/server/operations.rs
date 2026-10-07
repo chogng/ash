@@ -534,8 +534,46 @@ impl AppServer {
         } else {
             Vec::new()
         };
+        let mut tool_sets = std::collections::BTreeMap::new();
+        for tool in tools.iter().filter(|tool| {
+            tool.exposure != ash_app_server_protocol::protocol::agent::ToolExposureDto::Hidden
+        }) {
+            // Source identity excludes catalog generations and remote tool names so a group's
+            // identity survives reconnects and does not merge independent MCP servers.
+            let source_id = tool
+                .source_chain
+                .iter()
+                .rev()
+                .find_map(|source| match source {
+                    ash_protocol::ToolSourceProvenance::Mcp { server_id, .. } => {
+                        Some(server_id.to_string())
+                    }
+                    ash_protocol::ToolSourceProvenance::Plugin { plugin_id, .. } => {
+                        Some(plugin_id.to_string())
+                    }
+                    ash_protocol::ToolSourceProvenance::Extension { id } => Some(id.clone()),
+                    ash_protocol::ToolSourceProvenance::Product { component } => {
+                        Some(component.clone())
+                    }
+                    ash_protocol::ToolSourceProvenance::Dynamic { .. }
+                    | ash_protocol::ToolSourceProvenance::System { .. } => None,
+                })
+                .unwrap_or_default();
+            let id = serde_json::to_string(&(tool.source, &source_id))
+                .map_err(|_| RpcError::new(-32603, AppServerErrorName::InternalError))?;
+            let group = tool_sets.entry(id.clone()).or_insert_with(|| {
+                ash_app_server_protocol::protocol::agent::AgentToolSetCapabilityDto {
+                    id,
+                    source: tool.source,
+                    source_id,
+                    tools: Vec::new(),
+                }
+            });
+            group.tools.push(tool.name.clone());
+        }
         result(&AgentCapabilitiesReadResult {
             tools,
+            tool_sets: tool_sets.into_values().collect(),
             local_process_sandbox_configured: configured,
             sandbox_backends,
             sandbox_diagnostics,
@@ -1779,7 +1817,10 @@ impl AppServer {
             && input.iter().any(|item| {
                 !matches!(
                     item,
-                    InputItem::Text { .. } | InputItem::Context { .. } | InputItem::Issue { .. }
+                    InputItem::Text { .. }
+                        | InputItem::Context { .. }
+                        | InputItem::Issue { .. }
+                        | InputItem::ToolSelection { .. }
                 )
             })
         {
@@ -2284,6 +2325,16 @@ impl AppServer {
         session_id: &ash_protocol::SessionId,
         input: Vec<InputItem>,
     ) -> Result<Vec<UserInput>, RpcError> {
+        if input
+            .iter()
+            .filter(|item| matches!(item, InputItem::ToolSelection { .. }))
+            .count()
+            > 1
+        {
+            return Err(core_error(core_api::CoreError::InvalidInput(
+                "Turn input may contain only one tool selection".into(),
+            )));
+        }
         input
             .into_iter()
             .map(|item| {
@@ -2301,6 +2352,20 @@ impl AppServer {
                     }
                     InputItem::Text { text } => UserInput::Text { text },
                     InputItem::Context { name, content } => UserInput::Context { name, content },
+                    InputItem::ToolSelection { disabled } => {
+                        if disabled.len() > 4096
+                            || disabled
+                                .iter()
+                                .collect::<std::collections::BTreeSet<_>>()
+                                .len()
+                                != disabled.len()
+                        {
+                            return Err(core_error(core_api::CoreError::InvalidInput(
+                                "Tool selection must contain at most 4096 unique tool names".into(),
+                            )));
+                        }
+                        UserInput::ToolSelection { disabled }
+                    }
                     InputItem::AudioAttachment { attachment } => {
                         UserInput::AudioAttachment { attachment }
                     }

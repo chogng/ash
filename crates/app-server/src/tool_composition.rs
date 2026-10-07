@@ -282,6 +282,7 @@ impl ToolPortKind {
 pub(crate) struct ToolPort {
     kind: ToolPortKind,
     contributions: Vec<ToolContribution>,
+    catalog_only: Vec<AgentToolCapabilityDto>,
     policy: Arc<dyn ActionPolicyService>,
 }
 
@@ -330,6 +331,7 @@ impl ToolPort {
         let mut port = Self {
             kind: ToolPortKind::Extension,
             contributions: Vec::new(),
+            catalog_only: Vec::new(),
             policy,
         };
         for executor in executors {
@@ -343,12 +345,29 @@ impl ToolPort {
     }
 
     pub(crate) fn mcp(tools: Arc<dyn ToolService>, policy: Arc<dyn ActionPolicyService>) -> Self {
-        Self::from_service(
-            ToolPortKind::Mcp,
-            ToolExposure::Direct,
-            project_mcp_service(tools),
-            policy,
-        )
+        let definitions = tools.definitions();
+        let exposed = project_mcp_service(Arc::clone(&tools));
+        let exposed_names = exposed
+            .definitions()
+            .into_iter()
+            .map(|tool| tool.name)
+            .collect::<BTreeSet<_>>();
+        let mut port = Self::from_service(ToolPortKind::Mcp, ToolExposure::Direct, exposed, policy);
+        // Large MCP catalogs call individual tools through the metadata broker. Keep those
+        // source-owned members selectable without exposing all definitions to the model.
+        port.catalog_only = definitions
+            .into_iter()
+            .filter(|tool| !exposed_names.contains(&tool.name))
+            .map(|tool| AgentToolCapabilityDto {
+                source_chain: tools.source_provenance(&tool.name),
+                name: tool.name.to_string(),
+                description: tool.description,
+                source: ToolSourceDto::Mcp,
+                exposure: ToolExposureDto::Deferred,
+                authority: ToolAuthorityDto::ProviderDefined,
+            })
+            .collect();
+        port
     }
 
     fn from_service(
@@ -376,6 +395,7 @@ impl ToolPort {
         Self {
             kind,
             contributions,
+            catalog_only: Vec::new(),
             policy,
         }
     }
@@ -1022,6 +1042,7 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
         return Ok(None);
     }
     let mut definitions = Vec::new();
+    let mut catalog_only = Vec::new();
     let mut names = BTreeSet::new();
     let mut local_policy = None;
     let mut mcp_policy = None;
@@ -1031,6 +1052,17 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
     let mut application_policy = None;
     let mut environment_policy = None;
     for (service_index, port) in ports.into_iter().enumerate() {
+        for tool in port.catalog_only {
+            let name = ToolName::new(tool.name.clone())
+                .map_err(|error| ToolCompositionError(error.to_string()))?;
+            if !names.insert(name) {
+                return Err(ToolCompositionError(format!(
+                    "duplicate tool catalog name during App Server composition: {}",
+                    tool.name
+                )));
+            }
+            catalog_only.push(tool);
+        }
         for contribution in port.contributions {
             if !names.insert(contribution.definition.name.clone()) {
                 return Err(ToolCompositionError(format!(
@@ -1104,7 +1136,7 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
         }
     }
     let (registry, routes) = build_registry(registry_generation, &definitions)?;
-    let catalog = definitions
+    let mut catalog = definitions
         .iter()
         .map(|collected| AgentToolCapabilityDto {
             name: collected.contribution.definition.name.to_string(),
@@ -1126,7 +1158,8 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
             },
             authority: tool_authority(collected),
         })
-        .collect();
+        .collect::<Vec<_>>();
+    catalog.append(&mut catalog_only);
     let protocol_definitions = definitions
         .into_iter()
         .map(|collected| collected.contribution.definition)
@@ -1134,6 +1167,18 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
     let search = registry
         .has_deferred_tools()
         .then(|| ToolSearchRuntime::new(Arc::clone(&registry), &search_options));
+    if let Some(search) = &search {
+        catalog.push(AgentToolCapabilityDto {
+            name: search.definition().name.to_string(),
+            description: search.definition().description.clone(),
+            source: ToolSourceDto::Host,
+            source_chain: vec![ToolSourceProvenance::Product {
+                component: "tool-search".into(),
+            }],
+            exposure: ToolExposureDto::Direct,
+            authority: ToolAuthorityDto::ProductService,
+        });
+    }
     let search_enabled = search.is_some();
     Ok(Some(CombinedToolPorts {
         tools: Arc::new(CompositeToolService {
@@ -1566,7 +1611,12 @@ impl ToolService for CompositeToolService {
         if let Some(search) = &self.search
             && call.name == search.definition().name
         {
-            return search.execute(call, authorization, cancellation);
+            return search.execute_selected(
+                call,
+                authorization,
+                cancellation,
+                facts.disabled_tools(),
+            );
         }
         let (binding, runtime) = self.runtime(call)?;
         match runtime {
@@ -1595,7 +1645,12 @@ impl ToolService for CompositeToolService {
         if let Some(search) = &self.search
             && call.name == search.definition().name
         {
-            return search.execute(call, authorization, cancellation);
+            return search.execute_selected(
+                call,
+                authorization,
+                cancellation,
+                facts.disabled_tools(),
+            );
         }
         let (binding, runtime) = self.runtime(call)?;
         match runtime {
@@ -1620,7 +1675,12 @@ impl ToolService for CompositeToolService {
         if let Some(search) = &self.search
             && call.name == search.definition().name
         {
-            return search.execute(call, authorization, cancellation);
+            return search.execute_selected(
+                call,
+                authorization,
+                cancellation,
+                facts.disabled_tools(),
+            );
         }
         let (binding, runtime) = self.runtime(call)?;
         match runtime {
@@ -1850,6 +1910,16 @@ impl ToolSearchRuntime {
         authorization: &ToolAuthorization,
         cancellation: &CancellationToken,
     ) -> Result<ToolExecutionOutput, CoreError> {
+        self.execute_selected(call, authorization, cancellation, &[])
+    }
+
+    fn execute_selected(
+        &self,
+        call: &ToolCall,
+        authorization: &ToolAuthorization,
+        cancellation: &CancellationToken,
+        disabled: &[ToolName],
+    ) -> Result<ToolExecutionOutput, CoreError> {
         cancellation
             .check()
             .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
@@ -1861,7 +1931,7 @@ impl ToolSearchRuntime {
         let query = self.query(call)?;
         let result = match (&self.state, query.syntax()) {
             (ToolSearchRuntimeState::Hybrid(embedding), ToolSearchQuerySyntax::NaturalLanguage) => {
-                embedding.search(&query).map_err(|error| {
+                embedding.search(&query, disabled).map_err(|error| {
                     CoreError::Execution(format!(
                         "hybrid embedding tool search is unavailable: {error}"
                     ))
@@ -1876,13 +1946,14 @@ impl ToolSearchRuntime {
                 )));
             }
             (ToolSearchRuntimeState::Lexical, ToolSearchQuerySyntax::NaturalLanguage)
-            | (_, ToolSearchQuerySyntax::Regex) => self.registry.search(&query),
+            | (_, ToolSearchQuerySyntax::Regex) => self.registry.search_excluding(&query, disabled),
         };
         let output = ToolSearchOutput {
             registry_generation: result.registry_generation().get(),
             tools: result
                 .matches()
                 .iter()
+                .filter(|matched| !disabled.contains(matched.loadable().definition().name()))
                 .map(|matched| ToolSearchOutputMatch {
                     name: matched.loadable().definition().name().clone(),
                     description: matched.loadable().definition().description().to_owned(),

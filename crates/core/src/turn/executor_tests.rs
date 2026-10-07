@@ -4665,3 +4665,214 @@ fn connection_selection_is_frozen_at_turn_start_and_released_for_the_next_turn()
     wait_for_turn_status(&threads, &thread_id, &next, TurnStatus::Completed);
     assert_eq!(*model.used.lock().unwrap(), [1, 3]);
 }
+
+fn selected_tool_turn(
+    tools: Arc<dyn ToolService>,
+    model: Arc<ScriptedModel>,
+    mode: ash_protocol::ToolMode,
+    disabled: &[&str],
+) -> (Arc<ThreadController>, ThreadId, TurnId, TurnExecutor) {
+    let (threads, thread_id, previous) = started_turn();
+    threads
+        .complete_turn(&thread_id, &previous, "previous".into())
+        .unwrap();
+    let executor = TurnExecutor::new(
+        threads.clone(),
+        model,
+        tools,
+        Arc::new(SandboxActionPolicyService),
+    );
+    let turn = threads
+        .start_turn(
+            &thread_id,
+            StartTurnRequest {
+                context_policy: Default::default(),
+                mode: Default::default(),
+                advisor: None,
+                kind: ash_protocol::TurnKind::Coding,
+                instructions: crate::test_turn_instructions(),
+                command_id: CommandId::new("selected-tools").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                model: None,
+                reasoning_effort: None,
+                policy_revision: "test-policy-v1".into(),
+                approval_mode: ash_protocol::ApprovalMode::Manual,
+                tool_mode: mode,
+                tool_profile: Some(executor.tool_profile_snapshot().unwrap()),
+                activated_skills: Vec::new(),
+                input: vec![
+                    UserInput::Text {
+                        text: "use enabled tools".into(),
+                    },
+                    UserInput::ToolSelection {
+                        disabled: disabled
+                            .iter()
+                            .map(|name| ToolName::new(*name).unwrap())
+                            .collect(),
+                    },
+                ],
+            },
+        )
+        .unwrap();
+    (threads, thread_id, turn.turn_id, executor)
+}
+
+#[test]
+fn disabled_direct_tools_are_absent_and_malicious_model_calls_fail_before_execution() {
+    let model = Arc::new(ScriptedModel::new([Ok(ModelResponse {
+        output: vec![ResponseItem::ToolCall(ToolCall {
+            id: ToolCallId::new("disabled-call").unwrap(),
+            name: ToolName::new("weather").unwrap(),
+            arguments: json!({}),
+        })],
+        usage: None,
+        billing: None,
+        stop_reason: StopReason::ToolUse,
+    })]));
+    let (threads, thread_id, turn_id, executor) = selected_tool_turn(
+        Arc::new(MutableDefinitionsTool {
+            description: Mutex::new("stable".into()),
+        }),
+        model.clone(),
+        ash_protocol::ToolMode::Direct,
+        &["weather"],
+    );
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+    let facts =
+        ToolExecutionFacts::for_turn(&snapshot, &turn_id, [ToolName::new("weather").unwrap()])
+            .unwrap();
+    assert!(facts.available_tools().next().is_none());
+    assert!(facts.delegation_tools().next().is_none());
+    assert_eq!(facts.disabled_tools(), &[ToolName::new("weather").unwrap()]);
+    assert!(
+        executor
+            .execute(&thread_id, &turn_id, &CancellationSource::new().token())
+            .is_err()
+    );
+    assert!(model.requests()[0].tools.is_empty());
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+    assert_eq!(snapshot.turns.last().unwrap().status, TurnStatus::Failed);
+    assert!(
+        snapshot
+            .items
+            .iter()
+            .all(|item| !matches!(item, ThreadItem::ToolCall { .. }))
+    );
+}
+
+#[test]
+fn disabled_deferred_tools_cannot_be_reactivated_by_search_results() {
+    let model = Arc::new(ScriptedModel::new([
+        Ok(ModelResponse {
+            output: vec![ResponseItem::ToolCall(ToolCall {
+                id: ToolCallId::new("search").unwrap(),
+                name: ToolName::new("tool_search").unwrap(),
+                arguments: json!({}),
+            })],
+            usage: None,
+            billing: None,
+            stop_reason: StopReason::ToolUse,
+        }),
+        Ok(text_response("done")),
+    ]));
+    let (_, thread_id, turn_id, executor) = selected_tool_turn(
+        Arc::new(DeferredWeatherTools),
+        model.clone(),
+        ash_protocol::ToolMode::Direct,
+        &["weather"],
+    );
+    executor
+        .execute(&thread_id, &turn_id, &CancellationSource::new().token())
+        .unwrap();
+    assert_eq!(model.requests().len(), 2);
+    for request in model.requests() {
+        assert_eq!(
+            request
+                .tools
+                .iter()
+                .map(|tool| tool.name.as_str())
+                .collect::<Vec<_>>(),
+            ["tool_search"]
+        );
+    }
+}
+
+#[test]
+fn steering_cannot_replace_a_running_turns_frozen_tool_selection() {
+    let model = Arc::new(ScriptedModel::new([Ok(text_response("done"))]));
+    let (threads, thread_id, turn_id, _) = selected_tool_turn(
+        Arc::new(DeferredWeatherTools),
+        model,
+        ash_protocol::ToolMode::Direct,
+        &["weather"],
+    );
+    let request = SteerTurnRequest {
+        command_id: CommandId::new("change-tools").unwrap(),
+        expected_sequence: SequenceExpectation::Any,
+        turn_id,
+        input: vec![
+            UserInput::Text {
+                text: "continue".into(),
+            },
+            UserInput::ToolSelection {
+                disabled: Vec::new(),
+            },
+        ],
+    };
+    assert!(matches!(
+        threads.steer_turn(&thread_id, request),
+        Err(CoreError::InvalidInput(_))
+    ));
+}
+
+#[cfg(feature = "code-mode")]
+#[test]
+fn disabled_code_mode_brokers_stay_absent_after_catalog_augmentation() {
+    let model = Arc::new(ScriptedModel::new([Ok(text_response("done"))]));
+    let (_, thread_id, turn_id, executor) = selected_tool_turn(
+        Arc::new(DeferredWeatherTools),
+        model.clone(),
+        ash_protocol::ToolMode::CodeModeOnly,
+        &["exec", "wait", "weather"],
+    );
+    executor
+        .execute(&thread_id, &turn_id, &CancellationSource::new().token())
+        .unwrap();
+    assert!(model.requests()[0].tools.is_empty());
+}
+
+#[cfg(feature = "code-mode")]
+#[test]
+fn disabled_tools_are_unavailable_to_code_mode_nested_calls() {
+    let model = Arc::new(ScriptedModel::new([
+        Ok(ModelResponse {
+            output: vec![ResponseItem::ToolCall(ToolCall {
+                id: ToolCallId::new("disabled-code-cell").unwrap(),
+                name: ToolName::new("exec").unwrap(),
+                arguments: json!({"source":"text(await tools.weather({city: 'Paris'}));"}),
+            })],
+            usage: None,
+            billing: None,
+            stop_reason: StopReason::ToolUse,
+        }),
+        Ok(text_response("done")),
+    ]));
+    let (threads, thread_id, turn_id, mut executor) = selected_tool_turn(
+        Arc::new(MutableDefinitionsTool {
+            description: Mutex::new("stable".into()),
+        }),
+        model,
+        ash_protocol::ToolMode::CodeModeOnly,
+        &["weather"],
+    );
+    executor.policy = Arc::new(CodeModeControlPolicy);
+    executor
+        .execute(&thread_id, &turn_id, &CancellationSource::new().token())
+        .unwrap();
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+    assert_eq!(snapshot.turns.last().unwrap().status, TurnStatus::Completed);
+    assert!(snapshot.items.iter().all(
+        |item| !matches!(item, ThreadItem::ToolCall { name, .. } if name.as_str() == "weather")
+    ));
+    assert!(snapshot.items.iter().any(|item| matches!(item, ThreadItem::ToolResult { tool_call_id, is_error: true, text, .. } if tool_call_id.as_str() == "disabled-code-cell" && text.contains("weather"))));
+}

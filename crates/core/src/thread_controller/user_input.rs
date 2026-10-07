@@ -56,6 +56,7 @@ pub(super) fn normalize_attachments(
             | UserInput::Context { .. }
             | UserInput::LocalImage { .. }
             | UserInput::Skill { .. }
+            | UserInput::ToolSelection { .. }
             | UserInput::Mention { .. } => Ok(input.clone()),
         })
         .collect()
@@ -70,6 +71,7 @@ pub(super) fn validate<'a>(
             "Turn input must contain at least one item".into(),
         ));
     }
+    tool_selection(input)?;
 
     let validated = input
         .iter()
@@ -96,7 +98,7 @@ pub(super) fn validate<'a>(
             UserInput::Image { .. } => Some(Err(CoreError::InvalidInput(
                 "legacy image input must be normalized before validation".into(),
             ))),
-            UserInput::Skill { .. } => None,
+            UserInput::Skill { .. } | UserInput::ToolSelection { .. } => None,
             UserInput::LocalImage { .. } | UserInput::Mention { .. } => {
                 Some(Err(CoreError::InvalidInput(
                     "this Thread controller currently accepts text, context, and validated attachments"
@@ -108,7 +110,7 @@ pub(super) fn validate<'a>(
     validate_skill_activations(input, activated_skills)?;
     if validated.is_empty() {
         return Err(CoreError::InvalidInput(
-            "Turn input must include text, context, or an attachment in addition to any Skill selection".into(),
+            "Turn input must include text, context, or an attachment in addition to Skill or tool selections".into(),
         ));
     }
     Ok(validated)
@@ -130,6 +132,7 @@ fn validate_skill_activations(
             | UserInput::Image { .. }
             | UserInput::LocalImage { .. }
             | UserInput::Mention { .. } => None,
+            UserInput::ToolSelection { .. } => None,
         })
         .collect::<Vec<_>>();
     let explicit = activated_skills
@@ -156,6 +159,39 @@ fn validate_skill_activations(
         }
     }
     Ok(())
+}
+
+pub(super) fn tool_selection(
+    input: &[UserInput],
+) -> Result<Option<&[ash_protocol::ToolName]>, CoreError> {
+    let mut selections = input.iter().filter_map(|item| match item {
+        UserInput::ToolSelection { disabled } => Some(disabled.as_slice()),
+        UserInput::Text { .. }
+        | UserInput::Context { .. }
+        | UserInput::AudioAttachment { .. }
+        | UserInput::Audio { .. }
+        | UserInput::ImageAttachment { .. }
+        | UserInput::Image { .. }
+        | UserInput::LocalImage { .. }
+        | UserInput::Skill { .. }
+        | UserInput::Mention { .. } => None,
+    });
+    let selected = selections.next();
+    if selections.next().is_some()
+        || selected.is_some_and(|names| {
+            names.len() > 4096
+                || names
+                    .iter()
+                    .collect::<std::collections::BTreeSet<_>>()
+                    .len()
+                    != names.len()
+        })
+    {
+        return Err(CoreError::InvalidInput(
+            "Tool selection must occur once with at most 4096 unique names".into(),
+        ));
+    }
+    Ok(selected)
 }
 
 pub(super) fn thread_items(

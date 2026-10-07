@@ -1043,7 +1043,7 @@ impl ThreadController {
     pub fn start_turn(
         &self,
         thread_id: &ThreadId,
-        request: StartTurnRequest,
+        mut request: StartTurnRequest,
     ) -> Result<StartTurnResult, CoreError> {
         self.store.execution_binding(thread_id)?.require_bound()?;
         validate_command_id(&request.command_id)?;
@@ -1060,6 +1060,14 @@ impl ThreadController {
             return Err(CoreError::InvalidInput("advisor is off".into()));
         }
         validate_policy_revision(&request.policy_revision)?;
+        if let Some(disabled) = user_input::tool_selection(&request.input)? {
+            let profile = request.tool_profile.as_mut().ok_or_else(|| {
+                CoreError::InvalidInput("Tool selection requires a frozen tool profile".into())
+            })?;
+            profile.disabled_tools = disabled.to_vec();
+            crate::tool_profile::validate_tool_profile_snapshot(profile)
+                .map_err(CoreError::InvalidInput)?;
+        }
         request
             .instructions
             .validate()

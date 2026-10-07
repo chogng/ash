@@ -247,3 +247,201 @@ fn definition_with_token_estimate(target: usize) -> ToolDefinition {
     }
     panic!("could not construct definition with {target} estimated tokens");
 }
+
+#[test]
+fn frozen_selection_filters_mcp_search_and_blocks_nested_calls_in_the_turn_executor() {
+    use ash_core::CreateThreadRequest;
+    use ash_core::InMemoryThreadStore;
+    use ash_core::StartTurnRequest;
+    use ash_core::ThreadController;
+    use ash_core::TurnExecutor;
+    use ash_protocol::ModelRequest;
+    use ash_protocol::ModelResponse;
+    use ash_protocol::ResponseItem;
+    use ash_protocol::StopReason;
+    use core_api::ModelService;
+    use core_api::SequenceExpectation;
+    use std::collections::VecDeque;
+    use std::sync::Mutex;
+
+    struct CatalogModel(Mutex<VecDeque<ModelResponse>>);
+    impl ModelService for CatalogModel {
+        fn invoke(
+            &self,
+            _: core_api::ModelSelection<'_>,
+            _: &ModelRequest,
+            _: &CancellationToken,
+        ) -> Result<ModelResponse, CoreError> {
+            self.0
+                .lock()
+                .unwrap()
+                .pop_front()
+                .ok_or_else(|| CoreError::Execution("unexpected model call".into()))
+        }
+    }
+    struct CatalogPolicy;
+    impl core_api::ActionPolicyService for CatalogPolicy {
+        fn revision(&self) -> String {
+            "test-policy".into()
+        }
+        fn decide(
+            &self,
+            request: &ActionReviewRequest,
+            cancellation: &CancellationToken,
+        ) -> Result<ash_action_policy::ExecutionDecision, CoreError> {
+            if request.provenance().source_id() == MCP_SEARCH_TOOLS_NAME {
+                decide_mcp_catalog_search(request, cancellation)
+            } else {
+                Ok(ash_action_policy::ExecutionDecision::RunUnsandboxed {
+                    grant_id: ash_action_policy::GrantId::new("test"),
+                })
+            }
+        }
+    }
+    struct CountedTools {
+        inner: CatalogTools,
+        calls: std::sync::atomic::AtomicUsize,
+    }
+    impl ToolService for CountedTools {
+        fn definitions(&self) -> Vec<ToolDefinition> {
+            self.inner.definitions()
+        }
+        fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
+            self.inner.prepare(call)
+        }
+        fn execute(
+            &self,
+            call: &ToolCall,
+            authorization: &ToolAuthorization,
+            cancellation: &CancellationToken,
+        ) -> Result<ToolExecutionOutput, CoreError> {
+            self.calls
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            self.inner.execute(call, authorization, cancellation)
+        }
+    }
+    let actual = Arc::new(CountedTools {
+        inner: CatalogTools::with_count(16),
+        calls: std::sync::atomic::AtomicUsize::new(0),
+    });
+    let service = Arc::new(super::McpMetaToolService::new(
+        actual.clone(),
+        actual.definitions(),
+    ));
+    let disabled = ToolName::new("server__tool_7").unwrap();
+    let entry = service.by_name.get(&disabled).unwrap();
+    let calls = [
+        ToolCall {
+            id: ash_protocol::ToolCallId::new("selected-search").unwrap(),
+            name: ToolName::new(MCP_SEARCH_TOOLS_NAME).unwrap(),
+            arguments: serde_json::json!({"query":"tool 7"}),
+        },
+        ToolCall {
+            id: ash_protocol::ToolCallId::new("disabled-nested-call").unwrap(),
+            name: ToolName::new(MCP_CALL_TOOL_NAME).unwrap(),
+            arguments: serde_json::json!({"tool":disabled, "catalog_digest":service.catalog_digest, "definition_digest":entry.definition_digest, "arguments":{}}),
+        },
+    ];
+    let model = Arc::new(CatalogModel(Mutex::new(
+        calls
+            .into_iter()
+            .map(|call| ModelResponse {
+                output: vec![ResponseItem::ToolCall(call)],
+                usage: None,
+                billing: None,
+                stop_reason: StopReason::ToolUse,
+            })
+            .collect(),
+    )));
+    let threads = Arc::new(ThreadController::with_store(Arc::new(
+        InMemoryThreadStore::default(),
+    )));
+    let thread_id = ash_protocol::ThreadId::new("selected-mcp").unwrap();
+    threads
+        .create_thread(CreateThreadRequest {
+            execution_target: None,
+            agent_id: ash_protocol::AgentId::new("agent").unwrap(),
+            origin: Default::default(),
+            agent: None,
+            session_id: ash_protocol::SessionId::new("session").unwrap(),
+            thread_id: thread_id.clone(),
+            title: "selection".into(),
+        })
+        .unwrap();
+    let executor = TurnExecutor::new(threads.clone(), model, service, Arc::new(CatalogPolicy));
+    let turn = threads
+        .start_turn(
+            &thread_id,
+            StartTurnRequest {
+                context_policy: Default::default(),
+                mode: Default::default(),
+                advisor: None,
+                kind: ash_protocol::TurnKind::Coding,
+                instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
+                command_id: ash_protocol::CommandId::new("start-selected-mcp").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                model: None,
+                reasoning_effort: None,
+                policy_revision: "test-policy".into(),
+                approval_mode: ash_protocol::ApprovalMode::Manual,
+                tool_mode: ash_protocol::ToolMode::Direct,
+                tool_profile: Some(executor.tool_profile_snapshot().unwrap()),
+                activated_skills: Vec::new(),
+                input: vec![
+                    ash_protocol::UserInput::Text {
+                        text: "search then try a disabled tool".into(),
+                    },
+                    ash_protocol::UserInput::ToolSelection {
+                        disabled: vec![disabled.clone()],
+                    },
+                ],
+            },
+        )
+        .unwrap();
+    executor.start(&thread_id, &turn.turn_id).unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let cancellation = ash_async_utils::CancellationSource::new();
+    let snapshot = loop {
+        let changed = threads.thread_changed(&thread_id).unwrap();
+        let snapshot = threads.read_thread(&thread_id).unwrap();
+        if snapshot.turns[0].status == ash_protocol::TurnStatus::Failed {
+            break snapshot;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "disabled nested call did not fail: {:?}",
+            snapshot.items
+        );
+        pollster::block_on(ash_async_utils::wait_until(
+            changed,
+            deadline,
+            &cancellation.token(),
+        ))
+        .unwrap();
+    };
+    assert_eq!(actual.calls.load(std::sync::atomic::Ordering::Relaxed), 0);
+    let search = snapshot
+        .items
+        .iter()
+        .find_map(|item| match item {
+            ash_protocol::ThreadItem::ToolResult {
+                tool_call_id,
+                text,
+                is_error: false,
+                ..
+            } if tool_call_id.as_str() == "selected-search" => Some(text),
+            _ => None,
+        })
+        .unwrap();
+    let result: serde_json::Value = serde_json::from_str(search).unwrap();
+    assert!(
+        result["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|entry| entry["name"] != disabled.as_str())
+    );
+    assert!(snapshot.items.iter().all(
+        |item| !matches!(item, ash_protocol::ThreadItem::ToolCall { name, .. } if name == &disabled)
+    ));
+}

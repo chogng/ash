@@ -207,3 +207,39 @@ fn hybrid_search_can_add_a_semantic_only_match() {
         "calendar_list_events"
     );
 }
+
+#[test]
+fn exclusions_do_not_consume_lexical_regex_or_hybrid_result_slots() {
+    let mut builder = ToolRegistryBuilder::new(ToolRegistryGeneration::new(19));
+    for name in ["github_issue_0", "github_issue_1", "github_issue_2"] {
+        builder
+            .register(registration(
+                name,
+                "List GitHub repository issues",
+                ToolExposure::Deferred,
+            ))
+            .unwrap();
+    }
+    let snapshot = builder.build().unwrap();
+    let excluded = [
+        ToolName::new("github_issue_0").unwrap(),
+        ToolName::new("github_issue_1").unwrap(),
+    ];
+    let query =
+        ToolSearchQuery::new("repository issues", ToolSearchLimit::new(1).unwrap()).unwrap();
+    let regex = ToolSearchQuery::regex("github_issue_", ToolSearchLimit::new(1).unwrap()).unwrap();
+    let semantic = ["github_issue_0", "github_issue_1", "github_issue_2"]
+        .map(|name| ToolName::new(name).unwrap());
+    for result in [
+        snapshot.search_excluding(&query, &excluded),
+        snapshot.search_excluding(&regex, &excluded),
+        snapshot.search_hybrid_excluding(&query, &semantic, &excluded),
+    ] {
+        assert_eq!(result.matches().len(), 1);
+        assert_eq!(
+            result.matches()[0].loadable().definition().name().as_str(),
+            "github_issue_2"
+        );
+        assert_eq!(result.registry_generation(), snapshot.generation());
+    }
+}

@@ -179,6 +179,13 @@ impl ModelToolCatalogSnapshot {
         self
     }
 
+    /// The frozen binder rejects calls absent from the restricted definitions as well.
+    pub(crate) fn without_disabled_tools(mut self, names: &[ash_protocol::ToolName]) -> Self {
+        self.definitions
+            .retain(|definition| !names.contains(&definition.name));
+        self
+    }
+
     /// Appends definitions owned by Core while preserving the frozen binder for ordinary tools.
     #[cfg(feature = "code-mode")]
     pub(crate) fn with_additional_definitions(
@@ -631,6 +638,9 @@ impl ToolExecutionFacts {
             host_tools
                 .insert(ash_protocol::ToolName::new("wait").expect("Code Mode Tool name is valid"));
         }
+        if let Some(profile) = &turn.tool_profile {
+            host_tools.retain(|name| !profile.disabled_tools.contains(name));
+        }
         let (available_tools, delegation_tools) = match snapshot.agent_configuration() {
             Some(seed) => {
                 let own_ceiling = seed.capability_scope.tools.iter().collect::<BTreeSet<_>>();
@@ -686,6 +696,15 @@ impl ToolExecutionFacts {
     /// Returns the exact durable Thread/Turn identity executing the current Tool Call.
     pub fn execution_identity(&self) -> Option<&ToolExecutionIdentity> {
         self.execution.as_ref()
+    }
+
+    /// Frozen user exclusions, independent of authorization for any remaining tool.
+    pub fn disabled_tools(&self) -> &[ash_protocol::ToolName] {
+        self.execution
+            .as_ref()
+            .and_then(|identity| identity.tool_profile.as_ref())
+            .map(|profile| profile.disabled_tools.as_slice())
+            .unwrap_or_default()
     }
 
     /// Returns the exact tools this Agent may invoke.

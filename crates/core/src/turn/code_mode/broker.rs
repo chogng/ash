@@ -388,6 +388,15 @@ impl CodeModeBroker {
             }
             _ => frozen_catalog,
         };
+        let frozen_catalog = match snapshot
+            .turns
+            .iter()
+            .find(|turn| &turn.turn_id == context.turn_id())
+            .and_then(|turn| turn.tool_profile.as_ref())
+        {
+            Some(profile) => frozen_catalog.without_disabled_tools(&profile.disabled_tools),
+            None => frozen_catalog,
+        };
         // Nested execution checks the tool-owned definition; model wording belongs only to runtime declarations.
         let mut model_definitions = frozen_catalog.definitions().to_vec();
         if let Some(instructions) = snapshot

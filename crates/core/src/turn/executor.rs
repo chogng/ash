@@ -221,6 +221,10 @@ impl TurnExecutor {
             catalog
         };
         let catalog = self.code_mode.augment_catalog(catalog, mode)?;
+        let catalog = match profile {
+            Some(profile) => catalog.without_disabled_tools(&profile.disabled_tools),
+            None => catalog,
+        };
         Ok(match instructions {
             Some(instructions) => catalog.with_model_descriptions(instructions),
             None => catalog,

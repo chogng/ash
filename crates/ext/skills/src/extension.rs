@@ -43,7 +43,8 @@ impl SkillActivationContributor for SkillRuntime {
                 | UserInput::Audio { .. }
                 | UserInput::Image { .. }
                 | UserInput::LocalImage { .. }
-                | UserInput::Mention { .. } => None,
+                | UserInput::Mention { .. }
+                | UserInput::ToolSelection { .. } => None,
             })
             .map(|selected| {
                 input

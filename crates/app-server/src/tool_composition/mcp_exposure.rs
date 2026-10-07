@@ -92,6 +92,23 @@ struct CatalogEntry {
 }
 
 impl McpMetaToolService {
+    fn parse_selected(
+        &self,
+        call: &ToolCall,
+        facts: &ToolExecutionFacts,
+    ) -> Result<MetaCall, CoreError> {
+        let parsed = self.parse(call)?;
+        if let MetaCall::Invoke(nested) = &parsed
+            && facts.disabled_tools().contains(&nested.name)
+        {
+            return Err(CoreError::Policy(format!(
+                "Tool '{}' is disabled for this Turn",
+                nested.name
+            )));
+        }
+        Ok(parsed)
+    }
+
     fn new(tools: Arc<dyn ToolService>, mut definitions: Vec<ToolDefinition>) -> Self {
         definitions.sort_by(|left, right| left.name.cmp(&right.name));
         let catalog_digest = digest_json(&definitions);
@@ -199,6 +216,7 @@ impl McpMetaToolService {
         query: &str,
         authorization: &ToolAuthorization,
         cancellation: &CancellationToken,
+        disabled: &[ToolName],
     ) -> Result<ToolExecutionOutput, CoreError> {
         cancellation
             .check()
@@ -220,6 +238,7 @@ impl McpMetaToolService {
         let mut ranked = self
             .by_name
             .values()
+            .filter(|entry| !disabled.contains(&entry.definition.name))
             .filter_map(|entry| {
                 let name = entry.definition.name.as_str().to_lowercase();
                 let mut score = terms
@@ -307,6 +326,17 @@ impl ToolService for McpMetaToolService {
             .resolve_execution_interaction(&self.nested_call(call)?, request, response)
     }
 
+    fn prepare_with_facts(
+        &self,
+        call: &ToolCall,
+        facts: &ToolExecutionFacts,
+    ) -> Result<ActionReviewRequest, CoreError> {
+        match self.parse_selected(call, facts)? {
+            MetaCall::Search(query) => self.prepare_search(&query),
+            MetaCall::Invoke(call) => self.tools.prepare_with_facts(&call, facts),
+        }
+    }
+
     fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
         match self.parse(call)? {
             MetaCall::Search(query) => self.prepare_search(&query),
@@ -328,7 +358,9 @@ impl ToolService for McpMetaToolService {
         cancellation: &CancellationToken,
     ) -> Result<ToolExecutionOutput, CoreError> {
         match self.parse(call)? {
-            MetaCall::Search(query) => self.execute_search(&query, authorization, cancellation),
+            MetaCall::Search(query) => {
+                self.execute_search(&query, authorization, cancellation, &[])
+            }
             MetaCall::Invoke(call) => self.tools.execute(&call, authorization, cancellation),
         }
     }
@@ -340,8 +372,10 @@ impl ToolService for McpMetaToolService {
         cancellation: &CancellationToken,
         facts: &ToolExecutionFacts,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        match self.parse(call)? {
-            MetaCall::Search(query) => self.execute_search(&query, authorization, cancellation),
+        match self.parse_selected(call, facts)? {
+            MetaCall::Search(query) => {
+                self.execute_search(&query, authorization, cancellation, facts.disabled_tools())
+            }
             MetaCall::Invoke(call) => {
                 self.tools
                     .execute_with_facts(&call, authorization, cancellation, facts)
@@ -357,7 +391,9 @@ impl ToolService for McpMetaToolService {
         sink: &mut dyn ToolOutputSink,
     ) -> Result<ToolExecutionOutput, CoreError> {
         match self.parse(call)? {
-            MetaCall::Search(query) => self.execute_search(&query, authorization, cancellation),
+            MetaCall::Search(query) => {
+                self.execute_search(&query, authorization, cancellation, &[])
+            }
             MetaCall::Invoke(call) => {
                 self.tools
                     .execute_streaming(&call, authorization, cancellation, sink)
@@ -373,8 +409,10 @@ impl ToolService for McpMetaToolService {
         facts: &ToolExecutionFacts,
         sink: &mut dyn ToolOutputSink,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        match self.parse(call)? {
-            MetaCall::Search(query) => self.execute_search(&query, authorization, cancellation),
+        match self.parse_selected(call, facts)? {
+            MetaCall::Search(query) => {
+                self.execute_search(&query, authorization, cancellation, facts.disabled_tools())
+            }
             MetaCall::Invoke(call) => self.tools.execute_streaming_with_facts(
                 &call,
                 authorization,
@@ -394,8 +432,10 @@ impl ToolService for McpMetaToolService {
         interactions: Arc<dyn ToolInteractionService>,
         sink: &mut dyn ToolOutputSink,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        match self.parse(call)? {
-            MetaCall::Search(query) => self.execute_search(&query, authorization, cancellation),
+        match self.parse_selected(call, facts)? {
+            MetaCall::Search(query) => {
+                self.execute_search(&query, authorization, cancellation, facts.disabled_tools())
+            }
             MetaCall::Invoke(call) => self.tools.execute_streaming_with_facts_and_interactions(
                 &call,
                 authorization,

@@ -250,7 +250,16 @@ impl ToolRegistrySnapshot {
     }
 
     pub fn search(&self, query: &ToolSearchQuery) -> ToolSearchResult {
-        self.result_from_ranking(self.search.search(&self.entries, query))
+        self.search_excluding(query, &[])
+    }
+
+    /// Excludes unavailable names before applying the result limit.
+    pub fn search_excluding(
+        &self,
+        query: &ToolSearchQuery,
+        excluded: &[ToolName],
+    ) -> ToolSearchResult {
+        self.result_from_ranking(self.search.search(&self.entries, query, excluded))
     }
 
     /// Merges lexical and caller-provided semantic ranks without comparing incompatible scores.
@@ -262,18 +271,33 @@ impl ToolRegistrySnapshot {
         query: &ToolSearchQuery,
         semantic_ranking: &[ToolName],
     ) -> ToolSearchResult {
+        self.search_hybrid_excluding(query, semantic_ranking, &[])
+    }
+
+    /// Applies the same exclusions to lexical and semantic candidates before ranking and limiting.
+    pub fn search_hybrid_excluding(
+        &self,
+        query: &ToolSearchQuery,
+        semantic_ranking: &[ToolName],
+        excluded: &[ToolName],
+    ) -> ToolSearchResult {
         if query.syntax() == ToolSearchQuerySyntax::Regex {
-            return self.search(query);
+            return self.search_excluding(query, excluded);
         }
         let candidate_limit = TOOL_SEARCH_MAX_LIMIT;
-        let lexical = self
-            .search
-            .search_with_limit(&self.entries, query, candidate_limit);
+        let lexical =
+            self.search
+                .search_with_limit(&self.entries, query, candidate_limit, excluded);
         let mut scores = BTreeMap::<usize, u64>::new();
         for (rank, (entry_index, _)) in lexical.into_iter().enumerate() {
             *scores.entry(entry_index).or_default() += reciprocal_rank_score(rank);
         }
-        for (rank, name) in semantic_ranking.iter().take(candidate_limit).enumerate() {
+        for (rank, name) in semantic_ranking
+            .iter()
+            .filter(|name| !excluded.contains(name))
+            .take(candidate_limit)
+            .enumerate()
+        {
             let Some(entry_index) = self.by_name.get(name).copied() else {
                 continue;
             };

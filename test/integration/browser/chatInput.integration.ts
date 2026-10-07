@@ -104,8 +104,10 @@ services.registerInstance(IAgentCapabilitiesService, {
 	read: async () => {
 		if (new URLSearchParams(location.search).has('toolFailure')) { throw new Error('Tool catalog failed'); }
 		return {
+			toolSets: [{ id: 'local', source: 'local', sourceId: 'directory', tools: ['read_file', 'write_file'] }, { id: 'mcp:docs', source: 'mcp', sourceId: 'docs-server', tools: ['connector_search'] }],
 			tools: [
 				{ name: 'read_file', description: 'Read a source document', source: 'local', sourceDetails: ['directory'], exposure: 'direct', authority: 'directoryRead' },
+				{ name: 'write_file', description: 'Write a source document', source: 'local', sourceDetails: ['directory'], exposure: 'direct', authority: 'directoryWrite' },
 				{ name: 'connector_search', description: 'Search external references', source: 'mcp', sourceDetails: ['docs-server'], exposure: 'deferred', authority: 'providerDefined' },
 				{ name: 'internal_broker', description: 'Hidden broker', source: 'host', sourceDetails: [], exposure: 'hidden', authority: 'productService' },
 			],

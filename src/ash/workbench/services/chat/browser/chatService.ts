@@ -1,3 +1,4 @@
+import { localize } from '../../../../nls.js';
 import type { AgentResponse as AgentResponseDto, InputItem, SkillRef as SkillRefDto, Thread as ThreadDto, ThreadItem as ThreadItemDto, ThreadTranscriptEntry as ThreadTranscriptEntryDto, ThreadTranscriptSnapshot as ThreadTranscriptSnapshotDto, ThreadTranscriptUpdateEnvelope as ThreadTranscriptUpdateEnvelopeDto, ThreadUpdateEnvelope as ThreadUpdateEnvelopeDto, TurnChangeSetSummary as TurnChangeSetSummaryDto, TurnChangesReadResult as TurnChangesReadResultDto } from "../../../../../../.build/protocol/typescript/index.js";
 import { Emitter } from "../../../../base/common/event.js";
 import { canceled, onUnexpectedError } from '../../../../base/common/errors.js';
@@ -280,6 +281,13 @@ export class ChatService extends Disposable implements IChatService {
 function toContextInput(context: ResolvedChatContext): InputItem {
 	if (context.kind === 'image') { return { type: 'image', url: context.content }; }
 	if (context.kind === 'instruction') { return { type: 'instruction', path: context.content }; }
+	if (context.kind === 'toolSelection') {
+		const disabled: unknown = JSON.parse(context.content);
+		if (!Array.isArray(disabled) || disabled.length > 4096 || disabled.some(name => typeof name !== 'string' || !name.trim()) || new Set(disabled).size !== disabled.length) {
+			throw new Error(localize('chat.tools.invalidSelection', 'The tool selection is invalid. Configure tools again.'));
+		}
+		return { type: 'toolSelection', disabled };
+	}
 	return { type: 'context', name: context.name, content: context.content };
 }
 
