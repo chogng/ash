@@ -7,7 +7,6 @@ Before changing a file, identify its owner and read every matching scoped instru
 | Change surface | Required instruction |
 | --- | --- |
 | TypeScript frontend | [`typescript-coding-guidelines.instructions.md`](instructions/typescript-coding-guidelines.instructions.md), [`frontend-architecture.instructions.md`](instructions/frontend-architecture.instructions.md), and [`source-code-organization.instructions.md`](instructions/source-code-organization.instructions.md) |
-| Editor implementation | [`editor.instructions.md`](instructions/editor.instructions.md) |
 | Browser UI or CSS | [`browser-ui.instructions.md`](instructions/browser-ui.instructions.md) |
 | Any implementation or test | [`testing.instructions.md`](instructions/testing.instructions.md) |
 | Rust, Cargo manifests/lockfile, `.cargo/`, or Rust build checks | [Rust development](../.agents/skills/rust-development/SKILL.md) |
