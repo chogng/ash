@@ -35,7 +35,7 @@ test('Session files preserve their original directory through selection, directo
 		const calls: unknown[] = [];
 		const host = createDisconnectedRendererApi();
 		const fileHost: IRendererHost = {
-			...host, fs: {
+			...host, fileSearch: { glob: async (directory, query, signal) => { calls.push({ target: directory.target, query, aborted: signal?.aborted }); return { matches: [], totalMatches: 0 }; } }, fs: {
 				...host.fs,
 				readFile: async params => { calls.push(params); return { content: 'original', revision: 'rev-1' }; },
 				writeFile: async params => { calls.push(params); return { revision: 'rev-2', metadata: { fileType: 'file', readonly: false, sizeBytes: 7, modifiedAtMillis: null } }; },
@@ -44,6 +44,7 @@ test('Session files preserve their original directory through selection, directo
 			}
 		};
 		using files = services.createInstance(SessionFileService, fileHost);
+		const originalFolder = workspace.getWorkspace().folders[0]!;
 		const first = URI.file('C:/sessions/first/main.ts');
 		await files.readFile(first);
 		sessions.openSession('second', 'second-thread');
@@ -55,6 +56,8 @@ test('Session files preserve their original directory through selection, directo
 		await files.pasteSystemFiles(URI.file('C:/sessions/first'), false);
 		await management.archiveSession('first');
 		await files.readFile(first);
+		const controller = new AbortController();
+		await files.glob({ resource: originalFolder.uri, target: { type: 'workspace', dirId: originalFolder.id } }, { includePatterns: ['**/*.ts'], excludePatterns: [], maxResults: 100 }, controller.signal);
 		const owner = { sessionId: 'first', path: 'C:/sessions/first' };
 		assert.deepEqual(calls, [
 			{ sessionDirectory: owner, path: 'main.ts' },
@@ -62,6 +65,7 @@ test('Session files preserve their original directory through selection, directo
 			{ sessionDirectory: owner, source: 'main.ts', target: 'copy.ts' },
 			{ sessionDirectory: owner, path: '.', moveRequested: false },
 			{ sessionDirectory: owner, path: 'main.ts' },
+			{ target: { type: 'session', ...owner }, query: { includePatterns: ['**/*.ts'], excludePatterns: [], maxResults: 100 }, aborted: false },
 		]);
 		await assert.rejects(async () => files.copy(first, URI.file('C:/sessions/second/copied.ts')), /between Session/);
 	} finally { browser.window.close(); }

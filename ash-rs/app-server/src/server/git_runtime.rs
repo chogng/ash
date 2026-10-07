@@ -959,6 +959,14 @@ impl GitRepositoryRuntime {
             .operation
             .lock()
             .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        if cursor.is_none() {
+            // A new traversal observes current refs and remotes. Accept that state
+            // before saving its cursor so a delayed watcher cannot invalidate it
+            // merely for reporting changes this traversal has already observed.
+            let (repository, snapshot) =
+                self.service.snapshot().map_err(GitRuntimeError::Service)?;
+            self.accept(repository, snapshot)?;
+        }
         let mut sessions = self
             .graph_sessions
             .lock()

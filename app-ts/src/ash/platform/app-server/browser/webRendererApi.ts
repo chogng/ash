@@ -1,3 +1,4 @@
+import { createAppServerFileSearchApi } from '../../search/browser/fileSearchApi.js';
 import { AppServerAssetService } from '../../assets/browser/appServerAssetService.js';
 import { AppServerIssueReporterService } from '../../issue/browser/appServerIssueReporterService.js';
 import { AppServerGitHubService } from '../../github/browser/appServerGitHubService.js';
@@ -117,6 +118,7 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 		language: createAppServerLanguageApi(connection),
 		languageServers: createAppServerLanguageServerService(connection),
 		git: createAppServerGitApi(connection),
+		fileSearch: createAppServerFileSearchApi(connection),
 		contentSearch: createAppServerContentSearchApi(connection),
 		contentSearchConfiguration: createAppServerContentSearchConfigurationApi(connection),
 		terminal: new AppServerTerminalProcessService(connection, appServer),

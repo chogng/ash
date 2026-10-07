@@ -22,7 +22,7 @@ pub(super) struct Request {
     private_ipc: Vec<String>,
     proxy_port: Option<u16>,
     #[cfg(target_os = "macos")]
-    seatbelt_deny_regexes: Vec<String>,
+    seatbelt_rules: String,
 }
 
 // The handoff carries Ash's concrete execution controls, never a serialized SDK
@@ -41,7 +41,7 @@ struct Handoff {
     bubblewrap: Option<PathBuf>,
     private_ipc: Vec<String>,
     #[cfg(target_os = "macos")]
-    seatbelt_deny_regexes: Vec<String>,
+    seatbelt_rules: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -72,7 +72,7 @@ impl Serialize for Request {
             bubblewrap: self.bubblewrap.clone(),
             private_ipc: self.private_ipc.clone(),
             #[cfg(target_os = "macos")]
-            seatbelt_deny_regexes: self.seatbelt_deny_regexes.clone(),
+            seatbelt_rules: self.seatbelt_rules.clone(),
         }
         .serialize(serializer)
     }
@@ -108,7 +108,7 @@ impl<'de> Deserialize<'de> for Request {
             private_ipc: handoff.private_ipc,
             proxy_port,
             #[cfg(target_os = "macos")]
-            seatbelt_deny_regexes: handoff.seatbelt_deny_regexes,
+            seatbelt_rules: handoff.seatbelt_rules,
         })
     }
 }
@@ -121,17 +121,19 @@ impl Request {
             .address
             .as_ref()
             .map(|address| address.port());
-        let snapshot = FilesystemSnapshot::capture(
-            inner
-                .policy
-                .readwrite_paths
-                .iter()
-                .chain(&inner.policy.readonly_paths)
-                .chain(&inner.policy.denied_paths)
-                .map(PathBuf::from)
-                .chain(std::iter::once(PathBuf::from(&inner.working_directory))),
-        )
-        .map_err(|error| unavailable(error.to_string()))?;
+        let snapshot_paths = inner
+            .policy
+            .readwrite_paths
+            .iter()
+            .chain(&inner.policy.readonly_paths)
+            .chain(&inner.policy.denied_paths)
+            .map(PathBuf::from)
+            .chain(std::iter::once(PathBuf::from(&inner.working_directory)))
+            .map(snapshot_path)
+            .collect::<std::io::Result<Vec<_>>>()
+            .map_err(|error| unavailable(error.to_string()))?;
+        let snapshot = FilesystemSnapshot::capture(snapshot_paths)
+            .map_err(|error| unavailable(error.to_string()))?;
         Ok(Self {
             inner,
             snapshot,
@@ -139,7 +141,7 @@ impl Request {
             private_ipc: Vec::new(),
             proxy_port,
             #[cfg(target_os = "macos")]
-            seatbelt_deny_regexes: Vec::new(),
+            seatbelt_rules: String::new(),
         })
     }
 
@@ -163,8 +165,8 @@ impl Request {
     }
 
     #[cfg(target_os = "macos")]
-    pub fn set_seatbelt_deny_regexes(&mut self, regexes: Vec<String>) {
-        self.seatbelt_deny_regexes = regexes;
+    pub fn set_seatbelt_rules(&mut self, rules: String) {
+        self.seatbelt_rules = rules;
     }
 
     pub fn prepare(&self) -> Result<(), SandboxError> {
@@ -194,7 +196,7 @@ impl Request {
             let seatbelt = self.inner.seatbelt.get_or_insert_with(Default::default);
             seatbelt.allow_unix_sockets = false;
             seatbelt.allowed_unix_socket_paths = self.private_ipc;
-            if !self.seatbelt_deny_regexes.is_empty() {
+            if !self.seatbelt_rules.is_empty() {
                 if seatbelt.profile_override.is_some() {
                     return Err(SandboxError::UnsupportedPolicy(
                         "continuous path rules cannot extend a Seatbelt profile override".into(),
@@ -206,11 +208,7 @@ impl Request {
                         self.inner.policy.network_proxy.address.as_ref(),
                     )
                     .map_err(SandboxError::UnsupportedPolicy)?;
-                for regex in &self.seatbelt_deny_regexes {
-                    profile.push_str(&format!(
-                        "\n(deny file-read* file-write* (regex #\"{regex}\"))"
-                    ));
-                }
+                profile.push_str(&self.seatbelt_rules);
                 self.inner
                     .seatbelt
                     .as_mut()
@@ -247,6 +245,22 @@ impl Request {
             .proxy_port
             .map(|port| mxc_sdk::mxc_common::models::ProxyAddress::new("127.0.0.1".into(), port));
     }
+}
+
+// A Unix socket cannot be opened as a file. Its deny is attached to its pathname,
+// while the containing directory supplies the handle-bound authority for that path.
+fn snapshot_path(path: PathBuf) -> std::io::Result<PathBuf> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::FileTypeExt;
+        if std::fs::metadata(&path)?.file_type().is_socket() {
+            return Ok(path
+                .parent()
+                .expect("a socket path has a parent")
+                .to_owned());
+        }
+    }
+    Ok(path)
 }
 
 fn spawn_error(error: mxc_sdk::mxc_common::models::ScriptResponse) -> SandboxError {

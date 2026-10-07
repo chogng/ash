@@ -5,7 +5,7 @@ applyTo: "**"
 
 # Testing Guidelines
 
-Validation and test synchronization are part of the implementation, regardless of language or whether a test file is directly edited. Language-specific commands and conventions live in `rust-testing.instructions.md` and `typescript-testing.instructions.md`.
+Validation and test synchronization are part of the implementation, regardless of language or whether a test file is directly edited. Rust commands and conventions live in [Rust development](../../.agents/skills/rust-development/SKILL.md#validation); TypeScript rules live in [`typescript-testing.instructions.md`](typescript-testing.instructions.md).
 
 ## 改动与配套内容同步
 

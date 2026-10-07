@@ -253,7 +253,6 @@
     "chat.context.failed": "无法添加上下文：{0}",
     "chat.context.chooseFile": "选择 {0} 中的文件",
     "chat.context.filesAdded": "已添加 {0} 个附件",
-    "chat.context.parent": "上级文件夹",
     "chat.context.image": "图片",
     "chat.context.file": "文件",
     "chat.context.context": "上下文",
@@ -350,7 +349,8 @@
     "chat.editor.wordWrap.description": "将长代码行换行以适应回复宽度。关闭时可横向滚动查看长行。",
     "chat.editor.wordWrap.off": "关闭",
     "chat.editor.wordWrap.on": "开启",
-    "chat.editor.wordWrap.invalid": "代码块自动换行必须为 on 或 off。"
+    "chat.editor.wordWrap.invalid": "代码块自动换行必须为 on 或 off。",
+    "chat.context.filePattern": "搜索文件路径（例如 src/*.ts）"
   },
   "ash.workbench": {
     "command.OpenAutomations": "打开自动化",

@@ -862,6 +862,8 @@ fn kimi_discovered_catalog_tracks_the_active_connection_and_persists_by_vendor()
         ash_protocol::CapabilitySupport::Supported
     );
     kimi.capabilities.fast_mode = ash_protocol::CapabilitySupport::Unsupported;
+    // The API connection cannot expose the subscription's high-speed model route.
+    kimi.acceleration_options.clear();
     assert_eq!(service.list().unwrap(), api_catalog);
     assert_eq!(
         service.config.read_snapshot().unwrap().values.providers[&provider]

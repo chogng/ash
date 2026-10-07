@@ -359,6 +359,53 @@ fn unchanged_watcher_refresh_keeps_graph_cursor_alive() {
 }
 
 #[test]
+fn new_graph_observes_external_changes_before_a_late_watcher_refresh() {
+    let repository = TestRepository::init();
+    for message in ["first", "second"] {
+        repository.write("file.txt", message);
+        repository.git(&["add", "."]);
+        repository.git(&["commit", "-m", message]);
+    }
+    repository.git(&[
+        "remote",
+        "add",
+        "origin",
+        "https://github.com/example/old.git",
+    ]);
+    let runtime = GitRuntime::new(
+        mutation_authorization(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    runtime.status().unwrap();
+
+    // The graph request reaches the backend before the remote edit's watcher event.
+    repository.git(&[
+        "remote",
+        "set-url",
+        "origin",
+        "https://github.com/example/new.git",
+    ]);
+    let limit = std::num::NonZeroUsize::new(1).unwrap();
+    let first_page = runtime.graph(1, limit, None).unwrap();
+    assert_eq!(
+        first_page.remotes[0].identity.as_ref().unwrap().repository,
+        "new"
+    );
+    let cursor = first_page.next_cursor.unwrap();
+    runtime.repository(None).unwrap().refresh_from_watcher();
+
+    let final_page = runtime.graph(1, limit, Some(&cursor)).unwrap();
+    assert_eq!(final_page.commits.len(), 1);
+    assert_ne!(
+        first_page.commits[0].object_id,
+        final_page.commits[0].object_id
+    );
+    assert!(!final_page.has_more);
+    assert!(final_page.next_cursor.is_none());
+}
+
+#[test]
 fn external_ref_and_remote_changes_publish_without_head_or_file_changes() {
     let repository = TestRepository::init();
     for message in ["first", "second"] {

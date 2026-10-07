@@ -19,10 +19,12 @@ for (const locale of ['en', 'zh-CN']) {
 		await add.press('Enter');
 		await picker.getByRole('combobox').fill(chinese ? '工作区文件' : 'Workspace files');
 		await page.keyboard.press('Enter');
+		await expect(picker.getByRole('combobox')).toHaveAttribute('placeholder', chinese ? '搜索文件路径（例如 src/*.ts）' : 'Search file paths (for example, src/*.ts)');
 		await picker.getByRole('combobox').fill('src/');
-		await page.keyboard.press('Enter');
-		await expect(picker).toContainText(chinese ? '上级文件夹' : 'Parent folder');
-		await picker.getByRole('combobox').fill('nested.txt');
+		await expect(picker.getByRole('option')).toHaveCount(1);
+		await expect(picker.getByRole('option')).toContainText('src/nested.txt');
+		await picker.getByRole('combobox').fill('src/*.txt');
+		await expect(picker.getByRole('option')).toContainText('src/nested.txt');
 		await page.keyboard.press('Enter');
 		await expect(attachments.getByRole('listitem')).toHaveCount(2);
 		await add.press('Enter');
@@ -140,4 +142,47 @@ test('attachment names fit a narrow composer and use the high contrast border', 
 	await remove.focus();
 	await expect(remove).toBeFocused();
 	expect(await remove.evaluate(element => element.getBoundingClientRect().width)).toBeGreaterThanOrEqual(24);
+});
+
+
+test('workspace path queries discard late results and cancel when the picker closes', async ({ page }) => {
+	await page.goto('/chatInput.html?deferFileSearch=1');
+	await page.evaluate(() => window.ashChatInputIntegration.showModels());
+	await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+	const picker = page.getByRole('dialog');
+	await picker.getByRole('combobox').fill('Workspace files');
+	await page.keyboard.press('Enter');
+	await expect(page.getByLabel('File search reads', { exact: true })).toHaveText('1');
+	await picker.getByRole('combobox').fill('brief');
+	await expect(page.getByLabel('File search reads', { exact: true })).toHaveText('2');
+	await page.evaluate(() => window.ashChatInputIntegration.releaseFileSearch(2));
+	await expect(picker.getByRole('option')).toHaveCount(1);
+	await expect(picker.getByRole('option')).toContainText('brief.txt');
+	await page.evaluate(() => window.ashChatInputIntegration.releaseFileSearch(1));
+	await expect(page.getByLabel('Completed file search reads', { exact: true })).toHaveText('2');
+	await expect(picker.getByRole('option')).toHaveCount(1);
+	await expect(picker.getByRole('option')).toContainText('brief.txt');
+	await picker.getByRole('combobox').fill('src/');
+	await expect(page.getByLabel('File search reads', { exact: true })).toHaveText('3');
+	await page.keyboard.press('Escape');
+	await page.evaluate(() => window.ashChatInputIntegration.releaseFileSearch(3));
+	await expect(page.getByLabel('Completed file search reads', { exact: true })).toHaveText('3');
+	await expect(picker).toHaveCount(0);
+	await expect(page.getByLabel('Context error')).toHaveText('');
+	await expect(page.getByRole('list', { name: 'Attached context' })).toBeHidden();
+	await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
+});
+
+test('disposing the composer cancels an outstanding workspace file scan', async ({ page }) => {
+	await page.goto('/chatInput.html?deferFileSearch=1');
+	await page.evaluate(() => window.ashChatInputIntegration.showModels());
+	await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+	await page.getByRole('dialog').getByRole('combobox').fill('Workspace files');
+	await page.keyboard.press('Enter');
+	await expect(page.getByLabel('File search reads', { exact: true })).toHaveText('1');
+	await page.evaluate(() => window.ashChatInputIntegration.dispose());
+	await page.evaluate(() => window.ashChatInputIntegration.releaseFileSearch(1));
+	await expect(page.getByLabel('Completed file search reads', { exact: true })).toHaveText('1');
+	await expect(page.getByRole('dialog')).toHaveCount(0);
+	await expect(page.getByLabel('Context error')).toHaveText('');
 });

@@ -4,6 +4,8 @@ mod process;
 #[cfg(windows)]
 mod pty;
 mod request;
+#[cfg(target_os = "macos")]
+mod seatbelt;
 #[cfg(windows)]
 pub use pty::PTY_HELPER_ARGUMENT;
 #[cfg(windows)]
@@ -158,3 +160,7 @@ fn bubblewrap(context: &InstallContext) -> Result<Option<PathBuf>, SandboxError>
 #[cfg(test)]
 #[path = "sandbox_tests.rs"]
 mod tests;
+
+#[cfg(all(test, target_os = "macos"))]
+#[path = "network_tests.rs"]
+mod network_tests;

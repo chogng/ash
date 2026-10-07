@@ -1,3 +1,5 @@
+import { IFileSearchService } from '../../platform/search/common/fileSearch.js';
+import { BrowserFileSearchService } from '../../platform/search/browser/browserFileSearchService.js';
 import { Schemas } from '../../base/common/network.js';
 import type { IFileSystemProvider } from '../../platform/files/common/fileSystemProviderService.js';
 import { IUserDataProfileService } from '../../workbench/services/userDataProfile/common/userDataProfile.js';
@@ -331,6 +333,7 @@ export abstract class Workbench extends Disposable {
 			this._register(fileService.registerProvider('file', options.browserFileSystemProvider));
 		}
 		services.registerInstance(IFileService, fileService);
+		services.registerInstance(IFileSearchService, options.api.hasAppServer ? files : services.createInstance(BrowserFileSearchService));
 		services.registerInstance(ISystemFileTransferService, files);
 		services.registerInstance(ILabelService, this._register(new LabelService(workspace)));
 		services.registerInstance(IResourceIconRenderer, themeService);

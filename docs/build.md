@@ -218,7 +218,7 @@ Sherpa ONNX 静态库使用按版本共享的校验缓存，位于 `third_party/
 
 ### 依赖检查
 
-按 [Rust 依赖规范](../.github/instructions/rust-coding-guidelines.instructions.md#dependencies-and-build-costs) 安装固定版本的检查工具，然后执行：
+按 [Rust 依赖规范](../.agents/skills/rust-development/SKILL.md#dependencies) 检查依赖。工具使用下列固定版本：
 
 ```sh
 cargo install cargo-shear --version 1.13.4 --locked

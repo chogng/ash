@@ -164,6 +164,9 @@ import type { ExtensionResourceOpenParams } from './types/ExtensionResourceOpenP
 import type { ExtensionResourceOpenResult } from './types/ExtensionResourceOpenResult.js';
 import type { FeedbackPrepareParams } from './types/FeedbackPrepareParams.js';
 import type { FeedbackUploadParams } from './types/FeedbackUploadParams.js';
+import type { FileGlobCancelParams } from './types/FileGlobCancelParams.js';
+import type { FileGlobParams } from './types/FileGlobParams.js';
+import type { FileGlobResult } from './types/FileGlobResult.js';
 import type { FsCopyParams } from './types/FsCopyParams.js';
 import type { FsCreateDirectoryParams } from './types/FsCreateDirectoryParams.js';
 import type { FsCreateFileParams } from './types/FsCreateFileParams.js';
@@ -956,6 +959,8 @@ export interface AppServerRequestMap {
   "git/fetch": { params: GitFetchParams; response: GitOperationResult };
   "git/pull": { params: GitRepositoryParams; response: GitOperationResult };
   "git/push": { params: GitRepositoryParams; response: GitOperationResult };
+  "file/search/glob": { params: FileGlobParams; response: FileGlobResult };
+  "file/search/glob/cancel": { params: FileGlobCancelParams; response: null };
   "grep/search/start": { params: ContentSearchStartParams; response: ContentSearchStartResult };
   "grep/search/read": { params: ContentSearchReadParams; response: ContentSearchReadResult };
   "grep/search/cancel": { params: ContentSearchCancelParams; response: null };
@@ -1380,6 +1385,8 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "git/fetch": { method: "git/fetch" },
   "git/pull": { method: "git/pull" },
   "git/push": { method: "git/push" },
+  "file/search/glob": { method: "file/search/glob" },
+  "file/search/glob/cancel": { method: "file/search/glob/cancel" },
   "grep/search/start": { method: "grep/search/start" },
   "grep/search/read": { method: "grep/search/read" },
   "grep/search/cancel": { method: "grep/search/cancel" },

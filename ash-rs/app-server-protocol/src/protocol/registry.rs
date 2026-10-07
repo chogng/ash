@@ -1683,6 +1683,14 @@ use crate::protocol::search::ContentSearchStartParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::search::ContentSearchStartResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::search::FileGlobCancelParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::search::FileGlobParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::search::FileGlobResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::search::FileGlobTarget;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::search::GrepIndexDisableAndDeleteParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::search::GrepIndexDisableAndDeleteResult;
@@ -4468,6 +4476,17 @@ client_methods! {
         response: GitOperationResult,
         serialization: RepositoryExclusive,
     },
+    FileGlob => "file/search/glob" {
+        params: FileGlobParams,
+        response: FileGlobResult,
+        serialization: None,
+        cancellation: "operationId",
+    },
+    FileGlobCancel => "file/search/glob/cancel" {
+        params: FileGlobCancelParams,
+        response: (),
+        serialization: None,
+    },
     ContentSearchStart => "grep/search/start" {
         params: ContentSearchStartParams,
         response: ContentSearchStartResult,
@@ -6188,6 +6207,10 @@ typescript_bindings! {
     GitCommitParams,
     GitOperationResult,
     GitCommitResult,
+    FileGlobParams,
+    FileGlobResult,
+    FileGlobTarget,
+    FileGlobCancelParams,
     ContentSearchPatternKind,
     ContentSearchCaseSensitivity,
     ContentSearchFreshness,

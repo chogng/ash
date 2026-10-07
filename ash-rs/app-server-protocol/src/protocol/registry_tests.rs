@@ -584,3 +584,39 @@ fn github_notification_and_fork_admission_preserves_write_outcomes() {
         serde_json::json!({"type":"gitHubEnterpriseBrowser","host":"git.example.com"})
     );
 }
+
+#[test]
+fn file_glob_round_trips_explicit_directory_and_declares_connection_cancellation() {
+    use super::super::search::FileGlobParams;
+    let wire = serde_json::json!({
+        "operationId":"glob-query", "target":{"type":"workspace","dirId":"workspace-folder"},
+        "includePatterns":["src/**/*.rs"], "excludePatterns":["**/*.test.rs"], "maxResults":100
+    });
+    let decoded: FileGlobParams = serde_json::from_value(wire.clone()).unwrap();
+    assert_eq!(serde_json::to_value(decoded).unwrap(), wire);
+    let method = definition("file/search/glob");
+    assert_eq!(method.serialization_scope(&wire).unwrap(), None);
+    assert_eq!(
+        method.cancellation_operation_id(&wire).unwrap().as_deref(),
+        Some("glob-query")
+    );
+    let mut unexpected = wire.clone();
+    unexpected["path"] = serde_json::json!("/ungranted");
+    assert!(serde_json::from_value::<FileGlobParams>(unexpected).is_err());
+    let mut missing = wire;
+    missing.as_object_mut().unwrap().remove("target");
+    assert!(serde_json::from_value::<FileGlobParams>(missing).is_err());
+    for operation in ["".to_owned(), "x".repeat(129)] {
+        assert!(
+            method
+                .cancellation_operation_id(&serde_json::json!({"operationId":operation}))
+                .is_err()
+        );
+    }
+    assert_eq!(
+        definition("file/search/glob/cancel")
+            .serialization_scope(&serde_json::json!({"operationId":"glob-query"}))
+            .unwrap(),
+        None
+    );
+}

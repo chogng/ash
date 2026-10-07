@@ -185,3 +185,52 @@ pub struct GrepIndexDisableAndDeleteResult {
     pub config: ConfigCommandResult,
     pub deletion: LocalIndexClearOutcomeDto,
 }
+
+/// Runs a bounded path glob in an explicitly selected, authorized workspace directory.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct FileGlobParams {
+    #[schemars(length(min = 1, max = 128))]
+    pub operation_id: String,
+    pub target: FileGlobTarget,
+    #[schemars(length(max = 64))]
+    pub include_patterns: Vec<String>,
+    #[schemars(length(max = 64))]
+    pub exclude_patterns: Vec<String>,
+    #[schemars(range(min = 1, max = 5000))]
+    pub max_results: usize,
+}
+
+/// Paths use root-relative forward-slash separators on every platform.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FileGlobResult {
+    pub paths: Vec<String>,
+    pub total_matches: usize,
+}
+
+/// Requests cancellation on this connection; the original request carries the terminal result.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct FileGlobCancelParams {
+    #[schemars(length(min = 1, max = 128))]
+    pub operation_id: String,
+}
+
+/// Directory identity is supplied by the owning Workspace or Session, never inferred from cwd.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum FileGlobTarget {
+    Workspace {
+        dir_id: String,
+    },
+    Session {
+        session_id: ash_protocol::SessionId,
+        path: PathBuf,
+    },
+}

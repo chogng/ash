@@ -1,3 +1,4 @@
+import { URI } from '../../../../base/common/uri.js';
 import { createTestInitializeResult } from '../common/testAppServerProtocol.js';
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
@@ -675,4 +676,49 @@ test('extension disk requests are rejected before reaching a renderer service', 
 		assert.equal(calls, 0);
 		assert.deepEqual(transport.requests.at(-1)?.error, { code: -32000, message: 'Workspace file requests must be handled by App Server' });
 	} finally { registration.dispose(); }
+});
+
+test('file glob uses the shared backend and maps root-relative paths to renderer resources', async () => {
+	const transport = new FakeTransport();
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	using cleanup = toDisposable(() => connected.dispose());
+	const folder = { resource: URI.file('/workspace'), target: { type: 'workspace' as const, dirId: 'folder' } };
+	const query = { includePatterns: ['src/**/*.ts'], excludePatterns: ['**/*.test.ts'], maxResults: 100 };
+	const pending = connected.api.fileSearch.glob(folder, query);
+	const request = transport.requests.at(-1)!;
+	assert.equal(request.method, 'file/search/glob');
+	assert.ok(isRecord(request.params));
+	assert.equal(typeof request.params.operationId, 'string');
+	assert.deepEqual(request.params, { operationId: request.params.operationId, target: folder.target, ...query });
+	transport.respondAt(-1, { paths: ['src/中文.ts'], totalMatches: 105 });
+	const result = await pending;
+	assert.equal(result.matches[0]?.resource.path, '/workspace/src/中文.ts');
+	assert.equal(result.matches[0]?.path, 'src/中文.ts');
+	assert.equal(result.totalMatches, 105);
+});
+
+test('file glob cancellation waits for the original terminal reply and rejects late results', async () => {
+	const transport = new FakeTransport();
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	using cleanup = toDisposable(() => connected.dispose());
+	const folder = { resource: URI.file('/workspace'), target: { type: 'workspace' as const, dirId: 'folder' } };
+	const query = { includePatterns: [], excludePatterns: [], maxResults: 100 };
+	const controller = new AbortController();
+	const pending = connected.api.fileSearch.glob(folder, query, controller.signal);
+	const operation = transport.requests.at(-1)!;
+	controller.abort();
+	const cancel = transport.requests.at(-1)!;
+	assert.equal(cancel.method, 'file/search/glob/cancel');
+	assert.ok(isRecord(operation.params));
+	assert.deepEqual(cancel.params, { operationId: operation.params.operationId });
+	let settled = false;
+	const rejected = assert.rejects(pending, isCancellationError).then(() => { settled = true; });
+	transport.respondAt(-1, null);
+	await Promise.resolve();
+	assert.equal(settled, false);
+	transport.respondAt(-2, { paths: ['stale.txt'], totalMatches: 1 });
+	await rejected;
+	const count = transport.requests.length;
+	await assert.rejects(connected.api.fileSearch.glob(folder, query, controller.signal), isCancellationError);
+	assert.equal(transport.requests.length, count);
 });

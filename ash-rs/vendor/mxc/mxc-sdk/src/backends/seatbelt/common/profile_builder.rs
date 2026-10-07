@@ -29,7 +29,7 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::mxc_common::filesystem_resolve::{resolve_path_plan, FsIntent};
+use crate::mxc_common::filesystem_resolve::{FsIntent, resolve_path_plan};
 use crate::mxc_common::host_is_canonical_loopback;
 use crate::mxc_common::models::{ClipboardPolicy, ContainerPolicy, ExecutionRequest, ProxyAddress};
 use crate::seatbelt_common::seatbelt_policy;
@@ -110,6 +110,7 @@ pub fn build_profile_with_proxy(
     }
     // Policy-derived deny rules go LAST so they win on conflict.
     write_filesystem_deny(&mut out, &resolved);
+    write_filesystem_boundaries(&mut out, &resolved);
 
     Ok(out)
 }
@@ -414,6 +415,39 @@ fn write_filesystem_deny(out: &mut String, paths: &ResolvedPaths) {
                 out.push_str("))\n");
             }
         }
+    }
+}
+
+/// Keep authority roots and protected descendants at their policy pathnames.
+/// A read/write deny on a child alone does not prevent renaming its writable
+/// ancestor, which would move the child outside that pathname restriction.
+fn write_filesystem_boundaries(out: &mut String, paths: &ResolvedPaths) {
+    let mut anchors = std::collections::BTreeSet::new();
+    for root in &paths.readwrite {
+        if root != "/" {
+            anchors.insert(root.clone());
+        }
+    }
+    for path in paths.readonly.iter().chain(&paths.denied) {
+        for ancestor in Path::new(path).ancestors().skip(1) {
+            anchors.insert(ancestor.to_string_lossy().into_owned());
+        }
+    }
+    for path in anchors {
+        let _ = writeln!(
+            out,
+            "(deny file-write-unlink (require-all (vnode-type DIRECTORY) (literal {})))",
+            quote_scheme(&path)
+        );
+    }
+    // These selectors mutate files through read-only descriptors; file-write*
+    // does not cover them, even under deny-default. Full disk write without
+    // carveouts retains its explicitly unrestricted behavior.
+    if !paths.readwrite.iter().any(|path| path == "/")
+        || !paths.readonly.is_empty()
+        || !paths.denied.is_empty()
+    {
+        out.push_str("(deny system-fcntl (fcntl-command 80 110))\n");
     }
 }
 
@@ -2158,7 +2192,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn a_link_the_caller_controls_is_not_trusted() {
-        use std::os::unix::fs::{symlink, MetadataExt as _};
+        use std::os::unix::fs::{MetadataExt as _, symlink};
 
         let dir = std::env::temp_dir().join(format!("mxc-devdir-trust-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
@@ -2207,3 +2241,7 @@ mod tests {
         assert!(p.contains(&format!("(subpath \"{}\")", granted.display())));
     }
 }
+
+#[cfg(test)]
+#[path = "profile_security_tests.rs"]
+mod security_tests;

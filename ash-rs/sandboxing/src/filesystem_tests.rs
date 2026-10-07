@@ -150,3 +150,45 @@ fn minimal_host_read_requires_an_explicit_read_rule() {
         "/outside"
     })));
 }
+
+#[test]
+fn configured_glob_cases_resolve_with_normalized_separators() {
+    for (pattern, candidate, selected) in [
+        ("**/*.ts", "main.ts", true),
+        ("**/*.ts", "src/nested/main.ts", true),
+        ("src/**/*.{ts,tsx}", "src/main.tsx", true),
+        ("src/**/file[0-9]?.ts", "src/deep/file1a.ts", true),
+        ("src/[!a]*.ts", "src/b.ts", true),
+        ("src/[!a]*.ts", "src/a.ts", false),
+        ("*.ts", "src/main.ts", false),
+        ("**/*.{ts,{js,jsx}}", "main.jsx", true),
+        ("src\\**\\*.ts", "src/main.ts", true),
+    ] {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join(candidate);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, "canary").unwrap();
+        let dir = Dir::open_local(temp.path()).unwrap();
+        let scope = SandboxScope::single(dir.clone())
+            .with_path_rules(vec![
+                SandboxPathRule::pattern(
+                    dir.clone(),
+                    pattern,
+                    SandboxPathAccess::Denied,
+                    PatternMatchTiming::PreparationSnapshot,
+                )
+                .unwrap(),
+            ])
+            .unwrap();
+        let resolved = scope
+            .resolve_filesystem(FileSystemAccess::DirectoryWrite)
+            .unwrap();
+        assert_eq!(
+            resolved
+                .denied_paths()
+                .contains(&dir.canonical_path().join(candidate)),
+            selected,
+            "{pattern}: {candidate}"
+        );
+    }
+}

@@ -132,7 +132,8 @@ test-search-rust:
 
 # Validate search consumers, backend behavior, renderer lifecycle, and compiler warnings.
 test-search: check-search test-search-rust
-    pnpm --dir app-ts test:unit --run src/ash/platform/search/test/browser/searchService.test.ts --run src/ash/workbench/contrib/search/test/browser/searchViewPane.test.ts
+    pnpm --dir app-ts test:unit --run src/ash/platform/search/test/browser/searchService.test.ts --run src/ash/platform/search/test/browser/browserFileSearchService.test.ts --run src/ash/platform/app-server/test/browser/webRendererApi.test.ts --run src/ash/sessions/test/browser/sessionFileService.test.ts --run src/ash/workbench/contrib/search/test/browser/searchViewPane.test.ts
+    pnpm --dir app-ts test:browser:integration chatContextActions.integration.spec.ts --project=chromium
     pnpm --dir app-ts typecheck:renderer
     just check-search --deny-warnings
 

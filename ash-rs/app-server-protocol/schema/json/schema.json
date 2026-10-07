@@ -10890,6 +10890,38 @@
         {
           "properties": {
             "method": {
+              "const": "file/search/glob",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/FileGlobParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "file/search/glob/cancel",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/FileGlobCancelParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "grep/search/start",
               "type": "string"
             },
@@ -17475,6 +17507,38 @@
             },
             "result": {
               "$ref": "#/$defs/GitOperationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "file/search/glob",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/FileGlobResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "file/search/glob/cancel",
+              "type": "string"
+            },
+            "result": {
+              "type": "null"
             }
           },
           "required": [
@@ -24986,6 +25050,127 @@
         "digest"
       ],
       "type": "object"
+    },
+    "FileGlobCancelParams": {
+      "additionalProperties": false,
+      "description": "Requests cancellation on this connection; the original request carries the terminal result.",
+      "properties": {
+        "operationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "operationId"
+      ],
+      "type": "object"
+    },
+    "FileGlobParams": {
+      "additionalProperties": false,
+      "description": "Runs a bounded path glob in an explicitly selected, authorized workspace directory.",
+      "properties": {
+        "excludePatterns": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "type": "array"
+        },
+        "includePatterns": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "type": "array"
+        },
+        "maxResults": {
+          "format": "uint",
+          "maximum": 5000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "operationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "target": {
+          "$ref": "#/$defs/FileGlobTarget"
+        }
+      },
+      "required": [
+        "operationId",
+        "target",
+        "includePatterns",
+        "excludePatterns",
+        "maxResults"
+      ],
+      "type": "object"
+    },
+    "FileGlobResult": {
+      "description": "Paths use root-relative forward-slash separators on every platform.",
+      "properties": {
+        "paths": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "totalMatches": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "paths",
+        "totalMatches"
+      ],
+      "type": "object"
+    },
+    "FileGlobTarget": {
+      "description": "Directory identity is supplied by the owning Workspace or Session, never inferred from cwd.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "dirId": {
+              "type": "string"
+            },
+            "type": {
+              "const": "workspace",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "dirId"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "sessionId": {
+              "$ref": "#/$defs/SessionId"
+            },
+            "type": {
+              "const": "session",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "sessionId",
+            "path"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "ForkedAgentContext": {
       "description": "Selection policy for inheriting a fixed prefix of parent Thread history.",

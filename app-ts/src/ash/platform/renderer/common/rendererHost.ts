@@ -1,3 +1,4 @@
+import type { IFileSearchService } from '../../search/common/fileSearch.js';
 import type { IAssetService } from '../../assets/common/assetService.js';
 import type { IIssueReporterService } from '../../issue/common/issue.js';
 import type { IGitHubService } from '../../github/common/githubService.js';
@@ -103,6 +104,7 @@ export interface IRendererHost extends RendererHostCapabilities {
 	readonly syntax: ISyntaxApi;
 	readonly language: ILanguageApi;
 	readonly git: IGitApi;
+	readonly fileSearch: IFileSearchService;
 	readonly contentSearch: IContentSearchApi;
 	readonly contentSearchConfiguration: IContentSearchConfigurationService;
 	readonly terminal: ITerminalProcessService;

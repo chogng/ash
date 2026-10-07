@@ -10,7 +10,7 @@ Before changing a file, identify its owner and read every matching scoped instru
 | Editor implementation | [`editor.instructions.md`](instructions/editor.instructions.md) |
 | Browser UI or CSS | [`browser-ui.instructions.md`](instructions/browser-ui.instructions.md) |
 | Any implementation or test | [`testing.instructions.md`](instructions/testing.instructions.md) |
-| Rust, Cargo manifests/lockfile, `.cargo/`, or Rust build checks | [`rust-coding-guidelines.instructions.md`](instructions/rust-coding-guidelines.instructions.md) and [`rust-testing.instructions.md`](instructions/rust-testing.instructions.md) |
+| Rust, Cargo manifests/lockfile, `.cargo/`, or Rust build checks | [Rust rules in `AGENTS.md`](../AGENTS.md#rust-rules) |
 | TypeScript tests and validation | [`typescript-testing.instructions.md`](instructions/typescript-testing.instructions.md) |
 | `ash-rs/native` or `app-rs` | [`native.instructions.md`](instructions/native.instructions.md) |
 | Markdown documentation | [`documentation.instructions.md`](instructions/documentation.instructions.md) |
@@ -74,7 +74,7 @@ Generic Marketplace infrastructure and templates must not hardcode a repository 
 - For ordinary tasks, implement the requested behavior, run the relevant tests, and report results directly. Update existing documentation only where behavior or responsibilities changed. The staged artifact workflow in [`docs/development-workflow.md`](../docs/development-workflow.md) applies only when the user explicitly invokes `/develop`.
 - Modify the exact repository or worktree the user named. Do not substitute a temporary clone, another worktree, or only a remote branch without explicit agreement.
 - In an owner-led pre-release repository, a PR is not the default integration requirement. Use PR review for external contributions, security-sensitive work, or real multi-person review needs.
-- Use the smallest typecheck, test, build, or documentation check that covers the changed surface. Rust package commands and workspace escalation are defined by [`rust-testing.instructions.md`](instructions/rust-testing.instructions.md); TypeScript validation is defined by [`typescript-testing.instructions.md`](instructions/typescript-testing.instructions.md). Do not report a command as passing unless it completed successfully.
+- Use the smallest typecheck, test, build, or documentation check that covers the changed surface. Rust package commands and workspace escalation are defined in [Rust development](../.agents/skills/rust-development/SKILL.md#validation); TypeScript validation is defined by [`typescript-testing.instructions.md`](instructions/typescript-testing.instructions.md). Do not report a command as passing unless it completed successfully.
 - Preserve unrelated working-tree changes. A historical violation is migration debt, not precedent for new code.
 
 ## Learnings

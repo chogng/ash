@@ -1,3 +1,5 @@
+import { IFileSearchService } from '../../platform/search/common/fileSearch.js';
+import { BrowserFileSearchService } from '../../platform/search/browser/browserFileSearchService.js';
 import { AppServerAvailableContext } from '../common/contextkeys.js';
 import { localize } from '../../nls.js';
 import { Schemas } from '../../base/common/network.js';
@@ -676,6 +678,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IExtensionService, extensionService);
 		const extensionReady = extensionService.start();
 		void extensionReady.catch(error => logService.error("extensions", "Declarative extension activation failed", error));
+		services.registerInstance(IFileSearchService, api.hasAppServer ? api.fileSearch : services.createInstance(BrowserFileSearchService));
 		services.registerInstance(
 			IContentSearchService,
 			api.hasAppServer ? new BrowserContentSearchService(api.contentSearch, workspaceContext) : new FileContentSearchService(fileService, workspaceContext),

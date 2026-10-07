@@ -622,20 +622,278 @@ mod execution {
             ]
         );
     }
+
+    #[test]
+    fn nested_readonly_paths_cannot_move_out_of_their_restrictions() {
+        let temp = tempfile::tempdir().unwrap();
+        fs::create_dir_all(temp.path().join(".github/workflows")).unwrap();
+        fs::create_dir(temp.path().join("free")).unwrap();
+        fs::write(
+            temp.path().join(".github/workflows/release.yml"),
+            "original",
+        )
+        .unwrap();
+        let dir = Dir::open_local(temp.path()).unwrap();
+        let scope = SandboxScope::single(dir.clone())
+            .with_path_rules(vec![
+                SandboxPathRule::exact(
+                    dir,
+                    ".github/workflows/release.yml",
+                    SandboxPathAccess::ReadOnly,
+                    ash_sandboxing::MissingPathBehavior::Reject,
+                )
+                .unwrap(),
+            ])
+            .unwrap();
+        let policy = SandboxPolicy::new(FileSystemAccess::DirectoryWrite, NetworkAccess::Denied);
+        let output = run(&scope, policy, "/bin/sh", &["-c".into(),
+            "mv free free-renamed || exit 1; if mv .github/workflows .github/moved; then exit 2; fi; if mv .github moved; then exit 3; fi; test \"$(cat .github/workflows/release.yml)\" = original".into()]);
+        assert_eq!(output.exit_code, Some(0), "{output:?}");
+        assert!(temp.path().join("free-renamed").exists());
+    }
+
+    #[test]
+    fn metadata_names_remain_readonly_before_their_first_creation() {
+        let temp = tempfile::tempdir().unwrap();
+        let dir = Dir::open_local(temp.path()).unwrap();
+        let scope = SandboxScope::single(dir);
+        let output = run(&scope, SandboxPolicy::new(FileSystemAccess::DirectoryWrite, NetworkAccess::Denied), "/bin/sh", &["-c".into(),
+            "mkdir ordinary || exit 1; for name in .git .agents .codex .ash; do if mkdir \"$name\"; then exit 2; fi; if printf forbidden >\"$name\"; then exit 3; fi; done".into()]);
+        assert_eq!(output.exit_code, Some(0), "{output:?}");
+        assert!(temp.path().join("ordinary").is_dir());
+        for name in ash_sandboxing::PROTECTED_DIR_METADATA_NAMES {
+            assert!(!temp.path().join(name).exists());
+        }
+    }
+
+    #[test]
+    fn general_continuous_globs_cover_late_files_and_pin_matching_ancestors() {
+        let temp = tempfile::tempdir().unwrap();
+        fs::create_dir_all(temp.path().join("config/nested")).unwrap();
+        fs::create_dir(temp.path().join("free")).unwrap();
+        let dir = Dir::open_local(temp.path()).unwrap();
+        let scope = SandboxScope::single(dir.clone())
+            .with_path_rules(vec![
+                SandboxPathRule::pattern(
+                    dir,
+                    "config/**/*.{key,pem}",
+                    SandboxPathAccess::Denied,
+                    PatternMatchTiming::Continuous,
+                )
+                .unwrap(),
+            ])
+            .unwrap();
+        let root = temp.path().to_owned();
+        let writer = std::thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(4);
+            while !root.join("started").exists() {
+                assert!(Instant::now() < deadline);
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            fs::write(root.join("config/nested/late.key"), "secret").unwrap();
+            fs::write(root.join("ready"), "ready").unwrap();
+        });
+        let output = run(&scope, SandboxPolicy::new(FileSystemAccess::DirectoryWrite, NetworkAccess::Denied), "/bin/sh", &["-c".into(),
+            "mv free free-renamed || exit 1; touch started; while [ ! -e ready ]; do sleep 0.05; done; if cat config/nested/late.key; then exit 2; fi; if mv config/nested moved; then exit 3; fi; if printf bad >config/new.pem; then exit 4; fi; printf allowed >config/nested/ordinary.txt".into()]);
+        writer.join().unwrap();
+        assert_eq!(output.exit_code, Some(0), "{output:?}");
+        assert!(!output.stdout.contains("secret"), "{output:?}");
+        assert_eq!(
+            fs::read_to_string(temp.path().join("config/nested/late.key")).unwrap(),
+            "secret"
+        );
+        assert_eq!(
+            fs::read_to_string(temp.path().join("config/nested/ordinary.txt")).unwrap(),
+            "allowed"
+        );
+    }
+
+    // The test process invokes the platform syscalls through Python, keeping
+    // unsafe FFI outside this crate's forbid(unsafe_code) boundary.
+    const FCNTL_PROBE: &str = r#"
+import ctypes, errno, os, sys
+lib = ctypes.CDLL(None, use_errno=True)
+# Darwin arm64 distinguishes fixed arguments from the variadic argument.
+lib.fcntl.argtypes = [ctypes.c_int, ctypes.c_int]
+if len(sys.argv) > 1 and sys.argv[1] == 'prepare':
+    class Store(ctypes.Structure):
+        _fields_ = [('flags', ctypes.c_uint32), ('position', ctypes.c_int),
+                    ('offset', ctypes.c_int64), ('length', ctypes.c_int64), ('allocated', ctypes.c_int64)]
+    fd = os.open('donor', os.O_RDWR)
+    store = Store(4, 3, 0, 65536, 0)
+    assert lib.fcntl(fd, 42, ctypes.byref(store)) == 0, ctypes.get_errno()
+    os.close(fd)
+    sys.exit(0)
+denied = open('expectation').read() == 'deny'
+fds = [os.open(path, os.O_RDONLY if denied else os.O_RDWR) for path in ['../canary', 'donor', '../receiver']]
+if denied:
+    try:
+        os.open('../canary', os.O_WRONLY)
+    except OSError as error:
+        assert error.errno == errno.EPERM, error
+    else:
+        raise AssertionError('ordinary canary write was allowed')
+class Attributes(ctypes.Structure):
+    _fields_ = [('count', ctypes.c_uint16), ('reserved', ctypes.c_uint16),
+                ('common', ctypes.c_uint32), ('volume', ctypes.c_uint32),
+                ('directory', ctypes.c_uint32), ('file', ctypes.c_uint32), ('fork', ctypes.c_uint32)]
+attributes = Attributes(5, 0, 0x00080000, 0, 0, 0, 0)
+generation = (ctypes.c_uint32 * 2)()
+assert lib.fgetattrlist(fds[0], ctypes.byref(attributes), generation, ctypes.c_size_t(8), 0x20) == 0, ctypes.get_errno()
+assert generation[0] == 8
+for fd, selector, argument in [(fds[0], 80, generation[1]), (fds[1], 110, fds[2])]:
+    result = lib.fcntl(fd, selector, ctypes.c_uint32(argument))
+    error = ctypes.get_errno()
+    if denied:
+        assert (result, error) == (-1, errno.EPERM), (selector, result, error)
+    elif selector == 110 and result == -1 and error == errno.ENOTSUP:
+        print('transfer positive control unsupported')
+    else:
+        assert result == 0, (selector, result, error)
+print('fcntl probes completed')
+"#;
+
+    #[test]
+    fn restricted_filesystems_deny_mutating_fcntls_through_readonly_descriptors() {
+        use std::os::macos::fs::MetadataExt;
+        #[derive(Debug, PartialEq, Eq)]
+        struct Snapshot {
+            bytes: Vec<u8>,
+            blocks: u64,
+            flags: u32,
+            modified: (i64, i64),
+            changed: (i64, i64),
+        }
+        fn snapshot(root: &std::path::Path) -> Vec<Snapshot> {
+            ["canary", "work/donor", "receiver"]
+                .map(|name| {
+                    let path = root.join(name);
+                    let metadata = fs::metadata(&path).unwrap();
+                    Snapshot {
+                        bytes: fs::read(path).unwrap(),
+                        blocks: metadata.st_blocks(),
+                        flags: metadata.st_flags(),
+                        modified: (metadata.st_mtime(), metadata.st_mtime_nsec()),
+                        changed: (metadata.st_ctime(), metadata.st_ctime_nsec()),
+                    }
+                })
+                .into()
+        }
+        for access in [
+            None,
+            Some(FileSystemAccess::ReadOnly),
+            Some(FileSystemAccess::DirectoryWrite),
+            Some(FileSystemAccess::FullAccess),
+        ] {
+            let temp = tempfile::tempdir().unwrap();
+            fs::create_dir(temp.path().join("work")).unwrap();
+            fs::write(temp.path().join("canary"), "outside canary").unwrap();
+            fs::write(temp.path().join("receiver"), []).unwrap();
+            fs::write(
+                temp.path().join("work/expectation"),
+                if access.is_some() { "deny" } else { "allow" },
+            )
+            .unwrap();
+            // Retain the file until after verification so closing the helper
+            // does not release its unused preallocation beyond EOF.
+            let donor = fs::File::create(temp.path().join("work/donor")).unwrap();
+            let prepared = std::process::Command::new("/usr/bin/python3")
+                .args(["-c", FCNTL_PROBE, "prepare"])
+                .current_dir(temp.path().join("work"))
+                .output()
+                .unwrap();
+            assert!(prepared.status.success(), "{prepared:?}");
+            let before = snapshot(temp.path());
+            assert!(before[1].blocks > 0);
+            let arguments = ["-c".into(), FCNTL_PROBE.into()];
+            let (status, stdout, stderr) = match access {
+                None => {
+                    let output = std::process::Command::new("/usr/bin/python3")
+                        .args(&arguments)
+                        .current_dir(temp.path().join("work"))
+                        .output()
+                        .unwrap();
+                    (
+                        output.status.code(),
+                        String::from_utf8(output.stdout).unwrap(),
+                        String::from_utf8(output.stderr).unwrap(),
+                    )
+                }
+                Some(access) => {
+                    let (scope, arguments) = if access == FileSystemAccess::FullAccess {
+                        let dir = Dir::open_local(temp.path()).unwrap();
+                        let scope = SandboxScope::single(dir.clone())
+                            .with_path_rules(vec![
+                                SandboxPathRule::pattern(
+                                    dir,
+                                    "**/{canary,donor,receiver}",
+                                    SandboxPathAccess::ReadOnly,
+                                    PatternMatchTiming::Continuous,
+                                )
+                                .unwrap(),
+                            ])
+                            .unwrap();
+                        (
+                            scope,
+                            [
+                                "-c".into(),
+                                format!("import os; os.chdir('work')\n{FCNTL_PROBE}"),
+                            ],
+                        )
+                    } else {
+                        let dir = Dir::open_local(temp.path().join("work")).unwrap();
+                        (SandboxScope::single(dir), arguments)
+                    };
+                    let output = run(
+                        &scope,
+                        SandboxPolicy::new(access, NetworkAccess::Denied),
+                        "/usr/bin/python3",
+                        &arguments,
+                    );
+                    (output.exit_code, output.stdout, output.stderr)
+                }
+            };
+            assert_eq!(status, Some(0), "{access:?}: {stdout}; {stderr}");
+            assert!(stdout.contains("fcntl probes completed"));
+            let after = snapshot(temp.path());
+            if access.is_some() {
+                assert_eq!(after, before, "restricted fcntls changed canaries");
+            } else {
+                assert!(
+                    after[0].bytes.is_empty(),
+                    "positive compression control must truncate"
+                );
+            }
+            drop(donor);
+        }
+    }
 }
 
 #[cfg(target_os = "macos")]
 #[test]
-fn restricted_pty_requires_an_explicit_host_helper() {
+fn restricted_pty_uses_the_sdk_without_a_host_helper() {
     let temp = tempfile::tempdir().unwrap();
     let dir = Dir::open_local(temp.path()).unwrap();
     let backend = MxcSandbox::new(InstallContext::current());
-    let command = SandboxCommand::new("/bin/sh", ["-c", "exit 0"], dir.canonical_path())
-        .with_pty(ash_utils_pty::TerminalSize { rows: 24, cols: 80 });
+    let command = SandboxCommand::new(
+        "/bin/sh",
+        ["-c", "test -t 0 && test -t 1"],
+        dir.canonical_path(),
+    )
+    .with_pty(ash_utils_pty::TerminalSize { rows: 24, cols: 80 });
     let policy = SandboxPolicy::new(FileSystemAccess::ReadOnly, NetworkAccess::Denied);
-    let error = backend.prepare(&command, policy, &dir).unwrap_err();
-    assert!(
-        error.to_string().contains("PTY helper is not configured"),
-        "{error}"
-    );
+    let mut process = backend
+        .prepare(&command, policy, &dir)
+        .unwrap()
+        .spawn(&[])
+        .unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    let status = loop {
+        if let Some(status) = process.try_wait().unwrap() {
+            break status;
+        }
+        assert!(std::time::Instant::now() < deadline);
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    };
+    assert_eq!(status, ash_sandboxing::SandboxProcessExitStatus::Code(0));
 }

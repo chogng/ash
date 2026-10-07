@@ -1,0 +1,4 @@
+interface:
+  display_name: "Rust Development"
+  short_description: "Implement and validate Ash Rust changes"
+  default_prompt: "Use $rust-development to implement and validate this Ash Rust change."

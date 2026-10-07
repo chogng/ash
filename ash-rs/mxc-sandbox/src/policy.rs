@@ -10,8 +10,6 @@ use mxc_sdk::mxc_common::models::ContainerPolicy;
 use mxc_sdk::mxc_contract::published::v1_0_0 as contract;
 use mxc_sdk::mxc_contract::published::v1_0_0::OptionalField;
 use std::path::Path;
-#[cfg(target_os = "macos")]
-use std::time::{Duration, Instant};
 
 pub(super) fn request(
     command: &SandboxCommand,
@@ -101,7 +99,7 @@ pub(super) fn request(
                 request.inner.policy.readwrite_paths.push(device.to_owned());
             }
         }
-        request.set_seatbelt_deny_regexes(continuous_seatbelt_denials(scope)?);
+        request.set_seatbelt_rules(crate::seatbelt::rules(scope, &resolved_filesystem)?);
     }
     #[cfg(target_os = "macos")]
     request.set_private_ipc(
@@ -112,63 +110,6 @@ pub(super) fn request(
             .collect::<Result<Vec<_>, _>>()?,
     );
     Ok(request)
-}
-
-#[cfg(target_os = "macos")]
-fn continuous_seatbelt_denials(scope: &SandboxScope) -> Result<Vec<String>, SandboxError> {
-    let mut regexes = Vec::new();
-    for rule in scope.path_rules() {
-        let Some(pattern) = rule.continuous_pattern() else {
-            continue;
-        };
-        if rule.access() != ash_sandboxing::SandboxPathAccess::Denied || pattern != "**/.env" {
-            return Err(SandboxError::UnsupportedPolicy(format!(
-                "Seatbelt cannot enforce continuous filesystem pattern: {pattern}"
-            )));
-        }
-        reject_linked_env_files(rule.owner().canonical_path())?;
-        // Match the basename on every host path so a workspace ancestor move
-        // cannot carry the protected file beyond a root-anchored deny.
-        regexes.push(r"^(/[^/]+)*/\.env(/.*)?$".to_owned());
-    }
-    Ok(regexes)
-}
-
-#[cfg(target_os = "macos")]
-fn reject_linked_env_files(root: &Path) -> Result<(), SandboxError> {
-    // Seatbelt filters pathnames, so an existing hard link could expose an
-    // .env inode through another name. Inspect only directories and .env files.
-    let started = Instant::now();
-    let mut pending = vec![root.to_owned()];
-    while let Some(directory) = pending.pop() {
-        if started.elapsed() > Duration::from_secs(30) {
-            return Err(SandboxError::InvalidScope(
-                "continuous .env link inspection exceeded its preparation budget".into(),
-            ));
-        }
-        for entry in std::fs::read_dir(&directory).map_err(|error| {
-            SandboxError::Io(format!(
-                "cannot enumerate '{}': {error}",
-                directory.display()
-            ))
-        })? {
-            let entry = entry.map_err(|error| SandboxError::Io(error.to_string()))?;
-            let path = entry.path();
-            if entry.file_name() == ".env" {
-                ash_sandboxing::reject_linked_file(&path)?;
-            }
-            if entry
-                .file_type()
-                .map_err(|error| {
-                    SandboxError::Io(format!("cannot inspect '{}': {error}", path.display()))
-                })?
-                .is_dir()
-            {
-                pending.push(path);
-            }
-        }
-    }
-    Ok(())
 }
 
 fn filesystem_from_resolved(

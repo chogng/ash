@@ -1,29 +1,3 @@
-diff --git a/src/mxc-sdk/build/build_mxc_build_common.rs b/src/mxc-sdk/build/build_mxc_build_common.rs
---- a/src/mxc-sdk/build/build_mxc_build_common.rs
-+++ b/src/mxc-sdk/build/build_mxc_build_common.rs
-@@ -103,6 +103,10 @@
-     };
-     let output = compiler
-         .arg("/nologo")
-+        // winresource writes UTF-8, including the copyright symbol. Neither
-+        // the host ANSI codepage nor LLVM's default identifies that encoding.
-+        .arg("/c")
-+        .arg("65001")
-         .arg(format!("/fo{}", compiled_path.display()))
-         .arg(&resource_path)
-         .output()?;
-diff --git a/src/mxc-sdk/build.rs b/src/mxc-sdk/build.rs
---- a/src/mxc-sdk/build.rs
-+++ b/src/mxc-sdk/build.rs
-@@ -23,7 +23,7 @@
- // The SDK build uses the release metadata subset. Runtime and executor modules
- // include the remaining constants and stderr helpers.
- #[allow(dead_code)]
--#[path = "src/backends/nanvix/common/mod.rs"]
-+#[path = "src/backends/nanvix/common.rs"]
- mod nanvix_common;
- 
- fn main() -> Result<(), Box<dyn std::error::Error>> {
 diff --git a/src/mxc-sdk/Cargo.toml b/src/mxc-sdk/Cargo.toml
 --- a/src/mxc-sdk/Cargo.toml
 +++ b/src/mxc-sdk/Cargo.toml
@@ -145,6 +119,32 @@ diff --git a/src/mxc-sdk/Cargo.toml b/src/mxc-sdk/Cargo.toml
  
  [[example]]
  name = "isolation_session_console"
+diff --git a/src/mxc-sdk/build/build_mxc_build_common.rs b/src/mxc-sdk/build/build_mxc_build_common.rs
+--- a/src/mxc-sdk/build/build_mxc_build_common.rs
++++ b/src/mxc-sdk/build/build_mxc_build_common.rs
+@@ -103,6 +103,10 @@
+     };
+     let output = compiler
+         .arg("/nologo")
++        // winresource writes UTF-8, including the copyright symbol. Neither
++        // the host ANSI codepage nor LLVM's default identifies that encoding.
++        .arg("/c")
++        .arg("65001")
+         .arg(format!("/fo{}", compiled_path.display()))
+         .arg(&resource_path)
+         .output()?;
+diff --git a/src/mxc-sdk/build.rs b/src/mxc-sdk/build.rs
+--- a/src/mxc-sdk/build.rs
++++ b/src/mxc-sdk/build.rs
+@@ -23,7 +23,7 @@
+ // The SDK build uses the release metadata subset. Runtime and executor modules
+ // include the remaining constants and stderr helpers.
+ #[allow(dead_code)]
+-#[path = "src/backends/nanvix/common/mod.rs"]
++#[path = "src/backends/nanvix/common.rs"]
+ mod nanvix_common;
+ 
+ fn main() -> Result<(), Box<dyn std::error::Error>> {
 diff --git a/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_command.rs b/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_command.rs
 --- a/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_command.rs
 +++ b/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_command.rs
@@ -1218,7 +1218,16 @@ rename to src/mxc-sdk/src/backends/seatbelt/common.rs
 diff --git a/src/mxc-sdk/src/backends/seatbelt/common/profile_builder.rs b/src/mxc-sdk/src/backends/seatbelt/common/profile_builder.rs
 --- a/src/mxc-sdk/src/backends/seatbelt/common/profile_builder.rs
 +++ b/src/mxc-sdk/src/backends/seatbelt/common/profile_builder.rs
-@@ -85,6 +85,29 @@
+@@ -29,7 +29,7 @@
+ use std::fs;
+ use std::path::{Path, PathBuf};
+ 
+-use crate::mxc_common::filesystem_resolve::{resolve_path_plan, FsIntent};
++use crate::mxc_common::filesystem_resolve::{FsIntent, resolve_path_plan};
+ use crate::mxc_common::host_is_canonical_loopback;
+ use crate::mxc_common::models::{ClipboardPolicy, ContainerPolicy, ExecutionRequest, ProxyAddress};
+ use crate::seatbelt_common::seatbelt_policy;
+@@ -85,8 +85,32 @@
      write_extra_seatbelt_rules(&mut out, request);
      write_ui_rules(&mut out, request);
  
@@ -1247,8 +1256,11 @@ diff --git a/src/mxc-sdk/src/backends/seatbelt/common/profile_builder.rs b/src/m
 +    }
      // Policy-derived deny rules go LAST so they win on conflict.
      write_filesystem_deny(&mut out, &resolved);
++    write_filesystem_boundaries(&mut out, &resolved);
  
-@@ -284,7 +307,7 @@
+     Ok(out)
+ }
+@@ -284,7 +308,7 @@
          let readonly = resolve_all(&policy.readonly_paths)?;
          let mut readwrite = resolve_all(&policy.readwrite_paths)?;
  
@@ -1257,7 +1269,7 @@ diff --git a/src/mxc-sdk/src/backends/seatbelt/common/profile_builder.rs b/src/m
          // dropping the path keeps the emitted profile an honest description of
          // the effective policy.
          let mut readonly: Vec<String> = readonly;
-@@ -314,8 +337,8 @@
+@@ -314,8 +338,8 @@
      // makes the *deepest* intent win at every path — a `readonlyPaths` entry
      // nested inside a broader `readwritePaths` subtree stays read-only rather
      // than inheriting the parent's write grant. `deniedPaths` is deliberately
@@ -1268,15 +1280,11 @@ diff --git a/src/mxc-sdk/src/backends/seatbelt/common/profile_builder.rs b/src/m
      out.push_str(";; --- policy.readonlyPaths / policy.readwritePaths (shallow-to-deep) ---\n");
      for mount in resolve_path_plan(&paths.readwrite, &paths.readonly, &[]) {
          let subpath = [mount.path.clone()];
-@@ -366,11 +389,31 @@
+@@ -366,11 +390,64 @@
          // whatever listens there. A Docker / ssh-agent / gpg-agent socket is a
          // control plane, so that would be an escape.
          out.push_str(";; --- policy.deniedPaths (override broader allow rules) ---\n");
 -        write_path_rule(
--            out,
--            "deny file-read* file-write* network-bind network-outbound",
--            &paths.denied,
--        );
 +        for hidden in &paths.denied {
 +            let exceptions = paths
 +                .readonly
@@ -1302,10 +1310,45 @@ diff --git a/src/mxc-sdk/src/backends/seatbelt/common/profile_builder.rs b/src/m
 +                out.push_str("))\n");
 +            }
 +        }
++    }
++}
++
++/// Keep authority roots and protected descendants at their policy pathnames.
++/// A read/write deny on a child alone does not prevent renaming its writable
++/// ancestor, which would move the child outside that pathname restriction.
++fn write_filesystem_boundaries(out: &mut String, paths: &ResolvedPaths) {
++    let mut anchors = std::collections::BTreeSet::new();
++    for root in &paths.readwrite {
++        if root != "/" {
++            anchors.insert(root.clone());
++        }
++    }
++    for path in paths.readonly.iter().chain(&paths.denied) {
++        for ancestor in Path::new(path).ancestors().skip(1) {
++            anchors.insert(ancestor.to_string_lossy().into_owned());
++        }
++    }
++    for path in anchors {
++        let _ = writeln!(
+             out,
+-            "deny file-read* file-write* network-bind network-outbound",
+-            &paths.denied,
++            "(deny file-write-unlink (require-all (vnode-type DIRECTORY) (literal {})))",
++            quote_scheme(&path)
+         );
++    }
++    // These selectors mutate files through read-only descriptors; file-write*
++    // does not cover them, even under deny-default. Full disk write without
++    // carveouts retains its explicitly unrestricted behavior.
++    if !paths.readwrite.iter().any(|path| path == "/")
++        || !paths.readonly.is_empty()
++        || !paths.denied.is_empty()
++    {
++        out.push_str("(deny system-fcntl (fcntl-command 80 110))\n");
      }
  }
  
-@@ -1476,6 +1519,24 @@
+@@ -1476,6 +1553,24 @@
      }
  
      #[test]
@@ -1330,6 +1373,68 @@ diff --git a/src/mxc-sdk/src/backends/seatbelt/common/profile_builder.rs b/src/m
      fn denied_paths_deny_outbound_under_default_allow() {
          // `defaultPolicy: allow` emits a bare `(allow network-outbound)`, which
          // on its own grants AF_UNIX `connect()`. A denied subtree must still
+@@ -2097,7 +2192,7 @@
+     #[cfg(unix)]
+     #[test]
+     fn a_link_the_caller_controls_is_not_trusted() {
+-        use std::os::unix::fs::{symlink, MetadataExt as _};
++        use std::os::unix::fs::{MetadataExt as _, symlink};
+ 
+         let dir = std::env::temp_dir().join(format!("mxc-devdir-trust-{}", std::process::id()));
+         let _ = fs::remove_dir_all(&dir);
+@@ -2146,3 +2241,7 @@
+         assert!(p.contains(&format!("(subpath \"{}\")", granted.display())));
+     }
+ }
++
++#[cfg(test)]
++#[path = "profile_security_tests.rs"]
++mod security_tests;
+diff --git a/src/mxc-sdk/src/backends/seatbelt/common/profile_security_tests.rs b/src/mxc-sdk/src/backends/seatbelt/common/profile_security_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/src/mxc-sdk/src/backends/seatbelt/common/profile_security_tests.rs
+@@ -0,0 +1,40 @@
++use super::*;
++
++#[test]
++fn protected_children_pin_ancestors_after_all_grants() {
++    let mut request = ExecutionRequest::default();
++    request.policy.readwrite_paths = vec!["/workspace".into(), "/destination".into()];
++    request.policy.readonly_paths = vec!["/workspace/config/settings".into()];
++    request.policy.denied_paths = vec!["/workspace/private/secret".into()];
++    let profile = build_profile_with_proxy(&request, None).unwrap();
++    for path in [
++        "/workspace",
++        "/destination",
++        "/workspace/config",
++        "/workspace/private",
++    ] {
++        let anchor = format!(
++            "(deny file-write-unlink (require-all (vnode-type DIRECTORY) (literal \"{path}\")))"
++        );
++        assert!(profile.contains(&anchor), "{profile}");
++        assert!(profile.find(&anchor) > profile.find("policy.deniedPaths"));
++    }
++    assert!(profile.contains("(deny system-fcntl (fcntl-command 80 110))"));
++}
++
++#[test]
++fn full_disk_write_only_omits_fcntl_denial_without_carveouts() {
++    let mut request = ExecutionRequest::default();
++    request.policy.readwrite_paths = vec!["/".into()];
++    assert!(
++        !build_profile_with_proxy(&request, None)
++            .unwrap()
++            .contains("system-fcntl")
++    );
++    request.policy.readonly_paths = vec!["/private-data".into()];
++    assert!(
++        build_profile_with_proxy(&request, None)
++            .unwrap()
++            .contains("system-fcntl")
++    );
++}
 diff --git a/src/mxc-sdk/src/backends/seatbelt/common/seatbelt_runner.rs b/src/mxc-sdk/src/backends/seatbelt/common/seatbelt_runner.rs
 --- a/src/mxc-sdk/src/backends/seatbelt/common/seatbelt_runner.rs
 +++ b/src/mxc-sdk/src/backends/seatbelt/common/seatbelt_runner.rs

@@ -123,7 +123,7 @@ fn github_error_categories_are_independent_of_product_reporter_errors() {
 }
 
 #[test]
-fn every_registered_github_repository_method_has_network_execution() {
+fn every_registered_github_network_method_has_execution() {
     use ash_app_server_protocol::protocol::registry::CLIENT_METHODS;
     for method in CLIENT_METHODS
         .iter()
@@ -132,7 +132,11 @@ fn every_registered_github_repository_method_has_network_execution() {
         match method.kind {
             ClientMethod::GitHubCancel
             | ClientMethod::GitHubAccountList
-            | ClientMethod::GitHubAccountConnect => {}
+            | ClientMethod::GitHubAccountConnect
+            // Session PR references belong to the local thread store, not GitHub HTTP.
+            | ClientMethod::GitHubSessionPullRequests
+            | ClientMethod::GitHubSessionPullRequestAttach
+            | ClientMethod::GitHubSessionPullRequestDetach => {}
             method => assert!(
                 GitHubRequestProcessor::handles(method),
                 "{} has no network execution",

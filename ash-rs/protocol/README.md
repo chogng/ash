@@ -35,7 +35,7 @@
 推理档位等参数值保留各自约定，例如 `extraHigh`；供应商接口按其自身协议编码。
 
 Rust 文件、模块、函数和字段使用 `snake_case`，类型和枚举成员使用 `PascalCase`，
-完整规则见 [Rust 命名规范](../../.github/instructions/rust-coding-guidelines.instructions.md#naming-and-json-contracts)。
+接口修改要求见 [Rust 契约规则](../../.agents/skills/rust-development/SKILL.md#contracts)。
 JSON 命名按完整接口契约推广；当前统一范围是模型声明、目录元数据、模型列表和偏好更新。
 模型调用、消息、用量、配置存储及供应商报文按各自契约编码。修改其他接口的 JSON 字段时，
 同步调用方、校验、序列化测试、生成产物、文档和受影响的协议或存储版本。

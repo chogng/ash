@@ -99,7 +99,7 @@ impl SandboxPathRule {
         access: SandboxPathAccess,
         timing: PatternMatchTiming,
     ) -> Result<Self, SandboxError> {
-        let relative = relative.into();
+        let relative = relative.into().replace('\\', "/");
         validate_relative(Path::new(&relative))?;
         GlobBuilder::new(&relative)
             .literal_separator(true)

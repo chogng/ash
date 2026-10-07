@@ -2376,6 +2376,7 @@ dependencies = [
  "ash-tool-executor",
  "ash-utils-pty",
  "dunce",
+ "globset",
  "libtest-mimic",
  "log",
  "mxc-sdk",

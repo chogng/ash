@@ -1,12 +1,12 @@
 # MXC 升级验收与去除 vendor
 
-本轮固定官方提交 `c45e7d5a485036d88f469aa363efaa3c651564bc`，采用 `mxc-sdk 1.0.0`。Windows 由本任务继续验收；Linux、macOS 由用户另行验收。每个平台记录实际源码、系统版本、架构、命令、通过数和清理结果，旧 pin 的结果不算新版通过证据。
+本轮固定官方提交 `c45e7d5a485036d88f469aa363efaa3c651564bc`，采用 `mxc-sdk 1.0.0`。Windows 和 macOS ARM64 已有下述实机结果；Linux 发行版及各平台未覆盖的组合继续单独验收。每个平台记录实际源码、系统版本、架构、命令、通过数和清理结果，旧 pin 的结果不算新版通过证据。
 
 ## 为什么目前保留 vendor
 
 官方单包 SDK 已直接提供 Unix PTY、请求契约和平台运行器。文件身份快照、宿主 ACL 授权范围和 Windows 终端交接格式已移回 Ash。
 
-当前仍有官方未合入的隔离和生命周期修正：隐藏父目录内的授权例外、Windows ACL 日志与继承恢复、精确 PSEC 能力准备、WSL `AF_VSOCK` 禁止、进程树清理前保留 PID，以及 Unix 终端前台中断和 Bubblewrap 作业控制。直接改成官方 Git 依赖会失去这些修正；改用 fork 仍需维护同样的补丁。
+当前仍有官方未合入的隔离和生命周期修正：隐藏父目录内的授权例外、Windows ACL 日志与继承恢复、精确 PSEC 能力准备、WSL `AF_VSOCK` 禁止、进程树清理前保留 PID、Seatbelt 祖先目录固定与 `fcntl` 防护，以及 Unix 终端前台中断和 Bubblewrap 作业控制。直接改成官方 Git 依赖会失去这些修正；改用 fork 仍需维护同样的补丁。
 
 完整差异和来源校验见 [vendor 说明](ash-rs/vendor/mxc/README.md)；已运行项目见 [适配器验证](ash-rs/mxc-sandbox/README.md#验证)。本轮补丁包含 51 个 `mod.rs` 文件模块改名，不能把补丁文件数量全部当作功能修改数量。
 
@@ -60,12 +60,14 @@ just rust-warnings ash-mxc-sandbox
 
 WSL 复测、Windows 挂载目录和可选公网 IPv6 的完整参数见 [现有入口](ash-rs/mxc-sandbox/README.md#验证)。不改网络授权来让测试通过。
 
-## macOS：用户验收
+## macOS：ARM64 实机与剩余验收
 
-- [ ] 在 macOS 实机编译并运行适配器和官方 PTY 的 6 项测试；本轮目前仅完成 ARM64 测试目标交叉编译。
-- [ ] 验证 Seatbelt 的只读目录、写入范围、隐藏父目录授权例外、元数据和进程树回收。
-- [ ] 验证禁止网络和受管代理的实际流量；独立检查 Unix socket 禁止、执行私有 IPC 例外与敏感 socket 拒绝。
-- [ ] 验证 PTY 输入、尺寸、环境、中断前台作业后 shell 存活、退出和回收。
+- [x] 在 macOS 27.0.1（build 26A434）ARM64 实机运行适配器库 27 项和官方 PTY 7 项测试。
+- [x] 验证 Seatbelt 的只读目录、写入范围、隐藏父目录授权例外、元数据和进程树回收；新增祖先目录移动、未创建的元数据、持续 glob 的新文件及 `fcntl` 80/110 回归。
+- [x] 使用本机实际局域网私有 IPv4 接收端验证 HTTP 对照、Denied/Managed 直连拒绝，以及代理目标批准与拒绝。
+- [x] 验证 Unix socket 默认禁止、执行私有 IPC 目录中的创建与连接、其他可写目录 socket 拒绝，以及模拟 SSH agent socket 拒绝。
+- [ ] 补齐 IPv6、CONNECT、SOCKS、TCP/UDP DNS、后代网络继承及另一台局域网设备；真实 Docker/GPG socket 仍需对应环境验收。
+- [x] 验证 PTY 输入、尺寸、环境、中断前台作业后 shell 存活、退出和回收；终端内同样实施持续拒绝与只读规则。
 - [ ] 若支持 Intel Mac，补 x86_64 实机验收；记录 macOS 版本与架构。
 
 ```sh
@@ -73,11 +75,24 @@ just test ash-mxc-sandbox --lib --locked
 just test ash-mxc-sandbox --test pty --locked
 just test ash-tool-executor --lib --locked
 just test ash-exec-server --test execution --locked
-just test mxc-sdk --manifest-path ash-rs/vendor/mxc/Cargo.toml --lib profile_builder::tests --locked
+just test ash-sandboxing --lib --locked
+just test mxc-sdk --manifest-path ash-rs/vendor/mxc/Cargo.toml --lib profile_builder --locked
 just rust-warnings ash-mxc-sandbox
 ```
 
-Seatbelt 策略生成单测不证明实际访问受到限制；网络、文件与 IPC 项需通过真实沙箱进程验证。
+2026-10-06 使用当前 pin 加本地补丁执行上述文件与终端回归：`sandboxing` 库 20 项、SDK Seatbelt 策略生成 89 项及前端现有 glob 3 项通过。本次文件边界参考本地 Codex `822e58cc3d666166c7446c5b1ea2e52f5d09594c` 的 `seatbelt.rs`；继续由 MXC 负责平台运行器与基础策略，Ash 负责自身路径规则。持续 glob 支持共同路径语法及 Unicode 字面量，非 ASCII 字节字符类和持续写授权明确拒绝。前端保留本地匹配，权限规则由后端独立解析和实施。
+
+执行器库 14 项、执行服务集成 15 项也通过；适配器、`sandboxing`、SDK 的正常 check 与 warning 门禁通过，Linux/Windows ARM64 测试目标交叉编译通过。依赖检查、vendor 校验和 Bazel 适配器库构建通过；Bazel 的既有系统库注解提示仍存在。
+
+补充 3 项 ARM64 实测通过：本机实际局域网私有 IPv4 接收端的 HTTP 对照、Denied 与 Managed
+直连拒绝、代理目标批准与拒绝；私有 IPC 目录内创建与连接成功且其他可写目录 socket 被拒绝；
+私有目录中的模拟 SSH agent socket 仍被拒绝。每个接收端都有普通进程可达性对照和实际请求计数。
+这些测试不依赖公网；IPv6、CONNECT、SOCKS、TCP/UDP DNS 及另一台局域网设备仍未覆盖。
+
+TS 聊天工作区文件选择器已通过 `file/search/glob` 复用 Agent 的后端文件查询；
+前端保留已有路径匹配与独立浏览器资源遍历。查询取消与连接绑定，搜索 ignore 规则不参与沙箱授权。
+
+Seatbelt 策略生成单测不证明实际访问受到限制；尚未完成网络实际流量矩阵、私有 IPC 完整矩阵和 Intel Mac 验收，不能据此宣称完成所有 Codex 能力对齐。
 
 ## 去除 vendor 的条件
 

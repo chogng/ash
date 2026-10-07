@@ -2,11 +2,18 @@ use ash_file_access::Dir;
 use ash_install_context::InstallContext;
 use ash_sandboxing::FileSystemAccess;
 use ash_sandboxing::NetworkAccess;
+#[cfg(target_os = "macos")]
+use ash_sandboxing::PatternMatchTiming;
 use ash_sandboxing::ProcessHandle;
 use ash_sandboxing::SandboxBackend;
 use ash_sandboxing::SandboxCommand;
+#[cfg(target_os = "macos")]
+use ash_sandboxing::SandboxPathAccess;
+#[cfg(target_os = "macos")]
+use ash_sandboxing::SandboxPathRule;
 use ash_sandboxing::SandboxPolicy;
 use ash_sandboxing::SandboxProcessExitStatus;
+use ash_sandboxing::SandboxScope;
 use ash_utils_pty::TerminalSize;
 use libtest_mimic::Trial;
 use mxc_sandbox::MxcSandbox;
@@ -54,6 +61,84 @@ pub(super) fn trials() -> Vec<Trial> {
                 terminal.text
             );
             assert!(!terminal.root.path().join("denied").exists());
+            Ok(())
+        }),
+        #[cfg(target_os = "macos")]
+        Trial::test("terminal_preserves_continuous_path_boundaries", || {
+            let root = tempfile::tempdir().unwrap();
+            std::fs::create_dir(root.path().join("config")).unwrap();
+            std::fs::create_dir(root.path().join("docs")).unwrap();
+            let dir = Dir::open_local(root.path()).unwrap();
+            let scope = SandboxScope::single(dir.clone())
+                .with_path_rules(vec![
+                    SandboxPathRule::pattern(
+                        dir.clone(),
+                        "config/**/*.key",
+                        SandboxPathAccess::Denied,
+                        PatternMatchTiming::Continuous,
+                    )
+                    .unwrap(),
+                    SandboxPathRule::pattern(
+                        dir,
+                        "docs/**/*.md",
+                        SandboxPathAccess::ReadOnly,
+                        PatternMatchTiming::Continuous,
+                    )
+                    .unwrap(),
+                ])
+                .unwrap();
+            let mut terminal = Terminal::start_scoped(
+                root,
+                &scope,
+                SandboxPolicy::new(FileSystemAccess::DirectoryWrite, NetworkAccess::Denied),
+                r#"
+test -t 0 && test -t 1 || exit 80
+printf 'policy-ready\n'
+read answer
+cat config/late.key && exit 81
+mv config moved && exit 82
+mkdir .git && exit 83
+cat docs/late.md || exit 84
+printf forbidden >> docs/late.md && exit 85
+printf allowed > ordinary.txt || exit 86
+printf 'policy-preserved\n'
+"#,
+            );
+            terminal.read_until("policy-ready");
+            std::fs::write(
+                terminal.root.path().join("config/late.key"),
+                "secret-canary",
+            )
+            .unwrap();
+            std::fs::write(
+                terminal.root.path().join("docs/late.md"),
+                "read-only-canary\n",
+            )
+            .unwrap();
+            terminal.input.write_all(b"continue\n").unwrap();
+            terminal.read_until("policy-preserved");
+            assert_eq!(terminal.wait(), SandboxProcessExitStatus::Code(0));
+            terminal.assert_output_closed();
+            assert!(
+                !terminal.text.contains("secret-canary"),
+                "{}",
+                terminal.text
+            );
+            assert!(
+                terminal.text.contains("read-only-canary"),
+                "{}",
+                terminal.text
+            );
+            assert_eq!(
+                std::fs::read_to_string(terminal.root.path().join("docs/late.md")).unwrap(),
+                "read-only-canary\n"
+            );
+            assert_eq!(
+                std::fs::read_to_string(terminal.root.path().join("ordinary.txt")).unwrap(),
+                "allowed"
+            );
+            assert!(!terminal.root.path().join(".git").exists());
+            assert!(!terminal.root.path().join("moved").exists());
             Ok(())
         }),
         Trial::test("closing_terminal_reaps_the_workload", || {
@@ -128,12 +213,26 @@ impl Terminal {
     fn start(script: &str) -> Self {
         let root = tempfile::tempdir().unwrap();
         let dir = Dir::open_local(root.path()).unwrap();
-        let backend = MxcSandbox::new(InstallContext::current());
-        let command = SandboxCommand::new("/bin/sh", ["-c", script], dir.canonical_path())
-            .with_pty(TerminalSize { rows: 24, cols: 80 });
+        let scope = SandboxScope::single(dir);
         let policy = SandboxPolicy::new(FileSystemAccess::ReadOnly, NetworkAccess::Denied);
+        Self::start_scoped(root, &scope, policy, script)
+    }
+
+    fn start_scoped(
+        root: tempfile::TempDir,
+        scope: &SandboxScope,
+        policy: SandboxPolicy,
+        script: &str,
+    ) -> Self {
+        let backend = MxcSandbox::new(InstallContext::current());
+        let command = SandboxCommand::new(
+            "/bin/sh",
+            ["-c", script],
+            scope.command_dir().canonical_path(),
+        )
+        .with_pty(TerminalSize { rows: 24, cols: 80 });
         let mut process = backend
-            .prepare(&command, policy, &dir)
+            .prepare_scoped(&command, policy, scope)
             .unwrap()
             .spawn(&[("PTY_TEST_VALUE".into(), "workload".into())])
             .unwrap();

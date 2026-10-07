@@ -61,7 +61,7 @@ flowchart TD
 | 公共内容搜索     | Agent、编辑器和 Codebase 检索使用公共 grep 服务                                                         | 共享目录索引，分别管理请求                                         |
 | 配置与组装       | 宿主持有 `EnvRuntimeConfig`、grep 与 file-search；分别注入使用者                                        | `LocalToolConfig` 只保留工具执行策略，工具组合不向宿主提供公共服务 |
 | Codebase 职责    | `CodebaseRetrievalService` 组合 FTS、grep、符号和语义候选                                               | `Codebase` 的源码、chunk 与版本管理不引用 grep                     |
-| 文件路径搜索     | `file-search::Service` 提供 glob / 枚举与模糊搜索入口；Agent、CLI、TUI 和 Rust 桌面文件面板调用公共能力 | glob 读当前路径并按修改时间排序；模糊搜索复用请求内的路径索引      |
+| 文件路径搜索     | `file-search::Service` 提供 glob / 枚举与模糊搜索入口；Agent、CLI、TUI、Rust 桌面文件面板及 TS 工作区文件选择器调用公共能力 | glob 读当前路径并按修改时间排序；模糊搜索复用请求内的路径索引      |
 | 查询新鲜度       | Rust API 与 RPC 均支持 `Indexed` / `Current`，RPC 成功结果返回实际模式                                  | 编辑器默认保持当前磁盘搜索；Agent 和 Codebase 使用索引候选         |
 | 索引 glob 与诊断 | tgrep 的正向 glob 保持索引查询；Rust 结果和 RPC 分页提供查询计划及候选统计                              | 统计包含已确认的 Ash 写入，描述内容匹配前的文件筛选                |
 
@@ -69,6 +69,26 @@ flowchart TD
 [检索组合](../ash-rs/codebase/src/retrieval/service.rs)、
 [文件路径搜索](../ash-rs/file-search/README.md)、
 [搜索协议适配](../ash-rs/app-server/src/server/search_operations.rs)。下文描述当前内容搜索行为。
+
+## TS 工作区文件查询
+
+聊天“添加上下文 → 工作区文件”通过 `IFileSearchService` 调用 `file/search/glob`，与
+Agent glob 复用 App Server 持有的 `file-search::Service`。Workbench 显式传入文件夹 `dirId`；
+Sessions 传入绑定原始根目录的 `sessionId` 与路径。App Server 检查对应目录的 `SearchFiles`，
+并在扫描期间持有授权租约；裸路径不能独立授予访问权。
+
+- include/exclude 各最多 64 项、每项最多 1 KiB；结果上限为 1–5,000。选择器每次取 100 个结果。
+- 空 include 枚举遵守 Git ignore 和隐藏文件规则的文件；正向 glob 保持 rg override 语义。
+- 返回以 `/` 分隔的根目录相对路径及匹配总数；路径排序与 Agent 使用同一实现。
+- 每次请求携带唯一 `operationId`。输入变化、关闭选择器或销毁 Composer 时发出
+  `file/search/glob/cancel`；取消仅作用于当前连接。取消响应确认已收到请求，原请求仍返回终态。
+- 前端丢弃过期结果，不用首批 100 项在本地替代整个工作区查询。普通输入匹配路径片段；
+  `src/*.ts` 等显式 glob 交给后端解释。文件内容快照和未保存编辑器文本继续由前端持有。
+
+没有 App Server 的独立浏览器运行时由 `BrowserFileSearchService` 遍历浏览器授权资源，
+使用已有前端 matcher；它不承诺 Rust 的 Git ignore/rg override 或修改时间排序语义。
+这是运行时组装的实现选择，连接失败不会转入浏览器扫描。前端对已有路径的同步匹配仍在本地；
+文件搜索过滤不作为沙箱的路径权限规则。
 
 ## 结论
 
@@ -78,7 +98,7 @@ flowchart TD
 ```text
 Search UI
   → IContentSearchService
-  → ash:content-search:*
+  → Renderer protocol client / host relay
   → grep/search/*
   → DirId + Authorization<SearchFiles>
   → ash-grep
@@ -92,7 +112,7 @@ Search UI
 | 内容                                             | 所有者                                                      |
 | ------------------------------------------------ | ----------------------------------------------------------- |
 | 查询表单、结果分组、高亮和取消时机               | Renderer                                                    |
-| IPC 参数形状和输入上限                           | Electron Main                                               |
+| 类型协议与参数校验                               | Renderer 协议客户端与 App Server；Main 只转发传输             |
 | 目录选择、`SearchFiles` 检查和连接级任务路由     | App Server                                                  |
 | 引擎选择、执行、结构化结果、目录索引、分页和取消 | `ash-grep`                                                  |
 | 文件名模糊查找                                   | `ash-file-search`                                           |
@@ -107,9 +127,8 @@ Search UI
 - `grep/search/read` 使用游标读取下一批匹配项；`completed` 仅在查询结束且当前游标已读完结果时为真。
 - `grep/search/cancel` 终止并释放任务。
 
-IPC 通道使用 `ash:content-search:*`。公开接口使用完整的 `ContentSearch*`，因为它跨越
-Renderer、Electron Main 和 App Server；搜索模块内部的私有函数只使用 `start`、`read`、`cancel`
-等无歧义短词。
+Renderer 通过现有 App Server 连接发送生成的类型协议；Electron Main 只转发传输。
+公开内容搜索接口使用 `ContentSearch*`，搜索模块内部的私有函数使用 `start`、`read`、`cancel`。
 
 ## 边界
 

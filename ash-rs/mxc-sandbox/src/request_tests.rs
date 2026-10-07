@@ -80,6 +80,8 @@ fn terminal_handoff_preserves_explicit_environment_and_filesystem_identity() {
         decoded.inner.policy.readwrite_paths,
         prepared.inner.policy.readwrite_paths
     );
+    #[cfg(target_os = "macos")]
+    assert_eq!(decoded.seatbelt_rules, prepared.seatbelt_rules);
     decoded.snapshot.validate().unwrap();
     std::fs::rename(&work, temp.path().join("old-work")).unwrap();
     std::fs::create_dir(&work).unwrap();
@@ -161,4 +163,42 @@ fn terminal_handoff_keeps_managed_proxy_and_network_restrictions() {
         mxc_sdk::mxc_common::models::NetworkPolicy::Block
     ));
     assert!(!decoded.inner.policy.allow_local_network);
+}
+
+#[cfg(unix)]
+#[test]
+fn socket_path_denials_snapshot_the_containing_directory() {
+    let temp = tempfile::tempdir().unwrap();
+    let parent = temp.path().join("control");
+    std::fs::create_dir(&parent).unwrap();
+    let path = parent.join("service.sock");
+    let _listener = std::os::unix::net::UnixListener::bind(&path).unwrap();
+    let parent = std::fs::canonicalize(parent).unwrap();
+    let path = std::fs::canonicalize(path).unwrap();
+    let mut policy = mxc_sdk::mxc_common::models::ContainerPolicy::default();
+    policy.denied_paths = vec![path.to_str().unwrap().into()];
+    let request = Request::new(
+        crate::policy::sdk_request(
+            "exit 0".into(),
+            temp.path().to_str().unwrap().into(),
+            policy,
+            NetworkAccess::Denied,
+            None,
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert!(
+        request
+            .inner
+            .policy
+            .denied_paths
+            .contains(&path.to_str().unwrap().to_owned())
+    );
+    assert!(request.snapshot.paths().any(|saved| saved == parent));
+    assert!(!request.snapshot.paths().any(|saved| saved == path));
+    request.snapshot.validate().unwrap();
+    std::fs::rename(&parent, temp.path().join("old-control")).unwrap();
+    std::fs::create_dir(&parent).unwrap();
+    assert!(request.snapshot.validate().is_err());
 }

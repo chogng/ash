@@ -1,3 +1,4 @@
+import { createDisconnectedFileSearchApi } from '../../search/browser/fileSearchApi.js';
 import { createDisconnectedNetworkDiagnosticsApi } from '../../networkDiagnostics/browser/networkDiagnosticsApi.js';
 import { createDisconnectedIssueReporterService } from '../../issue/browser/appServerIssueReporterService.js';
 import { createDisconnectedGitHubService } from '../../github/browser/appServerGitHubService.js';
@@ -59,6 +60,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
 		language: createDisconnectedLanguageApi(unavailableOperation),
 		languageServers: createDisconnectedLanguageServerService(unavailableOperation),
 		git: createDisconnectedGitApi(unavailableOperation),
+		fileSearch: createDisconnectedFileSearchApi(unavailableOperation),
 		contentSearch: createDisconnectedContentSearchApi(unavailableOperation),
 		contentSearchConfiguration: createDisconnectedContentSearchConfigurationApi(unavailableOperation),
 		terminal: new DisconnectedTerminalProcessService(unavailableOperation, appServer),

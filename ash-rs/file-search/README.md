@@ -7,7 +7,7 @@
 
 - `Service` 提供已授权目录内的 glob 查询，以及路径模糊搜索的创建入口。
 - glob 读取当前磁盘路径；模糊查询使用请求持有的后台路径索引与 Nucleo matcher。
-- Agent、CLI 和 TUI 消费公共能力；调用方持有请求 handle，负责自己的交互与输出。
+- Agent、CLI、TUI 和桌面消费公共能力；TS 工作区文件选择器通过 App Server 的 `file/search/glob` 接入。调用方负责授权、取消、交互与输出。
 - 不读取候选文件内容、不注册模型 Tool、不拥有 TUI popup/token 状态。
 
 公共路径搜索能力的职责和实现状态统一见[搜索架构](../../docs/search.md#目标依赖关系)

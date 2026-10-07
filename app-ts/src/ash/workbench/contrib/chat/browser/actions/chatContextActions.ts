@@ -1,3 +1,4 @@
+import { IFileSearchService } from '../../../../../platform/search/common/fileSearch.js';
 import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
 import { createUuid } from '../../../../../base/common/uuid.js';
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
@@ -5,7 +6,7 @@ import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '..
 import { basename, extUri } from '../../../../../base/common/resources.js';
 import type { URI } from '../../../../../base/common/uri.js';
 import { localize } from '../../../../../nls.js';
-import { FileKind, IFileService } from '../../../../../platform/files/common/files.js';
+import { IFileService } from '../../../../../platform/files/common/files.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
@@ -25,7 +26,6 @@ interface ContextSourceItem extends IQuickPickItem {
 
 interface ResourceItem extends IQuickPickItem {
 	readonly resource: URI;
-	readonly isDirectory: boolean;
 }
 
 /** Each picker belongs to its originating composer, even when another pane becomes active. */
@@ -39,6 +39,7 @@ export class AttachContextAction extends Disposable {
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 		@IChatContextPickService private readonly contextPicks: IChatContextPickService,
 		@IFileService private readonly files: IFileService,
+		@IFileSearchService private readonly fileSearch: IFileSearchService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IEditorGroupsService private readonly editors: IEditorGroupsService,
 		@IWorkingCopyService private readonly workingCopies: IWorkingCopyService,
@@ -77,7 +78,7 @@ export class AttachContextAction extends Disposable {
 				if (source.source === 'workspace') {
 					resource = await this.pickWorkspaceFile();
 				} else {
-					const items = openEditors.map(editor => ({ label: basename(editor.resource), description: editor.resource.path, resource: editor.resource, isDirectory: false }));
+					const items = openEditors.map(editor => ({ label: basename(editor.resource), description: editor.resource.path, resource: editor.resource }));
 					resource = (await this.pick(items, localize('chat.context.editors', 'Open editors')))?.resource;
 				}
 				if (!resource || this.isDisposed) { return; }
@@ -157,22 +158,43 @@ export class AttachContextAction extends Disposable {
 
 	private async pickWorkspaceFile(): Promise<URI | undefined> {
 		const folders = this.workspace.getWorkspace().folders;
-		let directory = folders.length === 1 ? folders[0].uri : (await this.pick(folders.map(folder => ({ label: folder.name, resource: folder.uri, isDirectory: true })), localize('chat.context.workspace', 'Workspace files')))?.resource;
-		const trail: URI[] = [];
-		while (directory && !this.isDisposed) {
-			const entries = await this.files.readDirectory(directory);
-			if (this.isDisposed) { return undefined; }
-			const items = entries.filter(entry => entry.kind === FileKind.Directory || entry.kind === FileKind.File).map(entry => ({ label: entry.kind === FileKind.Directory ? `${entry.name}/` : entry.name, resource: entry.resource, isDirectory: entry.kind === FileKind.Directory }));
-			items.sort((left, right) => Number(right.isDirectory) - Number(left.isDirectory) || left.label.localeCompare(right.label));
-			if (trail.length) { items.unshift({ label: localize('chat.context.parent', 'Parent folder'), resource: trail[trail.length - 1], isDirectory: true }); }
-			const selected = await this.pick<ResourceItem>(items, localize('chat.context.chooseFile', 'Choose a file in {0}', directory.path));
-			if (!selected) { return undefined; }
-			if (!selected.isDirectory) { return selected.resource; }
-			if (trail.length && extUri.isEqual(selected.resource, trail[trail.length - 1])) { trail.pop(); }
-			else { trail.push(directory); }
-			directory = selected.resource;
-		}
-		return undefined;
+		const folder = folders.length === 1 ? folders[0] : (await this.pick(folders.map(folder => ({ label: folder.name, folder })), localize('chat.context.workspace', 'Workspace files')))?.folder;
+		if (!folder || this.isDisposed) { return undefined; }
+		const resources = this.pickers.add(new DisposableStore());
+		const picker = resources.add(this.quickInput.createQuickPick<ResourceItem>());
+		const cancellation = resources.add(new MutableDisposable());
+		picker.ariaLabel = localize('chat.context.chooseFile', 'Choose a file in {0}', folder.uri.path);
+		picker.placeholder = localize('chat.context.filePattern', 'Search file paths (for example, src/*.ts)');
+		// Results are filtered by the search owner, including paths beyond the initial result limit.
+		picker.filterValue = () => '';
+		return new Promise((resolve, reject) => {
+			let finished = false;
+			const finish = (resource?: URI, error?: unknown): void => {
+				if (finished) { return; }
+				finished = true;
+				if (error) { reject(error); } else { resolve(resource); }
+				resources.dispose();
+			};
+			resources.add(toDisposable(() => finish()));
+			resources.add(picker.onDidAccept(item => finish(item.resource)));
+			resources.add(picker.onDidHide(() => finish()));
+			const search = async (value: string): Promise<void> => {
+				const controller = new AbortController();
+				cancellation.value = toDisposable(() => controller.abort());
+				picker.items = [];
+				// Plain text is a literal path fragment; explicit wildcards use the backend glob grammar.
+				const pattern = /[*?{[]/.test(value) ? value : `**/*${value.replace(/[\\*?{}[\]]/g, '\\$&')}*`;
+				try {
+					const found = await this.fileSearch.glob({ resource: folder.uri, target: { type: 'workspace', dirId: folder.id } }, { includePatterns: value ? [pattern] : [], excludePatterns: [], maxResults: 100 }, controller.signal);
+					if (!finished && !controller.signal.aborted) { picker.items = found.matches.map(item => ({ label: item.path, resource: item.resource })); }
+				} catch (error) {
+					if (!controller.signal.aborted) { finish(undefined, error); }
+				}
+			};
+			resources.add(picker.onDidChangeValue(value => { void search(value); }));
+			picker.show();
+			void search('');
+		});
 	}
 
 	private pick<T extends IQuickPickItem>(items: readonly T[], label: string): Promise<T | undefined> {

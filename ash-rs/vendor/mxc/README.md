@@ -10,7 +10,7 @@
 | --- | --- |
 | `mxc_common` | 独立 ACL 日志与严格恢复、继承标记和祖先属性授权；退出观察保留 PID；SOCKS 环境保持协议；Windows 命令行保留调用方的命令解释语义 |
 | Bubblewrap | 指定执行路径、根挂载下的系统文件恢复、隐藏父目录内的授权例外、网络监控的 PID 生命周期、禁止 WSL 的 `AF_VSOCK` 绕过 |
-| Seatbelt | 隐藏父目录内的授权例外、独立禁止 Unix socket、完整环境和进程清理 |
+| Seatbelt | 隐藏父目录内的授权例外、独立禁止 Unix socket、完整环境和进程清理；固定可写根及受保护路径的祖先目录，拒绝通过只读描述符修改文件的 `fcntl` 80/110 |
 | ProcessContainer | 按完整请求准备 PSEC，区分能力缺失与系统调用故障；Ash 明确选择 PSEC 运行器 |
 | Unix PTY | 直接使用官方 PTY；添加向终端当前前台进程组发送中断的接口；避免 Bubblewrap 再次创建 session，保留控制终端与作业控制 |
 | Windows 构建 | 资源文件明确使用 UTF-8，Cargo 与 Bazel 均可编译；Bazel 资源编译器使用现有 LLVM 工具链 |
@@ -34,3 +34,5 @@ bazel build //ash-rs/mxc-sandbox:mxc-sandbox
 ```
 
 Linux/macOS 的真实隔离行为须在对应系统验证。Windows 的 Rust ProcessContainer PTY 尚不可直接使用；Node 端的 PTY 接入不改变此限制。
+
+2026-10-06 的 macOS 27.0.1 ARM64 实测已覆盖上述文件边界及官方 PTY，SDK 策略生成 89 项测试通过。Ash 特有的持续 glob 和未创建元数据规则由适配器追加，SDK 不依赖 Ash 的规则类型或 glob 实现。具体通过数及未验收范围见 [适配器验证](../../mxc-sandbox/README.md#验证)。

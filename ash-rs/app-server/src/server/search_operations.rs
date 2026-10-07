@@ -16,6 +16,12 @@ use ash_app_server_protocol::protocol::search::ContentSearchReadParams;
 use ash_app_server_protocol::protocol::search::ContentSearchReadResult;
 use ash_app_server_protocol::protocol::search::ContentSearchStartParams;
 use ash_app_server_protocol::protocol::search::ContentSearchStartResult;
+use ash_app_server_protocol::protocol::search::FileGlobCancelParams;
+use ash_app_server_protocol::protocol::search::FileGlobParams;
+use ash_app_server_protocol::protocol::search::FileGlobResult;
+use ash_app_server_protocol::protocol::search::FileGlobTarget;
+use ash_async_utils::CancellationToken;
+use ash_file_access::Permission;
 use grep::CaseSensitivity as ContentSearchCaseSensitivity;
 use grep::JobError as ContentSearchError;
 use grep::Owner as ContentSearchOwner;
@@ -25,6 +31,85 @@ use grep::Query as ContentSearchQuery;
 use serde_json::Value;
 
 impl AppServer {
+    pub(super) fn file_glob(
+        &self,
+        params: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
+        let params: FileGlobParams = decode(params)?;
+        let authorization = match params.target {
+            FileGlobTarget::Workspace { dir_id } => {
+                let runtime = self
+                    .env_runtime
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                runtime
+                    .dirs
+                    .get(&dir_id)
+                    .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))?
+                    .authorize(Permission::SearchFiles)
+                    .map_err(|_| RpcError::new(-32043, AppServerErrorName::PermissionRequired))?
+            }
+            FileGlobTarget::Session { session_id, path } => self
+                .session_dir_authorization(&session_id, &path, Permission::SearchFiles)
+                .map_err(|error| {
+                    if error.code == -32064 {
+                        RpcError::new(-32043, AppServerErrorName::PermissionRequired)
+                    } else {
+                        error
+                    }
+                })?,
+        };
+        let query = file_search::GlobQuery {
+            scope: Default::default(),
+            include_patterns: params.include_patterns,
+            exclude_patterns: params.exclude_patterns,
+            max_results: params.max_results,
+        };
+        // Hold the grant lease for the scan; directory replacement/revocation waits for admitted I/O.
+        let found = authorization
+            .execute(
+                authorization.subject(),
+                authorization.dir(),
+                Permission::SearchFiles,
+                || {
+                    self.file_search
+                        .glob(authorization.dir(), &query, cancellation)
+                },
+            )
+            .map_err(|_| RpcError::new(-32043, AppServerErrorName::PermissionRequired))?
+            .map_err(file_glob_error)?;
+        let paths = found
+            .paths
+            .into_iter()
+            .map(|path| {
+                path.components()
+                    .map(|part| part.as_os_str().to_str().expect("glob returns UTF-8 paths"))
+                    .collect::<Vec<_>>()
+                    .join("/")
+            })
+            .collect();
+        result(&FileGlobResult {
+            paths,
+            total_matches: found.total_matches,
+        })
+    }
+
+    pub(super) fn file_glob_cancel(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: FileGlobCancelParams = decode(params)?;
+        if params.operation_id.is_empty() || params.operation_id.chars().count() > 128 {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        self.request_cancellations
+            .cancel_operation(connection.connection_id, params.operation_id);
+        self.request_scheduler.cancel_waiting_requests();
+        result(&())
+    }
+
     pub(super) fn grep_index_status(&self, params: &Value) -> Result<Value, RpcError> {
         let _: EmptyParams = decode(params)?;
         let (service, root) = self.grep_index_context()?;
@@ -205,5 +290,19 @@ fn grep_status(
         ready: status.ready,
         indexed_file_count: status.indexed_file_count,
         watcher_active: status.watcher_active,
+    }
+}
+
+fn file_glob_error(error: file_search::Error) -> RpcError {
+    match error {
+        file_search::Error::InvalidInput(_) => {
+            RpcError::new(-32602, AppServerErrorName::InvalidParams)
+        }
+        file_search::Error::Cancelled(_) => {
+            RpcError::new(-32800, AppServerErrorName::RequestCancelled)
+        }
+        file_search::Error::Failed(_) => {
+            RpcError::new(-32050, AppServerErrorName::SearchUnavailable)
+        }
     }
 }

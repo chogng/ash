@@ -2830,6 +2830,10 @@ impl AppServer {
             Some(ClientMethod::GitFetch) => self.git_fetch(&request.params, cancellation),
             Some(ClientMethod::GitPull) => self.git_pull(&request.params, cancellation),
             Some(ClientMethod::GitPush) => self.git_push(&request.params, cancellation),
+            Some(ClientMethod::FileGlob) => self.file_glob(&request.params, cancellation),
+            Some(ClientMethod::FileGlobCancel) => {
+                self.file_glob_cancel(connection, &request.params)
+            }
             Some(ClientMethod::ContentSearchStart) => {
                 self.content_search_start(connection, &request.params)
             }

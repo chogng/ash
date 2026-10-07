@@ -1,3 +1,5 @@
+import { IFileSearchService } from '../../../src/ash/platform/search/common/fileSearch.js';
+import { BrowserFileSearchService } from '../../../src/ash/platform/search/browser/browserFileSearchService.js';
 import '../../../src/ash/base/browser/ui/styles.css';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { FileKind, IFileService } from '../../../src/ash/platform/files/common/files.js';
@@ -38,7 +40,7 @@ import { EventType, Gesture } from '../../../src/ash/base/browser/touch.js';
 import { addDisposableListener, stopEvent } from '../../../src/ash/base/browser/dom.js';
 
 declare global {
-	interface Window { ashChatInputIntegration: { refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; denyAcceleration(id: string): void; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; }; }
+	interface Window { ashChatInputIntegration: { refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; denyAcceleration(id: string): void; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; }; }
 }
 
 const locale = new URLSearchParams(location.search).get('locale');
@@ -130,16 +132,32 @@ resources.add(contextPicks.registerPicker({
 }));
 const root = URI.file('/workspace');
 const edited = URI.file('/workspace/edited.ts');
-services.registerInstance(IWorkspaceContextService, { getWorkspace: () => ({ folders: [{ uri: root, name: 'workspace' }] }) } as unknown as IWorkspaceContextService);
+services.registerInstance(IWorkspaceContextService, { getWorkspace: () => ({ folders: [{ id: 'workspace', index: 0, uri: root, name: 'workspace' }] }) } as unknown as IWorkspaceContextService);
 services.registerInstance(IEditorGroupsService, { groups: [{ inputs: [{ resource: edited }] }] } as unknown as IEditorGroupsService);
 services.registerInstance(IWorkingCopyService, { get: (resource: URI) => resource.path === edited.path ? [{ backupKind: 'text', backup: () => 'Unsaved editor text' }] : [] } as unknown as IWorkingCopyService);
+const fileSearchWaiters = new Map<number, () => void>();
+let fileSearchReads = 0;
+let fileSearchCompleted = 0;
+const searchReads = document.createElement('output');
+searchReads.setAttribute('aria-label', 'File search reads');
+const searchCompleted = document.createElement('output');
+searchCompleted.setAttribute('aria-label', 'Completed file search reads');
+document.body.append(searchReads, searchCompleted);
 services.registerInstance(IFileService, {
-	readDirectory: async (resource: URI) => resource.path === '/workspace' ? [
-		{ resource: URI.file('/workspace/src'), name: 'src', kind: FileKind.Directory },
-		{ resource: URI.file('/workspace/brief.txt'), name: 'brief.txt', kind: FileKind.File },
-	] : [{ resource: URI.file('/workspace/src/nested.txt'), name: 'nested.txt', kind: FileKind.File }],
+	readDirectory: async (resource: URI) => {
+		if (resource.path === '/workspace' && new URLSearchParams(location.search).has('deferFileSearch')) {
+			searchReads.textContent = String(++fileSearchReads);
+			await new Promise<void>(resolve => fileSearchWaiters.set(fileSearchReads, resolve));
+			searchCompleted.textContent = String(++fileSearchCompleted);
+		}
+		return resource.path === '/workspace' ? [
+			{ resource: URI.file('/workspace/src'), name: 'src', kind: FileKind.Directory },
+			{ resource: URI.file('/workspace/brief.txt'), name: 'brief.txt', kind: FileKind.File },
+		] : [{ resource: URI.file('/workspace/src/nested.txt'), name: 'nested.txt', kind: FileKind.File }];
+	},
 	readFile: async (resource: URI) => ({ resource, content: 'Workspace file content', revision: '1' }),
 } as unknown as IFileService);
+services.registerInstance(IFileSearchService, services.createInstance(BrowserFileSearchService));
 const submission = document.createElement('output');
 submission.setAttribute('aria-label', 'Submission');
 document.body.append(submission);
@@ -198,6 +216,11 @@ function renderModels(): void {
 }
 part.render(state);
 window.ashChatInputIntegration = {
+	releaseFileSearch: index => {
+		const release = fileSearchWaiters.get(index)!;
+		fileSearchWaiters.delete(index);
+		release();
+	},
 	setRetirement: retirement => {
 		models = models.map(entry => ({ ...entry, retirement }));
 		renderModels();

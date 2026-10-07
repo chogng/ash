@@ -1,3 +1,4 @@
+import type { FileSearchDirectory, FileSearchQuery, FileSearchResult, IFileSearchService } from '../../../../../platform/search/common/fileSearch.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { BrowserFileService } from '../../../../../platform/files/browser/fileService.js';
@@ -5,16 +6,16 @@ import type { IFileApi } from '../../../../../platform/files/common/fileApi.js';
 import type { IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
 
 /** Selects the owning Session at the transport boundary; shared file/editor state stays in Workbench. */
-export class SessionFileService extends BrowserFileService {
+export class SessionFileService extends BrowserFileService implements IFileSearchService {
+	private readonly fileSearch: IFileSearchService;
 	constructor(
 		host: IRendererHost,
 		@IWorkspaceContextService workspace: IWorkspaceContextService,
 	) {
 		const target = <T extends { readonly dirId?: string; }>(params: T): Omit<T, 'dirId'> & { dirId?: string; sessionDirectory?: { sessionId: string; path: string; }; } => {
 			if (!params.dirId?.startsWith('session:')) { return params; }
-			const [sessionId, path] = params.dirId.slice('session:'.length).split(':').map(decodeURIComponent);
 			const { dirId, ...rest } = params;
-			return { ...rest, sessionDirectory: { sessionId, path } };
+			return { ...rest, sessionDirectory: sessionDirectoryFor(dirId) };
 		};
 		const api: IFileApi = {
 			getMetadata: params => host.fs.getMetadata(target(params)),
@@ -48,5 +49,18 @@ export class SessionFileService extends BrowserFileService {
 				return toDisposable(() => subscription.dispose());
 			},
 		});
+		this.fileSearch = host.fileSearch;
 	}
+
+	public glob(directory: FileSearchDirectory, query: FileSearchQuery, signal?: AbortSignal): Promise<FileSearchResult> {
+		if (directory.target.type === 'workspace' && directory.target.dirId.startsWith('session:')) {
+			return this.fileSearch.glob({ resource: directory.resource, target: { type: 'session', ...sessionDirectoryFor(directory.target.dirId) } }, query, signal);
+		}
+		return this.fileSearch.glob(directory, query, signal);
+	}
+}
+
+function sessionDirectoryFor(dirId: string): { sessionId: string; path: string } {
+	const [sessionId, path] = dirId.slice('session:'.length).split(':').map(decodeURIComponent);
+	return { sessionId, path };
 }
