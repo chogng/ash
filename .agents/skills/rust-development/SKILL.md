@@ -1,6 +1,6 @@
 ---
 name: rust-development
-description: Implement and validate Ash Rust code, Cargo manifests or lockfiles, .cargo settings, and Rust build tools. Use for Rust changes across ash-rs, app-rs, code, and ash-cli. Does not apply to TypeScript-only work or ordinary documentation edits.
+description: Implement and validate Ash Rust code, Cargo manifests or lockfiles, .cargo settings, and Rust build tools. Use for Rust changes across crates and cli. Does not apply to TypeScript-only work or ordinary documentation edits.
 ---
 
 # Rust development
@@ -17,7 +17,7 @@ Find the owning Cargo package and read its implementation and tests before editi
 
 ## Contracts
 
-For model or provider fields, follow [model-provider-fields](../model-provider-fields/SKILL.md). Model JSON uses `snake_case`; frontend adapters use `camelCase`. Preserve parameter spellings and other formats' rules; see [model naming](../../../ash-rs/protocol/README.md#modelsjson-从哪里定义).
+For model or provider fields, follow [model-provider-fields](../model-provider-fields/SKILL.md). Model JSON uses `snake_case`; frontend adapters use `camelCase`. Preserve parameter spellings and other formats' rules; see [model naming](../../../crates/protocol/README.md#modelsjson-从哪里定义).
 
 Rename JSON fields together with callers, validation, serialization tests, generated types, docs, and affected protocol or storage versions. Generate schemas, fixtures, and bindings from their source definitions. Do not hand-edit generated files or duplicate protocol values.
 
@@ -42,11 +42,11 @@ Add the checks required by the change:
 | Change | Additional validation |
 | --- | --- |
 | Dependencies, features, or lockfile | Run `just dependencies`; check features and affected build/runtime manifests. |
-| App Server protocol | Run `just generate-protocol`, protocol tests, `pnpm --dir app-ts typecheck:protocol`, and affected client builds or typechecks. |
+| App Server protocol | Run `just generate-protocol`, protocol tests, `pnpm typecheck:protocol`, and affected client builds or typechecks. |
 | Tests | Run the warning check; test-only code must not create production warnings. |
 | Platform conditions | Compile affected test targets on every affected platform. |
 | Dependency or build-measurement tools | Run `just test-python scripts` and the changed command against the real workspace. |
 
-For Rust product behavior, verify state, commands, identity, events, output, timing, and PTY lifecycle. For Rust Desktop runtime investigation, use `APP_SESSION_TRACE=1 just app`; enable `APP_SESSION_TRACE_FRAMES=1` only for frame timing. For TUI tests, use [test-tui](../test-tui/SKILL.md); for CLI processes and terminal boundaries, use [test-tui-pty](../test-tui-pty/SKILL.md).
+For Rust product behavior, verify state, commands, identity, events, output, timing, and PTY lifecycle. For TUI tests, use [test-tui](../test-tui/SKILL.md); for CLI processes and terminal boundaries, use [test-tui-pty](../test-tui-pty/SKILL.md).
 
 For example, an App Server field rename requires package validation, regeneration, the generated TypeScript strict check, and checks for affected clients. A private implementation change without a contract change stays with the owning package.

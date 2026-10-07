@@ -13,7 +13,7 @@
 > （[阶段 E](ash-agent-runtime-architecture.md#阶段-emultiagentcoordinator核心纵向切片已完成)）；理由见
 > [`ash-agent-runtime-architecture.md` R4](ash-agent-runtime-architecture.md#44-r4多-agent-契约冻结先行)。
 >
-> 跨任务的持久 Team：[`ash-rs/docs/agent-teams.md`](../ash-rs/docs/agent-teams.md)
+> 跨任务的持久 Team：[`crates/docs/agent-teams.md`](../crates/docs/agent-teams.md)
 > Core 总体边界：[`core.md`](core.md)
 > Context 与 ContextManager：[`core-context.md`](core-context.md)
 > Canonical Session/Thread/Turn contract：[`protocol.md`](protocol.md)
@@ -36,7 +36,7 @@
 | 取消父 Agent 会发生什么？                          | App Server 的 Turn interrupt/Session stop 会向所有 live descendants 传播；child 取消不反向影响 parent/sibling                     | [取消与终态语义](#9-取消与终态语义)                      |
 | 多个 Agent 的代码结果如何避免互相破坏？            | 根 Agent 通过明确任务范围和依赖安排子 Agent；每个 Thread 使用自己的受管目录与 Turn ChangeSet，最终验证和提交仍走 Git/Turn Changes | [`chat-session-inspector.md`](chat-session-inspector.md) |
 | 专化职责的提示词、模型、工具和启动范围在哪里定义？ | 内置定义由产品资源维护，自定义定义来自 `.ash/agents`；会话、委托和工作流共用一种契约                                              | [`agents.md`](agents.md)                                 |
-| Team 与 Agent 树是什么关系？                       | Team 跨任务保存成员关系；每次 Team 工作关联一个 Session 内的协调 Thread 及其委托后代。当前 `/team` 只实现了一次任务内的协作       | [Agent Team](../ash-rs/docs/agent-teams.md)              |
+| Team 与 Agent 树是什么关系？                       | Team 跨任务保存成员关系；每次 Team 工作关联一个 Session 内的协调 Thread 及其委托后代。当前 `/team` 只实现了一次任务内的协作       | [Agent Team](../crates/docs/agent-teams.md)              |
 | 多个独立 Session 如何协作？                        | 不建立隐式协作；需要共同目标时回到一个 Session 的 Agent tree                                                                      | [系统边界](#2-系统边界)                                  |
 
 ## 1. 结论
@@ -92,7 +92,7 @@ lifecycle，不串行 child Thread 执行。
 - 普通 fork、rewind 和 replacement 保留源 AgentId。
 - replacement 要求源 Thread 已归档，新分支从空历史开始；旧历史、委托和结果留在原 Thread。
 - Agent 与 Thread 绑定、Thread 来源均不可重新分配；替换通过创建新绑定表达。
-- 当前 Agent 记录与首次 Thread 创建同事务提交，删除所有任务后仍保留身份。持久 Team 的成员需先于首次运行获得 `AgentId`，因此目标身份存储还需支持原子创建无 Thread 的 Agent 记录；见 [Agent Team](../ash-rs/docs/agent-teams.md)。
+- 当前 Agent 记录与首次 Thread 创建同事务提交，删除所有任务后仍保留身份。持久 Team 的成员需先于首次运行获得 `AgentId`，因此目标身份存储还需支持原子创建无 Thread 的 Agent 记录；见 [Agent Team](../crates/docs/agent-teams.md)。
 - `agent-graph-store` 定义读取契约，`ash-state` 实现索引；云端认证不进入该模型。
 
 身份跨 Session 复用不建立跨 Session 委托、消息、共同预算或取消关系。
@@ -159,13 +159,13 @@ child 和等待 delivery receipt 都在 Thread writer 之外。
 
 ### 3.1 一次任务内的共享讨论
 
-同一 Agent 树已可通过 `board_read` 和 `board_write` 共享频道、话题、回复与订阅。消息由 `ash-rs/ext/agent-message-board` 保存，成员身份、运行状态与工具授权由 Ash 既有运行时提供。接口与通知规则见 [Agent 共享讨论板](../ash-rs/docs/extensions.md#agent-共享讨论板)。跨任务的 Team 消息由 [Agent Team](../ash-rs/docs/agent-teams.md) 单独定义，不能把此板的 Session 隔离改成隐式跨任务共享。
+同一 Agent 树已可通过 `board_read` 和 `board_write` 共享频道、话题、回复与订阅。消息由 `crates/ext/agent-message-board` 保存，成员身份、运行状态与工具授权由 Ash 既有运行时提供。接口与通知规则见 [Agent 共享讨论板](../crates/docs/extensions.md#agent-共享讨论板)。跨任务的 Team 消息由 [Agent Team](../crates/docs/agent-teams.md) 单独定义，不能把此板的 Session 隔离改成隐式跨任务共享。
 
 - 根 Agent 可为工作建立频道，成员在话题中发布发现、阻塞、接口决定和验证证据。
 - 消息按 Session 与根 Thread 隔离；成员可主动读取历史，提醒只送达其当前活动 Turn。
 - 分工、启动、等待和取消继续使用 Agent 树；讨论内容不能代替委托结果、授权或验收事实。
 - `/team <任务>` 已通过服务端命令启动 `team/coordinator`，由其委托 `team/implementer` 与 `team/reviewer`；这些角色使用同一讨论板。
-- `/team status` 查看结果，`/team resume` 恢复当前执行或重试失败尝试，`/team cancel` 取消协调者及其后代。命令状态由 `ash-rs/ext/workflows` 保存，执行仍归 Core。
+- `/team status` 查看结果，`/team resume` 恢复当前执行或重试失败尝试，`/team cancel` 取消协调者及其后代。命令状态由 `crates/ext/workflows` 保存，执行仍归 Core。
 
 ## 4. 创建（Create）、分叉（Fork）与生成（Spawn）
 

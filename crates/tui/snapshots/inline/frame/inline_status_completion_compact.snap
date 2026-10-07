@@ -1,0 +1,64 @@
+---
+source: crates/tui/src/app/inline/frame_tests.rs
+expression: text(&completion)
+---
+                                                                                
+    ▄  ▄     Ash Code v0.1.0                                                    
+  ▗█▛██▜█▖   Automatic model                                                    
+  ▝▜████▛▘   .                                                                  
+    ▝  ▘                                                                        
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+  ─────────────────────────────────────────────────────────────────────── 1/5   
+  /status                    show session state and thread totals               
+  /statusline                choose the items shown in the status line          
+  /shortcuts                 browse and customize terminal shortcuts            
+  /pr                        ask the Agent to create or inspect a pull request  
+  /debug-context             Developer: inspect context tool estimates and      
+                             full definitions                                   
+────────────────────────────────────────────────────────────────────────────────
+> /status                                                                       
+────────────────────────────────────────────────────────────────────────────────
+                                                                                
+  ⏸ Manual

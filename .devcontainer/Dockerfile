@@ -35,7 +35,6 @@ RUN curl --fail --silent --show-error --location https://apt.llvm.org/llvm-snaps
 
 COPY .nvmrc /tmp/ash-node-version
 COPY package.json /tmp/ash-package.json
-COPY app-ts/package.json /tmp/ash-app-ts-package.json
 COPY rust-toolchain.toml /tmp/ash-rust-toolchain.toml
 
 ENV PNPM_HOME=/usr/local/share/pnpm \
@@ -48,7 +47,7 @@ RUN test "$(node --version)" = "v$(cat /tmp/ash-node-version)" \
     && rm /tmp/ash-pnpm-install.sh /tmp/ash-pnpm-profile \
     && ln -s "$PNPM_HOME/bin/pnpm" /usr/local/bin/pnpm \
     && test "$(pnpm --version)" = "$(node -p 'require("/tmp/ash-package.json").packageManager.split("@")[1]')" \
-    && pnpm dlx "playwright@$(node -p 'require("/tmp/ash-app-ts-package.json").devDependencies["@playwright/test"]')" install-deps chromium \
+    && pnpm dlx "playwright@$(node -p 'require("/tmp/ash-package.json").devDependencies["@playwright/test"]')" install-deps chromium \
     && chown -R node:node "$PNPM_HOME"
 
 RUN printf '%s\n' 'node ALL=(root) NOPASSWD: /usr/bin/chown' > /etc/sudoers.d/ash-node \

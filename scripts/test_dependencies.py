@@ -44,7 +44,7 @@ class DependencyTests(unittest.TestCase):
             "target.'cfg(windows)'.dependencies",
         ):
             with self.subTest(section=section):
-                p = self.package("test", "ash-rs/test", f'[{section}]\nserde = "1"\n')
+                p = self.package("test", "crates/test", f'[{section}]\nserde = "1"\n')
                 self.assertIn(
                     "must inherit",
                     dependencies.declaration_errors(self.root, self.metadata(p))[0],
@@ -53,10 +53,10 @@ class DependencyTests(unittest.TestCase):
     def test_member_paths_are_allowed_but_vendored_sources_are_centralized(self):
         p = self.package(
             "a",
-            "ash-rs/a",
+            "crates/a",
             '[dependencies]\nb = { path = "../b" }\nforeign = { path = "../vendor/foreign" }\n',
         )
-        b = self.package("b", "ash-rs/b")
+        b = self.package("b", "crates/b")
         errors = dependencies.declaration_errors(self.root, self.metadata(p, b))
         self.assertEqual(len(errors), 1)
         self.assertIn("foreign", errors[0])
@@ -64,7 +64,7 @@ class DependencyTests(unittest.TestCase):
     def test_unmanaged_manifests_are_not_checked(self):
         p = self.package(
             "a",
-            "ash-rs/a",
+            "crates/a",
             '[dependencies]\nserde = { workspace = true, features = ["derive"] }\n',
         )
         vendor = self.package(
@@ -77,7 +77,7 @@ class DependencyTests(unittest.TestCase):
     def test_inherited_source_overrides_are_rejected(self):
         p = self.package(
             "a",
-            "ash-rs/a",
+            "crates/a",
             '[dependencies]\nserde = { workspace = true, version = "2" }\n',
         )
         self.assertIn(
@@ -130,20 +130,28 @@ class DependencyTests(unittest.TestCase):
 
     def test_indirect_boundary_includes_build_dependencies_and_aliases(self):
         app = self.package(
-            "app", "app-rs", deps=[{"name": "bridge", "kind": None, "rename": "helper"}]
+            "ash-app-server",
+            "crates/app-server",
+            deps=[{"name": "bridge", "kind": None, "rename": "helper"}],
         )
         bridge = self.package(
-            "bridge", "ash-rs/bridge", deps=[{"name": "ash-tui", "kind": "build"}]
+            "bridge", "crates/bridge", deps=[{"name": "ash-tui", "kind": "build"}]
         )
-        tui = self.package("ash-tui", "code/tui")
+        tui = self.package("ash-tui", "crates/tui")
         errors = dependencies.boundary_errors(
             self.root, self.metadata(app, bridge, tui)
         )
-        self.assertIn("forbidden dependency path: app -> bridge -> ash-tui", errors)
+        self.assertIn(
+            "forbidden dependency path: ash-app-server -> bridge -> ash-tui", errors
+        )
 
     def test_dev_edges_do_not_become_product_edges(self):
-        app = self.package("app", "app-rs", deps=[{"name": "ash-tui", "kind": "dev"}])
-        tui = self.package("ash-tui", "code/tui")
+        app = self.package(
+            "ash-app-server",
+            "crates/app-server",
+            deps=[{"name": "ash-tui", "kind": "dev"}],
+        )
+        tui = self.package("ash-tui", "crates/tui")
         self.assertEqual(
             dependencies.boundary_errors(self.root, self.metadata(app, tui)), []
         )
@@ -154,12 +162,12 @@ class DependencyTests(unittest.TestCase):
                 with self.subTest(consumer=name, engine=engine):
                     consumer = self.package(
                         name,
-                        f"ash-rs/{name}",
+                        f"crates/{name}",
                         deps=[{"name": "adapter", "kind": None}],
                     )
                     adapter = self.package(
                         "adapter",
-                        "ash-rs/adapter",
+                        "crates/adapter",
                         deps=[{"name": engine, "kind": None}],
                     )
                     self.assertIn(
@@ -175,15 +183,15 @@ class DependencyTests(unittest.TestCase):
                 with self.subTest(consumer=name, target=target):
                     consumer = self.package(
                         name,
-                        f"ash-rs/{name.removeprefix('ash-')}",
+                        f"crates/{name.removeprefix('ash-')}",
                         deps=[{"name": "adapter", "kind": None, "rename": "host"}],
                     )
                     adapter = self.package(
                         "adapter",
-                        "ash-rs/adapter",
+                        "crates/adapter",
                         deps=[{"name": target, "kind": "build"}],
                     )
-                    runtime = self.package(target, f"ash-rs/{target}")
+                    runtime = self.package(target, f"crates/{target}")
                     self.assertIn(
                         f"forbidden dependency path: {name} -> adapter -> {target}",
                         dependencies.boundary_errors(
@@ -192,12 +200,12 @@ class DependencyTests(unittest.TestCase):
                     )
 
     def test_core_and_hooks_share_contracts_without_reverse_execution_dependency(self):
-        api = self.package("ash-core-api", "ash-rs/core-api")
+        api = self.package("ash-core-api", "crates/core-api")
         core = self.package(
-            "ash-core", "ash-rs/core", deps=[{"name": "ash-core-api", "kind": None}]
+            "ash-core", "crates/core", deps=[{"name": "ash-core-api", "kind": None}]
         )
         hooks = self.package(
-            "ash-hooks", "ash-rs/hooks", deps=[{"name": "ash-core-api", "kind": None}]
+            "ash-hooks", "crates/hooks", deps=[{"name": "ash-core-api", "kind": None}]
         )
         self.assertEqual(
             dependencies.boundary_errors(self.root, self.metadata(api, core, hooks)), []
@@ -206,13 +214,13 @@ class DependencyTests(unittest.TestCase):
     def test_daemon_cannot_reach_server_through_client(self):
         daemon = self.package(
             "ash-app-server-daemon",
-            "ash-rs/app-server-daemon",
+            "crates/app-server-daemon",
             deps=[{"name": "client", "kind": None}],
         )
         client = self.package(
-            "client", "ash-rs/client", deps=[{"name": "ash-app-server", "kind": None}]
+            "client", "crates/client", deps=[{"name": "ash-app-server", "kind": None}]
         )
-        server = self.package("ash-app-server", "ash-rs/app-server")
+        server = self.package("ash-app-server", "crates/app-server")
         self.assertIn(
             "ash-app-server-daemon -> client -> ash-app-server",
             dependencies.boundary_errors(
@@ -221,7 +229,7 @@ class DependencyTests(unittest.TestCase):
         )
 
     def test_agent_handlers_use_contracts_and_allow_core_in_server_assembly(self):
-        server = self.root / "ash-rs/app-server/src/server"
+        server = self.root / "crates/app-server/src/server"
         server.mkdir(parents=True)
         server.with_suffix(".rs").write_text("use ash_core::ThreadController;\n")
         for name in dependencies.AGENT_HANDLERS:
@@ -294,7 +302,7 @@ class DependencyTests(unittest.TestCase):
                 {"code": "shear/unlinked_files", "message": "orphan.rs"},
                 {
                     "code": "shear/unused_dependency",
-                    "file": "ash-rs/a/Cargo.toml",
+                    "file": "crates/a/Cargo.toml",
                     "message": "unused optional dependency `serde`",
                 },
             ]
@@ -309,7 +317,7 @@ class DependencyTests(unittest.TestCase):
         ):
             errors = dependencies.shear_errors("cargo-shear", self.root)
         self.assertEqual(
-            errors, ["ash-rs/a/Cargo.toml: unused optional dependency `serde`"]
+            errors, ["crates/a/Cargo.toml: unused optional dependency `serde`"]
         )
 
     def test_shear_tool_failure_is_not_a_pass(self):

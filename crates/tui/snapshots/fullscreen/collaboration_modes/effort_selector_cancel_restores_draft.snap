@@ -1,0 +1,28 @@
+---
+source: crates/tui/src/app/collaboration_modes_tests.rs
+expression: render_effort(&app)
+---
+  .                                                                [Dashboard]
+
+● Conversation remains visible
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ────────────────────────────────────────────────────────────────────────────
+  > keep this draft
+    and this line
+  ─────────────────────────────────────────────────────────── Automatic model
+
+  ⏸ Manual

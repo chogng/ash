@@ -100,7 +100,7 @@ Sessions 也支持 `/permission` 和相同的行内参数。`/guardian setup` �
 | `Bypass permissions` | `BypassPermissions` / `bypassPermissions` | 跳过这次交互并签发精确绑定的 bypass authority                                                    |
 
 模式列表、显示顺序、名称、说明、翻译 key 和确认标记由
-`ash-rs/protocol/src/approval_mode.rs` 统一定义。TypeScript 通过现有协议生成流程获取静态定义，
+`crates/protocol/src/approval_mode.rs` 统一定义。TypeScript 通过现有协议生成流程获取静态定义，
 在未连接 App Server 时也能显示菜单；TUI 和 Rust App 可直接使用 `ApprovalMode::definition()`。
 每个界面自行解析语言和处理快捷键，后端不保存界面语言或数字键绑定。菜单首项为 Auto，
 默认权限仍为 Manual；Plan、Ask 和无人值守的交互策略不属于这三个权限 ID。
@@ -284,7 +284,7 @@ Windows 本地工具使用 `HostAclChanges::ScopedWithTraversal`：在范围内 
 本地 Shell 配置中出现网络目标、网络动作或 `network` capability selector 时启用受管网络；未配置时仍断网，
 `rg` 保持只读断网。代理在 DNS 和连接前调用最终 action policy，`Deny`、`RequireApproval`
 与显式允许规则都作用于真实目标。具体配置格式及平台支持见
-[`network-proxy`](../ash-rs/network-proxy/README.md)。
+[`network-proxy`](../crates/network-proxy/README.md)。
 
 运行中的网络审批绑定当前执行、请求序号、目标和策略版本，复用现有持久审批协议。
 批准只继续该请求，Shell 及文件系统限制继续有效；拒绝或取消关闭请求，不重跑已经开始的命令。
@@ -410,5 +410,5 @@ Windows 本地工具使用 `HostAclChanges::ScopedWithTraversal`：在范围内 
 - [ ] 新 UI 选项是否在协议和 Core 中有唯一、明确的权威语义；
 - [ ] 当前实现与计划设计是否仍清楚分离。
 
-确定性规则语言见 [`ash-execpolicy` README](../ash-rs/execpolicy/README.md)；最终决策顺序与 grant
-binding 见 [`ash-action-policy` README](../ash-rs/action-policy/README.md)。
+确定性规则语言见 [`ash-execpolicy` README](../crates/execpolicy/README.md)；最终决策顺序与 grant
+binding 见 [`ash-action-policy` README](../crates/action-policy/README.md)。

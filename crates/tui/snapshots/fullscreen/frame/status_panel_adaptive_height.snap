@@ -1,0 +1,24 @@
+---
+source: crates/tui/src/app/fullscreen/frame_tests.rs
+expression: rendered
+---
+  .                                                                [Dashboard]  
+        ┌── Session status ────────────────────────────────────────[✗]─┐        
+        │                                                              │        
+        │   Session    Diagnostics                                     │        
+        │                                                              │        
+        │  Model:      openai/gpt                                      │        
+        │  Session ID: session-1                                       │        
+        │  Thread ID:  thread-1                                        │        
+        │                                                              │        
+        │  Thread totals                                               │        
+        │  Model calls:        0                                       │        
+        │  Input tokens:       0 tokens                                │        
+        │  Cached input:       0 tokens                                │        
+        │  Cached input share: unknown                                 │        
+        │  Cache writes:       0 tokens                                │        
+  ──────│  Output tokens:      0 tokens                                │──────  
+  > /   │  Reasoning output:   0 tokens                                │        
+  ──────└──────────────────────────────────────────────────────────────┘model   
+                                                                                
+  Tab tabs · ↑/↓ scroll · Esc close

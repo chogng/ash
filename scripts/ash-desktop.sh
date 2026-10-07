@@ -12,9 +12,9 @@ case "${1-}" in
 		;;
 	--connected)
 		if [[ "$OSTYPE" == darwin* ]]; then
-			exec uv run --python 3.12 pnpm --dir app-ts dev:ui:connected
+			exec uv run --python 3.12 pnpm dev:ui:connected
 		fi
-		exec pnpm --dir app-ts dev:ui:connected
+		exec pnpm dev:ui:connected
 		;;
 	*)
 		printf 'Unknown Ash Desktop launch mode: %s\n' "$1" >&2

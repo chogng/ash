@@ -1,0 +1,24 @@
+---
+source: crates/tui/src/app/fullscreen/frame_tests.rs
+expression: "render(&app, 80, 20)"
+---
+  .                                                                [Dashboard]  
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+  Queue 1: Run the focused tests · next                                         
+  Queue 2: Review the result · paused                                           
+⠋ Starting... · 0s                                                              
+                                                                                
+  ────────────────────────────────────────────────────────────────────────────  
+  >                                                                             
+  ─────────────────────────────────────────────────────────── Automatic model   
+                                                                                
+  ⏸ Manual · ← Dashboard · ? for shortcuts

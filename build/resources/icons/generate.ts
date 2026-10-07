@@ -2,15 +2,13 @@ import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { optimize } from "svgo";
-import { generateToRs } from "./generate-to-rs.ts";
 import { generateToTs } from "./generate-to-ts.ts";
 
 const repositoryDirectory = resolve(import.meta.dirname, "../../..");
 const iconDirectory = resolve(repositoryDirectory, "resources/icons");
 const defaultOutputs: IconOutputs = {
 	manifestFile: resolve(iconDirectory, "manifest.json"),
-	rustFile: resolve(repositoryDirectory, "app-rs/icons/src/generated.rs"),
-	typescriptFile: resolve(repositoryDirectory, "app-ts/src/ash/base/common/productIcons.ts"),
+	typescriptFile: resolve(repositoryDirectory, "src/ash/base/common/productIcons.ts"),
 };
 const iconFilePattern = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*\.svg$/;
 const unsafeSvgPattern = /<(?:script|foreignObject)\b|\son[a-z]+\s*=|(?:href|xlink:href)\s*=/i;
@@ -31,7 +29,6 @@ type IconSourceHandling = "check" | "ignore" | "write";
 
 export interface IconOutputs {
 	readonly manifestFile?: string;
-	readonly rustFile?: string;
 	readonly typescriptFile?: string;
 }
 
@@ -52,7 +49,6 @@ export interface GeneratedIcon {
 	readonly id: string;
 	readonly propertyName: string;
 	readonly rendering: IconRendering;
-	readonly rustName: string;
 	readonly sourcePath: string;
 	readonly svg: string;
 }
@@ -123,7 +119,6 @@ async function compileIcons(sourceDirectory: string): Promise<IconCompilation> {
 
 	const icons: GeneratedIcon[] = [];
 	const propertyNames = new Set<string>();
-	const rustNames = new Set<string>();
 	const sourceUpdates: IconSourceUpdate[] = [];
 	for (const fileName of iconFiles) {
 		if (!iconFilePattern.test(fileName)) {
@@ -143,21 +138,16 @@ async function compileIcons(sourceDirectory: string): Promise<IconCompilation> {
 
 		const id = basename(fileName, ".svg");
 		const propertyName = typescriptPropertyName(id);
-		const rustName = id.replaceAll("-", "_").toUpperCase();
 		if (propertyNames.has(propertyName)) {
 			throw new Error(`Duplicate generated TypeScript icon name '${propertyName}'`);
 		}
-		if (rustNames.has(rustName)) {
-			throw new Error(`Duplicate generated Rust icon name '${rustName}'`);
-		}
+
 		propertyNames.add(propertyName);
-		rustNames.add(rustName);
 		icons.push({
 			fileName,
 			id,
 			propertyName,
 			rendering: renderingMode(optimizedSvg),
-			rustName,
 			sourcePath,
 			svg: optimizedSvg,
 		});
@@ -169,9 +159,6 @@ function compileOutputs(icons: readonly GeneratedIcon[], outputs: IconOutputs): 
 	const generated: GeneratedOutput[] = [];
 	if (outputs.manifestFile) {
 		generated.push({ content: generateManifest(icons), label: "manifest", path: outputs.manifestFile });
-	}
-	if (outputs.rustFile) {
-		generated.push({ content: generateToRs(icons, outputs.rustFile), label: "rust", path: outputs.rustFile });
 	}
 	if (outputs.typescriptFile) {
 		generated.push({ content: generateToTs(icons), label: "typescript", path: outputs.typescriptFile });

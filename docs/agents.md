@@ -1,12 +1,12 @@
 # Agent：统一定义、专化职责与启动关系
 
-> 状态：Proposed。本文件拥有 Ash Agent Role 的产品边界、统一契约、内置清单和维护规则；当前实现见 [`ash-agent-roles`](../ash-rs/agent-roles/README.md)，委托运行与 Agent 树见 [`core-multi-agent.md`](core-multi-agent.md)，自定义对象和 `.ash` 边界见 [`agent-customizations.md`](agent-customizations.md)，`/develop` 的阶段、产物和失效流程见 [`develop.md`](develop.md)。
+> 状态：Proposed。本文件拥有 Ash Agent Role 的产品边界、统一契约、内置清单和维护规则；当前实现见 [`ash-agent-roles`](../crates/agent-roles/README.md)，委托运行与 Agent 树见 [`core-multi-agent.md`](core-multi-agent.md)，自定义对象和 `.ash` 边界见 [`agent-customizations.md`](agent-customizations.md)，`/develop` 的阶段、产物和失效流程见 [`develop.md`](develop.md)。
 
-> 2026-09-09 设计复核：默认启动改为 `Default`，根与子 Thread 共用角色解析；共同规则、模型指导和 Role 的组合、Codex/Claude Code/VS Code 参考与性能评测统一维护在 [Agent 指令组合、模型专化与评测](../ash-rs/docs/agent-instructions.md)。通用启动与组合已接入；本文第 8 节区分已实现能力和剩余产品契约。
+> 2026-09-09 设计复核：默认启动改为 `Default`，根与子 Thread 共用角色解析；共同规则、模型指导和 Role 的组合、Codex/Claude Code/VS Code 参考与性能评测统一维护在 [Agent 指令组合、模型专化与评测](../crates/docs/agent-instructions.md)。通用启动与组合已接入；本文第 8 节区分已实现能力和剩余产品契约。
 
 Ash 只有一种 Agent 定义。内置 Agent 与 `.ash/agents` 自定义 Agent 的差别是来源、可编辑性和发布周期；“根 Agent”“子 Agent”不是两种定义，只是某次运行在 Agent 树中的相对位置。代码和协议使用“会话入口运行”与“委托运行”表达关系，界面可以在树中把被委托节点简称为“子 Agent”。
 
-Agent 定义也不是持久 Team 成员。Team 成员使用已有 `AgentId` 和成员关系，角色定义只决定某次 Thread 的职责与能力；跨任务成员契约见 [Agent Team](../ash-rs/docs/agent-teams.md)。当前内置 `team/*` 角色供一次协作工作流使用，不表示持久 Team 已实现。
+Agent 定义也不是持久 Team 成员。Team 成员使用已有 `AgentId` 和成员关系，角色定义只决定某次 Thread 的职责与能力；跨任务成员契约见 [Agent Team](../crates/docs/agent-teams.md)。当前内置 `team/*` 角色供一次协作工作流使用，不表示持久 Team 已实现。
 
 ## 快速理解
 
@@ -45,7 +45,7 @@ Agent 定义回答“使用什么职责、提示词、模型策略、工具和�
 不新增 `ash-subagents`。`ash-agent-roles` 是全部 Agent Role 的唯一 owner，用一个 crate 隔离定义、内置资源、来源加载和校验依赖；它不接管 Agent 运行时。
 
 ```text
-ash-rs/agent-roles/
+crates/agent-roles/
 ├── Cargo.toml
 ├── README.md
 ├── assets/
@@ -241,13 +241,13 @@ Agent 只声明默认值、覆盖权限、替换范围和能力要求。App Serv
 | 阶段顺序、接受门、产物版本、上游失效、恢复与用户等待 | [`develop.md`](develop.md) |
 | 委托 Thread、上下文种子、消息、取消、等待和持久结果 | [`core-multi-agent.md`](core-multi-agent.md) |
 | 一次任务的委托、消息、等待和结果 | [`core-multi-agent.md`](core-multi-agent.md) |
-| 跨任务 Team 的成员关系和生命周期 | [Agent Team](../ash-rs/docs/agent-teams.md) |
+| 跨任务 Team 的成员关系和生命周期 | [Agent Team](../crates/docs/agent-teams.md) |
 
 阶段协调必须由确定性工作流完成，不能把 `develop.md` 整篇作为提示词交给会话入口 Agent。工作流创建阶段 Agent 时提交固定阶段身份、已接受上游版本、代码基线、工具范围、预算、时间和停止条件；阶段 Agent 只返回候选或证据，不能自行推进、接受或重写工作流状态。
 
 ## 6. 选择、可见性与执行流程
 
-当前内置定义用 `launch: any/workflow/delegation/host`、`callers` 与 `delegates` 表达启动范围。运行时校验准确内置来源、调用方定义摘要及委托目标；普通选择目录只列通用角色，Default 也不能绕过私有角色门禁。资源正文归 `ash-rs/agent-roles/assets`。
+当前内置定义用 `launch: any/workflow/delegation/host`、`callers` 与 `delegates` 表达启动范围。运行时校验准确内置来源、调用方定义摘要及委托目标；普通选择目录只列通用角色，Default 也不能绕过私有角色门禁。资源正文归 `crates/agent-roles/assets`。
 
 | Team 角色 | 入口与当前工具边界 |
 | --- | --- |
@@ -306,7 +306,7 @@ flowchart LR
 | 委托运行使用完整模型调用基线 | 尚未完成 | 当前 Agent Role 选择明确冻结 `ModelRef`；推理等级和服务等级还需要作为同一模型策略核对并冻结。 |
 | Agent 模型继承、覆盖和兼容替换 | 尚未完成 | 当前委托只使用调用方当前 `ModelRef` 或定义中的准确模型；`ash-models-manager` 目前只解析指定模型，没有跨 provider 候选选择、替换决定和用户警告。 |
 | 会话入口选择 Agent 定义 | 已实现 | `session/create.agent` 接收带来源的选择，配置与 ThreadCreated 同批提交；重试复用原配置。 |
-| Default 与共同规则、模型指导、Role 组合 | 已实现 | 共同规则归 prompts，模型指导独立冻结，Role 通过统一 Thread 配置生效；见 [指令组合设计](../ash-rs/docs/agent-instructions.md)。 |
+| Default 与共同规则、模型指导、Role 组合 | 已实现 | 共同规则归 prompts，模型指导独立冻结，Role 通过统一 Thread 配置生效；见 [指令组合设计](../crates/docs/agent-instructions.md)。 |
 | 统一定义契约 | 部分具备 | 内置与目录 Markdown 共用解析器并产出 `AgentRole`；内置启动范围已接入，模型完整策略、上下文策略和带作用范围能力仍需补齐。 |
 | 内置专化 catalog 与本文角色资源 | 部分具备 | `issue`、Advisor、代码审查、Team、Develop 阶段与 Intent 私有角色已打包；其他普通角色仍未加入。 |
 | 启动来源与 `/develop` 私有范围 | 已实现当前入口 | 会话、工作流与委托入口检查准确内置来源、调用方摘要和允许目标；私有角色不进入通用工具目录，不能通过 Default 绕过。 |
@@ -334,7 +334,7 @@ flowchart LR
 7. 工作流或私有定义还要验证普通选择器和错误调用方无法发现、选择或调用它们。
 8. 对照源码与测试更新本文件的状态表；不能只依据其他本地 Markdown 宣布完成。
 
-涉及提示词组合、模型专化或性能结论时，同时遵循 [评测与文档维护要求](../ash-rs/docs/agent-instructions.md#文档与实验的维护)，保留对照结果、失败样本和适用版本。
+涉及提示词组合、模型专化或性能结论时，同时遵循 [评测与文档维护要求](../crates/docs/agent-instructions.md#文档与实验的维护)，保留对照结果、失败样本和适用版本。
 
 ## 10. 长期不变量
 
@@ -350,7 +350,7 @@ flowchart LR
 
 ## 11. 外部参考与取舍
 
-Codex、Claude Code、VS Code 本地 Copilot 与 Copilot Agent Host 的指令组合、固定源码版本、采用范围和评测限制统一见 [外部产品参考](../ash-rs/docs/agent-instructions.md#外部产品参考与采用范围)。
+Codex、Claude Code、VS Code 本地 Copilot 与 Copilot Agent Host 的指令组合、固定源码版本、采用范围和评测限制统一见 [外部产品参考](../crates/docs/agent-instructions.md#外部产品参考与采用范围)。
 
 - [OpenAI 模型指南](https://developers.openai.com/api/docs/guides/latest-model) 使用“多 Agent / 子 Agent”描述一个 Agent 协调多个执行者，说明该词首先表达运行时协作关系。Ash 不从该术语推导独立定义类型。
 - [Claude Code 自定义子代理文档](https://code.claude.com/docs/en/sub-agents) 同时描述独立提示词、工具、模型与上下文，并明确同一 Agent 文件也可通过 `--agent` 或设置作为主会话 Agent 运行。Ash 采用“定义与运行位置分离”的结论，但不复制其文件优先级和同名覆盖规则。

@@ -43,7 +43,7 @@ get_session(S1) = all Threads where thread.session_id == S1
 
 根 Thread 常见 `thread_id == session_id`，但调用方不得依赖这个关系推断归属；是否同树只看显式 `session_id`。
 
-Agent 身份与云端认证分开。历史版本 16 起的 `ThreadCreated` 记录 `agent_id` 和来源；当前 Agent 记录、绑定、事件与目录记录随首次 Thread 同事务提交。普通 fork、消息恢复、rewind 和 replacement 保留 AgentId，当前普通委托创建独立 AgentId。删除任务只删除所属 Thread，Agent 身份继续保留。目标 [Agent Team](../ash-rs/docs/agent-teams.md) 要求成员可先于 Thread 获得 AgentId，并在后续任务中明确复用该身份；这不改变已创建 Thread 的身份或来源。
+Agent 身份与云端认证分开。历史版本 16 起的 `ThreadCreated` 记录 `agent_id` 和来源；当前 Agent 记录、绑定、事件与目录记录随首次 Thread 同事务提交。普通 fork、消息恢复、rewind 和 replacement 保留 AgentId，当前普通委托创建独立 AgentId。删除任务只删除所属 Thread，Agent 身份继续保留。目标 [Agent Team](../crates/docs/agent-teams.md) 要求成员可先于 Thread 获得 AgentId，并在后续任务中明确复用该身份；这不改变已创建 Thread 的身份或来源。
 
 历史版本 12–15 的各个 Thread 在迁移时获得独立的 `legacy-agent:<thread_id>`；已有 fork 不追溯合并身份。迁移保存可验证的来源锚点，保留原事件字节；迁移后的新 fork 延续源 AgentId。
 

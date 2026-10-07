@@ -53,7 +53,7 @@ test('the CLI checks without writing, fixes both languages, and leaves generated
 	for (const name of excluded) {
 		assert.equal(readFileSync(join(directory, name), 'utf8'), input);
 	}
-	for (const path of [join(directory, 'types.d.mts'), 'app-ts/src/ash/base/common/productIcons.ts', 'app-ts/src/ash/base/browser/dompurify/dompurify.js', 'app-ts/src/ash/base/common/marked/marked.js']) {
+	for (const path of [join(directory, 'types.d.mts'), 'src/ash/base/common/productIcons.ts', 'src/ash/base/browser/dompurify/dompurify.js', 'src/ash/base/common/marked/marked.js']) {
 		const unsupported = spawnSync(process.execPath, [join(repositoryRoot, 'build/format.ts'), '--check', path], { cwd: repositoryRoot, encoding: 'utf8' });
 		assert.equal(unsupported.status, 1);
 		assert.match(unsupported.stderr, /No first-party TypeScript or JavaScript sources matched/);
@@ -61,7 +61,7 @@ test('the CLI checks without writing, fixes both languages, and leaves generated
 });
 
 test('Prettier owns configuration and prose but excludes code, generated contracts, fixtures, and locks', async () => {
-	const ignored = ['build/lib/formatter.ts', 'build/script.js', 'ash-rs/app-server-protocol/schema/typescript/protocol.ts', 'ash-rs/app-server-protocol/schema/json/schema.json', 'app-ts/generated/example.json', 'third_party/v8/runtime-lock.json', 'app-ts/test/fixtures/example.json', 'app-ts/src/ash/base/browser/dompurify/cgmanifest.json', 'app-ts/src/ash/base/common/marked/cgmanifest.json', '.pytest_cache/README.md', 'pnpm-lock.yaml'];
+	const ignored = ['build/lib/formatter.ts', 'build/script.js', 'crates/app-server-protocol/schema/typescript/protocol.ts', 'crates/app-server-protocol/schema/json/schema.json', 'generated/example.json', 'third_party/v8/runtime-lock.json', 'test/fixtures/example.json', 'src/ash/base/browser/dompurify/cgmanifest.json', 'src/ash/base/common/marked/cgmanifest.json', '.pytest_cache/README.md', 'pnpm-lock.yaml'];
 	for (const file of ignored) {
 		assert.equal((await getFileInfo(resolve(repositoryRoot, file), { ignorePath: join(repositoryRoot, '.prettierignore') })).ignored, true, file);
 	}

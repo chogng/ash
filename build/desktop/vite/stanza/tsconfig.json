@@ -1,0 +1,14 @@
+{
+  "extends": "../../../../tsconfig.renderer.json",
+  "compilerOptions": {
+    "typeRoots": [
+      "../../../../node_modules/@types",
+      "../../../../node_modules"
+    ]
+  },
+  "include": [
+    "../../../../src/typings/css.d.ts",
+    "../../../../src/typings/editContext.d.ts",
+    "index.ts"
+  ]
+}

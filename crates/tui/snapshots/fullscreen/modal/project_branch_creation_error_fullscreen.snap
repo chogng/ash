@@ -1,0 +1,34 @@
+---
+source: crates/tui/src/app/fullscreen/modal_tests.rs
+expression: frame_text(&app)
+---
+  .                                                                                    [Dashboard]  
+                                                                                                    
+                                                                                                    
+            ┌── Project branches › New branch ────────────────────────────────────[✗]─┐             
+            │                                                                         │             
+            │  Create branch                                                          │             
+            │                                                                         │             
+            │  ╭────────────────────────────────────────────────────────────────────╮ │             
+            │  │ ash/topic                                                          │ │             
+            │  ╰────────────────────────────────────────────────────────────────────╯ │             
+            │  branch already exists                                                  │             
+            │  Create a branch at HEAD without switching worktrees.                   │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+  ──────────└─────────────────────────────────────────────────────────────────────────┘───────────  
+  > Build anything                                                                                  
+  ─────────────────────────────────────────────────────────────────────────────── Automatic model   
+                                                                                                    
+  Enter to create  ·  Esc to back

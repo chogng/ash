@@ -1,0 +1,28 @@
+---
+source: crates/tui/src/app/inline/frame_tests.rs
+expression: text(&buffer)
+---
+                                                                                
+    ▄  ▄     Ash Code v0.1.0                                                    
+  ▗█▛██▜█▖   Automatic model                                                    
+  ▝▜████▛▘   .                                                                  
+    ▝  ▘                                                                        
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+─ Extensions ───────────────────────────────────────────────────────────────────
+                                                                                
+   Skills    Marketplace    MCP    Hooks    Plugins                             
+  ╭──────────────────────────────────────────────────────────────────────────╮  
+  │ Search installed plugins                                                 │  
+  ╰──────────────────────────────────────────────────────────────────────────╯  
+> review@ash [disable]                                                       +  
+                                                                                
+  Enter enable / disable · / search · r refresh

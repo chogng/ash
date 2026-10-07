@@ -1,0 +1,28 @@
+---
+source: crates/tui/src/app/fullscreen/home_tests.rs
+expression: "text(&render(&app, 80, 24))"
+---
+  .                                                                [Dashboard]  
+                                                                                
+  ╭─────┌── Project worktrees ─────────────────────────────────────[✗]─┐─────╮  
+  │     │                                                              │     │  
+  │    ▄│  ╭─────────────────────────────────────────────────────────╮ │     │  
+  │  ▗█▛│  │ Search worktrees                                        │ │     │  
+  │  ▝▜█│  ╰─────────────────────────────────────────────────────────╯ │     │  
+  │    ▝│  Worktree created. Enter to open it.                         │     │  
+  │     │  New worktree  ·  Create at HEAD · no session                │     │  
+  │     │  repo  ·  Current · main · /repo                             │     │  
+  │     │> topic  ·  Enter to open · main · /worktrees/topic           │     │  
+  │     │                                                              │     │  
+  │     │                                                              │     │  
+  │     │                                                              │     │  
+  ╰─────│                                                              │─────╯  
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+  ──────└──────────────────────────────────────────────────────────────┘──────  
+  > Build anything                                                              
+  ─────────────────────────────────────────────────────────── Automatic model   
+                                                                                
+  n New worktree · d delete · / search · Esc close

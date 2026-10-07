@@ -137,11 +137,11 @@ verbosity 设置，补充选择、预览、部分提交和结果内容；焦点�
 
 | 能力                              | 当前实现位置                                                                                                             |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Git 查询、普通修改与对象能力      | `ash-rs/git/src/{working_copy,history,references,remote,objects,worktree}.rs` 及所属子目录                               |
-| 目标发布、checkout 保持与事务恢复 | `ash-rs/git-transaction/src/lib.rs`                                                                                      |
-| Turn 捕获、选择、预览与提交进度   | `ash-rs/git-turn-changes/src/{ledger,model,commit}.rs`                                                                   |
-| SQLite 记录、原子占用与迁移       | `ash-rs/state/src/sqlite/{git_turn_changes,git_turn_commits}.rs`                                                         |
-| 协议与领域装配                    | `ash-rs/app-server-protocol/src/protocol/turn_changes.rs`、App Server 的 `git_turn_changes_*` 与 `thread_dir_binding.rs` |
+| Git 查询、普通修改与对象能力      | `crates/git/src/{working_copy,history,references,remote,objects,worktree}.rs` 及所属子目录                               |
+| 目标发布、checkout 保持与事务恢复 | `crates/git-transaction/src/lib.rs`                                                                                      |
+| Turn 捕获、选择、预览与提交进度   | `crates/git-turn-changes/src/{ledger,model,commit}.rs`                                                                   |
+| SQLite 记录、原子占用与迁移       | `crates/state/src/sqlite/{git_turn_changes,git_turn_commits}.rs`                                                         |
+| 协议与领域装配                    | `crates/app-server-protocol/src/protocol/turn_changes.rs`、App Server 的 `git_turn_changes_*` 与 `thread_dir_binding.rs` |
 | 文件选择与预览确认                | Sessions Changes、`turnMultiDiffSource` 与共享 MultiDiff toolbar                                                         |
 
 原 `git/src/graph.rs` 和测试已迁至 `git/src/history/graph.rs` 与 `graph_tests.rs`。
@@ -168,8 +168,8 @@ verbosity 设置，补充选择、预览、部分提交和结果内容；焦点�
 | `just verify worktree`                                                                                | 正常 check、20 项测试和 warning gate 通过                                                                                                         |
 | `just verify ash-app-server-protocol`、`just generate-protocol`                                       | 协议生成完成；正常 check、88 项单测、1 项注册同步测试和 warning gate 通过                                                                         |
 | `just verify ash-app-server --filter local_git_turn_changes_seal_and_commit_a_shell_turn_through_rpc` | 正常 check、真实 RPC 流程和 warning gate 通过；部分提交后丢弃剩余文件、删除执行目录并 GC 后仍可读历史、命令重放不重复提交                         |
-| `pnpm --dir app-ts run typecheck:protocol` / `typecheck:renderer`                                     | strict TypeScript 检查通过                                                                                                                        |
-| `pnpm --dir app-ts build` / `prepare:backend`                                                         | 正常 Renderer / Electron 构建和后端产品包构建通过                                                                                                 |
+| `pnpm run typecheck:protocol` / `typecheck:renderer`                                     | strict TypeScript 检查通过                                                                                                                        |
+| `pnpm build` / `prepare:backend`                                                         | 正常 Renderer / Electron 构建和后端产品包构建通过                                                                                                 |
 | 定向前端单测（6 个文件）                                                                              | 19 项通过；覆盖中英文文案、选择刷新、Session 切换、迟到响应、非默认分支预览操作与入口注册                                                         |
 | Browser UI / Electron UI Playwright                                                                   | 各 1 项通过；真实后端场景按目标条件跳过，各 1 项，未计作通过                                                                                      |
 | Electron + App Server Playwright                                                                      | 2 项通过；真实后端双 Session 分别预览提交、未选文件保留，使用最新后端产品包                                                                       |

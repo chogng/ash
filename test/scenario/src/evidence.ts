@@ -256,7 +256,7 @@ function isHttpUrl(value: string): boolean {
 }
 
 function readAshVersion(): string {
-	const packagePath = join(repositoryRoot, 'app-ts', 'package.json');
+	const packagePath = join(repositoryRoot, '.', 'package.json');
 	return existsSync(packagePath) ? (JSON.parse(readFileSync(packagePath, 'utf8')) as { version: string; }).version : 'unknown';
 }
 

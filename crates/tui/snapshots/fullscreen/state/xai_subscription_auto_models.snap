@@ -1,0 +1,28 @@
+---
+source: crates/tui/src/app/state_tests.rs
+expression: updated
+---
+  .                                                                                [Dashboard]
+
+            ┌── Config › Super Grok ───────────────────────────────────────────[✗]─┐
+            │                                                                      │
+            │> Account  ·  ada@example.test                                        │
+            │  Plan  ·  SuperGrok Heavy                                            │
+            │                                                                      │
+            │  Models ──────────────────────────────────────────────────────────── │
+            │  Grok Next                                                           │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+  ──────────└──────────────────────────────────────────────────────────────────────┘──────────
+  > Build anything
+  ─────────────────────────────────────────────────────────────────────────── Automatic model
+
+  Esc to return  ·  l to sign out

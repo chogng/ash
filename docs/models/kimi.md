@@ -6,7 +6,7 @@ Ash 将自己的 Kimi Code 登录与本机 Kimi Desktop、Kimi Code CLI 的连�
 
 `kimi-subscription`：用户从 `/config → Providers → Kimi` 发起设备码登录。Ash 展示授权地址和一次性代码；登录成功后，`ash-kimi` 把凭据保存在 Ash profile SecretStore，并负责续期和登出。账户接口只返回可展示的状态，不返回 access token 或 refresh token。
 
-模型请求使用固定的 `https://api.kimi.com/coding/v1/chat/completions`。Kimi Code 订阅与 Kimi 开发者 API 使用不同的凭据和请求目标；一次订阅请求失败不会改用 API 密钥。接口和凭据细节见 [`ash-kimi` README](../../ash-rs/kimi/README.md)。
+模型请求使用固定的 `https://api.kimi.com/coding/v1/chat/completions`。Kimi Code 订阅与 Kimi 开发者 API 使用不同的凭据和请求目标；一次订阅请求失败不会改用 API 密钥。接口和凭据细节见 [`ash-kimi` README](../../crates/kimi/README.md)。
 
 `kimi-desktop`：本机安装并登录 Kimi Desktop 后，Ash 只读使用它写入的 Kimi Code 运行配置。每次模型请求都重新读取当前凭据，请求目标是 `https://agent-gw.kimi.com/coding/v1`。Ash 不导入桌面端 OAuth、不保存这份凭据，也不替桌面端续期或登出。桌面端提供的模型由该网关 `/models` 返回；Ash Code 的 `/model` 列表会读取这些型号，不借用 `kimi-subscription` 的静态模型清单。可以使用 `/model kimi-desktop/k2d8-preview` 选择当前网关返回的该型号；实际可用型号以网关响应为准。
 

@@ -1,0 +1,45 @@
+---
+source: crates/tui/src/models/picker_tests.rs
+expression: "frames.join(\"\\n\")"
+---
+English None
+"╭──────────────────────────────────────╮"
+"│ Search models                        │"
+"╰──────────────────────────────────────╯"
+"> GPT-6 Astra  [Fast off]               "
+"                                        "
+
+English Some("priority")
+"╭──────────────────────────────────────╮"
+"│ Search models                        │"
+"╰──────────────────────────────────────╯"
+"> GPT-6 Astra  [Fast]                   "
+"                                        "
+
+English Some("ultrafast")
+"╭──────────────────────────────────────╮"
+"│ Search models                        │"
+"╰──────────────────────────────────────╯"
+"> GPT-6 Astra  [Ultra Fast]             "
+"                                        "
+
+Chinese None
+"╭──────────────────────────────────────╮"
+"│ 搜索模型                             │" Hidden by multi-width symbols: [(3, " "), (5, " "), (7, " "), (9, " ")]
+"╰──────────────────────────────────────╯"
+"> GPT-6 Astra  [加速 关]                " Hidden by multi-width symbols: [(17, " "), (19, " "), (22, " ")]
+"                                        "
+
+Chinese Some("priority")
+"╭──────────────────────────────────────╮"
+"│ 搜索模型                             │" Hidden by multi-width symbols: [(3, " "), (5, " "), (7, " "), (9, " ")]
+"╰──────────────────────────────────────╯"
+"> GPT-6 Astra  [加速]                   " Hidden by multi-width symbols: [(17, " "), (19, " ")]
+"                                        "
+
+Chinese Some("ultrafast")
+"╭──────────────────────────────────────╮"
+"│ 搜索模型                             │" Hidden by multi-width symbols: [(3, " "), (5, " "), (7, " "), (9, " ")]
+"╰──────────────────────────────────────╯"
+"> GPT-6 Astra  [超快速]                 " Hidden by multi-width symbols: [(17, " "), (19, " "), (21, " ")]
+"                                        "

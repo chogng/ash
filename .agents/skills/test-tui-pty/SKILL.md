@@ -9,8 +9,8 @@ Use this skill only when behavior depends on the real `ash` CLI process, PTY, or
 
 ## Own the real-process scenario
 
-- Put scenario bodies in `ash-cli/tests/tui/{terminal,conversation,config,issues}.rs` and keep `ash-cli/tests/tui_real_scenarios.rs` as the single integration-test entry point. Reuse `ash-cli/tests/support`; do not add a separate Cargo test target for each scenario.
-- Drive the CLI through `TuiProcess` and use its `assert_snapshot` method for terminal frames. Snapshots are stored under `ash-cli/tests/snapshots/`.
+- Put scenario bodies in `cli/tests/tui/{terminal,conversation,config,issues}.rs` and keep `cli/tests/tui_real_scenarios.rs` as the single integration-test entry point. Reuse `cli/tests/support`; do not add a separate Cargo test target for each scenario.
+- Drive the CLI through `TuiProcess` and use its `assert_snapshot` method for terminal frames. Snapshots are stored under `cli/tests/snapshots/`.
 - Assert observable state, output, timing, lifecycle, protocol payloads, and side effects separately where the scenario makes a behavioral claim. A terminal snapshot alone does not prove a command or side effect occurred.
 - Keep detailed state combinations in App simulation tests. Add only the PTY cases needed to prove process, terminal, or transport behavior.
 
@@ -32,10 +32,10 @@ just test-tui <test-filter>
 
 This entry point builds the matching App Server daemon before running the CLI integration test. Do not invoke the `ash-cli` PTY target directly: a stale daemon binary can disagree with the newly built client.
 
-Review every affected pending snapshot, including snapshots outside `code/`:
+Review every affected pending snapshot, including snapshots outside `crates/tui/`:
 
 ```bash
-find ash-cli -name '*.snap.new' -print
+find cli -name '*.snap.new' -print
 cargo insta show path/to/snapshot.snap.new
 ```
 
@@ -45,7 +45,7 @@ Read every changed row and confirm the frame reached the intended state. Treat d
 cargo insta accept --snapshot path/to/snapshot.snap
 ```
 
-After acceptance, rerun the same `just test-tui` filter without an update environment variable and confirm `find ash-cli -name '*.snap.new' -print` returns no pending snapshots. Do not use `INSTA_UPDATE=always` as the ordinary update workflow.
+After acceptance, rerun the same `just test-tui` filter without an update environment variable and confirm `find cli -name '*.snap.new' -print` returns no pending snapshots. Do not use `INSTA_UPDATE=always` as the ordinary update workflow.
 
 Use `just ash` for an interactive terminal run when it materially improves verification. When driving it programmatically, send text and Enter in separate writes, wait for a state-specific marker before the next action, and use an isolated profile or fixture for scenarios that write configuration or repository state. Interactive verification supplements automated tests; it does not replace them.
 

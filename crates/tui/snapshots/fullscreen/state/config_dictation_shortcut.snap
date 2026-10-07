@@ -1,0 +1,28 @@
+---
+source: crates/tui/src/app/state_tests.rs
+expression: render_dictation_frame(&app)
+---
+  .                                                                [Dashboard]  
+                                                                                
+        ┌── Config ────────────────────────────────────────────────[✗]─┐        
+        │                                                              │        
+        │   General    Providers    Issues    Network                  │        
+        │                                                              │        
+        │  ╭─────────────────────────────────────────────────────────╮ │        
+        │  │ Search configuration                                    │ │        
+        │  ╰─────────────────────────────────────────────────────────╯ │        
+        │  7 more above                                                │        
+        │  Key hint style                                   Contrast   │        
+        │  Screen mode                                    fullscreen   │        
+        │  Memories                                              off + │        
+        │  Automatic Git fetch                                   Off + │        
+        │  Git fetch interval                                   180s   │        
+        │  Advisor                                               Off   │        
+        │  Always use half-width punctuation (Chinese only)      off + │        
+        │  Dictation shortcut                                    off   │        
+        │> Dictation key                                      ctrl+g   │        
+  ──────└──────────────────────────────────────────────────────────────┘──────  
+  > Build anything                                                              
+  ─────────────────────────────────────────────────────────── Automatic model   
+                                                                                
+  Enter/Space change · Tab tabs · / search · Esc close

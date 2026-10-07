@@ -1,9 +1,9 @@
 # Slash Commands 与 Slash Launcher 架构
 
 > 本文拥有 Slash Commands 的跨产品语义、运行时边界与当前接入状态。Rust 实现细节由
-> [`ash-slash-commands` README](../ash-rs/slash-commands/README.md) 拥有；通用斜杠启动面板
+> [`ash-slash-commands` README](../crates/slash-commands/README.md) 拥有；通用斜杠启动面板
 > （Slash Launcher）的实现契约由
-> [`ash-slash-launcher` README](../ash-rs/slash-launcher/README.md) 拥有；App Server wire snapshot
+> [`ash-slash-launcher` README](../crates/slash-launcher/README.md) 拥有；App Server wire snapshot
 > 由 [`ash-app-server-api.md`](ash-app-server-api.md) 拥有。Slash Command 与
 > Instructions/Skills/Agents artifact 的关系由
 > [`agent-customizations.md`](agent-customizations.md) 统一定义。
@@ -67,7 +67,7 @@ model。`origin`、Workbench `actionId` 和 TUI dispatcher identity 都是与 en
 Server-advertised Slash Command 必须有真实执行语义，不能仅凭 origin 猜测统一分发。当前内置
 `/compact` 由 Desktop 直接调用 `SessionRequest::CompactContext`，以独立 Turn 执行并把成功或失败留在
 当前对话；它不会把 `/compact` 文本发给模型。其他 server prompt command 继续把 unchanged invocation
-作为普通 `StartTurn.input`。当前 `/team` 与 `/develop` 也通过 `StartTurn.input` 传输，但 App Server 识别后交给持久工作流执行，控制命令不会作为普通提示词调用模型；当前 `/team` 管理的是一次协作任务，持久成员组织另见 [Agent Team](../ash-rs/docs/agent-teams.md)。命令契约见 [Develop 当前命令](develop.md#当前可执行命令) 和 [Agent 树](core-multi-agent.md)。Local command 必须存在真实 client execution path，否则不能进入 catalog。
+作为普通 `StartTurn.input`。当前 `/team` 与 `/develop` 也通过 `StartTurn.input` 传输，但 App Server 识别后交给持久工作流执行，控制命令不会作为普通提示词调用模型；当前 `/team` 管理的是一次协作任务，持久成员组织另见 [Agent Team](../crates/docs/agent-teams.md)。命令契约见 [Develop 当前命令](develop.md#当前可执行命令) 和 [Agent 树](core-multi-agent.md)。Local command 必须存在真实 client execution path，否则不能进入 catalog。
 Desktop 的 `/new`、`/history` 属于
 Workbench command mapping；Codex TUI 的 `/model` 属于 Session model selector；Ash TUI 的 `/theme` 属于
 device-local presentation preference：无参数时打开由 `theme` 拥有的固定 Ash Code
@@ -118,7 +118,7 @@ Theme picker，带 ID 时静默直接切换；Theme picker 不启用搜索，通
 ## Marketplace 与领域管理入口
 
 Web/Electron Workbench 和 Ash Code TUI 使用一个包管理入口，加上各领域的使用入口。命令只打开对应功能；安装状态由
-[`Core Plugins`](../ash-rs/docs/core-plugins.md#一个包入口多个领域消费方) 统一持有。
+[`Core Plugins`](../crates/docs/core-plugins.md#一个包入口多个领域消费方) 统一持有。
 
 | 入口                | 用户操作                                                             | 安装相关操作                                |
 | ------------------- | -------------------------------------------------------------------- | ------------------------------------------- |
@@ -160,7 +160,7 @@ Ash Code 的 `/skills` 只管理已发现的技能，安装技能从 `/marketpla
 Rust surfaces 直接共享 `ash-slash-commands` 的 headless state。Desktop 直接消费同一个 generated
 `SlashCommandDefinition` model，并由 Stanza Editor 的通用 completion/session state 投影交互；TypeScript
 只保留运行时 catalog binding。Rust crate 与 Desktop adapter 共同执行
-`ash-rs/slash-commands/fixtures/conformance.json`，确保名称校验、大小写、候选排序和参数规则一致。
+`crates/slash-commands/fixtures/conformance.json`，确保名称校验、大小写、候选排序和参数规则一致。
 
 ## 修改影响
 

@@ -1,0 +1,16 @@
+---
+source: crates/tui/src/app/fullscreen/pointer_tests.rs
+expression: text
+---
+  .                        [Dashboard]  
+                                        
+                                        
+                                        
+                                        
+  ─────────────────────────────── 1/1   
+  /quit                      quit Ash   
+  ────────────────────────────────────  
+  > /q                                  
+  ─────────────────── Automatic model   
+                                        
+  ⏸ Manual

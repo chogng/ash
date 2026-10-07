@@ -1,0 +1,28 @@
+---
+source: crates/tui/src/app/collaboration_modes_tests.rs
+expression: render(&app)
+---
+  .                                                                [Dashboard]  
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                      Use /mode agent|plan|debug|multitask|ask  
+  ────────────────────────────────────────────────────────────────────────────  
+  >                                                                             
+  ─────────────────────────────────────────────────────────── Automatic model   
+                                                                                
+  ⏩  Auto · ← Dashboard · ? for shortcuts

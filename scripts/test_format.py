@@ -15,14 +15,14 @@ class FormatterTests(unittest.TestCase):
                 "id": "ash-code",
                 "name": "ash-code",
                 "manifest_path": str(
-                    formatting.REPOSITORY_ROOT / "code/tui/Cargo.toml"
+                    formatting.REPOSITORY_ROOT / "crates/tui/Cargo.toml"
                 ),
             },
             {
                 "id": "vendored",
                 "name": "vendored",
                 "manifest_path": str(
-                    formatting.REPOSITORY_ROOT / "ash-rs/vendor/mxc/Cargo.toml"
+                    formatting.REPOSITORY_ROOT / "crates/vendor/mxc/Cargo.toml"
                 ),
             },
             {

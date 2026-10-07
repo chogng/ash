@@ -5,10 +5,9 @@ import { resolve } from "node:path";
 const repositoryRoot = resolve(import.meta.dirname, "../..");
 const source = resolve(repositoryRoot, "resources/win32/ash.svg");
 const executableOutput = resolve(repositoryRoot, "resources/win32/ash.ico");
-const windowOutput = resolve(repositoryRoot, "resources/win32/ash-512.png");
 const sizes = [16, 24, 32, 48, 64, 128, 256] as const;
 
-export async function generateWindowsApplicationIcons(): Promise<{ executable: Buffer; window: Buffer; }> {
+export async function generateWindowsApplicationIcons(): Promise<Buffer> {
 	const artwork = (await readFile(source)).toString("base64");
 	const browser = await chromium.launch({ headless: true });
 	try {
@@ -45,7 +44,7 @@ export async function generateWindowsApplicationIcons(): Promise<{ executable: B
 			directory.writeUInt32LE(offset, entry + 12);
 			offset += image.length;
 		}
-		return { executable: Buffer.concat([directory, ...images]), window: await renderPng(512) };
+		return Buffer.concat([directory, ...images]);
 	} finally {
 		await browser.close();
 	}
@@ -56,14 +55,12 @@ if (import.meta.main) {
 	const generated = await generateWindowsApplicationIcons();
 	if (check) {
 		const executable = await readFile(executableOutput);
-		const window = await readFile(windowOutput);
-		if (!generated.executable.equals(executable) || !generated.window.equals(window)) {
+		if (!generated.equals(executable)) {
 			throw new Error("Windows application icons are stale. Run pnpm app-icon:generate.");
 		}
-		console.log(`Validated ${sizes.length} Windows executable icon sizes and the 512px window icon.`);
+		console.log(`Validated ${sizes.length} Windows executable icon sizes.`);
 	} else {
-		await writeFile(executableOutput, generated.executable);
-		await writeFile(windowOutput, generated.window);
-		console.log(`Generated ${sizes.length} Windows executable icon sizes and the 512px window icon.`);
+		await writeFile(executableOutput, generated);
+		console.log(`Generated ${sizes.length} Windows executable icon sizes.`);
 	}
 }

@@ -1,11 +1,11 @@
 import * as l10n from '@vscode/l10n';
 import chinese from '../l10n/bundle.l10n.zh-cn.json';
-import { match } from '../../../app-ts/src/ash/base/common/glob.js';
+import { match } from '../../../src/ash/base/common/glob.js';
 import MarkdownIt from 'markdown-it';
 import { createLanguageService, githubSlugifier } from 'vscode-markdown-languageservice';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { URI, Utils } from 'vscode-uri';
-import { Event } from '../../../app-ts/src/ash/base/common/event.js';
+import { Event } from '../../../src/ash/base/common/event.js';
 
 const markdownExtensions = /\.(md|markdown|mdown|mkd|mkdn|mdwn|markdn|mdtxt|mdtext|mdc)$/iu;
 const parser = new MarkdownIt({ html: true });

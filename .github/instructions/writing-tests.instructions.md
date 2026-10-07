@@ -1,6 +1,6 @@
 ---
 description: Ash TypeScript test writing guidelines — unit tests, browser integration, snapshots, and clean teardown.
-applyTo: "**/src/ash/**/test/**/*.ts,**/src/ash/**/*.test.ts,app-ts/test/**/*.ts"
+applyTo: "**/src/ash/**/test/**/*.ts,**/src/ash/**/*.test.ts,test/**/*.ts"
 ---
 
 # Writing Tests
@@ -19,12 +19,12 @@ Choose the smallest layer that owns the behavior. Keep sorting and serialization
 
 ## Running Tests
 
-- **Unit tests:** `pnpm --dir app-ts test:unit`
+- **Unit tests:** `pnpm test:unit`
   - Filter: `--grep <pattern>`
   - File: `--run src/ash/<owner>/test/<runtime>/myFile.test.ts`
   - Glob: `--runGlob '**/myFile.test.js'`
-- **Editor browser integration:** `pnpm --dir app-ts test:editor:browser`
-- **All browser integration:** `pnpm --dir app-ts test:browser:integration`
+- **Editor browser integration:** `pnpm test:editor:browser`
+- **All browser integration:** `pnpm test:browser:integration`
 - **Browser and Electron UI:** use the owning `test:smoke:*` Playwright project.
 
 ## Writing Unit Tests
@@ -33,7 +33,7 @@ Tests use Mocha's TDD interface (`suite`/`test`) with `node:assert/strict`. Impo
 
 ## Writing Product Automation
 
-Import the shared fixture from `app-ts/test/automation/test.ts`. Reuse the owning window and feature drivers for repeated navigation; keep behavior assertions in the scenario. A new scenario owns fresh workspace/profile state, while a restart retains that scenario's state. The launcher owns startup readiness, process cleanup and diagnostics for all its windows, including failures before startup completes.
+Import the shared fixture from `test/automation/test.ts`. Reuse the owning window and feature drivers for repeated navigation; keep behavior assertions in the scenario. A new scenario owns fresh workspace/profile state, while a restart retains that scenario's state. The launcher owns startup readiness, process cleanup and diagnostics for all its windows, including failures before startup completes.
 
 When an action reorders a list, retain the target's stable identity in the locator. A live `.first()` locator can point to a different item after the action and make the assertion check the wrong behavior. Keep catalog rules in the owning unit suite and verify persistence with a named item in the product flow.
 

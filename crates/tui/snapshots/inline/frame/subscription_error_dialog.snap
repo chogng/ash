@@ -1,0 +1,28 @@
+---
+source: crates/tui/src/app/inline/frame_tests.rs
+expression: text(&buffer)
+---
+                                                                                
+    ▄  ▄     Ash Code v0.1.0                                                    
+  ▗█▛██▜█▖   Automatic model                                                    
+  ▝▜████▛▘   .                                                                  
+    ▝  ▘                                                                        
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+─ Kimi › Error ─────────────────────────────────────────────────────────────────
+                                                                                
+  Kimi token exchange failed with HTTP 400                                      
+                                                                                
+  Enter/Esc to close

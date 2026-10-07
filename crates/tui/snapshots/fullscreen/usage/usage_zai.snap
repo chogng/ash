@@ -1,0 +1,32 @@
+---
+source: crates/tui/src/app/usage_tests.rs
+expression: zai_screen
+---
+  .                                                                [Dashboard]
+
+
+        ┌── Usage ─────────────────────────────────────────────────[✗]─┐
+        │                                                              │
+        │   BigModel    Z.AI                                           │
+        │                                                              │
+        │> Z.AI plan  ·  Not reported                                  │
+        │                                                              │
+        │  Weekly limit ────────────────────────────────────────────── │
+        │  7d window  ·  65% left (35% used)                           │
+        │  Resets  ·  Not reported                                     │
+        │                                                              │
+        │  MCP limit ───────────────────────────────────────────────── │
+        │  Window  ·  98% left (2% used)                               │
+        │  Resets  ·  Not reported                                     │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+  ──────└──────────────────────────────────────────────────────────────┘──────
+  > Build anything
+  ─────────────────────────────────────────────────────────── Automatic model
+
+  Tab/Shift+Tab to switch  ·  Esc to close  ·  Run /usage to refresh

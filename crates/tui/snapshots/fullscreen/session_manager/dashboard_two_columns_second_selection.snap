@@ -1,0 +1,36 @@
+---
+source: crates/tui/src/app/session_manager_tests.rs
+expression: output
+---
+  .                                                                                       [仪 表 盘 ]
+
+─ 仪 表 盘  ─────────────────────────────────────────────────────────────────────────── 分 组 : 状 态   g ─
+
+    会 话                                状 态              更 新 时 间   │ 会 话 详 情
+  空 闲  (2) -                                                      │
+  ○ Review parser                      空 闲                        │ Fix compiler
+> ○ Fix compiler                       空 闲                        │ 空 闲
+                                                                  │
+  已 归 档  (0)                                                      │ 当 前 进 展
+                                                                  │ Compiler tests are running.
+                                                                  │
+                                                                  │ 项 目
+                                                                  │ build-host:/projects/compiler
+                                                                  │ 模 型 : openai/root-model
+                                                                  │
+                                                                  │ 线 程 : 1
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+
+  Enter/→ 打 开  · Space 预 览  · Ctrl+X 归 档  · i 详 情  · g 切 换 分 组  · Esc 返 回

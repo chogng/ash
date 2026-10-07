@@ -1,0 +1,34 @@
+---
+source: crates/tui/src/app/fullscreen/modal_tests.rs
+expression: frame_text(&app)
+---
+                                                                                                    
+    ▄  ▄     Ash Code v0.1.0                                                                        
+  ▗█▛██▜█▖   Automatic model                                                                        
+  ▝▜████▛▘   .                                                                                      
+    ▝  ▘                                                                                            
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+─ Project branches ─────────────────────────────────────────────────────────────────────────────────
+                                                                                                    
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────╮  
+  │ Search branches                                                                              │  
+  ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  
+  New branch  ·  At HEAD · no checkout change                                                       
+  Project branches                                                                                  
+> main  ·  Current                                                                                  
+  topic  ·  In another worktree                                                                     
+                                                                                                    
+  b New branch · d delete · / search · Esc close

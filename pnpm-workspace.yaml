@@ -1,6 +1,5 @@
 packages:
   - build
-  - app-ts
   - extensions/markdown-language-features
   - test/scenario
 engineStrict: true

@@ -1,0 +1,28 @@
+---
+source: crates/tui/src/app/collaboration_modes_tests.rs
+expression: frame_text(terminal.backend().buffer())
+---
+  .                                                                [Dashboard]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                   Copied 6 chars to clipboard
+  ────────────────────────────────────────────────────────────────────────────
+  > keep this draft
+  ─────────────────────────────────────────────────────────── Automatic model
+
+  ⏸ Manual

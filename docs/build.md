@@ -1,6 +1,6 @@
 # 构建与开发
 
-本文说明环境准备、产品构建、验证和缓存清理。Electron、Browser、Stanza 的启动模式、热更新和前端测试见 [app-ts README](../app-ts/README.md)；产品关系见 [产品线](product-lines.md)。
+本文说明环境准备、产品构建、验证和缓存清理。Electron、Browser、Stanza 的启动模式、热更新和前端测试见 [前端开发](frontend.md)；产品关系见 [产品线](product-lines.md)。
 
 ## 构建入口
 
@@ -19,7 +19,7 @@
 
 安装 Rust、Just 和 Python 3.11 及以上版本。Unix 构建入口使用 `python3`；运行前确认 `python3 -c 'import tomllib'` 成功。macOS 自带 Python 可能不满足要求，可使用 `uv run --python 3.12 just ash-desktop`；Apple Silicon 上的 Homebrew Python 3.12 也可将 `/opt/homebrew/opt/python@3.12/libexec/bin` 放在 PATH 前部。
 
-准备完整后端包时，macOS 还需要 Go 1.26 和系统 C/C++ 工具链来构建 LiveKit Server，见 [LiveKit Server](../third_party/livekit/README.md)。Linux 的完整后端构建需要 ALSA 开发库；沙箱构建需要 C 编译器和 libcap，见 [共享包构建](../build/ash_rs/README.md)。
+准备完整后端包时，macOS 还需要 Go 1.26 和系统 C/C++ 工具链来构建 LiveKit Server，见 [LiveKit Server](../third_party/livekit/README.md)。Linux 的完整后端构建需要 ALSA 开发库；沙箱构建需要 C 编译器和 libcap，见 [共享包构建](../build/runtime/README.md)。
 
 ### Windows 开发环境
 
@@ -55,13 +55,13 @@
 | Rust 桌面端          | `just app`         | `Ash App (Rust)` |
 | 终端界面             | `just ash`         | `Ash Code (TUI)` |
 
-仅前端、只监听前端、完整 Web 和独立编辑器的区别及对应命令见 [前端启动方式](../app-ts/README.md#启动项目)。
+仅前端、只监听前端、完整 Web 和独立编辑器的区别及对应命令见 [前端启动方式](frontend.md#启动项目)。
 
 #### 构建与维护
 
 | 命令                                                        | 结果                                                                       |
 | ----------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `just build`                                                | 构建三条产品线及其开发所需服务程序                                         |
+| `just build`                                                | 构建两个产品及其开发所需服务程序                                           |
 | `just build-code` / `just build-desktop` / `just build-app` | 构建指定产品                                                               |
 | `just build-rust`                                           | 构建根 Rust workspace                                                      |
 | `just check <package>`                                      | 检查指定 Rust 包                                                           |
@@ -84,8 +84,6 @@
 
 验证完整开发包时使用 `just ash-package`，需要让 Code TUI 运行该包时使用 `just ash-package-run`。日常 `just ash` 只准备源码运行所需程序。
 
-发布包入口为 `just runtime-package`、`just code-package` 和 `just app-package`，参数和组装顺序见 [共享包构建](../build/ash_rs/README.md)、[Code 发布](../build/code/README.md)及 [App 发布](../app-rs/docs/app-release-graph.md)。
-
 ### 测试
 
 | 命令                                            | 覆盖范围                                                 |
@@ -98,7 +96,7 @@
 | `pnpm test`                                     | Rust 协议验证、构建工具检查和前端单测                    |
 | `pnpm test:build`                               | TypeScript 构建工具单测                                  |
 
-Electron、Browser、编辑器的构建和测试命令，以及测试是否启动 App Server，见 [前端验证命令](../app-ts/README.md#常用命令)。
+Electron、Browser、编辑器的构建和测试命令，以及测试是否启动 App Server，见 [前端验证命令](frontend.md#常用命令)。
 
 #### 固定开发步骤
 
@@ -114,18 +112,18 @@ Electron、Browser、编辑器的构建和测试命令，以及测试是否启�
 `verify` 支持 `--filter <test-name>`、`--features <features>` 和 `--profile <profile>`；过滤条件只传给测试，feature 与 profile 传给三个步骤。`verify` 和 `snapshot` 支持 `--plan`，只解析并展示命令，不编译或运行。路径可以使用仓库根目录下的相对路径或绝对路径。
 
 ```sh
-just context code/tui/snapshots/fullscreen/composer/composer_focused.snap
-just snapshot code/tui/snapshots/fullscreen/composer/composer_focused.snap
+just context crates/tui/snapshots/fullscreen/composer/composer_focused.snap
+just snapshot crates/tui/snapshots/fullscreen/composer/composer_focused.snap
 just snapshot --pending --plan
 just verify ash-utils-home-dir
 ```
 
-`snapshot` 覆盖 `code/tui/snapshots/` 下由带字面量名称的断言生成的外部快照，接受 `.snap` 和 `.snap.new`，同一测试只运行一次。动态名称、共享 helper 中的断言和真实 PTY 快照使用所属测试入口。需要进程内 App Server 时传入 `--features in-process-tests`。运行生成 `.snap.new`，不直接覆盖基线。
+`snapshot` 覆盖 `crates/tui/snapshots/` 下由带字面量名称的断言生成的外部快照，接受 `.snap` 和 `.snap.new`，同一测试只运行一次。动态名称、共享 helper 中的断言和真实 PTY 快照使用所属测试入口。需要进程内 App Server 时传入 `--features in-process-tests`。运行生成 `.snap.new`，不直接覆盖基线。
 
 按 [test-tui](../.agents/skills/test-tui/SKILL.md) 逐份审阅后，显式列出要接受的具体文件：
 
 ```sh
-just snapshot code/tui/snapshots/fullscreen/composer/composer_focused.snap --accept
+just snapshot crates/tui/snapshots/fullscreen/composer/composer_focused.snap --accept
 ```
 
 `--accept` 必须显式列出已审阅文件，不能与 `--pending` 同用；接受后按组复跑测试。其他待审阅文件保留；目录中还有 `.snap.new` 时返回非零退出码并列出路径。
@@ -145,26 +143,25 @@ just test-tui actual_tui_process_interrupts_an_inflight_http_stream
 
 #### UI 场景录屏
 
-场景录屏需要带 `drawtext` 滤镜的 FFmpeg：macOS 使用 `ffmpeg-full` 并将其 `bin` 加入 PATH，Windows 可安装 `Gyan.FFmpeg`，Linux 可安装 `ffmpeg`。运行方法和证据目录见 [前端 UI 场景录屏](../app-ts/README.md#ui-场景录屏)。
+场景录屏需要带 `drawtext` 滤镜的 FFmpeg：macOS 使用 `ffmpeg-full` 并将其 `bin` 加入 PATH，Windows 可安装 `Gyan.FFmpeg`，Linux 可安装 `ffmpeg`。运行方法和证据目录见 [前端 UI 场景录屏](frontend.md#ui-场景录屏)。
 
 #### Bazel 边界与 TUI 场景测试
 
-Windows 先配置 Git Bash，然后运行 App 边界和打包契约测试；其他平台只需第二条命令：
+运行迁移后的 CLI/TUI 场景：
 
-```powershell
-$env:BAZEL_SH = "C:\Program Files\Git\bin\bash.exe"
-bazelisk test //app-rs:app_ci --test_output=errors --test_env=PATH
+```sh
+bazel test //cli:tui-real-scenarios --test_output=errors --test_env=PATH
 ```
 
-`--test_env=PATH` 将固定版本 Node 的路径传给测试进程。`//ash-cli:tui-real-scenarios` 运行同一组 CLI/TUI PTY 场景；先将锁定的 `rg`、`tgrep` 路径设为 `ASH_RG_PATH`、`ASH_TGREP_PATH`。Linux CI 无法运行的真实沙箱场景由 macOS 作业覆盖。
+`--test_env=PATH` 将固定版本 Node 的路径传给测试进程。`//cli:tui-real-scenarios` 运行同一组 CLI/TUI PTY 场景；先将锁定的 `rg`、`tgrep` 路径设为 `ASH_RG_PATH`、`ASH_TGREP_PATH`。Linux CI 无法运行的真实沙箱场景由 macOS 作业覆盖。
 
 ### Dev Container：Linux Desktop、Web 与后端
 
-安装 Docker 和 VS Code Dev Containers 扩展，执行 **Dev Containers: Reopen in Container**。配置见 [`.devcontainer/`](../.devcontainer/)，首次创建需联网安装工具、项目依赖、Chromium 和后端资源。
+安装 Docker 和 VS Code Dev Containers 扩展，执行 **Dev Containers: Reopen in Container**。配置见 [`.devcontainer/`](../.devcontainer)，首次创建需联网安装工具、项目依赖、Chromium 和后端资源。
 
 在容器终端执行 `just ash-desktop` 启动 Electron，在宿主机打开转发的 6080 端口，使用 VNC 密码 `vscode` 查看桌面。容器启用 `privileged` 并配置 Electron 沙箱权限；依赖和产物使用容器卷，与宿主机隔离。
 
-仅前端 Web 模式执行 `pnpm --dir app-ts dev:web --host 0.0.0.0`，打开转发的 5173 端口。完整 Web 模式和 App Server 只监听容器回环地址，须在容器内运行 Playwright，不能通过端口转发在宿主机浏览器访问。Browser 测试执行 `pnpm test:desktop:smoke:browser` 或 `pnpm test:web-integration`；Electron Playwright 使用容器桌面。
+仅前端 Web 模式执行 `pnpm dev:web --host 0.0.0.0`，打开转发的 5173 端口。完整 Web 模式和 App Server 只监听容器回环地址，须在容器内运行 Playwright，不能通过端口转发在宿主机浏览器访问。Browser 测试执行 `pnpm test:desktop:smoke:browser` 或 `pnpm test:web-integration`；Electron Playwright 使用容器桌面。
 
 ## 输出布局
 
@@ -172,8 +169,8 @@ bazelisk test //app-rs:app_ci --test_output=errors --test_env=PATH
 | ------------------------------------------- | ------------------------------------------------------------------------- |
 | `.build/cargo/`                             | 默认 Cargo 输出，可由 `CARGO_TARGET_DIR` 覆盖                             |
 | `.build/code/dev/generations/<digest>/bin/` | Code 源码运行所需程序；保留当前版本与仍在运行的版本，程序对象以硬链接复用 |
-| `.build/app-ts/`                            | Electron、Renderer、生成的测试程序和 Playwright 报告                      |
-| `.build/app-ts/web/ash/`                    | 独立 Web 构建，包含浏览器 Workbench 与 Sessions 页面                      |
+| `.build/desktop/`                           | Electron、Renderer、生成的测试程序和 Playwright 报告                      |
+| `.build/desktop/web/ash/`                   | 独立 Web 构建，包含浏览器 Workbench 与 Sessions 页面                      |
 | `.build/runtime/dev/`                       | 完整后端开发包和选用记录                                                  |
 | `.build/build-health/`                      | 构建测量日志与报告                                                        |
 | `.build/ash-playwright-mcp/`                | 临时 UI 场景与验证证据                                                    |
@@ -194,11 +191,11 @@ Sherpa ONNX 静态库使用按版本共享的校验缓存，位于 `third_party/
 
 预算仅在显式清理时应用。回收保留锁文件，跳过正在构建、运行或完成不足一分钟的 profile，工作集可能暂时超限。自定义 `CARGO_TARGET_DIR` 不自动参与预算；仓库内的其他 Cargo 输出目录可用 `--target-dir` 指定。
 
-开发运行版本由发布器按租约回收，保留当前版本与仍在运行的版本。验证脚本应在结束时删除自行创建的临时编译、索引目录，只保留报告和复现材料；`just bench-build` 会自动清理自己的编译目录。开发包的发布与回收规则见 [共享包构建](../build/ash_rs/README.md)和 [Code 构建](../build/code/README.md)。
+开发运行版本由发布器按租约回收，保留当前版本与仍在运行的版本。验证脚本应在结束时删除自行创建的临时编译、索引目录，只保留报告和复现材料；`just bench-build` 会自动清理自己的编译目录。开发包的发布与回收规则见 [共享包构建](../build/runtime/README.md)和 [Code 构建](../build/code/README.md)。
 
 `just rust-warnings` 检查新生成与已缓存的编译警告，保持 `RUSTFLAGS` 与普通构建一致，避免生成另一套产物。
 
-生成的前端协议副本位于 `app-ts/src/ash/platform/app-server/common/generated/`，可由 `pnpm --dir app-ts protocol:sync` 重建。受版本控制的图标工厂使用 `pnpm icons:generate` 更新。
+生成的前端协议副本位于 `src/ash/platform/app-server/common/generated/`，可由 `pnpm protocol:sync` 重建。受版本控制的图标工厂使用 `pnpm icons:generate` 更新。
 
 ## Rust 依赖检查与构建测量
 
@@ -272,16 +269,6 @@ just bench-build ash-cli --profile dev-small --jobs 4 --compare .build/build-hea
 
 ## 构建源码与仓库脚本边界
 
-| 路径                                  | 职责                                            |
-| ------------------------------------- | ----------------------------------------------- |
-| `build/app_ts/`                       | Electron、Web 的构建、开发启动和后端变化监听    |
-| `build/ash_rs/`                       | 共享后端构建、资源下载、组包与签名              |
-| `build/code/`、`build/app_rs/`        | 各产品的构建和交付                              |
-| `build/lib/`、`build/download/`       | 共用的 Cargo、归档、签名和下载实现              |
-| `build/protocol/`、`build/resources/` | 协议同步与共享资源生成                          |
-| `build/pnpm/`、`build/clean.ts`       | Node 安装校验与清理                             |
-| `scripts/`                            | 仓库级 Cargo 环境、格式化、测试、依赖检查和测量 |
-
 根 `justfile` 和 `package.json` 声明命令并调用上述实现。`scripts/` 可以调用 `build/`；构建实现不反向调用仓库脚本。前端构建工具使用 TypeScript，后端构建和组包使用 Python。测试内容归对应产品，运行产物归 `.build/`。
 
-工具需要从仓库根发现的 Cargo、pnpm、Bazel 和 TypeScript 配置留在根目录；Node workspace 共用根锁文件。共享包布局和发布流程见 [构建器说明](../build/ash_rs/README.md)，桌面开发生命周期见 [app-ts README](../app-ts/README.md)，文档站由独立的 `ash-docs` 仓库负责。
+工具需要从仓库根发现的 Cargo、pnpm、Bazel 和 TypeScript 配置留在根目录；Node workspace 共用根锁文件。共享包布局和发布流程见 [构建器说明](../build/runtime/README.md)，桌面开发生命周期见 [前端开发](frontend.md)，文档站由独立的 `ash-docs` 仓库负责。

@@ -1,0 +1,26 @@
+---
+source: crates/tui/src/app/state_tests.rs
+expression: "crate::app::usage_tests::render(&app, 96, 24)"
+---
+  .                                                                        [— / —] [Dashboard]
+
+            ┌── Config › BigModel ─────────────────────────────────────────────[✗]─┐
+            │                                                                      │
+            │   Status                                                             │
+            │                                                                      │
+            │> Coding plan enabled                                                 │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+  ╭─────────│  Tab/Shift+Tab to switch  ·  Esc to return  ·  l to sign out         │─────────╮
+  │ > Build └──────────────────────────────────────────────────────────────────────┘         │
+  ╰──────────────────────────────────────────────────────────────────────── Automatic model ─╯

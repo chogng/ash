@@ -1,0 +1,48 @@
+load("//:defs.bzl", "ash_rust_binary", "ash_rust_crate")
+load("@crates//:defs.bzl", "all_crate_deps")
+load("@rules_rust//rust:defs.bzl", "rust_test")
+load("//bazel/platforms:release_binaries.bzl", "multiplatform_binaries")
+
+ash_rust_crate(
+    name = "cli",
+    crate_name = "ash_cli",
+)
+
+ash_rust_binary(
+    name = "ash",
+    crate_name = "ash",
+    crate_root = "src/main.rs",
+    deps = [":cli"],
+)
+
+rust_test(
+    name = "tui-real-scenarios",
+    crate_name = "tui_real_scenarios",
+    crate_root = "tests/tui_real_scenarios.rs",
+    srcs = glob(["tests/tui/*.rs"]) + [
+        "tests/support/scenario_http.rs",
+        "tests/support/tui_process.rs",
+        "tests/tui_real_scenarios.rs",
+    ],
+    compile_data = [
+        "//crates/skills:built-in-skills",
+    ],
+    data = [
+        "tests/support/issue_provider.py",
+        ":ash",
+        "//crates/app-server:ash-app-server",
+        "//crates/app-server-daemon:ash-app-server-daemon",
+    ] + glob(["tests/snapshots/**/*.snap"]),
+    deps = all_crate_deps(normal = True, normal_dev = True) + [":cli"],
+    edition = "2024",
+    env_inherit = ["PATH", "ASH_RG_PATH", "ASH_TGREP_PATH"],
+    rustc_env = {
+        "CARGO_BIN_EXE_ash": "$(rlocationpath :ash)",
+        "CARGO_BIN_EXE_ash-app-server": "$(rlocationpath //crates/app-server:ash-app-server)",
+        "CARGO_BIN_EXE_ash-app-server-daemon": "$(rlocationpath //crates/app-server-daemon:ash-app-server-daemon)",
+    },
+    rustc_env_files = ["//:workspace-version-env"],
+    timeout = "long",
+)
+
+multiplatform_binaries(name = "ash")

@@ -14,7 +14,6 @@
   "remoteUser": "node",
   "mounts": [
     "source=ash-${devcontainerId}-node-modules,target=/workspaces/ash/node_modules,type=volume,volume-nocopy",
-    "source=ash-${devcontainerId}-app-ts-node-modules,target=/workspaces/ash/app-ts/node_modules,type=volume,volume-nocopy",
     "source=ash-${devcontainerId}-build-node-modules,target=/workspaces/ash/build/node_modules,type=volume,volume-nocopy",
     "source=ash-${devcontainerId}-build-output,target=/workspaces/ash/.build,type=volume,volume-nocopy",
     "source=ash-${devcontainerId}-python-env,target=/workspaces/ash/scripts/.venv,type=volume,volume-nocopy",

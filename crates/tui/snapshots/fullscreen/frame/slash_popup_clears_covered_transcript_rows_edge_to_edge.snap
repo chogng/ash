@@ -1,0 +1,24 @@
+---
+source: crates/tui/src/app/fullscreen/frame_tests.rs
+expression: "render(&app, terminal_area.width, terminal_area.height)"
+---
+  .                                                                [Dashboard]  
+                                                                                
+● Model invocation failed 8 underlying transcript content underlying transcript 
+content underlying transcript content underlying transcript content             
+                                                                                
+● Model invocation failed 9 underlying transcript content underlying transcript 
+content underlying transcript content underlying transcript content             
+                                                                                
+  ────────────────────────────────────────────────────────────────────── 1/38   
+  /context                   show context usage and available input capacity   ┃
+  /status                    show session state and thread totals              │
+  /usage                     show account quotas, balances, and reset times    │
+  /statusline                choose the items shown in the status line         │
+  /skills                    browse and manage skills                          │
+  /memories                  manage memories, reading consent and model saving │
+  ────────────────────────────────────────────────────────────────────────────  
+  > /                                                                           
+  ────────────────────────────────────────────────────── Claude Sonnet (high)   
+                                                                                
+  ⏸ Manual

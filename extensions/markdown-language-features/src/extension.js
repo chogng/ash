@@ -1,5 +1,5 @@
 import { registerLanguageFeatures } from './languageFeatures.js';
-import { Marked } from '../../../app-ts/src/ash/base/common/marked/marked.js';
+import { Marked } from '../../../src/ash/base/common/marked/marked.js';
 import manifest from '../package.json';
 import english from '../package.nls.json';
 import chinese from '../package.nls.zh-CN.json';

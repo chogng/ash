@@ -36,7 +36,7 @@ try {
     $report.os = Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, OSArchitecture
     $report.build = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' |
         Select-Object DisplayVersion, CurrentBuild, UBR
-    $report.mxc = Get-Content 'ash-rs/vendor/mxc/upstream.json' -Raw | ConvertFrom-Json
+    $report.mxc = Get-Content 'crates/vendor/mxc/upstream.json' -Raw | ConvertFrom-Json
     $report.toolchain = (& rustc -Vv | Out-String).Trim()
     if ($LASTEXITCODE -ne 0) { throw 'Rust toolchain unavailable' }
     $report.python = (& python --version | Out-String).Trim()

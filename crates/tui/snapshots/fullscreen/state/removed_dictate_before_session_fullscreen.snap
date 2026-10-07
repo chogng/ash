@@ -1,0 +1,28 @@
+---
+source: crates/tui/src/app/state_tests.rs
+expression: frame
+---
+  .                                                                [Dashboard]  
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                    Unknown command: /dictate.  
+  ────────────────────────────────────────────────────────────────────────────  
+  >                                                                             
+  ─────────────────────────────────────────────────────────── Automatic model   
+                                                                                
+  ⏸ Manual · ← Dashboard · ? for shortcuts

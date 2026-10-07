@@ -1,7 +1,5 @@
 # 工程文档
 
-[系统架构](architecture.md) · [Ash Code](../code/README.md) · [TUI 布局](../code/LAYOUT.md) · [app](../app-rs/docs/README.md) · [用户文档](https://github.com/chogng/ash-docs)
-
 普通开发直接完成实现和测试，按需更新现有文档；显式使用 `/develop` 时才采用[阶段产物与验收规则](development-workflow.md)。编写文档见[写作规范](../.github/instructions/documentation.instructions.md)。各模块的代码和测试入口在相邻 README。
 
 ## 意图驱动的 Agent 开发流程
@@ -25,7 +23,7 @@
 | [`agents.md`](agents.md)                                                                 | 设计 | 内置与自定义 Agent 的统一定义、专化职责、启动来源和执行约束                    |
 | [`tools.md`](tools.md)                                                                   | 设计 | 工具三层契约、registry snapshot                                                |
 | [`exec.md`](exec.md)                                                                     | 设计 | 进程执行                                                                       |
-| [`core-plugins.md`](../ash-rs/docs/core-plugins.md)                                      | 设计 | Plugin 来源、PluginsManager、包存储、activation 与 capability 接线             |
+| [`core-plugins.md`](../crates/docs/core-plugins.md)                                      | 设计 | Plugin 来源、PluginsManager、包存储、activation 与 capability 接线             |
 | [`localization.md`](localization.md)                                                     | 设计 | 内置 locale catalog、Marketplace localization 包与 UI fallback                 |
 | [`plugins.md`](plugins.md) / [`connectors.md`](connectors.md) / [`skills.md`](skills.md) | 设计 | Plugin 扩展分发、Connector 外部账号连接与 Skill 指令运行时边界                 |
 | [`editor-extensions.md`](editor-extensions.md)                                           | 设计 | 声明式扩展与 Ash 原生可执行 Host v1 的双轨边界、信任、生命周期和产品接入状态   |
@@ -60,27 +58,12 @@
 
 ## 界面与体验
 
-[`ash-desktop-architecture.md`](ash-desktop-architecture.md)、
-[`ui-styling-ownership.md`](ui-styling-ownership.md)、
-[`editor-architecture.md`](editor-architecture.md)、[`editor-core.md`](editor-core.md)、
-[`workbench-pane-composite-design.md`](workbench-pane-composite-design.md)、
-[`design-tokens.md`](design-tokens.md)、[`theme-authoring-template.md`](theme-authoring-template.md)（模板）、
-[`menu-system.md`](menu-system.md)、[`icons.md`](icons.md)、[`search.md`](search.md)、
-[`keybindings.md`](keybindings.md)、
-[`code-intelligence.md`](code-intelligence.md)、
-[`codebase.md`](codebase.md)、
-[`syntax-analysis.md`](syntax-analysis.md)、[`lsp.md`](lsp.md)、
-[`editor-extensions.md`](editor-extensions.md)、
-[`chat-session-inspector.md`](chat-session-inspector.md)、[`typst.md`](typst.md)
-
 ## app 产品
-
-[app 文档](../app-rs/docs/README.md)：桌面交互、终端、输入与渲染。
 
 ## 平台与产品
 
-[`architecture.md`](architecture.md)（总入口）、[`ash-rs-architecture.md`](ash-rs-architecture.md)、
-[`code/README.md`](../code/README.md)、[`workbench-modes.md`](workbench-modes.md)、
+[`architecture.md`](architecture.md)（总入口）、[`rust-architecture.md`](rust-architecture.md)、
+[`crates/tui/README.md`](../crates/tui/README.md)、[`workbench-modes.md`](workbench-modes.md)、
 [`product-lines.md`](product-lines.md)、[`remote-development.md`](remote-development.md)、[`git.md`](git.md)
 
 ## 产品研究
@@ -92,9 +75,3 @@
 | [`figma-dev-mode.md`](figma-dev-mode.md) | 参考 / 产品建议 | Design 开发检查、Code Connect、MCP、版本交接、权限与 Ash Design 的长期设计 |
 
 ## 计划与迁移
-
-| 文档                                                                                  | 状态            |
-| ------------------------------------------------------------------------------------- | --------------- |
-| [`app-rs/docs/native-deprecation-plan.md`](../app-rs/docs/native-deprecation-plan.md) | Native 弃用迁移 |
-| [`app-rs/docs/app-migration-plan.md`](../app-rs/docs/app-migration-plan.md)           | App 迁移        |
-| [`app-rs/docs/app-release-graph.md`](../app-rs/docs/app-release-graph.md)             | App 发布依赖    |

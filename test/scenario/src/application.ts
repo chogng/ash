@@ -4,10 +4,10 @@ import { createServer } from 'node:net';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { launchBrowser } from '../../../app-ts/test/automation/playwrightBrowser.ts';
-import { launchElectron } from '../../../app-ts/test/automation/playwrightElectron.ts';
-import type { PlaywrightApplication, PlaywrightDriver } from '../../../app-ts/test/automation/playwrightDriver.ts';
-import type { Workbench } from '../../../app-ts/test/automation/workbench.ts';
+import { launchBrowser } from '../../automation/playwrightBrowser.ts';
+import { launchElectron } from '../../automation/playwrightElectron.ts';
+import type { PlaywrightApplication, PlaywrightDriver } from '../../automation/playwrightDriver.ts';
+import type { Workbench } from '../../automation/workbench.ts';
 import type { RunnerOptions } from './options.ts';
 
 export type JSONValue = string | number | boolean | null | JSONValue[] | { readonly [key: string]: JSONValue; };
@@ -82,7 +82,7 @@ export class ApplicationService {
 				workspacePermissions: options.workspacePath ? 'development' : undefined,
 				extraArgs: options.extraArgs,
 				recordVideo: { directory: videoDirectory, size: videoSize },
-				desktopDirectory: join(repositoryRoot, 'app-ts'),
+				desktopDirectory: join(repositoryRoot, '.'),
 			});
 			return createRunningApplication({
 				application: launched.application,
@@ -108,8 +108,8 @@ export class ApplicationService {
 		const port = await availablePort();
 		const baseURL = `http://127.0.0.1:${port}/`;
 		const server = spawn(process.execPath, [
-			join(repositoryRoot, 'build/app_ts/launch/web.ts'),
-			join(repositoryRoot, '.build/app-ts/renderer/ash'),
+			join(repositoryRoot, 'build/desktop/launch/web.ts'),
+			join(repositoryRoot, '.build/desktop/renderer/ash'),
 			String(port),
 		], { cwd: repositoryRoot, env: { ...process.env, ASH_WEB_APP_SERVER: '0' }, stdio: ['ignore', 'ignore', 'pipe'] });
 		let serverErrors = '';

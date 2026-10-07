@@ -3,7 +3,7 @@
 > [阶段产物与验收规则](development-workflow.md)仅适用于用户显式使用 `/develop`，不适用于日常评估、修复和实现。本文拥有 `/develop` 产品系统，分别注明当前实现与后续设计；使用 `intent.md` 等记录本身不能证明产品已经实现。
 
 > 状态：已实现命令与阶段运行的纵向流程（2026-09-22），其余目标按下文标注。本文是 `/develop` 流程、产物和状态机的唯一开发设计文档；内置角色定义由 `agents.md` 维护。
-> 文档所有权：本文拥有从自然对话到意图、规格、计划、实施、验收和收口的完整产品流程，以及阶段 Agent、上下文交付、版本失效、Slash Command 和 Team 任务的关系。持久 Team 的成员与生命周期由 [`Agent Team`](../ash-rs/docs/agent-teams.md) 维护；内置阶段 Agent 与私有 Agent 的 ID、提示词、工具、能力和启动范围由 [`agents.md`](agents.md#52-develop-阶段角色) 维护；Slash Command 通用边界见 [`slash-commands.md`](slash-commands.md)，Agent 树见 [`core-multi-agent.md`](core-multi-agent.md)，上下文选择与压缩见 [`core-context.md`](core-context.md)。
+> 文档所有权：本文拥有从自然对话到意图、规格、计划、实施、验收和收口的完整产品流程，以及阶段 Agent、上下文交付、版本失效、Slash Command 和 Team 任务的关系。持久 Team 的成员与生命周期由 [`Agent Team`](../crates/docs/agent-teams.md) 维护；内置阶段 Agent 与私有 Agent 的 ID、提示词、工具、能力和启动范围由 [`agents.md`](agents.md#52-develop-阶段角色) 维护；Slash Command 通用边界见 [`slash-commands.md`](slash-commands.md)，Agent 树见 [`core-multi-agent.md`](core-multi-agent.md)，上下文选择与压缩见 [`core-context.md`](core-context.md)。
 
 `ASH.md` 已由 Agent 运行时读取。当前阶段产物保存在工作流领域数据库；`intent.md`、`spec.md` 和 `plan.md` 的文件导出仍属后续设计，不用于把当前系统设计拆成四份自我描述的文档。
 
@@ -13,7 +13,7 @@
 
 ### 当前可执行命令
 
-`ash-rs/ext/workflows` 保存工作状态和不可变候选；App Server 通过现有 `StartTurn` 接收命令，提交不调用模型的控制 Turn，并使用 Core 启动专用子 Agent。客户端从服务端命令目录取得入口，不需要本地提示词别名。
+`crates/ext/workflows` 保存工作状态和不可变候选；App Server 通过现有 `StartTurn` 接收命令，提交不调用模型的控制 Turn，并使用 Core 启动专用子 Agent。客户端从服务端命令目录取得入口，不需要本地提示词别名。
 
 | 命令                            | 当前行为                                                                                          |
 | ------------------------------- | ------------------------------------------------------------------------------------------------- |
@@ -280,7 +280,7 @@ Intent v1 accepted
 
 ## 9. Team 与阶段执行
 
-`/develop` 创建和管理开发工作；流程协调内核判断当前处于哪个阶段；Plan 决定工作是否具备可独立拆分的证据。执行可使用单 Agent、临时多 Agent 协作，或选择一个已有 Team 的成员。Team 长期保存成员关系，本次阶段的执行、取消与结果仍属于一个 Session 的 Agent 树；完整成员契约见 [Agent Team](../ash-rs/docs/agent-teams.md)。当前 `/team` 命令只有临时多 Agent 协作，尚不能选择持久 Team。
+`/develop` 创建和管理开发工作；流程协调内核判断当前处于哪个阶段；Plan 决定工作是否具备可独立拆分的证据。执行可使用单 Agent、临时多 Agent 协作，或选择一个已有 Team 的成员。Team 长期保存成员关系，本次阶段的执行、取消与结果仍属于一个 Session 的 Agent 树；完整成员契约见 [Agent Team](../crates/docs/agent-teams.md)。当前 `/team` 命令只有临时多 Agent 协作，尚不能选择持久 Team。
 
 适合多人执行的情况包括：
 
@@ -299,7 +299,7 @@ Intent v1 accepted
 
 本次多人执行只消费固定的 Intent、Spec、Plan 和代码基线，不拥有第二份目标或验收事实。使用持久 Team 时，成员身份从 Team 读取，执行权限仍由本次任务决定。Agent 的委托、结果和取消由 Agent tree 管理，修改证据与发布继续使用 Turn Changes 和 Git 的既有路径。
 
-共享讨论使用已实现的 [Agent 讨论板](../ash-rs/docs/extensions.md#agent-共享讨论板)。进入团队执行的阶段可按工作与阶段建立频道，成员在话题中报告发现、依赖阻塞和验证结果，并引用固定产物版本、文件位置或测试记录。频道和订阅由阶段协调方通过受授权工具建立；阶段角色是否获得读取或写入工具，仍由其能力范围决定。
+共享讨论使用已实现的 [Agent 讨论板](../crates/docs/extensions.md#agent-共享讨论板)。进入团队执行的阶段可按工作与阶段建立频道，成员在话题中报告发现、依赖阻塞和验证结果，并引用固定产物版本、文件位置或测试记录。频道和订阅由阶段协调方通过受授权工具建立；阶段角色是否获得读取或写入工具，仍由其能力范围决定。
 
 讨论板只保存协作信息。已接受产物、阶段转换、失效判断和最终验收由 `ext/workflows` 记录；帖子中的“通过”或“完成”不能推动状态机。当前角色已获得讨论板工具，命令与阶段行为见[当前可执行命令](#当前可执行命令)。
 

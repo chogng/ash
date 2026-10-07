@@ -1,12 +1,12 @@
 # 登录与账户系统
 
-> 物理位置：`ash-rs/login/`
+> 物理位置：`crates/login/`
 > Rust crate：`ash_login`
-> 订阅后台观察：`ash-rs/subscriptions/`
+> 订阅后台观察：`crates/subscriptions/`
 > 当前状态：多 Provider 控制面、App Server RPC、ChatGPT/Kimi/Super Grok/BigModel/Z.AI 订阅认证、GitHub 账户连接与本地模型执行已实现
 > 订阅接入与额度：[`subscriptions.md`](subscriptions.md)
-> Kimi OAuth owner：`ash-rs/kimi/`
-> Super Grok 登录 owner：`ash-rs/supergrok/`
+> Kimi OAuth owner：`crates/kimi/`
+> Super Grok 登录 owner：`crates/supergrok/`
 > Provider runtime：[`model-provider.md`](model-provider.md)
 > Secret persistence：[`secrets.md`](secrets.md)
 

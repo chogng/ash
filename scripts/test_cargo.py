@@ -279,7 +279,7 @@ class ProcessTestRunnerTests(unittest.TestCase):
         return {
             "reason": "compiler-artifact",
             "package_id": "app-server",
-            "manifest_path": str(Path("ash-rs/app-server/Cargo.toml").resolve()),
+            "manifest_path": str(Path("crates/app-server/Cargo.toml").resolve()),
             "target": {"name": name, "kind": [kind]},
             "profile": {"test": kind == "test"},
             "executable": str(Path("test-output", name).resolve()),

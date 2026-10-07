@@ -1,0 +1,28 @@
+---
+source: crates/tui/src/app/collaboration_modes_tests.rs
+expression: render_effort(&app)
+---
+  .                                                                [Dashboard]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ────────────────────────────────────────────────────────────────────────────
+  >
+  ─────────────────────────────────────────────────────────── Automatic model
+
+  ⏸ Manual · ← Dashboard · ? for shortcuts

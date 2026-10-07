@@ -1,0 +1,28 @@
+---
+source: crates/tui/src/app/collaboration_modes_tests.rs
+expression: visible
+---
+                                                                                
+    ▄  ▄     Ash Code v0.1.0                                                    
+  ▗█▛██▜█▖   Automatic model                                                    
+  ▝▜████▛▘   .                                                                  
+    ▝  ▘                                                                        
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+─ 权 限  ─────────────────────────────────────────────────────────────────────────
+                                                                                
+  自 动                                                                        +  
+  手 动                                                                   当 前  +  
+> 跳 过 权 限 审 批                                                                -  
+    跳 过 大 部 分 审 批 ， 访 问 范 围 限 制 仍 然 有 效                                         
+                                                                                
+  Enter 确 认  · ←/→ 详 情  · Esc 关 闭

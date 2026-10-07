@@ -21,8 +21,8 @@
 title: <Capability / Domain> API
 status: draft
 capabilityVersion: 1
-owner: ash-rs
-rustOwner: ash-rs
+owner: crates
+rustOwner: crates
 requestedBy: desktop
 consumers:
   - desktop
@@ -42,7 +42,7 @@ lastUpdated: YYYY-MM-DD
 
 ### 状态所有者
 
-`<说明权威状态属于 Desktop、ash-rs、connection、thread、turn 或 capability handle。>`
+`<说明权威状态属于 Desktop、crates、connection、thread、turn 或 capability handle。>`
 
 ### 兼容策略
 

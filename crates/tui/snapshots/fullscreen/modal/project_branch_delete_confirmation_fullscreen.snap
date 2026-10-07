@@ -1,0 +1,34 @@
+---
+source: crates/tui/src/app/fullscreen/modal_tests.rs
+expression: frame_text(&app)
+---
+  .                                                                                    [Dashboard]  
+                                                                                                    
+                                                                                                    
+            ┌── Project branches › Delete branch ─────────────────────────────────[✗]─┐             
+            │                                                                         │             
+            │> topic  ·  Only merged branches can be deleted. This cannot be undone.  │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+  ──────────└─────────────────────────────────────────────────────────────────────────┘───────────  
+  > Build anything                                                                                  
+  ─────────────────────────────────────────────────────────────────────────────── Automatic model   
+                                                                                                    
+  Enter to delete  ·  Esc to back

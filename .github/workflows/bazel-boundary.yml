@@ -1,13 +1,11 @@
-name: Bazel app boundary
+name: Bazel TUI scenarios
 
 on:
   push:
     branches: [main]
     paths:
-      - "ash-cli/**"
-      - "code/**"
-      - "app-rs/**"
-      - "ash-rs/**"
+      - "cli/**"
+      - "crates/**"
       - "build/**"
       - "bazel/**"
       - "third_party/tgrep/**"
@@ -23,10 +21,8 @@ on:
       - ".github/workflows/bazel-boundary.yml"
   pull_request:
     paths:
-      - "ash-cli/**"
-      - "code/**"
-      - "app-rs/**"
-      - "ash-rs/**"
+      - "cli/**"
+      - "crates/**"
       - "build/**"
       - "bazel/**"
       - "third_party/tgrep/**"
@@ -52,24 +48,6 @@ permissions:
   contents: read
 
 jobs:
-  app-boundary:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version-file: .nvmrc
-      - name: Set up Bazel
-        uses: bazel-contrib/setup-bazel@c5acdfb288317d0b5c0bbd7a396a3dc868bb0f86 # v0.19.0
-        with:
-          bazelisk-cache: true
-          disk-cache: bazel-app-boundary
-          repository-cache: true
-          cache-save: true
-      - name: Test app boundary contract
-        run: bazel test //app-rs:app_ci --test_output=errors --test_env=PATH
-
   tui-scenarios:
     name: Bazel TUI scenarios
     runs-on: ubuntu-24.04
@@ -97,8 +75,8 @@ jobs:
           import subprocess
           from pathlib import Path
           from build.lib.targets import TARGETS
-          from build.ash_rs.ripgrep import resolve_ripgrep
-          from build.ash_rs.tgrep import resolve_tgrep
+          from build.runtime.ripgrep import resolve_ripgrep
+          from build.runtime.tgrep import resolve_tgrep
 
           root = Path.cwd()
           target = TARGETS["x86_64-unknown-linux-gnu"]
@@ -129,6 +107,6 @@ jobs:
 
       - name: Test real TUI terminal scenarios
         run: >-
-          bazel test //ash-cli:tui-real-scenarios --test_output=errors
+          bazel test //cli:tui-real-scenarios --test_output=errors
           --test_env=PATH --test_env=ASH_RG_PATH --test_env=ASH_TGREP_PATH
           --test_arg=--test-threads=4 --test_arg=--skip --test_arg=actual_tui_sandbox_

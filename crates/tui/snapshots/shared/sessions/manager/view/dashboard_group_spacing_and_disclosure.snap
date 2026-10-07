@@ -1,0 +1,27 @@
+---
+source: crates/tui/src/sessions/manager/view_tests.rs
+expression: "frames.join(\"\\n\\n\")"
+---
+─ Dashboard ───────────────────────────── Group: Status  g ─
+                                                            
+  Failed (1) -                                              
+  ● failed                                                  
+                                                            
+  Idle (1) -                                                
+  ○ idle                                                    
+                                                            
+  Archived (0)                                              
+                                                            
+                                                            
+                                                            
+                                                            
+                                                            
+
+─ Dashboard ───────────────────────────── Group: Status  g ─
+                                                            
+  Failed (1) -                                              
+  ● failed                                                  
+                                                            
+  Idle (1) +                                                
+                                                            
+  Archived (0)

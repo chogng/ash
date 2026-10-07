@@ -1,0 +1,19 @@
+---
+source: crates/tui/src/status/panel_tests.rs
+expression: terminal.backend().to_string()
+---
+"   セッション    診断                                                           " Hidden by multi-width symbols: [(4, " "), (6, " "), (8, " "), (10, " "), (12, " "), (18, " "), (20, " ")]
+"  合計:       収集中                                                            " Hidden by multi-width symbols: [(3, " "), (5, " "), (15, " "), (17, " "), (19, " ")]
+"  TUI:        収集中                                                            " Hidden by multi-width symbols: [(15, " "), (17, " "), (19, " ")]
+"  App Server: included in the TUI process                                       "
+"  メモリ診断: 記録中                                                            " Hidden by multi-width symbols: [(3, " "), (5, " "), (7, " "), (9, " "), (11, " "), (15, " "), (17, " "), (19, " ")]
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "

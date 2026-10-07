@@ -46,7 +46,7 @@ Dev Mode 与 Design Mode 使用同一份设计文件。它集中提供设计检�
 
 ## 对 Ash 的使用建议
 
-以下是依据上述差异给出的使用建议，Ash Creator 的目标与当前实现分别见 [Creator 设计方案](../app-ts/src/ash/sessions/contrib/creator/DESIGN.md)和 [Creator 当前能力](../app-ts/src/ash/sessions/contrib/creator/README.md)。
+以下是依据上述差异给出的使用建议，Ash Creator 的目标与当前实现分别见 [Creator 设计方案](../src/ash/sessions/contrib/creator/DESIGN.md)和 [Creator 当前能力](../src/ash/sessions/contrib/creator/README.md)。
 
 | 任务 | 更合适的方式 | 原因 |
 | --- | --- | --- |

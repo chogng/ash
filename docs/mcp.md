@@ -1,8 +1,8 @@
 # MCP 集成系统
 
-> Product runtime 当前实现：[`ash-rs/ash-mcp/`](../ash-rs/ash-mcp/README.md)，
+> Product runtime 当前实现：[`crates/ash-mcp/`](../crates/ash-mcp/README.md)，
 > Rust crate：`ash_mcp`
-> Low-level client 当前实现：[`ash-rs/rmcp-client/`](../ash-rs/rmcp-client/README.md)，
+> Low-level client 当前实现：[`crates/rmcp-client/`](../crates/rmcp-client/README.md)，
 > Rust crate：`ash_rmcp_client`
 > 当前状态：low-level client、tools-only product runtime、Config/Connector/Marketplace/legacy Plugin hot composition、
 > `tools/list_changed` rebuild、App Server/Core tools vertical slice、Connector disconnect dispatch fence、
@@ -11,7 +11,7 @@
 > Agent runtime：[`ash-agent-runtime-architecture.md`](ash-agent-runtime-architecture.md)
 > Tool shared contract 与纯转换：[`tools.md`](tools.md)
 > Config authority 与 runtime snapshot 接入：[`config.md`](config.md)
-> Marketplace package 入口：[`core-plugins.md`](../ash-rs/docs/core-plugins.md)
+> Marketplace package 入口：[`core-plugins.md`](../crates/docs/core-plugins.md)
 > Legacy Plugin 兼容来源：[`plugins.md`](plugins.md)
 > Connector account 与 ready binding：[`connectors.md`](connectors.md)
 > Skill 指令边界：[`skills.md`](skills.md)
@@ -62,7 +62,7 @@ prompts、reconnect/health 和更完整的 interaction surface 仍是 Proposed�
 - MCP server 输出、tool annotation 或 prompt 内容的信任背书；
 - Ash Session、Thread、Turn 或 App Server connection 的替代品。
 
-Marketplace、Plugin、Connector 与 MCP 的 canonical 关系由 [`core-plugins.md`](../ash-rs/docs/core-plugins.md)
+Marketplace、Plugin、Connector 与 MCP 的 canonical 关系由 [`core-plugins.md`](../crates/docs/core-plugins.md)
 和 [`connectors.md`](connectors.md) 共同维护。从 MCP runtime 视角看，
 边界可压缩为：
 
@@ -93,11 +93,11 @@ server 启动，Connector connected 也不等于自动批准每次 Tool call。
 - `ash-rmcp-client` 已用官方 RMCP SDK 实现单连接 initialize、tools list/call、
   progress/list-changed/elicitation host callback、caller cancellation、request deadline、有界
   shutdown，以及 local stdio 与 reqwest Streamable HTTP connector；其实现契约见
-  [`ash-rs/rmcp-client/README.md`](../ash-rs/rmcp-client/README.md)；
+  [`crates/rmcp-client/README.md`](../crates/rmcp-client/README.md)；
 - `ash-mcp` 已实现多 server `RequireAll` / `AllowPartial` 启动、分页和 byte/tool limits、
   deterministic alias、exact remote identity、connection/catalog generation、不可变
   catalog/binding、list-changed stale 标记、可取消 tools/call、结果大小限制和有界 shutdown；
-  其实现契约见 [`ash-rs/ash-mcp/README.md`](../ash-rs/ash-mcp/README.md)；
+  其实现契约见 [`crates/ash-mcp/README.md`](../crates/ash-mcp/README.md)；
 - `ash-config` 与 App Server config operations 已有 MCP server declaration CRUD；配置存在不
   等于 runtime 已启用；
 - `ash-protocol` 已有 provider-independent `ToolDefinition`、`ToolCall`、`ToolResult`、
@@ -664,7 +664,7 @@ queue saturation 和 output rejection。
 当前仅工具运行时保持单 crate、私有模块和显式公共导出：
 
 ```text
-ash-rs/ash-mcp/src/
+crates/ash-mcp/src/
 ├── lib.rs
 ├── definition.rs
 ├── error.rs

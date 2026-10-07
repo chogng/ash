@@ -1,0 +1,8 @@
+---
+source: crates/tui/src/app/fullscreen/modal_tests.rs
+expression: text
+---
+┌── Config ────[✗]─┐
+│                  │
+└──────────────────┘
+  Esc close

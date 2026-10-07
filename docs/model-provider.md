@@ -1,6 +1,6 @@
 # 模型调用系统
 
-> - 物理位置：`ash-rs/model-provider/`
+> - 物理位置：`crates/model-provider/`
 > - Rust crate：`ash_model_provider`
 > - 层次：Provider 运行时与选择层
 > - 当前状态：completion runtime 已直接组合 `ash-api` endpoint profile、`ash-client` operation
@@ -8,16 +8,16 @@
 >   Completions、Anthropic Messages 已使用原生 wire streaming；semantic OpenAI API-key
 >   materialization 已有 host-injected `SecretStore` 路径；独立 WebSocket transport 与显式 provider
 >   capability 已落地，Responses WebSocket 和公共 Realtime GA 已提供显式 runtime 会话入口
-> - Crate 实现与 adapter 调用图：[`ash-rs/model-provider/README.md`](../ash-rs/model-provider/README.md)
+> - Crate 实现与 adapter 调用图：[`crates/model-provider/README.md`](../crates/model-provider/README.md)
 > - 声明配置层：[`model-provider-info.md`](model-provider-info.md)
 > - API 协议层：[`ash-api.md`](ash-api.md)
 > - Operation client：[`ash-client.md`](ash-client.md)
-> - 底层网络：[`ash-http-client` README](../ash-rs/http-client/README.md)
-> - WebSocket transport：[`ash-websocket-client` README](../ash-rs/websocket-client/README.md)
+> - 底层网络：[`ash-http-client` README](../crates/http-client/README.md)
+> - WebSocket transport：[`ash-websocket-client` README](../crates/websocket-client/README.md)
 > - Secret persistence：[`secrets.md`](secrets.md)
 > - Interactive login control plane：[`login.md`](login.md)
 > - 订阅接入方式：[`subscriptions.md`](subscriptions.md)
-> - 请求字段、消息顺序与提示词校验：[多 provider 核对](../ash-rs/model-provider-info/docs/model-template.md#11-远端请求校验2026-10-06-核对)
+> - 请求字段、消息顺序与提示词校验：[多 provider 核对](../crates/model-provider-info/docs/model-template.md#11-远端请求校验2026-10-06-核对)
 
 ## 快速理解
 
@@ -473,7 +473,7 @@ App Server composition
 ## 12. 目标目录
 
 ```text
-ash-rs/model-provider/
+crates/model-provider/
 ├── BUILD.bazel
 ├── Cargo.toml
 ├── README.md

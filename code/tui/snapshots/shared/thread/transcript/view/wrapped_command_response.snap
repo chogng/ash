@@ -1,8 +1,0 @@
----
-source: code/tui/src/thread/transcript/view/render_tests.rs
-expression: "visible_buffer(&rendered[0])"
----
-> /out
- └─ 界界ABCD
-    EFGHIGH
-      tail

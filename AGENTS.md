@@ -12,7 +12,7 @@
 
 References: `../vscode`, `../codex`, `../zed`, `../warp`, `../marketplace`, `../mxc`, `../tgrep`.
 
-## Only for ash-rs
+## Only for crates
 
 Design for the intended long-term architecture. Check effects across the system and follow its ownership and dependency rules.
 

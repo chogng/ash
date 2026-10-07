@@ -1,8 +1,8 @@
 # Codebase
 
-> 本文拥有代码知识的产品边界。实现见 [`ash-codebase`](../ash-rs/codebase/README.md)、
-> [`ash-codebase-store`](../ash-rs/codebase-store/README.md) 和
-> [`ash-cloud-codebase`](../ash-rs/cloud-codebase/README.md)。
+> 本文拥有代码知识的产品边界。实现见 [`ash-codebase`](../crates/codebase/README.md)、
+> [`ash-codebase-store`](../crates/codebase-store/README.md) 和
+> [`ash-cloud-codebase`](../crates/cloud-codebase/README.md)。
 
 ## 结论
 

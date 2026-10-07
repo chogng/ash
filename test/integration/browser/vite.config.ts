@@ -1,0 +1,49 @@
+import { resolve } from "node:path";
+import { defineConfig } from "vite";
+import { rendererOutput } from '../../../build/desktop/vite/rendererOutput.js';
+
+export default defineConfig({
+	root: resolve(import.meta.dirname),
+	server: { host: "127.0.0.1", port: 5185, strictPort: true },
+	build: {
+		outDir: resolve(import.meta.dirname, "../../../.build/desktop/editor-browser"),
+		emptyOutDir: true,
+		rolldownOptions: {
+			output: rendererOutput,
+			input: {
+				composite: resolve(import.meta.dirname, 'composite.html'),
+				actionWidget: resolve(import.meta.dirname, 'actionWidget.html'),
+				search: resolve(import.meta.dirname, 'search.html'),
+				debug: resolve(import.meta.dirname, 'debug.html'),
+				testing: resolve(import.meta.dirname, "testing.html"),
+				table: resolve(import.meta.dirname, 'table.html'),
+				tokenization: resolve(import.meta.dirname, 'tokenization.html'),
+				diff: resolve(import.meta.dirname, 'diff.html'),
+				language: resolve(import.meta.dirname, "language.html"),
+				marketplace: resolve(import.meta.dirname, "marketplace.html"),
+				issueReporter: resolve(import.meta.dirname, 'issueReporter.html'),
+				advisor: resolve(import.meta.dirname, "advisor.html"),
+				chatInput: resolve(import.meta.dirname, "chatInput.html"),
+				dataChannel: resolve(import.meta.dirname, 'dataChannel.html'),
+				extensionHost: resolve(import.meta.dirname, 'extensionHost.html'),
+				github: resolve(import.meta.dirname, 'github.html'),
+				githubReview: resolve(import.meta.dirname, 'githubReview.html'),
+				sessionGitHub: resolve(import.meta.dirname, 'sessionGitHub.html'),
+				markdown: resolve(import.meta.dirname, 'markdown.html'),
+				themes: resolve(import.meta.dirname, "themes.html"),
+				webTransport: resolve(import.meta.dirname, 'webTransport.html'),
+				files: resolve(import.meta.dirname, 'files.html'),
+				dialog: resolve(import.meta.dirname, "dialog.html"),
+				onboarding: resolve(import.meta.dirname, 'onboarding.html'),
+				link: resolve(import.meta.dirname, 'link.html'),
+				releaseNotes: resolve(import.meta.dirname, 'releaseNotes.html'),
+				webview: resolve(import.meta.dirname, 'webview.html'),
+				terminal: resolve(import.meta.dirname, "terminal.html"),
+				textModel: resolve(import.meta.dirname, "textModel.html"),
+				standalone: resolve(import.meta.dirname, 'standalone.html'),
+				gpuText: resolve(import.meta.dirname, "gpuText.html"),
+				academic: resolve(import.meta.dirname, "academic.html"),
+			},
+		},
+	},
+});

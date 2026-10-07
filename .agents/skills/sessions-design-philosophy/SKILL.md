@@ -7,7 +7,7 @@ description: Sessions 独立设计规范。用于 Sessions 窗口的设计、实
 
 Sessions 让用户发起工作、跟进 Agent、处理需要自己决定的事项，并查看结果。界面围绕正在进行的工作组织，让用户随时知道：我在哪个会话里、工作进行到哪里、接下来能做什么。
 
-本 Skill 是 Sessions 的完整设计规范，适用于 `app-ts/src/ash/sessions/**`，以及其他目录中明确为 Sessions 提供的产品界面。它独立维护，不继承 `design-philosophy` 或 Workbench 的视觉规则；规则相同也在这里完整定义。图标库、控件和主题服务是实现工具，其默认外观不决定 Sessions 的设计。
+本 Skill 是 Sessions 的完整设计规范，适用于 `src/ash/sessions/**`，以及其他目录中明确为 Sessions 提供的产品界面。它独立维护，不继承 `design-philosophy` 或 Workbench 的视觉规则；规则相同也在这里完整定义。图标库、控件和主题服务是实现工具，其默认外观不决定 Sessions 的设计。
 
 以下是设计要求，不能据此宣称现有界面已经符合规范。修改 UI 时落实受影响的要求；本 Skill 的创建不自动授权改造其他界面。产品状态、权限和生命周期仍遵守仓库及所属模块的契约。
 
@@ -126,7 +126,7 @@ Activity Bar 是 Sessions 的产品页面导航。页面之间保持稳定顺序
 ### 悬停提示（Tooltip）
 
 - Sessions Agent Window 的悬停提示使用 12px 大圆角，不显示指向控件的三角形箭头。`sessions.tooltip.background` 与 `sessions.tooltip.foreground` 的默认配色在浅色、深色和高对比度主题下均为黑底白字；`sessions.tooltip.border` 在高对比度下使用白色边框。Sessions 在窗口内将这些 token 映射给 tooltip，不能修改共享 Workbench tooltip token 的注册值。普通边框、阴影、字号、行高和内边距与共享 Workbench tooltip 保持一致。
-- Sessions 专属的 tooltip 外观集中在 `app-ts/src/ash/sessions/browser/media/workbench.css`，以 `.ash-sessions-window` 限定作用范围。Tooltip 挂在窗口根节点下，不在触发按钮或标题栏内部；样式不能依赖这些控件的后代关系。
+- Sessions 专属的 tooltip 外观集中在 `src/ash/sessions/browser/media/workbench.css`，以 `.ash-sessions-window` 限定作用范围。Tooltip 挂在窗口根节点下，不在触发按钮或标题栏内部；样式不能依赖这些控件的后代关系。
 
 ### 颜色、状态与动效
 

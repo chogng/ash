@@ -1,0 +1,24 @@
+---
+source: crates/tui/src/app/chat_view_tests.rs
+expression: text(&scrolled)
+---
+                                                                                
+    ▄  ▄     Ash Code v0.1.0                                                    
+  ▗█▛██▜█▖   Automatic model                                                    
+  ▝▜████▛▘   /work/ash                                                          
+    ▝  ▘                                                                        
+                                                                                
+● History entry 0                                                               
+                                                                                
+● History entry 1                                                               
+                                                                                
+● History entry 2                                                               
+                                                                                
+                          Ctrl+End to jump to bottom ↓                          
+⠋ Working... · 0s · esc to interrupt                                            
+                                                                                
+────────────────────────────────────────────────────────────────────────────────
+> keep this draft                                                               
+────────────────────────────────────────────────────────────────────────────────
+  Shared model (high) · branch-layout · context unknown · Plan                  
+  ⏸ Manual

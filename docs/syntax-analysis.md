@@ -1,12 +1,5 @@
 # 编辑器语法能力
 
-> 状态：Rust `CodeEditor` 已内部接入 Rust、JSON、JSONC 与 Shell 的增量 tree-sitter
-> 分析；Rust `DiffEditor` 已通过 retained `DiffEditorDocument` 内部维护两侧语法状态；Desktop
-> Stanza Text Engine 通过 TextMate 与有界 App Server syntax facts 提供语法能力。本文拥有跨编辑器的语法能力边界；底层解析契约见
-> [`ash-syntax` README](../ash-rs/syntax/README.md)，符号索引、Language Server、代码检索与未来代码图
-> 的跨系统演进见 [`code-intelligence.md`](code-intelligence.md)，Native 编辑器 API 见
-> [`ash-editor` README](../app-rs/editor/README.md)。
-
 ## 快速理解
 
 语法高亮、折叠、outline 和 parse diagnostic 都是编辑器能力。产品层对外组合
@@ -22,7 +15,7 @@
 | Native 文件 document lifecycle                                 | `ash-text-file` + `FileEditorHost` / `FileEditorPane`          | ✅；独立 crate 拥有 baseline/version/dirty/conflict，Native 已接通 Tab、Explorer load、save、关闭确认、外部重载/显式乐观覆盖、中心 Editor Surface 以及 keyboard/IME/pointer/clipboard/viewport 输入 |
 | Native `DiffEditor` 两侧 syntax token 投影                     | `ash-editor::DiffEditorDocument` / `DiffEditor`                | ✅；宿主只提交 diff 与 language                                                                                                                                                                     |
 | Stanza bundled-language token                                  | TextMate worker + lexical fallback                             | ✅                                                                                                                                                                                                  |
-| Stanza parser facts                                            | `ash-rs/syntax` via bounded `platform/syntax` adapter          | ✅ JavaScript/JSX、TypeScript/TSX、JSON/JSONC、Rust、Shell diagnostic/symbol/folding/selection                                                                                                      |
+| Stanza parser facts                                            | `crates/syntax` via bounded `platform/syntax` adapter          | ✅ JavaScript/JSX、TypeScript/TSX、JSON/JSONC、Rust、Shell diagnostic/symbol/folding/selection                                                                                                      |
 | App Server syntax RPC                                          | 按连接和模型保留解析文档                                       | ✅；相邻版本增量更新语法树，仅服务异步 facts                                                                                                                                                        |
 | Stanza Smart Select                                            | Stanza selection/history + `ash-syntax` on-demand scopes       | ✅ expand/shrink；revision-bound、可取消、stale-safe，parser 失败时 lexical fallback                                                                                                                |
 | completion、type、definition/reference、rename                 | `ash-lsp` + language server，经编辑器 language feature 接入    | ✅ Code 主路径；语言覆盖由 provider collection 决定                                                                                                                                                 |

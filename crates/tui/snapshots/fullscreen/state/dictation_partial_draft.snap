@@ -1,0 +1,28 @@
+---
+source: crates/tui/src/app/state_tests.rs
+expression: render_dictation_frame(&app)
+---
+  .                                                                [Dashboard]  
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+  Dictation · listening · ctrl+c to stop dictation                              
+  ────────────────────────────────────────────────────────────────────────────  
+  > Draft hello                                                                 
+  ─────────────────────────────────────────────────────────── Automatic model   
+                                                                                
+  ⏸ Manual

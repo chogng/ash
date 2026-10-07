@@ -18,26 +18,23 @@ __pycache__/
 .tmp/
 .snow
 output/
-!app-ts/src/ash/workbench/contrib/output/
-!app-ts/src/ash/workbench/contrib/output/**
-!app-ts/src/ash/workbench/services/output/
-!app-ts/src/ash/workbench/services/output/**
+!src/ash/workbench/contrib/output/
+!src/ash/workbench/contrib/output/**
+!src/ash/workbench/services/output/
+!src/ash/workbench/services/output/**
 
-# Legacy Desktop build products
-app-ts/node_modules/
-app-ts/dist/
-app-ts/test/integration/browser/dist/
-app-ts/.tmp/
-app-ts/debug.log
+# Frontend dependencies and generated files
 node_modules/
+dist/
+test/integration/browser/dist/
+debug.log
 .pnpm-store/
-app-ts/src/ash/platform/app-server/common/generated/
-app-ts/src/ash/platform/extensions/common/generated/
+src/ash/platform/app-server/common/generated/
+src/ash/platform/extensions/common/generated/
 schemas/app-server/
 
 # Downloaded, checksum-verified third-party native runtime artifacts.
 third_party/.cache/
-
 
 .DS_Store
 .tmp-editor-file-audit.txt

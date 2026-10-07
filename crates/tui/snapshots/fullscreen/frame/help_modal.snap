@@ -1,0 +1,28 @@
+---
+source: crates/tui/src/app/fullscreen/frame_tests.rs
+expression: rendered
+---
+  .                                                                [Dashboard]  
+                                                                                
+● Conver┌── Help ──────────────────────────────────────────────────[✗]─┐        
+        │                                                              │        
+        │   Commands    Keys                                           │        
+        │                                                              │        
+        │  ╭─────────────────────────────────────────────────────────╮ │        
+        │  │ Search commands and shortcuts                           │ │        
+        │  ╰─────────────────────────────────────────────────────────╯ │        
+        │> /status  ·  show status                                     │        
+        │  /model  ·  show model                                       │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+  ──────└──────────────────────────────────────────────────────────────┘──────  
+  > draft                                                                       
+  ─────────────────────────────────────────────────────────── Automatic model   
+                                                                                
+  Tab/Shift+Tab to switch  ·  / to search  ·  Esc to close

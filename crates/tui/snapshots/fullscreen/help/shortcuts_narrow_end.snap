@@ -1,0 +1,22 @@
+---
+source: crates/tui/src/app/help_tests.rs
+expression: bottom
+---
+  .                            [Dashboard]
+  ┌── Keyboard shortcuts ────────────[✗]─┐
+  │                                      │
+  │  Ctrl+↑ / Ctrl+↓       Select a      │
+  │                        message       │
+  │  Space                 Expand        │
+  │                        selected      │
+  │                        message       │
+  │  Enter                 View selected │
+  │                        message       │
+  │                        details       │
+  │  Esc                   Return to     │
+  │                        input         │
+  │                                      │
+  │  /shortcuts customize                │
+  └──────────────────────────────────────┘
+
+  ↑/↓ scroll · Esc to close

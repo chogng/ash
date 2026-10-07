@@ -1,0 +1,34 @@
+---
+source: cli/tests/support/tui_process.rs
+expression: screen
+---
+  <FIXTURE…>                                      …                            [— / —] [Dashboard]
+
+
+            ┌── Guardian ─────────────────────────────────────────────────────────[✗]─┐
+            │                                                                         │
+            │  <FIXTURE>/wor │
+            │  Scan project…                                                        + │
+            │  Save reviewed background                                             + │
+            │> ASH.md                                                      Accepted - │
+            │    ASH.md                                                               │
+            │    3a89c0ec9ca2486dd2c3344f4bab77a7859285887959859f5d622a123dbd2aa0     │
+            │    Build with pnpm build                                                │
+            │  Include recent project sessions                             Disabled + │
+            │                                                                         │
+            │                                                                         │
+            │                                                                         │
+            │                                                                         │
+            │                                                                         │
+            │                                                                         │
+            │                                                                         │
+            │                                                                         │
+            │                                                                         │
+            │                                                                         │
+            │                                                                         │
+            │                                                                         │
+            │                                                                         │
+            │  Enter confirm · ←/→ details · Esc close                                │
+  ──────────└─────────────────────────────────────────────────────────────────────────┘───────────
+  > Build anything
+  ─────────────────────────────────────────────────────────────────────────────── Automatic model

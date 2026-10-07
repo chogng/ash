@@ -392,10 +392,10 @@ instructions（下一个 model safe point 重新冻结）
 
 ## 12. Skills 与命令入口
 
-- **slash commands**（`ash-rs/slash-commands` 已有 catalog）：在 `session/request` StartTurn 之前由
+- **slash commands**（`crates/slash-commands` 已有 catalog）：在 `session/request` StartTurn 之前由
   App Server 展开，展开后的正文作为 durable UserMessage 进入 Turn 输入；消息内保留
   `<command-name>` 标注供模型识别来源。不在模型侧解析斜杠语法。
-- **Skills**（`ash-rs/skills` 已有 runtime；发现/信任归 [`skills.md`](skills.md)）：
+- **Skills**（`crates/skills` 已有 runtime；发现/信任归 [`skills.md`](skills.md)）：
   - 用户入口使用独立 `$name` selector；`/` 只触发产品和服务命令，`@` 留给文件与 Plugin 上下文；
   - v1 已实现：用户提交 exact `SkillRef`，App Server 冻结 digest/generation/reason，Core 在每个
     model safe point 重载 exact `SKILL.md`，以 `ActivatedSkill` instruction layer 注入；raw path
@@ -483,5 +483,5 @@ M0–M6 是本文行为规格的覆盖总账，不再充当阶段性构建计划
 - [`ash-agent-runtime-architecture.md`](ash-agent-runtime-architecture.md) — 执行内核与阶段计划
 - [`core-context.md`](core-context.md) — ContextPlan / checkpoint 机制
 - [`tools.md`](tools.md) — 工具三层契约与 registry snapshot
-- [`skills.md`](skills.md) / [`slash-commands` crate](../ash-rs/slash-commands/) — 扩展来源
-- [`ash-prompts` README](../ash-rs/prompts/README.md) — 共享提示词资产契约与分域 ownership
+- [`skills.md`](skills.md) / [`slash-commands` crate](../crates/slash-commands) — 扩展来源
+- [`ash-prompts` README](../crates/prompts/README.md) — 共享提示词资产契约与分域 ownership

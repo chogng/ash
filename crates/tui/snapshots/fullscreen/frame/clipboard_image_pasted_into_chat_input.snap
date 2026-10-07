@@ -1,0 +1,24 @@
+---
+source: crates/tui/src/app/fullscreen/frame_tests.rs
+expression: rendered_after_paste
+---
+  .                                                                [Dashboard]  
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+  ────────────────────────────────────────────────────────────────────────────  
+  > [Image #1]                                                                  
+  ─────────────────────────────────────────────────────────── Automatic model   
+                                                                                
+  ⏸ Manual

@@ -1,0 +1,34 @@
+---
+source: crates/tui/src/app/fullscreen/modal_tests.rs
+expression: frame_text(&app)
+---
+  .                                                                                    [Dashboard]  
+                                                                                                    
+                                                                                                    
+            ┌── Project branches ─────────────────────────────────────────────────[✗]─┐             
+            │                                                                         │             
+            │  ╭────────────────────────────────────────────────────────────────────╮ │             
+            │  │ Search branches                                                    │ │             
+            │  ╰────────────────────────────────────────────────────────────────────╯ │             
+            │  Branch deleted.                                                        │             
+            │  New branch  ·  At HEAD · no checkout change                            │             
+            │  Project branches                                                       │             
+            │> main  ·  Current                                                       │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+  ──────────└─────────────────────────────────────────────────────────────────────────┘───────────  
+  > Build anything                                                                                  
+  ─────────────────────────────────────────────────────────────────────────────── Automatic model   
+                                                                                                    
+  b New branch · d delete · / search · Esc close

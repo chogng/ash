@@ -1,0 +1,9 @@
+---
+source: crates/tui/src/app/inline/header_tests.rs
+expression: rendered
+---
+
+    ▄  ▄     Ash Code v0.1.0
+  ▗█▛██▜█▖   openai/gpt-5.6
+  ▝▜████▛▘   /work/ash
+    ▝  ▘

@@ -86,7 +86,7 @@ platform(
 
 alias(
     name = "ash",
-    actual = "//ash-cli:ash",
+    actual = "//cli:ash",
     visibility = ["//visibility:public"],
 )
 

@@ -1,0 +1,34 @@
+---
+source: crates/tui/src/app/fullscreen/modal_tests.rs
+expression: frame_text(&app)
+---
+  .                                                                                    [Dashboard]  
+                                                                                                    
+                                                                                                    
+            ┌── Project worktrees › Delete worktree ──────────────────────────────[✗]─┐             
+            │                                                                         │             
+            │> /worktrees/topic  ·  Requires a clean linked worktree with no task.    │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+  ──────────└─────────────────────────────────────────────────────────────────────────┘───────────  
+  > Build anything                                                                                  
+  ─────────────────────────────────────────────────────────────────────────────── Automatic model   
+                                                                                                    
+  Enter to delete  ·  Esc to back

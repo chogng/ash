@@ -1,6 +1,6 @@
 ---
 description: Ash design philosophy — the shared Values→Principles→Moves vocabulary for reasoning about UI in design terms rather than raw pixels. Use when creating, editing, or reviewing any visual surface (CSS, DOM, theming, icons, motion). Name the value/principle before reaching for a token.
-applyTo: "app-ts/src/ash/**/browser/**/*.{ts,css}"
+applyTo: "src/ash/**/browser/**/*.{ts,css}"
 ---
 
 # Design philosophy

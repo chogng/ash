@@ -1,12 +1,12 @@
 # Ash 产品更新架构
 
-> 状态：Target architecture 与当前实现差距。本文拥有三个产品的更新责任边界、共享契约、
+> 状态：Target architecture 与当前实现差距。本文拥有 Desktop 与 CLI/TUI的更新责任边界、共享契约、
 > 安装交接和演进顺序；产品线定义见 [`product-lines.md`](product-lines.md)，配置系统见
 > [`config.md`](config.md)。
 
 ## 结论
 
-三个产品不各自维护一套完整更新系统，也不由 App Server 统一替换三个产品。长期结构固定为：
+Desktop 与 CLI/TUI 共用更新领域，安装与重启由各自宿主负责。长期结构固定为：
 
 1. 发布系统提供同一种签名描述、版本通道和不可变产物；
 2. 共享 Rust 更新领域负责检查、下载、签名与摘要校验、调度和状态；
@@ -16,20 +16,16 @@
 更新单位是**已发布的产品安装包**，不是实现它的语言。Electron Desktop 的 Renderer、Electron Main、
 随包 Rust App Server 和 update host 共用一个产品版本与发布身份，必须作为一个安装包一起更新；
 打包时校验 TS 包与 Rust 后端的版本、协议和二进制身份。单独替换随包后端会使已安装产品失去这项保证。
-`ash code` 和 Rust Desktop `app` 是另外两条产品线，各自选择和安装自己的完整包，可以与 Electron
-Desktop 处于不同版本。Remote runtime 按连接兼容性独立安装，见下文“App Server 与 Remote 边界”。
+`ash code` 是独立产品线，选择和安装自己的完整包，可以与 Electron Desktop 处于不同版本。Remote runtime 按连接兼容性独立安装，见下文“App Server 与 Remote 边界”。
 
 ```mermaid
 flowchart TD
     Release["签名发布源\nlatest / stable"] --> Core["ash-product-update\n版本 · 签名 · 下载 · 校验 · 状态"]
     Core --> ElectronHost["Electron update host"]
-    Core --> RustHost["app product host"]
     Core --> CliHost["ash CLI host"]
     ElectronHost --> ElectronInstall["Electron Desktop 安装与重启"]
-    RustHost --> RustInstall["Rust Desktop 安装与重启"]
     CliHost --> CliInstall["Ash Code 版本目录与启动入口"]
     ElectronUI["Electron Renderer UI"] -. "策略 / 状态 / 操作" .-> ElectronHost
-    RustUI["Rust GUI"] -. "策略 / 状态 / 操作" .-> RustHost
     Tui["TUI"] -. "策略 / 状态 / 操作" .-> CliHost
 ```
 
@@ -41,8 +37,8 @@ Remote App Server，不跟随当前 Workspace 或 Environment 切换。
 
 | 拆法                            | 结论   | 原因                                                                                           |
 | ------------------------------- | ------ | ---------------------------------------------------------------------------------------------- |
-| 三端各写完整实现                | 不采用 | 签名格式、通道语义、限流、回滚和安全修复会产生三个权威实现                                     |
-| App Server 统一检查、下载并安装 | 不采用 | App Server 可能连接远端或脱离外层产品存活，不拥有 Electron、Rust Desktop 和 CLI 的安装生命周期 |
+| 两端各写完整实现                | 不采用 | 签名格式、通道语义、限流、回滚和安全修复会产生两个权威实现                                     |
+| App Server 统一检查、下载并安装 | 不采用 | App Server 可能连接远端或脱离外层产品存活，不拥有 Electron 和 CLI 的安装生命周期 |
 | 共享检查下载，Renderer 自己安装 | 不采用 | Renderer 不能获得任意文件路径或替换产品文件的权限，Electron 安装必须留在可信宿主               |
 
 ## 分层与 owner
@@ -50,14 +46,12 @@ Remote App Server，不跟随当前 Workspace 或 Environment 切换。
 | 层                   | 唯一 owner                                     | 负责                                                                             | 明确不负责                             |
 | -------------------- | ---------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------- |
 | 发布控制面           | CI 与 Release 工作流                           | 版本、通道晋升、签名、各产品与平台产物                                           | 用户设置、进程退出、安装目录           |
-| 更新领域             | 目标 `ash-rs/product-update`                   | 描述解析、签名验证、版本比较、目标选择、有界下载、摘要校验、检查调度、状态与错误 | UI、Electron IPC、窗口、启动入口       |
+| 更新领域             | 目标 `crates/product-update`                   | 描述解析、签名验证、版本比较、目标选择、有界下载、摘要校验、检查调度、状态与错误 | UI、Electron IPC、窗口、启动入口       |
 | Electron update host | 目标 Rust update host + Electron Main adapter  | 启动可信更新进程、接收类型化结果、调用 Desktop 安装与退出能力                    | 解析发布规则、接受 Renderer 提供的路径 |
-| Rust Desktop 宿主    | `app` composition root 与 distribution adapter | 选择 app 安装器、协调窗口退出和重启                                              | 再实现一套签名与下载协议               |
 | Ash Code 宿主        | `cli`                                          | CLI 包安装、版本目录、启动入口切换、TUI 通知                                     | 把安装副作用放进 `ash-tui`             |
-| 三端 UI              | Renderer、Rust GUI、TUI                        | 策略编辑、进度、成功、失败、重启操作                                             | 下载、校验、路径选择、文件替换         |
+| 两端 UI              | Renderer、TUI                        | 策略编辑、进度、成功、失败、重启操作                                             | 下载、校验、路径选择、文件替换         |
 
-crate 用来隔离共享更新能力和依赖，不代表所有产品必须使用同一个进程。Rust Desktop 与 CLI 可以
-直接组合更新领域；Electron Main 不能复制 Rust 规则，应用一个只连接本机可信子进程的窄 adapter。
+crate 用来隔离共享更新能力和依赖，不代表所有产品必须使用同一个进程。CLI 可以直接组合更新领域；Electron Main 不能复制 Rust 规则，应用一个只连接本机可信子进程的窄 adapter。
 该 update host 只接收类型化命令并返回类型化事件，Renderer 不接触它的进程句柄、下载路径或密钥。
 
 ## 共享领域契约
@@ -69,7 +63,7 @@ crate 用来隔离共享更新能力和依赖，不代表所有产品必须使�
 | 字段             | 含义                                   |
 | ---------------- | -------------------------------------- |
 | schema version   | 描述格式版本                           |
-| product          | `ash-desktop`、`ash-app` 或 `ash-code` |
+| product          | `ash-desktop` 或 `ash-code`；App Server runtime 独立使用 `ash-app-server` |
 | channel          | `latest` 或 `stable`                   |
 | version          | 语义版本                               |
 | release identity | 不可变发布身份，防止指针换包           |
@@ -169,7 +163,7 @@ host，并通过私有 typed channel 接收已经验证的产物身份；Main �
 安装 adapter，并协调窗口关闭与重启。
 
 TS 的 `platform/update` 定义服务契约、设置和 Electron adapter，`workbench/services/update` 注册桌面服务，
-`workbench/contrib/update` 提供菜单和状态展示。Rust 的 `ash-rs/product-update` 拥有发布描述校验、
+`workbench/contrib/update` 提供菜单和状态展示。Rust 的 `crates/product-update` 拥有发布描述校验、
 版本选择及下载文件的大小与摘要校验。这里按职责分开代码，更新时仍替换同一个 Electron Desktop 安装包。
 `update.policy` 存在本机 UI profile：`latest` 或 `stable` 每天自动检查，`never` 停止自动检查；
 手动检查在 `never` 下仍使用 `latest`。Remote workspace 不改变此策略。
@@ -195,15 +189,6 @@ Renderer action
 Main 不解析签名描述，不保存更新业务状态；update host 不拥有 BrowserWindow、Workbench reload 或
 Electron 生命周期。
 
-### Rust Desktop
-
-`app` 直接组合共享更新领域，通过 product-specific installer 把 `ReadyToInstall` 转换成系统安装或
-版本切换。`zui` 可以保留 `UpdateHandle` 这类 UI 可调用 facade，但签名解析、HTTP 下载和摘要校验
-应从 `app-rs/zui/src/services/update.rs` 迁出，避免 UI 基础设施成为发布规则 owner。
-
-Rust GUI 负责展示下载进度、错误和重启操作；app composition root 负责生命周期。窗口组件不直接
-持有 staging 路径或安装器。
-
 ### Ash Code
 
 CLI host 直接组合共享更新领域。`ash-tui` 的 Config 只保存并展示一个三态策略：
@@ -222,25 +207,24 @@ CLI 使用版本目录和稳定启动入口切换完整包；当前进程继续�
 
 ## 设置与状态
 
-三个产品共享 `UpdatePolicy` 的语义和值，但不共享一份可写用户配置：
+Desktop 与 CLI/TUI 共享 `UpdatePolicy` 的语义和值，但不共享一份可写用户配置：
 
 | 产品             | 用户设置位置                     | 作用域                   |
 | ---------------- | -------------------------------- | ------------------------ |
 | Electron Desktop | 注册到 profile `settings.json`   | 本机 Electron UI profile |
-| Rust Desktop     | profile `config.toml` 的 `[gui]` | 本机 Rust GUI profile    |
 | Ash Code         | profile `config.toml` 的 `[tui]` | 本机 CLI/TUI profile     |
 
-连接 Remote workspace 不改变本机更新策略。组织将来可以提供只读的强制策略层，但不能让三个 UI
+连接 Remote workspace 不改变本机更新策略。组织将来可以提供只读的强制策略层，但不能让两个 UI
 相互改写设置。发布 URL、公钥、产品身份和平台目标属于可信包配置，不属于用户设置。
 
 检查时间、下载进度、失败原因、已准备版本和重启要求是可重建运行状态，保存在对应产品安装根或
-状态存储中，不写回 `settings.json`、`[gui]` 或 `[tui]`。
+状态存储中，不写回 `settings.json` 或 `[tui]`。
 
 ## App Server 与 Remote 边界
 
 产品更新不是 Agent 业务 API，不加入普通 Session/Thread App Server connection。原因是：
 
-- Electron、Rust Desktop 和 CLI 更新的是本机外层产品，不是当前 Environment；
+- Electron 和 CLI 更新的是本机外层产品，不是当前 Environment；
 - TUI 连接 Remote App Server 时仍应更新本机 CLI，不能更新远端 `ash-remote-server`；
 - app-server daemon 的存活时间可能长于窗口，不能自行决定关闭和替换产品；
 - Renderer connection、Remote connection 和产品安装身份不是同一个生命周期。
@@ -250,32 +234,10 @@ Remote runtime 的下载、兼容握手、安装与回滚继续由 `ash-remote-c
 
 ## 当前状态
 
-| 能力                  | 当前实现                                                                                                                                                                                                                                     | 目标状态                                                                       |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Ash Code 策略 UI      | `Latest / Stable / Never` 已在 TUI 实现                                                                                                                                                                                                      | 保留 UI，类型迁到共享领域后由 adapter 映射                                     |
-| Ash Code 更新         | CLI 已改用共享策略与签名验证；调度、下载、诊断和安装仍在 `ash-cli/src/update.rs`                                                                                                                                                             | 保留 CLI 安装 adapter，继续迁出通用调度、下载和诊断                            |
-| Rust Desktop 更新     | `app-rs/zui/src/services/update.rs` 已改用共享签名描述；HTTP staging 与安装 facade 仍在 `zui`                                                                                                                                                | 继续迁出通用下载，`zui` 只保留 facade                                          |
-| Electron Desktop 更新 | Manage 菜单和每日自动检查可选择最新或稳定通道；签名验证后下载完整安装包，核对大小与 SHA-256，再由 Main 执行 Windows 安装器或 macOS 应用包替换与重启。当前状态只在运行中的 Main 保存，未验证真实跨版本升级                                    | 将检查时间、下载进度和已准备版本迁入共享状态；完成安装失败恢复与真实跨版本验证 |
-| 系统签名              | App 与 Ash Code 已共用 `build/lib/signing.py`；Ash Code macOS/Windows 发布会签完并验证每个可执行文件，macOS 压缩包还会公证；Electron Desktop 的 macOS `.app` 已签名并公证，Windows bundle 可执行文件和最终 `.exe` 安装器已接入发布签名与验证 | 三端最终安装器接入同一入口；Desktop `.pkg` / `.dmg` 公证后附加票据             |
-| 更新描述签名          | `code/update-sign` 已直接消费共享发布描述与 canonical encoding                                                                                                                                                                               | 保留密钥输入和 release artifact adapter                                        |
-| 发布工作流            | Ash Code 已有系统签名、macOS 公证、最新版本描述签名和稳定版本晋升工作流；Electron Desktop 的 macOS zip 和 Windows exe 已接入签名描述生成与发布，也有独立的稳定通道晋升工作流                                                                 | 扩展 Rust Desktop 产物并完成三端稳定通道                                       |
-| 共享更新 crate        | `ash-rs/product-update` 已拥有策略、product/target/package 描述、签名验证及有界下载与摘要校验                                                                                                                                                | 继续迁入通用调度、状态与错误                                                   |
-
 “已有代码”不代表共享架构已经完成。当前 Ash Code 和 `zui` 仍各自拥有下载与调度代码，这些逻辑
 需要继续迁到共享领域，不能被 Electron 复制为第三套实现。
 
 ## 演进顺序
-
-1. 已固定共享发布描述、签名 envelope、`UpdatePolicy`、product/target/package identity 和测试
-   fixture；签名工具、Ash Code 与 `zui` 已消费同一契约。
-2. 继续向 `ash-rs/product-update` 迁入通用下载、摘要、调度和诊断；保持 Ash Code 与 Rust
-   Desktop 的用户行为不变。
-3. 把 `cli` 收缩为版本目录、启动入口和 TUI notice adapter，删除本地重复逻辑。
-4. 把 `app-rs/zui` 的签名和下载实现替换为共享领域；在 `app` composition root 接入安装生命周期。
-5. 为 Electron Desktop 增加本机 update host、Main typed adapter、Renderer service 和 UI；验证
-   Renderer 无路径权限且 Remote workspace 不改变更新目标。
-6. 三端全部接入后删除旧 DTO、解析器、检查缓存和签名测试副本，只保留共享 conformance fixture
-   与每端安装/呈现测试。
 
 ## 验证要求
 
@@ -289,7 +251,6 @@ Remote runtime 的下载、兼容握手、安装与回滚继续由 `ash-remote-c
 ### 产品宿主
 
 - Electron：Renderer 无路径权限、Main/update host 关闭顺序、安装器失败、窗口退出与重启；
-- Rust Desktop：真实 product composition、安装交接、重启和失败恢复；
 - Ash Code：真实 PTY 配置持久化、当前会话不中断、下次启动选中新版本；
 - Remote：连接远端时只更新本机产品，Remote runtime 继续走独立兼容与安装流程。
 

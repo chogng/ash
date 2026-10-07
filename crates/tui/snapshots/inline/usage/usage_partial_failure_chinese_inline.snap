@@ -1,0 +1,28 @@
+---
+source: crates/tui/src/app/usage_tests.rs
+expression: screen
+---
+
+    ▄  ▄     Ash Code v0.1.0
+  ▗█▛██▜█▖   Automatic model
+  ▝▜████▛▘   .
+    ▝  ▘
+
+> /usage
+
+> /usage
+
+
+
+
+
+
+
+
+
+─ 额度 ─────────────────────────────────────────────────────────────────────────────────────────────
+
+   BigModel    ChatGPT    xAI
+> 状态  ·  无法读取账号额度，请运行 /usage 重试。
+
+  Tab/Shift+Tab 切换  ·  Esc 关闭  ·  运行 /usage 刷新

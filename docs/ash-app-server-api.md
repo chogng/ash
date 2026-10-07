@@ -3,7 +3,7 @@
 ```yaml
 title: Ash App Server API
 status: development
-owner: ash-rs
+owner: crates
 consumers:
   - desktop
   - cli
@@ -15,9 +15,9 @@ lastUpdated: 2026-09-29
 的兼容入口；Rust DTO、生成的 TypeScript 和 JSON Schema 必须始终一致。
 
 具体 method registry、artifact generator 与 schema fixture 见
-[`ash-app-server-protocol` README](../ash-rs/app-server-protocol/README.md)；JSON-RPC dispatch、
+[`ash-app-server-protocol` README](../crates/app-server-protocol/README.md)；JSON-RPC dispatch、
 subscription broker、resource store 与 local composition 见
-[`ash-app-server` README](../ash-rs/app-server/README.md)。本文拥有跨客户端 API 语义与演进方向，
+[`ash-app-server` README](../crates/app-server/README.md)。本文拥有跨客户端 API 语义与演进方向，
 两个 README 拥有当前实现接口与修改路径。
 
 ## 快速理解
@@ -55,13 +55,13 @@ Session、Thread、Turn 和更新流，不建立第二套领域模型。
 - `call/control` 控制静音、停止收听、设备发言权及轨道音量。`call/leave` 释放本连接的媒体与设备后返回；`call/end` 由房间所有者关闭整个房间。
 - 邀请、移除、角色变更和结束操作携带操作身份与已读修订号，冲突明确失败。邀请密钥只按显式邀请操作返回，普通状态通知不携带密钥。
 - 连接关闭会释放其资源；其他窗口的通话不受影响。媒体重连期间停止采集，房间换代后重新取得权限和票据。
-- AI 任务委托、屏幕共享及文档关联尚未进入此协议。类型和错误以 [通话协议源](../ash-rs/app-server-protocol/src/protocol/call.rs)及生成 schema 为准。
+- AI 任务委托、屏幕共享及文档关联尚未进入此协议。类型和错误以 [通话协议源](../crates/app-server-protocol/src/protocol/call.rs)及生成 schema 为准。
 
 ### 听写资源
 
 - `dictation/start` 与 `dictation/stop` 使用客户端生成的 `resourceId`。只有受信产品 host 可以启动听写；停止只能针对同一连接创建的资源。
 - `backend` 明确选择本地模型，或选择 `openAi` / `xai` 云端供应商及其转写模型。云端识别使用该供应商的直接 API 凭据，不读取当前文字模型的订阅凭据。
-- [realtime-voice](../ash-rs/realtime-voice/README.md) 管理设备所在进程的识别会话，一个进程同时只占用一个麦克风。`dictation/transcript` 携带临时或最终文本，`dictation/ended` 携带结束及错误；这些通知只送给发起连接。停止响应也携带最终文本。
+- [realtime-voice](../crates/realtime-voice/README.md) 管理设备所在进程的识别会话，一个进程同时只占用一个麦克风。`dictation/transcript` 携带临时或最终文本，`dictation/ended` 携带结束及错误；这些通知只送给发起连接。停止响应也携带最终文本。
 - 停止请求或连接关闭会释放听写资源。App Server 在所在设备上采集音频；远端客户端需要由本机语音会话持有麦克风。
 - `dictation/model/read` 查询模型包是否已安装，不加载识别器、不采集麦克风。`dictation/model/start` 使用连接所属的 `resourceId` 接受准备或导入操作，立即响应；`dictation/model/progress` 报告检查、下载字节数、加载及最终结果。停止请求和连接关闭取消该连接的操作，等待写入与工作线程结束后释放资源。模型发布成功与取消竞争时，已发布的包保留；可重复停止，不恢复断线前的操作。
 - Rust 统一决定模型缓存目录。导入参数只包含模型 ID 和源目录；源目录包含 `dictation-model.json`、`encoder.onnx`、`decoder.onnx`、`tokens.txt`。下载校验和导入均在临时目录中完成，实际加载通过后再发布；跨进程文件锁阻止同一模型同时安装，已安装的包不可覆盖。下载进度为每个文件实际收到的字节数，没有未知总大小的百分比。
@@ -106,7 +106,7 @@ Session 是按 `sessionId` 聚合 Thread 的只读树视图，不保存独立状
 `parentThreadId + parentSequence`；Core 按这个锚点重放父 Thread，并把锚点内连续、已结束的 Turn
 导入子 Thread，因此未完成的 Turn 和父 Thread 后续提交都不会进入已创建的分支。
 
-Project 是独立持久化领域，保存长期根目录表以及对 Session 的弱关联；它不复制 Thread 事件，也不改变 Session 只读聚合语义。一次多 Agent 工作只由同一 Session 的 Agent tree 表达。目标 Team 另存跨任务成员关系和任务引用，不建立跨 Session 的执行树；见 [Agent Team](../ash-rs/docs/agent-teams.md)。
+Project 是独立持久化领域，保存长期根目录表以及对 Session 的弱关联；它不复制 Thread 事件，也不改变 Session 只读聚合语义。一次多 Agent 工作只由同一 Session 的 Agent tree 表达。目标 Team 另存跨任务成员关系和任务引用，不建立跨 Session 的执行树；见 [Agent Team](../crates/docs/agent-teams.md)。
 
 Memory 是独立 profile 持久化领域。它不属于 Thread transcript，也不因 Session 关闭而删除；Profile、Project 和 Dir 作用域使用各自稳定身份，Dir 作用域不保存路径。
 
@@ -210,7 +210,7 @@ description 不能为空，同一 snapshot 中 name 必须唯一。可选字段 
 客户端必须按命令契约分发。Skill 和 server prompt command 通过 `StartTurn.input` 保留 `/name`、text/image 顺序；
 内置 `/compact` 通过 `session/request::CompactContext` 执行，不发送普通聊天文本。
 校验、local/server 合并与 Rust client 交互状态的 canonical owner 是
-[`ash-slash-commands`](../ash-rs/slash-commands/README.md)；App Server 只组合并发布 server snapshot。
+[`ash-slash-commands`](../crates/slash-commands/README.md)；App Server 只组合并发布 server snapshot。
 三种 client surface 的合并、执行与渲染边界见 [`slash-commands.md`](slash-commands.md)。
 
 ### 客户端-hosted 浏览器能力
@@ -856,7 +856,7 @@ Thread {
 
 ### Thread 正文条目与三端显示
 
-当前的分工是：后端确定一段内容属于什么、在哪个 Turn、按什么顺序出现；客户端决定宽度、换行、间距、折叠、滚动和交互。`session/thread/read` 与 `session/thread/subscribe` 均返回 `thread` 和 `transcript`。`transcript` 是 `ThreadTranscriptSnapshot`，含稳定 `entryId`、当前 `revision` 和按序排列的完整条目。定义以 [`ash-thread-transcript`](../ash-rs/thread-transcript/src/model.rs) 与 [`ThreadItem`](../ash-rs/protocol/src/item.rs) 为准。
+当前的分工是：后端确定一段内容属于什么、在哪个 Turn、按什么顺序出现；客户端决定宽度、换行、间距、折叠、滚动和交互。`session/thread/read` 与 `session/thread/subscribe` 均返回 `thread` 和 `transcript`。`transcript` 是 `ThreadTranscriptSnapshot`，含稳定 `entryId`、当前 `revision` 和按序排列的完整条目。定义以 [`ash-thread-transcript`](../crates/thread-transcript/src/model.rs) 与 [`ThreadItem`](../crates/protocol/src/item.rs) 为准。
 
 | 正文条目     | 后端给出的含义                                                                                                 |
 | ------------ | -------------------------------------------------------------------------------------------------------------- |
@@ -865,13 +865,7 @@ Thread {
 | `turnError`  | 当前 Turn 的稳定错误                                                                                           |
 | `toolOutput` | 绑定 `toolCallId` 的临时 stdout 或 stderr 内容                                                                 |
 
-App Server 的 [`TranscriptAccumulator`](../ash-rs/thread-transcript/src/accumulator.rs) 汇集内部增量，向客户端发送完整条目的 `upsert`、按 ID `remove` 或 `clearTransient`，而不是让各端自行拼接零散文字。`session/thread/transcript/update` 带 `sessionId`、`threadId`、`durableSequence` 和递增的 `revision`；`streamCursor` 只用于临时流的连续性。客户端按条目身份应用更新；修订号不连续时重新读取正文快照，不从可见文字推断消息、工具或执行状态。`Thread` 仍是已提交事实的权威来源，正文快照负责显示顺序和临时内容。
-
-| 客户端              | 当前显示职责                                                                                                                                                                                                                 |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Ash Code TUI        | 将条目组织成可绘制的消息和工具单元，布局、滚动与终端输出由客户端拥有；fullscreen 与 inline 的行为见 [LAYOUT.md](../code/LAYOUT.md)。                                                                                         |
-| Rust 桌面界面       | 保存正文快照及更新，将条目排成会话时间线；见 [正文状态](../app-rs/session/src/pane/transcript.rs)和[时间线](../app-rs/session/src/pane/timeline.rs)。                                                                        |
-| TypeScript 桌面界面 | 通过 Chat 服务保留后端条目字段，再映射为聊天列表单元；见 [服务接口](../app-ts/src/ash/workbench/services/chat/common/chatService.ts)和[列表映射](../app-ts/src/ash/workbench/contrib/chat/browser/widget/chatListItems.ts)。 |
+App Server 的 [`TranscriptAccumulator`](../crates/thread-transcript/src/accumulator.rs) 汇集内部增量，向客户端发送完整条目的 `upsert`、按 ID `remove` 或 `clearTransient`，而不是让各端自行拼接零散文字。`session/thread/transcript/update` 带 `sessionId`、`threadId`、`durableSequence` 和递增的 `revision`；`streamCursor` 只用于临时流的连续性。客户端按条目身份应用更新；修订号不连续时重新读取正文快照，不从可见文字推断消息、工具或执行状态。`Thread` 仍是已提交事实的权威来源，正文快照负责显示顺序和临时内容。
 
 工具执行产生的 `ToolCall`、`ToolResult` 是后端条目；`/status` 等本地斜杠命令是客户端操作，TUI 可在自己的正文中显示操作与结果，但不把它们伪装成持久化的 Thread 条目。当前三端都接入了后端语义条目，具体显示能力仍有差异：TypeScript 聊天列表和 Rust 桌面时间线主要以文字显示工具结果；TypeScript 服务虽保留工具结果的富内容字段，列表尚未逐种呈现这些内容。这是客户端显示范围，不改变后端的内容归属。
 
@@ -1193,7 +1187,7 @@ ChatGPT 的两条登录入口分别为：
 | `{ type: "chatGptPlanBrowser", accountId: null }` | `chatgpt-plan` | 发起 Ash 独立浏览器授权和新注册 |
 | `{ type: "chatGptPlanBrowser", accountId: "<registration ID>" }` | `chatgpt-plan` | 使用该 Ash 注册已签发的 client ID 重新授权，核对原账号身份 |
 
-其他供应商的登录方法和所有 DTO 从 [Rust 协议定义](../ash-rs/app-server-protocol/src/protocol/account.rs) 生成，不在文档中维护另一份枚举。两条 ChatGPT 连接的凭据、取消、登出和目录范围各自独立；自动选择顺序为有效本机登录、Ash 独立登录、Platform API key。详见[账户边界](models/chatgpt.md)。
+其他供应商的登录方法和所有 DTO 从 [Rust 协议定义](../crates/app-server-protocol/src/protocol/account.rs) 生成，不在文档中维护另一份枚举。两条 ChatGPT 连接的凭据、取消、登出和目录范围各自独立；自动选择顺序为有效本机登录、Ash 独立登录、Platform API key。详见[账户边界](models/chatgpt.md)。
 
 上述 RPC、带版本的 `accounts[]` 和 `account/login/completed` / `account/updated` 主动通知已实现，并通过注入的 multi-driver `LoginService` 工作；未安装服务时返回稳定 `AccountUnavailable`。`account/logout` 必须携带 provider，避免同时登录多个供应商时误删另一账户。
 
@@ -1261,10 +1255,10 @@ Kimi 订阅登录使用 device-code flow，没有本地 callback listener：App 
 
 ## 12. 权威来源
 
-- Rust DTO 与 registry：`ash-rs/app-server-protocol/src/protocol/`
-- JSON Schema：`ash-rs/app-server-protocol/schema/json/schema.json`
-- TypeScript 入口：`ash-rs/app-server-protocol/schema/typescript/index.ts`
-- Desktop 生成入口：`app-ts/src/ash/platform/app-server/common/generated/index.ts`
+- Rust DTO 与 registry：`crates/app-server-protocol/src/protocol/`
+- JSON Schema：`crates/app-server-protocol/schema/json/schema.json`
+- TypeScript 入口：`crates/app-server-protocol/schema/typescript/index.ts`
+- Desktop 生成入口：`src/ash/platform/app-server/common/generated/index.ts`
 
 修改契约后执行：
 
@@ -1274,11 +1268,11 @@ pnpm run generate:protocol
 
 Rust DTO 与 registry 是唯一协议来源；`schema/typescript` 是提交到 Git 的生成快照，前端 `common/generated` 是不提交的消费副本。`protocol:generate` 先更新快照，再同步前端副本；禁止手改两处生成物。
 
-纯前端构建通过 `pnpm --dir app-ts protocol:sync` 同步快照，不运行 Cargo。同步会移除退场类型，保留未变文件的时间戳，并在源快照缺失或目标包含手写文件时失败。联合开发的后端 watcher 和开发包准备入口在发布后端前重新生成协议。
+纯前端构建通过 `pnpm protocol:sync` 同步快照，不运行 Cargo。同步会移除退场类型，保留未变文件的时间戳，并在源快照缺失或目标包含手写文件时失败。联合开发的后端 watcher 和开发包准备入口在发布后端前重新生成协议。
 
 生成类型只用于协议客户端、领域通信接口和运行时 adapter；领域服务、编辑器与 UI 使用前端自有类型。WebSocket 只传输消息，`initialize` 负责主版本、生成协议指纹和必需能力可用性检查。schema hash 不同会阻断连接；允许扩展的结果对象可增加字段，严格对象、未知枚举和未声明通知仍须经过解码规则校验，不会因握手通过而跳过。
 
-生成快照一致性测试、`pnpm --dir app-ts typecheck:protocol`、协议行为测试和受影响的前端构建必须同时通过。
+生成快照一致性测试、`pnpm typecheck:protocol`、协议行为测试和受影响的前端构建必须同时通过。
 
 ## 13. Typst 文档编译
 
@@ -1292,7 +1286,7 @@ Rust DTO 与 registry 是唯一协议来源；`schema/typescript` 是提交到 G
 
 ## Issue 浏览与 Agent Session
 
-Issue 浏览接口由 [`issues.rs`](../ash-rs/app-server-protocol/src/protocol/issues.rs) 定义。
+Issue 浏览接口由 [`issues.rs`](../crates/app-server-protocol/src/protocol/issues.rs) 定义。
 
 | 方法              | 契约                                                                              |
 | ----------------- | --------------------------------------------------------------------------------- |
@@ -1310,12 +1304,12 @@ TUI 选择 Issue 后调用通用 `session/create`，指定内置 `issue`；随�
 
 Issue Workflow、plan、assignment、task、专属 PR 发布接口及对应存储已退出生产调用链；这些旧 method 返回 MethodNotFound。配置文件 schemaVersion 1 升级到 2 时移除 issues.repositories、recommendMerge 和 analysisModel，保留浏览刷新偏好；SQLite 配置文档版本为 10。已有用户数据库中的旧 Issue 表不会在后台被自动删除。
 
-指令组合和外部参考见 [Agent 指令系统](../ash-rs/docs/agent-instructions.md)，模型和权限选择不能由 Issue 页面另建一套规则。
+指令组合和外部参考见 [Agent 指令系统](../crates/docs/agent-instructions.md)，模型和权限选择不能由 Issue 页面另建一套规则。
 
 ## GitHub 仓库管理
 
 `initialize.capabilities.github` 与 `contracts.github.version = 1` 表示后端提供内置 GitHub 能力。
-[`github.rs`](../ash-rs/app-server-protocol/src/protocol/github.rs) 定义 `github/*` 请求和结果。
+[`github.rs`](../crates/app-server-protocol/src/protocol/github.rs) 定义 `github/*` 请求和结果。
 请求直接携带 host/owner/name，不要求本地工作目录；登录复用已有 GitHub 账号入口，凭据不进入协议。
 
 接口覆盖仓库信息、Issue 读写、Issue/PR 讨论评论、PR 列表/详情/创建/修改/文件/评审/合并/自动合并、提交检查、标签和可分配负责人。
@@ -1354,7 +1348,7 @@ PR 文件最多 3000 个，达到上限的结果设置 `limitReached`，不能�
 - `ModelInvocationRecord.timeContext` 可选记录完成的模型调用所用快照：`sampledAtUnixMs`、`utcOffsetSeconds`、`timeZone`、`origin`（`host` / `configured`）和 `mode`。关闭时间上下文时缺省。
 - Unix 毫秒受既有 `UnixMillis` 范围约束，日期与时区类型不进入传输契约。
 
-输入参照、跨日、重试、恢复与 Token 边界统一维护在 [Agent 时间与等待](../ash-rs/docs/agent-wait.md)。
+输入参照、跨日、重试、恢复与 Token 边界统一维护在 [Agent 时间与等待](../crates/docs/agent-wait.md)。
 
 ## Advisor
 
@@ -1392,17 +1386,17 @@ Thread 保存普通 Coding Turn 的顾问选择策略；接受 Turn 时将解析
 
 ## 工作区测试
 
-`ash-rs/testing` 持有测试目录、执行进程和结果。Renderer 负责测试树、编辑器入口、保存脏文件与显示输出；Electron Main 仅转发现有 App Server 消息。
+`crates/testing` 持有测试目录、执行进程和结果。Renderer 负责测试树、编辑器入口、保存脏文件与显示输出；Electron Main 仅转发现有 App Server 消息。
 
 | 归属                         | 实现入口                                                                                                                                                                 |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Rust 测试领域                | `ash-rs/testing/src/lib.rs`，App Server 在 `ash-rs/app-server/src/server/testing_operations.rs` 分发并转换类型                                                           |
-| 前端公共契约与工作区生命周期 | `app-ts/src/ash/platform/testing/common/testExecutionService.ts`、`app-ts/src/ash/workbench/services/testing/common/testingService.ts`、同级 `browser/testingService.ts` |
-| 协议适配                     | `app-ts/src/ash/platform/testing/browser/appServerTestExecutionService.ts`                                                                                               |
-| 测试树与编辑器按钮           | `app-ts/src/ash/workbench/contrib/testing/browser/testingViewPane.ts`、`testingEditorContribution.ts`                                                                    |
-| 协议与生成物                 | `ash-rs/app-server-protocol/src/protocol/testing.rs`、`schema/typescript/`，包括 method map 和 `AppServerProtocolDecoder.ts`；Renderer 绑定由生成任务同步                |
+| Rust 测试领域                | `crates/testing/src/lib.rs`，App Server 在 `crates/app-server/src/server/testing_operations.rs` 分发并转换类型                                                           |
+| 前端公共契约与工作区生命周期 | `src/ash/platform/testing/common/testExecutionService.ts`、`src/ash/workbench/services/testing/common/testingService.ts`、同级 `browser/testingService.ts` |
+| 协议适配                     | `src/ash/platform/testing/browser/appServerTestExecutionService.ts`                                                                                               |
+| 测试树与编辑器按钮           | `src/ash/workbench/contrib/testing/browser/testingViewPane.ts`、`testingEditorContribution.ts`                                                                    |
+| 协议与生成物                 | `crates/app-server-protocol/src/protocol/testing.rs`、`schema/typescript/`，包括 method map 和 `AppServerProtocolDecoder.ts`；Renderer 绑定由生成任务同步                |
 
-桌面调用沿用 `appServerProtocolClient.ts` → `appServerMessagePortTransport.ts` → `appServerConnectionRelay.ts` → 共享 App Server。前两者位于 `app-ts/src/ash/platform/app-server/` 的 `browser/`、`electron-browser/`，Relay 与进程启动入口 `appServerProcessLauncher.ts` 位于 `electron-main/`。每个 Renderer 使用独立连接，进程由现有启动层共享。本次新增测试领域，没有替换旧 Host。测试脚本保留既有 Tasks 与终端执行链，不生成单条测试结果。
+桌面调用沿用 `appServerProtocolClient.ts` → `appServerMessagePortTransport.ts` → `appServerConnectionRelay.ts` → 共享 App Server。前两者位于 `src/ash/platform/app-server/` 的 `browser/`、`electron-browser/`，Relay 与进程启动入口 `appServerProcessLauncher.ts` 位于 `electron-main/`。每个 Renderer 使用独立连接，进程由现有启动层共享。本次新增测试领域，没有替换旧 Host。测试脚本保留既有 Tasks 与终端执行链，不生成单条测试结果。
 
 内置支持 Cargo 工作区中的普通测试、宏展开后生成的测试、异步测试属性和文档测试。库、二进制及集成测试先通过 Cargo 编译，再读取测试程序的 `--list`；编译配置未启用的测试不进入目录。Rust 语法树只补充源码位置，宏生成的测试没有可靠位置时 `source` 为 `null`，仍可运行和调试。文档测试通过 rustdoc 列举和执行，保留 `ignore`、`no_run`、`compile_fail` 的含义。
 
@@ -1416,7 +1410,7 @@ Thread 保存普通 Coding Turn 的顾问选择策略；接受 Turn 时将解析
 
 ## 素材入库与确切版本读取
 
-`ash-rs/assets` 拥有 PNG、JPEG、WebP 原件校验、正式元数据和不可变版本；`ash-state::SqliteAssetStore` 将原件与版本在同一事务中保存。该存储属于 Profile，独立于 Thread、窗口与 connection。初始化的 `contracts.assets.version = 1` 表示接口可用。
+`crates/assets` 拥有 PNG、JPEG、WebP 原件校验、正式元数据和不可变版本；`ash-state::SqliteAssetStore` 将原件与版本在同一事务中保存。该存储属于 Profile，独立于 Thread、窗口与 connection。初始化的 `contracts.assets.version = 1` 表示接口可用。
 
 调用方先确定 `assetId` 与 `versionId`，调用 `asset/import/start`，按返回的 `maxChunkBytes` 顺序调用 `asset/import/write`，再调用 `asset/import/finish`。原件最多 16 MiB，上传块最多 192 KiB；上传资源只属于发起 connection，重复上传 ID 拒绝，取消使用 `asset/import/cancel`，断开连接清理未完成上传。完整上传的完成请求消费上传并进行原子入库，入库不承诺取消。修改响应丢失后使用 `asset/version` 查询原身份，不自动重放。相同版本与同一内容、名称和来源重试不产生第二条版本记录，身份冲突返回 `AssetConflict`。
 
@@ -1429,7 +1423,7 @@ Frontend 的公共契约为 `platform/assets/common/assetService.ts`，`browser/
 ## 审核环境契约
 
 `approvalEnvironment` capability 仅向产品或浏览器连接提供。普通连接不能扫描、读取或修改用户确认的
-审核资料，initialize 参数不能提升连接身份。领域定义位于 `ash-rs/guardian-environment`，State 实现
+审核资料，initialize 参数不能提升连接身份。领域定义位于 `crates/guardian-environment`，State 实现
 持久化和命令回执；App Server 只解析目录权限、路由模型调用和编解码。
 
 `scope` 为 `{ "type": "thread", "threadId": "…" }` 或

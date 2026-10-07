@@ -1,6 +1,6 @@
 # Ash GitHub authorization service
 
-This Cloudflare Worker is the public callback and token exchange service for Ash Desktop's GitHub browser authorization. `ash-rs/github` owns the local loopback listener, PKCE verifier, token lifecycle, and profile secret storage. The Worker keeps the OAuth client's secret outside the desktop build and redirects the GitHub authorization code to the local listener using a signed, ten-minute state value.
+This Cloudflare Worker is the public callback and token exchange service for Ash Desktop's GitHub browser authorization. `crates/github` owns the local loopback listener, PKCE verifier, token lifecycle, and profile secret storage. The Worker keeps the OAuth client's secret outside the desktop build and redirects the GitHub authorization code to the local listener using a signed, ten-minute state value.
 
 Desktop login already uses `account/login/start` with `gitHubBrowser`. The frontend opens the returned authorization URL; the Worker redirects to GitHub and returns the authorization code to Ash's local listener. The Rust backend exchanges that code through the Worker, reads the GitHub account identity, and stores the grant. Opening the authorization page alone does not complete login: the user must approve it in GitHub, and `account/read` must report the GitHub account as `ready`.
 

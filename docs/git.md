@@ -1,8 +1,8 @@
 # Git 与 Desktop SCM：系统边界和当前状态
 
 > 本文拥有 Git 跨进程 ownership、用户可见语义和演进状态。`ash-git` 的命令、解析、
-> timeout 与失败细节以 [`ash-rs/git/README.md`](../ash-rs/git/README.md) 为准；
-> worktree 切换目标与 Codex 兼容归属以 [`ash-rs/worktree/README.md`](../ash-rs/worktree/README.md) 为准；
+> timeout 与失败细节以 [`crates/git/README.md`](../crates/git/README.md) 为准；
+> worktree 切换目标与 Codex 兼容归属以 [`crates/worktree/README.md`](../crates/worktree/README.md) 为准；
 > 能力划分与 Session 文件选择提交见 [`git-capabilities.md`](git-capabilities.md)；
 > external wire shape 以 [`ash-app-server-api.md`](ash-app-server-api.md) 为准。
 
@@ -62,7 +62,7 @@ Git 查询和修改使用不同 capability：
 
 ## SCM History 行布局
 
-History 使用公共 [`ListView`](../app-ts/src/ash/base/browser/ui/list/listView.ts) 管理滚动、行高、
+History 使用公共 [`ListView`](../src/ash/base/browser/ui/list/listView.ts) 管理滚动、行高、
 可见范围、行复用和有界缓存释放。SCM 提供提交内容、展开后的高度和操作资源，
 在列表永久移除行时释放对应资源；行离开渲染范围时关闭其详情卡片。
 “加载更多”作为列表的一行，在进入包含预渲染区域的渲染范围时请求下一页。
@@ -98,11 +98,11 @@ History 提交行的右侧使用浮层，包含分支标签（例如 `main`）�
 | 显示的操作按钮     | 覆盖标题右端，标题宽度不变 | 参与行内布局，占用可分配宽度 |
 | 分支标签与远端图标 | 与按钮共用右侧浮层         | 参与行内布局                 |
 
-浮层由 [`SCMHistoryViewPane`](../app-ts/src/ash/workbench/contrib/scm/browser/scmHistoryViewPane.ts)
-组织，定位、显隐和背景由 [`scm.css`](../app-ts/src/ash/workbench/contrib/scm/browser/media/scm.css)
+浮层由 [`SCMHistoryViewPane`](../src/ash/workbench/contrib/scm/browser/scmHistoryViewPane.ts)
+组织，定位、显隐和背景由 [`scm.css`](../src/ash/workbench/contrib/scm/browser/media/scm.css)
 负责。这条规则只适用于 History 提交行；Changes 文件行和分组工具栏保留各自的布局规则。
 
-[`History smoke tests`](../app-ts/test/smoke/areas/windows/scm-history.spec.ts) 已在网页与 Electron
+[`History smoke tests`](../test/smoke/areas/windows/scm-history.spec.ts) 已在网页与 Electron
 验证 280px 侧栏中的长标题、分支和远端标签、悬停与键盘焦点下的宽度不变、更多菜单及打开比较，
 覆盖 Ash 的深色、浅色和两种高对比主题。
 
@@ -134,7 +134,7 @@ VS Code 的 SCM Workbench 不执行 Git，也不定义 Git wire DTO；Git provid
 group、history item、reference 和 command 投影成 SCM contract。Ash 应保持同一依赖方向，但不照搬
 VS Code 的 extension-host 进程布局。
 
-前端 Git 的服务契约、实现和专属命令位于 `app-ts/src/ash/workbench/contrib/git/`；SCM 的视图和通用展示
+前端 Git 的服务契约、实现和专属命令位于 `src/ash/workbench/contrib/git/`；SCM 的视图和通用展示
 留在 `workbench/contrib/scm/`。Git 命令 ID 由 `contrib/git/common/gitCommands.ts` 提供给欢迎页和状态栏。
 
 | 层级                                     | 长期 owner                                                                                                                        | 当前状态                                                                     | 边界判断                                                    |
@@ -158,7 +158,7 @@ Changes、状态栏和前端历史图由通用 `ISCMService`、repository/provid
 
 ### SCM 文件归属
 
-以下路径相对 `app-ts/src/ash/workbench/contrib/scm/`。这些归属已由用户确认，后续对齐沿用同一决定。
+以下路径相对 `src/ash/workbench/contrib/scm/`。这些归属已由用户确认，后续对齐沿用同一决定。
 
 | 职责                                     | 所属文件                                                                                                        | 已退出的旧文件                         |
 | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
@@ -211,13 +211,13 @@ Git 操作的接入位置：
 
 | 职责                         | 源码                                                                                                                                                                                                                                                                                                                       |
 | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 前端契约、仓库选择与结果转换 | [`IGitService`](../app-ts/src/ash/workbench/contrib/git/common/gitService.ts)、[`GitService`](../app-ts/src/ash/workbench/contrib/git/browser/gitService.ts)                                                                                                                                                               |
-| 命令、输入和确认框           | [`gitBranches.ts`](../app-ts/src/ash/workbench/contrib/git/browser/gitBranches.ts)、[`gitWorktrees.ts`](../app-ts/src/ash/workbench/contrib/git/browser/gitWorktrees.ts)、[`git.contribution.ts`](../app-ts/src/ash/workbench/contrib/git/browser/git.contribution.ts)                                                     |
-| 协议调用与连接               | [`Git API adapter`](../app-ts/src/ash/platform/git/browser/gitApi.ts)、[`protocol client`](../app-ts/src/ash/platform/app-server/browser/appServerProtocolClient.ts)                                                                                                                                                       |
-| Electron 连接启动和透明转发  | [`daemon launcher`](../app-ts/src/ash/platform/app-server-daemon/electron-main/appServerDaemonLauncher.ts)、[`relay`](../app-ts/src/ash/platform/app-server/electron-main/appServerConnectionRelay.ts)、[`MessagePort transport`](../app-ts/src/ash/platform/app-server/electron-browser/appServerMessagePortTransport.ts) |
-| 协议定义和生成边界           | [`Git protocol`](../ash-rs/app-server-protocol/src/protocol/git.rs)、[`request map`](../app-ts/src/ash/platform/app-server/common/generated/AppServerRequestMap.ts)、[`decoder`](../app-ts/src/ash/platform/app-server/common/generated/AppServerProtocolDecoder.ts)                                                       |
-| Git 执行与部分 index 编辑    | [`references.rs`](../ash-rs/git/src/references.rs)、[`index_edit.rs`](../ash-rs/git/src/working_copy/index_edit.rs)                                                                                                                                                                                                        |
-| Rust 调度与通知              | [`git_operations.rs`](../ash-rs/app-server/src/server/git_operations.rs)、[`git_runtime.rs`](../ash-rs/app-server/src/server/git_runtime.rs)                                                                                                                                                                               |
+| 前端契约、仓库选择与结果转换 | [`IGitService`](../src/ash/workbench/contrib/git/common/gitService.ts)、[`GitService`](../src/ash/workbench/contrib/git/browser/gitService.ts)                                                                                                                                                               |
+| 命令、输入和确认框           | [`gitBranches.ts`](../src/ash/workbench/contrib/git/browser/gitBranches.ts)、[`gitWorktrees.ts`](../src/ash/workbench/contrib/git/browser/gitWorktrees.ts)、[`git.contribution.ts`](../src/ash/workbench/contrib/git/browser/git.contribution.ts)                                                     |
+| 协议调用与连接               | [`Git API adapter`](../src/ash/platform/git/browser/gitApi.ts)、[`protocol client`](../src/ash/platform/app-server/browser/appServerProtocolClient.ts)                                                                                                                                                       |
+| Electron 连接启动和透明转发  | [`daemon launcher`](../src/ash/platform/app-server-daemon/electron-main/appServerDaemonLauncher.ts)、[`relay`](../src/ash/platform/app-server/electron-main/appServerConnectionRelay.ts)、[`MessagePort transport`](../src/ash/platform/app-server/electron-browser/appServerMessagePortTransport.ts) |
+| 协议定义和生成边界           | [`Git protocol`](../crates/app-server-protocol/src/protocol/git.rs)、[`request map`](../src/ash/platform/app-server/common/generated/AppServerRequestMap.ts)、[`decoder`](../src/ash/platform/app-server/common/generated/AppServerProtocolDecoder.ts)                                                       |
+| Git 执行与部分 index 编辑    | [`references.rs`](../crates/git/src/references.rs)、[`index_edit.rs`](../crates/git/src/working_copy/index_edit.rs)                                                                                                                                                                                                        |
+| Rust 调度与通知              | [`git_operations.rs`](../crates/app-server/src/server/git_operations.rs)、[`git_runtime.rs`](../crates/app-server/src/server/git_runtime.rs)                                                                                                                                                                               |
 
 这些入口复用已有协议与连接：每个 renderer 一条独立连接，共享 profile 的 app-server daemon；没有新增 Host 或需要退出的旧 Host 注册。生成协议与 decoder 已覆盖这些方法，前端命令只依赖 `IGitService`。命令通过 `getRepository` 先取得目标 ID，后续查询、输入、确认和执行始终使用该 ID。
 

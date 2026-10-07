@@ -1,0 +1,24 @@
+---
+source: crates/tui/src/app/fullscreen/frame_tests.rs
+expression: "render(&app, 80, 20)"
+---
+  .                                                                [Dashboard]  
+                                                                                
+        ┌── Hooks › PreToolUse ────────────────────────────────────[✗]─┐        
+        │                                                              │        
+        │  Configure Hooks                                             │        
+        │                                                              │        
+        │  ╭─────────────────────────────────────────────────────────╮ │        
+        │  │ Search Hooks                                            │ │        
+        │  ╰─────────────────────────────────────────────────────────╯ │        
+        │> user:hook:review  ·  disabled  ·  /profile/config.toml      │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+  ──────│                                                              │──────  
+  > Buil└──────────────────────────────────────────────────────────────┘        
+  ─────────────────────────────────────────────────────────── Automatic model   
+                                                                                
+  Enter confirm · / search · r refresh · Esc return

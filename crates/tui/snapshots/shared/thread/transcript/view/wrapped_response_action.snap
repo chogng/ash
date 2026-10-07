@@ -1,0 +1,25 @@
+---
+source: crates/tui/src/thread/transcript/view/render_tests.rs
+expression: visible_buffer(buffer).trim_end()
+---
+● Reason
+ing
+summary
+ └─ line
+    line
+    line
+    line
+    line
+    line
+    line
+    line
+    line
+    line
+    line
+    line
+    … 2
+    more
+    line
+    s
+    view
+    full

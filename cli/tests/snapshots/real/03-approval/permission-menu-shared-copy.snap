@@ -1,0 +1,34 @@
+---
+source: cli/tests/support/tui_process.rs
+expression: screen
+---
+  <FIXTURE…>                                      …                            [— / —] [Dashboard]
+
+
+            ┌── Permissions ──────────────────────────────────────────────────────[✗]─┐
+            │                                                                         │
+            │  Auto                                                                 + │
+            │  Manual                                                               + │
+            │> Bypass permissions                                           Current - │
+            │    Skip most approvals; access limits still apply                       │
+            │                                                                         │
+            │                                                                         │
+            │                                                                         │
+            │                                                                         │
+            │                                                                         │
+            │                                                                         │
+            │                                                                         │
+            │                                                                         │
+            │                                                                         │
+            │                                                                         │
+            │                                                                         │
+            │                                                                         │
+            │                                                                         │
+            │                                                                         │
+            │                                                                         │
+            │                                                                         │
+            │                                                                         │
+            │  Enter confirm · ←/→ details · Esc close                                │permissions
+  ──────────└─────────────────────────────────────────────────────────────────────────┘───────────
+  > Build anything
+  ──────────────────────────────────────────────────────────────────────── Automatic model · Plan

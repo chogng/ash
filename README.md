@@ -1,17 +1,13 @@
 # Ash
 
-Ash is a Rust-first agent workspace with three product lines sharing one App Server contract:
+Ash is an agent workspace with an Electron/Web interface and a Rust CLI/TUI, sharing one Rust App Server contract.
 
-| Product    | Description           | Source             | Start              |
-| ---------- | --------------------- | ------------------ | ------------------ |
-| `ash code` | Terminal UI           | [`code`](code)     | `just ash`         |
-| `ash`      | Electron Desktop      | [`app-ts`](app-ts) | `just ash-desktop` |
-| `app`      | Rust Desktop terminal | [`app-rs`](app-rs) | `just app`         |
+| Product  | Source                                        | Start              |
+| -------- | --------------------------------------------- | ------------------ |
+| Desktop  | [`src/`](src)                                 | `just ash-desktop` |
+| Terminal | [`cli/`](cli) and [`crates/tui/`](crates/tui) | `just ash`         |
 
-`ash-rs` contains the shared Rust backend. The product-neutral backend executable is
-`ash-app-server`, owned by [`ash-app-server`](ash-rs/app-server/README.md). Electron's `code` and
-`academic` builds are internal variants, not additional product lines; see
-[`docs/product-lines.md`](docs/product-lines.md) and [`docs/workbench-modes.md`](docs/workbench-modes.md).
+[`crates/`](crates) contains the Rust backend and terminal crates. Crate ownership and build targets keep terminal presentation separate from the shared backend. Desktop packaging selects backend executables and does not include the CLI/TUI.
 
 ## Quick start
 
@@ -29,9 +25,7 @@ See [Windows environment responsibilities](docs/build.md#windows-开发环境).
 
 On macOS or Linux, install Rust and Python 3.11 or newer; Python 3.12 is
 recommended. Confirm that `python3` resolves to that version before running
-backend preparation or Desktop smoke tests. Cargo supplies the input
-classifier's build-time Protocol Buffers compiler; no system `protoc`
-installation is required. See the [build guide](docs/build.md#macos-与-linux-开发环境)
+backend preparation or Desktop smoke tests. See the [build guide](docs/build.md#macos-与-linux-开发环境)
 for the macOS Homebrew path requirement.
 
 For Electron or Browser Workbench development, install the pnpm version declared
@@ -49,13 +43,13 @@ declared pnpm version.
 
 Build definitions live in [`build/`](build), while reproducible local artifacts are collected under the ignored `.build/` root. See [`docs/build.md`](docs/build.md) for the command and output layout.
 
-Build all three product lines through the repository-level command:
+Build both products through the repository-level command:
 
 ```bash
 just build
 ```
 
-Use `just build-code`, `just build-desktop`, or `just build-app` to build one product host.
+Use `just build-code` or `just build-desktop` to build one product host.
 `just build-rust` remains the explicit full Rust workspace build.
 
 `pnpm build` builds only the Electron and Browser workspace.
@@ -74,8 +68,7 @@ just ash exec "summarize the current changes"
 just ash-desktop
 ```
 
-In VS Code, select `Ash (Electron)` and press F5 to run the same command. The three
-product groups are `Ash Code (TUI)`, `Ash (Electron)`, and `Ash App (Rust)`.
+In VS Code, select `Ash (Electron)` and press F5 to run the same command. The product groups are `Ash Code (TUI)` and `Ash (Electron)`.
 `Ash (Electron, Frontend Watch Only)` also runs the Rust backend but only watches frontend
 and Electron host changes. `Ash Web (Chrome)` starts the independent Browser Workbench.
 Stopping either its server or Chrome debug session stops both, so the next F5 can reuse the port.
@@ -101,7 +94,7 @@ For Sessions, select `Ash Sessions Web (Chrome)` with F5 to prepare the backend 
 open its authenticated Sessions page in the browser debugger. The UI-only configuration
 is `Ash Sessions Web (Chrome, UI Only)`. Both use Vite hot updates; connected Web commands
 also rebuild Rust sources and switch the managed backend after successful compilation,
-retaining browser authentication and unsent input. See [frontend development](app-ts/README.md#日常-web-开发).
+retaining browser authentication and unsent input. See [frontend development](docs/frontend.md#日常-web-开发).
 
 Use `Ash Web (Chrome)` with F5 for browser development. This mode opens, edits and saves
 browser-authorized local folders, restores dirty editors after reload, stores settings in IndexedDB,
@@ -117,13 +110,13 @@ the module runs in a page-owned Worker. Vite watches package resources and reloa
 For example, in PowerShell:
 
 ```powershell
-$env:ASH_WEB_EXTENSION_PATHS = (Resolve-Path app-ts/test/fixtures/web-extension).Path
+$env:ASH_WEB_EXTENSION_PATHS = (Resolve-Path test/fixtures/web-extension).Path
 pnpm dev:web
 ```
 
 This is an explicit trusted development input, with no third-party installation or sandbox claim.
-Use `pnpm --dir app-ts test:smoke:browser:dev` to test the development entry and
-`pnpm --dir app-ts test:smoke:browser` to test the built Web artifacts.
+Use `pnpm test:smoke:browser:dev` to test the development entry and
+`pnpm test:smoke:browser` to test the built Web artifacts.
 
 ### Stanza standalone editor
 
@@ -133,38 +126,29 @@ Use `pnpm --dir app-ts test:smoke:browser:dev` to test the development entry and
 pnpm dev:stanza
 ```
 
-然后打开 `http://127.0.0.1:5199/build/app_ts/vite/stanza/index.html`。在 VS Code 中也可以选择
+然后打开 `http://127.0.0.1:5199/build/desktop/vite/stanza/index.html`。在 VS Code 中也可以选择
 `Stanza Editor - Standalone` 配置按 F5；它会自动启动 Vite 并打开浏览器调试。页面把完整 API 暴露为
 `globalThis.stanza`，可在浏览器控制台检查 `stanza.editor.getEditors()` 和
 `stanza.editor.getModels()`。
 
-### `app`
-
-```bash
-just app
-```
-
 ## Repository map
 
-- [`ash-rs`](ash-rs): shared protocol, App Server, domain, storage, execution, and runtime crates.
-- [`ash-cli`](ash-cli): user-facing `ash` command, including shared management and terminal launch.
-- [`code`](code): terminal presentation and terminal-specific capabilities.
-- [`app-ts`](app-ts): Electron Main, Preload, Renderer, and Browser Workbench.
-- [`build`](build): checked-in build orchestration; generated artifacts go to `.build/`.
-- [`app-rs`](app-rs): Rust window, terminal, renderer, and product UI.
-- [`docs`](docs): architecture and system documentation; start with [`docs/README.md`](docs/README.md).
+- [`src/`](src): Electron Main, Preload, Renderer, and Browser Workbench.
+- [`cli/`](cli): user-facing `ash` command and terminal launch.
+- [`crates/`](crates): Rust protocols, backend domains, runtime, and terminal crates.
+- [`build/`](build): build and packaging tools; generated artifacts go to `.build/`.
+- [`docs/`](docs): architecture and development documentation.
 
 ## Where to read next
 
 - [Ash user documentation](https://github.com/chogng/ash-docs)
 - [Product lines and host boundaries](docs/product-lines.md)
 - [System architecture](docs/architecture.md)
-- [Ash Code documentation](code/README.md)
+- [Ash Code documentation](crates/tui/README.md)
 - [Electron Desktop architecture](docs/ash-desktop-architecture.md)
-- [Shared Rust architecture](docs/ash-rs-architecture.md)
+- [Shared Rust architecture](docs/rust-architecture.md)
 - [Remote development](docs/remote-development.md)
-- [Packaging](build/ash_rs/README.md)
-- [`app` release graph](app-rs/docs/app-release-graph.md)
+- [Packaging](build/runtime/README.md)
 
 Crate-level implementation details live in the `README.md` next to each crate.
 
@@ -172,4 +156,4 @@ Crate-level implementation details live in the `README.md` next to each crate.
 
 Ash's original code and materials are proprietary and all rights reserved. See [`LICENSE`](LICENSE).
 Third-party components remain governed by their own licenses and notices, including
-[`app-ts/THIRD_PARTY_NOTICES.md`](app-ts/THIRD_PARTY_NOTICES.md).
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).

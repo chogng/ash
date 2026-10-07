@@ -4,12 +4,12 @@
 > 已接入 revision-bound 语言请求与编辑器 provider，Desktop 仍保留既有 Rust、JSON/JSONC、Shell
 > 设置和 diagnostics presentation。
 > 本文拥有跨 crate 的语言能力语义、所有权和演进阶段；当前实现接口与修改路径由
-> [`ash-lsp` README](../ash-rs/lsp/README.md) 和
-> [`ash-lsp-server-provider` README](../ash-rs/lsp-server-provider/README.md)、
-> [`ash-lsp-manager` README](../ash-rs/lsp-manager/README.md) 分别拥有。本地符号索引与
+> [`ash-lsp` README](../crates/lsp/README.md) 和
+> [`ash-lsp-server-provider` README](../crates/lsp-server-provider/README.md)、
+> [`ash-lsp-manager` README](../crates/lsp-manager/README.md) 分别拥有。本地符号索引与
 > Language Server 结果如何组合、以及未来代码图的边界见
 > [`code-intelligence.md`](code-intelligence.md)。跨 package family 的 Marketplace source、共享验证、
-> 领域投影与失败隔离见 [`core-plugins.md`](../ash-rs/docs/core-plugins.md)。
+> 领域投影与失败隔离见 [`core-plugins.md`](../crates/docs/core-plugins.md)。
 
 ## 快速理解
 

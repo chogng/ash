@@ -14,7 +14,7 @@ if (process.exitCode === 0) {
 	const executable = isScript ? process.execPath : packageManager;
 	const prefix = isScript ? [packageManager] : [];
 	const result = spawnSync(executable, [
-		...prefix, '--dir', 'app-ts', 'test:unit',
+		...prefix, '--dir', '.', 'test:unit',
 		'--run', 'src/ash/workbench/test/common/design-tokens.test.ts',
 	], { cwd: root, stdio: 'inherit', windowsHide: true });
 	if (result.error) {

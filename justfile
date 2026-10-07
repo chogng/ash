@@ -73,8 +73,8 @@ bench-build *args:
 prune-build-cache *args:
     {{ python }} -B -m build.lib.cargo_cache {{ recipe_args }}
 
-# Build the three product hosts from the repository root.
-build: build-code build-desktop build-app
+# Build the terminal and Electron products from the repository root.
+build: build-code build-desktop
 
 # Build the Ash Code CLI/TUI host and its development server programs.
 build-code:
@@ -82,11 +82,7 @@ build-code:
 
 # Build the Electron Desktop product.
 build-desktop:
-    pnpm --dir app-ts build
-
-# Build the Rust Desktop host and its development server programs.
-build-app:
-    {{ python }} -B scripts/cargo.py build -p app --bin app -p ash-app-server --bin ash-app-server -p ash-code-mode-host --bin ash-code-mode-host
+    pnpm build
 
 # Build the root Rust workspace with the locked V8 inputs when required.
 build-rust *args:
@@ -117,7 +113,7 @@ check *args:
 rust-warnings *args:
     {{ python }} -B scripts/cargo.py --deny-warnings check -p {{ recipe_args }} --all-targets
 
-# Discover and compile every direct consumer of grep and file-search, including app-rs/files.
+# Discover and compile every direct consumer of grep and file-search, and their tests.
 check-search *args:
     {{ python }} -B scripts/check_search.py {{ recipe_args }}
 
@@ -128,18 +124,17 @@ test-search-rust:
     just test ash-app-server --lib local_tools
     just test ash-app-server --lib server::environment_runtime::tests
     just test ash-app-server --lib server::search_operations::tests
-    just test ash-files
 
 # Validate search consumers, backend behavior, renderer lifecycle, and compiler warnings.
 test-search: check-search test-search-rust
-    pnpm --dir app-ts test:unit --run src/ash/platform/search/test/browser/searchService.test.ts --run src/ash/platform/search/test/browser/browserFileSearchService.test.ts --run src/ash/platform/app-server/test/browser/webRendererApi.test.ts --run src/ash/sessions/test/browser/sessionFileService.test.ts --run src/ash/workbench/contrib/search/test/browser/searchViewPane.test.ts
-    pnpm --dir app-ts test:browser:integration chatContextActions.integration.spec.ts --project=chromium
-    pnpm --dir app-ts typecheck:renderer
+    pnpm test:unit --run src/ash/platform/search/test/browser/searchService.test.ts --run src/ash/platform/search/test/browser/browserFileSearchService.test.ts --run src/ash/platform/app-server/test/browser/webRendererApi.test.ts --run src/ash/sessions/test/browser/sessionFileService.test.ts --run src/ash/workbench/contrib/search/test/browser/searchViewPane.test.ts
+    pnpm test:browser:integration chatContextActions.integration.spec.ts --project=chromium
+    pnpm typecheck:renderer
     just check-search --deny-warnings
 
 # Exercise an assembled package through real stdio RPC, using its bundled search engines.
 test-search-package *args:
-    {{ python }} -B build/ash_rs/search_smoke.py {{ recipe_args }}
+    {{ python }} -B build/runtime/search_smoke.py {{ recipe_args }}
 
 # Fail once the configuration support window makes a compatibility migration removable.
 check-config-migrations:
@@ -147,7 +142,7 @@ check-config-migrations:
 
 # Refresh the canonical user configuration schema.
 generate-config-schema:
-    cargo run --quiet -p ash-config-schema -- ash-rs/config/schema.json
+    cargo run --quiet -p ash-config-schema -- crates/config/schema.json
 
 # Derive the editable model catalog schema from its Rust parser declarations.
 generate-model-catalog-schema *args:
@@ -155,7 +150,7 @@ generate-model-catalog-schema *args:
 
 # Refresh the checked-in App Server protocol fixtures and generated TypeScript client.
 generate-protocol:
-    pnpm --dir app-ts run protocol:generate
+    pnpm run protocol:generate
 
 # Launch the ash code TUI product from the current source tree.
 ash *args:
@@ -163,11 +158,11 @@ ash *args:
 
 # Preview the Welcome pet's idle frame, all frames, or one named action.
 pet *args:
-    @{{ python }} -B scripts/cargo.py run --quiet -p ash-sprite -- code/tui/assets/welcome/pet.sprite {{ args }}
+    @{{ python }} -B scripts/cargo.py run --quiet -p ash-sprite -- crates/tui/assets/welcome/pet.sprite {{ args }}
 
 # Assemble the complete immutable development package shared by Ash products.
 ash-package *args:
-    {{ python }} -B build/ash_rs/prepare.py {{ recipe_args }}
+    {{ python }} -B build/runtime/prepare.py {{ recipe_args }}
 
 # Assemble the complete development package and launch Ash Code against it.
 ash-package-run *args:
@@ -175,27 +170,11 @@ ash-package-run *args:
 
 # Launch the ash Electron Desktop product.
 ash-desktop:
-    pnpm --dir app-ts dev
-
-# Launch the pure-Rust app Desktop product.
-app: build-app
-    {{ python }} -B scripts/cargo.py run -p app
-
-# Check every pure-Rust app target with the locked sandbox-enabled V8 inputs.
-app-check:
-    {{ python }} -B scripts/cargo.py check -p app --all-targets
-
-# Test every pure-Rust app target with the locked sandbox-enabled V8 inputs.
-app-test:
-    {{ python }} -B scripts/cargo.py test -p app --all-targets
-
-# Stage an unsigned app package; release CI signs and verifies the staged binary.
-app-package *args:
-    {{ python }} -B build/app_rs/build.py {{ recipe_args }}
+    pnpm dev
 
 # Build a shared App Server runtime package.
 runtime-package *args:
-    {{ python }} -B build/ash_rs/build.py {{ recipe_args }}
+    {{ python }} -B build/runtime/build.py {{ recipe_args }}
 
 # Compose a managed Code package from a verified runtime package and the ash executable.
 code-package *args:

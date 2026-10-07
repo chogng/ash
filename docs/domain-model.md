@@ -51,7 +51,7 @@ get_session(session_id)
 
 Agent 身份、任务分组和执行分支分别表达。普通 fork、消息恢复、rewind 和 replacement 延续 AgentId，委托创建独立 AgentId；复用身份不共享上下文、取消域或权限。云端认证身份单独映射，不替代业务 AgentId。绑定、来源和迁移规则见 [`protocol.md`](protocol.md#2-身份)。
 
-目标 Team 为新成员分配持久 `AgentId`，或明确绑定已有 `AgentId`；成员可以先于首次 Thread 存在。每次工作创建独立协调 Thread 和成员 Thread，可关联新 Session 或 `/develop` 的已有 Session。现有普通委托创建新的 AgentId；Team 成员再次执行需要明确绑定原身份的受验证入口，不能根据角色名推断。Team、Project 与任务的关系见 [Agent Team](../ash-rs/docs/agent-teams.md)。
+目标 Team 为新成员分配持久 `AgentId`，或明确绑定已有 `AgentId`；成员可以先于首次 Thread 存在。每次工作创建独立协调 Thread 和成员 Thread，可关联新 Session 或 `/develop` 的已有 Session。现有普通委托创建新的 AgentId；Team 成员再次执行需要明确绑定原身份的受验证入口，不能根据角色名推断。Team、Project 与任务的关系见 [Agent Team](../crates/docs/agent-teams.md)。
 
 `Project` 与会话树是弱关联。删除 Project、移动 Project 或重新归类 Thread，不得改变 Thread 与 `session_id` 的核心身份。当前关联保存在 Project 的 `session_ids` 集合中，不向 Thread 增加 Project 身份，也不建立 Session store；`ProjectId`、完整 Project 记录和命令回执由独立 Project store 持久化。窗口 Workspace、目录集合或 Session 标题都不能被客户端推断成 Project。
 

@@ -5,7 +5,7 @@ applyTo: "**/src/ash/editor/**/*.ts,**/test/integration/browser/**"
 
 # Editor Implementation Guidelines
 
-See [`src/ash/editor/README.md`](../../app-ts/src/ash/editor/README.md), [`text-engine.md`](../../app-ts/src/ash/editor/text-engine.md), and [`document-engine.md`](../../app-ts/src/ash/editor/document-engine.md).
+See [`src/ash/editor/README.md`](../../src/ash/editor/README.md), [`text-engine.md`](../../src/ash/editor/text-engine.md), and [`document-engine.md`](../../src/ash/editor/document-engine.md).
 
 ## Ownership
 

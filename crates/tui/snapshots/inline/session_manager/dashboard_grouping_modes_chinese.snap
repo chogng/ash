@@ -1,0 +1,135 @@
+---
+source: crates/tui/src/app/session_manager_tests.rs
+expression: "screens.join(\"\\n\\n\")"
+---
+─ 仪 表 盘  ─────────────────────────────────────────────────────────────────────────── 分 组 : 模 型   g ─
+
+    会 话                                状 态              更 新 时 间   │ 会 话 详 情
+  openai/test-model (1) -                                         │
+> ○ Snapshot session                   空 闲                        │ Snapshot session
+                                                                  │ 空 闲
+  已 归 档  (0)                                                      │
+                                                                  │ 项 目
+                                                                  │ /workspace/project
+                                                                  │ 模 型 : openai/test-model
+                                                                  │
+                                                                  │ 线 程 : 1
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+
+  Enter/→ 打 开  · Space 预 览  · Ctrl+X 归 档  · i 详 情  · g 切 换 分 组  · Esc 返 回
+
+─ 仪 表 盘  ─────────────────────────────────────────────────────────────────────────── 分 组 : 项 目   g ─
+
+    会 话                                状 态              更 新 时 间   │ 会 话 详 情
+  /workspace/project (1) -                                        │
+> ○ Snapshot session                   空 闲                        │ Snapshot session
+                                                                  │ 空 闲
+  已 归 档  (0)                                                      │
+                                                                  │ 项 目
+                                                                  │ /workspace/project
+                                                                  │ 模 型 : openai/test-model
+                                                                  │
+                                                                  │ 线 程 : 1
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+
+  Enter/→ 打 开  · Space 预 览  · Ctrl+X 归 档  · i 详 情  · g 切 换 分 组  · Esc 返 回
+
+─ 仪 表 盘  ─────────────────────────────────────────────────────────────────────────── 分 组 : 状 态   g ─
+
+    会 话                                状 态              更 新 时 间   │ 会 话 详 情
+  空 闲  (1) -                                                      │
+> ○ Snapshot session                   空 闲                        │ Snapshot session
+                                                                  │ 空 闲
+  已 归 档  (0)                                                      │
+                                                                  │ 项 目
+                                                                  │ /workspace/project
+                                                                  │ 模 型 : openai/test-model
+                                                                  │
+                                                                  │ 线 程 : 1
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+
+  Enter/→ 打 开  · Space 预 览  · Ctrl+X 归 档  · i 详 情  · g 切 换 分 组  · Esc 返 回
+
+─ 仪 表 盘  ─────────────────────────────────────────────────────────────────────────── 分 组 : 状 态   g ─
+
+    会 话                                状 态              更 新 时 间   │ 会 话 详 情
+  空 闲  (1) -                                                      │
+> ○ Snapshot session                   空 闲                        │ Snapshot session
+                                                                  │ 空 闲
+  已 归 档  (0)                                                      │
+                                                                  │ 项 目
+                                                                  │ /workspace/project
+                                                                  │ 模 型 : openai/test-model
+                                                                  │
+                                                                  │ 线 程 : 1
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                         无 法 保 存 仪 表 盘 分 组 方 式 ： read-only profile
+  Enter/→ 打 开  · Space 预 览  · Ctrl+X 归 档  · i 详 情  · g 切 换 分 组  · Esc 返 回

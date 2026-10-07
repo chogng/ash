@@ -1,0 +1,36 @@
+---
+source: crates/tui/src/app/help_tests.rs
+expression: output
+---
+    ▄  ▄     Ash Code v0.1.0
+  ▗█▛██▜█▖   Automatic model
+  ▝▜████▛▘   .
+    ▝  ▘
+
+─ Keyboard shortcuts ─────────────────────────────────────────────────────────────────────
+
+  Compose                                      Session
+  /                     Commands               ?          Keyboard shortcuts
+  @                     Mention files and      ←          Dashboard (empty input)
+                        plugins                Esc Esc    Open rewind checkpoints
+  $                     Select a skill         esc        Interrupt task
+  Enter                 Send message           shift+tab  Cycle task mode
+  Shift+Enter / Ctrl+J  New line               shift+↓    Decrease thinking effort
+  Ctrl+R                Search input           shift+↑    Increase thinking effort
+                        history                ctrl+o     Copy last response
+  ctrl+v                Attach clipboard       ctrl+c     Interrupt or quit
+                        image                  ctrl+z     Suspend Ash
+
+  Transcript
+  PageUp / PageDown     Scroll transcript
+  Ctrl+Home / Ctrl+End  Oldest / latest
+  Ctrl+↑ / Ctrl+↓       Select a message
+  Space                 Expand selected
+                        message
+  Enter                 View selected
+                        message details
+  Esc                   Return to input
+
+  /shortcuts customize
+
+  ↑/↓ scroll · Esc to close

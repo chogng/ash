@@ -1,17 +1,17 @@
 # Skill 指令系统
 
-> 物理位置：`ash-rs/skills/`
+> 物理位置：`crates/skills/`
 > Rust crate：`ash_skills`
 > 当前状态：Phase S0、S1 显式选择、可信 built-in metadata 自动 selector、模型按需读取、通用 package resource、有界文本模型切片与 binary asset Resource materialization 已实现；Renderer preview、script execution adapter 与 S3–S4 仍为 Proposed。TUI 与 Desktop 已把
 > 可直接调用的 Skill 通过独立的 `$name` 选择器调用；`/skills` 只承担目录管理。
-> Crate 实现契约：[`ash-rs/skills/README.md`](../ash-rs/skills/README.md)
-> Runtime extension 实现契约：[`ash-rs/ext/skills/README.md`](../ash-rs/ext/skills/README.md)
-> 通用扩展生命周期：[`ash-rs/ext/extension-api/README.md`](../ash-rs/ext/extension-api/README.md)
+> Crate 实现契约：[`crates/skills/README.md`](../crates/skills/README.md)
+> Runtime extension 实现契约：[`crates/ext/skills/README.md`](../crates/ext/skills/README.md)
+> 通用扩展生命周期：[`crates/ext/extension-api/README.md`](../crates/ext/extension-api/README.md)
 > Core architecture：[`core.md`](core.md)
 > Agent runtime：[`ash-agent-runtime-architecture.md`](ash-agent-runtime-architecture.md)
 > Config authority 与 runtime snapshot 接入：[`config.md`](config.md)
 > Instructions/Skills/Agents 领域划分与外部导入：[`agent-customizations.md`](agent-customizations.md)
-> Marketplace package 入口：[`core-plugins.md`](../ash-rs/docs/core-plugins.md)
+> Marketplace package 入口：[`core-plugins.md`](../crates/docs/core-plugins.md)
 > Legacy Plugin 兼容来源：[`plugins.md`](plugins.md)
 > MCP runtime：[`mcp.md`](mcp.md)
 
@@ -63,11 +63,11 @@ Skill 内容是带来源的外部 instruction：
 
 当前 `ash-skills` 已实现 S0 format/catalog：built-in/user/Directory controlled root、bounded
 frontmatter parse、metadata-only scan、完整 `SKILL.md` digest、isolated diagnostic 和 immutable
-catalog generation。内置内容由 `ash-rs/skills/assets/` 拥有，release staging 将其复制到
+catalog generation。内置内容由 `crates/skills/assets/` 拥有，release staging 将其复制到
 `ash-resources/skills/`，`ash-install-context` 提供 directory candidate，host 再构造
 `SkillSourceRoot::built_in`。当前正式内置内容包括 `skill-creator` 和 `create-instructions`；新增 built-in 需要明确的
 产品语义、触发边界和选择评测，不能把 catalog fixture 直接升级为产品能力。实现细节与 limits 由
-[`ash-rs/skills/README.md`](../ash-rs/skills/README.md) 维护。
+[`crates/skills/README.md`](../crates/skills/README.md) 维护。
 
 `ash-skills-extension` 当前拥有 catalog runtime：它组合 release built-in root、user config 中
 明确 enabled 的绝对 source root 和 active Directory 的 `.ash/skills`，叠加 durable per-Skill
@@ -219,7 +219,7 @@ App Server 只在组合根安装 extension，并把 Config、RPC DTO 和 `skills
 - `ash-skills` 不依赖 `ash-core`、stores、App Server 或 Plugin live manager；
 - `ash-file-identity` 只提供已打开文件的跨平台 identity/link-count，不拥有 Skill path
   policy；具体 Win32/Unix contract 见
-  [`ash-rs/file-identity/README.md`](../ash-rs/file-identity/README.md)；
+  [`crates/file-identity/README.md`](../crates/file-identity/README.md)；
 - Skill source 以窄 `SkillSourceRoot`/file resolver port 注入；
 - Marketplace Manager 或 legacy Plugin authority 只提供 immutable exact root，Skill manager 仍重新校验 Skill format；
 - Core ContextAssembler 只接收通用 `PromptFragment`，不依赖 Skill catalog 或 filesystem；
@@ -343,7 +343,7 @@ availability 或 diagnostic 变化才递增 generation。
 当前 `ash-file-watcher` 已提供共享、多订阅者的 filesystem invalidation substrate：
 `PathsChanged` 传递排序去重后的 coarse path hint，backend error/overflow 通过
 `RescanRequired` 传递 subscriber 自己的 watched roots。其 backend/ref-count/path fallback contract
-由 [`ash-rs/file-watcher/README.md`](../ash-rs/file-watcher/README.md) 维护。
+由 [`crates/file-watcher/README.md`](../crates/file-watcher/README.md) 维护。
 
 Watcher 仍只发 invalidation hint。当前 App Server adapter 订阅 built-in/user roots、active
 Directory 的 `.ash/skills` 与 user config authority path。目录不存在时，保留目标的递归监听意图，
@@ -696,7 +696,7 @@ Skill install/remove 不属于 Skill manager：
 
 ### 15.1 外部 Agent Skill 导入（仅限 Desktop）
 
-[`external-agent-migration`](../ash-rs/external-agent-migration/README.md) 当前已经能只读发现 Codex 的
+[`external-agent-migration`](../crates/external-agent-migration/README.md) 当前已经能只读发现 Codex 的
 `~/.agents/skills`、项目 `.agents/skills`、Claude 的 `~/.claude/skills` 和项目
 `.claude/skills`（含 Claude commands 候选），并把 canonical path、来源、scope 与 review
 category 放入 `AgentPathInspection`，同时在 `MigrationPlan` 中给出 skill 名称清单；它不读取或
@@ -725,7 +725,7 @@ Desktop 导入，其 Skill 可以与其他来源一起出现在 TUI catalog 中�
 边界，不属于通用 `utils`；只有不理解外部 Agent 格式的路径规范化、目录 containment 和文件
 identity 原语可以下沉到已有基础 crate。Desktop 交互所有权与其他外部配置类型的映射见
 [`ash-desktop-architecture.md`](ash-desktop-architecture.md#22-外部-agent-配置导入仅限-desktop)；
-TUI 当前不提供外部 Agent 导入入口；Ash Code 的公共边界以其[API 入口](../code/README.md)为准。
+TUI 当前不提供外部 Agent 导入入口；Ash Code 的公共边界以其[API 入口](../crates/tui/README.md)为准。
 
 目录贡献不是 Import。`ash-file-access` 拥有目录来源与能力契约；只有带 `DiscoverSkills` 的有效 Grant 才能发现 Skill。该发现可以复用 `external-agent-migration` 的安全路径检查，但不写入 Config、不产生 imported source，也不改变 `cwd`。完整语义见 [`environment-access.md`](environment-access.md#5-来源权限取代目录-trust)。
 
@@ -774,7 +774,7 @@ CatalogStale
 ## 18. 目标目录
 
 ```text
-ash-rs/skills/src/
+crates/skills/src/
 ├── lib.rs
 ├── identity.rs
 ├── source.rs

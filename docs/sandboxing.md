@@ -1,6 +1,6 @@
 # 沙箱架构
 
-Ash 的 `sandboxing` 拥有统一权限契约和执行前的后端选择。请求先确定最低隔离要求，再选择能实施该请求的后端；选择过程不得改变隔离模型。目标覆盖 Codex 的本地命令、交互终端、持续执行会话、文件权限及受管网络能力。本文维护长期契约与实现边界，MXC 文档依据、平台差异、实施与验收见 [Codex 本地执行对齐方案](../ash-rs/docs/mxc-sandbox-windows-fallback.md)。
+Ash 的 `sandboxing` 拥有统一权限契约和执行前的后端选择。请求先确定最低隔离要求，再选择能实施该请求的后端；选择过程不得改变隔离模型。目标覆盖 Codex 的本地命令、交互终端、持续执行会话、文件权限及受管网络能力。本文维护长期契约与实现边界，MXC 文档依据、平台差异、实施与验收见 [Codex 本地执行对齐方案](../crates/docs/mxc-sandbox-windows-fallback.md)。
 
 ## 调用与所有权
 
@@ -38,7 +38,7 @@ flowchart TD
 
 ## 选择与执行
 
-以下是执行契约。当前 SDK 的能力探测仍存在错误分类缺口，修复要求和完成状态见 [能力检查与错误分类](../ash-rs/docs/mxc-sandbox-windows-fallback.md#能力检查与错误分类)。
+以下是执行契约。当前 SDK 的能力探测仍存在错误分类缺口，修复要求和完成状态见 [能力检查与错误分类](../crates/docs/mxc-sandbox-windows-fallback.md#能力检查与错误分类)。
 
 1. Executor 为已授权请求建立代理，Manager 验证并解析工作目录。
 2. `SandboxBackends` 按注册顺序准备候选；每个候选收到完整且相同的策略和目录范围。
@@ -49,7 +49,7 @@ flowchart TD
 7. 结束时终止并等待进程树，排空输出，再释放隔离资源和代理。
 
 注册的候选必须完整实施请求。准备出普通进程不能满足受限请求；只有显式 `FullAccess + Allowed` 且单目录、无隐藏范围时使用普通进程。
-能力检查可以创建并释放临时 PSEC 环境，但不能启动用户命令、配置账户或修改持久 ACL/WFP 规则。失败和清理错误都需要保留。发布资格与运行时能力是两项独立要求，见方案的 [发布条件](../ash-rs/docs/mxc-sandbox-windows-fallback.md#发布条件)。
+能力检查可以创建并释放临时 PSEC 环境，但不能启动用户命令、配置账户或修改持久 ACL/WFP 规则。失败和清理错误都需要保留。发布资格与运行时能力是两项独立要求，见方案的 [发布条件](../crates/docs/mxc-sandbox-windows-fallback.md#发布条件)。
 
 ## 权限契约
 
@@ -87,7 +87,7 @@ macOS 策略固定可写根和受保护路径的祖先目录，防止移动目�
 
 - 保留 `Denied`、`Managed`、`Allowed` 作为产品的常用选择；完整请求分别表达外连、入站、宿主回环及本地进程通信。后端能力耦合不能成为修改授权的理由。
 - `Managed` 的目标授权由 Ash 代理实施。MXC 负责使代理可达并限制其他出口，不会替外部代理安装域名规则，也不会把任意 TCP/UDP 客户端透明转换成 HTTP 代理客户端。
-- Windows PSEC 的代理身份、私有网络双向能力与 Ash 默认禁止入站存在接入约束；适配器在准备阶段拒绝不能保持禁止未授权入站的 Managed 组合。具体处理与未完成项见 [Windows 代理接入](../ash-rs/docs/mxc-sandbox-windows-fallback.md#windows-代理接入)。
+- Windows PSEC 的代理身份、私有网络双向能力与 Ash 默认禁止入站存在接入约束；适配器在准备阶段拒绝不能保持禁止未授权入站的 Managed 组合。具体处理与未完成项见 [Windows 代理接入](../crates/docs/mxc-sandbox-windows-fallback.md#windows-代理接入)。
 - Unix socket 是独立的 IPC 权限，不再用 IP 网络是否受限决定全部禁止。目标是在本次执行的私有临时目录中允许构建工具需要的 socket，并显式拒绝 Docker、SSH/GPG agent 及其他任务的 socket；不得通过授予整个共享临时目录来取得兼容性。
 - macOS 没有私有 TCP 回环；Seatbelt 的宿主回环限制也会影响同一任务的 TCP 服务。后台开发服务器须带明确监听授权，或采用可实施的 IPC/转发方案；不支持的入站组合应拒绝。
 
@@ -107,7 +107,7 @@ macOS 策略固定可写根和受保护路径的祖先目录，防止移动目�
 - 输入关闭、前台中断和整个进程树终止分别表达。输出需要有界缓存及明确的截断/缺口信息；PTY 的 stdout/stderr 合并，管道保持分离。终态在回收进程树及排空尾部输出后确定。
 - 复用执行进程的生命周期，不引入 MXC 命名容器来模拟会话。进程退出后本次隔离资源结束；不承诺 App Server 重启后仍可重新接入已退出或已回收的进程。
 
-目标能力与准确的 MXC Rust SDK 接入要求见 [执行会话与 PTY](../ash-rs/docs/mxc-sandbox-windows-fallback.md#执行会话与-pty)。
+目标能力与准确的 MXC Rust SDK 接入要求见 [执行会话与 PTY](../crates/docs/mxc-sandbox-windows-fallback.md#执行会话与-pty)。
 
 ## MXC 接入边界
 
@@ -117,11 +117,11 @@ macOS 策略固定可写根和受保护路径的祖先目录，防止移动目�
 - Linux 与 macOS 继续通过同一适配器接入 Bubblewrap 和 Seatbelt。Bubblewrap 在启动时安装禁止 `AF_VSOCK` 的 seccomp 过滤器，阻止 WSL 互操作创建不受 Linux 命名空间约束的 Windows 进程；过滤器由后代继承。
 - 本轮自写 `mxc-user` 账户运行器已退出源码、编译、打包、签名和 CI 配置；不再安装它。
 
-补丁来源与校验见 [MXC 依赖](../ash-rs/vendor/mxc/README.md)。原型源码与校验清单保存在本机 `.build/acceptance/mxc-local/prototype-source`，历史测试与系统清理结果保留在 [Windows 验收手册](windows-sandbox-acceptance-runbook.md)。
+补丁来源与校验见 [MXC 依赖](../crates/vendor/mxc/README.md)。原型源码与校验清单保存在本机 `.build/acceptance/mxc-local/prototype-source`，历史测试与系统清理结果保留在 [Windows 验收手册](windows-sandbox-acceptance-runbook.md)。
 
 固定版本的 [上游说明](https://github.com/microsoft/mxc/blob/c45e7d5a485036d88f469aa363efaa3c651564bc/README.md) 已移除早期预览声明。Ash 的隔离保证仍以所用策略、受审查补丁和对应平台实机证据为依据；不能仅凭 SDK 版本或后端名称宣布完成产品验收。
 
-2026-09-12 另核对本地 MXC `567570084f1ebaca539b0a3186aeb68bca77788a` 的 SDK、平台及诊断文档。它用于发现接入限制和升级差异，不代表 Ash 已升级。文档中的 JSON、Rust SDK、命令行和设计提案分别核对，不能把某个入口的能力当作所有入口已实现；依据与失败原因见 [MXC 文档复核](../ash-rs/docs/mxc-sandbox-windows-fallback.md#mxc-文档复核与接入纠正)。
+2026-09-12 另核对本地 MXC `567570084f1ebaca539b0a3186aeb68bca77788a` 的 SDK、平台及诊断文档。它用于发现接入限制和升级差异，不代表 Ash 已升级。文档中的 JSON、Rust SDK、命令行和设计提案分别核对，不能把某个入口的能力当作所有入口已实现；依据与失败原因见 [MXC 文档复核](../crates/docs/mxc-sandbox-windows-fallback.md#mxc-文档复核与接入纠正)。
 
 ## Windows 候选评估
 
@@ -148,9 +148,9 @@ Codex 的专用账户实现是行为参考。Ash 不直接注册其产品 crate�
 
 这里的宿主安装授权与 `HostAclChanges::Scoped` 不同：后者仍只覆盖 Grant 与隐藏目录，不能批准账户创建、持久网络规则、NUL 或其他宿主路径的修改。接入后也必须保留这一区别。
 
-独立实现位于 [`windows-sandbox`](../ash-rs/windows-sandbox/README.md)，不复用 Codex 的账户、服务、管道或包身份。它从冻结的 InstallContext 获取 Ash helper，使用路径和文件摘要绑定已授权的安装；安装和修复不进入普通执行路径。
+独立实现位于 [`windows-sandbox`](../crates/windows-sandbox/README.md)，不复用 Codex 的账户、服务、管道或包身份。它从冻结的 InstallContext 获取 Ash helper，使用路径和文件摘要绑定已授权的安装；安装和修复不进入普通执行路径。
 
-2026-10-02 起，管理操作由独立 [`windows-sandbox-service`](../ash-rs/windows-sandbox-service/README.md) 处理。SCM 生命周期和管道认证归服务，账户及执行机制归 Windows 平台库；请求中没有可自报的用户 SID、命令或运行时根目录。程序和账户状态由管理员持有，执行只读取已完成的安装记录。更新独占所有账户租约后替换运行器，保留账户和网络对象；中断记录须通过明确管理操作处理。这项服务改造不扩大 WindowsAccount 的隔离保证，也不改变 MXC 的 PSEC 能力要求。
+2026-10-02 起，管理操作由独立 [`windows-sandbox-service`](../crates/windows-sandbox-service/README.md) 处理。SCM 生命周期和管道认证归服务，账户及执行机制归 Windows 平台库；请求中没有可自报的用户 SID、命令或运行时根目录。程序和账户状态由管理员持有，执行只读取已完成的安装记录。更新独占所有账户租约后替换运行器，保留账户和网络对象；中断记录须通过明确管理操作处理。这项服务改造不扩大 WindowsAccount 的隔离保证，也不改变 MXC 的 PSEC 能力要求。
 
 2026-09-11 实机追踪确认：移除限制 SID 中的 Everyone 后，Windows PowerShell 的 CLR 调用 `NtCreatePrivateNamespace` 返回 `STATUS_ACCESS_DENIED`。该调用的边界描述符包含 Everyone。增加 `BaseNamedObjects` 目录权限不能替代这项检查；相关试验权限已撤销，产品安装清单不保留这些目录授权。
 

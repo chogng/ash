@@ -1,0 +1,24 @@
+---
+source: crates/tui/src/app/announcement_tests.rs
+expression: text
+---
+  公告：Ash 有新版本可用。运行 ash update       
+  升级。                                        
+  .                                   [仪表盘]  
+                                                
+                                                
+                                                
+                                                
+                                                
+                                                
+                                                
+                                                
+                                                
+                                                
+                                                
+                                                
+  ────────────────────────────────────────────  
+  > Keep this draft                             
+  ────────────────────────────────── 自动模型   
+                                                
+  ⏸ 手动

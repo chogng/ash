@@ -97,55 +97,52 @@ class SpellcheckTests(unittest.TestCase):
     ) -> None:
         for name in (
             "third_party/library/README.md",
-            "ash-rs/vendor/library/src/lib.rs",
-            "app-ts/src/generated/client.ts",
-            "app-ts/src/fixtures/example.ts",
-            "ash-rs/example/src/parser_tests.rs",
-            "app-ts/src/example.test.ts",
+            "crates/vendor/library/src/lib.rs",
+            "src/generated/client.ts",
+            "src/fixtures/example.ts",
+            "crates/example/src/parser_tests.rs",
+            "src/example.test.ts",
             "extensions/example/syntaxes/example.json",
-            "app-ts/localization/fr/strings.json",
-            "app-rs/input-classifier/dictionaries/stems.txt",
+            "localization/fr/strings.json",
             "docs/tools/captured-prompt.md",
         ):
             self.write(name, MISSPELLING)
         self.write(
-            "ash-rs/example/src/lib.rs",
+            "crates/example/src/lib.rs",
             'french: "autorisation", english: "Manual"\n',
         )
         result = self.check()
         self.assertEqual(result.returncode, 0, result.stdout)
 
-        self.write("ash-rs/example/src/lib.rs", MISSPELLING)
+        self.write("crates/example/src/lib.rs", MISSPELLING)
         result = self.check()
         self.assertEqual(result.returncode, 65, result.stdout)
-        self.assertIn("ash-rs/example/src/lib.rs", result.stdout)
+        self.assertIn("crates/example/src/lib.rs", result.stdout)
 
-        self.write("ash-rs/example/src/lib.rs", "receive")
-        self.write(
-            "app-ts/localization/en/strings.json", f'{{"message": "{MISSPELLING}"}}'
-        )
+        self.write("crates/example/src/lib.rs", "receive")
+        self.write("localization/en/strings.json", f'{{"message": "{MISSPELLING}"}}')
         result = self.check()
         self.assertEqual(result.returncode, 65, result.stdout)
-        self.assertIn("app-ts/localization/en/strings.json", result.stdout)
+        self.assertIn("localization/en/strings.json", result.stdout)
 
     def test_mixed_translation_sources_keep_english_checked(self) -> None:
         self.write(
-            "code/tui/src/nls.rs",
+            "crates/tui/src/nls.rs",
             'english: "Branch", french: "branche",\n',
         )
         result = self.check()
         self.assertEqual(result.returncode, 0, result.stdout)
 
         self.write(
-            "code/tui/src/nls.rs",
+            "crates/tui/src/nls.rs",
             f'english: "{MISSPELLING}", french: "branche",\n',
         )
         result = self.check()
         self.assertEqual(result.returncode, 65, result.stdout)
-        self.assertIn("code/tui/src/nls.rs", result.stdout)
+        self.assertIn("crates/tui/src/nls.rs", result.stdout)
 
     def test_test_directories_and_spec_files_are_not_excluded_wholesale(self) -> None:
-        for name in ("test/README.md", "tests/README.md", "app-ts/test/check.spec.ts"):
+        for name in ("test/README.md", "tests/README.md", "test/check.spec.ts"):
             with self.subTest(name=name):
                 path = self.write(name, MISSPELLING)
                 result = self.check()

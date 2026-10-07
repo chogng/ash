@@ -1,0 +1,24 @@
+---
+source: crates/tui/src/app/fullscreen/frame_tests.rs
+expression: rendered
+---
+  .                                                                [Dashboard]  
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                          image in clipboard · ctrl+v to paste  
+  ────────────────────────────────────────────────────────────────────────────  
+  >                                                                             
+  ─────────────────────────────────────────────────────────── Automatic model   
+                                                                                
+  ⏸ Manual · ← Dashboard · ? for shortcuts

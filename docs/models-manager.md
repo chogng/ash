@@ -1,14 +1,14 @@
 # 模型目录系统
 
-> 物理位置：`ash-rs/models-manager/`
+> 物理位置：`crates/models-manager/`
 > Rust crate：`ash_models_manager`
 > 当前状态：Phase 1 core、Ollama/ChatGPT/xAI/Kimi 及部分 API 连接的动态目录、按供应商分文件的持久缓存已实现；跨 provider 的 Agent 模型选择和完整 App Server snapshot API 尚未实现
-> Crate 实现说明：[`ash-models-manager` README](../ash-rs/models-manager/README.md)
-> Canonical model contract：[`ash-protocol` model catalog](../ash-rs/protocol/src/model/catalog.rs)
+> Crate 实现说明：[`ash-models-manager` README](../crates/models-manager/README.md)
+> Canonical model contract：[`ash-protocol` model catalog](../crates/protocol/src/model/catalog.rs)
 > Provider wire adapter：[`ash-api.md`](ash-api.md)
 > Provider runtime：[`model-provider.md`](model-provider.md)
 > Operation client：[`ash-client.md`](ash-client.md)
-> 底层网络：[`ash-http-client` README](../ash-rs/http-client/README.md)
+> 底层网络：[`ash-http-client` README](../crates/http-client/README.md)
 
 > 官方资料核对日期：2026-07-25。Provider API 与模型生命周期会持续变化，本文固定架构边界和
 > 合并语义；具体 endpoint、字段映射与内置 metadata 必须以实现时的官方文档和 contract test
@@ -125,7 +125,7 @@ model provider 负责“如何用已选模型执行一次调用”
 - capability/workload/visibility filter；
 - `(ProviderId, ModelId)` 的解析、校验和稳定排序；
 - 启动前的 provider 无关模型选择：请求模型、同 provider 候选、跨 provider 候选、兼容性检查和替换说明；
-- 模型专化 instructions 的资产、revision 与准确模型选择；所有 Agent 共用规则由 `ash-prompts` 拥有，详见 [指令组合](../ash-rs/docs/agent-instructions.md)；
+- 模型专化 instructions 的资产、revision 与准确模型选择；所有 Agent 共用规则由 `ash-prompts` 拥有，详见 [指令组合](../crates/docs/agent-instructions.md)；
 - immutable `ModelCatalogSnapshot` 及 generation 变化；
 - cache/refresh/merge 的诊断信息和不含秘密的 telemetry。
 
@@ -818,7 +818,7 @@ Availability、freshness、source quality 和 warnings 属于 `ModelCatalogEntry
 只保留序列化模型字段。已知窗口限制用户配置窗口；未给出压缩阈值时采用有效窗口的 90%，显式
 阈值也受此上限限制。调用方在独立副本上获得有效信息，不改写目录事实和来源。
 Context builder 根据有效信息、输出预留和安全余量计算可用输入预算；manager 不执行压缩。
-职责对照和当前静态调用预算边界见 [crate 说明](../ash-rs/models-manager/README.md#有效模型信息与职责)。
+职责对照和当前静态调用预算边界见 [crate 说明](../crates/models-manager/README.md#有效模型信息与职责)。
 
 ### 11.2 App Server API
 
@@ -914,7 +914,7 @@ catalog_stale_age_seconds{provider}
 遵守 workspace 的小模块和公开 API 规则，建议：
 
 ```text
-ash-rs/models-manager/
+crates/models-manager/
 ├── Cargo.toml
 ├── README.md
 └── src/

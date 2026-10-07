@@ -14,6 +14,10 @@ import tomllib
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from build.lib.cargo import read_source_layout  # noqa: E402
+
 SHEAR_VERSION = "1.13.4"
 SECTIONS = ("dependencies", "build-dependencies", "dev-dependencies")
 AGENT_HANDLERS = (
@@ -104,6 +108,7 @@ def boundary_errors(root: Path, metadata: dict) -> list[str]:
         name: sorted({d["name"] for d in p["dependencies"] if d["kind"] != "dev"})
         for name, p in packages.items()
     }
+    terminal = set(read_source_layout()["terminalCrates"])
     errors = []
     for start, parts in paths.items():
         queue = deque([(start, [start])])
@@ -118,13 +123,15 @@ def boundary_errors(root: Path, metadata: dict) -> list[str]:
                 destination = paths.get(dependency, ())
                 forbidden = (
                     (
-                        parts[0] in {"ash-rs", "app-rs"}
-                        and dependency in {"ash-cli", "ash-tui"}
-                    )
-                    or (
-                        parts[0] == "ash-rs"
-                        and destination
-                        and destination[0] in {"app-rs", "code", "ash-cli"}
+                        parts[0] == "crates"
+                        and (
+                            dependency == "ash-cli"
+                            or (
+                                parts[1] not in terminal
+                                and destination[:1] == ("crates",)
+                                and destination[1] in terminal
+                            )
+                        )
                     )
                     or (
                         start == "ash-app-server-daemon"
@@ -162,7 +169,7 @@ def agent_handler_errors(root: Path) -> list[str]:
         r"(?:threads|multi_agent|turn_backend|turn_executor_snapshot)\b"
     )
     for name in AGENT_HANDLERS:
-        path = root / "ash-rs/app-server/src/server" / name
+        path = root / "crates/app-server/src/server" / name
         if not path.is_file():
             errors.append(
                 f"{path.relative_to(root)}: missing Agent handler; update its boundary rule"

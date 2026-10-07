@@ -1,0 +1,24 @@
+---
+source: crates/tui/src/app/interaction_flow_tests.rs
+expression: "render(&restored, 80, 20)"
+---
+  .                                                                [Dashboard]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ────────────────────────────────────────────────────────────────────────────
+  > conversation draft
+  ─────────────────────────────────────────────────────────── Automatic model
+
+  ⏸ Manual

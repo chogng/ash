@@ -1,8 +1,8 @@
 import type { Page } from '@playwright/test';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
-import type { PlaywrightApplication, PlaywrightDriver } from '../../../app-ts/test/automation/playwrightDriver.ts';
-import type { Workbench } from '../../../app-ts/test/automation/workbench.ts';
+import type { PlaywrightApplication, PlaywrightDriver } from '../../automation/playwrightDriver.ts';
+import type { Workbench } from '../../automation/workbench.ts';
 import { ApplicationService, type JSONValue } from './application.ts';
 import { EvidenceService, type StepBlocker } from './evidence.ts';
 import { parseRunnerOptions } from './options.ts';

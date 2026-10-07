@@ -21,15 +21,14 @@ def package(name: str, path: str, *dependencies: str) -> dict:
 class CiImpactTests(unittest.TestCase):
     def setUp(self) -> None:
         packages = [
-            package("ash-tui", "code/tui", "shared"),
+            package("ash-tui", "crates/tui", "shared"),
             package("ash-cli", "ash-cli", "shared"),
-            package("ash-app-server", "ash-rs/app-server", "shared"),
-            package("ash-app-server-daemon", "ash-rs/app-server-daemon"),
-            package("ash-remote-server", "ash-rs/remote-server"),
-            package("shared", "ash-rs/shared", "leaf"),
-            package("leaf", "ash-rs/leaf"),
-            package("app", "app-rs", "unrelated"),
-            package("unrelated", "ash-rs/unrelated"),
+            package("ash-app-server", "crates/app-server", "shared"),
+            package("ash-app-server-daemon", "crates/app-server-daemon"),
+            package("ash-remote-server", "crates/remote-server"),
+            package("shared", "crates/shared", "leaf"),
+            package("leaf", "crates/leaf"),
+            package("unrelated", "crates/unrelated"),
         ]
         self.metadata = {
             "packages": packages,
@@ -38,10 +37,10 @@ class CiImpactTests(unittest.TestCase):
 
     def test_product_and_transitive_dependency_changes_run_tui(self) -> None:
         for path in (
-            "code/tui/src/lib.rs",
-            "ash-rs/leaf/src/lib.rs",
-            "ash-rs/app-server/src/lib.rs",
-            "code/tui/src/view.snap",
+            "crates/tui/src/lib.rs",
+            "crates/leaf/src/lib.rs",
+            "crates/app-server/src/lib.rs",
+            "crates/tui/src/view.snap",
         ):
             with self.subTest(path=path):
                 self.assertTrue(ci_impact.tui_affected([path], self.metadata, ROOT))
@@ -49,7 +48,7 @@ class CiImpactTests(unittest.TestCase):
     def test_unrelated_package_changes_skip_tui(self) -> None:
         self.assertFalse(
             ci_impact.tui_affected(
-                ["app-rs/src/main.rs", "ash-rs/unrelated/src/lib.rs"],
+                ["crates/unrelated/src/lib.rs"],
                 self.metadata,
                 ROOT,
             )
@@ -62,7 +61,7 @@ class CiImpactTests(unittest.TestCase):
             "scripts/cargo.py",
             "build/lib/targets.py",
             "third_party/ripgrep/runtime-lock.json",
-            "ash-rs/deleted/src/lib.rs",
+            "crates/deleted/src/lib.rs",
             "build/code/run.py",
         ):
             with self.subTest(path=path):

@@ -1,0 +1,10 @@
+---
+source: crates/tui/src/models/effort_selector_tests.rs
+expression: content
+---
+      更快                     更聪明
+      ───────────────────────────▲───    多任务  开启
+        low        high         max
+
+              最高推理强度，可能消耗更多 token
+               并耗时更长，适合最困难的任务。

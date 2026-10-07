@@ -3,12 +3,12 @@
 > 本文是 Ash 编辑器扩展的职责、运行方式与权限边界的权威说明。
 > 产品方向已确定为：扩展用 TS 编写，编译后的 JS 在 Rust 管理的独立 V8 宿主内运行，通过 TS SDK 调用编辑器服务或 Rust 后端。
 > 第三方扩展包来源选用 Open VSX；市场接入与扩展运行兼容性分别建设和验证。
-> 静态包与资源实现见 [`ash-rs/extension-catalog/README.md`](../ash-rs/extension-catalog/README.md)，
-> Workbench 接入见 [`app-ts/src/ash/workbench/services/extensions/README.md`](../app-ts/src/ash/workbench/services/extensions/README.md)。
+> 静态包与资源实现见 [`crates/extension-catalog/README.md`](../crates/extension-catalog/README.md)，
+> Workbench 接入见 [`src/ash/workbench/services/extensions/README.md`](../src/ash/workbench/services/extensions/README.md)。
 > 进程监管与权限门禁继续复用
-> [`ash-rs/editor-extension-host/README.md`](../ash-rs/editor-extension-host/README.md)；作者接口见
-> [`TS SDK`](../app-ts/extension-sdk/README.md)，JS 执行见 [`Rust V8 宿主`](../ash-rs/js-extension-host/README.md)。
-> Marketplace 安装由 [`core-plugins.md`](../ash-rs/docs/core-plugins.md) 维护，
+> [`crates/editor-extension-host/README.md`](../crates/editor-extension-host/README.md)；作者接口见
+> [`TS SDK`](../extension-sdk/README.md)，JS 执行见 [`Rust V8 宿主`](../crates/js-extension-host/README.md)。
+> Marketplace 安装由 [`core-plugins.md`](../crates/docs/core-plugins.md) 维护，
 > Plugin 来源授权由 [`plugins.md`](plugins.md) 维护。
 
 ## 快速理解
@@ -161,7 +161,7 @@ macOS 产品宿主先读取包快照并初始化 V8，再通过 Seatbelt 禁止�
 共享、可调整大小的缓冲区和 WebAssembly 不开放，因为其分配绕过该 ArrayBuffer 接口。独立可执行扩展的原有系统硬限制不变。
 其他系统目前拒绝产品 JS 执行；Open VSX 下载包不会自动选用此入口。
 
-作者可运行 `pnpm --dir app-ts/extension-sdk build:example`，得到 `.build/extension-sdk/` 下的 JS 与 Plugin manifest。
+作者可运行 `pnpm --dir extension-sdk build:example`，得到 `.build/extension-sdk/` 下的 JS 与 Plugin manifest。
 真实子进程测试覆盖 SDK→前端文档调用、SDK→Rust 磁盘读取、错误、取消、新运行实例和停用释放；
 当前不是完整 VS Code API，也尚未向公共 npm registry 发布 SDK。
 
@@ -179,15 +179,15 @@ GitHub 请求，以及 Git 和持久化。扩展取得所需业务结果，不�
 | 打开文件或 Diff         | 使用工作台编辑器和当前文档模型                         | 提供所需 Git 对象或远端内容                              |
 | 保存数据                | 保存扩展范围内的持久数据请求；窗口显示状态仍由 TS 管理 | 校验存储范围并持久化，隔离不同扩展的数据                 |
 
-仓库已经有 [`IGitHubService`](../app-ts/src/ash/platform/github/common/githubService.ts) 和
-[`AppServerGitHubService`](../app-ts/src/ash/platform/github/browser/appServerGitHubService.ts)，
-后者通过生成协议调用 [`App Server GitHub processor`](../ash-rs/app-server/src/server/request_processors/github.rs)
-和 [`ash-rs/github`](../ash-rs/github/README.md)。这条产品服务路径可以作为 SDK 接入的后端能力来源；
+仓库已经有 [`IGitHubService`](../src/ash/platform/github/common/githubService.ts) 和
+[`AppServerGitHubService`](../src/ash/platform/github/browser/appServerGitHubService.ts)，
+后者通过生成协议调用 [`App Server GitHub processor`](../crates/app-server/src/server/request_processors/github.rs)
+和 [`crates/github`](../crates/github/README.md)。这条产品服务路径可以作为 SDK 接入的后端能力来源；
 当前产品账号授权不等于第三方扩展授权，不能把现有服务或完整连接直接交给扩展。
 GitHub 的独立 TS 扩展入口、TS SDK 的 GitHub API 和逐扩展权限接入尚未完成。
 
 代码在 `extensions/` 或 `src/` 不决定它是否交给 Rust。扩展特有流程在扩展包，通用编辑器和界面
-服务在 TS `src/ash`，共享后端业务在 `ash-rs`。迁移依据是能力和状态由谁管理，不是上游目录名。
+服务在 TS `src/ash`，共享后端业务在 `crates`。迁移依据是能力和状态由谁管理，不是上游目录名。
 
 ### 0.3 权限必须在运行环境和服务端执行
 
@@ -473,7 +473,7 @@ request ID、无效 Output 操作、超限 frame/Output 队列或未声明 capab
 这两类注册分别要求 manifest 声明 `dataChannel`、`linkPresentationProvider` capability。数据通道只
 接收前端发布的数据；链接供应商只接收正在展示的匹配 URI。查询结果按平台类型校验后以文本更新链接，
 不会执行扩展返回的 HTML。订阅队列、更新周期、取消与迟到结果隔离约定见
-[Host RPC v1](../ash-rs/editor-extension-host/README.md#4-host-rpc-v1)。产品不收集或上传遥测；
+[Host RPC v1](../crates/editor-extension-host/README.md#4-host-rpc-v1)。产品不收集或上传遥测；
 `editTelemetry` 目前只发布补全接受状态与持续时间，扩展订阅不等同于新增产品遥测采集。
 
 扩展命名 Output 是带背压的事件流，不是静态 registration kind，也不扩大 manifest capability ceiling。
@@ -633,8 +633,8 @@ Open VSX 安装与基础 JS 执行已接入，不表示全部扩展 API、平台
 迁移时按实际受影响包选择对应检查，TS/JS 扩展还必须验证真实 Web/Electron 入口与第 0 节权限行为。
 
 ```text
-pnpm --dir app-ts/extension-sdk typecheck
-pnpm --dir app-ts/extension-sdk build:example
+pnpm --dir extension-sdk typecheck
+pnpm --dir extension-sdk build:example
 just check ash-js-extension-host
 just test ash-js-extension-host
 just rust-warnings ash-js-extension-host
@@ -646,15 +646,15 @@ just test ash-core-plugins live_open_vsx -- --ignored
 just test ash-app-server marketplace
 just test ash-app-server product_services
 just generate-protocol
-pnpm --dir app-ts typecheck:renderer
+pnpm typecheck:renderer
 just test ash-editor-extension-protocol
 just test ash-editor-extension-host
 just test ash-extensions
-powershell -NoProfile -ExecutionPolicy Bypass -File ash-rs/editor-extension-host/check-standalone.ps1
-pnpm --dir app-ts test:extensions
-pnpm --dir app-ts typecheck:extensions
-pnpm --dir app-ts test:unit
-pnpm --dir app-ts test:build-tools
+powershell -NoProfile -ExecutionPolicy Bypass -File crates/editor-extension-host/check-standalone.ps1
+pnpm test:extensions
+pnpm typecheck:extensions
+pnpm test:unit
+pnpm test:build-tools
 ```
 
 `test:extensions` 与 `typecheck:extensions` 覆盖静态链、Host transport 与 Workbench Provider 接口。
@@ -664,7 +664,7 @@ App Server 测试覆盖共享目录接入、精确包授权持久化、revision 
 真实市场验证显式启用网络，不纳入默认离线测试：
 
 ```sh
-ASH_PLAYWRIGHT_OPEN_VSX=1 pnpm --dir app-ts run test:smoke:desktop test/smoke/areas/chat/marketplace.spec.ts --grep 'Open VSX installs|Open VSX JavaScript'
+ASH_PLAYWRIGHT_OPEN_VSX=1 pnpm run test:smoke:desktop test/smoke/areas/chat/marketplace.spec.ts --grep 'Open VSX installs|Open VSX JavaScript'
 ```
 
 该 Electron 测试下载 Dracula，检查安装后主题可选、使用同一 profile 重新打开进程后安装仍在、

@@ -121,7 +121,7 @@ Thread owner 和当前执行器，不创建第二份状态，也不增加进程�
 `ThreadController`、`TurnExecutor`、归约与恢复仍在 Core。`ToolService`、工具授权凭据及
 执行事实继续留在 Core，避免为了拆 crate 而公开原本受限的授权构造方法。
 领域值仍由 `protocol` 拥有，存储接口仍由 `thread-store` 拥有；产品客户端继续通过
-App Server 接入。契约清单见 [`ash-core-api`](../ash-rs/core-api/README.md)。
+App Server 接入。契约清单见 [`ash-core-api`](../crates/core-api/README.md)。
 
 `just dependencies` 检查契约 crate 的间接依赖，并检查 Agent 请求、会话、队列、自动化、
 角色选择与交互计时模块的 Core 实现访问。装配和工具适配代码遵循各自职责。

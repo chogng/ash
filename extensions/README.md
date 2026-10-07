@@ -3,7 +3,7 @@
 > This README owns the repository package-set and distribution contract. The cross-layer runtime,
 > trust, refresh, and evolution contract is maintained in
 > [`docs/editor-extensions.md`](../docs/editor-extensions.md); the Rust catalog implementation is
-> documented in [`ash-rs/extension-catalog/README.md`](../ash-rs/extension-catalog/README.md).
+> documented in [`crates/extension-catalog/README.md`](../crates/extension-catalog/README.md).
 
 This directory contains extension package sources and declarative resources shipped with Ash. Packaging
 places the same directory under `ash-resources/extensions/`.
@@ -15,8 +15,8 @@ The declarative loader reads resources without executing package code. Packages 
 entry, including `markdown-language-features`, are separately bundled and executed by the TS
 browser extension host. This directory holds packages, not the SDK or runtime implementation.
 
-Authors use the [`TS SDK`](../app-ts/extension-sdk/README.md); compiled JavaScript runs in a separate
-[`Rust V8 host`](../ash-rs/js-extension-host/README.md) without Node. Editor and UI services remain
+Authors use the [`TS SDK`](../extension-sdk/README.md); compiled JavaScript runs in a separate
+[`Rust V8 host`](../crates/js-extension-host/README.md) without Node. Editor and UI services remain
 in TS; GitHub requests, Git, credentials, storage, and authorized system operations use Rust
 backend APIs. The existing trusted Worker path does not yet establish third-party permission
 isolation. See the [architecture decision](../docs/editor-extensions.md#0-确定的产品方向).

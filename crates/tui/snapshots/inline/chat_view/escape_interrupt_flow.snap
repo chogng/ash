@@ -1,0 +1,91 @@
+---
+source: crates/tui/src/app/chat_view_tests.rs
+expression: "frames.join(\"\\n\\n\")"
+---
+English running
+
+
+
+
+
+
+
+
+
+
+
+
+
+⠋ Working... · 0s · esc to interrupt
+
+────────────────────────────────────────────────────────────────────────────────
+> keep this draft
+────────────────────────────────────────────────────────────────────────────────
+  Shared model (high) · branch-layout · context unknown · Plan
+  ⏸ Manual
+
+English cancelling
+
+
+
+
+
+
+
+
+
+
+
+
+
+⠋ Cancelling... · 0s
+
+────────────────────────────────────────────────────────────────────────────────
+> keep this draft
+────────────────────────────────────────────────────────────────────────────────
+  Shared model (high) · branch-layout · context unknown · Plan
+  ⏸ Manual
+
+Chinese running
+
+
+
+
+
+
+
+
+
+
+
+
+
+⠋ 正在处理... · 0s · esc 可中断
+
+────────────────────────────────────────────────────────────────────────────────
+> keep this draft
+────────────────────────────────────────────────────────────────────────────────
+  Shared model (high) · branch-layout · context unknown · 计划
+  ⏸ 手动
+
+Chinese cancelling
+
+
+
+
+
+
+
+
+
+
+
+
+
+⠋ 正在取消... · 0s
+
+────────────────────────────────────────────────────────────────────────────────
+> keep this draft
+────────────────────────────────────────────────────────────────────────────────
+  Shared model (high) · branch-layout · context unknown · 计划
+  ⏸ 手动

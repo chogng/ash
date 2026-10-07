@@ -1,0 +1,8 @@
+---
+source: crates/tui/src/thread/transcript/view/render_tests.rs
+expression: visible_buffer(buffer)
+---
+>
+/x
+ └A
+  B

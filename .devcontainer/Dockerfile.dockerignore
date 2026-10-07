@@ -5,5 +5,3 @@
 !.devcontainer/desktop-init.sh
 !package.json
 !rust-toolchain.toml
-!app-ts/
-!app-ts/package.json

@@ -1,0 +1,28 @@
+---
+source: crates/tui/src/app/network_tests.rs
+expression: "render(&app, 100, 24)"
+---
+
+    ▄  ▄     Ash Code v0.1.0
+  ▗█▛██▜█▖   Automatic model
+  ▝▜████▛▘   .
+    ▝  ▘
+
+
+─ Config › Network ─────────────────────────────────────────────────────────────────────────────────
+
+> Run diagnostics again
+  Copy required domains
+
+  Example ────────────────────────────────────────────────────────────────────────────────────────
+  Model service: api.example.test:443
+  Proxy: proxy.example.test:8080
+  HTTP reachable · status 401
+  Usage service: usage.example.test:443
+  Direct connection
+  DNS lookup failed
+  Account usage: Account usage query failed
+  Checks HTTP reachability and account usage.
+  Model generation and streaming are not tested.
+
+  Enter to confirm  ·  Esc to return  ·  r to refresh

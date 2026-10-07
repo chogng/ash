@@ -13,8 +13,8 @@ sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from build.code import run  # noqa: E402
 from build.code import build as code_build  # noqa: E402
-from build.ash_rs.prepare import current_package as selected_package  # noqa: E402
-from build.ash_rs.prepare import development_root  # noqa: E402
+from build.runtime.prepare import current_package as selected_package  # noqa: E402
+from build.runtime.prepare import development_root  # noqa: E402
 from build.lib.targets import default_target  # noqa: E402
 
 
@@ -30,7 +30,7 @@ def current_package() -> Path:
 def main(arguments: list[str] | None = None) -> int:
     environment = os.environ.copy()
     prepared = subprocess.run(
-        [sys.executable, "-B", "build/ash_rs/prepare.py"],
+        [sys.executable, "-B", "build/runtime/prepare.py"],
         cwd=run.REPOSITORY_ROOT,
         env=environment,
         check=False,

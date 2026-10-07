@@ -145,11 +145,11 @@ Agent Sidebar 的空 `CompositeBar` root 仍是统一标题结构的一部分，
 
 当前实现的关键入口是：
 
-- `app-ts/src/ash/workbench/browser/parts/paneCompositePart.ts`
-- `app-ts/src/ash/workbench/browser/parts/sidebar/sidebarPart.ts`
-- `app-ts/src/ash/workbench/browser/parts/auxiliarybar/auxiliarybarPart.ts`
-- `app-ts/src/ash/workbench/browser/parts/panel/panelPart.ts`
-- `app-ts/src/ash/workbench/browser/parts/compositeBar.ts`
-- `app-ts/src/ash/workbench/browser/workbench.ts`
+- `src/ash/workbench/browser/parts/paneCompositePart.ts`
+- `src/ash/workbench/browser/parts/sidebar/sidebarPart.ts`
+- `src/ash/workbench/browser/parts/auxiliarybar/auxiliarybarPart.ts`
+- `src/ash/workbench/browser/parts/panel/panelPart.ts`
+- `src/ash/workbench/browser/parts/compositeBar.ts`
+- `src/ash/workbench/browser/workbench.ts`
 
 相关改动至少运行 Desktop TypeScript 编译，以及 Workbench layout、Chat view、toolbar/action view item 和 UI styling ownership 测试。视觉改动还需要在 Browser Workbench 中验证收起、展开、hover、拖拽与窄宽度 overflow。

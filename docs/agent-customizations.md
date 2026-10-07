@@ -10,7 +10,7 @@
 > 独立指令管理界面、完整 Agent 管理界面和完整 import apply 仍未实现。
 >
 > Skill 的格式、来源与激活细节见 [`skills.md`](skills.md)；外部格式发现和转换实现契约见
-> [`external-agent-migration` README](../ash-rs/external-agent-migration/README.md)；配置与事务边界见
+> [`external-agent-migration` README](../crates/external-agent-migration/README.md)；配置与事务边界见
 > [`config.md`](config.md)；内置与自定义 Agent 的统一定义契约、专化职责和启动范围见 [`agents.md`](agents.md)；最终模型输入由 [`core-context.md`](core-context.md) 定义。
 
 ## 快速理解
@@ -246,7 +246,7 @@ Slash Command catalog 只包含产品和服务命令；独立 `$name` Skill sele
 `$create-instructions` 是创建或更新细分 Instruction 的内置 Skill，复用通用激活机制；`/init`
 保留为初始化 `ASH.md` 的产品命令。两者使用正常文件工具和目录授权；已有文件先读取再修改。
 指令 metadata、按需读取、显式附件 API 与写入前置条件由
-[`ash-instructions` README](../ash-rs/instructions/README.md) 维护。
+[`ash-instructions` README](../crates/instructions/README.md) 维护。
 外部 `CLAUDE.md` 导入是独立的确定性文件操作：重新校验用户选中的来源，只在目标缺失或为空时
 复制到 Ash 的目标文件；已有非空目标报告冲突，不交给 Agent 合并。来源正文不进入 `/init`
 或任何用于整理导入内容的 Agent Turn。四种来源的项目指令均已接通预览与目标写入。
@@ -278,7 +278,7 @@ Slash Command catalog 只包含产品和服务命令；独立 `$name` Skill sele
 ### 多来源项目指令导入实现
 
 Copilot、Claude、Codex、Cursor 项目指令已具备后端预览与发布接口，详情由
-[external-agent-migration](../ash-rs/external-agent-migration/README.md#多来源项目指令导入)
-和 [App Server 协议](../ash-rs/app-server-protocol/README.md#指令导入) 维护。
+[external-agent-migration](../crates/external-agent-migration/README.md#多来源项目指令导入)
+和 [App Server 协议](../crates/app-server-protocol/README.md#指令导入) 维护。
 导入后由 Ash 指令目录独立管理，复用主、子 Agent 的 catalog 与 Core 路径；不注册持续外部来源。
 Claude/Codex 用户级指令也已接入同一接口，写入当前 Ash home，并分别校验来源与目标目录权限。跨领域事务和 Desktop 导入界面仍未完成。

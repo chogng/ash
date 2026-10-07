@@ -1,10 +1,10 @@
 # 无界面 Agent 执行
 
-> 目标物理位置：`ash-rs/exec/`  
+> 目标物理位置：`crates/exec/`
 > 当前状态：阶段 1–2 已实现；远程进程/文件执行平面已实现；可靠自动化与远程 Agent worker 仍在计划中
-> 当前 crate 实现契约：[`ash-rs/exec/README.md`](../ash-rs/exec/README.md)
-> App Server Client：[`app-server-client.md`](app-server-client.md)  
-> App Server contract：[`ash-app-server-api.md`](ash-app-server-api.md)  
+> 当前 crate 实现契约：[`crates/exec/README.md`](../crates/exec/README.md)
+> App Server Client：[`app-server-client.md`](app-server-client.md)
+> App Server contract：[`ash-app-server-api.md`](ash-app-server-api.md)
 > Canonical 产品模型：[`protocol.md`](protocol.md)
 
 ## 快速理解
@@ -84,11 +84,11 @@ Ash 已有 durable aggregate sequence、snapshot + gap subscribe 和 typed comma
 命名迁移已经完成：
 
 ```text
-former ash-rs/exec
-  → ash-rs/tool-executor
+former crates/exec
+  → crates/tool-executor
   → crate ash-tool-executor
 
-current ash-rs/exec
+current crates/exec
   → crate/binary ash-exec
   → headless Agent runner
 ```
@@ -99,7 +99,7 @@ current ash-rs/exec
 [`sandboxing.md`](sandboxing.md)。
 
 当前远程 process/filesystem execution 的实现契约见
-[`ash-exec-server`](../ash-rs/exec-server/README.md)。桌面 PTY 与远程受限 PTY 均归该 crate；远程 PTY 通过内部启动器继承终端并保留 MXC 约束。
+[`ash-exec-server`](../crates/exec-server/README.md)。桌面 PTY 与远程受限 PTY 均归该 crate；远程 PTY 通过内部启动器继承终端并保留 MXC 约束。
 
 ```text
 ash-tool-executor
@@ -526,8 +526,8 @@ ash-scheduler-protocol
 - 连接恢复窗口内可继续观察原操作，不重发进程启动或文件写入。
 
 服务重启后的进程恢复、远端 App Server 部署以及远程 Agent 执行不属于当前已实现能力；具体边界见
-[`ash-exec-server`](../ash-rs/exec-server/README.md) 和
-[`ash-exec-server-protocol`](../ash-rs/exec-server-protocol/README.md)。
+[`ash-exec-server`](../crates/exec-server/README.md) 和
+[`ash-exec-server-protocol`](../crates/exec-server-protocol/README.md)。
 
 ### 阶段 5：远程 Agent 工作进程（计划）
 
@@ -551,7 +551,7 @@ ash-scheduler-protocol
 - Ctrl-C 发送 typed `session/request` `InterruptTurn`；
 - headless approval 不会永久等待不存在的 UI；
 
-远程进程执行环境的验证由 [`ash-exec-server`](../ash-rs/exec-server/README.md) 的 crate 检查与测试覆盖。
+远程进程执行环境的验证由 [`ash-exec-server`](../crates/exec-server/README.md) 的 crate 检查与测试覆盖。
 阶段 3 可靠自动化和阶段 5 远程 Agent worker 尚需满足：
 
 - durable gap 可在断线后通过 reconnect/read/subscribe 恢复；

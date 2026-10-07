@@ -7,7 +7,7 @@ import { findClassAttributeSubstringSelector, findRootAnchoredHas, findWorkbench
 import { validateDesignTokens } from './lib/stylelint/validateDesignTokens.ts';
 
 const repositoryRoot = resolve(import.meta.dirname, '..');
-const defaultSources = ['app-ts/src/**/*.css', 'extensions/**/*.css'];
+const defaultSources = ['src/**/*.css', 'extensions/**/*.css'];
 const testPath = /(?:^|[/\\])(?:test|test-data|testData|node_modules)(?:[/\\])/;
 
 export function resolveStylelintMatches(sources: readonly string[], root = repositoryRoot): string[] {
@@ -53,7 +53,7 @@ export function checkStyles(files: readonly string[], validator: IValidator = ge
 		if (rootHas !== undefined) { report(rootHas, 'Root-anchored :has() causes page-wide style invalidation; project state through a class owned by the component.'); }
 		const classSubstring = findClassAttributeSubstringSelector(content);
 		if (classSubstring !== undefined) { report(classSubstring, 'Class attribute substring selectors react to unrelated class changes; select a stable class.'); }
-		if (/^app-ts\/src\/ash\/(?:base|platform|editor)\//.test(name)) {
+		if (/^src\/ash\/(?:base|platform|editor)\//.test(name)) {
 			const workbenchRoot = findWorkbenchSelector(content);
 			if (workbenchRoot !== undefined) { report(workbenchRoot, 'Lower-layer CSS must not depend on the .ash-workbench root owned by Workbench.'); }
 		}
@@ -81,7 +81,7 @@ export function stylelint(sources?: readonly string[]): number {
 	for (const error of errors) {
 		console.error(error);
 	}
-	const suggestionFiles = sources ? files : files.filter(file => relative(repositoryRoot, file).replaceAll('\\', '/').startsWith('app-ts/src/ash/sessions/'));
+	const suggestionFiles = sources ? files : files.filter(file => relative(repositoryRoot, file).replaceAll('\\', '/').startsWith('src/ash/sessions/'));
 	const suggestions = checkStyleSuggestions(suggestionFiles);
 	for (const suggestion of suggestions) {
 		console.warn(suggestion);

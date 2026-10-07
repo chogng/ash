@@ -47,25 +47,32 @@
 			"name": "Ash (Electron, Agents)",
 			"type": "node-terminal",
 			"request": "launch",
-			"command": "pnpm --dir app-ts dev:agents",
+			"command": "pnpm dev:agents",
 			"cwd": "${workspaceFolder}",
 			"presentation": {
 				"group": "1_ash_desktop",
 				"order": 3
 			},
 			"osx": {
-				"command": "uv run --python 3.12 pnpm --dir app-ts dev:agents"
+				"command": "uv run --python 3.12 pnpm dev:agents"
 			}
 		},
 		{
 			"name": "Ash Web (Chrome)",
 			"type": "node",
 			"request": "launch",
-			"program": "${workspaceFolder}/app-ts/node_modules/vite/bin/vite.js",
-			"args": ["--config", "../build/app_ts/vite/vite.config.ts", "--mode", "web"],
-			"cwd": "${workspaceFolder}/app-ts",
-			// serverReadyAction matches raw debug output, including any ANSI color sequences.
-			"env": { "ASH_WEB_APP_SERVER": "0", "NO_COLOR": "1" },
+			"program": "${workspaceFolder}/node_modules/vite/bin/vite.js",
+			"args": [
+				"--config",
+				"build/desktop/vite/vite.config.ts",
+				"--mode",
+				"web"
+			],
+			"cwd": "${workspaceFolder}",
+			"env": {
+				"ASH_WEB_APP_SERVER": "0",
+				"NO_COLOR": "1"
+			},
 			"preLaunchTask": "Prepare Ash Web",
 			"console": "internalConsole",
 			"outputCapture": "std",
@@ -86,17 +93,30 @@
 			"request": "launch",
 			"url": "http://127.0.0.1:5173/",
 			"webRoot": "${workspaceFolder}",
-			"cascadeTerminateToConfigurations": ["Ash Web (Chrome)"],
-			"presentation": { "hidden": true }
+			"cascadeTerminateToConfigurations": [
+				"Ash Web (Chrome)"
+			],
+			"presentation": {
+				"hidden": true
+			}
 		},
 		{
 			"name": "Ash Sessions Web (Chrome)",
 			"type": "node",
 			"request": "launch",
-			"program": "${workspaceFolder}/app-ts/node_modules/vite/bin/vite.js",
-			"args": ["--config", "../build/app_ts/vite/vite.config.ts", "--mode", "web"],
-			"cwd": "${workspaceFolder}/app-ts",
-			"env": { "ASH_WEB_APP_SERVER": "1", "ASH_DEV_AGENTS_WINDOW": "1", "NO_COLOR": "1" },
+			"program": "${workspaceFolder}/node_modules/vite/bin/vite.js",
+			"args": [
+				"--config",
+				"build/desktop/vite/vite.config.ts",
+				"--mode",
+				"web"
+			],
+			"cwd": "${workspaceFolder}",
+			"env": {
+				"ASH_WEB_APP_SERVER": "1",
+				"ASH_DEV_AGENTS_WINDOW": "1",
+				"NO_COLOR": "1"
+			},
 			"preLaunchTask": "Prepare Ash Web Backend",
 			"console": "internalConsole",
 			"outputCapture": "std",
@@ -107,16 +127,28 @@
 				"webRoot": "${workspaceFolder}",
 				"killOnServerStop": true
 			},
-			"presentation": { "group": "1_ash_desktop", "order": 4 }
+			"presentation": {
+				"group": "1_ash_desktop",
+				"order": 4
+			}
 		},
 		{
 			"name": "Ash Sessions Web (Chrome, UI Only)",
 			"type": "node",
 			"request": "launch",
-			"program": "${workspaceFolder}/app-ts/node_modules/vite/bin/vite.js",
-			"args": ["--config", "../build/app_ts/vite/vite.config.ts", "--mode", "web"],
-			"cwd": "${workspaceFolder}/app-ts",
-			"env": { "ASH_WEB_APP_SERVER": "0", "ASH_DEV_AGENTS_WINDOW": "1", "NO_COLOR": "1" },
+			"program": "${workspaceFolder}/node_modules/vite/bin/vite.js",
+			"args": [
+				"--config",
+				"build/desktop/vite/vite.config.ts",
+				"--mode",
+				"web"
+			],
+			"cwd": "${workspaceFolder}",
+			"env": {
+				"ASH_WEB_APP_SERVER": "0",
+				"ASH_DEV_AGENTS_WINDOW": "1",
+				"NO_COLOR": "1"
+			},
 			"preLaunchTask": "Prepare Ash Web",
 			"console": "internalConsole",
 			"outputCapture": "std",
@@ -126,7 +158,10 @@
 				"name": "Ash Sessions Web Browser (Chrome)",
 				"killOnServerStop": true
 			},
-			"presentation": { "group": "1_ash_desktop", "order": 5 }
+			"presentation": {
+				"group": "1_ash_desktop",
+				"order": 5
+			}
 		},
 		{
 			"name": "Ash Sessions Web Browser (Chrome)",
@@ -134,21 +169,11 @@
 			"request": "launch",
 			"url": "http://127.0.0.1:5173/",
 			"webRoot": "${workspaceFolder}",
-			"cascadeTerminateToConfigurations": ["Ash Sessions Web (Chrome, UI Only)"],
-			"presentation": { "hidden": true }
-		},
-		{
-			"name": "Ash App (Rust)",
-			"type": "node-terminal",
-			"request": "launch",
-			"command": "just app",
-			"osx": {
-				"command": "uv run --python 3.12 just app"
-			},
-			"cwd": "${workspaceFolder}",
+			"cascadeTerminateToConfigurations": [
+				"Ash Sessions Web (Chrome, UI Only)"
+			],
 			"presentation": {
-				"group": "2_app",
-				"order": 1
+				"hidden": true
 			}
 		},
 		{

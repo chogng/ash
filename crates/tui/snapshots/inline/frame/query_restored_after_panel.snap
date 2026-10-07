@@ -1,0 +1,20 @@
+---
+source: crates/tui/src/app/inline/frame_tests.rs
+expression: "text(&render(&app, 50, 16))"
+---
+                                                  
+                                                  
+                                                  
+                                                  
+┌Next step  (1/1)────────────────────────────────┐
+│How should the work continue?                   │
+│> Continue  Use the proposed approach           │
+│  Type your own answer  Answer in the input belo│
+│                                                │
+└────────────────────────────────────────────────┘
+                                                  
+──────────────────────────────────────────────────
+> chat draft stays here                           
+──────────────────────────────────────────────────
+                                                  
+  Enter to answer

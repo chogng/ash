@@ -120,7 +120,7 @@ Code Connect、Dev Mode 和 MCP 可以配合，也可以分别使用：开发者
 
 ## 对 Ash Design 的产品建议
 
-Ash Creator 的目标与当前能力分别由 [Creator 设计方案](../app-ts/src/ash/sessions/contrib/creator/DESIGN.md)和 [Creator README](../app-ts/src/ash/sessions/contrib/creator/README.md)维护。本节讨论 Dev Mode 对长期产品设计的启发，不把 Figma 的功能或以下建议写成 Ash 已有能力。
+Ash Creator 的目标与当前能力分别由 [Creator 设计方案](../src/ash/sessions/contrib/creator/DESIGN.md)和 [Creator README](../src/ash/sessions/contrib/creator/README.md)维护。本节讨论 Dev Mode 对长期产品设计的启发，不把 Figma 的功能或以下建议写成 Ash 已有能力。
 
 ### 编辑和开发检查读取同一份设计
 

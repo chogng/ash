@@ -18,11 +18,11 @@
 | DeepSeek  | 3 档：`low`、`high`、`max`；另可关闭                                                                       | DeepSeek V4 默认开启思考；Responses API 的 `none` 可关闭，Chat Completions 要用 `thinking.type: "disabled"`。其他兼容值会折叠映射到这三档。[官方文档](https://api-docs.deepseek.com/guides/thinking_mode/)                                                                                                                                               |
 | GLM       | 因型号不同为 3、6 或 7 档                                                                                  | GLM-5.3：`low`、`high`、`max`；GLM-5.2：`none`、`minimal`、`low`、`medium`、`high`、`xhigh`、`max`；GLM-5.1：前述集合去掉 `max`。GLM-5.3 思考不能关闭。[官方文档](https://docs.z.ai/guides/overview/migrate-to-glm-new)                                                                                                                                  |
 
-Kimi K2.7 Code 与 Highspeed 的思考常开、不能关闭；K2.6 才支持开关。此差异于 2026-10-05 按[官方型号参数表](https://platform.kimi.ai/docs/api/models-overview)复核。六家字段对照与通用声明结构见[模型声明规范](../../ash-rs/model-provider-info/docs/model-template.md)。
+Kimi K2.7 Code 与 Highspeed 的思考常开、不能关闭；K2.6 才支持开关。此差异于 2026-10-05 按[官方型号参数表](https://platform.kimi.ai/docs/api/models-overview)复核。六家字段对照与通用声明结构见[模型声明规范](../../crates/model-provider-info/docs/model-template.md)。
 
 这些标签不能跨供应商直接比较，也不能用供应商级的固定枚举替代型号级支持列表。请求构造应依据所选型号和接入协议。
 
-Ash 的模型选择器只显示所接入型号支持的推理档位，`Ultra` / `Ultracode` 不进入此列表。TUI 的 `/effort ultra`、`/effort ultracode` 与 `/effort multitask` 都开启由 Ash 协调的 Multitask，并保留当前 effort；它们不调用外部产品的同名工作流，也不自动改为 `max` / `xhigh`。目录刷新本身不会切换任务模式。使用方式与产品差异见 [Multitask、Ultra 与 Ultracode](../../ash-rs/collaboration-mode-templates/collaboration-modes.md#multitaskultra-与-ultracode)。
+Ash 的模型选择器只显示所接入型号支持的推理档位，`Ultra` / `Ultracode` 不进入此列表。TUI 的 `/effort ultra`、`/effort ultracode` 与 `/effort multitask` 都开启由 Ash 协调的 Multitask，并保留当前 effort；它们不调用外部产品的同名工作流，也不自动改为 `max` / `xhigh`。目录刷新本身不会切换任务模式。使用方式与产品差异见 [Multitask、Ultra 与 Ultracode](../../crates/collaboration-mode-templates/collaboration-modes.md#multitaskultra-与-ultracode)。
 
 ### 思考开关与 Ash 接入端点
 
@@ -122,7 +122,7 @@ Anthropic Claude 4.6 及更新型号默认支持 1M 上下文，长上下文不�
 
 ## 如何读这张表
 
-- 这是公开基准价，不是一次实际调用的完整账单。OpenAI 长上下文、Fast/Batch/Flex、缓存写入、区域处理；Anthropic 缓存写入与批处理；Google 缓存存储；xAI 超过 200K 上下文与 Priority，都会改变费用。各项精确规则见供应商原价目表与 [Ash 计价设计](../../ash-rs/docs/model-accounting.md#首版价目表基线)。
+- 这是公开基准价，不是一次实际调用的完整账单。OpenAI 长上下文、Fast/Batch/Flex、缓存写入、区域处理；Anthropic 缓存写入与批处理；Google 缓存存储；xAI 超过 200K 上下文与 Priority，都会改变费用。各项精确规则见供应商原价目表与 [Ash 计价设计](../../crates/docs/model-accounting.md#首版价目表基线)。
 - DeepSeek 高峰为周一至周五 UTC 01:00–04:00 和 06:00–10:00，中国法定节假日全天按谷价；其余时间也按谷价。
 - DeepSeek 官方价目表分别以美元和人民币列价；两种币种各按官方页面原价记录，不作汇率换算。`deepseek-flash`（API 调用 ID）映射到当前模型版本 DeepSeek-V4.1-Flash；旧 ID `deepseek-v4-flash` 和 `deepseek-v4-flash-vision-exp` 虽仍可请求，但对应型号已退役，请求由 DeepSeek-V4.1-Flash 提供服务并按 Flash 价格计费。表中高峰和谷时段分别占一行。
 - Z.AI 国际站以美元列价，智谱 BigModel 国内开放平台以人民币列价；表中分别记录两站原价，不作汇率换算。国内 `glm-5.1` 按输入长度 32K 分档，表内价格顺序对应“<32K / ≥32K”；目录中的 `glm-5-turbo` 未见于官方当前 API 价目表，不把名称相近的 `GLM-5-Turbo` 当作同一 ID。

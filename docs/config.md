@@ -1,7 +1,7 @@
 # 配置系统
 
 > 本文拥有用户配置、目录配置、作用域合并和运行时生效点。实现见
-> [`ash-config`](../ash-rs/config/README.md)。目录能力的长期语义见
+> [`ash-config`](../crates/config/README.md)。目录能力的长期语义见
 > [`environment-access.md`](environment-access.md)。
 
 ## 结论
@@ -29,7 +29,7 @@ Runtime snapshot
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
 | User Config     | Agent 默认值、Provider、MCP、Skill source、Plugin request、Hook、Tool Search、execution policy、目录权限、Git 自动获取，以及前端自有的 `gui`、`tui` 键值表 | secret、live connection、已安装包、运行健康状态，以及 `gui`、`tui` 字段含义 |
 | Dir Config      | 目录提供的 Agent/MCP/Skill/Plugin/Hook 意图和只收紧的执行规则                                                                                              | 授权、凭据、安装、激活和运行状态                                            |
-| Device Settings | TUI/Electron 主题、可访问性、hover、sash 等设备界面偏好                                                                                                    | Rust GUI 编辑器字体、Agent、Provider、目录权限和运行状态                    |
+| Device Settings | TUI/Electron 主题、可访问性、hover、sash 等设备界面偏好                                                                                                    | Agent、Provider、目录权限和运行状态                                         |
 | Secret Store    | opaque secret bytes                                                                                                                                        | 配置类型、OAuth 流程和作用域决定                                            |
 | 各领域管理器    | 实际安装、连接、激活、健康状态和生命周期                                                                                                                   | 用户配置正文                                                                |
 | App Server      | 组合不可变快照并选择生效点                                                                                                                                 | 重新拥有各领域状态                                                          |
@@ -63,7 +63,7 @@ API key、OAuth token、authorization header 或 refresh 状态。
 allowedHosts = ["api.openai.com", "github.com"]
 ```
 
-Git 自动获取由 App Server 对已授权可修改的仓库逐个调度，Desktop、Rust GUI 和 TUI 共用一份 `[git]` 配置。默认关闭；`autofetch` 可设为 `"off"`、`"default"` 或 `"all"`，`autofetchPeriod` 是 1–86400 秒，默认 180 秒：
+Git 自动获取由 App Server 对已授权可修改的仓库逐个调度，Desktop 和 TUI 共用一份 `[git]` 配置。默认关闭；`autofetch` 可设为 `"off"`、`"default"` 或 `"all"`，`autofetchPeriod` 是 1–86400 秒，默认 180 秒：
 
 ```toml
 [git]
@@ -87,7 +87,7 @@ editorLineHeight = 20
 
 `theme` 使用内置主题入口、用户主题 ID 或 `system`。`interfaceFontFamily` 和 `interfaceFontSize` 控制 Workbench 导航和设置页等界面文字；`editorFontFamily`、`editorFontSize` 和 `editorLineHeight` 只控制编辑器。字体族可用 `monospace`、`sans-serif`、`serif` 或具体字体名称，字号范围为 6–96 px，编辑器行高不能小于字号且不能超过 192 px。这些默认值、校验和生效方式都属于图形界面，不进入 Config 或 App Server 的领域类型。
 
-TUI 独立解释根级 `[tui]`，其中保存主题、屏幕模式、输入模式等界面设置；字段含义见 [TUI 配置说明](../code/README.md#tui-主题文件)，fullscreen 与 inline 的交互见 [LAYOUT.md](../code/LAYOUT.md#屏幕模式配置)：
+TUI 独立解释根级 `[tui]`，其中保存主题、屏幕模式、输入模式等界面设置；字段含义见 [TUI 配置说明](../crates/tui/README.md#tui-主题文件)，fullscreen 与 inline 的交互见 [LAYOUT.md](../crates/tui/LAYOUT.md#屏幕模式配置)：
 
 ```toml
 [tui]
@@ -103,7 +103,7 @@ Config 和 App Server 将 `[gui]`、`[tui]` 作为不透明键值表保存，不
 
 用户文件以 `connections` 保存接入，模型选择以厂商＋模型 ID 表达，两者独立。保存、导入和严格读取配置时，Config 使用 `model-provider-info` 的接入声明校验连接；未知供应商返回 `UnknownProvider`，不会等到模型调用时才报错。保存失败不提交新的快照、revision 或默认模型。
 
-自定义兼容端点仍受支持，但必须使用具有完整 `custom` 声明的自定义接入，或已声明的 `openai-compatible` 接入；只为未知供应商填写 base URL 不能注册它。公共 registry 接口也允许宿主先注册插件定义，再合并其配置；这不意味着配置文件能凭一个陌生 ID 加载插件。声明和注册边界见 [`model-provider-info`](../ash-rs/model-provider-info/README.md#公共模型)。Ollama 和自定义接入使用用户指定的模型 ID，不按型号名称排除供应商。
+自定义兼容端点仍受支持，但必须使用具有完整 `custom` 声明的自定义接入，或已声明的 `openai-compatible` 接入；只为未知供应商填写 base URL 不能注册它。公共 registry 接口也允许宿主先注册插件定义，再合并其配置；这不意味着配置文件能凭一个陌生 ID 加载插件。声明和注册边界见 [`model-provider-info`](../crates/model-provider-info/README.md#公共模型)。Ollama 和自定义接入使用用户指定的模型 ID，不按型号名称排除供应商。
 
 ## 供应商默认模型
 
@@ -182,7 +182,7 @@ pub struct DirConfigDocument {
 - 执行 Hook；
 - 使用 `AllowUnsandboxed` 放宽执行策略。
 
-Hook 的配置示例、事件目录和浏览方式统一见 [Hooks crate](../ash-rs/hooks/README.md)。
+Hook 的配置示例、事件目录和浏览方式统一见 [Hooks crate](../crates/hooks/README.md)。
 
 ## 目录权限
 
@@ -213,17 +213,16 @@ BuiltInDefaults
 
 这不是递归对象合并。每个字段必须明确来源、merge/replace/clear 语义、provenance 和生效点。
 
-| 配置                             | 来源                          | 关键规则                                          |
-| -------------------------------- | ----------------------------- | ------------------------------------------------- |
-| Agent model                      | User、Dir、Session、launch    | 只影响下一次模型安全点                            |
-| Tool Mode                        | User、StartTurn override      | Turn 接受时冻结                                   |
-| Context compaction               | User                          | Turn command receipt 冻结，子任务和 Goal 续跑继承 |
-| Provider endpoint                | User、Host                    | Dir 不能替换认证或网络边界                        |
-| MCP / Skill / Plugin / Hook      | User、Dir                     | Dir 只提供待处理意图；领域管理器决定实际状态      |
-| Execution policy                 | Host、Organization、User、Dir | Dir 只能保持或收紧                                |
-| Directory permissions            | User、Organization、Host      | Dir Config 无权自授                               |
-| Rust GUI theme/editor typography | User                          | 进入 `config/read`，不参与 Agent Turn 执行        |
-| TUI/Electron device preference   | Device Settings               | 不进入 Agent runtime snapshot                     |
+| 配置                           | 来源                          | 关键规则                                          |
+| ------------------------------ | ----------------------------- | ------------------------------------------------- |
+| Agent model                    | User、Dir、Session、launch    | 只影响下一次模型安全点                            |
+| Tool Mode                      | User、StartTurn override      | Turn 接受时冻结                                   |
+| Context compaction             | User                          | Turn command receipt 冻结，子任务和 Goal 续跑继承 |
+| Provider endpoint              | User、Host                    | Dir 不能替换认证或网络边界                        |
+| MCP / Skill / Plugin / Hook    | User、Dir                     | Dir 只提供待处理意图；领域管理器决定实际状态      |
+| Execution policy               | Host、Organization、User、Dir | Dir 只能保持或收紧                                |
+| Directory permissions          | User、Organization、Host      | Dir Config 无权自授                               |
+| TUI/Electron device preference | Device Settings               | 不进入 Agent runtime snapshot                     |
 
 目录来源未获得对应能力时，解析结果保留其待处理意图和诊断，但不会静默激活。运行时协调失败只
 更新实际状态，不回滚用户期望。
@@ -236,7 +235,6 @@ BuiltInDefaults
 | MCP / Skill / Plugin / Hook catalog | 各管理器完成协调后，由新 generation 发布                     |
 | 目录权限                            | 新 Grant 发布后；撤销会使旧 Authorization 失效并停止依赖资源 |
 | execution policy                    | 下一次动作评估；已经准备的调用保留冻结版本                   |
-| Rust GUI theme/editor typography    | Workbench 收到新 config generation 后重建完整样式            |
 | TUI/Electron device preference      | 对应 Renderer 服务自己的更新周期                             |
 
 运行中的 Turn 不读取可变 ConfigStore，也不持有 live manager。它只消费创建时冻结的快照和后续

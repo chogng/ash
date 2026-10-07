@@ -87,7 +87,7 @@ Mode–model 与 model–effort 的按钮边缘间距必须相同；两处都消
 不覆盖主选项字号；分组标题、说明和徽标仍按各自的文本角色使用次级字号。
 输入栏按钮与展开菜单分别由各自组件维护字体，按钮样式不能代替菜单字体约定。
 
-相关回归由 [Chat 输入区 Playwright 测试](../app-ts/test/integration/browser/chatInput.integration.spec.ts)
+相关回归由 [Chat 输入区 Playwright 测试](../test/integration/browser/chatInput.integration.spec.ts)
 覆盖：中英文下的 800、400、280px 窗口检查计算样式与实际边缘间距，
 并比较 model 与 mode 菜单主选项的字体、字号和字重；
 另有悬停、Tab、方向键、菜单选择及焦点恢复验证。

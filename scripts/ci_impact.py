@@ -23,7 +23,7 @@ GLOBAL_INPUTS = {
     Path("justfile"),
     Path("scripts/cargo.py"),
     Path("scripts/ci_impact.py"),
-    Path("build/ash_rs/ripgrep.py"),
+    Path("build/runtime/ripgrep.py"),
     Path("third_party/ripgrep/runtime-lock.json"),
     Path(".github/workflows/rust-warnings.yml"),
 }
@@ -80,10 +80,8 @@ def tui_affected(changed_files: list[str], metadata: dict, root: Path) -> bool:
         if path.parts[:2] == ("build", "code"):
             return True
         if not path.parts or path.parts[0] not in {
-            "app-rs",
-            "code",
-            "ash-cli",
-            "ash-rs",
+            "cli",
+            "crates",
             "third_party",
         }:
             continue

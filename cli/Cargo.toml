@@ -1,0 +1,63 @@
+[package]
+name = "ash-cli"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+default-run = "ash"
+
+[lib]
+name = "ash_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "ash"
+path = "src/main.rs"
+
+[dependencies]
+cli = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
+chrono = { workspace = true }
+rand = { workspace = true }
+ash-utils-home-dir = { workspace = true }
+ash-app-server-daemon = { workspace = true }
+process-hardening = { workspace = true }
+ash-package-store = { workspace = true }
+build-info = { workspace = true }
+build-identity = { workspace = true }
+flate2 = { workspace = true }
+fs2 = { workspace = true }
+semver = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+signal-hook = { workspace = true }
+tar = { workspace = true }
+ureq = { workspace = true }
+zip = { workspace = true }
+ash-app-server-client = { workspace = true }
+ash-app-server-protocol = { workspace = true }
+ash-exec = { workspace = true }
+ash-install-context = { workspace = true }
+ash-protocol = { workspace = true }
+ash-product-update = { workspace = true }
+ash-remote = { workspace = true }
+ash-remote-connections = { workspace = true }
+arg0 = { workspace = true }
+ash-tui = { workspace = true }
+
+[dev-dependencies]
+cargo-bin = { workspace = true }
+core-plugins = { package = "ash-core-plugins", path = "../crates/core-plugins" }
+plugin = { package = "ash-plugin", path = "../crates/plugin" }
+ed25519-dalek = { workspace = true }
+insta = { workspace = true }
+portable-pty = { workspace = true }
+tempfile = { workspace = true }
+ash-terminal = { workspace = true }
+ash-product-update = { workspace = true, features = ["signing"] }
+
+[lints]
+workspace = true
+
+[package.metadata.cargo-shear]

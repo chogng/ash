@@ -1,7 +1,7 @@
 # `ash` Electron Desktop 架构与协作边界
 
 > 负责人：Desktop 开发者
-> Rust 对接负责人：ash-rs 开发者
+> Rust 对接负责人：crates 开发者
 > 当前开发基线：[`ash-app-server-api.md`](ash-app-server-api.md)
 > Workbench 模式装配与切换边界：[`workbench-modes.md`](workbench-modes.md)
 > Renderer 控件、Workbench Part 与 CSS 状态所有权：[`ui-styling-ownership.md`](ui-styling-ownership.md)
@@ -11,7 +11,7 @@
 > 外部 Agent Skill 来源与加载边界：[`skills.md`](skills.md)
 > Agent 自定义对象、`.ash` 与外部导入边界：[`agent-customizations.md`](agent-customizations.md)
 > 三条公开产品线与宿主边界：[`product-lines.md`](product-lines.md)
-> 共享 Rust 进程入口实现：[`ash-app-server`](../ash-rs/app-server/README.md)
+> 共享 Rust 进程入口实现：[`ash-app-server`](../crates/app-server/README.md)
 
 ## 快速理解
 
@@ -32,7 +32,7 @@
 `ash` 是 Ash 的 Electron 富客户端，负责窗口、浏览器、系统能力和 UI，不拥有
 Session、Thread、Turn、ThreadItem、审批策略或持久化状态机。
 
-Desktop 只能通过版本化 App Server API 使用 ash-rs：
+Desktop 只能通过版本化 App Server API 使用 crates：
 
 ```text
 Renderer
@@ -89,10 +89,10 @@ Renderer 不能因为已经校验过输入，就获得直接使用 `fs`、网络
 
 `Files` 按下表拆分所有权；“当前状态”用于区分本阶段实现和后续能力：
 Rust primitive 与 model adapter 的实现细节分别见
-[`ash-rs/file-system/README.md`](../ash-rs/file-system/README.md) 和
-[`ash-rs/file-system-tool/README.md`](../ash-rs/file-system-tool/README.md)。跨平台 Rust
+[`crates/file-system/README.md`](../crates/file-system/README.md) 和
+[`crates/file-system-tool/README.md`](../crates/file-system-tool/README.md)。跨平台 Rust
 `file:` URI 的 canonical implementation contract 见
-[`ash-rs/utils/path-uri/README.md`](../ash-rs/utils/path-uri/README.md)；Project root 的 App Server
+[`crates/utils/path-uri/README.md`](../crates/utils/path-uri/README.md)；Project root 的 App Server
 输出已接入该契约，Files 的共享 URI 状态仍为“部分具备”。
 
 | 能力                                              | Owner                                        | 当前状态                                                                  |
@@ -141,7 +141,7 @@ Renderer component
 ### 2.2 外部 Agent 配置导入（仅限 Desktop）
 
 外部 Agent 配置导入是 Desktop 专属的用户工作流。当前
-[`external-agent-migration`](../ash-rs/external-agent-migration/README.md) 已实现 Codex/Claude 已知路径的
+[`external-agent-migration`](../crates/external-agent-migration/README.md) 已实现 Codex/Claude 已知路径的
 检查、canonical containment、symlink 拒绝、确定性 `AgentPathInspection` 和安全诊断，并能读取
 有界源格式生成类型化 `MigrationPlan`（settings、MCP、hooks、plugins、memory、agents 等
 fragment）；它不读取 skill/command/memory 正文，不应用配置。Desktop 的目录选择、内容预览、
@@ -166,16 +166,16 @@ Ash 原生 Instructions/Skills/Agents、`.ash` 命名空间以及 Import 与 sou
 具体来源和激活语义由 [`skills.md`](skills.md) 定义，批准语义由
 [`permissions.md`](permissions.md) 定义。
 
-该功能即使首版很小，也不能整体放入 `ash-rs/utils`。外部目录识别、格式映射、敏感内容排除和
+该功能即使首版很小，也不能整体放入 `crates/utils`。外部目录识别、格式映射、敏感内容排除和
 配置 mutation 都属于产品领域语义；`external-agent-migration` 拥有只读发现与计划模型，Desktop 只
 拥有交互，App Server 负责协调，各目标领域负责校验和落库。只有不理解 Codex、Claude、Skill、
 MCP 或 Agent definition 的路径规范化、目录 containment 和文件 identity 原语可以复用
-`ash-rs/utils/path-utils`、`ash-rs/utils/path-uri` 等基础 crate。
+`crates/utils/path-utils`、`crates/utils/path-uri` 等基础 crate。
 
 ## 3. 目录边界
 
 ```text
-app-ts/
+
 ├── src/
 │   ├── main.ts
 │   ├── bootstrap.ts
@@ -216,12 +216,12 @@ Electron 自动化共用 `test/automation/playwrightElectron.ts` 的进程启动
 桌面锁定时直接报告环境错误，不把它当作窗口切换成功。进程退出后才停止测试 daemon，
 进程退出和 daemon 停止分别使用各自的期限。
 
-`app-ts/src/ash/platform/app-server/common/generated/` 消费 Rust 协议 crate 的生成快照，不手写 wire DTO。纯前端构建只同步快照，协议修改通过 `pnpm generate:protocol` 更新；职责和验证见 [App Server 协议来源](ash-app-server-api.md#12-权威来源)。
+`src/ash/platform/app-server/common/generated/` 消费 Rust 协议 crate 的生成快照，不手写 wire DTO。纯前端构建只同步快照，协议修改通过 `pnpm generate:protocol` 更新；职责和验证见 [App Server 协议来源](ash-app-server-api.md#12-权威来源)。
 生成的 `APP_SERVER_SCHEMA_HASH` 是 bundled Desktop 的 exact-schema 基线；Electron Main
 必须比较 initialize response，hash 不一致时不得创建业务窗口或进入 Ready。
 
 开发态与发布态共享 canonical Ash package contract。Python 开发组装器
-`build/ash_rs/prepare.py` 按 target、JavaScript runtime 与 build profile 组装不可变 debug
+`build/runtime/prepare.py` 按 target、JavaScript runtime 与 build profile 组装不可变 debug
 package；Rust package store 在完整文件清单校验通过后发布编号 manifest，并用进程 lease 保护正在运行的 package。它读取 production builder
 使用的同一份 runtime lock、校验 archive digest。`appServerDaemonExecutablePath()` 在开发态选择该
 package root，在发布态选择 Electron `resourcesPath`，两者都只启动
@@ -258,7 +258,7 @@ Main 不把 `ipcRenderer`、`fs`、`child_process`、`webContents` 或任意 JSO
 `platform/remote` 拥有。`platform/app-server` 保留 renderer 协议客户端和 Main 连接转发。
 窗口关闭只终止连接程序，实际共享后台的生命周期由 Rust daemon 管理。
 
-当前 `ChildProcessJsonlTransport` 将子进程 stream lifecycle 与 JSON-RPC pairing 分开。它在积累无限 buffer 前按原始 byte 拒绝超过 1 MiB 的 frame，只接受严格 LF 和有效 UTF-8；outbound write 同时等待 callback 与 drain，并限制 pending write 数。child/stdio 任一错误都会关闭 transport；stderr 只保留 64 KiB ring，诊断读取时脱敏 credential。`close()` 异步、幂等，并在 graceful deadline 后强制终止。`pnpm --dir app-ts run test:main` 覆盖分片 UTF-8、超限 frame、非法 framing、backpressure、stderr 和 close。
+当前 `ChildProcessJsonlTransport` 将子进程 stream lifecycle 与 JSON-RPC pairing 分开。它在积累无限 buffer 前按原始 byte 拒绝超过 1 MiB 的 frame，只接受严格 LF 和有效 UTF-8；outbound write 同时等待 callback 与 drain，并限制 pending write 数。child/stdio 任一错误都会关闭 transport；stderr 只保留 64 KiB ring，诊断读取时脱敏 credential。`close()` 异步、幂等，并在 graceful deadline 后强制终止。`pnpm run test:main` 覆盖分片 UTF-8、超限 frame、非法 framing、backpressure、stderr 和 close。
 
 `JsonRpcPeer` 在 transport 之上负责双向 JSON-RPC envelope、request ID pairing、remote
 error、timeout/abort、late/unknown/duplicate response、入站 handler cancellation、pending
@@ -373,7 +373,7 @@ Workbench 的 `workbench.editor.restoreEditors` 默认开启。`WorkbenchLayout`
 版本冲突和备份目录。启动时 Renderer 查询待恢复的工作区，Main 只负责打开窗口，因此
 `window.restoreWindows: none` 仍会恢复含未保存内容的工作区。保存或放弃修改按已观察的版本删除备份，
 恢复失败不消费正文。浏览器和无后端 UI 模式仍使用 IndexedDB。
-共享协议及其他客户端的接入状态见 [备份约定](../ash-rs/app-server-protocol/README.md#未保存内容备份)。
+共享协议及其他客户端的接入状态见 [备份约定](../crates/app-server-protocol/README.md#未保存内容备份)。
 
 Renderer 通过受信 IPC route 和 `workspace.getWorkspace()` 读取该身份，并在
 `parseWorkspaceIdentifier()` 校验和恢复 URI。`WorkspaceContextService` 根据该标识构造当前
@@ -418,7 +418,7 @@ App Server 连接并重新读取 Session/Thread；Renderer 不直接读写 SQLit
 Electron sandbox 边界分为两层。`ISandboxGlobals` 是 preload 唯一暴露到主世界的底层桥接：
 它包含只读进程元数据、受 `ash:` 频道前缀约束的 `send` / `invoke` / `on`，以及按 nonce 交付和取消等待的 MessagePort 桥接。preload 必须保持
 自包含，运行时除 `electron` 外不得加载任何模块，也不得把 Electron event 对象传给 Renderer。
-构建后的 preload 由 `build/app_ts/host.ts` 检查这一约束。
+构建后的 preload 由 `build/desktop/host.ts` 检查这一约束。
 
 `createElectronRendererApi()` 组装领域化、强类型、可枚举的 `AshElectronRendererApi`。Electron 系统能力经平台适配器读取；跨宿主领域能力由其父接口
 `IRendererHost` 定义，Electron 专属能力保持以下精确形状：
@@ -704,15 +704,15 @@ Workbench 开发入口，本地文件夹由浏览器授权的 `HTMLFileSystemPro
 `build:web` / `start:web` 提供同一独立 Web 模式。当前本地
 `dev:web:full` 与 `build:web:full` / `start:web:full` 使用受管理 Rust App Server 的认证
 HTTP/WebSocket 浏览器入口。每个浏览器页签独立交换 JSON-RPC，服务仍由 profile registry 管理。
-`build/app_ts/web.ts` 只持有启动租约、读取启动信息和收尾；不转发业务消息。
+`build/desktop/web.ts` 只持有启动租约、读取启动信息和收尾；不转发业务消息。
 Vite 提供开发资源，发布资源由 Rust HTTP 入口读取可信配置中的目录。
-Web 构建输出 `.build/app-ts/web/ash`，仅包含浏览器入口；普通 `build:renderer` 保留 Desktop 入口与 disconnected 模式。`build:web:full` 显式启用后端连接。
+Web 构建输出 `.build/desktop/web/ash`，仅包含浏览器入口；普通 `build:renderer` 保留 Desktop 入口与 disconnected 模式。`build:web:full` 显式启用后端连接。
 可信启动入口绑定工作区和允许的 Origin；一次性票据兑换后，浏览器通过会话凭证连接，
 不声明目录授权宿主，也不调用 `env/dirs/set` 扩大权限。具体契约和验证见
-[前端连接与浏览器能力](../app-ts/docs/design/app-server-connection.md)。
+[前端连接与浏览器能力](design/app-server-connection.md)。
 公网远程部署的认证、TLS 和访问策略不属于这个本地服务的能力。
 
-Renderer 与 Stanza 共用 `build/app_ts/vite/rendererOutput.ts` 的分包规则，保留模块执行顺序，避免贡献注册
+Renderer 与 Stanza 共用 `build/desktop/vite/rendererOutput.ts` 的分包规则，保留模块执行顺序，避免贡献注册
 顺序改变。构建对超过 500 kB 的 JavaScript chunk 直接报错；`build-metrics.json` 另外记录
 每个入口的静态 JavaScript 总量。分包不等于减少总下载量，worker 资源不计入此 chunk 限额。
 
@@ -852,7 +852,7 @@ Renderer 在同一后端的 30 秒租约内 attach 原 PTY，首次续读成功�
 创建、释放和移动均在列表、标题与活动项更新后发出 `onDidChangeInstances`。创建与重启开始读取前查询窗口当前连接状态，
 避免异步返回覆盖已发生的断线。Tasks 与 DAP 在发送命令前要求新实例处于 running；否则关闭自己创建的实例并报告启动失败，
 不在连接恢复后自动发送这次命令。
-platform 到 services 的装配缺口、对应目录与职责见 [Terminal 对齐台账](../app-ts/docs/terminal-api-alignment-status.md)。
+platform 到 services 的装配缺口、对应目录与职责见 [Terminal 对齐台账](terminal-api-alignment-status.md)。
 
 ### 6.8 产品链接与 URL 回调
 
@@ -910,7 +910,7 @@ Electron Main 是 Browser Target 的唯一权威持有者。
 
 规则按配置顺序选择第一个匹配且已注册的打开方式；`default` 使用系统浏览器。未配置时内置浏览器不接管链接。编辑器、聊天、终端、Git、问题报告和发布说明中的用户链接均使用同一选择服务。编辑器 Markdown 提示、富文本文档链接，以及 Code 和 Agents 窗口的 `window.open` 请求也走这条链。富文本中按 Ctrl/Command 点击或按 Ctrl/Command+Enter 打开当前链接，普通点击保留编辑行为；聚焦链接后也可按 Enter 打开。终端的网址支持鼠标打开和命令面板的“终端：打开检测到的链接…”；取消选择返回终端。通过规则打开的页面属于用户，并复用当前工作区的浏览器 Session。Web 不注册桌面浏览器打开方式。
 
-Ash 可执行扩展可以声明 `externalUriOpener` 能力，在激活结果中注册 HTTP/HTTPS 打开方式。设置补全显示扩展提供的名称，规则 ID 为 `extension:<encodeURIComponent(扩展 ID)>:<encodeURIComponent(注册 ID)>`。前端负责规则选择，既有扩展宿主负责带代次校验的调用和取消；扩展退出、重启或连接关闭时，旧注册与请求一同撤销。这条接口属于 Ash 扩展协议，尚未实现 VS Code JavaScript 扩展的 `registerExternalUriOpener` 和按 URL 惰性激活。完整协议字段与调用约定见 [Browser foundation](../app-ts/docs/browser-foundation.md#external-uri-opening)。
+Ash 可执行扩展可以声明 `externalUriOpener` 能力，在激活结果中注册 HTTP/HTTPS 打开方式。设置补全显示扩展提供的名称，规则 ID 为 `extension:<encodeURIComponent(扩展 ID)>:<encodeURIComponent(注册 ID)>`。前端负责规则选择，既有扩展宿主负责带代次校验的调用和取消；扩展退出、重启或连接关闭时，旧注册与请求一同撤销。这条接口属于 Ash 扩展协议，尚未实现 VS Code JavaScript 扩展的 `registerExternalUriOpener` 和按 URL 惰性激活。完整协议字段与调用约定见 [Browser foundation](browser-foundation.md#external-uri-opening)。
 
 当前 URL policy 允许 HTTPS、loopback HTTP 与精确的 `about:blank`，拒绝 URL credentials、
 `file:`、`javascript:` 和其他特权 scheme。用户 Session 按工作区持久保存，Agent Session 按窗口和 Thread 使用内存 partition，同一 Thread 的多个页面共享登录。所有页面固定：
@@ -973,13 +973,13 @@ Desktop connection，新建目标、后续观察、动作和关闭同时核对 c
 
 后续基座继续补齐设备权限选择、证书信任和网页交互。Rust 保留工具注册、
 授权和 App Server 协议，用户页面默认私有，分享只授予指定 Thread 的当前连接。PDF、trace、network inspection、console 和高级 locator
-属于后续独立契约。当前连接、释放与恢复的细节见[前端连接与浏览器能力](../app-ts/docs/design/app-server-connection.md)。
+属于后续独立契约。当前连接、释放与恢复的细节见[前端连接与浏览器能力](design/app-server-connection.md)。
 
 ## 8. Desktop 提交 App Server 能力需求
 
 Desktop 开发者在实现前提交一份符合
 [`ash-api-interface-requirements.md`](ash-api-interface-requirements.md) 的产品接口需求。
-Desktop 是需求提出方；ash-rs 是已接受 App Server 契约的 owner。接口必须同时评估 CLI、
+Desktop 是需求提出方；crates 是已接受 App Server 契约的 owner。接口必须同时评估 CLI、
 daemon 和远程客户端影响，不能定义为 Desktop 私有业务 API。
 
 文档必须覆盖：
@@ -992,7 +992,7 @@ daemon 和远程客户端影响，不能定义为 Desktop 私有业务 API。
 - 错误码、超时、取消、幂等和顺序；
 - 每个请求、成功响应和错误响应的 JSON fixture。
 
-ash-rs 开发者根据该文档实现 Rust DTO、dispatcher、typed client、handler、schema 和
+crates 开发者根据该文档实现 Rust DTO、dispatcher、typed client、handler、schema 和
 TypeScript 生成。进程内 CLI client 与 Desktop stdio client 必须经过同一个 dispatcher。
 
 当前已接受的方法、通知、错误码和前端可开发范围以
@@ -1006,8 +1006,8 @@ TypeScript 生成。进程内 CLI client 与 Desktop stdio client 必须经过�
 - `ash-app-server-daemon connect`（共享 local authority）与 `--listen stdio://`（direct compatibility）；
 - 独立的 `ash-app-server --managed` 后台进程与 `ash-app-server-daemon` 控制程序（profile authority、process-generation record、真实
   initialize readiness、协作停止、socket 与 idle lifecycle）；
-- `ash-rs/app-server-protocol/schema/typescript/index.ts` 与 `types/` 类型目录；
-- `ash-rs/app-server-protocol/schema/json/schema.json`；
+- `crates/app-server-protocol/schema/typescript/index.ts` 与 `types/` 类型目录；
+- `crates/app-server-protocol/schema/json/schema.json`；
 - schema hash；
 - 当前 schema fixtures；
 - Rust contract tests；

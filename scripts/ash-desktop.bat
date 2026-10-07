@@ -16,7 +16,7 @@ popd
 exit /b %result%
 
 :connected
-call pnpm --dir app-ts dev:ui:connected
+call pnpm dev:ui:connected
 set "result=%errorlevel%"
 popd
 exit /b %result%

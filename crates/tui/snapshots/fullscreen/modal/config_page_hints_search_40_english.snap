@@ -1,0 +1,16 @@
+---
+source: crates/tui/src/app/fullscreen/modal_tests.rs
+expression: text
+---
+  ┌── Config ────────────────────[✗]─┐  
+  │                                  │  
+  │   General    Providers           │  
+  │   Issues    Network              │  
+  │                                  │  
+  │  ╭─────────────────────────────╮ │  
+  │  │ Search configuration        │ │  
+  │  ╰─────────────────────────────╯ │  
+  │  Vim mode                  off   │  
+  └──────────────────────────────────┘  
+  Enter/Esc/Ctrl+C to return  ·         
+  Tab/Shift+Tab to switch

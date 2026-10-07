@@ -1,11 +1,11 @@
 # App Server 客户端架构与演进方案
 
-> 物理位置：`ash-rs/app-server-client/`  
+> 物理位置：`crates/app-server-client/`
 > 主要消费者：`ash-exec` 非交互执行宿主、`ash-tui`、`app`
-> Wire contract：[`ash-app-server-api.md`](ash-app-server-api.md)  
-> Canonical 产品模型：[`protocol.md`](protocol.md)  
+> Wire contract：[`ash-app-server-api.md`](ash-app-server-api.md)
+> Canonical 产品模型：[`protocol.md`](protocol.md)
 > Headless 与远程调度：[`exec.md`](exec.md)
-> 当前 crate contract：[`ash-rs/app-server-client/README.md`](../ash-rs/app-server-client/README.md)
+> 当前 crate contract：[`crates/app-server-client/README.md`](../crates/app-server-client/README.md)
 
 ## 快速理解
 
@@ -156,13 +156,8 @@ pub(crate) enum AppServerBackend {
 - Remote backend 由 `ash-remote-connections` 建立 SSH/stdio 连接，再交给相同的
   `AppServerSession`；
 - 两者暴露相同 typed request handle、event stream 与 shutdown contract；
-- `AppServerHost` 是 `app` 的产品级横向协调层，不是 `ash-rs` 的通用 App Server API；
+- `AppServerHost` 是 `app` 的产品级横向协调层，不是 `crates` 的通用 App Server API；
 - remote scheduler 仍位于 `ash-exec` 上层，不属于 App Server backend。
-
-在 app 中，这个产品边界位于 `app-rs/workbench/app_server/`。Agent、Language 和 Terminal 通过
-Workbench 的 App Server host 使用它导出的 session/event contract；`zui`、`ash-ui-components`、Agent Sidebar
-等 UI crate 不依赖 App Server client。这样 `ash-rs` 提供核心协议和通用 client，app 提供
-产品启动、本地/Remote backend 与重连协调，两边不会再各自复制一套 client。
 
 ## 4. 启动流程
 

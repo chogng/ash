@@ -1,0 +1,28 @@
+---
+source: crates/tui/src/app/state_tests.rs
+expression: reconnected
+---
+  .                                                                                [Dashboard]
+
+            ┌── Config › ChatGPT subscription ─────────────────────────────────[✗]─┐
+            │                                                                      │
+            │> Account  ·  person@example.test                                     │
+            │                                                                      │
+            │  Models ──────────────────────────────────────────────────────────── │
+            │  No models available                                                 │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+  ──────────└──────────────────────────────────────────────────────────────────────┘──────────
+  > Build anything
+  ─────────────────────────────────────────────────────────────────────────── Automatic model
+
+  Esc to return  ·  l to sign out

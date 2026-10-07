@@ -61,7 +61,7 @@ Cursor 本机版本由 `Info.plist`、`package.json` 和 `product.json` 交叉�
 | MCP / 动态工具         | MCP 资源、模板、调用、动态工具、发现与延迟加载                                    | `GetMcpTools` / `CallMcpTool` 或 `GetDynamicTools` / `CallDynamicTool` 按配置装配；发现支持 RE2 pattern      | MCP、动态工具、扩展统一组合；大 MCP 目录另有搜索 / 调用入口            | 语言模型工具服务、扩展 API 与 MCP 工具贡献                                |
 | JavaScript 编排工具    | Code Mode：`exec` / `wait`，调用 `tools.*`                                        | 本次未确认跨全部工具的等价 Code Mode；`browser_cdp` 可请求浏览器 Runtime 域能力                              | Code Mode 运行时和目录接口已有                                         | `run_playwright_code` 是浏览器域能力；本次未确认跨全部工具的等价执行器    |
 
-主要源码入口：[Codex 注册链路](/Volumes/1t/codex/codex-rs/core/src/tools/spec_plan.rs:1091)、[Ash 本地工具](/Volumes/1t/ash/ash-rs/app-server/src/local_tools/suite.rs:166)、[VS Code / Copilot 工具名称](/Volumes/1t/vscode/extensions/copilot/src/extension/tools/common/toolNames.ts:21)。Cursor 当前项采用[Agent 工具构造与装配](/Applications/Cursor.app/Contents/Resources/app/extensions/cursor-agent-exec/dist/main.js)、[两套协议](/Applications/Cursor.app/Contents/Resources/app/extensions/cursor-resolver/dist/browser/main.js:27501)、[浏览器 Provider](/Applications/Cursor.app/Contents/Resources/app/extensions/cursor-browser-automation/dist/extension.js)、[桌面操作 Provider](/Applications/Cursor.app/Contents/Resources/app/extensions/cursor-computer-use/dist/extension.js)。
+主要源码入口：[Codex 注册链路](/Volumes/1t/codex/codex-rs/core/src/tools/spec_plan.rs:1091)、[Ash 本地工具](/Volumes/1t/ash/crates/app-server/src/local_tools/suite.rs:166)、[VS Code / Copilot 工具名称](/Volumes/1t/vscode/extensions/copilot/src/extension/tools/common/toolNames.ts:21)。Cursor 当前项采用[Agent 工具构造与装配](/Applications/Cursor.app/Contents/Resources/app/extensions/cursor-agent-exec/dist/main.js)、[两套协议](/Applications/Cursor.app/Contents/Resources/app/extensions/cursor-resolver/dist/browser/main.js:27501)、[浏览器 Provider](/Applications/Cursor.app/Contents/Resources/app/extensions/cursor-browser-automation/dist/extension.js)、[桌面操作 Provider](/Applications/Cursor.app/Contents/Resources/app/extensions/cursor-computer-use/dist/extension.js)。
 
 ## 3. 已核实的工具族与实现入口
 
@@ -361,25 +361,25 @@ create_agent stop_agent get_pr_code_tour write_canvas read_canvas generate_video
 
 ### 3.3 Ash
 
-Ash 通过 App Server 组合 Environment、Dynamic、Extension、Host、Local、MCP 六类来源，登记工具定义、执行路由、来源和暴露方式。[组合代码](/Volumes/1t/ash/ash-rs/app-server/src/tool_composition.rs:998)
+Ash 通过 App Server 组合 Environment、Dynamic、Extension、Host、Local、MCP 六类来源，登记工具定义、执行路由、来源和暴露方式。[组合代码](/Volumes/1t/ash/crates/app-server/src/tool_composition.rs:998)
 
 | 工具族           | 已核实的名称 / 行为                                                                                                                          | 源码入口                                                                                                                                                              |
 | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 本地文件与搜索   | `read_file`、`write_file`、`edit`、`grep`、`glob`                                                                                            | [本地工具集](/Volumes/1t/ash/ash-rs/app-server/src/local_tools/suite.rs:166)                                                                                          |
-| 执行与补丁       | `shell-command` 执行器、`apply_patch`；同名 shell service 先标为 Hidden，再由执行器贡献替换，最终暴露以执行器为准                            | [组合与暴露](/Volumes/1t/ash/ash-rs/app-server/src/local_tools.rs:245)、[替换规则](/Volumes/1t/ash/ash-rs/app-server/src/tool_composition.rs:365)                     |
-| 长进程           | `shell-session`，action 包含 `start/read/wait/write/close_input/interrupt/resize/terminate`                                                  | [会话描述与 schema](/Volumes/1t/ash/ash-rs/app-server/src/local_tools/suite.rs:92)                                                                                    |
-| 代码检索         | `search_code`，接入符号、语义与云检索来源                                                                                                    | [工具实现](/Volumes/1t/ash/ash-rs/app-server/src/codebase_retrieval_tool.rs:33)、[实际接入](/Volumes/1t/ash/ash-rs/app-server/src/server/environment_runtime.rs:2245) |
-| 计划与目标       | `update_plan`、`get_goal`、`create_goal`、`update_goal`                                                                                      | [计划工具](/Volumes/1t/ash/ash-rs/app-server/src/server/update_plan_tool.rs:35)、[Goal](/Volumes/1t/ash/ash-rs/ext/goal/src/tool.rs:27)                               |
-| 模式切换         | `switch_mode(mode, reason)`；更新当前 Turn 的模式及下一次调用的模式提示词。Plan / Ask → 执行模式需用户明确选择；权限、角色和工具快照保持不变 | [工具与约定](tools.md#当前-turn-的模式切换)、[执行代码](/Volumes/1t/ash/ash-rs/app-server/src/server/switch_mode_tool.rs)                                             |
-| 咨询与指令       | `advisor`、`read_instruction`                                                                                                                | [Advisor](/Volumes/1t/ash/ash-rs/ext/advisor/src/lib.rs:30)、[指令读取](/Volumes/1t/ash/ash-rs/app-server/src/server/instruction_operations.rs:169)                   |
-| 多 Agent 与团队  | `spawn_agent`、`send_agent_message`、`wait_agent`、`team_post_message`、`team_read_messages`                                                 | [Agent 工具](/Volumes/1t/ash/ash-rs/ext/agent/src/tool.rs:54)、[接入本地工具](/Volumes/1t/ash/ash-rs/app-server/src/server/environment_runtime.rs:3042)               |
-| 消息板           | `board_read`、`board_write`                                                                                                                  | [消息板工具](/Volumes/1t/ash/ash-rs/ext/agent-message-board/src/tools.rs:27)                                                                                          |
-| 历史与笔记       | `history_list/read/search`、`notes_list/read/search/write`                                                                                   | [扩展安装](/Volumes/1t/ash/ash-rs/ext/history-notes/src/lib.rs:35)                                                                                                    |
-| 记忆             | `memories-scopes`、`memories-search`、`memories-read`、`memories-save`，按记忆授权与扩展装配提供                                             | [记忆定义](/Volumes/1t/ash/ash-rs/ext/memories/src/tool.rs:263)                                                                                                       |
-| Skill、Web、图像 | `skills-read`、`web_search`、`imagegen`；Web / 图像依赖后端配置                                                                              | [Skill / Web 安装](/Volumes/1t/ash/ash-rs/app-server/src/server.rs:1293)、[图像安装](/Volumes/1t/ash/ash-rs/app-server/src/server.rs:1240)                            |
-| 工具发现         | 有 Deferred 工具时生成 `tool_search`；工具搜索支持 BM25 / regex，混合 embedding 取决于配置                                                   | [发现工具](/Volumes/1t/ash/ash-rs/app-server/src/tool_composition.rs:1904)                                                                                            |
-| 大 MCP 目录      | 超过 15 个定义或本地估算 5000 token 时，改为 `search_tools` + `call_mcp_tool` 入口                                                           | [MCP 目录处理](/Volumes/1t/ash/ash-rs/app-server/src/tool_composition/mcp_exposure.rs:35)                                                                             |
-| Code Mode        | JavaScript 工具执行与 `ALL_TOOLS` 元数据；目录随实际启用工具生成                                                                             | [Code Mode 目录](/Volumes/1t/ash/ash-rs/code-mode-runtime/src/globals.rs:77)                                                                                          |
+| 本地文件与搜索   | `read_file`、`write_file`、`edit`、`grep`、`glob`                                                                                            | [本地工具集](/Volumes/1t/ash/crates/app-server/src/local_tools/suite.rs:166)                                                                                          |
+| 执行与补丁       | `shell-command` 执行器、`apply_patch`；同名 shell service 先标为 Hidden，再由执行器贡献替换，最终暴露以执行器为准                            | [组合与暴露](/Volumes/1t/ash/crates/app-server/src/local_tools.rs:245)、[替换规则](/Volumes/1t/ash/crates/app-server/src/tool_composition.rs:365)                     |
+| 长进程           | `shell-session`，action 包含 `start/read/wait/write/close_input/interrupt/resize/terminate`                                                  | [会话描述与 schema](/Volumes/1t/ash/crates/app-server/src/local_tools/suite.rs:92)                                                                                    |
+| 代码检索         | `search_code`，接入符号、语义与云检索来源                                                                                                    | [工具实现](/Volumes/1t/ash/crates/app-server/src/codebase_retrieval_tool.rs:33)、[实际接入](/Volumes/1t/ash/crates/app-server/src/server/environment_runtime.rs:2245) |
+| 计划与目标       | `update_plan`、`get_goal`、`create_goal`、`update_goal`                                                                                      | [计划工具](/Volumes/1t/ash/crates/app-server/src/server/update_plan_tool.rs:35)、[Goal](/Volumes/1t/ash/crates/ext/goal/src/tool.rs:27)                               |
+| 模式切换         | `switch_mode(mode, reason)`；更新当前 Turn 的模式及下一次调用的模式提示词。Plan / Ask → 执行模式需用户明确选择；权限、角色和工具快照保持不变 | [工具与约定](tools.md#当前-turn-的模式切换)、[执行代码](/Volumes/1t/ash/crates/app-server/src/server/switch_mode_tool.rs)                                             |
+| 咨询与指令       | `advisor`、`read_instruction`                                                                                                                | [Advisor](/Volumes/1t/ash/crates/ext/advisor/src/lib.rs:30)、[指令读取](/Volumes/1t/ash/crates/app-server/src/server/instruction_operations.rs:169)                   |
+| 多 Agent 与团队  | `spawn_agent`、`send_agent_message`、`wait_agent`、`team_post_message`、`team_read_messages`                                                 | [Agent 工具](/Volumes/1t/ash/crates/ext/agent/src/tool.rs:54)、[接入本地工具](/Volumes/1t/ash/crates/app-server/src/server/environment_runtime.rs:3042)               |
+| 消息板           | `board_read`、`board_write`                                                                                                                  | [消息板工具](/Volumes/1t/ash/crates/ext/agent-message-board/src/tools.rs:27)                                                                                          |
+| 历史与笔记       | `history_list/read/search`、`notes_list/read/search/write`                                                                                   | [扩展安装](/Volumes/1t/ash/crates/ext/history-notes/src/lib.rs:35)                                                                                                    |
+| 记忆             | `memories-scopes`、`memories-search`、`memories-read`、`memories-save`，按记忆授权与扩展装配提供                                             | [记忆定义](/Volumes/1t/ash/crates/ext/memories/src/tool.rs:263)                                                                                                       |
+| Skill、Web、图像 | `skills-read`、`web_search`、`imagegen`；Web / 图像依赖后端配置                                                                              | [Skill / Web 安装](/Volumes/1t/ash/crates/app-server/src/server.rs:1293)、[图像安装](/Volumes/1t/ash/crates/app-server/src/server.rs:1240)                            |
+| 工具发现         | 有 Deferred 工具时生成 `tool_search`；工具搜索支持 BM25 / regex，混合 embedding 取决于配置                                                   | [发现工具](/Volumes/1t/ash/crates/app-server/src/tool_composition.rs:1904)                                                                                            |
+| 大 MCP 目录      | 超过 15 个定义或本地估算 5000 token 时，改为 `search_tools` + `call_mcp_tool` 入口                                                           | [MCP 目录处理](/Volumes/1t/ash/crates/app-server/src/tool_composition/mcp_exposure.rs:35)                                                                             |
+| Code Mode        | JavaScript 工具执行与 `ALL_TOOLS` 元数据；目录随实际启用工具生成                                                                             | [Code Mode 目录](/Volumes/1t/ash/crates/code-mode-runtime/src/globals.rs:77)                                                                                          |
 
 Ash 浏览器工具 **10 个名称**：
 
@@ -390,7 +390,7 @@ browser_back       browser_reload     browser_screenshot
 browser_close
 ```
 
-`browser_observe` 读取页面状态、可访问性树，并可包含 DOM / 截图资源；它把多个观察能力合到一个工具里。与当前 Cursor 的 16 个工具相比，Ash 这组定义没有通用 `browser_cdp`，也没有独立按键、坐标点击、select、drag、bounding box、highlight 和 browser lock 工具；与 VS Code 相比，没有 `run_playwright_code`。这里比较的是实际提供的入口，不据工具数量推算能力比例。[Ash 浏览器定义](/Volumes/1t/ash/ash-rs/app-server/src/browser_tool.rs:58)
+`browser_observe` 读取页面状态、可访问性树，并可包含 DOM / 截图资源；它把多个观察能力合到一个工具里。与当前 Cursor 的 16 个工具相比，Ash 这组定义没有通用 `browser_cdp`，也没有独立按键、坐标点击、select、drag、bounding box、highlight 和 browser lock 工具；与 VS Code 相比，没有 `run_playwright_code`。这里比较的是实际提供的入口，不据工具数量推算能力比例。[Ash 浏览器定义](/Volumes/1t/ash/crates/app-server/src/browser_tool.rs:58)
 
 ### 3.4 VS Code + Copilot
 
@@ -422,11 +422,11 @@ VS Code 的 Workbench 提供共享工具服务、终端、测试、语言操作�
 | Ash               | App Server 合并工具来源、构造 registry，另行生成搜索入口                                                                 | 不一定；Direct / Deferred / ModelOnly / Hidden，Code Mode 也有资格过滤                                 | 目录授权、环境、宿主、扩展、MCP、搜索配置、当前任务                        |
 | VS Code + Copilot | Workbench 工具服务、扩展贡献与 Copilot 请求筛选                                                                          | 不一定；用户选择、模型特定定义、分组与延迟加载会改变集合                                               | tool picker、请求引用、模型匹配、实验设置、浏览器分享与扩展配置            |
 
-来源：[Codex 暴露策略](/Volumes/1t/codex/codex-rs/core/src/tools/spec_plan.rs:235)、[Ash registry 筛选](/Volumes/1t/ash/ash-rs/tools/src/registry.rs:237)、[VS Code 请求筛选](/Volumes/1t/vscode/extensions/copilot/src/extension/tools/vscode-node/toolsService.ts:286)、[VS Code 延迟工具定义](/Volumes/1t/vscode/extensions/copilot/src/extension/tools/common/toolDeferralService.ts:14)。
+来源：[Codex 暴露策略](/Volumes/1t/codex/codex-rs/core/src/tools/spec_plan.rs:235)、[Ash registry 筛选](/Volumes/1t/ash/crates/tools/src/registry.rs:237)、[VS Code 请求筛选](/Volumes/1t/vscode/extensions/copilot/src/extension/tools/vscode-node/toolsService.ts:286)、[VS Code 延迟工具定义](/Volumes/1t/vscode/extensions/copilot/src/extension/tools/common/toolDeferralService.ts:14)。
 
 ### 4.1 Ash 前端当前拿到什么
 
-前端调用 `agent/capabilities/read`，接口返回当前本地环境工具组合的能力摘要。前端逐项映射，没有在这个适配器中截断工具列表。[前端调用](/Volumes/1t/ash/app-ts/src/ash/platform/agentCapabilities/browser/agentCapabilitiesApi.ts:7)、[服务端接口](/Volumes/1t/ash/ash-rs/app-server/src/server/operations.rs:312)
+前端调用 `agent/capabilities/read`，接口返回当前本地环境工具组合的能力摘要。前端逐项映射，没有在这个适配器中截断工具列表。[前端调用](/Volumes/1t/ash/src/ash/platform/agentCapabilities/browser/agentCapabilitiesApi.ts:7)、[服务端接口](/Volumes/1t/ash/crates/app-server/src/server/operations.rs:312)
 
 | 核查项                                          | 当前结论                 | 证据与影响                                                                                                    |
 | ----------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------- |
@@ -442,7 +442,7 @@ VS Code 的 Workbench 提供共享工具服务、终端、测试、语言操作�
 
 两个应进一步核查的问题是：前端是否需要同时显示 MCP 原始成员与搜索入口，以及系统生成的工具是否应与普通工具一起登记和展示。这是目录契约问题，不能用 UI 上有多少行来判断全部工具是否已经接入。
 
-证据：[catalog 构造](/Volumes/1t/ash/ash-rs/app-server/src/tool_composition.rs:1080)、[搜索工具单独追加](/Volumes/1t/ash/ash-rs/app-server/src/tool_composition.rs:1265)、[模型目录](/Volumes/1t/ash/ash-rs/app-server/src/tool_composition.rs:1361)、[Code Mode 过滤](/Volumes/1t/ash/ash-rs/app-server/src/tool_composition.rs:1273)、[前端字段](/Volumes/1t/ash/app-ts/src/ash/platform/agentCapabilities/common/agentCapabilitiesService.ts:7)。
+证据：[catalog 构造](/Volumes/1t/ash/crates/app-server/src/tool_composition.rs:1080)、[搜索工具单独追加](/Volumes/1t/ash/crates/app-server/src/tool_composition.rs:1265)、[模型目录](/Volumes/1t/ash/crates/app-server/src/tool_composition.rs:1361)、[Code Mode 过滤](/Volumes/1t/ash/crates/app-server/src/tool_composition.rs:1273)、[前端字段](/Volumes/1t/ash/src/ash/platform/agentCapabilities/common/agentCapabilitiesService.ts:7)。
 
 ## 5. Ash 的差异与后续核查顺序
 

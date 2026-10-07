@@ -1,6 +1,6 @@
 # TypeScript UI UX Persistence
 
-Use this reference only for UX data interpreted by the TypeScript UI under `app-ts`.
+Use this reference only for UX data interpreted by the TypeScript UI under `src`.
 
 ## Boundary with VS Code API alignment
 

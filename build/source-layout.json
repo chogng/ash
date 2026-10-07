@@ -1,0 +1,10 @@
+{
+  "terminalCrates": [
+    "ansi-escape",
+    "mermaid",
+    "sprite",
+    "terminal",
+    "terminal-detection",
+    "tui"
+  ]
+}

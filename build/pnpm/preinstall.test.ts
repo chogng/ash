@@ -12,16 +12,16 @@ test("installation accepts only the declared Node and package manager", async ()
 		await mkdir(join(root, "build/pnpm"), { recursive: true });
 		await copyFile(join(import.meta.dirname, "preinstall.ts"), entry);
 		await writeFile(join(root, ".nvmrc"), process.versions.node);
-		await writeFile(join(root, "package.json"), JSON.stringify({ type: "module", packageManager: "pnpm@12.4.2" }));
-		for (const agent of ["pnpm/12.4.2 npm/?", "pnpm/11.17.0", "npm/11.0.0", ""]) {
+		await writeFile(join(root, "package.json"), JSON.stringify({ type: "module", packageManager: "pnpm@12.8.0" }));
+		for (const agent of ["pnpm/12.8.0 npm/?", "pnpm/11.17.0", "npm/11.0.0", ""]) {
 			const result = spawnSync(process.execPath, [entry], {
 				env: { ...process.env, npm_config_user_agent: agent }, encoding: "utf8", windowsHide: true,
 			});
-			if (agent.startsWith("pnpm/12.4.2")) {
+			if (agent.startsWith("pnpm/12.8.0")) {
 				assert.equal(result.status, 0, result.stderr);
 			} else {
 				assert.equal(result.status, 1);
-				assert.match(result.stderr, /Use pnpm@12\.4\.2/);
+				assert.match(result.stderr, /Use pnpm@12\.8\.0/);
 			}
 		}
 		for (const packageManager of [undefined, "pnpm", "pnpm@"]) {

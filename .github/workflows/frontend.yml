@@ -4,12 +4,19 @@ on:
   push:
     branches: [main]
     paths:
-      - "app-ts/**"
+      - "src/**"
+      - "test/**"
+      - "extension-sdk/**"
+      - "generated/**"
+      - "localization/**"
+      - "licenses/**"
+      - "playwright.config.ts"
+      - "tsconfig*.json"
       - "build/**"
       - "third_party/livekit/**"
       - "resources/**"
       - "extensions/**"
-      - "ash-rs/**"
+      - "crates/**"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
@@ -22,12 +29,19 @@ on:
       - ".github/workflows/frontend.yml"
   pull_request:
     paths:
-      - "app-ts/**"
+      - "src/**"
+      - "test/**"
+      - "extension-sdk/**"
+      - "generated/**"
+      - "localization/**"
+      - "licenses/**"
+      - "playwright.config.ts"
+      - "tsconfig*.json"
       - "build/**"
       - "third_party/livekit/**"
       - "resources/**"
       - "extensions/**"
-      - "ash-rs/**"
+      - "crates/**"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
@@ -90,7 +104,7 @@ jobs:
       - name: Check CSS variable names
         run: pnpm stylelint
       - name: Check generated protocol contracts
-        run: pnpm --dir app-ts typecheck:protocol
+        run: pnpm typecheck:protocol
       - name: Check and test build tools
         if: matrix.surface == 'browser'
         run: |
@@ -99,47 +113,47 @@ jobs:
           pnpm build:stanza
       - name: Test frontend units
         if: matrix.surface == 'browser'
-        run: pnpm --dir app-ts test:unit
+        run: pnpm test:unit
       - name: Install Chromium
         if: matrix.surface == 'browser'
-        run: pnpm --dir app-ts exec playwright install --with-deps chromium
+        run: pnpm exec playwright install --with-deps chromium
       - name: Test browser integration
         if: matrix.surface == 'browser'
-        run: pnpm --dir app-ts run test:browser:integration --project=chromium
+        run: pnpm run test:browser:integration --project=chromium
       - name: Prepare production browser UI smoke tests
         if: matrix.surface == 'browser'
-        run: pnpm --dir app-ts run pretest:smoke:browser
+        run: pnpm run pretest:smoke:browser
       - name: Test production browser UI
         if: matrix.surface == 'browser'
-        run: pnpm --dir app-ts run test:smoke:browser:no-compile
+        run: pnpm run test:smoke:browser:no-compile
       - name: Prepare Electron UI smoke tests
         if: matrix.surface == 'electron'
-        run: pnpm --dir app-ts run pretest:smoke:ui
+        run: pnpm run pretest:smoke:ui
       - name: Test Electron UI
         if: matrix.surface == 'electron'
-        run: pnpm --dir app-ts run test:smoke:ui:no-compile
+        run: pnpm run test:smoke:ui:no-compile
       - name: Prepare connected Web smoke tests
         if: matrix.surface == 'browser'
-        run: pnpm --dir app-ts run pretest:smoke:browser:full
+        run: pnpm run pretest:smoke:browser:full
       - name: Test connected Web
         if: matrix.surface == 'browser'
-        run: pnpm --dir app-ts run test:smoke:browser:full:no-compile
+        run: pnpm run test:smoke:browser:full:no-compile
       - name: Prepare connected Electron smoke tests
         if: matrix.surface == 'electron'
-        run: pnpm --dir app-ts run pretest:smoke:desktop
+        run: pnpm run pretest:smoke:desktop
       - name: Test connected Electron
         if: matrix.surface == 'electron'
         run: pnpm run smoketest-no-compile
       - name: Test Academic workbench
         if: matrix.surface == 'electron'
-        run: pnpm --dir app-ts exec playwright test --project=electron-academic-ui
+        run: pnpm exec playwright test --project=electron-academic-ui
       - name: Test connected Academic document editing
         if: matrix.surface == 'electron'
-        run: pnpm --dir app-ts exec node test/smoke/run.ts electron-editor-app-server
+        run: pnpm exec node test/smoke/run.ts electron-editor-app-server
       - name: Upload test diagnostics
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: frontend-${{ matrix.surface }}-${{ matrix.runner }}
-          path: .build/app-ts/playwright/
+          path: .build/desktop/playwright/
           if-no-files-found: ignore

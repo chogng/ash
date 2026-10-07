@@ -1,10 +1,5 @@
 # Product Icon System：资源、语义与渲染边界
 
-> 状态：Current。
-> 本文拥有跨 Desktop、Rust native 与 renderer 的 product-icon ownership。Canonical SVG
-> 文件操作见 [`resources/README.md`](../resources/README.md)，Rust API 与生成路径见
-> [`ash-icons`](../app-rs/icons/README.md)。
-
 ## 快速理解
 
 Product icon 是 renderer-independent semantic identity，不是某个 component 或 GPU backend
@@ -32,7 +27,7 @@ resources/icons/*.svg
 | 能力                                                   | 当前 owner                                   | 状态                 |
 | ------------------------------------------------------ | -------------------------------------------- | -------------------- |
 | Canonical first-party SVG artwork                      | `resources/icons`                            | ✅                   |
-| Desktop generated SVG factories                        | `app-ts/src/ash/base/common/productIcons.ts` | ✅                   |
+| Desktop generated SVG factories                        | `src/ash/base/common/productIcons.ts` | ✅                   |
 | Desktop built-in SVG catalog                           | `base/common/lxicons.ts` / `lxiconsUtil.ts`  | ✅                   |
 | Desktop semantic registration与resolution              | `platform/theme/common/iconRegistry.ts`      | ✅                   |
 | Desktop SVG creation and display                       | `base/browser/ui/lxicons`                    | ✅                   |
@@ -42,7 +37,7 @@ resources/icons/*.svg
 | Rust logical placement、tint 与 clip scene contract    | `zui::PaintIcon`                             | ✅                   |
 | Rust icon+text component geometry                      | `ash-ui-components::IconLabel`               | ✅                   |
 | Product command 与 icon selection                      | 各 product host                              | ✅                   |
-| Seti file-extension/theme resolution                   | `app-ts/src/ash/platform/theme/browser`      | ✅，浏览器主题能力   |
+| Seti file-extension/theme resolution                   | `src/ash/platform/theme/browser`      | ✅，浏览器主题能力   |
 | Native symbolic mask、fixed-color atlas 与 render path | `ash-wgpu`                                   | ✅                   |
 
 `ash-icons` 不依赖 `zui` 或 `ash-ui-components`。`PaintIcon`、`IconLabel`、`Button` 和 `InputBox` 可以依赖 icon identity，但

@@ -1,0 +1,36 @@
+---
+source: crates/tui/src/app/session_manager_tests.rs
+expression: render(&app)
+---
+  .                                                                                    [Dashboard]
+
+─ Dashboard ───────────────────────────────────────────────────────────────────── Group: Status  g ─
+
+    Sessions                           Status           Updated   │ Session details
+> Idle (1) +                                                      │
+                                                                  │   Idle (1)
+  Archived (0)                                                    │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
+
+  Enter/→ to expand · g to group · Esc to return

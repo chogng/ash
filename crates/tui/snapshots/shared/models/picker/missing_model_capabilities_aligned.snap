@@ -1,0 +1,18 @@
+---
+source: crates/tui/src/models/picker_tests.rs
+expression: terminal.backend().to_string()
+---
+"╭──────────────────────────────────────────────────────────────────────────────────────────────────╮"
+"│ Search models                                                                                    │"
+"╰──────────────────────────────────────────────────────────────────────────────────────────────────╯"
+"> Model 4                                     [Long context on]                                     "
+"  Model 2                         [Fast off]                                                        "
+"  Model 7      ██ ██ ██   Medium  [Fast off]  [Long context on]                                     "
+"  Model 6                         [Fast off]  [Long context on]                                     "
+"  Model 5      ██ ██ ██   Medium              [Long context on]                                     "
+"  Model 3      ██ ██ ██   Medium  [Fast off]                                                        "
+"  Model 1      ██ ██ ██   Medium                                                                    "
+"  Model 0                                                                                           "
+"                                                                                                    "
+"                                                                                                    "
+"                                                                                                    "

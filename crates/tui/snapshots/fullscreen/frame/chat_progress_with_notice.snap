@@ -1,0 +1,24 @@
+---
+source: crates/tui/src/app/fullscreen/frame_tests.rs
+expression: working
+---
+  .                                                                [Dashboard]  
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+⠋ Working... · 0s · esc to interrupt                                            
+                                                               Copied 42 chars  
+  ────────────────────────────────────────────────────────────────────────────  
+  >                                                                             
+  ─────────────────────────────────────────────────────────── Automatic model   
+                                                                                
+  ⏸ Manual · ← Dashboard · ? for shortcuts

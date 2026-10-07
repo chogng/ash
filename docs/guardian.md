@@ -12,7 +12,7 @@ Guardian 是 Ash 的风险审核系统，供权限模式 Auto 使用。系统及
 Guardian 只在确定性规则无法独立判断时提供风险建议；它不能覆盖安全规则，也不能自行签发
 执行授权。
 
-后端共享审核数据统一由 [`ash-protocol/guardian.rs`](../ash-rs/protocol/src/guardian.rs) 定义：动作与
+后端共享审核数据统一由 [`ash-protocol/guardian.rs`](../crates/protocol/src/guardian.rs) 定义：动作与
 能力身份、证据来源和信任类别、风险等级、用户授权程度、审核建议，以及绑定准确动作和策略
 版本的审核结果。Core、审核器和策略引擎直接使用这些类型。沙箱执行上下文、分类器接口、
 建议校验与最终授权仍归 `action-policy`；审核器的 `model_contract.rs` 负责模型提示和响应格式。
@@ -486,5 +486,5 @@ Guardian 的失败模式必须显式：
 - 凭证和密钥不进入评测样本集或普通审查上下文。
 
 Guardian 的实现细节、错误语义和修改指南见
-[`ash-guardian-reviewer` README](../ash-rs/ext/guardian-reviewer/README.md)；确定性决策引擎与授权实现见
-[`ash-action-policy` README](../ash-rs/action-policy/README.md)。
+[`ash-guardian-reviewer` README](../crates/ext/guardian-reviewer/README.md)；确定性决策引擎与授权实现见
+[`ash-action-policy` README](../crates/action-policy/README.md)。

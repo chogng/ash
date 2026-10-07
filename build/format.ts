@@ -7,9 +7,9 @@ const repositoryRoot = resolve(import.meta.dirname, '..');
 const settings: ts.FormatCodeSettings = JSON.parse(readFileSync(resolve(repositoryRoot, 'tsfmt.json'), 'utf8'));
 const sourceExtensions = /\.(?:[cm]?[jt]s|[jt]sx)$/;
 const excludedDirectories = /(?:^|\/)(?:node_modules|generated|vendor|dist|out|fixtures|test-data|testData|typings)(?:\/|$)/;
-const sourceRoots = ['app-ts/', 'build/', 'extensions/', 'test/', 'services/', 'ash-rs/js-extension-host/'];
-const copiedSourceRoots = ['app-ts/src/ash/base/browser/dompurify/', 'app-ts/src/ash/base/common/marked/'];
-const generatedSources = new Set(['app-ts/src/ash/base/common/productIcons.ts']);
+const sourceRoots = ['src/', 'build/', 'extensions/', 'test/', 'services/', 'crates/js-extension-host/'];
+const copiedSourceRoots = ['src/ash/base/browser/dompurify/', 'src/ash/base/common/marked/'];
+const generatedSources = new Set(['src/ash/base/common/productIcons.ts']);
 
 export function format(fileName: string, text: string): string {
 	const absolutePath = resolve(fileName);

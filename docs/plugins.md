@@ -1,21 +1,21 @@
 # 插件系统
 
-> 物理位置：`ash-rs/plugin/`、`ash-rs/core-plugins/`
+> 物理位置：`crates/plugin/`、`crates/core-plugins/`
 > Rust crate：`ash_plugin`、`ash_core_plugins`
 > 当前状态：`ash-plugin` 已拥有 Plugin identity、manifest、path 与 package observation；
 > `ash-core-plugins` 已拥有 local/Marketplace package store、durable authority、activation、lease 与远端 registry 接入；
-> Connector 领域类型、目录发现、连接状态持久化和认证流程统一归 `ash-rs/ext/connectors`。
+> Connector 领域类型、目录发现、连接状态持久化和认证流程统一归 `crates/ext/connectors`。
 > App Server 已能从注入的 activation 自动接线 Connector 与 MCP，通用 OAuth
 > PKCE/device 状态机、App Server control plane、Desktop/TUI 产品入口与 GitHub providers 已实现；
 > PL4 的可执行 Editor Extension 本地安装/授权声明已实现，Host runtime 不由本 crate 拥有
-> crate 实现契约：[`ash-plugin`](../ash-rs/plugin/README.md)、[`ash-core-plugins`](../ash-rs/core-plugins/README.md)
-> 跨 package family 的 Marketplace source、共享验证与领域投影：[`core-plugins.md`](../ash-rs/docs/core-plugins.md)
+> crate 实现契约：[`ash-plugin`](../crates/plugin/README.md)、[`ash-core-plugins`](../crates/core-plugins/README.md)
+> 跨 package family 的 Marketplace source、共享验证与领域投影：[`core-plugins.md`](../crates/docs/core-plugins.md)
 > Connector account/lifecycle：[`connectors.md`](connectors.md)
 > MCP runtime：[`mcp.md`](mcp.md)
 > Skill runtime：[`skills.md`](skills.md)
 > Config authority 与 runtime snapshot 接入：[`config.md`](config.md)
 > Editor Extension 的 TS/JS 运行方向与当前实现：[`editor-extensions.md`](editor-extensions.md)
-> 可执行 Host runtime 实现：[`ash-rs/editor-extension-host/README.md`](../ash-rs/editor-extension-host/README.md)
+> 可执行 Host runtime 实现：[`crates/editor-extension-host/README.md`](../crates/editor-extension-host/README.md)
 
 ## 快速理解
 
@@ -331,7 +331,7 @@ artifact fail closed。
 
 ### 5.3 身份
 
-通用插件标识采用 `name@marketplace`，规则见 [Core Plugins](../ash-rs/docs/core-plugins.md#插件标识与-provider)。
+通用插件标识采用 `name@marketplace`，规则见 [Core Plugins](../crates/docs/core-plugins.md#插件标识与-provider)。
 本节的 `PluginPackageId` 专指现有 `.ash-plugin` manifest 中的 `publisher/name`，两段使用 lowercase ASCII、数字和单连字符，并限制总长度。
 display name 可本地化且可变化，不能充当 identity。
 
@@ -675,7 +675,7 @@ Manager 撤销 installation，并等待 capability lease 排空。两者都不�
 
 已实现 Plugin mutation 使用 `CommandId + expectedRevision + exact package payload`。这些 mutation 不读取
 Marketplace catalog，也不接受 Renderer 提交宿主文件路径。远端信任、TUF、revocation、下载、artifact
-和安装状态由 [`core-plugins.md`](../ash-rs/docs/core-plugins.md) 定义的 PluginsManager 链路统一拥有。
+和安装状态由 [`core-plugins.md`](../crates/docs/core-plugins.md) 定义的 PluginsManager 链路统一拥有。
 
 正式 package 把只读配置和公开信任根放在
 `ash-resources/product-services/{product-services.json,marketplace-root.json}`。Desktop/server、
@@ -703,7 +703,7 @@ CLI/TUI/Desktop 不直接扫描 Plugin 目录，不解析 manifest，也不自�
 ## 15. 安全
 
 Legacy local package ingestion 必须防御以下问题；remote Marketplace ingestion 的 TUF/archive 契约由
-[`core-plugins.md`](../ash-rs/docs/core-plugins.md) 单独拥有：
+[`core-plugins.md`](../crates/docs/core-plugins.md) 单独拥有：
 
 - archive path traversal、absolute path 和 drive/device path；
 - symlink/hardlink escape；
@@ -754,7 +754,7 @@ CommandConflict
 Plugin 定义与产品生命周期保持两个 crate：
 
 ```text
-ash-rs/plugin/src/
+crates/plugin/src/
 ├── lib.rs
 ├── identity.rs
 ├── path.rs
@@ -768,7 +768,7 @@ ash-rs/plugin/src/
     ├── local.rs
     └── digest.rs
 
-ash-rs/core-plugins/src/
+crates/core-plugins/src/
 ├── lib.rs
 ├── plugin_activation.rs
 ├── plugin_authority.rs

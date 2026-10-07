@@ -1,0 +1,68 @@
+{
+  "layoutVersion": 2,
+  "entrypoint": "bin/ash-app-server{exe}",
+  "pathDir": "ash-path",
+  "resourcesDir": "ash-resources",
+  "binaries": {
+    "appServer": "bin/ash-app-server{exe}",
+    "remote": "bin/ash-remote{exe}",
+    "remoteServer": "bin/ash-remote-server{exe}",
+    "execServer": "bin/ash-exec-server{exe}",
+    "appServerDaemon": "bin/ash-app-server-daemon{exe}",
+    "codeModeHost": "bin/ash-code-mode-host{exe}",
+    "jsExtensionHost": "bin/ash-js-extension-host{exe}",
+    "voiceHost": "bin/ash-voice-host{exe}",
+    "collaborationServer": "bin/ash-collaboration-server{exe}",
+    "livekit": "bin/livekit-server{exe}"
+  },
+  "licenses": [
+    {
+      "source": "third_party/ripgrep/LICENSE-MIT",
+      "destination": "ash-resources/licenses/ripgrep/LICENSE-MIT"
+    },
+    {
+      "source": "third_party/ripgrep/UNLICENSE",
+      "destination": "ash-resources/licenses/ripgrep/UNLICENSE"
+    },
+    {
+      "source": "third_party/vscode/LICENSE.txt",
+      "destination": "ash-resources/licenses/vscode/LICENSE.txt"
+    },
+    {
+      "source": "crates/vendor/mxc/LICENSE.md",
+      "destination": "ash-resources/licenses/mxc/LICENSE.md"
+    },
+    {
+      "source": "crates/uds/LICENSE-APACHE",
+      "destination": "ash-resources/licenses/uds/LICENSE-APACHE"
+    },
+    {
+      "source": "crates/uds/NOTICE",
+      "destination": "ash-resources/licenses/uds/NOTICE"
+    },
+    {
+      "source": "third_party/tgrep/LICENSE",
+      "destination": "ash-resources/licenses/tgrep/LICENSE"
+    },
+    {
+      "source": "third_party/livekit/LICENSE",
+      "destination": "ash-resources/licenses/livekit/LICENSE"
+    },
+    {
+      "source": "third_party/livekit/NOTICE",
+      "destination": "ash-resources/licenses/livekit/NOTICE"
+    },
+    {
+      "source": "third_party/livekit/pkg/sfu/NOTICE",
+      "destination": "ash-resources/licenses/livekit/pkg/sfu/NOTICE"
+    },
+    {
+      "source": "third_party/livekit-rust-sdks/LICENSE",
+      "destination": "ash-resources/licenses/livekit-rust-sdks/LICENSE"
+    },
+    {
+      "source": "third_party/livekit-rust-sdks/NOTICE",
+      "destination": "ash-resources/licenses/livekit-rust-sdks/NOTICE"
+    }
+  ]
+}

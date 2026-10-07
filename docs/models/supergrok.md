@@ -6,7 +6,7 @@ Super Grok 可以在 Ash 中通过设备码登录。如果运行 Ash 后端的�
 
 用户从 `/config → Providers → Super Grok` 发起连接。已有可用的 Grok 登录时，Ash 直接连接；否则展示设备授权地址和一次性代码。Ash 自己登录的凭据保存在 profile SecretStore，由 `ash-supergrok` 刷新和登出。
 
-没有 Ash 登录凭据时，Ash 可以读取后端主机的 `~/.grok/auth.json`。它只使用当前登录的 access token，不复制或刷新 Grok 的 refresh token，也不写回该文件。用户在 Ash 中断开这种借用的登录，只会在 Ash 保存停用状态；Grok 自己的登录不受影响。之后在 Ash 登录的凭据优先于 Grok 文件。细节见 [`ash-supergrok` README](../../ash-rs/supergrok/README.md)。
+没有 Ash 登录凭据时，Ash 可以读取后端主机的 `~/.grok/auth.json`。它只使用当前登录的 access token，不复制或刷新 Grok 的 refresh token，也不写回该文件。用户在 Ash 中断开这种借用的登录，只会在 Ash 保存停用状态；Grok 自己的登录不受影响。之后在 Ash 登录的凭据优先于 Grok 文件。细节见 [`ash-supergrok` README](../../crates/supergrok/README.md)。
 
 ## 套餐、额度与模型
 

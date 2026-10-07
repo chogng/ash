@@ -1,8 +1,8 @@
 # 外部服务连接系统
 
-> 实现：[`ash-rs/ext/connectors/`](../ash-rs/ext/connectors/README.md)，package：
+> 实现：[`crates/ext/connectors/`](../crates/ext/connectors/README.md)，package：
 > `ash-connectors-extension`，调用方使用 `connectors`。
-> Package 入口：[`core-plugins.md`](../ash-rs/docs/core-plugins.md)。
+> Package 入口：[`core-plugins.md`](../crates/docs/core-plugins.md)。
 > Plugin 声明与目录集成：[`plugins.md`](plugins.md)。MCP 调用边界：[`mcp.md`](mcp.md)。
 > 当前状态：Connector domain、SQLite authority、API-token connect/disconnect、App Server 协议、
 > package-rooted Plugin activation、ready/standalone MCP composition、模型安全点 registry replacement、

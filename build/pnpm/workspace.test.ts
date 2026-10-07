@@ -28,12 +28,12 @@ test("pnpm owns every repository Node project with one lockfile", () => {
 	};
 	const workspace = readFileSync(join(repositoryRoot, "pnpm-workspace.yaml"), "utf8");
 	const lockfile = readFileSync(join(repositoryRoot, "pnpm-lock.yaml"), "utf8");
-	assert.equal(rootManifest.packageManager, "pnpm@12.4.2");
-	assert.equal(rootManifest.engines?.pnpm, "12.4.2");
+	assert.equal(rootManifest.packageManager, "pnpm@12.8.0");
+	assert.equal(rootManifest.engines?.pnpm, "12.8.0");
 	assert.equal(rootManifest.scripts?.preinstall, "node build/pnpm/preinstall.ts");
 	assert.ok(lockfile.includes(`specifier: runtime:${readFileSync(join(repositoryRoot, ".nvmrc"), "utf8").trim()}`));
 	const packages = [...workspace.matchAll(/^  - (.+)$/gm)].map((match) => match[1]);
-	assert.deepEqual(packages, ["build", "app-ts", "test/scenario"]);
+	assert.deepEqual(packages, ["build", "extensions/markdown-language-features", "test/scenario"]);
 	assert.doesNotMatch(workspace, /^storeDir:/m);
 	for (const dependency of ["electron", "esbuild", "sharp", "unrs-resolver", "workerd"]) {
 		assert.match(workspace, new RegExp(`^  ${dependency}: true$`, "m"));

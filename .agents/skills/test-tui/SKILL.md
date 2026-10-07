@@ -11,8 +11,8 @@ Use this skill for `ash-tui` component, feature, and App behavior that can be ve
 
 | Change | Test owner | Verification |
 | --- | --- | --- |
-| Component, feature, or fixed page rendering | `code/tui` sibling `*_tests.rs` | Fixed-size Ratatui `TestBackend` and a snapshot of visible output |
-| Keyboard path, streaming phase, queue, approval, recovery, page navigation, or agent-manager flow | `code/tui` App or feature simulation test | Drive the real App or feature with typed input and scripted external responses |
+| Component, feature, or fixed page rendering | `crates/tui` sibling `*_tests.rs` | Fixed-size Ratatui `TestBackend` and a snapshot of visible output |
+| Keyboard path, streaming phase, queue, approval, recovery, page navigation, or agent-manager flow | `crates/tui` App or feature simulation test | Drive the real App or feature with typed input and scripted external responses |
 | State transition, event routing, request payload, sequence, or file side effect | Narrow owning test | Typed semantic assertions; add a snapshot when visible text or layout is part of the behavior |
 
 Keep detailed screen-state coverage in the owning App or feature tests. Do not move deterministic rendering or App interaction into the PTY suite or duplicate the same screen matrix at every layer. Use the PTY skill for a small representative check of the actual process or terminal boundary.
@@ -25,7 +25,7 @@ Keep detailed screen-state coverage in the owning App or feature tests. Do not m
 4. Fake only external boundaries. Use manual channels and direct typed events when the App owner is enough; use the in-process App Server with a scripted `OperationClient` when request, reducer, or streaming integration is part of the behavior. Do not recreate a production reducer inside a mock.
 5. Drive asynchronous phases with explicit gates, received events, call counts, or state predicates. A timeout may bound a test, but a sleep must not decide when the snapshot is ready.
 
-`code/tui/src/app/conversation_flow_tests.rs` is the in-process scripted-model example. Smaller App and feature scenarios should stay beside their owner and inject typed events directly.
+`crates/tui/src/app/conversation_flow_tests.rs` is the in-process scripted-model example. Smaller App and feature scenarios should stay beside their owner and inject typed events directly.
 
 ## Snapshot views
 
@@ -35,7 +35,7 @@ Use fixed fixture values and terminal dimensions. Cover another width only when 
 
 Text snapshots do not capture foreground/background colors or modifiers. When these communicate state or focus, assert the actual rendered buffer cells separately, including marker position, theme color, and modifiers. For animation, inject fixed times into the production renderer and assert representative phases and repeatability; do not copy the animation formula into the test or test only a detached color helper. A `TestBackend` captures only the Ratatui buffer; use the owning host or PTY test for behavior outside that surface.
 
-Use `insta::assert_snapshot!` for substantial external snapshots. Inline snapshots fit short local output that is easier to review beside the test. Give snapshots behavior-based names. A screenshot, manual run, generated text file, or environment-gated export is not a regression snapshot because it cannot fail when the UI changes. Do not add a new export environment variable, write tracked baselines with `fs::write`, or silently skip an assertion when an environment variable is absent. Files under `code/tui/page-snapshots` are review artifacts, not `insta` expectations. When replacing a view, replace its relevant snapshot coverage instead of deleting the old baselines without equivalents.
+Use `insta::assert_snapshot!` for substantial external snapshots. Inline snapshots fit short local output that is easier to review beside the test. Give snapshots behavior-based names. A screenshot, manual run, generated text file, or environment-gated export is not a regression snapshot because it cannot fail when the UI changes. Do not add a new export environment variable, write tracked baselines with `fs::write`, or silently skip an assertion when an environment variable is absent. Files under `crates/tui/page-snapshots` are review artifacts, not `insta` expectations. When replacing a view, replace its relevant snapshot coverage instead of deleting the old baselines without equivalents.
 
 ## Run and review
 
@@ -45,10 +45,10 @@ Start with the smallest package and test filter that owns the behavior:
 just test-tui-unit <test-filter>
 ```
 
-When starting from an external snapshot under `code/tui/snapshots/` whose assertion has a literal name, prefer the snapshot-path workflow:
+When starting from an external snapshot under `crates/tui/snapshots/` whose assertion has a literal name, prefer the snapshot-path workflow:
 
 ```bash
-just snapshot code/tui/snapshots/fullscreen/composer/composer_focused.snap
+just snapshot crates/tui/snapshots/fullscreen/composer/composer_focused.snap
 ```
 
 Pass multiple snapshot paths to group them by owning test, or use `just snapshot --pending` to discover pending TUI snapshots. Duplicate paths and screen modes sharing a test run only once. The command resolves source functions, checks that the compiled test list contains exactly one match per group, runs each test, and shows selected pending changes and newly generated files. A failed test does not prevent the remaining selected tests from running; the command preserves a failure exit code. Snapshot names can differ from test names; do not use the snapshot basename as a test filter. Use `--plan` to inspect the source function without compiling, and `--features in-process-tests` when the owning test needs the in-process App Server. For dynamic names, shared assertion helpers, or inline snapshots, select the owning test directly with `just test-tui-unit`; real PTY snapshots use [test-tui-pty](../test-tui-pty/SKILL.md).
@@ -65,10 +65,10 @@ Read every changed row, including whitespace, wrapping, clipping, and omitted co
 For the snapshot-path workflow, explicitly list the reviewed files to accept and rerun their tests:
 
 ```bash
-just snapshot code/tui/snapshots/fullscreen/composer/composer_focused.snap --accept
+just snapshot crates/tui/snapshots/fullscreen/composer/composer_focused.snap --accept
 ```
 
-You may list several reviewed files with `--accept`; never combine it with `--pending`. The command checks all selected pending files and compiled test owners before accepting, shows every selected diff, accepts only the listed files, and reruns each owning test once without inherited `INSTA_*` settings. A single test may emit several snapshots, including both screen modes; review every affected file. The command lists all pending snapshots under `code/tui/snapshots/` and returns nonzero while any remain, even when the selected test passes. Check the test result and pending-file list separately.
+You may list several reviewed files with `--accept`; never combine it with `--pending`. The command checks all selected pending files and compiled test owners before accepting, shows every selected diff, accepts only the listed files, and reruns each owning test once without inherited `INSTA_*` settings. A single test may emit several snapshots, including both screen modes; review every affected file. The command lists all pending snapshots under `crates/tui/snapshots/` and returns nonzero while any remain, even when the selected test passes. Check the test result and pending-file list separately.
 
 When using the owning test directly, accept a reviewed snapshot by its exact repository-relative expected path:
 

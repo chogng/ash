@@ -1,8 +1,8 @@
 # 搜索架构与内容搜索
 
 > 本文维护搜索能力的目标依赖关系、实现状态和跨文件内容搜索的产品边界。实现分别见
-> [`ash-grep`](../ash-rs/grep/README.md) 与
-> [`ash-app-server`](../ash-rs/app-server/README.md)。
+> [`ash-grep`](../crates/grep/README.md) 与
+> [`ash-app-server`](../crates/app-server/README.md)。
 
 ## 目标依赖关系
 
@@ -65,10 +65,10 @@ flowchart TD
 | 查询新鲜度       | Rust API 与 RPC 均支持 `Indexed` / `Current`，RPC 成功结果返回实际模式                                  | 编辑器默认保持当前磁盘搜索；Agent 和 Codebase 使用索引候选         |
 | 索引 glob 与诊断 | tgrep 的正向 glob 保持索引查询；Rust 结果和 RPC 分页提供查询计划及候选统计                              | 统计包含已确认的 Ash 写入，描述内容匹配前的文件筛选                |
 
-实现入口：[宿主组装](../ash-rs/app-server/src/server/environment_runtime.rs)、
-[检索组合](../ash-rs/codebase/src/retrieval/service.rs)、
-[文件路径搜索](../ash-rs/file-search/README.md)、
-[搜索协议适配](../ash-rs/app-server/src/server/search_operations.rs)。下文描述当前内容搜索行为。
+实现入口：[宿主组装](../crates/app-server/src/server/environment_runtime.rs)、
+[检索组合](../crates/codebase/src/retrieval/service.rs)、
+[文件路径搜索](../crates/file-search/README.md)、
+[搜索协议适配](../crates/app-server/src/server/search_operations.rs)。下文描述当前内容搜索行为。
 
 ## TS 工作区文件查询
 

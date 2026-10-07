@@ -1,0 +1,28 @@
+---
+source: crates/tui/src/app/state_tests.rs
+expression: render_dictation_frame(&app)
+---
+  .                                                                [Dashboard]  
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                            Dictation stopped.  
+  ────────────────────────────────────────────────────────────────────────────  
+  > Please fix the parser and run tests                                         
+  ─────────────────────────────────────────────────────────── Automatic model   
+                                                                                
+  ⏸ Manual

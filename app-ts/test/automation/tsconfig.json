@@ -1,9 +1,0 @@
-{
-  "extends": "../../../tsconfig.base.json",
-  "compilerOptions": {
-    "noEmit": true,
-    "allowImportingTsExtensions": true,
-    "types": ["node"]
-  },
-  "include": ["../../playwright.config.ts", "./**/*.ts", "../smoke/**/*.ts"]
-}

@@ -1,11 +1,11 @@
 # 模型调用操作层
 
-> - 物理位置：`ash-rs/ash-client/`
+> - 物理位置：`crates/ash-client/`
 > - Rust crate：`ash_client`
 > - 层次：Ash API operation client、retry 与 stream framing
 > - 当前状态：typed unary request/response、安全 retry loop、增量 SSE framer 和 telemetry wrapper
 >   已实现；底层 HTTP port 与 production backend 已在 `ash-http-client`
-> - 底层网络：[`ash-http-client` README](../ash-rs/http-client/README.md)
+> - 底层网络：[`ash-http-client` README](../crates/http-client/README.md)
 > - API 协议层：[`ash-api.md`](ash-api.md)
 > - Provider runtime：[`model-provider.md`](model-provider.md)
 
@@ -28,7 +28,7 @@
 - operation、attempt 和 stream telemetry。
 
 它不创建 HTTP backend，也不拥有 proxy、TLS、证书、redirect、连接池或 transport logging。
-这些能力统一属于 [`ash-http-client`](../ash-rs/http-client/README.md)，本文件不重复其规则。
+这些能力统一属于 [`ash-http-client`](../crates/http-client/README.md)，本文件不重复其规则。
 
 它也不知道 OpenAI、ChatGPT、Codex、Anthropic 或任何 `ModelRequest`。Provider JSON、event 和
 error 语义属于 `ash-api`。
@@ -345,7 +345,7 @@ provider.kind = openai | anthropic | custom
 
 禁止把 exact model ID、URL、header value、credential、prompt、tool arguments/output、reasoning、
 raw response body 或 stream payload 放进 operation log/label。底层完整规则以
-[`ash-http-client` README](../ash-rs/http-client/README.md#telemetry) 为准。
+[`ash-http-client` README](../crates/http-client/README.md#telemetry) 为准。
 
 ## 8. 错误
 
@@ -367,7 +367,7 @@ timing evidence，但不能复制 transport secret 或 raw body。
 ## 9. 目标目录
 
 ```text
-ash-rs/ash-client/
+crates/ash-client/
 ├── BUILD.bazel
 ├── Cargo.toml
 └── src/

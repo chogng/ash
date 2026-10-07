@@ -1,0 +1,24 @@
+---
+source: crates/tui/src/app/fullscreen/frame_tests.rs
+expression: "render(&app, 80, 20)"
+---
+  .                                                                [Dashboard]  
+                                                                                
+        ┌── Hooks › Configure Hooks ───────────────────────────────[✗]─┐        
+        │                                                              │        
+        │> User configuration  ·  /profile/config.toml                 │        
+        │  Project configuration  ·  ./.ash/config.toml                │        
+        │  Ask Ash to configure                                        │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+  ──────│                                                              │──────  
+  > Buil└──────────────────────────────────────────────────────────────┘        
+  ─────────────────────────────────────────────────────────── Automatic model   
+                                                                                
+  Enter confirm · r refresh · Esc return

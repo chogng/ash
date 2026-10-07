@@ -2,7 +2,7 @@
 
 本手册分别验证 MXC PSEC 路径和独立 Windows 账户实现，保留各轮实机证据。2026-10-02 的 Windows 11 23H2 x64 管理员验收已通过当前服务安装、更新、账户执行和清理；随后完成 WSL2 回归与 DNS/IPv6 网络矩阵。PSEC 在 Windows 11 25H2 ARM64 CI 上取得成功路径证据，本机 23H2 仍缺少能力。WSLC SDK 部分通过，一次性容器清理仍报错；Ash 尚未接入它。具体范围见 [补充验收](#2026-10-02-psecwslc-与网络补充验收)。
 账户 CI 的 ACL 标记差异已修复，本机与 ARM64/Server CI 复测通过；公网 IPv6 的临时出口矩阵在 Windows 与 WSL 两种模式均通过，见 [ACL 与 IPv6 复测](#2026-10-02-acl-恢复与公网-ipv6-复测)。
-实现契约见 [mxc-sandbox](../ash-rs/mxc-sandbox/README.md) 与 [windows-sandbox](../ash-rs/windows-sandbox/README.md)。历史账户原型的结果不能作为当前候选的通过证据。
+实现契约见 [mxc-sandbox](../crates/mxc-sandbox/README.md) 与 [windows-sandbox](../crates/windows-sandbox/README.md)。历史账户原型的结果不能作为当前候选的通过证据。
 
 ## 当前入口
 
@@ -10,7 +10,7 @@
 
 当前 MXC Windows 后端只接受完整 PSEC 能力。此前的账户原型已退出源码和产品包，不能再通过 `mxc-user` 或 `tests/local.ps1` 安装它。独立实现使用 `ash-windows-sandbox`，安装与验收需要明确授权；通过依据是下述当前源码的实机记录，不能沿用旧原型的结论。
 
-2026-10-02 新增独立 `ash-windows-sandbox-service` 后，账户验收脚本先安装 SCM 服务，再通过认证管道安装账户、执行用例、替换运行器并复测，然后替换服务程序、重启并验证执行，最后删除账户和服务。本机已完成这条管理员实机路径，证据见 [本轮验收记录](#2026-10-02-服务及账户管理员验收)。当前安装约束和操作入口见 [服务说明](../ash-rs/windows-sandbox-service/README.md)。
+2026-10-02 新增独立 `ash-windows-sandbox-service` 后，账户验收脚本先安装 SCM 服务，再通过认证管道安装账户、执行用例、替换运行器并复测，然后替换服务程序、重启并验证执行，最后删除账户和服务。本机已完成这条管理员实机路径，证据见 [本轮验收记录](#2026-10-02-服务及账户管理员验收)。当前安装约束和操作入口见 [服务说明](../crates/windows-sandbox-service/README.md)。
 
 ```powershell
 just test ash-sandboxing --lib
@@ -47,7 +47,7 @@ PSEC 报告包含系统版本、架构、工具链、MXC pin、各项退出码�
 
 本机为 Windows 11 专业版 23H2、build 22631、x64。`scripts/test-psec.ps1 -Capability absent` 实际通过：13 项适配器单元测试、2 项普通回归、1 项明确缺能力拒绝。状态为 `passed-unsupported-capability`，证明缺能力时在执行前拒绝，不证明 PSEC 成功执行。证据保存在 `.build/acceptance/mxc-upgrade-windows-20261007/psec/`。
 
-账户程序、服务、终端探针及网络探针已完成正常 Cargo 构建。新 SDK 的 ACL、继承恢复、账户文件策略与适配器测试已通过，详见 [适配器验证](../ash-rs/mxc-sandbox/README.md#验证)。执行服务首轮 34 项通过，1 项把带与不带 Windows 扩展路径前缀的同一目录判为不同目录；改为比较规范化后的实际目录，失败项复跑通过，warning 门禁通过。Windows 服务 9 项测试通过，覆盖真实认证管道、连续连接、延迟读取、受限客户端及安装权限；这轮测试不注册 SCM 服务或创建账户。
+账户程序、服务、终端探针及网络探针已完成正常 Cargo 构建。新 SDK 的 ACL、继承恢复、账户文件策略与适配器测试已通过，详见 [适配器验证](../crates/mxc-sandbox/README.md#验证)。执行服务首轮 34 项通过，1 项把带与不带 Windows 扩展路径前缀的同一目录判为不同目录；改为比较规范化后的实际目录，失败项复跑通过，warning 门禁通过。Windows 服务 9 项测试通过，覆盖真实认证管道、连续连接、延迟读取、受限客户端及安装权限；这轮测试不注册 SCM 服务或创建账户。
 
 管理员入口已准备在 `.build/acceptance/mxc-upgrade-windows-20261007/run-admin-acceptance.ps1`。首次提权启动返回“操作已被用户取消”，本次尚未创建测试账户、安装服务或改动 WFP。新版账户的真实执行、PTY、安装更新及清理仍等待管理员验收；新 pin 的 PSEC 成功路径需要具备完整能力的 Windows 主机。待验收范围与 Linux/macOS 交接见根目录 [MXC-TODO.md](../MXC-TODO.md)。
 
@@ -92,7 +92,7 @@ Windows、WSL 2 中的 Linux 进程和 MXC 的 WSL Container（WSLC）是不同�
 当前 Ash 直接使用 Windows PSEC、Linux Bubblewrap、macOS Seatbelt 运行器，没有接入 WSLC。
 当前固定上游版本将 WSLC 列为 v0.9 后端，不要求运行时实验开关；Rust 构建仍需启用 `wslc` feature、携带独立的 `wslcsdk.dll`，并具备 WSL 2.9.9+。本机 WSL 3.0.1 满足版本要求，其他组件须由 WSLC SDK 实际探测。可以单独验证 SDK，但 Ash 尚无 WSLC 执行链，SDK 通过不能计为 Ash 接入通过，见 [固定版本的 WSLC 说明](https://github.com/microsoft/mxc/blob/46ce71d0da7b97bb531a33e175bf4166ffa730c0/docs/wsl/wsl-container-getting-started.md)。
 
-WSL 2 的 Linux 验收复用 [Linux 测试入口](../ash-rs/mxc-sandbox/README.md#验证)，另外必须覆盖：
+WSL 2 的 Linux 验收复用 [Linux 测试入口](../crates/mxc-sandbox/README.md#验证)，另外必须覆盖：
 
 - Linux 文件系统工作目录与 `/mnt/c` 工作目录分别验证目录授权、只读元数据、隐藏目录和路径别名。
 - 检查通过 Windows 可执行文件及 WSL 互操作入口，能否越过文件和网络限制；取消后检查两侧进程和延迟写入。
@@ -123,7 +123,7 @@ WSL 2 使用 Linux 内核，但提供跨系统文件与命令互操作；mirrore
 
 SDK 复测还发现一个旧用例让外部代理携带 MXC 主机列表，却期望通过校验。当前 SDK 不把该列表传给外部代理，已有相应用例检查拒绝；本轮将成功用例改为 SDK 自带测试代理，保留其应通过策略校验并到达环境检查的断言。
 
-本机证据目录为 `.build/acceptance/wsl/run-20261002-073047/`。`wsl-result.json` 汇总各阶段与未覆盖项，`result.json` 和 `acceptance.log` 保存 Windows 完整入口及清理；`linux-wsl-nat.log` 保留原始越界失败，`linux-wsl-nat-rerun.log`、`linux-network-nat-after-fix.log`、`linux-wsl-mirrored.log` 保存修复后的实机结果；`linux-sdk.log` 保留旧用例失败，`linux-sdk-rerun.log` 保存修正后的结果。`sources/`、`source-final.diff` 和 `source-manifest.json` 保存最终源码及摘要，`plans/` 保存 Windows 安装、更新与移除清单。这些本机证据不随 Git 提交。复跑入口见 [Windows 后端](../ash-rs/windows-sandbox/README.md) 和 [MXC 适配器](../ash-rs/mxc-sandbox/README.md#验证)。
+本机证据目录为 `.build/acceptance/wsl/run-20261002-073047/`。`wsl-result.json` 汇总各阶段与未覆盖项，`result.json` 和 `acceptance.log` 保存 Windows 完整入口及清理；`linux-wsl-nat.log` 保留原始越界失败，`linux-wsl-nat-rerun.log`、`linux-network-nat-after-fix.log`、`linux-wsl-mirrored.log` 保存修复后的实机结果；`linux-sdk.log` 保留旧用例失败，`linux-sdk-rerun.log` 保存修正后的结果。`sources/`、`source-final.diff` 和 `source-manifest.json` 保存最终源码及摘要，`plans/` 保存 Windows 安装、更新与移除清单。这些本机证据不随 Git 提交。复跑入口见 [Windows 后端](../crates/windows-sandbox/README.md) 和 [MXC 适配器](../crates/mxc-sandbox/README.md#验证)。
 
 WSL、发行版和构建工具保留在本机用于复测。上述早轮结果只覆盖这些用例；DNS/IPv6、Windows 宿主地址、WSLC SDK 和 PSEC CI 证据由下轮补充，不能沿用早轮结论。WSL1、ARM64 Linux 实机、Linux PTY、完整崩溃恢复与 App Server 产品链路仍未验证。Bubblewrap 也未通过 Ash `Allowed` 执行路径，其要求的全部入站权限由 SDK 拒绝；没有降低该请求。PSEC 成功资格不受 WSL 结果影响。
 
@@ -140,7 +140,7 @@ WSL、发行版和构建工具保留在本机用于复测。上述早轮结果�
 
 镜像模式的 Windows IPv6 回环 `::1` 在沙箱外即不可达，不计为隔离通过；Windows 物理接口 IPv6 地址的对照也未连通。微软文档明确 mirrored 的宿主回环仅支持 `127.0.0.1`，见 [WSL 网络说明](https://learn.microsoft.com/en-us/windows/wsl/networking#mirrored-mode-networking)。本机没有公网 IPv6 地址和默认 IPv6 路由，因此没有公网 IPv6 成功路径证据。NAT 的 Windows IPv6 链路本地目标、两种模式的 Linux IPv6 目标和域名代理已验证；这些边界仍需区分。Bubblewrap `Allowed`、PTY、App Server 产品链路不在本轮通过范围。
 
-复跑 Windows 矩阵时，向既有入口显式提供一个在宿主可达、同时支持 TCP/UDP DNS 的端点：`./scripts/test-windows-sandbox.ps1 -Target x86_64-pc-windows-msvc -NetworkDnsServer '<resolver-ip>:53'`。多个端点使用逗号分隔，IPv6 使用 `[address]:53`。Linux 入口与可选 Windows 宿主目标见 [适配器验证](../ash-rs/mxc-sandbox/README.md#验证)。本轮专用接收端共享计数，相关实机测试必须串行执行。
+复跑 Windows 矩阵时，向既有入口显式提供一个在宿主可达、同时支持 TCP/UDP DNS 的端点：`./scripts/test-windows-sandbox.ps1 -Target x86_64-pc-windows-msvc -NetworkDnsServer '<resolver-ip>:53'`。多个端点使用逗号分隔，IPv6 使用 `[address]:53`。Linux 入口与可选 Windows 宿主目标见 [适配器验证](../crates/mxc-sandbox/README.md#验证)。本轮专用接收端共享计数，相关实机测试必须串行执行。
 
 **PSEC CI：** 已读取并归档 [run 36941123878](https://github.com/chogng/ash/actions/runs/36941123878/job/110632598456) 的日志和原始 ZIP。Windows 11 Enterprise 25H2 ARM64，build `26200.9457`，Rust `1.98.0`，MXC pin `46ce71d0da7b97bb531a33e175bf4166ffa730c0`。适配器库 12 项、普通回归 2 项通过；随后 7 项指定验收各自实际执行且通过：PSEC 准备、cmd/PowerShell 输出与退出码、文件作用域和元数据、取消/超时及后代回收、跨执行写入隔离、正常退出后代回收。ZIP SHA-256 为 `d59bf71b427265351805fe9cb7e14e8eff2e75796b4852db6546affe049aef5c`，原始报告为 `passed-listed-scope`。
 
@@ -363,7 +363,7 @@ ACL 证据的边界：
 | Ash 适配器 lib / Windows 非忽略测试           | 4 + 1 项通过；5 项完整执行测试待配置后运行                                         |
 | `just check ash-mxc-sandbox --tests --locked` | 通过                                                                               |
 | Cargo 正常构建 `mxc-user` / 网络 probe        | 通过                                                                               |
-| Bazel `//ash-rs/vendor/mxc:mxc-user`          | 通过                                                                               |
+| Bazel `//crates/vendor/mxc:mxc-user`          | 通过                                                                               |
 | 打包与签名流程单测                            | 42 项中 38 项通过，4 项既有平台条件跳过；没有进行正式代码签名                      |
 | 未配置运行时与缺少授权参数的 setup            | 均拒绝，运行时目录未创建                                                           |
 | vendor 差异与固定上游复核                     | 已重新生成；源文件对照通过                                                         |
@@ -400,7 +400,7 @@ ACL 证据的边界：
 
 | 实际运行                                                                                                                                 | 结果                                                                                                              |
 | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `just test appcontainer_common --manifest-path ash-rs/vendor/mxc/Cargo.toml --lib user:: --locked -- --include-ignored --test-threads=1` | 12 项通过，包括真实账户登录、运行器/凭据访问边界、限制令牌、文件写权限和独立桌面                                  |
+| `just test appcontainer_common --manifest-path crates/vendor/mxc/Cargo.toml --lib user:: --locked -- --include-ignored --test-threads=1` | 12 项通过，包括真实账户登录、运行器/凭据访问边界、限制令牌、文件写权限和独立桌面                                  |
 | `tests/local.ps1 -Phase Test -Output .build/acceptance/mxc-local/round5`                                                                 | 2 项通过、4 项失败、0 项忽略；测试程序退出码 101                                                                  |
 | 受管网络                                                                                                                                 | 获批 HTTP 与 SOCKS 请求成功，未获批目标返回拒绝；直接 TCP、其他端口、监听和后代绕过被阻止，UDP 没有到达宿主接收端 |
 | PowerShell 文件与退出用例                                                                                                                | 超时，没有进入预期断言；不能记作文件范围与退出码验收通过                                                          |
@@ -440,7 +440,7 @@ PowerShell 未完成初始化的根因仍需定位。没有放宽文件、网络
 | SDK `host_changes::tests` / `request::tests`                   | 4 + 2 项通过                                                                                 |
 | `just check ash-app-server --lib`                              | 通过                                                                                         |
 | `python -B scripts/cargo.py build -p ash-mxc-sandbox --locked` | 通过                                                                                         |
-| `bazel build //ash-rs/sandboxing:sandboxing`                   | 通过；保留仓库既有 GTK 依赖注解提示                                                          |
+| `bazel build //crates/sandboxing:sandboxing`                   | 通过；保留仓库既有 GTK 依赖注解提示                                                          |
 | Windows 打包与签名相关检查                                     | 9 项通过，含退场运行器排除和许可证保留                                                       |
 | 完整相关 Python 套件                                           | 38 项中 1 项失败、4 项跳过：现有协议主版本断言为 2，当前工作区生成为 3；未修改并行的协议工作 |
 
@@ -474,7 +474,7 @@ PowerShell 未完成初始化的根因仍需定位。没有放宽文件、网络
 | 普通 lib 测试                                              | 14 项通过，3 项需要安装的用例忽略；另新增 Everyone 可写宿主文件仍须拒绝写入的回归并通过                           |
 | `just check ash-windows-sandbox --tests --locked`          | 通过                                                                                                              |
 | `just rust-warnings ash-windows-sandbox --locked`          | 通过，未报告编译 warning                                                                                          |
-| `bazel build //ash-rs/windows-sandbox:ash-windows-sandbox` | 通过；修正别名误带入测试依赖造成的循环                                                                            |
+| `bazel build //crates/windows-sandbox:ash-windows-sandbox` | 通过；修正别名误带入测试依赖造成的循环                                                                            |
 
 私有命名空间的调用者必须满足边界描述符，见 [Microsoft CreatePrivateNamespace 文档](https://learn.microsoft.com/en-us/windows/win32/api/namespaceapi/nf-namespaceapi-createprivatenamespacew)。目录 ACL 与该边界检查是两项不同要求。额外目录授权已从候选的安装清单移除；诊断用 syscall 跟踪和 AppContainer 实验代码已移出产品源码。
 

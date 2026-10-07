@@ -1,0 +1,36 @@
+---
+source: crates/tui/src/app/inline/frame_tests.rs
+expression: text(&buffer)
+---
+                                                                                                    
+    ▄  ▄     Ash Code v0.1.0                                                                        
+  ▗█▛██▜█▖   Automatic model                                                                        
+  ▝▜████▛▘   .                                                                                      
+    ▝  ▘                                                                                            
+                                                                                                    
+                                                                                                    
+                                                                                                    
+─ Config ───────────────────────────────────────────────────────────────────────────────────────────
+                                                                                                    
+   General    Providers    Issues    Network                                                        
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────╮  
+  │ Search configuration                                                                         │  
+  ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  
+> Vim mode                                                                                   off    
+  Show tips                                                                                   on    
+  Memory diagnostics                                                                         off +  
+  Automatic updates                                                                       Latest    
+  Show Git changes as diff                                                                   off +  
+  Language                                                                               English    
+  Status bar style                                                                        Simple +  
+  Key hint style                                                                        Contrast    
+  Screen mode                                                                             inline    
+  Memories                                                                                   off +  
+  Automatic Git fetch                                                                        Off +  
+  Git fetch interval                                                                        180s    
+  Advisor                                                                                    Off    
+  Always use half-width punctuation (Chinese only)                                           off +  
+  Dictation shortcut                                                                         off    
+  Dictation key                                                                           ctrl+g    
+                                                                                                    
+  Enter change · r reset · Tab tabs · / search · Esc close

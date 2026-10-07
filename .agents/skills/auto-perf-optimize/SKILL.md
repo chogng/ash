@@ -108,7 +108,7 @@ Seed-copy rules:
 
 The first version of an automation runner is rarely correct. Treat the runner as a test you are developing: run a cheap scenario, observe the live workbench, adjust one selector or wait condition, and repeat. Do not collect heap snapshots until the runner is boringly reliable.
 
-**New runners go in the [scratchpad](./scratchpad/) folder** (gitignored). Checked-in scripts in `scripts/` are stable, generic runners — don't modify them for a one-off investigation. Instead, copy patterns from them into a scratchpad script.
+**New runners go in the [scratchpad](./scratchpad) folder** (gitignored). Checked-in scripts in `scripts/` are stable, generic runners — don't modify them for a one-off investigation. Instead, copy patterns from them into a scratchpad script.
 
 Organize scratchpad work into **dated subfolders** named `YYYY-MM-DD-short-description/` (e.g., `2026-04-09-chat-scroll-leak/`). Each subfolder should contain:
 
@@ -192,7 +192,7 @@ RUN=../../../.build/chat-memory-smoke/<run-folder> node --max-old-space-size=163
 
 When the user describes a non-Chat scenario, ask only for the missing essentials: what action starts the scenario, what counts as one repeatable iteration, what indicates the UI is settled, and whether the profile should be persistent or temporary.
 
-**Write new scenario runners in the [scratchpad](./scratchpad/) folder.** This folder is gitignored — use it freely for one-off investigation scripts. If a runner proves generally useful, promote it to `scripts/` with documentation and validation.
+**Write new scenario runners in the [scratchpad](./scratchpad) folder.** This folder is gitignored — use it freely for one-off investigation scripts. If a runner proves generally useful, promote it to `scripts/` with documentation and validation.
 
 Put each investigation in a **dated subfolder** (see "Develop and Watch a Runner" for the naming convention).
 

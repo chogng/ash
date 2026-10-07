@@ -18,11 +18,11 @@ class WorkflowTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory(prefix="ash workflow ")
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name).resolve()
-        self.write("Cargo.toml", '[workspace]\nmembers = ["code/tui", "ash-rs/*"]\n')
-        self.write("code/tui/Cargo.toml", '[package]\nname = "ash-tui"\n')
-        self.write("ash-rs/example/Cargo.toml", '[package]\nname = "example"\n')
-        self.write("code/tui/src/lib.rs", "")
-        self.write("ash-rs/example/src/lib.rs", "")
+        self.write("Cargo.toml", '[workspace]\nmembers = ["crates/tui", "crates/*"]\n')
+        self.write("crates/tui/Cargo.toml", '[package]\nname = "ash-tui"\n')
+        self.write("crates/example/Cargo.toml", '[package]\nname = "example"\n')
+        self.write("crates/tui/src/lib.rs", "")
+        self.write("crates/example/src/lib.rs", "")
         self.write("AGENTS.md", "Repository instructions\n")
         self.write(".github/copilot-instructions.md", "Ownership rules\n")
         self.write(
@@ -34,7 +34,7 @@ class WorkflowTests(unittest.TestCase):
         )
         self.write(
             ".github/instructions/tui.md",
-            '---\napplyTo: "code/**"\n---\n[test-tui](../../.agents/skills/test-tui/SKILL.md)\n',
+            '---\napplyTo: "crates/tui/**"\n---\n[test-tui](../../.agents/skills/test-tui/SKILL.md)\n',
         )
         self.write(
             ".github/instructions/frontend.md",
@@ -44,7 +44,7 @@ class WorkflowTests(unittest.TestCase):
         self.write(
             ".github/instructions/unscoped.md", "Reference without an applyTo pattern\n"
         )
-        self.source = "code/tui/src/composer_tests.rs"
+        self.source = "crates/tui/src/composer_tests.rs"
         self.write(
             self.source,
             """// fn wrong() { crate::tui_assert_snapshot!("composer_focused", value); }
@@ -56,7 +56,7 @@ fn input_keeps_its_bottom_rule() {
 }
 """,
         )
-        self.baseline = "code/tui/snapshots/fullscreen/composer/composer_focused.snap"
+        self.baseline = "crates/tui/snapshots/fullscreen/composer/composer_focused.snap"
         self.write(
             self.baseline,
             f"---\nsource: {self.source}\nexpression: text(&buffer)\n---\nold frame\n",
@@ -112,8 +112,8 @@ fn input_keeps_its_bottom_rule() {
 
     def test_glob_segments_include_root_files_without_crossing_slashes(self):
         self.assertTrue(workflow.glob_matches("Cargo.toml", "**/Cargo.toml"))
-        self.assertTrue(workflow.glob_matches("code/tui/src/lib.rs", "**/*.rs"))
-        self.assertFalse(workflow.glob_matches("code/tui/src/lib.rs", "code/*.rs"))
+        self.assertTrue(workflow.glob_matches("crates/tui/src/lib.rs", "**/*.rs"))
+        self.assertFalse(workflow.glob_matches("crates/tui/src/lib.rs", "code/*.rs"))
         self.assertEqual(
             set(workflow.scope_patterns("**/*.{rs,snap},justfile")),
             {"**/*.rs", "**/*.snap", "justfile"},
@@ -231,7 +231,7 @@ fn input_keeps_its_bottom_rule() {
             (self.root / self.baseline).read_text().replace("old frame", "new frame"),
         )
         unrelated = self.write(
-            "code/tui/snapshots/shared/other.snap.new", "unrelated pending frame"
+            "crates/tui/snapshots/shared/other.snap.new", "unrelated pending frame"
         )
 
         def external(command, kwargs):
@@ -274,7 +274,7 @@ fn input_keeps_its_bottom_rule() {
         self.assertEqual(self.commands[-1][2], "accept")
 
     def inline_baseline(self):
-        name = "code/tui/snapshots/inline/composer/composer_focused.snap"
+        name = "crates/tui/snapshots/inline/composer/composer_focused.snap"
         self.write(name, (self.root / self.baseline).read_text())
         return name
 
@@ -294,14 +294,14 @@ fn input_keeps_its_bottom_rule() {
         self.assertNotIn("accept", sum(self.commands, []))
 
     def test_batch_runs_remaining_tests_after_failure_and_shows_new_siblings(self):
-        other_source = "code/tui/src/other_tests.rs"
+        other_source = "crates/tui/src/other_tests.rs"
         self.write(
             other_source,
             'fn second_case() { tui_assert_snapshot!("second", value); }',
         )
-        other = "code/tui/snapshots/shared/second.snap"
+        other = "crates/tui/snapshots/shared/second.snap"
         self.write(other, f"---\nsource: {other_source}\n---\nsecond frame\n")
-        sibling = "code/tui/snapshots/inline/composer/composer_focused.snap.new"
+        sibling = "crates/tui/snapshots/inline/composer/composer_focused.snap.new"
 
         def external(command, kwargs):
             if "--list" in command:
@@ -367,7 +367,7 @@ fn input_keeps_its_bottom_rule() {
                 (self.root / baseline).read_text().replace("old frame", "new frame"),
             )
         unrelated = self.write(
-            "code/tui/snapshots/shared/other.snap.new",
+            "crates/tui/snapshots/shared/other.snap.new",
             (self.root / self.baseline).read_text(),
         )
         real_run = subprocess.run
@@ -399,7 +399,7 @@ fn input_keeps_its_bottom_rule() {
     def test_frontend_instruction_routing_matches_actual_repository_paths(self):
         instruction_directory = workflow.ROOT / ".github/instructions"
         for extension in ("ts", "css"):
-            target = f"app-ts/src/ash/base/browser/ui/button/button.{extension}"
+            target = f"src/ash/base/browser/ui/button/button.{extension}"
             rules = ["best-practices", "design-philosophy"]
             if extension == "css":
                 rules.append("design-tokens")

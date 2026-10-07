@@ -1,0 +1,20 @@
+---
+source: crates/tui/src/app/mode_tests.rs
+expression: render(&app)
+---
+  .                                  [Dashboard]  
+                                                  
+> /command                                        
+ └─ first result                                  
+    second result                                 
+                                                  
+                                                  
+                                                  
+                                                  
+                                                  
+                                                  
+  ──────────────────────────────────────────────  
+  >                                               
+  ───────────────────────────── Automatic model   
+                                                  
+  ⏸ Manual · ← Dashboard · ? for shortcuts

@@ -60,7 +60,7 @@ test('source selection deduplicates files, excludes fixtures, and rejects unmatc
 		assert.deepEqual(resolveStylelintMatches(['browser', 'browser/**/*.css', 'browser/one.css'], directory), [join(directory, 'browser/one.css')]);
 		assert.throws(() => resolveStylelintMatches(['missing/**/*.css'], directory), /No production CSS/);
 		assert.throws(() => resolveStylelintMatches(['browser/test/fixture.css'], directory), /No production CSS/);
-		assert.throws(() => resolveStylelintMatches([join(root, 'app-ts/src/ash/base/browser/ui/button/button.css')], directory), /must belong/);
+		assert.throws(() => resolveStylelintMatches([join(root, 'src/ash/base/browser/ui/button/button.css')], directory), /must belong/);
 	} finally {
 		rmSync(directory, { recursive: true });
 	}
@@ -90,7 +90,7 @@ test('CLI reports file and location, fails on misspellings, and never updates th
 
 test('hygiene stops before registry verification on CSS errors and preserves the verifier exit code', () => {
 	const directory = mkdtempSync(join(tmpdir(), 'ash-stylelint-hygiene-'));
-	const source = join(directory, 'app-ts/src/example.css');
+	const source = join(directory, 'src/example.css');
 	const manager = join(directory, 'manager.cjs');
 	try {
 		for (const name of ['build/hygiene.ts', 'build/stylelint.ts', 'build/lib/stylelint/validateVariableNames.ts', 'build/lib/stylelint/validateHasSelectors.ts', 'build/lib/stylelint/validateDesignTokens.ts']) {
@@ -98,7 +98,7 @@ test('hygiene stops before registry verification on CSS errors and preserves the
 			copyFileSync(join(root, name), join(directory, name));
 		}
 		writeFileSync(join(directory, 'build/lib/stylelint/ash-known-variables.json'), JSON.stringify(known));
-		mkdirSync(join(directory, 'app-ts/src'), { recursive: true });
+		mkdirSync(join(directory, 'src'), { recursive: true });
 		writeFileSync(manager, "require('node:fs').writeFileSync('called.json', JSON.stringify(process.argv.slice(2))); process.exitCode = 23;");
 		writeFileSync(source, '.a { color: var(--not-registered); }');
 		const options = { cwd: directory, encoding: 'utf8' as const, env: { ...process.env, npm_execpath: manager } };
@@ -109,7 +109,7 @@ test('hygiene stops before registry verification on CSS errors and preserves the
 		const verification = spawnSync(process.execPath, ['build/hygiene.ts'], options);
 		assert.equal(verification.status, 23, verification.stderr);
 		assert.deepEqual(JSON.parse(readFileSync(join(directory, 'called.json'), 'utf8')), [
-			'--dir', 'app-ts', 'test:unit', '--run', 'src/ash/workbench/test/common/design-tokens.test.ts',
+			'--dir', '.', 'test:unit', '--run', 'src/ash/workbench/test/common/design-tokens.test.ts',
 		]);
 	} finally {
 		rmSync(directory, { recursive: true });
@@ -136,7 +136,7 @@ test('selector checks distinguish page roots and class substrings from component
 test('CSS layer checks reject Workbench roots only in lower-layer production CSS', () => {
 	const directory = mkdtempSync(join(tmpdir(), 'ash-stylelint-layers-'));
 	try {
-		const files = ['base', 'platform', 'editor', 'workbench'].map(layer => join(directory, `app-ts/src/ash/${layer}/browser/component.css`));
+		const files = ['base', 'platform', 'editor', 'workbench'].map(layer => join(directory, `src/ash/${layer}/browser/component.css`));
 		for (const file of files) {
 			mkdirSync(join(file, '..'), { recursive: true });
 			writeFileSync(file, '.ash-workbench .component { color: var(--ash-foreground); }');
@@ -144,7 +144,7 @@ test('CSS layer checks reject Workbench roots only in lower-layer production CSS
 		const errors = checkStyles(files, getVariableNameValidator(known), directory);
 		assert.equal(errors.length, 3);
 		for (const [index, layer] of ['base', 'platform', 'editor'].entries()) {
-			assert.equal(errors[index], `app-ts/src/ash/${layer}/browser/component.css:1:1: Lower-layer CSS must not depend on the .ash-workbench root owned by Workbench.`);
+			assert.equal(errors[index], `src/ash/${layer}/browser/component.css:1:1: Lower-layer CSS must not depend on the .ash-workbench root owned by Workbench.`);
 		}
 	} finally {
 		rmSync(directory, { recursive: true });

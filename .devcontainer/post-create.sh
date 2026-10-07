@@ -3,7 +3,6 @@ set -eu
 
 sudo chown node:node \
     node_modules \
-    app-ts/node_modules \
     build/node_modules \
     .build \
     scripts/.venv \
@@ -15,7 +14,7 @@ sudo chown node:node \
 just install
 pnpm install --frozen-lockfile
 sudo /usr/local/bin/ash-configure-electron-sandbox
-pnpm --dir app-ts exec playwright install chromium
+pnpm exec playwright install chromium
 
 # Fetch the locked Linux media server before the first full Web build.
-python -B build/ash_rs/livekit.py "$(rustc -vV | awk '$1 == "host:" { print $2 }')"
+python -B build/runtime/livekit.py "$(rustc -vV | awk '$1 == "host:" { print $2 }')"

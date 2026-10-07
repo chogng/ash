@@ -1,0 +1,24 @@
+---
+source: crates/tui/src/app/fullscreen/frame_tests.rs
+expression: "render(&app, 80, 20)"
+---
+  .                                                                [Dashboard]  
+                                                                                
+        ┌── Hooks › user:hook:review ──────────────────────────────[✗]─┐        
+        │                                                              │        
+        │  Event:       PreToolUse                                     │        
+        │  Enablement:  disabled                                       │        
+        │  Source file: /profile/config.toml                           │        
+        │  Tool names:  ["exec_command"]                               │        
+        │  Program:     review-hook                                    │        
+        │  Arguments:   ["--check"]                                    │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │> Edit configuration                                          │        
+  ──────│  Ask Ash to configure                                        │──────  
+  > Buil└──────────────────────────────────────────────────────────────┘        
+  ─────────────────────────────────────────────────────────── Automatic model   
+                                                                                
+  Enter confirm · PgUp/PgDn scroll · r refresh · Esc return

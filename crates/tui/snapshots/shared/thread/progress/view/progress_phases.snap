@@ -1,0 +1,7 @@
+---
+source: crates/tui/src/thread/progress/view_tests.rs
+expression: text
+---
+⠙ Working... · 1m 05s · esc to interrupt
+○ Waiting for approval · 1m 05s · esc to interrupt
+⠙ Cancelling... · 1m 05s

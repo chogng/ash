@@ -4,5 +4,5 @@ ash_rust_binary(
     name = "ash-update-sign",
     crate_name = "ash_update_sign",
     crate_root = "src/main.rs",
-    deps = ["//ash-rs/product-update:product-update"],
+    deps = ["//crates/product-update:product-update"],
 )

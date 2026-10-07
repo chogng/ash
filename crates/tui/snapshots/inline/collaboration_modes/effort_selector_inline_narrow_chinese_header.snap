@@ -1,0 +1,28 @@
+---
+source: crates/tui/src/app/collaboration_modes_tests.rs
+expression: text
+---
+
+    ▄  ▄     Ash Code v0.1.0
+  ▗█▛██▜█▖   Automatic model
+  ▝▜████▛▘   .
+    ▝  ▘
+
+
+
+
+
+
+
+─ 推理强度 ─────────────────────────────
+
+    更快                     更聪明
+    ───────────────▲───────────────
+      low        high         max
+
+              多任务  关闭
+
+  使用更多推理，适合复杂任务和仔细验证
+                   。
+
+  ←/→ 选择 · Esc 取消

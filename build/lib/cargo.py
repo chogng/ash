@@ -63,3 +63,10 @@ def cargo_rendered_diagnostic(
         return None
     rendered = diagnostic.get("rendered")
     return rendered if isinstance(rendered, str) else None
+
+
+def read_source_layout() -> dict:
+    """Keep terminal presentation ownership shared by build tools and dependency checks."""
+    return json.loads(
+        (Path(__file__).resolve().parents[1] / "source-layout.json").read_text()
+    )

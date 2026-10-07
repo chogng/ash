@@ -1,13 +1,13 @@
 # 模型与供应商声明
 
-> - 物理位置：`ash-rs/model-provider-info/`
+> - 物理位置：`crates/model-provider-info/`
 > - Rust crate：`model_provider_info`
 > - 层次：模型与接入声明层
 > - 当前状态：基础实现已包含声明式默认 `ApiProfile` 和独立 input-token count binding；invocation
 >   WebSocket profile 也已使用独立的 fail-closed capability；多 profile allow-list 与用户 override
 >   仍待实现
-> - Crate 实现与修改路径：[`ash-rs/model-provider-info/README.md`](../ash-rs/model-provider-info/README.md)
-> - 六家官方接口对照与字段提案：[通用模型声明规范](../ash-rs/model-provider-info/docs/model-template.md)
+> - Crate 实现与修改路径：[`crates/model-provider-info/README.md`](../crates/model-provider-info/README.md)
+> - 六家官方接口对照与字段提案：[通用模型声明规范](../crates/model-provider-info/docs/model-template.md)
 > - Provider runtime：[`model-provider.md`](model-provider.md)
 > - API 协议层：[`ash-api.md`](ash-api.md)
 
@@ -231,13 +231,13 @@ definition/runtime 显式声明。
 
 ## 7. 静态模型元数据
 
-[`ash-rs/model-provider-info/models.json`](../ash-rs/model-provider-info/models.json) 是产品内置文本模型的唯一声明点，`STATIC_MODEL_CATALOG` 提供其一次解析后的共享数据。每个条目必须包含厂商、模型 ID、显示名，以及可独立修改的完整基础提示词与 revision；模型容量、独立预算档位、已知能力和推理参数按需填写。`context_window_options` 第一项就是默认预算；没有档位声明时预算等于已知容量。省略容量或能力表示未知，不代表不支持。订阅/API 共享模型条目；`access`、`runtime`、凭据和人格字段不属于模型条目。可选字段与校验规则见 [crate README](../ash-rs/model-provider-info/README.md#统一静态模型清单)。
+[`crates/model-provider-info/models.json`](../crates/model-provider-info/models.json) 是产品内置文本模型的唯一声明点，`STATIC_MODEL_CATALOG` 提供其一次解析后的共享数据。每个条目必须包含厂商、模型 ID、显示名，以及可独立修改的完整基础提示词与 revision；模型容量、独立预算档位、已知能力和推理参数按需填写。`context_window_options` 第一项就是默认预算；没有档位声明时预算等于已知容量。省略容量或能力表示未知，不代表不支持。订阅/API 共享模型条目；`access`、`runtime`、凭据和人格字段不属于模型条目。可选字段与校验规则见 [crate README](../crates/model-provider-info/README.md#统一静态模型清单)。
 
-模型指令由 `models-manager` 按准确身份选择；未登记模型使用 `prompts/templates/agent/base_prompt.md`。权限、Role 和协作模式由运行时另行加入，默认正文不会自动拼入已登记模型的完整提示词。维护方法见 [crate README](../ash-rs/model-provider-info/README.md#统一静态模型清单)。
+模型指令由 `models-manager` 按准确身份选择；未登记模型使用 `prompts/templates/agent/base_prompt.md`。权限、Role 和协作模式由运行时另行加入，默认正文不会自动拼入已登记模型的完整提示词。维护方法见 [crate README](../crates/model-provider-info/README.md#统一静态模型清单)。
 
 `builtin_connections()` 声明每个接入的厂商、认证类型、执行适配器、端点、协议、计数能力和限制。`ProviderConfigRegistry::with_configs` 将保存的内置接入、已注册供应商和完整自定义声明组装为 registry；未知供应商返回 `UnknownProvider`。端点和默认参数由 `normalize` / `normalize_for` 规范化；上游 ID 差异由 `NormalizedModelProviderConfig::upstream_model` 精确映射，未声明差异的模型保持相同 ID，不猜名称前缀。
 
-动态目录观察不注册接入定义。Config 在保存、导入和严格读取时校验连接，接入规则见 [模型接入配置](config.md#模型接入配置)。字段扩展的设计建议见 [通用模型声明规范](../ash-rs/model-provider-info/docs/model-template.md)；该建议尚未成为当前 JSON 格式。
+动态目录观察不注册接入定义。Config 在保存、导入和严格读取时校验连接，接入规则见 [模型接入配置](config.md#模型接入配置)。字段扩展的设计建议见 [通用模型声明规范](../crates/model-provider-info/docs/model-template.md)；该建议尚未成为当前 JSON 格式。
 
 `model/list` 返回固定内置目录，不接受视图分支。远端目录由 `models-manager` 管理，作为接入范围内的观察和自定义接入发现能力，不作为内置模型调用许可。没有远端记录的内置模型仍能发请求，服务返回的认证、权限或模型错误直接交给调用方。
 

@@ -1,0 +1,133 @@
+---
+source: crates/tui/src/app/status_tests.rs
+expression: text
+---
+Session
+                                                                                
+    ▄  ▄     Ash Code v0.1.0                                                    
+  ▗█▛██▜█▖   Automatic model                                                    
+  ▝▜████▛▘   .                                                                  
+    ▝  ▘                                                                        
+                                                                                
+─ Session status ───────────────────────────────────────────────────────────────
+                                                                                
+   Session    Diagnostics                                                       
+  Model:      test/model                                                        
+  Session ID: session-test                                                      
+  Thread ID:  thread-test                                                       
+                                                                                
+  Thread totals                                                                 
+  Model calls:        4                                                         
+  Input tokens:       120,000 tokens                                            
+  Cached input:       0 tokens                                                  
+  Cached input share: 0.0%                                                      
+  Cache writes:       0 tokens                                                  
+  Output tokens:      0 tokens                                                  
+  Reasoning output:   0 tokens                                                  
+  Reference cost:     unknown                                                   
+                                                                                
+  Tab tabs · ↑/↓ scroll · Esc close                                             
+
+Session · bottom
+                                                                                
+    ▄  ▄     Ash Code v0.1.0                                                    
+  ▗█▛██▜█▖   Automatic model                                                    
+  ▝▜████▛▘   .                                                                  
+    ▝  ▘                                                                        
+                                                                                
+─ Session status ───────────────────────────────────────────────────────────────
+                                                                                
+   Session    Diagnostics                                                       
+  Model:      test/model                                                        
+  Session ID: session-test                                                      
+  Thread ID:  thread-test                                                       
+                                                                                
+  Thread totals                                                                 
+  Model calls:        4                                                         
+  Input tokens:       120,000 tokens                                            
+  Cached input:       0 tokens                                                  
+  Cached input share: 0.0%                                                      
+  Cache writes:       0 tokens                                                  
+  Output tokens:      0 tokens                                                  
+  Reasoning output:   0 tokens                                                  
+  Reference cost:     unknown                                                   
+                                                                                
+  Tab tabs · ↑/↓ scroll · Esc close                                             
+
+Thread totals
+                                                                                
+    ▄  ▄     Ash Code v0.1.0                                                    
+  ▗█▛██▜█▖   Automatic model                                                    
+  ▝▜████▛▘   .                                                                  
+    ▝  ▘                                                                        
+                                                                                
+─ Session status ───────────────────────────────────────────────────────────────
+                                                                                
+   Session    Diagnostics                                                       
+  Model:      test/model                                                        
+  Session ID: session-test                                                      
+  Thread ID:  thread-test                                                       
+                                                                                
+  Thread totals                                                                 
+  Model calls:        4                                                         
+  Input tokens:       120,000 tokens                                            
+  Cached input:       0 tokens                                                  
+  Cached input share: 0.0%                                                      
+  Cache writes:       0 tokens                                                  
+  Output tokens:      0 tokens                                                  
+  Reasoning output:   0 tokens                                                  
+  Reference cost:     unknown                                                   
+                                                                                
+  Tab tabs · ↑/↓ scroll · Esc close                                             
+
+Diagnostics
+                                                                                
+    ▄  ▄     Ash Code v0.1.0                                                    
+  ▗█▛██▜█▖   Automatic model                                                    
+  ▝▜████▛▘   .                                                                  
+    ▝  ▘                                                                        
+                                                                                
+─ Session status ───────────────────────────────────────────────────────────────
+                                                                                
+   Session    Diagnostics                                                       
+  Total:              collecting                                                
+  TUI:                collecting                                                
+  App Server:         included in the TUI process                               
+  Memory diagnostics: Disabled                                                  
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+  Tab tabs · ↑/↓ scroll · Esc close                                             
+
+Closed
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+────────────────────────────────────────────────────────────────────────────────
+> status draft!                                                                 
+────────────────────────────────────────────────────────────────────────────────
+                                                                                
+  ⏸ Manual

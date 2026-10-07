@@ -1,0 +1,28 @@
+---
+source: crates/tui/src/app/state_tests.rs
+expression: screen
+---
+  .                                                                                [Dashboard]
+
+            ┌── Config › BigModel ─────────────────────────────────────────────[✗]─┐
+            │                                                                      │
+            │> Browser opened  ·  https://zcode.z.ai/authorize                     │
+            │  Cancel sign-in                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+  ──────────└──────────────────────────────────────────────────────────────────────┘──────────
+  > Build anything
+  ─────────────────────────────────────────────────────────────────────────── Automatic model
+
+  Esc to return

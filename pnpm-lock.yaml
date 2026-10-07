@@ -7,153 +7,153 @@ importers:
     configDependencies: {}
     packageManagerDependencies:
       pnpm:
-        specifier: 12.4.2
-        version: 12.4.2
+        specifier: 12.8.0
+        version: 12.8.0
 
 packages:
 
-  '@pnpm/exe.android-arm64@12.4.2':
-    resolution: {integrity: sha512-E255MbcQ0V1577M2BV0ajWuP7KmTPYA0jqZnk3rK6Lq3kTvZWulMMb7iqRmnLsQbyWTkMEB2CfyM70loVDA8xg==}
+  '@pnpm/exe.android-arm64@12.8.0':
+    resolution: {integrity: sha512-gilfZS0Aae1fXlh6WJVCxlB4t0Rq/kOjowRSKTeVuUGHD/Agn91j/wH9V000NDKf4D6IEzGuWbnBPf6teGM64w==}
     cpu: [arm64]
     os: [android]
 
-  '@pnpm/exe.android-x64@12.4.2':
-    resolution: {integrity: sha512-J1pSeCUwuKxMG70ZzpWn8JzElxiEa8NN/3N0SlZRtU2xbztChaJCKF3HaBNIj9yPfeofWzJo/lwNvDDjraQuZw==}
+  '@pnpm/exe.android-x64@12.8.0':
+    resolution: {integrity: sha512-sVUvq8Jg1wINrtSxCoYfyYs1uKQ6NWjkPWWsjIznmyLX/iXywBY1GJtQ2cwfCbzzsy74L/VFkK78d/oeejUecg==}
     cpu: [x64]
     os: [android]
 
-  '@pnpm/exe.darwin-arm64@12.4.2':
-    resolution: {integrity: sha512-A0WDo8iErfZBXgrLseQxw8i8Y9ctUpOEl/Uu+cubnTzpD8tT9ykIB548L8YTM2WD4OS+ZOHSxy8aGZcvKq8PaQ==}
+  '@pnpm/exe.darwin-arm64@12.8.0':
+    resolution: {integrity: sha512-EaEGvBt4GzKKoH6MdzUHkwL/+FW8q1/JLJwtbYmn/dYsrADyIwaZuHmwRiCUUCDlEsk/yGjhrTuhPOwJno78pw==}
     cpu: [arm64]
     os: [darwin]
 
-  '@pnpm/exe.darwin-x64@12.4.2':
-    resolution: {integrity: sha512-MSgJdovBWHcb5DEOvfPH9yNi/T5O1Xa4ess+E1ESGo/5yuty7S4JoiIjami+fsNXfnoQMlwsMUqYU4zAvBcNCw==}
+  '@pnpm/exe.darwin-x64@12.8.0':
+    resolution: {integrity: sha512-bB7uMzzb3KPegc/hRtyf1fmbKXifj6t6Fp4YDzs59fOVK2s+2LDohN0EY2Dkw4QAL9dn5BIJwPeZtLTV16g1Kg==}
     cpu: [x64]
     os: [darwin]
 
-  '@pnpm/exe.freebsd-x64@12.4.2':
-    resolution: {integrity: sha512-h2YumlQSNvgbRPv+RXwABohX65f9bOBZn+jMIt7bFDISZPCzQ+Nvpt6Awbp4ip5PwQgYxbu5iREJ1fHE39Fm8A==}
+  '@pnpm/exe.freebsd-x64@12.8.0':
+    resolution: {integrity: sha512-r1HPVjrZYzLSr2oEieUimJt+gbkHvaXW9nsJeVtAbRxS+t72bsKLRe1GGtuyx6yF76VR4pcB/tdcumkHaMCWbA==}
     cpu: [x64]
     os: [freebsd]
 
-  '@pnpm/exe.linux-arm64-musl@12.4.2':
-    resolution: {integrity: sha512-LwSEtSEDTv6S51YLs3YvSkPyun/QmfMic1UGICUkPWFu6ByP43RdMlkKvmVkfGhAYCpnxO057vrmyJqtfZrPCA==}
+  '@pnpm/exe.linux-arm64-musl@12.8.0':
+    resolution: {integrity: sha512-UbCu3XOpG6CDMX3MXAf4IF3XQatlVOLwNkU3ltrboiNdBHD1+7bqvUWfCMLWMZmZDFZJwH7V4sPJmDIE6N/3UQ==}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
 
-  '@pnpm/exe.linux-arm64@12.4.2':
-    resolution: {integrity: sha512-2dSiDXyhx+RTHsewxex8f/jVjqQXWJ2oow4kCVHEWdZKeBpgMxvZ6fHkTAUBJXgqhbKIDHvuNlZBP7gJfUWL5A==}
+  '@pnpm/exe.linux-arm64@12.8.0':
+    resolution: {integrity: sha512-jVcRvNCF/lSD5N43XQImbspPiqUXB7WzNCtPeAG0u+K4KlKahMC0dwFajZL5kolRUzuxZUZIM9KdzuqM0XxmeQ==}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
-  '@pnpm/exe.linux-ppc64@12.4.2':
-    resolution: {integrity: sha512-8Itc+jQk+MTz04LS9D1RcH+VctAWmzM4l1cJQ+Sx7pAJNo7EKHdRMbC0Tok1jyQ7eEHNJZD5EleYneZqWfZM+g==}
+  '@pnpm/exe.linux-ppc64@12.8.0':
+    resolution: {integrity: sha512-lO+mX8b6ixVJv5fb1/2SZU+5HAwmn/kEbALESYN7H7J73f1lkEijIck3ny2kL/mtX5Bh9cJsDydn+vXCM8hvgQ==}
     cpu: [ppc64]
     os: [linux]
     libc: [glibc]
 
-  '@pnpm/exe.linux-riscv64@12.4.2':
-    resolution: {integrity: sha512-hleOeqhTVpH+z9RVMGnxvU4ZnrkBUClWjCbHD9u6kwyqhGSpevoU1wTGish+CBRhmIgMAy9pAfFpqhbAKOKNfw==}
+  '@pnpm/exe.linux-riscv64@12.8.0':
+    resolution: {integrity: sha512-3U1LrGcMY16F++DhjCKHm+miIcW4DOjjkyQ2Yitg3z8xEG8KR+9ZEAMwrv3tGVvsY8nesdQKCnkWBOMsVLkeCw==}
     cpu: [riscv64]
     os: [linux]
     libc: [glibc]
 
-  '@pnpm/exe.linux-s390x@12.4.2':
-    resolution: {integrity: sha512-LAsQRRdP9aToENR6dtcIJ9l+e1zMYOX0tQcLGpRyLPVBQcYRLlvAPcmDshsiIHQjp05SDa9FI0czX1ZQ1a7a/A==}
+  '@pnpm/exe.linux-s390x@12.8.0':
+    resolution: {integrity: sha512-f99oXQsr63TL/h6/VAh/cE7KEsyQCVFgG8eNfyiBlLpehwnufo/FSvWudMEFyNA6fpG+dIGRlEnGVI8eVEz5gQ==}
     cpu: [s390x]
     os: [linux]
     libc: [glibc]
 
-  '@pnpm/exe.linux-x64-musl@12.4.2':
-    resolution: {integrity: sha512-kzfzH2/0BWdTABK14Yj5a1xsdkTEQUp2eXEPNakaD9jKL025lq3hyaKHIz/gIZaPDMe/1bFFK/En4ztFlbBJxw==}
+  '@pnpm/exe.linux-x64-musl@12.8.0':
+    resolution: {integrity: sha512-Citic9qoi/INXqjLgxikqODVT5FKNa5uLHdIoNOQZq8i4dFPFD7vkY2cbzqS5hExrrWTdjaKp63Vk/W9VXte5g==}
     cpu: [x64]
     os: [linux]
     libc: [musl]
 
-  '@pnpm/exe.linux-x64@12.4.2':
-    resolution: {integrity: sha512-/pbt0UVTa8NMDhzOWLQRfZ6G9ROKXlJPZtx845BqyWfc7hCrWXhTLBd70yO2y8+E+IWN3oHM1s/JsIQNGk1yvg==}
+  '@pnpm/exe.linux-x64@12.8.0':
+    resolution: {integrity: sha512-oTX7gtrsyXl1vuTBOoZoK3ouv5cEIKqgbSAVS0Cv4yr2HbR6VHG1Sy2CeO1sXeSBGJ4xTv3HYy3Dw+Xf1nNLWQ==}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
-  '@pnpm/exe.win32-arm64@12.4.2':
-    resolution: {integrity: sha512-PsW19e4dAUNpZ0cS9flaxFuAmpt2dKlH/Vvi8TZ4qyJjjQzue/CEsWm+6wKVP4CJ7IT8RdL4qh+soOPWIgF2Zw==}
+  '@pnpm/exe.win32-arm64@12.8.0':
+    resolution: {integrity: sha512-vU7Zpxyvnj5Rqjj6rXDVwJOdLaQtsII54H3LmCXR1rhl9TQ/J9wrB+lH9ypvVL8iURlqM/3dA3TMqM/PRkqE/A==}
     cpu: [arm64]
     os: [win32]
 
-  '@pnpm/exe.win32-x64@12.4.2':
-    resolution: {integrity: sha512-+xGoeE0g55ztWvl8i5QqdmNfW3nIrTVcoQrNshEOwxthm9Ag48oXton3uxOA3/SANyz5AXexEjj2KO20NnOrEw==}
+  '@pnpm/exe.win32-x64@12.8.0':
+    resolution: {integrity: sha512-QS1bgThRBVb8e2BjCkk/i+OohAgnRB85I/yfyyXe+mFDstdQWztx50D/AEOVdhVscUbCbIJTUUObVLczdEWLRg==}
     cpu: [x64]
     os: [win32]
 
-  pnpm@12.4.2:
-    resolution: {integrity: sha512-CK3GYTGAJ1x8ntraOdzwjJxhrU5+rzMKTzRh8QKw+QdCNFTRF/mOctR/7wYWBwZE17/8lzpqV/UJCm18NosHyQ==}
+  pnpm@12.8.0:
+    resolution: {integrity: sha512-ORbpVZzfvd99ySHomZB2WEQlFh3nc/bKv39HRn8NlFK/qJponsJFdTrT1Vq8s89wbmZ6wSBi28nGJfvXK8og3A==}
     engines: {node: '>=18.*'}
     hasBin: true
 
 snapshots:
 
-  '@pnpm/exe.android-arm64@12.4.2':
+  '@pnpm/exe.android-arm64@12.8.0':
     optional: true
 
-  '@pnpm/exe.android-x64@12.4.2':
+  '@pnpm/exe.android-x64@12.8.0':
     optional: true
 
-  '@pnpm/exe.darwin-arm64@12.4.2':
+  '@pnpm/exe.darwin-arm64@12.8.0':
     optional: true
 
-  '@pnpm/exe.darwin-x64@12.4.2':
+  '@pnpm/exe.darwin-x64@12.8.0':
     optional: true
 
-  '@pnpm/exe.freebsd-x64@12.4.2':
+  '@pnpm/exe.freebsd-x64@12.8.0':
     optional: true
 
-  '@pnpm/exe.linux-arm64-musl@12.4.2':
+  '@pnpm/exe.linux-arm64-musl@12.8.0':
     optional: true
 
-  '@pnpm/exe.linux-arm64@12.4.2':
+  '@pnpm/exe.linux-arm64@12.8.0':
     optional: true
 
-  '@pnpm/exe.linux-ppc64@12.4.2':
+  '@pnpm/exe.linux-ppc64@12.8.0':
     optional: true
 
-  '@pnpm/exe.linux-riscv64@12.4.2':
+  '@pnpm/exe.linux-riscv64@12.8.0':
     optional: true
 
-  '@pnpm/exe.linux-s390x@12.4.2':
+  '@pnpm/exe.linux-s390x@12.8.0':
     optional: true
 
-  '@pnpm/exe.linux-x64-musl@12.4.2':
+  '@pnpm/exe.linux-x64-musl@12.8.0':
     optional: true
 
-  '@pnpm/exe.linux-x64@12.4.2':
+  '@pnpm/exe.linux-x64@12.8.0':
     optional: true
 
-  '@pnpm/exe.win32-arm64@12.4.2':
+  '@pnpm/exe.win32-arm64@12.8.0':
     optional: true
 
-  '@pnpm/exe.win32-x64@12.4.2':
+  '@pnpm/exe.win32-x64@12.8.0':
     optional: true
 
-  pnpm@12.4.2:
+  pnpm@12.8.0:
     optionalDependencies:
-      '@pnpm/exe.android-arm64': 12.4.2
-      '@pnpm/exe.android-x64': 12.4.2
-      '@pnpm/exe.darwin-arm64': 12.4.2
-      '@pnpm/exe.darwin-x64': 12.4.2
-      '@pnpm/exe.freebsd-x64': 12.4.2
-      '@pnpm/exe.linux-arm64': 12.4.2
-      '@pnpm/exe.linux-arm64-musl': 12.4.2
-      '@pnpm/exe.linux-ppc64': 12.4.2
-      '@pnpm/exe.linux-riscv64': 12.4.2
-      '@pnpm/exe.linux-s390x': 12.4.2
-      '@pnpm/exe.linux-x64': 12.4.2
-      '@pnpm/exe.linux-x64-musl': 12.4.2
-      '@pnpm/exe.win32-arm64': 12.4.2
-      '@pnpm/exe.win32-x64': 12.4.2
+      '@pnpm/exe.android-arm64': 12.8.0
+      '@pnpm/exe.android-x64': 12.8.0
+      '@pnpm/exe.darwin-arm64': 12.8.0
+      '@pnpm/exe.darwin-x64': 12.8.0
+      '@pnpm/exe.freebsd-x64': 12.8.0
+      '@pnpm/exe.linux-arm64': 12.8.0
+      '@pnpm/exe.linux-arm64-musl': 12.8.0
+      '@pnpm/exe.linux-ppc64': 12.8.0
+      '@pnpm/exe.linux-riscv64': 12.8.0
+      '@pnpm/exe.linux-s390x': 12.8.0
+      '@pnpm/exe.linux-x64': 12.8.0
+      '@pnpm/exe.linux-x64-musl': 12.8.0
+      '@pnpm/exe.win32-arm64': 12.8.0
+      '@pnpm/exe.win32-x64': 12.8.0
 
 ---
 lockfileVersion: '9.0'
@@ -168,18 +168,6 @@ overrides:
 importers:
 
   .:
-    devDependencies:
-      node:
-        specifier: runtime:24.21.0
-        version: runtime:24.21.0
-      prettier:
-        specifier: 3.9.9
-        version: 3.9.9
-      sirv:
-        specifier: ^3.0.2
-        version: 3.0.2
-
-  app-ts:
     dependencies:
       '@xterm/addon-fit':
         specifier: ^0.11.0
@@ -242,6 +230,15 @@ importers:
       mocha:
         specifier: 12.0.1
         version: 12.0.1
+      node:
+        specifier: runtime:24.21.0
+        version: runtime:24.21.0
+      prettier:
+        specifier: 3.9.9
+        version: 3.9.9
+      sirv:
+        specifier: ^3.0.2
+        version: 3.0.2
       svgo:
         specifier: 4.0.1
         version: 4.0.1
@@ -297,7 +294,7 @@ importers:
         version: 0.0.18
       '@vscode/markdown-editor':
         specifier: 0.0.2-107
-        version: 0.0.2-107
+        version: 0.0.2-107(supports-color@8.1.1)
       '@vscode/observables':
         specifier: 0.1.1-0
         version: 0.1.1-0
@@ -2598,14 +2595,14 @@ snapshots:
 
   '@vscode/l10n@0.0.18': {}
 
-  '@vscode/markdown-editor@0.0.2-107':
+  '@vscode/markdown-editor@0.0.2-107(supports-color@8.1.1)':
     dependencies:
       '@vscode/codicons': 0.0.46-36
       '@vscode/diff': 0.0.2-0
       '@vscode/observables': 0.1.1-0
       entities: 6.0.1
       katex: 0.16.47
-      micromark: 4.0.3
+      micromark: 4.0.3(supports-color@8.1.1)
       micromark-extension-frontmatter: 2.0.0
       micromark-extension-gfm: 3.0.0
       micromark-extension-gfm-strikethrough: 2.1.0
@@ -2777,10 +2774,6 @@ snapshots:
       whatwg-url: 16.0.1
     transitivePeerDependencies:
       - '@noble/hashes'
-
-  debug@4.4.3:
-    dependencies:
-      ms: 2.1.3
 
   debug@4.4.3(supports-color@10.2.2):
     dependencies:
@@ -3352,10 +3345,10 @@ snapshots:
 
   micromark-util-types@2.0.3: {}
 
-  micromark@4.0.3:
+  micromark@4.0.3(supports-color@8.1.1):
     dependencies:
       '@types/debug': 4.1.13
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@8.1.1)
       decode-named-character-reference: 1.3.0
       devlop: 1.1.0
       micromark-core-commonmark: 2.0.4

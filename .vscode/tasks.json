@@ -4,36 +4,59 @@
 		{
 			"label": "Prepare Ash Web",
 			"type": "shell",
-			"command": "pnpm --dir app-ts prepare:generated",
-			"options": { "cwd": "${workspaceFolder}" },
+			"command": "pnpm prepare:generated",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
 			"problemMatcher": [],
-			"presentation": { "panel": "dedicated", "group": "ash-browser-ui" },
-			"runOptions": { "instanceLimit": 1 }
+			"presentation": {
+				"panel": "dedicated",
+				"group": "ash-browser-ui"
+			},
+			"runOptions": {
+				"instanceLimit": 1
+			}
 		},
 		{
 			"label": "Prepare Ash Web Backend",
 			"type": "shell",
-			"command": "pnpm --dir app-ts predev:web:full",
-			"options": { "cwd": "${workspaceFolder}" },
+			"command": "pnpm predev:web:full",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
 			"problemMatcher": [],
-			"presentation": { "panel": "dedicated", "group": "ash-browser-ui" },
-			"runOptions": { "instanceLimit": 1 },
-			"osx": { "command": "uv run --python 3.12 pnpm --dir app-ts predev:web:full" }
+			"presentation": {
+				"panel": "dedicated",
+				"group": "ash-browser-ui"
+			},
+			"runOptions": {
+				"instanceLimit": 1
+			},
+			"osx": {
+				"command": "uv run --python 3.12 pnpm predev:web:full"
+			}
 		},
 		{
 			"label": "Watch Ash Web Types",
 			"type": "shell",
 			"command": "pnpm typecheck:web:watch",
-			"options": { "cwd": "${workspaceFolder}" },
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
 			"isBackground": true,
 			"problemMatcher": "$tsc-watch",
-			"presentation": { "panel": "dedicated", "group": "ash-browser-ui" },
-			"runOptions": { "instanceLimit": 1 }
+			"presentation": {
+				"panel": "dedicated",
+				"group": "ash-browser-ui"
+			},
+			"runOptions": {
+				"instanceLimit": 1
+			}
 		},
 		{
 			"label": "Prepare Ash Backend",
 			"type": "shell",
-			"command": "pnpm --dir app-ts prepare:backend",
+			"command": "pnpm prepare:backend",
 			"options": {
 				"cwd": "${workspaceFolder}"
 			},
@@ -46,35 +69,13 @@
 				"instanceLimit": 1
 			},
 			"osx": {
-				"command": "uv run --python 3.12 pnpm --dir app-ts prepare:backend"
-			}
-		},
-		{
-			"label": "Run Ash App (Rust)",
-			"type": "shell",
-			"command": "just app",
-			"osx": {
-				"command": "uv run --python 3.12 just app"
-			},
-			"isBackground": true,
-			"options": {
-				"cwd": "${workspaceFolder}"
-			},
-			"problemMatcher": [],
-			"presentation": {
-				"reveal": "always",
-				"panel": "dedicated",
-				"group": "app",
-				"clear": true
-			},
-			"runOptions": {
-				"instanceLimit": 1
+				"command": "uv run --python 3.12 pnpm prepare:backend"
 			}
 		},
 		{
 			"label": "Run Ash Web",
 			"type": "shell",
-			"command": "pnpm --dir app-ts dev:web",
+			"command": "pnpm dev:web",
 			"isBackground": true,
 			"options": {
 				"cwd": "${workspaceFolder}"
@@ -109,9 +110,9 @@
 		{
 			"label": "Run Ash Server (Web)",
 			"type": "shell",
-			"command": "pnpm --dir app-ts dev:web:full",
+			"command": "pnpm dev:web:full",
 			"osx": {
-				"command": "uv run --python 3.12 pnpm --dir app-ts dev:web:full"
+				"command": "uv run --python 3.12 pnpm dev:web:full"
 			},
 			"isBackground": true,
 			"options": {

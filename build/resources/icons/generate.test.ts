@@ -6,7 +6,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 
-import { productIconsPlugin } from "../../app_ts/vite/productIconsPlugin.ts";
+import { productIconsPlugin } from "../../desktop/vite/productIconsPlugin.ts";
 import { checkIcons, generateIcons, type IconOutputs } from "./generate.ts";
 
 const addSvg = `<svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
@@ -17,7 +17,6 @@ const addSvg = `<svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://ww
 function outputs(root: string): IconOutputs {
 	return {
 		manifestFile: join(root, "icons", "manifest.json"),
-		rustFile: join(root, "app", "icons", "src", "generated.rs"),
 		typescriptFile: join(root, "generated", "product-icons.ts"),
 	};
 }
@@ -39,7 +38,6 @@ test("product icon generation tracks added, changed, and removed SVG files", asy
 		assert.doesNotMatch(generated, /\bwidth=\\"16\\"/);
 		assert.doesNotMatch(generated, /\bheight=\\"16\\"/);
 		assert.match(await readFile(generatedOutputs.manifestFile!, "utf8"), /"rendering": "symbolic"/);
-		assert.match(await readFile(generatedOutputs.rustFile!, "utf8"), /pub const ADD: Icon/);
 		assert.equal((await generateIcons({ outputs: generatedOutputs, sourceDirectory })).outputChanged, false);
 
 		await writeFile(join(sourceDirectory, "close.svg"), addSvg.replace("black", "red"));
@@ -110,8 +108,6 @@ test("product icon generation canonicalizes sources and supports a read-only che
 		assert.doesNotMatch(optimized, /\bwidth="16"/);
 		assert.doesNotMatch(optimized, /\bheight="16"/);
 		assert.match(optimized, /viewBox="0 0 16 16"/);
-		const rust = await readFile(generatedOutputs.rustFile!, "utf8");
-		await writeFile(generatedOutputs.rustFile!, rust.replaceAll("\n", "\r\n"));
 		assert.equal((await checkIcons({ outputs: generatedOutputs, sourceDirectory })).count, 1);
 	} finally {
 		await rm(root, { force: true, recursive: true });

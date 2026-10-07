@@ -1,0 +1,20 @@
+---
+source: crates/tui/src/app/mode_tests.rs
+expression: render(&app)
+---
+  .                                  [Dashboard]  
+  ┌── Fullscreen detail ───────────────────[✗]─┐  
+  │                                            │  
+  │  Text: full detail                         │  
+  │                                            │  
+  │                                            │  
+  │                                            │  
+  │                                            │  
+  │                                            │  
+  │                                            │  
+  │                                            │  
+  │                                            │  
+  └────────────────────────────────────────────┘  
+  ───────────────────────────── Automatic model   
+                                                  
+  ↑/↓ scroll  ·  Esc to close

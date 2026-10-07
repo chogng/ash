@@ -1,0 +1,34 @@
+---
+source: crates/tui/src/app/fullscreen/modal_tests.rs
+expression: frame_text(&app)
+---
+  .                                                                                    [Dashboard]  
+                                                                                                    
+                                                                                                    
+            ┌── Config ───────────────────────────────────────────────────────────[✗]─┐             
+            │                                                                         │             
+            │   General    Providers    Issues    Network                             │             
+            │                                                                         │             
+            │  ╭────────────────────────────────────────────────────────────────────╮ │             
+            │  │ Screen mode                                                        │ │             
+            │  ╰────────────────────────────────────────────────────────────────────╯ │             
+            │  Screen mode                                               fullscreen   │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+┌Question  (│                                                                         │────────────┐
+│Choose an o│                                                                         │            │
+│> Continue │                                                                         │            │
+│  Type your│                                                                         │            │
+│           │                                                                         │            │
+└───────────│                                                                         │────────────┘
+            │                                                                         │             
+  ──────────└─────────────────────────────────────────────────────────────────────────┘───────────  
+  > Build anything                                                                                  
+  ─────────────────────────────────────────────────────────────────────────────── Automatic model   
+                                                                                                    
+  Enter/Esc/Ctrl+C to return  ·  Tab/Shift+Tab to switch

@@ -1,11 +1,11 @@
 # 凭据与秘密系统
 
-> - 物理位置：`ash-rs/secrets/`
+> - 物理位置：`crates/secrets/`
 > - Rust crate：`ash_secrets`
 > - 层次：host secret persistence primitive
 > - 当前实现：typed key/value、`load/store/delete` port、profile 私有文件、OS keyring、ephemeral memory 与 unavailable backend
-> - Crate 实现、安全义务与测试：[`ash-rs/secrets/README.md`](../ash-rs/secrets/README.md)
-> - OS keyring adapter：[`ash-rs/keyring-store/README.md`](../ash-rs/keyring-store/README.md)
+> - Crate 实现、安全义务与测试：[`crates/secrets/README.md`](../crates/secrets/README.md)
+> - OS keyring adapter：[`crates/keyring-store/README.md`](../crates/keyring-store/README.md)
 > - Direct-provider credential：[`model-provider.md`](model-provider.md#6-供应商凭据边界)
 > - Interactive login control plane：[`login.md`](login.md)
 > - App Server 登录控制面：[`ash-app-server-api.md`](ash-app-server-api.md#11-account-与登录)
@@ -162,7 +162,7 @@ secret backend。Backend 可以序列化物理写入，但不能推断 token exp
 ## 7. 当前实现位置
 
 ```text
-ash-rs/secrets/
+crates/secrets/
 ├── BUILD.bazel
 ├── Cargo.toml
 ├── README.md
@@ -179,7 +179,7 @@ ash-rs/secrets/
 ```
 
 ```text
-ash-rs/keyring-store/
+crates/keyring-store/
 ├── BUILD.bazel
 ├── Cargo.toml
 ├── README.md

@@ -1,5 +1,0 @@
----
-source: code/tui/src/thread/progress/view_tests.rs
-expression: rendered.trim_end()
----
-⠋ Brains… · esc to interrupt

@@ -37,7 +37,7 @@ App Server 是共享后端入口，负责连接、类型化请求、授权入口
 
 异步任务同样需要额度。容量计数覆盖已接纳请求的等待、执行与响应交付，并保留独立控制容量；有界传输队列不能代替执行容量约束。执行子进程通过任务和资源契约工作，不能复制 Thread、Turn 或审批状态，也不能在失联后自动重放修改。
 
-当前 App Server 的 GitHub 远端请求已由独立处理器在共享异步执行器中运行；请求数量和保留输入字节具有进程与连接两层限制。其他同步领域仍使用有界工作线程。输出队列、通知、领域缓存、索引和后台任务尚未统一计入进程内存或执行额度，现有消息限制不表示 RSS 上限。重型计算没有因本次调整新增子进程；执行环境继续使用已有 exec-server 边界。具体额度、取消和验证入口见 [App Server](../ash-rs/app-server/README.md#请求执行与容量)。
+当前 App Server 的 GitHub 远端请求已由独立处理器在共享异步执行器中运行；请求数量和保留输入字节具有进程与连接两层限制。其他同步领域仍使用有界工作线程。输出队列、通知、领域缓存、索引和后台任务尚未统一计入进程内存或执行额度，现有消息限制不表示 RSS 上限。重型计算没有因本次调整新增子进程；执行环境继续使用已有 exec-server 边界。具体额度、取消和验证入口见 [App Server](../crates/app-server/README.md#请求执行与容量)。
 
 ## 2. 一次请求如何穿过 Ash
 
@@ -87,7 +87,7 @@ flowchart TD
 | 系统                   | 回答的核心问题                                           | 应当拥有                                                             | 重点审计边界                                                                      | 权威文档                                                                                                                                                                     |
 | ---------------------- | -------------------------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Project 与工作组织系统 | 哪些本地/远程根和 Session 需要长期组织在一起？           | Project metadata、长期根目录表以及对 Session 的弱关联                | Project、Workspace、Environment 和 Grant 是否被误建成同一对象                     | [`domain-model.md`](domain-model.md)                                                                                                                                         |
-| Agent Team 系统        | 哪些 Agent 身份作为成员跨任务协作？                      | Team 成员关系、协调者、讨论及任务关联；当前为目标设计                | Team 是否复制 Session 执行状态或把角色定义当成成员身份                            | [Agent Team](../ash-rs/docs/agent-teams.md)                                                                                                                                  |
+| Agent Team 系统        | 哪些 Agent 身份作为成员跨任务协作？                      | Team 成员关系、协调者、讨论及任务关联；当前为目标设计                | Team 是否复制 Session 执行状态或把角色定义当成成员身份                            | [Agent Team](../crates/docs/agent-teams.md)                                                                                                                                  |
 | 会话系统               | 一次工作如何被识别、恢复和持续保存？                     | Session、Thread、Turn、事件顺序与持久化事务                          | Session、Thread、Store 与 rollout 是否存在重复权威                                | [`core.md`](core.md)、[`protocol.md`](protocol.md)                                                                                                                           |
 | 上下文系统             | 当前模型究竟能看到什么？                                 | 上下文选择、预算、压缩、恢复和每个 Thread 的上下文状态               | 持久事实、模型输入和 UI 展示状态是否混为一体                                      | [`core-context.md`](core-context.md)                                                                                                                                         |
 | Agent 运行时           | 模型输出如何推进一次 Turn？                              | Agent 生命周期、模型回合、工具回合、取消与同 Session Agent tree 协调 | 单 Agent 执行、子 Agent tree 和持久化是否混为一个协调器                           | [`agent-harness-design.md`](agent-harness-design.md)、[`core-multi-agent.md`](core-multi-agent.md)、[`ash-agent-runtime-architecture.md`](ash-agent-runtime-architecture.md) |
@@ -108,9 +108,9 @@ flowchart TD
 
 | 系统              | 回答的核心问题                   | 应当拥有                                                                                                                               | 重点审计边界                                                 | 权威文档                                                                                                                                                        |
 | ----------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 扩展系统          | 外部能力如何被发现、激活和撤销？ | Core Plugins 聚合来源并管理 package lifecycle，各领域消费 capability；Plugin 只定义 bundle，Connector 管账号，MCP 管协议，Skill 管指令 | 安装、领域授权、运行时和 Agent 消费是否分层                  | [`core-plugins.md`](../ash-rs/docs/core-plugins.md)、[`plugins.md`](plugins.md)、[`connectors.md`](connectors.md)、[`skills.md`](skills.md)、[`mcp.md`](mcp.md) |
+| 扩展系统          | 外部能力如何被发现、激活和撤销？ | Core Plugins 聚合来源并管理 package lifecycle，各领域消费 capability；Plugin 只定义 bundle，Connector 管账号，MCP 管协议，Skill 管指令 | 安装、领域授权、运行时和 Agent 消费是否分层                  | [`core-plugins.md`](../crates/docs/core-plugins.md)、[`plugins.md`](plugins.md)、[`connectors.md`](connectors.md)、[`skills.md`](skills.md)、[`mcp.md`](mcp.md) |
 | App Server 与协议 | 产品入口如何调用同一套权威能力？ | 唯一外部进入/输出边界、对外方法、DTO、事件、订阅、版本和客户端契约                                                                     | 客户端是否绕过门禁，或协议层是否偷偷拥有产品决定或持久化规则 | [`ash-app-server-api.md`](ash-app-server-api.md)、[`app-server-client.md`](app-server-client.md)、[`protocol.md`](protocol.md)                                  |
-| 产品界面          | 用户如何观察和控制这些系统？     | Desktop、CLI、TUI 的交互、呈现和平台适配                                                                                               | 界面是否复制 Core 状态或在本地发明业务规则                   | [`ash-desktop-architecture.md`](ash-desktop-architecture.md)、[`ash-code`](../code/README.md)                                                                   |
+| 产品界面          | 用户如何观察和控制这些系统？     | Desktop、CLI、TUI 的交互、呈现和平台适配                                                                                               | 界面是否复制 Core 状态或在本地发明业务规则                   | [`ash-desktop-architecture.md`](ash-desktop-architecture.md)、[`ash-code`](../crates/tui/README.md)                                                                   |
 
 系统名称不是按照 crate 数量划分的。一个系统可以由多个 crate 实现，一个 crate 也可能只是某个
 系统的适配器。真正的边界由权威状态、最终决定、执行责任和失败语义决定。
@@ -202,4 +202,4 @@ flowchart TD
 4. 用真实调用关系检查实现是否仍符合系统边界；
 5. 如果实现无法映射回唯一系统，先记录并解决架构问题，不为现状补一个模糊名称。
 
-完整的文档分层、语言和图表规则见 [`documentation-guidelines.md`](documentation-guidelines.md)。领域身份、Core、协议和 Rust 对外层分别由 [`domain-model.md`](domain-model.md)、[`core.md`](core.md)、[`protocol.md`](protocol.md) 与 [`ash-rs-architecture.md`](ash-rs-architecture.md) 拥有。
+完整的文档分层、语言和图表规则见 [`documentation-guidelines.md`](documentation-guidelines.md)。领域身份、Core、协议和 Rust 对外层分别由 [`domain-model.md`](domain-model.md)、[`core.md`](core.md)、[`protocol.md`](protocol.md) 与 [`rust-architecture.md`](rust-architecture.md) 拥有。

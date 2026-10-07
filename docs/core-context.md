@@ -10,10 +10,10 @@
 >
 > Core 总体边界：[`core.md`](core.md)
 > Canonical Thread/Turn/Item contract：[`protocol.md`](protocol.md)
-> 通用 extension contract：[`ash-rs/ext/extension-api/README.md`](../ash-rs/ext/extension-api/README.md)
+> 通用 extension contract：[`crates/ext/extension-api/README.md`](../crates/ext/extension-api/README.md)
 > 多 Agent context inheritance：[`core-multi-agent.md`](core-multi-agent.md)
-> 共享提示词资产契约：[`ash-prompts`](../ash-rs/prompts/README.md)
-> 预算与 token 计量实现：[`ash-context-engine`](../ash-rs/context-engine/README.md)
+> 共享提示词资产契约：[`ash-prompts`](../crates/prompts/README.md)
+> 预算与 token 计量实现：[`ash-context-engine`](../crates/context-engine/README.md)
 
 ## 快速理解
 
@@ -230,7 +230,7 @@ ContextManager/Planner 完成。
 
 ### 5.4 通用预算引擎
 
-[`ash-context-engine`](../ash-rs/context-engine/README.md) 只拥有模型无关的预算数学和 token 计量
+[`ash-context-engine`](../crates/context-engine/README.md) 只拥有模型无关的预算数学和 token 计量
 结果：它区分普通请求的压缩压力线与模型硬窗口，接受精准 preflight/本地 tokenizer 结果或带保守
 记账余量的估算，并返回 `Fits`、`NeedsCompaction` 或 `ExceedsContextWindow`。
 
@@ -240,7 +240,7 @@ ContextManager/Planner 完成。
 
 ### 5.5 提示词所有权与组装
 
-提示词按功能归属：`model-provider-info/models.json` 保存模型规格与每个模型的完整基础正文，`ash-models-manager` 按准确身份选择并冻结；未登记模型的基础正文来自 `prompts/templates/agent/base_prompt.md`。Goal 提示归 `ext/goal`，动态上下文由对应贡献者提供，`ash-guardian-reviewer` 拥有与动作授权 response schema 绑定的审查提示词，Skill、扩展和工具描述由各能力 crate 拥有。[`ash-prompts`](../ash-rs/prompts/README.md) 提供共享资产与冻结契约，并拥有 context compaction、审查目标与续接模板；代码审查与 Advisor 的角色正文归 `ash-agent-roles`。
+提示词按功能归属：`model-provider-info/models.json` 保存模型规格与每个模型的完整基础正文，`ash-models-manager` 按准确身份选择并冻结；未登记模型的基础正文来自 `prompts/templates/agent/base_prompt.md`。Goal 提示归 `ext/goal`，动态上下文由对应贡献者提供，`ash-guardian-reviewer` 拥有与动作授权 response schema 绑定的审查提示词，Skill、扩展和工具描述由各能力 crate 拥有。[`ash-prompts`](../crates/prompts/README.md) 提供共享资产与冻结契约，并拥有 context compaction、审查目标与续接模板；代码审查与 Advisor 的角色正文归 `ash-agent-roles`。
 
 App Server 在接受普通 Turn 前把 `ash-models-manager` 的基础 instructions 冻结为 durable `TurnInstructions`，review Turn 则冻结 `agent-roles/assets/reviewer.md` 的正文与定义摘要 并标记 `TurnKind::Review`。`$create-instructions` 使用通用 Skill 激活流程创建指令文件。Core 不在 invocation 时重新读取模型配置；它把 Turn 快照连同 User、Directory、Goal、Skill 与扩展 fragment 按 instruction layer、放置顺序、budget 和 provenance 组装成最终 request。User Instructions 位于 Directory 之前，两者作为 user-role 指令进入首条输入消息，不进入 system body。Core 从本 Turn 成功的 `read_file` / `read_instruction` 调用提供路径，App Server 确认目录归属后做 Contextual 匹配，并按准确指令文件读取路径加载 OnDemand 正文。写入工具提交后，由 host 在执行前校验目标路径的规则；缺少规则以工具错误返回模型，不能用同一批调用中新读到的规则直接执行写入。Review Turn 跳过 active Goal 注入与 Goal continuation。历史旧 Turn 可以读取为缺少快照，但不能以临时查询或默认文本继续执行。
 
@@ -584,7 +584,7 @@ ContextManager 决定是否选入下一次 ContextPlan。
 ## 11. 目录与可见性
 
 ```text
-ash-rs/
+crates/
 ├─ context-engine/
 │  └─ src/
 │     ├─ budget.rs

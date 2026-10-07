@@ -1,0 +1,28 @@
+---
+source: crates/tui/src/app/state_tests.rs
+expression: "crate::app::usage_tests::render(&app, 96, 24)"
+---
+  .                                                                                [Dashboard]
+
+            ┌── Config › Kimi ─────────────────────────────────────────────────[✗]─┐
+            │                                                                      │
+            │> Account  ·  person@example.test                                     │
+            │                                                                      │
+            │  Models ──────────────────────────────────────────────────────────── │
+            │  No models available                                                 │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+  ──────────└──────────────────────────────────────────────────────────────────────┘──────────
+  > Build anything
+  ─────────────────────────────────────────────────────────────────────────── Automatic model
+
+  Esc to return  ·  l to sign out

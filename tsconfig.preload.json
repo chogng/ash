@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": ".build/desktop/preload",
+    "incremental": true,
+    "tsBuildInfoFile": ".build/desktop/preload.tsbuildinfo",
+    "rootDir": ".",
+    "types": ["node", "electron"]
+  },
+  "include": ["src/ash/base/parts/sandbox/electron-browser/preload.cts"]
+}

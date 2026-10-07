@@ -1,0 +1,20 @@
+---
+source: crates/tui/src/app/mode_tests.rs
+expression: render(&app)
+---
+  .                                  [Dashboard]  
+                                                  
+                                                  
+● focus message 05                                
+                                                  
+● focus message 06                                
+                                                  
+● focus message 07                                
+                                                  
+             Jump to bottom (click) ↓             
+                                                  
+  ──────────────────────────────────────────────  
+  > x                                             
+  ───────────────────────────── Automatic model   
+                                                  
+  ⏸ Manual

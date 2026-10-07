@@ -7,13 +7,13 @@
 /justfile text eol=lf
 
 # Unified diff blank context lines require a space prefix.
-/ash-rs/vendor/mxc/changes.patch whitespace=-blank-at-eol
+/crates/vendor/mxc/changes.patch whitespace=-blank-at-eol
 
 # Embed identical shared prompt assets on every platform.
-/ash-rs/prompts/templates/** text eol=lf
-/ash-rs/collaboration-mode-templates/templates/** text eol=lf
-/ash-rs/agent-roles/assets/** text eol=lf
-/ash-rs/model-provider-info/models.json text eol=lf
+/crates/prompts/templates/** text eol=lf
+/crates/collaboration-mode-templates/templates/** text eol=lf
+/crates/agent-roles/assets/** text eol=lf
+/crates/model-provider-info/models.json text eol=lf
 
 # Keep embedded classifier assets identical to their pinned release hashes.
 /app-rs/input-classifier/models/*.json text eol=lf
@@ -24,4 +24,4 @@
 /resources/icons/*.svg text eol=lf
 /resources/icons/manifest.json text eol=lf
 /app-rs/icons/src/generated.rs text eol=lf
-/app-ts/generated/product-icons.ts text eol=lf
+/generated/product-icons.ts text eol=lf

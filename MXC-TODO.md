@@ -8,7 +8,7 @@
 
 当前仍有官方未合入的隔离和生命周期修正：隐藏父目录内的授权例外、Windows ACL 日志与继承恢复、精确 PSEC 能力准备、WSL `AF_VSOCK` 禁止、进程树清理前保留 PID、Seatbelt 祖先目录固定与 `fcntl` 防护，以及 Unix 终端前台中断和 Bubblewrap 作业控制。直接改成官方 Git 依赖会失去这些修正；改用 fork 仍需维护同样的补丁。
 
-完整差异和来源校验见 [vendor 说明](ash-rs/vendor/mxc/README.md)；已运行项目见 [适配器验证](ash-rs/mxc-sandbox/README.md#验证)。本轮补丁包含 51 个 `mod.rs` 文件模块改名，不能把补丁文件数量全部当作功能修改数量。
+完整差异和来源校验见 [vendor 说明](crates/vendor/mxc/README.md)；已运行项目见 [适配器验证](crates/mxc-sandbox/README.md#验证)。本轮补丁包含 51 个 `mod.rs` 文件模块改名，不能把补丁文件数量全部当作功能修改数量。
 
 ## Windows：本任务负责
 
@@ -58,7 +58,7 @@ just test ash-mxc-sandbox --test network_matrix --locked -- --ignored --test-thr
 just rust-warnings ash-mxc-sandbox
 ```
 
-WSL 复测、Windows 挂载目录和可选公网 IPv6 的完整参数见 [现有入口](ash-rs/mxc-sandbox/README.md#验证)。不改网络授权来让测试通过。
+WSL 复测、Windows 挂载目录和可选公网 IPv6 的完整参数见 [现有入口](crates/mxc-sandbox/README.md#验证)。不改网络授权来让测试通过。
 
 ## macOS：ARM64 实机与剩余验收
 
@@ -76,7 +76,7 @@ just test ash-mxc-sandbox --test pty --locked
 just test ash-tool-executor --lib --locked
 just test ash-exec-server --test execution --locked
 just test ash-sandboxing --lib --locked
-just test mxc-sdk --manifest-path ash-rs/vendor/mxc/Cargo.toml --lib profile_builder --locked
+just test mxc-sdk --manifest-path crates/vendor/mxc/Cargo.toml --lib profile_builder --locked
 just rust-warnings ash-mxc-sandbox
 ```
 

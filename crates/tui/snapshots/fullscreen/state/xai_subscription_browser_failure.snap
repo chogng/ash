@@ -1,0 +1,28 @@
+---
+source: crates/tui/src/app/state_tests.rs
+expression: screen
+---
+  .                                                                                [Dashboard]
+
+
+
+
+
+
+
+
+          ┌── Super Grok › Could not open browser ───────────────────────────────[✗]─┐
+          │                                                                          │
+          │  browser command unavailable                                             │
+          │                                                                          │
+          └──────────────────────────────────────────────────────────────────────────┘
+
+
+
+
+
+  ────────────────────────────────────────────────────────────────────────────────────────────
+  > Build anything
+  ─────────────────────────────────────────────────────────────────────────── Automatic model
+
+  Enter/Esc to close

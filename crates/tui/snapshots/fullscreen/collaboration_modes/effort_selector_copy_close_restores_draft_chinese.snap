@@ -1,0 +1,28 @@
+---
+source: crates/tui/src/app/collaboration_modes_tests.rs
+expression: frame_text(terminal.backend().buffer())
+---
+  .                                                                   [仪表盘]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                   Copied 2 chars to clipboard
+  ────────────────────────────────────────────────────────────────────────────
+  > keep this draft
+  ────────────────────────────────────────────────────────────────── 自动模型
+
+  ⏸ 手动

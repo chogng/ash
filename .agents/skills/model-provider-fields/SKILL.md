@@ -11,10 +11,10 @@ description: 在 Ash 新增、删除、改名或调整模型及 provider 字段�
 
 从用户要表达的能力开始，检查现有字段、生产调用方和测试，明确本次是模型事实、接入限制、请求参数、账户权益、用户偏好还是 Ash 执行策略。
 
-- [通用模型声明规范](../../../ash-rs/model-provider-info/docs/model-template.md)：第 2 节是各家接口对照，第 7 节是当前缺口，第 8 节是 Codex 字段映射。设计建议和已实现能力必须分清。
-- [model-provider-info README](../../../ash-rs/model-provider-info/README.md)：静态目录、字段归属和当前可解析格式。
-- [models.json](../../../ash-rs/model-provider-info/models.json)、[解析声明](../../../ash-rs/model-provider-info/src/static_model_spec.rs)及生成的 [Schema](../../../ash-rs/model-provider-info/models.schema.json)：核对准确型号和已有契约，不手改生成文件。
-- [models-manager README](../../../ash-rs/models-manager/README.md)：动态目录、来源合并和连接生效规则。
+- [通用模型声明规范](../../../crates/model-provider-info/docs/model-template.md)：第 2 节是各家接口对照，第 7 节是当前缺口，第 8 节是 Codex 字段映射。设计建议和已实现能力必须分清。
+- [model-provider-info README](../../../crates/model-provider-info/README.md)：静态目录、字段归属和当前可解析格式。
+- [models.json](../../../crates/model-provider-info/models.json)、[解析声明](../../../crates/model-provider-info/src/static_model_spec.rs)及生成的 [Schema](../../../crates/model-provider-info/models.schema.json)：核对准确型号和已有契约，不手改生成文件。
+- [models-manager README](../../../crates/models-manager/README.md)：动态目录、来源合并和连接生效规则。
 - [套餐与价格](../../../docs/models/plans-and-pricing.md)：涉及订阅档位或账户权限时读取；运行时权益仍以所选连接的实际证据为准。
 
 按字段用途继续追踪 `ash-api` 的请求和响应编码、`model-provider` 的调用、Core 的执行或 App Server 与客户端的使用。相邻 Codex 源码可用于解释 Codex 字段及消费者，但不能替代其他厂商的接口证据，也不能把 Codex 的执行策略当成跨 provider 标准。

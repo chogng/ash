@@ -1,17 +1,17 @@
 # 模型 API 协议
 
-> - 物理位置：`ash-rs/ash-api/`
+> - 物理位置：`crates/ash-api/`
 > - Rust crate：`ash_api`
 > - 层次：模型 API 协议层
 > - 当前状态：OpenAI Responses、OpenAI-compatible Chat Completions 与 Anthropic Messages 已具备
 >   unary codec、原生 HTTP/SSE invocation、canonical delta 与 terminal response assembly；独立
 >   Responses WebSocket、公共 Realtime GA、OpenAI 与 xAI 听写均有协议会话和显式 runtime 入口
-> - Crate codec 与 decoder 实现：[`ash-rs/ash-api/README.md`](../ash-rs/ash-api/README.md)
+> - Crate codec 与 decoder 实现：[`crates/ash-api/README.md`](../crates/ash-api/README.md)
 > - Canonical contract：[`protocol.md`](protocol.md#6-provider-independent-model-contract)
 > - Provider runtime：[`model-provider.md`](model-provider.md)
 > - Operation client：[`ash-client.md`](ash-client.md)
-> - 底层网络：[`ash-http-client` README](../ash-rs/http-client/README.md)
-> - WebSocket transport：[`ash-websocket-client` README](../ash-rs/websocket-client/README.md)
+> - 底层网络：[`ash-http-client` README](../crates/http-client/README.md)
+> - WebSocket transport：[`ash-websocket-client` README](../crates/websocket-client/README.md)
 > - Provider credential：[`model-provider.md`](model-provider.md#6-供应商凭据边界)
 > - Secret persistence：[`secrets.md`](secrets.md)
 > - Model catalog control plane：[`models-manager.md`](models-manager.md)
@@ -589,7 +589,7 @@ Provider error message 默认不是稳定公共 API，不能未经清洗直接�
 端点拥有完整协议操作，共用代码按职责复用。当前主要归属如下，省略测试和不影响分层的小文件：
 
 ```text
-ash-rs/ash-api/src/
+crates/ash-api/src/
 ├── lib.rs
 ├── endpoint.rs
 ├── endpoint/
@@ -842,4 +842,4 @@ idle deadline、proxy/TLS、pool 和 HTTP diagnostics 的测试属于 `ash-http-
 - [Z.AI context caching](https://docs.z.ai/guides/capabilities/cache)
 
 Kimi 公共 API 使用 Chat Completions 和 `https://api.moonshot.ai/v1`；Kimi Code、Desktop 与 CLI
-连接各自声明端点和凭据。型号参数与思考历史的官方依据见[通用模型声明规范](../ash-rs/model-provider-info/docs/model-template.md)。
+连接各自声明端点和凭据。型号参数与思考历史的官方依据见[通用模型声明规范](../crates/model-provider-info/docs/model-template.md)。

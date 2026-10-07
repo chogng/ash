@@ -1,10 +1,10 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import ts from '../../../../app-ts/node_modules/typescript/lib/typescript.js';
+import ts from '../../../../node_modules/typescript/lib/typescript.js';
 
 const repositoryRoot = resolve(import.meta.dirname, '../../../..');
-const ashEditorRoot = resolve(repositoryRoot, 'app-ts/src/ash/editor');
+const ashEditorRoot = resolve(repositoryRoot, 'src/ash/editor');
 const vscodeEditorRoot = resolve(repositoryRoot, '../vscode/src/vs/editor');
 const ledgerPath = resolve(ashEditorRoot, 'api-alignment-status.md');
 const sourceCache = new Map();

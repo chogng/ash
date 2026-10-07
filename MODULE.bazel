@@ -158,15 +158,6 @@ filegroup(
     ]
 ]
 
-crate.annotation(
-    crate = "candle-onnx",
-    build_script_tools = ["//third_party/candle-onnx:protoc"],
-    build_script_env = {
-        "PROTOC": "$(execpath @@//third_party/candle-onnx:protoc)",
-    },
-    repositories = ["crates"],
-)
-
 # The consolidated SDK stamps its Windows helper binaries during its build.
 # Use the existing LLVM toolchain for resources rather than a host Windows SDK.
 crate.annotation(

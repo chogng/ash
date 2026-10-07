@@ -7,7 +7,7 @@
 > 切换和多 Agent 演进
 >
 > Cancellation tree 的当前实现与 race semantics 见
-> [`ash-async-utils` README](../ash-rs/async-utils/README.md)。
+> [`ash-async-utils` README](../crates/async-utils/README.md)。
 
 本文是 Agent 执行架构的总入口和跨层演进的权威文档。Core 的 ownership 与 crate 内部分层以
 [`core.md`](core.md) 为准；Context 以 [`core-context.md`](core-context.md) 为准；多 Agent 以
@@ -110,7 +110,7 @@
 | `ModelInvocationSnapshot`                                                                    | 部分   | B          | selected model、`ContextPlan` 与 tools 已冻结；独立 provider/config/catalog revision 集合尚未建模                                                                |
 | Agent 运行创建前的模型继承、覆盖与兼容替换                                                   | 仅设计 | E 之后     | [`agents.md`](agents.md#41-模型选择与替换)、[`models-manager.md`](models-manager.md#103-模型选择与替换)                                                          |
 | `ContextInput` / `ContextPlan` / 纯内容选择 planner                                          | 已实现 | B          | [`core-context.md`](core-context.md)                                                                                                                             |
-| 通用 context budget / token measurement 判定                                                 | 已实现 | B          | [`ash-context-engine`](../ash-rs/context-engine/README.md)；OpenAI exact，Anthropic/Google/Kimi/Z.AI estimated remote preflight 已接入，local tokenizer 尚未接入 |
+| 通用 context budget / token measurement 判定                                                 | 已实现 | B          | [`ash-context-engine`](../crates/context-engine/README.md)；OpenAI exact，Anthropic/Google/Kimi/Z.AI estimated remote preflight 已接入，local tokenizer 尚未接入 |
 | `ContextManager`（薄协调，无 cache）                                                         | 已实现 | B          | `core/src/context_manager.rs`、`loaded_thread.rs`                                                                                                                |
 | compaction checkpoint schema + 压缩流程                                                      | 已实现 | B          | 预算压缩和供应商溢出单次恢复均复用 durable checkpoint，见 [`core-context.md`](core-context.md) §8                                                                |
 | `ContextCompactionService` / `Clock` / `IdGenerator` / `CapabilityBroker` 端口               | 部分   | B / 按需   | model-backed compaction 已实现；其余仍按需设计                                                                                                                   |
@@ -390,18 +390,18 @@ cancellation tree、结构性 Agent tree budget、恢复、Desktop tree projecti
 Rust：
 
 ```bash
-cargo fmt --manifest-path ash-rs/Cargo.toml --all -- --check
-cargo clippy --manifest-path ash-rs/Cargo.toml --workspace --all-targets -- -D warnings
-cargo test --manifest-path ash-rs/Cargo.toml --workspace
+cargo fmt --manifest-path crates/Cargo.toml --all -- --check
+cargo clippy --manifest-path crates/Cargo.toml --workspace --all-targets -- -D warnings
+cargo test --manifest-path crates/Cargo.toml --workspace
 ```
 
 Desktop 与协议：
 
 ```bash
 pnpm verify:protocol
-pnpm --dir app-ts run build:host
-pnpm --dir app-ts run typecheck:renderer
-pnpm --dir app-ts run test:main
+pnpm run build:host
+pnpm run typecheck:renderer
+pnpm run test:main
 ```
 
 跨阶段必须持续覆盖（已实现部分回归 + 新增项）：
@@ -439,6 +439,6 @@ pnpm --dir app-ts run test:main
 - [上下文系统](core-context.md)
 - [多 Agent 协作系统](core-multi-agent.md)
 - [产品协议](protocol.md)
-- [ash-rs 产品内核与统一对外层](ash-rs-architecture.md)
+- [crates 产品内核与统一对外层](rust-architecture.md)
 - [Ash App Server API](ash-app-server-api.md)
 - [Pi session format snapshot](https://github.com/earendil-works/pi/blob/5bc1c2c0a6f07e00e8c240304182f213ab8d311f/packages/coding-agent/docs/session-format.md)

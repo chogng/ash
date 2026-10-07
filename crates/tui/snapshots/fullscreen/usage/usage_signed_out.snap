@@ -1,0 +1,24 @@
+---
+source: crates/tui/src/app/usage_tests.rs
+expression: screen
+---
+  .                                                                [Dashboard]
+
+        ┌── Usage ─────────────────────────────────────────────────[✗]─┐
+        │                                                              │
+        │  Sign in to a subscription: /config > Providers.             │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+  ──────│                                                              │──────
+  > Buil└──────────────────────────────────────────────────────────────┘
+  ─────────────────────────────────────────────────────────── Automatic model
+
+  Esc to close

@@ -2,14 +2,14 @@
 
 ```yaml
 status: current narrow integration
-owner: ash-rs/utils/typst and ash-rs/app-server
+owner: crates/utils/typst and crates/app-server
 consumers:
   - desktop
 lastUpdated: 2026-07-28
 ```
 
 本文负责跨 crate 的架构与信任模型。编译器实现细节以
-[`ash-rs/utils/typst/README.md`](../ash-rs/utils/typst/README.md) 为准。
+[`crates/utils/typst/README.md`](../crates/utils/typst/README.md) 为准。
 
 ## 快速理解
 

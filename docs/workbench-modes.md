@@ -1,6 +1,6 @@
 # Ash Desktop 工作台与文档贡献
 
-> 本文描述当前实现。未来 Work / Code 设计见 [目标设计](../app-ts/docs/design/work-code-workbench.md)，公开产品线见 [产品线说明](product-lines.md)。
+> 本文描述当前实现。未来 Work / Code 设计见 [目标设计](design/work-code-workbench.md)，公开产品线见 [产品线说明](product-lines.md)。
 
 Ash Desktop 当前只有 Code 工作台。Academic 是可在同一窗口打开的论文文档类型；用户不需要切换工作台或重载窗口。代码、差异、论文、Tasks、Testing、Debug、Chat 和 Agents 窗口使用同一安装包与后端。
 
@@ -42,10 +42,10 @@ Workbench、独立编辑器窗口和 Code Sessions 使用共享应用身份及�
 
 标题服务通过 `createAuxiliaryTitlebarPart` 创建并登记辅助标题栏，窗口关闭时释放标题监听并移除登记。辅助窗口布局预留标题栏和状态栏高度。环境属性通过 `updateProperties` 传播；调试会话暂停且应用失焦时，调试贡献设置红点前缀。Electron Main 读取桌面进程权限，并校验打包清单中的安装文件；构建流程在打包目录写入 `package.json.checksums`，覆盖 `dist/` 与 `resources/`。完整性结果由 `IIntegrityService` 返回，实际不一致时进入现有通知中心。开发运行没有发布校验清单，`isPure` 保持未定义。此检查用于发现安装文件变化，不代替操作系统签名；Rust App Server 的权限和安装状态独立于桌面应用。
 
-Code Sessions 保持独立页面。Workbench 通过 Titlebar action 请求打开 Agents 窗口；Main 持有窗口创建、复用与关闭，Sessions 使用自己的会话状态。`sessions` 可以复用 `workbench` 能力，`workbench` 不反向导入 `sessions`。详情见 [Sessions 说明](../app-ts/src/ash/sessions/README.md)。
+Code Sessions 保持独立页面。Workbench 通过 Titlebar action 请求打开 Agents 窗口；Main 持有窗口创建、复用与关闭，Sessions 使用自己的会话状态。`sessions` 可以复用 `workbench` 能力，`workbench` 不反向导入 `sessions`。详情见 [Sessions 说明](../src/ash/sessions/README.md)。
 
 ## 构建与验证
 
-统一 Renderer 输出在 `.build/app-ts/renderer/ash`，包含 Workbench 与 Code Sessions 入口。Academic 不再拥有独立模式入口或 `editor.academic.all.ts`。
+统一 Renderer 输出在 `.build/desktop/renderer/ash`，包含 Workbench 与 Code Sessions 入口。Academic 不再拥有独立模式入口或 `editor.academic.all.ts`。
 
 验证覆盖文档类型匹配、共享模型与释放、保存冲突、旧配置忽略与存储迁移、浏览器富文档输入以及 Electron 实际文件打开和保存。用户流程使用 Playwright 的内容、焦点和持久状态断言。

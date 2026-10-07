@@ -1,7 +1,7 @@
 # Ash API 接口文档规范
 
 > 本文规定 Desktop、CLI 或其他客户端提交 Ash App Server 产品 API 需求时必须包含的内容。  
-> ash-rs 是已接受契约的 owner，并据此实现 Rust 协议、handler、typed client、生成类型和测试。
+> crates 是已接受契约的 owner，并据此实现 Rust 协议、handler、typed client、生成类型和测试。
 
 当前已经接受的产品契约见
 [`ash-app-server-api.md`](ash-app-server-api.md)。
@@ -27,8 +27,8 @@
 title: Browser Capability API
 status: draft | review | accepted | deprecated
 capabilityVersion: 1
-owner: ash-rs
-rustOwner: ash-rs
+owner: crates
+rustOwner: crates
 requestedBy: desktop
 consumers: [desktop, cli]
 lastUpdated: YYYY-MM-DD

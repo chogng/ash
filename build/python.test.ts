@@ -3,7 +3,7 @@ import test from 'node:test';
 import { resolve } from 'node:path';
 import { pythonCommand, type PythonHost } from './python.ts';
 
-const arguments_ = ['-B', 'build/ash_rs/prepare.py'];
+const arguments_ = ['-B', 'build/runtime/prepare.py'];
 
 test('python command honors the configured interpreter', () => {
 	assert.deepEqual(pythonCommand(arguments_, host('linux', { PYTHON: '/tools/python' })), {

@@ -1,0 +1,36 @@
+---
+source: cli/tests/support/tui_process.rs
+expression: screen
+---
+  <FIXTURE…>                                      …                            [— / —] [Dashboard]
+
+> 请创建 approved-by-tui.txt
+
+● Updated file
+
+● 工具已获批准并执行。文件写入完成。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ⏸ Manual                                                       /permission to change permissions
+  ────────────────────────────────────────────────────────────────────────────────────────────────
+  >
+  ───────────────────────────────────────────────────────────────────────────── ash-real-scenario
+
+  Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort

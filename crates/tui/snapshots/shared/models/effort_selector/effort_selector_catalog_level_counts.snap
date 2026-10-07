@@ -1,0 +1,38 @@
+---
+source: crates/tui/src/models/effort_selector_tests.rs
+expression: "screens.join(\"\\n\\n\")"
+---
+1 levels
+                                           Faster  Smarter
+                                           ───────▲───────    Multitask  off
+                                                none
+
+                                      No reasoning. Best for straightforward tasks.
+
+2 levels
+                                        Faster        Smarter
+                                        ────────────────▲────    Multitask  off
+                                          none       minimal
+
+                                    Less reasoning for quick, straightforward tasks.
+
+3 levels
+                                  Faster                    Smarter
+                                  ────────────────────────────▲────    Multitask  off
+                                    none       minimal       low
+
+                                    Less reasoning for quick, straightforward tasks.
+
+5 levels
+                      Faster                                            Smarter
+                      ────────────────────────────────────────────────────▲────    Multitask  off
+                        none       minimal       low       medium       high
+
+                               More reasoning for complex tasks and careful verification.
+
+7 levels
+          Faster                                                                    Smarter
+          ────────────────────────────────────────────────────────────────────────────▲────    Multitask  off
+            none       minimal       low       medium       high        xhigh        max
+
+                   Maximum reasoning. May use more tokens and take longer; use for the hardest tasks.

@@ -1,0 +1,36 @@
+---
+source: crates/tui/src/app/conversation_flow_tests.rs
+expression: streaming_frame
+---
+  .                                                                                    [Dashboard]
+
+> 请 正 常 回 复 ， 并 展 示 多 行 输 出 。
+
+● 你 好 ！ 普 通 对 话
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+⠋ Working... · 0s · esc to interrupt
+                                                                 /permission to change permissions
+  ────────────────────────────────────────────────────────────────────────────────────────────────
+  >
+  ─────────────────────────────────────────────────────────────────────────────── Automatic model
+
+  ⏸ Manual · ← Dashboard · ? for shortcuts

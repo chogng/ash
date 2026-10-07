@@ -1,0 +1,28 @@
+---
+source: crates/tui/src/app/fullscreen/home_tests.rs
+expression: "text(&render(&app, 80, 24))"
+---
+  .                                                                [Dashboard]  
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+  ────────────────────────────────────────────────────────────────────────────  
+  > 检 查 项 目 结 构                                                                 
+  ─────────────────────────────────────────────────────────── Automatic model   
+                                                                                
+  ⏸ Manual

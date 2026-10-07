@@ -73,7 +73,7 @@ export async function prepareBrowserExtensions(): Promise<void> {
 		bundledResources[id] = packageResources;
 		extensions.push({ id, name: manifest.name, publisher: manifest.publisher, version: manifest.version, displayName: manifest.name, sourceKind: index < builtInCount ? 'builtIn' : 'user', manifestJson, manifestSha256: digest(manifestJson), packageSha256: digest(JSON.stringify(packageResources)) });
 	}
-	await publish(resolve(root, 'app-ts/src/ash/platform/extensions/common/generated/browser.json'), { catalog: { generation: 1, diagnostics: [], extensions }, resources: bundledResources });
+	await publish(resolve(root, 'src/ash/platform/extensions/common/generated/browser.json'), { catalog: { generation: 1, diagnostics: [], extensions }, resources: bundledResources });
 }
 
 const digest = (content: string): string => 'sha256:' + createHash('sha256').update(content).digest('hex');
@@ -98,7 +98,7 @@ if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.m
 	for (const file of (await readdir(resolve(directory, 'themes'))).sort()) {
 		if (file.endsWith('.json')) resources['themes/' + file] = await readFile(resolve(directory, 'themes', file), 'utf8');
 	}
-	const output = resolve(root, 'app-ts/src/ash/platform/extensions/common/generated/theme-defaults.json');
+	const output = resolve(root, 'src/ash/platform/extensions/common/generated/theme-defaults.json');
 	await mkdir(dirname(output), { recursive: true });
 	// Build and test entry points can prepare resources concurrently; publish a complete snapshot.
 	const temporary = output + '.' + randomUUID();

@@ -1,0 +1,28 @@
+---
+source: crates/tui/src/app/collaboration_modes_tests.rs
+expression: render_effort(&app)
+---
+  .                                                                [Dashboard]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+─ Thinking effort ──────────────────────────────────────────────────────────────
+
+               Faster                  Smarter
+               ───────────────▲───────────────    Multitask  off
+                 low        high         max
+
+           More reasoning for complex tasks and careful verification.
+
+  ←/→ choose  ·  Tab toggle multitask  ·  Enter apply  ·  Esc cancel

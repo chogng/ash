@@ -1,0 +1,233 @@
+---
+source: crates/tui/src/app/status_tests.rs
+expression: text
+---
+Diagnostics overview
+  .                                                                                    [Dashboard]  
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+            ┌── Developer: Context diagnostics ───────────────────────────────────[✗]─┐             
+            │                                                                         │             
+            │  Test model                                 12.3k / 100k tokens (12.3%) │             
+            │                                                                         │             
+            │                                                                         │             
+            │> ■ System prompt                                          1.5k (1.5%) + │             
+            │  ■ Tool definitions                                         5k (5.0%)   │             
+            │  ■ Memory / instruction files                              300 (0.3%) + │             
+            │  ■ Skills (41)                                            1.5k (1.5%) + │             
+            │  ■ Conversation and tool results                            4k (4.0%) + │             
+            │                                                                         │             
+            │  Tool definition details ────────────────────────────────────────────── │             
+            │  read_file                                                  5k (5.0%) + │             
+            │                                                                         │             
+            │  Context allocation ─────────────────────────────────────────────────── │             
+            │  Compaction mode                                      Layered summary   │             
+            │  ■ Free space                                           77.7k (77.7%)   │             
+            │  ■ Output reserve                                           2k (2.0%)   │             
+            │  ■ Safety margin                                            1k (1.0%)   │             
+            │  ■ Autocompact buffer                                       7k (7.0%)   │             
+            │  Auto-compact window                                      93k (93.0%)   │             
+            │  Auto-compact threshold                                   90k (90.0%)   │             
+            │  Latest request · provider reported                        25k tokens   │             
+            │                                                                         │             
+            └─────────────────────────────────────────────────────────────────────────┘             
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+  ────────────────────────────────────────────────────────────────────────────────────────────────  
+  > diagnostic draft                                                                                
+  ─────────────────────────────────────────────────────────────────────────────── Automatic model   
+                                                                                                    
+  ↑/↓ select · Enter details · Esc close                                                            
+
+Expanded memory source
+  .                                                                                    [Dashboard]  
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+            ┌── Developer: Context diagnostics ───────────────────────────────────[✗]─┐             
+            │                                                                         │             
+            │  Test model                                 12.3k / 100k tokens (12.3%) │             
+            │                                                                         │             
+            │                                                                         │             
+            │  ■ System prompt                                          1.5k (1.5%) + │             
+            │  ■ Tool definitions                                         5k (5.0%)   │             
+            │> ■ Memory / instruction files                              300 (0.3%) - │             
+            │    AGENTS.md · 300 tokens                                               │             
+            │  ■ Skills (41)                                            1.5k (1.5%) + │             
+            │  ■ Conversation and tool results                            4k (4.0%) + │             
+            │                                                                         │             
+            │  Tool definition details ────────────────────────────────────────────── │             
+            │  read_file                                                  5k (5.0%) + │             
+            │                                                                         │             
+            │  Context allocation ─────────────────────────────────────────────────── │             
+            │  Compaction mode                                      Layered summary   │             
+            │  ■ Free space                                           77.7k (77.7%)   │             
+            │  ■ Output reserve                                           2k (2.0%)   │             
+            │  ■ Safety margin                                            1k (1.0%)   │             
+            │  ■ Autocompact buffer                                       7k (7.0%)   │             
+            │  Auto-compact window                                      93k (93.0%)   │             
+            │  Auto-compact threshold                                   90k (90.0%)   │             
+            │  Latest request · provider reported                        25k tokens   │             
+            │                                                                         │             
+            └─────────────────────────────────────────────────────────────────────────┘             
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+  ────────────────────────────────────────────────────────────────────────────────────────────────  
+  > diagnostic draft                                                                                
+  ─────────────────────────────────────────────────────────────────────────────── Automatic model   
+                                                                                                    
+  ↑/↓ select · Enter details · Esc close                                                            
+
+Expanded skill count
+  .                                                                                    [Dashboard]  
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+            ┌── Developer: Context diagnostics ───────────────────────────────────[✗]─┐             
+            │                                                                         │             
+            │  Test model                                 12.3k / 100k tokens (12.3%) │             
+            │                                                                         │             
+            │                                                                         │             
+            │  ■ System prompt                                          1.5k (1.5%) + │             
+            │  ■ Tool definitions                                         5k (5.0%)   │             
+            │  ■ Memory / instruction files                              300 (0.3%) + │             
+            │> ■ Skills (41)                                            1.5k (1.5%) - │             
+            │    41 skills · 1.5k tokens                                              │             
+            │  ■ Conversation and tool results                            4k (4.0%) + │             
+            │                                                                         │             
+            │  Tool definition details ────────────────────────────────────────────── │             
+            │  read_file                                                  5k (5.0%) + │             
+            │                                                                         │             
+            │  Context allocation ─────────────────────────────────────────────────── │             
+            │  Compaction mode                                      Layered summary   │             
+            │  ■ Free space                                           77.7k (77.7%)   │             
+            │  ■ Output reserve                                           2k (2.0%)   │             
+            │  ■ Safety margin                                            1k (1.0%)   │             
+            │  ■ Autocompact buffer                                       7k (7.0%)   │             
+            │  Auto-compact window                                      93k (93.0%)   │             
+            │  Auto-compact threshold                                   90k (90.0%)   │             
+            │  Latest request · provider reported                        25k tokens   │             
+            │                                                                         │             
+            └─────────────────────────────────────────────────────────────────────────┘             
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+  ────────────────────────────────────────────────────────────────────────────────────────────────  
+  > diagnostic draft                                                                                
+  ─────────────────────────────────────────────────────────────────────────────── Automatic model   
+                                                                                                    
+  ↑/↓ select · Enter details · Esc close                                                            
+
+Expanded tool definition
+  .                                                                                    [Dashboard]  
+            ┌── Developer: Context diagnostics ───────────────────────────────────[✗]─┐             
+            │                                                                         │             
+            │  Test model                                 12.3k / 100k tokens (12.3%) │             
+            │                                                                         │             
+            │                                                                         │             
+            │  ■ System prompt                                          1.5k (1.5%) + │             
+            │  ■ Tool definitions                                         5k (5.0%)   │             
+            │  ■ Memory / instruction files                              300 (0.3%) + │             
+            │  ■ Skills (41)                                            1.5k (1.5%) + │             
+            │  ■ Conversation and tool results                            4k (4.0%) + │             
+            │                                                                         │             
+            │  Tool definition details ────────────────────────────────────────────── │             
+            │> read_file                                                  5k (5.0%) - │             
+            │    {                                                                    │             
+            │      "description": "Read a workspace file",                            │             
+            │      "name": "read_file",                                               │             
+            │      "parameters": {                                                    │             
+            │        "properties": {                                                  │             
+            │          "path": {                                                      │             
+            │            "type": "string"                                             │             
+            │          }                                                              │             
+            │        },                                                               │             
+            │        "required": [                                                    │             
+            │          "path"                                                         │             
+            │        ],                                                               │             
+            │        "type": "object"                                                 │             
+            │      },                                                                 │             
+            │      "strict": true                                                     │             
+            │    }                                                                    │             
+            │                                                                         │             
+            │  Context allocation ─────────────────────────────────────────────────── │             
+            │  Compaction mode                                      Layered summary   │             
+            │  ■ Free space                                           77.7k (77.7%)   │             
+            │  ■ Output reserve                                           2k (2.0%)   │             
+            │  ■ Safety margin                                            1k (1.0%)   │             
+            │  ■ Autocompact buffer                                       7k (7.0%)   │             
+            │  Auto-compact window                                      93k (93.0%)   │             
+            │  Auto-compact threshold                                   90k (90.0%)   │             
+  ──────────│  Latest request · provider reported                        25k tokens   │───────────  
+  > diagnost│                                                                         │             
+  ──────────└─────────────────────────────────────────────────────────────────────────┘atic model   
+                                                                                                    
+  ↑/↓ select · Enter details · Esc close                                                            
+
+Closed · draft restored
+  .                                                                                    [Dashboard]  
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+  ────────────────────────────────────────────────────────────────────────────────────────────────  
+  > diagnostic draft                                                                                
+  ─────────────────────────────────────────────────────────────────────────────── Automatic model   
+                                                                                                    
+  ⏸ Manual

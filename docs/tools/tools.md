@@ -1,7 +1,7 @@
 # 工具系统
 
-> 计划物理位置：`ash-rs/tools/`  
-> Rust crate：`ash_tools`  
+> 计划物理位置：`crates/tools/`
+> Rust crate：`ash_tools`
 > 当前状态：T1 主链完成，T2 MCP/dynamic 主链完成；MCP host runtime 已提取到 `ext/mcp`。T3 的
 > Tool Search、capability-bearing extension、Connector discovery projection、Plugin catalog projection 与
 > typed discovery request 已接入共享契约；`ext/web-search` 已提供默认关闭、宿主注入 backend 后才注册的
@@ -10,11 +10,11 @@
 > 图片内容。Code Mode 已完成 exec/wait、V8 cell runtime、durable nested-call broker 和可选 stdio Host；
 > Plugin local content store 已落地，但安装 authority、activation、grant，以及 dynamic owner 断连后的持久化重启
 > 端到端 fixture 仍未完成。
-> Canonical value 与 durable Tool Item：[`protocol.md`](protocol.md)  
-> Core 调度、approval 与恢复：[`core.md`](core.md)  
-> MCP client runtime：[`mcp.md`](mcp.md)  
-> Plugin authority：[`plugins.md`](plugins.md)  
-> Config 与 runtime snapshot：[`config.md`](config.md)  
+> Canonical value 与 durable Tool Item：[`protocol.md`](protocol.md)
+> Core 调度、approval 与恢复：[`core.md`](core.md)
+> MCP client runtime：[`mcp.md`](mcp.md)
+> Plugin authority：[`plugins.md`](plugins.md)
+> Config 与 runtime snapshot：[`config.md`](config.md)
 > Provider wire adapter：[`ash-api.md`](ash-api.md)
 
 ## 快速理解
@@ -315,7 +315,7 @@ Git 服务。通用命令工具不按 Git 子命令逐个注册，也不需要�
 `ash-file-system` 还提供 host-only 的 `find_nearest_ancestor_with_markers`，用于从一个本地路径
 向上发现最近的项目 marker。它不是模型 Tool，不读取 marker 配置，也不施加 `DirectoryRoot`
 containment；调用方仍拥有项目根语义和搜索边界。实现与错误策略由
-[`ash-rs/file-system/README.md`](../ash-rs/file-system/README.md) 维护。
+[`crates/file-system/README.md`](../../crates/file-system/README.md) 维护。
 
 搜索分成 Agent 内容搜索、编辑器内容搜索和交互式路径搜索：
 
@@ -326,22 +326,22 @@ containment；调用方仍拥有项目根语义和搜索边界。实现与错误
 | `ash-file-search`                 | ignore-aware 路径索引、fuzzy matching、`PathSearchHandle` 和 CLI                          | 否          |
 | `ash-file-watcher`                | 多订阅者路径失效提示、missing-path fallback、throttle/debounce 与 overflow rescan hint    | 否          |
 
-模型侧注册独立 `grep` 和 `glob` Tool。`grep` 默认使用包内 tgrep；公共配置 `grep.backend = "ripgrep"` 可显式选择 `rg`。编辑器与 Codebase 也使用同一 grep 服务；`glob` 继续通过 `rg --files` 枚举文件。交互式路径搜索契约由 [`ash-rs/file-search/README.md`](../ash-rs/file-search/README.md) 维护。
+模型侧注册独立 `grep` 和 `glob` Tool。`grep` 默认使用包内 tgrep；公共配置 `grep.backend = "ripgrep"` 可显式选择 `rg`。编辑器与 Codebase 也使用同一 grep 服务；`glob` 继续通过 `rg --files` 枚举文件。交互式路径搜索契约由 [`crates/file-search/README.md`](../../crates/file-search/README.md) 维护。
 
-[`ash-grep`](../../ash-rs/grep/README.md) 通过内部 tgrep 适配器按仓库启动并持有上游 `tgrep serve --shared` 子进程，为各 Directory 注册独立 worktree 租约，通过其本机 TCP JSON-RPC 查询。普通目录与未提交的新仓库使用单目录服务。tgrep 自己维护 trigram 索引和文件监听。公共结果按路径排序，Agent 调用限定 100 个匹配行；Ash 文件工具写入后先由对应 worktree 的刷新接口确认处理，避免监听延迟；单目录服务使用 reload 确认。删除 worktree 前先等待已开始的搜索并释放目录租约。外部编辑仍遵循 tgrep 异步索引语义；正向 glob 直接筛选索引候选。单文件和含未保存文档的查询使用磁盘扫描。公共结果与 RPC 分页携带本次索引查询的计划和候选统计，具体过滤约定见 [`ash-tgrep`](../../ash-rs/tgrep/README.md)。
+[`ash-grep`](../../crates/grep/README.md) 通过内部 tgrep 适配器按仓库启动并持有上游 `tgrep serve --shared` 子进程，为各 Directory 注册独立 worktree 租约，通过其本机 TCP JSON-RPC 查询。普通目录与未提交的新仓库使用单目录服务。tgrep 自己维护 trigram 索引和文件监听。公共结果按路径排序，Agent 调用限定 100 个匹配行；Ash 文件工具写入后先由对应 worktree 的刷新接口确认处理，避免监听延迟；单目录服务使用 reload 确认。删除 worktree 前先等待已开始的搜索并释放目录租约。外部编辑仍遵循 tgrep 异步索引语义；正向 glob 直接筛选索引候选。单文件和含未保存文档的查询使用磁盘扫描。公共结果与 RPC 分页携带本次索引查询的计划和候选统计，具体过滤约定见 [`ash-tgrep`](../../crates/tgrep/README.md)。
 
 运行时版本、源码和补丁校验值由 [`third_party/tgrep/runtime-lock.json`](../../third_party/tgrep/runtime-lock.json) 固定。开发准备与发布构建编译校验后的固定源码与补丁，统一放入 `ash-resources/tgrep/`；搜索期间不下载。普通关闭切回 `rg` 并保留磁盘索引；关闭并删除在配置提交后释放服务，再通过 State Runtime 的独占租约删除。旧 `fastRegex` 配置迁移为 `tgrep`，旧索引不读取，新索引使用版本目录。
 
 `ash-file-watcher` 同样不是搜索或读取接口。它只把 OS mutation/error 转成
 `PathsChanged`/`RescanRequired`；consumer 必须重新扫描并校验 own state。其 ref-count、路径匹配、
 RAII 与 failure contract 由
-[`ash-rs/file-watcher/README.md`](../ash-rs/file-watcher/README.md) 维护。
+[`crates/file-watcher/README.md`](../../crates/file-watcher/README.md) 维护。
 
 当前 local App Server 启动时通过 `ash-install-context` 按 `ASH_RG_PATH`、package
 `ash-path/`、Ash executable 同目录、host `PATH` 的顺序生成 `rg` candidates，再由
 `ash-shell-command` 验证并冻结 canonical executable identity；未找到时启用本地工具的
 composition 直接失败。canonical release package 由
-[`build/ash_rs/build.py`](../build/ash_rs/build.py) 按
+[`build/runtime/build.py`](../../build/runtime/build.py) 按
 [`third_party/ripgrep/runtime-lock.json`](../third_party/ripgrep/runtime-lock.json) 下载并校验
 target-specific ripgrep archive，把 executable 放到 `ash-path/rg[.exe]`；源码开发启动仍可使用
 `ASH_RG_PATH` 或 host `PATH`。
@@ -356,7 +356,7 @@ pattern/ignore file 参数，包括 `-f/path`、`-LH` 等紧凑短参数形式�
 App Server 尚未执行 `rg --version` capability probe；本地 override/PATH candidate 也不保证与
 package 锁定版本相同。该 runtime prerequisite 属于命令执行与安装诊断，不应通过重新增加一套
 内容搜索 Tool 解决。crate 内实现契约见
-[`ash-rs/shell-command/README.md`](../ash-rs/shell-command/README.md)。
+[`crates/shell-command/README.md`](../../crates/shell-command/README.md)。
 
 ## 5. 身份、来源与绑定
 
@@ -1052,7 +1052,7 @@ snapshot-local 目录、输入准备、召回融合、generation 校验、过滤
 已授权 semantic 和可选 cloud candidates，再返回 bounded、current-source-verified excerpts。Policy 只
 只接受绑定当前目录、授权版本和读取 Permission 的 Authorization；伪造或复用其他 Authorization 会被拒绝。
 
-`ash-rs/tools/src/registry_search_eval_tests.rs` 保存一份跨 coding、GitHub、Slack、Calendar、
+`crates/tools/src/registry_search_eval_tests.rs` 保存一份跨 coding、GitHub、Slack、Calendar、
 Browser 和 Database 的离线查询集，比较当前 BM25 排序与 uniform token-overlap baseline，并以
 Top-1、Top-3 和 MRR 设置回归门槛。该 synthetic fixture 只防止明显退化，不替代基于匿名真实调用
 构建的长期评测集；纯语义同义词和跨语言查询单独计分，不冒充词法方案已经解决的能力。
@@ -1307,7 +1307,7 @@ bytes 的权限。
 ### 15.4 图像安全
 
 共享图片字节的解码、资源限制、缩放、重编码、metadata policy 与 bounded cache 由
-[`ash-utils-image`](../ash-rs/utils/image/README.md) 实现；本节拥有跨 Core、Tool、模型与
+[`ash-utils-image`](../../crates/utils/image/README.md) 实现；本节拥有跨 Core、Tool、模型与
 provider 的安全和策略边界，crate README 拥有具体实现契约。
 
 - data URL、remote URL 和 durable attachment reference 使用不同 typed source；
@@ -1439,7 +1439,7 @@ InternalToolInvariant
 第一版保持一个 crate，模块默认 private，`lib.rs` 只做精确导出：
 
 ```text
-ash-rs/tools/src/
+crates/tools/src/
 ├── lib.rs
 ├── error.rs
 ├── identity.rs
@@ -1547,7 +1547,7 @@ mod tests;
 - ✅ `ash-mcp` 输出 `McpToolProjection` 并建立 immutable catalog/binding；
 - ✅ 接通 MCP schema/name/result conversion 与调用取消；
 - ✅ MCP App Server/Core adapter 接入逐次 approval、durable commit 和 unknown outcome；
-- ✅ MCP host integration 从 App Server 私有模块提取到 `ash-rs/ext/mcp`；App Server 仅组合和 safe-point replacement；
+- ✅ MCP host integration 从 App Server 私有模块提取到 `crates/ext/mcp`；App Server 仅组合和 safe-point replacement；
 - ✅ dynamic definition 进入共享 registry，execution 经过 approval、durable interaction 与 Tool Result commit；
 - ✅ dynamic request 固定 definition digest、call id、name 与 arguments；同名新定义不能认领旧 response；
 - ✅ 多连接 delivery 还按 initialize capability 的 exact dynamic tool name 选 owner；
@@ -1665,4 +1665,4 @@ ranking 只证明 gate、document embedding、cosine ranking 和 hybrid merge �
 - 新 API 不使用让调用方写出 `foo(false)` / `bar(None)` 的含糊参数；
 - 模块默认 private，`lib.rs` 精确导出，implementation tests 放 sibling 文件。
 
-新增的 Goal、Agent、历史笔记、图片和等待工具，以及对应扩展职责见 [Agent 扩展](../ash-rs/docs/extensions.md)。
+新增的 Goal、Agent、历史笔记、图片和等待工具，以及对应扩展职责见 [Agent 扩展](../../crates/docs/extensions.md)。

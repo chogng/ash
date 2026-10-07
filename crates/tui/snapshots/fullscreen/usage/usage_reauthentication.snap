@@ -1,0 +1,24 @@
+---
+source: crates/tui/src/app/usage_tests.rs
+expression: screen
+---
+  .                                                                [Dashboard]
+
+        ┌── Usage ─────────────────────────────────────────────────[✗]─┐
+        │                                                              │
+        │  Reconnect ChatGPT in /config > Providers.                   │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+  ──────│                                                              │──────
+  > Buil└──────────────────────────────────────────────────────────────┘
+  ─────────────────────────────────────────────────────────── Automatic model
+
+  Esc to close

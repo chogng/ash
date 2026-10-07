@@ -41,7 +41,7 @@ BigModel 与 Z.AI 使用[官方 ZCode](https://zcode.z.ai/en/docs/configuration)
 
 ## 账户额度与刷新
 
-Ash Code 的 `/usage` 打开“Usage”（中文为“额度”）面板，统计范围是供应商账户。本线程累计 token 消耗与参考成本在 `/status` 查看，最近请求的上下文占用在 `/context` 查看；三个命令的完整职责见 [TUI 命令说明](../code/README.md#命令与补全)。
+Ash Code 的 `/usage` 打开“Usage”（中文为“额度”）面板，统计范围是供应商账户。本线程累计 token 消耗与参考成本在 `/status` 查看，最近请求的上下文占用在 `/context` 查看；三个命令的完整职责见 [TUI 命令说明](../crates/tui/README.md#命令与补全)。
 
 `account/rateLimits/read` 支持七个订阅入口，按 `{ provider, accountId }` 查询指定账户；接口字段、身份检查和错误见 [App Server 账号接口](ash-app-server-api.md#11-account-与登录)。ChatGPT 返回额度窗口的已使用比例、UTC 重置时间和点数；Kimi 返回上游实际提供的五小时、每周或每月窗口；Super Grok 返回上游周期、使用比例和余额。BigModel 与 Z.AI 查询 Coding Plan monitor 的额度窗口；接口没有返回的套餐、额度或重置时间保持“未提供”。Start Plan 返回有效套餐名称和各模型额度桶的使用比例、可用状态与周期。各供应商的额度含义不同，界面分别展示。
 

@@ -5,15 +5,15 @@ description: Use when running browser integration tests in the Ash repo. Covers 
 
 # Running Integration Tests
 
-Browser integration tests live in `app-ts/test/integration/browser/`. They test editors and components in a real browser through Playwright.
+Browser integration tests live in `test/integration/browser/`. They test editors and components in a real browser through Playwright.
 
 ## Scripts
 
 | Scope | Command from the repository root |
 | --- | --- |
-| All browser integration specs | `pnpm --dir app-ts test:browser:integration` |
-| Editor browser specs | `pnpm --dir app-ts test:editor:browser` |
-| Editor units plus browser integration | `pnpm --dir app-ts test:editor` |
+| All browser integration specs | `pnpm test:browser:integration` |
+| Editor browser specs | `pnpm test:editor:browser` |
+| Editor units plus browser integration | `pnpm test:editor` |
 
 These commands typecheck the tests, build the browser pages, start the test server, and close it when Playwright exits. With `--list`, they only typecheck and list tests.
 
@@ -22,9 +22,9 @@ These commands typecheck the tests, build the browser pages, start the test serv
 Arguments go directly to Playwright; do not add a `--` separator:
 
 ```bash
-pnpm --dir app-ts test:browser:integration dialog.integration.spec.ts --project=chromium
-pnpm --dir app-ts test:editor:browser textModel.integration.spec.ts --project=chromium --list
-pnpm --dir app-ts test:editor:browser --project=chromium --grep 'restores'
+pnpm test:browser:integration dialog.integration.spec.ts --project=chromium
+pnpm test:editor:browser textModel.integration.spec.ts --project=chromium --list
+pnpm test:editor:browser --project=chromium --grep 'restores'
 ```
 
 `--grep`, `--list`, `--repeat-each=N`, and `--max-failures=1` use Playwright's meanings. Check the selected tests with `--list` when a filter is ambiguous. The `chrome-gpu` project selects GPU specs and requires the corresponding Chrome installation; ordinary component specs use `chromium`.
@@ -37,4 +37,4 @@ pnpm --dir app-ts test:editor:browser --project=chromium --grep 'restores'
 
 ## Debugging failures
 
-Diagnostics and traces are under `.build/app-ts/playwright/editor-results`; the HTML report is under `editor-report`. Inspect state, DOM, logs, and traces when a test fails. Follow [Writing Tests](../../../.github/instructions/writing-tests.instructions.md) for fixture ownership and cleanup.
+Diagnostics and traces are under `.build/desktop/playwright/editor-results`; the HTML report is under `editor-report`. Inspect state, DOM, logs, and traces when a test fails. Follow [Writing Tests](../../../.github/instructions/writing-tests.instructions.md) for fixture ownership and cleanup.

@@ -295,7 +295,7 @@ def snapshot_function(source: str, name: str) -> str:
 
 
 def snapshot(args: argparse.Namespace, root: Path) -> int:
-    directory = root / "code/tui/snapshots"
+    directory = root / "crates/tui/snapshots"
     if args.pending and args.accept:
         raise ValueError("--accept requires explicit reviewed paths; omit --pending")
     if not args.paths and not args.pending:
@@ -314,13 +314,13 @@ def snapshot(args: argparse.Namespace, root: Path) -> int:
         baseline = Path(str(path).removesuffix(".new"))
         if baseline.suffix != ".snap" or not baseline.is_relative_to(directory):
             raise ValueError(
-                "snapshot workflow supports external code/tui/snapshots/*.snap files"
+                "snapshot workflow supports external crates/tui/snapshots/*.snap files"
             )
         if baseline in baselines:
             continue
         source = repository_file(field(frontmatter(path), "source"), root)
-        if not source.is_relative_to(root / "code/tui/src"):
-            raise ValueError("snapshot source must belong to code/tui/src")
+        if not source.is_relative_to(root / "crates/tui/src"):
+            raise ValueError("snapshot source must belong to crates/tui/src")
         function = snapshot_function(source.read_text(encoding="utf-8"), baseline.stem)
         groups.setdefault((source, function), []).append(baseline)
         baselines.add(baseline)
