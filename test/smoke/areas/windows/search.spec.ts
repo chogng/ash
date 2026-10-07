@@ -3,7 +3,7 @@ import { basename, join } from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import type { ElectronApplication } from '@playwright/test';
 
-test('Search Dismiss removes retained matches, files and folders without changing disk contents', async ({ target, workbench, testWorkspace }) => {
+test('Search Dismiss removes retained matches, files and folders without changing disk contents', async ({ target, application, workbench, testWorkspace }) => {
 	test.skip(target.appServerMode !== 'required', 'Uses actual workspace content searches.');
 	const contents = [
 		['main.ts', 'ash_dismiss_token first\nash_dismiss_token second\n'],
@@ -19,6 +19,7 @@ test('Search Dismiss removes retained matches, files and folders without changin
 	const search = workbench.search.element;
 	const tree = search.getByRole('tree');
 	const toolbar = page.getByRole('toolbar', { name: 'Search result actions', exact: true });
+	const openMoreActions = () => toolbar.getByRole('button', { name: 'More Actions', exact: true }).click();
 	const dismissKey = process.platform === 'darwin' ? 'Meta+Backspace' : 'Delete';
 	await expect(workbench.search.status).toHaveText('4 results');
 	await workbench.search.query.press(dismissKey);
@@ -31,20 +32,16 @@ test('Search Dismiss removes retained matches, files and folders without changin
 	const next = tree.getByRole('treeitem', { name: 'Line 2, column 1: ash_dismiss_token second', exact: true });
 	await expect(next).toHaveAttribute('aria-selected', 'true');
 	await expect(tree).toHaveAttribute('aria-activedescendant', (await next.getAttribute('id'))!);
-	await toolbar.getByRole('button', { name: 'More Actions', exact: true }).click();
-	await page.getByRole('menuitemcheckbox', { name: 'View as tree', exact: true }).click();
+	await workbench.menus.select(application, openMoreActions, ['View as tree']);
 	await tree.getByRole('treeitem', { name: 'src', exact: true }).click();
-	await toolbar.getByRole('button', { name: 'More Actions', exact: true }).click();
-	await page.getByRole('menuitem', { name: 'Dismiss', exact: true }).click();
+	await workbench.menus.select(application, openMoreActions, ['Dismiss']);
 	await expect(workbench.search.status).toHaveText('2 results');
 	await expect(tree.getByRole('treeitem', { name: 'src', exact: true })).toHaveCount(0);
 	await tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path', { hasText: 'main.ts' }) }).click();
-	await toolbar.getByRole('button', { name: 'More Actions', exact: true }).click();
-	await page.getByRole('menuitem', { name: 'Dismiss', exact: true }).click();
+	await workbench.menus.select(application, openMoreActions, ['Dismiss']);
 	await expect(workbench.search.files).toHaveText(['notes.md']);
 	await expect(workbench.search.status).toHaveText('1 results');
-	await toolbar.getByRole('button', { name: 'More Actions', exact: true }).click();
-	await page.getByRole('menuitem', { name: 'Open results in Search Editor', exact: true }).click();
+	await workbench.menus.select(application, openMoreActions, ['Open results in Search Editor']);
 	const resultEditor = page.locator('.ash-search-editor');
 	await expect(resultEditor).toBeVisible();
 	await expect(resultEditor).toContainText('notes.md');
@@ -439,15 +436,11 @@ test('Search Copy All copies current retained results through the host clipboard
 		: (application as ElectronApplication).evaluate(({ clipboard }) => clipboard.readText());
 	await workbench.search.open();
 	const toolbar = page.getByRole('toolbar', { name: 'Search result actions', exact: true });
-	await toolbar.getByRole('button', { name: 'More Actions', exact: true }).click();
-	await expect(page.getByRole('menuitem', { name: 'Copy All', exact: true })).toBeDisabled();
-	await page.keyboard.press('Escape');
+	const openMoreActions = () => toolbar.getByRole('button', { name: 'More Actions', exact: true }).click();
+	expect(await workbench.menus.inspect(application, openMoreActions)).toContainEqual(expect.objectContaining({ label: 'Copy All', enabled: false }));
 	await workbench.search.search('ash_copy_token');
 	await expect(workbench.search.status).toHaveText('4 results');
-	const copyAll = async () => {
-		await toolbar.getByRole('button', { name: 'More Actions', exact: true }).click();
-		await page.getByRole('menuitem', { name: 'Copy All', exact: true }).click();
-	};
+	const copyAll = () => workbench.menus.select(application, openMoreActions, ['Copy All']);
 	const delimiter = process.platform === 'win32' ? '\r\n' : '\n';
 	const pathLabel = (path: string) => join(testWorkspace.directory, path).replace(/^([a-z]):/i, (_prefix, drive: string) => drive.toUpperCase() + ':');
 	const blocks = [
@@ -460,8 +453,7 @@ test('Search Copy All copies current retained results through the host clipboard
 	await expect.poll(readCopied).toBe(blocks.join(delimiter + delimiter));
 	const tree = workbench.search.element.getByRole('tree');
 	await tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path', { hasText: 'src/file10.ts' }) }).click();
-	await toolbar.getByRole('button', { name: 'More Actions', exact: true }).click();
-	await page.getByRole('menuitem', { name: 'Dismiss', exact: true }).click();
+	await workbench.menus.select(application, openMoreActions, ['Dismiss']);
 	await expect(workbench.search.status).toHaveText('3 results');
 	await copyAll();
 	await expect.poll(readCopied).toBe([blocks[0], blocks[2]].join(delimiter + delimiter));
