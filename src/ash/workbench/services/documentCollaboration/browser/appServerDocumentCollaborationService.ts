@@ -19,9 +19,9 @@ import type { DocumentCollaborationEnvelope } from "../../../../editor/common/se
 import type { DocumentCollaborationRemoteEnvelope } from "../../../../editor/common/services/documentCollaborationService.js";
 import type { IDocumentCollaborationApi } from "../../../../platform/collaboration/common/documentCollaborationApi.js";
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
-import type { DocumentCollaborationPresenceSnapshot as AppServerDocumentCollaborationPresenceSnapshot } from "../../../../../../crates/app-server-protocol/schema/typescript/index.js";
-import type { DocumentCollaborationSnapshot as AppServerDocumentCollaborationSnapshot } from "../../../../../../crates/app-server-protocol/schema/typescript/index.js";
-import type { DocumentCollaborationUpdate as AppServerDocumentCollaborationUpdate } from "../../../../../../crates/app-server-protocol/schema/typescript/index.js";
+import type { DocumentCollaborationPresenceSnapshot as AppServerDocumentCollaborationPresenceSnapshot } from "../../../../../../.build/protocol/typescript/index.js";
+import type { DocumentCollaborationSnapshot as AppServerDocumentCollaborationSnapshot } from "../../../../../../.build/protocol/typescript/index.js";
+import type { DocumentCollaborationUpdate as AppServerDocumentCollaborationUpdate } from "../../../../../../.build/protocol/typescript/index.js";
 
 /** App Server transport adapter for Stanza's server-ordered collaboration contract. */
 export class AppServerDocumentCollaborationService extends Disposable implements IDocumentCollaborationService {

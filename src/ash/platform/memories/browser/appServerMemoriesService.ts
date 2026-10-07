@@ -1,6 +1,6 @@
-import { decodeAppServerRequestParams } from '../../../../../crates/app-server-protocol/schema/typescript/AppServerProtocolDecoder.js';
-import { APP_SERVER_METHODS } from '../../../../../crates/app-server-protocol/schema/typescript/index.js';
-import type { Memory as MemoryDto, MemorySummary as MemorySummaryDto, MemoryPolicy as MemoryPolicyDto } from '../../../../../crates/app-server-protocol/schema/typescript/index.js';
+import { decodeAppServerRequestParams } from '../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
+import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
+import type { Memory as MemoryDto, MemorySummary as MemorySummaryDto, MemoryPolicy as MemoryPolicyDto } from '../../../../../.build/protocol/typescript/index.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { Emitter } from '../../../base/common/event.js';
 import { generateUuid } from '../../../base/common/uuid.js';

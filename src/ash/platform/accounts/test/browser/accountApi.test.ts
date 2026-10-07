@@ -3,8 +3,8 @@ import { test } from 'mocha';
 import { createAppServerAccountApi, type BrowserAccountLoginHostServices } from '../../browser/accountApi.js';
 import type { IAccountApi } from '../../common/accountApi.js';
 import type { AppServerProtocolClient } from '../../../app-server/browser/appServerProtocolClient.js';
-import type { AccountLoginStartResult } from '../../../../../../crates/app-server-protocol/schema/typescript/index.js';
-import { decodeAppServerResponse } from '../../../../../../crates/app-server-protocol/schema/typescript/AppServerProtocolDecoder.js';
+import type { AccountLoginStartResult } from '../../../../../../.build/protocol/typescript/index.js';
+import { decodeAppServerResponse } from '../../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 
 function fixture(started: AccountLoginStartResult, rejectOpen = false): { api: IAccountApi; calls: unknown[]; } {
 	const calls: unknown[] = [];

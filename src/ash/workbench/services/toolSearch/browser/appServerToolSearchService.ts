@@ -1,4 +1,4 @@
-import type { ModelRef, ToolSearchConfigDto } from "../../../../../../crates/app-server-protocol/schema/typescript/index.js";
+import type { ModelRef, ToolSearchConfigDto } from "../../../../../../.build/protocol/typescript/index.js";
 import type { IToolSearchApi } from "../../../../platform/toolSearch/common/toolSearchApi.js";
 import type { IToolSearchService, ToolSearchConfiguration, ToolSearchEmbeddingStatus, ToolSearchSettings } from "../../../../platform/toolSearch/common/toolSearchService.js";
 

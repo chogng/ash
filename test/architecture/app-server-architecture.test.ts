@@ -6,10 +6,11 @@ import ts from 'typescript';
 import { findDesktopRoot } from './testPaths.js';
 
 const sourceRoot = resolve(findDesktopRoot(import.meta.dirname), 'src/ash');
-const generatedRoot = resolve(findDesktopRoot(import.meta.dirname), 'crates/app-server-protocol/schema/typescript');
+const generatedRoot = resolve(findDesktopRoot(import.meta.dirname), '.build/protocol/typescript');
 
 test('generated protocol dependencies stay in transport contracts and runtime adapters', () => {
 	assert.equal(existsSync(join(generatedRoot, 'index.ts')), true, 'consumers share the Rust-owned protocol snapshot');
+	assert.equal(existsSync(resolve(sourceRoot, '../../crates/app-server-protocol/schema')), false, 'generated contracts stay outside the source tree');
 	assert.equal(existsSync(resolve(sourceRoot, '../../generated/app-server')), false, 'retired protocol snapshot');
 	assert.equal(existsSync(join(sourceRoot, 'platform/app-server/common/generated')), false, 'retired frontend protocol copy');
 	const violations: string[] = [];

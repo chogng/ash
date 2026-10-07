@@ -1,8 +1,8 @@
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
-import type { AdvisorConfig, AdvisorConfigureResult, CollaborationMode, AgentRoleListResult, ModelListResult, ModelRef, SessionCatalogReadResult, SessionCreateParams, SessionListResult, SessionReadParams, SessionRequest, SessionRequestParams, SessionRequestResult, SessionResult, SessionSubscribeParams, SessionSubscribeResult, SessionThreadReadParams, SessionThreadReadResult, SessionThreadResult, SessionThreadSubscribeParams, SessionThreadSubscribeResult, SessionThreadUnsubscribeParams, SessionUnsubscribeParams, ThreadGoalClearParams, ThreadGoalClearResponse, ThreadGoalGetParams, ThreadGoalGetResponse, ThreadGoalSetParams, ThreadGoalSetResponse, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult, TurnSteerResult } from "../../../../../crates/app-server-protocol/schema/typescript/index.js";
-import type { ProviderApiKeySetParams, ProviderApiKeySetResult, ProviderListResult } from '../../../../../crates/app-server-protocol/schema/typescript/index.js';
-import type { ReasoningEffort } from '../../../../../crates/app-server-protocol/schema/typescript/index.js';
-import type { QueueEnqueueParams, QueueListParams, QueueListResult, QueuedMessage } from '../../../../../crates/app-server-protocol/schema/typescript/index.js';
+import type { AdvisorConfig, AdvisorConfigureResult, CollaborationMode, AgentRoleListResult, ModelListResult, ModelRef, SessionCatalogReadResult, SessionCreateParams, SessionListResult, SessionReadParams, SessionRequest, SessionRequestParams, SessionRequestResult, SessionResult, SessionSubscribeParams, SessionSubscribeResult, SessionThreadReadParams, SessionThreadReadResult, SessionThreadResult, SessionThreadSubscribeParams, SessionThreadSubscribeResult, SessionThreadUnsubscribeParams, SessionUnsubscribeParams, ThreadGoalClearParams, ThreadGoalClearResponse, ThreadGoalGetParams, ThreadGoalGetResponse, ThreadGoalSetParams, ThreadGoalSetResponse, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult, TurnSteerResult } from "../../../../../.build/protocol/typescript/index.js";
+import type { ProviderApiKeySetParams, ProviderApiKeySetResult, ProviderListResult } from '../../../../../.build/protocol/typescript/index.js';
+import type { ReasoningEffort } from '../../../../../.build/protocol/typescript/index.js';
+import type { QueueEnqueueParams, QueueListParams, QueueListResult, QueuedMessage } from '../../../../../.build/protocol/typescript/index.js';
 
 export type SessionMode = CollaborationMode;
 

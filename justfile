@@ -151,9 +151,9 @@ generate-config-schema:
 generate-model-catalog-schema *args:
     {{ python }} -B scripts/cargo.py run -p ash-model-provider-info --bin generate-model-catalog-schema -- {{ args }}
 
-# Refresh the checked-in App Server protocol fixtures and generated TypeScript client.
+# Prepare the cached App Server schema, metadata and TypeScript client.
 generate-protocol:
-    pnpm run protocol:generate
+    {{ python }} -B build/protocol/generate.py
 
 # Launch the Ash Code TUI product from the current source tree.
 ash-code *args:

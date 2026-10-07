@@ -32,31 +32,12 @@ use ash_protocol::SkillSourceId;
 use ash_protocol::ThreadEvent;
 use std::collections::BTreeSet;
 use std::path::Path;
-use std::path::PathBuf;
 
 fn generated_typescript() -> String {
     typescript_files()
         .into_iter()
         .map(|(_, contents)| contents)
         .collect::<String>()
-}
-
-fn generated_fixture_paths(root: &Path) -> Vec<PathBuf> {
-    let mut paths = Vec::new();
-    let mut pending_directories = vec![root.to_path_buf()];
-    while let Some(directory) = pending_directories.pop() {
-        for entry in std::fs::read_dir(directory).unwrap() {
-            let entry = entry.unwrap();
-            let path = entry.path();
-            if entry.file_type().unwrap().is_dir() {
-                pending_directories.push(path);
-            } else {
-                paths.push(path.strip_prefix(root).unwrap().to_path_buf());
-            }
-        }
-    }
-    paths.sort();
-    paths
 }
 
 #[test]
@@ -941,39 +922,6 @@ fn generated_typescript_separates_types_from_protocol_entrypoints() {
     assert!(!request_map.contains("from './types.js'"));
     let index = files.get(Path::new("index.ts")).unwrap();
     assert!(index.contains("export type * from './types/index.js';"));
-}
-
-#[test]
-fn schema_fixtures_match_the_generators() {
-    let schema = include_str!("../schema/json/schema.json");
-
-    assert_eq!(schema.replace("\r\n", "\n"), json_schema());
-    assert_eq!(
-        include_str!("../schema/metadata.json").replace("\r\n", "\n"),
-        protocol_metadata()
-    );
-    let fixture_index = cargo_bin::find_resource!(
-        "schema/typescript/index.ts",
-        "_main/crates/app-server-protocol/schema/typescript/index.ts"
-    )
-    .unwrap();
-    let fixture_directory = fixture_index.parent().unwrap();
-    let fixture_names = generated_fixture_paths(fixture_directory);
-    let mut expected_names = typescript_files()
-        .iter()
-        .map(|(path, _)| path.clone())
-        .collect::<Vec<_>>();
-    expected_names.sort();
-    assert_eq!(fixture_names, expected_names);
-    for (path, expected) in typescript_files() {
-        let actual = std::fs::read_to_string(fixture_directory.join(&path)).unwrap();
-        assert_eq!(
-            actual.replace("\r\n", "\n"),
-            expected.replace("\r\n", "\n"),
-            "{}",
-            path.display()
-        );
-    }
 }
 
 #[test]

@@ -1,5 +1,5 @@
-import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH, type InitializeResult, type ServerCapabilities } from '../../../../../crates/app-server-protocol/schema/typescript/index.js';
-import { decodeAppServerResult } from '../../../../../crates/app-server-protocol/schema/typescript/AppServerProtocolDecoder.js';
+import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH, type InitializeResult, type ServerCapabilities } from '../../../../../.build/protocol/typescript/index.js';
+import { decodeAppServerResult } from '../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import { localize } from '../../../nls.js';
 
 type AppServerCapabilityName = Exclude<keyof ServerCapabilities, 'contracts'>;

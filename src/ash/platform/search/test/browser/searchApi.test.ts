@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import type { AppServerProtocolClient } from '../../../app-server/browser/appServerProtocolClient.js';
-import type { ConfigUpdateParams } from '../../../../../../crates/app-server-protocol/schema/typescript/index.js';
+import type { ConfigUpdateParams } from '../../../../../../.build/protocol/typescript/index.js';
 import { createAppServerContentSearchConfigurationApi, createDisconnectedContentSearchConfigurationApi } from '../../browser/searchApi.js';
 
 test('content search configuration saves only the selected backend at the read revision', async () => {

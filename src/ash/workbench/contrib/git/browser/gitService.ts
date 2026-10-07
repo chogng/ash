@@ -1,5 +1,5 @@
 import type { GitCommand, GitCommandResult, GitCatalog, GitIndexDiff, GitIndexSelection, GitCommitDetails } from '../common/gitService.js';
-import type { ConfigReadResult, GitConfigDto, GitHeadDto, GitRepositoryChangeDto, GitRepositoryDto, GitStatusResult } from "../../../../../../crates/app-server-protocol/schema/typescript/index.js";
+import type { ConfigReadResult, GitConfigDto, GitHeadDto, GitRepositoryChangeDto, GitRepositoryDto, GitStatusResult } from "../../../../../../.build/protocol/typescript/index.js";
 import { Emitter } from "../../../../base/common/event.js";
 import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";

@@ -20,6 +20,8 @@ from build.lib.ripgrep import resolve_ripgrep
 from build.lib.tgrep import resolve_tgrep
 from build.lib.version import read_workspace_version
 
+from build.protocol.generate import generate_protocol
+
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -174,6 +176,7 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
 def build_package(args: argparse.Namespace) -> int:
     target = args.target or default_target()
     spec = TARGETS[target]
+    generate_protocol(root=REPOSITORY_ROOT, cargo=args.cargo)
     protocol_metadata = load_protocol_metadata(REPOSITORY_ROOT)
     inputs = {
         "ash-voice-host": None,

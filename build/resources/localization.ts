@@ -4,7 +4,7 @@ import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { resolve, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ASH_LOCALIZATION_CATALOG_VERSION } from '../../src/ash/platform/languagePacks/common/languagePackContract.ts';
-import { APPROVAL_MODE_DEFINITIONS } from '../../crates/app-server-protocol/schema/typescript/ApprovalModes.ts';
+import { APPROVAL_MODE_DEFINITIONS } from '../../.build/protocol/typescript/ApprovalModes.ts';
 
 type Bundles = Record<string, Record<string, string>>;
 export interface LocalizationSource { readonly path: string; readonly text: string; }

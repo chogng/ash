@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Event } from '../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
-import type { ModelListResult } from '../../../../../../../crates/app-server-protocol/schema/typescript/index.js';
+import type { ModelListResult } from '../../../../../../../.build/protocol/typescript/index.js';
 import type { IAppServerApi, IServerEventApi } from '../../../../../platform/app-server/common/appServerApi.js';
 import type { IModelApi } from '../../../../../platform/sessions/common/sessionApi.js';
 import { LanguageModelsService } from '../../common/languageModels.js';

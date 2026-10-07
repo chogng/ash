@@ -16,6 +16,11 @@ from build.lib.package_binaries import resolve_windows_sandbox_binary
 
 class CargoBuildTests(unittest.TestCase):
     def setUp(self) -> None:
+        boundary = patch(
+            "build.lib.package_binaries.cargo_command_uses_package", return_value=False
+        )
+        boundary.start()
+        self.addCleanup(boundary.stop)
         cache = patch(
             "build.lib.package_binaries.leased_cache",
             side_effect=lambda _root, **_options: nullcontext(),

@@ -935,9 +935,7 @@ def file_sha256(path: Path) -> str:
 
 def load_protocol_metadata(repository_root: Path) -> Dict[str, object]:
     metadata = json.loads(
-        (repository_root / "crates/app-server-protocol/schema/metadata.json").read_text(
-            encoding="utf-8"
-        )
+        (repository_root / ".build/protocol/metadata.json").read_text(encoding="utf-8")
     )
     if (
         not isinstance(metadata, dict)

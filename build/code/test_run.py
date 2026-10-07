@@ -15,6 +15,9 @@ from build.code import build
 
 class SourceRunnerTests(unittest.TestCase):
     def setUp(self) -> None:
+        boundary = patch("build.code.build.generate_protocol", return_value=False)
+        boundary.start()
+        self.addCleanup(boundary.stop)
         cache = patch(
             "build.code.build.leased_cache",
             side_effect=lambda _root, **_options: nullcontext(),

@@ -172,16 +172,17 @@ bazel test //cli:tui-real-scenarios --test_output=errors --test_env=PATH
 `build/lib/development_store.py` 为 Desktop 和 Code 提供版本存储、租约与回收。
 源码布局与下面的输出布局分别维护；迁移构建源码不会改变现有开发包位置或租约。
 
-| 路径                                        | 内容                                                                      |
-| ------------------------------------------- | ------------------------------------------------------------------------- |
-| `.build/cargo/`                             | 默认 Cargo 输出，可由 `CARGO_TARGET_DIR` 覆盖                             |
-| `.build/code/dev/generations/<digest>/bin/` | Code 源码运行所需程序；保留当前版本与仍在运行的版本，程序对象以硬链接复用 |
-| `.build/desktop/`                           | Electron、Renderer、生成的测试程序和 Playwright 报告                      |
-| `.build/desktop/web/ash/`                   | 独立 Web 构建，包含浏览器 Workbench 与 Sessions 页面                      |
-| `.build/runtime/dev/`                       | 完整后端开发包和选用记录                                                  |
-| `.build/build-health/`                      | 构建测量日志与报告                                                        |
-| `.build/ash-playwright-mcp/`                | 临时 UI 场景与验证证据                                                    |
-| `.build/bazel-*`                            | Bazel 工作区便捷链接；Bazel 输出缓存另行管理                              |
+| 路径                                              | 内容                                                                      |
+| ------------------------------------------------- | ------------------------------------------------------------------------- |
+| `.build/cargo/`                                   | 默认 Cargo 输出，可由 `CARGO_TARGET_DIR` 覆盖                             |
+| `.build/code/dev/generations/<digest>/bin/`       | Code 源码运行所需程序；保留当前版本与仍在运行的版本，程序对象以硬链接复用 |
+| `.build/desktop/`                                 | Electron、Renderer、生成的测试程序和 Playwright 报告                      |
+| `.build/desktop/web/ash/`                         | 独立 Web 构建，包含浏览器 Workbench 与 Sessions 页面                      |
+| `.build/runtime/dev/`                             | 完整后端开发包和选用记录                                                  |
+| `.build/build-health/`                            | 构建测量日志与报告                                                        |
+| `.build/ash-playwright-mcp/`                      | 临时 UI 场景与验证证据                                                    |
+| `.build/protocol/`、`.build/protocol-inputs.json` | 共享协议生成物和输入缓存，正常构建自动重建                                |
+| `.build/bazel-*`                                  | Bazel 工作区便捷链接；Bazel 输出缓存另行管理                              |
 
 Sherpa ONNX 静态库使用按版本共享的校验缓存，位于 `third_party/.cache/sherpa-onnx/`。仓库 Cargo 入口与产品构建会准备并复用该资源，详见 [资源锁定与离线构建](../third_party/sherpa-onnx/README.md)。
 
@@ -189,7 +190,7 @@ Sherpa ONNX 静态库使用按版本共享的校验缓存，位于 `third_party/
 
 `pnpm clean` 删除 `.build/`、旧 `target/`、`dist/`、旧 `test/integration/browser/dist/`，以及根目录和 `build/`、`scripts/` 内的 Python、pytest、Ruff 缓存；同时删除本地 `node_modules/` 内的 `.vite/`、`.vite-temp/` 缓存。清理前停止构建和开发进程；下次启动会重新构建。
 
-清理保留源码、依赖包、用户级 pnpm store、`third_party/.cache/`、生成的协议源码和 `.ash/` 配置，不遍历符号链接指向的目录。Bazel 外部输出缓存单独用 `bazel clean --expunge` 清理。
+清理保留源码、依赖包、用户级 pnpm store、`third_party/.cache/`、`.ash/` 配置，不遍历符号链接指向的目录。Bazel 外部输出缓存单独用 `bazel clean --expunge` 清理。
 
 日常 Cargo 和产品构建保留编译缓存，只记录使用时间并持有租约。目录盘点与回收通过 `just prune-build-cache` 单独执行，避免热构建等待扫描或清理后重新编译。
 
@@ -204,7 +205,7 @@ Sherpa ONNX 静态库使用按版本共享的校验缓存，位于 `third_party/
 
 `just rust-warnings` 检查新生成与已缓存的编译警告，保持 `RUSTFLAGS` 与普通构建一致，避免生成另一套产物。
 
-前端与构建工具直接消费 `crates/app-server-protocol/schema/typescript/` 的已提交协议快照；修改后端协议后使用 `pnpm protocol:generate` 更新，并运行 `pnpm typecheck:protocol`。协议生成器与开发后端统一使用 `dev-small` profile，复用相同配置的依赖产物；生成器的 `export` feature 仍保留独立编译变体。受版本控制的图标工厂使用 `pnpm icons:generate` 更新。
+前端与构建工具直接消费 `.build/protocol/typescript/` 的共享生成协议，产物不提交到 Git。正常前端、Rust Just 和打包入口自动准备协议：首次需要 Rust 工具链，输入与产物未变化时直接复用缓存。修改后端协议后可运行 `just generate-protocol`，再运行 `pnpm typecheck:protocol`；直接 Cargo 构建前必须先准备。协议生成器与开发后端统一使用 `dev-small` profile，复用相同配置的依赖产物；生成器的 `export` feature 仍保留独立编译变体。受版本控制的图标工厂使用 `pnpm icons:generate` 更新。
 
 ## Rust 依赖检查与构建测量
 

@@ -626,7 +626,6 @@ dependencies = [
  "ash-slash-commands",
  "ash-task-delivery-contract",
  "ash-thread-transcript",
- "ash-utils-cargo-bin",
  "ash-utils-path-uri",
  "schemars",
  "serde",

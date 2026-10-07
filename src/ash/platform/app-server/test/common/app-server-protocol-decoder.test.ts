@@ -7,7 +7,7 @@ import {
 	decodeAppServerRequestParams,
 	decodeAppServerResponse,
 	decodeAppServerServerRequest,
-} from '../../../../../../crates/app-server-protocol/schema/typescript/AppServerProtocolDecoder.js';
+} from '../../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 
 test('directory permissions reject unknown enum values at the generated boundary', () => {
 	const params = { commandId: 'set-permissions', expectedRevision: 1, path: '/workspace', permissions: ['readFiles'] };

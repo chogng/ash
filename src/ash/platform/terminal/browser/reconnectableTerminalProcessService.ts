@@ -1,4 +1,4 @@
-import { APP_SERVER_METHODS, type TerminalAttachResult, type TerminalReconnectLease } from "../../../../../crates/app-server-protocol/schema/typescript/index.js";
+import { APP_SERVER_METHODS, type TerminalAttachResult, type TerminalReconnectLease } from "../../../../../.build/protocol/typescript/index.js";
 import { timeout } from "../../../base/common/async.js";
 import { Disposable, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
 import type { AppServerConnectionState } from "../../app-server/common/appServerApi.js";

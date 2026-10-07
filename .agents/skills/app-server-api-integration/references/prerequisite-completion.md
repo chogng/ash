@@ -93,12 +93,12 @@ starter 读取并运行时验证启动记录，保存 endpoint 与进程代次�
 稳定输出至少包含：
 
 ```text
-../app-server-protocol/schema/typescript/AppServerRequestMap.ts
-../app-server-protocol/schema/typescript/AppServerNotificationMap.ts
-../app-server-protocol/schema/typescript/AppServerServerRequestMap.ts
-../app-server-protocol/schema/typescript/AppServerProtocolDecoder.ts
-../app-server-protocol/schema/typescript/AppServerListenInfo.ts
-../app-server-protocol/schema/typescript/index.ts
+.build/protocol/typescript/AppServerRequestMap.ts
+.build/protocol/typescript/AppServerNotificationMap.ts
+.build/protocol/typescript/AppServerServerRequestMap.ts
+.build/protocol/typescript/AppServerProtocolDecoder.ts
+.build/protocol/typescript/AppServerListenInfo.ts
+.build/protocol/typescript/index.ts
 ```
 
 生成映射表达：
@@ -127,7 +127,7 @@ export interface AppServerServerRequestMap {
 
 运行时 decoder 必须验证 required 字段、tagged union、数组、对象、可空与可选字段、request ID、method membership 以及未知字段策略。它可以由生成器编译 JSON Schema 为 TypeScript 校验代码，但具体字段、tag 和 method 不能手写进 frontend。当前 generator 无法覆盖协议使用的 schema 子集时先扩展 generator；若扩展需要新增依赖或改变公开 schema 行为且没有用户决定，再执行冲突门禁。不能只验证 envelope 后对 params/result 使用 `as`。
 
-frontend 不从 sibling checkout 运行时导入生成物。`build/app-server/generate-protocol.mjs` 运行固定版本的打包 backend generator，直接写入 `src/platform/agentHost/common/appServerProtocol/generated/`；`build/app-server/check-protocol-sync.ts` 在临时目录用同一固定版本重新生成并逐字节比较。生成物可以提交，但只能由生成任务更新；手改、遗漏文件、版本不匹配或重新生成有 diff 都使构建失败。
+frontend 不从 sibling checkout 运行时导入生成物。`build/protocol/generate.ts` 运行固定版本的打包 backend generator，直接写入 `.build/protocol/typescript/`；`build/protocol/generate.py` 在临时目录用同一固定版本重新生成并逐字节比较。生成物可以提交，但只能由生成任务更新；手改、遗漏文件、版本不匹配或重新生成有 diff 都使构建失败。
 
 生成 owner 与测试位置：
 
@@ -138,11 +138,11 @@ frontend 不从 sibling checkout 运行时导入生成物。`build/app-server/ge
 ../app-server-protocol/src/precomputed_exports_tests.rs
 ../app-server-protocol/src/schema_fixtures.rs
 ../app-server-protocol/src/schema_fixtures_tests.rs
-../app-server-protocol/schema/typescript/
-../app-server-protocol/schema/json/
-build/app-server/generate-protocol.mjs
-build/app-server/check-protocol-sync.ts
-src/platform/agentHost/common/appServerProtocol/generated/
+.build/protocol/typescript/
+.build/protocol/json/
+build/protocol/generate.ts
+build/protocol/generate.py
+.build/protocol/typescript/
 ```
 
 生成测试必须覆盖：

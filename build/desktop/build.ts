@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
 import { buildHost, prepareHostOutput } from './host.ts';
-import { generateLocalization } from '../resources/localization.ts';
+import { generateProtocol } from '../protocol/generate.ts';
 
 const repositoryRoot = resolve(import.meta.dirname, '../..');
 const sourceRoot = resolve(repositoryRoot, '.');
@@ -17,6 +17,8 @@ if (extra.length || !['all', 'host', 'renderer', 'web', 'prepare'].includes(comm
 if (command === 'prepare') {
 	await prepareHostOutput();
 } else {
+	await generateProtocol();
+	const { generateLocalization } = await import('../resources/localization.ts');
 	await generateLocalization();
 	if (command === 'all' || command === 'host') await buildHost();
 	if (command === 'all' || command === 'renderer' || command === 'web') {

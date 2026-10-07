@@ -7,7 +7,7 @@ import { Range, type IRange } from "../../../../editor/common/core/range.js";
 import { type ITextModel } from "../../../../editor/common/model.js";
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import * as languages from '../../../../editor/common/languages.js';
-import { type LanguageCompletionItemKindDto, type LanguageHierarchyItemDto, type LanguageCodeActionDto, type LanguageCodeLensDto, type LanguageDirectoryEditDto, type LanguageDocumentLinkDto, type LanguageDocumentSymbolDto } from '../../../../../../crates/app-server-protocol/schema/typescript/index.js';
+import { type LanguageCompletionItemKindDto, type LanguageHierarchyItemDto, type LanguageCodeActionDto, type LanguageCodeLensDto, type LanguageDirectoryEditDto, type LanguageDocumentLinkDto, type LanguageDocumentSymbolDto } from '../../../../../../.build/protocol/typescript/index.js';
 import { type ILanguageApi } from "../../../../platform/language/common/languageApi.js";
 import { workspaceResourceFromPath } from "../../../../platform/files/browser/fileService.js";
 import { workspaceRelativePath, type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";

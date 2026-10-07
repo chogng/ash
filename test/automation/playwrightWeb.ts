@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { startWeb } from '../../build/desktop/web.ts';
 import { developmentAshPackagePath } from '../../build/desktop/runtimeStore.ts';
-import { decodeWebSessionInfo } from '../../crates/app-server-protocol/schema/typescript/WebProtocolDecoder.ts';
+import { decodeWebSessionInfo } from '../../.build/protocol/typescript/WebProtocolDecoder.ts';
 import { createTestEnvironment } from './testEnvironment.js';
 
 export interface WebLaunchResult {

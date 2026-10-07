@@ -1,7 +1,7 @@
 import { type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { decodeBase64 } from "../../../base/common/buffer.js";
 import type { IAppServerApi } from "../../app-server/common/appServerApi.js";
-import type { TerminalReadResult } from "../../../../../crates/app-server-protocol/schema/typescript/index.js";
+import type { TerminalReadResult } from "../../../../../.build/protocol/typescript/index.js";
 import type { AppServerProtocolClient } from "../../app-server/browser/appServerProtocolClient.js";
 import { appServerRequest, voidResult } from "../../app-server/browser/appServerRequest.js";
 import type {

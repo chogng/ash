@@ -19,7 +19,6 @@
 third_party/
 src/ash/base/browser/dompurify/
 src/ash/base/common/marked/
-crates/app-server-protocol/schema/
 schemas/
 pnpm-lock.yaml
 Cargo.lock

@@ -1,7 +1,7 @@
 import type { AppServerProtocolClient } from '../../app-server/browser/appServerProtocolClient.js';
-import { APP_SERVER_METHODS } from '../../../../../crates/app-server-protocol/schema/typescript/index.js';
+import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
 import { LocalTranscriptionModelState, type ILocalTranscriptionBackendService, type ILocalTranscriptionModelStatus } from '../common/localTranscription.js';
-import type { DictationModelStage, DictationModelStatus } from '../../../../../crates/app-server-protocol/schema/typescript/index.js';
+import type { DictationModelStage, DictationModelStatus } from '../../../../../.build/protocol/typescript/index.js';
 
 /** Converts only this domain's messages on the renderer's existing connection. */
 export function createAppServerLocalTranscriptionBackendService(client: AppServerProtocolClient): ILocalTranscriptionBackendService {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { decodeWebListenInfo, decodeWebSessionInfo } from '../../../../../../crates/app-server-protocol/schema/typescript/WebProtocolDecoder.js';
+import { decodeWebListenInfo, decodeWebSessionInfo } from '../../../../../../.build/protocol/typescript/WebProtocolDecoder.js';
 
 test('Web launch decoder rejects remote endpoints and authority injected into metadata', () => {
 	const info = { endpoint: 'http://127.0.0.1:5174/', ticket: 'a'.repeat(64), pid: 42 };

@@ -48,6 +48,16 @@ PRODUCTION_BUBBLEWRAP_SOURCE = REPOSITORY_ROOT / "crates" / "vendor" / "bubblewr
 
 
 class PackageTests(unittest.TestCase):
+    def setUp(self) -> None:
+        boundary = patch("build.app_server.generate_protocol", return_value=False)
+        boundary.start()
+        self.addCleanup(boundary.stop)
+        boundary = patch(
+            "build.lib.package_binaries.cargo_command_uses_package", return_value=False
+        )
+        boundary.start()
+        self.addCleanup(boundary.stop)
+
     def test_release_builder_reads_update_key_from_environment(self) -> None:
         with patch.dict(os.environ, {"ASH_UPDATE_PUBLIC_KEY": "a" * 64}):
             options = parse_build_arguments(["--package-dir", "package"])
@@ -233,11 +243,11 @@ class PackageTests(unittest.TestCase):
         "yaml",
     ]
 
-    def test_product_protocol_metadata_comes_from_committed_metadata(self) -> None:
+    def test_product_protocol_metadata_comes_from_prepared_metadata(self) -> None:
         metadata = {"major": 7, "schemaHash": "sha256:" + "a" * 64}
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            path = root / "crates/app-server-protocol/schema/metadata.json"
+            path = root / ".build/protocol/metadata.json"
             path.parent.mkdir(parents=True)
             path.write_text(json.dumps(metadata), encoding="utf-8")
             with patch(
@@ -249,7 +259,7 @@ class PackageTests(unittest.TestCase):
     def test_rejects_invalid_protocol_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            path = root / "crates/app-server-protocol/schema/metadata.json"
+            path = root / ".build/protocol/metadata.json"
             path.parent.mkdir(parents=True)
             for value in (
                 [],

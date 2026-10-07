@@ -61,7 +61,7 @@ test('the CLI checks without writing, fixes both languages, and leaves generated
 });
 
 test('Prettier owns configuration and prose but excludes code, generated contracts, fixtures, and locks', async () => {
-	const ignored = ['build/lib/formatter.ts', 'build/script.js', 'crates/app-server-protocol/schema/typescript/protocol.ts', 'crates/app-server-protocol/schema/json/schema.json', 'generated/example.json', 'third_party/v8/runtime-lock.json', 'test/fixtures/example.json', 'src/ash/base/browser/dompurify/cgmanifest.json', 'src/ash/base/common/marked/cgmanifest.json', '.pytest_cache/README.md', 'pnpm-lock.yaml'];
+	const ignored = ['build/lib/formatter.ts', 'build/script.js', '.build/protocol/typescript/protocol.ts', '.build/protocol/json/schema.json', 'generated/example.json', 'third_party/v8/runtime-lock.json', 'test/fixtures/example.json', 'src/ash/base/browser/dompurify/cgmanifest.json', 'src/ash/base/common/marked/cgmanifest.json', '.pytest_cache/README.md', 'pnpm-lock.yaml'];
 	for (const file of ignored) {
 		assert.equal((await getFileInfo(resolve(repositoryRoot, file), { ignorePath: join(repositoryRoot, '.prettierignore') })).ignored, true, file);
 	}

@@ -13,7 +13,7 @@ import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../..
 import { type ILanguageApi } from "../../../../../platform/language/common/languageApi.js";
 import { type IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
 import { type IDirPermissionsService } from "../../../../../platform/dirPermissions/common/dirPermissionsService.js";
-import { type PermissionDto, type ServerNotification } from '../../../../../../../crates/app-server-protocol/schema/typescript/index.js';
+import { type PermissionDto, type ServerNotification } from '../../../../../../../.build/protocol/typescript/index.js';
 import { WorkspaceContextService } from "../../../workspaces/browser/workspaceContextService.js";
 import { AppServerLanguageProviders } from "../../browser/appServerLanguageProviders.js";
 

@@ -4,7 +4,7 @@ import { addDisposableListener } from '../../../src/ash/base/browser/dom.js';
 import { ILanguageFeaturesService } from '../../../src/ash/editor/common/services/languageFeatures.js';
 import { StandaloneServices } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
 import * as stanza from '../../../src/ash/editor/editor.main.js';
-import type { ServerNotification } from '../../../crates/app-server-protocol/schema/typescript/index.js';
+import type { ServerNotification } from '../../../.build/protocol/typescript/index.js';
 import { createDisconnectedLanguageApi } from '../../../src/ash/platform/language/browser/languageApi.js';
 import { WorkspaceContextService } from '../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js';
 import { AppServerLanguageProviders } from '../../../src/ash/workbench/services/language/browser/appServerLanguageProviders.js';

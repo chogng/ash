@@ -15,6 +15,8 @@ from build.lib.cargo_cache import leased_cache
 from build.lib.sherpa import resolve_sherpa_cargo_env
 from build.lib.targets import TargetSpec
 from build.lib.v8 import resolve_v8_cargo_env
+from build.lib.cargo_selection import cargo_command_uses_package
+from build.protocol.generate import generate_protocol
 
 
 _BINARIES = {
@@ -91,6 +93,10 @@ def build_binaries(
         command.extend(["--package", _BINARIES[name][0], "--bin", name])
     if "ash-voice-host" in missing:
         command.extend(["--features", "ash-voice-host/host"])
+    if cargo_command_uses_package(
+        cargo, command[1:], repository_root, "ash-app-server-protocol"
+    ):
+        generate_protocol(root=repository_root, cargo=cargo)
     with leased_cache(
         repository_root,
         profile="debug" if cargo_profile == "dev" else cargo_profile,

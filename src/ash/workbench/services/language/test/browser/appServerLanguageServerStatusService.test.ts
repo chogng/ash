@@ -7,7 +7,7 @@ import { type IServerEventApi } from "../../../../../platform/app-server/common/
 import { DialogService } from "../../../dialogs/common/dialogService.js";
 import { StatusbarAlignment, StatusbarService } from "../../../statusbar/browser/statusbar.js";
 import { AppServerLanguageServerStatusService } from "../../browser/appServerLanguageServerStatusService.js";
-import { type ServerNotification } from "../../../../../../../crates/app-server-protocol/schema/typescript/index.js";
+import { type ServerNotification } from "../../../../../../../.build/protocol/typescript/index.js";
 
 test("language-server status service publishes channels and only projects active work-done progress", () => {
 	const events = new FakeServerEvents();

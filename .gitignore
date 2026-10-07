@@ -31,6 +31,7 @@ debug.log
 .pnpm-store/
 src/ash/platform/extensions/common/generated/
 schemas/app-server/
+crates/app-server-protocol/schema/
 
 # Downloaded, checksum-verified third-party native runtime artifacts.
 third_party/.cache/

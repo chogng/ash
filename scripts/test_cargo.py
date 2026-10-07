@@ -12,6 +12,9 @@ from scripts.cargo import main, prepare_test_executable, run_process_tests
 
 class CodeModeHostTests(unittest.TestCase):
     def setUp(self) -> None:
+        protocol = patch("scripts.cargo.generate_protocol")
+        self.protocol = protocol.start()
+        self.addCleanup(protocol.stop)
         cache = patch(
             "scripts.cargo.leased_cache",
             side_effect=lambda _root, **_options: nullcontext(),
@@ -25,6 +28,24 @@ class CodeModeHostTests(unittest.TestCase):
         )
         target.start()
         self.addCleanup(target.stop)
+
+    @patch("scripts.cargo.subprocess.run")
+    @patch("scripts.cargo.cargo_command_uses_v8", return_value=False)
+    @patch("scripts.cargo.cargo_command_uses_package")
+    def test_protocol_preparation_precedes_compilation_and_failures_stop_cargo(
+        self, uses_package, uses_v8, run
+    ):
+        uses_package.side_effect = lambda _cargo, _args, _root, package: (
+            package == "ash-app-server-protocol"
+        )
+        run.return_value = subprocess.CompletedProcess([], 0)
+        self.assertEqual(main(["check", "-p", "ash-app-server-protocol"]), 0)
+        self.protocol.assert_called_once()
+        run.reset_mock()
+        self.protocol.side_effect = RuntimeError("export failed")
+        with self.assertRaisesRegex(RuntimeError, "export failed"):
+            main(["check", "-p", "ash-app-server-protocol"])
+        run.assert_not_called()
 
     @patch.dict(
         "scripts.cargo.os.environ",

@@ -1,7 +1,7 @@
 import {
 	APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH,
 	type InitializeResult, type ModelCatalogEntry,
-} from '../../../../../../crates/app-server-protocol/schema/typescript/index.js';
+} from '../../../../../../.build/protocol/typescript/index.js';
 
 /** A complete handshake: protocol additions must update this typed fixture once. */
 export function createTestInitializeResult(): InitializeResult {

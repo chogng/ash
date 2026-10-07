@@ -1,7 +1,4 @@
 use ash_app_server_protocol::GENERATED_TYPESCRIPT_HEADER;
-use ash_app_server_protocol::JSON_SCHEMA_FIXTURE;
-use ash_app_server_protocol::METADATA_FIXTURE;
-use ash_app_server_protocol::TYPESCRIPT_FIXTURE_DIRECTORY;
 use ash_app_server_protocol::json_schema;
 use ash_app_server_protocol::protocol_metadata;
 use ash_app_server_protocol::typescript_files;
@@ -9,9 +6,10 @@ use std::collections::BTreeSet;
 use std::path::Path;
 use std::path::PathBuf;
 
-const USAGE: &str = "usage: generate_protocol <json|typescript|metadata> --out <directory>\n       generate_protocol fixtures";
+const USAGE: &str = "usage: generate_protocol <all|json|typescript|metadata> --out <directory>";
 
 enum Artifact {
+    All,
     JsonSchema,
     TypeScript,
     Metadata,
@@ -20,6 +18,7 @@ enum Artifact {
 impl Artifact {
     fn parse(argument: &str) -> Result<Self, String> {
         match argument {
+            "all" => Ok(Self::All),
             "json" => Ok(Self::JsonSchema),
             "typescript" => Ok(Self::TypeScript),
             "metadata" => Ok(Self::Metadata),
@@ -33,20 +32,12 @@ enum Command {
         artifact: Artifact,
         output_directory: PathBuf,
     },
-    WriteFixtures,
 }
 
 impl Command {
     fn parse(arguments: impl IntoIterator<Item = String>) -> Result<Self, String> {
         let mut arguments = arguments.into_iter();
         let operation = arguments.next().ok_or_else(|| USAGE.to_owned())?;
-        if operation == "fixtures" {
-            return if arguments.next().is_none() {
-                Ok(Self::WriteFixtures)
-            } else {
-                Err(USAGE.into())
-            };
-        }
 
         let artifact = Artifact::parse(&operation)?;
         if arguments.next().as_deref() != Some("--out") {
@@ -73,6 +64,11 @@ impl Command {
                 artifact,
                 output_directory,
             } => match artifact {
+                Artifact::All => {
+                    write_artifact(&output_directory, "json/schema.json", json_schema())?;
+                    write_artifact(&output_directory, "metadata.json", protocol_metadata())?;
+                    write_typescript_files(&output_directory.join("typescript"))
+                }
                 Artifact::JsonSchema => {
                     write_artifact(&output_directory, "schema.json", json_schema())
                 }
@@ -81,7 +77,6 @@ impl Command {
                     write_artifact(&output_directory, "metadata.json", protocol_metadata())
                 }
             },
-            Self::WriteFixtures => write_fixtures(),
         }
     }
 }
@@ -107,13 +102,6 @@ fn write_artifact(
     contents: String,
 ) -> std::io::Result<()> {
     write_fixture(directory.join(file_name), contents)
-}
-
-fn write_fixtures() -> std::io::Result<()> {
-    let crate_directory = Path::new(env!("CARGO_MANIFEST_DIR"));
-    write_fixture(crate_directory.join(JSON_SCHEMA_FIXTURE), json_schema())?;
-    write_fixture(crate_directory.join(METADATA_FIXTURE), protocol_metadata())?;
-    write_typescript_files(&crate_directory.join(TYPESCRIPT_FIXTURE_DIRECTORY))
 }
 
 fn write_typescript_files(directory: &Path) -> std::io::Result<()> {

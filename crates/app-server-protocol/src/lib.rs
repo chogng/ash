@@ -21,12 +21,6 @@ mod typescript_decoder;
 #[cfg(any(test, feature = "export"))]
 pub use export::GENERATED_TYPESCRIPT_HEADER;
 #[cfg(any(test, feature = "export"))]
-pub use export::JSON_SCHEMA_FIXTURE;
-#[cfg(any(test, feature = "export"))]
-pub use export::METADATA_FIXTURE;
-#[cfg(any(test, feature = "export"))]
-pub use export::TYPESCRIPT_FIXTURE_DIRECTORY;
-#[cfg(any(test, feature = "export"))]
 pub use export::json_schema;
 #[cfg(any(test, feature = "export"))]
 pub use export::protocol_metadata;

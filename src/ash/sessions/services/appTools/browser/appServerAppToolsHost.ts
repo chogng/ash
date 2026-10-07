@@ -2,7 +2,7 @@ import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
 import type { AppServerProtocolClient } from '../../../../platform/app-server/browser/appServerProtocolClient.js';
-import { APP_SERVER_SERVER_REQUESTS, type AppHostOperation } from '../../../../../../crates/app-server-protocol/schema/typescript/index.js';
+import { APP_SERVER_SERVER_REQUESTS, type AppHostOperation } from '../../../../../../.build/protocol/typescript/index.js';
 import type { IAppToolsHost } from './appTools.js';
 
 /** Binds one renderer connection to its window-owned application capabilities. */

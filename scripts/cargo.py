@@ -19,6 +19,7 @@ from build.lib.cargo import (  # noqa: E402
     parse_cargo_message,
 )
 from build.lib.cargo_cache import leased_cache, profile_from_arguments  # noqa: E402
+from build.protocol.generate import generate_protocol  # noqa: E402
 from build.lib.sherpa import resolve_sherpa_cargo_env  # noqa: E402
 from build.lib.targets import TARGETS, default_target  # noqa: E402
 from build.lib.v8 import (  # noqa: E402
@@ -250,6 +251,11 @@ def main(arguments: list[str] | None = None) -> int:
     if target not in TARGETS:
         parser.error(f"unsupported V8 target: {target}")
     environment = os.environ.copy()
+    if cargo_command_uses_package(
+        args.cargo, cargo_arguments, REPOSITORY_ROOT, "ash-app-server-protocol"
+    ):
+        # Prepare outside Cargo's build lock; the exporter bootstraps without metadata.
+        generate_protocol(root=REPOSITORY_ROOT, cargo=args.cargo)
     if args.deny_warnings:
         # Cargo replays cached diagnostics for this gate without changing rustc's
         # artifact identity, unlike appending -D warnings to RUSTFLAGS.

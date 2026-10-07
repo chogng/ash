@@ -78,8 +78,7 @@ src/
 ├── platform/agentHost/
 │   ├── common/
 │   │   └── appServerProtocol/
-│   │       ├── appServerProtocol.ts
-│   │       └── generated/
+│   │       └── appServerProtocol.ts
 │   ├── browser/
 │   │   └── appServerProtocolClient.ts
 │   ├── electron-browser/
@@ -99,11 +98,11 @@ src/
 │   └── appServerSessionAdapter.ts
 └── code/electron-main/app.ts
 
-build/app-server/generate-protocol.mjs
-build/app-server/check-protocol-sync.ts
+build/protocol/generate.ts
+build/protocol/generate.py
 ```
 
-`appServerProtocol/generated/` 由固定版本的后端生成器直接写入，并由 `check-protocol-sync.ts` 在临时目录重新生成后逐字节比较，禁止手改。生成物供 renderer 使用，因此最终 owner 必须位于 `common/`，不能留在旧 TypeScript Host 的 `node/` 子树。领域属于 platform 还是 workbench 由前端调用方和依赖方向决定。只属于 Agents Window 的 Thread facade 才放进 Sessions Provider。只创建有真实调用方的文件；小型 adapter 可以与领域 service implementation 同文件，没有独立 relay 逻辑时可与 starter 合并，不能为了目录对称创建占位文件。
+`.build/protocol/typescript/` 由 Rust 导出器写入，构建入口在临时目录生成完整契约后发布，禁止手改或提交生成物；`schema_hash` 集成测试在 `export` feature 下逐字节验证源码与产物一致。生成物供所有宿主共用，保留在构建目录，由 Rust protocol crate 负责；前端 protocol client contract 留在 `common/`，不能把产物复制进旧 TypeScript Host 的 `node/` 子树。领域属于 platform 还是 workbench 由前端调用方和依赖方向决定。只属于 Agents Window 的 Thread facade 才放进 Sessions Provider。只创建有真实调用方的文件；小型 adapter 可以与领域 service implementation 同文件，没有独立 relay 逻辑时可与 starter 合并，不能为了目录对称创建占位文件。
 
 后端参考源码使用并列 crate 路径：
 
@@ -113,7 +112,7 @@ build/app-server/check-protocol-sync.ts
 ├── src/protocol/common.rs
 ├── src/protocol/v2/<domain>.rs
 ├── src/export.rs
-└── schema/typescript/
+└── src/typescript_decoder.template.ts
 
 ../app-server/
 ├── src/main.rs

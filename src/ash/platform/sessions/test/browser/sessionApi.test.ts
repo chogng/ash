@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import type { AppServerProtocolClient } from '../../../app-server/browser/appServerProtocolClient.js';
-import type { ConfigUpdateParams, ModelPreferencesUpdateParams } from '../../../../../../crates/app-server-protocol/schema/typescript/index.js';
+import type { ConfigUpdateParams, ModelPreferencesUpdateParams } from '../../../../../../.build/protocol/typescript/index.js';
 import { createAppServerModelApi } from '../../browser/sessionApi.js';
 
 test('Model preferences send a targeted update with the current revision', async () => {

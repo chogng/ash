@@ -14,7 +14,7 @@ import type {
 	TurnChangesReadParams,
 	TurnChangesReadResult,
 	TurnChangesUpdateDraftParams,
-} from "../../../../../crates/app-server-protocol/schema/typescript/index.js";
+} from "../../../../../.build/protocol/typescript/index.js";
 
 /** Transport-neutral access to the App Server Turn change ledger. */
 export interface ITurnChangesApi {

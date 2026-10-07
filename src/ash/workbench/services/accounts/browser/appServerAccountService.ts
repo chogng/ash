@@ -1,4 +1,4 @@
-import type { AccountDto, AccountLoginCompleted, AccountReadResult, AccountUpdated } from '../../../../../../crates/app-server-protocol/schema/typescript/index.js';
+import type { AccountDto, AccountLoginCompleted, AccountReadResult, AccountUpdated } from '../../../../../../.build/protocol/typescript/index.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { IAccountApi } from '../../../../platform/accounts/common/accountApi.js';

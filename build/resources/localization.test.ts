@@ -99,7 +99,7 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 		'src/ash/feature.ts': `import { localize } from './nls.js'; localize('hello', 'Hello');`,
 		'src/ash/platform/languagePacks/common/languagePackContract.ts': `export const ASH_LOCALIZATION_CATALOG_VERSION = 'ash-1';`,
 		'src/ash/platform/languagePacks/common/languagePacksService.ts': `export interface LanguagePackCatalog { readonly schemaVersion: 1; readonly locale: string; readonly languageName: string; readonly localizedLanguageName: string; readonly catalogVersion: string; readonly bundles: Readonly<Record<string, Readonly<Record<string, string>>>>; }`,
-		'crates/app-server-protocol/schema/typescript/ApprovalModes.ts': `export const APPROVAL_MODE_DEFINITIONS = [];`,
+		'.build/protocol/typescript/ApprovalModes.ts': `export const APPROVAL_MODE_DEFINITIONS = [];`,
 		'localization/languages.json': JSON.stringify(['en', 'zh-CN'].map(locale => ({ locale, languageName: locale, localizedLanguageName: locale }))),
 		'localization/en/messages.json': '{}',
 		'localization/zh-CN/messages.json': JSON.stringify({ ash: { hello: '你好' } }),
@@ -120,7 +120,7 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 		return result.stdout;
 	}
 	run(['build/resources/localization.ts', '--check']);
-	await assert.rejects(stat(join(root, '.build')), { code: 'ENOENT' });
+	await assert.rejects(stat(join(root, '.build/desktop/localization')), { code: 'ENOENT' });
 	run(['build/resources/localization.ts']);
 	const generated = join(root, '.build/desktop/localization');
 	const outputs = (await readdir(generated)).sort();

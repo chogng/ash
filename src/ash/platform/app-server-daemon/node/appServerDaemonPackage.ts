@@ -1,6 +1,6 @@
 import { lstatSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH } from "../../../../../crates/app-server-protocol/schema/typescript/index.js";
+import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH } from "../../../../../.build/protocol/typescript/index.js";
 import { developmentArtifactsPath, developmentAshPackagePath } from "../../environment/node/developmentArtifacts.js";
 
 export interface AppServerDaemonPackageLocation {

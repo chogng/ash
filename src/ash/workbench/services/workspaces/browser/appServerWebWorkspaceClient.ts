@@ -1,5 +1,5 @@
-import { decodeWebListenInfo, decodeWebWorkspaceListResult } from '../../../../../../crates/app-server-protocol/schema/typescript/WebProtocolDecoder.js';
-import type { WebWorkspaceListRequest, WebWorkspaceOpenRequest } from '../../../../../../crates/app-server-protocol/schema/typescript/index.js';
+import { decodeWebListenInfo, decodeWebWorkspaceListResult } from '../../../../../../.build/protocol/typescript/WebProtocolDecoder.js';
+import type { WebWorkspaceListRequest, WebWorkspaceOpenRequest } from '../../../../../../.build/protocol/typescript/index.js';
 import type { IWebWorkspaceClient, IWebWorkspaceDirectoryList } from './workspaceOpenService.js';
 
 /** Authenticated browser control requests stay outside the workspace-bound JSONL connection. */

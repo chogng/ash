@@ -158,7 +158,17 @@
     "package:app-server": "just app-server-package",
     "package:remote": "just remote-package",
     "generate:protocol": "just generate-protocol",
-    "stylelint:update": "pnpm test:unit --run src/ash/workbench/contrib/themes/test/node/colorRegistry.releaseTest.ts"
+    "stylelint:update": "pnpm test:unit --run src/ash/workbench/contrib/themes/test/node/colorRegistry.releaseTest.ts",
+    "prelocalization:generate": "pnpm run protocol:generate",
+    "prelocalization:check": "pnpm run protocol:generate",
+    "pretypecheck:protocol": "pnpm run protocol:generate",
+    "prepackage:win32:bundle": "pnpm run protocol:generate",
+    "prepackage:win32:installer": "pnpm run protocol:generate",
+    "prepackage:darwin:bundle": "pnpm run protocol:generate",
+    "prestart:web": "pnpm run protocol:generate",
+    "pretypecheck:web:watch": "pnpm run protocol:generate",
+    "pretypecheck:memories": "pnpm run protocol:generate",
+    "pretypecheck:test-unit": "pnpm run protocol:generate"
   },
   "devDependencies": {
     "@electron/rebuild": "4.2.0",

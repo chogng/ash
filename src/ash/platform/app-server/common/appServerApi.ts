@@ -1,5 +1,5 @@
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
-import type { ResourceMetadataParams, ResourceMetadataResult, ResourceReadParams, ResourceReadResult, ResourceReleaseParams, ServerNotification, SlashCommandDefinition } from "../../../../../crates/app-server-protocol/schema/typescript/index.js";
+import type { ResourceMetadataParams, ResourceMetadataResult, ResourceReadParams, ResourceReadResult, ResourceReleaseParams, ServerNotification, SlashCommandDefinition } from "../../../../../.build/protocol/typescript/index.js";
 import type { DisposableHandle } from "../../ipc/common/ipc.js";
 
 export type AppServerConnectionState = "stopped" | "starting" | "initializing" | "ready" | "stopping" | "crashed" | "restarting";

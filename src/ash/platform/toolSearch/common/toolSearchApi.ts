@@ -1,4 +1,4 @@
-import type { ConfigCommandResult, ConfigReadResult, ToolSearchConfigureParams } from "../../../../../crates/app-server-protocol/schema/typescript/index.js";
+import type { ConfigCommandResult, ConfigReadResult, ToolSearchConfigureParams } from "../../../../../.build/protocol/typescript/index.js";
 
 /** Transport-only Tool Search operations. Product consumers use IToolSearchService. */
 export interface IToolSearchApi {

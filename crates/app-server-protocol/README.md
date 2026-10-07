@@ -5,7 +5,7 @@
 - `session/list` 与 Session mutation result 的 `Session.model` 返回主线程当前选择的模型；主线程未选模型时省略此字段。子线程、fork 或全局默认模型不替代主线程的选择。列表从持久目录读取，不为显示模型逐个重放历史；旧目录版本通过历史重建后写入当前格式。
 - `project/read`、Project mutation result 和 `project/changed` 的 root `path` 是绝对 `file:` URI；
   `environmentId` 指明所属环境，`dirId` 指明目录身份。URI 本身不提供文件访问权限。
-- Rust DTO 与方法注册表是唯一协议来源；修改后必须从仓库根运行 `just generate-protocol`，并提交 JSON Schema、三张 TypeScript 方法映射与运行时解码器。
+- Rust DTO 与方法注册表是唯一协议来源；修改后从仓库根运行 `just generate-protocol`；JSON Schema、TypeScript 方法映射、运行时解码器和 metadata 写入 Git 忽略的 `.build/protocol/`，只提交 Rust 定义及消费方改动。
 
 `agent/capabilities/read.sandboxDiagnostics` 返回当前目录只读进程的后端准备状态，分别检查 denied、allowed、managed 网络策略；
 `ready` 只表示准备通过，`unsupported` 和 `unavailable` 携带原因，不保证命令或 PTY 启动成功。
@@ -19,12 +19,12 @@
 ## 编译与导出
 
 - 队列、通话、协作和任务交付使用各自的 `*-contract` crate；服务端启用执行 feature 时也不改变协议依赖。协议构建不编译这些领域的执行器、SQLite、工具执行、剪贴板或图片处理；默认与服务端 feature 合并后的依赖边界由 `tests/dependency_boundary.rs` 验证。
-- 默认构建使用空实现 `JsonSchema` / `TS` 派生，保留属性但不生成实现；握手 hash 由构建脚本从已提交的 `schema/metadata.json` 写入编译常量。
-- 单元测试使用真实派生，校验 Rust 定义与已提交产物一致。
+- 默认构建使用空实现 `JsonSchema` / `TS` 派生，保留属性但不生成实现；握手 hash 由构建脚本从 `.build/protocol/metadata.json` 写入编译常量。
+- 单元测试使用真实派生验证契约，`schema_hash` 集成测试校验默认运行时、导出器与生成客户端一致。
 - `json-schema` feature 只启用真实 `JsonSchema` 派生，供需要组成自有 schema 的 Rust 消费方使用。
-- `export` feature 在 `json-schema` 之上启用 TypeScript 派生和完整导出 API；`generate_protocol` 二进制要求该 feature。`just generate-protocol` 显式启用并同步生成 schema、TypeScript 和协议元数据。
+- `export` feature 在 `json-schema` 之上启用 TypeScript 派生和完整导出 API；该模式直接计算 schema hash，不依赖已有 metadata；`generate_protocol` 二进制要求该 feature。`just generate-protocol` 显式启用并同步生成 schema、TypeScript 和协议元数据。
 - 导出内容未变化时保留文件时间戳，避免重复触发 Rust 构建；开发监听器先生成协议，再编译服务。
-- 开发与发布打包直接读取 `schema/metadata.json`，不启动协议生成器；测试校验它与 Rust 定义、运行时 hash 和客户端一致。
+- 前端构建、Rust Just 命令和开发或发布打包先检查共享输入与产物缓存，变化时调用导出器，然后读取 `.build/protocol/metadata.json`；首次准备需要 Rust 工具链。直接 Cargo 构建前运行 `just generate-protocol`。Bazel 启用 `export` 从 Rust 计算 hash，不读取 Cargo 本地输出。并发准备由进程锁串行化，失败保留上一次完整产物并在下次重试。
 - 其他领域 crate 自己使用的 schema / TypeScript 依赖不受此开关控制。
 
 ## 运行基础设施

@@ -17,7 +17,7 @@ export async function protocolSourceDirectories(signal?: AbortSignal): Promise<s
 	});
 }
 
-/** Refreshes the Rust-owned protocol snapshot consumed directly by frontend adapters and build tools. */
+/** Prepares the cached Rust-owned contract consumed by frontend adapters and build tools. */
 export async function generateProtocol(signal?: AbortSignal): Promise<void> {
 	await new Promise<void>((resolvePromise, reject) => {
 		const { command, args } = pythonCommand(['-B', 'build/protocol/generate.py']);

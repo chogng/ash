@@ -43,8 +43,8 @@ renderer contribution
 - `src/platform/agentHost/electron-browser/appServerMessagePortTransport.ts` 只把 MessagePort frame 转换为 protocol transport。
 - `src/platform/agentHost/electron-main/electronAgentHostStarter.ts` 拥有共享进程的启动、停止、可执行文件解析和 renderer connection acquisition。
 - `src/platform/agentHost/electron-main/appServerConnectionRelay.ts` 为每个 renderer 创建独立 backend connection，并透明转发 frame；它不解析 JSON-RPC。
-- `src/platform/agentHost/common/appServerProtocol/generated/` 是 renderer 可导入的机械生成物，不能留在 `node/` owner 下，也不能手改。
-- `build/app-server/generate-protocol.mjs` 与 `build/app-server/check-protocol-sync.ts` 固定后端版本、生成协议并做逐字节同步检查。
+- `.build/protocol/typescript/` 是 renderer 可导入的机械生成物，不能留在 `node/` owner 下，也不能手改。
+- `build/protocol/generate.ts` 与 `build/protocol/generate.py` 从 Cargo 的导出依赖图生成 `.build/protocol/`，校验输入和产物缓存，并串行化并发准备。
 - `../app-server-protocol/` 是 method、params、response、notification、server request、错误结构和 decoder 的唯一协议 owner；`../app-server/` 拥有 connection、typed dispatch 和跨领域 orchestration；对应 Rust 领域 crate 拥有领域行为与持久状态。
 
 只有 backend Thread 进入 Agents Window 时，才在 `src/sessions/` 增加 Provider adapter。Sessions 是条件消费者，不是通用 app-server API，也不是 process、Project 或 connection owner。

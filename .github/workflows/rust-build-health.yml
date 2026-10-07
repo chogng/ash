@@ -11,7 +11,6 @@ on:
       - "rust-toolchain.toml"
       - "scripts/*.py"
       - "build/**"
-      - "crates/app-server-protocol/schema/**"
       - "scripts/pyproject.toml"
       - "scripts/requirements.txt"
       - "justfile"
@@ -25,7 +24,6 @@ on:
       - "rust-toolchain.toml"
       - "scripts/*.py"
       - "build/**"
-      - "crates/app-server-protocol/schema/**"
       - "scripts/pyproject.toml"
       - "scripts/requirements.txt"
       - "justfile"
@@ -108,7 +106,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends build-essential libssl-dev pkg-config
-      - name: Check the default protocol build and committed artifacts
+      - name: Check the default protocol build and generated artifacts
         run: |
           # The warning gate checks every target covered by the regular check.
           just rust-warnings ash-app-server-protocol --locked

@@ -25,7 +25,7 @@ import { IFileTextModelService } from '../../../workbench/services/textmodelReso
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
-import type { ModelRef, QueueEnqueueParams, ServerNotification, Session as SessionDto, SessionCreateParams, Thread, ThreadTranscriptSnapshot } from "../../../../../crates/app-server-protocol/schema/typescript/index.js";
+import type { ModelRef, QueueEnqueueParams, ServerNotification, Session as SessionDto, SessionCreateParams, Thread, ThreadTranscriptSnapshot } from "../../../../../.build/protocol/typescript/index.js";
 import type { SessionMutationParams, SessionOperationInput } from "../../../platform/sessions/common/sessionApi.js";
 import type { IRendererHost } from "../../../platform/renderer/common/rendererHost.js";
 import type { IAction } from "../../../base/common/actions.js";

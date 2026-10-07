@@ -1,4 +1,4 @@
-import type { ModelListResult } from '../../../../../../crates/app-server-protocol/schema/typescript/index.js';
+import type { ModelListResult } from '../../../../../../.build/protocol/typescript/index.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';

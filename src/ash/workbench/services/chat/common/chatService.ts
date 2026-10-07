@@ -1,5 +1,5 @@
 import type { Event } from "../../../../base/common/event.js";
-import { PRODUCT_SLASH_COMMANDS } from "../../../../../../crates/app-server-protocol/schema/typescript/index.js";
+import { PRODUCT_SLASH_COMMANDS } from "../../../../../../.build/protocol/typescript/index.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import type { SkillReference } from "../../../../platform/skills/common/skillApi.js";
 import type { ModelReasoningEffort } from "./modelCatalog.js";

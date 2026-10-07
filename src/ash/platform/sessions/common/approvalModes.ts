@@ -1,4 +1,4 @@
-import { APPROVAL_MODE_DEFINITIONS } from '../../../../../crates/app-server-protocol/schema/typescript/index.js';
+import { APPROVAL_MODE_DEFINITIONS } from '../../../../../.build/protocol/typescript/index.js';
 
 export type ApprovalMode = 'manual' | 'auto' | 'bypassPermissions';
 

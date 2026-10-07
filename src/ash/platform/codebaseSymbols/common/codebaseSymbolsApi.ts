@@ -1,4 +1,4 @@
-import type { CodebaseSymbolsSearchParams, CodebaseSymbolsSearchResult, CodebaseSymbolsStatusResult, DocumentOverlayCloseParams, DocumentOverlayStatusResult, DocumentOverlaySynchronizeParams } from "../../../../../crates/app-server-protocol/schema/typescript/index.js";
+import type { CodebaseSymbolsSearchParams, CodebaseSymbolsSearchResult, CodebaseSymbolsStatusResult, DocumentOverlayCloseParams, DocumentOverlayStatusResult, DocumentOverlaySynchronizeParams } from "../../../../../.build/protocol/typescript/index.js";
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
 
 /** Transport-only codebase-symbols operations. Product consumers use ICodebaseSymbolsService. */

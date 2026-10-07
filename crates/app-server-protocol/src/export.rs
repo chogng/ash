@@ -27,15 +27,6 @@ use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 
-/// Checked-in JSON Schema fixture, relative to this crate's manifest directory.
-pub const JSON_SCHEMA_FIXTURE: &str = "schema/json/schema.json";
-
-/// Checked-in TypeScript fixture directory, relative to this crate's manifest directory.
-pub const TYPESCRIPT_FIXTURE_DIRECTORY: &str = "schema/typescript";
-
-/// Checked-in protocol metadata, shared by Rust builds and product packaging.
-pub const METADATA_FIXTURE: &str = "schema/metadata.json";
-
 /// Generates version and schema identity from the current Rust contract.
 pub fn protocol_metadata() -> String {
     // Fixture bytes must not depend on whether another crate enables preserve_order.

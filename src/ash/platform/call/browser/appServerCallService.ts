@@ -3,7 +3,7 @@ import { RunOnceScheduler } from '../../../base/common/async.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import type { AppServerProtocolClient } from '../../app-server/browser/appServerProtocolClient.js';
-import { APP_SERVER_METHODS, type CallStatus, type CallControl } from '../../../../../crates/app-server-protocol/schema/typescript/index.js';
+import { APP_SERVER_METHODS, type CallStatus, type CallControl } from '../../../../../.build/protocol/typescript/index.js';
 import type { CallDeployment, CallInvitation, CallState, ICallService, ScreenFrame, ScreenSource, ScreenTarget } from '../common/callService.js';
 
 export class AppServerCallService extends Disposable implements ICallService {

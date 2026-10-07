@@ -15,7 +15,7 @@ import { Range } from '../../../../../editor/common/core/range.js';
 import { ITextModelService } from '../../../../../editor/common/services/resolverService.js';
 import { AppServerProtocolClient } from '../../../../../platform/app-server/browser/appServerProtocolClient.js';
 import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, type AppServerTransport } from '../../../../../platform/app-server/common/appServerTransport.js';
-import { APP_SERVER_SCHEMA_HASH, APP_SERVER_PROTOCOL_MAJOR, type InitializeResult, type ServerCapabilities, type AppServerServerRequestMethod, type ServerRequestParams, type ServerRequestResult } from '../../../../../../../crates/app-server-protocol/schema/typescript/index.js';
+import { APP_SERVER_SCHEMA_HASH, APP_SERVER_PROTOCOL_MAJOR, type InitializeResult, type ServerCapabilities, type AppServerServerRequestMethod, type ServerRequestParams, type ServerRequestResult } from '../../../../../../../.build/protocol/typescript/index.js';
 import { FileKind, FileNotFoundError, FileRevisionConflictError, type IFileService, type IFileWriteRequest, type FileExistingTargetBehavior } from '../../../../../platform/files/common/files.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { BrowserTextResourceStore } from '../../../../contrib/codeEditor/browser/browserTextResourceStore.js';

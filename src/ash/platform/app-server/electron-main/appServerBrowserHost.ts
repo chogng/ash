@@ -1,9 +1,9 @@
-import { decodeAppServerServerRequestParams } from '../../../../../crates/app-server-protocol/schema/typescript/AppServerProtocolDecoder.js';
+import { decodeAppServerServerRequestParams } from '../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { raceCancellationError } from '../../../base/common/async.js';
 import { isRecord } from '../../../base/common/types.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
-import type { BrowserCreateParams, BrowserObserveParams, BrowserPerformParams, BrowserCloseParams } from '../../../../../crates/app-server-protocol/schema/typescript/index.js';
+import type { BrowserCreateParams, BrowserObserveParams, BrowserPerformParams, BrowserCloseParams } from '../../../../../.build/protocol/typescript/index.js';
 import { IBrowserViewMainService } from '../../browserView/electron-main/browserViewMainService.js';
 import type { BrowserView } from '../../browserView/electron-main/browserView.js';
 import { IPlaywrightService } from '../../browserView/common/playwrightService.js';

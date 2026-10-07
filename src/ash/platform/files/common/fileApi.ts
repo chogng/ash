@@ -1,4 +1,4 @@
-import type { FsCopyParams, FsCreateDirectoryParams, FsCreateFileParams, FsDeleteParams, FsGetMetadataParams, FsGetMetadataResult, FsPasteSystemFilesParams, FsReadBinaryFileParams, FsReadBinaryFileResult, FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult, FsRenameParams, FsWriteBinaryFileParams, FsWriteFileParams, FsWriteFileResult } from "../../../../../crates/app-server-protocol/schema/typescript/index.js";
+import type { FsCopyParams, FsCreateDirectoryParams, FsCreateFileParams, FsDeleteParams, FsGetMetadataParams, FsGetMetadataResult, FsPasteSystemFilesParams, FsReadBinaryFileParams, FsReadBinaryFileResult, FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult, FsRenameParams, FsWriteBinaryFileParams, FsWriteFileParams, FsWriteFileResult } from "../../../../../.build/protocol/typescript/index.js";
 
 export interface IFileApi {
 	getMetadata(params: FsGetMetadataParams): Promise<FsGetMetadataResult>;

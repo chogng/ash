@@ -17,20 +17,21 @@ fn parses_a_typescript_output_directory() {
     let Command::Generate {
         artifact,
         output_directory,
-    } = command
-    else {
-        panic!("expected an artifact generation command");
-    };
+    } = command;
     assert!(matches!(artifact, Artifact::TypeScript));
     assert_eq!(output_directory, PathBuf::from("generated/app-server"));
 }
 
 #[test]
-fn parses_the_checked_in_fixture_command() {
-    assert!(matches!(
-        Command::parse(["fixtures".to_owned()]),
-        Ok(Command::WriteFixtures)
-    ));
+fn parses_a_complete_contract_output_directory() {
+    let command =
+        Command::parse(["all".to_owned(), "--out".to_owned(), "output".to_owned()]).unwrap();
+    let Command::Generate {
+        artifact,
+        output_directory,
+    } = command;
+    assert!(matches!(artifact, Artifact::All));
+    assert_eq!(output_directory, PathBuf::from("output"));
 }
 
 #[test]
@@ -99,7 +100,7 @@ fn writes_metadata_without_exporting_typescript() {
     let actual: serde_json::Value =
         serde_json::from_slice(&std::fs::read(directory.join("metadata.json")).unwrap()).unwrap();
     let expected: serde_json::Value =
-        serde_json::from_str(include_str!("../../../schema/metadata.json")).unwrap();
+        serde_json::from_str(&ash_app_server_protocol::protocol_metadata()).unwrap();
     assert_eq!(actual, expected);
     assert_eq!(std::fs::read_dir(&directory).unwrap().count(), 1);
 

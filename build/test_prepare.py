@@ -12,6 +12,11 @@ from build.lib.targets import TARGETS
 
 
 class PrepareTests(unittest.TestCase):
+    def setUp(self) -> None:
+        boundary = patch("build.prepare.generate_protocol", return_value=False)
+        boundary.start()
+        self.addCleanup(boundary.stop)
+
     def test_assembly_changes_invalidate_the_package_without_tracking_frontend_or_tests(
         self,
     ) -> None:

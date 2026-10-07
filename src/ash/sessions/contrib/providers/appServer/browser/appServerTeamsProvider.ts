@@ -1,4 +1,4 @@
-import type { TeamCommandDto, TeamDto, TeamMessageDto, TeamRunDto } from '../../../../../../../crates/app-server-protocol/schema/typescript/index.js';
+import type { TeamCommandDto, TeamDto, TeamMessageDto, TeamRunDto } from '../../../../../../../.build/protocol/typescript/index.js';
 import type { ITeamApi } from '../../../../../platform/teams/common/teamApi.js';
 import type { Team, TeamCommand, TeamMessage, TeamRun } from '../../../../services/teams/common/team.js';
 import type { ITeamsProvider } from '../../../../services/teams/common/teamsProvider.js';

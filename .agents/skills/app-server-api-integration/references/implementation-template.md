@@ -114,7 +114,7 @@ Main 不能持有 protocol pending、执行 initialize 或替领域调用方选�
 生成输出由以下目录拥有：
 
 ```text
-../app-server-protocol/schema/typescript/
+.build/protocol/typescript/
 ```
 
 生成器必须产出并验证：
@@ -131,9 +131,9 @@ Main 不能持有 protocol pending、执行 initialize 或替领域调用方选�
 前端通过固定后端版本运行生成命令，直接写入 renderer 可导入的最终目录：
 
 ```text
-build/app-server/generate-protocol.mjs
-build/app-server/check-protocol-sync.ts
-src/platform/agentHost/common/appServerProtocol/generated/
+build/protocol/generate.ts
+build/protocol/generate.py
+.build/protocol/typescript/
 ```
 
 同步检查必须在临时目录重新生成并逐字节比较，不从并列 checkout 复制一个可能与打包 binary 不同的 schema。生成路径从旧 TypeScript Host 的 `node/` 子树迁出后，只保留这一份 committed 生成物。
@@ -163,7 +163,7 @@ transport 只产生 opened/closed/message，使用有界队列并保持每条 co
 
 ```text
 src/platform/agentHost/common/appServerProtocol/appServerProtocol.ts
-src/platform/agentHost/common/appServerProtocol/generated/
+.build/protocol/typescript/
 src/platform/agentHost/browser/appServerProtocolClient.ts
 ```
 

@@ -4,7 +4,9 @@
   "type": "module",
   "scripts": {
     "test": "node --test \"**/*.test.ts\"",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "pretest": "node protocol/generate.ts",
+    "pretypecheck": "node protocol/generate.ts"
   },
   "devDependencies": {
     "@electron/packager": "20.0.4",

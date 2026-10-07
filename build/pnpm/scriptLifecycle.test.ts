@@ -22,6 +22,9 @@ test("aggregate, test and typecheck commands prepare inputs once and stop on pre
 		"prepare:output": "output",
 		"prepare:extensions": "extensions",
 		"localization:generate": "localization",
+		"protocol:generate": "protocol",
+		"typecheck:protocol": "protocol-check",
+		"localization:check": "localization-check",
 		"typecheck:common": "common",
 		"icons:check": "icons",
 	})) scripts[name] = `node record.ts ${operation}`;
@@ -37,17 +40,20 @@ test("aggregate, test and typecheck commands prepare inputs once and stop on pre
 	const executable = script ? process.execPath : pnpm;
 	const prefix = script ? [pnpm] : [];
 	for (const [command, expected, failure] of [
-		["test:main", ["styles", "tools", "output", "extensions", "localization", "common", "icons", "unit"], ""],
+		["test:main", ["styles", "tools", "output", "extensions", "protocol", "localization", "common", "icons", "unit"], ""],
 		["test:main", ["styles"], "styles"],
-		["test:unit", ["output", "extensions", "localization", "common", "icons", "unit"], ""],
-		["test:editor:unit", ["output", "extensions", "localization", "common", "icons", "editor"], ""],
-		["test:extensions", ["output", "extensions", "localization", "common", "icons", "extension-tests"], ""],
-		["test:browser:integration", ["extensions", "localization", "common", "icons", "browser"], ""],
-		["test:editor:browser", ["extensions", "localization", "common", "icons", "editor-browser"], ""],
-		["test:editor:browser:build", ["extensions", "localization", "common", "icons", "browser-build"], ""],
-		["typecheck:common", ["localization", "common"], ""],
-		["test:browser:integration", ["extensions", "localization"], "localization"],
-		["test:main", ["styles", "tools", "output", "extensions", "localization", "common"], "common"],
+		["test:browser:integration", ["extensions", "protocol"], "protocol"],
+		["test:unit", ["output", "extensions", "protocol", "localization", "common", "icons", "unit"], ""],
+		["test:editor:unit", ["output", "extensions", "protocol", "localization", "common", "icons", "editor"], ""],
+		["test:extensions", ["output", "extensions", "protocol", "localization", "common", "icons", "extension-tests"], ""],
+		["test:browser:integration", ["extensions", "protocol", "localization", "common", "icons", "browser"], ""],
+		["test:editor:browser", ["extensions", "protocol", "localization", "common", "icons", "editor-browser"], ""],
+		["test:editor:browser:build", ["extensions", "protocol", "localization", "common", "icons", "browser-build"], ""],
+		["typecheck:protocol", ["protocol", "protocol-check"], ""],
+		["localization:check", ["protocol", "localization-check"], ""],
+		["typecheck:common", ["protocol", "localization", "common"], ""],
+		["test:browser:integration", ["extensions", "protocol", "localization"], "localization"],
+		["test:main", ["styles", "tools", "output", "extensions", "protocol", "localization", "common"], "common"],
 	] as const) {
 		await writeFile(join(directory, "operations.jsonl"), "");
 		const result = spawnSync(executable, [...prefix, "run", command], {

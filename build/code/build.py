@@ -21,6 +21,7 @@ from build.lib.targets import TARGETS  # noqa: E402
 from build.lib.targets import default_target  # noqa: E402
 from build.lib.v8 import resolve_v8_cargo_env  # noqa: E402
 from build.lib.development_store import leased_binary_generation  # noqa: E402
+from build.protocol.generate import generate_protocol  # noqa: E402
 
 
 DEVELOPMENT_PROFILE = "dev-small"
@@ -45,6 +46,7 @@ def development_binaries(*, platform_name: str | None = None) -> list[str]:
 def build_binaries(
     binaries: list[str], environment: dict[str, str]
 ) -> tuple[int, dict[str, Path]]:
+    generate_protocol(root=REPOSITORY_ROOT)
     target = TARGETS[default_target()]
     cargo_environment = environment.copy()
     cargo_environment.update(resolve_v8_cargo_env(target, environ=cargo_environment))

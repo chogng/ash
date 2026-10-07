@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import type { ElectronApplication } from '@playwright/test';
 import type { ISandboxGlobals } from "../../../../src/ash/base/parts/sandbox/electron-browser/sandboxTypes.js";
-import { decodeAppServerServerRequestResult } from '../../../../crates/app-server-protocol/schema/typescript/AppServerProtocolDecoder.js';
+import { decodeAppServerServerRequestResult } from '../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import { expect, test } from '../../../automation/test.js';
 interface BrowserPrompt { options: Electron.MessageBoxOptions; respond: (result: Electron.MessageBoxReturnValue) => void; }
 

@@ -27,6 +27,8 @@ from build.lib.ripgrep import resolve_ripgrep
 from build.lib.tgrep import resolve_tgrep
 from build.lib.version import read_workspace_version
 
+from build.protocol.generate import generate_protocol
+
 
 ROOT = Path(__file__).resolve().parents[1]
 PROFILE = "dev-small"
@@ -340,6 +342,7 @@ def development_binary_inputs(spec: TargetSpec) -> dict[str, None]:
 
 def prepare_development_package(args: argparse.Namespace, *, root: Path = ROOT) -> Path:
     """Reuse a current package, then build and publish only when its inputs changed."""
+    generate_protocol(root=root)
     target = default_target()
     spec = TARGETS[target]
     protocol = load_protocol_metadata(root)
@@ -407,7 +410,7 @@ def prepare_development_package(args: argparse.Namespace, *, root: Path = ROOT) 
     )
     # The second key checks the resolved binaries and locked runtime assets.
     package_paths = package_sources(root) + [
-        root / "crates/app-server-protocol/schema/metadata.json",
+        root / ".build/protocol/metadata.json",
         root / "crates/skills/assets",
         root / "extensions",
         root / "resources/product-services",

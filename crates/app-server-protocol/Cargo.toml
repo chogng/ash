@@ -56,7 +56,6 @@ serde_json = { workspace = true }
 [dev-dependencies]
 extension-protocol = { workspace = true, features = ["export"] }
 slash-commands = { package = "ash-slash-commands", path = "../slash-commands", features = ["export"] }
-cargo-bin = { workspace = true }
 sha2 = { workspace = true }
 schemars = { workspace = true }
 ts-rs = { workspace = true, features = ["no-serde-warnings"] }

@@ -1,4 +1,4 @@
-import type { PluginCommandResultDto, PluginInstallLocalParams, PluginInstallLocalResult, PluginListResult, PluginPackageCommandParams } from "../../../../../crates/app-server-protocol/schema/typescript/index.js";
+import type { PluginCommandResultDto, PluginInstallLocalParams, PluginInstallLocalResult, PluginListResult, PluginPackageCommandParams } from "../../../../../.build/protocol/typescript/index.js";
 
 export interface IPluginApi {
 	list(): Promise<PluginListResult>;

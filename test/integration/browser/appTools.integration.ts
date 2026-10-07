@@ -2,7 +2,7 @@ import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.j
 import { AppServerProtocolClient } from '../../../src/ash/platform/app-server/browser/appServerProtocolClient.js';
 import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION, type AppServerTransport } from '../../../src/ash/platform/app-server/common/appServerTransport.js';
 import { createTestInitializeResult } from '../../../src/ash/platform/app-server/test/common/testAppServerProtocol.js';
-import type { AppHostOperation } from '../../../crates/app-server-protocol/schema/typescript/index.js';
+import type { AppHostOperation } from '../../../.build/protocol/typescript/index.js';
 import { AppToolsHost } from '../../../src/ash/sessions/contrib/appTools/browser/appToolsHost.js';
 import { AppServerAppToolsHost } from '../../../src/ash/sessions/services/appTools/browser/appServerAppToolsHost.js';
 import { ISessionGroupsService, SessionGroupsService } from '../../../src/ash/sessions/services/sessions/browser/sessionGroupsService.js';

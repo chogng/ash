@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { isCancellationError } from "../../../../../base/common/errors.js";
-import type { AgentTreeNodeProjection, ModelUsageSummary, ServerNotification, Session as SessionDto, SessionThreadProjection } from "../../../../../../../crates/app-server-protocol/schema/typescript/index.js";
+import type { AgentTreeNodeProjection, ModelUsageSummary, ServerNotification, Session as SessionDto, SessionThreadProjection } from "../../../../../../../.build/protocol/typescript/index.js";
 import { IAppServerApi, type AppServerConnectionState, type IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
