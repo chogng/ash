@@ -1,4 +1,5 @@
 import { registerTestComponentServices } from '../../../workbench/test/common/testEditorServices.js';
+import { IGitHubService as ISessionsGitHubService } from '../../contrib/github/browser/githubService.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import { IFileService } from '../../../platform/files/common/files.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
@@ -204,6 +205,13 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	};
 	using resources = new DisposableStore();
 	const services = resources.add(createCodeEditorServices(resources).createChild());
+	services.registerInstance(ISessionsGitHubService, {
+		onDidChange: Event.None,
+		getSessionPullRequests: () => [],
+		initialize() { },
+		attachPullRequest: async () => { throw new Error('Unexpected PR attachment'); },
+		detachPullRequest: async () => { throw new Error('Unexpected PR removal'); },
+	});
 	services.registerInstance(ILanguageModelsService, chatService);
 	services.registerInstance(IChatService, chatService);
 	services.registerInstance(IDictationService, undefined);

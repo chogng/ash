@@ -1,4 +1,5 @@
 import { TaskQueue, timeout } from "../../../../base/common/async.js";
+import { groupByMap } from "../../../../base/common/collections.js";
 import { getErrorMessage } from "../../../../base/common/errors.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
@@ -232,20 +233,17 @@ export class DebugAdapterSession extends Disposable implements IDebugSession {
 	}
 
 	private async sendBreakpoints(): Promise<void> {
-		const groups = new Map<string, IDebugBreakpoint[]>();
-		for (const breakpoint of this.breakpoints().filter(breakpoint => breakpoint.enabled && (breakpoint.resource.scheme === "file" || isRemoteResource(breakpoint.resource)))) {
+		const supportedBreakpoints = this.breakpoints().filter(breakpoint => breakpoint.enabled && (breakpoint.resource.scheme === "file" || isRemoteResource(breakpoint.resource))).filter(breakpoint => {
 			const unsupported = breakpoint.logMessage && !this._capabilities.supportsLogPoints ? localize("debug.unsupportedLogpoints", "Debug Adapter does not support logpoints")
 				: breakpoint.condition && !this._capabilities.supportsConditionalBreakpoints ? localize("debug.unsupportedConditionalBreakpoints", "Debug Adapter does not support conditional breakpoints")
 					: breakpoint.hitCondition && !this._capabilities.supportsHitConditionalBreakpoints ? localize("debug.unsupportedHitConditions", "Debug Adapter does not support hit conditions") : undefined;
 			if (unsupported) {
 				this.updateBreakpoints?.([{ id: breakpoint.id, verified: false, message: unsupported }]);
-				continue;
+				return false;
 			}
-			const path = breakpoint.resource.scheme === "file" ? breakpoint.resource.fsPath : breakpoint.resource.path;
-			const group = groups.get(path) ?? [];
-			group.push(breakpoint);
-			groups.set(path, group);
-		}
+			return true;
+		});
+		const groups = groupByMap(supportedBreakpoints, breakpoint => breakpoint.resource.scheme === "file" ? breakpoint.resource.fsPath : breakpoint.resource.path);
 		const sources = new Set([...this.syncedBreakpointSources, ...groups.keys()]);
 		for (const path of sources) {
 			const breakpoints = groups.get(path) ?? [];

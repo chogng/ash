@@ -3,8 +3,32 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { extname, join, resolve } from "node:path";
 import test from "node:test";
 import { spawnSync } from "node:child_process";
+import ts from 'typescript';
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
+
+test('production renderer projects exclude tests and host-only compilation roots', () => {
+	for (const project of ['tsconfig.renderer.json', 'tsconfig.extensions-check.json', 'tsconfig.memories-check.json']) {
+		const config = ts.getParsedCommandLineOfConfigFile(join(repositoryRoot, project), {}, {
+			...ts.sys,
+			onUnRecoverableConfigFileDiagnostic: diagnostic => assert.fail(ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')),
+		});
+		assert.ok(config, project);
+		assert.deepEqual(config.errors, [], project);
+		assert.equal(config.options.noEmit, true, project);
+		assert.deepEqual(config.fileNames.filter(path => /\/(?:test|node|electron-main)\//u.test(path)), [], project);
+	}
+});
+
+test('TypeScript project include patterns select existing sources', () => {
+	for (const name of readdirSync(repositoryRoot).filter(name => /^tsconfig.*\.json$/u.test(name))) {
+		const config = JSON.parse(readFileSync(join(repositoryRoot, name), 'utf8'));
+		for (const pattern of config.include ?? []) {
+			const matches = ts.sys.readDirectory(repositoryRoot, ['.ts', '.tsx', '.cts', '.mts'], [], [pattern]);
+			assert.ok(matches.length > 0, `${name}: ${pattern}`);
+		}
+	}
+});
 
 test("product build and launch tools have one owner while repository scripts remain shared", () => {
 	for (const directory of ["src/scripts", "scripts/desktop", "scripts/code", "build/remote", "app-rs", "app-ts", "ash-rs", "ash-cli", "code"]) {

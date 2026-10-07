@@ -18,11 +18,13 @@ function registry(): ConfigurationRegistry {
 
 suite('ResourceGlobMatcher', () => {
 	test('resolves folder rules, nested roots and resources outside the workspace', () => {
-		using workspace = new WorkspaceContextService({ id: 'multi', folders: [
-			{ id: 'first', name: 'first', index: 0, uri: URI.file('/first') },
-			{ id: 'nested', name: 'nested', index: 1, uri: URI.file('/first/nested') },
-			{ id: 'second', name: 'second', index: 2, uri: URI.file('/second') },
-		] });
+		using workspace = new WorkspaceContextService({
+			id: 'multi', folders: [
+				{ id: 'first', name: 'first', index: 0, uri: URI.file('/first') },
+				{ id: 'nested', name: 'nested', index: 1, uri: URI.file('/first/nested') },
+				{ id: 'second', name: 'second', index: 2, uri: URI.file('/second') },
+			]
+		});
 		using configuration = new InMemoryConfigurationService(registry());
 		using services = new InstantiationService();
 		services.registerInstance(IWorkspaceContextService, workspace);
@@ -32,12 +34,12 @@ suite('ResourceGlobMatcher', () => {
 	});
 
 	test('matches absolute Windows and non-file paths alongside relative rules', () => {
-		using workspace = new WorkspaceContextService({ id: 'win', uri: URI.file('C:\\project') });
+		using workspace = new WorkspaceContextService({ id: 'win', uri: URI.file('C:/project') });
 		using configuration = new InMemoryConfigurationService(registry());
 		using matcher = new ResourceGlobMatcher(() => ({ 'C:\\project\\generated\\**': true, 'src/**': true, '/remote/**': true }), () => true, workspace, configuration);
 		assert.deepEqual([
-			matcher.matches(URI.file('C:\\project\\generated\\a.ts')),
-			matcher.matches(URI.file('C:\\project\\src\\a.ts')),
+			matcher.matches(URI.file('C:/project/generated/a.ts')),
+			matcher.matches(URI.file('C:/project/src/a.ts')),
 			matcher.matches(URI.from({ scheme: 'test-resource', path: '/remote/a.ts' })),
 		], [true, true, true]);
 	});
@@ -63,7 +65,7 @@ suite('ResourceGlobMatcher', () => {
 		using configuration = new InMemoryConfigurationService(registry());
 		const expression: IExpression = { '**/*.js': { when: '$(basename).ts' } };
 		using matcher = new ResourceGlobMatcher(() => expression, () => true, workspace, configuration);
-		(expression['**/*.js'] as { when: string }).when = 'other.ts';
+		(expression['**/*.js'] as { when: string; }).when = 'other.ts';
 		assert.equal(matcher.matches(URI.file('/root/main.js'), name => name === 'main.ts'), true);
 		await configuration.updateValue('test.expression', { 'changed': true });
 		assert.equal(matcher.matches(URI.file('/root/main.js'), name => name === 'main.ts'), false);

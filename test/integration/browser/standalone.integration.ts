@@ -436,6 +436,7 @@ const typescriptConfiguration = stanza.languages.setLanguageConfiguration('types
 	comments: { lineComment: '//', blockComment: ['/*', '*/'] },
 	brackets: [['{', '}'], ['[', ']'], ['(', ')']],
 	colorizedBracketPairs: [['{', '}'], ['[', ']'], ['(', ')']],
+	indentationRules: { increaseIndentPattern: /\{\s*$/, decreaseIndentPattern: /^\s*\}/ },
 });
 const events: CreationEvent[] = [];
 const listener = stanza.editor.onDidCreateEditor(editor => {

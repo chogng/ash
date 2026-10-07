@@ -120,6 +120,21 @@ test("Syntax worker selects one token provider and merges diagnostic providers",
 	assert.deepEqual(diagnostics.value.diagnostics.map(diagnostic => diagnostic.message), ["first", "second"]);
 });
 
+test('Syntax worker merges a large diagnostic batch without exceeding the argument limit', async () => {
+	using model = new TextModel('value');
+	using registry = new SyntaxProviderRegistry();
+	const diagnostic = diagnosticResult('initial').diagnostics[0]!;
+	const diagnostics = Array.from({ length: 200_000 }, (_, index) => ({ ...diagnostic, message: `diagnostic ${index}` }));
+	const final = diagnosticResult('final');
+	using first = registry.register(provider('large', { diagnostics: () => ({ diagnostics }) }));
+	using second = registry.register(provider('final', { diagnostics: () => final }));
+	using worker = new SyntaxProviderWorker(registry);
+
+	const result = await runLane(worker, model, SYNTAX_DIAGNOSTIC_LANE);
+
+	assert.deepEqual(result.value.diagnostics, [...diagnostics, ...final.diagnostics]);
+});
+
 test("Syntax provider failures are isolated by lane and provider", async () => {
 	using model = new TextModel("value");
 	using registry = new SyntaxProviderRegistry();

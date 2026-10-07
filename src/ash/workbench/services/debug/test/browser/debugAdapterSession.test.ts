@@ -134,6 +134,22 @@ test("DebugAdapterSession sends expressions unchanged and does not install unsup
 	} finally { await other.disconnect(); }
 });
 
+test("DebugAdapterSession groups interleaved source breakpoints and clears a retired source", async () => {
+	using processes = new FakeDebugAdapterProcessService();
+	const otherResource = URI.file('C:\\workspace\\other.ts');
+	let points: readonly IDebugBreakpoint[] = [breakpoint(4), { ...breakpoint(5), resource: otherResource }, breakpoint(6)];
+	const session = await DebugAdapterSession.start({ configuration: configuration(), processService: processes, breakpoints: () => points, workspace: URI.file('/workspace') });
+	try {
+		assert.deepEqual(processes.requests('setBreakpoints').map(request => request.arguments), [
+			{ source: { path: points[0]!.resource.fsPath }, breakpoints: [{ line: 4 }, { line: 6 }] },
+			{ source: { path: otherResource.fsPath }, breakpoints: [{ line: 5 }] },
+		]);
+		points = [breakpoint(4)];
+		await session.syncBreakpoints();
+		assert.deepEqual(processes.requests('setBreakpoints').at(-1)?.arguments, { source: { path: otherResource.fsPath }, breakpoints: [] });
+	} finally { await session.disconnect(); }
+});
+
 test("DebugAdapterSession cancels pending breakpoint replacements when disposed", async () => {
 	using processes = new FakeDebugAdapterProcessService();
 	const session = await DebugAdapterSession.start({ configuration: configuration(), processService: processes, breakpoints: () => [breakpoint(4)], workspace: URI.file('/workspace') });

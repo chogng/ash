@@ -2,7 +2,7 @@ import { runUnitTests } from './mocha.ts';
 
 runUnitTests([
 	'src/ash/base/test/common/event.test.js',
-	'src/ash/editor/test/common/languageRegistry.test.js',
+	'src/ash/editor/test/common/languagesRegistry.test.js',
 	'src/ash/platform/commands/test/common/commands.test.js',
 	'src/ash/platform/extensions/test/**/*.test.js',
 	'src/ash/platform/extensionHost/test/**/*.test.js',
@@ -20,7 +20,6 @@ runUnitTests([
 	'src/ash/workbench/services/tasks/test/browser/taskService.test.js',
 	'src/ash/workbench/services/testing/test/browser/testingService.test.js',
 	'src/ash/workbench/services/untitled/test/common/untitledTextEditorService.test.js',
-	'src/ash/workbench/test/browser/appServerConnectionStateObserver.test.js',
 	'src/ash/workbench/test/browser/workbench-theme.test.js',
 	'src/ash/workbench/test/common/theme.test.js',
 ], false);

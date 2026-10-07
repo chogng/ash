@@ -567,7 +567,7 @@ test('new unmatched windows use the required default size on the active display 
 				displayService: {
 					onDidChangeDisplays: Event.None,
 					getAllDisplays: () => [primaryDisplay, display],
-					getPrimaryDisplay: () => primaryDisplay, getCursorDisplay: () => primaryDisplay,
+					getPrimaryDisplay: () => primaryDisplay, getCursorDisplay: () => display,
 					getDisplayMatching: bounds => {
 						assert.deepEqual(bounds, activeBounds);
 						return display;

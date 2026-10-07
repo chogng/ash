@@ -1,4 +1,5 @@
 import * as languages from '../languages.js';
+import { pushMany } from '../../../base/common/arrays.js';
 import { Range, type IRange } from '../core/range.js';
 import { type LanguageToken, createLanguageTokenSnapshotNormalizer, type LanguageTokenResult } from '../tokens/languageTokens.js';
 import { SyntaxProviderRegistry } from '../languageFeatureRegistry.js';
@@ -365,7 +366,7 @@ export class SyntaxProviderWorker implements languages.SyntaxWorker, LanguageWor
 		const batches = await Promise.all(providers.map(provider => this.runDiagnosticProvider(provider, request, signal, normalize)));
 		signal.throwIfAborted();
 		const diagnostics: languages.LanguageDiagnostic[] = [];
-		for (const batch of batches) diagnostics.push(...(batch?.diagnostics ?? []));
+		for (const batch of batches) if (batch) pushMany(diagnostics, batch.diagnostics);
 		return normalize({ diagnostics });
 	}
 

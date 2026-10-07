@@ -14,6 +14,49 @@ import { createTestCursorConfiguration, createTestCursorsController, executeTest
 import { Event } from '../../../../base/common/event.js';
 import { EditOperationType } from '../../../common/cursorCommon.js';
 import { ViewModelEventsCollector } from '../../../common/viewModelEventDispatcher.js';
+import type { IEditorOptions } from '../../../common/config/editorOptions.js';
+
+for (const scenario of [
+	{ mode: 'none', value: '  {\n}', position: new Position(2, 1) },
+	{ mode: 'keep', value: '  {\n  }', position: new Position(2, 3) },
+	{ mode: 'brackets', value: '  {\n    \n  }', position: new Position(2, 5) },
+	{ mode: 'advanced', value: '  {\n    \n  }', position: new Position(2, 5) },
+	{ mode: 'full', value: '  {\n    \n  }', position: new Position(2, 5) },
+] as const) {
+	test(`Language Enter honors ${scenario.mode} auto indentation`, () => {
+		using model = new TextModel('  {}');
+		using selections = createTestCursorsController(model, [caret(3)]);
+		using configurations = new TestLanguageConfigurationService();
+		using builtins = registerTestLanguageConfigurations(configurations);
+		executeTestEditOperation(selections, createLanguageEnterCommand(model, selections.getSelections(), configurations.getLanguageConfiguration('typescript'), {
+			autoIndent: scenario.mode,
+			indentation: { kind: EditorIndentationKind.Spaces, tabSize: 2 },
+		}));
+		assert.deepEqual({ text: model.getText(), position: selections.getSelections()[0]!.getPosition() }, { text: scenario.value, position: scenario.position });
+	});
+}
+
+for (const mode of ['brackets', 'advanced', 'full'] as const) {
+	test(`Language Enter ${mode} controls registered on-enter rules`, () => {
+		using model = new TextModel('  // explain');
+		using selections = createTestCursorsController(model, [caret(12)]);
+		using configurations = new TestLanguageConfigurationService();
+		using builtins = registerTestLanguageConfigurations(configurations);
+		executeTestEditOperation(selections, createLanguageEnterCommand(model, selections.getSelections(), configurations.getLanguageConfiguration('rust'), { autoIndent: mode }));
+		assert.equal(model.getText(), mode === 'brackets' ? '  // explain\n  ' : '  // explain\n  // ');
+	});
+}
+
+test('Full Enter inherits indentation across a blank line', () => {
+	using model = new TextModel('block:\n', { languageId: 'demo' });
+	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position(2, 1))]);
+	using configurations = new TestLanguageConfigurationService();
+	using rules = configurations.register('demo', { indentationRules: { increaseIndentPattern: /:\s*$/, decreaseIndentPattern: /^end\b/ } });
+	executeTestEditOperation(selections, createLanguageEnterCommand(model, selections.getSelections(), configurations.getLanguageConfiguration('demo'), {
+		autoIndent: 'full', indentation: { kind: EditorIndentationKind.Spaces, tabSize: 2 },
+	}));
+	assert.deepEqual({ text: model.getText(), position: selections.getSelections()[0]!.getPosition() }, { text: 'block:\n\n  ', position: new Position(3, 3) });
+});
 
 test("Language Enter creates an indented line between configured brackets", () => {
 	using model = new TextModel("if (ok) {}");
@@ -263,7 +306,7 @@ function createLanguageEnterCommand(
 	model: TextModel,
 	selections: readonly Selection[],
 	configuration: ResolvedLanguageConfiguration,
-	options: { readonly indentation?: EditorIndentationOptions; } = {},
+	options: { readonly indentation?: EditorIndentationOptions; readonly autoIndent?: IEditorOptions['autoIndent']; } = {},
 ) {
 	resolveEditorIndentationOptions(options.indentation);
 	const languageConfigurationService = {
@@ -274,7 +317,7 @@ function createLanguageEnterCommand(
 	};
 	const indentation = options.indentation;
 	if (indentation) model.updateOptions({ insertSpaces: indentation.kind !== EditorIndentationKind.Tabs, tabSize: indentation.tabSize, indentSize: indentation.tabSize });
-	const config = createTestCursorConfiguration(model, languageConfigurationService);
+	const config = createTestCursorConfiguration(model, languageConfigurationService, { autoIndent: options.autoIndent });
 	return TypeOperations.typeWithInterceptors(false, EditOperationType.Other, config, model, [...selections], [], '\n');
 }
 

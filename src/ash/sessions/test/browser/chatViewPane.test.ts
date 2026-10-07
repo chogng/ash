@@ -20,6 +20,7 @@ import { registerTestDictationOnboarding } from '../../../workbench/test/common/
 import { IDictationService } from '../../../platform/dictation/common/dictationService.js';
 import { ChatSpeechToTextService, IChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
+import { IGitHubService as ISessionsGitHubService } from '../../contrib/github/browser/githubService.js';
 import { IFileTextModelService } from '../../../workbench/services/textmodelResolver/common/textModelResourceService.js';
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
@@ -743,6 +744,13 @@ test('sending from one session preserves a later draft during first-session crea
 	using editorResources = new DisposableStore();
 	const composerStorage = editorResources.add(createTestStorage());
 	const editorServices = editorResources.add(createTestEditorServices(undefined, createCodeEditorServices(editorResources), dom.window.document, composerStorage));
+	editorServices.registerInstance(ISessionsGitHubService, {
+		onDidChange: Event.None,
+		getSessionPullRequests: () => [],
+		initialize() { },
+		attachPullRequest: async () => { throw new Error('Unexpected PR attachment'); },
+		detachPullRequest: async () => { throw new Error('Unexpected PR removal'); },
+	});
 	editorServices.registerInstance(IDictationService, undefined);
 	editorServices.registerSingleton(IChatSpeechToTextService, () => editorServices.createInstance(ChatSpeechToTextService));
 	using contextViewService = new BrowserContextViewService(dom.window.document.body);
@@ -2174,6 +2182,7 @@ test('Model discovery refreshes the picker after an older catalog request comple
 	assert.deepEqual(await oldCatalog, []);
 	const pickerEntry = {
 		model: discovered.model, displayName: discovered.display_name, description: discovered.description, discovered: true,
+		retirement: undefined,
 		contextWindow: null, defaultContextWindow: null, maximumContextWindow: null, longContext: null,
 		selectedAcceleration: null, accelerationOptions: [{ id: 'priority', name: 'Priority lane', description: 'Faster processing' }],
 		supportedReasoningEfforts: [{ effort: 'low', description: 'Quick tasks' }],

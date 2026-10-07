@@ -1,5 +1,6 @@
 import { addDisposableListener } from '../../../../../../base/browser/dom.js';
 import { appendLabelIcon } from '../../../../../../base/browser/ui/iconlabel/iconLabels.js';
+import { createPixelSpinner, type IPixelSpinner } from '../../../../../../base/browser/ui/pixelSpinner/pixelSpinner.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { autorun, observableFromEvent, type IObservable } from '../../../../../../base/common/observable.js';
 import { URI } from '../../../../../../base/common/uri.js';
@@ -44,7 +45,9 @@ export class ChatMarkdownDecorationsRenderer extends Disposable {
 				continue;
 			}
 			this.bindings.add(watcher);
+			const spinner = this.bindings.add(new MutableDisposable<IPixelSpinner>());
 			const restore = (): void => {
+				spinner.clear();
 				anchor.replaceChildren(...contents);
 				if (title === null) { anchor.removeAttribute('title'); } else { anchor.setAttribute('title', title); }
 				if (ariaLabel === null) { anchor.removeAttribute('aria-label'); } else { anchor.setAttribute('aria-label', ariaLabel); }
@@ -84,8 +87,12 @@ export class ChatMarkdownDecorationsRenderer extends Disposable {
 					presentation.secondaryStatus?.label,
 					presentation.changes ? `+${presentation.changes.insertions} −${presentation.changes.deletions}` : undefined,
 				].filter(value => value !== undefined && value !== '').join(' · ');
+				spinner.clear();
 				anchor.textContent = label;
-				if (presentation instanceof GitHubResourcePresentation && presentation.pullRequestIcon) {
+				if (presentation.isLoading) {
+					spinner.value = createPixelSpinner();
+					anchor.prepend(spinner.value.element, ' ');
+				} else if (presentation instanceof GitHubResourcePresentation && presentation.pullRequestIcon) {
 					const icon = presentation.pullRequestIcon;
 					const glyph = appendLabelIcon(anchor, icon);
 					glyph.style.color = `var(${colorCssVariable(icon.color!.id)})`;

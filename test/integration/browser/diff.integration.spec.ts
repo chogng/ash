@@ -291,9 +291,14 @@ test('diff feature geometry follows wrapping and collapse, and selecting hidden 
 	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().moves)).toBe(1);
 	const path = page.locator('#single .ash-diff-moved-links > svg > path');
 	await page.evaluate(() => window.ashDiffIntegration.toggleWordWrap());
+	const firstLine = await page.evaluate(() => window.ashDiffIntegration.linePositions(1, 1));
+	const originalRowHeight = firstLine.originalBottom - firstLine.originalTop;
+	const modifiedRowHeight = firstLine.modifiedBottom - firstLine.modifiedTop;
 	await expect.poll(async () => {
 		const positions = await page.evaluate(() => window.ashDiffIntegration.linePositions(26, 61));
-		return await path.getAttribute('d') === `M 0 ${positions.originalTop - positions.originalScrollTop + 10} C 12 ${positions.originalTop - positions.originalScrollTop + 10} 12 ${positions.modifiedTop - positions.modifiedScrollTop + 10} 24 ${positions.modifiedTop - positions.modifiedScrollTop + 10}`;
+		const originalCenter = positions.originalTop - positions.originalScrollTop + originalRowHeight / 2;
+		const modifiedCenter = positions.modifiedTop - positions.modifiedScrollTop + modifiedRowHeight / 2;
+		return await path.getAttribute('d') === `M 0 ${originalCenter} C 12 ${originalCenter} 12 ${modifiedCenter} 24 ${modifiedCenter}`;
 	}).toBe(true);
 	const before = await path.getAttribute('d');
 	await expect.poll(() => page.evaluate(() => {
@@ -901,13 +906,16 @@ test('multi diff keeps one outer scroll and remounts only visible file editors',
 
 test('multi diff keeps the visible file in place when an earlier comparison changes height', async ({ page }) => {
 	await openDiffPage(page);
-	const longText = Array.from({ length: 180 }, (_, index) => `line ${index}`).join('\n');
+	const lineCount = 180;
+	const longText = Array.from({ length: lineCount }, (_, index) => `line ${index}`).join('\n');
 	await page.evaluate(text => {
 		window.ashDiffIntegration.setComparisonText(text, text);
 		window.ashDiffIntegration.setSecondComparisonText(text, text);
 	}, longText);
 	const editor = page.locator('#multi .stanza-multi-diff-editor');
-	await expect.poll(() => editor.evaluate(element => element.scrollHeight)).toBeGreaterThan(7000);
+	const firstLine = await page.evaluate(() => window.ashDiffIntegration.linePositions(1, 1));
+	const bodyHeight = 2 * lineCount * (firstLine.modifiedBottom - firstLine.modifiedTop);
+	await expect.poll(() => editor.evaluate(element => element.scrollHeight)).toBeGreaterThan(bodyHeight);
 	const first = editor.locator('.stanza-multi-diff-editor-section').first();
 	const secondTop = await first.evaluate(element => parseFloat(element.style.top) + parseFloat(element.style.height) + 8);
 	await editor.evaluate((element, top) => { element.scrollTop = top + 500; }, secondTop);

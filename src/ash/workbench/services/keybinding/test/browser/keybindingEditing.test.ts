@@ -57,8 +57,9 @@ test('shortcut list refuses dirty JSON; saving conflicts retain text and the ext
 	await assert.rejects(fixture.services.get(IKeybindingEditingService).editKeybinding(userItem(source), 'ctrl+j', undefined), /Save keybindings.json/u);
 	await fixture.writeSource('[]');
 	await fixture.models.refresh(resource);
-	assert.equal(reference.hasExternalChange, true);
+	assert.equal(reference.hasExternalChange, false);
 	await assert.rejects(reference.save(signal), /changed outside/u);
+	assert.equal(reference.hasExternalChange, true);
 	assert.equal(reference.isDirty, true);
 	assert.match(reference.model.getValue(), /unsaved/u);
 	assert.deepEqual(await fixture.read(), []);

@@ -1,5 +1,5 @@
 import { IFileSearchService } from '../../../../../platform/search/common/fileSearch.js';
-import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
+import { pickFiles } from '../../../../../base/browser/fileAccess.js';
 import { createUuid } from '../../../../../base/common/uuid.js';
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
@@ -31,7 +31,6 @@ interface ResourceItem extends IQuickPickItem {
 /** Each picker belongs to its originating composer, even when another pane becomes active. */
 export class AttachContextAction extends Disposable {
 	private readonly pickers = this._register(new DisposableStore());
-	private readonly uploadResources = this._register(new MutableDisposable<DisposableStore>());
 	private pending = false;
 
 	constructor(
@@ -66,7 +65,7 @@ export class AttachContextAction extends Disposable {
 			if (this.isDisposed) { return; }
 			const source = await this.pick(sources, localize('chat.context.add', 'Add context'));
 			if (!source || this.isDisposed) { return; }
-			if (source.source === 'upload') { this.showFilePicker(); return; }
+			if (source.source === 'upload') { await this.showFilePicker(); return; }
 			let attachment: ChatContextAttachment | undefined;
 			if (source.source === 'providers') {
 				const controller = new AbortController();
@@ -104,23 +103,16 @@ export class AttachContextAction extends Disposable {
 		}
 	}
 
-	private showFilePicker(): void {
-		const input = h(this.host.container.ownerDocument, 'input');
-		input.type = 'file';
-		input.multiple = true;
-		input.hidden = true;
-		input.setAttribute('aria-label', localize('chat.attach.files', 'Attach files'));
-		this.host.container.append(input);
-		const resources = new DisposableStore();
-		this.uploadResources.value = resources;
-		resources.add(toDisposable(() => input.remove()));
-		resources.add(addDisposableListener(input, 'cancel', () => { this.uploadResources.clear(); this.host.focusInput(); }));
-		resources.add(addDisposableListener(input, 'change', () => {
-			const files = [...(input.files ?? [])];
-			this.uploadResources.clear();
-			void this.attachFiles(files);
-		}));
-		input.click();
+	private async showFilePicker(): Promise<void> {
+		const controller = new AbortController();
+		this.pickers.add(toDisposable(() => controller.abort()));
+		const files = await pickFiles({
+			ownerDocument: this.host.container.ownerDocument,
+			selection: 'multiple',
+			ariaLabel: localize('chat.attach.files', 'Attach files'),
+			signal: controller.signal,
+		});
+		if (files && !this.isDisposed) { await this.attachFiles(files); }
 	}
 
 	private async attachFiles(files: readonly File[]): Promise<void> {
@@ -151,8 +143,6 @@ export class AttachContextAction extends Disposable {
 			}
 		} catch (error) {
 			if (!this.isDisposed) { this.notifications.error(localize('chat.context.failed', 'Could not add context: {0}', String(error))); }
-		} finally {
-			if (!this.isDisposed) { this.host.focusInput(); }
 		}
 	}
 

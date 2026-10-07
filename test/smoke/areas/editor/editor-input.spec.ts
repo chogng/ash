@@ -1,6 +1,22 @@
 import { expect, test } from '../../../automation/test.js';
 import type { ElectronApplication } from '@playwright/test';
 
+test('editor Enter preserves indentation and undo restores the input position', async ({ workbench }) => {
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+N');
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.waitForEditorFocus();
+	await page.keyboard.insertText('  value');
+	await editor.input.press('Enter');
+	await expect(editor.lines).toHaveText(['  value', '  ']);
+	await expect(editor.input).toBeFocused();
+	await editor.input.press('ControlOrMeta+z');
+	await expect(editor.lines).toHaveText(['  value']);
+	await page.keyboard.insertText('!');
+	await expect(editor.lines).toHaveText(['  value!']);
+	await expect(editor.input).toBeFocused();
+});
+
 test('editor and Chat input font settings apply independently and persist in Chinese', async ({ application, workbench, restartWorkbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');

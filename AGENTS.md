@@ -7,6 +7,7 @@
 - Do not use `native` or `projection` in names.
 - Comment on reasons, constraints, resource lifetimes, and API rules that the code does not explain.
 - Test Web and Electron with Playwright. Debug with runtime behavior and assertions, not screenshots.
+- If the user's requested UI style conflicts with an applicable skill, stop and ask the user before next.
 - Lead with the conclusion. Use plain language, short explanations, and tables when they clarify comparisons.
 - Reserve `✅` and `❌` for binary judgments. Describe partial progress or delegated work in words.
 

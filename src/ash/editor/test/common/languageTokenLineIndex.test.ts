@@ -11,6 +11,35 @@ import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { type WorkerTextModelResult } from '../../common/services/textModelSync/textModelSync.protocol.js';
 
+for (const retainedAtStart of [true, false]) {
+	test(`Token line index rebuilds surrounding lines with the retained line at the ${retainedAtStart ? 'start' : 'end'}`, () => {
+		const lineCount = 1_000;
+		using model = new TextModel('v\n'.repeat(lineCount - 1) + 'v');
+		using store = createLanguageTokenStore(model);
+		const retainedLine = retainedAtStart ? 0 : lineCount - 1;
+		acceptTokens(store, model, 1, [token(retainedLine, 0, 1, 'retained')]);
+		using index = new LanguageTokenLineIndex(store);
+		const retained = index.getLineTokens(retainedLine);
+		const tokens = Array.from({ length: lineCount }, (_, line) => token(line, 0, 1, line === retainedLine ? 'retained' : 'added'));
+		const result = createLanguageTokenSnapshotNormalizer(model.createVersionedSnapshot())({ tokens });
+		attachLanguageTokenResultDelta(result, {
+			baseRequestId: 1,
+			splices: [{
+				baseStartItemIndex: retainedAtStart ? 1 : 0,
+				baseDeleteItemCount: 0,
+				resultStartItemIndex: retainedAtStart ? 1 : 0,
+				resultInsertItemCount: lineCount - 1,
+				lineDeltaBefore: 0,
+				lineDeltaAfter: 0,
+			}],
+		});
+
+		assert.equal(store.accept({ requestId: 2, textModel: model, modelVersion: model.version, value: result }), LanguageResultAcceptance.Applied);
+		assert.deepEqual(index.lines.map(line => line.tokens[0]), tokens);
+		assert.equal(index.getLineTokens(retainedLine), retained);
+	});
+}
+
 test("Token line index groups sparse lines and answers constant-time line queries", () => {
 	using model = new TextModel("const one = 1;\n\nreturn one;");
 	using store = createLanguageTokenStore(model);

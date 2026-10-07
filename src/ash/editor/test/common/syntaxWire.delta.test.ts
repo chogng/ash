@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
-import { SYNTAX_DIAGNOSTIC_LANE, SYNTAX_TOKEN_LANE, type SyntaxLane, type SyntaxResult } from '../../common/languages.js';
+import { LanguageDiagnosticSeverity, SYNTAX_DIAGNOSTIC_LANE, SYNTAX_TOKEN_LANE, type SyntaxLane, type SyntaxResult } from '../../common/languages.js';
 import { testTokens, testDiagnostics } from './testSyntaxProvider.js';
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
@@ -9,6 +9,26 @@ import { TextModel } from "../../common/model/textModel.js";
 import type { LanguageToken } from '../../common/tokens/languageTokens.js';
 import { syntaxWireCodec } from '../../common/services/semanticTokensDto.js';
 import { type WorkerTextModelResult } from '../../common/services/textModelSync/textModelSync.protocol.js';
+
+test('Syntax wire decodes large delta insertions without exceeding the argument limit', () => {
+	using model = new TextModel('x\ny');
+	const snapshot = model.createVersionedSnapshot();
+	const diagnostic = { range: new Range(1, 1, 1, 2), severity: LanguageDiagnosticSeverity.Error, message: 'baseline' };
+	const previous: SyntaxResult = { lane: SYNTAX_DIAGNOSTIC_LANE, value: { diagnostics: [diagnostic] } };
+	const current: SyntaxResult = {
+		lane: SYNTAX_DIAGNOSTIC_LANE,
+		value: { diagnostics: [diagnostic, ...Array.from({ length: 200_000 }, (_, index) => ({ ...diagnostic, range: new Range(2, 1, 2, 2), message: `diagnostic ${index}` }))] },
+	};
+	const base = { requestId: 1, snapshot, result: previous };
+	const delta = syntaxWireCodec.encodeResult(SYNTAX_DIAGNOSTIC_LANE, current, snapshot, base) as { readonly kind: string; };
+	const full = syntaxWireCodec.encodeResult(SYNTAX_DIAGNOSTIC_LANE, current, snapshot, undefined);
+
+	assert.equal(delta.kind, 'delta');
+	assert.deepEqual(
+		syntaxWireCodec.decodeResult(SYNTAX_DIAGNOSTIC_LANE, structuredClone(delta), snapshot, base),
+		syntaxWireCodec.decodeResult(SYNTAX_DIAGNOSTIC_LANE, structuredClone(full), snapshot, undefined),
+	);
+});
 
 test('Syntax wire preserves metadata-only token changes and removals in deltas', () => {
 	using model = new TextModel('first\nsecond');

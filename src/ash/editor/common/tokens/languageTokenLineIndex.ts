@@ -1,6 +1,6 @@
 import { resolveSemanticTokenStyling } from '../services/semanticTokensProviderStyling.js';
 import { type ResolvedSemanticToken, type SemanticTokenLine, type SemanticTokenModelSource, type SemanticTokenSource, type LanguageToken, type LanguageTokenResult } from './languageTokens.js';
-import { arraysEqual } from "../../../base/common/arrays.js";
+import { arraysEqual, pushMany } from "../../../base/common/arrays.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable, combinedDisposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { type VersionedLanguageResult } from '../model/languageRequestCoordinator.js';
@@ -244,14 +244,16 @@ function applyDelta(base: LanguageTokenIndexState, tokens: readonly LanguageToke
 	let rebuiltLineCount = 0;
 	for (const candidate of candidates) {
 		const rebuilt = buildLineStates(tokens, tokenIndex, candidate.range.startItemIndex);
-		lineStates.push(...rebuilt.states, candidate.state);
-		ranges.push(...rebuilt.ranges, candidate.range);
+		pushMany(lineStates, rebuilt.states);
+		lineStates.push(candidate.state);
+		pushMany(ranges, rebuilt.ranges);
+		ranges.push(candidate.range);
 		rebuiltLineCount += rebuilt.states.length;
 		tokenIndex = candidate.range.endItemIndex;
 	}
 	const tail = buildLineStates(tokens, tokenIndex, tokens.length);
-	lineStates.push(...tail.states);
-	ranges.push(...tail.ranges);
+	pushMany(lineStates, tail.states);
+	pushMany(ranges, tail.ranges);
 	rebuiltLineCount += tail.states.length;
 	return Object.freeze({
 		state: createState(tokens.length, lineStates, ranges),

@@ -16,6 +16,7 @@ import { IStorageService } from '../../../../../platform/storage/common/storage.
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { PaneComposite } from '../../../../../workbench/browser/parts/views/paneComposite.js';
 import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
+import { registerTestComponentServices } from '../../../../../workbench/test/common/testEditorServices.js';
 import { ViewDescriptorService } from '../../../../../workbench/services/views/browser/viewDescriptorService.js';
 import { SessionsViewRegistry } from '../../../../common/views.js';
 import { ILibraryService, LIBRARY_NAVIGATION_CONTAINER_ID, LIBRARY_DETAILS_CONTAINER_ID } from '../../browser/libraryService.js';
@@ -41,6 +42,7 @@ class LibraryFixture extends Disposable {
 		this._register(toDisposable(() => this.environment.window.close()));
 		for (const [id, descriptor] of getSingletonServiceDescriptors()) { this.services.registerSingleton(id, () => this.services.createInstance(descriptor.ctor, ...descriptor.staticArguments)); }
 		this.services.registerInstance(IStorageService, this.storage);
+		registerTestComponentServices(this.services, this.environment.window.document);
 		this.services.registerInstance(IContextKeyService, this.contextKeys);
 		this.services.registerInstance(IConfigurationService, { getValue: () => false } as unknown as IConfigurationService);
 		this.services.registerInstance(IHoverService, { setupDelayedHover: () => Disposable.None } as unknown as IHoverService);

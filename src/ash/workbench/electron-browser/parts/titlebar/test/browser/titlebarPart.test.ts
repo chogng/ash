@@ -34,6 +34,7 @@ const { IMenuService } = await import('../../../../../../platform/actions/common
 const { IContextMenuService } = await import('../../../../../../platform/contextview/browser/contextView.js');
 const { ContextKeyService } = await import('../../../../../../platform/contextkey/browser/contextKeyService.js');
 const { CommandService } = await import('../../../../../services/commands/common/commandService.js');
+const { registerTestComponentServices } = await import('../../../../../test/common/testEditorServices.js');
 
 test('Electron titlebar applies the active theme and releases its subscription with the part', () => {
 	const tracker = new DisposableTracker();
@@ -49,6 +50,7 @@ test('Electron titlebar applies the active theme and releases its subscription w
 		services.registerInstance(IQuickAccessController, { onDidChangeVisibility: Event.None, show() { } });
 		const applied: INativeWindowTheme[] = [];
 		services.registerInstance(IThemeService, themes);
+		registerTestComponentServices(services, environment.window.document);
 		services.registerInstance(INativeHostService, {
 			isAdmin: async () => false,
 			onDidRequestOpenExternalUri: () => ({ dispose() { } }),

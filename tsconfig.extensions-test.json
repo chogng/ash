@@ -6,6 +6,7 @@
     "src/ash/base/common/**/*.ts",
     "src/ash/base/test/common/event.test.ts",
     "src/ash/editor/common/**/*.ts",
+    "src/ash/editor/test/common/languagesRegistry.test.ts",
     "src/ash/platform/commands/test/common/commands.test.ts",
     "src/ash/platform/extensions/**/*.ts",
     "src/ash/platform/extensionHost/common/**/*.ts",
@@ -15,6 +16,7 @@
     "src/ash/workbench/common/**/*.ts",
     "src/ash/workbench/services/extensions/**/*.ts",
     "src/ash/workbench/services/language/common/**/*.ts",
+    "src/ash/workbench/services/language/test/common/languageFeaturesService.test.ts",
     "src/ash/workbench/services/textMate/common/**/*.ts",
     "src/ash/workbench/services/textMate/test/common/**/*.ts",
     "src/ash/workbench/contrib/codeEditor/test/browser/codeEditorPane.test.ts",
@@ -27,7 +29,6 @@
     "src/ash/workbench/services/tasks/test/browser/taskService.test.ts",
     "src/ash/workbench/services/testing/test/browser/testingService.test.ts",
     "src/ash/workbench/services/untitled/test/common/untitledTextEditorService.test.ts",
-    "src/ash/workbench/test/browser/appServerConnectionStateObserver.test.ts",
     "src/ash/workbench/test/browser/workbench-theme.test.ts",
     "src/ash/workbench/test/common/theme.test.ts"
   ]

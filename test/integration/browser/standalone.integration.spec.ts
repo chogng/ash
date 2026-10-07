@@ -3854,6 +3854,87 @@ for (const inputKind of ['EditContext', 'textarea'] as const) {
 		}
 	}
 
+	for (const scenario of [
+		{ mode: 'none', value: '  {\n}', selection: '[2,1 -> 2,1]' },
+		{ mode: 'keep', value: '  {\n  }', selection: '[2,3 -> 2,3]' },
+		{ mode: 'brackets', value: '  {\n      \n  }', selection: '[2,7 -> 2,7]' },
+		{ mode: 'advanced', value: '  {\n      \n  }', selection: '[2,7 -> 2,7]' },
+		{ mode: 'full', value: '  {\n      \n  }', selection: '[2,7 -> 2,7]' },
+	] as const) {
+		test(`${inputKind} Enter honors ${scenario.mode} auto indentation and undo restores the caret`, async ({ page }) => {
+			if (inputKind === 'textarea') {
+				await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+			}
+			await page.goto('/standalone.html');
+			const initial = await page.evaluate(mode => {
+				window.ashStandaloneIntegration.prepareBrackets('  {}', [4]);
+				window.ashStandaloneIntegration.updateContributionOptions({ autoIndent: mode });
+				return window.ashStandaloneIntegration.readKeyboardEditing();
+			}, scenario.mode);
+			const input = page.locator('#caller .stanza-editor-input');
+			await input.press('Enter');
+			const entered = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
+			expect({ value: entered.value, selection: entered.selection, version: entered.version, focused: entered.focused }).toEqual({
+				value: scenario.value, selection: scenario.selection, version: initial.version + 1, focused: true,
+			});
+			await input.press('ControlOrMeta+z');
+			const undone = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
+			expect({ value: undone.value, selection: undone.selection, focused: undone.focused }).toEqual({ value: initial.value, selection: initial.selection, focused: true });
+			await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+		});
+	}
+
+	for (const mode of ['none', 'keep', 'brackets', 'advanced', 'full'] as const) {
+		test(`${inputKind} ${mode} typing controls closing-bracket indentation and undo`, async ({ page }) => {
+			if (inputKind === 'textarea') {
+				await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+			}
+			await page.goto('/standalone.html');
+			const initial = await page.evaluate(mode => {
+				window.ashStandaloneIntegration.prepareLineComment({ languageId: 'typescript' });
+				window.ashStandaloneIntegration.prepareClipboard('if (ok) {\n    ', [[2, 5, 2, 5]]);
+				window.ashStandaloneIntegration.updateContributionOptions({ autoIndent: mode });
+				return window.ashStandaloneIntegration.readKeyboardEditing();
+			}, mode);
+			const input = page.locator('#caller .stanza-editor-input');
+			await input.press('}');
+			const state = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
+			expect({ value: state.value, selection: state.selection, version: state.version, focused: state.focused }).toEqual({
+				value: mode === 'full' ? 'if (ok) {\n}' : 'if (ok) {\n    }',
+				selection: mode === 'full' ? '[2,2 -> 2,2]' : '[2,6 -> 2,6]',
+				version: initial.version + 1,
+				focused: true,
+			});
+			await input.press('ControlOrMeta+z');
+			const undone = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
+			expect({ value: undone.value, selection: undone.selection, focused: undone.focused }).toEqual({ value: initial.value, selection: initial.selection, focused: true });
+			await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+		});
+	}
+
+	for (const mode of ['advanced', 'full'] as const) {
+		test(`${inputKind} ${mode} Enter controls inherited indentation on blank lines`, async ({ page }) => {
+			if (inputKind === 'textarea') {
+				await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+			}
+			await page.goto('/standalone.html');
+			await page.evaluate(mode => {
+				window.ashStandaloneIntegration.prepareLineComment({ languageId: 'typescript' });
+				window.ashStandaloneIntegration.prepareClipboard('if (ok) {\n', [[2, 1, 2, 1]]);
+				window.ashStandaloneIntegration.updateContributionOptions({ autoIndent: mode });
+			}, mode);
+			const input = page.locator('#caller .stanza-editor-input');
+			await input.press('Enter');
+			const state = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
+			expect({ value: state.value, selection: state.selection, focused: state.focused }).toEqual(mode === 'full'
+				? { value: 'if (ok) {\n\n    ', selection: '[3,5 -> 3,5]', focused: true }
+				: { value: 'if (ok) {\n\n', selection: '[3,1 -> 3,1]', focused: true });
+			await input.press('ControlOrMeta+z');
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).value).toBe('if (ok) {\n');
+			await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+		});
+	}
+
 	test(`${inputKind} commits one Enter edit and restores its selection on undo`, async ({ page }) => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.stack ?? error.message));

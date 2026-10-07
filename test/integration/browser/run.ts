@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const desktopDirectory = resolve(import.meta.dirname, '../../..');
@@ -21,23 +22,27 @@ const testEnv = {
 if (playwrightArgs.includes('--list')) {
 	process.exit(await run(process.execPath, testArgs, testEnv));
 }
-const build = await run(process.execPath, ['node_modules/vite/bin/vite.js', 'build', '--config', 'test/integration/browser/vite.config.ts'], process.env);
-if (build !== 0) process.exit(build);
-const server = spawn(process.execPath, [
-	'build/desktop/launch/web.ts',
-	'.build/desktop/editor-browser',
-	'5185',
-], {
-	cwd: desktopDirectory,
-	stdio: 'inherit',
-});
-
+const outputParent = resolve(desktopDirectory, '.build/desktop');
+mkdirSync(outputParent, { recursive: true });
+// Another build can clear the shared output while the server is reading it.
+const assetsDirectory = mkdtempSync(resolve(outputParent, 'editor-browser-'));
+let server: ChildProcess | undefined;
 let exitCode = 1;
 try {
-	await waitForServer(serverUrl, server);
-	exitCode = await run(process.execPath, testArgs, testEnv);
+	const build = await run(process.execPath, ['node_modules/vite/bin/vite.js', 'build', '--config', 'test/integration/browser/vite.config.ts', '--outDir', assetsDirectory], process.env);
+	if (build !== 0) {
+		exitCode = build;
+	} else {
+		server = spawn(process.execPath, ['build/desktop/launch/web.ts', assetsDirectory, '5185'], {
+			cwd: desktopDirectory,
+			stdio: 'inherit',
+		});
+		await waitForServer(serverUrl, server);
+		exitCode = await run(process.execPath, testArgs, testEnv);
+	}
 } finally {
-	await stop(server);
+	if (server) await stop(server);
+	rmSync(assetsDirectory, { recursive: true, force: true });
 }
 
 process.exitCode = exitCode;

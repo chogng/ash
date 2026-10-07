@@ -1,5 +1,32 @@
 import { expect, test } from '@playwright/test';
 
+test('loading chat links own a decorative spinner until resolution and respect reduced motion', async ({ page }) => {
+	await page.goto('/github.html');
+	await page.evaluate(() => window.ashGitHubIntegration.render('[Waiting](https://github.com/team/repo/issues/9)'));
+	const link = page.locator('main a[href="https://github.com/team/repo/issues/9"]');
+	const spinner = link.locator('.ash-pixel-spinner');
+	await expect(link).toHaveAttribute('aria-busy', 'true');
+	await expect(spinner).toHaveCount(1);
+	await expect(spinner).toBeInViewport();
+	await expect(spinner).toHaveAttribute('aria-hidden', 'true');
+	await expect(spinner).not.toHaveAttribute('role');
+	await link.evaluate(element => element.setAttribute('hidden', ''));
+	await expect(spinner).toHaveClass(/paused/);
+	await link.evaluate(element => element.removeAttribute('hidden'));
+	await expect(spinner).not.toHaveClass(/paused/);
+	await page.emulateMedia({ reducedMotion: 'reduce' });
+	expect(await spinner.locator('i').first().evaluate(element => getComputedStyle(element).animationName)).toBe('none');
+	await page.evaluate(() => window.ashGitHubIntegration.theme('highContrast'));
+	expect(await spinner.evaluate(element => getComputedStyle(element).color === getComputedStyle(element.parentElement!).color)).toBe(true);
+	const retainedSpinner = await spinner.elementHandle();
+	await page.evaluate(() => window.ashGitHubIntegration.releaseIssue());
+	await expect(link).toContainText('Old private issue');
+	await expect(link).toHaveAttribute('aria-busy', 'false');
+	await expect(spinner).toHaveCount(0);
+	expect(await retainedSpinner!.evaluate(element => element.isConnected)).toBe(false);
+	await retainedSpinner!.dispose();
+});
+
 test('four GitHub resources resolve through the protocol and expose safe keyboard-accessible cards', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => { errors.push(error.message); console.error(error.message); });

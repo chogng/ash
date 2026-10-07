@@ -14,6 +14,7 @@ export interface FilePickerOptions {
 	readonly selection?: FileSelection;
 	readonly directory?: boolean;
 	readonly signal?: AbortSignal;
+	readonly ariaLabel?: string;
 }
 
 /** Opens a native browser file picker and resolves undefined when cancelled. */
@@ -27,10 +28,11 @@ export function pickFiles(
 	input.hidden = true;
 	input.multiple = options.selection === "multiple";
 	input.accept = options.accept?.join(",") ?? "";
+	if (options.ariaLabel) input.setAttribute("aria-label", options.ariaLabel);
 	if (options.directory) input.setAttribute("webkitdirectory", "");
 	ownerDocument.body.append(input);
 
-	return new Promise((resolve) => {
+	return new Promise((resolve, reject) => {
 		const registrations = new DisposableStore();
 		let settled = false;
 		const finish = (files: readonly File[] | undefined): void => {
@@ -64,7 +66,13 @@ export function pickFiles(
 			));
 		}
 
-		input.click();
+		try {
+			input.click();
+		} catch (error) {
+			registrations.dispose();
+			input.remove();
+			reject(error);
+		}
 	});
 }
 

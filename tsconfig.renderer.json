@@ -13,7 +13,6 @@
     "src/ash/code/electron-browser/sessions/**/*.ts",
     "src/ash/editor/*/browser/**/*.ts",
     "src/ash/editor/*/common/**/*.ts",
-    "src/ash/editor/*/contrib/**/*.ts",
     "src/ash/editor/*/*.ts",
     "src/ash/platform/app-server/common/**/*.ts",
     "src/ash/platform/app-server/browser/**/*.ts",
@@ -30,7 +29,6 @@
     "src/ash/platform/keyboardLayout/**/*.ts",
     "src/ash/platform/list/**/*.ts",
     "src/ash/platform/menubar/common/**/*.ts",
-    "src/ash/platform/markdown/browser/**/*.ts",
     "src/ash/platform/native/common/**/*.ts",
     "src/ash/platform/native/electron-browser/**/*.ts",
     "src/ash/platform/search/**/*.ts",
@@ -38,13 +36,11 @@
     "src/ash/platform/theme/browser/**/*.ts",
     "src/ash/platform/theme/common/**/*.ts",
     "src/ash/platform/workspace/common/**/*.ts",
-    "src/ash/platform/webview/browser/**/*.ts",
     "src/ash/workbench/**/*.ts"
   ],
   "exclude": [
-    "src/ash/base/test/**/*.ts",
-    "src/ash/base/parts/**/electron-main/**/*.ts",
-    "src/ash/editor/*/test/**/*.ts",
-    "src/ash/platform/keybinding/electron-main/**/*.ts"
+    "src/ash/**/test/**/*.ts",
+    "src/ash/**/electron-main/**/*.ts",
+    "src/ash/**/node/**/*.ts"
   ]
 }

@@ -31,7 +31,13 @@ export function runUnitTests(patterns: readonly string[], editorEnvironment: boo
 	} else if (selection.runGlob) {
 		names = globSync(selection.runGlob, { cwd: outputDirectory });
 	} else {
-		names = patterns.flatMap(pattern => globSync(pattern, { cwd: outputDirectory }));
+		names = patterns.flatMap(pattern => {
+			const matches = globSync(pattern, { cwd: outputDirectory });
+			if (matches.length === 0) {
+				throw new Error(`No compiled unit tests matched the required pattern: ${pattern}`);
+			}
+			return matches;
+		});
 	}
 	const files = [...new Set(names.map(name => resolve(outputDirectory, name)))].sort();
 	if (files.length === 0) {

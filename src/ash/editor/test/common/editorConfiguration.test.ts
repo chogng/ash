@@ -6,6 +6,7 @@ import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } fr
 import { Registry } from '../../../platform/registry/common/platform.js';
 import {
 	EditorFontLigatures,
+	EditorAutoIndentStrategy,
 	EditorFontVariations,
 	EditorLayoutInfoComputer,
 	EditorOption,
@@ -69,6 +70,10 @@ test('common editor options normalize shared editor settings', () => {
 });
 
 test('common editor options preserve VS Code internal enum and nested option contracts', () => {
+	assert.deepEqual(['none', 'keep', 'brackets', 'advanced', 'full', undefined, 'invalid', 0].map(value => EditorOptions.autoIndent.validate(value)), [
+		EditorAutoIndentStrategy.None, EditorAutoIndentStrategy.Keep, EditorAutoIndentStrategy.Brackets, EditorAutoIndentStrategy.Advanced,
+		EditorAutoIndentStrategy.Full, EditorAutoIndentStrategy.Full, EditorAutoIndentStrategy.Full, EditorAutoIndentStrategy.Full,
+	]);
 	assert.equal(EditorOptions.accessibilitySupport.validate('auto'), AccessibilitySupport.Unknown);
 	assert.equal(EditorOptions.accessibilitySupport.validate('on'), AccessibilitySupport.Enabled);
 	assert.equal(EditorOptions.cursorStyle.validate('block'), TextEditorCursorStyle.Block);
@@ -177,7 +182,7 @@ test('editor zoom clamps levels and emits only effective changes', () => {
 });
 
 test('editor settings are registered by the common configuration owner', () => {
-	assert.equal(configurationRegistry.getConfiguration(CodeEditorConfiguration.fontSize)?.defaultValue, 13);
+	assert.equal(configurationRegistry.getConfiguration(CodeEditorConfiguration.fontSize)?.defaultValue, isMacintosh ? 12 : 14);
 	assert.equal(configurationRegistry.getConfiguration(CodeEditorConfiguration.wordWrap)?.defaultValue, EditorLineWrapping.Off);
 	assert.equal(configurationRegistry.getConfiguration(CodeEditorConfiguration.colorDecorators)?.defaultValue, true);
 	assert.equal(configurationRegistry.getConfiguration(CodeEditorConfiguration.colorDecoratorsActivatedOn)?.defaultValue, 'clickAndHover');

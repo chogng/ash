@@ -6,9 +6,70 @@ import { EditOperationType } from "../../../common/cursorCommon.js";
 import { TestLanguageConfigurationService, registerTestLanguageConfigurations } from '../modes/testLanguageConfigurationService.js';
 import { Selection } from "../../../common/core/selection.js";
 import { Position } from "../../../common/core/position.js";
+import { Range } from '../../../common/core/range.js';
 import { TextModel } from "../../../common/model/textModel.js";
 import { createTestCursorConfiguration, createTestCursorsController, executeTestDeleteOperation } from '../testCursorConfiguration.js';
 import { ViewModelEventsCollector } from '../../../common/viewModelEventDispatcher.js';
+
+for (const mode of ['none', 'keep', 'brackets', 'advanced', 'full'] as const) {
+	test(`Language typing ${mode} controls closing-bracket indentation in one undo step`, () => {
+		using model = new TextModel('block {\n  ', { languageId: 'demo', tabSize: 2, indentSize: 2, insertSpaces: true });
+		using configurations = new TestLanguageConfigurationService();
+		using rules = configurations.register('demo', {
+			brackets: [['{', '}']],
+			indentationRules: { increaseIndentPattern: /\{\s*$/, decreaseIndentPattern: /^\s*\}/ },
+		});
+		const original = Selection.fromPositions(new Position(2, 3));
+		using selections = createTestCursorsController(model, [original], { autoIndent: mode }, configurations);
+
+		typeText(selections, '}');
+
+		assert.deepEqual({ text: model.getText(), position: selections.getSelections()[0]!.getPosition() }, {
+			text: mode === 'full' ? 'block {\n}' : 'block {\n  }',
+			position: new Position(2, mode === 'full' ? 2 : 4),
+		});
+		model.undo();
+		assert.deepEqual({ text: model.getText(), selection: selections.getSelections()[0] }, { text: 'block {\n  ', selection: original });
+	});
+}
+
+test('Full typing adjusts each cursor indentation in one transaction', () => {
+	using model = new TextModel('block {\n  \nblock {\n  ', { languageId: 'demo', tabSize: 2, indentSize: 2, insertSpaces: true });
+	using configurations = new TestLanguageConfigurationService();
+	using rules = configurations.register('demo', { brackets: [['{', '}']], indentationRules: { increaseIndentPattern: /\{\s*$/, decreaseIndentPattern: /^\s*\}/ } });
+	const original = [Selection.fromPositions(new Position(2, 3)), Selection.fromPositions(new Position(4, 3))];
+	using selections = createTestCursorsController(model, original, { autoIndent: 'full' }, configurations);
+	const version = model.version;
+
+	typeText(selections, '}');
+
+	assert.deepEqual({ text: model.getText(), positions: selections.getSelections().map(selection => selection.getPosition()), version: model.version }, {
+		text: 'block {\n}\nblock {\n}', positions: [new Position(2, 2), new Position(4, 2)], version: version + 1,
+	});
+	model.undo();
+	assert.deepEqual({ text: model.getText(), selections: selections.getSelections() }, { text: 'block {\n  \nblock {\n  ', selections: original });
+});
+
+test('Full typing retains auto-closing ownership when a temporary indent is removed', () => {
+	using model = new TextModel('if (ok)\n  ', { languageId: 'demo', tabSize: 2, indentSize: 2, insertSpaces: true });
+	using configurations = new TestLanguageConfigurationService();
+	using rules = configurations.register('demo', {
+		brackets: [['{', '}']],
+		indentationRules: { increaseIndentPattern: /\{\s*$/, decreaseIndentPattern: /^\s*\}/, indentNextLinePattern: /^if/ },
+	});
+	const original = Selection.fromPositions(new Position(2, 3));
+	using selections = createTestCursorsController(model, [original], { autoIndent: 'full' }, configurations);
+
+	typeText(selections, '{');
+	assert.deepEqual({ text: model.getText(), position: selections.getSelections()[0]!.getPosition(), closers: selections.getAutoClosedCharacters() }, {
+		text: 'if (ok)\n{}', position: new Position(2, 2), closers: [new Range(2, 2, 2, 3)],
+	});
+	const version = model.version;
+	typeText(selections, '}');
+	assert.deepEqual({ text: model.getText(), position: selections.getSelections()[0]!.getPosition(), version: model.version }, { text: 'if (ok)\n{}', position: new Position(2, 3), version });
+	model.undo();
+	assert.deepEqual({ text: model.getText(), selection: selections.getSelections()[0] }, { text: 'if (ok)\n  ', selection: original });
+});
 
 test("Language pair typing auto-closes and overtypes one existing closer", () => {
 	using model = new TextModel('call', { languageId: 'typescript' });

@@ -22,6 +22,7 @@ test('Workbench context picker uploads, previews and removes attachments with th
 	]);
 	const attachments = chat.getByRole('list', { name: 'Attached context' });
 	await expect(attachments.getByRole('listitem')).toHaveCount(2);
+	await expect(page.locator('input[type="file"][aria-label="Attach files"]')).toHaveCount(0);
 	await expect(attachments.getByRole('img', { name: 'preview.png' })).toHaveAttribute('src', /^data:image\/png;base64,/);
 	const remove = chat.getByRole('button', { name: 'Remove brief.txt', exact: true });
 	await remove.focus();
@@ -37,4 +38,29 @@ test('Workbench context picker uploads, previews and removes attachments with th
 	await chat.getByRole('button', { name: 'Remove preview.png', exact: true }).press('Enter');
 	await expect(attachments).toBeHidden();
 	await expect(chat.locator('.stanza-editor-input')).toBeFocused();
+});
+
+test('cancelling attachment selection removes the picker and lets the composer attach again', async ({ workbench }) => {
+	const page = workbench.page;
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	}
+	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
+	const add = chat.getByRole('button', { name: 'Add context', exact: true });
+	await add.press('Enter');
+	const cancelledUpload = page.waitForEvent('filechooser');
+	await page.getByRole('dialog', { name: 'Add context', exact: true }).getByRole('combobox').fill('Attach files');
+	await page.keyboard.press('Enter');
+	await cancelledUpload;
+	const input = page.locator('input[type="file"][aria-label="Attach files"]');
+	await input.dispatchEvent('cancel');
+	await expect(input).toHaveCount(0);
+	await expect(chat.locator('.stanza-editor-input')).toBeFocused();
+	await add.press('Enter');
+	const upload = page.waitForEvent('filechooser');
+	await page.getByRole('dialog', { name: 'Add context', exact: true }).getByRole('combobox').fill('Attach files');
+	await page.keyboard.press('Enter');
+	await (await upload).setFiles({ name: 'after-cancel.txt', mimeType: 'text/plain', buffer: Buffer.from('Attach after cancellation') });
+	await expect(chat.getByRole('button', { name: 'Remove after-cancel.txt', exact: true })).toBeVisible();
+	await expect(input).toHaveCount(0);
 });

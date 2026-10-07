@@ -5,7 +5,7 @@ import { type WorkerTextModelCodec, type WorkerTextModelResult, type WorkerTextM
 import { type TextSnapshot } from '../core/textChange.js';
 import { Position } from '../core/position.js';
 import { Range } from '../core/range.js';
-import { arraysEqual, commonArraySuffixLength, commonPrefixLength } from '../../../base/common/arrays.js';
+import { arraysEqual, commonArraySuffixLength, commonPrefixLength, pushMany } from '../../../base/common/arrays.js';
 
 export interface LanguageTokenResultSplice {
 	readonly baseStartItemIndex: number;
@@ -201,7 +201,7 @@ function decodeSyntaxWireResult(lane: languages.SyntaxLane, value: unknown, snap
 		for (const item of baseItems.slice(baseItemIndex, startItemIndex)) items.push(shiftItem(lane, item, lineDelta));
 		const inserted = encodedSplice.items.map(item => syntaxDecodeItem(lane, item));
 		const resultStartItemIndex = items.length;
-		items.push(...inserted);
+		pushMany(items, inserted);
 		const nextLineDelta = decodeSafeInteger(encodedSplice.lineDelta, "Syntax delta line shift");
 		tokenSplices.push(Object.freeze({
 			baseStartItemIndex: startItemIndex,

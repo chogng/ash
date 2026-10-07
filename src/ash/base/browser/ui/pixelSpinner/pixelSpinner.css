@@ -1,0 +1,51 @@
+.ash-pixel-spinner {
+	display: inline-grid;
+	grid-template-columns: repeat(2, 4px);
+	gap: var(--ash-spacing-size20);
+	vertical-align: middle;
+}
+
+.ash-pixel-spinner i {
+	width: 4px;
+	height: 4px;
+	background: currentColor;
+	opacity: 0.35;
+	animation: ash-pixel-spinner-pulse 800ms steps(1) infinite;
+}
+
+.ash-pixel-spinner i:nth-child(2) {
+	animation-delay: -600ms;
+}
+.ash-pixel-spinner i:nth-child(3) {
+	animation-delay: -200ms;
+}
+.ash-pixel-spinner i:nth-child(4) {
+	animation-delay: -400ms;
+}
+
+.ash-pixel-spinner-ring {
+	transform: rotate(45deg);
+}
+.ash-pixel-spinner-ring i {
+	border-radius: 50%;
+}
+.ash-pixel-spinner.paused i {
+	animation-play-state: paused;
+}
+
+@keyframes ash-pixel-spinner-pulse {
+	0%,
+	24% {
+		opacity: 1;
+	}
+	25%,
+	100% {
+		opacity: 0.35;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.ash-pixel-spinner i {
+		animation: none;
+	}
+}

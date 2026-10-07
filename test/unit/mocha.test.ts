@@ -20,14 +20,26 @@ test('other behavior', () => {});
 `);
 const first = relative(outputDirectory, join(directory, 'first.test.js')).replaceAll('\\', '/');
 const second = relative(outputDirectory, join(directory, 'second.test.js')).replaceAll('\\', '/');
+const requiredRunner = join(directory, 'required.ts');
+const runnerImport = relative(directory, resolve(desktopDirectory, 'test/unit/mocha.ts')).replaceAll('\\', '/');
+writeFileSync(requiredRunner, `import { runUnitTests } from ${JSON.stringify(runnerImport)};
+runUnitTests(${JSON.stringify([first, 'test/unit/missing-required.test.js'])}, false);
+`);
 
-function run(args: readonly string[]): { status: number | null; output: string; } {
-	const result = spawnSync(process.execPath, ['test/unit/run.ts', ...args], {
+function run(args: readonly string[], entrypoint = 'test/unit/run.ts'): { status: number | null; output: string; } {
+	const result = spawnSync(process.execPath, [entrypoint, ...args], {
 		cwd: desktopDirectory, encoding: 'utf8', timeout: 15_000, windowsHide: true,
 	});
 	if (result.error) { throw result.error; }
 	return { status: result.status, output: result.stdout + result.stderr };
 }
+
+test('a missing required file fails even when another required file exists', () => {
+	const result = run([], requiredRunner);
+	assert.equal(result.status, 1, result.output);
+	assert.match(result.output, /No compiled unit tests matched the required pattern: test\/unit\/missing-required.test.js/);
+	assert.doesNotMatch(result.output, /Mocha: .*tests executed/);
+});
 
 test('a filter may select a test in only one of multiple isolated files', () => {
 	const result = run(['--run', first, '--run', second, '--grep', '^selected behavior$']);

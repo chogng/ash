@@ -1694,6 +1694,7 @@ const editorOptions = {
 	inDiffEditor: register(new EditorOptionDefinition(EditorOption.inDiffEditor, 'inDiffEditor', false, input => booleanValue(input, false))),
 	ariaLabel: register(new EditorOptionDefinition(EditorOption.ariaLabel, 'ariaLabel', 'Editor content', input => stringValue(input, 'Editor content'))),
 	readOnly: register(new EditorOptionDefinition(EditorOption.readOnly, 'readOnly', false, input => booleanValue(input, false))),
+	autoIndent: register(new EditorOptionDefinition(EditorOption.autoIndent, 'autoIndent', EditorAutoIndentStrategy.Full, validateAutoIndent, { type: 'string', enum: ['none', 'keep', 'brackets', 'advanced', 'full'], default: 'full' })),
 	fontFamily: register(new EditorOptionDefinition(EditorOption.fontFamily, 'fontFamily', EDITOR_FONT_DEFAULTS.fontFamily, input => stringValue(input, EDITOR_FONT_DEFAULTS.fontFamily))),
 	fontInfo,
 	fontLigatures2: fontLigatures,
@@ -1764,6 +1765,7 @@ const editorOptions = {
 };
 
 type EditorOptionsCollection = Record<string, IEditorOption<EditorOption, unknown>> & {
+	readonly autoIndent: IEditorOption<EditorOption.autoIndent, EditorAutoIndentStrategy>;
 	readonly fontFamily: IEditorOption<EditorOption.fontFamily, string>;
 	readonly fontWeight: IEditorOption<EditorOption.fontWeight, string>;
 	readonly fontSize: IEditorOption<EditorOption.fontSize, number>;
@@ -1885,7 +1887,6 @@ const enumCompatibilityDefaults = {
 	autoClosingDelete: ['auto', ['always', 'auto', 'never']],
 	autoClosingOvertype: ['auto', ['always', 'auto', 'never']],
 	autoClosingQuotes: ['languageDefined', ['always', 'languageDefined', 'beforeWhitespace', 'never']],
-	autoIndent: ['full', ['none', 'keep', 'brackets', 'advanced', 'full']],
 	autoSurround: ['languageDefined', ['languageDefined', 'quotes', 'brackets', 'never']],
 	cursorSmoothCaretAnimation: ['off', ['off', 'explicit', 'on']],
 	experimentalGpuAcceleration: ['off', ['off', 'on']],
@@ -2110,6 +2111,16 @@ function validateCursorBlinkingStyle(input: unknown): TextEditorCursorBlinkingSt
 		return cursorBlinkingStyleFromString(input as Parameters<typeof cursorBlinkingStyleFromString>[0]);
 	}
 	return TextEditorCursorBlinkingStyle.Blink;
+}
+
+function validateAutoIndent(input: unknown): EditorAutoIndentStrategy {
+	switch (input) {
+		case 'none': return EditorAutoIndentStrategy.None;
+		case 'keep': return EditorAutoIndentStrategy.Keep;
+		case 'brackets': return EditorAutoIndentStrategy.Brackets;
+		case 'advanced': return EditorAutoIndentStrategy.Advanced;
+		default: return EditorAutoIndentStrategy.Full;
+	}
 }
 
 function validateAccessibilitySupport(input: unknown): AccessibilitySupport {

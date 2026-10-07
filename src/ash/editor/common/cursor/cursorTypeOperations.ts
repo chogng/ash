@@ -1,4 +1,6 @@
 import { ShiftCommand } from '../commands/shiftCommand.js';
+import { EditorAutoIndentStrategy } from '../config/editorOptions.js';
+import { getIndentActionForType, getIndentForEnter } from '../languages/autoIndent.js';
 import { CompositionSurroundSelectionCommand } from '../commands/surroundSelectionCommand.js';
 import { ReplaceCommandWithOffsetSelection } from '../commands/replaceCommand.js';
 import { Position } from '../core/position.js';
@@ -107,11 +109,28 @@ export class TypeOperations {
 		if (overtype) {
 			return overtype;
 		}
+		const indentations = !isDoingComposition && config.autoIndent === EditorAutoIndentStrategy.Full && config.inputMode === 'insert' && text.length === 1
+			? selections.map(selection => indentationForType(config, model, selection, text))
+			: [];
 		const pairContexts = selections.map(selection => pairTypingContext(config, model, selection, text));
-		if (!isDoingComposition && pairContexts.some(hasPairTypingBehavior)) {
+		if (!isDoingComposition && (pairContexts.some(hasPairTypingBehavior) || indentations.some(indentation => indentation !== null))) {
 			const edits = selections.map((selection, index) => {
 				const context = pairContexts[index]!;
-				return pairTypeEdit(model, selection, text, context.surroundingPair, context.openingPair, context.closingPairs, context.autoCloseBefore, autoClosedCharacters);
+				const result = pairTypeEdit(model, selection, text, context.surroundingPair, context.openingPair, context.closingPairs, context.autoCloseBefore, autoClosedCharacters);
+				const indentation = indentations[index];
+				if (indentation === undefined || indentation === null) return result;
+				const before = model.getLineContent(selection.startLineNumber).slice(0, selection.startColumn - 1);
+				const prefix = normalizeEditorIndentation(indentation, indentationOptions(config)) + before.slice(getLeadingIndentation(before).length);
+				// Keep indentation and the pair in one command so undo and tracked closers share the same edit.
+				return {
+					...result,
+					edit: {
+						range: new Range(selection.startLineNumber, 1, result.edit.range.endLineNumber, result.edit.range.endColumn),
+						text: prefix + result.edit.text,
+						anchorOffsetInText: prefix.length + result.edit.anchorOffsetInText,
+						activeOffsetInText: prefix.length + result.edit.activeOffsetInText,
+					},
+				};
 			});
 			const commands = edits.map(result => result.pair
 				? new BaseTypeWithAutoClosingCommand(result.edit.range, result.edit.text, result.edit.anchorOffsetInText, result.edit.activeOffsetInText, result.pair.open, result.pair.close)
@@ -154,6 +173,15 @@ function pairTypingContext(config: CursorConfiguration, model: ITextModel, selec
 		closingPairs: pairs.filter(pair => pair.close === text),
 		autoCloseBefore: configuration.getAutoCloseBeforeSet(isQuote(text)),
 	};
+}
+
+function indentationForType(config: CursorConfiguration, model: ITextModel, selection: Selection, text: string): string | null {
+	// Input must remain synchronous while an asynchronous syntax provider is still analyzing the model.
+	if (!selection.isEmpty() || !model.tokenization.isCheapToTokenize(selection.startLineNumber)) return null;
+	return getIndentActionForType(config, model, selection, text, {
+		shiftIndent: value => TypeOperations.shiftIndent(config, value),
+		unshiftIndent: value => TypeOperations.unshiftIndent(config, value),
+	}, config.languageConfigurationService);
 }
 
 function hasPairTypingBehavior(context: PairTypingContext): boolean {
@@ -224,7 +252,10 @@ function autoClosingAllowed(model: ITextModel, position: Position, pair: Standar
 	return pair.isOK(tokenType ?? StandardTokenType.Other);
 }
 
-function enterEdit(model: ITextModel, selection: Selection, configuration: ResolvedLanguageConfiguration, indentation: ResolvedEditorIndentationOptions): LanguageSelectionEdit {
+function enterEdit(config: CursorConfiguration, model: ITextModel, selection: Selection, configuration: ResolvedLanguageConfiguration, indentation: ResolvedEditorIndentationOptions): LanguageSelectionEdit {
+	if (config.autoIndent === EditorAutoIndentStrategy.None) {
+		return { range: selection, text: '\n', anchorOffsetInText: 1, activeOffsetInText: 1 };
+	}
 	const startLine = model.getLineContent(selection.getStartPosition().lineNumber);
 	const endLine = model.getLineContent(selection.getEndPosition().lineNumber);
 	const originalBefore = startLine.slice(0, selection.startColumn - 1);
@@ -234,12 +265,30 @@ function enterEdit(model: ITextModel, selection: Selection, configuration: Resol
 		? model.getLineContent(selection.startLineNumber - 1)
 		: '';
 	const structuralBefore = isInsideBlockComment(model, selection.getStartPosition()) ? '' : structuralText(before);
-	const insertion = enterInsertion(originalBefore, enterAction(configuration, previous, before, after, structuralBefore), indentation);
+	const action = enterAction(config.autoIndent, configuration, previous, before, after, structuralBefore);
+	if (action) {
+		const insertion = enterInsertion(originalBefore, action, indentation);
+		return { range: selection, text: insertion.text, anchorOffsetInText: insertion.caret, activeOffsetInText: insertion.caret };
+	}
+	let leading = getLeadingIndentation(originalBefore);
+	if (config.autoIndent === EditorAutoIndentStrategy.Full && model.tokenization.isCheapToTokenize(selection.startLineNumber) && model.tokenization.isCheapToTokenize(selection.endLineNumber)) {
+		const inherited = getIndentForEnter(config.autoIndent, model, selection, {
+			shiftIndent: value => TypeOperations.shiftIndent(config, value),
+			unshiftIndent: value => TypeOperations.unshiftIndent(config, value),
+		}, config.languageConfigurationService);
+		leading = inherited?.afterEnter ?? leading;
+	}
+	const insertion = enterInsertion(leading, { indentAction: IndentAction.None }, indentation);
 	return { range: selection, text: insertion.text, anchorOffsetInText: insertion.caret, activeOffsetInText: insertion.caret };
 }
 
-function enterAction(configuration: ResolvedLanguageConfiguration, previous: string, before: string, after: string, structuralBefore: string): EnterAction {
-	const explicit = configuration.underlyingConfig.onEnterRules?.find(rule => matchesEnterRule(rule, previous, before, after));
+function enterAction(autoIndent: EditorAutoIndentStrategy, configuration: ResolvedLanguageConfiguration, previous: string, before: string, after: string, structuralBefore: string): EnterAction | null {
+	if (autoIndent < EditorAutoIndentStrategy.Brackets) {
+		return null;
+	}
+	const explicit = autoIndent >= EditorAutoIndentStrategy.Advanced
+		? configuration.underlyingConfig.onEnterRules?.find(rule => matchesEnterRule(rule, previous, before, after))
+		: undefined;
 	if (explicit) return explicit.action;
 	const pairs = [...(configuration.underlyingConfig.brackets ?? [])].sort((left, right) => right[0].length - left[0].length);
 	for (const pair of pairs) {
@@ -248,12 +297,7 @@ function enterAction(configuration: ResolvedLanguageConfiguration, previous: str
 			? { indentAction: IndentAction.IndentOutdent }
 			: { indentAction: IndentAction.Indent };
 	}
-	const rules = configuration.indentationRules;
-	if (rules && !testPattern(rules.unIndentedLinePattern, structuralBefore)) {
-		if (testPattern(rules.increaseIndentPattern, structuralBefore) || testPattern(rules.indentNextLinePattern, structuralBefore)) return { indentAction: IndentAction.Indent };
-		if (testPattern(rules.decreaseIndentPattern, after)) return { indentAction: IndentAction.Outdent };
-	}
-	return { indentAction: IndentAction.None };
+	return null;
 }
 
 function enterInsertion(before: string, action: EnterAction, indentation: ResolvedEditorIndentationOptions): { readonly text: string; readonly caret: number; } {
@@ -285,7 +329,7 @@ function testPattern(pattern: RegExp | null | undefined, text: string): boolean 
 function languageEnter(config: CursorConfiguration, model: ITextModel, selections: Selection[]): EditOperationResult {
 	const indentation = indentationOptions(config);
 	const commands = selections.map(selection => {
-		const edit = enterEdit(model, selection, languageConfigurationAt(config, model, selection.getPosition()), indentation);
+		const edit = enterEdit(config, model, selection, languageConfigurationAt(config, model, selection.getPosition()), indentation);
 		return new ReplaceCommandWithOffsetSelection(edit.range, edit.text, edit.anchorOffsetInText, edit.activeOffsetInText);
 	});
 	return new EditOperationResult(EditOperationType.TypingOther, commands, {
