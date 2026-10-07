@@ -2,7 +2,7 @@ import { WEB_APP_SERVER_PROTOCOL_VERSION, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_
 import { APP_SERVER_METHODS, APP_SERVER_SERVER_REQUESTS, type AppServerMethod, type AppServerMethodDefinition, type InitializeResult, type MethodParams, type MethodResult, type ServerCapabilities, type ServerNotification } from "../../../../../.build/protocol/typescript/index.js";
 import { decodeAppServerEnvelope, decodeAppServerNotification, decodeAppServerResponse, decodeAppServerServerRequest } from "../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js";
 import { VSBuffer } from "../../../base/common/buffer.js";
-import { isCancellationError, toError } from "../../../base/common/errors.js";
+import { canceled, isCancellationError, toError } from "../../../base/common/errors.js";
 import { isRecord } from "../../../base/common/types.js";
 import type { AppServerConnectionState } from "../common/appServerApi.js";
 import { AppServerRemoteError } from "../common/appServerError.js";
@@ -100,30 +100,45 @@ export class AppServerProtocolClient {
 	async connect(): Promise<AppServerConnectionMetadata> {
 		if (this.disposed) throw new Error("Cannot connect a disposed App Server client");
 		if (this._state !== "stopped" && this._state !== 'crashed') throw new Error(`Cannot connect App Server client from ${this._state}`);
-		this._generation++;
-		this.setState("starting");
+		const generation = ++this._generation;
 		const connected = new Promise<AppServerConnectionMetadata>((resolve, reject) => {
 			this.connectResolve = resolve;
 			this.connectReject = reject;
 			this.connectTimeout = setTimeout(() => this.fail(new Error("Timed out connecting to the App Server bridge")), this.options.connectTimeoutMs);
 		});
-		this.transport.send(WEB_APP_SERVER_CONNECT_EVENT, { protocolVersion: WEB_APP_SERVER_PROTOCOL_VERSION });
+		// Observers can close or replace the connection synchronously when its state changes.
+		this.setState("starting");
+		if (this.isCurrentConnection(generation, 'starting')) {
+			try {
+				this.transport.send(WEB_APP_SERVER_CONNECT_EVENT, { protocolVersion: WEB_APP_SERVER_PROTOCOL_VERSION });
+			} catch (error) {
+				this.fail(toError(error));
+			}
+		}
 		const metadata = await connected;
+		if (!this.isCurrentConnection(generation, 'starting')) { throw canceled(); }
 		this.setState("initializing");
 		try {
+			if (!this.isCurrentConnection(generation, 'initializing')) { throw canceled(); }
 			const initialized = await this.requestRaw(APP_SERVER_METHODS.initialize, {
 				clientInfo: { name: this.options.clientName, version: this.options.clientVersion },
 				capabilities: this.options.capabilities,
 			}, this.options.initializeTimeoutMs);
+			if (!this.isCurrentConnection(generation, 'initializing')) { throw canceled(); }
 			const initialization = validateInitializeResult(initialized);
 			this._slashCommands = initialization.slashCommands;
 			this._capabilities = initialization.capabilities;
 			this.setState("ready");
+			if (!this.isCurrentConnection(generation, 'ready')) { throw canceled(); }
 			return metadata;
 		} catch (error) {
-			this.fail(toError(error));
+			if (this.isCurrentConnection(generation, 'initializing')) { this.fail(toError(error)); }
 			throw error;
 		}
+	}
+
+	private isCurrentConnection(generation: number, state: AppServerConnectionState): boolean {
+		return !this.disposed && this._generation === generation && this._state === state;
 	}
 
 	request<M extends AppServerMethod>(definition: AppServerMethodDefinition<M>, params: MethodParams<M>): Promise<MethodResult<M>> {

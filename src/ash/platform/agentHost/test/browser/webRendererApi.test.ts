@@ -430,6 +430,94 @@ test('initialization can outlast bridge connection without timing out', async ()
 	} finally { client.dispose(); }
 });
 
+for (const stage of ['bridge', 'initialize'] as const) {
+	for (const close of ['disconnect', 'dispose', 'transport'] as const) {
+		test(`closing after ${stage} responds prevents the pending connection from becoming ready (${close})`, async () => {
+			const transport = new FakeTransport();
+			const client = new AppServerProtocolClient(transport, { initializeTimeoutMs: 20 });
+			using cleanup = toDisposable(() => client.dispose());
+			const connecting = client.connect();
+			const rejected = assert.rejects(connecting, isCancellationError);
+			if (stage === 'initialize') await Promise.resolve();
+			if (close === 'transport') transport.close('Backend stopped');
+			else client[close]();
+			const requestCount = transport.requests.length;
+			await rejected;
+			assert.deepEqual({
+				state: client.state,
+				newRequests: transport.requests.length - requestCount,
+			}, { state: close === 'transport' ? 'crashed' : 'stopped', newRequests: 0 });
+		});
+	}
+}
+
+test('replacing a connection before its bridge continuation does not initialize the old connection', async () => {
+	const transport = new FakeTransport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	const old = client.connect();
+	const rejected = assert.rejects(old, isCancellationError);
+	client.disconnect();
+	const replacement = client.connect();
+	await rejected;
+	await replacement;
+	assert.deepEqual({
+		state: client.state,
+		generation: client.generation,
+		initializations: transport.requests.filter(request => request.method === 'initialize').length,
+	}, { state: 'ready', generation: 2, initializations: 1 });
+});
+
+test('an old initialization rejection cannot close its replacement connection', async () => {
+	const transport = new FakeTransport(value => value, 5);
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	const old = client.connect();
+	const rejected = assert.rejects(old, /connection replaced/);
+	await Promise.resolve();
+	client.disconnect();
+	const replacement = client.connect();
+	await rejected;
+	await replacement;
+	assert.deepEqual({
+		state: client.state,
+		generation: client.generation,
+		disconnects: transport.sentEvents.filter(event => event === WEB_APP_SERVER_DISCONNECT_EVENT).length,
+	}, { state: 'ready', generation: 2, disconnects: 1 });
+});
+
+for (const state of ['starting', 'initializing', 'ready'] as const) {
+	test(`a connection observer can dispose during ${state} without sending subsequent traffic`, async () => {
+		const transport = new FakeTransport();
+		const client = new AppServerProtocolClient(transport, { connectTimeoutMs: 20 });
+		using cleanup = toDisposable(() => client.dispose());
+		using observer = client.onStateChange(value => { if (value === state) client.dispose(); });
+		await assert.rejects(client.connect(), state === 'starting' ? /client disposed/ : isCancellationError);
+		assert.deepEqual({
+			state: client.state,
+			connects: transport.sentEvents.filter(event => event === WEB_APP_SERVER_CONNECT_EVENT).length,
+			requests: transport.requests.length,
+		}, { state: 'stopped', connects: state === 'starting' ? 0 : 1, requests: state === 'ready' ? 1 : 0 });
+	});
+}
+
+test('a synchronous bridge send failure settles its waiter and permits a new connection', async () => {
+	let failConnect = true;
+	const transport = new class extends FakeTransport {
+		override send(event: string, payload?: unknown): void {
+			if (event === WEB_APP_SERVER_CONNECT_EVENT && failConnect) { throw new Error('Bridge unavailable'); }
+			super.send(event, payload);
+		}
+	}();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	await assert.rejects(client.connect(), /Bridge unavailable/);
+	assert.equal(client.state, 'crashed');
+	failConnect = false;
+	await client.connect();
+	assert.deepEqual({ state: client.state, generation: client.generation }, { state: 'ready', generation: 2 });
+});
+
 test('a matching schema initializes and decodes additive result fields', async () => {
 	const transport = new FakeTransport(value => ({
 		...value,

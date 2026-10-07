@@ -372,7 +372,6 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IChatService, chat);
 		services.registerInstance(ILanguageModelsConfigurationService, this._register(services.createInstance(LanguageModelsConfigurationService, ChatModelPreferences)));
 		services.registerInstance(ILanguageModelsService, this._register(services.createInstance(LanguageModelsService)));
-		services.registerInstance(ISkillService, options.api.skills);
 		services.registerInstance(IInstructionService, options.api.instructions);
 		services.registerInstance(IAgentCapabilitiesService, options.api.agentCapabilities);
 		services.registerInstance(IDirPermissionsService, this._register(new AppServerDirPermissionsService(options.api.dirPermissions, options.api.events)));
