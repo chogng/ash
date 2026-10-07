@@ -40,6 +40,24 @@ export interface SettingsContent {
 	setVisible(visible: boolean): void;
 }
 
+/** Non-configuration service state and actions; Preferences owns their DOM and widgets. */
+export interface SettingsSectionModel {
+	readonly categoryId: string;
+	readonly title: string;
+	readonly description: string;
+	readonly help: string;
+	readonly onDidChange: Event<void>;
+	/** Field IDs and kinds remain stable for this section’s lifetime; values and actions may change. */
+	readonly fields: readonly SettingsSectionField[];
+	setVisible(visible: boolean): void;
+}
+
+export type SettingsSectionField =
+	| { readonly id: string; readonly kind: 'status'; readonly text: string; }
+	| { readonly id: string; readonly kind: 'text'; readonly label: string; readonly value: string; readonly placeholder: string; readonly enabled: boolean; readonly setValue: (value: string) => void; }
+	| { readonly id: string; readonly kind: 'select'; readonly label: string; readonly value: string | undefined; readonly options: readonly { readonly value: string; readonly label: string; }[]; readonly enabled: boolean; readonly setValue: (value: string) => void; }
+	| { readonly id: string; readonly kind: 'action'; readonly label: string; readonly enabled: boolean; readonly run: () => Promise<void>; };
+
 /** Settings group/item model with query filtering over canonical item metadata. */
 export class SettingsTreeModel<T> extends ObjectTreeModel<SettingsTreeElement<T>> {
 	private navigationScopeIds: ReadonlySet<string> | undefined;

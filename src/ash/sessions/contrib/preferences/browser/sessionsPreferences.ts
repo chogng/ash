@@ -1,3 +1,5 @@
+import { GitHubSettingsModel } from '../../../../workbench/contrib/github/browser/githubSettingsModel.js';
+import { SettingsSectionRenderer } from '../../../../workbench/contrib/preferences/browser/settingsSectionRenderer.js';
 import './media/sessionsPreferences.css';
 import '../../../../workbench/contrib/preferences/browser/media/settingsCard.css';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
@@ -92,7 +94,7 @@ export class SessionsPreferences extends Disposable {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsSettings,
 					{ type: AccessibleViewType.Help },
-					() => localize('sessions.settings.help', 'Sessions Settings has categories on the left and settings on the right. General contains dictation settings; Models contains chat models and API connections. Agents contains the Advisor model and enable switch. Changes are saved immediately. Design contains canvas cursor and accessibility settings. Customize has Settings, Plugins, Skills, and Hooks tabs. Use Left and Right to move between tabs, then Enter or Space to open one. Use search to filter settings. The local dictation table lists available and installed models. Use arrow keys to move between rows and cells, and Tab to reach Install, Use model, Cancel, or Uninstall. Preparation continues after Settings closes. Cloud dictation uses the API connections in Models. Press Escape to close Settings.'),
+					() => localize('sessions.settings.help', 'Sessions Settings has categories on the left and settings on the right. General contains dictation settings; Models contains chat models and API connections. Git & PRs contains Codex review account status, repository access checks, and official review management links. Agents contains the Advisor model and enable switch. Changes are saved immediately. Design contains canvas cursor and accessibility settings. Customize has Settings, Plugins, Skills, and Hooks tabs. Use Left and Right to move between tabs, then Enter or Space to open one. Use search to filter settings. The local dictation table lists available and installed models. Use arrow keys to move between rows and cells, and Tab to reach Install, Use model, Cancel, or Uninstall. Preparation continues after Settings closes. Cloud dictation uses the API connections in Models. Press Escape to close Settings.'),
 					() => focused.focus(),
 					AccessibilityVerbositySettingId.SessionsSettings,
 				);
@@ -196,13 +198,16 @@ export class SessionsPreferences extends Disposable {
 		}])));
 		const customizeContent = resources.add(contentServices.createInstance(SessionsCustomizeContent, list, async () => { dialog.close(); }, this.showEditor));
 		const advisorContent = resources.add(contentServices.createInstance(AdvisorSettingsContent, list));
-		const sections = this.sections(modelContent, dictationContent, customizeContent, advisorContent);
+		const githubSettings = resources.add(contentServices.createInstance(GitHubSettingsModel, async () => { dialog.close(); }));
+		const githubContent = resources.add(contentServices.createInstance(SettingsSectionRenderer, list, githubSettings, AccessibleViewProviderId.GitHubSettings, AccessibilityVerbositySettingId.GitHubSettings));
+		const sections = this.sections(modelContent, dictationContent, customizeContent, advisorContent, githubContent);
 		const categories = sections.flatMap(section => section.categories);
 		if (categoryId === 'skills' || categoryId === 'plugins' || categoryId === 'hooks') customizeContent.selectTab(categoryId);
 		let activeCategory = categoryId === 'customize' || categoryId === 'skills' || categoryId === 'plugins' || categoryId === 'hooks' ? categories.findIndex(category => category.content === customizeContent)
 			: categoryId === 'dictation' ? categories.findIndex(category => category.content === dictationContent)
-				: categoryId === 'agents' ? categories.findIndex(category => category.content === advisorContent)
-					: categoryId === 'models' ? categories.findIndex(category => category.content === modelContent) : 0;
+				: categoryId === 'github' ? categories.findIndex(category => category.content === githubContent)
+					: categoryId === 'agents' ? categories.findIndex(category => category.content === advisorContent)
+						: categoryId === 'models' ? categories.findIndex(category => category.content === modelContent) : 0;
 		const treeModel = resources.add(new SettingsTreeModel<ISetting | SettingsContentItem>());
 		const tree = resources.add(new SettingsTree(list, {
 			model: treeModel,
@@ -274,8 +279,9 @@ export class SessionsPreferences extends Disposable {
 		this.navigate = (categoryId, marketplaceOptions) => {
 			if (categoryId === 'skills' || categoryId === 'plugins' || categoryId === 'hooks') customizeContent.selectTab(categoryId);
 			activeCategory = categoryId === 'customize' || categoryId === 'skills' || categoryId === 'plugins' || categoryId === 'hooks' ? categories.findIndex(category => category.content === customizeContent)
-				: categoryId === 'agents' ? categories.findIndex(category => category.content === advisorContent)
-					: categoryId === 'models' ? categories.findIndex(category => category.content === modelContent) : categories.findIndex(category => category.content === dictationContent);
+				: categoryId === 'github' ? categories.findIndex(category => category.content === githubContent)
+					: categoryId === 'agents' ? categories.findIndex(category => category.content === advisorContent)
+						: categoryId === 'models' ? categories.findIndex(category => category.content === modelContent) : categories.findIndex(category => category.content === dictationContent);
 			searchInput.value = '';
 			render();
 			if (marketplaceOptions) void customizeContent.openPlugins(marketplaceOptions);
@@ -313,7 +319,7 @@ export class SessionsPreferences extends Disposable {
 		}
 	}
 
-	private sections(modelContent: SettingsContent, dictationContent: SettingsContent, customizeContent: SettingsContent, advisorContent: SettingsContent): readonly SettingsSection[] {
+	private sections(modelContent: SettingsContent, dictationContent: SettingsContent, customizeContent: SettingsContent, advisorContent: SettingsContent, githubContent: SettingsContent): readonly SettingsSection[] {
 		const appearanceSettings: readonly ISetting[] = [{
 			id: SessionsConfiguration.layoutStyle,
 			valueType: 'select',
@@ -386,7 +392,7 @@ export class SessionsPreferences extends Disposable {
 				{ title: localize('library.title', 'Library'), icon: Lxicon.library, settings: librarySettings },
 				{ title: localize('sessions.settings.design', 'Design'), icon: Lxicon.symbolColor, settings: designSettings },
 				{ title: localize('sessions.settings.models', 'Models'), icon: Lxicon.model, settings: [], content: modelContent },
-				{ title: localize('sessions.settings.gitPrs', 'Git & PRs'), icon: Lxicon.git, settings: [] },
+				{ title: localize('sessions.settings.gitPrs', 'Git & PRs'), icon: Lxicon.git, settings: [], content: githubContent },
 				{ title: localize('sessions.settings.worktree', 'Worktree'), icon: Lxicon.gitBranch, settings: [] },
 				{ title: localize('sessions.settings.browser', 'Browser'), icon: Lxicon.browserWeb, settings: [] },
 				{ title: localize('sessions.settings.tab', 'Tab'), icon: Lxicon.keyboardTab, settings: [] },

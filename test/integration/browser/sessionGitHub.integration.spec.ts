@@ -123,3 +123,11 @@ test('removing a manual attachment retains its current branch association', asyn
 	await expect(remove).toHaveCount(0);
 	await expect(page.locator('.ash-session-chat-input-pr')).toHaveCount(2);
 });
+
+test('Session PR review opens the shared editor without posting a review', async ({ page }) => {
+	await page.goto('/sessionGitHub.html');
+	const review = page.getByRole('button', { name: 'Review pull request team/one #7 in Ash', exact: true });
+	await expect(review).toBeVisible(); await review.click();
+	expect(await page.evaluate(() => window.ashSessionGitHub.opened)).toContain('ash-github://github.com/team/one/pull/7');
+	expect(await page.evaluate(() => window.ashSessionGitHub.requests.some(request => request.method === 'github/comment/create'))).toBe(false);
+});

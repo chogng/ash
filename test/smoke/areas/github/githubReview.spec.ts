@@ -37,3 +37,30 @@ test('Sessions opens the shared GitHub editor and its accessibility help', async
 	await page.keyboard.press('Escape'); await expect(owner).toBeFocused();
 	await accountActions(page, application);
 });
+
+test('GitHub settings share the Preferences renderer in Workbench and Sessions and restore help focus', async ({ workbench, target, application }) => {
+	const page = workbench.page;
+	await workbench.settingsEditor.openUserSettingsUI();
+	await workbench.settingsEditor.selectCategory('github');
+	const section = page.locator('.ash-settings-section');
+	await expect(section).toContainText('Confirm official Connector authorization');
+	const refresh = section.getByRole('button', { name: 'Refresh accounts', exact: true });
+	await expect(refresh).toBeEnabled();
+	await expect(section.getByRole('button', { name: 'Browse pull requests', exact: true })).toBeDisabled();
+	await refresh.focus(); await page.keyboard.press('Alt+F1');
+	await expect(page.getByRole('dialog', { name: 'Accessibility Help', exact: true }).getByRole('textbox')).toHaveValue(/official Connector authorization are separate/);
+	await page.keyboard.press('Escape'); await expect(refresh).toBeFocused();
+	await page.keyboard.press('Escape');
+	await expect(workbench.settingsEditor.element).toBeHidden();
+	const sessionsPage = await workbench.openAgentsWindow(target.kind);
+	await new Menus(sessionsPage).select(application, () => sessionsPage.locator('[data-part="activitybar"] .ash-sessions-activity-bottom button').last().click(), ['Settings']);
+	const settings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings', exact: true });
+	await settings.getByRole('button', { name: 'Git & PRs', exact: true }).click();
+	const sessionsSection = settings.locator('.ash-settings-section');
+	await expect(sessionsSection.getByRole('button', { name: 'Manage automatic reviews', exact: true })).toBeVisible();
+	const sessionsRefresh = sessionsSection.getByRole('button', { name: 'Refresh accounts', exact: true });
+	await expect(sessionsRefresh).toBeEnabled();
+	await sessionsRefresh.focus(); await sessionsPage.keyboard.press('Alt+F1');
+	await expect(sessionsPage.getByRole('dialog', { name: 'Accessibility Help', exact: true }).getByRole('textbox')).toHaveValue(/Request Codex review posts @codex review/);
+	await sessionsPage.keyboard.press('Escape'); await expect(sessionsRefresh).toBeFocused();
+});

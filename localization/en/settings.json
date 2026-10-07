@@ -208,6 +208,8 @@
     "categories.chat-input.label": "Message input",
     "categories.chat-input.description": "Set the font and spacing for messages you type.",
     "categories.chat-code-blocks.label": "Code blocks",
-    "categories.chat-code-blocks.description": "Set the font, spacing, and word wrap for code blocks in replies."
+    "categories.chat-code-blocks.description": "Set the font, spacing, and word wrap for code blocks in replies.",
+    "categories.github.label": "GitHub",
+    "categories.github.description": "Connect accounts and manage Codex pull request reviews."
   }
 }

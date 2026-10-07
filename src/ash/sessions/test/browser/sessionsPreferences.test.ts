@@ -1,3 +1,8 @@
+import { IOpenerService } from '../../../platform/opener/common/opener.js';
+import { IAccountService } from '../../../platform/accounts/common/accountService.js';
+import { IGitHubService } from '../../../platform/github/common/githubService.js';
+import { IGitHubConnectionService } from '../../../workbench/services/accounts/common/gitHubConnectionService.js';
+import { GitHubReviewModel, IGitHubReviewModel } from '../../../workbench/contrib/github/browser/githubReviewModel.js';
 import '../../contrib/library/browser/library.contribution.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import assert from 'node:assert/strict';
@@ -117,6 +122,12 @@ test('Sessions Models switches control the model picker visibility preference', 
 	services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, fallback) => fallback });
 	const { IPreferencesService } = await import('../../../workbench/services/preferences/common/preferences.js');
 	services.registerInstance(IPreferencesService, { openSettings: category => preferences.open(category) } as import('../../../workbench/services/preferences/common/preferences.js').IPreferencesService);
+	services.registerInstance(IAccountService, { onDidChangeAccounts: Event.None, onDidCompleteLogin: Event.None, read: async () => ({ revision: 1n, accounts: [] }), startLogin: async () => { throw new Error('Not used'); }, cancelLogin: async () => {}, logout: async () => {} });
+	services.registerInstance(IGitHubService, { listAccounts: async () => [] } as unknown as IGitHubService);
+	services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async () => {}, cancel: async () => {} });
+	using githubReview = services.createInstance(GitHubReviewModel);
+	services.registerInstance(IGitHubReviewModel, githubReview);
+	services.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
 	using preferences = services.createInstance(SessionsPreferences, window.document.body, () => { });
 	const opened = preferences.open();
 	await Promise.race([opened, Promise.resolve()]);

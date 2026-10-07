@@ -1,0 +1,26 @@
+.ash-settings-section {
+	min-width: 0;
+	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size120);
+}
+
+.ash-settings-section-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-settings-section > h5 {
+	margin: 0;
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-settings-section > p {
+	margin: 0;
+	color: var(--ash-description-foreground);
+	line-height: 1.5;
+	overflow-wrap: anywhere;
+}

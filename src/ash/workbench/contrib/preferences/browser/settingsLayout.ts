@@ -95,6 +95,14 @@ export const SettingsNavigation = [
 				],
 			},
 			{
+				id: 'github',
+				label: 'GitHub',
+				description: 'Connect accounts and manage Codex pull request reviews.',
+				keywords: ['Codex', 'PR', 'review', 'Connector'],
+				presentation: 'general',
+				groups: [],
+			},
+			{
 				id: 'network',
 				label: 'Network',
 				description: 'Configure application HTTP compatibility and check service connectivity.',

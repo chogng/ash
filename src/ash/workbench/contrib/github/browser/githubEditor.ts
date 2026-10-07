@@ -1,3 +1,4 @@
+import { IPreferencesService } from '../../../services/preferences/common/preferences.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import './githubEditor.css';
@@ -70,6 +71,8 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 	private mergeActions!: WorkbenchToolBar;
 	private discussions!: HTMLDivElement;
 	private discussionActions!: WorkbenchToolBar;
+	private codexActions!: WorkbenchToolBar;
+	private codexNotice!: HTMLParagraphElement;
 	private issueSection!: HTMLDivElement;
 	private issueComments!: HTMLDivElement;
 	private issueReply!: HTMLTextAreaElement;
@@ -90,6 +93,7 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 	private shownThreads: unknown;
 	private shownDrafts: string | undefined;
 	private shownReviews: unknown;
+	private shownComments: unknown;
 	private threadInteractionState = '';
 	private selectedFile: GitHubPullRequestFile | undefined;
 	private selectedSide = GitHubDiffSide.Right;
@@ -114,6 +118,7 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 		@IContextViewService private readonly contextView: IContextViewService,
 		@ITextModelResourceService private readonly models: ITextModelResourceService,
 		@IOpenerService private readonly opener: IOpenerService,
+		@IPreferencesService private readonly preferences: IPreferencesService,
 		@IDialogService private readonly dialogs: IDialogService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IAccessibleViewService private readonly accessibleView: IAccessibleViewService,
@@ -168,6 +173,8 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 		this._register(addDisposableListener(this.formDraft, 'change', () => { if (this.model.compose) { this.model.compose.draft = this.formDraft.checked; } }));
 		this.formActions = this.toolbar(this.form, localize('github.editor.formActions', 'Form actions'));
 		this.reviewSection = this.element(this.detail, 'github-review');
+		this.codexActions = this.toolbar(this.reviewSection, localize('github.editor.codexActions', 'Codex review actions'));
+		this.codexNotice = h(parent.ownerDocument, 'p'); this.codexNotice.setAttribute('role', 'status'); this.codexNotice.setAttribute('aria-live', 'polite'); this.reviewSection.append(this.codexNotice);
 		this.reviewers = h(parent.ownerDocument, 'p'); this.reviewSection.append(this.reviewers);
 		this.reviewerActions = this.toolbar(this.reviewSection, localize('github.editor.reviewerActions', 'Reviewer actions'));
 		this.localActions = this.toolbar(this.reviewSection, localize('github.editor.localActions', 'Local repository actions'));
@@ -210,11 +217,19 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 		signal.addEventListener('abort', cancel, { once: true });
 		try {
 			await this.model.initialize();
+			if (input.resource.authority) {
+				const id = new URLSearchParams(input.resource.query).get('account');
+				const account = this.model.accounts.find(account => account.host === input.resource.authority && account.status === 'ready' && (id ? account.id === id : account.id === this.model.selectedAccount?.id))
+					?? this.model.accounts.find(account => account.host === input.resource.authority && account.status === 'ready' && (!id || account.id === id));
+				if (!account) { throw new GitHubError(GitHubErrorCode.AuthenticationRequired); }
+				this.model.selectAccount(account.id);
+			}
 			const repo = this.model.repository;
 			this.owner.value = repo?.owner ?? '';
 			this.repositoryName.value = repo?.name ?? '';
 			const parts = input.resource.path.split('/').filter(Boolean);
-			if (parts.length >= 2 && (repo?.owner !== parts[0] || repo?.name !== parts[1])) { this.owner.value = parts[0]!; this.repositoryName.value = parts[1]!; await this.load(); }
+			const mode = parts[2] === 'issues' ? 'issues' : 'pullRequests';
+			if (parts.length >= 2 && (repo?.owner !== parts[0] || repo?.name !== parts[1] || repo?.accountId !== this.model.selectedAccount?.id || this.model.mode !== mode)) { this.owner.value = parts[0]!; this.repositoryName.value = parts[1]!; await this.model.loadRepository(parts[0]!, parts[1]!, mode); }
 			throwIfCancelled(signal);
 			if (parts[2] === 'pull' && /^\d+$/.test(parts[3] ?? '')) { await this.model.openPullRequest(Number(parts[3])); }
 			if (parts[2] === 'issues' && /^\d+$/.test(parts[3] ?? '')) { await this.model.openIssue(Number(parts[3])); }
@@ -228,7 +243,7 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 	public override getControl(): HTMLElement { return this.root; }
 	public accessibleContent(): string {
 		const selected = this.model.pullRequest ?? this.model.issue;
-		return [this.model.selectedAccount && `${this.model.selectedAccount.login}@${this.model.selectedAccount.host}`, this.model.notifications.map(row => `${row.unread ? localize('github.editor.unread', 'Unread') : ''} ${row.repository.owner}/${row.repository.name}: ${row.title} (${row.reason})`).join('\n'), this.model.fork && localize('github.editor.forkAccepted', 'Fork creation accepted: {0}. GitHub may still be copying the repository.', this.model.fork.fullName), this.reviewers.textContent, this.status.textContent, selected && `#${selected.number} ${selected.title}\n${selected.body}`, this.model.checks?.checks.map(check => `${check.name}: ${check.conclusion ?? check.status}`).join('\n'), this.model.files.map(file => `${file.filename} +${file.additions} −${file.deletions}`).join('\n'), this.model.threads.map(thread => `${thread.path}:${thread.line ?? ''}\n${thread.comments.comments.map(comment => `${comment.author ?? ''}: ${comment.body}`).join('\n')}`).join('\n\n'), this.model.reviews.map(review => `${review.state}: ${review.body}`).join('\n'), this.model.issue?.comments.map(comment => comment.body).join('\n'), this.model.draft?.body, this.model.draft?.comments.map(comment => `${comment.path}:${comment.line}\n${comment.body}`).join('\n')].filter(Boolean).join('\n\n');
+		return [this.model.selectedAccount && `${this.model.selectedAccount.login}@${this.model.selectedAccount.host}`, this.model.notifications.map(row => `${row.unread ? localize('github.editor.unread', 'Unread') : ''} ${row.repository.owner}/${row.repository.name}: ${row.title} (${row.reason})`).join('\n'), this.model.fork && localize('github.editor.forkAccepted', 'Fork creation accepted: {0}. GitHub may still be copying the repository.', this.model.fork.fullName), this.reviewers.textContent, this.status.textContent, selected && `#${selected.number} ${selected.title}\n${selected.body}`, this.model.checks?.checks.map(check => `${check.name}: ${check.conclusion ?? check.status}`).join('\n'), this.model.files.map(file => `${file.filename} +${file.additions} −${file.deletions}`).join('\n'), this.model.threads.map(thread => `${thread.path}:${thread.line ?? ''}\n${thread.comments.comments.map(comment => `${comment.author ?? ''}: ${comment.body}`).join('\n')}`).join('\n\n'), this.model.reviews.map(review => `${review.state}: ${review.body}`).join('\n'), this.codexNotice.textContent, this.model.pullRequestComments.map(comment => comment.body).join('\n'), this.model.issue?.comments.map(comment => comment.body).join('\n'), this.model.draft?.body, this.model.draft?.comments.map(comment => `${comment.path}:${comment.line}\n${comment.body}`).join('\n')].filter(Boolean).join('\n\n');
 	}
 
 	private render(): void {
@@ -320,6 +335,13 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 
 	private renderReview(): void {
 		const model = this.model;
+		this.codexActions.setActions([
+			this.action('requestCodexReview', localize('github.editor.requestCodex', 'Request Codex review'), model.canWrite && !model.codexReviewRequested && model.repository?.host === 'github.com', () => model.requestCodexReview()),
+			this.action('codexSettings', localize('github.editor.codexSettings', 'Codex review settings'), true, () => this.preferences.openSettings('github')),
+		]);
+		this.codexNotice.textContent = model.codexReviewRequested
+			? localize('github.editor.codexRequested', 'Posted @codex review. Refresh to read PR comments and review discussions. The official Connector must be authorized for this repository.')
+			: localize('github.editor.codexHint', 'Request Codex review posts @codex review using your GitHub account. Configure the official Connector in Codex review settings.');
 		this.checks.replaceChildren(h(this.root.ownerDocument, 'h3', localize('github.editor.checks', 'Checks')));
 		if (model.checks) {
 			this.checks.append(h(this.root.ownerDocument, 'p', model.checks.state));
@@ -375,14 +397,16 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 		this.mergeMethod.setOptions(methods); this.mergeMethod.enabled = canReview;
 		this.mergeActions.setActions([this.action('merge', localize('github.editor.merge', 'Merge pull request'), canReview && methods.length > 0, () => this.merge(false))], [this.action('autoMerge', localize('github.editor.autoMerge', 'Enable auto-merge'), canReview && !!info?.allowAutoMerge && methods.length > 0 && !model.pullRequest?.autoMerge, () => this.merge(true))]);
 		const interactionState = `${model.busy}/${model.submissionUncertain}`;
-		if (this.shownThreads !== model.threads || this.shownReviews !== model.reviews || this.threadInteractionState !== interactionState) {
+		if (this.shownThreads !== model.threads || this.shownReviews !== model.reviews || this.shownComments !== model.pullRequestComments || this.threadInteractionState !== interactionState) {
 			this.threadInteractionState = interactionState;
-			this.shownThreads = model.threads; this.shownReviews = model.reviews; this.threadResources.clear(); this.discussions.replaceChildren(h(this.root.ownerDocument, 'h3', localize('github.editor.discussions', 'Review discussions')));
-			for (const review of model.reviews) { const row = this.element(this.discussions, 'github-thread'); this.link(row, review.state, review.url); row.append(h(this.root.ownerDocument, 'pre', review.body)); }
+			this.shownThreads = model.threads; this.shownReviews = model.reviews; this.shownComments = model.pullRequestComments; this.threadResources.clear(); this.discussions.replaceChildren(h(this.root.ownerDocument, 'h3', localize('github.editor.discussions', 'Review discussions')));
+			for (const comment of model.pullRequestComments) { const row = this.element(this.discussions, 'github-pr-comment'); this.link(row, localize('github.editor.prComment', 'PR comment #{0}', comment.id), comment.url); row.append(h(this.root.ownerDocument, 'pre', comment.body)); }
+			for (const review of model.reviews) { const row = this.element(this.discussions, 'github-thread'); this.link(row, review.state, review.url); row.append(h(this.root.ownerDocument, 'p', localize('github.editor.reviewCommit', 'Reviewed commit: {0}', review.commit)), h(this.root.ownerDocument, 'pre', review.body)); }
 			for (const thread of model.threads) { this.renderThread(thread); }
 		}
 		for (const input of this.discussions.querySelectorAll<HTMLInputElement>('input')) { input.disabled = model.busy || model.submissionUncertain; }
 		this.discussionActions.setActions([
+			this.action('morePRComments', localize('github.editor.morePRComments', 'Load more PR comments'), !model.busy && model.nextCommentsPage !== null, () => model.morePullRequestComments()),
 			this.action('moreThreads', localize('github.editor.moreThreads', 'Load more discussions'), !model.busy && !!model.nextThreadsCursor, () => model.moreThreads()),
 			this.action('moreReviews', localize('github.editor.moreReviews', 'Load more reviews'), !model.busy && model.nextReviewsPage !== null, () => model.moreReviews()),
 		]);

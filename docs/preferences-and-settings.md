@@ -11,6 +11,12 @@
 | 用户设置 JSON | 普通文本编辑器打开 `ash-settings:/user/settings.json`；[`SettingsFileSystemProvider`](../src/ash/workbench/contrib/preferences/common/settingsFilesystemProvider.ts) 读写当前用户设置源                                               | 在图形设置页内部维护另一份配置 |
 | 键盘快捷键    | [`KeyboardShortcutsEditor`](../src/ash/workbench/contrib/preferences/browser/keyboardShortcutsEditor.ts) 使用自己的输入和模型；快捷键资源独立于普通配置键值                                                                           | 充当设置页的子页面             |
 
+## 设置内容与渲染
+
+功能模块注册配置项，分类布局引用 setting ID，由 Preferences 统一建模和渲染。账号状态与管理操作通过数据契约接入。功能模块不得提供设置页 DOM、widget 或渲染回调；完整职责约束和旧接口迁移边界见 [Settings 接入与渲染边界](../src/ash/workbench/contrib/preferences/README.md)。
+
+GitHub 设置页显示复用 Codex 登录和 Ash 的 GitHub 账号，检查指定仓库的访问权限，并链接官方 Connector 与自动审查管理页。Ash 的仓库访问成功不代表官方 Connector 已获授权。PR 页面使用 GitHub 账号发布 `@codex review` 请求，刷新及分页读取 PR 评论和审查讨论；发送结果不确定时，确认 GitHub 上的结果前不能再次提交。
+
 ## 打开路径
 
 `preferencesActions.ts` 注册三个命令。调用方通过 `IPreferencesService` 选择要打开的内容，服务再把相应的 `EditorInput` 交给 Workbench `EditorService`：
@@ -34,6 +40,8 @@
 样式也跟随创建页面的代码：[`settingsEditor.css`](../src/ash/workbench/contrib/preferences/browser/media/settingsEditor.css) 负责页面布局和状态提示，[`settingsTree.css`](../src/ash/workbench/contrib/preferences/browser/media/settingsTree.css) 负责分类树布局，[`settingsWidgets.css`](../src/ash/workbench/contrib/preferences/browser/media/settingsWidgets.css) 负责设置搜索框和设置项控件。
 
 ## Models 设置
+
+以下描述当前行为与实现。`ModelSettingsContent` 和功能模块创建设置 widget 的接入属于尚未迁移的旧实现，不能作为新页面的架构范例；迁移须遵守 [Settings 接入与渲染边界](../src/ash/workbench/contrib/preferences/README.md) 并保留这些行为。
 
 Workbench 和 Sessions 共用 `ModelSettingsContent`。模型目录按供应商排列，同一供应商内按发布时间从新到旧排列；默认收起为每家供应商的首个模型，`viewall models` 展开或收起完整列表。当前显示的列表将已开启模型排在前面，两组内部保持目录原序；关闭后回到未开启组中的原有位置，与开启先后无关。列表顶部的模型搜索框按名称和 `provider/model` ID 搜索整个目录，搜索结果使用同一排序规则，清空搜索后恢复展开状态；API key 区域不参与这个局部搜索。键盘切换开关后，保存完成时焦点留在同一个模型上。
 

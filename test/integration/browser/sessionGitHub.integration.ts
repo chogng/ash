@@ -1,3 +1,4 @@
+import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
@@ -120,7 +121,7 @@ const opened: string[] = [];
 const opener = { open: async (uri: URI) => { opened.push(uri.toString()); return true; } } as IOpenerService;
 const notifications = { error: (error: unknown) => { throw error; } } as unknown as INotificationService;
 const quickInput = resources.add(new QuickInputController(document.body));
-const toolbar = resources.add(new SessionChatInputToolbar(main, { sessionId: 'session', onDidChange: Event.None }, github, opener, notifications, quickInput));
+const toolbar = resources.add(new SessionChatInputToolbar(main, { sessionId: 'session', onDidChange: Event.None }, github, opener, notifications, quickInput, { openEditor: async input => { opened.push(input.resource.toString()); } } as IEditorService));
 toolbar.render();
 const list = resources.add(new SessionsList(main, management, sessions, 'Sessions', 'New Session', github));
 github.initialize();

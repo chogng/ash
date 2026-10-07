@@ -1,3 +1,6 @@
+import { GitHubSettingsModel } from '../../github/browser/githubSettingsModel.js';
+import { SettingsSectionRenderer } from './settingsSectionRenderer.js';
+import { AccessibleViewProviderId, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
@@ -208,7 +211,9 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		const initialCategory = SettingsCategories[0];
 		if (!initialCategory) throw new Error('Settings requires at least one category');
 		this.activeCategory = initialCategory;
+		const githubSettings = this._register(this.instantiationService.createInstance(GitHubSettingsModel, async () => { await this.instantiationService.invokeFunction(accessor => accessor.get(ICommandService).executeCommand(CLOSE_EDITOR_COMMAND_ID)); }));
 		this.contents.push(
+			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, githubSettings, AccessibleViewProviderId.GitHubSettings, AccessibilityVerbositySettingId.GitHubSettings)),
 			this._register(this.instantiationService.createInstance(NetworkSettingsContent, settingsContent)),
 			this._register(this.instantiationService.createInstance(SearchSettingsContent, settingsContent)),
 			this._register(this.instantiationService.createInstance(AdvisorSettingsContent, settingsContent)),

@@ -1,3 +1,9 @@
+import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
+import { GitHubSettingsModel } from '../../../src/ash/workbench/contrib/github/browser/githubSettingsModel.js';
+import { SettingsSectionRenderer } from '../../../src/ash/workbench/contrib/preferences/browser/settingsSectionRenderer.js';
+import { AccessibleViewProviderId, AccessibilityVerbositySettingId } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
+import { IRemoteAgentService } from '../../../src/ash/workbench/services/remote/common/remoteAgentService.js';
+import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
 import type { EditorPane } from '../../../src/ash/workbench/browser/parts/editor/editorPane.js';
 import '../../../src/ash/platform/theme/common/sizes/baseSizes.js';
 import '../../../src/ash/editor/browser/widget/diffEditor/registrations.contribution.js';
@@ -74,7 +80,7 @@ class ReviewTransport implements AppServerTransport {
 	private pr(number = 7) { return { number, title: number === 7 ? '<img src=x onerror=alert(1)> Review change' : 'Another pull request', body: 'PR description', url: `https://github.com/team/repo/pull/${number}`, state: this.merged ? 'closed' : 'open', draft: false, mergedAt: this.merged ? 'now' : null, headCommit: this.commit, headBranch: 'feature', headRepository: 'contributor/fork', baseBranch: 'main', mergeable: null, autoMerge: false }; }
 	private issue() { return { number: 9, title: 'Fix issue', url: 'https://github.com/team/repo/issues/9', state: 'open', labels: ['bug'], assignees: ['Alice'], updatedAt: 'now' }; }
 	private dispatch(request: Request): void {
-		if (this.failure && request.method === 'github/pullRequest/review') { this.respond(request, undefined, this.failure); return; }
+		if (this.failure && (request.method === 'github/pullRequest/review' || request.method === 'github/comment/create')) { this.respond(request, undefined, this.failure); return; }
 		switch (request.method) {
 			case 'initialize': this.respond(request, createTestInitializeResult()); break;
 			case 'github/account/list': this.respond(request, { accounts: this.accountCatalog }); break;
@@ -105,7 +111,7 @@ class ReviewTransport implements AppServerTransport {
 			case 'github/pullRequest/autoMerge': this.respond(request, null); break;
 			case 'github/issue/list': this.respond(request, { issues: [this.issue()], nextPage: null, notice: '' }); break;
 			case 'github/issue/read': this.respond(request, { issue: this.issue(), body: 'Issue description', comments: [] }); break;
-			case 'github/comment/list': this.respond(request, { comments: [], nextPage: null }); break;
+			case 'github/comment/list': this.respond(request, Number(request.params.number) === 7 ? { comments: [{ id: request.params.page === 1 ? 1 : 2, body: request.params.page === 1 ? 'Codex Review Summary' : 'Follow-up review result', url: 'https://github.com/team/repo/pull/7#comment', updatedAt: 'now' }], nextPage: request.params.page === 1 ? 2 : null } : { comments: [], nextPage: null }); break;
 			case 'github/comment/create': this.respond(request, { id: 12, body: request.params.body, url: 'https://github.com/team/repo/issues/9#comment', updatedAt: 'now' }); break;
 			case 'github/issue/create': case 'github/issue/update': this.respond(request, { issue: { ...this.issue(), title: request.params.title ?? 'Fix issue', state: request.params.state ?? 'open', labels: request.params.labels ?? ['bug'], assignees: request.params.assignees ?? ['Alice'] }, body: request.params.body ?? 'Issue description' }); break;
 			case 'github/cancel': this.respond(request, { status: 'requested' }); break;
@@ -137,13 +143,17 @@ services.registerInstance(IWorkingCopyService, { getAll: () => dirty ? [{ resour
 const accounts = resources.add(new Emitter<AccountState>());
 const loggedOut: { provider: string; accountId?: string; }[] = [];
 const browserHosts: (string | undefined)[] = [];
-const initialAccount: AccountState = { revision: 1n, accounts: [{ provider: 'github', accountId: 'alice', credentialRevision: 1n, status: 'ready' }] };
+const initialAccount: AccountState = { revision: 1n, accounts: [{ provider: 'github', accountId: 'alice', credentialRevision: 1n, status: 'ready' }, { provider: 'chatgpt-subscription', accountId: 'codex', displayName: 'Existing Codex account', credentialRevision: 1n, status: 'ready' }] };
+services.registerInstance(IRemoteAgentService, { connectionState: 'connected', connection: { kind: 'local', generation: 1 }, onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None, reconnect: async () => ({ kind: 'alreadyConnected' }), rollbackRuntime: async () => ({ kind: 'cancelled' }) });
 services.registerInstance(IAccountService, { onDidChangeAccounts: accounts.event, onDidCompleteLogin: Event.None, read: async () => initialAccount, startLogin: async () => { throw new Error('Not used'); }, cancelLogin: async () => { }, logout: async (provider, accountId) => { loggedOut.push({ provider, accountId }); transport.accountCatalog = transport.accountCatalog.filter(account => account.id !== accountId); accounts.fire({ revision: 2n, accounts: transport.accountCatalog.map(account => ({ provider: 'github', accountId: account.id, credentialRevision: BigInt(account.credentialRevision), status: 'ready' })) }); } });
 services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async host => { browserHosts.push(host); }, cancel: async () => { } });
 services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
 services.registerInstance(ITextModelResourceService, resources.add(new BrowserTextModelService({ onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: request.bootstrapText!, revision: undefined }), save: async () => { throw new Error('Review snapshots are read-only'); } })));
 const dialogs = resources.add(new DialogService()); services.registerInstance(IDialogService, dialogs); services.registerInstance(IDialogsModel, dialogs.model); services.registerInstance(IWorkbenchDialogHandler, new BrowserDialogHandler(document.body));
 resources.add(new DialogHandlerContribution(dialogs.model, services.get(IWorkbenchDialogHandler)));
+const external: string[] = [];
+// Keep browser navigation observable without sending writes to a real repository.
+services.registerInstance(IOpenerService, { open: async (uri: URI | string) => { external.push(uri.toString()); return true; } } as IOpenerService);
 registerCodeEditorServices(services);
 let pane: EditorPane | undefined;
 services.registerInstance(IEditorPart, { get activePane() { return pane; } } as IEditorPart);
@@ -153,9 +163,19 @@ services.registerInstance(IEditorService, {
 		pane = EditorPanes.getEditorPane(input)!.create({ instantiationService: services }); pane.create(document.getElementById('github')!); pane.layout({ width: innerWidth, height: innerHeight }); await pane.setInput(input, new AbortController().signal); pane.focus();
 	}, focusActiveEditor: () => pane!.focus()
 });
+function showSettings(): void {
+	pane?.dispose(); pane = undefined;
+	const root = document.getElementById('github')!; root.replaceChildren();
+	const model = resources.add(services.createInstance(GitHubSettingsModel, async () => { root.replaceChildren(); }));
+	const section = resources.add(services.createInstance(SettingsSectionRenderer, root, model, AccessibleViewProviderId.GitHubSettings, AccessibilityVerbositySettingId.GitHubSettings));
+	const item = Array.from(section.getNodes()[0]!.children!)[0]!.element;
+	if (item.kind === 'item' && 'domNode' in item.value) { root.append(item.value.domNode); }
+	section.setVisible(true);
+}
+services.registerInstance(IPreferencesService, { openSettings: async () => { showSettings(); }, openUserSettings: async () => {}, openGlobalKeybindingSettings: async () => {} });
 const commands = resources.add(new CommandService(services));
 window.ashGitHubReview = {
-	requests: transport.requests, gitRequests, loggedOut, browserHosts, dirty: () => { dirty = true; }, open: () => commands.executeCommand('workbench.action.github.open'), close: () => { pane?.dispose(); pane = undefined; },
+	external, settings: showSettings, requests: transport.requests, gitRequests, loggedOut, browserHosts, dirty: () => { dirty = true; }, open: () => commands.executeCommand('workbench.action.github.open'), close: () => { pane?.dispose(); pane = undefined; },
 	changeHead: () => { transport.commit = 'c'.repeat(40); }, fail: () => { transport.failure = 'GitHubSubmissionUncertain'; },
 	hold: method => { transport.heldMethod = method; }, release: () => transport.release(),
 	replaceAccount: () => accounts.fire({ revision: 2n, accounts: [{ provider: 'github', accountId: 'bob', credentialRevision: 2n, status: 'ready' }] }),
@@ -163,5 +183,5 @@ window.ashGitHubReview = {
 	accessibleContent: type => AccessibleViewRegistry.getImplementations().find(item => item.name === `githubEditor.${type}`)!.getProvider(services)!.provideContent(),
 };
 window.addEventListener('pagehide', () => { pane?.dispose(); resources.dispose(); }, { once: true });
-await window.ashGitHubReview.open();
-declare global { interface Window { ashGitHubReview: { requests: Request[]; browserHosts: (string | undefined)[]; gitRequests: { method: string; params: Record<string, unknown>; }[]; loggedOut: { provider: string; accountId?: string; }[]; dirty(): void; open(): Promise<unknown>; close(): void; changeHead(): void; fail(): void; hold(method: string): void; release(): void; replaceAccount(): void; theme(name: 'light' | 'highContrast'): void; accessibleContent(type: AccessibleViewType): string; }; } }
+if (new URL(location.href).searchParams.has('settings')) { showSettings(); } else { await window.ashGitHubReview.open(); }
+declare global { interface Window { ashGitHubReview: { external: string[]; settings(): void; requests: Request[]; browserHosts: (string | undefined)[]; gitRequests: { method: string; params: Record<string, unknown>; }[]; loggedOut: { provider: string; accountId?: string; }[]; dirty(): void; open(): Promise<unknown>; close(): void; changeHead(): void; fail(): void; hold(method: string): void; release(): void; replaceAccount(): void; theme(name: 'light' | 'highContrast'): void; accessibleContent(type: AccessibleViewType): string; }; } }

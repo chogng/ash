@@ -49,3 +49,8 @@
 .ash-github-editor.compact .github-sidebar { flex-basis: 160px; border-right: 0; border-bottom: var(--ash-strokeThickness) solid var(--ash-widget-border); }
 
 .ash-github-editor [hidden] { display: none; }
+
+.github-pr-comment pre {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}

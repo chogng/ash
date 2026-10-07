@@ -21,6 +21,7 @@ function setup() {
 		readReviewDiff: async () => ({ baseCommit: 'b'.repeat(40), files: { items: [{ filename: 'a.rs', previousFilename: null, status: 'modified', additions: 1, deletions: 1, changes: 2, patch: '@@ -1 +1 @@\n-old\n+new' }], nextPage: null, limitReached: false } }),
 		readChecks: async () => ({ state: 'success', statuses: [], checks: [], nextPage: null }),
 		listReviewThreads: async () => ({ threads: [], nextCursor: null }),
+		listComments: async () => ({ items: [], nextPage: null }),
 		listPullRequestReviews: async () => ({ items: [], nextPage: null }),
 		reviewPullRequest: async () => { submissions++; if (failSubmission) { throw new GitHubError(GitHubErrorCode.SubmissionUncertain); } return { id: 1, commit: current.headCommit, body: 'Review', state: 'COMMENTED', url: `${pr.url}#review`, submittedAt: 'now' }; },
 	};
@@ -130,4 +131,30 @@ test('a fork with an uncertain result cannot be submitted again after repository
 	const fork = { organization: null, name: 'my-fork', branches: GitHubForkBranches.All };
 	await model.createFork(fork); await model.loadRepository('team', 'repo'); await model.createFork(fork);
 	assert.deepEqual({ calls, uncertain: model.submissionUncertain, fork: model.fork }, { calls: 1, uncertain: true, fork: undefined });
+});
+
+test('Codex requests post one PR comment, paginate discussion results and reject an unseen head', async () => {
+	const fixture = setup(); using model = fixture.model; using accounts = fixture.accounts;
+	const comment = { id: 12, body: '@codex review', url: `${pr.url}#comment`, updatedAt: 'now' };
+	const writes: unknown[] = [];
+	fixture.github.createComment = async (repository, number, body) => { writes.push({ repository, number, body }); return comment; };
+	fixture.github.listComments = async (_repository, _number, page) => ({ items: page === 1 ? [] : [comment, { ...comment, id: 13, body: 'Review result' }], nextPage: page === 1 ? 2 : null });
+	await model.loadRepository('team', 'repo'); await model.openPullRequest(7);
+	await model.requestCodexReview();
+	assert.deepEqual(writes, [{ repository: { accountId: 'alice', host: 'github.com', owner: 'team', name: 'repo' }, number: 7, body: '@codex review' }]);
+	await assert.rejects(model.requestCodexReview());
+	await model.morePullRequestComments();
+	assert.deepEqual(model.pullRequestComments.map(comment => comment.id), [12, 13]);
+	await model.openPullRequest(7); fixture.changeHead(); await model.requestCodexReview();
+	assert.equal(writes.length, 1); assert.equal(model.ready, false);
+});
+
+test('uncertain Codex comment submissions stay blocked after refreshing the PR', async () => {
+	const fixture = setup(); using model = fixture.model; using accounts = fixture.accounts;
+	let writes = 0;
+	fixture.github.createComment = async () => { writes++; throw new GitHubError(GitHubErrorCode.SubmissionUncertain); };
+	await model.loadRepository('team', 'repo'); await model.openPullRequest(7); await model.requestCodexReview();
+	assert.equal(model.submissionUncertain, true);
+	await model.openPullRequest(7); await assert.rejects(model.requestCodexReview());
+	assert.equal(writes, 1);
 });

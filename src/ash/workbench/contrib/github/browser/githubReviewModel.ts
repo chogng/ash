@@ -3,7 +3,7 @@ import { CancellationTokenSource, type CancellationToken } from '../../../../bas
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IAccountService, type AccountState } from '../../../../platform/accounts/common/accountService.js';
-import { GitHubNotificationFilter, type GitHubNotification, type GitHubCreateFork, type GitHubFork, GitHubDiffSide, GitHubError, GitHubErrorCode, GitHubIssueState, IGitHubService, type GitHubAccount, type GitHubRequestedReviewers, type GitHubReviewComment, GitHubReviewerChange, type GitHubChecks, type GitHubCreateIssue, type GitHubCreatePullRequest, type GitHubIssueDetails, type GitHubIssueSummary, type GitHubMergeMethod, type GitHubPullRequest, type GitHubPullRequestFile, type GitHubPullRequestReview, type GitHubRepository, type GitHubRepositoryInfo, type GitHubReviewCommentInput, type GitHubReviewEvent, type GitHubReviewThread, type GitHubReviewThreadState, type GitHubUpdateIssue, type GitHubUpdatePullRequest } from '../../../../platform/github/common/githubService.js';
+import { GitHubNotificationFilter, type GitHubComment, type GitHubNotification, type GitHubCreateFork, type GitHubFork, GitHubDiffSide, GitHubError, GitHubErrorCode, GitHubIssueState, IGitHubService, type GitHubAccount, type GitHubRequestedReviewers, type GitHubReviewComment, GitHubReviewerChange, type GitHubChecks, type GitHubCreateIssue, type GitHubCreatePullRequest, type GitHubIssueDetails, type GitHubIssueSummary, type GitHubMergeMethod, type GitHubPullRequest, type GitHubPullRequestFile, type GitHubPullRequestReview, type GitHubRepository, type GitHubRepositoryInfo, type GitHubReviewCommentInput, type GitHubReviewEvent, type GitHubReviewThread, type GitHubReviewThreadState, type GitHubUpdateIssue, type GitHubUpdatePullRequest } from '../../../../platform/github/common/githubService.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 
 export interface ReviewDraft {
@@ -66,6 +66,8 @@ export class GitHubReviewModel extends Disposable {
 	public nextThreadsCursor: string | null = null;
 	public checks: GitHubChecks | undefined;
 	public nextCommentsPage: number | null = null;
+	public pullRequestComments: readonly GitHubComment[] = [];
+	public codexReviewRequested = false;
 	public busy = false;
 	public ready = false;
 	public error: unknown;
@@ -91,7 +93,7 @@ export class GitHubReviewModel extends Disposable {
 			catch (error) { this.initialization = undefined; this.error = error; this.change.fire(); }
 		})();
 	}
-	private async refreshAccounts(): Promise<void> {
+	public async refreshAccounts(): Promise<void> {
 		const generation = ++this.catalogGeneration;
 		const accounts = await this.github.listAccounts();
 		if (generation !== this.catalogGeneration || this.isDisposed) { return; }
@@ -232,17 +234,40 @@ export class GitHubReviewModel extends Disposable {
 			const pr = await this.github.readPullRequest(repository, number, token);
 			if (token.isCancellationRequested) { return; }
 			this.pullRequest = pr; this.change.fire();
-			const [diff, checks, threads, reviews, requestedReviewers] = await Promise.all([
+			const [diff, checks, threads, reviews, requestedReviewers, comments] = await Promise.all([
 				this.github.readReviewDiff(repository, number, pr.headCommit, 1, token),
 				this.github.readChecks(repository, pr.headCommit, 1, token),
 				this.github.listReviewThreads(repository, number, null, token),
 				this.github.listPullRequestReviews(repository, number, 1, token),
 				this.github.requestedReviewers(repository, number, token),
+				this.github.listComments(repository, number, 1, token),
 			]);
 			if (token.isCancellationRequested) { return; }
 			this.baseCommit = diff.baseCommit; this.files = diff.files.items; this.nextFilesPage = diff.files.nextPage; this.filesLimitReached = diff.files.limitReached;
 			this.checks = checks; this.threads = threads.threads; this.nextThreadsCursor = threads.nextCursor;
-			this.reviews = reviews.items; this.nextReviewsPage = reviews.nextPage; this.requestedReviewers = requestedReviewers; this.ready = true;
+			this.reviews = reviews.items; this.nextReviewsPage = reviews.nextPage; this.requestedReviewers = requestedReviewers; this.pullRequestComments = comments.items; this.nextCommentsPage = comments.nextPage; this.ready = true;
+		});
+	}
+
+	public async requestCodexReview(): Promise<void> {
+		if (!this.canWrite || this.codexReviewRequested || this.repository?.host !== 'github.com') { throw new GitHubError(GitHubErrorCode.Conflict); }
+		const repository = this.requireRepository(); const pr = this.requirePullRequest();
+		await this.run(async token => {
+			const current = await this.github.readPullRequest(repository, pr.number, token);
+			if (token.isCancellationRequested) { return; }
+			if (current.headCommit !== pr.headCommit || current.state !== 'open' || current.mergedAt) { throw new GitHubError(GitHubErrorCode.Conflict); }
+			// This requests the official Connector; a posted comment does not prove the cloud review started.
+			const comment = await this.github.createComment(repository, pr.number, '@codex review', token);
+			if (!token.isCancellationRequested) { this.pullRequestComments = distinct([...this.pullRequestComments, comment], row => row.id); this.codexReviewRequested = true; }
+		}, undefined, true);
+	}
+
+	public async morePullRequestComments(): Promise<void> {
+		const page = this.nextCommentsPage; const pr = this.pullRequest;
+		if (page === null || !pr) { return; }
+		await this.run(async token => {
+			const result = await this.github.listComments(this.requireRepository(), pr.number, page, token);
+			if (!token.isCancellationRequested) { this.pullRequestComments = distinct([...this.pullRequestComments, ...result.items], row => row.id); this.nextCommentsPage = result.nextPage; }
 		});
 	}
 
@@ -479,7 +504,7 @@ export class GitHubReviewModel extends Disposable {
 	private clearSelection(): void {
 		this.selectedNotification = undefined;
 		this.pullRequest = undefined; this.issue = undefined; this.files = []; this.baseCommit = undefined; this.checks = undefined;
-		this.threads = []; this.reviews = []; this.requestedReviewers = { users: [], teams: [] }; this.ready = false;
+		this.threads = []; this.reviews = []; this.pullRequestComments = []; this.codexReviewRequested = false; this.requestedReviewers = { users: [], teams: [] }; this.ready = false;
 		this.nextFilesPage = null; this.nextReviewsPage = null; this.nextThreadsCursor = null; this.nextCommentsPage = null; this.filesLimitReached = false;
 	}
 	private requireRepository(): GitHubRepository { if (!this.repository) { throw new GitHubError(GitHubErrorCode.InvalidInput); } return this.repository; }

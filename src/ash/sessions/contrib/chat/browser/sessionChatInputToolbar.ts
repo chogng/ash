@@ -1,3 +1,4 @@
+import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import './media/sessionChatInputToolbar.css';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
@@ -25,6 +26,7 @@ export class SessionChatInputToolbar extends Disposable {
 		@IOpenerService private readonly opener: IOpenerService,
 		@INotificationService private readonly notifications: INotificationService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
+		@IEditorService private readonly editors: IEditorService,
 	) {
 		super();
 		this.domNode = h(container.ownerDocument, 'div');
@@ -51,7 +53,7 @@ export class SessionChatInputToolbar extends Disposable {
 			present.add(key);
 			let entry = this.entries.get(key);
 			if (!entry) {
-				entry = this.entries.set(key, new PullRequestEntry(this.domNode, request, this.opener, this.notifications, async reference => {
+				entry = this.entries.set(key, new PullRequestEntry(this.domNode, request, this.opener, this.notifications, this.editors, async reference => {
 					const sessionId = this.model.sessionId;
 					if (!sessionId) { return; }
 					await this.github.detachPullRequest(sessionId, reference);
@@ -96,7 +98,7 @@ class PullRequestEntry extends Disposable {
 	private readonly removeDomNode: HTMLButtonElement;
 	private request: IResolvedSessionPullRequest;
 
-	constructor(container: HTMLElement, request: IResolvedSessionPullRequest, opener: IOpenerService, notifications: INotificationService, detach: (reference: NonNullable<IResolvedSessionPullRequest['recordedReference']>) => Promise<void>) {
+	constructor(container: HTMLElement, request: IResolvedSessionPullRequest, opener: IOpenerService, notifications: INotificationService, editors: IEditorService, detach: (reference: NonNullable<IResolvedSessionPullRequest['recordedReference']>) => Promise<void>) {
 		super();
 		this.request = request;
 		this.containerDomNode = h(container.ownerDocument, 'div');
@@ -112,11 +114,19 @@ class PullRequestEntry extends Disposable {
 		this.removeDomNode.type = 'button';
 		this.removeDomNode.className = 'ash-session-chat-input-pr-action';
 		this.removeDomNode.textContent = localize('sessions.github.remove', 'Remove');
-		this.containerDomNode.append(this.domNode, this.removeDomNode);
+		const reviewDomNode = h(container.ownerDocument, 'button');
+		reviewDomNode.type = 'button'; reviewDomNode.className = 'ash-session-chat-input-pr-action';
+		reviewDomNode.textContent = localize('sessions.github.review', 'Review');
+		reviewDomNode.setAttribute('aria-label', localize('sessions.github.reviewLabel', 'Review pull request {0}/{1} #{2} in Ash', request.owner, request.repo, request.number));
+		this._register(addDisposableListener(reviewDomNode, 'click', () => {
+			const resource = this.request.uri.with({ scheme: 'ash-github', query: '', fragment: '' });
+			void editors.openEditor({ resource, label: getPullRequestLabel(this.request), readOnly: true, showBreadcrumbs: false }).catch(error => notifications.error(error));
+		}));
+		this.containerDomNode.append(this.domNode, reviewDomNode, this.removeDomNode);
 		container.append(this.containerDomNode);
 		this._register(addDisposableListener(this.domNode, 'click', event => {
 			event.preventDefault();
-			void opener.open(request.uri, { openExternal: true }).catch(error => notifications.error(error));
+			void opener.open(this.request.uri, { openExternal: true }).catch(error => notifications.error(error));
 		}));
 		this._register(addDisposableListener(this.removeDomNode, 'click', () => {
 			const reference = this.request.recordedReference;

@@ -1,3 +1,8 @@
+import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
+import { IAccountService } from '../../../../../platform/accounts/common/accountService.js';
+import { IGitHubService } from '../../../../../platform/github/common/githubService.js';
+import { IGitHubConnectionService } from '../../../../../workbench/services/accounts/common/gitHubConnectionService.js';
+import { GitHubReviewModel, IGitHubReviewModel } from '../../../../../workbench/contrib/github/browser/githubReviewModel.js';
 import { KeybindingTestServices } from '../../../../services/keybinding/test/browser/keybindingTestServices.js';
 import { createTestLocaleService } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import '../../../chat/common/languageModelsConfiguration.js';
@@ -344,6 +349,7 @@ test('settingsLayout is the single projection from registered settings to catego
 
 	assert.deepEqual(SettingsCategories.map(category => category.id), [
 		'general',
+		'github',
 		'network',
 		'appearance',
 		'layout',
@@ -888,6 +894,11 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	editorServices.registerInstance(IEditorService, disposables.add(new BrowserEditorService(editor)));
 	const preferences = disposables.add(new PreferencesService(editorServices.get(IEditorService), editorServices.get(IFileTextModelService), keybindingProfile.files, keybindingProfile.profiles));
 	services.registerInstance(IPreferencesService, preferences);
+	services.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
+	services.registerInstance(IAccountService, { onDidChangeAccounts: Event.None, onDidCompleteLogin: Event.None, read: async () => ({ revision: 1n, accounts: [] }), startLogin: async () => { throw new Error('Not used'); }, cancelLogin: async () => {}, logout: async () => {} });
+	services.registerInstance(IGitHubService, { listAccounts: async () => [] } as unknown as IGitHubService);
+	services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async () => {}, cancel: async () => {} });
+	services.registerInstance(IGitHubReviewModel, disposables.add(services.createInstance(GitHubReviewModel)));
 	const missingHooks = disposables.add(descriptor.create({ instantiationService: editorServices }));
 	assert.throws(() => missingHooks.create(h(ownerDocument, 'div')), /Unknown service: hooksService/);
 	missingHooks.dispose();
@@ -900,7 +911,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(root.querySelector('.ash-modal-editor')?.getAttribute('role'), 'dialog');
 	assert.deepEqual(
 		[...root.querySelectorAll<HTMLElement>('[data-settings-category-id]')].map(element => element.dataset.settingsCategoryId),
-		['general', 'network'],
+		['general', 'github', 'network'],
 	);
 	const workbenchGroup = root.querySelector<HTMLElement>('[data-settings-group-id="workbench"]');
 	assert.ok(workbenchGroup);
@@ -908,7 +919,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	workbenchGroup.closest<HTMLElement>('.ash-tree-row')?.click();
 	assert.deepEqual(
 		[...root.querySelectorAll<HTMLElement>('[data-settings-category-id]')].map(element => element.dataset.settingsCategoryId),
-		['general', 'network', 'appearance', 'layout', 'startup'],
+		['general', 'github', 'network', 'appearance', 'layout', 'startup'],
 	);
 	assert.equal(root.querySelector('[data-settings-category-id="general"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
 	assert.equal(root.querySelector('[data-settings-category-id="appearance"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
