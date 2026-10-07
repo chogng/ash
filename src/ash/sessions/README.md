@@ -5,6 +5,8 @@
 [`docs/workbench-modes.md`](../../../docs/workbench-modes.md); this README
 is canonical for the renderer implementation and extension points.
 
+UI design and style boundaries are defined in [Sessions style](STYLE.md).
+
 Creator's Sites mode, contribution boundaries, implementation order and acceptance
 requirements are described in [Creator Sites](CREATOR_SITES.md).
 

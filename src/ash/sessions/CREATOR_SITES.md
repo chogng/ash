@@ -196,4 +196,4 @@ Sessions 窗口核心和共享服务不导入 contrib 实现。Creator 使用 Se
 - 文案、错误与可访问名称接入所属 NLS；至少验证一种非默认语言，以及窄窗口、主题和本轮受影响的界面状态。
 - 执行受影响模块测试、分层检查及正常构建，检查本轮引入的 warning；只记录实际运行的验证结果。
 
-界面遵守 [Sessions 设计规范](../../../.agents/skills/sessions-design-philosophy/SKILL.md)，无障碍实现遵守 [accessibility skill](../../../.agents/skills/accessibility/SKILL.md)。窗口职责与依赖约束分别见 [Sessions README](README.md) 与 [LAYERS.md](LAYERS.md)。
+界面遵守 [Sessions 设计与样式](STYLE.md)，无障碍实现遵守 [accessibility skill](../../../.agents/skills/accessibility/SKILL.md)。窗口职责与依赖约束分别见 [Sessions README](README.md) 与 [LAYERS.md](LAYERS.md)。

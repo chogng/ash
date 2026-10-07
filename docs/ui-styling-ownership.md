@@ -271,7 +271,7 @@ Theme 不判断某个 tab 是否 active，Part 也不选择 active token。`TabL
 
 ## 字体层级
 
-字号角色、字重与 CSS 用法统一由 [字体 token 规范](../.github/instructions/design-tokens.instructions.md#font-size--font-size) 维护；Sessions 的文字角色由 [Sessions 设计规范](../.agents/skills/sessions-design-philosophy/SKILL.md#字体与留白) 独立定义。本文只定义组件与宿主的字体样式所有权。
+字号角色、字重与 CSS 用法统一由 [字体 token 规范](../.github/instructions/design-tokens.instructions.md#font-size--font-size) 维护；Sessions 的文字角色由 [Sessions 设计与样式](../src/ash/sessions/STYLE.md#字体与留白) 独立定义。本文只定义组件与宿主的字体样式所有权。
 
 `TabList` 基座拥有 tab label 的统一强调字重 `fontWeight.semiBold` 与标准高度 `tab.height`（24px）；其 `inset` presentation 统一拥有 Editor 与 Chat 使用的内缩、圆角、截断渐变和 focus 几何，两个组合控件只提供各自的非选中背景 token。`CompositeBar`、Terminal tabs 等组合控件通过 presentation 决定字号、行高和内部间距，并只能调整直接托管的 TabList root 以完成对齐。Part 不得用深层 selector 改写这些字体规则。
 

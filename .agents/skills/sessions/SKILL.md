@@ -24,6 +24,7 @@ Start with `src/ash/sessions/README.md`, then read only the specifications relev
 | Area | Specification |
 |------|---------------|
 | Layering, folder ownership, cross-module imports | `src/ash/sessions/LAYERS.md` |
+| UI design, visual scales, interaction, and style boundaries | `src/ash/sessions/STYLE.md` |
 | Session/chat model, services, provider contract, core data flow | `src/ash/sessions/SESSIONS.md` |
 | Automations ownership, routing, migration, persistence, and run lifecycle | `src/ash/sessions/AUTOMATIONS.md` |
 | Workbench parts, grid, title bar, editor presentation | `src/ash/sessions/LAYOUT.md` |
@@ -60,6 +61,8 @@ Apply the core principles and the focused specification. Prefer small changes th
 - Shared workbench changes represent shared capability, not Sessions-specific policy.
 
 ### Specification edit gate
+
+UI design rules belong in `src/ash/sessions/STYLE.md`; this gate applies to architecture and behavior specifications.
 
 Bug fixes do not update specifications when they restore an existing contract. Before editing an authoritative specification, identify all three:
 
