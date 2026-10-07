@@ -37,8 +37,9 @@ import { IMenuService, MenuId, registerAction2 } from "../../../../../platform/a
 import { ICommandService } from "../../../../../platform/commands/common/commands.js";
 import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
 import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
-import { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
-import { transformContextMenuDelegate } from '../../../../../platform/contextview/browser/contextMenuService.js';
+import { IContextMenuService, IContextViewService } from "../../../../../platform/contextview/browser/contextView.js";
+import { BrowserContextMenuService, transformContextMenuDelegate } from '../../../../../platform/contextview/browser/contextMenuService.js';
+import { BrowserContextViewService } from '../../../../../platform/contextview/browser/contextViewService.js';
 import type { HoverSetupOptions, IHoverService, IManagedHover } from "../../../../../platform/hover/browser/hoverService.js";
 import { IResourceLabelService, ResourceLabels, DEFAULT_LABELS_CONTAINER, IResourceIconRenderer } from "../../../../browser/labels.js";
 import { GitWorkspaceError, IGitService, type GitCommitDetails, type GitRepository, type GraphQuery, type GitStatus } from "../../../../../workbench/contrib/git/common/gitService.js";
@@ -1096,20 +1097,23 @@ type ResourceGroupMenuFixture = DisposableStore & {
 	readonly key: (value: string, shiftKey?: boolean) => void;
 	readonly lastMenu: () => IContextMenuDelegate;
 	readonly menuCount: () => number;
+	readonly hideMenu: () => void;
+	readonly layoutMenu: () => void;
 	readonly refresh: () => void;
 	readonly removeGroup: (label: string) => void;
 };
 
-async function createResourceGroupMenuFixture(): Promise<ResourceGroupMenuFixture> {
+async function createResourceGroupMenuFixture(renderContextMenu = false): Promise<ResourceGroupMenuFixture> {
 	const resources = new DisposableStore();
 	const browser = new JSDOM('<!doctype html><body></body>');
 	const globals = installDomGlobals(browser);
-	resources.add(toDisposable(() => {
+	const disposeDom = (): void => {
 		browser.window.close();
 		for (const name of globals) {
 			Reflect.deleteProperty(globalThis, name);
 		}
-	}));
+	};
+	resources.add(toDisposable(disposeDom));
 	try {
 		const { ScmViewPane } = await import('../../browser/scmViewPane.js');
 		const dependencies = resources.add(createTestEditorServices(undefined, undefined, browser.window.document));
@@ -1145,16 +1149,37 @@ async function createResourceGroupMenuFixture(): Promise<ResourceGroupMenuFixtur
 		services.registerInstance(IMenuService, menus);
 		let menu: IContextMenuDelegate | undefined;
 		let menuCount = 0;
+		let contextView: BrowserContextViewService | undefined;
+		let contextMenu: BrowserContextMenuService | undefined;
+		if (renderContextMenu) {
+			// jsdom has no geometry; focus and menu events still use the production owners.
+			Object.defineProperties(browser.window.Element.prototype, {
+				getClientRects: { configurable: true, value: () => [{}] },
+				scrollTo: { configurable: true, value(): void { } },
+			});
+			contextView = resources.add(new BrowserContextViewService(browser.window.document.body));
+			services.registerInstance(IContextViewService, contextView);
+		}
 		services.registerInstance(IContextMenuService, {
-			onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
-			showContextMenu: delegate => { menu = transformContextMenuDelegate(delegate, menus, contextKeys); menuCount++; },
-			hideContextMenu: () => { menu?.onHide?.(true); },
+			onDidShowContextMenu: contextMenu?.onDidShowContextMenu ?? Event.None,
+			onDidHideContextMenu: contextMenu?.onDidHideContextMenu ?? Event.None,
+			showContextMenu: delegate => {
+				menu = transformContextMenuDelegate(delegate, menus, contextKeys);
+				menuCount++;
+				contextMenu?.showContextMenu(delegate);
+			},
+			hideContextMenu: () => {
+				if (contextMenu) contextMenu.hideContextMenu();
+				else menu?.onHide?.(true);
+			},
 		});
 		const { registerCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
 		registerCodeEditorServices(services);
+		if (renderContextMenu) contextMenu = resources.add(services.createInstance(BrowserContextMenuService));
 		const pane = resources.add(services.createInstance(ScmViewPane, browser.window.document.body, { id: VIEW_PANE_ID, title: 'Changes' }));
 		services.registerInstance(IViewsService, { getViewWithId: () => pane } as unknown as IViewsService);
 		browser.window.document.body.append(pane.element);
+		pane.setVisible(true);
 		const tree = pane.element.querySelector<HTMLElement>('[role="tree"]')!;
 		const group = (label: string): HTMLElement => [...tree.querySelectorAll<HTMLElement>('[role="treeitem"][aria-level="1"]')].find(row => row.querySelector('.ash-scm-section-label')?.textContent === label)!;
 		const folder = (label: string, groupLabel = 'Changes'): HTMLElement => {
@@ -1168,6 +1193,8 @@ async function createResourceGroupMenuFixture(): Promise<ResourceGroupMenuFixtur
 			key: (value: string, shiftKey = false) => { tree.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: value, shiftKey, bubbles: true, cancelable: true })); },
 			lastMenu: (): IContextMenuDelegate => { assert.ok(menu, 'The real group input must open a context menu'); return menu; },
 			menuCount: () => menuCount,
+			hideMenu: () => services.get(IContextMenuService).hideContextMenu(),
+			layoutMenu: () => contextView?.layout(),
 			refresh: () => { groups = groups.map(group => ({ ...group, resources: [...group.resources, resource('src/added.ts')] })); changes.fire(); },
 			removeGroup: (label: string) => { groups = groups.filter(group => group.label !== label); changes.fire(); },
 		});
@@ -1277,6 +1304,93 @@ test('SCM group Collapse All is limited to tree group menus and excluded from th
 	fixture.key('ContextMenu');
 	assert.equal(fixture.menuCount(), 0, 'Directory focus is not a group context');
 	assert.equal(fixture.folder('src').getAttribute('aria-expanded'), 'true');
+});
+
+test('SCM group menu closure preserves focus transferred outside the pane in the same repository', async () => {
+	using fixture = await createResourceGroupMenuFixture(true);
+	const { browser, tree, key } = fixture;
+	const outside = browser.window.document.createElement('input');
+	browser.window.document.body.append(outside);
+	tree.focus();
+	key('Home');
+	key('ContextMenu');
+	assert.equal(browser.window.document.activeElement?.getAttribute('role'), 'menu');
+	outside.focus();
+	fixture.hideMenu();
+	assert.equal(browser.window.document.activeElement, outside);
+	assert.equal(browser.window.document.querySelector('[role="menu"]'), null);
+});
+
+test('SCM group menu closure does not focus a hidden pane', async () => {
+	using fixture = await createResourceGroupMenuFixture(true);
+	const { browser, pane, tree, key } = fixture;
+	const outside = browser.window.document.createElement('input');
+	browser.window.document.body.append(outside);
+	tree.focus();
+	key('Home');
+	key('ContextMenu');
+	pane.setVisible(false);
+	outside.focus();
+	fixture.hideMenu();
+	assert.equal(browser.window.document.activeElement, outside);
+	assert.equal(pane.isBodyVisible(), false);
+});
+
+test('SCM group menu closure after a snapshot removes its anchor does not steal outside focus', async () => {
+	using fixture = await createResourceGroupMenuFixture(true);
+	const { browser, tree, key } = fixture;
+	const outside = browser.window.document.createElement('input');
+	browser.window.document.body.append(outside);
+	tree.focus();
+	key('Home');
+	key('ContextMenu');
+	const anchor = browser.window.document.getElementById(tree.getAttribute('aria-activedescendant')!)!;
+	outside.focus();
+	fixture.removeGroup('Staged Changes');
+	assert.equal(anchor.isConnected, false);
+	fixture.layoutMenu();
+	assert.equal(browser.window.document.querySelector('[role="menu"]'), null);
+	assert.equal(browser.window.document.activeElement, outside);
+});
+
+test('SCM group real menu returns focus on Escape and on action activation', async () => {
+	using fixture = await createResourceGroupMenuFixture(true);
+	const { browser, tree, key } = fixture;
+	tree.focus();
+	key('Home');
+	key('F10', true);
+	const menu = browser.window.document.querySelector<HTMLElement>('[role="menu"]')!;
+	assert.equal(browser.window.document.activeElement, menu);
+	menu.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+	assert.equal(browser.window.document.activeElement, tree);
+	assert.equal(fixture.folder('src', 'Staged Changes').getAttribute('aria-expanded'), 'true');
+	key('ContextMenu');
+	browser.window.document.querySelector<HTMLElement>('[role="menuitem"]')!.click();
+	assert.equal(browser.window.document.activeElement, tree);
+	assert.equal(fixture.folder('src', 'Staged Changes').getAttribute('aria-expanded'), 'false');
+	assert.equal(fixture.folder('src').getAttribute('aria-expanded'), 'true');
+});
+
+test('SCM group keyboard menu matches upstream modifiers and leaves other function keys untouched', async () => {
+	using fixture = await createResourceGroupMenuFixture();
+	const { browser, tree, key } = fixture;
+	tree.focus();
+	key('Home');
+	for (const modifiers of [{}, { ctrlKey: true }, { altKey: true }, { metaKey: true }]) {
+		const event = new browser.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, ...modifiers, bubbles: true, cancelable: true });
+		const menuCount = fixture.menuCount();
+		tree.dispatchEvent(event);
+		assert.equal(fixture.menuCount(), menuCount + 1);
+		assert.equal(event.defaultPrevented, true);
+		fixture.hideMenu();
+	}
+	for (const options of [{ key: 'F10' }, { key: 'F10', ctrlKey: true }, { key: 'F9', shiftKey: true }]) {
+		const event = new browser.window.KeyboardEvent('keydown', { ...options, bubbles: true, cancelable: true });
+		const menuCount = fixture.menuCount();
+		tree.dispatchEvent(event);
+		assert.equal(fixture.menuCount(), menuCount);
+		assert.equal(event.defaultPrevented, false);
+	}
 });
 
 test('ScmViewPane folds groups through the shared tree and keeps state when resources refresh', async () => {

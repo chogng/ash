@@ -234,11 +234,6 @@ export class ScmViewPane extends ViewPane {
 			// Snapshots replace group objects, so both repository and group must still match when the menu runs.
 			menuActionOptions: { args: [group, repository] },
 			getAnchor: () => event ? { x: event.clientX, y: event.clientY, targetWindow: anchor.ownerDocument.defaultView ?? undefined } : anchor,
-			onHide: () => {
-				if (!this.isDisposed && this.scmViewService.activeRepository === repository) {
-					this.tree.domFocus();
-				}
-			},
 		});
 	}
 
