@@ -22,6 +22,68 @@ test('Dismiss updates retained results and focus while refresh restores the sear
 	await expect(page.getByRole('status')).toHaveText('3 results');
 });
 
+test('Dismiss expands the next nested result branch and the last same-kind branch on fallback', async ({ page }) => {
+	await page.goto('/search.html');
+	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
+	await query.fill('focus');
+	await query.press('Enter');
+	await expect(page.getByRole('status')).toHaveText('5 results');
+	await page.getByRole('button', { name: 'More Actions', exact: true }).click();
+	await page.evaluate(() => window.ashSearchIntegration.selectTreeView());
+	const tree = page.getByRole('tree', { name: 'Search results', exact: true });
+	const folder = (name: string) => tree.getByRole('treeitem', { name, exact: true });
+	const file = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path').getByText('b.ts', { exact: true }) });
+	await folder('b').locator('.ash-tree-twistie').click();
+	await folder('c').locator('.ash-tree-twistie').click();
+	await tree.getByRole('treeitem', { name: 'Line 2, column 7: const needle = true;', exact: true }).click();
+	await page.evaluate(() => window.ashSearchIntegration.dismiss());
+	await expect(page.getByRole('status')).toHaveText('4 results');
+	for (const name of ['b', 'nested']) { await expect(folder(name)).toHaveAttribute('aria-expanded', 'true'); }
+	await expect(file).toHaveAttribute('aria-expanded', 'true');
+	await expect(folder('c')).toHaveAttribute('aria-expanded', 'false');
+	const next = tree.getByRole('treeitem', { name: 'Line 8, column 7: const needle = true;', exact: true });
+	await expect(next).toHaveAttribute('aria-selected', 'true');
+	await expect(tree).toHaveAttribute('aria-activedescendant', await next.getAttribute('id') as string);
+	await expect(tree).toBeFocused();
+
+	await folder('b').locator('.ash-tree-twistie').click();
+	await folder('c').locator('.ash-tree-twistie').click();
+	await tree.getByRole('treeitem', { name: 'Line 10, column 7: const needle = true;', exact: true }).click();
+	await page.evaluate(() => window.ashSearchIntegration.dismiss());
+	await expect(page.getByRole('status')).toHaveText('3 results');
+	for (const name of ['b', 'nested']) { await expect(folder(name)).toHaveAttribute('aria-expanded', 'true'); }
+	await expect(file).toHaveAttribute('aria-expanded', 'true');
+	const last = tree.getByRole('treeitem', { name: 'Line 9, column 7: const needle = true;', exact: true });
+	await expect(last).toHaveAttribute('aria-selected', 'true');
+	await expect(tree).toHaveAttribute('aria-activedescendant', await last.getAttribute('id') as string);
+	await expect(tree).toBeFocused();
+});
+
+test('Dismiss restores file focus inside a collapsed folder without expanding the target file', async ({ page }) => {
+	await page.goto('/search.html');
+	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
+	await query.fill('focus');
+	await query.press('Enter');
+	await expect(page.getByRole('status')).toHaveText('5 results');
+	await page.getByRole('button', { name: 'More Actions', exact: true }).click();
+	await page.evaluate(() => window.ashSearchIntegration.selectTreeView());
+	const tree = page.getByRole('tree', { name: 'Search results', exact: true });
+	const folder = (name: string) => tree.getByRole('treeitem', { name, exact: true });
+	const file = (name: string) => tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path').getByText(name, { exact: true }) });
+	await file('b.ts').locator('.ash-tree-twistie').click();
+	await folder('b').locator('.ash-tree-twistie').click();
+	await folder('c').locator('.ash-tree-twistie').click();
+	await file('a.ts').click();
+	await page.evaluate(() => window.ashSearchIntegration.dismiss());
+	await expect(page.getByRole('status')).toHaveText('3 results');
+	for (const name of ['b', 'nested']) { await expect(folder(name)).toHaveAttribute('aria-expanded', 'true'); }
+	await expect(file('b.ts')).toHaveAttribute('aria-expanded', 'false');
+	await expect(file('b.ts')).toHaveAttribute('aria-selected', 'true');
+	await expect(tree).toHaveAttribute('aria-activedescendant', await file('b.ts').getAttribute('id') as string);
+	await expect(folder('c')).toHaveAttribute('aria-expanded', 'false');
+	await expect(tree).toBeFocused();
+});
+
 test('Dismiss leaves a running search active and incorporates later result batches', async ({ page }) => {
 	await page.goto('/search.html');
 	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
@@ -311,6 +373,25 @@ test('Copy All includes collapsed retained results and excludes dismissed occurr
 	await expect(page.evaluate(() => window.ashSearchIntegration.copyAll())).rejects.toThrow('Clipboard permission denied');
 	await expect(page.getByRole('status')).toHaveText('2 results');
 	expect((await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).length).toBe(3);
+});
+
+test('Copy All does not write while Search is inactive and resumes from its retained model', async ({ page }) => {
+	await page.goto('/search.html');
+	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
+	await query.fill('needle');
+	await query.press('Enter');
+	await expect(page.getByRole('status')).toHaveText('1 results');
+	const snapshot = await page.evaluate(() => window.ashSearchIntegration.snapshot());
+	await page.evaluate(() => window.ashSearchIntegration.setSearchVisible(false));
+	await expect(query).toBeHidden();
+	await page.evaluate(() => window.ashSearchIntegration.copyAll());
+	expect(await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual([]);
+	expect(await page.evaluate(() => window.ashSearchIntegration.snapshot())).toEqual(snapshot);
+	await expect(query).toBeHidden();
+	await page.evaluate(() => window.ashSearchIntegration.setSearchVisible(true));
+	await expect(query).toBeVisible();
+	await page.evaluate(() => window.ashSearchIntegration.copyAll());
+	expect(await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['/workspace/src/main.ts\n  1,7: const needle = true;']);
 });
 
 test('Copy All reads the latest incremental results and its help is translated', async ({ page }) => {

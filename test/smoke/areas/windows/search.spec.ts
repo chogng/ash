@@ -1,5 +1,5 @@
 import { expect, test } from '../../../automation/test.js';
-import { basename, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import type { ElectronApplication } from '@playwright/test';
 
@@ -54,6 +54,51 @@ test('Search Dismiss removes retained matches, files and folders without changin
 	await expect(tree).toBeFocused();
 	await page.getByRole('button', { name: 'Refresh search', exact: true }).click();
 	await expect(workbench.search.status).toHaveText('4 results');
+	for (const [path, content] of contents) { expect(await readFile(join(testWorkspace.directory, path), 'utf8')).toBe(content); }
+});
+
+test('Search Dismiss restores match focus across collapsed branches through the actual result tree', async ({ target, application, workbench, testWorkspace }) => {
+	test.skip(target.appServerMode !== 'required', 'Uses actual workspace content searches.');
+	const contents = [
+		['a/a.ts', 'ash_focus_token first\nash_focus_token second\n'],
+		['b/nested/b.ts', 'ash_focus_token next\nash_focus_token last\n'],
+		['c/c.ts', 'ash_focus_token tail\n'],
+	] as const;
+	for (const [path, content] of contents) {
+		await mkdir(join(testWorkspace.directory, dirname(path)), { recursive: true });
+		await writeFile(join(testWorkspace.directory, path), content);
+	}
+	await workbench.search.open();
+	await workbench.search.search('ash_focus_token');
+	await expect(workbench.search.status).toHaveText('5 results');
+	const page = workbench.page;
+	const tree = workbench.search.element.getByRole('tree');
+	const toolbar = page.getByRole('toolbar', { name: 'Search result actions', exact: true });
+	await workbench.menus.select(application, () => toolbar.getByRole('button', { name: 'More Actions', exact: true }).click(), ['View as tree']);
+	const folder = (name: string) => tree.getByRole('treeitem', { name, exact: true });
+	const file = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path').getByText('b.ts', { exact: true }) });
+	await folder('b').locator('.ash-tree-twistie').click();
+	await folder('c').locator('.ash-tree-twistie').click();
+	const dismissKey = process.platform === 'darwin' ? 'Meta+Backspace' : 'Delete';
+	await tree.locator('.ash-search-match', { hasText: 'ash_focus_token second' }).click();
+	await tree.press(dismissKey);
+	await expect(workbench.search.status).toHaveText('4 results');
+	for (const name of ['b', 'nested']) { await expect(folder(name)).toHaveAttribute('aria-expanded', 'true'); }
+	await expect(file).toHaveAttribute('aria-expanded', 'true');
+	await expect(folder('c')).toHaveAttribute('aria-expanded', 'false');
+	const next = tree.getByRole('treeitem', { name: 'Line 1, column 1: ash_focus_token next', exact: true });
+	await expect(next).toHaveAttribute('aria-selected', 'true');
+	await expect(tree).toHaveAttribute('aria-activedescendant', (await next.getAttribute('id'))!);
+	await expect(tree).toBeFocused();
+	await folder('b').locator('.ash-tree-twistie').click();
+	await folder('c').locator('.ash-tree-twistie').click();
+	await tree.locator('.ash-search-match', { hasText: 'ash_focus_token tail' }).click();
+	await tree.press(dismissKey);
+	await expect(workbench.search.status).toHaveText('3 results');
+	const last = tree.getByRole('treeitem', { name: 'Line 2, column 1: ash_focus_token last', exact: true });
+	await expect(last).toHaveAttribute('aria-selected', 'true');
+	await expect(tree).toHaveAttribute('aria-activedescendant', (await last.getAttribute('id'))!);
+	await expect(tree).toBeFocused();
 	for (const [path, content] of contents) { expect(await readFile(join(testWorkspace.directory, path), 'utf8')).toBe(content); }
 });
 
@@ -412,6 +457,55 @@ test('Search translates query options and file filters into Chinese', async ({ t
 	await expect(workbench.page.getByRole('dialog').getByRole('textbox')).toHaveValue(/搜索编辑器[\s\S]*\.code-search/);
 	await workbench.page.keyboard.press('Escape');
 	await expect(editorQuery).toBeFocused();
+});
+
+test('Search Copy All leaves the host clipboard intact when its view container is inactive', async ({ target, application, workbench, testWorkspace }) => {
+	test.skip(target.appServerMode !== 'required', 'Uses actual workspace searches, keybindings and the host clipboard.');
+	await writeFile(join(testWorkspace.directory, 'main.ts'), 'ash_active_copy_token\n');
+	await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
+	const editor = workbench.editors.groupAt(0).editor;
+	const binding = '[{"key":"ctrl+alt+y","command":"search.action.copyAll"}]';
+	await editor.input.press('ControlOrMeta+A');
+	await editor.input.evaluate((element, source) => {
+		const clipboardData = new DataTransfer();
+		clipboardData.setData('text/plain', source);
+		element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
+	}, binding);
+	await editor.waitForEditorContents(content => content === binding);
+	await workbench.quickaccess.runCommand('workbench.action.files.save');
+	const page = workbench.page;
+	const seedClipboard = async (): Promise<void> => {
+		// The marker belongs to this test; previous clipboard contents are never read.
+		if (target.kind === 'browser') {
+			await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+			await page.evaluate(() => navigator.clipboard.writeText('ash-inactive-copy-fixture'));
+		} else {
+			await (application as ElectronApplication).evaluate(({ clipboard }) => clipboard.writeText('ash-inactive-copy-fixture'));
+		}
+	};
+	const readCopied = () => target.kind === 'browser'
+		? page.evaluate(() => navigator.clipboard.readText())
+		: (application as ElectronApplication).evaluate(({ clipboard }) => clipboard.readText());
+	await workbench.search.open();
+	await workbench.search.search('ash_active_copy_token');
+	await expect(workbench.search.status).toHaveText('1 results');
+	await seedClipboard();
+	await workbench.search.query.press('Control+Alt+Y');
+	const delimiter = process.platform === 'win32' ? '\r\n' : '\n';
+	const path = join(testWorkspace.directory, 'main.ts').replace(/^([a-z]):/i, (_prefix, drive: string) => drive.toUpperCase() + ':');
+	const expected = path + delimiter + '  1,1: ash_active_copy_token';
+	await expect.poll(readCopied).toBe(expected);
+	await workbench.openExplorer();
+	await expect(workbench.search.element).toBeHidden();
+	await seedClipboard();
+	await page.keyboard.press('Control+Alt+Y');
+	await workbench.waitForUiIdle();
+	expect(await readCopied()).toBe('ash-inactive-copy-fixture');
+	await expect(workbench.search.element).toBeHidden();
+	await workbench.search.open();
+	await expect(workbench.search.status).toHaveText('1 results');
+	await workbench.search.query.press('Control+Alt+Y');
+	await expect.poll(readCopied).toBe(expected);
 });
 
 test('Search Copy All copies current retained results through the host clipboard', async ({ target, workbench, testWorkspace, application }) => {

@@ -19,7 +19,7 @@ registerAction2(class CopyAllCommandAction extends Action2 {
 	}
 
 	public override async run(accessor: ServicesAccessor): Promise<void> {
-		const view = accessor.get(IViewsService).getViewWithId<SearchView>(SEARCH_VIEW_ID);
+		const view = accessor.get(IViewsService).getActiveViewWithId<SearchView>(SEARCH_VIEW_ID);
 		if (!view) { return; }
 		const labels = accessor.get(ILabelService);
 		// Read the retained model when invoked; collapsed rows and earlier snapshots are not the source.

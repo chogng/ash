@@ -338,7 +338,7 @@ function registerView(services: InstantiationService, view: SearchView): void {
 		isViewVisible: id => id === SEARCH_VIEW_ID,
 		openView: async <T extends IView>(): Promise<T | null> => view as unknown as T,
 		closeView() { },
-		getActiveViewWithId: <T extends IView>(id: string) => id === SEARCH_VIEW_ID ? view as unknown as T : null,
+		getActiveViewWithId: <T extends IView>(id: string) => id === SEARCH_VIEW_ID && view.isVisible() ? view as unknown as T : null,
 		getViewWithId: <T extends IView>(id: string) => id === SEARCH_VIEW_ID ? view as unknown as T : null,
 		focusView: async () => { view.focus(); return true; },
 	});
@@ -387,6 +387,56 @@ test('Dismiss runs the registered command, restores focus and updates retained s
 		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
 	}
 });
+
+for (const scenario of [
+	{ name: 'the next collapsed file', focusedFile: 'a.ts', expectedFile: 'b.ts', expectedMatch: 0, selectedFile: undefined, count: 5 },
+	{ name: 'the last collapsed file when no later match remains', focusedFile: 'c.ts', expectedFile: 'b.ts', expectedMatch: 1, selectedFile: 'c.ts', count: 4 },
+	{ name: 'the next collapsed file beyond a selected branch', focusedFile: 'a.ts', expectedFile: 'c.ts', expectedMatch: 0, selectedFile: 'b.ts', count: 3 },
+]) {
+	test(`Dismiss restores match focus in ${scenario.name}`, async () => {
+		const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+		const globals = installDomGlobals(browser);
+		const delivered = ['a.ts', 'b.ts', 'c.ts'].flatMap(path => matches.map(match => ({ ...match, path })));
+		try {
+			using store = new DisposableStore();
+			const services = createServices(store, browser, {
+				search: async (_query, options) => {
+					options?.onProgress?.(delivered);
+					return { resultCount: delivered.length, limitHit: false, error: undefined };
+				}
+			});
+			const { SearchView } = await import('../../browser/searchView.js');
+			await import('../../browser/searchActionsRemoveReplace.js');
+			using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
+			registerView(services, view);
+			input(view.element, 'Search workspace').value = 'needle';
+			view.element.querySelector('form')!.dispatchEvent(new browser.window.Event('submit', { cancelable: true }));
+			await waitFor(() => view.getSearchResultSnapshot()?.matchCount === 6);
+			const tree = view.getControl();
+			const focused = view.searchResult.files.find(file => file.path === scenario.focusedFile)!.matches[1]!;
+			const expectedFile = view.searchResult.files.find(file => file.path === scenario.expectedFile)!;
+			const expected = expectedFile.matches[scenario.expectedMatch]!;
+			const selected = view.searchResult.files.find(file => file.path === scenario.selectedFile);
+			for (const file of view.searchResult.files) {
+				if (file.path !== scenario.focusedFile) { tree.collapse(file.id); }
+			}
+			tree.setFocus(focused.id);
+			tree.setSelection(selected ? [focused.id, selected.id] : [focused.id]);
+			await services.get(ICommandService).executeCommand(SearchCommandIds.RemoveActionId);
+			assert.deepEqual({ focus: tree.focus?.id, selection: tree.selection.map(element => element.id), collapsed: tree.isCollapsed(expectedFile.id), count: view.getSearchResultSnapshot()?.matchCount }, {
+				focus: expected.id, selection: [expected.id], collapsed: false, count: scenario.count,
+			});
+			assert.equal(browser.window.document.activeElement, tree.element);
+			assert.ok(tree.getVisibleElements().includes(expected));
+			for (const file of view.searchResult.files) {
+				if (file.path !== scenario.focusedFile && file !== expectedFile) { assert.equal(tree.isCollapsed(file.id), true); }
+			}
+		} finally {
+			browser.window.close();
+			for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
+		}
+	});
+}
 
 test('Dismiss during a running search retains the job and accepts later batches before completion', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
@@ -484,6 +534,42 @@ test('Copy All formats the retained model in root, folder, filename and range or
 		assert.equal(written[1], blocks.filter(block => !block.startsWith('/workspace/src/file10.ts')).join(delimiter + delimiter));
 		assert.equal(view.getSearchResultSnapshot()?.matchCount, 6);
 		assert.ok(!view.getSearchResultSnapshot()?.content.includes('file10.ts'));
+	} finally {
+		browser.window.close();
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
+	}
+});
+
+test('Copy All leaves the clipboard intact while Search is inactive and reads retained results after reopening', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	const globals = installDomGlobals(browser);
+	const written: string[] = [];
+	try {
+		using store = new DisposableStore();
+		const services = createServices(store, browser, {
+			search: async (_query, options) => {
+				options?.onProgress?.(matches);
+				return { resultCount: matches.length, limitHit: false, error: undefined };
+			}
+		});
+		services.registerInstance(IClipboardService, new BrowserClipboardService({ writeText: async value => { written.push(value); } } as Clipboard));
+		const { SearchView } = await import('../../browser/searchView.js');
+		await import('../../browser/searchActionsCopy.js');
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
+		registerView(services, view);
+		input(view.element, 'Search workspace').value = 'needle';
+		view.element.querySelector('form')!.dispatchEvent(new browser.window.Event('submit', { cancelable: true }));
+		await waitFor(() => view.getSearchResultSnapshot()?.matchCount === 2);
+		const snapshot = view.getSearchResultSnapshot();
+		view.setVisible(false);
+		assert.equal(services.get(IViewsService).getActiveViewWithId(SEARCH_VIEW_ID), null);
+		assert.equal(services.get(IViewsService).getViewWithId(SEARCH_VIEW_ID), view);
+		await services.get(ICommandService).executeCommand(SearchCommandIds.CopyAllCommandId);
+		assert.deepEqual({ written, snapshot: view.getSearchResultSnapshot(), visible: view.isVisible() }, { written: [], snapshot, visible: false });
+		view.setVisible(true);
+		await services.get(ICommandService).executeCommand(SearchCommandIds.CopyAllCommandId);
+		const delimiter = isWindows ? '\r\n' : '\n';
+		assert.deepEqual(written, [['/workspace/src/main.ts', '  4,7: const needle = true;', '  9,5: use(needle);'].join(delimiter)]);
 	} finally {
 		browser.window.close();
 		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }

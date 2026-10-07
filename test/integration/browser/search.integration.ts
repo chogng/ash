@@ -1,4 +1,5 @@
 import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
+import type { IAction } from '../../../src/ash/base/common/actions.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { IContentSearchService, type IContentSearchQuery } from '../../../src/ash/platform/search/common/search.js';
@@ -63,7 +64,13 @@ instantiation.registerInstance(ICommandService, commands);
 const configuration = store.add(new WorkbenchConfigurationService());
 instantiation.registerInstance(IConfigurationService, configuration);
 instantiation.registerInstance(IContextKeyService, store.add(new ContextKeyService()));
-const menus: IContextMenuService = { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { }, hideContextMenu() { } };
+let treeViewAction: IAction | undefined;
+// Menu presentation is outside this fixture; retain the actual toolbar action for tree-layout scenarios.
+const menus: IContextMenuService = {
+	onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
+	showContextMenu: delegate => { treeViewAction = delegate.getActions?.().find(action => action.id === 'search.treeView'); },
+	hideContextMenu() { },
+};
 const contextView = store.add(new BrowserContextViewService(document.body));
 instantiation.registerInstance(IContextMenuService, menus);
 instantiation.registerInstance(IHoverService, store.add(new HoverService(configuration, contextView, menus)));
@@ -98,6 +105,16 @@ instantiation.registerInstance(IContentSearchService, {
 	search: async (query, options) => {
 		queries.push(query);
 		const first = { dirId: 'first', path: 'src/main.ts', lineNumber: 1, preview: 'const needle = true;', ranges: [{ start: 6, end: 12 }] };
+		if (query.text === 'focus') {
+			options?.onProgress?.([
+				{ ...first, path: 'a/a.ts' },
+				{ ...first, path: 'a/a.ts', lineNumber: 2 },
+				{ ...first, path: 'b/nested/b.ts', lineNumber: 8 },
+				{ ...first, path: 'b/nested/b.ts', lineNumber: 9 },
+				{ ...first, path: 'c/c.ts', lineNumber: 10 },
+			]);
+			return { resultCount: 5, limitHit: false, error: undefined };
+		}
 		if (query.text === 'windows') {
 			options?.onProgress?.([
 				{ ...first, path: 'root.ts', lineNumber: 2, preview: 'needle', ranges: [{ start: 0, end: 6 }] },
@@ -147,12 +164,17 @@ instantiation.registerInstance(IViewsService, {
 	isViewVisible: id => id === SEARCH_VIEW_ID,
 	openView: async <T extends IView>(): Promise<T | null> => pane as unknown as T,
 	closeView() { },
-	getActiveViewWithId: <T extends IView>(id: string) => id === SEARCH_VIEW_ID ? pane as unknown as T : null,
+	getActiveViewWithId: <T extends IView>(id: string) => id === SEARCH_VIEW_ID && pane.isVisible() ? pane as unknown as T : null,
 	getViewWithId: <T extends IView>(id: string) => id === SEARCH_VIEW_ID ? pane as unknown as T : null,
 	focusView: async () => { pane.focus(); return true; },
 });
 window.addEventListener('pagehide', () => store.dispose(), { once: true });
 window.ashSearchIntegration = {
+	selectTreeView: async () => {
+		if (!treeViewAction) { throw new Error('Search toolbar did not provide View as tree'); }
+		await treeViewAction.run();
+	},
+	setSearchVisible: value => pane.setVisible(value),
 	copyAll: () => commands.executeCommand<void>(SearchCommandIds.CopyAllCommandId),
 	clipboardWrites: () => [...clipboardWrites],
 	setClipboardFailure: value => { clipboardFailure = value; },
@@ -174,6 +196,8 @@ window.ashSearchIntegration = {
 declare global {
 	interface Window {
 		ashSearchIntegration: {
+			selectTreeView(): Promise<void>;
+			setSearchVisible(value: boolean): void;
 			copyAll(): Promise<void>;
 			clipboardWrites(): readonly string[];
 			setClipboardFailure(value: boolean): void;
