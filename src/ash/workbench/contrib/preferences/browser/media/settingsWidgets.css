@@ -94,8 +94,9 @@
 	line-height: 1.45;
 }
 
-/* Announce transient saves without inserting a visible line into the setting row. */
-.ash-settings-indicators {
+/* Keep status available to assistive technology without shifting the row's controls. */
+.ash-settings-indicators,
+.ash-settings-configured-description {
 	position: absolute;
 	width: 1px;
 	height: 1px;
@@ -104,7 +105,22 @@
 	white-space: nowrap;
 }
 
-.ash-settings-indicators[hidden] {
+.ash-settings-indicators[hidden],
+.ash-settings-configured-description[hidden] {
+	display: none;
+}
+
+.ash-settings-configured-marker {
+	position: absolute;
+	top: 12px;
+	bottom: 12px;
+	left: 0;
+	width: 4px;
+	border-radius: var(--ash-cornerRadius-small);
+	background: var(--ash-description-foreground);
+}
+
+.ash-settings-configured-marker[hidden] {
 	display: none;
 }
 

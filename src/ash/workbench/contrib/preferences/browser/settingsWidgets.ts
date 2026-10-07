@@ -14,6 +14,7 @@ import { Disposable, DisposableStore, type IDisposable, toDisposable } from '../
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import type { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { HoverConfiguration } from '../../../../platform/hover/common/hoverService.js';
 import type { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import { parseJsonc } from '../../../../base/common/jsonc.js';
 import type { JsonSchema } from '../../../../base/common/jsonSchema.js';
@@ -234,6 +235,7 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 		this.presentation = settingPresentation(descriptor);
 		this.domNode = h(document, 'div');
 		this.domNode.className = `ash-configuration-setting ash-${this.presentation}-setting`;
+		this.domNode.setAttribute('role', 'group');
 		if (kind === 'select' && this.presentation === 'editor') this.domNode.classList.add('ash-editor-setting-select-row');
 		if (kind === 'toggle') this.domNode.classList.add(`ash-${this.presentation}-toggle-setting`);
 		this._register(toDisposable(() => this.domNode.remove()));
@@ -244,7 +246,7 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 		this.titleDomNode.className = `ash-configuration-setting-title ash-${this.presentation}-setting-title`;
 		this.descriptionDomNode = h(document, 'span');
 		this.descriptionDomNode.className = `ash-configuration-setting-description ash-${this.presentation}-setting-description`;
-		this.indicators = this._register(new SettingsTreeIndicatorsLabel(this.copyDomNode));
+		this.indicators = this._register(new SettingsTreeIndicatorsLabel(this.copyDomNode, options.contextViewProvider, () => options.configurationService.getValue<number>(HoverConfiguration.delay)));
 		this.copyDomNode.prepend(this.titleDomNode, this.descriptionDomNode);
 		this.updateCopy(descriptor);
 
@@ -284,7 +286,12 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 
 	protected bindState(renderState: (state: SettingState<TValue>) => void): void {
 		const render = (state: SettingState<TValue>): void => {
-			this.indicators.update({ isPending: state.isPending });
+			// Domain bindings own their own defaults; they do not represent local user configuration.
+			const isConfigured = !this.descriptor.binding && !state.isDefault;
+			this.indicators.update({ isPending: state.isPending, isConfigured });
+			this.domNode.classList.toggle('is-configured', isConfigured);
+			if (isConfigured) this.domNode.setAttribute('aria-describedby', this.indicators.configuredDescriptionId);
+			else this.domNode.removeAttribute('aria-describedby');
 			renderState(state);
 		};
 		this._register(this.model.onDidChange(render));
@@ -318,6 +325,7 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 
 	private updateCopy(descriptor: TSetting): void {
 		this.titleDomNode.textContent = descriptor.title;
+		this.domNode.setAttribute('aria-label', descriptor.title);
 		this.descriptionDomNode.textContent = descriptor.description;
 	}
 }

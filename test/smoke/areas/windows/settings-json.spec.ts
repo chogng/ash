@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 import type { PlaywrightApplication } from '../../../automation/playwrightDriver.js';
+import { Workbench } from '../../../automation/workbench.js';
 
 async function pasteJson(input: Locator, source: string): Promise<void> {
 	await input.evaluate((element, source) => {
@@ -319,7 +320,14 @@ for (const locale of ['en', 'zh-CN']) {
 				await workbench.settingsEditor.selectCategory('appearance');
 			}
 			await settings.getByRole('searchbox').fill(`@id:${key}`);
-			const more = settings.locator(`[data-settings-item-id="${key}"]`).getByRole('button', { name: chinese ? /的更多操作$/u : /^More actions for /u });
+			const row = settings.locator(`[data-settings-item-id="${key}"]`);
+			const marker = row.locator('.ash-settings-configured-marker');
+			await expect(row).toHaveClass(/is-configured/u);
+			await expect(row).toHaveAccessibleDescription(chinese ? '已在本地用户设置中配置。' : 'Configured in local user settings.');
+			await expect(marker).toBeVisible();
+			await expect(marker).toHaveAttribute('aria-hidden', 'true');
+			await expect(marker).not.toHaveAttribute('tabindex');
+			const more = row.getByRole('button', { name: chinese ? /的更多操作$/u : /^More actions for /u });
 			await more.focus();
 			await more.press('Enter');
 			await expect(page.getByRole('menuitem', { name: chinese ? '复制设置 ID' : 'Copy Setting ID', exact: true })).toBeVisible();
@@ -328,6 +336,9 @@ for (const locale of ['en', 'zh-CN']) {
 			await reset.focus();
 			await reset.press('Enter');
 			await expect(more).toBeFocused();
+			await expect(row).not.toHaveClass(/is-configured/u);
+			await expect(row).toHaveAccessibleDescription('');
+			await expect(marker).toBeHidden();
 			await more.press('Enter');
 			await expect(reset).toBeDisabled();
 			await page.keyboard.press('Escape');
@@ -348,6 +359,78 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect(settings.getByRole('searchbox')).toHaveValue('');
 	});
 }
+
+test('Configured markers update after external persisted writes and release their hovers', async ({ application, workbench }) => {
+	const page = workbench.page;
+	const workbenchUrl = page.url();
+	await workbench.settingsEditor.openUserSettingsUI();
+	await workbench.settingsEditor.selectEditorCategory('editor-fonts');
+	const settings = workbench.settingsEditor.element;
+	await settings.getByRole('searchbox').fill('@id:editor.fontSize');
+	const row = settings.locator('[data-settings-item-id="editor.fontSize"]');
+	const marker = row.locator('.ash-settings-configured-marker');
+	const font = row.getByRole('spinbutton');
+	const fontDefault = Number(await font.inputValue());
+	let writer: Workbench | undefined;
+	const saveExternal = async (source: string): Promise<void> => {
+		if ('windows' in application) {
+			await page.evaluate(async source => {
+				const current = await globalThis.ashTestMainProcess.call<{ revision: number; }>('configuration', 'read');
+				await globalThis.ashTestMainProcess.call('configuration', 'update', { expectedRevision: current.revision, document: { version: 1, source } });
+			}, source);
+		} else {
+			if (!writer) {
+				const writerPage = await page.context().newPage();
+				writer = new Workbench(writerPage);
+				await writerPage.goto(workbenchUrl);
+				await writer.waitForReady();
+				await writer.quickaccess.runCommand('workbench.action.openSettingsJson');
+			}
+			const group = writer.editors.groupAt(0);
+			await group.editor.input.press('ControlOrMeta+A');
+			await pasteJson(group.editor.input, source);
+			await group.editor.input.press('ControlOrMeta+S');
+			await expect(group.tabs.filter({ hasText: 'User Settings (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
+		}
+	};
+	try {
+		await expect(marker).toBeHidden();
+		await saveExternal(JSON.stringify({ 'editor.fontSize': fontDefault }));
+		await expect(font).toHaveValue(String(fontDefault));
+		await expect(row).toHaveClass(/is-configured/u);
+		await expect(row).toHaveAccessibleDescription('Configured in local user settings.');
+		await expect(marker).toBeVisible();
+		for (const scheme of ['light', 'dark'] as const) {
+			await workbench.setAppearance(application, scheme);
+			await expect.poll(() => row.evaluate(element => {
+				const description = element.querySelector('.ash-configuration-setting-description')!;
+				const marker = element.querySelector('.ash-settings-configured-marker')!;
+				return getComputedStyle(marker).backgroundColor === getComputedStyle(description).color;
+			})).toBe(true);
+		}
+		await marker.hover();
+		await expect(page.getByRole('tooltip')).toHaveText('Configured in local user settings.');
+		await saveExternal(JSON.stringify({ '[typescript]': { 'editor.fontSize': fontDefault + 2 } }));
+		await expect(font).toHaveValue(String(fontDefault));
+		await expect(row).not.toHaveClass(/is-configured/u);
+		await expect(row).toHaveAccessibleDescription('');
+		await expect(marker).toBeHidden();
+		await expect(page.getByRole('tooltip')).toHaveCount(0);
+		await saveExternal(JSON.stringify({ 'editor.fontSize': fontDefault }));
+		await expect(marker).toBeVisible();
+		await marker.hover();
+		await expect(page.getByRole('tooltip')).toBeVisible();
+		await settings.locator('.ash-modal-editor-close').click();
+		await expect(page.getByRole('tooltip')).toHaveCount(0);
+	} finally {
+		if (writer) {
+			// Release the clean working copy before closing its IndexedDB-backed window services.
+			await writer.quickaccess.runCommand('workbench.action.closeAllEditors');
+			await expect(writer.editors.groupAt(0).tabs).toHaveCount(0);
+			await writer.page.close();
+		}
+	}
+});
 
 test('Saving JSON token customization refreshes Markdown and the canonical profile settings', async ({ application, target, testWorkspace, workbench }) => {
 	test.skip(target.appServerMode !== 'required', 'Requires the product grammar resources');
@@ -413,6 +496,7 @@ test('Settings JSON rejects invalid values and preserves dirty edits during a co
 	await font.fill('20');
 	await font.press('Tab');
 	await expect(settings.locator('[data-settings-item-id="editor.fontSize"] .ash-settings-indicators')).toBeHidden();
+	await expect(settings.locator('[data-settings-item-id="editor.fontSize"] .ash-settings-configured-marker')).toBeVisible();
 	await settings.locator('.ash-modal-editor-close').click();
 	await group.editor.waitForEditorFocus();
 	const conflict = await workbench.dialogs.expectMessage(application, 'File changed on disk', () => group.editor.input.press('ControlOrMeta+S'));

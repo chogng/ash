@@ -36,6 +36,8 @@ GitHub 设置页显示复用 Codex 登录和 Ash 的 GitHub 账号，检查指�
 
 Sessions 设置项菜单使用对话框内的 ContextView，以便在模态设置页中接收键盘焦点。菜单与服务随对话框关闭释放；取消或执行菜单动作后，焦点回到对应的“更多操作”按钮。
 
+配置注册表驱动、没有自有 binding 的设置行显示“已配置”标记，判断依据是当前本地用户覆盖是否存在；显式保存默认值仍显示标记，语言覆盖块不会标记基础设置。设置行通过单一无障碍说明提供同样信息，标记不进入 Tab 顺序。鼠标悬停说明复用现有 Hover 控件与该设置页的 ContextView，按 `workbench.hover.delay` 的当前值延迟显示；移除覆盖或销毁设置页会关闭悬停。外部配置保存立即更新状态；重置失败保留实际已保存的标记。样式复用现有主题颜色，不新增配置状态 owner。
+
 配置注册表驱动的设置项菜单提供“在 JSON 中编辑”，复杂键值控件同时提供直接按钮。设置页调用 `openUserSettings({ target: USER_LOCAL, revealSetting: { key, edit: true } })`。Preferences 服务取得编辑器共享的文件模型，在现有 JSONC 中定位顶层键；缺失键以注册默认值插入未保存的模型，保留注释、尾随逗号和其他键。普通编辑器打开固定标签，选择对应值并取得焦点。已有脏模型复用，插入支持撤销，不在打开入口中保存。使用自有 binding 的设置不提供此入口。
 
 保存沿普通文本编辑器 → TextFileService → SettingsFileSystemProvider → ConfigurationResourceService → 配置 API 写入同一份用户配置。配置变更事件驱动主题和编辑器立即刷新；保存使用模型读取时的修订号，真实外部修改会进入现有保存冲突处理。无效 JSONC 或注册值被拒绝，已生效配置保持原值，未保存文本仍留在编辑器。当前只支持 `USER` 与 `USER_LOCAL`，工作区和远程用户目标尚未实现。Electron 持久化到当前 profile 的 `settings.json`，Web 持久化到现有 IndexedDB 配置存储。

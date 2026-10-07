@@ -63,6 +63,16 @@ test('Sessions setting menus copy their current registered value as JSON', async
 			});
 		await openSettings();
 		await expect(row.getByRole('switch')).toBeChecked();
+		await expect(row).toHaveClass(/is-configured/u);
+		await expect(row).toHaveAccessibleDescription('Configured in local user settings.');
+		const marker = row.locator('.ash-settings-configured-marker');
+		await expect(marker).toBeVisible();
+		await expect(marker).not.toHaveAttribute('tabindex');
+		await marker.hover();
+		await expect(settings.getByRole('tooltip')).toHaveText('Configured in local user settings.');
+		await sessionsPage.keyboard.press('Escape');
+		await expect(settings.getByRole('tooltip')).toHaveCount(0);
+		await expect(settings).toBeVisible();
 		await openMenu();
 		await copy.press('Enter');
 		await expect(copy).toHaveCount(0);
@@ -85,9 +95,13 @@ test('Sessions setting menus copy their current registered value as JSON', async
 		await copy.press('Enter');
 		await expect(more).toBeFocused();
 		await expect.poll(read).toEqual({ text: '"sessions.activityBar.compact": true', count: 2 });
-		await sessionsPage.keyboard.press('Escape');
+		await marker.hover();
+		await expect(settings.getByRole('tooltip')).toBeVisible();
+		await settings.evaluate(element => (element as HTMLDialogElement).requestClose());
 		await expect(settings).toHaveCount(0);
 		await expect(sessionsPage.locator('.ash-context-view-menu')).toHaveCount(0);
+		await expect(sessionsPage.getByRole('tooltip').filter({ hasText: 'Configured in local user settings.' })).toHaveCount(0);
+		await expect(sessionsPage.locator('[data-part="activitybar"] .ash-sessions-activity-bottom button').last()).toBeFocused();
 	} finally {
 		if ('windows' in application) {
 			await application.evaluate(() => { (globalThis as typeof globalThis & { restoreSessionsCopy(): void; }).restoreSessionsCopy(); });

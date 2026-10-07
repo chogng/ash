@@ -251,6 +251,49 @@ test('URL rule suggestions follow extension registration without changing saved 
 	assert.deepEqual(configuration.getValue('workbench.externalUriOpeners'), { '*': 'extension:test:viewer' });
 });
 
+test('Configured markers follow explicit local user overrides and expose one accessible row description', async () => {
+	using resources = new DisposableStore();
+	const { createSettingWidget } = await import('../../browser/settingsWidgets.js');
+	const registry = new ConfigurationRegistry();
+	registry.registerConfiguration({ key: 'status.flag', defaultValue: true, parse: value => value as boolean, scope: ConfigurationScope.LANGUAGE_OVERRIDABLE, setting: { valueType: 'boolean', title: 'Flag', description: '' } });
+	registry.registerConfiguration({ key: 'status.object', defaultValue: {}, parse: value => value as Record<string, unknown>, setting: { valueType: 'stringMap', title: 'Object', description: '', structuredValues: true, keyLabel: 'Key', valueLabel: 'Value', addLabel: 'Add', removeLabel: 'Remove', incompleteMessage: 'Incomplete', duplicateMessage: 'Duplicate' } });
+	const configuration = resources.add(new WorkbenchConfigurationService({ registry }));
+	const root = h(browserEnvironment.window.document, 'div');
+	browserEnvironment.window.document.body.replaceChildren(root);
+	resources.add(toDisposable(() => root.remove()));
+	const contextView = resources.add(new BrowserContextViewService(root));
+	const widgets = new DefaultSettings(registry).all.map(setting => {
+		const widget = resources.add(createSettingWidget(root, setting, {
+			configurationService: configuration, contextViewProvider: contextView, contextMenuProvider: { showContextMenu() { } },
+			clipboardService: { readText: async () => '', writeText: async () => { }, readImage: async () => new Uint8Array(), readResources: async () => ({ resources: [], operation: 'copy' }), writeResources: async () => { }, hasResources: async () => false },
+			onStatus: () => { },
+		}));
+		root.append(widget.domNode);
+		return widget;
+	});
+	const assertStatus = (configured: boolean): void => {
+		for (const widget of widgets) {
+			const indicator = widget.domNode.querySelector<HTMLElement>('.ash-settings-configured-description')!;
+			const marker = widget.domNode.querySelector<HTMLElement>('.ash-settings-configured-marker')!;
+			assert.equal(widget.domNode.classList.contains('is-configured'), configured);
+			assert.equal(marker.hidden, !configured);
+			assert.equal(marker.getAttribute('aria-hidden'), 'true');
+			assert.equal(marker.hasAttribute('tabindex'), false);
+			assert.equal(widget.domNode.getAttribute('role'), 'group');
+			assert.equal(widget.domNode.getAttribute('aria-describedby'), configured ? indicator.id : null);
+			assert.equal(indicator.textContent, 'Configured in local user settings.');
+			assert.equal(indicator.hidden, !configured);
+			assert.equal(widget.domNode.querySelector('input')?.hasAttribute('aria-describedby') ?? false, false, 'controls do not repeat the row status');
+		}
+	};
+	assertStatus(false);
+	await configuration.write('{ "status.flag": true, "status.object": {} }', 0);
+	assertStatus(true);
+	assert.notEqual(widgets[0]!.domNode.getAttribute('aria-describedby'), widgets[1]!.domNode.getAttribute('aria-describedby'));
+	await configuration.write('{ "[typescript]": { "status.flag": false } }', 1);
+	assertStatus(false);
+});
+
 test('Copy Setting as JSON reads the latest local user values and preserves falsy and structured values', async () => {
 	using resources = new DisposableStore();
 	const { createSettingWidget } = await import('../../browser/settingsWidgets.js');
@@ -357,6 +400,11 @@ test('Copy Setting as JSON uses the current window default and reports clipboard
 	await action.run();
 	assert.deepEqual(await reported.p, { message: '无法执行设置操作。', isError: true });
 	assert.equal((await configuration.read()).source, '{}\n');
+	assert.equal(widget.domNode.querySelector<HTMLElement>('.ash-settings-configured-marker')!.hidden, true, 'the Sessions default does not count as a user override');
+	await configuration.updateValue('copy.window', false);
+	assert.equal(widget.domNode.querySelector('.ash-settings-configured-description')!.textContent, '已在本地用户设置中配置。');
+	await configuration.updateValue('copy.window', undefined);
+	assert.equal(widget.domNode.querySelector<HTMLElement>('.ash-settings-configured-marker')!.hidden, true);
 });
 
 test('Chinese setting actions, search filters and pending saves expose translated labels', async () => {
@@ -399,6 +447,7 @@ test('Chinese setting actions, search filters and pending saves expose translate
 		onStatus: message => { status = message; },
 	}));
 	root.append(widget.domNode);
+	assert.equal(widget.domNode.querySelector<HTMLElement>('.ash-settings-configured-marker')!.hidden, true, 'domain bindings do not expose local user configuration markers');
 	const more = widget.domNode.querySelector<HTMLButtonElement>('.ash-setting-item-actions-trigger')!;
 	assert.equal(more.getAttribute('aria-label'), '字号 的更多操作');
 	more.click();
@@ -411,6 +460,7 @@ test('Chinese setting actions, search filters and pending saves expose translate
 	await pending.complete();
 	await nextTurn();
 	assert.deepEqual([indicator.hidden, indicator.textContent, indicator.getAttribute('aria-label'), input.disabled], [true, '', '', false]);
+	assert.equal(widget.domNode.classList.contains('is-configured'), false);
 	more.click();
 	await actions.find(action => action.id === 'settings.resetSetting')!.run();
 	assert.equal(input.value, '1');

@@ -6,7 +6,7 @@ import { IUserDataProfileService } from '../../../../services/userDataProfile/co
 import { KeybindingTestServices } from '../../../../services/keybinding/test/browser/keybindingTestServices.js';
 import '../../../codeEditor/common/editorConfiguration.js';
 import { ConfigurationTarget } from '../../../../../platform/configuration/common/configuration.js';
-import { Extensions, type IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions, type IConfigurationRegistry, type IRegisteredConfiguration } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IEditorService as EditorServiceId } from '../../../../services/editor/common/editorService.js';
@@ -20,7 +20,7 @@ import { LanguageCompletionTriggerKind } from '../../../../../editor/common/lang
 import { BrowserTextModelService } from '../../../../services/textmodelResolver/browser/browserTextModelService.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { URI } from '../../../../../base/common/uri.js';
-import { ConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationRegistry, ConfigurationScope } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { ConfigurationSchemaId, createConfigurationSchema } from '../../../../../platform/configuration/common/configurationSchema.js';
 import { FileRevisionConflictError } from '../../../../../platform/files/common/files.js';
 import { Extensions as JSONExtensions, type IJSONContributionRegistry } from '../../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
@@ -55,6 +55,52 @@ test('Reset removes explicitly saved scalar and structured defaults while preser
 	}
 	assert.match((await configuration.read()).source, /Keep unrelated settings/u);
 	assert.match((await configuration.read()).source, /"extension.data": 99/u);
+});
+
+test('SettingModel announces explicit user overrides when the value stays at the default', async () => {
+	const registry = new ConfigurationRegistry();
+	registry.registerConfiguration({ key: 'status.flag', defaultValue: true, parse: value => value as boolean, scope: ConfigurationScope.LANGUAGE_OVERRIDABLE });
+	const registered = registry.getConfiguration('status.flag') as IRegisteredConfiguration<boolean>;
+	using configuration = new WorkbenchConfigurationService({ registry });
+	using model = new SettingModel(configurationSettingBinding(configuration, registered));
+	const states: { value: boolean; isDefault: boolean; isPending: boolean; }[] = [];
+	using listener = model.onDidChange(state => states.push({ value: state.value, isDefault: state.isDefault, isPending: state.isPending }));
+
+	await configuration.write('{ "status.flag": true }', 0);
+	assert.deepEqual(states, [{ value: true, isDefault: false, isPending: false }]);
+	model.refresh();
+	await configuration.write('{ "status.flag": true }', 1);
+	assert.equal(states.length, 1, 'unchanged snapshots do not repeat the configured notification');
+	await configuration.write('{ "[typescript]": { "status.flag": false } }', 2);
+	assert.deepEqual(states, [
+		{ value: true, isDefault: false, isPending: false },
+		{ value: true, isDefault: true, isPending: false },
+	]);
+	await configuration.write('{ "[typescript]": { "status.flag": true } }', 3);
+	assert.equal(states.length, 2, 'language-only changes do not configure the base setting');
+	await configuration.updateValue('status.flag', false);
+	assert.deepEqual(states.at(-1), { value: false, isDefault: false, isPending: false });
+	await model.reset();
+	assert.deepEqual(states.at(-1), { value: true, isDefault: true, isPending: false });
+	assert.equal(configuration.inspect('status.flag').userLocalValue, undefined);
+	assert.equal(configuration.inspect('status.flag', { overrideIdentifier: 'typescript' }).userLocalValue, true);
+});
+
+test('SettingModel keeps the configured status when the persistence layer rejects a reset', async () => {
+	const registry = new ConfigurationRegistry();
+	registry.registerConfiguration({ key: 'status.flag', defaultValue: true, parse: value => value as boolean });
+	const snapshot = { revision: 1, document: { version: 1 as const, source: '{ "status.flag": false }' } };
+	using configuration = new WorkbenchConfigurationService({
+		registry, initialSnapshot: snapshot,
+		api: { read: async () => snapshot, update: async () => { throw new Error('Configuration write rejected'); }, onDidChange: Event.None },
+	});
+	using model = new SettingModel(configurationSettingBinding(configuration, registry.getConfiguration('status.flag') as IRegisteredConfiguration<boolean>));
+	const states: { value: boolean; isDefault: boolean; isPending: boolean; }[] = [];
+	using listener = model.onDidChange(state => states.push({ value: state.value, isDefault: state.isDefault, isPending: state.isPending }));
+	await assert.rejects(model.reset(), /Configuration write rejected/u);
+	assert.deepEqual(states, [{ value: true, isDefault: false, isPending: true }, { value: false, isDefault: false, isPending: false }]);
+	assert.equal((await configuration.read()).source, snapshot.document.source);
+	assert.equal(configuration.inspect('status.flag').userLocalValue, false);
 });
 
 test('Domain setting bindings retain their own default and reset behavior', async () => {

@@ -72,6 +72,7 @@
     "search.clearTooltip": "移除设置搜索的筛选条件",
     "status.saving": "正在保存…",
     "status.savingAria": "正在保存设置",
+    "status.configured": "已在本地用户设置中配置。",
     "status.saveFailed": "无法保存设置。",
     "status.resetFailed": "无法重置设置。",
     "status.numberRange": "{0} 必须介于 {1} 和 {2} 之间。",

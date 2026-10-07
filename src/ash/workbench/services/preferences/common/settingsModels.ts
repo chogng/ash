@@ -18,12 +18,15 @@ export class SettingModel<T> extends Disposable implements SettingReference {
 	private readonly changeEmitter = this._register(new Emitter<SettingState<T>>());
 	private value: T;
 	private pending = false;
+	// Only the last emitted status is cached; the binding owns the stored override.
+	private lastIsDefault: boolean;
 
 	public readonly onDidChange = this.changeEmitter.event;
 
 	constructor(private readonly binding: SettingValueBinding<T>) {
 		super();
 		this.value = binding.getValue();
+		this.lastIsDefault = this.isDefault();
 		if (binding.onDidChange) this._register(binding.onDidChange(() => this.refresh()));
 	}
 
@@ -71,15 +74,23 @@ export class SettingModel<T> extends Disposable implements SettingReference {
 
 	public refresh(): void {
 		const value = this.binding.getValue();
-		if (Object.is(value, this.value)) return;
+		// Presence changes matter even when an explicit override equals the default.
+		const isDefault = this.binding.isDefault?.() ?? Object.is(value, this.binding.defaultValue);
+		if (Object.is(value, this.value) && isDefault === this.lastIsDefault) return;
 		this.value = value;
-		this.changeEmitter.fire(this.state);
+		this.emitState();
 	}
 
 	private setPending(pending: boolean): void {
 		if (pending === this.pending) return;
 		this.pending = pending;
-		this.changeEmitter.fire(this.state);
+		this.emitState();
+	}
+
+	private emitState(): void {
+		const state = this.state;
+		this.lastIsDefault = state.isDefault;
+		this.changeEmitter.fire(state);
 	}
 }
 
