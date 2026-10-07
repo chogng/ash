@@ -320,6 +320,12 @@ pub enum ThreadEvent {
         thread_id: ThreadId,
         turn_id: TurnId,
     },
+    ModelResponseEvaluated {
+        thread_id: ThreadId,
+        turn_id: TurnId,
+        source_thread_sequence: u64,
+        decision: crate::TurnLoopDecision,
+    },
     TurnFailed {
         thread_id: ThreadId,
         turn_id: TurnId,
@@ -414,6 +420,7 @@ impl ThreadEvent {
             Self::TurnExecutionAttempted { .. } => "turn.execution_attempted",
             Self::ModelUsageRecorded { .. } => "model.usage_recorded",
             Self::ModelInvocationRecorded { .. } => "model.invocation_recorded",
+            Self::ModelResponseEvaluated { .. } => "model.response_evaluated",
             Self::ItemCompleted { .. } => "item.completed",
             Self::HistoryPrefixBound { .. } => "history.prefix.bound",
             Self::PlanUpdated { .. } => "plan.updated",
@@ -468,6 +475,7 @@ impl ThreadEvent {
             | Self::TurnExecutionAttempted { thread_id, .. }
             | Self::ModelUsageRecorded { thread_id, .. }
             | Self::ModelInvocationRecorded { thread_id, .. }
+            | Self::ModelResponseEvaluated { thread_id, .. }
             | Self::ItemCompleted { thread_id, .. }
             | Self::HistoryPrefixBound { thread_id, .. }
             | Self::PlanUpdated { thread_id, .. }

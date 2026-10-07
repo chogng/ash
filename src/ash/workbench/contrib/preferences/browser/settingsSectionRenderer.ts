@@ -3,9 +3,11 @@ import { h, isHTMLElement } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { SelectBox } from '../../../../base/browser/ui/selectbox/selectbox.js';
+import { Switch } from '../../../../base/browser/ui/toggle/toggle.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
+import { localize } from '../../../../nls.js';
 import { AccessibleContentProvider, AccessibleViewType, type AccessibleViewProviderId, type AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -23,7 +25,7 @@ export class SettingsSectionRenderer extends Disposable implements SettingsConte
 	private readonly domNode: HTMLElement;
 	private readonly titleDomNode: HTMLElement;
 	private readonly descriptionDomNode: HTMLElement;
-	private readonly controls = new Map<string, Button | InputBox | SelectBox | HTMLElement>();
+	private readonly controls = new Map<string, Button | InputBox | SelectBox | Switch | HTMLElement>();
 	private readonly actionsDomNode: HTMLElement;
 	private readonly fields = new Map<string, SettingsSectionField>();
 	private isVisible = false;
@@ -54,7 +56,7 @@ export class SettingsSectionRenderer extends Disposable implements SettingsConte
 					const focused = document.activeElement;
 					if (!this.isVisible || !isHTMLElement(focused) || !this.domNode.contains(focused)) { return undefined; }
 					return new AccessibleContentProvider(providerId, { type },
-						() => type === AccessibleViewType.Help ? model.help : [model.title, model.description, ...model.fields.map(field => field.kind === 'status' ? field.text : field.kind === 'action' ? field.label : `${field.label}: ${field.kind === 'select' ? field.options.find(option => option.value === field.value)?.label ?? '' : field.value}`)].join('\n'),
+						() => type === AccessibleViewType.Help ? model.help : this.accessibleContent(),
 						() => { if (focused.isConnected) { focused.focus(); } }, verbosity);
 				},
 			}));
@@ -70,6 +72,21 @@ export class SettingsSectionRenderer extends Disposable implements SettingsConte
 
 	public setVisible(visible: boolean): void { this.isVisible = visible; this.model.setVisible(visible); }
 
+	private accessibleContent(): string {
+		const content = this.model.fields.map(field => {
+			switch (field.kind) {
+				case 'status': return field.text;
+				case 'action': return field.label;
+				case 'text': return `${field.label}: ${field.value}`;
+				case 'select': return `${field.label}: ${field.options.find(option => option.value === field.value)?.label ?? ''}`;
+				case 'boolean': return `${field.label}: ${field.value
+					? localize({ bundle: 'ash.settings', key: 'section.on' }, 'On')
+					: localize({ bundle: 'ash.settings', key: 'section.off' }, 'Off')}`;
+			}
+		});
+		return [this.model.title, this.model.description, ...content].join('\n');
+	}
+
 	private render(): void {
 		this.titleDomNode.textContent = this.model.title; this.descriptionDomNode.textContent = this.model.description;
 		for (const field of this.model.fields) {
@@ -79,8 +96,19 @@ export class SettingsSectionRenderer extends Disposable implements SettingsConte
 				if (field.kind === 'status') {
 					control = h(this.domNode.ownerDocument, 'p'); control.setAttribute('role', 'status'); control.setAttribute('aria-live', 'polite'); this.domNode.append(control);
 				} else if (field.kind === 'text') {
+					const label = h(this.domNode.ownerDocument, 'label');
+					label.textContent = field.label;
+					this.domNode.append(label);
 					const input = this._register(new InputBox(this.domNode, { ariaLabel: field.label, placeholder: field.placeholder, presentation: 'field' }));
-					this._register(input.onDidChange(value => { const current = this.fields.get(field.id); if (current?.kind === 'text') { current.setValue(value); } })); control = input;
+					input.inputElement.id = `settingsField-${generateUuid()}`;
+					label.htmlFor = input.inputElement.id;
+					// InputBox also emits when the renderer restores a saved value. Only a
+					// value different from the model is a user edit, otherwise a read dirties the draft.
+					this._register(input.onDidChange(value => { const current = this.fields.get(field.id); if (current?.kind === 'text' && current.value !== value) { current.setValue(value); } })); control = input;
+				} else if (field.kind === 'boolean') {
+					const toggle = this._register(new Switch(this.domNode, { label: field.label, ariaLabel: field.label }));
+					this._register(toggle.onDidChange(value => { const current = this.fields.get(field.id); if (current?.kind === 'boolean') { current.setValue(value); } }));
+					control = toggle;
 				} else if (field.kind === 'select') {
 					const select = this._register(new SelectBox(this.domNode, { options: field.options, ariaLabel: field.label, contextViewProvider: this.contextView }));
 					this._register(select.onDidSelect(({ value }) => { const current = this.fields.get(field.id); if (current?.kind === 'select') { current.setValue(value); } })); control = select;
@@ -91,8 +119,9 @@ export class SettingsSectionRenderer extends Disposable implements SettingsConte
 				}
 				this.controls.set(field.id, control);
 			}
-			if (field.kind === 'status' && isHTMLElement(control)) { control.textContent = field.text; }
+			if (field.kind === 'status' && isHTMLElement(control)) { if (control.textContent !== field.text) { control.textContent = field.text; } }
 			else if (field.kind === 'text' && control instanceof InputBox) { control.value = field.value; control.enabled = field.enabled; }
+			else if (field.kind === 'boolean' && control instanceof Switch) { control.checked = field.value; control.enabled = field.enabled; }
 			else if (field.kind === 'select' && control instanceof SelectBox) { if (JSON.stringify(control.options) !== JSON.stringify(field.options)) { control.setOptions(field.options); } control.value = field.value; control.enabled = field.enabled; }
 			else if (field.kind === 'action' && control instanceof Button) { control.label = field.label; control.enabled = field.enabled; }
 		}

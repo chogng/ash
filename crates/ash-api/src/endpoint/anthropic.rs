@@ -463,21 +463,16 @@ fn parse_response(response: Value) -> Result<ModelResponse, ApiError> {
             "Anthropic returned no supported content blocks".into(),
         ));
     }
-    let stop_reason = if output
-        .iter()
-        .any(|item| matches!(item, OutputItem::ToolCall(_)))
+    let stop_reason = match response
+        .get("stop_reason")
+        .and_then(Value::as_str)
+        .unwrap_or("end_turn")
     {
-        StopReason::ToolUse
-    } else {
-        match response
-            .get("stop_reason")
-            .and_then(Value::as_str)
-            .unwrap_or("end_turn")
-        {
-            "end_turn" | "stop_sequence" => StopReason::Completed,
-            "max_tokens" => StopReason::MaxOutputTokens,
-            other => StopReason::Other(other.into()),
-        }
+        "end_turn" | "stop_sequence" => StopReason::Completed,
+        "tool_use" => StopReason::ToolUse,
+        "refusal" => StopReason::Refusal,
+        "max_tokens" => StopReason::MaxOutputTokens,
+        other => StopReason::Other(other.into()),
     };
     Ok(ModelResponse {
         output,

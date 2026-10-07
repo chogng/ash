@@ -13,6 +13,7 @@ pub struct ResponsesEventDecoder {
     terminal: bool,
     response: Option<Value>,
     output: BTreeMap<u64, Value>,
+    message_ids: BTreeMap<u64, String>,
 }
 
 impl Default for ResponsesEventDecoder {
@@ -27,6 +28,7 @@ impl ResponsesEventDecoder {
             terminal: false,
             response: None,
             output: BTreeMap::new(),
+            message_ids: BTreeMap::new(),
         }
     }
 
@@ -134,6 +136,31 @@ impl ResponsesEventDecoder {
         event_type: &str,
     ) -> Result<Vec<ModelStreamEvent>, ApiError> {
         match event_type {
+            "response.output_item.added" => {
+                let Some(item) = payload
+                    .get("item")
+                    .filter(|item| item.get("type").and_then(Value::as_str) == Some("message"))
+                else {
+                    return Ok(Vec::new());
+                };
+                let index = payload
+                    .get("output_index")
+                    .and_then(Value::as_u64)
+                    .ok_or_else(|| {
+                        ApiError::InvalidResponse("OpenAI message is missing output_index".into())
+                    })?;
+                let message = super::parse_output_message(item, index)?;
+                self.validate_message_identity(index, &message.id)?;
+                if self.message_ids.insert(index, message.id.clone()).is_some() {
+                    return Err(ApiError::InvalidResponse(
+                        "OpenAI message started twice".into(),
+                    ));
+                }
+                Ok(vec![ModelStreamEvent::MessageStarted {
+                    id: message.id,
+                    phase: message.phase,
+                }])
+            }
             "response.output_item.done" => {
                 let index = payload
                     .get("output_index")
@@ -156,11 +183,47 @@ impl ResponsesEventDecoder {
                         "OpenAI response repeated a completed output index".into(),
                     ));
                 }
-                Ok(Vec::new())
+                if item.get("type").and_then(Value::as_str) == Some("message") {
+                    let message = super::parse_output_message(item, index)?;
+                    self.validate_message_identity(index, &message.id)?;
+                    self.message_ids.insert(index, message.id.clone());
+                    Ok(vec![ModelStreamEvent::MessageCompleted(message)])
+                } else {
+                    Ok(Vec::new())
+                }
             }
-            "response.output_text.delta" => Ok(vec![ModelStreamEvent::TextDelta(
-                required_delta(&payload, event_type)?.into(),
-            )]),
+            "response.output_text.delta" => {
+                let text = required_delta(payload, event_type)?.into();
+                let id = payload
+                    .get("item_id")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned)
+                    .or_else(|| {
+                        payload
+                            .get("output_index")
+                            .and_then(Value::as_u64)
+                            .map(|index| {
+                                self.message_ids
+                                    .get(&index)
+                                    .cloned()
+                                    .unwrap_or_else(|| format!("message-{index}"))
+                            })
+                    });
+                if let (Some(index), Some(id)) =
+                    (payload.get("output_index").and_then(Value::as_u64), &id)
+                {
+                    self.validate_message_identity(index, id)?;
+                    if self.output.contains_key(&index) {
+                        return Err(ApiError::InvalidResponse(
+                            "OpenAI text delta followed its completed message".into(),
+                        ));
+                    }
+                }
+                Ok(vec![match id {
+                    Some(id) => ModelStreamEvent::MessageDelta { id, text },
+                    None => ModelStreamEvent::TextDelta(text),
+                }])
+            }
             "response.reasoning_summary_text.delta" => Ok(vec![ModelStreamEvent::ReasoningDelta(
                 required_delta(&payload, event_type)?.into(),
             )]),
@@ -174,6 +237,20 @@ impl ResponsesEventDecoder {
             }
             _ => Ok(Vec::new()),
         }
+    }
+
+    fn validate_message_identity(&self, index: u64, id: &str) -> Result<(), ApiError> {
+        if id.is_empty()
+            || self.message_ids.iter().any(|(known_index, known_id)| {
+                (*known_index == index && known_id != id)
+                    || (*known_index != index && known_id == id)
+            })
+        {
+            return Err(ApiError::InvalidResponse(
+                "OpenAI message identity conflicts with its output index".into(),
+            ));
+        }
+        Ok(())
     }
 }
 

@@ -58,6 +58,7 @@ pub enum ToolOutputStream {
 )]
 pub enum ItemDelta {
     AgentMessage { text: String },
+    AgentMessagePhase { phase: Option<crate::MessagePhase> },
     Reasoning { text: String },
     Plan { text: String },
 }

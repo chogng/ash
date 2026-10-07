@@ -22,6 +22,7 @@ fn update(model: &mut TranscriptModel, id: &str, text: &str, lifecycle: CellLife
                 turn_id: turn_id.clone(),
                 transient: lifecycle == CellLifecycle::Live,
                 item: ThreadItem::AgentMessage {
+                    phase: None,
                     item_id: ItemId::new(id).unwrap(),
                     turn_id,
                     text: text.into(),

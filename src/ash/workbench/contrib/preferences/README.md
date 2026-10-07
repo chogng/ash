@@ -4,6 +4,8 @@
 
 本文是设置接入的职责约束。现有实现尚未全部符合这些约束；未迁移的实现不能作为新增接入的范例。偏好入口、JSON 编辑与存储路径见 [Preferences 与 Settings 的职责](../../../../../docs/preferences-and-settings.md)。
 
+该文档的 [VS Code 对照与待处理项](../../../../../docs/preferences-and-settings.md#与-vs-code-的对照与待处理项) 维护当前能力差异和已确认缺陷。本文维护接入规则，不重复保存上游文件清单或把目标架构描述成已有实现。
+
 ## 职责归属
 
 | 所有者                            | 负责的内容                                                                                     |
@@ -58,6 +60,8 @@ Preferences 负责页面控件、监听、焦点与其他 UI 资源的释放。�
 ## 当前迁移债务
 
 现有 `SettingsContent` / `SettingsContentItem` 和 `titleDomNode` 允许接入 DOM，部分设置区域还由功能模块创建 widget。这些是需要迁移的旧接口，不是本规则的例外。新增接入不得沿用；修改相关区域时应将配置注册、领域数据和 Preferences 渲染的职责拆清。
+
+GitHub 已通过 `GitHubSettingsModel` 和共享 `SettingsSectionRenderer` 分离领域数据与页面。Models、Advisor、Skills、Hooks、Language Server、Dictation 等仍有功能模块的页面实现；Sessions 也仍手工组装部分 `ISetting`。复用旧 widget 不等于已经复用注册表驱动的模型和统一 renderer。迁移状态须按真实生产链路判断。
 
 迁移应保留原有行为、配置源、搜索、焦点与无障碍能力，同时迁移调用方和对应验证。不能只换文件名、删掉已有覆盖，或再引入一套并行配置存储。本文记录目标职责；本次文档变更没有完成这些旧实现的迁移。
 

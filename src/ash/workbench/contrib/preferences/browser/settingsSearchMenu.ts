@@ -3,6 +3,7 @@ import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Separator, type IAction } from '../../../../base/common/actions.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
+import { localize } from '../../../../nls.js';
 
 export interface SettingsSearchMenuOptions {
 	readonly getValue: () => string;
@@ -21,8 +22,8 @@ export class SettingsSearchMenu extends Disposable {
 		this.button = this._register(new Button(container, {
 			label: '',
 			icon: Lxicon.filter,
-			ariaLabel: 'Filter Settings',
-			title: 'Filter Settings',
+			ariaLabel: localize({ bundle: 'ash.settings', key: 'search.filter' }, 'Filter Settings'),
+			title: localize({ bundle: 'ash.settings', key: 'search.filter' }, 'Filter Settings'),
 			onClick: () => this.show(),
 		}));
 		this.domNode = this.button.domNode;
@@ -38,16 +39,16 @@ export class SettingsSearchMenu extends Disposable {
 		const actions: readonly IAction[] = [
 			{
 				id: 'settings.search.id',
-				label: 'Setting ID…',
-				tooltip: 'Filter by setting identifier',
+				label: localize({ bundle: 'ash.settings', key: 'search.id' }, 'Setting ID…'),
+				tooltip: localize({ bundle: 'ash.settings', key: 'search.idTooltip' }, 'Filter by setting identifier'),
 				enabled: true,
 				run: () => this.updateTokens([...tokens.filter(token => !token.toLocaleLowerCase().startsWith('@id:')), '@id:']),
 			},
 			new Separator(),
 			{
 				id: 'settings.search.clearFilters',
-				label: 'Clear Filters',
-				tooltip: 'Remove Settings search filters',
+				label: localize({ bundle: 'ash.settings', key: 'search.clear' }, 'Clear Filters'),
+				tooltip: localize({ bundle: 'ash.settings', key: 'search.clearTooltip' }, 'Remove Settings search filters'),
 				enabled: hasFilters,
 				run: () => this.updateTokens(tokens.filter(token => !token.startsWith('@'))),
 			},

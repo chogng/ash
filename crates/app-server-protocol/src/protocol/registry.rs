@@ -540,6 +540,10 @@ use crate::protocol::config::ToolSearchEmbeddingStatusDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::config::ToolSearchModeDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::config::TraceConfigDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::config::TraceRecordingStateDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::connectors::ConnectorAccountDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::connectors::ConnectorApiTokenConnectParams;
@@ -2205,6 +2209,8 @@ use ash_protocol::MessageBoundary;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::MessageCheckpoint;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::MessagePhase;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelAcceleration;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelAccelerationOption;
@@ -2341,6 +2347,8 @@ use ash_protocol::StableTurnError;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::StableTurnErrorCode;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::StopReason;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::StreamCursor;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::TeamId;
@@ -2400,6 +2408,12 @@ use ash_protocol::TurnInstructions;
 use ash_protocol::TurnInteraction;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::TurnKind;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::TurnLoopAction;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::TurnLoopDecision;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::TurnLoopReason;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::TurnStatus;
 #[cfg(any(test, feature = "export"))]
@@ -5427,6 +5441,8 @@ typescript_bindings! {
     LanguageServerConfigDto,
     FrontendConfigDto,
     ConfigReadResult,
+    TraceConfigDto,
+    TraceRecordingStateDto,
     TimeContextConfigDto,
     TimeContext,
     TimeContextMode,
@@ -5748,6 +5764,11 @@ typescript_bindings! {
     ThreadStatus,
     ThreadArchiveReason,
     TurnStatus,
+    MessagePhase,
+    StopReason,
+    TurnLoopAction,
+    TurnLoopDecision,
+    TurnLoopReason,
     ActionApprovalCapabilityKind,
     ActionApprovalCapability,
     ActionApprovalRequest,

@@ -275,6 +275,7 @@ fn subscription_preserves_structured_tool_results_while_omitting_cache_breakpoin
         arguments: json!({}),
     };
     request.input.push(InputItem::Message(Message {
+        phase: None,
         role: MessageRole::Assistant,
         content: vec![],
         tool_calls: vec![call.clone()],

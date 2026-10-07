@@ -28,20 +28,23 @@
 
 ## Settings 内容
 
-Workbench 的 SettingsEditor 统一负责分类、搜索输入和页面可见性；SettingsTree 使用同一份条目
-元数据筛选和保留内容，TOC 从这棵树读取动态内容的搜索词。功能组件提供条目、控件和操作，
-不再单独创建搜索输入或维护另一份分类选择。嵌套内容使用宿主传入的 SettingsSearchQuery。
+Preferences 拥有设置页面的搜索、分类、导航、控件和交互样式；功能模块只提供注册配置、
+领域数据与操作。完整接入规则在 [Settings 接入与渲染边界](../src/ash/workbench/contrib/preferences/README.md)
+维护；页面与配置源的当前状态见 [Preferences 与 Settings](preferences-and-settings.md)。
 
-普通配置继续由 Configuration Registry 声明并交给 SettingsRenderer。模型目录、API 凭据和
-Hook 声明是各领域的内容，不为复用界面而伪造配置键或改变存储位置。Workbench 与 Sessions
-复用模型条目和凭据控件；Sessions 仍负责自己的设置窗口布局。Hook 内容归
-`workbench/contrib/hooks`，模型与凭据内容归 `workbench/contrib/chat`，模型包准备、导入和取消
-归 `workbench/contrib/localTranscription`。各控件的 CSS 跟随所属功能；`preferences` 负责
-设置框架和内容接入，不承接这些功能的业务控件。
+普通配置由 Configuration Registry 声明并交给 SettingsRenderer。模型目录、API 凭据和
+Hook 声明保留各自领域 owner，不为复用界面而伪造配置键或改变存储位置。领域任务的
+准备、导入、取消及凭据保存仍由所属服务负责，Preferences 只呈现数据和操作。
 
-听写内容归 `workbench/contrib/chat/browser/speechToText`，根据本地或云端选择组合控件。
-`base/browser/ui/table` 拥有列标题、列宽、行与单元格焦点和选中样式。模型表只渲染自己的
-文本和操作按钮，不覆盖 Table、SplitView 或 Button 的内部交互样式。
+当前 SettingsEditor 使用 SettingsTree 的条目元数据过滤内容，TOC 从同一棵树读取搜索词。
+GitHub 已使用数据模型与共享 SettingsSectionRenderer；Models、Hooks、Dictation 等仍由
+功能模块创建旧 SettingsContent 控件，CSS 跟随这些控件。Sessions 复用部分 renderer 与
+widget，但仍拥有独立布局和部分手工设置模型。这些是当前迁移债务，不能作为新功能
+传入 DOM、widget 或渲染回调的依据。
+
+迁移时，设置页呈现与 CSS 回到 Preferences renderer；可独立复用的基础控件继续拥有
+自己的 DOM 和样式。例如 `base/browser/ui/table` 拥有列标题、列宽、行与单元格焦点和
+选中样式，业务数据及操作仍由领域 owner 提供。宿主不穿透覆盖这些基础控件的内部状态。
 
 ## 分层所有权
 
@@ -82,7 +85,7 @@ Mode–model 与 model–effort 的按钮边缘间距必须相同；两处都消
 
 | 范围                         | 所有者与实现位置                                     | 约定                                                                                                                                 |
 | ---------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| 输入区工具栏排列             | `ChatInputPart` 的 `chat.css`                        | 相邻 action 使用 `--ash-actionBar-gap`                                                                                              |
+| 输入区工具栏排列             | `ChatInputPart` 的 `chat.css`                        | 相邻 action 使用 `--ash-actionBar-gap`                                                                                               |
 | Model 与 effort 内部布局     | `ModelPickerWidget` 的 `modelPicker.css`             | 两个入口共用 `fontSize.body1`、`cornerRadius.circle`、`toolbar.actionSize` 和左右 `spacing.size80`；内部间距同样使用 `actionBar.gap` |
 | 两个入口的标签与交互         | `ModelPickerWidget` 与 `ModelPickerConfiguration`    | 各自保留按钮语义、Tab 停靠点和浮层焦点恢复                                                                                           |
 | 入口悬停、键盘焦点与文本截断 | `chatInputPickerActionItem` 的 `chatInputPicker.css` | 各入口独立高亮；文本保留省略号，完整内容由 hover 提供                                                                                |

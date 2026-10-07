@@ -100,6 +100,11 @@ compatible provider 自动当作可计量。
 三套 codec 都处理 canonical messages、tools、tool choice、reasoning、usage、响应模型、实际服务等级和 stop reason，但
 只共享 mechanical helpers；不能因为 JSON 外形相似就合并 protocol-specific semantics。
 
+Responses 的正文输出映射为有序 `ResponseItem::Message`，保留消息 ID 和可选 phase；助手历史
+回传到 Responses 时使用原阶段字符串。Chat Completions 与 Anthropic Messages 保持阶段缺失，
+不发送它们没有声明的 phase 字段，也不将 thinking 推断为 commentary。三套 codec 均保留真实
+停止原因；即使响应内含工具请求，输出上限或未知停止原因也不会被覆盖为 ToolUse。
+
 ## 流式处理解码器
 
 Decoder 接收 `ash-client::SseFrame`，说明 SSE field parsing 已经完成。它们输出
@@ -111,7 +116,7 @@ SseFrame::Event
    ├─ parse event.data JSON
    ├─ determine event type
    ├─ validate lifecycle/schema
-   └─ emit TextDelta / ReasoningDelta / no event
+   └─ emit message lifecycle / TextDelta / ReasoningDelta / no event
 
 end of stream
 └─ Decoder::finish
@@ -120,7 +125,8 @@ end of stream
 
 `ResponsesEventDecoder`：
 
-- text 与 reasoning-summary delta 分别映射为 canonical delta；
+- output-item 的开始与完成、text delta 分别映射为带消息 ID 的生命周期事件；phase 可在完成时补齐；缺少消息身份的旧端点保留 TextDelta；
+- 校验消息 ID 与 output index 一致且不重复；reasoning-summary 保持独立增量；
 - `response.completed` 进入 terminal；
 - `response.failed`/`response.incomplete` 返回 failure；
 - terminal 后的任何 event、或 terminal 前 EOF 都是 invalid response；

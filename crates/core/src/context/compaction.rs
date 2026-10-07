@@ -262,6 +262,7 @@ impl ContextCompactionService for ModelContextCompactionService {
                 reasoning_summary: None,
                 instructions: Some(COMPACTION_PROMPT.body().into()),
                 input: vec![InputItem::Message(Message {
+                    phase: None,
                     role: MessageRole::User,
                     content: vec![ContentPart::Text(input)],
                     tool_calls: Vec::new(),
@@ -340,6 +341,7 @@ impl ContextCompactionService for ModelContextCompactionService {
             .iter()
             .filter_map(|item| match item {
                 ResponseItem::Text(text) => Some(text.trim()),
+                ResponseItem::Message(message) => Some(message.text.trim()),
                 ResponseItem::Refusal(_)
                 | ResponseItem::Reasoning(_)
                 | ResponseItem::ReasoningState(_)

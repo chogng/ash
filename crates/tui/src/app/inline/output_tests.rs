@@ -54,6 +54,7 @@ fn entry(id: &str, text: &str, transient: bool) -> ThreadTranscriptEntry {
         entry_id: id.into(),
         turn_id: turn_id.clone(),
         item: ThreadItem::AgentMessage {
+            phase: None,
             item_id: ItemId::new(id).unwrap(),
             turn_id,
             text: text.into(),

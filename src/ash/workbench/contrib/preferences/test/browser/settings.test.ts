@@ -11,6 +11,7 @@ import { ILanguageModelsService } from '../../../../contrib/chat/common/language
 import type { SettingsContentItem } from '../../browser/settingsTreeModels.js';
 import { IFileTextModelService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
+import type { IRegisteredConfiguration } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { IDictationService } from '../../../../../platform/dictation/common/dictationService.js';
 import { ChatSpeechToTextService, IChatSpeechToTextService } from '../../../chat/browser/speechToText/chatSpeechToTextService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
@@ -27,7 +28,7 @@ import { suiteTeardown, test } from 'mocha';
 import { installEditorTestDom } from '../../../../../editor/test/browser/editorTestGlobals.js';
 import { JSDOM } from 'jsdom';
 import { formatNlsMessage, localize, resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
-import type { IAction } from '../../../../../base/common/actions.js';
+import { Separator, type IAction } from '../../../../../base/common/actions.js';
 import type { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import type { IContextMenuService as ContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import type { ILocalizationService } from '../../../../services/localization/common/localizationService.js';
@@ -109,6 +110,8 @@ await import('../../../../services/chat/common/modelCatalog.js');
 const { IContentSearchConfigurationService } = await import('../../../../../platform/search/common/search.js');
 const { INetworkDiagnosticsService } = await import('../../../../../platform/networkDiagnostics/common/networkDiagnosticsService.js');
 const { IAgentCapabilitiesService } = await import('../../../../../platform/agentCapabilities/common/agentCapabilitiesService.js');
+const { ITraceSettingsService } = await import('../../../../../platform/trace/common/traceSettingsService.js');
+const { IFileDialogService } = await import('../../../../../platform/dialogs/common/dialogs.js');
 const { IRemoteAgentService: RemoteAgentServiceId } = await import('../../../../services/remote/common/remoteAgentService.js');
 const { IDirPermissionsService: DirPermissionsServiceId } = await import('../../../../../platform/dirPermissions/common/dirPermissionsService.js');
 const configurationRegistry = Registry.as<InstanceType<typeof ConfigurationRegistry>>(ConfigurationExtensions.Configuration);
@@ -245,6 +248,75 @@ test('URL rule suggestions follow extension registration without changing saved 
 	assert.deepEqual(configuration.getValue('workbench.externalUriOpeners'), { '*': 'extension:test:viewer' });
 });
 
+test('Chinese setting actions, search filters and pending saves expose translated labels', async () => {
+	using resources = new DisposableStore();
+	const { createSettingWidget, SettingsSearchWidget } = await import('../../browser/settingsWidgets.js');
+	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	resources.add(toDisposable(resetNlsResolver));
+	const root = h(browserEnvironment.window.document, 'div');
+	browserEnvironment.window.document.body.replaceChildren(root);
+	resources.add(toDisposable(() => root.remove()));
+	const configuration = resources.add(new WorkbenchConfigurationService());
+	const contextView = resources.add(new BrowserContextViewService(root));
+	let actions: readonly IAction[] = [];
+	const contextMenuProvider = {
+		showContextMenu: (delegate: import('../../../../../base/browser/contextmenu.js').IContextMenuDelegate) => {
+			actions = delegate.getActions();
+			delegate.onHide?.(false);
+		},
+	};
+	const pending = new DeferredPromise<void>();
+	let current = 1;
+	let status = '';
+	const registered = configurationRegistry.getConfiguration('editor.fontSize') as IRegisteredConfiguration<number> | undefined;
+	assert.ok(registered);
+	const widget = resources.add(createSettingWidget(root, {
+		id: registered.key, title: '字号', description: '', valueType: 'number', configuration: registered, minimum: 1, maximum: 10,
+		binding: {
+			id: registered.key, defaultValue: 1, getValue: () => current,
+			updateValue: async value => { await pending.p; current = value; },
+			resetValue: async () => { current = 1; },
+		},
+	}, {
+		configurationService: configuration, contextViewProvider: contextView, contextMenuProvider,
+		clipboardService: {
+			readText: async () => '', writeText: async () => { },
+			readResources: async () => ({ resources: [], operation: 'copy' }),
+			writeResources: async () => { }, hasResources: async () => false,
+		},
+		onStatus: message => { status = message; },
+	}));
+	root.append(widget.domNode);
+	const more = widget.domNode.querySelector<HTMLButtonElement>('.ash-setting-item-actions-trigger')!;
+	assert.equal(more.getAttribute('aria-label'), '字号 的更多操作');
+	more.click();
+	assert.deepEqual(actions.map(action => [action.label, action.enabled]), [['重置设置', false], ['复制设置 ID', true]]);
+	const input = widget.domNode.querySelector<HTMLInputElement>('input')!;
+	input.value = '2';
+	input.dispatchEvent(new browserEnvironment.window.Event('change', { bubbles: true }));
+	const indicator = widget.domNode.querySelector<HTMLElement>('.ash-settings-indicators')!;
+	assert.deepEqual([indicator.hidden, indicator.textContent, indicator.getAttribute('aria-label'), input.disabled], [false, '正在保存…', '正在保存设置', true]);
+	await pending.complete();
+	await nextTurn();
+	assert.deepEqual([indicator.hidden, indicator.textContent, indicator.getAttribute('aria-label'), input.disabled], [true, '', '', false]);
+	more.click();
+	await actions.find(action => action.id === 'settings.resetSetting')!.run();
+	assert.equal(input.value, '1');
+	input.value = '11';
+	input.dispatchEvent(new browserEnvironment.window.Event('change', { bubbles: true }));
+	assert.equal(status, '字号 必须介于 1 和 10 之间。');
+
+	const search = resources.add(new SettingsSearchWidget(root, { ariaControls: 'settings-results', contextMenuProvider, localizationService }));
+	const filter = search.domNode.querySelector<HTMLButtonElement>('.ash-settings-search-filter')!;
+	assert.equal(filter.getAttribute('aria-label'), '筛选设置');
+	search.value = '@id:editor.fontSize';
+	filter.click();
+	assert.deepEqual(actions.filter(action => action.id !== Separator.ID).map(action => action.label), ['设置 ID…', '清除筛选条件']);
+	await actions.find(action => action.id === 'settings.search.clearFilters')!.run();
+	assert.equal(search.value, '');
+});
+
 test('Activity Bar badges expose a translated profile setting with strict boolean validation', () => {
 	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	try {
@@ -373,6 +445,7 @@ test('settingsLayout is the single projection from registered settings to catego
 		'skills',
 		'tools',
 		'sandbox',
+		'execution-trace',
 		'hooks',
 	]);
 	assert.deepEqual(model.settings.map(setting => setting.id), defaults.all.map(setting => setting.id));
@@ -820,6 +893,8 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	const connectionChanged = disposables.add(new Emitter<RemoteConnectionState>());
 	const connectionIdentityChanged = disposables.add(new Emitter<RemoteAgentConnection>());
 	let connectionIdentity: RemoteAgentConnection = { kind: 'local', generation: 1 };
+	services.registerInstance(ITraceSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, configured: null, recording: { type: 'disabled' } }), configure: async () => { } });
+	services.registerInstance(IFileDialogService, { showOpenDialog: async () => undefined, showSaveDialog: async () => undefined, pickFileToSave: async () => undefined, showSaveConfirm: async () => 2 });
 	services.registerInstance(RemoteAgentServiceId, {
 		onDidChangeConnectionState: connectionChanged.event,
 		onDidChangeConnection: connectionIdentityChanged.event,
@@ -895,9 +970,9 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	const preferences = disposables.add(new PreferencesService(editorServices.get(IEditorService), editorServices.get(IFileTextModelService), keybindingProfile.files, keybindingProfile.profiles));
 	services.registerInstance(IPreferencesService, preferences);
 	services.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
-	services.registerInstance(IAccountService, { onDidChangeAccounts: Event.None, onDidCompleteLogin: Event.None, read: async () => ({ revision: 1n, accounts: [] }), startLogin: async () => { throw new Error('Not used'); }, cancelLogin: async () => {}, logout: async () => {} });
+	services.registerInstance(IAccountService, { onDidChangeAccounts: Event.None, onDidCompleteLogin: Event.None, read: async () => ({ revision: 1n, accounts: [] }), startLogin: async () => { throw new Error('Not used'); }, cancelLogin: async () => { }, logout: async () => { } });
 	services.registerInstance(IGitHubService, { listAccounts: async () => [] } as unknown as IGitHubService);
-	services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async () => {}, cancel: async () => {} });
+	services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async () => { }, cancel: async () => { } });
 	services.registerInstance(IGitHubReviewModel, disposables.add(services.createInstance(GitHubReviewModel)));
 	const missingHooks = disposables.add(descriptor.create({ instantiationService: editorServices }));
 	assert.throws(() => missingHooks.create(h(ownerDocument, 'div')), /Unknown service: hooksService/);
@@ -1044,9 +1119,9 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	root.querySelector<HTMLElement>('[data-settings-group-id="agents"]')?.closest<HTMLElement>('.ash-tree-row')?.click();
 	assert.equal(root.querySelector('[data-tree-id="group.agents"]')?.getAttribute('aria-expanded'), 'true');
 	assert.deepEqual(
-		['agents', 'teams', 'agent-defaults', 'models', 'rules', 'skills', 'tools', 'sandbox', 'hooks']
+		['agents', 'teams', 'agent-defaults', 'models', 'rules', 'skills', 'tools', 'sandbox', 'execution-trace', 'hooks']
 			.map(categoryId => root.querySelector<HTMLElement>(`[data-settings-category-id="${categoryId}"]`)?.textContent),
-		['Agents', 'Teams', 'Defaults', 'Models', 'Rules', 'Skills', 'Tools', 'Sandbox', 'Hooks'],
+		['Agents', 'Teams', 'Defaults', 'Models', 'Rules', 'Skills', 'Tools', 'Sandbox', 'Execution trace', 'Hooks'],
 	);
 	assert.equal(root.querySelector('[data-tree-id="general"]')?.getAttribute('aria-selected'), 'true');
 	root.querySelector<HTMLElement>('[data-settings-category-id="agents"]')?.click();

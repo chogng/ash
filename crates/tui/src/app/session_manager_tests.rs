@@ -774,6 +774,7 @@ fn preview_result(
                 turn_id: turn_id.clone(),
                 transient: false,
                 item: ash_protocol::ThreadItem::AgentMessage {
+                    phase: None,
                     item_id: ash_protocol::ItemId::new(format!("item-{index}")).unwrap(),
                     turn_id,
                     text: format!(

@@ -28,6 +28,7 @@ pub use page::TracePage;
 pub use page::read_session_trace_page;
 pub use recorder::MAX_PAYLOAD_BYTES;
 pub use recorder::ModelAttemptTrace;
+pub use recorder::RecorderState;
 pub use recorder::TRACE_ROOT_ENV;
 pub use recorder::TraceRecorder;
 pub use reducer::TraceEdge;

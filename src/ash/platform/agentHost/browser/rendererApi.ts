@@ -29,6 +29,7 @@ import { createDisconnectedExtensionHostApi } from "../../extensionHost/browser/
 import { createDisconnectedMarketplaceApi } from "../../marketplace/browser/marketplaceApi.js";
 import { createDisconnectedDirPermissionsApi } from "../../dirPermissions/browser/dirPermissionsApi.js";
 import { createDisconnectedAgentCapabilitiesApi } from '../../agentCapabilities/browser/agentCapabilitiesApi.js';
+import { createDisconnectedTraceSettingsApi } from '../../trace/browser/traceSettingsApi.js';
 import { createDisconnectedAccountApi } from "../../accounts/browser/accountApi.js";
 import { createDisconnectedTurnChangesApi } from "../../turnChanges/browser/turnChangesApi.js";
 import { createDisconnectedTeamApi } from '../../teams/browser/teamApi.js';
@@ -86,6 +87,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
 		issueReporter: createDisconnectedIssueReporterService(unavailableOperation),
 		github: createDisconnectedGitHubService(),
 		agentCapabilities: createDisconnectedAgentCapabilitiesApi(unavailableOperation),
+		traceSettings: createDisconnectedTraceSettingsApi(unavailableOperation),
 		hooks: createDisconnectedHooksApi(unavailableOperation),
 	};
 }

@@ -554,6 +554,7 @@ fn update_preferences(
         command_id: CommandId::new(command_id).unwrap(),
         expected_revision: ConfigRevision::new(revision),
         command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+            trace: Patch::Missing,
             context: Patch::Missing,
             advisor: Default::default(),
             time_context: ash_protocol::Patch::Missing,
@@ -899,6 +900,7 @@ fn tool_mode_defaults_to_direct_and_updates_durably() {
             command_id: CommandId::new("select-code-mode-only").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                trace: Patch::Missing,
                 context: Patch::Missing,
                 advisor: Default::default(),
                 time_context: ash_protocol::Patch::Missing,
@@ -1440,6 +1442,7 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
             command_id: CommandId::new("select-review-model").unwrap(),
             expected_revision: configured.revision,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                trace: Patch::Missing,
                 context: Patch::Missing,
                 advisor: Default::default(),
                 time_context: ash_protocol::Patch::Missing,
@@ -3050,4 +3053,63 @@ contextWindow = 128000
         ))
         .is_err()
     );
+}
+
+#[test]
+fn trace_preferences_are_validated_persisted_and_reset_to_disabled() {
+    let path = config_path("trace");
+    let store = ConfigStore::open(&path).unwrap();
+    let directory = path.with_extension("traces");
+    let trace = TraceConfig {
+        enabled: true,
+        directory: Some(directory.clone()),
+    };
+    let command = ConfigCommandRequest {
+        command_id: CommandId::new("trace-save").unwrap(),
+        expected_revision: ConfigRevision::INITIAL,
+        command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+            trace: Patch::Value(trace.clone()),
+            ..Default::default()
+        }),
+    };
+    store.apply(command.clone()).unwrap();
+    assert_eq!(
+        store.apply(command).unwrap().disposition,
+        ConfigCommandDisposition::Replayed
+    );
+    drop(store);
+    let store = ConfigStore::open(&path).unwrap();
+    assert_eq!(store.read_snapshot().unwrap().values.trace, Some(trace));
+    let rejected = store.apply(ConfigCommandRequest {
+        command_id: CommandId::new("trace-invalid").unwrap(),
+        expected_revision: ConfigRevision::new(1),
+        command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+            trace: Patch::Value(TraceConfig {
+                enabled: true,
+                directory: Some("relative".into()),
+            }),
+            ..Default::default()
+        }),
+    });
+    assert!(rejected.is_err());
+    assert_eq!(
+        store.read_snapshot().unwrap().revision,
+        ConfigRevision::new(1)
+    );
+    store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("trace-reset").unwrap(),
+            expected_revision: ConfigRevision::new(1),
+            command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                trace: Patch::Null,
+                ..Default::default()
+            }),
+        })
+        .unwrap();
+    assert_eq!(
+        store.read_snapshot().unwrap().values.trace,
+        Some(TraceConfig::default())
+    );
+    drop(store);
+    remove_config_files(&path);
 }

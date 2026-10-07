@@ -173,6 +173,7 @@ fn automatic_fetch_runs_from_shared_config_without_a_frontend() {
                 advisor: Patch::Missing,
                 tool_mode: Patch::Missing,
                 grep_backend: Patch::Missing,
+                trace: Patch::Missing,
                 git: Patch::Value(GitConfig {
                     autofetch: GitAutoFetchMode::Default,
                     autofetch_period: 1,

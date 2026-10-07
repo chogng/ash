@@ -1,6 +1,7 @@
 {
   "ash": {
     "sessions.conversation.editorName": "会话",
+    "sessions.settings.executionTrace": "执行轨迹",
     "cowork.input.modelActions": "模型和思考强度",
     "cowork.inputHelp": "Cowork 输入\nEnter 发送，Shift+Enter 换行。使用 + 按钮添加 UTF-8 文本或图片，也可粘贴或拖入图片；可以只发送附件。附件位于输入卡片左侧；模型、模型选项、听写和发送位于右侧。Tab 和 Shift+Tab 进入工具栏，方向键在工具栏内选择操作。Enter 或空格打开选择器，Escape 返回。使用 /permission 选择权限，/guardian setup 准备审核资料。审批请求会列出操作和准确目标。使用 Tab 到达“拒绝”或“批准一次”，再按 Enter 或空格。",
     "cowork.defaultmodel.invalid": "默认 Cowork 模型必须是字符串。",
@@ -309,7 +310,7 @@
     "sessions.settings.modelsLoadFailed": "无法加载模型。",
     "sessions.settings.modelVisibility": "在模型选择器中显示{0}",
     "sessions.settings.modelSaveFailed": "无法保存模型显示设置。",
-    "sessions.settings.help": "会话设置左侧为分类，右侧为设置。常规包含听写设置，模型包含聊天模型和 API 连接，设计包含画布光标与无障碍设置。智能体包含顾问模型选择和启用开关，修改后立即保存。自定义包含设置、插件、技能和 Hooks 标签页。左右方向键移动焦点，Enter 或空格打开标签页。使用搜索可筛选设置。本地听写表格列出可安装及已安装模型，方向键在行和单元格之间移动，Tab 可到达安装、使用模型、取消或卸载按钮。关闭设置后模型准备继续。云端听写使用模型页中的 API 连接。按 Escape 关闭设置。 模型页默认显示每个供应商的最新模型。模型搜索框按名称或 ID 筛选完整列表，清空搜索可恢复列表。viewall models 展开或收起完整列表。API key 在输入框失焦时保存；清空输入框会移除密钥。New provider 添加可编辑卡片。填写名称、Base URL、API key 和 API 格式，然后用 Test models 发现并测试列表。添加模型可填写 ID、上下文和可选的上游映射。行内开关控制启用，行内按钮编辑或删除手动配置；橙点表示尚未通过，绿点表示测试通过。用 Tab 和 Shift+Tab 切换输入框和按钮。 Git 与 PR 分类包含 Codex 审查账号状态、仓库访问检查和官方审查管理入口。",
+    "sessions.settings.help": "会话设置左侧为分类，右侧为设置。常规包含听写设置，模型包含聊天模型和 API 连接，设计包含画布光标与无障碍设置。智能体包含顾问模型选择和启用开关。执行轨迹显示运行中的记录状态、详细记录开关和保存目录；需要显式保存，再重启所属 App Server 才能生效。其他修改立即保存。自定义包含设置、插件、技能和 Hooks 标签页。左右方向键移动焦点，Enter 或空格打开标签页。使用搜索可筛选设置。本地听写表格列出可安装及已安装模型，方向键在行和单元格之间移动，Tab 可到达安装、使用模型、取消或卸载按钮。关闭设置后模型准备继续。云端听写使用模型页中的 API 连接。按 Escape 关闭设置。 模型页默认显示每个供应商的最新模型。模型搜索框按名称或 ID 筛选完整列表，清空搜索可恢复列表。viewall models 展开或收起完整列表。API key 在输入框失焦时保存；清空输入框会移除密钥。New provider 添加可编辑卡片。填写名称、Base URL、API key 和 API 格式，然后用 Test models 发现并测试列表。添加模型可填写 ID、上下文和可选的上游映射。行内开关控制启用，行内按钮编辑或删除手动配置；橙点表示尚未通过，绿点表示测试通过。用 Tab 和 Shift+Tab 切换输入框和按钮。 Git 与 PR 分类包含 Codex 审查账号状态、仓库访问检查和官方审查管理入口。",
     "sessions.settings.verbosityTitle": "设置无障碍帮助",
     "sessions.settings.verbosityDescription": "此页面获得焦点时，提示如何打开无障碍帮助。",
     "sessions.account.nameAndPlan": "{0} · {1}",

@@ -43,6 +43,8 @@ pub struct ReasoningState {
 #[serde(rename_all = "camelCase")]
 pub struct Message {
     pub role: MessageRole,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub phase: Option<MessagePhase>,
     pub content: Vec<ContentPart>,
     pub tool_calls: Vec<ToolCall>,
 }
@@ -51,8 +53,39 @@ impl Message {
     pub fn text(role: MessageRole, text: impl Into<String>) -> Self {
         Self {
             role,
+            phase: None,
             content: vec![ContentPart::Text(text.into())],
             tool_calls: Vec::new(),
+        }
+    }
+}
+
+/// The purpose of one assistant message, independent from generation or Turn completion.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum MessagePhase {
+    Commentary,
+    PartialAnswer,
+    FinalAnswer,
+    Other(String),
+}
+
+impl MessagePhase {
+    pub fn from_wire(value: &str) -> Self {
+        match value {
+            "commentary" => Self::Commentary,
+            "partial_answer" => Self::PartialAnswer,
+            "final_answer" => Self::FinalAnswer,
+            value => Self::Other(value.into()),
+        }
+    }
+
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Commentary => "commentary",
+            Self::PartialAnswer => "partial_answer",
+            Self::FinalAnswer => "final_answer",
+            Self::Other(value) => value,
         }
     }
 }

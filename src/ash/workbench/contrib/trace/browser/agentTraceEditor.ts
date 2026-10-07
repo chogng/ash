@@ -93,11 +93,13 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 		updateHint();
 		const toolbar = h(document, 'div', { className: 'ash-agent-trace-toolbar' });
 		this._register(new Button(toolbar, { label: localize('agentTrace.refresh', 'Refresh'), onClick: () => this.requestRefresh() }));
-		this.errorsButton = this._register(new Button(toolbar, { label: localize('agentTrace.errors', 'Errors only'), onClick: () => {
-			this.errorsOnly = !this.errorsOnly;
-			this.errorsButton.checked = this.errorsOnly;
-			this.render();
-		} }));
+		this.errorsButton = this._register(new Button(toolbar, {
+			label: localize('agentTrace.errors', 'Errors only'), onClick: () => {
+				this.errorsOnly = !this.errorsOnly;
+				this.errorsButton.checked = this.errorsOnly;
+				this.render();
+			}
+		}));
 		this.errorsButton.checked = false;
 		this.exportButton = this._register(new Button(toolbar, { label: localize('agentTrace.export', 'Export trace'), onClick: () => { void this.exportTrace(); } }));
 		this.evidenceButton = this._register(new Button(toolbar, { label: localize('agentTrace.evidence', 'View request / response'), onClick: () => { void this.loadEvidence(); } }));
@@ -351,7 +353,7 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 				}
 				const isError = eventIsError(record);
 				row.classList.toggle('failed', isError);
-				row.hidden = (this.errorsOnly && !isError) || !`${thread.threadId} ${JSON.stringify(record.event)}`.toLowerCase().includes(query);
+				row.hidden = (this.errorsOnly && !isError) || !`${thread.threadId} ${row.textContent} ${JSON.stringify(record.event)}`.toLowerCase().includes(query);
 				if (!row.hidden) { shown++; threadShown = true; }
 			}
 			group.domNode.hidden = !threadShown;
@@ -510,7 +512,7 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 
 function eventIsError(record: AgentTraceEvent): boolean {
 	const event = record.event;
-	return event.type === 'modelAttemptFailed' || event.type === 'modelAttemptAbandoned' || event.type === 'turnFailed' || (event.type === 'turnInterrupted' && isRecord(event.error)) || (isRecord(event.item) && event.item.isError === true) || (isRecord(event.record) && event.record.outcome === 'failed');
+	return event.type === 'modelAttemptFailed' || event.type === 'modelAttemptAbandoned' || event.type === 'turnFailed' || (event.type === 'modelResponseEvaluated' && isRecord(event.decision) && event.decision.action === 'fail') || (event.type === 'turnInterrupted' && isRecord(event.error)) || (isRecord(event.item) && event.item.isError === true) || (isRecord(event.record) && event.record.outcome === 'failed');
 }
 
 function eventLabel(record: AgentTraceEvent): string {
@@ -533,7 +535,13 @@ function eventLabel(record: AgentTraceEvent): string {
 		case 'turnCancelling': detail = localize('agentTrace.cancelling', 'Cancelling Turn'); break;
 		case 'turnInterrupted': detail = localize('agentTrace.interrupted', 'Turn interrupted'); break;
 		case 'userMessage': detail = localize('agentTrace.input', 'User input · {0}', String(item?.text ?? '').slice(0, 100)); break;
-		case 'agentMessage': detail = localize('agentTrace.output', 'Agent output · {0}', String(item?.text ?? '').slice(0, 100)); break;
+		case 'agentMessage': detail = localize('agentTrace.phasedOutput', 'Agent output · {0} · {1}', phaseLabel(item?.phase), String(item?.text ?? '').slice(0, 100)); break;
+		case 'modelResponseEvaluated': {
+			const decision = isRecord(event.decision) ? event.decision : undefined;
+			const phases = Array.isArray(decision?.messagePhases) ? decision.messagePhases.map(phaseLabel).join(', ') : phaseLabel(undefined);
+			detail = localize('agentTrace.loopDecision', 'Loop · {0} · {1} · stop: {2} · phases: {3}', loopActionLabel(decision?.action), loopReasonLabel(decision?.reason), stopReasonLabel(decision?.stopReason), phases);
+			break;
+		}
 		case 'toolCall': detail = localize('agentTrace.toolCall', 'Tool call · {0}', String(item?.name ?? '')); break;
 		case 'toolResult': detail = item?.isError ? localize('agentTrace.toolFailed', 'Tool failed · {0}', String(item?.toolCallId ?? '')) : localize('agentTrace.toolResult', 'Tool result · {0}', String(item?.toolCallId ?? '')); break;
 		case 'toolExecutionStarted': detail = localize('agentTrace.toolStarted', 'Tool execution started'); break;
@@ -554,12 +562,61 @@ function eventLabel(record: AgentTraceEvent): string {
 	return `${record.sequence} · ${detail} · ${new Date(record.recordedAt).toISOString()}${duration}`;
 }
 
+function phaseLabel(phase: unknown): string {
+	switch (phase) {
+		case 'commentary': return localize('agentTrace.phaseCommentary', 'Commentary');
+		case 'partial_answer': return localize('agentTrace.phasePartialAnswer', 'Partial answer');
+		case 'final_answer': return localize('agentTrace.phaseFinalAnswer', 'Final answer');
+		case null: case undefined: return localize('agentTrace.phaseUnspecified', 'Unspecified');
+		default: return typeof phase === 'string' ? phase : isRecord(phase) && typeof phase.other === 'string' ? phase.other : localize('agentTrace.phaseUnspecified', 'Unspecified');
+	}
+}
+
+function loopActionLabel(action: unknown): string {
+	switch (action) {
+		case 'executeTools': return localize('agentTrace.loopExecuteTools', 'Execute tools');
+		case 'continue': return localize('agentTrace.loopContinue', 'Continue generation');
+		case 'complete': return localize('agentTrace.loopComplete', 'Complete Turn');
+		case 'fail': return localize('agentTrace.loopFail', 'Fail Turn');
+		case 'superseded': return localize('agentTrace.loopSuperseded', 'Superseded by new input');
+		default: return String(action ?? '');
+	}
+}
+
+function loopReasonLabel(reason: unknown): string {
+	switch (reason) {
+		case 'toolRequests': return localize('agentTrace.reasonToolRequests', 'Pending tool requests');
+		case 'finalAnswer': return localize('agentTrace.reasonFinalAnswer', 'Final answer received');
+		case 'compatibleCompletion': return localize('agentTrace.reasonCompatibleCompletion', 'Completed without a known phase');
+		case 'nonterminalMessage': return localize('agentTrace.reasonNonterminalMessage', 'Nonterminal message received');
+		case 'continuationLimit': return localize('agentTrace.reasonContinuationLimit', 'Continuation limit reached');
+		case 'truncatedOutput': return localize('agentTrace.reasonTruncatedOutput', 'Output was truncated');
+		case 'invalidToolRequest': return localize('agentTrace.reasonInvalidToolRequest', 'Invalid tool request');
+		case 'unknownStopReason': return localize('agentTrace.reasonUnknownStopReason', 'Unknown stop reason');
+		case 'refusal': return localize('agentTrace.reasonRefusal', 'Model refused the request');
+		case 'newInput': return localize('agentTrace.reasonNewInput', 'New input arrived during generation');
+		default: return String(reason ?? '');
+	}
+}
+
+function stopReasonLabel(reason: unknown): string {
+	const type = isRecord(reason) ? reason.type : reason;
+	switch (type) {
+		case 'completed': return localize('agentTrace.stopCompleted', 'Generation completed');
+		case 'toolUse': return localize('agentTrace.stopToolUse', 'Tool use');
+		case 'maxOutputTokens': return localize('agentTrace.stopMaxOutputTokens', 'Output token limit');
+		case 'refusal': return localize('agentTrace.reasonRefusal', 'Model refused the request');
+		case 'other': return isRecord(reason) ? String(reason.detail ?? type) : type;
+		default: return String(type ?? '');
+	}
+}
+
 function recordingLabel(trace: AgentTrace): string {
 	switch (trace.diagnostics?.recordingStatus) {
 		case 'recording': return localize('agentTrace.recording', 'Local diagnostic evidence enabled.');
 		case 'incomplete': return localize('agentTrace.incomplete', 'Diagnostic evidence incomplete · {0} records omitted.', trace.diagnostics.droppedRecords);
 		case 'unavailable': return localize('agentTrace.unavailable', 'Diagnostic storage unavailable; execution history remains readable.');
-		case 'disabled': case undefined: return localize('agentTrace.disabled', 'Request evidence was not enabled. Set ASH_ROLLOUT_TRACE_ROOT before starting App Server.');
+		case 'disabled': case undefined: return localize('agentTrace.disabled', 'Request evidence was not enabled. Enable detailed recording in Execution trace settings, then restart the owning App Server.');
 	}
 }
 function evidenceLabel(kind: string): string {

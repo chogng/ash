@@ -276,6 +276,7 @@ fn start_plan_preserves_ash_instructions_and_tool_continuations() {
     request
         .input
         .push(ash_api::InputItem::Message(ash_api::Message {
+            phase: None,
             role: ash_api::MessageRole::Assistant,
             content: vec![],
             tool_calls: vec![call.clone()],
@@ -478,6 +479,7 @@ fn live_bigmodel_start_plan_ash_login_streams_and_continues_tools() {
     request
         .input
         .push(ash_api::InputItem::Message(ash_api::Message {
+            phase: None,
             role: ash_api::MessageRole::Assistant,
             content: vec![],
             tool_calls: vec![call.clone()],

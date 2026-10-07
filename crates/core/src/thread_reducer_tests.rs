@@ -875,6 +875,7 @@ fn reducer_verifies_and_rebuilds_a_context_checkpoint() {
                 thread_id: ThreadId::new("thread_1").unwrap(),
                 turn_id: TurnId::new("turn_1").unwrap(),
                 item: ThreadItem::AgentMessage {
+                    phase: None,
                     item_id: ItemId::new("item_2").unwrap(),
                     turn_id: TurnId::new("turn_1").unwrap(),
                     text: "answer".into(),
@@ -1159,6 +1160,7 @@ fn reducer_rebuilds_typed_command_receipt_and_all_durable_item_kinds() {
                 thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
                 turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
                 item: ThreadItem::AgentMessage {
+                    phase: None,
                     item_id: ItemId::new("item_4").expect("test ID is non-empty"),
                     turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
                     text: "answer".into(),

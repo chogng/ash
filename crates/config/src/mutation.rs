@@ -202,6 +202,12 @@ pub(crate) fn apply_command(
 }
 
 fn apply_preferences(document: &mut UserConfigDocument, update: &PreferencesUpdate) {
+    match &update.trace {
+        Patch::Missing => {}
+        // Reset stays disabled instead of falling back to a launch environment value.
+        Patch::Null => document.agent.trace = Some(crate::TraceConfig::default()),
+        Patch::Value(trace) => document.agent.trace = Some(trace.clone()),
+    }
     match &update.features {
         Patch::Missing => {}
         Patch::Null => document.features.clear(),

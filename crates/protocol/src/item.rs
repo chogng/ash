@@ -76,6 +76,9 @@ pub enum ThreadItem {
         item_id: ItemId,
         turn_id: TurnId,
         text: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        phase: Option<crate::MessagePhase>,
     },
     Reasoning {
         item_id: ItemId,

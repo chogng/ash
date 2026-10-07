@@ -1331,6 +1331,7 @@ fn model_pins_keep_provider_identity_and_provider_deletion_cleans_preferences() 
     client
         .update_config(
             ash_app_server_protocol::protocol::config::ConfigUpdateParams {
+                trace: ash_protocol::Patch::Missing,
                 context: ash_protocol::Patch::Missing,
                 command_id: CommandId::new("save-existing-pins").unwrap(),
                 expected_revision: config.revision,

@@ -8,6 +8,7 @@ use crate::PayloadKind;
 use crate::PayloadRef;
 use crate::PayloadStatus;
 use crate::RecordingStatus;
+use ash_protocol::AssistantMessage;
 use ash_protocol::ContentDigest;
 use ash_protocol::ModelRequest;
 use ash_protocol::ModelResponse;
@@ -34,6 +35,9 @@ pub const MAX_PAYLOAD_BYTES: usize = 8 * 1024 * 1024;
 const MAX_CAPTURE_BYTES: usize = 128 * 1024 * 1024;
 const MAX_CAPTURE_EVENTS: usize = 32_000;
 const MAX_CACHED_CAPTURES: usize = 16;
+// Leave space for structured messages and JSON escaping in the same partial-output payload.
+const MAX_PARTIAL_TEXT_BYTES: usize = MAX_PAYLOAD_BYTES / 8;
+const MAX_PARTIAL_MESSAGES: usize = 128;
 enum OpenMode {
     Existing,
     Create,
@@ -44,6 +48,14 @@ enum OpenMode {
 pub struct TraceRecorder {
     root: Option<PathBuf>,
     writers: Mutex<BTreeMap<SessionId, Arc<Mutex<Writer>>>>,
+}
+
+/// Startup configuration and observed storage faults; enabled does not imply a complete capture.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RecorderState {
+    Disabled,
+    Enabled { directory: PathBuf },
+    Unavailable { directory: PathBuf, error: String },
 }
 
 #[derive(Serialize, Deserialize)]
@@ -64,6 +76,23 @@ struct Writer {
 }
 
 impl TraceRecorder {
+    pub fn state(&self) -> RecorderState {
+        let Some(directory) = &self.root else {
+            return RecorderState::Disabled;
+        };
+        if let Some(existing) = directory.ancestors().find(|path| path.exists())
+            && let Err(error) = require_directory(existing)
+        {
+            return RecorderState::Unavailable {
+                directory: directory.clone(),
+                error,
+            };
+        }
+        RecorderState::Enabled {
+            directory: directory.clone(),
+        }
+    }
+
     pub fn from_environment() -> Self {
         Self::new(std::env::var_os(TRACE_ROOT_ENV).map(PathBuf::from))
     }
@@ -157,6 +186,7 @@ impl TraceRecorder {
                 attempt_id,
                 text: String::new(),
                 reasoning: String::new(),
+                messages: Vec::new(),
                 output_truncated: false,
             }),
         }
@@ -499,6 +529,7 @@ struct ActiveAttempt {
     attempt_id: String,
     text: String,
     reasoning: String,
+    messages: Vec<AssistantMessage>,
     output_truncated: bool,
 }
 enum AttemptTermination<'a> {
@@ -532,16 +563,77 @@ impl ModelAttemptTrace {
         let Some(active) = &mut self.active else {
             return;
         };
-        let text = match event {
-            ModelStreamEvent::TextDelta(text) | ModelStreamEvent::ReasoningDelta(text) => text,
+        let addition = match event {
+            ModelStreamEvent::TextDelta(text)
+            | ModelStreamEvent::ReasoningDelta(text)
+            | ModelStreamEvent::MessageDelta { text, .. } => text.len(),
+            ModelStreamEvent::MessageStarted { id, phase } => {
+                id.len() + phase.as_ref().map_or(0, |phase| phase.as_str().len())
+            }
+            ModelStreamEvent::MessageCompleted(message) => message.text.len(),
         };
-        if active.text.len() + active.reasoning.len() + text.len() > MAX_PAYLOAD_BYTES {
+        let structured_bytes: usize = active
+            .messages
+            .iter()
+            .map(|message| message.text.len())
+            .sum();
+        let replaced_bytes = match event {
+            ModelStreamEvent::MessageCompleted(message) => active
+                .messages
+                .iter()
+                .find(|stored| stored.id == message.id)
+                .map_or(0, |stored| stored.text.len()),
+            _ => 0,
+        };
+        if active.text.len() + active.reasoning.len() + addition > MAX_PARTIAL_TEXT_BYTES
+            || structured_bytes - replaced_bytes + addition > MAX_PARTIAL_TEXT_BYTES
+        {
             active.output_truncated = true;
             return;
         }
+        let message = match event {
+            ModelStreamEvent::MessageStarted { id, phase } => Some((id, phase.clone(), None)),
+            ModelStreamEvent::MessageDelta { id, text } => Some((id, None, Some(text.as_str()))),
+            ModelStreamEvent::MessageCompleted(message) => {
+                Some((&message.id, message.phase.clone(), None))
+            }
+            ModelStreamEvent::TextDelta(_) | ModelStreamEvent::ReasoningDelta(_) => None,
+        };
+        if let Some((id, phase, delta)) = message {
+            let index = active.messages.iter().position(|message| &message.id == id);
+            if id.len() > 1024
+                || phase
+                    .as_ref()
+                    .is_some_and(|phase| phase.as_str().len() > 1024)
+                || (index.is_none() && active.messages.len() >= MAX_PARTIAL_MESSAGES)
+            {
+                active.output_truncated = true;
+                return;
+            }
+            let index = index.unwrap_or_else(|| {
+                active.messages.push(AssistantMessage {
+                    id: id.clone(),
+                    text: String::new(),
+                    phase: None,
+                });
+                active.messages.len() - 1
+            });
+            let stored = &mut active.messages[index];
+            if !matches!(event, ModelStreamEvent::MessageDelta { .. }) {
+                stored.phase = phase;
+            }
+            if let Some(delta) = delta {
+                stored.text.push_str(delta);
+            } else if let ModelStreamEvent::MessageCompleted(message) = event {
+                stored.text = message.text.clone();
+            }
+        }
         match event {
-            ModelStreamEvent::TextDelta(text) => active.text.push_str(text),
+            ModelStreamEvent::TextDelta(text) | ModelStreamEvent::MessageDelta { text, .. } => {
+                active.text.push_str(text)
+            }
             ModelStreamEvent::ReasoningDelta(text) => active.reasoning.push_str(text),
+            ModelStreamEvent::MessageStarted { .. } | ModelStreamEvent::MessageCompleted(_) => {}
         }
     }
     pub fn complete(&mut self, response: &ModelResponse) {
@@ -577,11 +669,12 @@ impl ModelAttemptTrace {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let partial_output = if active.text.is_empty()
             && active.reasoning.is_empty()
+            && active.messages.is_empty()
             && !active.output_truncated
         {
             None
         } else {
-            Some(state.payload(PayloadKind::PartialOutput, &serde_json::json!({ "text": active.text, "reasoning": active.reasoning, "truncated": active.output_truncated })))
+            Some(state.payload(PayloadKind::PartialOutput, &serde_json::json!({ "text": active.text, "reasoning": active.reasoning, "messages": active.messages, "truncated": active.output_truncated })))
         };
         let event = match termination {
             AttemptTermination::Cancelled(reason) => DiagnosticEventKind::ModelAttemptCancelled {

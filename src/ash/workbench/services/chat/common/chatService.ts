@@ -124,13 +124,15 @@ export interface SkillSelectorDefinition {
 	readonly skill: SkillReference;
 }
 
+type MessagePhase = 'commentary' | 'partial_answer' | 'final_answer' | { readonly other: string; };
+
 export type ThreadItem =
 	| { readonly type: "userMessage"; readonly itemId: string; readonly turnId: string; readonly text: string; }
 	| { readonly type: "userContext"; readonly itemId: string; readonly turnId: string; readonly name: string; readonly content: string; }
 	| { readonly type: "userImage"; readonly itemId: string; readonly turnId: string; readonly url: string; }
 	| { readonly type: "userImageAttachment"; readonly itemId: string; readonly turnId: string; readonly attachment: ChatImageAttachment; }
 	| { readonly type: "userAudioAttachment"; readonly itemId: string; readonly turnId: string; readonly attachment: ChatAudioAttachment; }
-	| { readonly type: "agentMessage"; readonly itemId: string; readonly turnId: string; readonly text: string; }
+	| { readonly type: "agentMessage"; readonly itemId: string; readonly turnId: string; readonly text: string; readonly phase?: MessagePhase | null; }
 	| { readonly type: "reasoning"; readonly itemId: string; readonly turnId: string; readonly text: string; readonly state: readonly ChatReasoningState[]; }
 	| { readonly type: "plan"; readonly itemId: string; readonly turnId: string; readonly text: string; }
 	| { readonly type: "toolCall"; readonly itemId: string; readonly turnId: string; readonly toolCallId: string; readonly name: string; readonly argumentsJson: string; readonly binding?: ChatToolCallBinding | null; }
@@ -281,6 +283,7 @@ export type ThreadCommittedEvent =
 		| "turnExecutionAttempted"
 		| "modelUsageRecorded"
 		| "modelInvocationRecorded"
+		| "modelResponseEvaluated"
 		| "itemCompleted"
 		| "planUpdated"
 		| "interactionResolved"
@@ -306,7 +309,7 @@ export type ThreadCommittedEvent =
 export type ThreadUpdate =
 	| { readonly type: "committed"; readonly event: ThreadCommittedEvent; }
 	| { readonly type: "itemStarted"; readonly item: ThreadItem; }
-	| { readonly type: "itemDelta"; readonly itemId: string; readonly delta: { readonly type: "agentMessage" | "reasoning" | "plan"; readonly text: string; }; }
+	| { readonly type: "itemDelta"; readonly itemId: string; readonly delta: { readonly type: "agentMessage" | "reasoning" | "plan"; readonly text: string; } | { readonly type: 'agentMessagePhase'; readonly phase: MessagePhase | null; }; }
 	| { readonly type: "toolOutputDelta"; readonly turnId: string; readonly toolCallId: string; readonly stream: "stdout" | "stderr"; readonly text: string; };
 
 export interface ThreadUpdateEnvelope {

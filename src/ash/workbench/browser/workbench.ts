@@ -73,6 +73,7 @@ import { IRendererHostService, type IRendererHost } from "../../platform/rendere
 import { ILocalTranscriptionService } from '../../platform/localTranscription/common/localTranscription.js';
 import { NullLocalTranscriptionService } from '../services/localTranscription/browser/localTranscriptionService.js';
 import { IAgentCapabilitiesService } from '../../platform/agentCapabilities/common/agentCapabilitiesService.js';
+import { ITraceSettingsService } from '../../platform/trace/common/traceSettingsService.js';
 import { IBrowserViewService } from '../../platform/browserView/common/browserView.js';
 import { IRemoteConnectionService } from "../../platform/remote/common/remoteConnectionService.js";
 import { UnavailableRemoteConnectionService } from "../../platform/remote/common/remoteConnectionService.js";
@@ -517,6 +518,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IDictationService, api.dictation);
 		services.registerInstance(ILocalTranscriptionService, api.localTranscription ?? this._register(new NullLocalTranscriptionService()));
 		services.registerInstance(IAgentCapabilitiesService, api.agentCapabilities);
+		services.registerInstance(ITraceSettingsService, api.traceSettings);
 		services.registerInstance(INetworkDiagnosticsService, api.networkDiagnostics);
 		services.registerInstance(IContentSearchConfigurationService, api.contentSearchConfiguration);
 		services.registerInstance(IHooksService, api.hooks);

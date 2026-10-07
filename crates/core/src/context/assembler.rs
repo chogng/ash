@@ -129,12 +129,11 @@ impl ContextAssembler {
                         },
                     );
                 }
-                ThreadItem::AgentMessage { text, .. } => {
+                ThreadItem::AgentMessage { text, phase, .. } => {
                     active_user_turn = None;
-                    input.push(InputItem::Message(Message::text(
-                        MessageRole::Assistant,
-                        text.clone(),
-                    )));
+                    let mut message = Message::text(MessageRole::Assistant, text.clone());
+                    message.phase = phase.clone();
+                    input.push(InputItem::Message(message));
                 }
                 ThreadItem::ToolCall {
                     tool_call_id,
@@ -377,6 +376,7 @@ fn append_user_content(
     }
 
     input.push(InputItem::Message(Message {
+        phase: None,
         role: MessageRole::User,
         content: vec![content],
         tool_calls: Vec::new(),
@@ -392,6 +392,7 @@ fn append_tool_call(input: &mut Vec<InputItem>, call: ToolCall) {
         return;
     }
     input.push(InputItem::Message(Message {
+        phase: None,
         role: MessageRole::Assistant,
         content: Vec::new(),
         tool_calls: vec![call],

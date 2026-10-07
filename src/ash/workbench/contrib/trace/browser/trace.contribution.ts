@@ -90,6 +90,17 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	setting: { valueType: 'boolean', title: localize('agentTrace.verbosity', 'Execution Trace accessibility help'), description: localize('agentTrace.verbosityDescription', 'Announce keyboard help when the execution trace receives focus.') },
 });
 
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.TraceSettings,
+	defaultValue: true,
+	parse: value => { if (typeof value !== 'boolean') { throw new TypeError(localize({ bundle: 'ash.settings', key: 'trace.invalidVerbosity' }, 'Trace settings accessibility verbosity must be boolean.')); } return value; },
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize({ bundle: 'ash.settings', key: 'trace.verbosity' }, 'Execution trace settings accessibility help'); },
+		get description() { return localize({ bundle: 'ash.settings', key: 'trace.verbosityDescription' }, 'Announce how to open accessibility help in execution trace settings.'); },
+	},
+});
+
 for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 	AccessibleViewRegistry.register({
 		type,
@@ -101,7 +112,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			if (!(pane instanceof AgentTraceEditor)) { return undefined; }
 			const focused = accessor.get(ILayoutService).mainContainer.ownerDocument.activeElement;
 			return new AccessibleContentProvider(AccessibleViewProviderId.AgentTrace, { type },
-				() => type === AccessibleViewType.View ? pane.getAccessibleContent() : localize('agentTrace.helpText', 'Execution Trace\nRead the selected conversation’s saved execution history. Threads contain Turns and execution events; child Threads are nested beneath their parent. Events preserve each Thread’s sequence. Tab moves between controls, the selected event and selectable JSON details. Arrow keys, Home and End select visible events. Errors only shows failed Turns, model calls and tool results. Filtering searches identifiers and event contents. Refresh reads newer durable events. Request evidence requires ASH_ROLLOUT_TRACE_ROOT before App Server starts. Model attempts include failures, cancellations and partial output. View request / response loads the selected payload. Requests are semantic ModelService input, not HTTP bytes. View relationships follows model, tool, Code Mode, terminal and child-agent links. Diagnostic order is independent from Thread sequences. Hiding or closing the editor stops polling and releases subscriptions. Export saves all loaded events, including events hidden by the filter. Import opens a version 3 rollout trace from an evaluation or another saved capture. Closing the editor releases its live subscriptions. <keybinding:editor.action.accessibleView> reads the trace; Escape closes this help.'),
+				() => type === AccessibleViewType.View ? pane.getAccessibleContent() : localize('agentTrace.helpText', 'Execution Trace\nRead the selected conversation’s saved execution history. Threads contain Turns and execution events; child Threads are nested beneath their parent. Events preserve each Thread’s sequence. Tab moves between controls, the selected event and selectable JSON details. Arrow keys, Home and End select visible events. Errors only shows failed Turns, model calls and tool results. Filtering searches identifiers and event contents. Refresh reads newer durable events. Enable request evidence in Execution trace settings, then restart the owning App Server. Model attempts include failures, cancellations and partial output. View request / response loads the selected payload. Requests are semantic ModelService input, not HTTP bytes. View relationships follows model, tool, Code Mode, terminal and child-agent links. Diagnostic order is independent from Thread sequences. Hiding or closing the editor stops polling and releases subscriptions. Export saves all loaded events, including events hidden by the filter. Import opens a version 3 rollout trace from an evaluation or another saved capture. Closing the editor releases its live subscriptions. <keybinding:editor.action.accessibleView> reads the trace; Escape closes this help.'),
 				() => { if (isHTMLElement(focused) && focused.isConnected) { focused.focus(); } else { pane.focus(); } }, AccessibilityVerbositySettingId.AgentTrace);
 		},
 	});

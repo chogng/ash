@@ -1,4 +1,5 @@
 import { GitHubSettingsModel } from '../../github/browser/githubSettingsModel.js';
+import { TraceSettingsModel } from '../../trace/browser/traceSettingsModel.js';
 import { SettingsSectionRenderer } from './settingsSectionRenderer.js';
 import { AccessibleViewProviderId, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
@@ -212,7 +213,9 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		if (!initialCategory) throw new Error('Settings requires at least one category');
 		this.activeCategory = initialCategory;
 		const githubSettings = this._register(this.instantiationService.createInstance(GitHubSettingsModel, async () => { await this.instantiationService.invokeFunction(accessor => accessor.get(ICommandService).executeCommand(CLOSE_EDITOR_COMMAND_ID)); }));
+		const traceSettings = this._register(this.instantiationService.createInstance(TraceSettingsModel));
 		this.contents.push(
+			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, traceSettings, AccessibleViewProviderId.TraceSettings, AccessibilityVerbositySettingId.TraceSettings)),
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, githubSettings, AccessibleViewProviderId.GitHubSettings, AccessibilityVerbositySettingId.GitHubSettings)),
 			this._register(this.instantiationService.createInstance(NetworkSettingsContent, settingsContent)),
 			this._register(this.instantiationService.createInstance(SearchSettingsContent, settingsContent)),
@@ -422,6 +425,7 @@ function displayLanguageSetting(setting: ISetting, locale: ILocaleService, langu
 			defaultValue: setting.configuration.defaultValue,
 			onDidChange: listener => configuration.onDidChangeConfiguration(event => { if (event.affectsConfiguration(LocalizationConfiguration.locale)) { listener(); } }),
 			getValue: () => configuration.getValue(LocalizationConfiguration.locale),
+			isDefault: () => configuration.inspect(LocalizationConfiguration.locale).userLocalValue === undefined,
 			updateValue: value => locale.setLocale({ id: String(value), label: String(value) }),
 			resetValue: () => locale.clearLocalePreference(),
 		},
@@ -439,6 +443,7 @@ function localUpdatePolicySetting(setting: ISetting, configuration: IConfigurati
 				if (event.affectsConfiguration(DESKTOP_UPDATE_POLICY_SETTING)) listener();
 			}),
 			getValue: () => configuration.inspect<DesktopUpdatePolicy>(DESKTOP_UPDATE_POLICY_SETTING).userLocalValue ?? 'latest',
+			isDefault: () => configuration.inspect(DESKTOP_UPDATE_POLICY_SETTING).userLocalValue === undefined,
 			updateValue: (value: string | boolean) => configuration.updateValue(DESKTOP_UPDATE_POLICY_SETTING, value, ConfigurationTarget.USER_LOCAL),
 			resetValue: () => configuration.updateValue(DESKTOP_UPDATE_POLICY_SETTING, undefined, ConfigurationTarget.USER_LOCAL),
 		},

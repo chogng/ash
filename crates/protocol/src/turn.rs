@@ -32,6 +32,42 @@ pub use review_target::ReviewTarget;
 pub use status::TurnStatus;
 pub use tool_profile::ToolProfileSnapshot;
 
+/// The Core decision for a validated model response, retained for replay and trace inspection.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnLoopDecision {
+    pub action: TurnLoopAction,
+    pub reason: TurnLoopReason,
+    pub stop_reason: crate::StopReason,
+    pub message_phases: Vec<Option<crate::MessagePhase>>,
+    pub tool_call_count: u32,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum TurnLoopAction {
+    ExecuteTools,
+    Continue,
+    Complete,
+    Fail,
+    Superseded,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum TurnLoopReason {
+    ToolRequests,
+    FinalAnswer,
+    CompatibleCompletion,
+    NonterminalMessage,
+    ContinuationLimit,
+    TruncatedOutput,
+    InvalidToolRequest,
+    UnknownStopReason,
+    Refusal,
+    NewInput,
+}
+
 /// Canonical readable state for one user-intent-driven Agent execution.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

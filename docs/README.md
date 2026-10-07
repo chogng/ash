@@ -4,12 +4,12 @@
 
 ## 开始开发
 
-| 你要做什么                     | 从哪里开始                                                                           |
-| ------------------------------ | ------------------------------------------------------------------------------------ |
-| 安装工具、构建、测试或清理产物 | [构建与开发](build.md)                                                               |
-| 开发桌面端、浏览器界面或编辑器 | [前端开发](frontend.md)                                                              |
-| 修改命令行或终端界面           | [CLI](../cli/README.md)、[TUI](../crates/tui/README.md)                              |
-| 判断功能属于哪一端、哪个模块   | [产品与宿主边界](product-lines.md)、[系统架构](architecture.md)                      |
+| 你要做什么                     | 从哪里开始                                                                   |
+| ------------------------------ | ---------------------------------------------------------------------------- |
+| 安装工具、构建、测试或清理产物 | [构建与开发](build.md)                                                       |
+| 开发桌面端、浏览器界面或编辑器 | [前端开发](frontend.md)                                                      |
+| 修改命令行或终端界面           | [CLI](../cli/README.md)、[TUI](../crates/tui/README.md)                      |
+| 判断功能属于哪一端、哪个模块   | [产品与宿主边界](product-lines.md)、[系统架构](architecture.md)              |
 | 构建或发布运行包               | [共享运行包](../build/README.md)、[产品更新](product-update-architecture.md) |
 
 工具版本和命令在构建指南维护；各模块的实现、约束和测试入口在相邻 README。
@@ -21,7 +21,7 @@
 - **协议与接口：** [领域身份](domain-model.md)、[协议](protocol.md)、[App Server API](ash-app-server-api.md)、[客户端](app-server-client.md)、[工具契约](agent-tools-spec.md)。
 - **配置与扩展：** [配置](config.md)、[模型接入](model-provider.md)、[登录](login.md)、[Agent 定制](agent-customizations.md)、[Skills](skills.md)、[Plugins](plugins.md)、[Connectors](connectors.md)、[MCP](mcp.md)、[编辑器扩展](editor-extensions.md)。
 - **权限与安全：** [权限](permissions.md)、[沙箱](sandboxing.md)、[环境访问](environment-access.md)、[工作区安全](workspace-security.md)、[凭据](secrets.md)。
-- **界面开发：** [浏览器基础](browser-foundation.md)、[样式职责](ui-styling-ownership.md)、[主题变量](design-tokens.md)、[面板与布局](workbench-pane-composite-design.md)、[菜单](menu-system.md)、[本地化](localization.md)。
+- **界面开发：** [浏览器基础](browser-foundation.md)、[Preferences 与 Settings](preferences-and-settings.md)、[样式职责](ui-styling-ownership.md)、[主题变量](design-tokens.md)、[面板与布局](workbench-pane-composite-design.md)、[菜单](menu-system.md)、[本地化](localization.md)。
 
 设计文档会区分当前实现和目标设计。功能是否可用应以其中的状态说明及对应实现、测试为准。
 

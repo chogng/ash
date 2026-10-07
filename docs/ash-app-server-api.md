@@ -1067,6 +1067,20 @@ connection 会接收这些 child Thread 的实时 update。产品宿主应先应
 必须读取当前表并保留未知键，`null` 清除整张表，缺失字段的默认值由对应前端决定。Settings 与手工
 TOML 编辑共享同一 Config revision/generation 和 `config/changed` 通知链。
 
+### 执行轨迹配置
+
+`config/read.trace` 返回已保存的 `{ enabled, directory }` 或 `null`；`directory` 是后端机器上的
+绝对路径，启用时必填。`config/read.traceRecording` 独立返回运行中的记录器状态：
+`{ type: "disabled" }`、`{ type: "enabled", directory }` 或
+`{ type: "unavailable", directory, error }`。enabled 表示启动时配置的目录，不能据此认定每次捕获完整；
+目录结构错误可报告 unavailable，写入故障和省略证据仍由各捕获返回。
+
+`config/update.trace` 使用现有 `commandId + expectedRevision` 原子提交、冲突和重放规则：
+缺失保持原配置，value 整体替换，`null` 写入显式关闭。保存不切换记录器；profile runtime
+创建时冻结配置并供各 Directory host 共用，须重启所属 App Server 才能应用修改。没有显式 trace
+偏好时兼容启动环境变量 `ASH_ROLLOUT_TRACE_ROOT`，显式配置优先于该环境变量，包含关闭状态。
+普通 Workbench 和 Agents 设置页共用数据模型与渲染器，并展示保存意图与实际状态的差异。
+
 ### 网络诊断
 
 `network/read` 与 `network/diagnostics/run` 参数均为 `{}`。前者返回当前配置的模型连接、已就绪订阅的模型/登录/额度端点，以及后端接入的 Marketplace、图片和账号代理服务。端点归所属服务维护，诊断不维护另一份固定域名清单；外部 Kimi 程序、浏览器和插件自行发出的请求不在此列表中。每项含稳定目标 ID、连接身份、域名、端口、用途，以及共享网络快照选择的直连、代理主机/端口或权限阻止状态。路径、查询参数、代理认证信息和凭据不返回。

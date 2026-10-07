@@ -36,13 +36,13 @@ export class SettingModel<T> extends Disposable implements SettingReference {
 			id: this.binding.id,
 			value: this.value,
 			defaultValue: this.binding.defaultValue,
-			isDefault: Object.is(this.value, this.binding.defaultValue),
+			isDefault: this.isDefault(),
 			isPending: this.pending,
 		};
 	}
 
 	public isDefault(): boolean {
-		return Object.is(this.value, this.binding.defaultValue);
+		return this.binding.isDefault?.() ?? Object.is(this.value, this.binding.defaultValue);
 	}
 
 	public async update(value: T): Promise<void> {
@@ -91,6 +91,7 @@ export function configurationSettingBinding<T>(configurationService: IConfigurat
 			if (event.affectsConfiguration(configuration.key)) listener();
 		}),
 		getValue: () => configurationService.getValue<T>(configuration.key),
+		isDefault: () => configurationService.inspect<T>(configuration.key).userLocalValue === undefined,
 		updateValue: value => configurationService.updateValue(configuration.key, value),
 		resetValue: () => configurationService.updateValue(configuration.key, undefined),
 	};

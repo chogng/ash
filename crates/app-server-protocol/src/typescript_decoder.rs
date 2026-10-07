@@ -29,7 +29,16 @@ pub(crate) fn generate(schema: &Value) -> String {
 /// is application data and must never be removed by a recursive object-key filter.
 fn remove_annotations(schema: &mut Value) {
     visit_schema(schema, &mut |object| {
-        for annotation in ["description", "title", "$comment", "examples", "default"] {
+        // The runtime decoder validates numeric bounds and string patterns, but does not
+        // interpret JSON Schema format annotations (for example uint64 or uuid).
+        for annotation in [
+            "description",
+            "title",
+            "$comment",
+            "examples",
+            "default",
+            "format",
+        ] {
             object.remove(annotation);
         }
     });

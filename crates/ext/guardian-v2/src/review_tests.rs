@@ -71,9 +71,11 @@ impl ModelInvoker for RecordingInvoker {
     ) -> Result<ModelResponse, ModelProviderError> {
         self.requests.lock().unwrap().push(request.clone());
         Ok(ModelResponse {
-            output: vec![ResponseItem::Text(
-                r#"{"recommendation":"deny","reason":"unsafe"}"#.into(),
-            )],
+            output: vec![ResponseItem::Message(protocol::AssistantMessage {
+                id: "assessment".into(),
+                text: r#"{"recommendation":"deny","reason":"unsafe"}"#.into(),
+                phase: Some(protocol::MessagePhase::FinalAnswer),
+            })],
             usage: None,
             billing: None,
             stop_reason: StopReason::Completed,

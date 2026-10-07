@@ -256,6 +256,7 @@ impl TranscriptAccumulator {
             | ThreadEvent::TurnExecutionAttempted { .. }
             | ThreadEvent::ModelUsageRecorded { .. }
             | ThreadEvent::ModelInvocationRecorded { .. }
+            | ThreadEvent::ModelResponseEvaluated { .. }
             | ThreadEvent::InteractionRequested { .. }
             | ThreadEvent::InteractionResolved { .. }
             | ThreadEvent::ToolExecutionStarted { .. }
@@ -444,11 +445,14 @@ impl TranscriptAccumulator {
 
 fn item_from_delta(turn_id: &TurnId, item_id: &ItemId, delta: &ItemDelta) -> ThreadItem {
     match delta {
-        ItemDelta::AgentMessage { .. } => ThreadItem::AgentMessage {
-            item_id: item_id.clone(),
-            turn_id: turn_id.clone(),
-            text: String::new(),
-        },
+        ItemDelta::AgentMessage { .. } | ItemDelta::AgentMessagePhase { .. } => {
+            ThreadItem::AgentMessage {
+                phase: None,
+                item_id: item_id.clone(),
+                turn_id: turn_id.clone(),
+                text: String::new(),
+            }
+        }
         ItemDelta::Reasoning { .. } => ThreadItem::Reasoning {
             state: Vec::new(),
             item_id: item_id.clone(),
@@ -464,6 +468,13 @@ fn item_from_delta(turn_id: &TurnId, item_id: &ItemId, delta: &ItemDelta) -> Thr
 }
 
 fn append_matching_delta(item: &mut ThreadItem, delta: &ItemDelta) -> bool {
+    if let ItemDelta::AgentMessagePhase { phase } = delta {
+        if let ThreadItem::AgentMessage { phase: target, .. } = item {
+            *target = phase.clone();
+            return true;
+        }
+        return false;
+    }
     let (target, addition) = match (item, delta) {
         (ThreadItem::AgentMessage { text, .. }, ItemDelta::AgentMessage { text: addition })
         | (ThreadItem::Reasoning { text, .. }, ItemDelta::Reasoning { text: addition })

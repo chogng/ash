@@ -434,6 +434,14 @@ export const SettingsNavigation = [
 				groups: [],
 			},
 			{
+				id: 'execution-trace',
+				label: 'Execution trace',
+				description: 'Manage detailed recording and inspect the running backend configuration.',
+				keywords: ['trace', 'requests', 'responses', 'recording', 'diagnostics'],
+				presentation: 'general',
+				groups: [],
+			},
+			{
 				id: 'hooks',
 				label: 'Hooks',
 				description: 'Configure automated actions around agent workflow events.',

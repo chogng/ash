@@ -9,6 +9,16 @@ import {
 	decodeAppServerServerRequest,
 } from '../../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 
+test('message phases and loop decisions survive the generated notification boundary', () => {
+	const params = { sessionId: 'session', threadId: 'thread', durableSequence: 7, update: { type: 'itemDelta', itemId: 'message', turnId: 'turn', delta: { type: 'agentMessagePhase', phase: 'final_answer' } } };
+	const notification = { jsonrpc: '2.0', method: 'session/thread/update', params };
+	assert.deepEqual(decodeAppServerNotification(notification), notification);
+	const decision = { action: 'continue', reason: 'nonterminalMessage', stopReason: { type: 'completed' }, messagePhases: ['partial_answer', null, { other: 'future_phase' }], toolCallCount: 0 };
+	const committed = { ...notification, params: { ...params, update: { type: 'committed', event: { type: 'modelResponseEvaluated', threadId: 'thread', turnId: 'turn', sourceThreadSequence: 6, decision } } } };
+	assert.deepEqual(decodeAppServerNotification(committed), committed);
+	assert.throws(() => decodeAppServerNotification({ ...committed, params: { ...committed.params, update: { ...committed.params.update, event: { ...committed.params.update.event, decision: { ...decision, action: 'unknown' } } } } }), AppServerProtocolDecodeError);
+});
+
 test('directory permissions reject unknown enum values at the generated boundary', () => {
 	const params = { commandId: 'set-permissions', expectedRevision: 1, path: '/workspace', permissions: ['readFiles'] };
 	assert.deepEqual(decodeAppServerRequestParams('config/dirPermissions/set', params), params);
@@ -196,6 +206,15 @@ test('Feature map keys and queue edits are validated from the generated schema',
 	assert.deepEqual(decodeAppServerNotification({ jsonrpc: '2.0', method: 'queue/changed', params: {} }), {
 		jsonrpc: '2.0', method: 'queue/changed', params: {},
 	});
+});
+
+test('trace configuration patches preserve explicit disable and reject malformed intent', () => {
+	const params = { commandId: 'trace', expectedRevision: 4, trace: { enabled: true, directory: '/recordings' } };
+	assert.deepEqual(decodeAppServerRequestParams('config/update', params), params);
+	const reset = { ...params, trace: null };
+	assert.deepEqual(decodeAppServerRequestParams('config/update', reset), reset);
+	assert.throws(() => decodeAppServerRequestParams('config/update', { ...params, trace: { enabled: 'true', directory: '/recordings' } }), AppServerProtocolDecodeError);
+	assert.throws(() => decodeAppServerRequestParams('config/update', { ...params, trace: { ...params.trace, upload: true } }), AppServerProtocolDecodeError);
 });
 
 test('Memory records and process memory diagnostics use disjoint generated methods', () => {

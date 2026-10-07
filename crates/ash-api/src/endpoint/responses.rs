@@ -392,14 +392,20 @@ fn convert_input(
                             message.content.len() - 1,
                         ));
                     }
-                    converted.push(json!({
+                    let mut encoded = json!({
                         "role": role(message.role),
                         "content": message
                             .content
                             .iter()
                             .map(|part| convert_content(message.role, part))
                             .collect::<Vec<_>>(),
-                    }));
+                    });
+                    if message.role == MessageRole::Assistant
+                        && let Some(phase) = &message.phase
+                    {
+                        encoded["phase"] = json!(phase.as_str());
+                    }
+                    converted.push(encoded);
                 }
                 converted.extend(message.tool_calls.iter().map(|call| {
                     json!({
@@ -506,14 +512,26 @@ fn convert_responses_tool_choice(choice: &ToolChoice) -> Value {
 
 pub(crate) fn parse_response(response: Value) -> Result<ModelResponse, ApiError> {
     let mut output = Vec::new();
+    let mut message_ids = std::collections::BTreeSet::new();
     for item in response
         .get("output")
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
+        .enumerate()
     {
+        let (index, item) = item;
         match item.get("type").and_then(Value::as_str) {
             Some("message") => {
+                let message = parse_output_message(item, index as u64)?;
+                if !message_ids.insert(message.id.clone()) {
+                    return Err(ApiError::InvalidResponse(
+                        "OpenAI response repeated a message ID".into(),
+                    ));
+                }
+                if !message.text.is_empty() {
+                    output.push(OutputItem::Message(message));
+                }
                 for part in item
                     .get("content")
                     .and_then(Value::as_array)
@@ -521,7 +539,7 @@ pub(crate) fn parse_response(response: Value) -> Result<ModelResponse, ApiError>
                     .flatten()
                 {
                     match part.get("type").and_then(Value::as_str) {
-                        Some("output_text") => push_string(&mut output, part, "text", false),
+                        Some("output_text") => {}
                         Some("refusal") => push_string(&mut output, part, "refusal", true),
                         _ => {}
                     }
@@ -568,7 +586,15 @@ pub(crate) fn parse_response(response: Value) -> Result<ModelResponse, ApiError>
         .get("status")
         .and_then(Value::as_str)
         .unwrap_or("completed");
-    let stop_reason = if output
+    let stop_reason = if status != "completed" {
+        match response
+            .pointer("/incomplete_details/reason")
+            .and_then(Value::as_str)
+        {
+            Some("max_output_tokens") => StopReason::MaxOutputTokens,
+            _ => StopReason::Other(status.into()),
+        }
+    } else if output
         .iter()
         .any(|item| matches!(item, OutputItem::ToolCall(_)))
     {
@@ -579,18 +605,7 @@ pub(crate) fn parse_response(response: Value) -> Result<ModelResponse, ApiError>
     {
         StopReason::Refusal
     } else {
-        match status {
-            "completed" => StopReason::Completed,
-            "incomplete"
-                if response
-                    .pointer("/incomplete_details/reason")
-                    .and_then(Value::as_str)
-                    == Some("max_output_tokens") =>
-            {
-                StopReason::MaxOutputTokens
-            }
-            other => StopReason::Other(other.into()),
-        }
+        StopReason::Completed
     };
     Ok(ModelResponse {
         output,
@@ -598,6 +613,44 @@ pub(crate) fn parse_response(response: Value) -> Result<ModelResponse, ApiError>
         billing: crate::requests::parse_response_billing(&response)?,
         stop_reason,
     })
+}
+
+pub(super) fn parse_output_message(
+    item: &Value,
+    index: u64,
+) -> Result<ash_protocol::AssistantMessage, ApiError> {
+    let id = match item.get("id") {
+        None => format!("message-{index}"),
+        Some(Value::String(id)) => id.clone(),
+        Some(_) => {
+            return Err(ApiError::InvalidResponse(
+                "OpenAI message ID must be a string".into(),
+            ));
+        }
+    };
+    if id.is_empty() {
+        return Err(ApiError::InvalidResponse(
+            "OpenAI message ID is empty".into(),
+        ));
+    }
+    let phase = match item.get("phase") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(value)) => Some(ash_protocol::MessagePhase::from_wire(value)),
+        Some(_) => {
+            return Err(ApiError::InvalidResponse(
+                "OpenAI message phase must be a string".into(),
+            ));
+        }
+    };
+    let text = item
+        .get("content")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|part| part.get("type").and_then(Value::as_str) == Some("output_text"))
+        .filter_map(|part| part.get("text").and_then(Value::as_str))
+        .collect();
+    Ok(ash_protocol::AssistantMessage { id, text, phase })
 }
 
 pub(super) fn parse_usage(usage: Option<&Value>) -> Option<ModelUsage> {

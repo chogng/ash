@@ -13,6 +13,8 @@ export interface SettingValueBinding<T> {
 	readonly onDidChange?: Event<void>;
 
 	getValue(): T;
+	/** Persisted bindings distinguish an absent override from an explicitly saved default. */
+	isDefault?(): boolean;
 	updateValue(value: T): Promise<void>;
 	resetValue(): Promise<void>;
 }

@@ -30,6 +30,11 @@ Workbench 通用 Agent Sidebar 不受影响。
 自己的 sequence，不建立全局 Session 顺序。模型调用、用量、工具参数及结果、压缩、失败和取消
 可以从事件详情查看。
 
+每条助手输出显示其消息阶段；每次有效响应后的“循环决策”显示执行工具、继续生成、完成、
+失败或被新输入替代，并解释停止原因与判断理由。详情保留有序阶段、工具数及输入快照序号。
+这些决策属于持久执行历史，关闭详细记录仍可查看；“仅显示错误”也包含被拒绝的循环决策。
+完整响应及终止前部分输出的详细正文保留消息身份和阶段，已收到的阶段不会靠正文推测。
+
 界面通过 Chat 领域服务调用 `session/trace/read`，增量读取历史，再按现有 Thread 订阅跟随新事件。
 订阅 snapshot 补齐读取与订阅之间的空窗；共享 Chat 服务传递当前 Session 的 `session/changed`，
 触发读取以发现新子 Thread，编辑器不依赖 Sessions 目录服务。隐藏或关闭
@@ -39,8 +44,15 @@ Workbench 通用 Agent Sidebar 不受影响。
 原始 envelope、共享历史前缀和未知字段保留；正文与执行关系也随导出保存。导入／导出限制为 64 MiB。
 评测命令和用例来源见 [任务评测](../test/agent-eval/README.md)。
 
-需要模型请求证据时，在启动 App Server 前设置 `ASH_ROLLOUT_TRACE_ROOT=/absolute/local/directory`。
-运行时启动时读取该开关；修改后需重启拥有 Thread 的 App Server。记录只写本地目录，不上传，
+需要模型请求证据时，在 Workbench Settings → Chat → Execution trace，或 Agents Settings →
+Development → Execution trace 中启用详细记录，并填写 App Server 所在机器上的绝对保存目录。
+两个入口使用同一个数据模型和 Settings section renderer，写入当前连接 profile 的
+`config.toml` 中的 `[agent.trace]`；远端连接读取和修改远端 profile，本地目录选择器只在本地连接可用。
+设置页分别展示已保存配置、运行中的记录状态和待重启提示；外部配置改变时，未保存草稿须刷新后才能保存。
+没有显式保存的 trace 配置时，继续兼容启动环境变量 `ASH_ROLLOUT_TRACE_ROOT=/absolute/local/directory`；
+显式配置优先，包括 `enabled = false`。运行时启动时读取配置；修改后需重启拥有 Thread 的 App Server，
+仅重开窗口可能复用旧后端。关闭详细记录不影响执行历史；缺失的历史请求不会补录。
+记录只写后端本地目录，不上传，
 失败不会改变 Turn 的执行结果。启用后记录 Agent、上下文压缩与工具内辅助模型的每次 attempt，
 包括失败重试、取消，以及终止前收到的部分输出；进程退出时仍未结束的 attempt 保留为未完成事实。
 

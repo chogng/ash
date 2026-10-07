@@ -14,6 +14,45 @@ fn event(event: &str, data: &str) -> SseFrame {
 }
 
 #[test]
+fn responses_stream_keeps_message_boundaries_and_accepts_a_late_phase() {
+    let mut decoder = ResponsesEventDecoder::new();
+    for (index, id, phase) in [(0, "progress", "commentary"), (1, "answer", "final_answer")] {
+        assert_eq!(decoder.decode_json(&json!({"type":"response.output_item.added", "output_index":index, "item":{"type":"message","id":id,"content":[]}})).unwrap(),
+            [ModelStreamEvent::MessageStarted { id:id.into(), phase:None }]);
+        assert_eq!(decoder.decode_json(&json!({"type":"response.output_text.delta","output_index":index,"item_id":id,"delta":"text"})).unwrap(),
+            [ModelStreamEvent::MessageDelta { id:id.into(), text:"text".into() }]);
+        let completed = decoder.decode_json(&json!({"type":"response.output_item.done","output_index":index,"item":{"type":"message","id":id,"phase":phase,"content":[{"type":"output_text","text":"text"}]}})).unwrap();
+        assert!(
+            matches!(&completed[0], ModelStreamEvent::MessageCompleted(message) if message.id == id && message.phase.as_ref().unwrap().as_str() == phase)
+        );
+    }
+    decoder
+        .decode_json(
+            &json!({"type":"response.completed","response":{"status":"completed","output":[]}}),
+        )
+        .unwrap();
+    let response = super::super::parse_response(decoder.finish_response().unwrap()).unwrap();
+    assert_eq!(response.output.len(), 2);
+    assert_eq!(response.text(), "texttext");
+}
+
+#[test]
+fn responses_stream_rejects_message_identity_changes() {
+    for conflicting in [
+        json!({"type":"response.output_text.delta","output_index":0,"item_id":"wrong","delta":"text"}),
+        json!({"type":"response.output_item.done","output_index":0,"item":{"type":"message","id":"wrong"}}),
+        json!({"type":"response.output_item.added","output_index":1,"item":{"type":"message","id":"same"}}),
+    ] {
+        let mut decoder = ResponsesEventDecoder::new();
+        decoder.decode_json(&json!({"type":"response.output_item.added","output_index":0,"item":{"type":"message","id":"same"}})).unwrap();
+        assert!(matches!(
+            decoder.decode_json(&conflicting),
+            Err(ApiError::InvalidResponse(_))
+        ));
+    }
+}
+
+#[test]
 fn responses_decoder_emits_text_and_reasoning_deltas() {
     let mut decoder = ResponsesEventDecoder::new();
 

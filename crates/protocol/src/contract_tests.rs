@@ -2,6 +2,50 @@ use super::*;
 use serde_json::json;
 
 #[test]
+fn assistant_message_phase_is_optional_and_unknown_values_round_trip() {
+    let old = json!({"type":"agentMessage", "itemId":"item", "turnId":"turn", "text":"done"});
+    let item: ThreadItem = serde_json::from_value(old.clone()).unwrap();
+    assert_eq!(serde_json::to_value(item).unwrap(), old);
+    for phase in [
+        MessagePhase::Commentary,
+        MessagePhase::PartialAnswer,
+        MessagePhase::FinalAnswer,
+        MessagePhase::Other("future_phase".into()),
+    ] {
+        let mut value = old.clone();
+        value["phase"] = serde_json::to_value(&phase).unwrap();
+        let item: ThreadItem = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(item).unwrap(), value);
+        let mut message = Message::text(MessageRole::Assistant, "done");
+        message.phase = Some(phase);
+        assert_eq!(
+            serde_json::from_value::<Message>(serde_json::to_value(&message).unwrap()).unwrap(),
+            message
+        );
+    }
+}
+
+#[test]
+fn loop_decision_event_preserves_generation_facts_separately_from_the_action() {
+    let event = ThreadEvent::ModelResponseEvaluated {
+        thread_id: ThreadId::new("thread").unwrap(),
+        turn_id: TurnId::new("turn").unwrap(),
+        source_thread_sequence: 7,
+        decision: TurnLoopDecision {
+            action: TurnLoopAction::ExecuteTools,
+            reason: TurnLoopReason::ToolRequests,
+            stop_reason: StopReason::Completed,
+            message_phases: vec![Some(MessagePhase::FinalAnswer), None],
+            tool_call_count: 1,
+        },
+    };
+    let value = serde_json::to_value(&event).unwrap();
+    assert_eq!(value["decision"]["action"], "executeTools");
+    assert_eq!(value["decision"]["stopReason"]["type"], "completed");
+    assert_eq!(serde_json::from_value::<ThreadEvent>(value).unwrap(), event);
+}
+
+#[test]
 fn model_settings_and_explicit_request_controls_round_trip() {
     let value = json!({
         "input_modalities": ["text", "image"],

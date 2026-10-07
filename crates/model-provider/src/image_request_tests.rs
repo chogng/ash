@@ -16,6 +16,7 @@ fn model_request_final_gate_sanitizes_message_and_tool_result_images() {
         instructions: None,
         input: vec![
             InputItem::Message(Message {
+                phase: None,
                 role: MessageRole::User,
                 content: vec![ContentPart::ImageUrl {
                     url: "data:image/png;base64,AA==".into(),

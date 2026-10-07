@@ -124,6 +124,7 @@ fn streaming_commit_deadlines_are_serviced_during_continuous_input_and_completio
                     turn_id: turn_id.clone(),
                     transient: true,
                     item: ThreadItem::AgentMessage {
+                        phase: None,
                         item_id: ItemId::new("item").unwrap(),
                         turn_id,
                         text: "one\ntwo\nthree\nfour".into(),

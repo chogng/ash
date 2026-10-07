@@ -104,6 +104,8 @@ mod context_compaction_tests;
 mod context_inspection_tests;
 #[path = "diagnostic_trace_tests.rs"]
 mod diagnostic_trace_tests;
+#[path = "loop_decision_tests.rs"]
+mod loop_decision_tests;
 
 #[test]
 fn completes_a_text_turn_from_durable_context() {
@@ -887,6 +889,10 @@ fn steering_during_a_model_call_discards_its_stale_completion_and_replans() {
     assert!(request_contains(&requests[1], "steer toward tests"));
     let snapshot = threads.read_thread(&thread_id).unwrap();
     assert_eq!(snapshot.usage.model_invocations, 2);
+    assert!(threads.thread_updates_after(&thread_id, 0).unwrap().iter().any(|update| matches!(
+        &update.update, ThreadUpdate::Committed { event: ash_protocol::ThreadEvent::ModelResponseEvaluated { decision, .. } }
+        if decision.action == ash_protocol::TurnLoopAction::Superseded && decision.reason == ash_protocol::TurnLoopReason::NewInput
+    )));
     assert!(!snapshot.items.iter().any(
         |item| matches!(item, ThreadItem::AgentMessage { text, .. } if text == "stale answer")
     ));

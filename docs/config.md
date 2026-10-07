@@ -99,6 +99,24 @@ inputMode = "standard"
 Config 和 App Server 将 `[gui]`、`[tui]` 作为不透明键值表保存，不校验字段含义。更新任一表时，
 前端必须先读取当前值、保留自己不认识的键，再携带 `expectedRevision` 替换完整表；两个表彼此独立。
 
+## 执行轨迹记录
+
+`[agent.trace]` 保存当前后端 profile 的详细请求与响应记录偏好。目录必须是 App Server 所在
+机器上的绝对路径；开启时必填。关闭记录可保留原目录，执行历史仍正常保存。
+
+```toml
+[agent.trace]
+enabled = true
+directory = "/absolute/path/to/recordings"
+```
+
+配置由 `config/read` 与带 revision 的 `config/update.trace` 管理，两个图形设置入口共用同一份
+配置，不写入前端 `settings.json`。记录器由 profile runtime 创建，所有目录 host 共用该记录器；
+修改只在重启拥有 Thread 的 App Server 后生效，不中断进行中的 Turn。重开窗口可能复用原后端。
+没有 `[agent.trace]` 时沿用启动环境变量 `ASH_ROLLOUT_TRACE_ROOT`；一旦显式保存配置，即以该配置为准，
+关闭记录也覆盖环境变量。`config/update.trace = null` 写入显式关闭，避免重置操作重新启用环境变量。
+记录范围、大小上限和缺失证据的语义见 [执行 Trace](chat-session-inspector.md#执行-trace)。
+
 ## 模型接入配置
 
 用户文件以 `connections` 保存接入，模型选择以厂商＋模型 ID 表达，两者独立。保存、导入和严格读取配置时，Config 使用 `model-provider-info` 的接入声明校验连接；未知供应商返回 `UnknownProvider`，不会等到模型调用时才报错。保存失败不提交新的快照、revision 或默认模型。

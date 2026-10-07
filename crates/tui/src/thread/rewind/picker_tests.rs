@@ -100,6 +100,7 @@ fn message_checkpoints_offer_before_and_after_and_keep_unavailable_rows_read_onl
     let turn_id = thread.turns[0].turn_id.clone();
     thread.turns[0].items.extend([
         ThreadItem::AgentMessage {
+            phase: None,
             item_id: ItemId::new("answer").unwrap(),
             turn_id: turn_id.clone(),
             text: "I found the cause".into(),

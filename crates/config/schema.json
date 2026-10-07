@@ -108,6 +108,16 @@
         "toolMode": {
           "$ref": "#/$defs/ToolMode",
           "default": "direct"
+        },
+        "trace": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TraceConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "type": "object"
@@ -1567,6 +1577,25 @@
           "type": "string"
         }
       ]
+    },
+    "TraceConfig": {
+      "additionalProperties": false,
+      "description": "Local diagnostic recording selected at App Server startup, independently of durable history.",
+      "properties": {
+        "directory": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "enabled"
+      ],
+      "type": "object"
     },
     "UserExecPolicyConfig": {
       "additionalProperties": false,

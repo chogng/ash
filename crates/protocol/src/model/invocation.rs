@@ -122,6 +122,7 @@ impl ModelResponse {
             .iter()
             .filter_map(|item| match item {
                 ResponseItem::Text(text) => Some(text.as_str()),
+                ResponseItem::Message(message) => Some(message.text.as_str()),
                 _ => None,
             })
             .collect()
@@ -139,10 +140,21 @@ impl ModelResponse {
 #[serde(tag = "type", content = "value", rename_all = "camelCase")]
 pub enum ResponseItem {
     Text(String),
+    Message(AssistantMessage),
     Refusal(String),
     Reasoning(String),
     ReasoningState(ReasoningState),
     ToolCall(ToolCall),
+}
+
+/// One provider output message. Its identity is local to this model invocation.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AssistantMessage {
+    pub id: String,
+    pub text: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub phase: Option<crate::MessagePhase>,
 }
 
 /// A provider-neutral incremental update produced while a model invocation is in progress.
@@ -154,9 +166,18 @@ pub enum ResponseItem {
 pub enum ModelStreamEvent {
     TextDelta(String),
     ReasoningDelta(String),
+    MessageStarted {
+        id: String,
+        phase: Option<crate::MessagePhase>,
+    },
+    MessageDelta {
+        id: String,
+        text: String,
+    },
+    MessageCompleted(AssistantMessage),
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(tag = "type", content = "detail", rename_all = "camelCase")]
 pub enum StopReason {
     Completed,

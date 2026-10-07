@@ -37,8 +37,7 @@ use crate::context::ModelContextCompactionService;
 use crate::context::ModelInvocationPreparation;
 use crate::context::calibrated_budget;
 use crate::thread_controller::CommitContextCheckpointRequest;
-use crate::thread_controller::CommitModelInvocationItemsResult;
-use crate::thread_controller::CompleteModelInvocationResult;
+use crate::thread_controller::CommitModelResponseResult;
 use crate::thread_controller::PrepareModelInvocationRequest;
 use crate::thread_controller::TurnInterruption;
 use crate::turn::TurnExecutionBackend;
@@ -875,7 +874,14 @@ impl TurnExecutor {
                 (Err(error), Some(TurnExecutionTerminalState::Interrupted))
             }
             Err(ExecutionFailure::Failed { error, stable }) => {
-                self.threads.fail_turn(thread_id, turn_id, stable)?;
+                // Response rejection commits its failure with the decision so replay cannot
+                // resume a model result already rejected before a process exit.
+                let snapshot = self.threads.read_thread(thread_id)?;
+                if !snapshot.turns.iter().any(|turn| {
+                    &turn.turn_id == turn_id && turn.status == ash_protocol::TurnStatus::Failed
+                }) {
+                    self.threads.fail_turn(thread_id, turn_id, stable)?;
+                }
                 self.notify_failed_turn(&execution, cancellation);
                 (Err(error), Some(TurnExecutionTerminalState::Failed))
             }
@@ -1048,8 +1054,27 @@ impl TurnExecutor {
                 .with_cancellation(cancellation.clone()),
             );
             check_cancellation(cancellation)?;
-            let extension_fragments = extension_fragments
+            let mut extension_fragments = extension_fragments
                 .map_err(|error| ExecutionFailure::model(CoreError::Context(error.to_string())))?;
+            if turn.nonterminal_continuations > 0
+                && matches!(
+                    snapshot.items.last(),
+                    Some(ThreadItem::AgentMessage {
+                        phase: Some(
+                            ash_protocol::MessagePhase::Commentary
+                                | ash_protocol::MessagePhase::PartialAnswer
+                        ),
+                        ..
+                    })
+                )
+            {
+                extension_fragments.push(ash_extension_api::PromptFragment::new(
+                    ash_extension_api::PromptFragmentSource::new("core", "turn-loop-continuation", "v1"),
+                    ash_extension_api::PromptFragmentLayer::Product,
+                    ash_extension_api::PromptFragmentRetention::Required,
+                    "Your last response declared progress or a partial answer but supplied no next action. Continue with the necessary tool calls, or provide your final answer for this turn. Do not repeat a progress-only response.",
+                ));
+            }
             let harness_context = harness_context.as_ref().clone().with_time_context(
                 self.threads
                     .sample_time_context()
@@ -1236,94 +1261,69 @@ impl TurnExecutor {
                 }
             };
             let source_thread_sequence = invocation.context().source_thread_sequence();
-            if !self
-                .threads
-                .model_invocation_is_current(thread_id, turn_id, source_thread_sequence)
-                .map_err(ExecutionFailure::persistence)?
-            {
-                measurement_policy.finish_invocation();
-                continue 'model_steps;
-            }
             measurement_policy.finish_invocation();
-
             let tool_calls = response.tool_calls().cloned().collect::<Vec<_>>();
-            validate_model_tool_calls(&tool_calls, &request.tools)
-                .map_err(ExecutionFailure::model)?;
-            let reasoning_items = self.model_reasoning_items(turn_id, &response, &mut stream);
-            let text = final_text(&response, &stream);
-            if tool_calls.is_empty() {
-                let text = response_refusal_message(&response).unwrap_or(text);
-                if text.trim().is_empty() {
-                    return Err(ExecutionFailure::model(CoreError::Execution(
-                        response_failure_message(&response),
-                    )));
-                }
-                let item_id = stream
-                    .text_item_id()
-                    .unwrap_or_else(|| self.threads.next_stream_item_id());
-                let completion = match self
-                    .threads
-                    .complete_model_invocation_with_agent_message(
-                        thread_id,
-                        turn_id,
-                        source_thread_sequence,
-                        reasoning_items,
-                        item_id,
-                        text,
-                    )
-                    .map_err(ExecutionFailure::persistence)?
-                {
-                    CompleteModelInvocationResult::Completed(completion) => {
-                        TurnExecutionOutcome::Completed(completion)
-                    }
-                    CompleteModelInvocationResult::SupersededBySteer => {
-                        continue 'model_steps;
-                    }
-                };
-                let session_id = self
-                    .threads
-                    .read_thread(thread_id)
-                    .map_err(ExecutionFailure::persistence)?
-                    .session_id;
-                let _ = self.hooks.turn_completed(
-                    &TurnCompletedHookRequest {
-                        session_id,
-                        thread_id: thread_id.clone(),
-                        turn_id: turn_id.clone(),
-                    },
-                    cancellation,
-                );
-                return Ok(completion);
+            let mut decision = decide_model_response(&response, turn.nonterminal_continuations);
+            let validation = validate_model_tool_calls(&tool_calls, &request.tools);
+            if validation.is_err() {
+                decision.action = ash_protocol::TurnLoopAction::Fail;
+                decision.reason = ash_protocol::TurnLoopReason::InvalidToolRequest;
             }
-
-            let mut response_items = reasoning_items;
-            if !text.trim().is_empty() {
-                response_items.push(ash_protocol::ThreadItem::AgentMessage {
-                    item_id: stream
-                        .text_item_id()
-                        .unwrap_or_else(|| self.threads.next_stream_item_id()),
-                    turn_id: turn_id.clone(),
-                    text,
-                });
+            let mut response_items = self.model_reasoning_items(turn_id, &response, &mut stream);
+            response_items.extend(stream.message_items(&response));
+            if decision.action == ash_protocol::TurnLoopAction::ExecuteTools {
+                response_items.extend(self.bind_model_tool_calls(
+                    turn_id,
+                    &tool_calls,
+                    &tool_catalog,
+                )?);
             }
-            response_items.extend(self.bind_model_tool_calls(
-                turn_id,
-                &tool_calls,
-                &tool_catalog,
-            )?);
+            let action = decision.action.clone();
+            let reason = decision.reason.clone();
             match self
                 .threads
-                .commit_model_invocation_items(
+                .commit_model_response(
                     thread_id,
                     turn_id,
                     source_thread_sequence,
                     response_items,
+                    decision,
                 )
                 .map_err(ExecutionFailure::persistence)?
             {
-                CommitModelInvocationItemsResult::Committed => {}
-                CommitModelInvocationItemsResult::SupersededBySteer => {
-                    continue 'model_steps;
+                CommitModelResponseResult::SupersededBySteer => continue 'model_steps,
+                CommitModelResponseResult::Completed(completion) => {
+                    let session_id = self
+                        .threads
+                        .read_thread(thread_id)
+                        .map_err(ExecutionFailure::persistence)?
+                        .session_id;
+                    let _ = self.hooks.turn_completed(
+                        &TurnCompletedHookRequest {
+                            session_id,
+                            thread_id: thread_id.clone(),
+                            turn_id: turn_id.clone(),
+                        },
+                        cancellation,
+                    );
+                    return Ok(TurnExecutionOutcome::Completed(completion));
+                }
+                CommitModelResponseResult::Committed => {}
+            }
+            match action {
+                ash_protocol::TurnLoopAction::Continue => continue 'model_steps,
+                ash_protocol::TurnLoopAction::ExecuteTools => {}
+                ash_protocol::TurnLoopAction::Fail => {
+                    validation.map_err(ExecutionFailure::model)?;
+                    return Err(ExecutionFailure::model(CoreError::Execution(format!(
+                        "model response cannot complete the Turn: {reason:?}"
+                    ))));
+                }
+                ash_protocol::TurnLoopAction::Complete
+                | ash_protocol::TurnLoopAction::Superseded => {
+                    return Err(ExecutionFailure::model(CoreError::Execution(
+                        "model response commit did not match its decision".into(),
+                    )));
                 }
             }
             match self
@@ -1813,6 +1813,67 @@ impl TurnExecutionBackend for TurnExecutor {
     }
 }
 
+fn decide_model_response(
+    response: &ModelResponse,
+    continuations: u32,
+) -> ash_protocol::TurnLoopDecision {
+    use ash_protocol::MessagePhase;
+    use ash_protocol::StopReason;
+    use ash_protocol::TurnLoopAction;
+    use ash_protocol::TurnLoopReason;
+    let tool_call_count = response.tool_calls().count() as u32;
+    let message_phases = response
+        .output
+        .iter()
+        .filter_map(|item| match item {
+            ResponseItem::Message(message) if !message.text.trim().is_empty() => {
+                Some(message.phase.clone())
+            }
+            ResponseItem::Text(text) | ResponseItem::Refusal(text) if !text.trim().is_empty() => {
+                Some(None)
+            }
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let phase = message_phases.last().and_then(Option::as_ref);
+    let (action, reason) = match &response.stop_reason {
+        StopReason::MaxOutputTokens => (TurnLoopAction::Fail, TurnLoopReason::TruncatedOutput),
+        StopReason::Other(_) => (TurnLoopAction::Fail, TurnLoopReason::UnknownStopReason),
+        StopReason::ToolUse if tool_call_count == 0 => {
+            (TurnLoopAction::Fail, TurnLoopReason::InvalidToolRequest)
+        }
+        StopReason::Refusal if tool_call_count > 0 => {
+            (TurnLoopAction::Fail, TurnLoopReason::InvalidToolRequest)
+        }
+        StopReason::Refusal => (TurnLoopAction::Complete, TurnLoopReason::Refusal),
+        StopReason::Completed | StopReason::ToolUse if tool_call_count > 0 => {
+            (TurnLoopAction::ExecuteTools, TurnLoopReason::ToolRequests)
+        }
+        StopReason::Completed | StopReason::ToolUse => match phase {
+            Some(MessagePhase::Commentary | MessagePhase::PartialAnswer) if continuations == 0 => {
+                (TurnLoopAction::Continue, TurnLoopReason::NonterminalMessage)
+            }
+            Some(MessagePhase::Commentary | MessagePhase::PartialAnswer) => {
+                (TurnLoopAction::Fail, TurnLoopReason::ContinuationLimit)
+            }
+            Some(MessagePhase::FinalAnswer) => {
+                (TurnLoopAction::Complete, TurnLoopReason::FinalAnswer)
+            }
+            Some(MessagePhase::Other(_)) | None => (
+                TurnLoopAction::Complete,
+                TurnLoopReason::CompatibleCompletion,
+            ),
+        },
+    };
+    ash_protocol::TurnLoopDecision {
+        action,
+        reason,
+        stop_reason: response.stop_reason.clone(),
+        message_phases,
+        tool_call_count,
+    }
+}
+
 fn is_first_model_invocation(snapshot: &crate::ThreadSnapshot, turn_id: &TurnId) -> bool {
     !snapshot.items.iter().any(|item| {
         item.turn_id() == turn_id
@@ -1924,6 +1985,12 @@ struct InvocationStream {
     assistant_text: AssistantTextStreamParser,
     text: String,
     reasoning: String,
+    messages: BTreeMap<String, StreamedMessage>,
+}
+
+struct StreamedMessage {
+    item_id: ItemId,
+    parser: AssistantTextStreamParser,
 }
 
 impl InvocationStream {
@@ -1953,11 +2020,91 @@ impl InvocationStream {
             assistant_text: AssistantTextStreamParser::new(AssistantTextMode::Message),
             text: String::new(),
             reasoning: String::new(),
+            messages: BTreeMap::new(),
         }
     }
 
     fn text_item_id(&self) -> Option<ItemId> {
         self.text_item_id.clone()
+    }
+
+    fn start_message(&mut self, id: &str, phase: Option<ash_protocol::MessagePhase>) -> ItemId {
+        if let Some(message) = self.messages.get(id) {
+            return message.item_id.clone();
+        }
+        let legacy_item = if self.messages.is_empty() {
+            self.text_item_id()
+        } else {
+            None
+        };
+        let item_id = legacy_item
+            .clone()
+            .unwrap_or_else(|| self.threads.next_stream_item_id());
+        // Older endpoints stream unscoped text before returning a message snapshot.
+        // Reuse that entry without replacing its already displayed text with an empty start.
+        if legacy_item.is_none() {
+            self.publish(ThreadUpdate::ItemStarted {
+                turn_id: self.turn_id.clone(),
+                item: ThreadItem::AgentMessage {
+                    item_id: item_id.clone(),
+                    turn_id: self.turn_id.clone(),
+                    text: String::new(),
+                    phase,
+                },
+            });
+        }
+        self.messages.insert(
+            id.into(),
+            StreamedMessage {
+                item_id: item_id.clone(),
+                parser: AssistantTextStreamParser::new(AssistantTextMode::Message),
+            },
+        );
+        item_id
+    }
+
+    fn message_items(&mut self, response: &ModelResponse) -> Vec<ThreadItem> {
+        let mut items = Vec::new();
+        for output in &response.output {
+            if let ResponseItem::Message(message) = output
+                && !message.text.trim().is_empty()
+            {
+                let item_id = self.start_message(&message.id, message.phase.clone());
+                items.push(ThreadItem::AgentMessage {
+                    item_id,
+                    turn_id: self.turn_id.clone(),
+                    text: strip_citations(&message.text).0,
+                    phase: message.phase.clone(),
+                });
+            }
+        }
+        if let Some(text) = response_refusal_message(response) {
+            let item_id = if items.is_empty() {
+                self.text_item_id()
+            } else {
+                None
+            }
+            .unwrap_or_else(|| self.threads.next_stream_item_id());
+            items.push(ThreadItem::AgentMessage {
+                item_id,
+                turn_id: self.turn_id.clone(),
+                text,
+                phase: None,
+            });
+        } else if items.is_empty() {
+            let text = final_text(response, self);
+            if !text.trim().is_empty() {
+                items.push(ThreadItem::AgentMessage {
+                    item_id: self
+                        .text_item_id()
+                        .unwrap_or_else(|| self.threads.next_stream_item_id()),
+                    turn_id: self.turn_id.clone(),
+                    text,
+                    phase: None,
+                });
+            }
+        }
+        items
     }
 
     fn take_reasoning(&mut self) -> Option<(ItemId, String)> {
@@ -1988,6 +2135,7 @@ impl InvocationStream {
         self.publish(ThreadUpdate::ItemStarted {
             turn_id: self.turn_id.clone(),
             item: ThreadItem::AgentMessage {
+                phase: None,
                 item_id: item_id.clone(),
                 turn_id: self.turn_id.clone(),
                 text: String::new(),
@@ -2040,6 +2188,48 @@ impl ModelStreamSink for InvocationStream {
             .check()
             .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
         match event {
+            ModelStreamEvent::MessageStarted { id, phase } => {
+                let item_id = self.start_message(&id, phase.clone());
+                self.publish(ThreadUpdate::ItemDelta {
+                    turn_id: self.turn_id.clone(),
+                    item_id,
+                    delta: ash_protocol::ItemDelta::AgentMessagePhase { phase },
+                });
+            }
+            ModelStreamEvent::MessageDelta { id, text } => {
+                let item_id = self.start_message(&id, None);
+                let parsed = self.messages.get_mut(&id).unwrap().parser.push_str(&text);
+                if !parsed.visible_text.is_empty() {
+                    self.publish(ThreadUpdate::ItemDelta {
+                        turn_id: self.turn_id.clone(),
+                        item_id,
+                        delta: ash_protocol::ItemDelta::AgentMessage {
+                            text: parsed.visible_text,
+                        },
+                    });
+                }
+            }
+            ModelStreamEvent::MessageCompleted(message) => {
+                let item_id = self.start_message(&message.id, message.phase.clone());
+                let state = self.messages.get_mut(&message.id).unwrap();
+                let parsed = state.parser.finish();
+                if !parsed.visible_text.is_empty() {
+                    self.publish(ThreadUpdate::ItemDelta {
+                        turn_id: self.turn_id.clone(),
+                        item_id: item_id.clone(),
+                        delta: ash_protocol::ItemDelta::AgentMessage {
+                            text: parsed.visible_text,
+                        },
+                    });
+                }
+                self.publish(ThreadUpdate::ItemDelta {
+                    turn_id: self.turn_id.clone(),
+                    item_id,
+                    delta: ash_protocol::ItemDelta::AgentMessagePhase {
+                        phase: message.phase,
+                    },
+                });
+            }
             ModelStreamEvent::TextDelta(text) if !text.is_empty() => {
                 let parsed = self.assistant_text.push_str(&text);
                 self.publish_text_delta(parsed.visible_text);
@@ -2132,6 +2322,9 @@ impl ExecutionFailure {
     }
 
     fn persistence(error: CoreError) -> Self {
+        if matches!(error, CoreError::Cancelled(_)) {
+            return Self::Cancelled(error);
+        }
         Self::Failed {
             error,
             stable: StableTurnError::completion_persistence_failed(),
@@ -2147,17 +2340,6 @@ fn check_cancellation(cancellation: &CancellationToken) -> Result<(), ExecutionF
 
 fn cancelled_error(signal: &Cancellation<CancellationReason>) -> CoreError {
     CoreError::Cancelled(signal.reason().to_string())
-}
-
-fn response_failure_message(response: &ash_protocol::ModelResponse) -> String {
-    response
-        .output
-        .iter()
-        .find_map(|item| match item {
-            ResponseItem::Refusal(message) => Some(format!("model refused the request: {message}")),
-            _ => None,
-        })
-        .unwrap_or_else(|| "model returned no final text or Tool Call".into())
 }
 
 fn response_refusal_message(response: &ash_protocol::ModelResponse) -> Option<String> {

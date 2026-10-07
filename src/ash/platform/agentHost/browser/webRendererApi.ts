@@ -36,6 +36,7 @@ import { createAppServerExtensionHostApi } from "../../extensionHost/browser/ext
 import { createAppServerMarketplaceApi } from "../../marketplace/browser/marketplaceApi.js";
 import { createAppServerDirPermissionsApi } from "../../dirPermissions/browser/dirPermissionsApi.js";
 import { createAppServerAgentCapabilitiesApi } from '../../agentCapabilities/browser/agentCapabilitiesApi.js';
+import { createAppServerTraceSettingsApi } from '../../trace/browser/traceSettingsApi.js';
 import { createAppServerAccountApi } from "../../accounts/browser/accountApi.js";
 import { createAppServerTurnChangesApi } from "../../turnChanges/browser/turnChangesApi.js";
 import { AppServerAutomationService } from '../../automation/browser/appServerAutomationService.js';
@@ -137,6 +138,7 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 		issueReporter: new AppServerIssueReporterService(connection),
 		github: new AppServerGitHubService(connection),
 		agentCapabilities: createAppServerAgentCapabilitiesApi(connection),
+		traceSettings: createAppServerTraceSettingsApi(connection),
 		hooks: createAppServerHooksApi(connection),
 	};
 }

@@ -298,12 +298,8 @@ pub struct CompletedTurn {
     pub sequence: u64,
 }
 
-pub(crate) enum CompleteModelInvocationResult {
+pub(crate) enum CommitModelResponseResult {
     Completed(CompletedTurn),
-    SupersededBySteer,
-}
-
-pub(crate) enum CommitModelInvocationItemsResult {
     Committed,
     SupersededBySteer,
 }
@@ -451,6 +447,10 @@ impl ThreadController {
     pub fn with_trace_recorder(mut self, recorder: Arc<ash_rollout_trace::TraceRecorder>) -> Self {
         self.trace_recorder = recorder;
         self
+    }
+
+    pub fn trace_recording_state(&self) -> ash_rollout_trace::RecorderState {
+        self.trace_recorder.state()
     }
 
     pub fn read_session_trace_page(

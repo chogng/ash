@@ -206,6 +206,7 @@ fn item(id: &str, text: &str, transient: bool) -> ThreadTranscriptEntry {
         entry_id: format!("item:{id}"),
         turn_id: turn_id.clone(),
         item: ThreadItem::AgentMessage {
+            phase: None,
             item_id: ItemId::new(id).unwrap(),
             turn_id,
             text: text.to_owned(),

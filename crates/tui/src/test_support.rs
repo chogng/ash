@@ -79,6 +79,9 @@ pub(crate) fn hook_catalog(
 
 pub(crate) fn empty_config_snapshot() -> ConfigReadResult {
     ConfigReadResult {
+        trace: None,
+        trace_recording:
+            ash_app_server_protocol::protocol::config::TraceRecordingStateDto::Disabled,
         context: Default::default(),
         connections: Default::default(),
         active_connections: Default::default(),

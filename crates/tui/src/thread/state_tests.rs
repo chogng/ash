@@ -179,6 +179,7 @@ fn upsert_agent(text: &str, transient: bool) -> ThreadTranscriptChange {
             entry_id: "item:item_stream".into(),
             turn_id: turn_id.clone(),
             item: ThreadItem::AgentMessage {
+                phase: None,
                 item_id,
                 turn_id,
                 text: text.into(),
@@ -242,6 +243,7 @@ fn thread_snapshot() -> Thread {
                     text: "inspect the code".into(),
                 },
                 ThreadItem::AgentMessage {
+                    phase: None,
                     item_id: ItemId::new("item_3").unwrap(),
                     turn_id,
                     text: "canonical response".into(),

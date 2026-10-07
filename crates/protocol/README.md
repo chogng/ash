@@ -73,6 +73,21 @@ JSON 命名按完整接口契约推广；当前统一范围是模型声明、目
 `utils/image` 的 `PromptImageDetailLimits` 表达，Core 在附件准备时选择相应限制；token 累计由
 Core 的状态归并执行，精确费用累计由 `model-accounting` 计算，Core 负责提交新结果。
 
+## 消息阶段与循环决策
+
+`AssistantMessage` 保存一次调用内的消息 ID、正文与可选 `MessagePhase`；`Message` 的阶段用于
+回传已保存的助手消息。`commentary`、`partial_answer`、`final_answer` 表示消息用途，不表示
+调用或 Turn 的执行状态。缺失保持 `None`；未知值保存为 `Other(String)`，供应商编码仍使用原字符串。
+持久化 `ThreadItem::AgentMessage.phase` 可省略，旧历史保持可读。
+
+`MessageStarted`、`MessageDelta`、`MessageCompleted` 保留流式消息边界；`AgentMessagePhase`
+只补齐同一 Item 的元数据，不替换正文。`TextDelta` 与 `ResponseItem::Text` 继续供未提供消息边界的端点使用。
+
+`ModelResponseEvaluated` 保存 Core 作出的 `TurnLoopDecision`：动作、理由、原停止原因、有序
+消息阶段和工具数。输入快照的 `sourceThreadSequence` 用于检查新输入；决策与消息、完成或失败
+事件一起提交。继续次数由这些持久事件归并，诊断记录不开启也不影响恢复。具体规则见
+[Agent loop](../../AGENT-LOOP.md)。
+
 ## Guardian 在哪里
 
 Guardian 是工具操作执行前的风险审核，不是普通模型生成参数，也不是代码审查 Turn。

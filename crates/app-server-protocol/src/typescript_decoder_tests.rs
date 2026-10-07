@@ -34,8 +34,10 @@ fn annotation_removal_preserves_validation_and_payload_property_names() {
     let mut schema = json!({
         "description":"Documentation",
         "$defs":{"Data":{"description":"Data docs","type":"object","required":["description"],"properties":{
-            "description":{"description":"Field docs","type":"string","minLength":1},
-            "default":{"type":"object","const":{"description":"literal data","default":"literal default"}}
+            "description":{"description":"Field docs","type":"string","minLength":1,"format":"uuid"},
+            "count":{"type":"integer","minimum":0,"maximum":100,"format":"uint32"},
+            "format":{"type":"string"},
+            "default":{"type":"object","const":{"description":"literal data","default":"literal default","format":"literal format"}}
         }}},
         "oneOf":[{"description":"Variant docs","type":"array","items":{"description":"Item docs","type":"string","maxLength":4}}]
     });
@@ -45,7 +47,9 @@ fn annotation_removal_preserves_validation_and_payload_property_names() {
         json!({
             "$defs":{"Data":{"type":"object","required":["description"],"properties":{
                 "description":{"type":"string","minLength":1},
-                "default":{"type":"object","const":{"description":"literal data","default":"literal default"}}
+                "count":{"type":"integer","minimum":0,"maximum":100},
+                "format":{"type":"string"},
+                "default":{"type":"object","const":{"description":"literal data","default":"literal default","format":"literal format"}}
             }}},
             "oneOf":[{"type":"array","items":{"type":"string","maxLength":4}}]
         })

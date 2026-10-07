@@ -1999,6 +1999,7 @@ fn request_with_original_image() -> ModelRequest {
         speed: None,
         instructions: None,
         input: vec![ash_api::InputItem::Message(ash_api::Message {
+            phase: None,
             role: ash_api::MessageRole::User,
             content: vec![ash_api::ContentPart::ImageUrl {
                 url: "data:image/png;base64,AA==".into(),

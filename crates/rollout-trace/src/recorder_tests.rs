@@ -21,6 +21,61 @@ fn request() -> ModelRequest {
 }
 
 #[test]
+fn diagnostic_cancellation_preserves_ordered_messages_and_late_phase() {
+    let root = crate::tests::temporary_root();
+    let recorder = TraceRecorder::new(Some(root.clone()));
+    let mut attempt = recorder.start_attempt(context(), &request());
+    attempt.output(&ModelStreamEvent::MessageStarted {
+        id: "progress".into(),
+        phase: None,
+    });
+    attempt.output(&ModelStreamEvent::MessageDelta {
+        id: "progress".into(),
+        text: "working".into(),
+    });
+    attempt.output(&ModelStreamEvent::MessageCompleted(
+        ash_protocol::AssistantMessage {
+            id: "progress".into(),
+            text: "working".into(),
+            phase: Some(ash_protocol::MessagePhase::Commentary),
+        },
+    ));
+    attempt.output(&ModelStreamEvent::MessageStarted {
+        id: "answer".into(),
+        phase: Some(ash_protocol::MessagePhase::PartialAnswer),
+    });
+    attempt.output(&ModelStreamEvent::MessageDelta {
+        id: "answer".into(),
+        text: "first answer".into(),
+    });
+    attempt.cancel("interrupted");
+    let page = recorder.read(&context().session_id, 0, 500).unwrap();
+    let reference = page
+        .diagnostics
+        .events
+        .last()
+        .unwrap()
+        .event
+        .payload()
+        .unwrap();
+    let payload = recorder
+        .read_payload(
+            &context().session_id,
+            page.diagnostics.capture_id.as_ref().unwrap(),
+            &reference.payload_id,
+        )
+        .unwrap();
+    assert_eq!(
+        payload["messages"],
+        serde_json::json!([
+            {"id":"progress", "text":"working", "phase":"commentary"},
+            {"id":"answer", "text":"first answer", "phase":"partial_answer"}
+        ])
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn diagnostic_cancellation_retains_partial_output_and_survives_reopen() {
     let root = crate::tests::temporary_root();
     let recorder = TraceRecorder::new(Some(root.clone()));
@@ -56,7 +111,7 @@ fn diagnostic_cancellation_retains_partial_output_and_survives_reopen() {
         recorder
             .read_payload(&context().session_id, &capture, &payload.payload_id)
             .unwrap(),
-        serde_json::json!({ "text": "partial text", "reasoning": "partial reasoning", "truncated": false })
+        serde_json::json!({ "text": "partial text", "reasoning": "partial reasoning", "messages": [], "truncated": false })
     );
     assert!(matches!(
         recorder.read_payload(
@@ -177,4 +232,23 @@ fn diagnostic_payload_reads_reject_replaced_directories() {
         Err(DiagnosticError::Storage(_))
     ));
     fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn trace_recorder_reports_actual_directory_state_without_creating_capture_data() {
+    let root = crate::tests::temporary_root();
+    assert_eq!(TraceRecorder::default().state(), RecorderState::Disabled);
+    let recorder = TraceRecorder::new(Some(root.clone()));
+    assert_eq!(
+        recorder.state(),
+        RecorderState::Enabled {
+            directory: root.clone()
+        }
+    );
+    assert!(!root.exists());
+    fs::write(&root, b"not a directory").unwrap();
+    assert!(
+        matches!(recorder.state(), RecorderState::Unavailable { directory, .. } if directory == root)
+    );
+    fs::remove_file(root).unwrap();
 }

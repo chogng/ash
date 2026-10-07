@@ -874,7 +874,7 @@ impl LocalProfileRuntime {
         let threads = repository
             .recover_threads_with_attachments_and_trace_recorder(
                 attachments,
-                Arc::new(ash_rollout_trace::TraceRecorder::from_environment()),
+                configured_trace_recorder(&snapshot),
             )
             .map_err(open_error)?;
         threads
@@ -1151,7 +1151,7 @@ pub fn open_app_server_with_codebase_providers(
             let threads = repository
                 .recover_threads_with_attachments_and_trace_recorder(
                     attachments,
-                    Arc::new(ash_rollout_trace::TraceRecorder::from_environment()),
+                    configured_trace_recorder(&snapshot),
                 )
                 .map_err(open_error)?;
             (database_path, threads, config)
@@ -1175,9 +1175,7 @@ pub fn open_app_server_with_codebase_providers(
                     Arc::new(InMemoryThreadStore::default()),
                     attachments,
                 )
-                .with_trace_recorder(Arc::new(
-                    ash_rollout_trace::TraceRecorder::from_environment(),
-                )),
+                .with_trace_recorder(configured_trace_recorder(&snapshot)),
             );
             (database_path, threads, config)
         }
@@ -3259,4 +3257,17 @@ impl ModelService for FrozenModelService {
         self.provider
             .invoke(ModelSelection::ConfiguredDefault, &request, cancellation)
     }
+}
+
+// One profile owner freezes recording for all its Directory runtimes. Explicit saved intent
+// overrides the legacy launch variable, including when recording is disabled.
+fn configured_trace_recorder(
+    snapshot: &ash_config::ResolvedConfigSnapshot,
+) -> Arc<ash_rollout_trace::TraceRecorder> {
+    Arc::new(match &snapshot.values.trace {
+        Some(trace) => {
+            ash_rollout_trace::TraceRecorder::new(trace.directory.clone().filter(|_| trace.enabled))
+        }
+        None => ash_rollout_trace::TraceRecorder::from_environment(),
+    })
 }

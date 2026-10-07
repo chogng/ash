@@ -484,6 +484,7 @@ fn interrupted_history_keeps_partial_output_and_marks_the_reusable_prefix() {
                 text: "unfinished prompt".into(),
             },
             ThreadItem::AgentMessage {
+                phase: None,
                 item_id: id("interrupted-agent"),
                 turn_id: interrupted_turn_id.clone(),
                 text: "partial answer".into(),
@@ -626,6 +627,7 @@ fn snapshot(turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
             plan: None,
             usage: ash_protocol::ModelUsageSummary::default(),
             context_usage: None,
+            nonterminal_continuations: 0,
         }],
         items,
         context_checkpoints: Vec::new(),

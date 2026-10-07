@@ -364,6 +364,7 @@ fn turn(ids: &TestIds, status: TurnStatus, items: Vec<ThreadItem>) -> Turn {
 
 fn agent_message(ids: &TestIds, text: &str) -> ThreadItem {
     ThreadItem::AgentMessage {
+        phase: None,
         item_id: ItemId::new(format!("item-{text}")).unwrap(),
         turn_id: ids.turn_id.clone(),
         text: text.into(),

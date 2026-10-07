@@ -192,6 +192,8 @@ impl NetworkConfig {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AgentConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trace: Option<TraceConfig>,
     #[serde(default)]
     pub context: ash_protocol::ContextCompactionPolicy,
     #[serde(default)]
@@ -208,6 +210,31 @@ pub struct AgentConfig {
     pub advisor: Option<ash_protocol::AdvisorConfig>,
     #[serde(default)]
     pub tool_mode: ash_protocol::ToolMode,
+}
+
+/// Local diagnostic recording selected at App Server startup, independently of durable history.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TraceConfig {
+    pub enabled: bool,
+    pub directory: Option<std::path::PathBuf>,
+}
+
+impl TraceConfig {
+    fn validate(&self) -> Result<(), ConfigError> {
+        if self.enabled && self.directory.is_none() {
+            return Err(ConfigError("trace recording requires a directory".into()));
+        }
+        if let Some(directory) = &self.directory
+            && (!directory.is_absolute() || directory.as_os_str().as_encoded_bytes().contains(&0))
+        {
+            return Err(ConfigError(
+                "trace directory must be an absolute path without NUL".into(),
+            ));
+        }
+        Ok(())
+    }
 }
 
 /// Durable, non-secret user intent for ordinary Ash configuration.
@@ -271,6 +298,9 @@ impl UserConfigDocument {
     }
 
     pub(crate) fn validate(&self) -> Result<(), ConfigError> {
+        if let Some(trace) = &self.agent.trace {
+            trace.validate()?;
+        }
         if let Some(git) = self.git {
             git.validate()?;
         }
@@ -412,6 +442,7 @@ impl UserConfigDocument {
 /// type without exposing file or authority implementation details to runtime consumers.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ResolvedConfig {
+    pub trace: Option<TraceConfig>,
     pub context: ash_protocol::ContextCompactionPolicy,
     pub time_context: crate::TimeContextConfig,
     pub features: features::FeatureOverrides,
@@ -607,6 +638,7 @@ impl From<&UserConfigDocument> for ResolvedConfig {
             .collect();
         Self {
             time_context: document.agent.time_context.clone(),
+            trace: document.agent.trace.clone(),
             context: document.agent.context.clone(),
             features: document.features.clone(),
             issues: document.issues.clone(),

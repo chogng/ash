@@ -163,6 +163,75 @@ test('Settings JSON opens a pinned tab, reveals a value, saves immediately and p
 	await expect(group.content.locator('.stanza-editor-accessibility-status')).toContainText('2');
 });
 
+for (const locale of ['en', 'zh-CN']) {
+	test(`Settings reset removes explicit defaults and localizes action menus (${locale})`, async ({ workbench, restartWorkbench }) => {
+		const chinese = locale === 'zh-CN';
+		if (chinese) {
+			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+			const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
+			await picker.getByRole('combobox').fill('简体中文');
+			await picker.getByRole('combobox').press('Enter');
+			({ workbench } = await restartWorkbench());
+		}
+		const page = workbench.page;
+		const settings = page.getByRole('dialog', { name: chinese ? 'Ash 设置' : 'Ash Settings' });
+		await workbench.settingsEditor.openUserSettingsUI();
+		await workbench.settingsEditor.selectEditorCategory('editor-fonts');
+		const fontDefault = Number(await settings.locator('[data-settings-item-id="editor.fontSize"]').getByRole('spinbutton').inputValue());
+		await settings.locator('.ash-modal-editor-close').click();
+		await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
+		const group = workbench.editors.groupAt(0);
+		await group.editor.input.press('ControlOrMeta+A');
+		await pasteJson(group.editor.input, `{
+	// Keep this comment and unrelated setting.
+	"editor.fontSize": ${fontDefault},
+	"workbench.colorCustomizations": {},
+	"workbench.locale": ${JSON.stringify(locale)},
+	"window.menuStyle": "custom",
+	"extension.marker": 99,
+}\n`);
+		await group.editor.input.press('ControlOrMeta+S');
+		await expect(group.tabs.filter({ hasText: chinese ? '用户设置（JSON）' : 'User Settings (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
+
+		for (const key of ['editor.fontSize', 'workbench.colorCustomizations']) {
+			await workbench.settingsEditor.openUserSettingsUI();
+			if (key === 'editor.fontSize') {
+				await workbench.settingsEditor.selectEditorCategory('editor-fonts');
+			} else {
+				await workbench.settingsEditor.selectGroup('workbench');
+				await workbench.settingsEditor.selectCategory('appearance');
+			}
+			await settings.getByRole('searchbox').fill(`@id:${key}`);
+			const more = settings.locator(`[data-settings-item-id="${key}"]`).getByRole('button', { name: chinese ? /的更多操作$/u : /^More actions for /u });
+			await more.focus();
+			await more.press('Enter');
+			await expect(page.getByRole('menuitem', { name: chinese ? '复制设置 ID' : 'Copy Setting ID', exact: true })).toBeVisible();
+			const reset = page.getByRole('menuitem', { name: chinese ? '重置设置' : 'Reset Setting', exact: true });
+			await expect(reset).toBeEnabled();
+			await reset.focus();
+			await reset.press('Enter');
+			await expect(more).toBeFocused();
+			await more.press('Enter');
+			await expect(reset).toBeDisabled();
+			await page.keyboard.press('Escape');
+			await settings.locator('.ash-modal-editor-close').click();
+			await group.editor.waitForEditorContents(content => !content.includes(`"${key}"`) && content.includes('Keep this comment') && content.includes('"extension.marker": 99'));
+		}
+
+		await workbench.settingsEditor.openUserSettingsUI();
+		await settings.getByRole('searchbox').fill('@id:editor.fontSize');
+		const filter = settings.getByRole('button', { name: chinese ? '筛选设置' : 'Filter Settings', exact: true });
+		await filter.focus();
+		await filter.press('Enter');
+		await expect(page.getByRole('menuitem', { name: chinese ? '设置 ID…' : 'Setting ID…', exact: true })).toBeVisible();
+		const clear = page.getByRole('menuitem', { name: chinese ? '清除筛选条件' : 'Clear Filters', exact: true });
+		await clear.focus();
+		await clear.press('Enter');
+		await expect(settings.getByRole('searchbox')).toBeFocused();
+		await expect(settings.getByRole('searchbox')).toHaveValue('');
+	});
+}
+
 test('Saving JSON token customization refreshes Markdown and the canonical profile settings', async ({ application, target, testWorkspace, workbench }) => {
 	test.skip(target.appServerMode !== 'required', 'Requires the product grammar resources');
 	const page = workbench.page;

@@ -1,5 +1,44 @@
 use super::*;
 use ash_protocol::ItemDelta;
+
+#[test]
+fn phase_metadata_updates_the_same_transient_message_without_replacing_text() {
+    let mut accumulator = TranscriptAccumulator::new(session_id(), thread_id());
+    apply(
+        &mut accumulator,
+        transient(
+            1,
+            ThreadUpdate::ItemDelta {
+                turn_id: turn_id(),
+                item_id: item_id("item-1"),
+                delta: ItemDelta::AgentMessage {
+                    text: "working".into(),
+                },
+            },
+        ),
+    );
+    let updated = apply(
+        &mut accumulator,
+        transient(
+            2,
+            ThreadUpdate::ItemDelta {
+                turn_id: turn_id(),
+                item_id: item_id("item-1"),
+                delta: ItemDelta::AgentMessagePhase {
+                    phase: Some(ash_protocol::MessagePhase::Commentary),
+                },
+            },
+        ),
+    );
+    let TranscriptApplyResult::Applied(update) = updated else {
+        panic!("phase update must reach clients");
+    };
+    assert!(
+        matches!(&update.changes[0], ThreadTranscriptChange::Upsert {
+        entry: ThreadTranscriptEntry::Item { entry_id, item: ThreadItem::AgentMessage { text, phase: Some(ash_protocol::MessagePhase::Commentary), .. }, transient: true, .. }
+    } if entry_id == "item:item-1" && text == "working")
+    );
+}
 use ash_protocol::ItemId;
 use ash_protocol::ModelUsageSummary;
 use ash_protocol::SessionId;
@@ -454,6 +493,7 @@ fn durable(sequence: u64, event: ThreadEvent) -> ThreadUpdateEnvelope {
 
 fn agent_item(item: &str, text: &str) -> ThreadItem {
     ThreadItem::AgentMessage {
+        phase: None,
         item_id: item_id(item),
         turn_id: turn_id(),
         text: text.into(),

@@ -54,6 +54,7 @@ export const enum AccessibleViewProviderId {
 	Memories = 'memories',
 	Trace = 'trace',
 	AgentTrace = 'agentTrace',
+	TraceSettings = 'traceSettings',
 	IssueReporter = 'issueReporter',
 	Output = 'output',
 }
@@ -114,6 +115,7 @@ export const enum AccessibilityVerbositySettingId {
 	Memories = 'accessibility.verbosity.memories',
 	Trace = 'accessibility.verbosity.trace',
 	AgentTrace = 'accessibility.verbosity.agentTrace',
+	TraceSettings = 'accessibility.verbosity.traceSettings',
 	IssueReporter = 'accessibility.verbosity.issueReporter',
 	Output = 'accessibility.verbosity.output',
 }

@@ -144,7 +144,8 @@ impl ReviewModel for ProviderReviewModel {
         let mut text = String::new();
         for item in response.output {
             match item {
-                ResponseItem::Text(fragment) => {
+                ResponseItem::Text(fragment)
+                | ResponseItem::Message(protocol::AssistantMessage { text: fragment, .. }) => {
                     let bytes = text
                         .len()
                         .checked_add(fragment.len())

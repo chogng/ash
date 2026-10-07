@@ -337,6 +337,8 @@ pub struct TurnSnapshot {
     pub plan: Option<PlanUpdate>,
     pub usage: ModelUsageSummary,
     pub context_usage: Option<ModelContextUsage>,
+    /// Derived from committed loop decisions, so resuming cannot reset the continuation limit.
+    pub nonterminal_continuations: u32,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -831,6 +833,37 @@ pub(crate) fn reduce_thread_event_with_prefix(
             )?;
             snapshot.reference_cost.complete = false;
         }
+        ThreadEvent::ModelResponseEvaluated {
+            turn_id,
+            source_thread_sequence,
+            decision,
+            ..
+        } => {
+            require_no_command(envelope)?;
+            if *source_thread_sequence > snapshot.sequence {
+                return Err(CoreError::Journal(
+                    "model decision references a future Thread sequence".into(),
+                ));
+            }
+            let turn = snapshot
+                .turns
+                .iter_mut()
+                .find(|turn| &turn.turn_id == turn_id)
+                .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
+            if turn.status != TurnStatus::Running {
+                return Err(CoreError::Journal(
+                    "model decision requires a running Turn".into(),
+                ));
+            }
+            if decision.action == ash_protocol::TurnLoopAction::Continue {
+                turn.nonterminal_continuations = turn
+                    .nonterminal_continuations
+                    .checked_add(1)
+                    .ok_or_else(|| {
+                        CoreError::Journal("Turn continuation counter overflow".into())
+                    })?;
+            }
+        }
         ThreadEvent::ModelInvocationRecorded {
             thread_id,
             turn_id,
@@ -1136,6 +1169,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     plan: None,
                     usage: ModelUsageSummary::default(),
                     context_usage: None,
+                    nonterminal_continuations: 0,
                 },
             )?;
             let receipt = envelope.command.clone().ok_or_else(|| {
@@ -2489,6 +2523,7 @@ fn import_history(
             plan: turn.plan.clone(),
             usage: ModelUsageSummary::default(),
             context_usage: None,
+            nonterminal_continuations: 0,
         })
         .collect();
     snapshot.items = turns
@@ -2597,6 +2632,7 @@ fn append_imported_turn(
         plan: turn.plan.clone(),
         usage: ModelUsageSummary::default(),
         context_usage: None,
+        nonterminal_continuations: 0,
     });
     items.extend(turn.items.iter().cloned());
     Ok(())

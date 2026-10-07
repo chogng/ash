@@ -114,6 +114,7 @@ where
     crate::config::TuiSettings::from_tui(&tui)?;
     client
         .update_config(ConfigUpdateParams {
+            trace: Patch::Missing,
             context: ash_protocol::Patch::Missing,
             advisor: Default::default(),
             time_context: Default::default(),

@@ -1,5 +1,4 @@
-use super::CommitModelInvocationItemsResult;
-use super::CompleteModelInvocationResult;
+use super::CommitModelResponseResult;
 use super::CompletedTurn;
 use super::RecordToolExecutionEscalation;
 use super::RecordToolExecutionStart;
@@ -216,6 +215,7 @@ impl ThreadController {
             thread_id,
             turn_id,
             ThreadItem::AgentMessage {
+                phase: None,
                 item_id,
                 turn_id: turn_id.clone(),
                 text,
@@ -268,6 +268,7 @@ impl ThreadController {
     ) -> Result<CompletedTurn, CoreError> {
         self.mutate_thread(thread_id, |snapshot| {
             let item = ThreadItem::AgentMessage {
+                phase: None,
                 item_id,
                 turn_id: turn_id.clone(),
                 text: output,
@@ -295,96 +296,74 @@ impl ThreadController {
         })
     }
 
-    /// Commits one local model completion unless durable steering arrived after its input snapshot.
-    pub(crate) fn complete_model_invocation_with_agent_message(
-        &self,
-        thread_id: &ThreadId,
-        turn_id: &TurnId,
-        source_thread_sequence: u64,
-        preceding_items: Vec<ThreadItem>,
-        item_id: ItemId,
-        output: String,
-    ) -> Result<CompleteModelInvocationResult, CoreError> {
-        self.mutate_thread(thread_id, |snapshot| {
-            if has_steer_after(snapshot, turn_id, source_thread_sequence) {
-                return Ok(CompleteModelInvocationResult::SupersededBySteer);
-            }
-            let item = ThreadItem::AgentMessage {
-                item_id,
-                turn_id: turn_id.clone(),
-                text: output,
-            };
-            let mut events = preceding_items
-                .into_iter()
-                .map(|item| ThreadEvent::ItemCompleted {
-                    checkpoint_after_sequence: None,
-                    workspace_checkpoint: None,
-                    thread_id: thread_id.clone(),
-                    turn_id: turn_id.clone(),
-                    item,
-                })
-                .collect::<Vec<_>>();
-            events.extend([
-                ThreadEvent::ItemCompleted {
-                    checkpoint_after_sequence: None,
-                    workspace_checkpoint: None,
-                    thread_id: thread_id.clone(),
-                    turn_id: turn_id.clone(),
-                    item: item.clone(),
-                },
-                ThreadEvent::TurnCompleted {
-                    thread_id: thread_id.clone(),
-                    turn_id: turn_id.clone(),
-                },
-            ]);
-            self.record_batch(snapshot, events)?;
-            Ok(CompleteModelInvocationResult::Completed(CompletedTurn {
-                item,
-                sequence: snapshot.sequence,
-            }))
-        })
-    }
-
-    /// Atomically commits non-terminal model output unless newer steering superseded its input.
-    pub(crate) fn commit_model_invocation_items(
+    /// Commits response items and the loop decision together, checking steering under the writer lock.
+    pub(crate) fn commit_model_response(
         &self,
         thread_id: &ThreadId,
         turn_id: &TurnId,
         source_thread_sequence: u64,
         items: Vec<ThreadItem>,
-    ) -> Result<CommitModelInvocationItemsResult, CoreError> {
+        mut decision: ash_protocol::TurnLoopDecision,
+    ) -> Result<CommitModelResponseResult, CoreError> {
         self.mutate_thread(thread_id, |snapshot| {
-            if has_steer_after(snapshot, turn_id, source_thread_sequence) {
-                return Ok(CommitModelInvocationItemsResult::SupersededBySteer);
+            let turn = snapshot.turns.iter().find(|turn| &turn.turn_id == turn_id)
+                .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
+            if matches!(turn.status, ash_protocol::TurnStatus::Cancelling | ash_protocol::TurnStatus::Interrupted) {
+                return Err(CoreError::Cancelled("Turn cancelled before response commit".into()));
             }
-            let events = items
-                .into_iter()
-                .map(|item| ThreadEvent::ItemCompleted {
+            if turn.status != ash_protocol::TurnStatus::Running {
+                return Err(CoreError::Execution("model response requires a running Turn".into()));
+            }
+            let superseded = has_steer_after(snapshot, turn_id, source_thread_sequence);
+            if superseded {
+                decision.action = ash_protocol::TurnLoopAction::Superseded;
+                decision.reason = ash_protocol::TurnLoopReason::NewInput;
+            }
+            let completed_item = if decision.action == ash_protocol::TurnLoopAction::Complete {
+                if turn.pending_interaction.is_some() || snapshot.items.iter().any(|item| {
+                    matches!(item, ThreadItem::ToolCall { turn_id: owner, tool_call_id, .. }
+                        if owner == turn_id && !snapshot.items.iter().any(|result|
+                            matches!(result, ThreadItem::ToolResult { tool_call_id: resolved, .. } if resolved == tool_call_id)))
+                }) {
+                    return Err(CoreError::Execution("Turn still has a pending interaction".into()));
+                }
+                Some(items.iter().rev().find(|item| matches!(item, ThreadItem::AgentMessage { text, .. } if !text.trim().is_empty()))
+                    .cloned().ok_or_else(|| CoreError::Execution("model returned no final message".into()))?)
+            } else {
+                None
+            };
+            let failed = decision.action == ash_protocol::TurnLoopAction::Fail;
+            let mut events = vec![ThreadEvent::ModelResponseEvaluated {
+                thread_id: thread_id.clone(),
+                turn_id: turn_id.clone(),
+                source_thread_sequence,
+                decision,
+            }];
+            if !superseded {
+                events.extend(items.into_iter().map(|item| ThreadEvent::ItemCompleted {
                     checkpoint_after_sequence: None,
                     workspace_checkpoint: None,
                     thread_id: thread_id.clone(),
                     turn_id: turn_id.clone(),
                     item,
-                })
-                .collect();
+                }));
+            }
+            if completed_item.is_some() {
+                events.push(ThreadEvent::TurnCompleted { thread_id: thread_id.clone(), turn_id: turn_id.clone() });
+            } else if failed {
+                events.push(ThreadEvent::TurnFailed {
+                    thread_id: thread_id.clone(), turn_id: turn_id.clone(),
+                    error: ash_protocol::StableTurnError::model_invocation_failed(),
+                });
+            }
             self.record_batch(snapshot, events)?;
-            Ok(CommitModelInvocationItemsResult::Committed)
-        })
-    }
-
-    /// Returns whether a model response still precedes every accepted steering command.
-    pub(crate) fn model_invocation_is_current(
-        &self,
-        thread_id: &ThreadId,
-        turn_id: &TurnId,
-        source_thread_sequence: u64,
-    ) -> Result<bool, CoreError> {
-        self.with_loaded_thread(thread_id, |loaded| {
-            Ok(!has_steer_after(
-                &loaded.snapshot,
-                turn_id,
-                source_thread_sequence,
-            ))
+            Ok(if superseded {
+                CommitModelResponseResult::SupersededBySteer
+            } else if let Some(item) = completed_item {
+                CommitModelResponseResult::Completed(CompletedTurn { item, sequence: snapshot.sequence })
+            } else {
+                CommitModelResponseResult::Committed
+            })
         })
     }
 

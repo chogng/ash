@@ -16,6 +16,41 @@ import { registerTestComponentServices } from '../../../../test/common/testEdito
 import { AgentTraceEditor } from '../../browser/agentTraceEditor.js';
 
 suite('Execution Trace editor', () => {
+
+	test('explains loop decisions and message phases in the timeline and accessible view', async () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using services = new InstantiationService();
+			using configuration = new InMemoryConfigurationService();
+			using context = new ContextKeyService();
+			services.registerInstance(IConfigurationService, configuration);
+			services.registerInstance(IContextKeyService, context);
+			services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
+			const events = [
+				{ type: 'itemCompleted', item: { type: 'agentMessage', text: 'working', phase: 'commentary' } },
+				{ type: 'modelResponseEvaluated', decision: { action: 'continue', reason: 'nonterminalMessage', stopReason: { type: 'completed' }, messagePhases: ['commentary'], toolCallCount: 0 } },
+				{ type: 'modelResponseEvaluated', decision: { action: 'fail', reason: 'truncatedOutput', stopReason: { type: 'maxOutputTokens' }, messagePhases: ['partial_answer'], toolCallCount: 0 } },
+			];
+			services.registerInstance(IChatService, {
+				onDidChangeSession: Event.None, onDidUpdateThread: Event.None, onDidBecomeReady: Event.None,
+				readTrace: async () => ({ trace: { formatVersion: 3, sessionId: 's', historyPrefixes: [], threads: [{ threadId: 'root', events: events.map((event, index) => ({ eventId: `e-${index}`, sequence: index + 1, recordedAt: 1, event: { ...event, threadId: 'root', turnId: 'turn' } })) }] }, cursors: { root: 3 }, hasMore: false }),
+				readTraceDiagnostics: async () => ({ diagnostics: { formatVersion: 1, captureId: null, recordingStatus: 'disabled', droppedRecords: 0, events: [] }, cursor: 0, hasMore: false }),
+				subscribeThread: async () => ({ thread: { sequence: 3 } }), unsubscribeThread: async () => { },
+			} as unknown as IChatService);
+			using pane = registerTestComponentServices(services).createInstance(AgentTraceEditor);
+			pane.create(dom.window.document.body);
+			await pane.setInput({ resource: URI.parse('ash-agent-trace:/s') }, new AbortController().signal);
+			assert.match(pane.getAccessibleContent(), /Agent output · Commentary · working/);
+			assert.match(pane.getAccessibleContent(), /Continue generation · Nonterminal message received · stop: Generation completed · phases: Commentary/);
+			const buttons = [...dom.window.document.querySelectorAll<HTMLButtonElement>('button')];
+			buttons.find(button => button.textContent === 'Errors only')!.click();
+			const visible = [...dom.window.document.querySelectorAll<HTMLButtonElement>('.ash-agent-trace-event')].filter(row => !row.hidden);
+			assert.equal(visible.length, 1);
+			assert.match(visible[0].textContent!, /Fail Turn · Output was truncated · stop: Output token limit · phases: Partial answer/);
+			visible[0].click();
+			assert.match(pane.getAccessibleContent(), /"toolCallCount": 0/);
+		} finally { dom.window.close(); }
+	});
 	test('discovers child Threads through shared Session invalidation without Sessions services', async () => {
 		const dom = new JSDOM('<!doctype html><body></body>');
 		try {
@@ -41,10 +76,12 @@ suite('Execution Trace editor', () => {
 					return {
 						trace: {
 							formatVersion: 3, sessionId: 's', historyPrefixes: [],
-							threads: threads.map(threadId => ({ threadId, events: after[threadId] ? [] : [{
-								eventId: `${threadId}-1`, sequence: 1, recordedAt: 1,
-								event: { type: 'threadCreated', threadId, title: threadId, origin: threadId === 'child' ? { type: 'agentSpawn', parentThreadId: 'root', parentSequence: 1 } : undefined },
-							}] })),
+							threads: threads.map(threadId => ({
+								threadId, events: after[threadId] ? [] : [{
+									eventId: `${threadId}-1`, sequence: 1, recordedAt: 1,
+									event: { type: 'threadCreated', threadId, title: threadId, origin: threadId === 'child' ? { type: 'agentSpawn', parentThreadId: 'root', parentSequence: 1 } : undefined },
+								}]
+							})),
 						},
 						cursors: Object.fromEntries(threads.map(threadId => [threadId, 1])), hasMore: false,
 					};

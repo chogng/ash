@@ -178,6 +178,7 @@ where
     };
 
     client.update_config(ConfigUpdateParams {
+        trace: Patch::Missing,
         context: ash_protocol::Patch::Missing,
         advisor: Default::default(),
         time_context: Default::default(),
@@ -307,6 +308,7 @@ fn write_pins<T: JsonRpcTransport>(
     );
     crate::config::TuiSettings::from_tui(&tui).map_err(ModelCommandError)?;
     client.update_config(ConfigUpdateParams {
+        trace: Patch::Missing,
         context: ash_protocol::Patch::Missing,
         advisor: Default::default(),
         time_context: Default::default(),

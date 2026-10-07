@@ -236,48 +236,59 @@ Context keys connect focus-local state to actions, menus, and keybindings.
 
 ## Configuration architecture
 
-Configuration, application state, and Rust product intent are separate
-authorities:
+Configuration, application state, and Rust product intent have separate owners.
+The current TypeScript settings path is:
 
-- `platform/configuration/common` defines typed configuration keys, the
-  `IConfigurationService` contract, and the bounded versioned wire document.
-- `workbench/services/configuration` validates host snapshots through the
-  registered keys and publishes atomic changes to product services.
-- Electron Main owns `<profile>/configuration.json`, performs atomic writes, watches for
-  external edits, and enforces compare-and-swap revisions. Renderer access is
-  restricted to the typed read/update/change preload capability.
-- Electron Main independently owns `<profile>/keybindings.json` under the same
-  revisioned JSON storage primitive. This preserves ordered shortcut rules
-  without turning them into an ordinary configuration value.
-- Browser hosts use the same Workbench service with an in-memory document
-  until a browser persistence host is supplied.
-- `configuration.json` stores frontend/device key/value settings such as menu
-  presentation, fonts, accessibility, and product theme selections. Keyboard
-  shortcuts belong to `keybindings.json`.
-- `state.json` stores reconstructable machine state such as window bounds. It
-  must not become a configuration store.
-- The Rust ConfigStore remains authoritative for cross-client backend intent
-  such as models, providers, MCP servers, Skills, and directory permissions.
-  Presentation preferences, keyboard events, and Desktop command IDs do not
-  cross that boundary.
+- `platform/configuration/common/configurationRegistry.ts` owns registered keys,
+  defaults, parsers, serializers, schemas, and declared scopes.
+- `workbench/services/configuration/browser/configurationService.ts` resolves
+  registered values and supported language overrides, validates editor writes,
+  and publishes configuration and resource changes. Persisted writes currently
+  support only `USER` and `USER_LOCAL`; the other configuration layers are not
+  implemented merely because they appear in the shared contract.
+- Electron Main owns `<profile>/settings.json`, writes the JSONC source
+  atomically, watches external edits, and enforces compare-and-swap revisions.
+  Renderer access uses the typed read/update/change preload capability.
+- Browser product entries supply `IndexedDbConfigurationApi`. It stores the
+  settings source and revision in the `ash-configuration` database and uses
+  `BroadcastChannel` to reload changes in Workbench and Sessions pages on the
+  same origin. The service's optional in-memory mode is not the product's
+  persistence path.
+- The editable `ash-settings:/user/settings.json` resource is a view of that
+  same source. `SettingsFileSystemProvider` connects the ordinary text-file save
+  path to `IConfigurationResourceService`; it does not own a second document.
+- `keybindings.json` is a separate ordered resource supplied by
+  `IUserDataProfileService`, validated by the keybinding owner, and edited
+  through the shared file model. It is not a settings property.
+- `state.json` stores reconstructable machine state such as window bounds.
+- Rust domain services retain backend intent, model/provider configuration,
+  permissions, and secrets. TypeScript presentation settings do not change
+  ownership when a backend connection changes.
 
-Workbench 中 Preferences 入口、图形 Settings 页与用户设置 JSON 的页面分工见
-[Preferences 与 Settings 的职责](preferences-and-settings.md)。
+The current Electron settings file is a plain JSONC object, for example:
 
-The current Desktop document is:
-
-```json
+```jsonc
 {
-  "version": 1,
-  "values": {
-    "editor.fontSize": 14
-  }
+  // User preferences, not a versioned persistence envelope.
+  "editor.fontSize": 14,
 }
 ```
 
-Configuration keys are declared once through `ConfigurationsRegistry`.
-Consumers request values with the returned typed key instead of repeating
-string addresses or casting untrusted persisted values.
+The configuration API carries a versioned `{ version: 1, source }` document
+inside a revisioned snapshot. That transport shape is not the file format.
+The older `configuration.json` / `{ version, values }` description does not
+represent the current product path. Legacy migration must be verified
+separately; changing this description does not migrate existing profiles.
+
+Consumers use registered string keys through `IConfigurationService`. The
+current registry is named `ConfigurationRegistry`; it does not provide the
+previously documented typed-key return contract.
+
+Preferences entry points, rendering responsibilities, known defects, and
+VS Code differences are maintained in
+[Preferences and Settings](preferences-and-settings.md). New integration rules
+are maintained in the
+[Preferences README](../src/ash/workbench/contrib/preferences/README.md).
 
 The active `keybindings.json` is a top-level ordered array:
 
@@ -300,9 +311,9 @@ The active `keybindings.json` is a top-level ordered array:
 ]
 ```
 
-The host capability represents the active keybinding resource rather than a
-fixed path. A future profile service can switch that resource without changing
-the resolver, contribution, or command layers.
+The profile service supplies the active keybinding resource rather than making
+consumers hardcode a path. The resolver, contribution, and command layers use
+that resource contract.
 
 ## External URI opening
 

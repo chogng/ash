@@ -149,7 +149,7 @@ fn diagnostic_trace_retains_partial_output_before_cancellation_rejects_the_strea
                 &reference.payload_id
             )
             .unwrap(),
-        json!({ "text": "received text rejected by cancelled consumer", "reasoning": "received reasoning", "truncated": false })
+        json!({ "text": "received text rejected by cancelled consumer", "reasoning": "received reasoning", "messages": [], "truncated": false })
     );
 }
 

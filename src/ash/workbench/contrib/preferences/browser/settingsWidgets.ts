@@ -149,7 +149,7 @@ class SettingActions extends Disposable {
 	}
 
 	public updateLabel(label: string): void {
-		const actionLabel = `More actions for ${label}`;
+		const actionLabel = localize({ bundle: 'ash.settings', key: 'actions.more' }, 'More actions for {0}', label);
 		this.trigger.label = actionLabel;
 		this.trigger.setTitle(actionLabel);
 		this.trigger.domNode.setAttribute('aria-label', actionLabel);
@@ -160,14 +160,14 @@ class SettingActions extends Disposable {
 		const actions: IAction[] = [
 			{
 				id: 'settings.resetSetting',
-				label: 'Reset Setting',
+				label: localize({ bundle: 'ash.settings', key: 'actions.reset' }, 'Reset Setting'),
 				tooltip: '',
 				enabled: !this.options.reference.isDefault(),
 				run: () => this.run(() => this.options.reference.reset()),
 			},
 			{
 				id: 'settings.copySettingId',
-				label: 'Copy Setting ID',
+				label: localize({ bundle: 'ash.settings', key: 'actions.copyId' }, 'Copy Setting ID'),
 				tooltip: '',
 				enabled: true,
 				run: () => this.run(() => this.options.clipboardService.writeText(this.options.reference.id)),
@@ -247,7 +247,7 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 			},
 			contextMenuProvider: options.contextMenuProvider,
 			clipboardService: options.clipboardService,
-			onError: error => options.onStatus(settingErrorMessage(error, 'Unable to run the setting action.'), true),
+			onError: error => options.onStatus(settingErrorMessage(error, localize({ bundle: 'ash.settings', key: 'actions.failed' }, 'Unable to run the setting action.')), true),
 			openSettings: !descriptor.binding && options.onOpenSettings ? () => options.onOpenSettings!(descriptor.configuration.key) : undefined,
 		}));
 	}
@@ -283,7 +283,7 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 		try {
 			await this.model.update(value);
 		} catch (error) {
-			this.reportStatus(settingErrorMessage(error, 'Unable to save the setting.'), true);
+			this.reportStatus(settingErrorMessage(error, localize({ bundle: 'ash.settings', key: 'status.saveFailed' }, 'Unable to save the setting.')), true);
 		}
 	}
 
@@ -294,7 +294,7 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 		try {
 			await this.model.reset();
 		} catch (error) {
-			this.reportStatus(settingErrorMessage(error, 'Unable to reset the setting.'), true);
+			this.reportStatus(settingErrorMessage(error, localize({ bundle: 'ash.settings', key: 'status.resetFailed' }, 'Unable to reset the setting.')), true);
 			throw error;
 		}
 	}
@@ -370,7 +370,7 @@ class NumberSettingWidget extends AbstractSettingWidget<INumberSetting, number> 
 		if (!Number.isFinite(value) || value < this.descriptor.minimum || value > this.descriptor.maximum) {
 			this.model.refresh();
 			this.input.value = String(this.model.state.value);
-			this.reportStatus(`${this.descriptor.title} must be between ${this.descriptor.minimum} and ${this.descriptor.maximum}.`, true);
+			this.reportStatus(localize({ bundle: 'ash.settings', key: 'status.numberRange' }, '{0} must be between {1} and {2}.', this.descriptor.title, this.descriptor.minimum, this.descriptor.maximum), true);
 			return;
 		}
 		void this.updateSetting(value);
@@ -605,7 +605,7 @@ class StringMapSettingWidget extends AbstractSettingWidget<IStringMapSetting, Re
 			const editButton = this._register(new Button(actions, {
 				label: localize({ bundle: 'ash.settings', key: 'json.edit' }, 'Edit in settings.json'),
 				onClick: () => {
-					void options.onOpenSettings!(this.descriptor.configuration.key).catch(error => options.onStatus(settingErrorMessage(error, 'Unable to open settings.json.'), true));
+					void options.onOpenSettings!(this.descriptor.configuration.key).catch(error => options.onStatus(settingErrorMessage(error, localize({ bundle: 'ash.settings', key: 'json.openFailed' }, 'Unable to open settings.json.')), true));
 				},
 			}));
 		}
@@ -725,14 +725,14 @@ class StringMapSettingWidget extends AbstractSettingWidget<IStringMapSetting, Re
 				value[key] = this.descriptor.structuredValues && /^(?:\{|\[|true$|false$)/u.test(childPatterns) ? parseJsonc(childPatterns, key) : childPatterns;
 			} catch (error) {
 				valueInput.setAttribute('aria-invalid', 'true');
-				this.reportStatus(settingErrorMessage(error, 'Invalid setting value.'), true);
+				this.reportStatus(settingErrorMessage(error, localize({ bundle: 'ash.settings', key: 'status.invalidValue' }, 'Invalid setting value.')), true);
 				return;
 			}
 		}
 		try {
 			this.descriptor.configuration.parse(value);
 		} catch (error) {
-			this.reportStatus(settingErrorMessage(error, 'Invalid setting value.'), true);
+			this.reportStatus(settingErrorMessage(error, localize({ bundle: 'ash.settings', key: 'status.invalidValue' }, 'Invalid setting value.')), true);
 			return;
 		}
 		if (sameStringMap(value, this.model.state.value)) {

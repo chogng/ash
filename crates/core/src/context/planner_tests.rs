@@ -637,6 +637,7 @@ fn user_item(item_id: &str, turn_id: TurnId, text: &str) -> ThreadItem {
 
 fn agent_item(item_id: &str, turn_id: TurnId, text: &str) -> ThreadItem {
     ThreadItem::AgentMessage {
+        phase: None,
         item_id: id(item_id),
         turn_id,
         text: text.into(),
@@ -708,6 +709,7 @@ fn snapshot(current_turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
                 plan: None,
                 usage: ash_protocol::ModelUsageSummary::default(),
                 context_usage: None,
+            nonterminal_continuations: 0,
             })
             .collect(),
         items,

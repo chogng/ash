@@ -506,6 +506,7 @@ async fn responses_tool_result_continues_on_the_same_socket() {
         panic!("tool required");
     };
     request.input.push(InputItem::Message(Message {
+        phase: None,
         role: MessageRole::Assistant,
         content: vec![],
         tool_calls: vec![call.clone()],

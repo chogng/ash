@@ -1,5 +1,6 @@
 import { h } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { localize } from '../../../../nls.js';
 
 export interface SettingsTreeIndicatorsState {
 	readonly isPending: boolean;
@@ -23,7 +24,7 @@ export class SettingsTreeIndicatorsLabel extends Disposable {
 	}
 
 	public update(state: SettingsTreeIndicatorsState): void {
-		const label = state.isPending ? 'Saving…' : '';
+		const label = state.isPending ? localize({ bundle: 'ash.settings', key: 'status.saving' }, 'Saving…') : '';
 		this.labelDomNode.textContent = label;
 		this.domNode.setAttribute('aria-label', getIndicatorsLabelAriaLabel(state));
 		this.domNode.classList.toggle('is-pending', state.isPending);
@@ -32,5 +33,5 @@ export class SettingsTreeIndicatorsLabel extends Disposable {
 }
 
 export function getIndicatorsLabelAriaLabel(state: SettingsTreeIndicatorsState): string {
-	return state.isPending ? 'Saving setting' : '';
+	return state.isPending ? localize({ bundle: 'ash.settings', key: 'status.savingAria' }, 'Saving setting') : '';
 }

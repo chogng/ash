@@ -887,6 +887,7 @@ fn automatic_compaction(
         request
             .input
             .push(ash_protocol::InputItem::Message(ash_protocol::Message {
+                phase: None,
                 role: ash_protocol::MessageRole::User,
                 content: vec![ContentPart::Text(
                     ash_prompts::HANDOFF_PROMPT.body().to_owned(),

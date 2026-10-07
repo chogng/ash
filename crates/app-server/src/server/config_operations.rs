@@ -45,6 +45,8 @@ use ash_app_server_protocol::protocol::config::ToolSearchConfigDto;
 use ash_app_server_protocol::protocol::config::ToolSearchConfigureParams;
 use ash_app_server_protocol::protocol::config::ToolSearchEmbeddingStatusDto;
 use ash_app_server_protocol::protocol::config::ToolSearchModeDto;
+use ash_app_server_protocol::protocol::config::TraceConfigDto;
+use ash_app_server_protocol::protocol::config::TraceRecordingStateDto;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::search::GrepIndexDisableAndDeleteParams;
 use ash_app_server_protocol::protocol::search::GrepIndexDisableAndDeleteResult;
@@ -152,6 +154,7 @@ impl AppServer {
             snapshot,
             self.active_dir_id().as_ref(),
             self.tool_search_embedding_status(),
+            self.threads.trace_recording_state(),
         ))
     }
 
@@ -217,6 +220,10 @@ impl AppServer {
                 command_id: params.command_id,
                 expected_revision: ConfigRevision::new(params.expected_revision),
                 command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                    trace: params.trace.map(|trace| ash_config::TraceConfig {
+                        enabled: trace.enabled,
+                        directory: trace.directory.map(std::path::PathBuf::from),
+                    }),
                     context: params.context,
                     time_context: params
                         .time_context
@@ -267,6 +274,7 @@ impl AppServer {
                 expected_revision: ConfigRevision::new(params.expected_revision),
                 command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
                     context: Patch::Missing,
+                    trace: Patch::Missing,
                     time_context: ash_protocol::Patch::Missing,
                     features: Default::default(),
                     model: Patch::Missing,
@@ -635,6 +643,7 @@ fn config_read_result(
     snapshot: ResolvedConfigSnapshot,
     active_dir: Option<&ash_file_access::DirId>,
     tool_search_status: ToolSearchEmbeddingStatus,
+    trace_state: ash_rollout_trace::RecorderState,
 ) -> ConfigReadResult {
     let commit_message_active_dir_authorized = active_dir.is_some_and(|dir| {
         snapshot
@@ -669,6 +678,26 @@ fn config_read_result(
         embedding_status: tool_search_status_dto(tool_search_status),
     };
     ConfigReadResult {
+        trace: snapshot.values.trace.map(|trace| TraceConfigDto {
+            enabled: trace.enabled,
+            directory: trace
+                .directory
+                .map(|path| path.to_string_lossy().into_owned()),
+        }),
+        trace_recording: match trace_state {
+            ash_rollout_trace::RecorderState::Disabled => TraceRecordingStateDto::Disabled,
+            ash_rollout_trace::RecorderState::Enabled { directory } => {
+                TraceRecordingStateDto::Enabled {
+                    directory: directory.to_string_lossy().into_owned(),
+                }
+            }
+            ash_rollout_trace::RecorderState::Unavailable { directory, error } => {
+                TraceRecordingStateDto::Unavailable {
+                    directory: directory.to_string_lossy().into_owned(),
+                    error,
+                }
+            }
+        },
         context: snapshot.values.context.clone(),
         time_context: ash_app_server_protocol::protocol::config::TimeContextConfigDto {
             mode: snapshot.values.time_context.mode,

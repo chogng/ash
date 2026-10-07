@@ -1,6 +1,7 @@
 {
   "ash": {
     "sessions.conversation.editorName": "Session",
+    "sessions.settings.executionTrace": "Execution trace",
     "sessions.activity.chat": "Chat",
     "sessions.activity.colab": "Collaboration",
     "sessions.activity.library": "Library",

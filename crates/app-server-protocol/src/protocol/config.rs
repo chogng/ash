@@ -583,10 +583,33 @@ pub struct FrontendConfigDto(
     #[ts(type = "Record<string, unknown>")] pub BTreeMap<String, serde_json::Value>,
 );
 
+/// Local diagnostic intent, applied when the owning App Server starts.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TraceConfigDto {
+    pub enabled: bool,
+    pub directory: Option<String>,
+}
+
+/// Actual recorder state, independent from a newer saved configuration.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum TraceRecordingStateDto {
+    Disabled,
+    Enabled { directory: String },
+    Unavailable { directory: String, error: String },
+}
+
 /// Current user configuration snapshot returned by `config/read`.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigReadResult {
+    pub trace: Option<TraceConfigDto>,
+    pub trace_recording: TraceRecordingStateDto,
     pub context: ash_protocol::ContextCompactionPolicy,
     pub time_context: TimeContextConfigDto,
     pub features: Vec<features::FeatureState>,
@@ -730,6 +753,10 @@ pub enum ConfigCommandDispositionDto {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ConfigUpdateParams {
+    #[serde(default, skip_serializing_if = "Patch::is_missing")]
+    #[schemars(with = "Option<TraceConfigDto>")]
+    #[ts(as = "Option<TraceConfigDto>", optional = nullable)]
+    pub trace: Patch<TraceConfigDto>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     #[schemars(with = "Option<ash_protocol::ContextCompactionPolicy>")]
     #[ts(as = "Option<ash_protocol::ContextCompactionPolicy>", optional = nullable)]

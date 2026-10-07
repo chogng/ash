@@ -1,4 +1,6 @@
 import { IOpenerService } from '../../../platform/opener/common/opener.js';
+import { ITraceSettingsService } from '../../../platform/trace/common/traceSettingsService.js';
+import { IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { IAccountService } from '../../../platform/accounts/common/accountService.js';
 import { IGitHubService } from '../../../platform/github/common/githubService.js';
 import { IGitHubConnectionService } from '../../../workbench/services/accounts/common/gitHubConnectionService.js';
@@ -116,6 +118,8 @@ test('Sessions Models switches control the model picker visibility preference', 
 	using workspace = new WorkspaceContextService({ id: 'sessions-preferences', folders: [] });
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IRemoteAgentService, { connectionState: 'connected', connection: { kind: 'local', generation: 1 }, onDidChangeConnectionState: Event.None, onDidChangeConnection: Event.None, reconnect: async () => ({ kind: 'alreadyConnected' }), rollbackRuntime: async () => ({ kind: 'cancelled' }) });
+	services.registerInstance(ITraceSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, configured: null, recording: { type: 'disabled' } }), configure: async () => {} });
+	services.registerInstance(IFileDialogService, { showOpenDialog: async () => undefined, showSaveDialog: async () => undefined, pickFileToSave: async () => undefined, showSaveConfirm: async () => 2 });
 	services.registerInstance(IChatSessionNavigationService, { getActiveConversation: () => undefined, getConversations: () => [], captureActiveDraft: async () => undefined, openConversation: async () => { }, appendToActiveDraft: () => { } });
 	services.registerInstance(IEditorService, {} as IEditorService);
 	services.registerInstance(IFileService, {} as IFileService);

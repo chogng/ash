@@ -28,6 +28,7 @@ import { WorkbenchConfigurationService } from '../../../../../workbench/services
 import { BrowserTextResourceStore } from '../../../../../workbench/contrib/codeEditor/browser/browserTextResourceStore.js';
 import type { EditorOpenOptions, EditorOpenTarget, IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
 import { PreferencesService } from '../../../../../workbench/services/preferences/browser/preferencesService.js';
+import { configurationSettingBinding, SettingModel } from '../../../../../workbench/services/preferences/common/settingsModels.js';
 import { UserSettingsResource } from '../../../../../workbench/services/preferences/common/settingsEditorInput.js';
 import { SettingsFileSystemProvider } from '../../../../../workbench/contrib/preferences/common/settingsFilesystemProvider.js';
 import { createJsonCompletionProvider } from '../../../../../workbench/services/language/common/jsonLanguageFeatures.js';
@@ -38,6 +39,38 @@ const jsonRegistry = Registry.as<IJSONContributionRegistry>(JSONExtensions.JSONC
 
 const keybindingProfile = new KeybindingTestServices();
 suiteTeardown(() => keybindingProfile.dispose());
+
+test('Reset removes explicitly saved scalar and structured defaults while preserving unrelated JSONC', async () => {
+	const registry = new ConfigurationRegistry();
+	registry.registerConfiguration({ key: 'editor.fontSize', defaultValue: 14, parse: value => Number(value) });
+	registry.registerConfiguration({ key: 'workbench.colors', defaultValue: {}, parse: value => value as Record<string, unknown> });
+	using configuration = new WorkbenchConfigurationService({ registry });
+	await configuration.write('{\n\t// Keep unrelated settings.\n\t"editor.fontSize": 14,\n\t"workbench.colors": {},\n\t"extension.data": 99,\n}\n', 0);
+
+	for (const key of ['editor.fontSize', 'workbench.colors']) {
+		using model = new SettingModel(configurationSettingBinding(configuration, registry.getConfiguration(key)!));
+		assert.deepEqual([model.isDefault(), model.state.isDefault], [false, false]);
+		await model.reset();
+		assert.deepEqual([model.isDefault(), model.state.isDefault, configuration.inspect(key).userLocalValue], [true, true, undefined]);
+	}
+	assert.match((await configuration.read()).source, /Keep unrelated settings/u);
+	assert.match((await configuration.read()).source, /"extension.data": 99/u);
+});
+
+test('Domain setting bindings retain their own default and reset behavior', async () => {
+	let current = 3;
+	let resets = 0;
+	using model = new SettingModel({
+		id: 'domain.setting', defaultValue: 3, getValue: () => current,
+		updateValue: async value => { current = value; },
+		resetValue: async () => { current = 3; resets++; },
+	});
+	assert.equal(model.isDefault(), true);
+	await model.update(4);
+	assert.equal(model.isDefault(), false);
+	await model.reset();
+	assert.deepEqual([model.isDefault(), current, resets], [true, 3, 1]);
+});
 
 test('SettingsFileSystemProvider projects only the editable JSONC settings resource', async () => {
 	const registry = testRegistry();

@@ -2972,6 +2972,7 @@ fn select_model(
                 commit_message_model: Patch::Missing,
                 tool_mode: Patch::Missing,
                 grep_backend: Patch::Missing,
+                trace: Patch::Missing,
                 git: Patch::Missing,
                 gui: Patch::Missing,
                 tui: Patch::Missing,
@@ -5007,4 +5008,113 @@ fn model_settings_snapshot_passes_effective_catalog_metadata_to_the_provider() {
     assert_eq!(captured_info.settings, info.settings);
     assert_eq!(captured_info.context_window, info.context_window);
     assert_eq!(captured_info.auto_compact_token_limit, Some(115200));
+}
+
+#[test]
+fn trace_settings_require_profile_owner_restart_and_are_shared_by_directory_hosts() {
+    let profile = tempfile::tempdir().unwrap();
+    let first_dir = tempfile::tempdir().unwrap();
+    let second_dir = tempfile::tempdir().unwrap();
+    let recordings = profile.path().join("recordings");
+    // Fix the initial preference without mutating the process environment used by other tests.
+    let runtime = LocalProfileRuntime::open(profile.path()).unwrap();
+    runtime
+        .config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("trace-initial").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                trace: Patch::Value(ash_config::TraceConfig::default()),
+                ..Default::default()
+            }),
+        })
+        .unwrap();
+    drop(runtime);
+    let runtime = Arc::new(LocalProfileRuntime::open(profile.path()).unwrap());
+    let open = |runtime: &Arc<LocalProfileRuntime>, dir: &Path| {
+        let server = open_app_server(
+            AppServerOptions::new(profile.path())
+                .with_profile_runtime(Arc::clone(runtime))
+                .with_dir_root(dir)
+                .without_built_in_skills(),
+        )
+        .unwrap();
+        let mut connection = server.connection();
+        local_call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"trace-test","version":"1"},"capabilities":{}}}),
+        );
+        (server, connection)
+    };
+    let (server, mut connection) = open(&runtime, first_dir.path());
+    let saved = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":2,"method":"config/update","params":{
+                "commandId":"trace-enable","expectedRevision":1,"trace":{"enabled":true,"directory":recordings}
+            }
+        }),
+    );
+    assert_eq!(saved["result"]["revision"], 2, "{saved}");
+    let (sibling, mut sibling_connection) = open(&runtime, second_dir.path());
+    let config = local_call(
+        &sibling,
+        &mut sibling_connection,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"config/read","params":{}}),
+    );
+    assert_eq!(
+        config["result"]["trace"],
+        serde_json::json!({"enabled":true,"directory":recordings})
+    );
+    assert_eq!(
+        config["result"]["traceRecording"],
+        serde_json::json!({"type":"disabled"})
+    );
+    drop(sibling);
+    drop(server);
+    drop(runtime);
+    let runtime = Arc::new(LocalProfileRuntime::open(profile.path()).unwrap());
+    let (server, mut connection) = open(&runtime, first_dir.path());
+    let config = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":4,"method":"config/read","params":{}}),
+    );
+    assert_eq!(
+        config["result"]["traceRecording"],
+        serde_json::json!({"type":"enabled","directory":recordings})
+    );
+    let invalid = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":5,"method":"config/update","params":{
+                "commandId":"trace-invalid","expectedRevision":2,"trace":{"enabled":true,"directory":"relative"}
+            }
+        }),
+    );
+    assert!(invalid.get("error").is_some(), "{invalid}");
+    let disabled = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":6,"method":"config/update","params":{
+                "commandId":"trace-disable","expectedRevision":2,"trace":{"enabled":false,"directory":recordings}
+            }
+        }),
+    );
+    assert_eq!(disabled["result"]["revision"], 3);
+    assert!(matches!(
+        server.threads().trace_recording_state(),
+        ash_rollout_trace::RecorderState::Enabled { .. }
+    ));
+    drop(server);
+    drop(runtime);
+    let runtime = LocalProfileRuntime::open(profile.path()).unwrap();
+    assert_eq!(
+        runtime.threads.trace_recording_state(),
+        ash_rollout_trace::RecorderState::Disabled
+    );
 }

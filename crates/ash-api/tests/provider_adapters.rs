@@ -13,6 +13,116 @@ use ash_http_client::HttpHeader;
 use serde_json::{Value, json};
 use std::sync::Mutex;
 
+#[test]
+fn responses_preserves_ordered_message_phases_and_replays_them_only_to_responses() {
+    use ash_protocol::AssistantMessage;
+    use ash_protocol::MessagePhase;
+    let messages = [
+        ("progress", "working", "commentary"),
+        ("partial", "first answer", "partial_answer"),
+        ("answer", "done", "final_answer"),
+        ("future", "extra", "future_phase"),
+    ];
+    let transport = CapturingTransport::new(json!({
+        "status": "completed", "output": messages.map(|(id, text, phase)| json!({
+            "type":"message", "id":id, "phase":phase, "content":[{"type":"output_text", "text":text}]
+        }))
+    }));
+    let response = ApiEndpoint::OpenAiResponses
+        .complete_with_client(&target(), "model", &ModelRequest::text("hello"), &transport)
+        .unwrap();
+    assert_eq!(
+        response.output,
+        messages.map(|(id, text, phase)| OutputItem::Message(AssistantMessage {
+            id: id.into(),
+            text: text.into(),
+            phase: Some(MessagePhase::from_wire(phase))
+        }))
+    );
+    let mut input = Message::text(MessageRole::Assistant, "working");
+    input.phase = Some(MessagePhase::Commentary);
+    let mut request = ModelRequest::text("continue");
+    request.input.insert(0, InputItem::Message(input));
+    ApiEndpoint::OpenAiResponses
+        .complete_with_client(&target(), "model", &request, &transport)
+        .unwrap();
+    assert_eq!(
+        transport.request.lock().unwrap().as_ref().unwrap().2["input"][0]["phase"],
+        "commentary"
+    );
+    for (endpoint, body) in [
+        (
+            ApiEndpoint::OpenAiChatCompletions,
+            json!({"choices":[{"message":{"content":"done"},"finish_reason":"stop"}]}),
+        ),
+        (
+            ApiEndpoint::AnthropicMessages,
+            json!({"content":[{"type":"text","text":"done"}],"stop_reason":"end_turn"}),
+        ),
+    ] {
+        let transport = CapturingTransport::new(body);
+        endpoint
+            .complete_with_client(&target(), "model", &request, &transport)
+            .unwrap();
+        assert!(
+            !transport
+                .request
+                .lock()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .2
+                .to_string()
+                .contains("\"phase\"")
+        );
+    }
+}
+
+#[test]
+fn provider_stops_are_not_overwritten_by_tool_requests() {
+    for (endpoint, body) in [
+        (
+            ApiEndpoint::OpenAiResponses,
+            json!({"status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[{"type":"function_call","call_id":"call","name":"weather","arguments":"{}"}]}),
+        ),
+        (
+            ApiEndpoint::OpenAiChatCompletions,
+            json!({"choices":[{"message":{"tool_calls":[{"id":"call","type":"function","function":{"name":"weather","arguments":"{}"}}]},"finish_reason":"length"}]}),
+        ),
+        (
+            ApiEndpoint::AnthropicMessages,
+            json!({"content":[{"type":"tool_use","id":"call","name":"weather","input":{}}],"stop_reason":"max_tokens"}),
+        ),
+    ] {
+        let transport = CapturingTransport::new(body);
+        let response = endpoint
+            .complete_with_client(&target(), "model", &tool_request(), &transport)
+            .unwrap();
+        assert_eq!(response.stop_reason, StopReason::MaxOutputTokens);
+        assert_eq!(response.tool_calls().count(), 1);
+    }
+}
+
+#[test]
+fn responses_rejects_malformed_phase_and_duplicate_message_identity() {
+    for output in [
+        json!([{"type":"message","id":"id","phase":false,"content":[{"type":"output_text","text":"done"}]}]),
+        json!([{"type":"message","id":42,"content":[{"type":"output_text","text":"done"}]}]),
+        json!([{"type":"message","id":"id","content":[{"type":"output_text","text":"first"}]},{"type":"message","id":"id","content":[{"type":"output_text","text":"second"}]}]),
+    ] {
+        let transport = CapturingTransport::new(json!({"status":"completed","output":output}));
+        assert!(matches!(
+            ApiEndpoint::OpenAiResponses.complete_with_client(
+                &target(),
+                "model",
+                &ModelRequest::text("hello"),
+                &transport
+            ),
+            Err(ApiError::InvalidResponse(_))
+        ));
+    }
+}
+
 struct CapturingTransport {
     request: Mutex<Option<(String, Vec<HttpHeader>, Value)>>,
     response: Value,
@@ -281,6 +391,7 @@ fn conformance_request() -> ModelRequest {
     request.reasoning = None;
     request.input = vec![
         InputItem::Message(Message {
+            phase: None,
             role: MessageRole::User,
             content: vec![
                 ContentPart::Text("What is the weather?".into()),
@@ -292,6 +403,7 @@ fn conformance_request() -> ModelRequest {
             tool_calls: Vec::new(),
         }),
         InputItem::Message(Message {
+            phase: None,
             role: MessageRole::Assistant,
             content: Vec::new(),
             tool_calls: vec![ToolCall {
@@ -609,6 +721,7 @@ fn astra_preserves_supported_reasoning_and_round_trips_tool_results() {
         let call = response.tool_calls().next().unwrap();
         assert_eq!(call.arguments, json!({"city": "Paris"}));
         request.input.push(InputItem::Message(Message {
+            phase: None,
             role: MessageRole::Assistant,
             content: Vec::new(),
             tool_calls: vec![call.clone()],
@@ -696,7 +809,11 @@ fn openai_responses_collects_completed_items_with_terminal_usage() {
         response.output,
         vec![
             OutputItem::Reasoning("Checking".into()),
-            OutputItem::Text("Hello".into()),
+            OutputItem::Message(ash_protocol::AssistantMessage {
+                id: "message-1".into(),
+                text: "Hello".into(),
+                phase: None
+            }),
             OutputItem::ToolCall(ToolCall {
                 id: ToolCallId::new("call_1").unwrap(),
                 name: ToolName::new("weather").unwrap(),
@@ -713,6 +830,11 @@ fn openai_responses_collects_completed_items_with_terminal_usage() {
         vec![
             ModelStreamEvent::ReasoningDelta("Checking".into()),
             ModelStreamEvent::TextDelta("Hello".into()),
+            ModelStreamEvent::MessageCompleted(ash_protocol::AssistantMessage {
+                id: "message-1".into(),
+                text: "Hello".into(),
+                phase: None
+            }),
         ]
     );
 }

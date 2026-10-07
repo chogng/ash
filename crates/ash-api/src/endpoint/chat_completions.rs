@@ -382,22 +382,18 @@ fn parse_response(endpoint: ApiEndpoint, response: Value) -> Result<ModelRespons
         .get("finish_reason")
         .and_then(Value::as_str)
         .unwrap_or("stop");
-    let stop_reason = if output
-        .iter()
-        .any(|item| matches!(item, OutputItem::ToolCall(_)))
-    {
-        StopReason::ToolUse
-    } else if output
-        .iter()
-        .any(|item| matches!(item, OutputItem::Refusal(_)))
-    {
-        StopReason::Refusal
-    } else {
-        match finish_reason {
-            "stop" => StopReason::Completed,
-            "length" => StopReason::MaxOutputTokens,
-            other => StopReason::Other(other.into()),
+    let stop_reason = match finish_reason {
+        "stop"
+            if output
+                .iter()
+                .any(|item| matches!(item, OutputItem::Refusal(_))) =>
+        {
+            StopReason::Refusal
         }
+        "stop" => StopReason::Completed,
+        "tool_calls" | "function_call" => StopReason::ToolUse,
+        "length" => StopReason::MaxOutputTokens,
+        other => StopReason::Other(other.into()),
     };
     Ok(ModelResponse {
         output,

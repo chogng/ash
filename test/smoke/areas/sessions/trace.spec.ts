@@ -15,6 +15,33 @@ async function openTrace(page: Page, title = 'View Execution Trace'): Promise<vo
 	await expect(page.locator('.ash-agent-trace')).toBeVisible();
 }
 
+test('Execution Trace shows loop actions, message phases and stop reasons', async ({ workbench }) => {
+	await workbench.quickaccess.runCommand('ash.agentTrace.open');
+	const viewer = workbench.page.locator('.ash-agent-trace');
+	const decisions = [
+		{ action: 'executeTools', reason: 'toolRequests', stopReason: { type: 'toolUse' }, messagePhases: ['final_answer'], toolCallCount: 1 },
+		{ action: 'continue', reason: 'nonterminalMessage', stopReason: { type: 'completed' }, messagePhases: ['partial_answer'], toolCallCount: 0 },
+		{ action: 'complete', reason: 'compatibleCompletion', stopReason: { type: 'completed' }, messagePhases: [null], toolCallCount: 0 },
+		{ action: 'fail', reason: 'truncatedOutput', stopReason: { type: 'maxOutputTokens' }, messagePhases: ['partial_answer'], toolCallCount: 0 },
+		{ action: 'superseded', reason: 'newInput', stopReason: { type: 'completed' }, messagePhases: ['final_answer'], toolCallCount: 0 },
+	];
+	const trace = { formatVersion: 3, sessionId: 'loop-import', historyPrefixes: [], threads: [{ threadId: 'root', events: decisions.map((decision, index) => ({ eventId: `e-${index}`, sequence: index + 1, recordedAt: 1, event: { type: 'modelResponseEvaluated', threadId: 'root', turnId: 'turn', sourceThreadSequence: 0, decision } })) }] };
+	await viewer.locator('input[type=file]').setInputFiles({ name: 'loop.trace.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(trace)) });
+	await expect(viewer.locator('.ash-agent-trace-event')).toHaveCount(5);
+	await expect(viewer.locator('.ash-agent-trace-list')).toContainText('Execute tools · Pending tool requests · stop: Tool use · phases: Final answer');
+	await expect(viewer.locator('.ash-agent-trace-list')).toContainText('Continue generation · Nonterminal message received');
+	await expect(viewer.locator('.ash-agent-trace-list')).toContainText('Complete Turn · Completed without a known phase');
+	await expect(viewer.locator('.ash-agent-trace-list')).toContainText('Superseded by new input · New input arrived during generation');
+	await viewer.getByRole('button', { name: 'Errors only', exact: true }).click();
+	const failure = viewer.locator('.ash-agent-trace-event:visible');
+	await expect(failure).toHaveCount(1);
+	await failure.focus();
+	await failure.press('Enter');
+	await expect(failure).toHaveAttribute('aria-pressed', 'true');
+	await expect(viewer.getByRole('region', { name: 'Execution event details' })).toContainText('maxOutputTokens');
+	await expect(viewer.getByRole('region', { name: 'Execution event details' })).toContainText('sourceThreadSequence');
+});
+
 test('Workbench opens the shared Execution Trace editor and imports a capture', async ({ workbench }) => {
 	await workbench.quickaccess.runCommand('ash.agentTrace.open');
 	const viewer = workbench.page.locator('.ash-agent-trace');
@@ -127,6 +154,12 @@ test('Execution Trace command and help use Chinese in the real Sessions window',
 	await expect(viewer.getByRole('button', { name: '查看请求／响应', exact: true })).toBeVisible();
 	await expect(viewer.getByRole('button', { name: '查看执行关系', exact: true })).toBeVisible();
 	await expect(viewer.getByRole('status')).toContainText('打开已保存的对话');
+	const trace = { formatVersion: 3, sessionId: 'loop-zh', historyPrefixes: [], threads: [{ threadId: 'root', events: [{ eventId: 'loop', sequence: 1, recordedAt: 1, event: { type: 'modelResponseEvaluated', threadId: 'root', turnId: 'turn', decision: { action: 'continue', reason: 'nonterminalMessage', stopReason: { type: 'completed' }, messagePhases: ['commentary'], toolCallCount: 0 } } }] }] };
+	await viewer.locator('input[type=file]').setInputFiles({ name: 'loop-zh.trace.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(trace)) });
+	await expect(viewer.locator('.ash-agent-trace-list')).toContainText('循环决策 · 继续生成 · 当前消息尚未结束任务 · 停止原因：本次生成完成 · 消息阶段：进度说明');
+	await viewer.getByRole('textbox', { name: '筛选执行事件' }).fill('继续生成');
+	await expect(viewer.locator('.ash-agent-trace-event:visible')).toHaveCount(1);
+	await viewer.getByRole('textbox', { name: '筛选执行事件' }).fill('');
 	await viewer.getByRole('button', { name: '帮助', exact: true }).click();
 	await expect(page.getByRole('dialog', { name: '无障碍帮助' }).getByRole('textbox')).toHaveValue(/各 Thread 自己的顺序[\s\S]*ModelService 的语义输入/u);
 	await page.keyboard.press('Escape');

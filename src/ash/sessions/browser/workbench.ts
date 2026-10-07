@@ -88,6 +88,7 @@ import { NotificationService } from "../../workbench/services/notification/commo
 import { INotificationsCenter, NotificationsCenter } from "../../workbench/browser/parts/notifications/notificationsCenter.js";
 import { INotificationService } from "../../platform/notification/common/notification.js";
 import { IRendererHostService, type IRendererHost } from "../../platform/renderer/common/rendererHost.js";
+import { ITraceSettingsService } from '../../platform/trace/common/traceSettingsService.js';
 import type { INativeHostApi, IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
 import { IStorageService, WillSaveStateReason, StorageScope } from "../../platform/storage/common/storage.js";
 import { IThemeService } from "../../platform/theme/common/themeService.js";
@@ -375,6 +376,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(ILanguageModelsService, this._register(services.createInstance(LanguageModelsService)));
 		services.registerInstance(ISkillService, options.api.skills);
 		services.registerInstance(IHooksService, options.api.hooks);
+		services.registerInstance(ITraceSettingsService, options.api.traceSettings);
 		const marketplaceService = this._register(new AppServerMarketplaceService(options.api.marketplace, options.api.events));
 		services.registerInstance(IMarketplaceService, marketplaceService);
 		const languagePacks = this._register(services.createInstance(MarketplaceLanguagePackService, builtinLanguagePackCatalogs));
