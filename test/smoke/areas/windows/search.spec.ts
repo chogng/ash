@@ -114,7 +114,7 @@ test('Search selects exact matches, opens beside the editor and supports result 
 	await expect(workbench.search.query).toBeFocused();
 });
 
-test('Search offers tree view, sorting and accessible help through actual workbench controls', async ({ target, workbench, testWorkspace }) => {
+test('Search offers tree view, sorting and accessible help through actual workbench controls', async ({ target, application, workbench, testWorkspace }) => {
 	await workbench.search.open();
 	const query = workbench.search.query;
 	await query.focus();
@@ -133,11 +133,10 @@ test('Search offers tree view, sorting and accessible help through actual workbe
 	const files = workbench.search.element.locator('.ash-search-file-path');
 	const workspaceName = basename(testWorkspace.directory);
 	await expect(files).toHaveText([`${workspaceName} • a.ts`, `${workspaceName} • main.ts`, `${workspaceName} • src/z.ts`]);
-	await toolbar.getByRole('button', { name: 'More Actions', exact: true }).click();
-	await workbench.page.getByRole('menuitemcheckbox', { name: 'Sort by match count', exact: true }).click();
+	const openMoreActions = () => toolbar.getByRole('button', { name: 'More Actions', exact: true }).click();
+	await workbench.menus.select(application, openMoreActions, ['Sort by match count']);
 	await expect(files).toHaveText([`${workspaceName} • src/z.ts`, `${workspaceName} • a.ts`, `${workspaceName} • main.ts`]);
-	await toolbar.getByRole('button', { name: 'More Actions', exact: true }).click();
-	await workbench.page.getByRole('menuitemcheckbox', { name: 'View as tree', exact: true }).click();
+	await workbench.menus.select(application, openMoreActions, ['View as tree']);
 	await expect(files).toHaveText(['z.ts', 'a.ts', 'main.ts']);
 	const folder = workbench.search.element.getByRole('treeitem', { name: 'src', exact: true });
 	await folder.locator('.ash-tree-twistie').click();
@@ -274,8 +273,7 @@ test('Search replaces across lines on disk and undo restores the searched conten
 	await expect(workbench.search.status).toHaveText('No results found.');
 	expect((await readFile(path, 'utf8')).replace(/\r\n/g, '\n')).toBe('中文😀 updated end\n');
 	const toolbar = workbench.page.getByRole('toolbar', { name: 'Search result actions', exact: true });
-	await toolbar.getByRole('button', { name: 'More Actions', exact: true }).click();
-	await workbench.page.getByRole('menuitem', { name: 'Undo replacement', exact: true }).click();
+	await workbench.menus.select(application, () => toolbar.getByRole('button', { name: 'More Actions', exact: true }).click(), ['Undo replacement']);
 	await expect(workbench.search.status).toHaveText('1 results');
 	expect((await readFile(path, 'utf8')).replace(/\r\n/g, '\n')).toBe('中文😀 first\nsecond end\n');
 	await workbench.search.element.getByRole('button', { name: 'Use Regular Expression', exact: true }).click();
@@ -304,6 +302,8 @@ test.describe('Search with a granted browser folder', () => {
 			Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
 		});
 		await workbench.quickaccess.runCommand('workbench.action.files.openFolderViaWorkspace');
+		// Opening the folder rebuilds Workbench; wait for its new Explorer before navigation.
+		await expect(page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.txt', exact: true })).toBeVisible();
 		await workbench.search.open();
 		await workbench.search.search('needle');
 		await expect(workbench.search.status).toHaveText('2 results');
@@ -400,7 +400,7 @@ test('Search translates query options and file filters into Chinese', async ({ t
 	await expect(workbench.page.getByRole('dialog').getByRole('textbox')).toHaveValue(/跨文件搜索[\s\S]*移除结果[\s\S]*不会删除文件/);
 	await workbench.page.keyboard.press('Escape');
 	await expect(query).toBeFocused();
-	await workbench.page.getByRole('toolbar', { name: 'Search result actions', exact: true }).getByRole('button', { name: '更多操作', exact: true }).click();
+	await workbench.page.getByRole('toolbar', { name: '搜索结果操作', exact: true }).getByRole('button', { name: '更多操作', exact: true }).click();
 	await expect(workbench.page.getByRole('menuitem', { name: '移除结果', exact: true })).toBeVisible();
 	await expect(workbench.page.getByRole('menuitem', { name: '复制全部结果', exact: true })).toBeVisible();
 	await workbench.page.keyboard.press('Escape');
