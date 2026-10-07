@@ -3,11 +3,12 @@ import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { localize } from "../../../../nls.js";
 import { NotificationSeverity, type INotificationService, type NotificationItem } from "../../../../platform/notification/common/notification.js";
 
-/** Transient presentation of notification history. Closing a toast retains its record. */
+/** Transient presentation of notification history. Explicit removal clears the shared record. */
 export class NotificationsToasts extends Disposable {
 	private readonly element: HTMLDivElement;
 	private readonly visible = new Set<number>();
 	private hidden = false;
+	private previousFocus: HTMLElement | undefined;
 
 	constructor(container: HTMLElement, private readonly service: INotificationService) {
 		super();
@@ -24,12 +25,28 @@ export class NotificationsToasts extends Disposable {
 			this.render();
 		}));
 		this._register(service.onDidRemove(item => { this.visible.delete(item.id); this.render(); }));
+		this._register(addDisposableListener(this.element, "focusin", event => {
+			const HTMLElement = document.defaultView?.HTMLElement;
+			const target = event.relatedTarget;
+			if (HTMLElement && target instanceof HTMLElement && target !== document.body && !this.element.contains(target)) {
+				this.previousFocus = target;
+			}
+		}));
 		this._register(addDisposableListener(this.element, "click", event => {
 			const target = event.target;
 			const Element = document.defaultView?.Element;
 			if (!Element || !(target instanceof Element)) return;
 			const button = target.closest<HTMLButtonElement>("[data-notification-close]");
-			if (button) { this.visible.delete(Number(button.dataset.notificationClose)); this.render(); }
+			if (button) {
+				const buttons = [...this.element.querySelectorAll<HTMLButtonElement>("[data-notification-close]")];
+				const focusedIndex = this.element.contains(document.activeElement) ? buttons.indexOf(button) : -1;
+				service.remove(Number(button.dataset.notificationClose));
+				// The model event replaces toast DOM; keep keyboard focus on the next surviving action.
+				if (focusedIndex >= 0) {
+					const remaining = this.element.querySelectorAll<HTMLButtonElement>("[data-notification-close]");
+					(remaining[Math.min(focusedIndex, remaining.length - 1)] ?? this.previousFocus)?.focus();
+				}
+			}
 		}));
 		for (const item of service.getNotifications().slice(-3)) this.visible.add(item.id);
 		this.render();
@@ -68,7 +85,7 @@ export class NotificationsToasts extends Disposable {
 			content.append(actions);
 		}
 		const close = h(document, "button"); close.type = "button"; close.className = "ash-notification-close"; close.dataset.notificationClose = String(item.id);
-		close.setAttribute("aria-label", localize('notifications.hideToast', 'Hide notification')); close.textContent = "×";
+		close.setAttribute("aria-label", localize('notifications.remove', 'Remove notification')); close.textContent = "×";
 		notification.append(content, close);
 		return notification;
 	}

@@ -7,7 +7,7 @@ import { NotificationsCenter } from "../../../../browser/parts/notifications/not
 import { StatusbarAlignment, StatusbarService } from "../../../statusbar/browser/statusbar.js";
 import { NotificationService } from "../../common/notificationService.js";
 
-test("notifications share history across toast and center", async () => {
+test("clearing a toast removes only its shared record from the notification center", async () => {
 	const browser = new JSDOM("<!doctype html><body><main></main></body>");
 	try {
 		using service = new NotificationService();
@@ -25,14 +25,17 @@ test("notifications share history across toast and center", async () => {
 		root.querySelector<HTMLButtonElement>(".ash-notification-action")!.click();
 		await Promise.resolve();
 		assert.equal(actionRuns, 1);
+		const retained = service.info("Keep this notification");
 		root.querySelector<HTMLButtonElement>(".ash-notification-close")!.click();
-		assert.equal(root.querySelectorAll(".ash-notification").length, 0);
-		assert.deepEqual(service.getNotifications().map(item => item.id), [handle.item.id]);
+		handle.close(); handle.close();
+		assert.equal(root.querySelectorAll(".ash-notification").length, 1);
+		assert.deepEqual(service.getNotifications().map(item => item.id), [retained.item.id]);
+		assert.deepEqual(removed, [handle.item.id]);
 		center.show();
 		assert.equal(root.querySelectorAll(".ash-notifications-row").length, 1);
-		assert.equal(root.querySelector(".ash-notifications-row .ash-notification-message")?.textContent, "Workspace needs attention");
+		assert.equal(root.querySelector(".ash-notifications-row .ash-notification-message")?.textContent, "Keep this notification");
 		root.querySelector<HTMLButtonElement>(".ash-notifications-clear")!.click();
-		assert.deepEqual(removed, [handle.item.id]);
+		assert.deepEqual(removed, [handle.item.id, retained.item.id]);
 		assert.equal(service.getNotifications().length, 0);
 		assert.equal(toggle.hidden, true);
 		assert.equal(root.querySelector(".ash-notifications-empty")?.textContent, "No notifications");
@@ -42,6 +45,27 @@ test("notifications share history across toast and center", async () => {
 		assert.equal(toggle.hidden, false);
 		toggle.click();
 		assert.equal(root.querySelector<HTMLElement>(".ash-notifications-center")?.hidden, false);
+	} finally { browser.window.close(); }
+});
+
+test("clearing focused toasts moves to adjacent actions and returns to the previous control", () => {
+	const browser = new JSDOM("<!doctype html><body><button id='origin'>Origin</button></body>");
+	try {
+		using service = new NotificationService();
+		const document = browser.window.document;
+		using center = new NotificationsCenter(document.body, document.body, service);
+		const handles = [service.info("First"), service.info("Second"), service.info("Third")];
+		const close = (index: number) => document.querySelector<HTMLButtonElement>(`[data-notification-close="${handles[index].item.id}"]`)!;
+		const origin = document.querySelector<HTMLButtonElement>("#origin")!;
+		origin.focus();
+		close(1).focus();
+		close(1).click();
+		assert.equal(document.activeElement, close(2));
+		close(2).click();
+		assert.equal(document.activeElement, close(0));
+		close(0).click();
+		assert.equal(document.activeElement, origin);
+		assert.deepEqual(service.getNotifications(), []);
 	} finally { browser.window.close(); }
 });
 

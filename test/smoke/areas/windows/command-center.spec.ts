@@ -282,7 +282,7 @@ test('Manage Accounts command opens the account picker when the account service 
 	const page = workbench.page;
 	await page.keyboard.press('F1');
 	const commandPicker = page.locator('.ash-quick-pick');
-	await commandPicker.getByRole('combobox').fill('Manage Accounts');
+	await commandPicker.getByRole('combobox').fill('>Manage Accounts');
 	await expect(commandPicker.locator('.ash-quick-pick-row-label', { hasText: 'Manage Accounts' })).toBeVisible();
 	await commandPicker.getByRole('combobox').press('Enter');
 
@@ -318,13 +318,12 @@ test('Manage Accounts command opens the account picker when the account service 
 		expect(notificationWithProgress).not.toBeNull();
 		expect(progressBounds).not.toBeNull();
 		expect(notificationWithProgress!.y + notificationWithProgress!.height).toBeLessThanOrEqual(progressBounds!.y);
-		await notification.getByRole('button', { name: 'Hide notification' }).click();
+		await notification.getByRole('button', { name: 'Remove notification' }).click();
 		await expect(notification).toHaveCount(0);
 		await page.getByRole('button', { name: 'Show Notification Center' }).click();
 		const center = page.getByRole('region', { name: 'Notification Center' });
 		await expect(center).toBeVisible();
-		await expect(center.locator('.ash-notifications-row', { hasText: 'Could not load accounts.' })).toBeVisible();
-		await center.getByRole('button', { name: 'Clear All' }).click();
+		await expect(center.locator('.ash-notifications-row', { hasText: 'Could not load accounts.' })).toHaveCount(0);
 		await expect(center.getByText('No notifications')).toBeVisible();
 		await page.keyboard.press('Escape');
 		await expect(center).toBeHidden();

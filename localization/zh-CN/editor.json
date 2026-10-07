@@ -207,7 +207,6 @@
     "notifications.title": "通知",
     "notifications.clearAll": "全部清除",
     "notifications.hideCenter": "隐藏通知中心",
-    "notifications.hideToast": "收起通知",
     "notifications.showCenter": "显示通知中心",
     "notifications.remove": "移除通知",
     "notifications.empty": "没有通知",
