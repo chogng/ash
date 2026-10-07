@@ -207,6 +207,59 @@ for (const useCenter of [false, true]) {
 	});
 }
 
+for (const scenario of [
+	{ control: 'action', change: 'add', count: 2, focusedIndex: 1 },
+	{ control: 'remove', change: 'add', count: 2, focusedIndex: 1 },
+	{ control: 'action', change: 'remove', count: 2, focusedIndex: 1 },
+	{ control: 'remove', change: 'remove', count: 2, focusedIndex: 1 },
+	{ control: 'action', change: 'add', count: 3, focusedIndex: 1 },
+	{ control: 'remove', change: 'add', count: 3, focusedIndex: 0 },
+] as const) {
+	test(`toast focus ${scenario.count === 3 && scenario.focusedIndex === 0 ? 'is not restored to an evicted' : 'stays on a retained'} ${scenario.control} when backend completion ${scenario.change}s a record with ${scenario.count} toasts`, async ({ workbench, application }) => {
+		const page = workbench.page;
+		await workbench.quickaccess.runCommand('notifications.clearAll');
+		for (let index = 0; index < scenario.count; index++) await workbench.quickaccess.runCommand('showEditorScreenReaderNotification');
+		const surface = page.locator('.ash-notification-host');
+		const ids = await surface.locator('[data-notification-close]').evaluateAll(elements => elements.map(element => (element as HTMLButtonElement).dataset.notificationClose!));
+		expect(ids).toHaveLength(scenario.count);
+		const toast = (id: string) => surface.locator(`.ash-notification:has([data-notification-close="${id}"])`);
+		const focusedId = ids[scenario.focusedIndex];
+		const target = scenario.control === 'remove' ? toast(focusedId).getByRole('button', { name: 'Remove notification', exact: true }) : toast(focusedId).getByRole('button', { name: 'Always Enable', exact: true });
+		const triggeringId = ids[scenario.count - 1 === scenario.focusedIndex ? 0 : scenario.count - 1];
+		const trigger = toast(triggeringId).getByRole('button', { name: 'Always Enable', exact: true });
+		const failure = scenario.change === 'add' ? await blockConfigurationWrite(page, application) : undefined;
+		try {
+			// The real action is deferred. Focus the other control before its backend
+			// completion adds an error or lets the producer close its own record.
+			await page.evaluate(({ button, focus }) => {
+				if (!(button instanceof HTMLButtonElement) || !(focus instanceof HTMLElement)) throw new Error('Expected visible toast controls');
+				button.click();
+				focus.focus();
+			}, { button: await trigger.elementHandle(), focus: await target.elementHandle() });
+			if (failure) {
+				await expect(surface.locator('.ash-notification-message').filter({ hasText: failure.message })).toHaveCount(1);
+				await failure.assertUnchanged();
+			} else {
+				await expect(toast(triggeringId)).toHaveCount(0);
+			}
+			const evicted = scenario.count === 3 && scenario.focusedIndex === 0;
+			if (evicted) {
+				await expect(target).toHaveCount(0);
+				expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+			} else {
+				await expect(target).toBeFocused();
+			}
+			await expect(surface.locator('.ash-notification')).toHaveCount(Math.min(3, scenario.count + (failure ? 1 : -1)));
+			await workbench.quickaccess.runCommand('notifications.showList');
+			const center = page.locator('.ash-notifications-center');
+			await expect(center.locator('[data-notification-id]')).toHaveCount(scenario.count + (failure ? 1 : -1));
+			await expect(center.locator(`[data-notification-id="${focusedId}"]`)).toHaveCount(1);
+		} finally {
+			if (failure) { try { await failure.assertUnchanged(); } finally { await failure.dispose(); } }
+		}
+	});
+}
+
 interface StoredConfiguration {
 	key: 'settings.json';
 	revision: number;

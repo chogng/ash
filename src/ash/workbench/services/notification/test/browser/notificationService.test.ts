@@ -105,6 +105,110 @@ test("toasts cap at three while history retains every notification", () => {
 	} finally { browser.window.close(); }
 });
 
+for (const control of ["action", "remove"] as const) {
+	for (const change of ["add", "remove"] as const) {
+		test(`a retained toast ${control} keeps focus when another record changes by ${change}`, () => {
+			using fixture = new NotificationsFixture();
+			const { document, service } = fixture;
+			const retained = service.info("Retained", [
+				{ id: "first", label: "Same label", run() { } },
+				{ id: "second", label: "Same label", run() { } },
+			]);
+			const other = service.info("Other");
+			toastControl(document, retained.item.id, control)!.focus();
+			if (change === "add") service.info("Added");
+			else other.close();
+			assert.equal(document.activeElement, toastControl(document, retained.item.id, control));
+			assert.equal(service.getNotifications().includes(retained.item), true);
+		});
+	}
+	for (const retained of [false, true]) {
+		test(`the three-toast limit ${retained ? "preserves retained" : "does not restore evicted"} ${control} focus`, () => {
+			using fixture = new NotificationsFixture();
+			const { document, service } = fixture;
+			const handles = ["First", "Second", "Third"].map(message => service.info(message, [{ id: "action", label: "Action", run() { } }]));
+			const focused = handles[retained ? 1 : 0];
+			toastControl(document, focused.item.id, control)!.focus();
+			const last = service.info("Fourth");
+			assert.equal(document.activeElement, retained ? toastControl(document, focused.item.id, control) : document.body);
+			assert.equal(toastControl(document, handles[0].item.id, "remove"), undefined);
+			assert.deepEqual([...document.querySelectorAll<HTMLElement>("[data-notification-close]")].map(element => Number(element.dataset.notificationClose)), [handles[1].item.id, handles[2].item.id, last.item.id]);
+			assert.deepEqual(service.getNotifications().map(item => item.id), [...handles.map(handle => handle.item.id), last.item.id]);
+		});
+	}
+	test(`closing a focused toast ${control} through its handle does not select a different control`, () => {
+		using fixture = new NotificationsFixture();
+		const { document, service } = fixture;
+		const focused = service.info("Removed", [{ id: "action", label: "Action", run() { } }]);
+		service.info("Other");
+		toastControl(document, focused.item.id, control)!.focus();
+		focused.close();
+		assert.equal(document.activeElement, document.body);
+		assert.equal(toastControl(document, focused.item.id, control), undefined);
+	});
+}
+
+test("toast record changes leave outside focus alone and disposal releases focus ownership", () => {
+	using fixture = new NotificationsFixture();
+	const { document, service, center, outside } = fixture;
+	const first = service.info("First");
+	outside.focus();
+	service.info("Second");
+	first.close();
+	assert.equal(document.activeElement, outside);
+	center.dispose();
+	service.info("After disposal");
+	service.clear();
+	assert.equal(document.activeElement, outside);
+	assert.equal(document.querySelector(".ash-notification-host"), null);
+});
+
+test("activating another toast removal preserves the still-focused action", () => {
+	using fixture = new NotificationsFixture();
+	const { document, service } = fixture;
+	const retained = service.info("Retained", [{ id: "action", label: "Action", run() { } }]);
+	const other = service.info("Removed");
+	toastControl(document, retained.item.id, "action")!.focus();
+	toastControl(document, other.item.id, "remove")!.click();
+	assert.equal(document.activeElement, toastControl(document, retained.item.id, "action"));
+});
+
+for (const dispose of [false, true]) {
+	test(`toast removal does not steal focus after a reentrant ${dispose ? "disposal" : "center open"}`, () => {
+		using fixture = new NotificationsFixture();
+		const { document, service, center, outside, panel, origin } = fixture;
+		const first = service.info("Removed");
+		service.info("Retained");
+		origin.focus();
+		toastControl(document, first.item.id, "remove")!.focus();
+		using listener = service.onDidRemove(() => {
+			if (dispose) { center.dispose(); outside.focus(); }
+			else center.show();
+		});
+		toastControl(document, first.item.id, "remove")!.click();
+		assert.equal(document.activeElement, dispose ? outside : panel);
+		assert.equal(document.querySelectorAll(".ash-notification-host .ash-notification").length, 0);
+	});
+}
+
+test("a center opened during notification arrival keeps focus and hides every toast", () => {
+	using fixture = new NotificationsFixture();
+	const { document, service, center, panel } = fixture;
+	const retained = service.info("Retained", [{ id: "action", label: "Action", run() { } }]);
+	toastControl(document, retained.item.id, "action")!.focus();
+	using listener = service.onDidAdd(() => center.show());
+	service.info("Added");
+	assert.equal(document.activeElement, panel);
+	assert.equal(document.querySelectorAll(".ash-notification-host .ash-notification").length, 0);
+});
+
+function toastControl(document: Document, id: number, control: "action" | "remove"): HTMLButtonElement | undefined {
+	const remove = document.querySelector<HTMLButtonElement>(`[data-notification-close="${id}"]`) ?? undefined;
+	if (control === "remove") return remove;
+	const actions = remove?.closest("article")?.querySelectorAll<HTMLButtonElement>(".ash-notification-action");
+	return actions?.item(1) ?? actions?.item(0) ?? undefined;
+}
+
 test("notification handle removes its record once", () => {
 	using service = new NotificationService();
 	let removals = 0;

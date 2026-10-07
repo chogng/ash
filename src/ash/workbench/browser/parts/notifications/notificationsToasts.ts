@@ -40,12 +40,13 @@ export class NotificationsToasts extends Disposable {
 			const button = target.closest<HTMLButtonElement>("[data-notification-close]");
 			if (button) {
 				const buttons = [...this.element.querySelectorAll<HTMLButtonElement>("[data-notification-close]")];
-				const focusedIndex = this.element.contains(document.activeElement) ? buttons.indexOf(button) : -1;
+				const focusedIndex = document.activeElement === button ? buttons.indexOf(button) : -1;
 				service.remove(Number(button.dataset.notificationClose));
-				// The model event replaces toast DOM; keep keyboard focus on the next surviving action.
-				if (focusedIndex >= 0) {
+				// Removal listeners can open the center, move focus, or dispose this owner.
+				if (focusedIndex >= 0 && !this.hidden && !this.isDisposed && this.element.isConnected && document.activeElement === document.body) {
 					const remaining = this.element.querySelectorAll<HTMLButtonElement>("[data-notification-close]");
-					(remaining[Math.min(focusedIndex, remaining.length - 1)] ?? this.previousFocus)?.focus();
+					const nextFocus = remaining[Math.min(focusedIndex, remaining.length - 1)] ?? this.previousFocus;
+					if (nextFocus?.isConnected) nextFocus.focus();
 				}
 			}
 		}));
@@ -60,14 +61,25 @@ export class NotificationsToasts extends Disposable {
 	}
 
 	private render(): void {
+		if (this.isDisposed) return;
 		if (this.hidden) { this.element.replaceChildren(); return; }
 		const document = this.element.ownerDocument;
-		this.element.replaceChildren(...this.service.getNotifications().filter(item => this.visible.has(item.id)).map(item => this.renderItem(document, item)));
+		const items = this.service.getNotifications().filter(item => this.visible.has(item.id));
+		for (const toast of [...this.element.children] as HTMLElement[]) {
+			if (!items.some(item => item.id === Number(toast.dataset.notificationId))) toast.remove();
+		}
+		// Records are immutable and append-ordered. Retain their controls so background
+		// changes preserve focus without refocusing across another owner's transition.
+		for (const item of items) {
+			if (this.hidden || this.isDisposed) return;
+			if (!this.element.querySelector(`[data-notification-id="${item.id}"]`)) this.element.append(this.renderItem(document, item));
+		}
 	}
 
 	private renderItem(document: Document, item: NotificationItem): HTMLElement {
 		const notification = h(document, "article");
 		notification.className = `ash-notification ash-notification-${item.severity}`;
+		notification.dataset.notificationId = String(item.id);
 		notification.setAttribute("role", item.severity === NotificationSeverity.Error ? "alert" : "status");
 		const content = h(document, "div");
 		content.className = "ash-notification-content";
