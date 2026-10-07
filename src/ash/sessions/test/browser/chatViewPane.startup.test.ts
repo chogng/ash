@@ -1,3 +1,6 @@
+import { IPromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
+import { PromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
+import { IAppServerSkillApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { ActionWidgetService, IActionWidgetService } from '../../../platform/actionWidget/browser/actionWidget.js';
 import { createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
 import { errorHandler } from '../../../base/common/errors.js';
@@ -16,7 +19,7 @@ import { toDisposable } from "../../../base/common/lifecycle.js";
 import type { IMenu, IMenuService } from "../../../platform/actions/common/actions.js";
 import type { ICommandService } from "../../../platform/commands/common/commands.js";
 import { IContextViewService, type IContextMenuService } from "../../../platform/contextview/browser/contextView.js";
-import type { IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, ThreadRead, ThreadSubscription, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope } from "../../../workbench/services/chat/common/chatService.js";
+import type { IChatService, ModelCatalogEntry, SlashCommandDefinition, ThreadRead, ThreadSubscription, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope } from "../../../workbench/services/chat/common/chatService.js";
 import type { IWorkbenchLayoutService, WorkbenchPartId, WorkbenchPartVisibilityChangeEvent } from "../../../workbench/services/layout/browser/layoutService.js";
 import type { ApprovalMode, IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../services/sessions/common/session.js";
 import type { ISessionsManagementService, SessionsManagementState } from "../../services/sessions/common/sessionsManagement.js";
@@ -52,12 +55,14 @@ test("opens a local Chat tab before the backend session request settles", () => 
 	using layoutService = new VisibleAuxiliarybarLayoutService({ root: document.body });
 	using contextViewService = new BrowserContextViewService(document.body);
 	using services = createTestEditorServices();
+	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerSingleton(IActionWidgetService, () => services.createInstance(ActionWidgetService));
 	services.registerInstance(IDictationService, undefined);
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 	registerTestDictationOnboarding(services);
 	const chat = unavailableChatService();
 	services.registerInstance(ILanguageModelsService, chat);
+	services.registerInstance(IAppServerSkillApi, { onDidChangeSkills: Event.None, readInstructions: async () => { throw new Error("No Skill body in this test fixture"); }, list: () => new Promise(() => { }), read: () => new Promise(() => { }), setEnabled: () => new Promise(() => { }) });
 	services.registerInstance(IContextViewService, contextViewService);
 	services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 	using view = new ChatViewPane(
@@ -169,7 +174,6 @@ function unavailableChatService(): IChatService & ILanguageModelsService {
 		onDidBecomeReady: neverEvent<void>(),
 		onDidChangeModels: neverEvent<void>(),
 		onDidChangeQueue: neverEvent<void>(),
-		onDidChangeSkills: neverEvent<void>(),
 		onDidUpdateTurnChanges: neverEvent<import("../../../workbench/services/chat/common/chatService.js").TurnChangesUpdate>(),
 		discoverProviderModels: () => pending,
 		listModels: () => pending as Promise<readonly ModelCatalogEntry[]>,
@@ -190,7 +194,6 @@ function unavailableChatService(): IChatService & ILanguageModelsService {
 		isModelVisible: () => true,
 		setModelVisible: () => pending as Promise<void>,
 		listSlashCommands: () => pending as Promise<readonly SlashCommandDefinition[]>,
-		listSkillSelectors: () => pending as Promise<readonly SkillSelectorDefinition[]>,
 		readThread: (_sessionId: SessionId, _threadId: ThreadId) => pending as Promise<ThreadRead>,
 		subscribeThread: (_sessionId: SessionId, _threadId: ThreadId, _afterSequence: number) => pending as Promise<ThreadSubscription>,
 		unsubscribeThread: (_sessionId: SessionId, _threadId: ThreadId) => pending as Promise<void>,

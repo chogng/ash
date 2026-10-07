@@ -185,7 +185,8 @@ test('Settings place Advisor in Agents and retain Customize controls across tabs
 		await expect(settings.locator('[data-hook-action="ask-scope"]')).toBeDisabled();
 		await page.keyboard.press('Escape');
 	}
-	await new QuickAccess(page).runCommand('ash.skills.open');
+	await new QuickAccess(page).runCommand('workbench.action.chat.configure.skills');
+	await new QuickAccess(page).select('Manage skill enablement…');
 	await expect(settings).toBeVisible();
 	await expect(settings.getByRole('tab', { name: 'Skills', exact: true })).toHaveAttribute('aria-selected', 'true');
 	await skills.getByRole('button', { name: 'Get skills from Marketplace', exact: true }).click();

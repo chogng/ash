@@ -689,6 +689,153 @@ fn skills_view_toggles_catalog_entries_by_enablement() {
 }
 
 #[test]
+fn skills_enablement_uses_the_same_session_scope_as_selection() {
+    use ash_app_server_protocol::protocol::environment::SessionDirAddParams;
+    use ash_app_server_protocol::protocol::skills::SkillCatalogReloadDto;
+    use ash_app_server_protocol::protocol::skills::SkillListParams;
+
+    let _guard = dispatch_test_guard();
+    let root = tempfile::tempdir().unwrap();
+    let primary = root.path().join("primary");
+    fs::create_dir_all(&primary).unwrap();
+    let workspace = root.path().join("workspace");
+    let skill_root = workspace.join(".ash/skills/session-review");
+    fs::create_dir_all(&skill_root).unwrap();
+    fs::write(
+        skill_root.join("SKILL.md"),
+        "---\nname: session-review\ndescription: Review this Session\n---\nReview changes.\n",
+    )
+    .unwrap();
+    let mut client = start_in_process_client(
+        InProcessClientOptions::new(
+            root.path().join("profile"),
+            ClientInfo {
+                name: "ash-tui-skills-test".into(),
+                version: "1".into(),
+            },
+        )
+        .with_capabilities(crate::client_capabilities())
+        .with_codex_home(root.path().join("codex"))
+        .with_dir_root(&primary)
+        .with_model_operation_client(Arc::new(OfflineOperationClient::default())),
+    )
+    .unwrap();
+    let conversation = ActiveConversation::start(&mut client, "skills".into()).unwrap();
+    client
+        .add_session_dir(SessionDirAddParams {
+            session_id: conversation.session_id().clone(),
+            path: workspace,
+            permissions: vec![PermissionDto::DiscoverSkills],
+        })
+        .unwrap();
+
+    let scope = Some(conversation.session_id());
+    let selection =
+        crate::skills::load_selection(&mut client, scope, SkillCatalogReloadDto::Refresh).unwrap();
+    let mut app = App::new();
+    app.update(SkillEvent::SettingsOpened(selection));
+    let index = app
+        .list_selection()
+        .unwrap()
+        .visible_items()
+        .iter()
+        .position(|entry| entry.label() == "session-review")
+        .unwrap();
+    for _ in 0..index {
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    }
+    let AppCommand::Skills(command) = app
+        .handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+        .unwrap()
+    else {
+        panic!("Enter should change the selected Skill");
+    };
+    // Resolve the exact wire identity; selector display text must not become a mutation key.
+    let catalog = client
+        .list_skills(SkillListParams {
+            session_id: scope.cloned(),
+            ..SkillListParams::default()
+        })
+        .unwrap();
+    let skill_id = catalog
+        .skills
+        .iter()
+        .find(|entry| entry.id.name.as_str() == "session-review")
+        .unwrap()
+        .id
+        .clone();
+    assert!(
+        !client
+            .list_skills(SkillListParams::default())
+            .unwrap()
+            .skills
+            .iter()
+            .any(|entry| entry.id == skill_id)
+    );
+    assert!(
+        crate::skills::set_enablement(
+            &mut client,
+            None,
+            skill_id.clone(),
+            SkillEnablementDto::Disabled
+        )
+        .is_err()
+    );
+    assert_eq!(
+        command,
+        SkillCommand::SetEnablement {
+            skill_id: skill_id.clone(),
+            enablement: SkillEnablementDto::Disabled
+        }
+    );
+    app.update(crate::skills::execute(&mut client, scope, command).unwrap());
+    assert!(
+        app.list_selection()
+            .unwrap()
+            .visible_items()
+            .iter()
+            .any(|entry| entry.label() == "session-review [disable]")
+    );
+    let disabled = client
+        .list_skills(SkillListParams {
+            session_id: scope.cloned(),
+            ..SkillListParams::default()
+        })
+        .unwrap();
+    assert_eq!(
+        disabled
+            .skills
+            .iter()
+            .find(|entry| entry.id == skill_id)
+            .unwrap()
+            .enablement,
+        SkillEnablementDto::Disabled
+    );
+    crate::skills::set_enablement(
+        &mut client,
+        scope,
+        skill_id.clone(),
+        SkillEnablementDto::Enabled,
+    )
+    .unwrap();
+    let enabled = client
+        .list_skills(SkillListParams {
+            session_id: scope.cloned(),
+            ..SkillListParams::default()
+        })
+        .unwrap();
+    assert_eq!(
+        enabled
+            .skills
+            .iter()
+            .find(|entry| entry.id == skill_id)
+            .unwrap()
+            .enablement,
+        SkillEnablementDto::Enabled
+    );
+}
+
+#[test]
 fn model_command_updates_and_clears_model_with_config_revision() {
     let (mut client, state_root) = client();
     let revision = client.read_config().unwrap().revision;

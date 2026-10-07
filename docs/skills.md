@@ -79,7 +79,23 @@ invalidation 会触发完整重扫；只有 entry、diagnostic 或 enablement �
 变化才推进 runtime generation。共享的 `SkillName`、`SkillSourceId` 与 `SkillId` 已下沉到
 `ash-protocol`，因此 config、catalog、App Server 与客户端不再靠 raw string 隐式绑定。
 
-TUI 与 Desktop 消费同一 typed catalog，并把 enabled、compatible、名称无歧义的 Skill 显示为 `$name` 候选。选择 `$commit` 后，客户端保留用户可见的 `$commit …` 文本，同时提交 exact pinned `SkillRef`；目录发现阶段不读取正文。Skill 与 Slash Command 使用不同前缀，因此同名不会冲突。`skills/changed` 会刷新 `$` 候选列表。
+TUI 与 Desktop 消费同一 typed catalog，并把 enabled、compatible、名称无歧义的 Skill 显示为 `$name` 候选。选择 `$commit` 后，客户端保留用户可见的 `$commit …` 文本，同时提交 exact pinned `SkillRef`；目录发现阶段不读取正文。Skill 与 Slash Command 使用不同前缀，因此同名不会冲突。`skills/changed` 和 `config/changed` 都会刷新 `$` 候选列表，后者也覆盖仅影响会话目录 Skill 的启停变化。
+
+Desktop 的 AgentHost 接入负责协议适配、目录失效通知和授权资源访问；Workbench 的 `IPromptsService` 负责可读 URI、Skill 发现及正文解析，Code、Cowork 与 Skills Settings 消费这个领域服务。Chat contribution 负责 `$name` 到 pinned reference 的映射，`ChatService` 保留 Thread/Turn 执行职责。目录读取和启停验证均传入当前 `sessionId`，新草稿创建 durable Session 后重新读取，并丢弃旧范围或旧请求的迟到结果。TUI 使用相同的会话查询与启停契约。启停仍是 Rust 用户配置中的 source-qualified `SkillId` 策略；`sessionId` 只限定目录发现和验证授权，不产生另一份会话启停状态。
+
+Desktop 前端文件归属与 VS Code 对应情况：
+
+| 职责                     | 当前文件与调用路径                                                                                                                                                                                                         | 对应情况                                                                                                                                        |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| 配置 Skill 命令          | `workbench/contrib/chat/browser/promptSyntax/skillActions.ts` 导出 `CONFIGURE_SKILLS_ACTION_ID` 与 `registerSkillActions`，由 Chat contribution 注册；两种窗口的 `/skills` 使用 `workbench.action.chat.configure.skills`。 | 使用 VS Code 同路径与公开入口；选择文件后惰性打开只读 `SKILL.md` 快照，选择管理项则进入现有 Settings/Customize 启停面板。                       |
+| `$name` 解析与补全       | `workbench/contrib/chat/common/skillSelectors.ts` 与 `browser/widget/input/chatSkillCompletion.ts` 各提供一份共享实现；Cowork 指定自己的输入语言和 provider 标识。                                                         | Ash 的独立 `$` 选择器与 Stanza 适配，未对齐为 VS Code 的完整 ChatRequestParser 或 AgentHost completion provider。                               |
+| Prompt 发现与解析        | `workbench/contrib/chat/common/promptSyntax/service/promptsService.ts`、`promptsServiceImpl.ts` 由每个窗口注册，Code/Cowork/Settings/配置命令消费；`promptFileParser.ts` 保留 exact 文件并分离 Markdown 正文。             | VS Code 同路径，按真实调用逐步实现：已支持 Skill 元数据、可读 URI、启停和正文快照；完整 Prompt API 与 YAML 语法工具仍待实现。                   |
+| 后端目录、启停与资源访问 | `platform/agentHost/common/appServerApi.ts` 提供前端契约，`browser/appServerApi.ts` 独占 wire 归一化、协议请求及共享资源读取。                                                                                             | Ash App Server 接入；source-qualified ID、digest、revision 与 TUI 共用同一 Rust authority。TS `platform/skills` 已退出，UI 不直接调用后端端口。 |
+| Settings 管理界面        | `workbench/contrib/skills/browser/skillsSettingsContent.ts` 与 `skills.css` 由 Workbench Settings 和 Sessions Customize 复用。                                                                                             | Ash Settings 组件，无 VS Code 同职责文件；尚未迁入完整 Customization 管理结构。                                                                 |
+
+当前 Prompt 服务只实现上述生产调用需要的 Skill 契约，未实现完整的 Prompt/Instruction/Agent/Hook 发现与解析、文本模型解析、provider、disable 策略或 Sessions `AgenticPromptsService` 和 AgentHost Customization 服务。后续沿真实调用方补齐，保留 Rust 的目录与执行 authority。
+
+Skill URI 包含 source-qualified ID、digest 与 Session，不包含后端私有路径，也不授予任意文件读取能力。仅当前窗口发现的 URI 可以经 Prompt 服务读取；`skill/resource/open` 按 exact digest 和 Session 授权，AgentHost 共用有界分块、摘要校验及释放逻辑。目录变更取消未完成读取并使旧 URI 失效；取消或窗口关闭不会发布迟到内容，替代连接不会收到旧资源的读取或释放。已打开编辑器保留只读快照，执行仍由后端校验 pinned reference。
 
 TUI `/skills` 提供 All/On/Off 页签和搜索；列表显示技能名称与 on/off 状态，左右键展开或收起描述。在任一页签选中技能后按 Enter/Space 切换启用状态，修改后重读目录。安装技能从 `/marketplace` 进入。
 

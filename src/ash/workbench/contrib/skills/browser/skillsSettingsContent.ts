@@ -10,11 +10,12 @@ import { ICommandService } from '../../../../platform/commands/common/commands.j
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { DialogSeverity, IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IMarketplaceService, OPEN_MARKETPLACE_COMMAND_ID } from '../../../../platform/marketplace/common/marketplaceService.js';
-import { ISkillService, type SkillManagementSnapshot } from '../../../../platform/skills/common/skillService.js';
+import { IPromptsService, type SkillManagementSnapshot } from '../../chat/common/promptSyntax/service/promptsService.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { localize } from '../../../../nls.js';
 import type { SettingsContent, SettingsContentItem, SettingsTreeNode } from '../../preferences/browser/settingsTreeModels.js';
+import { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';
 import './skills.css';
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
@@ -35,16 +36,18 @@ export class SkillsSettingsContent extends Disposable implements SettingsContent
 	private readonly status: HTMLDivElement;
 	private readonly toggle: HTMLButtonElement;
 	private snapshot: SkillManagementSnapshot | undefined;
+	private snapshotSessionId: string | undefined;
 	private working = false;
 	private generation = 0;
 
 	constructor(container: HTMLElement,
-		@ISkillService private readonly skills: ISkillService,
+		@IPromptsService private readonly skills: IPromptsService,
 		@IMarketplaceService marketplace: IMarketplaceService,
 		@ICommandService private readonly commands: ICommandService,
 		@IDialogService private readonly dialogs: IDialogService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IContextKeyService contextKeys: IContextKeyService,
+		@IChatSessionNavigationService private readonly sessions: IChatSessionNavigationService,
 	) {
 		super();
 		const document = container.ownerDocument;
@@ -66,6 +69,7 @@ export class SkillsSettingsContent extends Disposable implements SettingsContent
 			else this.list.removeAttribute('aria-description');
 		}));
 		this._register(marketplace.onDidChangeInstalled(() => { this.snapshot = undefined; if (this.visible && !this.working) { void this.run(() => this.load()); } }));
+		this._register(skills.onDidChangeSkills(() => { this.snapshot = undefined; if (this.visible && !this.working) { void this.run(() => this.load()); } }));
 		const scopedContext = this._register(contextKeys.createScoped(this.domNode));
 		scopedContext.createKey('skillsSettingsFocused', true);
 		this._register(AccessibleViewRegistry.register({
@@ -80,17 +84,19 @@ export class SkillsSettingsContent extends Disposable implements SettingsContent
 		}));
 		this.applyEnabled();
 	}
-	public setVisible(visible: boolean): void { if (this.visible === visible) { return; } this.visible = visible; if (visible && !this.snapshot) { void this.run(() => this.load()); } }
+	public setVisible(visible: boolean): void { this.visible = visible; if (visible && (!this.snapshot || this.snapshotSessionId !== this.sessions.getActiveConversation()?.sessionId)) { void this.run(() => this.load()); } }
 	public getNodes(): readonly SettingsTreeNode<SettingsContentItem>[] {
 		return [{ element: { kind: 'item', id: 'skills.catalog', title: localize('skills.title', 'Skills'), description: '', keywords: ['skills', 'capabilities', ...this.snapshot?.catalog.skills.flatMap(skill => [skill.id.name, skill.id.source, skill.description]) ?? []], value: { domNode: this.domNode } } }];
 	}
 
 	private async load(): Promise<void> {
 		const generation = ++this.generation;
-		const snapshot = await this.skills.read();
-		if (this.isDisposed || generation !== this.generation) { return; }
+		const sessionId = this.sessions.getActiveConversation()?.sessionId;
+		const snapshot = await this.skills.readSkillManagement(sessionId);
+		if (this.isDisposed || generation !== this.generation || sessionId !== this.sessions.getActiveConversation()?.sessionId) { return; }
 		const current = this.list.value;
 		this.snapshot = snapshot;
+		this.snapshotSessionId = sessionId;
 		this.list.replaceChildren(...snapshot.catalog.skills.map(skill => {
 			const option = h(this.domNode.ownerDocument, 'option'); option.value = JSON.stringify(skill.id); option.textContent = `${skill.id.name} · ${skill.id.source} · ${skill.enabled ? localize('skills.enabled', 'Enabled') : localize('skills.disabled', 'Disabled')}`; return option;
 		}));
@@ -111,7 +117,7 @@ export class SkillsSettingsContent extends Disposable implements SettingsContent
 		const skill = snapshot?.catalog.skills.find(skill => JSON.stringify(skill.id) === this.list.value);
 		if (!snapshot || !skill || this.working) { return; }
 		this.working = true; this.applyEnabled();
-		try { await this.skills.setEnabled(skill.id, !skill.enabled, snapshot.revision); if (!this.isDisposed) { await this.load(); } }
+		try { await this.skills.setSkillEnablement(skill.id, !skill.enabled, snapshot.revision, this.snapshotSessionId); if (!this.isDisposed) { await this.load(); } }
 		finally { this.working = false; if (!this.isDisposed) { this.applyEnabled(); this.toggle.focus(); } }
 	}
 	private applyEnabled(): void {

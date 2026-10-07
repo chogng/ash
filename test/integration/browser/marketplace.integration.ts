@@ -1,3 +1,6 @@
+import { IPromptsService } from '../../../src/ash/workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
+import { PromptsService } from '../../../src/ash/workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
+import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
 import '../../../src/ash/base/browser/ui/dialog/dialog.css';
 import '../../../src/ash/base/browser/ui/button/button.css';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
@@ -18,7 +21,7 @@ import { DialogService } from '../../../src/ash/workbench/services/dialogs/commo
 import { ILanguageServerService } from '../../../src/ash/platform/language/common/languageServerService.js';
 import type { IMarketplaceApi } from '../../../src/ash/platform/marketplace/common/marketplaceApi.js';
 import { IMarketplaceService, OPEN_MARKETPLACE_COMMAND_ID, type MarketplaceInstalledPackage, type MarketplaceOpenOptions } from '../../../src/ash/platform/marketplace/common/marketplaceService.js';
-import { ISkillService } from '../../../src/ash/platform/skills/common/skillService.js';
+import { IAppServerSkillApi } from '../../../src/ash/platform/agentHost/common/appServerApi.js';
 import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { ILocalizationService } from '../../../src/ash/workbench/services/localization/common/localizationService.js';
@@ -48,6 +51,8 @@ if (new URLSearchParams(window.location.search).get('locale') === 'zh-CN') {
 
 const disposables = new DisposableStore();
 const services = disposables.add(new InstantiationService());
+services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
+services.registerInstance(IChatSessionNavigationService, { getActiveConversation: () => undefined } as IChatSessionNavigationService);
 const changed = disposables.add(new Emitter<void>());
 const requests: unknown[] = [];
 let offline = false;
@@ -124,7 +129,9 @@ services.registerInstance(ICommandService, { executeCommand: async (id: string, 
 let revision = 3;
 let enabled = true;
 const skillId = { source: 'marketplace:example/web', name: 'review' };
-services.registerInstance(ISkillService, {
+services.registerInstance(IAppServerSkillApi, {
+	onDidChangeSkills: Event.None,
+	readInstructions: async () => { throw new Error('Skill body reading is outside this component fixture'); },
 	list: async () => ({ generation: 1, skills: [] }),
 	read: async () => ({ revision, catalog: { generation: 1, skills: [{ id: skillId, description: 'Review changes', enabled, compatible: true, contentDigest: 'digest' }] }, diagnostics: [{ source: 'workspace', subject: 'bad-skill', message: 'Invalid metadata' }] }),
 	setEnabled: async (id, value, expectedRevision) => { requests.push(['skill', id, value, expectedRevision]); if (expectedRevision !== revision) { throw new Error('Configuration changed. Refresh before saving.'); } enabled = value; revision++; },

@@ -1,7 +1,7 @@
 import type { Event } from "../../../../base/common/event.js";
 import { PRODUCT_SLASH_COMMANDS } from "../../../../../../.build/protocol/typescript/index.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
-import type { SkillReference } from "../../../../platform/skills/common/skillApi.js";
+import type { SkillReference } from "../../../../platform/agentHost/common/appServerApi.js";
 import type { ModelReasoningEffort } from "./modelCatalog.js";
 import type { ResolvedChatContext } from "./chatContextService.js";
 import type { SessionMode } from '../../../../platform/sessions/common/sessionApi.js';
@@ -464,11 +464,9 @@ export interface IChatService {
 	readonly onDidUpdateThreadTranscript: Event<ThreadTranscriptUpdateEnvelope>;
 	readonly onDidUpdateGoal: Event<ThreadGoalUpdate>;
 	readonly onDidBecomeReady: Event<void>;
-	readonly onDidChangeSkills: Event<void>;
 	readonly onDidUpdateTurnChanges: Event<TurnChangesUpdate>;
 	readonly onDidChangeQueue: Event<void>;
 	listSlashCommands(): Promise<readonly SlashCommandDefinition[]>;
-	listSkillSelectors(): Promise<readonly SkillSelectorDefinition[]>;
 	readThread(sessionId: SessionId, threadId: ThreadId): Promise<ThreadRead>;
 	/** The owner retains the subscription across refreshes/reconnects until explicitly released. */
 	subscribeThread(sessionId: SessionId, threadId: ThreadId, afterSequence: number, owner: object): Promise<ThreadSubscription>;

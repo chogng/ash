@@ -7,7 +7,7 @@ import type { IContextMenuService } from "../../../../../platform/contextview/br
 import type { IContextViewService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { AgentResponse, ApprovalMode, ChatAgent, ChatMode, ModelRef, SessionId, ThreadGoal, ThreadId } from "../../../../services/chat/common/chatService.js";
 import type { ChatInputDelegate } from "./input/chatInput.js";
-import type { SkillReference } from "../../../../../platform/skills/common/skillApi.js";
+import type { SkillReference } from "../../../../../platform/agentHost/common/appServerApi.js";
 import { ChatInputPart, type IChatInputPart } from "./input/chatInputPart.js";
 import type { ChatTurnErrorAction } from "./chatListItems.js";
 import { ChatListWidget } from "./chatListWidget.js";

@@ -20,7 +20,7 @@ import type { IGitApi } from "../../git/common/gitApi.js";
 import type { IContentSearchConfigurationService } from '../../search/common/search.js';
 import type { IContentSearchApi } from "../../search/common/searchApi.js";
 import type { IModelApi, ISessionApi, IThreadApi, ITurnApi } from "../../sessions/common/sessionApi.js";
-import type { ISkillService } from "../../skills/common/skillService.js";
+import type { IAppServerSkillApi } from "../../agentHost/common/appServerApi.js";
 import type { ILanguageServerService } from "../../language/common/languageServerService.js";
 import type { ITerminalProcessService } from "../../terminal/common/terminal.js";
 import type { ITypstApi } from "../../typst/common/typstApi.js";
@@ -94,7 +94,7 @@ export interface IRendererHost extends RendererHostCapabilities {
 	readonly thread: IThreadApi;
 	readonly turn: ITurnApi;
 	readonly turnChanges: ITurnChangesApi;
-	readonly skills: ISkillService;
+	readonly skills: IAppServerSkillApi;
 	readonly instructions: IInstructionService;
 	readonly languageServers: ILanguageServerService;
 	readonly typst: ITypstApi;

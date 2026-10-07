@@ -12,6 +12,7 @@ const local = [{
 
 test("Product Slash Commands preserve shared definitions and local panel arguments", () => {
 	const catalog = new SlashCommandCatalog(DesktopSlashCommands, []);
+	assert.deepEqual(catalog.binding('skills'), { origin: 'local', actionId: 'workbench.action.chat.configure.skills' });
 	assert.equal(catalog.get("chats"), undefined);
 	for (const definition of Object.values(ProductSlashCommands)) {
 		assert.deepEqual(catalog.get(definition.name), definition);

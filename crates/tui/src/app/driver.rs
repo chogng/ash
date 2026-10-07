@@ -787,6 +787,8 @@ fn refresh_server_event(
         client::ClientEvent::ConfigChanged => ServerRefresh {
             language_servers: true,
             config: true,
+            // Directory Skill enablement can change without changing the global catalog.
+            skills: true,
             ..ServerRefresh::default()
         },
         client::ClientEvent::AgentRequest(request) => {

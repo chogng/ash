@@ -19,6 +19,7 @@ for (const [name, value] of Object.entries({
 
 const { createCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
 const { ChatInputEditor } = await import("../../browser/widget/input/chatInputEditor.js");
+const { ChatInputEditor: CoworkChatInputEditor } = await import('../../../../../sessions/contrib/cowork/browser/widget/input/chatInputEditor.js');
 const { ChatInputConfiguration } = await import('../../browser/chat.shared.contribution.js');
 const { IConfigurationService } = await import('../../../../../platform/configuration/common/configuration.js');
 const { createChatCommandCompletionProvider } = await import("../../browser/widget/input/chatCommandCompletion.js");
@@ -258,33 +259,37 @@ test('Chat input emphasizes a description-only command match', async () => {
 	dom.window.close();
 });
 
-test('Chat input discovers Skills only through the `$` selector', async () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
-	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	const container = requiredElement<HTMLElement>(dom.window.document, "main");
-	const catalog = new SlashCommandCatalog(DesktopSlashCommands, []);
-	const skills = new SkillSelectorCatalog();
-	using editorServices = new DisposableStore();
-	using editor = createCodeEditorServices(editorServices).createInstance(ChatInputEditor, { container, placeholder: "Ask Ash", ariaLabel: "Chat message", slashCommands: catalog, skills });
-	skills.setSkills([{
-		name: "commit",
-		description: "Draft a commit message",
-		source: "user",
-		skill: { id: { source: "user:skill-source:test", name: "commit" }, version: { type: "pinnedDigest", digest: "sha256:commit" } },
-	}]);
-	const input = requiredElement<HTMLTextAreaElement>(editor.element, ".stanza-editor-input");
-	editor.focus();
+for (const kind of ['Code', 'Cowork'] as const) {
+	test(`${kind} input discovers Skills through the shared \`$\` selector`, async () => {
+		const dom = new JSDOM("<!doctype html><body><main></main></body>");
+		using domCleanup = { [Symbol.dispose]: () => dom.window.close() };
+		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+		const container = requiredElement<HTMLElement>(dom.window.document, "main");
+		const catalog = new SlashCommandCatalog(DesktopSlashCommands, []);
+		const skills = new SkillSelectorCatalog();
+		using editorServices = new DisposableStore();
+		const services = createCodeEditorServices(editorServices);
+		const options = { container, placeholder: "Ask Ash", ariaLabel: "Chat message", slashCommands: catalog, skills };
+		using editor = kind === 'Code' ? services.createInstance(ChatInputEditor, options) : services.createInstance(CoworkChatInputEditor, options);
+		skills.setSkills([{
+			name: "commit",
+			description: "Draft a commit message",
+			source: "user",
+			skill: { id: { source: "user:skill-source:test", name: "commit" }, version: { type: "pinnedDigest", digest: "sha256:commit" } },
+		}]);
+		const input = requiredElement<HTMLTextAreaElement>(editor.element, ".stanza-editor-input");
+		editor.focus();
 
-	input.dispatchEvent(beforeInputEvent(dom.window, '$'));
-	await waitFor(() => completionLabels(editor.element).length === 1);
+		input.dispatchEvent(beforeInputEvent(dom.window, '$'));
+		await waitFor(() => completionLabels(editor.element).length === 1);
 
-	assert.deepEqual(completionLabels(editor.element), ['$commit']);
-	const accept = keyboardEvent(dom.window, 'Enter');
-	input.dispatchEvent(accept);
-	assert.equal(editor.value, '$commit ');
+		assert.deepEqual(completionLabels(editor.element), ['$commit']);
+		const accept = keyboardEvent(dom.window, 'Enter');
+		input.dispatchEvent(accept);
+		assert.equal(editor.value, '$commit ');
 
-	dom.window.close();
-});
+	});
+}
 
 test('Chat command completion replaces the whole command and preserves arguments', async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");

@@ -6,10 +6,9 @@ import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { createUuid } from "../../../../base/common/uuid.js";
 import { IAppServerApi, IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
 import { IModelApi, IThreadApi, ITurnApi } from "../../../../platform/sessions/common/sessionApi.js";
-import { ISkillService } from "../../../../platform/skills/common/skillService.js";
 import { ITurnChangesApi } from "../../../../platform/turnChanges/common/turnChangesApi.js";
 import type { ModelRef, SessionId, ThreadId } from "../common/chatService.js";
-import type { AdvisorConfig, ConfigureAdvisorOptions, ConsultAdvisorOptions, CompactContextOptions, IChatService, InterruptTurnOptions, ResolveInteractionOptions, SkillSelectorDefinition, SlashCommandDefinition, StartTurnOptions, SteerTurnOptions, Thread, ThreadGoalUpdate, ThreadItem, ThreadSubscription, ThreadTranscriptEntry, ThreadTranscriptSnapshot, ThreadTranscriptUpdateEnvelope, ThreadUpdate, ThreadUpdateEnvelope, TurnChangeDetails, TurnChangeSetSummary, TurnCommitSelection, TurnCommitPreview, TurnChangesUpdate } from "../common/chatService.js";
+import type { AdvisorConfig, ConfigureAdvisorOptions, ConsultAdvisorOptions, CompactContextOptions, IChatService, InterruptTurnOptions, ResolveInteractionOptions, SlashCommandDefinition, StartTurnOptions, SteerTurnOptions, Thread, ThreadGoalUpdate, ThreadItem, ThreadSubscription, ThreadTranscriptEntry, ThreadTranscriptSnapshot, ThreadTranscriptUpdateEnvelope, ThreadUpdate, ThreadUpdateEnvelope, TurnChangeDetails, TurnChangeSetSummary, TurnCommitSelection, TurnCommitPreview, TurnChangesUpdate } from "../common/chatService.js";
 import type { ResolvedChatContext } from '../common/chatContextService.js';
 import { parseAgentTracePage, parseAgentTraceDiagnosticPage, parseAgentTraceGraph, type AgentTracePage, type AgentTraceDiagnosticPage, type AgentTraceGraph } from '../common/agentTrace.js';
 
@@ -27,7 +26,6 @@ export class ChatService extends Disposable implements IChatService {
 	private readonly _onDidUpdateThreadTranscript = this._register(new Emitter<ThreadTranscriptUpdateEnvelope>());
 	private readonly _onDidUpdateGoal = this._register(new Emitter<ThreadGoalUpdate>());
 	private readonly _onDidBecomeReady = this._register(new Emitter<void>());
-	private readonly _onDidChangeSkills = this._register(new Emitter<void>());
 	private readonly _onDidUpdateTurnChanges = this._register(new Emitter<TurnChangesUpdate>());
 	private readonly _onDidChangeQueue = this._register(new Emitter<void>());
 	private readonly threadSubscriptions = new Map<string, SharedThreadSubscription>();
@@ -37,7 +35,6 @@ export class ChatService extends Disposable implements IChatService {
 	readonly onDidUpdateThreadTranscript = this._onDidUpdateThreadTranscript.event;
 	readonly onDidUpdateGoal = this._onDidUpdateGoal.event;
 	readonly onDidBecomeReady = this._onDidBecomeReady.event;
-	readonly onDidChangeSkills = this._onDidChangeSkills.event;
 	readonly onDidUpdateTurnChanges = this._onDidUpdateTurnChanges.event;
 	readonly onDidChangeQueue = this._onDidChangeQueue.event;
 
@@ -46,7 +43,6 @@ export class ChatService extends Disposable implements IChatService {
 		@IThreadApi private readonly threadApi: IThreadApi,
 		@ITurnApi private readonly turnApi: ITurnApi,
 		@ITurnChangesApi private readonly turnChangesApi: ITurnChangesApi,
-		@ISkillService private readonly skillApi: ISkillService,
 		@IAppServerApi private readonly appServerApi: IAppServerApi,
 		@IServerEventApi eventApi: IServerEventApi,
 	) {
@@ -58,7 +54,6 @@ export class ChatService extends Disposable implements IChatService {
 			if (event.method === "session/thread/transcript/update") this._onDidUpdateThreadTranscript.fire(toThreadTranscriptUpdate(event.params));
 			if (event.method === "thread/goal/updated") this._onDidUpdateGoal.fire({ threadId: event.params.threadId, goal: { ...event.params.goal } });
 			if (event.method === "thread/goal/cleared") this._onDidUpdateGoal.fire({ threadId: event.params.threadId });
-			if (event.method === "skills/changed") this._onDidChangeSkills.fire();
 			if (event.method === "turnChanges/changed") this._onDidUpdateTurnChanges.fire({
 				sessionId: event.params.sessionId,
 				threadId: event.params.threadId,
@@ -89,20 +84,6 @@ export class ChatService extends Disposable implements IChatService {
 	async listSlashCommands(): Promise<readonly SlashCommandDefinition[]> {
 		const commands = await this.appServerApi.getSlashCommands();
 		return commands.map((command) => ({ ...command }));
-	}
-
-	async listSkillSelectors(): Promise<readonly SkillSelectorDefinition[]> {
-		const catalog = await this.skillApi.list("cached");
-		const counts = new Map<string, number>();
-		for (const skill of catalog.skills.filter(skill => skill.enabled && skill.compatible)) counts.set(skill.id.name, (counts.get(skill.id.name) ?? 0) + 1);
-		return catalog.skills
-			.filter(skill => skill.enabled && skill.compatible && counts.get(skill.id.name) === 1)
-			.map(skill => ({
-				name: skill.id.name,
-				description: skill.description,
-				source: skill.id.source,
-				skill: { id: { ...skill.id }, version: { type: "pinnedDigest", digest: skill.contentDigest } },
-			}));
 	}
 
 	async readThread(sessionId: SessionId, threadId: ThreadId): Promise<{ readonly thread: Thread; readonly transcript: ThreadTranscriptSnapshot; }> {

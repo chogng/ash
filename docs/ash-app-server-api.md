@@ -353,7 +353,7 @@ Server → Client `app/request`，不增加 Main 中的业务分发。
 | `skill/source/add` / `skill/source/remove` / `skill/source/enablement/set`               | config                                    | 修改 User Skill source                                                                                                                                                                                    |
 | `plugin/request/upsert` / `plugin/request/remove` / `plugin/request/enablement/set`      | config                                    | 修改 exact Plugin request；不安装或激活                                                                                                                                                                   |
 | `hook/upsert` / `hook/remove` / `hook/enablement/set`                                    | config + `ash-hooks` runtime              | 修改 declarative Hook；App Server 取得目录执行 Authorization 后组合 runtime，后续 safe point 按 immutable snapshot 执行匹配的 sandbox process                                                             |
-| `skills/list`                                                                            | global Skill catalog                      | 读取 cached projection 或请求完整 refresh                                                                                                                                                                 |
+| `skills/list`                                                                            | global / Session Skill catalog                      | 读取 cached projection 或请求完整 refresh                                                                                                                                                                 |
 | `skill/enablement/set`                                                                   | config + Skill catalog                    | revision-checked 启用/禁用 exact `SkillId`                                                                                                                                                                |
 | `skill/resource/open`                                                                    | Skill runtime + Resource                  | 将 digest-pinned package resource materialize 为 connection-owned resource                                                                                                                                |
 | `resource/metadata`                                                                      | Resource                                  | 读取元数据                                                                                                                                                                                                |
@@ -1146,6 +1146,11 @@ App Server 再扣除输出预留和安全余量。单模型配置优先于自定
 compatibility、effective enablement 和 isolated diagnostics。`reload: "cached"` 可复用当前
 projection；`reload: "refresh"` 要求 server 重扫受控 roots。`skill/enablement/set` 必须携带
 config `expectedRevision` 与 exact discovered `SkillId`，结果使用标准 config command receipt。
+`skills/list`、`skill/enablement/set` 和 `skill/resource/open` 都接受可选的 `sessionId`，
+按该 Session 的目录授权发现或验证 Skill；省略时只使用全局目录。`sessionId` 不改变启停
+策略的持久化范围：用户配置仍按 source-qualified `SkillId` 保存，Desktop 与 TUI 共用。
+客户端在 `config/changed` 后也重新读取会话目录，因为仅改变会话目录 Skill 的启停
+状态不一定改变全局目录。
 enablement 或 filesystem/config invalidation 导致可见 projection 变化时发布
 `skills/changed`；notification 是重新 list 的提示，不包含 catalog body，也不表示 Skill 已注入
 正在运行的 Turn。

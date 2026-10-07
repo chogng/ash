@@ -1,3 +1,5 @@
+import { IPromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
+import { PromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
 import type { IResourceEditorInput } from '../../../workbench/common/editor.js';
 import '../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
@@ -18,7 +20,7 @@ import { BrowserStorageService } from '../../../workbench/services/storage/brows
 import { NotificationService } from '../../../workbench/services/notification/common/notificationService.js';
 import { IModelApi, IThreadApi, ITurnApi } from '../../../platform/sessions/common/sessionApi.js';
 import { IAppServerApi, IServerEventApi } from '../../../platform/agentHost/common/appServerApi.js';
-import { ISkillService } from '../../../platform/skills/common/skillService.js';
+import { IAppServerSkillApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { ITurnChangesApi } from '../../../platform/turnChanges/common/turnChangesApi.js';
 import { ChatService } from '../../../workbench/services/chat/browser/chatService.js';
 import { IChatService } from '../../../workbench/services/chat/common/chatService.js';
@@ -36,6 +38,7 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://changes.test' });
 	try {
 		using services = new InstantiationService();
+		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 		using changed = new Emitter<void>();
 		using config = new WorkbenchConfigurationService();
 		using contexts = new ContextKeyService();
@@ -59,7 +62,7 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 		services.registerInstance(IModelApi, host.model);
 		services.registerInstance(IThreadApi, host.thread);
 		services.registerInstance(ITurnApi, host.turn);
-		services.registerInstance(ISkillService, host.skills);
+		services.registerInstance(IAppServerSkillApi, host.skills);
 		services.registerInstance(IAppServerApi, host.appServer);
 		services.registerInstance(IServerEventApi, host.events);
 		services.registerInstance(ITurnChangesApi, {

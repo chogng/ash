@@ -28,6 +28,10 @@
     "dropOrPaste.dropPreferences": "Preferred drop edit kinds, in order. The first available matching edit is used.",
     "dropOrPaste.configurePaste": "Configure preferred paste action...",
     "dropOrPaste.configureDrop": "Configure preferred drop action...",
-    "dropOrPaste.accessibilityHelp": "<keybinding:editor.action.pasteAs> lets you choose a paste action. <keybinding:editor.action.pasteAsText> pastes plain text. After pasting or dropping content, <keybinding:editor.changePasteType> or <keybinding:editor.changeDropType> opens the available actions and preferred-action settings. Escape returns to the editor."
+    "dropOrPaste.accessibilityHelp": "<keybinding:editor.action.pasteAs> lets you choose a paste action. <keybinding:editor.action.pasteAsText> pastes plain text. After pasting or dropping content, <keybinding:editor.changePasteType> or <keybinding:editor.changeDropType> opens the available actions and preferred-action settings. Escape returns to the editor.",
+    "skills.selectFile": "Select a skill file to open",
+    "skills.manageEnablement": "Manage skill enablement…",
+    "skills.discoveryFailed": "Unable to load skill files. Try refreshing the catalog.",
+    "skills.openFailed": "Unable to open skill {0}. Refresh the catalog and try again."
   }
 }

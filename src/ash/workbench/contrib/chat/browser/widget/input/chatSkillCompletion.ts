@@ -5,11 +5,19 @@ import { LanguageCompletionItemKind, type LanguageCompletionProvider, type Langu
 import type { SkillSelectorCatalog } from "../../../common/skillSelectors.js";
 import { CHAT_INPUT_LANGUAGE_ID } from "./chatCommandCompletion.js";
 
+interface ChatSkillCompletionOptions {
+	readonly id: string;
+	readonly languageId: string;
+}
+
 /** Adapts the Chat Skill catalog to the `$skill` completion contract. */
-export function createChatSkillCompletionProvider(catalog: SkillSelectorCatalog): LanguageCompletionProvider {
+export function createChatSkillCompletionProvider(
+	catalog: SkillSelectorCatalog,
+	options: ChatSkillCompletionOptions = { id: 'ash.chat.skills', languageId: CHAT_INPUT_LANGUAGE_ID },
+): LanguageCompletionProvider {
 	return Object.freeze({
-		id: "ash.chat.skills",
-		languageIds: Object.freeze([CHAT_INPUT_LANGUAGE_ID]),
+		id: options.id,
+		languageIds: Object.freeze([options.languageId]),
 		triggerCharacters: Object.freeze(["$"]),
 		provideCompletions: (request: LanguageCompletionProviderRequest) => {
 			const line = request.snapshot.getText().split("\n")[request.position.lineNumber - 1] ?? "";

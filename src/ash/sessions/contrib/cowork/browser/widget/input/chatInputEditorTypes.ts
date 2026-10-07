@@ -1,7 +1,7 @@
 import type { Event } from '../../../../../../base/common/event.js';
 import type { IDisposable } from '../../../../../../base/common/lifecycle.js';
 import type { SlashCommandCatalog } from '../../../common/slashCommands.js';
-import type { SkillSelectorCatalog } from '../../../common/skillSelectors.js';
+import type { SkillSelectorCatalog } from '../../../../../../workbench/contrib/chat/common/skillSelectors.js';
 
 /** Construction inputs shared by Chat input editor implementations. */
 export interface ChatInputEditorOptions {

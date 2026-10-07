@@ -1,4 +1,8 @@
+import { IPromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
+import { PromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
+import { IAppServerSkillApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
+import { emptyEditorServiceState } from '../../../workbench/test/common/testEditorService.js';
 import { createTestFileService, registerTestComponentServices, createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
 import { IGitHubService as ISessionsGitHubService } from '../../contrib/github/browser/githubService.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
@@ -148,7 +152,6 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 		onDidBecomeReady: ready.event,
 		onDidChangeModels: ready.event,
 		onDidChangeQueue: ready.event,
-		onDidChangeSkills: ready.event,
 		onDidUpdateTurnChanges: () => toDisposable(() => { }),
 		discoverProviderModels: async () => [],
 		async listModels() { return []; },
@@ -169,7 +172,6 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 		isModelVisible() { return true; },
 		async setModelVisible() { },
 		async listSlashCommands() { return []; },
-		async listSkillSelectors() { return []; },
 		async readThread() { throw new Error("No active Thread"); },
 		async subscribeThread() { throw new Error("No active Thread"); },
 		async unsubscribeThread() { },
@@ -212,6 +214,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	};
 	using resources = new DisposableStore();
 	const services = resources.add(createCodeEditorServices(resources).createChild());
+	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(ISessionsGitHubService, {
 		onDidChange: Event.None,
 		getSessionPullRequests: () => [],
@@ -221,6 +224,8 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	});
 	services.registerInstance(ILanguageModelsService, chatService);
 	services.registerInstance(IChatService, chatService);
+	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { assert.fail('Unexpected editor navigation'); }, focusActiveEditor: () => { } });
+	services.registerInstance(IAppServerSkillApi, { onDidChangeSkills: ready.event, readInstructions: async () => { throw new Error("No Skill body in this test fixture"); }, list: async () => ({ generation: 0, skills: [] }), read: async () => ({ revision: 0, catalog: { generation: 0, skills: [] }, diagnostics: [] }), setEnabled: async () => { } });
 	services.registerInstance(IChatSessionNavigationService, { openConversation: async () => { throw new Error('Unexpected conversation navigation'); } } as unknown as IChatSessionNavigationService);
 	services.registerInstance(IDictationService, undefined);
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));

@@ -138,6 +138,7 @@ test("AppServerFileSystemProvider maps wire entries back to resource URIs", asyn
 			delete: async () => { },
 		},
 		resourceApi: {
+			connectionGeneration: 0,
 			metadata: async () => { throw new Error("not used"); },
 			read: async ({ resourceId, offset, maxBytes }) => {
 				if (resourceId === 'resource-text') return { resourceId, offset, dataBase64: 'ZXhwb3J0IHt9Ow==', decodedLength: 10, eof: true };
@@ -197,6 +198,7 @@ test('workspace stream cancellation releases a snapshot allocated after the call
 		workspaceContextService: workspace,
 		api: { ...unavailableFileApi(), readBinaryFile: () => allocated.p },
 		resourceApi: {
+			connectionGeneration: 0,
 			metadata: async () => { throw new Error('not used'); },
 			read: async () => { throw new Error('Cancelled snapshot must not be read'); },
 			release: async ({ resourceId }) => { released.push(resourceId); },
@@ -219,6 +221,7 @@ test('workspace stream cancellation stops requesting chunks and releases its sna
 		workspaceContextService: workspace,
 		api: { ...unavailableFileApi(), readBinaryFile: async () => ({ resource: { resourceId: 'chunks', mimeType: 'application/pdf', size: 600000, sha256: 'sha256:chunks' }, revision: 'revision' }) },
 		resourceApi: {
+			connectionGeneration: 0,
 			metadata: async () => { throw new Error('not used'); },
 			read: async ({ resourceId, offset, maxBytes }) => {
 				requested.push(offset);
@@ -306,6 +309,7 @@ test("AppServerFileSystemProvider reads connection-owned binary resources in bou
 			delete: async () => { throw new Error("not used"); },
 		},
 		resourceApi: {
+			connectionGeneration: 0,
 			metadata: async () => { throw new Error("not used"); },
 			read: async ({ resourceId, offset, maxBytes }) => {
 				assert.equal(resourceId, "resource-large");
@@ -407,6 +411,7 @@ function unavailableFileApi() {
 
 function unavailableResourceApi() {
 	return {
+		connectionGeneration: 0,
 		metadata: async () => { throw new Error("unavailable"); },
 		read: async () => { throw new Error("unavailable"); },
 		release: async () => { throw new Error("unavailable"); },

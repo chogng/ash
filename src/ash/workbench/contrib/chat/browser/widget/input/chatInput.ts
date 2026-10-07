@@ -1,5 +1,5 @@
 import type { AgentResponse, ApprovalMode, ChatAgent, ChatMode, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, TurnInteraction } from "../../../../../services/chat/common/chatService.js";
-import type { SkillReference } from "../../../../../../platform/skills/common/skillApi.js";
+import type { SkillReference } from "../../../../../../platform/agentHost/common/appServerApi.js";
 import type { ModelRef } from "../../../../../services/chat/common/chatService.js";
 import type { ModelReasoningEffort } from "../../../../../services/chat/common/modelCatalog.js";
 import type { ChatContextAttachment } from "../../../../../services/chat/common/chatContextService.js";

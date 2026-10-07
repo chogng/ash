@@ -1,3 +1,5 @@
+import { IPromptsService } from '../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
+import { PromptsService } from '../../workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
 import { IDirPermissionsService } from '../../platform/dirPermissions/common/dirPermissionsService.js';
 import { AppServerDirPermissionsService } from '../../workbench/services/dirPermissions/browser/appServerDirPermissionsService.js';
 import { IAgentCapabilitiesService } from '../../platform/agentCapabilities/common/agentCapabilitiesService.js';
@@ -33,7 +35,7 @@ import { ILocalizationService } from '../../workbench/services/localization/comm
 import { WorkbenchLocalizationService } from '../../workbench/services/localization/browser/workbenchLocalizationService.js';
 import { builtinLanguagePackCatalogs } from '../../workbench/services/localization/common/localizationCatalogs.js';
 import { IHooksService } from '../../platform/hooks/common/hooksService.js';
-import { ISkillService } from '../../platform/skills/common/skillService.js';
+import { IAppServerSkillApi } from '../../platform/agentHost/common/appServerApi.js';
 import { IMarketplaceService, OPEN_MARKETPLACE_COMMAND_ID, OPEN_PLUGINS_COMMAND_ID, type MarketplaceOpenOptions } from '../../platform/marketplace/common/marketplaceService.js';
 import { AppServerMarketplaceService } from '../../workbench/services/marketplace/browser/appServerMarketplaceService.js';
 import { IRemoteAgentService } from '../../workbench/services/remote/common/remoteAgentService.js';
@@ -42,8 +44,6 @@ import { IChatSessionNavigationService } from '../../workbench/services/chat/com
 import '../../workbench/contrib/chat/browser/actions/chatSpeechToTextActions.js';
 import '../../workbench/contrib/quickaccess/browser/quickAccess.contribution.js';
 import { IDictationService } from '../../platform/dictation/common/dictationService.js';
-import { ChatSpeechToTextService, IChatSpeechToTextService } from '../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
-import { DictationOnboardingService, IDictationOnboardingService } from '../../workbench/contrib/chat/browser/speechToText/dictationOnboarding.js';
 import "../../workbench/browser/style.js";
 import "./media/workbench.css";
 import "./actions/sessionsChatActions.js";
@@ -286,8 +286,6 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(ITelemetryService, NullTelemetryService);
 		if (options.api.approvalEnvironment) { services.registerInstance(IApprovalEnvironmentService, options.api.approvalEnvironment); }
 		services.registerInstance(IDictationService, options.api.dictation);
-		services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
-		services.registerSingleton(IDictationOnboardingService, () => services.createInstance(DictationOnboardingService));
 		services.registerInstance(ILocalTranscriptionService, options.api.localTranscription ?? this._register(new NullLocalTranscriptionService()));
 		services.registerInstance(IConfigurationService, configurationService);
 		if (options.nativeHostApi) services.registerInstance(INativeHostService, options.nativeHostApi);
@@ -314,7 +312,8 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(ITurnApi, options.api.turn);
 		services.registerInstance(ITurnChangesApi, options.api.turnChanges);
 		services.registerInstance(ServerEventApiId, options.api.events);
-		services.registerInstance(ISkillService, options.api.skills);
+		services.registerInstance(IAppServerSkillApi, options.api.skills);
+		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 		const sessions = this._register(new SessionsManagementService(services.createInstance(AppServerSessionsProvider, {
 			workspace: options.workspaceSelection,
 			selectWorkspace: folders => pickWorkspaceFolder(services.get(IQuickInputService), folders),

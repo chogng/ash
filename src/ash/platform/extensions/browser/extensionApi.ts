@@ -1,6 +1,7 @@
-import { decodeBase64, VSBuffer } from "../../../base/common/buffer.js";
+import { decodeBase64 } from "../../../base/common/buffer.js";
 import type { ExtensionCatalogReload, ExtensionResourceRequest, IExtensionApi } from "../common/extensionApi.js";
-import { normalizeExtensionCatalog, normalizeExtensionResourceChunk, normalizeExtensionResourceOpenResult, verifyExtensionResourceDigest } from "../common/extensionApi.js";
+import { normalizeExtensionCatalog, MAX_EXTENSION_RESOURCE_BYTES } from "../common/extensionApi.js";
+import { readAppServerResource } from '../../agentHost/browser/appServerApi.js';
 import type { IResourceApi } from "../../agentHost/common/appServerApi.js";
 import type { AppServerProtocolClient } from "../../agentHost/browser/appServerProtocolClient.js";
 import { appServerRequest } from "../../agentHost/browser/appServerRequest.js";
@@ -37,23 +38,7 @@ export function createAppServerExtensionApi(connection: AppServerProtocolClient,
 }
 
 async function readExtensionResource(connection: AppServerProtocolClient, resourceApi: IResourceApi, request: ExtensionResourceRequest): Promise<Uint8Array> {
-	const resource = normalizeExtensionResourceOpenResult(await appServerRequest(connection, "extensions/resource/open", request));
-	const chunks: VSBuffer[] = [];
-	let offset = 0;
-	try {
-		while (offset < resource.size) {
-			const chunk = normalizeExtensionResourceChunk(await resourceApi.read({ resourceId: resource.resourceId, offset, maxBytes: Math.min(262_144, resource.size - offset) }));
-			const bytes = decodeBase64(chunk.dataBase64);
-			if (chunk.resourceId !== resource.resourceId || chunk.offset !== offset || chunk.decodedLength !== bytes.byteLength || bytes.byteLength === 0 || bytes.byteLength > resource.size - offset) throw new Error("Extension resource response is inconsistent");
-			chunks.push(bytes);
-			offset += bytes.byteLength;
-			if (chunk.eof !== (offset === resource.size)) throw new Error("Extension resource EOF marker is inconsistent");
-		}
-		const bytes = VSBuffer.concat(chunks);
-		if (bytes.byteLength !== resource.size) throw new Error("Extension resource byte count is inconsistent");
-		await verifyExtensionResourceDigest(bytes.buffer, resource.sha256);
-		return bytes.buffer;
-	} finally {
-		await resourceApi.release({ resourceId: resource.resourceId });
-	}
+	const generation = resourceApi.connectionGeneration;
+	const opened = await appServerRequest(connection, 'extensions/resource/open', request);
+	return readAppServerResource(resourceApi, opened.resource, MAX_EXTENSION_RESOURCE_BYTES, undefined, generation);
 }

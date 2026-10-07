@@ -1,3 +1,5 @@
+import { IPromptsService } from '../../../chat/common/promptSyntax/service/promptsService.js';
+import { PromptsService } from '../../../chat/common/promptSyntax/service/promptsServiceImpl.js';
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { IAccountService } from '../../../../../platform/accounts/common/accountService.js';
 import { IGitHubService } from '../../../../../platform/github/common/githubService.js';
@@ -18,7 +20,7 @@ import { INotificationService } from '../../../../../platform/notification/commo
 import { NotificationService } from '../../../../services/notification/common/notificationService.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { DialogService } from '../../../../services/dialogs/common/dialogService.js';
-import { ISkillService } from '../../../../../platform/skills/common/skillService.js';
+import { IAppServerSkillApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { IMarketplaceService } from '../../../../../platform/marketplace/common/marketplaceService.js';
 import { ILanguageServerService } from '../../../../../platform/language/common/languageServerService.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
@@ -608,6 +610,7 @@ test('Models Settings keeps loading API connections when the model catalog chang
 		isModelVisible: () => true,
 	} as unknown as IChatService;
 	const services = disposables.add(new InstantiationService());
+	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(ILocalTranscriptionService, disposables.add(new NullLocalTranscriptionService()));
 	services.registerInstance(ConfigurationServiceId, configuration);
 	services.registerInstance(ChatServiceId, chat);
@@ -673,6 +676,7 @@ test('Models Settings orders enabled models by catalog position and restores dis
 		discoverProviderModels: async () => catalog,
 	};
 	const services = resources.add(new InstantiationService());
+	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(ILanguageModelsService, models);
 	services.registerInstance(ConfigurationServiceId, resources.add(new WorkbenchConfigurationService()));
 	services.registerInstance(INotificationService, resources.add(new NotificationService()));
@@ -849,13 +853,21 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	} as unknown as IChatService;
 	const contextView = disposables.add(new BrowserContextViewService(root));
 	const services = new InstantiationService();
+	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(INotificationService, disposables.add(new NotificationService()));
 	services.registerInstance(IDictationService, undefined);
 	services.registerInstance(IChatSpeechToTextService, disposables.add(services.createInstance(ChatSpeechToTextService)));
-	services.registerInstance(ISkillService, {
+	const skillsChanged = disposables.add(new Emitter<void>());
+	let skillEnabled = true;
+	const skillScopes: (string | undefined)[] = [];
+	const skillMutations: unknown[][] = [];
+	const skillId = { source: 'directory:skill-source:test', name: 'review' };
+	services.registerInstance(IAppServerSkillApi, {
+		onDidChangeSkills: skillsChanged.event,
+		readInstructions: async () => { throw new Error("No Skill body in this test fixture"); },
 		list: async () => ({ generation: 0, skills: [] }),
-		read: async () => ({ revision: 0, catalog: { generation: 0, skills: [] }, diagnostics: [] }),
-		setEnabled: async () => { },
+		read: async sessionId => { skillScopes.push(sessionId); return { revision: 7, catalog: { generation: 1, skills: [{ id: skillId, description: 'Review changes', contentDigest: 'sha256:review', enabled: skillEnabled, compatible: true }] }, diagnostics: [] }; },
+		setEnabled: async (...args) => { skillMutations.push(args); skillEnabled = args[1]; },
 	});
 	services.registerInstance(IMarketplaceService, { onDidChangeInstalled: Event.None } as IMarketplaceService);
 	services.registerInstance(ILanguageServerService, { read: async () => ({ revision: 0, configurations: {}, servers: [] }), configure: async () => { }, removeConfiguration: async () => { } });
@@ -1126,6 +1138,20 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		['Agents', 'Teams', 'Defaults', 'Models', 'Rules', 'Skills', 'Tools', 'Sandbox', 'Execution trace', 'Hooks'],
 	);
 	assert.equal(root.querySelector('[data-tree-id="general"]')?.getAttribute('aria-selected'), 'true');
+	root.querySelector<HTMLElement>('[data-settings-category-id="skills"]')?.click();
+	await nextTurn();
+	assert.deepEqual(skillScopes, ['session-hooks']);
+	const skillToggle = root.querySelector<HTMLButtonElement>('.ash-skills > button');
+	assert.ok(skillToggle);
+	assert.equal(skillToggle.textContent, 'Disable skill');
+	skillToggle.click();
+	await nextTurn();
+	assert.deepEqual(skillMutations, [[skillId, false, 7, 'session-hooks']]);
+	assert.equal(skillToggle.textContent, 'Enable skill');
+	skillEnabled = true;
+	skillsChanged.fire();
+	await nextTurn();
+	assert.equal(skillToggle.textContent, 'Disable skill');
 	root.querySelector<HTMLElement>('[data-settings-category-id="agents"]')?.click();
 	await nextTurn();
 	assert.equal(root.querySelector('.ash-settings-page h3')?.textContent, 'Agents');
@@ -1396,6 +1422,7 @@ test('Local model controls share translated snapshots and keep preparation runni
 	const configuration = resources.add(new WorkbenchConfigurationService());
 	await configuration.updateValue(DictationConfiguration.localModel, 'imported-model');
 	const services = resources.add(new InstantiationService());
+	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(ConfigurationServiceId, configuration);
 	const changed = resources.add(new Emitter<void>());
 	let modelStatus: ILocalTranscriptionModelStatus | undefined;
@@ -1484,6 +1511,7 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 	} as unknown as IChatService;
 	const configuration = disposables.add(new WorkbenchConfigurationService());
 	const services = disposables.add(new InstantiationService());
+	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(ChatServiceId, chat);
 	services.registerInstance(INotificationService, disposables.add(new NotificationService()));
 	services.registerInstance(ILanguageModelsService, chat as unknown as ILanguageModelsService);

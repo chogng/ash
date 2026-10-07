@@ -24,7 +24,7 @@ import type { ModelReasoningEffort } from '../../../../../../workbench/services/
 import type { ChatContextAttachment } from "../../../../../../workbench/services/chat/common/chatContextService.js";
 import type { ModelRef } from "../../../../../../workbench/services/chat/common/chatService.js";
 import { DesktopSlashCommands, parseSlashCommandInput, SlashCommandCatalog } from "../../../common/slashCommands.js";
-import { SkillSelectorCatalog } from "../../../common/skillSelectors.js";
+import { SkillSelectorCatalog } from "../../../../../../workbench/contrib/chat/common/skillSelectors.js";
 import type { ChatInputDelegate, ChatInputState } from "./chatInput.js";
 import type { IChatInputEditor, IChatInputEditorProvider } from "./chatInputEditorTypes.js";
 import { ModelPickerActionItem } from '../../../../../../workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerActionItem.js';

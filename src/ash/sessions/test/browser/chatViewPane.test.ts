@@ -1,3 +1,6 @@
+import { IPromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
+import { PromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
+import { toSkillSelectors } from '../../../workbench/contrib/chat/common/skillSelectors.js';
 import { KeybindingTestServices } from '../../../workbench/services/keybinding/test/browser/keybindingTestServices.js';
 import { ChatInputPart } from '../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import { ChatInputEditors } from '../../../workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
@@ -15,7 +18,7 @@ import { initializeTestLocalization } from '../../../workbench/services/localiza
 import { resetNlsResolver } from '../../../nls.js';
 import { IModelApi, ISessionApi, IThreadApi, ITurnApi } from '../../../platform/sessions/common/sessionApi.js';
 import { ITurnChangesApi } from '../../../platform/turnChanges/common/turnChangesApi.js';
-import { ISkillService } from '../../../platform/skills/common/skillService.js';
+import { IAppServerSkillApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { IAppServerApi, IServerEventApi, type AppServerConnectionState } from '../../../platform/agentHost/common/appServerApi.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
@@ -49,7 +52,7 @@ import { InstantiationService } from "../../../platform/instantiation/common/ins
 import { IQuickInputService } from "../../../platform/quickinput/common/quickInput.js";
 import { CommandService } from "../../../workbench/services/commands/common/commandService.js";
 import type { IPaneComposite } from '../../../workbench/common/panecomposite.js';
-import { ViewContainerLocation, WorkbenchViewRegistry } from "../../../workbench/common/views.js";
+import { ViewContainerLocation, ViewsRegistry, WorkbenchViewRegistry } from "../../../workbench/common/views.js";
 import { chatTranscriptListItems, chatListItem, chatTurnErrorListItem, type ChatTurnErrorAction } from "../../../workbench/contrib/chat/browser/widget/chatListItems.js";
 import { ChatWidgetModel } from "../../browser/chatWidgetModel.js";
 import { CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, NEW_CHAT_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID } from "../../../workbench/contrib/chat/common/chat.js";
@@ -89,11 +92,13 @@ const inputResources = new DisposableStore();
 suiteTeardown(() => inputResources.dispose());
 function createInputServices(contextView: IContextViewService, chat: IChatService): InstantiationService {
 	const services = inputResources.add(createTestEditorServices(undefined, createCodeEditorServices(inputResources)));
+	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IContextViewService, contextView);
 	services.registerInstance(INotificationService, notifications);
 	services.registerInstance(IChatSessionNavigationService, { openConversation: async () => { } } as unknown as IChatSessionNavigationService);
 	services.registerSingleton(IActionWidgetService, () => services.createInstance(ActionWidgetService));
 	services.registerInstance(ILanguageModelsService, modelsFor(chat));
+	services.registerInstance(IAppServerSkillApi, skillServices.get(chat)!);
 	services.registerInstance(IAccessibleViewService, unavailableAccessibleViewService);
 	services.registerInstance(IDictationService, undefined);
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
@@ -114,6 +119,7 @@ const notifications = new NotificationService();
 class SessionsManagementService extends BaseSessionsManagementService {
 	constructor(api: IRendererHost) {
 		const services = inputResources.add(new InstantiationService());
+		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 		services.registerInstance(IAppServerApi, api.appServer);
 		services.registerInstance(ISessionApi, api.session);
 		services.registerInstance(IModelApi, api.model);
@@ -136,7 +142,7 @@ for (const [name, value] of Object.entries({
 		value,
 	});
 }
-const { registerChatViews } = await import(
+await import(
 	"../../browser/workbenchChat.contribution.js"
 );
 const { BrowserContextViewService } = await import(
@@ -231,6 +237,7 @@ test('Chat loads an Ash remote workspace image through the file service', async 
 		using sessions = new SessionsManagementService(fake.api);
 		using contextKeys = new ContextKeyService();
 		const services = new InstantiationService();
+		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 		using commands = new CommandService(services);
 		const menuService = new MenuService(commands, contextKeys);
 		const contextMenuService = { showContextMenu: () => undefined } as unknown as IContextMenuService;
@@ -273,9 +280,7 @@ function chatTitleActions(pane: { readonly partTitleProjection: { readonly actio
 }
 
 test("Chat contribution owns the fixed Auxiliary Bar view", () => {
-	const registry = new WorkbenchViewRegistry();
-
-	registerChatViews(registry);
+	const registry = ViewsRegistry;
 
 	assert.equal(
 		registry.getDefaultViewContainer(ViewContainerLocation.AuxiliaryBar)?.id,
@@ -313,6 +318,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		registry: new WorkbenchViewRegistry(),
 	}, contextKeys);
 	const services = new InstantiationService();
+	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	let preferencesEditorTarget: import('../../../workbench/services/editor/common/editorService.js').EditorOpenTarget | undefined;
 	using chat = createChatService(api);
 	using quickInput = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
@@ -326,6 +332,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	services.registerInstance(IPreferencesService, preferences);
 	services.registerInstance(IChatService, chat);
 	services.registerInstance(ILanguageModelsService, modelsFor(chat));
+	services.registerInstance(IAppServerSkillApi, skillServices.get(chat)!);
 	services.registerInstance(IQuickInputService, quickInput);
 	services.registerInstance(IContextKeyService, contextKeys);
 	using commands = new CommandService(services);
@@ -867,6 +874,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
 	});
 	const api = fake.api;
 	const services = new InstantiationService();
+	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	using sessions = new SessionsManagementService(api);
 	using contextKeys = new ContextKeyService();
 	using viewDescriptors = new ViewDescriptorService({
@@ -988,6 +996,7 @@ test("the New Chat slash command opens an untitled session", async () => {
 	const initialSession = session("session-1", "thread-1", "First Chat");
 	const fake = fakeApi({ sessions: [initialSession] });
 	const services = new InstantiationService();
+	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	using sessions = new SessionsManagementService(fake.api);
 	using contextKeys = new ContextKeyService();
 	using viewDescriptors = new ViewDescriptorService({
@@ -1070,6 +1079,7 @@ test("failed first send keeps the untitled session and its input draft", async (
 		createSessionError: new Error("Cannot create Session"),
 	});
 	const services = new InstantiationService();
+	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	using sessions = new SessionsManagementService(fake.api);
 	using contextKeys = new ContextKeyService();
 	using viewDescriptors = new ViewDescriptorService({
@@ -1226,6 +1236,7 @@ test("Chat history selects an active Thread through Quick Pick", async () => {
 		],
 	}).api;
 	const services = new InstantiationService();
+	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	using sessions = new SessionsManagementService(api);
 	using contextKeys = new ContextKeyService();
 	using quickInput = new WorkbenchQuickInputService({
@@ -1279,8 +1290,7 @@ test("Chat history selects an active Thread through Quick Pick", async () => {
 });
 
 test("ViewsService resolves, opens, and focuses contributed views", async () => {
-	const registry = new WorkbenchViewRegistry();
-	registerChatViews(registry);
+	const registry = ViewsRegistry;
 	using contextKeys = new ContextKeyService();
 	using descriptors = new ViewDescriptorService({
 		registry,
@@ -1330,6 +1340,7 @@ test("ViewsService resolves, opens, and focuses contributed views", async () => 
 	const { IPaneCompositePartService } = await import('../../../workbench/services/panecomposite/browser/panecomposite.js');
 	const { IViewDescriptorService } = await import('../../../workbench/common/views.js');
 	using services = new InstantiationService();
+	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IViewDescriptorService, descriptors);
 	services.registerInstance(IContextKeyService, contextKeys);
 	services.registerInstance(IPaneCompositePartService, {
@@ -1827,24 +1838,29 @@ function createTestStorage(): InstanceType<typeof BrowserStorageService> {
 }
 
 const modelServices = new WeakMap<IChatService, ILanguageModelsService>();
+const skillServices = new WeakMap<IChatService, IAppServerSkillApi>();
 function modelsFor(chat: IChatService): ILanguageModelsService {
 	return modelServices.get(chat)!;
 }
 function createWidgetModel(chat: IChatService, selection: import('../../browser/chatWidgetModel.js').ChatWidgetSelection, sessions: ISessionsManagementService): ChatWidgetModel {
 	const services = inputResources.add(new InstantiationService());
+	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(ILanguageModelsService, modelsFor(chat));
+	services.registerInstance(IAppServerSkillApi, skillServices.get(chat)!);
 	return services.createInstance(ChatWidgetModel, chat, selection, sessions);
 }
 function createChatService(api: IRendererHost, configurationService?: WorkbenchConfigurationService, storageService?: InstanceType<typeof BrowserStorageService>): ChatService {
 	const storage = storageService ?? createTestStorage();
 	if (!storageService) testStorages.push(storage);
 	const services = inputResources.add(new InstantiationService());
+	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	registerChatBackend(services, api);
 	services.registerInstance(IConfigurationService, configurationService ?? inputResources.add(new WorkbenchConfigurationService()));
 	services.registerInstance(IStorageService, storage);
 	services.registerInstance(ILanguageModelsConfigurationService, inputResources.add(services.createInstance(LanguageModelsConfigurationService, ChatModelPreferences)));
 	const chat = services.createInstance(ChatService);
 	modelServices.set(chat, inputResources.add(services.createInstance(LanguageModelsService)));
+	skillServices.set(chat, api.skills);
 	return chat;
 }
 
@@ -1854,13 +1870,14 @@ function registerChatBackend(services: InstantiationService, api: IRendererHost,
 	if (omitted !== IThreadApi) { services.registerInstance(IThreadApi, api.thread); }
 	if (omitted !== ITurnApi) { services.registerInstance(ITurnApi, api.turn); }
 	if (omitted !== ITurnChangesApi) { services.registerInstance(ITurnChangesApi, api.turnChanges); }
-	if (omitted !== ISkillService) { services.registerInstance(ISkillService, api.skills); }
+	if (omitted !== IAppServerSkillApi) { services.registerInstance(IAppServerSkillApi, api.skills); }
 	if (omitted !== IServerEventApi) { services.registerInstance(IServerEventApi, api.events); }
 }
 
-for (const dependency of [IModelApi, IThreadApi, ITurnApi, ITurnChangesApi, ISkillService, IAppServerApi, IServerEventApi]) {
+for (const dependency of [IModelApi, IThreadApi, ITurnApi, ITurnChangesApi, IAppServerApi, IServerEventApi]) {
 	test(`Chat rejects missing ${dependency.description} before allocating listeners`, () => {
 		using services = new InstantiationService();
+		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 		registerChatBackend(services, fakeApi().api, dependency);
 		assert.throws(() => services.createInstance(ChatService), { message: `Unknown service: ${dependency.description}` });
 	});
@@ -2060,7 +2077,7 @@ test("Chat service projects unique enabled Skills and submits the exact pinned r
 	});
 	using chat = createChatService(fake.api);
 
-	const selectors = await chat.listSkillSelectors();
+	const selectors = toSkillSelectors((await fake.api.skills.list("cached", "session-1")).skills);
 
 	assert.deepEqual(selectors, [{
 		name: "commit",
@@ -2077,6 +2094,56 @@ test("Chat service projects unique enabled Skills and submits the exact pinned r
 		{ type: "text", text: "$commit staged changes" },
 	]);
 });
+
+for (const kind of ['Code', 'Cowork'] as const) {
+	test(`${kind} reads Session Skills directly and rejects superseded catalog replies`, async () => {
+		const fake = fakeApi();
+		using changed = new Emitter<void>();
+		const pending: DeferredPromise<Awaited<ReturnType<IAppServerSkillApi['list']>>>[] = [];
+		const scopes: (string | undefined)[] = [];
+		const catalog = (name: string) => ({ generation: 1, skills: [{ id: { source: 'directory:skill-source:test', name }, description: name, contentDigest: `sha256:${name}`, enabled: true, compatible: true }] });
+		const api: IRendererHost = {
+			...fake.api, skills: {
+				...fake.api.skills, onDidChangeSkills: changed.event, list: async (_reload, sessionId) => {
+					scopes.push(sessionId);
+					if (scopes.length === 1) return catalog('initial');
+					const request = new DeferredPromise<Awaited<ReturnType<IAppServerSkillApi['list']>>>();
+					pending.push(request);
+					return request.p;
+				}
+			}
+		};
+		using chat = createChatService(api);
+		using sessions = new SessionsManagementService(api);
+		using services = new InstantiationService();
+		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
+		services.registerInstance(IAppServerSkillApi, api.skills);
+		services.registerInstance(ILanguageModelsService, modelsFor(chat));
+		using configuration = new WorkbenchConfigurationService();
+		using storage = createTestStorage();
+		services.registerInstance(IConfigurationService, configuration);
+		services.registerInstance(IStorageService, storage);
+		using preferences = services.createInstance(CoworkModelPreferencesService, CoworkModelPreferences);
+		services.registerInstance(ICoworkModelPreferences, preferences);
+		const selection = { kind: 'session' as const, active: { session: session('session-1'), threadId: 'thread-1' } };
+		using widget = kind === 'Code' ? services.createInstance(ChatWidgetModel, chat, selection, sessions) : services.createInstance(CoworkWidgetModel, chat, selection, sessions);
+		await widget.initialize();
+		assert.deepEqual(scopes, ['session-1']);
+		changed.fire();
+		changed.fire();
+		await pending[1]!.complete(catalog('latest'));
+		await waitFor(() => widget.inputState.skillSelectors[0]?.name === 'latest');
+		await pending[0]!.complete(catalog('stale'));
+		await nextTask();
+		assert.equal(widget.inputState.skillSelectors[0]?.name, 'latest');
+		assert.deepEqual(scopes, ['session-1', 'session-1', 'session-1']);
+		changed.fire();
+		widget.dispose();
+		await pending[2]!.complete(catalog('disposed'));
+		await nextTask();
+		assert.equal(widget.inputState.skillSelectors[0]?.name, 'latest');
+	});
+}
 
 test('instruction references reach Turn start, queue and steering without becoming document text', async () => {
 	const fake = fakeApi();
@@ -2149,9 +2216,11 @@ test('Cowork and Code keep independent defaults and model choices for the same d
 	const draft = sessions.createUntitledSession();
 	using code = createWidgetModel(chat, { kind: 'untitled', session: draft }, sessions);
 	using services = new InstantiationService();
+	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IStorageService, storage);
 	services.registerInstance(ILanguageModelsService, modelsFor(chat));
+	services.registerInstance(IAppServerSkillApi, skillServices.get(chat)!);
 	using preferences = services.createInstance(CoworkModelPreferencesService, CoworkModelPreferences);
 	services.registerInstance(ICoworkModelPreferences, preferences);
 	using cowork = services.createInstance(CoworkWidgetModel, chat, { kind: 'untitled', session: draft }, sessions);
@@ -2175,6 +2244,8 @@ test('Cowork and Code keep independent defaults and model choices for the same d
 	assert.deepEqual(sessions.untitledSessions.find(session => session.untitledSessionId === draft.untitledSessionId)?.model, codeModel.model);
 	await cowork.send('Use the Cowork model');
 	assert.deepEqual(fake.turnStartRequests.at(-1)?.model, coworkModel.model);
+	assert.ok(fake.skillListRequests.includes(undefined));
+	assert.equal(fake.skillListRequests.at(-1), 'created');
 });
 
 test('Cowork default model settings use the Chinese catalog and reject invalid values', () => {
@@ -2209,6 +2280,8 @@ test('New chats use the configured model before the remembered picker choice', a
 	assert.deepEqual(configured.selectedModel, second.model);
 	await configured.send('Use the configured model');
 	assert.deepEqual(fake.turnStartRequests.at(-1)?.model, second.model);
+	assert.ok(fake.skillListRequests.includes(undefined));
+	assert.equal(fake.skillListRequests.at(-1), 'created');
 
 	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, '');
 	const rememberedDraft = sessions.createUntitledSession();
@@ -2703,6 +2776,7 @@ function fakeApi(options: FakeOptions = {}): {
 	readonly turnCompactRequests: readonly SessionOperationInput<"compactContext">[];
 	readonly turnSteerRequests: readonly SessionOperationInput<"steerTurn">[];
 	readonly modelListRequests: readonly undefined[];
+	readonly skillListRequests: readonly (string | undefined)[];
 	readonly providerModelRequests: readonly string[];
 	readonly providerKeyRequests: readonly { readonly connection: string; readonly apiKey: string; }[];
 	readonly modelRequests: readonly { readonly commandId: string; readonly model: ModelRef; }[];
@@ -2724,6 +2798,7 @@ function fakeApi(options: FakeOptions = {}): {
 	const turnCompactRequests: SessionOperationInput<"compactContext">[] = [];
 	const turnSteerRequests: SessionOperationInput<"steerTurn">[] = [];
 	const modelListRequests: undefined[] = [];
+	const skillListRequests: (string | undefined)[] = [];
 	const providerModelRequests: string[] = [];
 	const providerKeyRequests: { connection: string; apiKey: string; }[] = [];
 	let providers = options.providers?.map(provider => ({ ...provider })) ?? [];
@@ -2837,7 +2912,8 @@ function fakeApi(options: FakeOptions = {}): {
 			},
 		},
 		skills: {
-			list: async () => ({ generation: 1, skills: options.skills ?? [] }),
+			onDidChangeSkills: Event.None, readInstructions: async () => { throw new Error("No Skill body in this test fixture"); },
+			list: async (_reload: string, sessionId?: string) => { skillListRequests.push(sessionId); return { generation: 1, skills: options.skills ?? [] }; },
 		},
 		thread: {
 			configureAdvisor: async (params: SessionOperationInput<"configureAdvisor">) => { advisorRequests.push(params); return { sequence: params.expectedSequence + 1 }; },
@@ -2891,6 +2967,7 @@ function fakeApi(options: FakeOptions = {}): {
 		turnCompactRequests,
 		turnSteerRequests,
 		modelListRequests,
+		skillListRequests,
 		providerModelRequests,
 		providerKeyRequests,
 		modelRequests,
@@ -3154,8 +3231,10 @@ test("Chat Settings toggles Advisor while keeping its selected model", async () 
 	using contextKeys = new ContextKeyService();
 	using quickInput = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
 	const services = new InstantiationService();
+	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IChatService, chat);
 	services.registerInstance(ILanguageModelsService, modelsFor(chat));
+	services.registerInstance(IAppServerSkillApi, skillServices.get(chat)!);
 	services.registerInstance(IQuickInputService, quickInput);
 	services.registerInstance(IDialogService, recordingDialogService([]));
 	using keybindingFiles = new KeybindingTestServices();
@@ -3196,8 +3275,10 @@ test('Chat Settings saves a masked provider key through the model API and refres
 	using quickInput = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
 	const messages: IMessageDialogOptions[] = [];
 	const services = new InstantiationService();
+	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IChatService, chat);
 	services.registerInstance(ILanguageModelsService, modelsFor(chat));
+	services.registerInstance(IAppServerSkillApi, skillServices.get(chat)!);
 	services.registerInstance(IQuickInputService, quickInput);
 	services.registerInstance(IDialogService, recordingDialogService(messages));
 	using keybindingFiles = new KeybindingTestServices();

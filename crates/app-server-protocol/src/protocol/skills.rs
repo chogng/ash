@@ -99,6 +99,11 @@ pub struct SkillListResult {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillSetEnablementParams {
+    /// Catalog lookup scope for directory Skills authorized by this Session. Enablement remains
+    /// user configuration keyed by the source-qualified Skill ID, shared by all clients.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub session_id: Option<ash_protocol::SessionId>,
     pub command_id: CommandId,
     #[schemars(range(min = 0))]
     #[ts(type = "number")]

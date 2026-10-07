@@ -4,7 +4,7 @@ import type { Event } from "../../../../../base/common/event.js";
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
 import type { AgentResponse, ApprovalMode, ChatAgent, ChatMode, ModelRef, SessionId, ThreadGoal, ThreadId } from "../../../../../workbench/services/chat/common/chatService.js";
 import type { ChatInputDelegate } from "../../../../../workbench/contrib/chat/browser/widget/input/chatInput.js";
-import type { SkillReference } from "../../../../../platform/skills/common/skillApi.js";
+import type { SkillReference } from "../../../../../platform/agentHost/common/appServerApi.js";
 import type { IChatInputPart } from "../../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js";
 import type { ChatTurnErrorAction } from "./chatListItems.js";
 import { ChatListWidget } from "./chatListWidget.js";

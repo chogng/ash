@@ -66,6 +66,7 @@ where
 {
     let config = client.read_config()?;
     client.set_skill_enablement(SkillSetEnablementParams {
+        session_id: session_id.cloned(),
         command_id: new_command_id("skill-enablement"),
         expected_revision: config.revision,
         skill_id,

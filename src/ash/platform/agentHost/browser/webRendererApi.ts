@@ -12,7 +12,7 @@ import { AppServerApprovalEnvironmentService } from '../../approvalEnvironment/b
 import { AppServerMemoriesService } from '../../memories/browser/appServerMemoriesService.js';
 import { AppServerMemoryDiagnosticsService } from '../../memory/browser/appServerMemoryDiagnosticsService.js';
 import { generateUuid } from '../../../base/common/uuid.js';
-import { createAppServerAppServerApi, createAppServerResourceApi, createAppServerServerEventApi } from "./appServerApi.js";
+import { createAppServerAppServerApi, createAppServerResourceApi, createAppServerServerEventApi, createAppServerSkillOperations } from "./appServerApi.js";
 import { type AppServerTransport } from "../common/appServerTransport.js";
 import { AppServerProtocolClient, type AppServerProtocolClientOptions, type AppServerConnectionMetadata } from "./appServerProtocolClient.js";
 import { createAppServerFileApi } from "../../files/browser/fileApi.js";
@@ -23,7 +23,6 @@ import { createAppServerGitApi } from "../../git/browser/gitApi.js";
 import { mergeRendererHostCapabilities, type IRendererHost, type RendererHostCapabilities } from "../../renderer/common/rendererHost.js";
 import { createAppServerContentSearchApi, createAppServerContentSearchConfigurationApi } from "../../search/browser/searchApi.js";
 import { createAppServerModelApi, createAppServerSessionApi, createAppServerThreadApi, createAppServerTurnApi } from "../../sessions/browser/sessionApi.js";
-import { createAppServerSkillApi } from "../../skills/browser/skillApi.js";
 import { AppServerTerminalProcessService } from "../../terminal/browser/appServerTerminalProcessService.js";
 import { createAppServerTypstApi } from "../../typst/browser/typstApi.js";
 import { createAppServerDocumentCollaborationApi } from "../../collaboration/browser/documentCollaborationApi.js";
@@ -108,7 +107,7 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 		thread: createAppServerThreadApi(connection),
 		turn: createAppServerTurnApi(connection),
 		turnChanges: createAppServerTurnChangesApi(connection),
-		skills: createAppServerSkillApi(connection),
+		skills: createAppServerSkillOperations(connection),
 		instructions: createAppServerInstructionService(connection),
 		typst: createAppServerTypstApi(connection),
 		documentCollaboration: createAppServerDocumentCollaborationApi(connection),

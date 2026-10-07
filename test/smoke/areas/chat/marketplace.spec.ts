@@ -11,9 +11,28 @@ test.beforeEach(async ({ workbench }) => {
 	await expect(workbench.page.getByRole('tab', { name: 'Welcome', exact: true })).toBeVisible();
 });
 
+for (const window of ['Code', 'Agents']) {
+	test(`Skills command opens a readonly SKILL.md snapshot from the shared backend in ${window}`, async ({ target, workbench }) => {
+		test.skip(target.appServerMode !== 'required', 'Requires the shared App Server Skill catalog.');
+		const page = window === 'Code' ? workbench.page : await workbench.openAgentsWindow(target.kind);
+		await new QuickAccess(page).runCommand('workbench.action.chat.configure.skills');
+		await new QuickAccess(page).select('skill-creator');
+		await expect(page.getByRole('tab', { name: 'skill-creator/SKILL.md', exact: true })).toBeVisible();
+		const editor = page.getByRole('region', { name: 'skill-creator/SKILL.md', exact: true });
+		const input = editor.locator('.stanza-editor-input');
+		await expect(editor.locator('.view-lines')).toContainText('name: skill-creator');
+		await expect(input).toHaveAttribute('aria-readonly', 'true');
+		await input.focus();
+		await page.keyboard.insertText('forbidden edit');
+		await expect(editor.locator('.view-lines')).toContainText('name: skill-creator');
+		await expect(editor.locator('.view-lines')).not.toContainText('forbidden edit');
+	});
+}
+
 test('Skills command opens Settings after the Skills sidebar is removed', async ({ application, workbench }) => {
 	const page = workbench.page;
-	await new QuickAccess(page).runCommand('ash.skills.open');
+	await new QuickAccess(page).runCommand('workbench.action.chat.configure.skills');
+	await new QuickAccess(page).select('Manage skill enablement…');
 	const settings = page.locator('.ash-settings-editor');
 	await expect(settings).toBeVisible();
 	const skills = settings.locator('.ash-skills');
@@ -28,6 +47,59 @@ test('Skills command opens Settings after the Skills sidebar is removed', async 
 	await page.keyboard.press('Escape');
 	await expect(helpButton).toBeFocused();
 	await page.locator('.ash-modal-editor-close').click();
+});
+
+test('Skills configuration command opens Customize in the Agents window', async ({ target, workbench }) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	await new QuickAccess(page).runCommand('workbench.action.chat.configure.skills');
+	await new QuickAccess(page).select('Manage skill enablement…');
+	const settings = page.locator('.ash-sessions-settings-dialog');
+	await expect(settings).toBeVisible();
+	await expect(settings.getByRole('tab', { name: 'Skills', exact: true })).toHaveAttribute('aria-selected', 'true');
+	await expect(settings.locator('.ash-skills').getByLabel('Skills', { exact: true })).toBeVisible();
+});
+
+test('Skill enablement updates Chat completion and survives a window reload', async ({ target, workbench }) => {
+	test.skip(target.appServerMode !== 'required', 'Requires the shared App Server Skill catalog.');
+	let page = workbench.page;
+	await workbench.quickaccess.runCommand('workbench.action.chat.configure.skills');
+	await new QuickAccess(page).select('Manage skill enablement…');
+	let skills = page.locator('.ash-skills');
+	const list = skills.getByLabel('Skills', { exact: true });
+	await expect(list.locator('option').filter({ hasText: 'skill-creator' })).toHaveCount(1);
+	await list.selectOption({ label: await list.locator('option').filter({ hasText: 'skill-creator' }).textContent() ?? '' });
+	await skills.getByRole('button', { name: 'Disable skill', exact: true }).click();
+	await expect(skills.getByRole('button', { name: 'Enable skill', exact: true })).toBeEnabled();
+	await page.locator('.ash-modal-editor-close').click();
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	}
+	let editor = page.locator('.ash-chat-input-editor');
+	await editor.locator('.stanza-editor-input').focus();
+	await page.keyboard.insertText('$');
+	await page.keyboard.press('Control+Space');
+	await expect(editor.getByRole('option', { name: /^\$create-instructions /u })).toBeVisible();
+	await expect(editor.getByRole('option', { name: /^\$skill-creator /u })).toHaveCount(0);
+	await page.reload();
+	await expect(page.getByRole('tab', { name: 'Welcome', exact: true })).toBeVisible();
+	await workbench.quickaccess.runCommand('workbench.action.chat.configure.skills');
+	await new QuickAccess(page).select('Manage skill enablement…');
+	skills = page.locator('.ash-skills');
+	const restored = skills.getByLabel('Skills', { exact: true });
+	await expect(restored.locator('option').filter({ hasText: 'skill-creator' })).toContainText('Disabled');
+	await restored.selectOption({ label: await restored.locator('option').filter({ hasText: 'skill-creator' }).textContent() ?? '' });
+	await skills.getByRole('button', { name: 'Enable skill', exact: true }).click();
+	await expect(skills.getByRole('button', { name: 'Disable skill', exact: true })).toBeEnabled();
+	await page.locator('.ash-modal-editor-close').click();
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	}
+	editor = page.locator('.ash-chat-input-editor');
+	await editor.locator('.stanza-editor-input').focus();
+	await page.keyboard.press('ControlOrMeta+A');
+	await page.keyboard.insertText('$');
+	await page.keyboard.press('Control+Space');
+	await expect(editor.getByRole('option', { name: /^\$skill-creator /u })).toBeVisible();
 });
 
 test('Marketplace view tab uses the extensions icon', async ({ workbench }) => {

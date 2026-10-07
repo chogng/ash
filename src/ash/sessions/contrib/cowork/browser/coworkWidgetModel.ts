@@ -1,3 +1,6 @@
+import { CancellationToken } from '../../../../base/common/cancellation.js';
+import { IPromptsService } from '../../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
+import { toSkillSelectors } from '../../../../workbench/contrib/chat/common/skillSelectors.js';
 import { ILanguageModelsService } from '../common/languageModels.js';
 import { ILanguageModelsConfigurationService } from '../common/languageModelsConfiguration.js';
 import { Emitter, type Event } from "../../../../base/common/event.js";
@@ -5,7 +8,7 @@ import { isCancellationError } from "../../../../base/common/errors.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { AgentResponse, ChatAgent, ChatMode, IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnChangeDetails, TurnChangeSetSummary, TurnInteraction } from "../../../../workbench/services/chat/common/chatService.js";
 import { localize } from "../../../../nls.js";
-import type { SkillReference } from "../../../../platform/skills/common/skillApi.js";
+import type { SkillReference } from "../../../../platform/agentHost/common/appServerApi.js";
 import type { ResolvedChatContext } from "../../../../workbench/services/chat/common/chatContextService.js";
 import type { IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../../services/sessions/common/session.js";
 import type { ISessionsManagementService } from "../../../services/sessions/common/sessionsManagement.js";
@@ -61,13 +64,14 @@ export class CoworkWidgetModel extends Disposable {
 	private readonly selectedReasoningEfforts = new Map<string, { model: string; effort: ModelReasoningEffort | undefined; }>();
 	private _slashCommands: readonly SlashCommandDefinition[] = [];
 	private _skillSelectors: readonly SkillSelectorDefinition[] = [];
+	private skillCatalogGeneration = 0;
 	private _changeSets: readonly TurnChangeSetSummary[] = [];
 	private readonly changeDetails = new Map<string, TurnChangeDetails>();
 	private changesGeneration = 0;
 
 	readonly onDidChange: Event<void> = this._onDidChange.event;
 
-	constructor(chatService: IChatService, selection: ChatWidgetSelection, sessionService: ISessionsManagementService, @ILanguageModelsService private readonly languageModels: ILanguageModelsService, @ILanguageModelsConfigurationService private readonly modelPreferences: ILanguageModelsConfigurationService) {
+	constructor(chatService: IChatService, selection: ChatWidgetSelection, sessionService: ISessionsManagementService, @IPromptsService private readonly skills: IPromptsService, @ILanguageModelsService private readonly languageModels: ILanguageModelsService, @ILanguageModelsConfigurationService private readonly modelPreferences: ILanguageModelsConfigurationService) {
 		super();
 		this.chatService = chatService;
 		this.sessionService = sessionService;
@@ -83,7 +87,7 @@ export class CoworkWidgetModel extends Disposable {
 		this._register(this.languageModels.onDidChangeModels(() => void this.loadModels()));
 		this._register(this.modelPreferences.onDidChangeModels(() => void this.loadModels()));
 		this._register(chatService.onDidChangeQueue(() => void this.loadQueue()));
-		this._register(chatService.onDidChangeSkills(() => void this.loadSkillSelectors()));
+		this._register(this.skills.onDidChangeSkills(() => void this.loadSkillSelectors()));
 		this._register(chatService.onDidUpdateTurnChanges((update) => {
 			if (update.sessionId !== this.sessionId || update.threadId !== this.threadId) return;
 			this.acceptChangeSets(update.changeSets);
@@ -516,7 +520,8 @@ export class CoworkWidgetModel extends Disposable {
 	}
 
 	private async loadCatalogs(): Promise<void> {
-		const [models, slashCommands, skillSelectors] = await Promise.allSettled([this.modelEntries(), this.chatService.listSlashCommands(), this.chatService.listSkillSelectors()]);
+		const [models, slashCommands] = await Promise.allSettled([this.modelEntries(), this.chatService.listSlashCommands(), this.loadSkillSelectors()]);
+		if (this.isDisposed) return;
 		if (models.status === "fulfilled") {
 			this._models = models.value;
 			this.modelsError = undefined;
@@ -525,7 +530,6 @@ export class CoworkWidgetModel extends Disposable {
 			this.modelsError = String(models.reason);
 		}
 		if (slashCommands.status === "fulfilled") this._slashCommands = slashCommands.value;
-		if (skillSelectors.status === "fulfilled") this._skillSelectors = skillSelectors.value;
 		this._onDidChange.fire();
 	}
 
@@ -554,8 +558,12 @@ export class CoworkWidgetModel extends Disposable {
 	}
 
 	private async loadSkillSelectors(): Promise<void> {
+		const generation = ++this.skillCatalogGeneration;
+		const sessionId = this.sessionId;
 		try {
-			this._skillSelectors = await this.chatService.listSkillSelectors();
+			const catalog = await this.skills.findAgentSkills(CancellationToken.None, sessionId);
+			if (this.isDisposed || generation !== this.skillCatalogGeneration || sessionId !== this.sessionId) return;
+			this._skillSelectors = toSkillSelectors(catalog);
 			this._onDidChange.fire();
 		} catch {
 			// Keep the last valid catalog when a transient refresh fails.
@@ -822,6 +830,9 @@ export class CoworkWidgetModel extends Disposable {
 			throw new Error("Untitled Chat Session was closed while its durable Session was being created");
 		}
 		this.selection = { kind: "session", active: created };
+		// The durable Session may authorize directory Skills absent from the untitled catalog.
+		this._skillSelectors = [];
+		void this.loadSkillSelectors();
 		const mode = this.selectedModes.get(untitledSession.untitledSessionId);
 		if (mode) this.selectedModes.set(created.threadId, mode);
 		this.selectedModes.delete(untitledSession.untitledSessionId);

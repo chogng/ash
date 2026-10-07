@@ -856,6 +856,7 @@ fn embedded_skill_catalog_lists_built_ins_and_persists_enablement() {
     let revision = client.read_config().unwrap().revision;
     client
         .set_skill_enablement(SkillSetEnablementParams {
+            session_id: None,
             command_id: CommandId::new("disable-skill-creator").unwrap(),
             expected_revision: revision,
             skill_id: listed.skills[0].id.clone(),

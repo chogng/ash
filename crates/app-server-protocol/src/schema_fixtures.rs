@@ -41,6 +41,26 @@ fn generated_typescript() -> String {
 }
 
 #[test]
+fn skill_enablement_preserves_optional_session_lookup_scope() {
+    use crate::protocol::skills::SkillSetEnablementParams;
+    let legacy = serde_json::json!({
+        "commandId": "disable-review", "expectedRevision": 1,
+        "skillId": { "source": "directory:skill-source:test", "name": "review" }, "enablement": "disabled"
+    });
+    let params: SkillSetEnablementParams = serde_json::from_value(legacy.clone()).unwrap();
+    assert!(params.session_id.is_none());
+    assert_eq!(serde_json::to_value(&params).unwrap(), legacy);
+    let mut scoped = legacy;
+    scoped["sessionId"] = serde_json::json!("session-review");
+    let params: SkillSetEnablementParams = serde_json::from_value(scoped.clone()).unwrap();
+    assert_eq!(
+        params.session_id.as_ref().unwrap().as_str(),
+        "session-review"
+    );
+    assert_eq!(serde_json::to_value(&params).unwrap(), scoped);
+}
+
+#[test]
 fn start_turn_reasoning_effort_round_trips_and_legacy_requests_use_default() {
     let request = serde_json::json!({
         "type": "startTurn",

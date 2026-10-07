@@ -13,6 +13,15 @@ fn origin() -> RequestOrigin {
     }
 }
 
+#[test]
+fn configuration_changes_refresh_session_skills() {
+    let mut app = App::new();
+    let refresh =
+        super::refresh_server_event(crate::client::ClientEvent::ConfigChanged, None, &mut app);
+    assert!(refresh.skills);
+    assert!(refresh.config);
+}
+
 fn scheduled(command: AppCommand) -> ScheduledCommand {
     ScheduledCommand {
         command,

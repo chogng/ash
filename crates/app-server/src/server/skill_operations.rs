@@ -60,8 +60,13 @@ impl AppServer {
     pub(super) fn skill_set_enablement(&self, params: &Value) -> Result<Value, RpcError> {
         let params: SkillSetEnablementParams = decode(params)?;
         let runtime = self.skills.as_ref().ok_or_else(skills_unavailable)?;
-        let snapshot = runtime
-            .list(SkillCatalogReload::Cached)
+        let snapshot = params
+            .session_id
+            .as_ref()
+            .map_or_else(
+                || runtime.list(SkillCatalogReload::Cached),
+                |session_id| runtime.list_for_session(session_id),
+            )
             .map_err(skills_failed)?;
         if !snapshot
             .entries

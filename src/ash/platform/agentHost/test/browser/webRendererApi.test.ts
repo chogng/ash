@@ -13,6 +13,159 @@ import { AppServerProtocolClient } from "../../browser/appServerProtocolClient.j
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { GitHubError, GitHubErrorCode, GitHubIssueState, GitHubMergeMethod } from '../../../github/common/githubService.js';
 import type { BrowserCreateParams } from '../../../../../../.build/protocol/typescript/index.js';
+import { createAppServerSkillOperations } from '../../browser/appServerApi.js';
+import { createHash } from 'node:crypto';
+
+const pinnedSkill = { id: { source: 'user:skill-source:test', name: 'review' }, version: { type: 'pinnedDigest' as const, digest: `sha256:${'a'.repeat(64)}` } };
+
+test('Skill body reading opens exact authorized bytes lazily and releases the connection handle', async () => {
+	const transport = new SkillResourceTransport(Buffer.from('# Review\n审阅 changes\n'));
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	await client.connect();
+	const body = await createAppServerSkillOperations(client).readInstructions(pinnedSkill, new AbortController().signal, 'skill-session');
+	assert.equal(body, '# Review\n审阅 changes\n');
+	assert.deepEqual(transport.requests.filter(request => request.method === 'skill/resource/open' || request.method === 'resource/read' || request.method === 'resource/release').map(request => [request.method, request.params]), [
+		['skill/resource/open', { sessionId: 'skill-session', skillId: pinnedSkill.id, skillContentDigest: pinnedSkill.version.digest, path: 'SKILL.md' }],
+		['resource/read', { resourceId: 'resource_0000000000000001', offset: 0, maxBytes: Buffer.byteLength(body) }],
+		['resource/release', { resourceId: 'resource_0000000000000001' }],
+	]);
+});
+
+test('Cancellation while opening a Skill releases its late handle without requesting chunks', async () => {
+	const transport = new SkillResourceTransport(Buffer.from('instructions'));
+	const controller = new AbortController();
+	transport.onOpen = () => controller.abort();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	await client.connect();
+	await assert.rejects(createAppServerSkillOperations(client).readInstructions(pinnedSkill, controller.signal), isCancellationError);
+	assert.deepEqual(transport.requests.filter(request => String(request.method).startsWith('resource/')).map(request => request.method), ['resource/release']);
+});
+
+test('Skill snapshots reject invalid UTF-8 after releasing the resource', async () => {
+	const transport = new SkillResourceTransport(Buffer.from([0xff]));
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	await client.connect();
+	await assert.rejects(createAppServerSkillOperations(client).readInstructions(pinnedSkill, new AbortController().signal), TypeError);
+	assert.equal(transport.requests.at(-1)?.method, 'resource/release');
+});
+
+test('Skill snapshots reject oversized instructions before reading chunks and release the handle', async () => {
+	const transport = new SkillResourceTransport(Buffer.alloc(262_145));
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	await client.connect();
+	await assert.rejects(createAppServerSkillOperations(client).readInstructions(pinnedSkill, new AbortController().signal), /size/u);
+	assert.deepEqual(transport.requests.filter(request => String(request.method).startsWith('resource/')).map(request => request.method), ['resource/release']);
+});
+
+test('A replaced connection never receives a Skill resource read or release from the retired connection', async () => {
+	const transport = new SkillResourceTransport(Buffer.from('instructions'));
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	await client.connect();
+	let reconnecting: ReturnType<AppServerProtocolClient['connect']> | undefined;
+	transport.onRead = () => { client.disconnect(); reconnecting = client.connect(); };
+	await assert.rejects(createAppServerSkillOperations(client).readInstructions(pinnedSkill, new AbortController().signal), /replaced/u);
+	await reconnecting;
+	assert.equal(client.state, 'ready');
+	assert.equal(transport.requests.filter(request => request.method === 'resource/release').length, 0);
+});
+
+test('Skill catalog and enablement share Session scope and invalidate across config changes and reconnects', async () => {
+	const transport = new FakeTransport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	const skills = createAppServerSkillOperations(client);
+	let changes = 0;
+	const subscription = skills.onDidChangeSkills(() => changes++);
+	await client.connect();
+	assert.equal(changes, 1);
+	const listing = skills.list('cached', 'skill-session');
+	assert.deepEqual(transport.requests.at(-1)?.params, { reload: 'cached', sessionId: 'skill-session' });
+	assert.equal(transport.requests.at(-1)?.method, 'skills/list');
+	transport.respondAt(-1, { generation: 4, skills: [], diagnostics: [] });
+	assert.deepEqual(await listing, { generation: 4, skills: [] });
+	const skillId = { source: 'directory:skill-source:test', name: 'review' };
+	const mutation = skills.setEnabled(skillId, false, 7, 'skill-session');
+	const params = transport.requests.at(-1)?.params;
+	assert.ok(isRecord(params));
+	assert.equal(transport.requests.at(-1)?.method, 'skill/enablement/set');
+	assert.deepEqual(params, { commandId: params.commandId, expectedRevision: 7, skillId, enablement: 'disabled', sessionId: 'skill-session' });
+	transport.respondAt(-1, { revision: 8, generation: 8, disposition: 'updated' });
+	await mutation;
+	transport.emitNotification({ method: 'config/changed', params: { revision: 8, generation: 8 } });
+	transport.emitNotification({ method: 'skills/changed', params: { generation: 5 } });
+	assert.equal(changes, 3);
+	client.disconnect();
+	await client.connect();
+	assert.equal(changes, 4);
+	subscription.dispose();
+	transport.emitNotification({ method: 'skills/changed', params: { generation: 6 } });
+	assert.equal(changes, 4);
+});
+
+test('Skill adapter exposes immutable domain metadata for enabled, disabled and incompatible Skills', async () => {
+	const transport = new FakeTransport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	const skills = createAppServerSkillOperations(client);
+	await client.connect();
+	const listing = skills.list('cached', 'skill-session');
+	const id = { source: 'user:skill-source:test', name: 'review' };
+	const contentDigest = `sha256:${'a'.repeat(64)}`;
+	const entry = { id, description: 'Review changes', sourceKind: 'user', contentDigest, enablement: 'enabled', compatibility: { type: 'compatible' } };
+	transport.respondAt(-1, {
+		generation: 4,
+		skills: [entry, { ...entry, id: { ...id, name: 'disabled' }, enablement: 'disabled' }, { ...entry, id: { ...id, name: 'unknown' }, compatibility: { type: 'unknown', note: 'Requires a newer runtime' } }],
+		diagnostics: [],
+	});
+	const catalog = await listing;
+	const descriptor = { id, description: entry.description, contentDigest, enabled: true, compatible: true };
+	assert.deepEqual(catalog, {
+		generation: 4,
+		skills: [descriptor, { ...descriptor, id: { ...id, name: 'disabled' }, enabled: false }, { ...descriptor, id: { ...id, name: 'unknown' }, compatible: false }],
+	});
+	assert.ok(Object.isFrozen(catalog) && Object.isFrozen(catalog.skills));
+	assert.ok(catalog.skills.every(skill => Object.isFrozen(skill) && Object.isFrozen(skill.id)));
+});
+
+test('Skill adapter rejects oversized metadata and keeps the connection usable for a subsequent catalog', async () => {
+	const transport = new FakeTransport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	const skills = createAppServerSkillOperations(client);
+	await client.connect();
+	const listing = skills.list('cached');
+	transport.respondAt(-1, {
+		generation: 4,
+		skills: [{ id: { source: 'user:skill-source:test', name: 'review' }, description: 'a'.repeat(1025), sourceKind: 'user', contentDigest: `sha256:${'a'.repeat(64)}`, enablement: 'enabled', compatibility: { type: 'compatible' } }],
+		diagnostics: [],
+	});
+	await assert.rejects(listing, { name: 'TypeError', message: 'Skill description is invalid' });
+	assert.equal(client.state, 'ready');
+	const refreshed = skills.list('refresh');
+	transport.respondAt(-1, { generation: 5, skills: [], diagnostics: [] });
+	assert.deepEqual(await refreshed, { generation: 5, skills: [] });
+});
+
+test('Malformed Skill wire responses fail the connection before a frontend catalog is published', async () => {
+	const transport = new FakeTransport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	const skills = createAppServerSkillOperations(client);
+	await client.connect();
+	const listing = skills.list('cached');
+	transport.respondAt(-1, {
+		generation: 4,
+		skills: [{ id: { source: 'user:skill-source:test', name: 'review' }, description: 'Review changes', sourceKind: 'user', contentDigest: `sha256:${'a'.repeat(64)}`, enablement: 'invalid', compatibility: { type: 'compatible' } }],
+		diagnostics: [],
+	});
+	await assert.rejects(listing);
+	assert.equal(client.state, 'crashed');
+});
 
 const githubRepository = { host: 'github.com', owner: 'team', name: 'repo' };
 const githubIssue = { number: 7, title: 'Issue', url: 'https://github.com/team/repo/issues/7', updatedAt: '2026-10-04', state: 'open', labels: ['bug'], assignees: ['owner'] };
@@ -418,6 +571,26 @@ class FakeTransport implements AppServerTransport {
 
 	public emit(event: string, payload: unknown): void {
 		for (const listener of this.listeners.get(event) ?? []) listener(payload);
+	}
+}
+
+class SkillResourceTransport extends FakeTransport {
+	public onOpen: (() => void) | undefined;
+	public onRead: (() => void) | undefined;
+	constructor(private readonly bytes: Buffer) { super(); }
+	public override send(event: string, payload?: unknown): void {
+		super.send(event, payload);
+		if (event !== WEB_APP_SERVER_FRAME_EVENT) return;
+		const request = this.requests.at(-1)!;
+		if (request.method === 'skill/resource/open') {
+			this.onOpen?.();
+			this.respondAt(-1, { path: 'SKILL.md', kind: 'instructions', resource: { resourceId: 'resource_0000000000000001', mimeType: 'text/markdown', size: this.bytes.length, sha256: `sha256:${createHash('sha256').update(this.bytes).digest('hex')}` } });
+		} else if (request.method === 'resource/read') {
+			this.onRead?.();
+			const params = request.params as { offset: number; maxBytes: number; };
+			const chunk = this.bytes.subarray(params.offset, params.offset + params.maxBytes);
+			this.respondAt(-1, { resourceId: 'resource_0000000000000001', offset: params.offset, dataBase64: chunk.toString('base64'), decodedLength: chunk.length, eof: params.offset + chunk.length === this.bytes.length });
+		} else if (request.method === 'resource/release') this.respondAt(-1, null);
 	}
 }
 

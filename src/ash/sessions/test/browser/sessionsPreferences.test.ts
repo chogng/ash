@@ -1,3 +1,5 @@
+import { IPromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
+import { PromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
 import { IAgentCapabilitiesService } from '../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { IDirPermissionsService } from '../../../platform/dirPermissions/common/dirPermissionsService.js';
 import { IOpenerService } from '../../../platform/opener/common/opener.js';
@@ -13,7 +15,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Emitter, Event } from '../../../base/common/event.js';
-import { ISkillService } from '../../../platform/skills/common/skillService.js';
+import { IAppServerSkillApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { IMarketplaceService } from '../../../platform/marketplace/common/marketplaceService.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
@@ -88,6 +90,7 @@ test('Sessions Models switches control the model picker visibility preference', 
 	const { ILocalTranscriptionService } = await import('../../../platform/localTranscription/common/localTranscription.js');
 	const { NullLocalTranscriptionService } = await import('../../../workbench/services/localTranscription/browser/localTranscriptionService.js');
 	using services = new InstantiationService();
+	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	using transcription = new NullLocalTranscriptionService();
 	const { IChatService: ChatService } = await import('../../../workbench/services/chat/common/chatService.js');
 	services.registerInstance(ChatService, chat);
@@ -111,7 +114,7 @@ test('Sessions Models switches control the model picker visibility preference', 
 	services.registerInstance(ContextMenus, {} as import('../../../platform/contextview/browser/contextView.js').IContextMenuService);
 	services.registerInstance(ContextKeys, contextKeys);
 	services.registerInstance(AccessibleView, accessibleView);
-	services.registerInstance(ISkillService, { list: async () => ({ generation: 0, skills: [] }), read: async () => ({ revision: 0, catalog: { generation: 0, skills: [] }, diagnostics: [] }), setEnabled: async () => { } });
+	services.registerInstance(IAppServerSkillApi, { onDidChangeSkills: Event.None, readInstructions: async () => { throw new Error("No Skill body in this test fixture"); }, list: async () => ({ generation: 0, skills: [] }), read: async () => ({ revision: 0, catalog: { generation: 0, skills: [] }, diagnostics: [] }), setEnabled: async () => { } });
 	services.registerInstance(IMarketplaceService, { onDidChangeInstalled: Event.None, listInstalled: async () => [] } as unknown as IMarketplaceService);
 	using commands = new CommandService(services);
 	services.registerInstance(ICommandService, commands);

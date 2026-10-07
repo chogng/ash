@@ -6,7 +6,7 @@ import { createDisconnectedGitHubService } from '../../github/browser/appServerG
 import { createDisconnectedHooksApi } from '../../hooks/browser/hooksApi.js';
 import { Event } from '../../../base/common/event.js';
 import { createDisconnectedLanguageServerService } from "../../language/browser/languageServerService.js";
-import { createDisconnectedAppServerApi, createDisconnectedResourceApi, createDisconnectedServerEventApi } from "./appServerApi.js";
+import { createDisconnectedAppServerApi, createDisconnectedResourceApi, createDisconnectedServerEventApi, createDisconnectedSkillOperations } from "./appServerApi.js";
 import { createDisconnectedFileApi } from "../../files/browser/fileApi.js";
 import { createBrowserExtensionApi } from "../../extensions/browser/extensionApi.js";
 import { createDisconnectedDiffApi } from "../../diff/browser/diffApi.js";
@@ -16,7 +16,6 @@ import type { IRendererHost } from "../../renderer/common/rendererHost.js";
 import { unavailableOperation, WebAppServerUnavailableError } from "../../renderer/browser/disconnectedHost.js";
 import { createDisconnectedContentSearchApi, createDisconnectedContentSearchConfigurationApi } from "../../search/browser/searchApi.js";
 import { createDisconnectedModelApi, createDisconnectedSessionApi, createDisconnectedThreadApi, createDisconnectedTurnApi } from "../../sessions/browser/sessionApi.js";
-import { createDisconnectedSkillApi } from "../../skills/browser/skillApi.js";
 import { DisconnectedTerminalProcessService } from "../../terminal/browser/disconnectedTerminalProcessService.js";
 import { createDisconnectedTypstApi } from "../../typst/browser/typstApi.js";
 import { createDisconnectedDocumentCollaborationApi } from "../../collaboration/browser/documentCollaborationApi.js";
@@ -50,7 +49,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
 		thread: createDisconnectedThreadApi(unavailableOperation),
 		turn: createDisconnectedTurnApi(unavailableOperation),
 		turnChanges: createDisconnectedTurnChangesApi(unavailableOperation),
-		skills: createDisconnectedSkillApi(unavailableOperation),
+		skills: createDisconnectedSkillOperations(unavailableOperation),
 		instructions: createDisconnectedInstructionService(unavailableOperation),
 		typst: createDisconnectedTypstApi(unavailableOperation),
 		documentCollaboration: createDisconnectedDocumentCollaborationApi(unavailableOperation),

@@ -1,3 +1,5 @@
+import { IPromptsService } from '../contrib/chat/common/promptSyntax/service/promptsService.js';
+import { PromptsService } from '../contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
 import { IInstructionService } from '../../platform/instructions/common/instructionService.js';
 import { IFileSearchService } from '../../platform/search/common/fileSearch.js';
 import { BrowserFileSearchService } from '../../platform/search/browser/browserFileSearchService.js';
@@ -29,7 +31,7 @@ import { IWorkbenchThemeService } from '../services/themes/common/workbenchTheme
 import { IHostColorSchemeService, type IHostColorSchemeService as HostColorSchemeService } from '../services/themes/common/hostColorSchemeService.js';
 import { BrowserHostColorSchemeService } from '../services/themes/browser/browserHostColorSchemeService.js';
 import { getActivityHoverPosition } from "./parts/compositeBarActions.js";
-import { ISkillService } from "../../platform/skills/common/skillService.js";
+import { IAppServerSkillApi } from "../../platform/agentHost/common/appServerApi.js";
 import { ILanguageServerService } from "../../platform/language/common/languageServerService.js";
 import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from '../../editor/common/services/languageFeatureDebounce.js';
 import { IInlineCompletionsService, InlineCompletionsService } from '../../editor/browser/services/inlineCompletionsService.js';
@@ -706,7 +708,8 @@ export class Workbench extends Disposable {
 		services.registerInstance(IPluginService, this._register(new AppServerPluginService(api.plugins, api.events)));
 		const marketplaceService = this._register(new AppServerMarketplaceService(api.marketplace, api.events));
 		services.registerInstance(IMarketplaceService, marketplaceService);
-		services.registerInstance(ISkillService, api.skills);
+		services.registerInstance(IAppServerSkillApi, api.skills);
+		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 		services.registerInstance(IInstructionService, api.instructions);
 		services.registerInstance(ILanguageServerService, api.languageServers);
 		services.registerInstance(IToolSearchService, new AppServerToolSearchService(api.toolSearch));
