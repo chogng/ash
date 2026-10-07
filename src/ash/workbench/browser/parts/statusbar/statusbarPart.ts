@@ -1,6 +1,6 @@
 import { toDisposable } from "../../../../base/common/lifecycle.js";
 import "./statusbarpart.css";
-import { addDisposableListener, isNode, h } from "../../../../base/browser/dom.js";
+import { addDisposableListener, isHTMLElement, isNode, h } from "../../../../base/browser/dom.js";
 import { Part } from "../../part.js";
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
@@ -60,6 +60,9 @@ export class StatusbarPart extends Part {
 	}
 
 	private render(): void {
+		const document = this.domNode.ownerDocument;
+		const activeElement = document.activeElement;
+		const focused = isHTMLElement(activeElement) && this.domNode.contains(activeElement) ? activeElement : undefined;
 		const leftEntries = this.statusbarService.getEntries(StatusbarAlignment.Left);
 		const rightEntries = this.statusbarService.getEntries(StatusbarAlignment.Right);
 		const visibleIds = new Set([...leftEntries, ...rightEntries].map(({ id }) => id));
@@ -73,6 +76,10 @@ export class StatusbarPart extends Part {
 		this.compactGroups.clear();
 		this.renderItems(this.leftItems, leftEntries);
 		this.renderItems(this.rightItems, rightEntries);
+		// Regrouping temporarily detaches retained items. Respect focus moved by update callbacks.
+		if (focused?.isConnected && this.domNode.contains(focused) && (document.activeElement === document.body || document.activeElement === focused)) {
+			focused.focus();
+		}
 	}
 
 	private renderItems(

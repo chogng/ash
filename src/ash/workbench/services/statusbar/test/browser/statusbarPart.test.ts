@@ -204,6 +204,91 @@ test("status bar items are focused through the part and activate from the keyboa
 	dom.window.close();
 });
 
+for (const alignment of [StatusbarAlignment.Left, StatusbarAlignment.Right]) {
+	test(`status bar ${alignment === StatusbarAlignment.Left ? "left" : "right"} entries retain the same focused node through updates and regrouping`, () => {
+		const browser = new JSDOM("<!doctype html><body></body>", { url: "https://ash.test" });
+		try {
+			const { document } = browser.window;
+			using service = new StatusbarService();
+			using entry = service.addEntry({ text: "origin", run() { } }, { id: "test.origin", alignment, priority: 2, compactGroup: "test.group" });
+			using peer = service.addEntry({ text: "peer", run() { } }, { id: "test.peer", alignment, priority: 0, compactGroup: "test.group" });
+			using services = createStatusbarServices(document);
+			using part = services.createInstance(StatusbarPart, document.body, service);
+			document.body.append(part.domNode);
+			const origin = part.domNode.querySelector<HTMLElement>('[data-statusbar-item-id="test.origin"] .ash-statusbar-item-label')!;
+			origin.focus();
+			entry.update({ text: "updated", run() { } });
+			assert.equal(document.activeElement, origin);
+			using inserted = service.addEntry({ text: "between", run() { } }, { id: "test.between", alignment, priority: 1 });
+			assert.equal(document.activeElement, origin);
+			assert.equal(part.domNode.querySelector('[data-compact-group="test.group"]'), null);
+			inserted.dispose();
+			assert.equal(document.activeElement, origin);
+			assert.ok(part.domNode.querySelector('[data-compact-group="test.group"]')?.contains(origin));
+			peer.dispose();
+			assert.equal(document.activeElement, origin);
+			assert.equal(part.domNode.querySelector('[data-statusbar-item-id="test.origin"] .ash-statusbar-item-label'), origin);
+		} finally {
+			browser.window.close();
+		}
+	});
+}
+
+test("status bar rendering does not restore a removed focused entry or take outside focus", () => {
+	const browser = new JSDOM("<!doctype html><body><button>Outside</button></body>", { url: "https://ash.test" });
+	try {
+		const { document } = browser.window;
+		using service = new StatusbarService();
+		using entry = service.addEntry({ text: "origin", run() { } }, { id: "test.origin", alignment: StatusbarAlignment.Left });
+		using services = createStatusbarServices(document);
+		using part = services.createInstance(StatusbarPart, document.body, service);
+		document.body.append(part.domNode);
+		const origin = part.domNode.querySelector<HTMLElement>(".ash-statusbar-item-label")!;
+		const outside = document.querySelector<HTMLButtonElement>("button")!;
+		outside.focus();
+		entry.update({ text: "updated", run() { } });
+		assert.equal(document.activeElement, outside);
+		origin.focus();
+		entry.dispose();
+		assert.equal(origin.isConnected, false);
+		assert.equal(document.activeElement, document.body);
+		using replacement = service.addEntry({ text: "replacement", run() { } }, { id: "test.origin", alignment: StatusbarAlignment.Left });
+		assert.equal(document.activeElement, document.body);
+		assert.notEqual(part.domNode.querySelector(".ash-statusbar-item-label"), origin);
+	} finally {
+		browser.window.close();
+	}
+});
+
+test("status bar rendering preserves focus explicitly moved outside during an entry update", () => {
+	const browser = new JSDOM("<!doctype html><body><button>Outside</button></body>", { url: "https://ash.test" });
+	try {
+		const { document } = browser.window;
+		const outside = document.querySelector<HTMLButtonElement>("button")!;
+		let moveFocus = false;
+		using delegateRegistration = setHoverDelegate({
+			setupDelayedHover() { throw new Error("Unexpected delayed hover registration"); },
+			setupHover() {
+				if (moveFocus) outside.focus();
+				return managedHover();
+			},
+		});
+		using service = new StatusbarService();
+		using entry = service.addEntry({ text: "origin", tooltip: "before", run() { } }, { id: "test.origin", alignment: StatusbarAlignment.Left });
+		using services = createStatusbarServices(document);
+		using part = services.createInstance(StatusbarPart, document.body, service);
+		document.body.append(part.domNode);
+		const origin = part.domNode.querySelector<HTMLElement>(".ash-statusbar-item-label")!;
+		origin.focus();
+		moveFocus = true;
+		entry.update({ text: "updated", tooltip: "after", run() { } });
+		assert.equal(origin.isConnected, true);
+		assert.equal(document.activeElement, outside);
+	} finally {
+		browser.window.close();
+	}
+});
+
 test("status bar item tooltips use the managed statusbar hover group", () => {
 	const dom = new JSDOM("<!doctype html><body></body>", { url: "https://ash.test" });
 	const setups: Array<{ target: HTMLElement; content: unknown; groupId?: string; }> = [];

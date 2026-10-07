@@ -6,6 +6,13 @@ import { Lxicon } from "../../../../../base/common/lxicons.js";
 import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { addDisposableListener } from "../../../../../base/browser/dom.js";
 import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
+import { IThemeService } from "../../../../../platform/theme/common/themeService.js";
+import { TestThemeService } from "../../../../../platform/theme/test/common/testThemeService.js";
+import { darkColorTheme } from "../../../../../platform/theme/common/colorTheme.js";
+import { IStorageService } from "../../../../../platform/storage/common/storage.js";
+import { BrowserStorageService } from "../../../storage/browser/storageService.js";
+import { registerTestComponentServices } from "../../../../test/common/testEditorServices.js";
+import { StatusbarPart } from "../../../../browser/parts/statusbar/statusbarPart.js";
 import { INotificationsCenter, NotificationsCenter } from "../../../../browser/parts/notifications/notificationsCenter.js";
 import "../../../../browser/parts/notifications/notificationsCommands.js";
 import { CommandService } from "../../../commands/common/commandService.js";
@@ -251,6 +258,43 @@ test("a removed toast focus origin does not prevent clearing the last toast in i
 	assert.notEqual(document.activeElement, origin);
 });
 
+test("hiding can restore focus into a callback that reopens an empty center", async () => {
+	using fixture = new NotificationsFixture();
+	const { document, center, panel, origin } = fixture;
+	origin.focus();
+	center.show();
+	using listener = addDisposableListener(origin, "focus", () => center.show());
+	center.hide();
+	await Promise.resolve();
+	assert.equal(panel.hidden, false);
+	assert.equal(document.activeElement, panel);
+	assert.equal(panel.querySelector(".ash-notifications-empty")?.textContent, "No notifications");
+});
+
+for (const clearAll of [false, true]) {
+	test(`${clearAll ? "Clear All" : "final removal"} retains restored focus through the real status bell render`, () => {
+		using statusbar = new StatusbarService();
+		using fixture = new NotificationsFixture(statusbar);
+		const { document, service, center, panel } = fixture;
+		using services = new InstantiationService();
+		services.registerSingleton(IThemeService, () => new TestThemeService(darkColorTheme));
+		services.registerSingleton(IStorageService, () => new BrowserStorageService({ ownerWindow: document.defaultView!, workspaceId: "notifications-test", backend: document.defaultView!.localStorage, flushInterval: 0 }));
+		registerTestComponentServices(services, document);
+		using part = services.createInstance(StatusbarPart, document.body, statusbar);
+		document.body.append(part.domNode);
+		const origin = part.domNode.querySelector<HTMLElement>('[data-statusbar-item-id="ash.status.notifications"] .ash-statusbar-item-label')!;
+		const handle = service.info("Finished");
+		if (clearAll) service.info("Also finished");
+		origin.focus();
+		center.show();
+		if (clearAll) center.clearAll(); else handle.close();
+		assert.equal(panel.hidden, true);
+		assert.deepEqual(service.getNotifications(), []);
+		assert.equal(part.domNode.querySelector('[data-statusbar-item-id="ash.status.notifications"] .ash-statusbar-item-label'), origin);
+		assert.equal(document.activeElement, origin);
+	});
+}
+
 test("disposing the center leaves records owned by the service and ignores late entries and events", async () => {
 	using fixture = new NotificationsFixture();
 	const { document, service, center, panel, origin, outside } = fixture;
@@ -283,15 +327,15 @@ class NotificationsFixture extends Disposable {
 	readonly origin: HTMLButtonElement;
 	readonly outside: HTMLButtonElement;
 
-	constructor() {
+	constructor(statusbar?: StatusbarService) {
 		super();
-		const browser = new JSDOM("<!doctype html><body><button id='origin'>Origin</button><button id='outside'>Outside</button></body>");
+		const browser = new JSDOM("<!doctype html><body><button id='origin'>Origin</button><button id='outside'>Outside</button></body>", { url: "https://ash.test" });
 		this._register(toDisposable(() => browser.window.close()));
 		this.document = browser.window.document;
 		this.origin = this.document.querySelector<HTMLButtonElement>("#origin")!;
 		this.outside = this.document.querySelector<HTMLButtonElement>("#outside")!;
 		this.service = this._register(new NotificationService());
-		this.center = this._register(new NotificationsCenter(this.document.body, this.document.body, this.service));
+		this.center = this._register(new NotificationsCenter(this.document.body, this.document.body, this.service, statusbar));
 		this.panel = this.document.querySelector<HTMLElement>(".ash-notifications-center")!;
 	}
 }
