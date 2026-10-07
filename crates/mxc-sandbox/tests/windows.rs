@@ -247,13 +247,18 @@ fn psec_filesystem_aliases_keep_read_only_and_denied_overrides() {
     let linked = std::process::Command::new(
         Path::new(&std::env::var_os("SystemRoot").unwrap()).join("System32/cmd.exe"),
     )
-    .args(["/d", "/c", "mklink", "/J"])
-    // Keep cmd arguments in DOS spelling; the policy still uses canonical paths.
-    .arg(dunce::simplified(&junction))
-    .arg(dunce::simplified(&config))
+    // Fixed relative names keep fixture setup independent of cmd path quoting;
+    // the sandbox policy still uses canonical paths.
+    .current_dir(temp.path())
+    .args(["/d", "/c", "mklink", "/J", "config-alias", "config"])
     .output()
     .unwrap();
     assert!(linked.status.success(), "{linked:?}");
+    assert_eq!(
+        std::fs::canonicalize(&junction).unwrap(),
+        std::fs::canonicalize(&config).unwrap(),
+        "junction fixture must reach the protected directory"
+    );
     let scope = SandboxScope::single(dir.clone())
         .with_path_rules(vec![
             SandboxPathRule::exact(
