@@ -592,23 +592,28 @@ fn start_record(
         data: Arc::clone(&data),
     });
     let input_thread = thread::spawn(move || drive_input(stdin, input_rx));
-    let stdout_thread = spawn_output_reader(stdout, Arc::clone(&data), OutputStream::Stdout);
-    let stderr_thread = spawn_output_reader(stderr, Arc::clone(&data), OutputStream::Stderr);
+    let stdout_thread = spawn_output_reader(
+        stdout,
+        Arc::clone(&data),
+        Arc::clone(&process),
+        OutputStream::Stdout,
+    );
+    let stderr_thread = spawn_output_reader(
+        stderr,
+        Arc::clone(&data),
+        Arc::clone(&process),
+        OutputStream::Stderr,
+    );
     thread::spawn(move || {
-        let _runtime_dir = runtime_dir;
-        let _network = network;
         let started_at = Instant::now();
         let end = loop {
             if control.load(Ordering::Acquire) == CONTROL_TERMINATE {
                 break WorkerEnd::Terminated;
             }
-            if let Err(reason) = cancellation.check() {
-                close_process(&process);
-                let _ = reason;
+            if cancellation.check().is_err() {
                 break WorkerEnd::Cancelled;
             }
             if started_at.elapsed() >= hard_timeout {
-                close_process(&process);
                 break WorkerEnd::TimedOut;
             }
             match process.lock() {
@@ -623,19 +628,35 @@ fn start_record(
             }
             thread::sleep(Duration::from_millis(10));
         };
+        if !matches!(&end, WorkerEnd::Exited(_)) {
+            close_process(&process);
+        }
         if let Ok(mut input) = input.lock() {
             input.take();
         }
         let _ = input_thread.join();
-        let _ = stdout_thread.join();
-        let _ = stderr_thread.join();
-        let final_state = match end {
-            WorkerEnd::Exited(status) => finish_outcome(&process, &data, authority, status),
-            WorkerEnd::Cancelled => SessionFinal::Cancelled,
-            WorkerEnd::TimedOut => SessionFinal::TimedOut,
-            WorkerEnd::Terminated => SessionFinal::Terminated,
-            WorkerEnd::Failed(message) => SessionFinal::Failed(message),
+        let stdout_result = stdout_thread
+            .join()
+            .unwrap_or_else(|_| Err("stdout reader panicked".into()));
+        let stderr_result = stderr_thread
+            .join()
+            .unwrap_or_else(|_| Err("stderr reader panicked".into()));
+        let output_result = stdout_result.and(stderr_result);
+        close_process(&process);
+        let final_state = match (end, output_result) {
+            (WorkerEnd::Exited(status), Ok(())) => {
+                finish_outcome(&process, &data, authority, status)
+            }
+            (WorkerEnd::Exited(_), Err(message)) | (WorkerEnd::Failed(message), _) => {
+                SessionFinal::Failed(message)
+            }
+            (WorkerEnd::Cancelled, _) => SessionFinal::Cancelled,
+            (WorkerEnd::TimedOut, _) => SessionFinal::TimedOut,
+            (WorkerEnd::Terminated, _) => SessionFinal::Terminated,
         };
+        // A terminal result promises that readers and execution-owned resources have stopped.
+        drop(network);
+        drop(runtime_dir);
         let (lock, changed) = &*data;
         if let Ok(mut state) = lock.lock() {
             state.final_state = Some(final_state);
@@ -786,27 +807,38 @@ enum OutputStream {
 fn spawn_output_reader(
     mut reader: Box<dyn Read + Send>,
     data: Arc<(Mutex<SessionData>, Notify)>,
+    process: Arc<Mutex<ash_sandboxing::ProcessHandle>>,
     stream: OutputStream,
-) -> thread::JoinHandle<()> {
+) -> thread::JoinHandle<Result<(), String>> {
     thread::spawn(move || {
+        let name = match stream {
+            OutputStream::Stdout => "stdout",
+            OutputStream::Stderr => "stderr",
+        };
         let mut chunk = [0u8; 8192];
-        loop {
+        let result = loop {
             let count = match reader.read(&mut chunk) {
-                Ok(0) => break,
+                Ok(0) => break Ok(()),
                 Ok(count) => count,
                 Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
-                Err(_) => break,
+                Err(error) => break Err(format!("{name} reader failed: {error}")),
             };
             let (lock, changed) = &*data;
             let Ok(mut state) = lock.lock() else {
-                break;
+                break Err("command session output is unavailable".into());
             };
             match stream {
                 OutputStream::Stdout => state.stdout.append(&chunk[..count]),
                 OutputStream::Stderr => state.stderr.append(&chunk[..count]),
             }
             changed.notify();
+        };
+        if result.is_err() {
+            // Stop the producer even if the lifecycle worker is already joining readers.
+            // This lets the other stream reach EOF without waiting for the command timeout.
+            close_process(&process);
         }
+        result
     })
 }
 
