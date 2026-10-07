@@ -30,7 +30,7 @@ registerAction2(class CopyMatchCommandAction extends Action2 {
 	}
 
 	public override async run(accessor: ServicesAccessor, match?: RenderableMatch): Promise<void> {
-		// Explicit row arguments remain valid inputs even after dismissal; only implicit selection needs an active view.
+		// Explicit arguments format their own current contents; only implicit selection needs an active view.
 		match ??= accessor.get(IViewsService).getActiveViewWithId<SearchView>(SEARCH_VIEW_ID)?.getControl().selection[0];
 		if (!match) { return; }
 		let text: string;

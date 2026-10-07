@@ -202,6 +202,8 @@ window.ashSearchIntegration = {
 		await treeViewAction.run();
 	},
 	setSearchVisible: value => pane.setVisible(value),
+	closeResultMenu: () => resultMenus.hideContextMenu(),
+	replaceResultMenu: () => resultMenus.showContextMenu({ getAnchor: () => host, getActions: () => [{ id: 'fixture.otherMenu', label: 'Other menu action', tooltip: '', enabled: true, run() { } }] }),
 	copyAll: () => commands.executeCommand<void>(SearchCommandIds.CopyAllCommandId),
 	clipboardWrites: () => [...clipboardWrites],
 	setClipboardFailure: value => { clipboardFailure = value; },
@@ -225,6 +227,8 @@ declare global {
 		ashSearchIntegration: {
 			selectTreeView(): Promise<void>;
 			setSearchVisible(value: boolean): void;
+			closeResultMenu(): void;
+			replaceResultMenu(): void;
 			copyAll(): Promise<void>;
 			clipboardWrites(): readonly string[];
 			setClipboardFailure(value: boolean): void;

@@ -124,9 +124,16 @@ export class SearchResultImpl {
 					continue;
 				}
 				const removeFile = removeChildren || selected.has(child);
+				if (removeFile) {
+					// Detach whole files from the active owner without destroying explicit command arguments.
+					for (const match of child.matches) { this.matchIds.delete(match.id); }
+					folder.children.delete(id);
+					this.fileMatches.delete(extUri.getComparisonKey(child.resource));
+					continue;
+				}
 				for (let index = child.matches.length - 1; index >= 0; index--) {
 					const match = child.matches[index]!;
-					if (removeFile || selected.has(match)) {
+					if (selected.has(match)) {
 						this.matchIds.delete(match.id);
 						child.matches.splice(index, 1);
 					}

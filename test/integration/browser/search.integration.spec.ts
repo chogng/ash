@@ -56,6 +56,37 @@ test('Copy result menu and accessibility guidance use the Chinese catalog', asyn
 	expect(await page.evaluate(() => window.ashSearchIntegration.help())).toContain('不会合并多选');
 });
 
+test('Copy menu closing preserves focus already moved to another input', async ({ page }) => {
+	await page.goto('/search.html');
+	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
+	await query.fill('needle');
+	await query.press('Enter');
+	await expect(page.getByRole('status')).toHaveText('1 results');
+	const tree = page.getByRole('tree', { name: 'Search results', exact: true });
+	await tree.getByRole('treeitem', { name: 'Line 1, column 7: const needle = true;', exact: true }).click();
+	await tree.press('Shift+F10');
+	await expect(page.getByRole('menuitem', { name: 'Copy', exact: true })).toBeVisible();
+	await query.focus();
+	await page.evaluate(() => window.ashSearchIntegration.closeResultMenu());
+	await expect(query).toBeFocused();
+});
+
+test('Copy menu replacement does not overwrite the next menu focus origin', async ({ page }) => {
+	await page.goto('/search.html');
+	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
+	await query.fill('needle');
+	await query.press('Enter');
+	await expect(page.getByRole('status')).toHaveText('1 results');
+	const tree = page.getByRole('tree', { name: 'Search results', exact: true });
+	await tree.getByRole('treeitem', { name: 'Line 1, column 7: const needle = true;', exact: true }).click();
+	await tree.press('Shift+F10');
+	await query.focus();
+	await page.evaluate(() => window.ashSearchIntegration.replaceResultMenu());
+	await expect(page.getByRole('menuitem', { name: 'Other menu action', exact: true })).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(query).toBeFocused();
+});
+
 test('Dismiss updates retained results and focus while refresh restores the searched files', async ({ page }) => {
 	await page.goto('/search.html');
 	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });

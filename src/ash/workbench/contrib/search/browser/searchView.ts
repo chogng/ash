@@ -240,7 +240,8 @@ export class SearchView extends ViewPane {
 		this._register(this.tree.onDidChangeSelection(() => this.updateResultActions()));
 		this._register(this.onDidChangeBodyVisibility(visible => { if (!visible) { this.resultMenu.clear(); } }));
 		this._register(addDisposableListener(this.tree.domNode, "keydown", event => {
-			if ((event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey)) && this.tree.focus) {
+			if (event.defaultPrevented || event.isComposing || event.ctrlKey || event.altKey || event.metaKey || event.target !== this.tree.element) { return; }
+			if (((event.key === "ContextMenu" && !event.shiftKey) || (event.key === "F10" && event.shiftKey)) && this.tree.focus) {
 				event.preventDefault();
 				event.stopPropagation();
 				this.showResultContextMenu(this.tree.focus, this.tree.domNode);
@@ -825,14 +826,19 @@ export class SearchView extends ViewPane {
 		this.resultMenu.clear();
 		this.menuElement = element;
 		let open = true;
-		this.resultMenu.value = toDisposable(() => {
+		const lifetime = toDisposable(() => {
 			if (open) { open = false; this.contextMenuService.hideContextMenu(); }
 			this.menuElement = undefined;
 		});
+		this.resultMenu.value = lifetime;
 		this.contextMenuService.showContextMenu({
 			getAnchor: () => anchor,
 			getActions: () => [{ id: SearchCommandIds.CopyMatchCommandId, label: localize("search.copy", "Copy"), tooltip: "", enabled: true, run: () => this.commands.executeCommand(SearchCommandIds.CopyMatchCommandId, element) }],
-			onHide: () => { open = false; this.menuElement = undefined; if (!this.isDisposed && this.isVisible()) { this.tree.domFocus(); } },
+			onHide: () => {
+				open = false;
+				// Desktop close callbacks may arrive after a successor menu has taken ownership.
+				if (this.resultMenu.value === lifetime) { this.resultMenu.clear(); }
+			},
 		});
 	}
 }

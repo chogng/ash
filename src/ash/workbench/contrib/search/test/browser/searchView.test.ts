@@ -806,3 +806,122 @@ test('Copy context menu uses its row and closes and releases listeners when that
 		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
 	}
 });
+
+test('Copy keeps dismissed file arguments separate from active snapshots, late batches and refreshed results', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	const globals = installDomGlobals(browser);
+	const written: string[] = [];
+	let progress: ((batch: typeof matches) => void) | undefined;
+	let finish: (() => void) | undefined;
+	let searches = 0;
+	try {
+		using store = new DisposableStore();
+		const services = createServices(store, browser, {
+			search: async (_query, options) => {
+				if (++searches > 1) {
+					options?.onProgress?.([{ ...matches[0]!, preview: 'fresh needle', ranges: [{ start: 6, end: 12 }] }]);
+					return { resultCount: 1, limitHit: false, error: undefined };
+				}
+				progress = batch => options?.onProgress?.(batch);
+				progress([...matches, { ...matches[0]!, path: 'keep.ts', preview: 'keep needle', ranges: [{ start: 5, end: 11 }] }]);
+				await new Promise<void>(resolve => { finish = resolve; });
+				return { resultCount: 3, limitHit: false, error: undefined };
+			}
+		});
+		services.registerInstance(IClipboardService, new BrowserClipboardService({ writeText: async value => { written.push(value); } } as Clipboard));
+		const { SearchView } = await import('../../browser/searchView.js');
+		await import('../../browser/searchActionsCopy.js');
+		await import('../../browser/searchActionsRemoveReplace.js');
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
+		registerView(services, view);
+		input(view.element, 'Search workspace').value = 'needle';
+		view.element.querySelector('form')!.dispatchEvent(new browser.window.Event('submit', { cancelable: true }));
+		await waitFor(() => view.searchResult.count === 3);
+		const tree = view.getControl();
+		const oldFile = view.searchResult.files.find(file => file.path === 'src/main.ts')!;
+		const oldMatches = [...oldFile.matches];
+		const oldFolder = [...view.searchResult.children[0]!.children.values()].find(child => child.kind === 'folder')!;
+		tree.setFocus(oldFile.id);
+		tree.setSelection([oldFile.id]);
+		const commands = services.get(ICommandService);
+		await commands.executeCommand(SearchCommandIds.RemoveActionId);
+		await commands.executeCommand(SearchCommandIds.CopyMatchCommandId, oldFile);
+		await commands.executeCommand(SearchCommandIds.CopyMatchCommandId, oldFolder);
+		await commands.executeCommand(SearchCommandIds.CopyAllCommandId);
+		const delimiter = isWindows ? '\r\n' : '\n';
+		const oldText = ['/workspace/src/main.ts', '  4,7: const needle = true;', '  9,5: use(needle);'].join(delimiter);
+		const keepText = '/workspace/keep.ts' + delimiter + '  4,6: keep needle';
+		assert.deepEqual(written, [oldText, keepText]);
+		assert.equal(view.searchResult.count, 1);
+		assert.equal(view.getSearchResultSnapshot(), undefined);
+		progress!([{ ...matches[0]!, preview: 'late NEEDLE', ranges: [{ start: 5, end: 11 }] }]);
+		await waitFor(() => view.searchResult.count === 2);
+		const replacement = view.searchResult.files.find(file => file.path === oldFile.path)!;
+		assert.notEqual(replacement, oldFile);
+		assert.notEqual(replacement.matches[0], oldMatches[0]);
+		view.searchResult.batchRemove([oldFolder, oldFile, ...oldMatches]);
+		assert.equal(view.searchResult.count, 2);
+		finish!();
+		await waitFor(() => view.getSearchResultSnapshot()?.matchCount === 2);
+		await commands.executeCommand(SearchCommandIds.CopyAllCommandId);
+		assert.equal(written.at(-1), '/workspace/src/main.ts' + delimiter + '  4,6: late NEEDLE' + delimiter + delimiter + keepText);
+		const snapshot = view.getSearchResultSnapshot()!;
+		assert.deepEqual(snapshot.content.split('\n').slice(2), ['# File: file:///workspace/keep.ts', '  4:6-4:12: needle', '', '# File: file:///workspace/src/main.ts', '  4:6-4:12: NEEDLE', '']);
+		view.element.querySelector<HTMLButtonElement>('button[aria-label="Refresh search"]')!.click();
+		await waitFor(() => view.getSearchResultSnapshot()?.matchCount === 1);
+		view.searchResult.batchRemove([replacement, oldFile, ...oldMatches]);
+		await commands.executeCommand(SearchCommandIds.CopyAllCommandId);
+		assert.equal(written.at(-1), '/workspace/src/main.ts' + delimiter + '  4,7: fresh needle');
+		await commands.executeCommand(SearchCommandIds.CopyMatchCommandId, oldFile);
+		assert.equal(written.at(-1), oldText);
+		assert.deepEqual(view.getSearchResultSnapshot()!.content.split('\n').slice(2), ['# File: file:///workspace/src/main.ts', '  4:7-4:13: needle', '']);
+	} finally {
+		finish?.();
+		browser.window.close();
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
+	}
+});
+
+test('Copy menu callbacks cannot clear a replacement and keyboard menus ignore inputs and extra modifiers', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	const globals = installDomGlobals(browser);
+	const shown: IContextMenuDelegate[] = [];
+	let hidden = 0;
+	try {
+		using store = new DisposableStore();
+		const services = createServices(store, browser, { search: async (_query, options) => { options?.onProgress?.(matches); return { resultCount: 2, limitHit: false, error: undefined }; } });
+		const menus = services.get(IContextMenuService);
+		menus.showContextMenu = delegate => { shown.push(delegate as IContextMenuDelegate); };
+		menus.hideContextMenu = () => { hidden++; };
+		const { SearchView } = await import('../../browser/searchView.js');
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
+		registerView(services, view);
+		input(view.element, 'Search workspace').value = 'needle';
+		view.element.querySelector('form')!.dispatchEvent(new browser.window.Event('submit', { cancelable: true }));
+		await waitFor(() => view.getSearchResultSnapshot()?.matchCount === 2);
+		const tree = view.getControl();
+		tree.setFocus(view.searchResult.files[0]!.matches[0]!.id);
+		const embeddedInput = browser.window.document.createElement('input');
+		tree.domNode.append(embeddedInput);
+		for (const [target, options] of [[embeddedInput, { shiftKey: true }], [tree.element, { shiftKey: true, ctrlKey: true }], [tree.element, { shiftKey: true, altKey: true }], [tree.element, { shiftKey: true, metaKey: true }], [tree.element, { shiftKey: true, isComposing: true }]] as const) {
+			const event = new browser.window.KeyboardEvent('keydown', { key: 'F10', bubbles: true, cancelable: true, ...options });
+			target.dispatchEvent(event);
+			assert.equal(event.defaultPrevented, false);
+		}
+		assert.equal(shown.length, 0);
+		const row = view.element.querySelector<HTMLElement>('.ash-search-match')!;
+		row.dispatchEvent(new browser.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+		row.dispatchEvent(new browser.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+		assert.equal(shown.length, 2);
+		assert.equal(hidden, 1);
+		input(view.element, 'Search workspace').focus();
+		shown[0]!.onHide?.(true);
+		assert.equal(browser.window.document.activeElement, input(view.element, 'Search workspace'));
+		view.searchResult.batchRemove([view.searchResult.files[0]!.matches[0]!]);
+		await view.queueRefreshTree();
+		assert.equal(hidden, 2);
+	} finally {
+		browser.window.close();
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
+	}
+});

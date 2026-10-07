@@ -94,3 +94,33 @@ test('Later search batches can restore dismissed matches and stale selections ca
 	result.batchRemove([folder, file, match]);
 	assert.deepEqual({ count: result.count, lines: result.files[0]!.matches.map(match => match.range.startLineNumber) }, { count: 2, lines: [1, 2] });
 });
+
+test('Dismissing whole files detaches their contents while later batches own distinct objects', () => {
+	const result = new SearchResultImpl([{ id: 'workspace', name: 'workspace', index: 0, uri: URI.file('/workspace') }]);
+	const raw = { dirId: 'workspace', path: 'src/main.ts', lineNumber: 1, preview: 'needle needle', ranges: [{ start: 0, end: 6 }, { start: 7, end: 13 }] };
+	result.add([raw, { ...raw, path: 'keep.ts', ranges: raw.ranges.slice(0, 1) }]);
+	const root = result.children[0]!;
+	const folder = [...root.children.values()].find(child => child.kind === 'folder')!;
+	const file = result.files[0]!;
+	const oldMatches = [...file.matches];
+	result.batchRemove([file, oldMatches[0]!, file]);
+	assert.deepEqual({ count: result.count, paths: result.files.map(file => file.path), folders: [...root.children.values()].map(child => child.name), detachedMatches: file.matches }, {
+		count: 1, paths: ['keep.ts'], folders: ['keep.ts'], detachedMatches: oldMatches,
+	});
+	assert.equal(folder.kind === 'folder' && folder.children.size, 0);
+	result.add([raw]);
+	const replacement = result.files.find(file => file.path === raw.path)!;
+	assert.notEqual(replacement, file);
+	assert.notEqual(replacement.matches[0], oldMatches[0]);
+	result.batchRemove([folder, file, ...oldMatches]);
+	assert.deepEqual({ count: result.count, activeMatches: replacement.matches.length, detachedMatches: file.matches }, { count: 3, activeMatches: 2, detachedMatches: oldMatches });
+	const newFolder = [...root.children.values()].find(child => child.kind === 'folder')!;
+	result.batchRemove([newFolder]);
+	assert.equal(newFolder.kind === 'folder' && newFolder.children.size, 0);
+	assert.equal(replacement.matches.length, 2);
+	assert.equal(result.count, 1);
+	result.clear();
+	result.add([{ ...raw, preview: 'fresh needle', ranges: [{ start: 6, end: 12 }] }]);
+	result.batchRemove([replacement, file, ...oldMatches]);
+	assert.deepEqual({ count: result.count, preview: result.files[0]!.matches[0]!.preview, oldPreview: file.matches[0]!.preview }, { count: 1, preview: 'fresh needle', oldPreview: 'needle needle' });
+});
