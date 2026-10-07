@@ -3,8 +3,10 @@ import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { getSingletonServiceDescriptors } from '../../../platform/instantiation/common/extensions.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
-import { IRendererHostService, type IRendererHost } from '../../../platform/renderer/common/rendererHost.js';
-import { IAppServerApi } from '../../../platform/agentHost/common/appServerApi.js';
+import type { IRendererHost } from '../../../platform/renderer/common/rendererHost.js';
+import { ISessionApi, IModelApi, ITurnApi } from '../../../platform/sessions/common/sessionApi.js';
+import { createDisconnectedRendererApi } from '../../../platform/agentHost/browser/rendererApi.js';
+import { IAppServerApi, IServerEventApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { Event } from '../../../base/common/event.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../workbench/common/contributions.js';
@@ -39,6 +41,7 @@ test('Sessions registers its regular Workbench service and starts its catalog', 
 	let subscriptions = 0;
 	let catalogLoads = 0;
 	const api = {
+		...createDisconnectedRendererApi(),
 		session: {
 			async subscribeCatalog() { catalogLoads++; return { sessions: [] }; },
 			async unsubscribeCatalog() { },
@@ -47,8 +50,11 @@ test('Sessions registers its regular Workbench service and starts its catalog', 
 		events: { subscribe() { subscriptions++; return { dispose() { } }; } },
 	} as unknown as IRendererHost;
 	using services = new InstantiationService();
-	services.registerInstance(IRendererHostService, api);
-	services.registerInstance(IAppServerApi, { getConnectionState: async () => 'ready', getSlashCommands: async () => [], onConnectionState: Event.None });
+	services.registerInstance(ISessionApi, api.session);
+	services.registerInstance(IModelApi, api.model);
+	services.registerInstance(ITurnApi, api.turn);
+	services.registerInstance(IServerEventApi, api.events);
+	services.registerInstance(IAppServerApi, { connectionGeneration: 1, getConnectionState: async () => 'ready', getSlashCommands: async () => [], onConnectionState: Event.None });
 	using workspace = new WorkspaceContextService({ id: 'empty-window' });
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IQuickInputService, {} as IQuickInputService);

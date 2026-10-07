@@ -5,6 +5,7 @@ import { appServerRequest, voidResult } from "./appServerRequest.js";
 
 export function createDisconnectedAppServerApi(unavailable: UnavailableOperation): IAppServerApi {
 	return {
+		connectionGeneration: 0,
 		getConnectionState: () => Promise.resolve("stopped"),
 		getSlashCommands: () => unavailable("appServer.getSlashCommands"),
 		onConnectionState: inertSubscription,
@@ -25,6 +26,7 @@ export function createDisconnectedServerEventApi(): IServerEventApi {
 
 export function createAppServerAppServerApi(connection: AppServerProtocolClient): IAppServerApi {
 	return {
+		get connectionGeneration() { return connection.generation; },
 		getConnectionState: () => Promise.resolve(connection.state),
 		getSlashCommands: () => Promise.resolve(connection.slashCommands),
 		onConnectionState: (listener) => connection.onStateChange(listener),

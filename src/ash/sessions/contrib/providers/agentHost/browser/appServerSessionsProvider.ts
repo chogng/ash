@@ -3,63 +3,74 @@ import { Emitter } from "../../../../../base/common/event.js";
 import { canceled } from "../../../../../base/common/errors.js";
 import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { createUuid } from "../../../../../base/common/uuid.js";
-import { IAppServerApi, type IServerEventApi } from "../../../../../platform/agentHost/common/appServerApi.js";
-import type { IModelApi, ISessionApi, ITurnApi } from "../../../../../platform/sessions/common/sessionApi.js";
+import { IAppServerApi, IServerEventApi } from "../../../../../platform/agentHost/common/appServerApi.js";
+import { IModelApi, ISessionApi, ITurnApi } from "../../../../../platform/sessions/common/sessionApi.js";
 import type { AgentThreadExecutionStatus, AgentTreeNode, IActiveSessionThread, ISession, ModelRef, SessionExecutionTarget, SessionId, SessionWorkspaceSelection, ThreadId } from "../../../../services/sessions/common/session.js";
 import type { ISessionsProvider } from "../../../../services/sessions/common/sessionsProvider.js";
 import type { ChatAgent } from '../../../../../workbench/services/chat/common/chatService.js';
 
 export interface AppServerSessionsProviderHost {
-	readonly session: ISessionApi;
 	readonly workspace: () => SessionWorkspaceSelection;
 	readonly selectWorkspace: (folders: readonly { readonly label: string; readonly target: SessionExecutionTarget; }[]) => Promise<SessionExecutionTarget | undefined>;
-	readonly model?: IModelApi;
-	readonly turn?: ITurnApi;
-	readonly events?: IServerEventApi;
 }
 
 /** App Server adapter. Generated DTOs do not cross this provider boundary. */
 export class AppServerSessionsProvider extends Disposable implements ISessionsProvider {
 	private readonly subscribed = new Set<SessionId>();
 	private catalogSubscribed = false;
-	private connectionGeneration = 0;
 	private model: ModelRef | null = null;
 	private readonly _onDidChangeCatalog = this._register(new Emitter<void>());
 	readonly onDidChangeCatalog = this._onDidChangeCatalog.event;
 	private readonly _onDidChangeSession = this._register(new Emitter<{ sessionId: SessionId; detailChanged: boolean; }>());
 	readonly onDidChangeSession = this._onDidChangeSession.event;
 
-	constructor(private readonly host: AppServerSessionsProviderHost, @IAppServerApi appServer: IAppServerApi) {
+	constructor(
+		private readonly host: AppServerSessionsProviderHost,
+		@IAppServerApi private readonly appServer: IAppServerApi,
+		@ISessionApi private readonly sessionApi: ISessionApi,
+		@IModelApi private readonly modelApi: IModelApi,
+		@ITurnApi private readonly turnApi: ITurnApi,
+		@IServerEventApi events: IServerEventApi,
+	) {
 		super();
 		const connection = appServer.onConnectionState(state => {
 			// The server starts each connection with an empty subscription set.
-			++this.connectionGeneration;
 			this.catalogSubscribed = false;
 			this.subscribed.clear();
 			if (state === 'ready') this._onDidChangeCatalog.fire();
 		});
 		this._register(toDisposable(() => connection.dispose()));
-		if (host.events) {
-			const subscription = host.events.subscribe(event => {
-				if (event.method === "session/changed") this._onDidChangeSession.fire({ sessionId: event.params.sessionId, detailChanged: event.params.agentTreeChanged });
-				if (event.method === "session/deleted") this._onDidChangeSession.fire({ sessionId: event.params.sessionId, detailChanged: false });
-			});
-			this._register(toDisposable(() => subscription.dispose()));
-		}
+		const subscription = events.subscribe(event => {
+			if (event.method === "session/changed") this._onDidChangeSession.fire({ sessionId: event.params.sessionId, detailChanged: event.params.agentTreeChanged });
+			if (event.method === "session/deleted") this._onDidChangeSession.fire({ sessionId: event.params.sessionId, detailChanged: false });
+		});
+		this._register(toDisposable(() => subscription.dispose()));
 		this._register(toDisposable(() => {
-			if (this.catalogSubscribed) { void host.session.unsubscribeCatalog().catch(error => console.error("Failed to unsubscribe Session catalog", error)); }
+			if (this.catalogSubscribed) { void this.sessionApi.unsubscribeCatalog().catch(error => console.error("Failed to unsubscribe Session catalog", error)); }
 			for (const sessionId of this.subscribed) {
-				void host.session.unsubscribe({ sessionId }).catch(error => console.error(`Failed to unsubscribe Session '${sessionId}'`, error));
+				void this.sessionApi.unsubscribe({ sessionId }).catch(error => console.error(`Failed to unsubscribe Session '${sessionId}'`, error));
 			}
 			this.subscribed.clear();
 		}));
 	}
 
 	async list(): Promise<readonly ISession[]> {
-		const generation = this.connectionGeneration;
+		this.assertNotDisposed();
+		const generation = this.appServer.connectionGeneration;
+		const subscribing = !this.catalogSubscribed;
+		const catalog = (subscribing ? this.sessionApi.subscribeCatalog() : this.sessionApi.list()).then(async result => {
+			if (generation !== this.appServer.connectionGeneration) { throw canceled(); }
+			if (this.isDisposed) {
+				if (subscribing) { await this.sessionApi.unsubscribeCatalog(); }
+				throw canceled();
+			}
+			// Keep ownership even when reading the model fails after the catalog subscribed.
+			this.catalogSubscribed = true;
+			return result;
+		});
 		const [result, model] = await Promise.all([
-			this.catalogSubscribed ? this.host.session.list() : this.host.session.subscribeCatalog(),
-			this.host.model?.readModel() ?? Promise.resolve(null),
+			catalog,
+			this.modelApi.readModel(),
 		]);
 		this.assertCurrentConnection(generation);
 		this.catalogSubscribed = true;
@@ -68,23 +79,27 @@ export class AppServerSessionsProvider extends Disposable implements ISessionsPr
 	}
 
 	async listAgents(): Promise<readonly ChatAgent[]> {
-		const result = await this.host.session.listAgents();
+		const result = await this.sessionApi.listAgents();
 		return result.agents.flatMap(agent => agent.source.type === 'directory'
 			? [{ name: agent.name, description: agent.description, sourceId: agent.source.id }]
 			: []);
 	}
 
 	async readCatalog(sessionId: SessionId, previous?: ISession): Promise<ISession | undefined> {
-		const generation = this.connectionGeneration;
-		const result = await this.host.session.readCatalog({ sessionId });
+		const generation = this.appServer.connectionGeneration;
+		const result = await this.sessionApi.readCatalog({ sessionId });
 		this.assertCurrentConnection(generation);
 		return result.session ? { ...toSession(result.session, [], previous), model: previous?.model ?? this.model } : undefined;
 	}
 
 	async subscribe(session: ISession): Promise<ISession> {
+		this.assertNotDisposed();
 		if (session.status !== "active") return session;
-		const generation = this.connectionGeneration;
-		const result = await this.host.session.subscribe({ sessionId: session.sessionId });
+		const generation = this.appServer.connectionGeneration;
+		const result = await this.sessionApi.subscribe({ sessionId: session.sessionId });
+		if (this.isDisposed && generation === this.appServer.connectionGeneration) {
+			await this.sessionApi.unsubscribe({ sessionId: session.sessionId });
+		}
 		this.assertCurrentConnection(generation);
 		this.subscribed.add(session.sessionId);
 		const next = toSession(result.session, result.threadProjections, session, result.agentTree.roots);
@@ -98,7 +113,7 @@ export class AppServerSessionsProvider extends Disposable implements ISessionsPr
 
 	async unsubscribe(sessionId: SessionId): Promise<void> {
 		if (!this.subscribed.delete(sessionId)) return;
-		await this.host.session.unsubscribe({ sessionId });
+		await this.sessionApi.unsubscribe({ sessionId });
 	}
 
 	currentWorkspace(): SessionWorkspaceSelection { return this.host.workspace(); }
@@ -108,9 +123,9 @@ export class AppServerSessionsProvider extends Disposable implements ISessionsPr
 			? await this.host.selectWorkspace(workspace.folders)
 			: workspace.type === 'current' ? null : workspace;
 		if (executionTarget === undefined) throw canceled();
-		const created = await this.host.session.create({ commandId: commandId("session"), title, executionTarget, agent: agent ? { type: 'exact', source: { type: 'directory', id: agent.sourceId }, name: agent.name } : { type: 'default' } });
-		const thread = await this.host.session.createThread({ commandId: commandId("thread"), sessionId: created.session.sessionId, title: "Main" });
-		const selected = model ?? await this.host.model?.readModel();
+		const created = await this.sessionApi.create({ commandId: commandId("session"), title, executionTarget, agent: agent ? { type: 'exact', source: { type: 'directory', id: agent.sourceId }, name: agent.name } : { type: 'default' } });
+		const thread = await this.sessionApi.createThread({ commandId: commandId("thread"), sessionId: created.session.sessionId, title: "Main" });
+		const selected = model ?? await this.modelApi.readModel();
 		const session = await this.subscribe({ ...toSession(thread.session), model: selected ?? null });
 		if (!session.chats.some(candidate => candidate.threadId === thread.threadId && candidate.status === "active")) {
 			throw new Error(`Created Thread is missing from subscribed Session snapshot: ${thread.threadId}`);
@@ -119,29 +134,27 @@ export class AppServerSessionsProvider extends Disposable implements ISessionsPr
 	}
 
 	async setModel(model: ModelRef): Promise<void> {
-		if (!this.host.model) throw new Error("Model selection is unavailable in this renderer host.");
-		await this.host.model.setModel({ commandId: commandId("model"), model });
+		await this.modelApi.setModel({ commandId: commandId("model"), model });
 		this.model = model;
 	}
 
 	async archive(session: ISession): Promise<ISession> {
-		const result = await this.host.session.archive({ commandId: commandId("archive-session"), sessionId: session.sessionId });
+		const result = await this.sessionApi.archive({ commandId: commandId("archive-session"), sessionId: session.sessionId });
 		await this.unsubscribe(session.sessionId);
 		return toSession(result.session, [], session);
 	}
 
 	async stop(session: ISession): Promise<ISession> {
-		const result = await this.host.session.stop({ commandId: commandId("stop-session"), sessionId: session.sessionId });
+		const result = await this.sessionApi.stop({ commandId: commandId("stop-session"), sessionId: session.sessionId });
 		await this.unsubscribe(session.sessionId);
 		return toSession(result.session, [], session);
 	}
 
 	async interrupt(session: ISession, threadId: ThreadId): Promise<void> {
-		if (!this.host.turn) throw new Error("Turn interruption is unavailable in this renderer host.");
-		const current = await this.host.session.read({ sessionId: session.sessionId });
+		const current = await this.sessionApi.read({ sessionId: session.sessionId });
 		const node = findAgentNode(current.agentTree.roots.map(toAgentTreeNode), threadId);
 		if (!node?.currentTurnId || !canInterrupt(node)) throw new Error(`Running Agent Thread is not available: ${threadId}`);
-		await this.host.turn.interrupt({
+		await this.turnApi.interrupt({
 			commandId: commandId("agent-interrupt"),
 			sessionId: session.sessionId,
 			threadId,
@@ -151,7 +164,7 @@ export class AppServerSessionsProvider extends Disposable implements ISessionsPr
 	}
 
 	private assertCurrentConnection(generation: number): void {
-		if (this.isDisposed || generation !== this.connectionGeneration) throw canceled();
+		if (this.isDisposed || generation !== this.appServer.connectionGeneration) throw canceled();
 	}
 }
 

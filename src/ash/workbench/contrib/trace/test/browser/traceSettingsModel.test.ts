@@ -49,10 +49,10 @@ suite('Execution trace settings model', () => {
 		assert.deepEqual(updates, [], 'A missing directory must not be persisted');
 		await run(model, 'choose');
 		await run(model, 'save');
-		assert.deepEqual(updates, [{ settings: { enabled: true, directory: '/recordings' }, revision: 7 }]);
+		assert.deepEqual(updates, [{ settings: { enabled: true, directory: URI.file('/recordings').fsPath }, revision: 7 }]);
 		assert.match(JSON.stringify(field(model, 'current')), /recording is off/);
 		assert.match(JSON.stringify(field(model, 'application')), /require restarting/);
-		snapshot = { ...snapshot, recording: { type: 'enabled', directory: '/recordings' } };
+		snapshot = { ...snapshot, recording: { type: 'enabled', directory: URI.file('/recordings').fsPath } };
 		await run(model, 'refresh');
 		assert.match(JSON.stringify(field(model, 'application')), /match the running backend/);
 	});

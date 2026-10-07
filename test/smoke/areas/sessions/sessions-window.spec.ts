@@ -2652,7 +2652,7 @@ test('Open in Agents selects the same session thread in the Agents Window', asyn
 	const targetChat = sessionsPage.locator('.ash-sessions-chat-slot.active:visible :is(.ash-chat,.ash-cowork)');
 	await expect(targetChat).toHaveAttribute('data-session-id', sessionId!);
 	await expect(targetChat).toHaveAttribute('data-thread-id', threadId!);
-	const sessionTitle = (await sessionsPage.locator('.ash-sessions-chat-slot.active:visible').evaluate(element => element.closest('.ash-editor-group')!.querySelector('[role="tab"]')!.textContent))!;
+	const sessionTitle = (await sessionsPage.locator('.ash-sessions-chat-slot.active:visible').evaluate(element => element.closest('.ash-editor-group')!.querySelector('[role="tab"]')!.getAttribute('aria-label')))!;
 	const navigation = sessionsPage.locator('.ash-sessions-activity-content');
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
 	await sessionsPage.locator('.ash-sessions-list-item').filter({ hasText: sessionTitle }).click();

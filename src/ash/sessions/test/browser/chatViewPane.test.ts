@@ -13,8 +13,10 @@ import { ILanguageModelsConfigurationService as ICoworkModelPreferences } from '
 import { LanguageModelsConfigurationService as CoworkModelPreferencesService } from '../../contrib/cowork/browser/languageModelsConfigurationService.js';
 import { initializeTestLocalization } from '../../../workbench/services/localization/test/common/localizationTestUtils.js';
 import { resetNlsResolver } from '../../../nls.js';
-import { IModelApi } from '../../../platform/sessions/common/sessionApi.js';
-import { IAppServerApi, IServerEventApi } from '../../../platform/agentHost/common/appServerApi.js';
+import { IModelApi, ISessionApi, IThreadApi, ITurnApi } from '../../../platform/sessions/common/sessionApi.js';
+import { ITurnChangesApi } from '../../../platform/turnChanges/common/turnChangesApi.js';
+import { ISkillService } from '../../../platform/skills/common/skillService.js';
+import { IAppServerApi, IServerEventApi, type AppServerConnectionState } from '../../../platform/agentHost/common/appServerApi.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
 import { IDictationService } from '../../../platform/dictation/common/dictationService.js';
@@ -30,6 +32,7 @@ import type { SessionMutationParams, SessionOperationInput } from "../../../plat
 import type { IRendererHost } from "../../../platform/renderer/common/rendererHost.js";
 import type { IAction } from "../../../base/common/actions.js";
 import { Emitter, Event } from "../../../base/common/event.js";
+import { isCancellationError } from '../../../base/common/errors.js';
 import { DeferredPromise } from '../../../base/common/async.js';
 import { SessionsService } from '../../services/sessions/browser/sessionsService.js';
 import { DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
@@ -112,7 +115,11 @@ class SessionsManagementService extends BaseSessionsManagementService {
 	constructor(api: IRendererHost) {
 		const services = inputResources.add(new InstantiationService());
 		services.registerInstance(IAppServerApi, api.appServer);
-		super(services.createInstance(AppServerSessionsProvider, { session: api.session, model: api.model, turn: api.turn, events: api.events, workspace: () => ({ type: 'current' }), selectWorkspace: async () => undefined }));
+		services.registerInstance(ISessionApi, api.session);
+		services.registerInstance(IModelApi, api.model);
+		services.registerInstance(ITurnApi, api.turn);
+		services.registerInstance(IServerEventApi, api.events);
+		super(services.createInstance(AppServerSessionsProvider, { workspace: () => ({ type: 'current' }), selectWorkspace: async () => undefined }));
 	}
 }
 for (const [name, value] of Object.entries({
@@ -747,7 +754,7 @@ test('sending from one session preserves a later draft during first-session crea
 	using editorResources = new DisposableStore();
 	const composerStorage = editorResources.add(createTestStorage());
 	const editorServices = editorResources.add(createTestEditorServices(undefined, createCodeEditorServices(editorResources), dom.window.document, composerStorage));
-	editorServices.registerInstance(IEditorService, { openEditor: async () => { throw new Error('Unexpected editor navigation'); } } as unknown as IEditorService);
+	editorServices.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { assert.fail('Unexpected editor navigation'); }, focusActiveEditor: () => { } });
 	editorServices.registerInstance(ISessionsGitHubService, {
 		onDidChange: Event.None,
 		getSessionPullRequests: () => [],
@@ -1832,15 +1839,93 @@ function createChatService(api: IRendererHost, configurationService?: WorkbenchC
 	const storage = storageService ?? createTestStorage();
 	if (!storageService) testStorages.push(storage);
 	const services = inputResources.add(new InstantiationService());
-	services.registerInstance(IModelApi, api.model);
-	services.registerInstance(IAppServerApi, api.appServer);
-	services.registerInstance(IServerEventApi, api.events);
+	registerChatBackend(services, api);
 	services.registerInstance(IConfigurationService, configurationService ?? inputResources.add(new WorkbenchConfigurationService()));
 	services.registerInstance(IStorageService, storage);
 	services.registerInstance(ILanguageModelsConfigurationService, inputResources.add(services.createInstance(LanguageModelsConfigurationService, ChatModelPreferences)));
-	const chat = new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, turnChangesApi: api.turnChanges, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events });
+	const chat = services.createInstance(ChatService);
 	modelServices.set(chat, inputResources.add(services.createInstance(LanguageModelsService)));
 	return chat;
+}
+
+function registerChatBackend(services: InstantiationService, api: IRendererHost, omitted?: unknown): void {
+	if (omitted !== IModelApi) { services.registerInstance(IModelApi, api.model); }
+	if (omitted !== IAppServerApi) { services.registerInstance(IAppServerApi, api.appServer); }
+	if (omitted !== IThreadApi) { services.registerInstance(IThreadApi, api.thread); }
+	if (omitted !== ITurnApi) { services.registerInstance(ITurnApi, api.turn); }
+	if (omitted !== ITurnChangesApi) { services.registerInstance(ITurnChangesApi, api.turnChanges); }
+	if (omitted !== ISkillService) { services.registerInstance(ISkillService, api.skills); }
+	if (omitted !== IServerEventApi) { services.registerInstance(IServerEventApi, api.events); }
+}
+
+for (const dependency of [IModelApi, IThreadApi, ITurnApi, ITurnChangesApi, ISkillService, IAppServerApi, IServerEventApi]) {
+	test(`Chat rejects missing ${dependency.description} before allocating listeners`, () => {
+		using services = new InstantiationService();
+		registerChatBackend(services, fakeApi().api, dependency);
+		assert.throws(() => services.createInstance(ChatService), { message: `Unknown service: ${dependency.description}` });
+	});
+}
+
+test('a late subscription and release from the old connection cannot replace or release a restored Thread', async () => {
+	const fake = fakeApi();
+	using connection = new Emitter<AppServerConnectionState>();
+	let generation = 1;
+	const pending = new DeferredPromise<Awaited<ReturnType<typeof fake.api.thread.subscribe>>>();
+	let subscribing = 0;
+	const released: string[] = [];
+	using chat = createChatService({
+		...fake.api,
+		appServer: { ...fake.api.appServer, get connectionGeneration() { return generation; }, onConnectionState: listener => connection.event(listener) },
+		thread: {
+			...fake.api.thread,
+			subscribe: params => ++subscribing === 1 ? pending.p : fake.api.thread.subscribe(params),
+			unsubscribe: async ({ threadId }) => { released.push(threadId); },
+		},
+	});
+	const owner = {};
+	const old = chat.subscribeThread('session-1', 'thread-1', 0, owner);
+	const rejected = assert.rejects(old, isCancellationError);
+	const closing = chat.unsubscribeThread('session-1', 'thread-1', owner);
+	connection.fire('crashed');
+	generation++;
+	connection.fire('ready');
+	await chat.subscribeThread('session-1', 'thread-1', 0, owner);
+	await pending.complete(await fake.api.thread.subscribe({ sessionId: 'session-1', threadId: 'thread-1', afterSequence: 0 }));
+	await rejected;
+	await closing;
+	assert.deepEqual(released, []);
+	await chat.unsubscribeThread('session-1', 'thread-1', owner);
+	assert.deepEqual(released, ['thread-1']);
+});
+
+test('disposing Chat releases each shared Thread subscription once', async () => {
+	const fake = fakeApi();
+	const released: string[] = [];
+	const chat = createChatService({ ...fake.api, thread: { ...fake.api.thread, unsubscribe: async ({ threadId }) => { released.push(threadId); } } });
+	try {
+		await chat.subscribeThread('session-1', 'thread-1', 0, {});
+		await chat.subscribeThread('session-1', 'thread-1', 0, {});
+		await chat.subscribeThread('session-1', 'thread-2', 0, {});
+	} finally { chat.dispose(); }
+	await waitFor(() => released.length === 2);
+	assert.deepEqual(released.sort(), ['thread-1', 'thread-2']);
+});
+
+for (const reconnect of [false, true]) {
+	test(`disposing Chat during subscription only releases its own connection (reconnect: ${reconnect})`, async () => {
+		const fake = fakeApi();
+		const pending = new DeferredPromise<Awaited<ReturnType<typeof fake.api.thread.subscribe>>>();
+		const released: string[] = [];
+		const chat = createChatService({ ...fake.api, thread: { ...fake.api.thread, subscribe: () => pending.p, unsubscribe: async ({ threadId }) => { released.push(threadId); } } });
+		const subscribing = chat.subscribeThread('session-1', 'thread-1', 0, {});
+		const rejected = assert.rejects(subscribing, isCancellationError);
+		chat.dispose();
+		if (reconnect) fake.emitReady();
+		await pending.complete(await fake.api.thread.subscribe({ sessionId: 'session-1', threadId: 'thread-1', afterSequence: 0 }));
+		await rejected;
+		await Promise.resolve();
+		assert.deepEqual(released, reconnect ? [] : ['thread-1']);
+	});
 }
 
 test('closing one conversation owner retains another owner across repeated subscriptions', async () => {
@@ -2627,6 +2712,7 @@ function fakeApi(options: FakeOptions = {}): {
 } {
 	const listeners = new Set<(notification: ServerNotification) => void>();
 	const connectionListeners = new Set<(state: "ready") => void>();
+	let connectionGeneration = 1;
 	const archiveRequests: SessionMutationParams[] = [];
 	const stopRequests: SessionMutationParams[] = [];
 	const createSessionRequests: SessionCreateParams[] = [];
@@ -2651,6 +2737,7 @@ function fakeApi(options: FakeOptions = {}): {
 		?? session(sessionId);
 	const api = {
 		appServer: {
+			get connectionGeneration() { return connectionGeneration; },
 			getConnectionState: async () => "ready" as const,
 			getSlashCommands: async () => [],
 			onConnectionState: (next: (state: "ready") => void) => {
@@ -2812,6 +2899,7 @@ function fakeApi(options: FakeOptions = {}): {
 			for (const listener of listeners) listener(notification);
 		},
 		emitReady: () => {
+			connectionGeneration++;
 			for (const listener of connectionListeners) listener("ready");
 		},
 	};

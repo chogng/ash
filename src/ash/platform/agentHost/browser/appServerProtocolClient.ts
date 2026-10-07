@@ -53,7 +53,7 @@ export class AppServerProtocolClient {
 	private readonly handlers = new Map<AppServerServerRequestMethod, (params: never, context: AppServerRequestContext) => unknown | Promise<unknown>>();
 	private readonly inbound = new Map<JsonRpcId, AbortController>();
 	private nextRequestId = 1;
-	public generation = 0;
+	private _generation = 0;
 	private _state: AppServerConnectionState = "stopped";
 	private _slashCommands: readonly InitializeResult["slashCommands"][number][] = [];
 	private _capabilities: ServerCapabilities | undefined;
@@ -82,6 +82,8 @@ export class AppServerProtocolClient {
 		return this._state;
 	}
 
+	public get generation(): number { return this._generation; }
+
 	get slashCommands(): readonly InitializeResult["slashCommands"][number][] {
 		return this._slashCommands;
 	}
@@ -98,7 +100,7 @@ export class AppServerProtocolClient {
 	async connect(): Promise<AppServerConnectionMetadata> {
 		if (this.disposed) throw new Error("Cannot connect a disposed App Server client");
 		if (this._state !== "stopped" && this._state !== 'crashed') throw new Error(`Cannot connect App Server client from ${this._state}`);
-		this.generation++;
+		this._generation++;
 		this.setState("starting");
 		const connected = new Promise<AppServerConnectionMetadata>((resolve, reject) => {
 			this.connectResolve = resolve;

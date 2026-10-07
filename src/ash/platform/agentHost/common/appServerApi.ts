@@ -6,6 +6,8 @@ export type AppServerConnectionState = "stopped" | "starting" | "initializing" |
 
 /** App Server connection lifecycle visible to a renderer host. */
 export interface IAppServerApi {
+	/** Changes when the protocol client starts a replacement connection. */
+	readonly connectionGeneration: number;
 	getConnectionState(): Promise<AppServerConnectionState>;
 	getSlashCommands(): Promise<readonly SlashCommandDefinition[]>;
 	onConnectionState(listener: (state: AppServerConnectionState) => void): DisposableHandle;

@@ -509,6 +509,14 @@ Electron 主进程连接由 `IMainProcessService` 提供 channel。Workbench 和
 
 `base/parts/ipc` 拥有 Electron 消息传输、JSON 消息帧、调用取消和事件订阅生命周期；`platform/ipc` 提供 Main 服务契约与薄适配。Main 在应用启动时为系统颜色、配置、系统与用户键盘布局、更新和最近项目历史各注册一次共享 channel；日志、存储、URI 分发等既有 channel 也复用该连接。领域适配器校验命令、事件和参数，服务事件直接成为 channel 订阅，应用不再逐窗口转发这些共享服务的变化。窗口启动与窗口专属操作仍通过有限可信路由提供，App Server 业务调用继续由 `AppServerProtocolClient` 和 Rust 协议负责，其 MessagePort transport 保留。
 
+App Server 接入的装配链为：`base` 的端口交付 → `platform/agentHost` 的 transport 与 protocol client →
+领域 API 的 service identifier → `ChatService` 与 Sessions provider → Sessions 管理和视图。
+Workbench 与 Agents Window 都先注册同一窗口连接上的 `ISessionApi`、`IThreadApi`、`ITurnApi`、
+`IModelApi`、`ITurnChangesApi` 和事件服务，再由实例化服务创建消费者。provider 的宿主参数只提供
+工作区选择；缺少后端依赖时在创建阶段失败。连接代次由 protocol client 唯一维护，经
+`IAppServerApi.connectionGeneration` 读取。断线后丢弃旧订阅并重新取快照；关闭消费者时释放其订阅，
+迟到结果只能释放原连接的资源，不能覆盖或取消重连后的订阅。
+
 Ash 当前没有 VS Code `externalServices` 中的 telemetry machine ID / Marketplace header 组合语义，
 也没有构建时替换的 Copilot license endpoint，因此不建立同名空目录。Marketplace 请求继续由
 `platform/marketplace` 拥有；不可把任意网络调用、外部 URL 或产品常量汇总进一个模糊的

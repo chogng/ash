@@ -233,6 +233,7 @@ test('Web reconnect initializes again without replaying an uncertain write', asy
 	const transport = new FakeTransport();
 	const connected = await connectWebRendererApi(transport, connectorHostServices);
 	try {
+		assert.equal(connected.api.appServer.connectionGeneration, 1);
 		const pending = connected.api.fs.writeFile({ dirId: 'web-dev:test', path: 'main.ts', content: 'changed' });
 		const rejected = assert.rejects(pending, /backend restarted/);
 		transport.close('backend restarted');
@@ -244,6 +245,7 @@ test('Web reconnect initializes again without replaying an uncertain write', asy
 			});
 		});
 		assert.equal(transport.requests.filter(request => request.method === 'initialize').length, 2);
+		assert.equal(connected.api.appServer.connectionGeneration, 2);
 		assert.equal(transport.requests.filter(request => request.method === 'fs/writeFile').length, 1);
 		assert.deepEqual(await connected.api.session.list(), { sessions: [] });
 	} finally { connected.dispose(); }

@@ -132,3 +132,6 @@ export interface ITurnApi {
 }
 
 export const IModelApi = createServiceIdentifier<IModelApi>('ModelApi');
+export const ISessionApi = createServiceIdentifier<ISessionApi>('SessionApi');
+export const IThreadApi = createServiceIdentifier<IThreadApi>('ThreadApi');
+export const ITurnApi = createServiceIdentifier<ITurnApi>('TurnApi');

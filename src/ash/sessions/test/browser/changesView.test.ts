@@ -16,6 +16,10 @@ import type { TurnChangesReadResult } from '../../../../../.build/protocol/types
 import { WorkbenchConfigurationService } from '../../../workbench/services/configuration/browser/configurationService.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import { NotificationService } from '../../../workbench/services/notification/common/notificationService.js';
+import { IModelApi, IThreadApi, ITurnApi } from '../../../platform/sessions/common/sessionApi.js';
+import { IAppServerApi, IServerEventApi } from '../../../platform/agentHost/common/appServerApi.js';
+import { ISkillService } from '../../../platform/skills/common/skillService.js';
+import { ITurnChangesApi } from '../../../platform/turnChanges/common/turnChangesApi.js';
 import { ChatService } from '../../../workbench/services/chat/browser/chatService.js';
 import { IChatService } from '../../../workbench/services/chat/common/chatService.js';
 import { IEditorService, type EditorOpenOptions } from '../../../workbench/services/editor/common/editorService.js';
@@ -52,15 +56,19 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 		const host = createDisconnectedRendererApi();
 		let truncated = false;
 		let pendingRead: DeferredPromise<{ path: string; binary: boolean; truncated: boolean; before: string; after: string; }> | undefined;
-		using chat = new ChatService({
-			modelApi: host.model, threadApi: host.thread, turnApi: host.turn, skillApi: host.skills, appServerApi: host.appServer, eventApi: host.events,
-			turnChangesApi: {
-				...host.turnChanges,
-				list: async params => params.sessionId === 'old' ? old.p : { changeSets: [details.summary] },
-				read: async params => { requests.push(params); return details; },
-				readFile: async params => { requests.push(params); return pendingRead ? pendingRead.p : { path: 'main.ts', binary: false, truncated, before: 'before', after: 'after' }; },
-			},
+		services.registerInstance(IModelApi, host.model);
+		services.registerInstance(IThreadApi, host.thread);
+		services.registerInstance(ITurnApi, host.turn);
+		services.registerInstance(ISkillService, host.skills);
+		services.registerInstance(IAppServerApi, host.appServer);
+		services.registerInstance(IServerEventApi, host.events);
+		services.registerInstance(ITurnChangesApi, {
+			...host.turnChanges,
+			list: async params => params.sessionId === 'old' ? old.p : { changeSets: [details.summary] },
+			read: async params => { requests.push(params); return details; },
+			readFile: async params => { requests.push(params); return pendingRead ? pendingRead.p : { path: 'main.ts', binary: false, truncated, before: 'before', after: 'after' }; },
 		});
+		using chat = services.createInstance(ChatService);
 		const opened: IResourceEditorInput[] = [];
 		const openOptions: (EditorOpenOptions | undefined)[] = [];
 		const editors: IEditorService = { onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [], async openEditor(input, options) { opened.push(input); openOptions.push(options); }, focusActiveEditor() { } };

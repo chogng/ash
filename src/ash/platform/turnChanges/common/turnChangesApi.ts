@@ -1,3 +1,4 @@
+import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type {
 	TurnChangesCommitParams,
 	TurnChangesPrepareCommitParams,
@@ -29,3 +30,5 @@ export interface ITurnChangesApi {
 	commit(params: TurnChangesCommitParams): Promise<TurnChangesMutationResult>;
 	discardThread(params: TurnChangesDiscardThreadParams): Promise<TurnChangesMutationResult>;
 }
+
+export const ITurnChangesApi = createServiceIdentifier<ITurnChangesApi>('TurnChangesApi');

@@ -9,6 +9,7 @@ import { SystemOutputService } from "../../browser/systemOutputService.js";
 test("SystemOutputService projects App Server lifecycle", async () => {
 	const listeners = new Set<(state: AppServerConnectionState) => void>();
 	const appServer: IAppServerApi = {
+		connectionGeneration: 1,
 		getConnectionState: async () => "ready",
 		getSlashCommands: async () => [],
 		onConnectionState: listener => { listeners.add(listener); return { dispose: () => listeners.delete(listener) }; },

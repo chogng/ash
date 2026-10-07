@@ -16,7 +16,8 @@ import { ServiceCollection } from '../../platform/instantiation/common/serviceCo
 import { getSingletonServiceDescriptors } from '../../platform/instantiation/common/extensions.js';
 import { IAssetService, type AssetVersion } from '../../platform/assets/common/assetService.js';
 import { IApprovalEnvironmentService } from '../../platform/approvalEnvironment/common/approvalEnvironmentService.js';
-import { IModelApi as ModelApiId } from '../../platform/sessions/common/sessionApi.js';
+import { IModelApi as ModelApiId, ISessionApi, IThreadApi, ITurnApi } from '../../platform/sessions/common/sessionApi.js';
+import { ITurnChangesApi } from '../../platform/turnChanges/common/turnChangesApi.js';
 import { AppServerAvailableContext, IsSessionsWindowContext, WorkspaceFolderCountContext } from '../../workbench/common/contextkeys.js';
 import { EditorPanes } from '../../workbench/browser/editor.js';
 import { EditorContextKeyController } from '../../workbench/browser/parts/editor/editorContextKeys.js';
@@ -307,13 +308,16 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IWorkbenchHostService, workbenchWindow);
 		services.registerInstance(AppServerApiId, options.api.appServer);
 		services.registerInstance(IRendererHostService, options.api);
+		services.registerInstance(ModelApiId, options.api.model);
+		services.registerInstance(ISessionApi, options.api.session);
+		services.registerInstance(IThreadApi, options.api.thread);
+		services.registerInstance(ITurnApi, options.api.turn);
+		services.registerInstance(ITurnChangesApi, options.api.turnChanges);
+		services.registerInstance(ServerEventApiId, options.api.events);
+		services.registerInstance(ISkillService, options.api.skills);
 		const sessions = this._register(new SessionsManagementService(services.createInstance(AppServerSessionsProvider, {
-			session: options.api.session,
 			workspace: options.workspaceSelection,
 			selectWorkspace: folders => pickWorkspaceFolder(services.get(IQuickInputService), folders),
-			model: options.api.model,
-			turn: options.api.turn,
-			events: options.api.events,
 		} satisfies AppServerSessionsProviderHost)));
 		const teams = new TeamsManagementService(new AppServerTeamsProvider(options.api.teams));
 		services.registerInstance(ITeamsManagementService, teams);
@@ -321,15 +325,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IStorageService, storage);
 		services.registerInstance(ISessionsManagementService, sessions);
 		const view = this.sessionsView = this._register(services.createInstance(SessionsService));
-		const chat = this._register(new ChatService({
-			modelApi: options.api.model,
-			threadApi: options.api.thread,
-			turnApi: options.api.turn,
-			turnChangesApi: options.api.turnChanges,
-			skillApi: options.api.skills,
-			appServerApi: options.api.appServer,
-			eventApi: options.api.events,
-		}));
+		const chat = this._register(services.createInstance(ChatService));
 		services.registerInstance(ISessionsService, view);
 		services.registerInstance(ISessionGroupsService, this._register(services.createInstance(SessionGroupsService)));
 		const workspace = this._register(services.createInstance(SessionsWorkspaceContextService, options.workspace));
@@ -374,8 +370,6 @@ export abstract class Workbench extends Disposable {
 		services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
 		if (options.createTextDocumentHost) { this._register(options.createTextDocumentHost(services)); }
 		services.registerInstance(IChatService, chat);
-		services.registerInstance(ModelApiId, options.api.model);
-		services.registerInstance(ServerEventApiId, options.api.events);
 		services.registerInstance(ILanguageModelsConfigurationService, this._register(services.createInstance(LanguageModelsConfigurationService, ChatModelPreferences)));
 		services.registerInstance(ILanguageModelsService, this._register(services.createInstance(LanguageModelsService)));
 		services.registerInstance(ISkillService, options.api.skills);
