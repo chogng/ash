@@ -237,12 +237,13 @@ fn psec_filesystem_aliases_keep_read_only_and_denied_overrides() {
     let dir = Dir::open_local(temp.path()).unwrap();
     let config = dir.canonical_path().join("config");
     let junction = dir.canonical_path().join("config-alias");
-    let secret = dir.canonical_path().join("secret.txt");
-    let secret_alias = dir.canonical_path().join("secret-alias.txt");
+    let secret = config.join("secret.txt");
+    let secret_alias = junction.join("secret.txt");
     std::fs::create_dir(&config).unwrap();
     std::fs::write(config.join("settings.txt"), "original").unwrap();
     std::fs::write(&secret, "secret-canary").unwrap();
-    std::fs::hard_link(&secret, &secret_alias).unwrap();
+    // Denied files with hard links are rejected before PSEC preparation. A junction
+    // reaches the same single-linked file, so this scenario exercises execution policy.
     let linked = std::process::Command::new(
         Path::new(&std::env::var_os("SystemRoot").unwrap()).join("System32/cmd.exe"),
     )
@@ -263,7 +264,7 @@ fn psec_filesystem_aliases_keep_read_only_and_denied_overrides() {
             .unwrap(),
             SandboxPathRule::exact(
                 dir.clone(),
-                "secret.txt",
+                "config/secret.txt",
                 SandboxPathAccess::Denied,
                 MissingPathBehavior::Reject,
             )
