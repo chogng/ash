@@ -1,3 +1,4 @@
+import { raceCancellationError } from '../../../../base/common/async.js';
 import { throwIfCancelled, type CancellationToken } from '../../../../base/common/cancellation.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
@@ -8,7 +9,7 @@ import { IOutlineService, type IOutline, type IOutlineCreator, type OutlineTarge
 /** Owns creator registration, while each consumer owns the outline it requests. */
 export class OutlineService extends Disposable implements IOutlineService {
 	public readonly _serviceBrand = undefined;
-	private readonly creators = new Set<IOutlineCreator<IEditorPane, unknown>>();
+	private readonly creators = new Set<IOutlineCreator<IEditorPane, any>>();
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
 
@@ -21,12 +22,16 @@ export class OutlineService extends Disposable implements IOutlineService {
 		return [...this.creators].some(creator => creator.matches(editor));
 	}
 
-	public async createOutline(editor: IEditorPane, target: OutlineTarget, token: CancellationToken): Promise<IOutline<unknown> | undefined> {
+	public async createOutline(editor: IEditorPane, target: OutlineTarget, token: CancellationToken): Promise<IOutline<any> | undefined> {
 		this.assertNotDisposed();
 		throwIfCancelled(token);
 		const creator = [...this.creators].find(candidate => candidate.matches(editor));
 		if (!creator) return undefined;
-		const outline = await creator.createOutline(editor, target, token);
+		const pending = creator.createOutline(editor, target, token).then(outline => {
+			if (token.isCancellationRequested || this.isDisposed || !this.creators.has(creator)) { outline?.dispose(); return undefined; }
+			return outline;
+		});
+		const outline = await raceCancellationError(pending, token);
 		if (this.isDisposed || token.isCancellationRequested || !this.creators.has(creator)) {
 			outline?.dispose();
 			return undefined;
@@ -34,7 +39,7 @@ export class OutlineService extends Disposable implements IOutlineService {
 		return outline;
 	}
 
-	public registerOutlineCreator(creator: IOutlineCreator<IEditorPane, unknown>): IDisposable {
+	public registerOutlineCreator(creator: IOutlineCreator<IEditorPane, any>): IDisposable {
 		this.assertNotDisposed();
 		if (this.creators.has(creator)) throw new Error('Outline creator is already registered');
 		this.creators.add(creator);

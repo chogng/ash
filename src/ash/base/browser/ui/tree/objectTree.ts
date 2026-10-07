@@ -224,6 +224,10 @@ export class ObjectTree<TNode> extends Disposable {
 		return this.tree.selection.map((node) => node.element);
 	}
 	getVisibleElements(): readonly TNode[] { return this.model.visibleNodes.map((node) => node.element); }
+	openFind(): void { this.tree.openFind(); }
+	closeFind(): void { this.tree.closeFind(); }
+	get findMode(): TreeFindMode { return this.tree.findMode; }
+	set findMode(mode: TreeFindMode) { this.tree.findMode = mode; }
 
 	domFocus(): void { this.tree.domFocus(); }
 	rerender(id?: string): void { this.model.rerender(id); }

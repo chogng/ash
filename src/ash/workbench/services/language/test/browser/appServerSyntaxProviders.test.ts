@@ -6,7 +6,7 @@ import { OutlineModel } from '../../../../../editor/contrib/documentSymbols/brow
 import { FoldingRangeService } from '../../../../../editor/contrib/folding/common/languageFoldingRanges.js';
 import { createLanguageFeatureRequest } from '../../../../../editor/common/languages.js';
 import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';
-import { AppServerSyntaxProviders, syntaxLanguageForEditorLanguage } from '../../browser/appServerSyntaxProviders.js';
+import { AppServerSyntaxProviders, projectAppServerSyntaxSymbols, syntaxLanguageForEditorLanguage } from '../../browser/appServerSyntaxProviders.js';
 import { createSyntaxWorker, SyntaxProviderWorker } from '../../../../../editor/common/services/editorWebWorker.js';
 
 test('Frontend tokens remain independent of App Server diagnostics, symbols, folds, and selection ranges', async () => {
@@ -202,4 +202,14 @@ test('oversized intermediate revisions reopen from the current bounded snapshot'
 	await request();
 	assert.deepEqual(opened, ['fn initial() {}\n', 'fn compact() {}\n']);
 	assert.equal(updates, 0);
+});
+
+
+test('syntax document symbols reconstruct containing scopes from unsorted flat parser ranges', () => {
+	using model = new TextModel('outer {\n inner {\n leaf\n }\n}\nother');
+	const symbol = (name: string, start: number, end: number) => ({ name, kind: 'function' as const, range: { start: { lineIndex: start, columnIndex: 0 }, end: { lineIndex: end, columnIndex: model.getLineContent(end + 1).length } }, selectionRange: { start: { lineIndex: start, columnIndex: 0 }, end: { lineIndex: start, columnIndex: 1 } } });
+	const symbols = projectAppServerSyntaxSymbols({ revision: model.getVersionId(), hasErrors: false, tokens: [], diagnostics: [], foldingRanges: [], symbols: [symbol('leaf', 2, 2), symbol('other', 5, 5), symbol('inner', 1, 3), symbol('outer', 0, 4)] }, model.createVersionedSnapshot());
+	const names = (entries: readonly import('../../../../../editor/common/languages.js').LanguageDocumentSymbol[]): unknown => entries.map(entry => ({ name: entry.name, children: names(entry.children ?? []) }));
+	assert.deepEqual(names(symbols), [{ name: 'outer', children: [{ name: 'inner', children: [{ name: 'leaf', children: [] }] }] }, { name: 'other', children: [] }]);
+	assert.ok(Object.isFrozen(symbols[0].children));
 });

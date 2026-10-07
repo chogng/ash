@@ -494,3 +494,22 @@ fn selection_ranges_reject_invalid_utf8_boundaries() {
         SyntaxError::InvalidSelectionBoundary { offset: 7 }
     ));
 }
+
+#[test]
+fn typescript_tags_include_javascript_declarations_and_typescript_extensions() {
+    let source = "function zebra() { function nested() {} }\ninterface Shape { draw(): void; }\n";
+    for language in [SyntaxLanguage::Typescript, SyntaxLanguage::Typescriptreact] {
+        let document = SyntaxDocument::open(language, DocumentRevision::new(1), source)
+            .expect("TypeScript tags should compile with the base JavaScript query");
+        let snapshot = document.snapshot();
+        let names = snapshot
+            .symbols()
+            .iter()
+            .map(|symbol| symbol.name.as_str())
+            .collect::<Vec<_>>();
+        assert!(names.contains(&"zebra"));
+        assert!(names.contains(&"nested"));
+        assert!(names.contains(&"Shape"));
+        assert!(names.contains(&"draw"));
+    }
+}

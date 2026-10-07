@@ -218,7 +218,21 @@ export function projectAppServerSyntaxDiagnostics(result: SyntaxAnalyzeResult, s
 export function projectAppServerSyntaxSymbols(result: SyntaxAnalyzeResult, snapshot: TextSnapshot): readonly LanguageDocumentSymbol[] {
 	assertMatchingRevision(result, snapshot);
 	const lines = snapshotLines(snapshot);
-	return Object.freeze(result.symbols.map(symbol => projectAppServerSyntaxSymbol(symbol, lines)));
+	// The parser transports flat ranges; document-symbol consumers require the containing scope tree.
+	interface SymbolNode { readonly symbol: LanguageDocumentSymbol; readonly children: SymbolNode[]; }
+	const symbols = result.symbols.map(symbol => projectAppServerSyntaxSymbol(symbol, lines)).sort((a, b) =>
+		a.range.startLineNumber - b.range.startLineNumber || a.range.startColumn - b.range.startColumn || b.range.endLineNumber - a.range.endLineNumber || b.range.endColumn - a.range.endColumn);
+	const roots: SymbolNode[] = [];
+	const stack: SymbolNode[] = [];
+	for (const symbol of symbols) {
+		while (stack.length && (!stack.at(-1)!.symbol.range.containsRange(symbol.range) || stack.at(-1)!.symbol.range.equalsRange(symbol.range))) stack.pop();
+		const node: SymbolNode = { symbol, children: [] };
+		(stack.at(-1)?.children ?? roots).push(node);
+		stack.push(node);
+	}
+	const freeze = ({ symbol, children }: SymbolNode): LanguageDocumentSymbol => children.length
+		? Object.freeze({ ...symbol, children: Object.freeze(children.map(freeze)) }) : symbol;
+	return Object.freeze(roots.map(freeze));
 }
 
 export function projectAppServerSyntaxSelectionRanges(result: SyntaxSelectionRangesResult, snapshot: TextSnapshot): readonly Range[] {

@@ -7,6 +7,8 @@ import {
 	registerFilesViews,
 } from "../contrib/files/browser/explorerViewlet.js";
 import '../contrib/files/browser/files.contribution.js';
+import { registerOutlineView } from '../contrib/outline/browser/outline.contribution.js';
+import { registerTimelineView } from '../contrib/timeline/browser/timeline.contribution.js';
 import '../contrib/accessibility/browser/accessibility.contribution.js';
 import '../contrib/git/browser/git.contribution.js';
 import {
@@ -86,6 +88,8 @@ ViewsRegistry.registerStaticViewContainer({
 	isDefault: true,
 });
 registerFilesViews();
+registerOutlineView();
+registerTimelineView();
 registerSearchViews();
 registerGitViews();
 registerProblemsView();

@@ -1,4 +1,6 @@
-use tree_sitter::{Language, Parser, Query};
+use tree_sitter::Language;
+use tree_sitter::Parser;
+use tree_sitter::Query;
 
 use crate::SyntaxError;
 
@@ -65,7 +67,12 @@ impl LanguageConfiguration {
             "highlights",
             definition.highlights,
         )?;
-        let tags = query(syntax_language, &language, "tags", definition.tags)?;
+        let tags = query(
+            syntax_language,
+            &language,
+            "tags",
+            &definition.tags.join("\n"),
+        )?;
         Ok(Self { highlights, tags })
     }
 }
@@ -73,7 +80,7 @@ impl LanguageConfiguration {
 struct LanguageDefinition {
     language: Language,
     highlights: &'static str,
-    tags: &'static str,
+    tags: &'static [&'static str],
 }
 
 fn definition(syntax_language: SyntaxLanguage) -> LanguageDefinition {

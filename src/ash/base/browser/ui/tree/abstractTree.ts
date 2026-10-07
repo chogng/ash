@@ -1,10 +1,13 @@
+import { InputBox } from '../inputbox/inputbox.js';
+import { Button } from '../button/button.js';
+import { localize } from '../../../../nls.js';
 import { addDisposableListener, isNode, stopEvent, h } from "../../dom.js";
 import { disposableWindowTimeout } from "../../scheduler.js";
 import { appendIcon } from "../lxicons/lxicon.js";
 import type { ListDragAndDrop, ListDragData, ListScrolling } from "../list/list.js";
 import { List } from "../list/listWidget.js";
 import { Emitter, type Event } from "../../../common/event.js";
-import { Disposable, MutableDisposable, type IDisposable } from "../../../common/lifecycle.js";
+import { Disposable, MutableDisposable, toDisposable, type IDisposable } from "../../../common/lifecycle.js";
 import { Lxicon } from "../../../common/lxicons.js";
 import { rot } from "../../../common/numbers.js";
 import type { AbstractTreeNode, TreeAcceptEvent, TreeActivateEvent, TreeCollapseRequestEvent, TreeDragAndDrop, TreeDragOverReaction, TreeFindMatchType, TreeFindMode, TreeFindResult, TreeFocusChangeEvent, TreeIndentGuides, TreeKeyboardNavigationLabelProvider, TreePointerEvent, TreePointerTarget, TreeSelectionChangeEvent, TreeSelectionPresentation, TreeTwistieState, TreeVisibleSplice } from "./tree.js";
@@ -63,6 +66,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 	private findCandidates: readonly TNode[] | undefined;
 	private readonly autoExpandTimer = this._register(new MutableDisposable<IDisposable>());
 	private autoExpandId: string | undefined;
+	private findWidget: { readonly element: HTMLElement; readonly input: InputBox; } | undefined;
 
 	readonly onPointer: Event<TreePointerEvent<TNode>> = this._onPointer.event;
 	readonly onDidDoubleClick: Event<TreePointerEvent<TNode>> = this._onDidDoubleClick.event;
@@ -198,6 +202,46 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 	}
 	get focus(): TNode | undefined { return this.list.activeItem; }
 	get selection(): readonly TNode[] { return this.list.selection; }
+	/** The tree owns the find controls; consumers choose which shortcut opens them. */
+	openFind(): void {
+		if (!this.findController) return;
+		if (!this.findWidget) {
+			const element = h(this.element.ownerDocument, 'div');
+			element.className = 'ash-tree-find-widget';
+			this.element.append(element);
+			this._register(toDisposable(() => element.remove()));
+			const label = localize('tree.find', 'Find in Tree');
+			const input = this._register(new InputBox(element, { type: 'search', presentation: 'compact', ariaLabel: label, placeholder: label }));
+			this.findWidget = { element, input };
+			this._register(this.list.onDidScroll(() => { element.style.transform = `translateY(${this.list.scrollTop}px)`; }));
+			this._register(input.onDidChange(value => this.setFindPattern(value)));
+			this._register(addDisposableListener(element, 'keydown', (event: KeyboardEvent) => {
+				event.stopPropagation();
+				if (event.key === 'Escape') { event.preventDefault(); this.closeFind(); }
+				else if (event.key === 'Enter') { event.preventDefault(); if (event.shiftKey) this.findPrevious(); else this.findNext(); }
+			}));
+			this._register(new Button(element, { label: localize('tree.closeFind', 'Close Find'), icon: Lxicon.close, iconOnly: true, size: 'small', onClick: () => this.closeFind() }));
+		}
+		this.findWidget.element.hidden = false;
+		this.findWidget.element.style.transform = `translateY(${this.list.scrollTop}px)`;
+		this.findWidget.input.focus();
+		this.findWidget.input.select();
+	}
+
+	closeFind(): void {
+		if (!this.findWidget) return;
+		this.findWidget.input.value = '';
+		this.findWidget.element.hidden = true;
+		this.clearFind();
+		this.domFocus();
+	}
+
+	get findMode(): TreeFindMode { return this.findController?.mode ?? 'highlight'; }
+	set findMode(mode: TreeFindMode) {
+		if (!this.findController || this.findController.mode === mode) return;
+		this.findController.mode = mode;
+		this.setFindPattern(this.findController.query);
+	}
 
 	setFocus(id: string, browserEvent?: UIEvent): void {
 		const index = this.items.findIndex((node) => node.id === id);
@@ -490,6 +534,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 	}
 
 	private restoreStickyContainer(): void {
+		if (this.findWidget && this.findWidget.element.parentElement !== this.element) this.element.append(this.findWidget.element);
 		if (this.stickyContainer && this.stickyContainer.parentElement !== this.element) this.element.append(this.stickyContainer);
 	}
 
@@ -554,12 +599,13 @@ class TreeFindController<T, TNode extends AbstractTreeNode<T>> {
 	private matches: readonly TNode[] = [];
 	private activeIndex = -1;
 
-	constructor(private readonly options: TreeFindControllerOptions<T, TNode>) { }
+	public mode: TreeFindMode;
+	constructor(private readonly options: TreeFindControllerOptions<T, TNode>) { this.mode = options.mode; }
 
 	get query(): string { return this.pattern; }
 	get activeMatch(): TNode | undefined { return this.matches[this.activeIndex]; }
 	get matchedNodes(): readonly TNode[] { return this.matches; }
-	get filtering(): boolean { return this.options.mode === "filter" && this.pattern.length > 0; }
+	get filtering(): boolean { return this.mode === "filter" && this.pattern.length > 0; }
 
 	update(pattern: string, candidates: readonly TNode[], visibleNodes: readonly TNode[] = candidates): readonly TNode[] {
 		const previousActive = this.activeMatch?.id;

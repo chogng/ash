@@ -156,3 +156,20 @@
 	min-width: 0;
 	flex: 1 1 auto;
 }
+
+.ash-tree-find-widget {
+	display: flex;
+	position: absolute;
+	z-index: 6;
+	top: 0;
+	right: 0;
+	left: 0;
+	align-items: center;
+	gap: var(--ash-spacing-size40);
+	padding: var(--ash-spacing-size40);
+	background: var(--ash-menu-background);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+}
+
+.ash-tree-find-widget[hidden] { display: none; }
+.ash-tree-find-widget > .ash-input-box { flex: 1; min-width: 0; }

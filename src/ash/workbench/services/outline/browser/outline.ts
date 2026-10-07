@@ -46,12 +46,13 @@ export interface IOutlineCreator<P extends IEditorPane, E> {
 	createOutline(editor: P, target: OutlineTarget, token: CancellationToken): Promise<IOutline<E> | undefined>;
 }
 
+/** Creators have heterogeneous element types, so the registry erases that type like VS Code. */
 export interface IOutlineService {
 	readonly _serviceBrand: undefined;
 	readonly onDidChange: Event<void>;
 	canCreateOutline(editor: IEditorPane): boolean;
-	createOutline(editor: IEditorPane, target: OutlineTarget, token: CancellationToken): Promise<IOutline<unknown> | undefined>;
-	registerOutlineCreator(creator: IOutlineCreator<IEditorPane, unknown>): IDisposable;
+	createOutline(editor: IEditorPane, target: OutlineTarget, token: CancellationToken): Promise<IOutline<any> | undefined>;
+	registerOutlineCreator(creator: IOutlineCreator<IEditorPane, any>): IDisposable;
 }
 
 export const IOutlineService = createDecorator<IOutlineService>('IOutlineService');

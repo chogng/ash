@@ -1,3 +1,5 @@
+import { raceCancellationError } from '../../../../base/common/async.js';
+import { isCancellationError } from '../../../../base/common/errors.js';
 import type { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
@@ -27,6 +29,7 @@ export class TimelineService extends Disposable implements ITimelineService {
 	public readonly onDidChangeTimeline = this.timelineChanged.event;
 	public readonly onDidChangeUri = this.uriChanged.event;
 	private readonly hasProvider;
+	private uriRequest = 0;
 
 	constructor(
 		@IContextKeyService context: IContextKeyService,
@@ -80,7 +83,7 @@ export class TimelineService extends Disposable implements ITimelineService {
 		if (!schemes.includes('*') && !schemes.includes(uri.scheme)) return undefined;
 		if (typeof options.limit === 'number' && (!Number.isSafeInteger(options.limit) || options.limit < 1)) throw new RangeError('Timeline page size must be a positive integer');
 		registration.requests.add(tokenSource);
-		const result = Promise.resolve().then(() => provider.provideTimeline(uri, options, tokenSource.token)).then(timeline => {
+		const provided = Promise.resolve().then(() => tokenSource.token.isCancellationRequested ? undefined : provider.provideTimeline(uri, options, tokenSource.token)).then(timeline => {
 			if (tokenSource.token.isCancellationRequested || this.providers.get(id) !== registration || !timeline) return undefined;
 			const handles = new Set<string>();
 			for (const item of timeline.items) {
@@ -88,12 +91,18 @@ export class TimelineService extends Disposable implements ITimelineService {
 				handles.add(item.handle);
 			}
 			return { ...timeline, source: id, items: timeline.items.map(item => ({ ...item, source: id })) } satisfies Timeline;
+		});
+		const result = raceCancellationError(provided, tokenSource.token).catch(error => {
+			if (tokenSource.token.isCancellationRequested || isCancellationError(error)) return undefined;
+			throw error;
 		}).finally(() => registration.requests.delete(tokenSource));
 		return { result, source: id, uri, options, tokenSource };
 	}
 
 	public setUri(uri: URI): void {
-		this.uriChanged.fire(uri);
-		void this.views.openView(TimelinePaneId, true).catch(error => this.log.error('timeline', 'Could not open Timeline', error));
+		const request = ++this.uriRequest;
+		void this.views.openView(TimelinePaneId, true).then(view => {
+			if (view && !this.isDisposed && request === this.uriRequest) this.uriChanged.fire(uri);
+		}).catch(error => this.log.error('timeline', 'Could not open Timeline', error));
 	}
 }

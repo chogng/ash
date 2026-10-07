@@ -1,0 +1,43 @@
+.ash-outline {
+	display: flex;
+	min-height: 0;
+	flex: 1 1 auto;
+	flex-direction: column;
+}
+
+.ash-outline-tree {
+	min-height: 0;
+	flex: 1 1 auto;
+}
+
+.ash-outline-message {
+	padding: var(--ash-spacing-size80);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+}
+
+.ash-outline-message:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+
+.ash-outline-row {
+	display: flex;
+	min-width: 0;
+	width: 100%;
+	align-items: center;
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-outline-label,
+.ash-outline-detail {
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.ash-outline-detail {
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+}

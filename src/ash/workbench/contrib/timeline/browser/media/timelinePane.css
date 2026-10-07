@@ -1,0 +1,49 @@
+.ash-timeline {
+	display: flex;
+	min-height: 0;
+	flex: 1 1 auto;
+	flex-direction: column;
+}
+
+.ash-timeline-tree {
+	min-height: 0;
+	flex: 1 1 auto;
+}
+
+.ash-timeline-message,
+.ash-timeline-resource {
+	padding: var(--ash-spacing-size80);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+}
+
+.ash-timeline-resource,
+.ash-timeline-label,
+.ash-timeline-description {
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.ash-timeline-message:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+
+.ash-timeline-row {
+	display: flex;
+	min-width: 0;
+	width: 100%;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-timeline-label {
+	flex: 1 1 auto;
+}
+
+.ash-timeline-description {
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+}

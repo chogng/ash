@@ -24,6 +24,9 @@ import { isRemoteResource } from '../../../../platform/remote/common/remote.js';
 import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { SaveParticipantsContribution } from './saveParticipants.js';
+import { DocumentSymbolsOutlineCreator } from './outline/documentSymbolsOutline.js';
+
+registerWorkbenchContribution('workbench.contrib.documentSymbolsOutline', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(DocumentSymbolsOutlineCreator));
 
 registerWorkbenchContribution(SaveParticipantsContribution.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(SaveParticipantsContribution));
 
