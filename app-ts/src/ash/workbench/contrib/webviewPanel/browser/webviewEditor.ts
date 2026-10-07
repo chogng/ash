@@ -45,7 +45,7 @@ export interface CustomTextEditorProvider {
 export class WebviewEditor extends EditorPane implements IEditorPane {
 	public readonly id: string;
 	private container: HTMLElement | undefined;
-	private readonly inputResources = this._register(new DisposableStore());
+	private readonly inputResources = this._register(new MutableDisposable<DisposableStore>());
 	private readonly renderRequest = this._register(new MutableDisposable());
 	private readonly webview = this._register(new MutableDisposable<WebviewElement>());
 	private model: CustomTextEditorModel | undefined;
@@ -87,56 +87,75 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 	}
 
 	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
-		this.clearInput();
-		const reference = await this.models.acquire(input, signal);
-		this.model = this.inputResources.add(this.instantiation.createInstance(CustomTextEditorModel, reference, input, this.saveUntitled));
+		this.assertNotDisposed();
 		signal.throwIfAborted();
-		this.input = input;
-		const model = this.model;
-		const stat = input.resource.scheme === Schemas.untitled ? undefined : await this.files.stat(input.resource);
-		const updateReadonly = (): void => { this.readOnly = input.readOnly === true || !!this.filesConfiguration.isReadonly(input.resource, stat); };
-		updateReadonly();
-		const render = async (): Promise<void> => {
-			const controller = new AbortController();
-			this.renderRequest.value = toDisposable(() => controller.abort());
-			const abort = (): void => controller.abort(signal.reason);
-			signal.addEventListener('abort', abort, { once: true });
-			try {
-				const content = await this.provider.render({ uri: input.resource.toString(), text: reference.model.getText(), languageId: reference.model.getLanguageId(), version: reference.model.getVersionId(), readOnly: this.readOnly }, controller.signal);
-				if (controller.signal.aborted || this.model !== model) {
-					return;
-				}
-				const variables = Object.entries(this.themes.getColorTheme().colors).map(([id, value]) => `${colorCssVariable(id)}:${value}`).join(';');
-				this.editable = content.update !== undefined;
-				this.renderedHtml = `<style>:root{${variables}}</style>${content.html}`;
-				if (this.webview.value) {
-					if (content.update !== undefined) {
-						this.webview.value.postMessage({ type: 'theme', variables });
-						this.webview.value.postMessage(content.update);
-					} else { this.webview.value.setHtml(this.renderedHtml); }
-				} else if (this.isVisible()) {
-					this.createWebview(input, this.renderedHtml);
-				}
-			} catch (error) {
-				if (!controller.signal.aborted) {
-					throw error;
-				}
-			} finally {
-				signal.removeEventListener('abort', abort);
+		this.clearInput();
+		const resources = new DisposableStore();
+		this.inputResources.value = resources;
+		const inputController = new AbortController();
+		resources.add(toDisposable(() => inputController.abort()));
+		// Clearing an input also cancels acquisition, before a model or webview exists.
+		const inputSignal = AbortSignal.any([signal, inputController.signal]);
+		try {
+			const reference = await this.models.acquire(input, inputSignal);
+			if (inputSignal.aborted) {
+				reference.dispose();
+				inputSignal.throwIfAborted();
 			}
-		};
-		const schedule = this.inputResources.add(new RunOnceScheduler(() => {
-			void render().catch(error => {
-				if (this.model === model) {
-					console.error('Custom editor rendering failed', error);
+			this.model = resources.add(this.instantiation.createInstance(CustomTextEditorModel, reference, input, this.saveUntitled));
+			inputSignal.throwIfAborted();
+			this.input = input;
+			const model = this.model;
+			const stat = input.resource.scheme === Schemas.untitled ? undefined : await this.files.stat(input.resource);
+			inputSignal.throwIfAborted();
+			const updateReadonly = (): void => { this.readOnly = input.readOnly === true || !!this.filesConfiguration.isReadonly(input.resource, stat); };
+			updateReadonly();
+			const render = async (): Promise<void> => {
+				const controller = new AbortController();
+				this.renderRequest.value = toDisposable(() => controller.abort());
+				const renderSignal = AbortSignal.any([inputSignal, controller.signal]);
+				try {
+					const content = await this.provider.render({ uri: input.resource.toString(), text: reference.model.getText(), languageId: reference.model.getLanguageId(), version: reference.model.getVersionId(), readOnly: this.readOnly }, renderSignal);
+					if (renderSignal.aborted || this.model !== model) {
+						return;
+					}
+					const variables = Object.entries(this.themes.getColorTheme().colors).map(([id, value]) => `${colorCssVariable(id)}:${value}`).join(';');
+					this.editable = content.update !== undefined;
+					this.renderedHtml = `<style>:root{${variables}}</style>${content.html}`;
+					if (this.webview.value) {
+						if (content.update !== undefined) {
+							this.webview.value.postMessage({ type: 'theme', variables });
+							this.webview.value.postMessage(content.update);
+						} else { this.webview.value.setHtml(this.renderedHtml); }
+					} else if (this.isVisible()) {
+						this.createWebview(input, this.renderedHtml);
+					}
+				} catch (error) {
+					if (!renderSignal.aborted) {
+						throw error;
+					}
 				}
-			});
-		}, 50));
-		this.refreshView = () => schedule.schedule();
-		this.inputResources.add(model.onDidChangeContent(() => { if (!this.applyingEdit) schedule.schedule(); }));
-		this.inputResources.add(this.filesConfiguration.onDidChangeReadonly(() => { updateReadonly(); schedule.schedule(); }));
-		this.inputResources.add(this.themes.onDidColorThemeChange(() => schedule.schedule()));
-		await render();
+			};
+			const schedule = resources.add(new RunOnceScheduler(() => {
+				void render().catch(error => {
+					if (this.model === model) {
+						console.error('Custom editor rendering failed', error);
+					}
+				});
+			}, 50));
+			this.refreshView = () => schedule.schedule();
+			resources.add(model.onDidChangeContent(() => { if (!this.applyingEdit) schedule.schedule(); }));
+			resources.add(this.filesConfiguration.onDidChangeReadonly(() => { updateReadonly(); schedule.schedule(); }));
+			resources.add(this.themes.onDidColorThemeChange(() => schedule.schedule()));
+			await render();
+			inputSignal.throwIfAborted();
+		} catch (error) {
+			// A late failure belongs to its own input and must not clear a newer one.
+			if (this.inputResources.value === resources) {
+				this.clearInput();
+			}
+			throw error;
+		}
 	}
 
 	public override setVisible(visible: boolean): void {
@@ -150,21 +169,22 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 	private createWebview(input: IResourceEditorInput, html: string): void {
 		this.webview.value = new WebviewElement(this.container!, { title: this.provider.displayName, initialHtml: html, forwardKeyboardEvents: true });
 		const webview = this.webview.value;
+		const resources = this.inputResources.value!;
 		// An opaque iframe cannot bubble its keyboard events into the owning editor group.
-		this.inputResources.add(webview.onDidKeyboardEvent(event => webview.element.dispatchEvent(event)));
+		resources.add(webview.onDidKeyboardEvent(event => webview.element.dispatchEvent(event)));
 		const updateHint = (): void => {
 			const hint = this.accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.WebviewEditor);
 			const label = hint ? `${this.provider.displayName}\n${hint}` : this.provider.displayName;
 			webview.element.setAttribute('aria-label', label);
 		};
 		updateHint();
-		this.inputResources.add(this.keybindings.onDidUpdateKeybindings(updateHint));
-		this.inputResources.add(this.configuration.onDidChangeConfiguration(event => {
+		resources.add(this.keybindings.onDidUpdateKeybindings(updateHint));
+		resources.add(this.configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(AccessibilityVerbositySettingId.WebviewEditor)) {
 				updateHint();
 			}
 		}));
-		this.inputResources.add(this.webview.value.onDidMessage(message => {
+		resources.add(this.webview.value.onDidMessage(message => {
 			if (this.editable && typeof message === 'object' && message !== null && 'type' in message) {
 				this.handleEditMessage(message, webview);
 				return;
