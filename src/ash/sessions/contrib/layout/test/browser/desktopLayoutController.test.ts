@@ -7,6 +7,7 @@ import { browserEnvironment } from '../../../../../editor/test/browser/testEdito
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { observableValue } from '../../../../../base/common/observable.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
@@ -31,6 +32,7 @@ class WorkingSetController extends BaseLayoutController { }
 const storageKey = 'sessions.singlePane.layoutState';
 
 suite('DesktopLayoutController', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
 	test('restoring an older Code working set removes page tabs and retains the selected file', async () => {
 		const saved = workingSet('session:b', 'retained.ts');
 		const file = saved.groups[0]!.editors[0]!;
@@ -238,6 +240,17 @@ suite('DesktopLayoutController', () => {
 		await closing;
 		const saved = JSON.parse(fixture.storage.get(storageKey, StorageScope.WORKSPACE)!) as { sessionResource: string; editorWorkingSet: EditorWorkingSet; }[];
 		assert.deepEqual(saved.find(entry => entry.sessionResource === 'session:b')?.editorWorkingSet, workingSet('session:b', 'b.ts'));
+	});
+
+	test('completed shutdown stops storage refreshes from capturing released editor state', async () => {
+		using fixture = await createFixture();
+		fixture.editor.set(workingSet('session:a', 'saved.ts'));
+		await fixture.lifecycle.shutdown('pageHide');
+		const saved = fixture.storage.get(storageKey, StorageScope.WORKSPACE);
+		assert.equal(fixture.controller.isDisposed, true);
+		fixture.editor.set(workingSet('session:a', 'after-shutdown.ts'));
+		await fixture.storage.flush();
+		assert.equal(fixture.storage.get(storageKey, StorageScope.WORKSPACE), saved);
 	});
 
 	test('required controller services are resolved by the production creation path', () => {

@@ -231,14 +231,14 @@ Chromium Terminal Playwright 22 项通过，新增 3 项经过生产服务注册
 | `electron-utility/sharedProcess/sharedProcessMain.ts` | 保留 shared-process 启动入口。 |
 | `electron-browser/workbench/workbench.ts`、`workbench.html` | 保留 Desktop Workbench 入口。 |
 | `browser/workbench/workbench.ts`、`workbench.html` | 保留 Web Workbench 入口。 |
-| `browser/sessions/sessions-code.ts`、`sessions-code.html` | 保留 Ash 的 Web Sessions 产品入口及现有 URL；上游无此入口不构成删除理由。 |
+| `browser/sessions/sessions-code.ts`、`sessions-code.html` | 用户确认后删除两个旧文件；Web 应用入口迁移到 `src/ash/sessions/sessions.web.main.internal.ts`，由 `sessions.web.main.ts` 加载贡献、`browser/web.factory.ts` 提供 `create(container, profile)`。Vite host 生成 `/browser/sessions/sessions.html`；保留 Web Agents 能力，并迁移生产 URL 与测试调用方。 |
 | `electron-browser/remote-runtime-install/remoteRuntimeInstall.ts`、`.html`、`.css` | 保留远程运行包安装窗口的产品入口和展示资源，执行与连接仍属于 Remote platform。 |
 | `electron-browser/sessions/sessions-code.ts`、`sessions-code.html` | 用户确认后迁移到 `src/ash/sessions/electron-browser/sessions.ts`、`sessions.html`；两个旧文件删除，目标与上游同路径，HTML、构建、Main、automation 与 smoke 消费者同批迁移。 |
 | `test/electron-main/workspaceLaunchArguments.test.ts` | 保留启动参数装配的回归测试。 |
 
 `app.ts` 退出三个执行 owner：Shell 安装算法由现有 `platform/native/electron-main/nativeHostMainService.ts` 承接；本地/SSH Workspace 连接替换与失败回滚由 `platform/workspaces/electron-main/appServerWorkspaceTransition.ts` 承接；待交接队列、一次性确认和 reload/crash/close 中断由 `platform/windows/electron-main/windowsMainService.ts` 随接收窗口释放。共享交接 IPC 契约归 `platform/window/common/window.ts`，Sessions 保留返回 Workbench 的产品动作和草稿消费。
 
-构建仍以 Code 为 Vite root，既有 Workbench/Web URL 保持稳定；现有 `workbenchEntryPlugin` 将新 Desktop URL 挂载到 Sessions 的真实 HTML 与 TS 源码，正式打包也输出 `sessions/electron-browser/sessions.html`。这不是旧路径转发，两个旧 Desktop 路径不再参与生产构建或加载。迁移后 Code 目录为 15 个文件，7 个同路径、8 个明确保留的 Ash 差异；没有复制上游实现或增加缺乏调用方的层。
+构建仍以 Code 为 Vite root，Workbench URL 保持稳定；现有 `workbenchEntryPlugin` 将 Desktop URL 挂载到 Sessions 的真实 HTML 与 TS 源码，正式打包输出 `sessions/electron-browser/sessions.html`。Web 产品 HTML 改由构建 host 生成，调用 Sessions 自己的公开入口；两个旧 Web 文件和两个旧 Desktop 文件均不再参与生产构建或加载。没有复制上游实现或增加缺乏调用方的层。
 
 本批 Windows 验证：正常单测入口 9 个文件共 80 项通过，runner 自测 5 项通过；Vite 的实际开发服务/打包与配置测试 5 项通过。Desktop Main/Renderer、Web 构建、Renderer/build-tools/automation 类型检查通过；22 个受影响 TS 文件格式检查及定向 diff 检查通过。最初 HTML mount 的全模块 load hook 引入构建性能提示，改为精确输入过滤后重新打包，提示已消失。
 

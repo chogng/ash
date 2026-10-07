@@ -129,8 +129,8 @@ test('build product identity loads without frontend runtime or settings migratio
       if (url.includes('/src/')) loaded.push(url);
       return nextLoad(url, context);
     } });
-    const { AshSessionsRendererEntry } = await import('./src/ash/code/common/application.ts');
-    assert.equal(AshSessionsRendererEntry, 'sessions-code');
+    const { AshRendererDirectory } = await import('./src/ash/code/common/application.ts');
+    assert.equal(AshRendererDirectory, 'ash');
     assert.deepEqual(loaded.map(url => url.split('/').at(-1)), ['application.ts']);
   `], { cwd: repositoryRoot, encoding: 'utf8' });
 	assert.equal(result.status, 0, result.stderr);

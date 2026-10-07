@@ -10,11 +10,10 @@ interface WorkbenchEntryServer {
 	transformIndexHtml(url: string, html: string): Promise<string>;
 }
 
-interface ProductPage {
+type ProductPage = {
 	readonly url: string;
-	readonly sourceFile: string;
 	readonly inputFile: string;
-}
+} & ({ readonly sourceFile: string; } | { readonly html: string; });
 
 interface CSSDevelopmentHost {
 	readonly service: ICSSDevelopmentService;
@@ -28,15 +27,17 @@ export type AshWorkbenchEntryPlugin = Omit<Plugin, "configureServer"> & {
 /**
  * Hosts product entry URLs independently of the layer that owns their HTML source.
  */
-export function workbenchEntryPlugin(entryPath = '/browser/workbench/workbench.html', page?: ProductPage, cssDevelopment?: CSSDevelopmentHost): AshWorkbenchEntryPlugin {
-	const inputFilter = page ? new RegExp(`^${normalizePath(page.inputFile).replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}$`, 'u') : undefined;
+export function workbenchEntryPlugin(entryPath = '/browser/workbench/workbench.html', pages: readonly ProductPage[] = [], cssDevelopment?: CSSDevelopmentHost): AshWorkbenchEntryPlugin {
+	const inputs = new Map(pages.map(page => [normalizePath(page.inputFile), page]));
+	const inputFilter = inputs.size ? new RegExp(`^(?:${[...inputs.keys()].map(path => path.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')).join('|')})$`, 'u') : undefined;
 	let root: string;
 	let development = false;
-	async function readPage(): Promise<string> {
-		const html = await readFile(page!.sourceFile, 'utf8');
+	async function readPage(page: ProductPage): Promise<string> {
+		if ('html' in page) { return page.html; }
+		const html = await readFile(page.sourceFile, 'utf8');
 		// Vite's HTML input is rooted under Code, while the Sessions module stays at its owning source path.
 		return html.replace(/(<script\b[^>]*\bsrc=["'])(\.\/[^"']+)(["'])/gu, (_match, prefix: string, source: string, suffix: string) => {
-			const file = normalizePath(resolve(dirname(page!.sourceFile), source));
+			const file = normalizePath(resolve(dirname(page.sourceFile), source));
 			return `${prefix}/@fs/${file.replace(/^\/+/u, '')}${suffix}`;
 		});
 	}
@@ -64,14 +65,15 @@ export function workbenchEntryPlugin(entryPath = '/browser/workbench/workbench.h
 			},
 		},
 		// Filter before invoking JavaScript so ordinary renderer modules bypass the HTML mount.
-		resolveId: page ? { filter: { id: inputFilter }, handler: id => id } : undefined,
-		load: page ? { filter: { id: inputFilter }, handler: () => readPage() } : undefined,
+		resolveId: inputs.size ? { filter: { id: inputFilter }, handler: id => id } : undefined,
+		load: inputs.size ? { filter: { id: inputFilter }, handler: id => readPage(inputs.get(normalizePath(id))!) } : undefined,
 		configureServer(server) {
 			server.middlewares.use((request, response, next) => {
 				const method = request.method;
+				const page = pages.find(page => request.url?.split('?')[0] === page.url);
 				if (page && (method === 'GET' || method === 'HEAD') && request.url?.split('?')[0] === page.url) {
 					void (async () => {
-						const html = await server.transformIndexHtml(request.url!, await readPage());
+						const html = await server.transformIndexHtml(request.url!, await readPage(page));
 						response.statusCode = 200;
 						response.setHeader('Content-Type', 'text/html; charset=utf-8');
 						response.setHeader('Cache-Control', 'no-store');

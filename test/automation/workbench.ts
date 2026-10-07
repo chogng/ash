@@ -81,7 +81,7 @@ export class Workbench {
 		let page = this.page;
 		if (kind === 'browser') {
 			await Promise.all([
-				page.waitForURL('**/sessions/sessions-code.html'),
+				page.waitForURL('**/sessions/sessions.html'),
 				page.locator('[data-action-id="ash.code.open-sessions"] button').click(),
 			]);
 		} else {

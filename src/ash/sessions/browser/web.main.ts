@@ -11,21 +11,16 @@ import { IDialogService } from '../../platform/dialogs/common/dialogs.js';
 import { IQuickInputService } from '../../platform/quickinput/common/quickInput.js';
 import { IWorkspaceContextService } from '../../platform/workspace/common/workspace.js';
 import { FileDialogService } from '../../workbench/services/dialogs/browser/fileDialogService.js';
-import './parts/menubar.contribution.js';
-import '../sessions.common.main.js';
 import { installBaseUiStyles } from "../../base/browser/ui/styles.js";
-import { addDisposableListener } from "../../base/browser/dom.js";
 import { onUnexpectedError } from "../../base/common/errors.js";
-import { DisposableStore, type IDisposable } from "../../base/common/lifecycle.js";
+import { Disposable } from "../../base/common/lifecycle.js";
 import { createDisconnectedRendererApi } from "../../platform/app-server/browser/rendererApi.js";
 import { IndexedDbConfigurationApi } from '../../platform/configuration/browser/indexedDbConfigurationApi.js';
 import { BrowserLifecycleService } from '../../workbench/services/lifecycle/browser/lifecycleService.js';
 import { BrowserHostColorSchemeService } from '../../workbench/services/themes/browser/browserHostColorSchemeService.js';
 import { BrowserContextMenuService } from "../../platform/contextview/browser/contextMenuService.js";
-import { BrowserClipboardService } from '../../platform/clipboard/browser/clipboardService.js';
 import { connectBrowserWorkbenchHost } from '../../workbench/browser/web.host.js';
 import { workspaceFromIdentifier } from '../../platform/workspace/common/workspace.js';
-import { showStartupError } from '../../workbench/browser/startupError.js';
 import type { SessionsProfile } from "../common/sessionsProfile.js";
 import type { Workbench } from './workbench.js';
 import { createSessionsWorkbench } from './workbenchFactory.js';
@@ -43,77 +38,70 @@ import { InstantiationType, registerSingleton } from '../../platform/instantiati
 registerSingleton(IHostService, BrowserHostService, InstantiationType.Delayed);
 registerSingleton(ILanguagePackStore, BrowserLanguagePackStore, InstantiationType.Delayed);
 
-/** Starts a browser-hosted Sessions page with the optional renderer host. */
-export async function startBrowserSessions(profile: SessionsProfile): Promise<void> {
-	let connectedHost: IDisposable | undefined;
-	try {
-		let documentClient: AppServerProtocolClient | undefined;
-		connectedHost = await connectBrowserWorkbenchHost([client => { documentClient = client; return {}; }], true, true);
-		await mountBrowserSessions(profile, connectedHost, documentClient);
-	} catch (error) {
-		connectedHost?.dispose();
-		showStartupError(error, text => new BrowserClipboardService(window.navigator.clipboard).writeText(text));
+/** Owns the browser services and Workbench created for one Sessions embedder. */
+export class SessionsBrowserMain extends Disposable {
+	constructor(private readonly container: HTMLElement, private readonly profile: SessionsProfile) {
+		super();
 	}
-}
 
-async function mountBrowserSessions(profile: SessionsProfile, connectedHost?: IDisposable, documentClient?: AppServerProtocolClient): Promise<void> {
-	installBaseUiStyles();
-	const sessions = new DisposableStore();
-	try {
-		const configurationApi = sessions.add(new IndexedDbConfigurationApi());
-		const initialConfigurationSnapshot = await configurationApi.read();
-		const host = globalThis.ashWebWorkbenchHost;
-		const browserFiles = host?.webWorkspaceClient ? undefined : sessions.add(new HTMLFileSystemProvider(window.indexedDB));
-		const container = host?.container ?? document.querySelector<HTMLElement>("#app");
-		if (!container) throw new Error("Sessions renderer requires an #app container");
-		const ownerWindow = container.ownerDocument.defaultView;
-		if (!ownerWindow) throw new Error('Sessions renderer requires an owner window');
-		const workbench = sessions.add(await createSessionsWorkbench({
-			createAppToolsHost: documentClient ? services => new AppServerAppToolsHost(documentClient!, services.createInstance(AppToolsHost, container.ownerDocument, undefined)) : undefined,
-			createTextDocumentHost: documentClient ? services => {
-				const editing = services.get(IChatEditingService);
-				return services.createInstance(AppServerTextDocumentHost, documentClient!, editing.applyEdits.bind(editing));
-			} : undefined,
-			contributionIds: ['workbench.contrib.sessionsLayout', 'sessions.contrib.multiDiffSource', 'chat.edits.editorOverlay', 'workbench.contrib.dataChannels', 'workbench.contrib.githubLinkPresentations'],
-			createStorageService: async storageOptions => new BrowserStorageService(storageOptions),
-			createLogService: () => new LogService({ sinks: [new ConsoleLogSink()] }),
-			profile,
-			api: host?.api ?? createDisconnectedRendererApi(),
-			workspaceSelection: () => host?.workspace ? selectionFromWorkspace(workspaceFromIdentifier(host.workspace)) : { type: 'current' },
-			workspace: () => host?.workspace ? workspaceFromIdentifier(host.workspace) : { id: 'sessions', folders: [] },
-			createUserDataFileSystemProvider: () => IndexedDBFileSystemProvider.create(ownerWindow.indexedDB, Schemas.vscodeUserData),
-			configurationApi,
-			initialConfigurationSnapshot,
-			browserFileSystemProvider: browserFiles,
-			createFileDialogService: services => {
-				const common = {
-					quickInput: () => services.get(IQuickInputService),
-					fileService: () => services.get(IFileService),
-					workspaceRoot: () => services.get(IWorkspaceContextService).getWorkspace().folders[0]?.uri,
-				};
-				const dialogs = () => services.get(IDialogService);
-				if (host?.webWorkspaceClient) {
-					return new FileDialogService({ ...common, kind: 'server', client: host.webWorkspaceClient }, dialogs);
-				}
-				return new FileDialogService({ ...common, kind: 'local', provider: browserFiles!, pickDirectory: startIn => (ownerWindow as unknown as Window & { showDirectoryPicker: (options?: { startIn?: FileSystemDirectoryHandle; }) => Promise<FileSystemDirectoryHandle>; }).showDirectoryPicker(startIn ? { startIn } : undefined) }, dialogs);
-			},
-			createLifecycleService: services => services.createInstance(BrowserLifecycleService, { ownerWindow, onError: onUnexpectedError }),
-			returnToWorkbench: () => {
-				const location = container.ownerDocument.location;
-				location.assign(new URL(profile.workbenchRelativePath, location.href).href);
-			},
-			createContextMenuService: services => services.createInstance(BrowserContextMenuService),
-			createHostColorSchemeService: () => new BrowserHostColorSchemeService(ownerWindow),
-			createTitlebarPart: (titlebarContainer, services) => services.createInstance(TitlebarPart, titlebarContainer, 'application-menu'),
-			container,
-		}));
-		sessions.add(addDisposableListener(window, "pagehide", () => {
-			void workbench.shutdown("pageHide").catch(onUnexpectedError).finally(() => sessions.dispose());
-		}, { once: true }));
-		if (connectedHost) sessions.add(connectedHost);
-		await workbench.whenRestored;
-	} catch (error) {
-		sessions.dispose();
-		throw error;
+	public async open(): Promise<Workbench> {
+		this.assertNotDisposed();
+		const { container, profile } = this;
+		try {
+			let documentClient: AppServerProtocolClient | undefined;
+			const connectedHost = await connectBrowserWorkbenchHost([client => { documentClient = client; return {}; }], true, true);
+			if (connectedHost) { this._register(connectedHost); }
+			installBaseUiStyles();
+			const configurationApi = this._register(new IndexedDbConfigurationApi());
+			const initialConfigurationSnapshot = await configurationApi.read();
+			const host = globalThis.ashWebWorkbenchHost;
+			const ownerWindow = container.ownerDocument.defaultView;
+			if (!ownerWindow) throw new Error('Sessions renderer requires an owner window');
+			const browserFiles = host?.webWorkspaceClient ? undefined : this._register(new HTMLFileSystemProvider(ownerWindow.indexedDB));
+			const workbench = this._register(await createSessionsWorkbench({
+				createAppToolsHost: documentClient ? services => new AppServerAppToolsHost(documentClient!, services.createInstance(AppToolsHost, container.ownerDocument, undefined)) : undefined,
+				createTextDocumentHost: documentClient ? services => {
+					const editing = services.get(IChatEditingService);
+					return services.createInstance(AppServerTextDocumentHost, documentClient!, editing.applyEdits.bind(editing));
+				} : undefined,
+				contributionIds: ['workbench.contrib.sessionsLayout', 'sessions.contrib.multiDiffSource', 'chat.edits.editorOverlay', 'workbench.contrib.dataChannels', 'workbench.contrib.githubLinkPresentations'],
+				createStorageService: async storageOptions => new BrowserStorageService(storageOptions),
+				createLogService: () => new LogService({ sinks: [new ConsoleLogSink()] }),
+				profile,
+				api: host?.api ?? createDisconnectedRendererApi(),
+				workspaceSelection: () => host?.workspace ? selectionFromWorkspace(workspaceFromIdentifier(host.workspace)) : { type: 'current' },
+				workspace: () => host?.workspace ? workspaceFromIdentifier(host.workspace) : { id: 'sessions', folders: [] },
+				createUserDataFileSystemProvider: () => IndexedDBFileSystemProvider.create(ownerWindow.indexedDB, Schemas.vscodeUserData),
+				configurationApi,
+				initialConfigurationSnapshot,
+				browserFileSystemProvider: browserFiles,
+				createFileDialogService: services => {
+					const common = {
+						quickInput: () => services.get(IQuickInputService),
+						fileService: () => services.get(IFileService),
+						workspaceRoot: () => services.get(IWorkspaceContextService).getWorkspace().folders[0]?.uri,
+					};
+					const dialogs = () => services.get(IDialogService);
+					if (host?.webWorkspaceClient) {
+						return new FileDialogService({ ...common, kind: 'server', client: host.webWorkspaceClient }, dialogs);
+					}
+					return new FileDialogService({ ...common, kind: 'local', provider: browserFiles!, pickDirectory: startIn => (ownerWindow as unknown as Window & { showDirectoryPicker: (options?: { startIn?: FileSystemDirectoryHandle; }) => Promise<FileSystemDirectoryHandle>; }).showDirectoryPicker(startIn ? { startIn } : undefined) }, dialogs);
+				},
+				createLifecycleService: services => services.createInstance(BrowserLifecycleService, { ownerWindow, onError: onUnexpectedError }),
+				returnToWorkbench: () => {
+					const location = container.ownerDocument.location;
+					location.assign(new URL(profile.workbenchRelativePath, location.href).href);
+				},
+				createContextMenuService: services => services.createInstance(BrowserContextMenuService),
+				createHostColorSchemeService: () => new BrowserHostColorSchemeService(ownerWindow),
+				createTitlebarPart: (titlebarContainer, services) => services.createInstance(TitlebarPart, titlebarContainer, 'application-menu'),
+				container,
+			}));
+			await workbench.whenRestored;
+			return workbench;
+		} catch (error) {
+			this.dispose();
+			throw error;
+		}
 	}
 }

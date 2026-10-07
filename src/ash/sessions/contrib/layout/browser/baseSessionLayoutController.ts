@@ -77,6 +77,8 @@ export abstract class BaseLayoutController extends Disposable {
 		}));
 		this._register(this.storage.onWillSaveState(() => this.saveState()));
 		this._register(this.lifecycle.onWillShutdown(event => event.join(this.whenSettled().then(() => this.saveState()), 'session editor layout')));
+		// The service scope outlives editor Parts; stop capturing state before those Parts are released.
+		this._register(this.lifecycle.onDidShutdown(() => this.dispose()));
 		this._register(this.editors.onDidVisibleEditorsChange(() => {
 			if (this.isEditorAutoVisibilitySuppressed()) {
 				return;

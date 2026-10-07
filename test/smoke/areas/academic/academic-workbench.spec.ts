@@ -47,7 +47,7 @@ for (const retiredMode of ['academic', 'unregistered']) {
 		await workbench.waitForReady();
 		await expect(workbench.page).toHaveTitle(/Ash Code/u);
 		const sessions = await workbench.openAgentsWindow('browser');
-		expect(new URL(sessions.url()).pathname).toMatch(/sessions\/sessions-code\.html$/u);
+		expect(new URL(sessions.url()).pathname).toMatch(/sessions\/sessions\.html$/u);
 		await expect(sessions.locator('.ash-sessions-window')).toBeVisible();
 	});
 }

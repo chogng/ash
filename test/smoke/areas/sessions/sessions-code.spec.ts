@@ -352,11 +352,61 @@ test.describe('Sessions from an Electron Workbench', () => {
 	});
 });
 
+browserTest('Browser Sessions production embedder owns its container and releases both ready and opening instances', async ({ page }, testInfo) => {
+	browserTest.skip(testInfo.project.name !== 'browser-ui' || process.env.ASH_PLAYWRIGHT_SERVER === 'development', 'Exercises exported production assets; development uses the generated Vite host.');
+	const failures: string[] = [];
+	page.on('pageerror', error => failures.push((error.stack ?? error.message).slice(0, 5000)));
+	await page.goto('/browser/sessions/sessions.html');
+	await expect(page.locator('.ash-sessions-list-add')).toBeVisible();
+	const moduleUrl = await page.evaluate(() => performance.getEntriesByType('resource').find(entry =>
+		/\/sessions\.web\.main\.internal-[^/]+\.js$/u.test(entry.name),
+	)?.name);
+	expect(moduleUrl).toBeTruthy();
+	// Production extracts imported CSS into entry stylesheets; the embedder must load them too.
+	const stylesheets = await page.locator('link[rel="stylesheet"]').evaluateAll(links => links.map(link => `<link rel="stylesheet" href="${(link as HTMLLinkElement).href}">`).join(''));
+	await page.route('**/browser/sessions/embedder.html', route => route.fulfill({
+		contentType: 'text/html',
+		body: `<!doctype html><html><head>${stylesheets}<style>body { margin: 0; } #sessions-host { position: fixed; inset: 0; }</style></head><body><main id="app">Host content</main><section id="sessions-host"></section></body></html>`,
+	}));
+	await page.goto('/browser/sessions/embedder.html');
+	const mount = async (closeDuringStartup: boolean): Promise<void> => {
+		await page.evaluate(async ({ moduleUrl, closeDuringStartup }) => {
+			const { create } = await import(moduleUrl!);
+			const container = document.getElementById('sessions-host')!;
+			const lifetime = create(container, {
+				id: 'code-sessions', label: 'Code Sessions', titlebarActionId: 'ash.code.open-sessions', workbenchRelativePath: '../workbench/workbench.html',
+			});
+			if (closeDuringStartup) {
+				const observer = new MutationObserver(() => {
+					if (!container.querySelector('.ash-sessions-window')) { return; }
+					container.dataset.mounted = 'true';
+					observer.disconnect();
+				});
+				observer.observe(container, { childList: true });
+				lifetime.dispose();
+			} else {
+				document.addEventListener('close-sessions', () => { lifetime.dispose(); lifetime.dispose(); }, { once: true });
+			}
+		}, { moduleUrl, closeDuringStartup });
+	};
+	await mount(false);
+	const container = page.locator('#sessions-host');
+	await expect(container.locator('.ash-sessions-list-add')).toBeVisible();
+	await expect(page.locator('#app')).toHaveText('Host content');
+	await page.evaluate(() => document.dispatchEvent(new Event('close-sessions')));
+	await expect(container).toBeEmpty();
+	await mount(true);
+	await expect(container).toHaveAttribute('data-mounted', 'true');
+	await expect(container).toBeEmpty();
+	await expect(page.locator('#app')).toHaveText('Host content');
+	expect(failures).toEqual([]);
+});
+
 browserTest('Browser Sessions Code shows Files and Changes and retains the selected view across pages and reload', async ({ page }, testInfo) => {
 	browserTest.skip(testInfo.project.name !== 'browser-ui');
 	const failures: string[] = [];
 	page.on('pageerror', error => failures.push(error.message));
-	await page.goto('/browser/sessions/sessions-code.html');
+	await page.goto('/browser/sessions/sessions.html');
 	const navigation = page.locator('.ash-sessions-activity-content');
 	const auxiliary = page.locator('[data-part="auxiliarybar"]');
 	const tabs = page.locator('[data-part="editor"] .ash-editor-title-control');
@@ -384,7 +434,7 @@ browserTest('Browser Sessions Code shows Files and Changes and retains the selec
 		await commands.select(theme);
 		await expect(picker).toHaveCount(0);
 		await expect(page.locator('#app')).toHaveAttribute('data-color-scheme', scheme);
-		await page.goto('/browser/sessions/sessions-code.html');
+		await page.goto('/browser/sessions/sessions.html');
 		await navigation.getByRole('button', { name: 'Code', exact: true }).click();
 		await expect(page.locator('#app')).toHaveAttribute('data-color-scheme', scheme);
 		const colors = await emptyMessage.evaluate(element => ({

@@ -11,6 +11,7 @@
     "src/ash/code/browser/**/*.ts",
     "src/ash/code/electron-browser/workbench/**/*.ts",
     "src/ash/sessions/electron-browser/sessions.ts",
+    "src/ash/sessions/sessions.web.main.internal.ts",
     "src/ash/editor/*/browser/**/*.ts",
     "src/ash/editor/*/common/**/*.ts",
     "src/ash/editor/*/*.ts",

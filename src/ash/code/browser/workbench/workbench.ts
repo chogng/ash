@@ -36,7 +36,7 @@ try {
 
 		public override run(accessor: ServicesAccessor): void {
 			const location = accessor.get(ILayoutService).activeContainer.ownerDocument.location;
-			location.assign(new URL('../sessions/sessions-code.html', location.href).href);
+			location.assign(new URL('../sessions/sessions.html', location.href).href);
 		}
 	});
 	const { startBrowserWorkbench } = await import('../../../workbench/browser/web.bootstrap.js');

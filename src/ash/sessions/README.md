@@ -7,6 +7,15 @@ is canonical for the renderer implementation and extension points.
 
 UI design and style boundaries are defined in [Sessions style](STYLE.md).
 
+Web embedders load `sessions.web.main.internal.ts` after initializing localization,
+then call `create(container, profile)` and retain its disposable handle. The Web
+entry loads shared and browser contributions; `browser/web.factory.ts` owns the
+embedding lifetime and `browser/web.main.ts` owns browser services and the
+Sessions Workbench. Disposing during startup shuts down the instance once it
+finishes opening. The Vite host generates the Code product page at
+`/browser/sessions/sessions.html`; no Sessions page bootstrap lives under
+`code/browser/sessions`.
+
 Creator's Sites mode, contribution boundaries, implementation order and acceptance
 requirements are described in [Creator Sites](CREATOR_SITES.md).
 

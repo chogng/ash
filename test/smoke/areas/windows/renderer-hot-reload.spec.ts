@@ -163,7 +163,7 @@ test('development Sessions applies successive CSS saves without reloading its pa
 		if (isBrowser) {
 			browser = await playwright.chromium.launch();
 			page = await browser.newPage();
-			await page.goto('http://127.0.0.1:5197/browser/sessions/sessions-code.html');
+			await page.goto('http://127.0.0.1:5197/browser/sessions/sessions.html');
 		} else {
 			const configuration = resolveElectronConfiguration({ desktopDirectory, appServerMode: 'disabled', userDataDirectory: profile });
 			electron = await _electron.launch({

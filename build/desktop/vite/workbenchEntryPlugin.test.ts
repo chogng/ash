@@ -39,8 +39,8 @@ test("Workbench entry leaves non-root and mutating requests to Vite", () => {
 });
 
 test('Sessions development opens its page directly and preserves workspace parameters', () => {
-	const middleware = configuredMiddleware('/browser/sessions/sessions-code.html');
-	assert.equal(invoke(middleware, { method: 'HEAD', url: '/?folder=project' }).headers.Location, '/browser/sessions/sessions-code.html?folder=project');
+	const middleware = configuredMiddleware('/browser/sessions/sessions.html');
+	assert.equal(invoke(middleware, { method: 'HEAD', url: '/?folder=project' }).headers.Location, '/browser/sessions/sessions.html?folder=project');
 });
 
 test('Sessions HTML is served and built from its owning layer with working module URLs', async () => {
@@ -57,7 +57,7 @@ test('Sessions HTML is served and built from its owning layer with working modul
 	const page = { url, inputFile: input, sourceFile: source };
 	let server: Awaited<ReturnType<typeof createServer>> | undefined;
 	try {
-		server = await createServer({ configFile: false, root, plugins: [workbenchEntryPlugin(undefined, page)], server: { host: '127.0.0.1', port: 0 } });
+		server = await createServer({ configFile: false, root, plugins: [workbenchEntryPlugin(undefined, [page])], server: { host: '127.0.0.1', port: 0 } });
 		await server.listen();
 		const address = server.httpServer!.address();
 		assert.ok(address && typeof address !== 'string');
@@ -74,7 +74,7 @@ test('Sessions HTML is served and built from its owning layer with working modul
 		await server.close();
 		server = undefined;
 		assert.equal(dirname(resolve(output)), resolve(directory));
-		await build({ configFile: false, root, base: './', plugins: [workbenchEntryPlugin(undefined, page)], build: { outDir: output, emptyOutDir: true, rolldownOptions: { input } } });
+		await build({ configFile: false, root, base: './', plugins: [workbenchEntryPlugin(undefined, [page])], build: { outDir: output, emptyOutDir: true, rolldownOptions: { input } } });
 		const builtHtml = await readFile(join(output, url.slice(1)), 'utf8');
 		const builtModule = /src="([^"]+\.js)"/u.exec(builtHtml)?.[1];
 		assert.ok(builtModule, builtHtml);

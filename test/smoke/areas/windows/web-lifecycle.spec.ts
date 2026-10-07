@@ -12,27 +12,31 @@ import { Editor } from '../../../automation/editor.js';
 
 const repository = resolve(import.meta.dirname, '../../../..');
 
-test('Sessions UI development opens directly and restores a draft after reload', async ({ target }) => {
+test('Sessions UI development opens directly and restores a draft after reload', async ({ target }, testInfo) => {
 	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled', 'Requires the Browser UI project');
 	test.setTimeout(60_000);
 	const browser = await chromium.launch();
+	const failures: string[] = [];
 	let launch: Awaited<ReturnType<typeof launchWeb>> | undefined;
 	try {
 		launch = await launchWeb('development', await freePort(), { ...process.env, ASH_WEB_APP_SERVER: '0', ASH_DEV_AGENTS_WINDOW: '1', NO_COLOR: '1' });
 		const page = await browser.newPage();
+		page.on('pageerror', error => failures.push(error.message));
 		await page.goto(launch.url);
 		await expect(page.locator('.ash-sessions-window')).toBeVisible();
-		expect(new URL(page.url()).pathname).toBe('/browser/sessions/sessions-code.html');
+		expect(new URL(page.url()).pathname).toBe('/browser/sessions/sessions.html');
 		expect(await page.evaluate(() => globalThis.ashWebWorkbenchHost)).toBeUndefined();
 		expect(await page.evaluate(() => performance.getEntriesByType('resource').some(entry => entry.name.includes('/@vite/client')))).toBe(true);
-		const editor = new Editor(page.locator('.ash-sessions-chat-input'));
+		const editor = new Editor(page.locator('.ash-sessions-chat-slot.active:visible'));
 		await editor.waitForEditorFocus();
 		await page.keyboard.insertText('Sessions UI development draft');
 		await editor.waitForEditorContents(text => text === 'Sessions UI development draft');
 		await expect.poll(() => page.evaluate(() => Object.values(localStorage).some(value => value.includes('Sessions UI development draft')))).toBe(true);
 		await page.reload();
 		await editor.waitForEditorContents(text => text === 'Sessions UI development draft');
+		expect(failures).toEqual([]);
 	} finally {
+		if (failures.length) await testInfo.attach('page-errors', { body: JSON.stringify(failures), contentType: 'application/json' });
 		await browser.close();
 		if (launch) await stop(launch.child);
 	}
@@ -62,7 +66,7 @@ for (const [mode, entry] of [['production', 'workbench'], ['development', 'workb
 			launch.child.stderr!.on('data', chunk => { hostDiagnostics = (hostDiagnostics + String(chunk)).slice(-8192); });
 			await page.goto(launch.url);
 			await expectWorkspace(page, entry);
-			expect(new URL(page.url()).pathname).toBe(entry === 'sessions' ? '/browser/sessions/sessions-code.html' : '/browser/workbench/workbench.html');
+			expect(new URL(page.url()).pathname).toBe(entry === 'sessions' ? '/browser/sessions/sessions.html' : '/browser/workbench/workbench.html');
 			expect(new URL(page.url()).hash).toBe('');
 			const session = await page.evaluate(() => {
 				const endpoint = sessionStorage.getItem('ash.appServer.endpoint')!;
@@ -81,7 +85,7 @@ for (const [mode, entry] of [['production', 'workbench'], ['development', 'workb
 			const selected = sidebar.locator(rows).filter({ hasText: 'Selected before reconnect' });
 			await expect(selected).toBeVisible();
 			await selected.click();
-			const editor = new Editor(page.locator(entry === 'sessions' ? '.ash-sessions-chat-input' : '.ash-chat-view-pane'));
+			const editor = new Editor(page.locator(entry === 'sessions' ? '.ash-sessions-chat-slot.active:visible' : '.ash-chat-view-pane'));
 			await editor.waitForEditorFocus();
 			await page.keyboard.insertText('Keep my unsent message after reconnect');
 			await editor.waitForEditorContents(text => text === 'Keep my unsent message after reconnect');
@@ -162,9 +166,9 @@ test('Web backend selection restores a Sessions connection and preserves its dra
 	try {
 		launch = await test.step('Start a managed Web listener', () => startWeb({ port: 0, assets: join(repository, '.build/desktop/web/ash'), environment: env }));
 		const page = await browser.newPage();
-		await page.goto(authenticatedWebUrl(launch.info, launch.info.endpoint, '/browser/sessions/sessions-code.html'));
+		await page.goto(authenticatedWebUrl(launch.info, launch.info.endpoint, '/browser/sessions/sessions.html'));
 		await test.step('Open Sessions with its real workspace', () => expectWorkspace(page, 'sessions'));
-		const editor = new Editor(page.locator('.ash-sessions-chat-input'));
+		const editor = new Editor(page.locator('.ash-sessions-chat-slot.active:visible'));
 		await editor.waitForEditorFocus();
 		await page.keyboard.insertText('Retain my Sessions draft');
 		await editor.waitForEditorContents(text => text === 'Retain my Sessions draft');

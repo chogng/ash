@@ -1335,7 +1335,7 @@ test('Sessions entry sits beside Quick Access and animates its Ash mark on inten
 	if (target.kind === 'browser') {
 		await page.setViewportSize({ width: 1200, height: 800 });
 		await entry.click();
-		await expect(page).toHaveURL(/sessions-code\.html/u);
+		await expect(page).toHaveURL(/sessions\/sessions\.html/u);
 		await expect(page.locator('.ash-code-sessions-window')).toBeVisible();
 		await expect(page.locator('#app')).toHaveAttribute('data-runtime', 'web');
 		await expect(page.getByRole('button', { name: 'Return to Workbench' })).toHaveCount(0);
