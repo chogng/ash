@@ -96,6 +96,7 @@ impl AppServer {
                 .map(|(object_id, subject)| GitStashDto { object_id, subject })
                 .collect(),
             remotes: catalog.remotes,
+            upstream_remote: catalog.upstream_remote,
             operation: catalog.operation.map(integration_dto),
         })
     }

@@ -79,12 +79,13 @@ pub struct GitCloneResult {
 }
 
 /// Remote selection for a Git fetch operation.
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum GitFetchModeDto {
     Default,
     #[default]
     All,
+    Remote(#[schemars(length(min = 1, max = 4096))] String),
 }
 
 /// Selects a repository and the remotes to fetch.
@@ -882,6 +883,9 @@ pub struct GitCatalogResult {
     pub tags: Vec<GitNamedRefDto>,
     pub stashes: Vec<GitStashDto>,
     pub remotes: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub upstream_remote: Option<String>,
     pub operation: Option<GitIntegrationDto>,
 }
 

@@ -197,8 +197,11 @@ export interface GitCatalog {
 	readonly tags: readonly { readonly name: string; readonly objectId: string; }[];
 	readonly stashes: readonly { readonly objectId: string; readonly subject: string; }[];
 	readonly remotes: readonly string[];
+	readonly upstreamRemote?: string;
 	readonly operation: GitIntegration | undefined;
 }
+
+export type GitFetchTarget = 'default' | 'all' | { readonly remote: string; };
 
 export interface GitCommandResult {
 	readonly status: GitStatus;
@@ -275,7 +278,7 @@ export interface IGitService {
 	unstage(paths: readonly string[], repositoryId?: string): Promise<GitStatus>;
 	discardWorktree(paths: readonly string[], repositoryId?: string): Promise<GitStatus>;
 	commit(message: string, repositoryId?: string): Promise<GitCommitResult>;
-	fetch(repositoryId?: string): Promise<GitStatus>;
+	fetch(repositoryId?: string, target?: GitFetchTarget): Promise<GitStatus>;
 	pull(repositoryId?: string): Promise<GitStatus>;
 	push(repositoryId?: string): Promise<GitStatus>;
 }

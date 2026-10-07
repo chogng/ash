@@ -312,6 +312,61 @@ fn git_operations_declare_repository_access_and_validate_selectors() {
 }
 
 #[test]
+fn git_fetch_modes_preserve_existing_requests_and_add_one_named_remote() {
+    use crate::protocol::git::GitCatalogResult;
+    use crate::protocol::git::GitFetchModeDto;
+    use crate::protocol::git::GitFetchParams;
+    for (mode, expected) in [
+        (None, None),
+        (
+            Some(serde_json::json!("default")),
+            Some(GitFetchModeDto::Default),
+        ),
+        (Some(serde_json::json!("all")), Some(GitFetchModeDto::All)),
+        (
+            Some(serde_json::json!({"remote":"team/backup"})),
+            Some(GitFetchModeDto::Remote("team/backup".into())),
+        ),
+    ] {
+        let mut request = serde_json::json!({"repositoryId":"repo-1"});
+        if let Some(mode) = mode {
+            request["mode"] = mode;
+        }
+        let params: GitFetchParams = serde_json::from_value(request.clone()).unwrap();
+        assert_eq!(params.mode, expected);
+        assert_eq!(serde_json::to_value(params).unwrap(), request);
+        assert_eq!(
+            definition("git/fetch")
+                .serialization_scope(&request)
+                .unwrap(),
+            Some(ClientRequestSerializationScope::Repository {
+                repository_id: Some("repo-1".into()),
+                access: SerializationAccess::Exclusive,
+            })
+        );
+    }
+    for mode in [
+        serde_json::json!("backup"),
+        serde_json::json!({"remote":null}),
+        serde_json::json!({"remote":12}),
+        serde_json::json!({"remote":"backup","all":null}),
+        serde_json::json!({"unknown":"backup"}),
+    ] {
+        assert!(
+            serde_json::from_value::<GitFetchParams>(serde_json::json!({"mode":mode})).is_err()
+        );
+    }
+    let previous =
+        serde_json::json!({"tags":[],"stashes":[],"remotes":["origin"],"operation":null});
+    let mut catalog: GitCatalogResult = serde_json::from_value(previous.clone()).unwrap();
+    assert_eq!(catalog.upstream_remote, None);
+    assert_eq!(serde_json::to_value(&catalog).unwrap(), previous);
+    catalog.upstream_remote = Some("team/backup".into());
+    let updated = serde_json::to_value(catalog).unwrap();
+    assert_eq!(updated["upstreamRemote"], "team/backup");
+}
+
+#[test]
 fn session_directory_move_is_session_exclusive() {
     let scope = definition("session/dirs/move")
         .serialization_scope(&serde_json::json!({ "sessionId": "session-1", "path": "/workspace", "permissions": [] }))

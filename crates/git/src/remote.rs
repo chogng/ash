@@ -260,6 +260,15 @@ impl GitClient {
         Ok(())
     }
 
+    /// Fetches one still-configured remote without changing the current checkout.
+    pub async fn fetch_remote(&self, repository: &GitRepository, name: &str) -> GitResult<()> {
+        self.require_remote(repository, name).await?;
+        self.run_mutation(repository.worktree_root(), ["fetch", "--prune", "--", name])
+            .await?
+            .require_success()?;
+        Ok(())
+    }
+
     /// Pulls the configured upstream only when it can fast-forward.
     pub async fn pull_fast_forward(&self, repository: &GitRepository) -> GitResult<()> {
         self.run_mutation(repository.worktree_root(), ["pull", "--ff-only"])

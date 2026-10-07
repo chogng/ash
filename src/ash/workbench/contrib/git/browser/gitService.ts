@@ -1,4 +1,4 @@
-import type { GitCommand, GitCommandResult, GitCatalog, GitIndexDiff, GitIndexSelection, GitCommitDetails } from '../common/gitService.js';
+import type { GitCommand, GitCommandResult, GitCatalog, GitIndexDiff, GitIndexSelection, GitCommitDetails, GitFetchTarget } from '../common/gitService.js';
 import type { ConfigReadResult, GitConfigDto, GitHeadDto, GitRepositoryChangeDto, GitRepositoryDto, GitStatusResult } from "../../../../../../.build/protocol/typescript/index.js";
 import { Emitter } from "../../../../base/common/event.js";
 import { CancellationToken } from '../../../../base/common/cancellation.js';
@@ -238,7 +238,7 @@ export class GitService extends Disposable implements IGitService {
 	public async catalog(repositoryId?: string): Promise<GitCatalog> {
 		const repository = await this.getRepository(repositoryId);
 		const result = await this.api.catalog({ repositoryId: repository.id });
-		return { ...result, operation: result.operation ?? undefined };
+		return { ...result, upstreamRemote: result.upstreamRemote ?? undefined, operation: result.operation ?? undefined };
 	}
 
 	public async executeCommand(command: GitCommand, repositoryId?: string): Promise<GitCommandResult> {
@@ -386,9 +386,9 @@ export class GitService extends Disposable implements IGitService {
 		return { objectId: result.objectId, status: toGitStatus(result.status, repository) };
 	}
 
-	async fetch(repositoryId?: string): Promise<GitStatus> {
+	async fetch(repositoryId?: string, target: GitFetchTarget = 'all'): Promise<GitStatus> {
 		const repository = await this.getRepository(repositoryId);
-		return toGitStatus((await this.api.fetch({ repositoryId: repository.id, mode: 'all' })).status, repository);
+		return toGitStatus((await this.api.fetch({ repositoryId: repository.id, mode: target })).status, repository);
 	}
 
 	async pull(repositoryId?: string): Promise<GitStatus> {

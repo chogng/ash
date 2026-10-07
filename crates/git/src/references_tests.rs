@@ -5,6 +5,55 @@ use crate::GitClient;
 use crate::test_support::TestRepository;
 
 #[tokio::test]
+async fn catalog_reports_the_configured_upstream_remote_without_splitting_ref_names() {
+    let source = TestRepository::init();
+    let client = GitClient::system();
+    let repository = client.open_repository(source.root()).await.unwrap();
+    assert_eq!(
+        client.catalog(&repository).await.unwrap().upstream_remote,
+        None
+    );
+    source.write("file.txt", "initial\n");
+    source.commit_all("Initial");
+    source.git(&[
+        "remote",
+        "add",
+        "team/backup",
+        source.root().to_str().unwrap(),
+    ]);
+    source.git(&["update-ref", "refs/remotes/team/backup/main", "HEAD"]);
+    source.git(&["config", "branch.main.remote", "team/backup"]);
+    source.git(&["config", "branch.main.merge", "refs/heads/main"]);
+    assert_eq!(
+        client
+            .catalog(&repository)
+            .await
+            .unwrap()
+            .upstream_remote
+            .as_deref(),
+        Some("team/backup")
+    );
+    source.git(&["switch", "--detach"]);
+    assert_eq!(
+        client.catalog(&repository).await.unwrap().upstream_remote,
+        None
+    );
+    source.git(&["switch", "main"]);
+    source.git(&["branch", "local"]);
+    source.git(&["config", "branch.main.remote", "."]);
+    source.git(&["config", "branch.main.merge", "refs/heads/local"]);
+    assert_eq!(
+        client.catalog(&repository).await.unwrap().upstream_remote,
+        None
+    );
+    source.git(&["config", "branch.main.remote", "removed"]);
+    assert_eq!(
+        client.catalog(&repository).await.unwrap().upstream_remote,
+        None
+    );
+}
+
+#[tokio::test]
 async fn refs_and_stashes_are_reviewed_by_identity_and_keep_working_files() {
     let source = TestRepository::init();
     source.write("file.txt", "original\n");

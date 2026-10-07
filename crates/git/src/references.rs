@@ -118,6 +118,7 @@ pub struct GitCatalog {
     pub tags: Vec<(String, String)>,
     pub stashes: Vec<(String, String)>,
     pub remotes: Vec<String>,
+    pub upstream_remote: Option<String>,
     pub operation: Option<GitIntegration>,
 }
 
@@ -166,10 +167,36 @@ impl GitClient {
             .collect::<GitResult<Vec<_>>>()?;
         let stashes = self.stashes(repository).await?;
         let remotes = self.remote_names(repository).await?;
+        // Remote names can contain slashes; the display upstream ref cannot identify its owner.
+        let upstream = self
+            .run_query(
+                repository.worktree_root(),
+                [
+                    "for-each-ref",
+                    "--format=%(HEAD)%00%(upstream:remotename)",
+                    "refs/heads",
+                ],
+            )
+            .await?
+            .require_success()?;
+        let upstream_remote = std::str::from_utf8(&upstream.stdout)
+            .map_err(|_| invalid("invalid upstream encoding"))?
+            .lines()
+            .try_fold(None, |selected, line| -> GitResult<Option<String>> {
+                let (head, remote) = line
+                    .split_once('\0')
+                    .ok_or_else(|| invalid("invalid upstream record"))?;
+                if head == "*" && remotes.iter().any(|name| name == remote) {
+                    Ok(Some(remote.to_owned()))
+                } else {
+                    Ok(selected)
+                }
+            })?;
         Ok(GitCatalog {
             tags,
             stashes,
             remotes,
+            upstream_remote,
             operation: self.integration_state(repository),
         })
     }

@@ -19,7 +19,7 @@ import { IOpenerService } from '../../../../../platform/opener/common/opener.js'
 import { OpenerService } from '../../../../../editor/browser/services/openerService.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import { StandaloneCodeEditorService } from '../../../../../editor/standalone/browser/standaloneCodeEditorService.js';
-import { IQuickInputService, type IQuickPickItem, type IQuickPick } from '../../../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, type IQuickPickItem, type IQuickPick, type IQuickPickSeparator } from '../../../../../platform/quickinput/common/quickInput.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
@@ -47,17 +47,21 @@ function historyElement(item: Partial<ISCMHistoryItem> = {}, provider?: GitHisto
 	};
 }
 
-function inputSelecting(index: number, inputValue?: string, prompts?: string[]): IQuickInputService {
+function inputSelecting(index: number, inputValue?: string, prompts?: string[], shown?: (items: readonly (IQuickPickItem | IQuickPickSeparator)[], placeholder: string, ariaLabel: string) => void): IQuickInputService {
 	return {
 		input: async options => { prompts?.push(options.placeHolder ?? ''); return inputValue; },
 		createQuickPick: <T extends IQuickPickItem>() => {
 			const accept = new Emitter<T>();
 			const hide = new Emitter<void>();
 			const picker = {
-				items: [] as readonly T[],
+				items: [] as readonly (T | IQuickPickSeparator)[],
 				placeholder: '', ariaLabel: '',
 				onDidAccept: accept.event, onDidHide: hide.event,
-				show(): void { queueMicrotask(() => index < 0 ? hide.fire() : accept.fire(this.items[index])); },
+				show(): void {
+					shown?.(this.items, this.placeholder, this.ariaLabel);
+					const items = this.items.filter((item): item is T => !('type' in item && item.type === 'separator'));
+					queueMicrotask(() => index < 0 ? hide.fire() : accept.fire(items[index]));
+				},
 				hide(): void { hide.fire(); },
 				dispose(): void { accept.dispose(); hide.dispose(); },
 				[Symbol.dispose](): void { this.dispose(); },
@@ -225,6 +229,98 @@ for (const locale of ['en', 'zh-CN']) {
 			await commands.executeCommand('git.fetchAll', 'repo-explicit');
 			assert.deepEqual({ fetches, messages }, { fetches: 0, messages: [locale === 'zh-CN' ? '此仓库未配置可获取的远端。' : 'This repository has no remotes configured to fetch from.'] });
 		} finally { resetNlsResolver(); }
+	});
+}
+
+test('Fetch uses the default mode for one remote without showing a picker', async () => {
+	const requests: unknown[][] = [];
+	using services = new InstantiationService();
+	registerGraphServices(services, {
+		getRepository: async repositoryId => ({ id: repositoryId!, label: 'Repository', path: '.', root: URI.file('/workspace') }),
+		catalog: async repositoryId => { requests.push(['catalog', repositoryId]); return { tags: [], stashes: [], remotes: ['backup'], operation: undefined }; },
+		fetch: async (repositoryId, target) => { requests.push(['fetch', repositoryId, target]); return {} as GitStatus; },
+	});
+	using commands = new CommandService(services);
+	await commands.executeCommand('git.fetch', 'repo-selected');
+	assert.deepEqual(requests, [['catalog', 'repo-selected'], ['fetch', 'repo-selected', 'default']]);
+	const item = MenusRegistry.getMenuItems(MenuId.CommandPalette).find(item => isMenuItem(item) && item.command.id === 'git.fetch');
+	assert.ok(item && isMenuItem(item));
+	assert.deepEqual(item.command.title, { original: 'Git: Fetch', value: 'Git: Fetch' });
+});
+
+test('Fetch warns about an empty remote list without showing a picker or fetching', async () => {
+	const messages: string[] = [];
+	let fetches = 0;
+	using services = new InstantiationService();
+	registerGraphServices(services, {
+		getRepository: async () => ({ id: 'repo-selected', label: 'Repository', path: '.', root: URI.file('/workspace') }),
+		catalog: async () => ({ tags: [], stashes: [], remotes: [], operation: undefined }),
+		fetch: async () => { fetches++; return {} as GitStatus; },
+	}, messages);
+	using commands = new CommandService(services);
+	await commands.executeCommand('git.fetch');
+	assert.deepEqual({ fetches, messages }, { fetches: 0, messages: ['This repository has no remotes configured to fetch from.'] });
+});
+
+for (const [index, target] of [[0, { remote: 'team/backup' }], [1, { remote: 'aaa' }], [2, 'all'], [-1, undefined]] as const) {
+	for (const locale of ['en', 'zh-CN']) {
+		test(`Fetch selects ${JSON.stringify(target)} in ${locale} and keeps its repository while the picker is open`, async () => {
+			const requests: unknown[][] = [];
+			let activeRepository = 'repo-selected';
+			const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === locale)!;
+			setNlsResolver((bundle, key, original, parameters) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? original, parameters));
+			try {
+				using services = new InstantiationService();
+				registerGraphServices(services, {
+					get activeRepository() { return { id: activeRepository, label: 'Repository', path: '.', root: URI.file('/workspace') }; },
+					getRepository: async repositoryId => { requests.push(['repository', repositoryId]); return { id: repositoryId!, label: 'Repository', path: '.', root: URI.file('/workspace') }; },
+					catalog: async repositoryId => { requests.push(['catalog', repositoryId]); return { tags: [], stashes: [], remotes: ['aaa', 'team/backup'], upstreamRemote: 'team/backup', operation: undefined }; },
+					fetch: async (repositoryId, target) => { requests.push(['fetch', repositoryId, target]); return {} as GitStatus; },
+				});
+				services.registerInstance(IQuickInputService, inputSelecting(index, undefined, undefined, (items, placeholder, ariaLabel) => {
+					activeRepository = 'repo-other';
+					const prompt = locale === 'zh-CN' ? '选择要获取的远端' : 'Select a remote to fetch';
+					assert.equal(placeholder, prompt);
+					assert.equal(ariaLabel, prompt);
+					assert.deepEqual(items.map(item => 'type' in item ? item.type : item.label), ['team/backup', 'aaa', 'separator', locale === 'zh-CN' ? '获取所有远端' : 'Fetch all remotes']);
+				}));
+				using commands = new CommandService(services);
+				await commands.executeCommand('git.fetch');
+				const expected: unknown[][] = [['repository', 'repo-selected'], ['catalog', 'repo-selected']];
+				if (target) { expected.push(['fetch', 'repo-selected', target]); }
+				assert.deepEqual(requests, expected);
+			} finally { resetNlsResolver(); }
+		});
+	}
+}
+
+for (const cancel of [false, true]) {
+	test(`Fetch releases the invoking provider after picker ${cancel ? 'cancellation' : 'fetch failure'}`, async () => {
+		using dependencies = new InstantiationService();
+		using services = dependencies.createChild();
+		using scm = new SCMService();
+		using views = new SCMViewService(scm);
+		const repository = { id: 'repo-selected', label: 'Repository', path: '.', root: URI.file('/workspace') };
+		let fetches = 0;
+		const git: Partial<IGitService> = {
+			onDidChangeRepositoryStatus: Event.None, onDidBecomeReady: Event.None,
+			getRepository: async () => repository,
+			status: async () => ({ repositoryId: repository.id, streamInstanceId: 'stream', revision: 1, workspacePath: '/workspace', head: { type: 'unborn', name: 'main' }, changes: [] }),
+			catalog: async () => ({ tags: [], stashes: [], remotes: ['backup', 'origin'], operation: undefined }),
+			fetch: async () => { fetches++; throw new Error('GitOperationFailed'); },
+		};
+		registerGraphServices(dependencies, git);
+		using history = new GitHistoryProvider(git as IGitService, repository.id);
+		using provider = new GitSCMProvider(git as IGitService, repository, history, {} as GitSCMProviderServices);
+		using registered = scm.registerSCMProvider(provider);
+		services.registerInstance(ISCMService, scm);
+		services.registerInstance(ISCMViewService, views);
+		services.registerInstance(IQuickInputService, inputSelecting(cancel ? -1 : 0, undefined, undefined, () => assert.equal(provider.isBusy, true)));
+		using commands = new CommandService(services);
+		await commands.executeCommand('git.fetch', registered.id);
+		assert.equal(provider.isBusy, false);
+		assert.equal(fetches, cancel ? 0 : 1);
+		if (!cancel) assert.equal(provider.statusMessage, 'GitOperationFailed');
 	});
 }
 

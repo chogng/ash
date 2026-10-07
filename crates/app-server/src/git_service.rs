@@ -64,9 +64,10 @@ enum GitPathMutation {
 }
 
 #[derive(Clone, Copy)]
-enum GitRemoteMutation {
+enum GitRemoteMutation<'a> {
     FetchDefault,
     Fetch,
+    FetchRemote(&'a str),
     PullFastForward,
     Push,
 }
@@ -752,6 +753,14 @@ impl GitService {
         self.mutate_remote(GitRemoteMutation::FetchDefault, cancellation)
     }
 
+    pub(crate) fn fetch_remote(
+        &self,
+        name: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
+        self.mutate_remote(GitRemoteMutation::FetchRemote(name), cancellation)
+    }
+
     pub(crate) fn pull_fast_forward(
         &self,
         cancellation: &CancellationToken,
@@ -795,7 +804,7 @@ impl GitService {
 
     fn mutate_remote(
         &self,
-        operation: GitRemoteMutation,
+        operation: GitRemoteMutation<'_>,
         cancellation: &CancellationToken,
     ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
         self.ensure_mutable()?;
@@ -809,6 +818,9 @@ impl GitService {
                             self.client.fetch_default(&repository).await
                         }
                         GitRemoteMutation::Fetch => self.client.fetch(&repository).await,
+                        GitRemoteMutation::FetchRemote(name) => {
+                            self.client.fetch_remote(&repository, name).await
+                        }
                         GitRemoteMutation::PullFastForward => {
                             self.client.pull_fast_forward(&repository).await
                         }

@@ -380,3 +380,32 @@ test('GitService maps integration state and binds partial staging to exact revie
 		{ repositoryId: 'root', path: 'file.txt', comparison: 'unstaged', expectedOriginal: null, expectedModified: 'new\n', selection: { kind: 'lines', start: 1, end: 1 } },
 	]);
 });
+
+test('GitService forwards every fetch target and maps the authoritative upstream remote', async () => {
+	const requests: unknown[] = [];
+	const status = { repositoryId: 'root', streamInstanceId: 'fetch', revision: 1, path: '', head: { type: 'unborn', name: 'main' }, changes: [] };
+	const api = {
+		repositories: async () => ({ repositories: [{ id: 'root', label: 'root', path: '' }, { id: 'nested', label: 'nested', path: 'nested' }] }),
+		status: async ({ repositoryId }: { repositoryId: string; }) => ({ ...status, repositoryId }),
+		catalog: async (params: unknown) => { requests.push(params); return { tags: [], stashes: [], remotes: ['aaa', 'team/backup'], upstreamRemote: 'team/backup', operation: null }; },
+		fetch: async (params: unknown) => { requests.push(params); return { status }; },
+	} as unknown as IGitApi;
+	const appServerApi = { getConnectionState: async () => 'disconnected', onConnectionState: () => toDisposable(() => undefined) } as unknown as IAppServerApi;
+	const eventApi = { subscribe: () => toDisposable(() => undefined) } as unknown as IServerEventApi;
+	using workspaceContext = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using configuration = new WorkbenchConfigurationService();
+	using service = new GitService({ api, appServerApi, eventApi, workspaceContext, canCloneRepository: false }, configuration, new NullLoggerService());
+	await service.listRepositories();
+	await service.selectRepository('nested');
+	assert.equal((await service.catalog('root')).upstreamRemote, 'team/backup');
+	for (const target of [undefined, 'default', 'all', { remote: 'team/backup' }] as const) {
+		assert.equal((await service.fetch('root', target)).repositoryId, 'root');
+	}
+	assert.deepEqual(requests, [
+		{ repositoryId: 'root' },
+		{ repositoryId: 'root', mode: 'all' },
+		{ repositoryId: 'root', mode: 'default' },
+		{ repositoryId: 'root', mode: 'all' },
+		{ repositoryId: 'root', mode: { remote: 'team/backup' } },
+	]);
+});

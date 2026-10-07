@@ -673,6 +673,9 @@ impl GitRuntime {
         match mode {
             GitFetchModeDto::Default => self.repository(repository_id)?.fetch_default(cancellation),
             GitFetchModeDto::All => self.repository(repository_id)?.fetch(cancellation),
+            GitFetchModeDto::Remote(name) => self
+                .repository(repository_id)?
+                .fetch_remote(&name, cancellation),
         }
     }
 
@@ -1281,6 +1284,17 @@ impl GitRepositoryRuntime {
         self.mutate_remote(GitService::fetch_default, cancellation)
     }
 
+    pub(super) fn fetch_remote(
+        &self,
+        name: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<GitStatusResult, GitRuntimeError> {
+        self.mutate_remote(
+            |service, cancellation| service.fetch_remote(name, cancellation),
+            cancellation,
+        )
+    }
+
     pub(super) fn pull_fast_forward(
         &self,
         cancellation: &CancellationToken,
@@ -1354,10 +1368,11 @@ impl GitRepositoryRuntime {
 
     fn mutate_remote(
         &self,
-        operation: fn(
+        operation: impl FnOnce(
             &GitService,
             &CancellationToken,
-        ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError>,
+        )
+            -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError>,
         cancellation: &CancellationToken,
     ) -> Result<GitStatusResult, GitRuntimeError> {
         let _operation =

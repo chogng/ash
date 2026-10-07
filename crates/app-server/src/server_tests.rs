@@ -6760,6 +6760,250 @@ fn restricted_dir_exposes_git_status_but_rejects_mutations() {
 }
 
 #[test]
+fn git_named_fetch_rpc_keeps_other_refs_and_local_state_and_revalidates_remote_names() {
+    let root = tempfile::tempdir().unwrap();
+    run_git(
+        root.path(),
+        &["init", "--bare", "--initial-branch=main", "origin.git"],
+    );
+    run_git(
+        root.path(),
+        &["init", "--bare", "--initial-branch=main", "backup.git"],
+    );
+    run_git(root.path(), &["clone", "origin.git", "producer"]);
+    let producer = root.path().join("producer");
+    run_git(&producer, &["config", "user.name", "Ash Test"]);
+    run_git(&producer, &["config", "user.email", "ash@example.test"]);
+    run_git(&producer, &["config", "commit.gpgsign", "false"]);
+    std::fs::write(producer.join("file.txt"), "initial\n").unwrap();
+    run_git(&producer, &["add", "file.txt"]);
+    run_git(&producer, &["commit", "-m", "Initial"]);
+    run_git(&producer, &["push", "origin", "main"]);
+    run_git(&producer, &["push", "../backup.git", "main"]);
+    run_git(root.path(), &["clone", "origin.git", "dir"]);
+    let dir = root.path().join("dir");
+    run_git(&dir, &["remote", "add", "team/backup", "../backup.git"]);
+    run_git(&dir, &["fetch", "--all"]);
+    run_git(
+        &dir,
+        &["branch", "--set-upstream-to=team/backup/main", "main"],
+    );
+    std::fs::write(dir.join("file.txt"), "staged\n").unwrap();
+    run_git(&dir, &["add", "file.txt"]);
+    std::fs::write(dir.join("file.txt"), "unstaged\n").unwrap();
+    std::fs::write(dir.join("untracked.txt"), "keep me\n").unwrap();
+    let read_git = |args: &[&str]| {
+        let output = std::process::Command::new("git")
+            .current_dir(&dir)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        String::from_utf8(output.stdout).unwrap()
+    };
+    let head = read_git(&["rev-parse", "HEAD"]);
+    let index = read_git(&["ls-files", "--stage"]);
+    let dirty = read_git(&["status", "--porcelain=v1"]);
+    let origin_ref = read_git(&["rev-parse", "refs/remotes/origin/main"]);
+    let server = server()
+        .with_git_root(dir_authorization(&dir, DirPermission::MutateRepository))
+        .unwrap();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let initial = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"git/status","params":{}}),
+    );
+    let repository_id = initial["result"]["repositoryId"].as_str().unwrap();
+    let catalog = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"git/catalog","params":{"repositoryId":repository_id}}),
+    );
+    assert_eq!(catalog["result"]["upstreamRemote"], "team/backup");
+    server.drain_notifications(&mut connection);
+    std::fs::write(producer.join("remote.txt"), "origin update\n").unwrap();
+    run_git(&producer, &["add", "remote.txt"]);
+    run_git(&producer, &["commit", "-m", "Origin update"]);
+    run_git(&producer, &["push", "origin", "main"]);
+    std::fs::write(producer.join("remote.txt"), "backup update\n").unwrap();
+    run_git(&producer, &["commit", "-am", "Backup update"]);
+    run_git(&producer, &["push", "../backup.git", "main"]);
+
+    let fetched = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":4,"method":"git/fetch","params":{"repositoryId":repository_id,"mode":{"remote":"team/backup"}}}),
+    );
+    assert!(fetched.get("error").is_none(), "{fetched}");
+    let backup_head = std::process::Command::new("git")
+        .current_dir(&producer)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .unwrap()
+        .stdout;
+    assert_eq!(
+        read_git(&["rev-parse", "refs/remotes/team/backup/main"]).as_bytes(),
+        backup_head
+    );
+    assert_eq!(
+        read_git(&["rev-parse", "refs/remotes/origin/main"]),
+        origin_ref
+    );
+    assert_eq!(read_git(&["rev-parse", "HEAD"]), head);
+    assert_eq!(read_git(&["ls-files", "--stage"]), index);
+    assert_eq!(read_git(&["status", "--porcelain=v1"]), dirty);
+    assert_eq!(
+        std::fs::read_to_string(dir.join("file.txt")).unwrap(),
+        "unstaged\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(dir.join("untracked.txt")).unwrap(),
+        "keep me\n"
+    );
+    assert_eq!(
+        fetched["result"]["status"]["changes"],
+        initial["result"]["changes"]
+    );
+    // Fetch advances the upstream comparison without moving the checked-out commit.
+    let mut expected_head = initial["result"]["head"].clone();
+    expected_head["upstream"]["behind"] = serde_json::json!(2);
+    assert_eq!(fetched["result"]["status"]["head"], expected_head);
+    assert!(
+        server
+            .drain_notifications(&mut connection)
+            .iter()
+            .any(|raw| {
+                let notification: serde_json::Value = serde_json::from_str(raw).unwrap();
+                notification["method"] == "git/statusChanged"
+                    && notification["params"]["status"]["repositoryId"] == repository_id
+                    && notification["params"]["status"]["revision"]
+                        .as_u64()
+                        .unwrap()
+                        > initial["result"]["revision"].as_u64().unwrap()
+            })
+    );
+
+    // The catalog can be stale when the user accepts the picker.
+    run_git(&dir, &["remote", "remove", "team/backup"]);
+    for (id, name) in [(5, "team/backup"), (6, "missing"), (7, "--all")] {
+        let rejected = call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc":"2.0","id":id,"method":"git/fetch","params":{"repositoryId":repository_id,"mode":{"remote":name}}}),
+        );
+        assert_eq!(rejected["error"]["message"], "GitOperationFailed");
+        assert_eq!(
+            read_git(&["rev-parse", "refs/remotes/origin/main"]),
+            origin_ref
+        );
+    }
+    let readonly = self::server()
+        .with_git_root(dir_authorization(&dir, DirPermission::InspectRepository))
+        .unwrap();
+    let mut reader = readonly.connection();
+    initialize(&readonly, &mut reader);
+    let rejected = call(
+        &readonly,
+        &mut reader,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"git/fetch","params":{"mode":{"remote":"origin"}}}),
+    );
+    assert_eq!(rejected["error"]["message"], "GitUnavailable");
+    assert_eq!(
+        read_git(&["rev-parse", "refs/remotes/origin/main"]),
+        origin_ref
+    );
+}
+
+#[test]
+fn git_named_fetch_connection_close_cancels_inflight_requests_and_releases_the_repository() {
+    use std::io::Read;
+    use std::net::TcpListener;
+    let root = tempfile::tempdir().unwrap();
+    run_git(root.path(), &["init", "--initial-branch=main"]);
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let url = format!("git://{}/repo.git", listener.local_addr().unwrap());
+    run_git(root.path(), &["remote", "add", "waiting", &url]);
+    let server = Arc::new(
+        server()
+            .with_git_root(dir_authorization(
+                root.path(),
+                DirPermission::MutateRepository,
+            ))
+            .unwrap(),
+    );
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let initial = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"git/status","params":{}}),
+    );
+    let repository_id = initial["result"]["repositoryId"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let close = connection.clone();
+    let worker_server = Arc::clone(&server);
+    let (done, completed) = std::sync::mpsc::channel();
+    let worker = thread::spawn(move || {
+        let result = call(
+            &worker_server,
+            &mut connection,
+            serde_json::json!({"jsonrpc":"2.0","id":3,"method":"git/fetch","params":{"repositoryId":repository_id,"mode":{"remote":"waiting"}}}),
+        );
+        done.send(result).unwrap();
+    });
+    let deadline = Instant::now() + Duration::from_secs(3);
+    let mut remote = loop {
+        match listener.accept() {
+            Ok((remote, _)) => break Some(remote),
+            Err(error)
+                if error.kind() == std::io::ErrorKind::WouldBlock && Instant::now() < deadline =>
+            {
+                thread::sleep(Duration::from_millis(10))
+            }
+            Err(_) => break None,
+        }
+    };
+    let mut bytes = [0; 256];
+    let received = remote.as_mut().and_then(|remote| {
+        // Accept polls without blocking; stream reads must wait for handshake and shutdown.
+        remote.set_nonblocking(false).ok()?;
+        remote.set_read_timeout(Some(Duration::from_secs(3))).ok()?;
+        remote.read(&mut bytes).ok()
+    });
+    // Cancel even if transport startup fails, so a failed assertion cannot strand the worker.
+    server.close_connection(close);
+    let cancelled = completed.recv_timeout(Duration::from_secs(3)).unwrap();
+    worker.join().unwrap();
+    assert!(
+        received.is_some_and(|count| count > 0),
+        "named fetch did not reach the local remote"
+    );
+    assert_eq!(cancelled["error"]["message"], "RequestCancelled");
+    match remote.unwrap().read(&mut bytes) {
+        Ok(0) => {}
+        Err(error)
+            if matches!(
+                error.kind(),
+                std::io::ErrorKind::ConnectionReset | std::io::ErrorKind::ConnectionAborted
+            ) => {}
+        result => panic!("named fetch process retained its remote after cancellation: {result:?}"),
+    }
+    let mut next = server.connection();
+    initialize(&server, &mut next);
+    let status = call(
+        &server,
+        &mut next,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"git/status","params":{}}),
+    );
+    assert!(status.get("error").is_none(), "{status}");
+}
+
+#[test]
 fn git_remote_rpcs_fetch_pull_and_push_against_a_local_bare_remote() {
     let root = std::env::temp_dir().join(format!(
         "ash-app-server-git-remote-{}-{}",

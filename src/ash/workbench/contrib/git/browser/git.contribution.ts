@@ -1,6 +1,6 @@
 import { localize2, localize } from '../../../../nls.js';
 
-import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, type IQuickPickItem, type IQuickPickSeparator } from '../../../../platform/quickinput/common/quickInput.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
@@ -39,7 +39,7 @@ import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { IWorkingCopyService } from '../../../services/workingCopy/common/workingCopyService.js';
 import { ISCMService, ISCMViewService, SCMHistoryBusyContext, SCMHistoryProviderIdContext, SCMProviderContext, SCMBusyContext, SCMCanCommitContext, type ISCMRepository } from '../../scm/common/scm.js';
 import { IQuickDiffService } from '../../scm/common/quickDiff.js';
-import { IGitService, type GitStatus } from '../common/gitService.js';
+import { IGitService, type GitFetchTarget, type GitStatus } from '../common/gitService.js';
 import { GitQuickDiffProvider } from './gitQuickDiffProvider.js';
 import { GitSCMContribution, GitSCMProvider } from './gitSCMProvider.js';
 import { ViewsRegistry } from '../../../common/views.js';
@@ -335,6 +335,59 @@ abstract class GitHistoryAction extends Action2 {
 	}
 }
 
+// Both fetch commands keep the repository selected when the invocation starts.
+async function runGitFetch(accessor: ServicesAccessor, target: unknown, remoteSelection: 'all' | 'choose'): Promise<void> {
+	const gitService = accessor.get(IGitService);
+	const notifications = accessor.get(INotificationService);
+	const historyTarget = isGitHistoryActionTarget(target) ? target : undefined;
+	const repositoryId = typeof target === 'string' ? target : historyTarget?.repositoryId ?? accessor.get(ISCMViewService).activeRepository?.id ?? gitService.activeRepository?.id;
+	try {
+		const repository = await gitService.getRepository(repositoryId);
+		const provider = historyTarget ? undefined : accessor.get(ISCMService).getRepository(repository.id)?.provider;
+		const fetch = async (): Promise<void> => {
+			const catalog = await gitService.catalog(repository.id);
+			if (catalog.remotes.length === 0) {
+				notifications.warning(localize('git.fetchAllNoRemotes', 'This repository has no remotes configured to fetch from.'));
+				return;
+			}
+			let fetchTarget: GitFetchTarget = 'all';
+			if (remoteSelection === 'choose') {
+				fetchTarget = 'default';
+				if (catalog.remotes.length > 1) {
+					const remotes = [...catalog.remotes].sort((left, right) => Number(right === catalog.upstreamRemote) - Number(left === catalog.upstreamRemote));
+					const items: (IQuickPickItem & { readonly target: GitFetchTarget; } | IQuickPickSeparator)[] = [
+						...remotes.map(remote => ({ label: remote, target: { remote } })),
+						{ type: 'separator' },
+						{ label: localize('git.fetchAllRemotesItem', 'Fetch all remotes'), target: 'all' },
+					];
+					const selected = await pickGitItem<IQuickPickItem & { readonly target: GitFetchTarget; }>(accessor.get(IQuickInputService), items, localize('git.fetchChooseRemote', 'Select a remote to fetch'));
+					if (!selected) { return; }
+					fetchTarget = selected.target;
+				}
+			}
+			await gitService.fetch(repository.id, fetchTarget);
+		};
+		if (historyTarget) {
+			await historyTarget.runTitleOperation(fetch);
+		} else if (provider instanceof GitSCMProvider) {
+			await provider.runTitleOperation(fetch);
+		} else {
+			await fetch();
+		}
+	} catch (error) {
+		notifications.error(gitErrorMessage(error));
+	}
+}
+
+registerAction2(class GitFetchAction extends Action2 {
+	constructor() {
+		super({ id: 'git.fetch', title: localize2('git.fetchTitle', 'Git: Fetch'), f1: true });
+	}
+	override run(accessor: ServicesAccessor, target: unknown): Promise<void> {
+		return runGitFetch(accessor, target, 'choose');
+	}
+});
+
 registerAction2(class GitFetchAllAction extends Action2 {
 	constructor() {
 		super({
@@ -348,32 +401,8 @@ registerAction2(class GitFetchAllAction extends Action2 {
 			menu: { id: MenuId.SCMHistoryTitle, when: SCMHistoryProviderIdContext.isEqualTo('git'), group: 'navigation', order: 1 },
 		});
 	}
-	override async run(accessor: ServicesAccessor, target: unknown): Promise<void> {
-		const gitService = accessor.get(IGitService);
-		const notifications = accessor.get(INotificationService);
-		const historyTarget = isGitHistoryActionTarget(target) ? target : undefined;
-		const repositoryId = typeof target === 'string' ? target : historyTarget?.repositoryId ?? accessor.get(ISCMViewService).activeRepository?.id ?? gitService.activeRepository?.id;
-		try {
-			// Catalog reads can outlive a repository selection; bind every request to this invocation.
-			const repository = await gitService.getRepository(repositoryId);
-			const provider = historyTarget ? undefined : accessor.get(ISCMService).getRepository(repository.id)?.provider;
-			const fetch = async (): Promise<void> => {
-				if ((await gitService.catalog(repository.id)).remotes.length === 0) {
-					notifications.warning(localize('git.fetchAllNoRemotes', 'This repository has no remotes configured to fetch from.'));
-					return;
-				}
-				await gitService.fetch(repository.id);
-			};
-			if (historyTarget) {
-				await historyTarget.runTitleOperation(fetch);
-			} else if (provider instanceof GitSCMProvider) {
-				await provider.runTitleOperation(fetch);
-			} else {
-				await fetch();
-			}
-		} catch (error) {
-			notifications.error(gitErrorMessage(error));
-		}
+	override run(accessor: ServicesAccessor, target: unknown): Promise<void> {
+		return runGitFetch(accessor, target, 'all');
 	}
 });
 
@@ -559,7 +588,7 @@ async function prepareGitCommand(accessor: ServicesAccessor, kind: RepositoryCom
 }
 
 /** The picker owns every listener until acceptance or cancellation. */
-async function pickGitItem<T extends IQuickPickItem>(input: IQuickInputService, items: readonly T[], placeHolder: string): Promise<T | undefined> {
+async function pickGitItem<T extends IQuickPickItem>(input: IQuickInputService, items: readonly (T | IQuickPickSeparator)[], placeHolder: string): Promise<T | undefined> {
 	if (items.length === 0) { return undefined; }
 	using lifetime = new DisposableStore();
 	const picker = lifetime.add(input.createQuickPick<T>());
