@@ -177,6 +177,39 @@ fn input_keeps_its_bottom_rule() {
         )
         self.assertEqual(self.commands[-1][1], "test")
 
+    def test_verify_runs_declared_consumer_tests_without_skipping_validation(self):
+        self.write(
+            "crates/example/Cargo.toml",
+            '[package]\nname = "example"\n'
+            '[package.metadata.ash.verify]\ntest-package = "ash-tui"\n',
+        )
+        self.assertEqual(self.execute(["verify", "example", "--filter", "request_"]), 0)
+        self.assertEqual(
+            [(command[1], command[2]) for command in self.commands],
+            [("check", "example"), ("test", "ash-tui"), ("rust-warnings", "example")],
+        )
+        self.assertIn("request_", self.commands[1])
+        self.commands.clear()
+        self.assertEqual(
+            self.execute(
+                ["verify", "example"],
+                lambda command, kwargs: subprocess.CompletedProcess(
+                    command, 0, "test result: ok. 0 passed; 0 failed;\n", ""
+                ),
+            ),
+            1,
+        )
+        self.assertEqual(self.commands[-1][1], "test")
+
+    def test_verify_rejects_an_unknown_consumer_before_running_commands(self):
+        self.write(
+            "crates/example/Cargo.toml",
+            '[package]\nname = "example"\n'
+            '[package.metadata.ash.verify]\ntest-package = "missing"\n',
+        )
+        self.assertEqual(self.execute(["verify", "example"]), 1)
+        self.assertEqual(self.commands, [])
+
     def test_snapshot_runs_actual_function_and_neutralizes_insta_settings(self):
         with patch.dict(
             os.environ, {"INSTA_UPDATE": "always", "INSTA_FORCE_PASS": "1"}

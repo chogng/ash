@@ -3,6 +3,10 @@ mod scenario_http;
 #[path = "support/tui_process.rs"]
 mod tui_process;
 
+#[cfg(unix)]
+#[path = "support/issue_server.rs"]
+mod issue_server;
+
 #[path = "tui/config.rs"]
 mod config;
 #[path = "tui/conversation.rs"]

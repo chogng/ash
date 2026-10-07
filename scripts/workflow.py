@@ -181,8 +181,22 @@ def run_test(
 
 
 def verify(args: argparse.Namespace, root: Path) -> int:
-    if args.package not in workspace_packages(root):
+    packages = workspace_packages(root)
+    if args.package not in packages:
         raise ValueError(f"unknown workspace package: {args.package}")
+    package = tomllib.loads(packages[args.package].read_text(encoding="utf-8"))[
+        "package"
+    ]
+    test_package = (
+        package.get("metadata", {})
+        .get("ash", {})
+        .get("verify", {})
+        .get("test-package", args.package)
+    )
+    if test_package not in packages:
+        raise ValueError(f"unknown verification test package: {test_package}")
+    if test_package != args.package:
+        print(f"Testing {args.package} through its consumer {test_package}")
     settings = ["--profile", args.profile]
     if args.features:
         settings += ["--features", args.features]
@@ -191,7 +205,7 @@ def verify(args: argparse.Namespace, root: Path) -> int:
         [
             "just",
             "test",
-            args.package,
+            test_package,
             *settings,
             *([args.filter] if args.filter else []),
         ],

@@ -16,6 +16,7 @@ fn wide_header_keeps_pet_and_identity_information_together() {
     let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
         models: vec![
             ash_app_server_protocol::protocol::model::ModelCatalogEntry {
+                retirement: None,
                 description: None,
                 discovered: None,
                 model: ash_protocol::ModelRef::new(

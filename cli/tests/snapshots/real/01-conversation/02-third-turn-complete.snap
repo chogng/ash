@@ -2,7 +2,7 @@
 source: cli/tests/support/tui_process.rs
 expression: screen
 ---
-  <FIXTURE…>                                      …                            [— / —] [Dashboard]
+  <FIXTURE…>                                                …                          [Dashboard]
 
 > 第一轮：请确认输入、流式输出和 Unicode 🚀
 
@@ -28,9 +28,9 @@ expression: screen
 
 
 
-  ⏸ Manual                                                       /permission to change permissions
+                                                                 /permission to change permissions
   ────────────────────────────────────────────────────────────────────────────────────────────────
   >
   ───────────────────────────────────────────────────────────────────────────── ash-real-scenario
 
-  Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort
+  ⏸ Manual · ← Dashboard · ? for shortcuts

@@ -2,12 +2,14 @@
 source: cli/tests/support/tui_process.rs
 expression: screen
 ---
-  <FIXTURE…>                                      …                            [— / —] [Dashboard]
+  <FIXTURE…>                                                …                          [Dashboard]
 
 > 请尝试创建 declined-by-tui.txt
 
-● Failed to update file
-└─ Failed to update file — user declined the requested one-time tool authorization
+● Failed to update file declined-by-tui.txt
+ └─ declined-by-tui.txt
+    user declined the requested one-time tool authorization
+    view full
 
 ● 工具调用被用户拒绝。没有写入文件。
 
@@ -26,11 +28,9 @@ expression: screen
 
 
 
-
-
-  ⏸ Manual                                                       /permission to change permissions
+                                                                 /permission to change permissions
   ────────────────────────────────────────────────────────────────────────────────────────────────
   >
   ───────────────────────────────────────────────────────────────────────────── ash-real-scenario
 
-  Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort
+  ⏸ Manual · ← Dashboard · ? for shortcuts

@@ -70,6 +70,7 @@ fn model_reasoning_effort_overrides_catalog_value() {
 
 fn entry(provider: &str, model: &str, _access: ModelAccess) -> ModelCatalogEntry {
     ModelCatalogEntry {
+        retirement: None,
         discovered: None,
         model: ModelRef::new(
             ProviderId::new(provider).unwrap(),

@@ -9,6 +9,10 @@ publish.workspace = true
 name = "core_api"
 doctest = false
 
+# Core exercises these host contracts through its real execution and lifecycle tests.
+[package.metadata.ash.verify]
+test-package = "ash-core"
+
 [dependencies]
 ash-utils-image = { workspace = true }
 agent-graph-store = { workspace = true }

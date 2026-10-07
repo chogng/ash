@@ -313,7 +313,7 @@ impl Fixture {
         ] {
             fs::write(bin.join(name), serde_json::to_vec(&data).unwrap()).unwrap();
         }
-        let script = bin.join("gh");
+        let script = bin.join("issue-provider");
         let resource = cargo_bin::find_resource!(
             "tests/support/issue_provider.py",
             "_main/cli/tests/support/issue_provider.py"
@@ -347,6 +347,7 @@ contextWindow = 128000
     pub fn append_config(&self, fragment: &str) {
         let mut config = fs::OpenOptions::new()
             .append(true)
+            .create(true)
             .open(self.profile.join("config.toml"))
             .unwrap();
         config.write_all(fragment.as_bytes()).unwrap();
@@ -581,13 +582,12 @@ impl TuiProcess {
         self.send_input(b"\x1b[Z");
     }
 
-    pub fn refresh_policy_tip(&mut self) {
-        // Confirming the current policy refreshes the hint without changing its value.
+    pub fn confirm_current_permission(&mut self) {
         self.wait_for_clipboard_tip_to_expire();
         self.submit("/permission");
         self.wait_for_stable_screen("Bypass permissions");
         self.enter();
-        self.wait_for_stable_screen("/permission to change permissions");
+        self.wait_for_stable_screen("? for shortcuts");
     }
 
     pub fn up(&mut self) {
@@ -807,8 +807,14 @@ impl TuiProcess {
 
     fn wait_for_clipboard_tip_to_expire(&self) {
         // The host clipboard belongs to the user, not these conversation fixtures.
+        let clipboard_tips = [
+            "image in clipboard",
+            "クリップボードに画像があります",
+            "剪贴板中有图片",
+            "image dans le presse-papiers",
+        ];
         let deadline = Instant::now() + STATE_TIMEOUT;
-        while self.screen().contains("image in clipboard") {
+        while clipboard_tips.iter().any(|tip| self.screen().contains(tip)) {
             assert!(Instant::now() < deadline, "clipboard tip did not expire");
             thread::sleep(Duration::from_millis(20));
         }
@@ -926,26 +932,26 @@ fn normalize_snapshot(mut screen: String, paths: &[String]) -> String {
 }
 
 fn normalize_elapsed_time(line: &str) -> String {
-    let Some(total) = line.find(" total · ") else {
+    if !line.trim_start().starts_with("○ ") {
+        return line.into();
+    }
+    let Some(total) = line.find(" · esc to interrupt") else {
         return line.into();
     };
     let Some(start) = line[..total].rfind(" · ").map(|start| start + " · ".len()) else {
         return line.into();
     };
-    let Some((minutes, seconds)) = line[start..total].split_once("m ") else {
-        return line.into();
-    };
-    let Some(seconds) = seconds.strip_suffix('s') else {
-        return line.into();
-    };
-    if minutes.is_empty()
-        || seconds.len() != 2
-        || !minutes.bytes().all(|byte| byte.is_ascii_digit())
-        || !seconds.bytes().all(|byte| byte.is_ascii_digit())
+    let duration = &line[start..total];
+    if duration.is_empty()
+        || !duration.split_whitespace().all(|part| {
+            part.strip_suffix(['h', 'm', 's']).is_some_and(|digits| {
+                !digits.is_empty() && digits.bytes().all(|byte| byte.is_ascii_digit())
+            })
+        })
     {
         return line.into();
     }
-    format!("{}0m 00s{}", &line[..start], &line[total..])
+    format!("{}0s{}", &line[..start], &line[total..])
 }
 
 fn normalize_truncated_fixture_path(line: &str, paths: &[String]) -> String {
@@ -1057,12 +1063,19 @@ fn normalize_assessment_ids(screen: &str) -> String {
 
 #[test]
 fn snapshot_normalization_freezes_elapsed_status_without_changing_other_text() {
-    let screen =
-        "○ Waiting for approval · 0m 01s total · ctrl+c to interrupt\nresponse took 0m 01s";
-    assert_eq!(
-        normalize_snapshot(screen.into(), &[]),
-        "○ Waiting for approval · 0m 00s total · ctrl+c to interrupt\nresponse took 0m 01s"
-    );
+    for duration in ["17s", "1m 03s", "2h 04m 07s"] {
+        let screen = format!(
+            "○ Waiting for approval · {duration} · esc to interrupt\nresponse took {duration}"
+        );
+        assert_eq!(
+            normalize_snapshot(screen, &[]),
+            format!("○ Waiting for approval · 0s · esc to interrupt\nresponse took {duration}")
+        );
+        assert_eq!(
+            normalize_snapshot(format!("response took {duration} · esc to interrupt"), &[]),
+            format!("response took {duration} · esc to interrupt")
+        );
+    }
 }
 
 #[test]

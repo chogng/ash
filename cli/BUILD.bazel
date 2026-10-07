@@ -20,6 +20,7 @@ rust_test(
     crate_name = "tui_real_scenarios",
     crate_root = "tests/tui_real_scenarios.rs",
     srcs = glob(["tests/tui/*.rs"]) + [
+        "tests/support/issue_server.rs",
         "tests/support/scenario_http.rs",
         "tests/support/tui_process.rs",
         "tests/tui_real_scenarios.rs",

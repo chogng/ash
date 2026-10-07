@@ -2,7 +2,7 @@
 source: cli/tests/support/tui_process.rs
 expression: screen
 ---
-  <FIXTURE…>                                      …                            [— / —] [Dashboard]
+  <FIXTURE…>                                                …                          [Dashboard]
 
 > 请保持流式输出，直到我取消
 
@@ -28,9 +28,9 @@ expression: screen
 
 
 
-  ⏸ Manual                                                       /permission to change permissions
+                                                                 /permission to change permissions
   ────────────────────────────────────────────────────────────────────────────────────────────────
   >
   ───────────────────────────────────────────────────────────────────────────── ash-real-scenario
 
-  Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort
+  ⏸ Manual · ← Dashboard · ? for shortcuts

@@ -23,6 +23,9 @@ output/
 !src/ash/workbench/contrib/output/**
 !src/ash/workbench/services/output/
 !src/ash/workbench/services/output/**
+# TUI transcript-output snapshots are test baselines, not build products.
+!crates/tui/snapshots/inline/output/
+!crates/tui/snapshots/inline/output/**
 
 # Frontend dependencies and generated files
 node_modules/

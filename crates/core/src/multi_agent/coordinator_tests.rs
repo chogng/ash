@@ -1341,7 +1341,7 @@ fn root_role_and_default_worker_share_rules_without_inheriting_responsibilities(
                 .map(|fragment| fragment.body())
                 .collect::<Vec<_>>()
                 .join("\n");
-            assert!(body.contains("Shared working rules"));
+            assert!(body.contains(ash_prompts::AGENT_INSTRUCTIONS.body().trim()));
             assert!(body.contains("## Tool permissions"));
             assert!(body.contains("Approval mode is `manual`"));
             assert_eq!(

@@ -2,18 +2,18 @@
 source: cli/tests/support/tui_process.rs
 expression: screen
 ---
-  <FIXTURE…>                                      …                            [— / —] [Dashboard]
+  <FIXTURE…>                                                …                          [Dashboard]
 
 > 请创建 approved-by-tui.txt
 
-● Updated file
-└─ write_file [call-approve]
-   {
-     "content": "approved through the real TUI\n",
-     "path": "approved-by-tui.txt"
-   }
-   wrote approved-by-tui.txt
-   view full
+● Updated file approved-by-tui.txt
+ └─ write_file [call-approve]
+    {
+      "path": "approved-by-tui.txt",
+      "content": "approved through the real TUI\n"
+    }
+    wrote approved-by-tui.txt
+    view full
 
 ● 工具已获批准并执行。文件写入完成。
 

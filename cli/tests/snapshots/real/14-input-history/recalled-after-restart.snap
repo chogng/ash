@@ -2,7 +2,7 @@
 source: cli/tests/support/tui_process.rs
 expression: screen
 ---
-  <FIXTURE…>                                      …                            [— / —] [Dashboard]
+  <FIXTURE…>                                                …                          [Dashboard]
 
   ╭──────────────────────────────────────────────────────────────────────────────────────────────╮
   │                                                                                              │
@@ -33,4 +33,4 @@ expression: screen
   > Remember this input across restarts
   ───────────────────────────────────────────────────────────────────────────── ash-real-scenario
 
-  Enter send  ·  Tab actions  ·  / commands
+  ⏸ Manual

@@ -821,6 +821,12 @@ fn restricted_dir_installs_only_non_executable_services() {
         .with_cloud_codebase_providers(providers)
         .with_local_env_host(None, DirGrantPolicy::InspectOnly)
         .unwrap();
+    let application_tools = server.local_env_host.as_ref().unwrap().tools.definitions();
+    assert!(
+        application_tools
+            .iter()
+            .any(|tool| tool.name.as_str() == "list_threads")
+    );
 
     assert_eq!(
         server.switch_local_dir_root(dir.path.clone()),
@@ -839,7 +845,7 @@ fn restricted_dir_installs_only_non_executable_services() {
         .tools
         .replace_host_available(true)
         .unwrap();
-    assert!(
+    assert_eq!(
         server
             .local_env_host
             .as_ref()
@@ -847,8 +853,8 @@ fn restricted_dir_installs_only_non_executable_services() {
             .tools
             .reloadable
             .tools()
-            .definitions()
-            .is_empty()
+            .definitions(),
+        application_tools
     );
 }
 
@@ -1118,6 +1124,12 @@ fn user_config_revocation_removes_executable_services_but_keeps_file_access() {
     let server = server()
         .with_local_env_host(None, DirGrantPolicy::UserConfig(Arc::clone(&config)))
         .unwrap();
+    let application_tools = server.local_env_host.as_ref().unwrap().tools.definitions();
+    assert!(
+        application_tools
+            .iter()
+            .any(|tool| tool.name.as_str() == "list_threads")
+    );
     server.switch_local_dir_root(dir.path.clone()).unwrap();
     assert!(server.terminal_service().is_ok());
     let thread = server
@@ -1205,7 +1217,7 @@ fn user_config_revocation_removes_executable_services_but_keeps_file_access() {
             .status,
         TurnStatus::Interrupted
     );
-    assert!(
+    assert_eq!(
         server
             .local_env_host
             .as_ref()
@@ -1213,8 +1225,8 @@ fn user_config_revocation_removes_executable_services_but_keeps_file_access() {
             .tools
             .reloadable
             .tools()
-            .definitions()
-            .is_empty()
+            .definitions(),
+        application_tools
     );
 }
 

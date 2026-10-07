@@ -63,7 +63,9 @@ class AgentEvalProductTests(unittest.TestCase):
                         self.send_response(200)
                         self.send_header("Content-Type", "text/event-stream")
                         self.end_headers()
-                        self.wfile.write(b'data: {"choices":[{"index":0,"delta":{"content":"fixture partial output"},"finish_reason":null}]}\n\n')
+                        self.wfile.write(
+                            b'data: {"choices":[{"index":0,"delta":{"content":"fixture partial output"},"finish_reason":null}]}\n\n'
+                        )
                         self.wfile.flush()
                         threading.Event().wait(5)
                         self.close_connection = True
@@ -308,7 +310,9 @@ order = 0
                         )
                         self.assertTrue(run["trace"]["usageComplete"])
                         self.assertEqual(run["trace"]["modelAttempts"], 2)
-                        self.assertEqual(run["trace"]["diagnosticRecordingStatus"], "recording")
+                        self.assertEqual(
+                            run["trace"]["diagnosticRecordingStatus"], "recording"
+                        )
                         diagnostic = trace["diagnostics"]
                         self.assertEqual(len(diagnostic["events"]), 6)
                         self.assertEqual(len(diagnostic["payloads"]), 6)
@@ -316,8 +320,16 @@ order = 0
                             event = observation["event"]
                             for field in ["requestPayload", "responsePayload"]:
                                 if field in event:
-                                    self.assertIn(event[field]["payloadId"], diagnostic["payloads"])
-                        self.assertTrue(any(edge["kind"] == "requestsTool" for edge in trace["graph"]["edges"]))
+                                    self.assertIn(
+                                        event[field]["payloadId"],
+                                        diagnostic["payloads"],
+                                    )
+                        self.assertTrue(
+                            any(
+                                edge["kind"] == "requestsTool"
+                                for edge in trace["graph"]["edges"]
+                            )
+                        )
                         self.assertNotIn("retainedProfile", run)
                     failure_suite = root / "failure-suite"
                     shutil.copytree(suite, failure_suite)
@@ -365,7 +377,13 @@ order = 0
                                 failed["materialization"]["status"], "restored"
                             )
                             self.assertEqual(failed["taskPassed"], mode == "retry")
-                            captured = json.loads((failed_output / failed["artifactDirectory"] / "trace.json").read_text())
+                            captured = json.loads(
+                                (
+                                    failed_output
+                                    / failed["artifactDirectory"]
+                                    / "trace.json"
+                                ).read_text()
+                            )
                             observations = captured["diagnostics"]["events"]
                             kinds = [record["event"]["type"] for record in observations]
                             self.assertIn("modelAttemptStarted", kinds)
@@ -376,9 +394,18 @@ order = 0
                                 self.assertEqual(failed["trace"]["failedAttempts"], 1)
                             if mode == "hang":
                                 self.assertIn("modelAttemptCancelled", kinds)
-                                ended = next(record["event"] for record in observations if record["event"]["type"] == "modelAttemptCancelled")
-                                partial = captured["diagnostics"]["payloads"][ended["partialOutput"]["payloadId"]]
-                                self.assertEqual(partial["text"], "fixture partial output")
+                                ended = next(
+                                    record["event"]
+                                    for record in observations
+                                    if record["event"]["type"]
+                                    == "modelAttemptCancelled"
+                                )
+                                partial = captured["diagnostics"]["payloads"][
+                                    ended["partialOutput"]["payloadId"]
+                                ]
+                                self.assertEqual(
+                                    partial["text"], "fixture partial output"
+                                )
                             self.assertNotIn("retainedProfile", failed)
                 finally:
                     subprocess.run(

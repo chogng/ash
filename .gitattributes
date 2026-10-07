@@ -9,6 +9,9 @@
 # Unified diff blank context lines require a space prefix.
 /crates/vendor/mxc/changes.patch whitespace=-blank-at-eol
 
+# Inline output baselines retain blank cells in fixed-width terminal buffers.
+/crates/tui/snapshots/inline/output/*.snap whitespace=-blank-at-eol
+
 # Embed identical shared prompt assets on every platform.
 /crates/prompts/templates/** text eol=lf
 /crates/collaboration-mode-templates/templates/** text eol=lf

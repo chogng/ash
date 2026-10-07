@@ -2,7 +2,7 @@
 source: cli/tests/support/tui_process.rs
 expression: screen
 ---
-  <FIXTURE…>        …                  [— / —] [Dashboard]
+  <FIXTURE…>        …                          [Dashboard]
 
 > 第一轮：测试真实流式输出、中文和 Emoji
 
@@ -12,9 +12,9 @@ expression: screen
 
 ● 第二轮排队消息已经执行。
 
-  ⏸ Manual               /permission to change permissions
+                         /permission to change permissions
   ────────────────────────────────────────────────────────
   >
   ───────────────────────────────────── ash-real-scenario
 
-  Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort
+  ⏸ Manual · ← Dashboard · ? for shortcuts

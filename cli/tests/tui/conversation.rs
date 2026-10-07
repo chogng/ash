@@ -23,8 +23,8 @@ fn actual_tui_recalls_input_history_after_process_restart() {
     second.wait_for_stable_screen("Ash Code v");
     second.up();
     second.wait_for_stable_screen("> Remember this input across restarts");
-    // These snapshots capture the settled screen, after the startup hint has faded.
-    second.wait_for_screen_to_omit("Manual");
+    second.wait_for_stable_screen("⏸ Manual");
+    second.wait_for_screen_to_omit("Type a task to begin, or use Tab to choose an action.");
     second.assert_snapshot("real/14-input-history/recalled-after-restart");
     assert_eq!(server.request_count(), 1);
     second.down();
@@ -64,6 +64,7 @@ fn actual_tui_runs_three_complete_conversation_turns() {
 
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
     process.wait_for_screen("Start a task below, or continue a previous session.");
+    process.wait_for_screen_to_omit("Type a task to begin, or use Tab to choose an action.");
     process.assert_snapshot("real/01-conversation/00-started");
 
     process.type_text("第一轮：请确认输入、流式输出和 Unicode 🚀");
@@ -86,8 +87,8 @@ fn actual_tui_runs_three_complete_conversation_turns() {
     process.wait_for_screen("第三轮最终结论");
     third.release();
     process.wait_for_stable_screen("连续多轮对话已完成");
-    process.refresh_policy_tip();
-    assert!(process.screen().contains("shift+↓/↑ effort"));
+    process.confirm_current_permission();
+    assert!(process.screen().contains("? for shortcuts"));
     process.assert_snapshot("real/01-conversation/02-third-turn-complete");
 
     let bodies = server.request_bodies();
@@ -114,7 +115,8 @@ fn actual_tui_displays_git_branch_and_changes() {
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
     process.wait_for_stable_screen("1 change");
     assert!(process.screen().lines().next().unwrap().contains("main"));
-    process.wait_for_screen_to_omit("Manual");
+    process.wait_for_stable_screen("⏸ Manual");
+    process.wait_for_screen_to_omit("Type a task to begin, or use Tab to choose an action.");
     process.assert_snapshot("real/08-git/00-branch-and-change");
     process.quit();
 }
@@ -143,7 +145,7 @@ fn actual_tui_queues_restores_and_completes_messages() {
     process.type_text("第三条：稍后恢复到输入框");
     process.enter();
     process.wait_for_screen("第三条：稍后恢复到输入框");
-    process.wait_for_screen("shift+tab mode");
+    process.wait_for_screen("? for shortcuts");
 
     process.alt_up();
     process.wait_for_screen("> Queue 2: 第三条：稍后恢复到输入框");
@@ -191,7 +193,7 @@ fn actual_tui_sandbox_approves_and_declines_real_file_tool_calls() {
     approve.wait_for_screen("工具已获批准并执行");
     approve_gate.release();
     approve.wait_for_stable_screen("文件写入完成");
-    approve.refresh_policy_tip();
+    approve.confirm_current_permission();
     approve.wait_for_stable_screen("Manual");
     approve.assert_snapshot("real/03-approval/01-approved-final");
     approve.control_up();
@@ -240,7 +242,7 @@ fn actual_tui_sandbox_approves_and_declines_real_file_tool_calls() {
     decline.wait_for_screen("工具调用被用户拒绝");
     decline_gate.release();
     decline.wait_for_stable_screen("没有写入文件");
-    decline.refresh_policy_tip();
+    decline.confirm_current_permission();
     decline.wait_for_stable_screen("Manual");
     decline.assert_snapshot("real/03-approval/03-declined-final");
     assert!(decline_fixture.find_file("declined-by-tui.txt").is_none());
@@ -278,13 +280,13 @@ fn actual_tui_sandbox_approval_modes_change_file_tool_authority() {
     auto.submit("start a session before automatic review");
     auto.wait_for_stable_screen("AUTO-SETUP-DONE");
     auto.submit("/permission auto");
-    auto.wait_for_screen("Auto");
+    auto.wait_for_stable_screen("Auto");
     auto.submit("请通过自动审查创建 auto-reviewed.txt");
     auto.wait_for_screen("自动审查拒绝了工具");
     auto_gate.wait_until_reached();
     assert!(auto_fixture.find_file("auto-reviewed.txt").is_none());
     auto.submit("/permission bypassPermissions");
-    auto.wait_for_screen("current: Auto");
+    auto.wait_for_screen("Auto");
     // Inspect the review result after the follow-up turn can finish.
     auto_gate.release();
     auto.wait_for_stable_screen("文件没有写入");
@@ -320,15 +322,14 @@ fn actual_tui_sandbox_approval_modes_change_file_tool_authority() {
     bypass.wait_for_screen("Bypass permissions");
     bypass.submit("请直接创建 permission-bypassed.txt");
     bypass.wait_for_stable_screen("文件直接写入完成");
-    bypass.refresh_policy_tip();
+    bypass.confirm_current_permission();
     bypass.wait_for_stable_screen("Bypass permissions");
     bypass.assert_snapshot("real/03-approval/07-bypass-final");
     bypass.control_up();
     bypass.up();
     bypass.space();
-    bypass.wait_for_screen("written with permission bypass");
-    bypass.refresh_policy_tip();
-    bypass.wait_for_stable_screen("/permission to change permissions");
+    bypass.wait_for_stable_screen("written with permission bypass");
+    bypass.wait_for_stable_screen("Space to expand");
     bypass.assert_snapshot("real/03-approval/08-bypass-details");
     let bypassed_thread_path = bypass_fixture.find_file("permission-bypassed.txt").unwrap();
     assert_eq!(

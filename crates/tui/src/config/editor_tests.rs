@@ -368,6 +368,7 @@ fn configured_advisor_model_is_selected_when_opening_config() {
     config.advisor = Some(AdvisorConfig::new(model.clone()));
     let mut catalog = ModelListResult {
         models: vec![ModelCatalogEntry {
+            retirement: None,
             description: None,
             discovered: None,
             model,

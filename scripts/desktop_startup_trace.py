@@ -264,10 +264,13 @@ def compare_reports(baseline: dict, candidate: dict) -> tuple[str, int]:
             if old_valid and new_valid
             else "—"
         )
-        display = lambda samples, version: ",".join(
-            str(sample["readyMs"]) if valid(sample, version) else "ERROR"
-            for sample in samples
-        )
+
+        def display(samples, version):
+            return ",".join(
+                str(sample["readyMs"]) if valid(sample, version) else "ERROR"
+                for sample in samples
+            )
+
         lines.append(
             f"{cohort} | {display(old, baseline['schemaVersion'])} | {display(new, candidate['schemaVersion'])} "
             f"| {old_median} | {new_median} | {delta} | {old_errors}/{new_errors}"
@@ -301,9 +304,13 @@ def compare_reports(baseline: dict, candidate: dict) -> tuple[str, int]:
                     if old_values and new_values
                     else "—"
                 )
-                display = lambda durations: ",".join(
-                    str(value) if value is not None else "ERROR" for value in durations
-                )
+
+                def display(durations):
+                    return ",".join(
+                        str(value) if value is not None else "ERROR"
+                        for value in durations
+                    )
+
                 lines.append(
                     f"{cohort} | {start} → {end} | {display(old_durations)} | {display(new_durations)} "
                     f"| {median(old_values)} | {median(new_values)} | {delta}"
@@ -345,10 +352,13 @@ def compare_reports(baseline: dict, candidate: dict) -> tuple[str, int]:
                     if old_values and new_values
                     else "—"
                 )
-                display = lambda durations: ",".join(
-                    f"{value:.1f}" if value is not None else "ERROR"
-                    for value in durations
-                )
+
+                def display(durations):
+                    return ",".join(
+                        f"{value:.1f}" if value is not None else "ERROR"
+                        for value in durations
+                    )
+
                 lines.append(
                     f"{cohort} | {start} → {end} | {display(old_durations)} | {display(new_durations)} "
                     f"| {median(old_values)} | {median(new_values)} | {delta}"

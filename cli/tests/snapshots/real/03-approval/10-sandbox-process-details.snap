@@ -2,28 +2,28 @@
 source: cli/tests/support/tui_process.rs
 expression: screen
 ---
-  <FIXTURE…>                                      …                            [— / —] [Dashboard]
+  <FIXTURE…>                                                …                          [Dashboard]
 
 
-> 尝试在工作区外创建 sandbox-must-not-write.txt
-
-● Thought
+● Reasoning summary
+ └─ 先在受限进程中尝试写入工作区外部。
+    再根据进程结果确认目录边界是否生效。
 
 ● Command failed
-└─ shell-command [call-sandbox]
-   {
-     "arguments": [
-       "-c",
-       "touch ../sandbox-must-not-write.txt 2>&- || { echo 'sandbox fixture: operation not
-permitted' >&2; exit 1; }"
-     ],
-     "program": "/bin/sh",
-     "working_directory": "."
-   }
-   sandbox denied the action, but the attempt may have produced side effects, so the exact call was
-not retried; reason: the process reported an access restriction; output: sandbox fixture: operation
-not permitted
-   view full
+ └─ shell-command [call-sandbox]
+    {
+      "program": "/bin/sh",
+      "arguments": [
+        "-c",
+        "touch ../sandbox-must-not-write.txt 2>&- || { echo 'sandbox fixture: operation not
+    permitted' >&2; exit 1; }"
+      ],
+      "working_directory": "."
+    }
+    sandbox denied the action, but the attempt may have produced side effects, so the exact call was
+    not retried; reason: the process reported an access restriction; output: sandbox fixture:
+    operation not permitted
+    view full
 
 ● 沙盒拒绝了越界写入，目标文件没有生成。
 

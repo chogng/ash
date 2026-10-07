@@ -881,14 +881,18 @@ dependencies = [
 name = "ash-cli"
 version = "0.1.0"
 dependencies = [
+ "ash-app-server",
  "ash-app-server-client",
  "ash-app-server-daemon",
  "ash-app-server-protocol",
  "ash-arg0",
+ "ash-async-utils",
  "ash-build-identity",
  "ash-build-info",
  "ash-core-plugins",
  "ash-exec",
+ "ash-github",
+ "ash-http-client",
  "ash-install-context",
  "ash-package-store",
  "ash-plugin",
@@ -897,6 +901,7 @@ dependencies = [
  "ash-protocol",
  "ash-remote",
  "ash-remote-connections",
+ "ash-secrets",
  "ash-terminal",
  "ash-tui",
  "ash-utils-cargo-bin",

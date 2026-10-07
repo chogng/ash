@@ -79,10 +79,12 @@ fn actual_tui_leases_its_generation_until_process_exit() {
     let fixture = Fixture::new().with_cli_executable(executable);
     fixture.write_config(&server.base_url());
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
-    process.wait_for_stable_screen("Enter send");
+    process.wait_for_stable_screen("? for shortcuts");
     assert!(lease.try_lock().is_err());
     process.quit();
     lease.try_lock().unwrap();
+    // Fixture cleanup launches another CLI process, which must be able to acquire its read lease.
+    lease.unlock().unwrap();
 }
 
 #[cfg(unix)]
@@ -131,7 +133,7 @@ fn actual_tui_dictation_download_cancels_recovers_and_restarts() {
 
         let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
         process.wait_for_stable_screen(if mode == "fullscreen" {
-            "Enter send"
+            "? for shortcuts"
         } else {
             "Manual"
         });
@@ -205,7 +207,7 @@ fn actual_tui_dictation_download_exit_releases_the_connection_owner() {
         let server = ScenarioServer::start([]);
         fixture.write_config(&server.base_url());
         let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
-        process.wait_for_stable_screen("Enter send");
+        process.wait_for_stable_screen("? for shortcuts");
         process.submit("/voice");
         process.wait_for_screen("Dictation · checking model files");
         let connection = proxy.connection();
@@ -246,7 +248,7 @@ fn actual_tui_dictation_download_respects_another_process_model_lock() {
     lock.try_lock().unwrap();
 
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
-    process.wait_for_stable_screen("Enter send");
+    process.wait_for_stable_screen("? for shortcuts");
     process.submit("/voice");
     process.wait_for_stable_screen("Dictation model is being prepared by another operation");
     assert_eq!(
@@ -301,6 +303,7 @@ fn actual_tui_guardian_setup_saves_project_background_through_the_app_server() {
 #[test]
 fn actual_tui_permission_ids_select_the_shared_menu_without_changing_plan() {
     let fixture = Fixture::new();
+    fixture.append_config("\n[tui]\nstatusLine = [\"model\", \"mode\", \"permissions\"]\n");
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
     process.wait_for_stable_screen("Automatic model");
     process.submit("/mode plan");
@@ -336,6 +339,7 @@ fn actual_tui_permission_ids_select_the_shared_menu_without_changing_plan() {
 #[test]
 fn collaboration_shortcuts_decode_shift_tab_and_directional_effort_without_changing_the_draft() {
     let fixture = Fixture::new();
+    fixture.append_config("\n[tui]\nstatusLine = [\"model\", \"mode\", \"permissions\"]\n");
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
     process.wait_for_stable_screen("Automatic model");
     process.type_text("BOUND-DRAFT≤≥");
@@ -346,7 +350,7 @@ fn collaboration_shortcuts_decode_shift_tab_and_directional_effort_without_chang
     process.back_tab();
     process.wait_for_stable_screen("Automatic model · Debug");
     assert!(!process.screen().contains("Next mode:"));
-    process.wait_for_screen_to_omit("Manual");
+    process.wait_for_stable_screen("⏸ Manual");
     process.assert_snapshot("real/02-terminal/collaboration-shortcuts");
     process.send(b"\x1b[1;2A");
     process.wait_for_stable_screen("Select a model with /model before changing thinking effort");
@@ -369,7 +373,7 @@ fn collaboration_shortcuts_decode_shift_tab_and_directional_effort_without_chang
             .config_source()
             .contains("modelReasoningEffort = \"extraHigh\"")
     );
-    process.wait_for_screen_to_omit("Manual");
+    process.wait_for_stable_screen("⏸ Manual");
     process.assert_snapshot("real/02-terminal/effort-shortcut");
     for (sequence, status, effort) in [
         (b"\x1b[1;2B".as_slice(), "GPT-6 Luna (high)", "high"),
@@ -421,7 +425,7 @@ fn inline_submitted_message_appears_once_while_working_and_after_completion() {
     process.submit("rebase");
     gate.wait_until_reached();
     process.wait_for_screen("REBASE-IN-PROGRESS");
-    process.wait_for_screen("ctrl+c to interrupt");
+    process.wait_for_screen("esc to interrupt");
     let working = process.terminal_text();
     gate.release();
     assert_eq!(working.matches("> rebase").count(), 1, "{working}");
@@ -477,7 +481,7 @@ fn actual_tui_inline_preserves_history_across_panels_resize_and_exit() {
             assert!(prompt_row - previous_reply_row <= 6, "{}", process.screen());
         }
         process.submit("/status");
-        process.wait_for_stable_screen("Full context window");
+        process.wait_for_stable_screen("Session status");
         process.escape();
         process.wait_for_stable_screen("Manual");
         assert_input_surface_visible(&process);
@@ -505,7 +509,7 @@ fn actual_tui_inline_preserves_history_across_panels_resize_and_exit() {
         );
     }
     assert!(
-        !history.contains("Full context window"),
+        !history.contains("Session status"),
         "temporary panels must not enter history:\n{history}"
     );
     assert!(process.raw_text().contains("\x1b[?2004l"));
@@ -525,7 +529,7 @@ fn inline_repeated_status_keeps_history_compact() {
 
     for _ in 0..2 {
         process.submit("/status");
-        process.wait_for_stable_screen("Full context window");
+        process.wait_for_stable_screen("Session status");
         process.escape();
         process.wait_for_stable_screen("Manual");
     }
@@ -636,7 +640,7 @@ fn actual_tui_screen_mode_switches_live_and_persists() {
     let server = ScenarioServer::start([HttpResponse::streaming(["MODE-SWITCH-REPLY"], None)]);
     fixture.write_config(&server.base_url());
     let mut process = TuiProcess::start_in_vscode(&fixture, &[], LARGE_SIZE);
-    process.wait_for_stable_screen("Enter send");
+    process.wait_for_stable_screen("? for shortcuts");
     let fullscreen_input = input_top_row(&process);
     // ConPTY can implement the screen switch through console APIs instead of forwarding CSI.
     #[cfg(unix)]
@@ -674,7 +678,7 @@ fn actual_tui_screen_mode_switches_live_and_persists() {
             .contains("screenMode = \"fullscreen\"")
     );
     process.escape();
-    process.wait_for_stable_screen("Enter send");
+    process.wait_for_stable_screen("? for shortcuts");
     assert_eq!(input_top_row(&process), fullscreen_input);
     process.submit("check the preserved conversation");
     process.wait_for_stable_screen("MODE-SWITCH-REPLY");
@@ -694,17 +698,17 @@ fn actual_tui_multiple_commands_preserve_internal_history_and_fixed_input() {
             ScenarioServer::start(REPLIES.map(|reply| HttpResponse::streaming([reply], None)));
         fixture.write_config(&server.base_url());
         let mut process = TuiProcess::start_in_vscode(&fixture, &[], size);
-        process.wait_for_stable_screen("Enter send");
+        process.wait_for_stable_screen("? for shortcuts");
         for _ in 0..12 {
             process.submit("/status");
-            process.wait_for_screen("Full context window");
+            process.wait_for_screen("Session status");
             process.escape();
-            process.wait_for_stable_screen("Enter send");
+            process.wait_for_stable_screen("? for shortcuts");
         }
         for (index, reply) in REPLIES.iter().enumerate() {
             process.submit(&format!("MESSAGE-{index:02}"));
             process.wait_for_screen(reply);
-            process.wait_for_stable_screen("Enter send");
+            process.wait_for_stable_screen("? for shortcuts");
             assert_input_surface_visible(&process);
         }
         assert_eq!(server.request_count(), REPLIES.len());
@@ -731,8 +735,8 @@ fn actual_tui_input_keeps_its_row_without_blank_line_growth() {
         let server = ScenarioServer::start([HttpResponse::streaming(["ISSUE13-REPLY"], None)]);
         fixture.write_config(&server.base_url());
         let mut process = TuiProcess::start_in_vscode(&fixture, &[], size);
-        process.wait_for_stable_screen("Enter send");
-        process.refresh_policy_tip();
+        process.wait_for_stable_screen("? for shortcuts");
+        process.confirm_current_permission();
         assert_input_surface_visible(&process);
         let hint_row = |process: &TuiProcess| {
             process
@@ -753,7 +757,7 @@ fn actual_tui_input_keeps_its_row_without_blank_line_growth() {
         }
         process.enter();
         process.wait_for_screen("ISSUE13-REPLY");
-        process.wait_for_stable_screen("Enter send");
+        process.wait_for_stable_screen("? for shortcuts");
         assert_eq!(input_top_row(&process), initial_input);
         assert_eq!(server.request_count(), 1);
         if size.cols == LARGE_SIZE.cols && size.rows == LARGE_SIZE.rows {
@@ -771,13 +775,13 @@ fn actual_tui_input_keeps_its_row_without_blank_line_growth() {
                 );
                 std::thread::sleep(std::time::Duration::from_millis(20));
             }
-            process.wait_for_stable_screen("Enter send");
+            process.wait_for_stable_screen("? for shortcuts");
             process.assert_snapshot("issue13/fullscreen_conversation");
         }
         process.submit("/status");
-        process.wait_for_screen("Full context window");
+        process.wait_for_screen("Session status");
         process.escape();
-        process.wait_for_stable_screen("Enter send");
+        process.wait_for_stable_screen("? for shortcuts");
         assert_input_surface_visible(&process);
         assert_eq!(input_top_row(&process), initial_input);
         process.type_text("next");
@@ -928,7 +932,7 @@ fn actual_tui_sandbox_process_details_show_enforcement() {
     process.wait_for_screen("Bypass permissions");
     process.submit("尝试在工作区外创建 sandbox-must-not-write.txt");
     process.wait_for_stable_screen("目标文件没有生成");
-    process.refresh_policy_tip();
+    process.confirm_current_permission();
     process.wait_for_stable_screen("Bypass permissions");
     process.assert_snapshot("real/03-approval/09-sandbox-blocked");
     assert!(!outside_path.exists());
@@ -996,7 +1000,7 @@ fn actual_tui_process_streams_queues_resizes_and_resumes() {
     let args = ["resume", session_id.as_str(), thread_id.as_str()];
     let mut resumed = TuiProcess::start(&fixture, &args, LARGE_SIZE);
     resumed.wait_for_stable_screen("第二轮排队消息已经执行。");
-    resumed.wait_for_screen_to_omit("Manual");
+    resumed.wait_for_stable_screen("⏸ Manual");
     resumed.assert_snapshot("real/07-lifecycle/01-resumed");
     resumed.quit();
 }
@@ -1068,10 +1072,10 @@ fn actual_tui_markdown_links_survive_terminal_output_and_resize() {
     )]);
     fixture.write_config(&server.base_url());
     let mut process = TuiProcess::start_in_vscode(&fixture, &[], LARGE_SIZE);
-    process.wait_for_stable_screen("Enter send");
+    process.wait_for_stable_screen("? for shortcuts");
     process.submit("show links");
     process.wait_for_screen("LINK-CHECK");
-    process.wait_for_stable_screen("Enter send");
+    process.wait_for_stable_screen("? for shortcuts");
     // ConPTY supplies its own OSC 8 id parameter; assert the destination, not its generated id.
     let raw = process.raw_text();
     let destinations = raw
@@ -1106,7 +1110,7 @@ fn actual_tui_streaming_queue_drains_while_provider_waits_and_input_continues() 
     )]);
     fixture.write_config(&server.base_url());
     let mut process = TuiProcess::start_in_vscode(&fixture, &[], LARGE_SIZE);
-    process.wait_for_stable_screen("Enter send");
+    process.wait_for_stable_screen("? for shortcuts");
     process.submit("show the queued lines");
     gate.wait_until_reached();
     process.wait_for_screen("COMMIT-ONE");
@@ -1135,14 +1139,14 @@ fn actual_tui_home_creates_only_the_submitted_session_and_resumes_it() {
     process.submit("/config");
     process.wait_for_stable_screen("Screen mode");
     process.escape();
-    process.wait_for_stable_screen("Enter send");
+    process.wait_for_stable_screen("? for shortcuts");
     process.submit("/status");
-    process.wait_for_stable_screen("Full context window");
+    process.wait_for_stable_screen("Session status");
     process.escape();
-    process.wait_for_stable_screen("Enter send");
+    process.wait_for_stable_screen("? for shortcuts");
     assert!(fixture.sessions().is_empty());
     process.resize(SMALL_SIZE);
-    process.wait_for_stable_screen("Enter send");
+    process.wait_for_stable_screen("? for shortcuts");
     process.submit("HOME-TASK 中文");
     process.wait_for_stable_screen("HOME-SESSION-REPLY");
     assert_eq!(server.request_count(), 1);
@@ -1254,7 +1258,7 @@ fn actual_tui_removed_dictate_command_does_not_start_speech_or_a_turn() {
         fixture.append_config(&format!("\n[tui]\nscreenMode = \"{mode}\"\n"));
         let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
         process.wait_for_stable_screen(if mode == "fullscreen" {
-            "Enter send"
+            "? for shortcuts"
         } else {
             "Manual"
         });

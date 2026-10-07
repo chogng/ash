@@ -2,11 +2,13 @@
 source: cli/tests/support/tui_process.rs
 expression: screen
 ---
-  <FIXTURE…>                                      …                            [— / —] [Dashboard]
+  <FIXTURE…>                                                …                          [Dashboard]
 
 > 请创建 approved-by-tui.txt
 
-● Updated file
+● Updated file approved-by-tui.txt
+ └─ approved-by-tui.txt
+    view full
 
 ● 工具已获批准并执行。文件写入完成。
 
@@ -26,11 +28,9 @@ expression: screen
 
 
 
-
-
-  ⏸ Manual                                                       /permission to change permissions
+                                                                 /permission to change permissions
   ────────────────────────────────────────────────────────────────────────────────────────────────
   >
   ───────────────────────────────────────────────────────────────────────────── ash-real-scenario
 
-  Enter send  ·  shift+tab mode  ·  shift+↓/↑ effort
+  ⏸ Manual · ← Dashboard · ? for shortcuts

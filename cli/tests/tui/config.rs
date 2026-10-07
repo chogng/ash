@@ -14,7 +14,7 @@ fn select_config_item(process: &mut TuiProcess, label: &str) {
 }
 
 fn open_provider(process: &mut TuiProcess, label: &str) {
-    process.wait_for_screen("Enter send");
+    process.wait_for_screen("? for shortcuts");
     process.submit("/config");
     process.wait_for_screen("Screen mode");
     process.tab();
@@ -121,7 +121,8 @@ fn actual_tui_issue_refresh_setting_persists_across_restart() {
     process.wait_for_screen("Ash Code v");
     process.submit("/config");
     process.wait_for_screen("Screen mode");
-    process.back_tab();
+    process.tab();
+    process.tab();
     select_config_item(&mut process, "Auto refresh");
     process.enter();
     wait_for_config(&fixture, "autoRefreshMinutes = 30");
@@ -133,7 +134,8 @@ fn actual_tui_issue_refresh_setting_persists_across_restart() {
     reopened.wait_for_screen("Ash Code v");
     reopened.submit("/config");
     reopened.wait_for_screen("Screen mode");
-    reopened.back_tab();
+    reopened.tab();
+    reopened.tab();
     reopened.wait_for_screen("Auto refresh");
     assert!(reopened.screen().contains("30m"));
     reopened.resize(SMALL_SIZE);
@@ -325,7 +327,7 @@ fn actual_tui_status_line_style_persists_across_restart() {
     process.enter();
     process.wait_for_screen("Expressive");
     process.escape();
-    process.wait_for_screen("Enter send");
+    process.wait_for_screen("? for shortcuts");
     process.quit();
     assert!(
         fixture
@@ -376,17 +378,17 @@ fn actual_tui_marketplace_and_lsp_commands() {
     fixture.write_config(&server.base_url());
     fixture.append_config("\n[languageServers.servers.fixture-lsp]\nmode = \"disabled\"\n");
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
-    process.wait_for_screen("Enter send");
+    process.wait_for_screen("? for shortcuts");
     process.submit("/marketplace");
     process.wait_for_screen("No packages in this view");
     process.escape();
     process.escape();
-    process.wait_for_screen("Enter send");
+    process.wait_for_screen("? for shortcuts");
     process.submit("/plugins");
     process.wait_for_screen("No packages in this view");
     process.escape();
     process.escape();
-    process.wait_for_screen("Enter send");
+    process.wait_for_screen("? for shortcuts");
     process.submit("/lsp rust");
     process.wait_for_screen("Find language servers in Marketplace");
     process.tab();

@@ -913,6 +913,7 @@ fn effort_data() -> crate::models::ModelPickerData {
     let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
         models: vec![
             ash_app_server_protocol::protocol::model::ModelCatalogEntry {
+                retirement: None,
                 description: None,
                 discovered: None,
                 model: ash_protocol::ModelRef::new(

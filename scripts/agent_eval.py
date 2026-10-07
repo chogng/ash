@@ -195,9 +195,15 @@ def trace_metrics(path: Path) -> dict:
         "sessionId": trace["sessionId"],
         "threads": len(trace["threads"]),
         "modelCalls": len(invocations),
-        "modelAttempts": sum(event["type"] == "modelAttemptStarted" for event in observations),
-        "failedAttempts": sum(event["type"] == "modelAttemptFailed" for event in observations),
-        "cancelledAttempts": sum(event["type"] == "modelAttemptCancelled" for event in observations),
+        "modelAttempts": sum(
+            event["type"] == "modelAttemptStarted" for event in observations
+        ),
+        "failedAttempts": sum(
+            event["type"] == "modelAttemptFailed" for event in observations
+        ),
+        "cancelledAttempts": sum(
+            event["type"] == "modelAttemptCancelled" for event in observations
+        ),
         "diagnosticRecordingStatus": diagnostics.get("recordingStatus", "disabled"),
         "savedPayloads": len(diagnostics.get("payloads", {})),
         "failedModelCalls": sum(

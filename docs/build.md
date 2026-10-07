@@ -112,6 +112,8 @@ Electron、Browser、编辑器的构建和测试命令，以及测试是否启�
 
 `verify` 支持 `--filter <test-name>`、`--features <features>` 和 `--profile <profile>`；过滤条件只传给测试，feature 与 profile 传给三个步骤。`verify` 和 `snapshot` 支持 `--plan`，只解析并展示命令，不编译或运行。路径可以使用仓库根目录下的相对路径或绝对路径。
 
+只有 trait 契约、由消费方覆盖行为的包，可以在自己的 Cargo 清单中声明 `[package.metadata.ash.verify]` 的 `test-package`。例如 `ash-core-api` 指向 `ash-core`：check 和 warning 检查仍检查 API 包，测试运行 Core 的真实执行与生命周期用例。消费方必须属于当前 workspace；测试过滤、feature 和 profile 同样应用到消费方，零通过用例仍会使验证失败。
+
 ```sh
 just context crates/tui/snapshots/fullscreen/composer/composer_focused.snap
 just snapshot crates/tui/snapshots/fullscreen/composer/composer_focused.snap

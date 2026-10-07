@@ -1,7 +1,6 @@
+use crate::issue_server::IssueServer;
 use crate::scenario_http::ScenarioServer;
 use crate::tui_process::Fixture;
-use crate::tui_process::LARGE_SIZE;
-use crate::tui_process::TuiProcess;
 use std::fs;
 use std::process::Command;
 
@@ -54,7 +53,8 @@ fn actual_tui_issue_browser_searches_refreshes_and_restores_cached_results() {
     let server = ScenarioServer::start([]);
     fixture.write_config(&server.base_url());
     prepare_repository(&fixture);
-    let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+    let issue_server = IssueServer::start(&fixture);
+    let mut process = issue_server.connect(&fixture);
     process.wait_for_screen("Ash Code v");
     process.submit("/issue");
     process.wait_for_screen("Repair first issue");
@@ -66,6 +66,7 @@ fn actual_tui_issue_browser_searches_refreshes_and_restores_cached_results() {
     process.back_tab();
     process.wait_for_screen("Repair first issue");
     process.down();
+    process.wait_for_screen("Type keywords/#number");
     process.type_text("#5001");
     process.enter();
     process.wait_for_screen("Repair issue outside loaded pages");
@@ -77,7 +78,7 @@ fn actual_tui_issue_browser_searches_refreshes_and_restores_cached_results() {
         .to_owned();
     fs::write(bin.join("issue-offline"), "offline").unwrap();
     process.type_text("r");
-    process.wait_for_screen("Fixture offline");
+    process.wait_for_screen("GitHubOperationFailed");
     assert!(
         process
             .screen()
@@ -95,7 +96,7 @@ fn actual_tui_issue_browser_searches_refreshes_and_restores_cached_results() {
     process.escape();
     process.quit();
     fs::write(bin.join("issue-offline"), "offline").unwrap();
-    let mut reopened = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+    let mut reopened = issue_server.connect(&fixture);
     reopened.wait_for_screen("Ash Code v");
     reopened.submit("/issue");
     reopened.wait_for_screen("Recovered first issue");
@@ -112,9 +113,10 @@ fn actual_tui_issue_start_checks_role_dependencies_before_creating_a_session() {
     fixture.write_config(&server.base_url());
     prepare_repository(&fixture);
     fs::write(fixture.workspace().join("tracked.txt"), "keep my changes\n").unwrap();
-    let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+    let issue_server = IssueServer::start(&fixture);
+    let mut process = issue_server.connect(&fixture);
     process.wait_for_screen("Ash Code v");
-    assert!(fixture.sessions().is_empty());
+    assert!(issue_server.sessions().is_empty());
     process.submit("/issue");
     process.wait_for_screen("Repair first issue");
     process.space();
@@ -123,7 +125,7 @@ fn actual_tui_issue_start_checks_role_dependencies_before_creating_a_session() {
     process.wait_for_screen("2 selected");
     process.type_text("d");
     process.wait_for_screen("Agent requires unavailable Skill 'github'");
-    assert!(fixture.sessions().is_empty());
+    assert!(issue_server.sessions().is_empty());
     assert_eq!(
         fs::read_to_string(fixture.workspace().join("tracked.txt")).unwrap(),
         "keep my changes\n"

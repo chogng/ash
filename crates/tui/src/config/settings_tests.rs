@@ -349,6 +349,32 @@ fn obsolete_pointer_settings_do_not_affect_screen_mode_and_are_removed_on_write(
 }
 
 #[test]
+fn complete_tui_candidate_accepts_obsolete_pointer_settings_until_the_next_save() {
+    for mode in ["fullscreen", "inline"] {
+        for old in [serde_json::json!(false), serde_json::json!(true)] {
+            let section = FrontendConfigDto(BTreeMap::from([
+                ("screenMode".into(), serde_json::json!(mode)),
+                ("mouseInteractions".into(), old.clone()),
+                ("copyOnSelect".into(), old),
+                ("language".into(), serde_json::json!("zh-CN")),
+                ("theme".into(), serde_json::json!("graphite")),
+                ("englishPunctuation".into(), serde_json::json!(true)),
+            ]));
+            let settings = TuiSettings::from_tui(&section).unwrap();
+            assert_eq!(settings.terminal.screen_mode().label(), mode);
+            let updated = settings.terminal.write_to_tui(&section).unwrap();
+            assert!(!updated.0.contains_key("mouseInteractions"));
+            assert!(!updated.0.contains_key("copyOnSelect"));
+            let restored = TuiSettings::from_tui(&updated).unwrap();
+            assert_eq!(restored.terminal, settings.terminal);
+            assert!(restored.punctuation.enabled);
+            assert_eq!(updated.0["theme"], section.0["theme"]);
+            assert_eq!(restored.terminal.write_to_tui(&updated).unwrap(), updated);
+        }
+    }
+}
+
+#[test]
 fn english_punctuation_defaults_off_and_rejects_non_boolean_values() {
     assert!(
         !TuiSettings::from_tui(&FrontendConfigDto(BTreeMap::new()))

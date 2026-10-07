@@ -2,11 +2,11 @@
 
 `code/` 拥有 `ash code` 的终端界面：输入、正文显示、页面布局、功能面板、终端模式与退出恢复。`cli/` 拥有用户命令、连接与启动；共享后端能力由 `crates/` 提供。
 
-| 阅读目的                                               | 文档                                                                                               |
-| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
-| fullscreen / inline 的区域、历史、面板、鼠标和模式切换 | [LAYOUT.md](LAYOUT.md)                                                                             |
-| 实现入口、提交与补全、功能接入、配置与主题、测试       | 本文                                                                                               |
-| CLI 用法、远程连接、安装与更新                         | [CLI README](../../cli/README.md)                                                                 |
+| 阅读目的                                               | 文档                                                                                                     |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| fullscreen / inline 的区域、历史、面板、鼠标和模式切换 | [LAYOUT.md](LAYOUT.md)                                                                                   |
+| 实现入口、提交与补全、功能接入、配置与主题、测试       | 本文                                                                                                     |
+| CLI 用法、远程连接、安装与更新                         | [CLI README](../../cli/README.md)                                                                        |
 | 跨客户端请求、通知与数据契约                           | [App Server API](../../docs/ash-app-server-api.md)、[App Server Client](../../docs/app-server-client.md) |
 
 ```text
@@ -17,20 +17,20 @@ ash-cli → crates/tui → ash-app-server-client → shared App Server crates
 
 ## 文件与职责
 
-| 要修改什么                                       | 从哪里开始                                                                                                                                                                                    |
-| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 启动、事件循环与请求调度                         | [app](src/app)、[dispatch.rs](src/app/dispatch.rs)                                                                                                                                    |
-| 输入、历史、附件、补全与排队                     | [composer](src/thread/composer)、[共享输入历史](../message-history/README.md)                                                                                                      |
-| 审批与提问                                       | [interaction](src/thread/interaction)                                                                                                                                                     |
-| 正文、流式显示、缓存与执行输出                   | [transcript](src/thread/transcript)、[render](src/render)                                                                                                                             |
-| 本轮运行状态行、spinner verbs、耗时和中断提示    | [progress.rs](src/thread/progress.rs)、[聊天布局](src/app/chat_view.rs)                                                                                                               |
-| fullscreen / inline 的页面、面板、鼠标与终端输出 | [LAYOUT.md](LAYOUT.md)                                                                                                                                                                        |
-| 会话管理与 Issue 工作流                          | [sessions](src/sessions)、[issues.rs](src/issues.rs)                                                                                                                                  |
-| 设置、主题、快捷键与界面语言                     | [config](src/config)、[theme](src/theme)、[keymap](src/keymap)、[nls.rs](src/nls.rs)                                                                                          |
-| 扩展、Connector 与目录授权                       | 对应功能模块；目录授权见 [dirs.rs](src/dirs.rs)                                                                                                                                           |
-| 上下文、会话状态、账户额度与内存诊断             | [context.rs](src/context.rs)、[status](src/status)、[usage.rs](src/usage.rs)、[memory.rs](src/memory.rs)                                                                      |
+| 要修改什么                                       | 从哪里开始                                                                                                                                                                     |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 启动、事件循环与请求调度                         | [app](src/app)、[dispatch.rs](src/app/dispatch.rs)                                                                                                                             |
+| 输入、历史、附件、补全与排队                     | [composer](src/thread/composer)、[共享输入历史](../message-history/README.md)                                                                                                  |
+| 审批与提问                                       | [interaction](src/thread/interaction)                                                                                                                                          |
+| 正文、流式显示、缓存与执行输出                   | [transcript](src/thread/transcript)、[render](src/render)                                                                                                                      |
+| 本轮运行状态行、spinner verbs、耗时和中断提示    | [progress.rs](src/thread/progress.rs)、[聊天布局](src/app/chat_view.rs)                                                                                                        |
+| fullscreen / inline 的页面、面板、鼠标与终端输出 | [LAYOUT.md](LAYOUT.md)                                                                                                                                                         |
+| 会话管理与 Issue 工作流                          | [sessions](src/sessions)、[issues.rs](src/issues.rs)                                                                                                                           |
+| 设置、主题、快捷键与界面语言                     | [config](src/config)、[theme](src/theme)、[keymap](src/keymap)、[nls.rs](src/nls.rs)                                                                                           |
+| 扩展、Connector 与目录授权                       | 对应功能模块；目录授权见 [dirs.rs](src/dirs.rs)                                                                                                                                |
+| 上下文、会话状态、账户额度与内存诊断             | [context.rs](src/context.rs)、[status](src/status)、[usage.rs](src/usage.rs)、[memory.rs](src/memory.rs)                                                                       |
 | 听写                                             | [state.rs](src/app/state.rs)、[请求调度](src/app/driver/command.rs)；App Server 的 [realtime-voice](../realtime-voice/README.md) 负责识别与模型安装，`ash-voice-host` 负责音频 |
-| 终端、ANSI 转换与 Mermaid 排版                   | [终端检测](../terminal-detection/README.md)、[ansi-escape](../ansi-escape/README.md)、[mermaid](../mermaid/README.md)                                                                                  |
+| 终端、ANSI 转换与 Mermaid 排版                   | [终端检测](../terminal-detection/README.md)、[ansi-escape](../ansi-escape/README.md)、[mermaid](../mermaid/README.md)                                                          |
 
 功能模块维护自己的状态、交互与请求。跨功能命令经 `dispatch.rs` 调用功能接口，App 只做调度；共享 `widgets` 提供通用控件。公开接口与参数以 [lib.rs](src/lib.rs) 为准。
 
@@ -104,7 +104,7 @@ Queue 保存完整草稿，包括图片、长粘贴和绑定的 Skill。恢复�
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `/context` | “上下文”面板在首次请求前即可显示分类估算；顶部展示模型名称、已用／完整模型窗口与百分比，多色占用条左侧排列已用分类、右侧固定压缩预留，中间是剩余空间。普通页面显示分类、剩余空间、压缩预留与触发阈值，不显示具体压缩模式或交接术语。压缩模式、输出预留、安全余量、压缩窗口和来源只在开发构建的 `/debug-context` 诊断中查看；正式构建不注册该命令，也不接受手动输入。最近请求的服务商测量单独显示；未知窗口不显示比例。fullscreen 顶部上下文入口打开同一面板。 |
 | `/status`  | “会话状态”面板分为“会话”和“诊断”两个页签。“会话”页展示模型、会话与线程 ID，以及“本线程累计消耗”：调用次数、token 与缓存统计、参考成本；“诊断”页展示进程资源与内存诊断状态。                                                                                                                                                                                                                                                                                   |
-| `/usage`   | “Usage”（中文为“额度”）面板展示账户的订阅限额、重置时间、余额或积分；每次打开重新查询，页签切换只使用本次结果。供应商支持范围见[订阅计划接入与额度](../../docs/subscriptions.md#账户额度与刷新)。                                                                                                                                                                                                                                                                |
+| `/usage`   | “Usage”（中文为“额度”）面板展示账户的订阅限额、重置时间、余额或积分；每次打开重新查询，页签切换只使用本次结果。供应商支持范围见[订阅计划接入与额度](../../docs/subscriptions.md#账户额度与刷新)。                                                                                                                                                                                                                                                             |
 
 上下文占用与线程累计消耗分别读取最近请求和整个线程的统计；上下文压缩后，累计消耗不会随之减少。`/context` 的模型名称与用量在同一行，用量靠右，分类估算直接列在占用条下方；缺失的统计保持等待或未知，不从累计消耗推算上下文占用。面板只展示证据，功能启停由对应配置或操作入口负责。两种模式的展开、滚动和退出行为见[上下文与会话状态面板](LAYOUT.md#上下文与会话状态面板)。
 
@@ -253,6 +253,8 @@ sessionGrouping = "status"
 
 `language` 只接受 `en`、`ja`、`zh-CN`、`fr`，缺省为 `en`。当前实现会立即切换 Config 根页面；供应商名、语言服务器标识、模型回复、代码和用户内容保持原文。TUI 在启动、读取 Config 和重载时校验完整 `[tui]` 表，未知配置键或无效值会报告错误；无效重载保留上一份有效设置、当前草稿和正在运行的任务状态。各字段仍由终端设置、状态栏、快捷键、模型、主题和听写功能分别解释，后端不解释 TUI 字段。单字段序列化保留其他同级字段，Config 保存前须通过完整候选校验。
 
+旧版 `[tui]` 的 `mouseInteractions`、`copyOnSelect` 只作为已移除字段接受，忽略其值，下次保存终端设置时删除。鼠标交互仍由当前 screen mode 决定；其他未知键保持报错，清理旧字段不会改写主题、语言或标点设置。
+
 目录权限不属于 TUI profile 设置，只保存在对应 Session。用户主题内容保存为 `<profile>/code/themes/*.json`。每个文件最多 1 MiB；目录最多读取 128 个常规 JSON 文件；`id` 必须是小写 kebab-case，`label` 为 1–80 个已去除首尾空格的字符，`appearance` 只能是 `dark` 或 `light`，`colors` 最多覆盖 64 项且颜色必须是 `#RRGGBB`。未知字段、未知颜色名、重复/保留 ID 和不支持的版本都会使该主题文件单独失效。
 
 ```json
@@ -305,12 +307,14 @@ just test-tui
 
 真实场景由 [tui_real_scenarios.rs](../../cli/tests/tui_real_scenarios.rs) 加载，可按函数名或模块过滤，例如 `just test-tui config::`：
 
-| 模块                                                    | 场景归属                                          |
-| ------------------------------------------------------- | ------------------------------------------------- |
-| [terminal.rs](../../cli/tests/tui/terminal.rs)         | PTY、终端历史、滚动、尺寸、输入区域及进程退出恢复 |
-| [conversation.rs](../../cli/tests/tui/conversation.rs) | 对话、队列、审批、会话及对话中的 Git 状态         |
-| [config.rs](../../cli/tests/tui/config.rs)             | 设置、供应商、账户、语言与配置面板导航            |
-| [issues.rs](../../cli/tests/tui/issues.rs)             | Issue 选择、会话创建与 PR；目前仅 Unix 场景       |
+| 模块                                                   | 场景归属                                                             |
+| ------------------------------------------------------ | -------------------------------------------------------------------- |
+| [terminal.rs](../../cli/tests/tui/terminal.rs)         | PTY、终端历史、滚动、尺寸、输入区域及进程退出恢复                    |
+| [conversation.rs](../../cli/tests/tui/conversation.rs) | 对话、队列、审批、会话及对话中的 Git 状态                            |
+| [config.rs](../../cli/tests/tui/config.rs)             | 设置、供应商、账户、语言与配置面板导航                               |
+| [issues.rs](../../cli/tests/tui/issues.rs)             | Issue 选择、搜索、刷新、缓存恢复与创建前的依赖检查；目前仅 Unix 场景 |
+
+Issue 场景运行真实 CLI/TUI，通过私有 SSH 传输连接同一 App Server；只有 SSH 的字节桥接和 GitHub HTTP 响应使用 fixture。账号认证、仓库识别、缓存和 Session 依赖检查沿用产品实现，不依赖机器上的 GitHub 登录或 `gh` 命令。
 
 `just test-tui actual_tui_dictation_download` 用本地代理验证听写模型准备时的中断、断网重试、退出和跨进程模型锁；`/voice` 的取消、断网和重试在 fullscreen、inline 分别验证。这组场景目前仅 Unix，不下载完整模型，也不使用真实麦克风。
 
@@ -347,7 +351,6 @@ just test-tui
 - 标题与正文在同一表单编辑，Tab 切字段，Ctrl+S 保存；保留换行与空格，离开有修改的表单需选择继续编辑或放弃修改。
 - 保存失败保留草稿，相同请求重试复用命令身份；版本冲突时 Ctrl+R 查看最新内容，u 明确采用其版本后返回草稿继续修订。
 - `/memories memory:…` 或操作菜单中的打开引用读取精确版本；过期或已删除引用明确报错。
-
 
 ## Snapshot organization
 

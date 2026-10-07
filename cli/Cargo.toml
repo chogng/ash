@@ -47,6 +47,11 @@ arg0 = { workspace = true }
 ash-tui = { workspace = true }
 
 [dev-dependencies]
+ash-app-server = { workspace = true }
+ash-async-utils = { workspace = true }
+ash-http-client = { workspace = true }
+ash-secrets = { workspace = true }
+github = { workspace = true }
 cargo-bin = { workspace = true }
 core-plugins = { package = "ash-core-plugins", path = "../crates/core-plugins" }
 plugin = { package = "ash-plugin", path = "../crates/plugin" }

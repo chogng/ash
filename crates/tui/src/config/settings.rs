@@ -4,6 +4,10 @@ use ash_app_server_protocol::protocol::config::FrontendConfigDto;
 use serde::Deserialize;
 use serde::Serialize;
 
+// Removed pointer preferences never select a screen mode. Accept only these old keys
+// until a terminal-settings save removes them; other unknown fields remain errors.
+const OBSOLETE_POINTER_KEYS: [&str; 2] = ["mouseInteractions", "copyOnSelect"];
+
 /// The TUI applies a complete candidate only after every feature owner has validated it.
 /// Persistence remains opaque, so editing one field still preserves unrelated stored values.
 pub(crate) struct TuiSettings {
@@ -20,6 +24,7 @@ impl TuiSettings {
         let terminal = TerminalSettings::from_tui(section)?;
         let unknown = section.0.keys().find(|key| {
             !TerminalSettings::KEYS.contains(&key.as_str())
+                && !OBSOLETE_POINTER_KEYS.contains(&key.as_str())
                 && !matches!(
                     key.as_str(),
                     "theme"
@@ -167,8 +172,9 @@ impl TerminalSettings {
         let mut values = section.0.clone();
         values.remove("dirPermissions");
         values.remove("followUpMode");
-        values.remove("mouseInteractions");
-        values.remove("copyOnSelect");
+        for key in OBSOLETE_POINTER_KEYS {
+            values.remove(key);
+        }
         for key in Self::KEYS {
             let value = fields
                 .get(key)

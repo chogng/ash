@@ -305,6 +305,7 @@ fn status_line_context_follows_thread_snapshots() {
     let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
         models: vec![
             ash_app_server_protocol::protocol::model::ModelCatalogEntry {
+                retirement: None,
                 description: None,
                 discovered: None,
                 model: snapshot.turns[0].model.clone().unwrap(),

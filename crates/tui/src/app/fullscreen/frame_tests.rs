@@ -2599,6 +2599,7 @@ fn configured_model_summary() -> ModelSummary {
     let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
         models: vec![
             ash_app_server_protocol::protocol::model::ModelCatalogEntry {
+                retirement: None,
                 description: None,
                 discovered: None,
                 model: ash_protocol::ModelRef::new(
@@ -2733,6 +2734,7 @@ fn custom_model_choices(
     let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
         models: vec![
             ash_app_server_protocol::protocol::model::ModelCatalogEntry {
+                retirement: None,
                 description: None,
                 discovered: None,
                 model: ash_protocol::ModelRef::new(
