@@ -20,6 +20,9 @@ import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDO
 import { focusWindow, WindowMode, type IFocusableWindow, type WorkspaceContextMainService } from '../../window/electron-main/window.js';
 import type { WindowsStateHandler } from './windowsStateHandler.js';
 import { CodeWindow, type IWindowCreationOptions } from './windowImpl.js';
+import { createUuid } from '../../../base/common/uuid.js';
+import type { IOpenAgentsWindowOptions } from '../../native/common/nativeHost.js';
+import type { IAgentsWindowHandoffResult } from '../../window/common/window.js';
 import type { IWindowConstructorOptions, IWindowWebPreferences, IOpenConfiguration, IWindowsMainService } from './windows.js';
 import { WINDOW_OPEN_FILES_CHANNEL, WINDOW_OPEN_FILES_RESPONSE_CHANNEL, validateWindowFilesResponse, type IWindowFilesRequest, type WindowFilesResponse } from '../../window/common/window.js';
 import type { IWindowBounds, IWindowState } from '../../window/electron-main/window.js';
@@ -39,6 +42,8 @@ export interface IWorkbenchWindow<TWindow> extends IFocusableWindow {
 		setZoomLevel(level: number): void;
 		on(event: 'zoom-changed' | 'did-start-loading' | 'render-process-gone', listener: () => void): unknown;
 		off(event: 'zoom-changed' | 'did-start-loading' | 'render-process-gone', listener: () => void): unknown;
+		on(event: 'did-start-navigation', listener: (event: unknown, url: string, inPlace: boolean, mainFrame: boolean) => void): unknown;
+		off(event: 'did-start-navigation', listener: (event: unknown, url: string, inPlace: boolean, mainFrame: boolean) => void): unknown;
 		send(channel: string, value: unknown): void;
 		once(event: 'render-process-gone', listener: () => void): unknown;
 	};
@@ -74,8 +79,74 @@ export interface IManagedWindowOpenOptions<TWindow extends IWorkbenchWindow<TWin
 	readonly initialize: (window: TWindow, resources: DisposableStore) => Promise<void>;
 }
 
+/** Pending handoffs belong to the receiving window's current renderer document. */
+class ManagedWindowHandoffs<TWindow extends IWorkbenchWindow<TWindow>> extends Disposable {
+	private readonly pending = new Map<string, { readonly options: IOpenAgentsWindowOptions; readonly resolve: () => void; readonly reject: (error: Error) => void; }>();
+	private readonly queue: string[] = [];
+
+	constructor(window: TWindow) {
+		super();
+		const rejectInterrupted = (): void => this.rejectPending(new Error('Agents Window reloaded before the handoff completed'));
+		const onNavigation = (_event: unknown, _url: string, inPlace: boolean, mainFrame: boolean): void => {
+			if (mainFrame && !inPlace) {
+				rejectInterrupted();
+			}
+		};
+		window.webContents.on('did-start-navigation', onNavigation);
+		this._register(toDisposable(() => {
+			if (!window.isDestroyed()) {
+				window.webContents.off('did-start-navigation', onNavigation);
+			}
+		}));
+		window.webContents.on('render-process-gone', rejectInterrupted);
+		this._register(toDisposable(() => {
+			if (!window.isDestroyed()) {
+				window.webContents.off('render-process-gone', rejectInterrupted);
+			}
+		}));
+		this._register(toDisposable(() => this.rejectPending(new Error('Agents Window closed before the handoff completed'))));
+	}
+
+	public enqueue(options: IOpenAgentsWindowOptions): Promise<void> {
+		this.assertNotDisposed();
+		const id = createUuid();
+		return new Promise<void>((resolve, reject) => {
+			this.pending.set(id, { options, resolve, reject });
+			this.queue.push(id);
+		});
+	}
+
+	public take(): { readonly id: string; readonly options: IOpenAgentsWindowOptions; } | undefined {
+		const id = this.queue.shift();
+		const handoff = id ? this.pending.get(id) : undefined;
+		return handoff && id ? { id, options: handoff.options } : undefined;
+	}
+
+	public complete(result: IAgentsWindowHandoffResult): void {
+		const handoff = this.pending.get(result.id);
+		if (!handoff) {
+			throw new Error('Agents Window handoff is not pending');
+		}
+		this.pending.delete(result.id);
+		if (result.error) {
+			handoff.reject(new Error(result.error));
+		} else {
+			handoff.resolve();
+		}
+	}
+
+	private rejectPending(error: Error): void {
+		for (const handoff of this.pending.values()) {
+			handoff.reject(error);
+		}
+		this.pending.clear();
+		this.queue.length = 0;
+	}
+}
+
 class ManagedWindowHost<TWindow extends IWorkbenchWindow<TWindow>> extends Disposable {
 	private readonly windowHost = this._register(new MutableDisposable<CodeWindow<TWindow>>());
+	private readonly handoffs = this._register(new MutableDisposable<ManagedWindowHandoffs<TWindow>>());
 	private opening: Promise<void> | undefined;
 	private closing: Promise<void> | undefined;
 	private resolveClosing: (() => void) | undefined;
@@ -113,6 +184,7 @@ class ManagedWindowHost<TWindow extends IWorkbenchWindow<TWindow>> extends Dispo
 			const windowHost = new CodeWindow(this.createWindow, options, resources);
 			this.windowHost.value = windowHost;
 			const window = windowHost.win;
+			resources.add(toDisposable(() => this.handoffs.clear()));
 			window.once('closed', () => {
 				this.resolveClosing?.();
 				if (this.windowHost.value !== windowHost) return;
@@ -160,6 +232,28 @@ class ManagedWindowHost<TWindow extends IWorkbenchWindow<TWindow>> extends Dispo
 
 	public failClose(window: TWindow, message: string): void {
 		if (this.currentWindow === window) this.rejectClosing?.(new Error(message));
+	}
+
+	public enqueueHandoff(options: IOpenAgentsWindowOptions): Promise<void> {
+		const window = this.currentWindow;
+		if (!window) {
+			return Promise.reject(new Error('Agents Window is unavailable for handoff'));
+		}
+		if (!this.handoffs.value) {
+			this.handoffs.value = new ManagedWindowHandoffs(window);
+		}
+		return this.handoffs.value.enqueue(options);
+	}
+
+	public takeHandoff(): { readonly id: string; readonly options: IOpenAgentsWindowOptions; } | undefined {
+		return this.handoffs.value?.take();
+	}
+
+	public completeHandoff(result: IAgentsWindowHandoffResult): void {
+		if (!this.handoffs.value) {
+			throw new Error('Agents Window handoff is not pending');
+		}
+		this.handoffs.value.complete(result);
 	}
 
 }
@@ -470,6 +564,23 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> exten
 
 	public managedWindow(key: string): TWindow | undefined {
 		return this.managedWindows.get(key)?.currentWindow;
+	}
+
+	public enqueueManagedWindowHandoff(key: string, options: IOpenAgentsWindowOptions): Promise<void> {
+		const host = this.managedWindows.get(key);
+		return host ? host.enqueueHandoff(options) : Promise.reject(new Error('Agents Window is unavailable for handoff'));
+	}
+
+	public takeManagedWindowHandoff(key: string): { readonly id: string; readonly options: IOpenAgentsWindowOptions; } | undefined {
+		return this.managedWindows.get(key)?.takeHandoff();
+	}
+
+	public completeManagedWindowHandoff(key: string, result: IAgentsWindowHandoffResult): void {
+		const host = this.managedWindows.get(key);
+		if (!host) {
+			throw new Error('Agents Window handoff is not pending');
+		}
+		host.completeHandoff(result);
 	}
 
 	public managedWindowValues(): readonly TWindow[] {

@@ -1,7 +1,7 @@
-import { AshWorkbenchName, AshSessionsRendererEntry } from '../common/application.js';
+import { AshWorkbenchName } from '../common/application.js';
 import { randomUUID } from 'node:crypto';
 import { WebviewProtocolProvider } from '../../platform/webview/electron-main/webviewProtocolProvider.js';
-import { isAdmin } from '../../platform/native/electron-main/nativeHostMainService.js';
+import { isAdmin, performShellCommand } from '../../platform/native/electron-main/nativeHostMainService.js';
 import { ChecksumService, checksumChannel } from '../../platform/checksum/node/checksumService.js';
 import { URLHandlerChannel, URLHandlerChannelClient } from '../../platform/url/common/urlIpc.js';
 import type { IOpenURLOptions } from '../../platform/url/common/url.js';
@@ -17,16 +17,12 @@ import { rendererSystemHostRoutes } from "../../platform/native/electron-main/re
 import { nativeImage, nativeTheme, shell } from "electron";
 import { app, BrowserWindow, dialog, globalShortcut, ipcMain, screen, Menu, Tray, type Event as ElectronEvent, type MenuItemConstructorOptions } from "electron/main";
 import type { DirGrant } from "../../platform/dirPermissions/common/dirPermissionsService.js";
-import { basename, delimiter, dirname, isAbsolute, join, parse } from "node:path";
-import { homedir } from 'node:os';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-import { access, chmod, lstat, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
-import { constants, readFileSync, watch } from "node:fs";
+import { basename, dirname, isAbsolute, join, parse } from "node:path";
+import { mkdir } from "node:fs/promises";
+import { readFileSync, watch } from "node:fs";
 import { pathToFileURL, fileURLToPath } from "node:url";
 import { throwIfCancelled, type CancellationToken } from "../../base/common/cancellation.js";
 import { isCancellationError } from "../../base/common/errors.js";
-import { createUuid } from '../../base/common/uuid.js';
 import { Disposable, DisposableMap, DisposableStore, DisposableTracker, MutableDisposable, installDisposableTracker, type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
 import { assertDefined } from "../../base/common/types.js";
 import { AshApplicationId, AshApplicationName } from '../common/application.js';
@@ -60,7 +56,8 @@ import { UpdateMainService, updateIpcRoutes } from '../../platform/update/electr
 import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, NATIVE_HOST_OPEN_WINDOW_CHANNEL, NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL, NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL, validateOpenAgentsWindow, validateSystemWideKeybindings, type INativeSystemWideKeybinding, type IOpenAgentsWindowOptions } from "../../platform/native/common/nativeHost.js";
 import { DialogMainService } from '../../platform/dialogs/electron-main/dialogMainService.js';
 import type { DialogRequest } from '../../platform/dialogs/common/dialogs.js';
-import { AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL, AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL, AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL, RETURN_TO_WORKBENCH_CHANNEL, validateAgentsWindowHandoffComplete, validateAgentsWindowHandoffTake, validateReturnToWorkbench, type IAgentsWindowHandoffResult } from '../../sessions/common/windowNavigation.js';
+import { RETURN_TO_WORKBENCH_CHANNEL, validateReturnToWorkbench } from '../../sessions/common/windowNavigation.js';
+import { AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL, AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL, AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL, validateAgentsWindowHandoffComplete, validateAgentsWindowHandoffTake, type IAgentsWindowHandoffResult } from '../../platform/window/common/window.js';
 import { GlobalKeybindingsMainService } from '../../platform/globalKeybindings/electron-main/globalKeybindingsMainService.js';
 import { OPEN_AGENTS_WINDOW_COMMAND_ID } from '../../workbench/contrib/chat/common/constants.js';
 import { StateService } from "../../platform/state/node/stateService.js";
@@ -98,7 +95,7 @@ import { ElectronRemoteRuntimeInstallWindow } from "../../platform/remote/electr
 import { electronRemoteWindowMainHost } from "../../platform/remote/electron-main/electronRemoteWindowMainHost.js";
 import { RemoteWindowMainContext } from "../../platform/remote/electron-main/remoteWindowMainContext.js";
 import { WORKSPACE_CONTEXT_CHANGED_CHANNEL } from "../../platform/workspace/common/workspaceIpc.js";
-import { createAppServerWorkspaceTransitionAdapter } from "../../platform/workspaces/electron-main/appServerWorkspaceTransition.js";
+import { createAppServerWorkspaceTransitionAdapter, reconnectAppServerWorkspace } from "../../platform/workspaces/electron-main/appServerWorkspaceTransition.js";
 import { DEVELOPMENT_DIR_PERMISSIONS, READ_DIR_PERMISSIONS } from '../../platform/workspace/common/workspaceTrust.js';
 import { type IWorkspaceTransitionFailure, type WorkspaceTransitionMainServiceOptions, WorkspaceTransitionFailureKind, WorkspaceTransitionMainService, WorkspaceTransitionStatus } from "../../platform/workspaces/electron-main/workspaceTransitionMainService.js";
 import { WorkspacesManagementMainService } from '../../platform/workspaces/electron-main/workspacesManagementMainService.js';
@@ -164,45 +161,15 @@ class SessionsWindowRecord extends Disposable {
 	readonly runtimeResources = this._register(new MutableDisposable<DisposableStore>());
 	supervisor: AppServerConnectionRelay | undefined;
 	windowState: { readonly window: BrowserWindow; readonly handler: WindowsStateHandler; readonly tracking: IDisposable; } | undefined;
-	private readonly handoffs = new Map<string, { readonly options: IOpenAgentsWindowOptions; readonly resolve: () => void; readonly reject: (error: Error) => void; }>();
-	private readonly handoffQueue: string[] = [];
 
 	constructor(workspaceContext: WorkspaceContextMainService, remoteConnections: IRemoteConnectionService) {
 		super();
 		this.workspaceContext = this._register(workspaceContext);
 		this.remoteConnections = remoteConnections;
-		this._register(toDisposable(() => this.rejectHandoffs(new Error('Agents Window closed before the handoff completed'))));
 	}
 
 	get workspaceId(): string { return this.workspaceContext.getWorkspace().id; }
 
-	enqueueHandoff(options: IOpenAgentsWindowOptions): Promise<void> {
-		const id = createUuid();
-		return new Promise<void>((resolve, reject) => {
-			this.handoffs.set(id, { options, resolve, reject });
-			this.handoffQueue.push(id);
-		});
-	}
-
-	takeHandoff(): { readonly id: string; readonly options: IOpenAgentsWindowOptions; } | undefined {
-		const id = this.handoffQueue.shift();
-		const handoff = id ? this.handoffs.get(id) : undefined;
-		return handoff && id ? { id, options: handoff.options } : undefined;
-	}
-
-	completeHandoff(result: IAgentsWindowHandoffResult): void {
-		const handoff = this.handoffs.get(result.id);
-		if (!handoff) throw new Error('Agents Window handoff is not pending');
-		this.handoffs.delete(result.id);
-		if (result.error) handoff.reject(new Error(result.error));
-		else handoff.resolve();
-	}
-
-	rejectHandoffs(error: Error): void {
-		for (const handoff of this.handoffs.values()) handoff.reject(error);
-		this.handoffs.clear();
-		this.handoffQueue.length = 0;
-	}
 }
 
 type WindowSessionEntry =
@@ -1290,11 +1257,7 @@ export class AshApplication extends Disposable {
 					await record.windowsStateHandler.saveWindowState(window);
 					window.webContents.send('ash:terminal:prepareReplacement');
 					if (this.appServerStartupMode !== 'disabled') {
-						const launcher = supervisor.options.enabled ? supervisor.options.processLauncher : undefined;
-						if (!(launcher instanceof AppServerDaemonLauncher) && !(launcher instanceof RemoteAppServerProcessLauncher)) {
-							throw new Error('Workspace connection has no directory launcher');
-						}
-						await this.reconnectAppServerWorkspace(supervisor, launcher, root, grant, workspace.id, workspaceContext.getWorkspace().id, workspaceHost);
+						await reconnectAppServerWorkspace(supervisor, workspaceHost, root, grant, workspace.id, workspaceContext.getWorkspace().id);
 					}
 					loadingWorkspace = true;
 					workspaceContext.updateWorkspace(workspace, resolvedWorkspace);
@@ -1345,7 +1308,7 @@ export class AshApplication extends Disposable {
 					await replaceWorkspace(workspace, true);
 				},
 				performDialogOperation: operation => this.dialogs.perform(window, operation),
-				performShellCommand: operation => this.performShellCommand(operation),
+				performShellCommand: operation => performShellCommand(operation, { isPackaged: app.isPackaged, executablePath: process.execPath }),
 				pickFolder: async () => {
 					const result = await this.dialogs.showOpenDialog({
 						title: "Add Directory",
@@ -1545,20 +1508,19 @@ export class AshApplication extends Disposable {
 					};
 					window.on('focus', onFocus);
 					windowDisposables.add(toDisposable(() => window.removeListener('focus', onFocus)));
-					// A renderer reload cannot acknowledge a draft already handed to the previous renderer.
-					const rejectInterruptedHandoffs = (): void => {
+					// Reloaded renderers must register their current system-wide keybindings again.
+					const clearInterruptedKeybindings = (): void => {
 						this.globalKeybindings.removeWindow(window.id);
-						session.rejectHandoffs(new Error('Agents Window reloaded before the handoff completed'));
 					};
 					const onNavigation = (_event: unknown, _url: string, inPlace: boolean, mainFrame: boolean): void => {
-						if (mainFrame && !inPlace) rejectInterruptedHandoffs();
+						if (mainFrame && !inPlace) clearInterruptedKeybindings();
 					};
 					window.webContents.on('did-start-navigation', onNavigation);
-					window.webContents.on('render-process-gone', rejectInterruptedHandoffs);
+					window.webContents.on('render-process-gone', clearInterruptedKeybindings);
 					windowDisposables.add(toDisposable(() => {
 						if (window.isDestroyed()) return;
 						window.webContents.removeListener('did-start-navigation', onNavigation);
-						window.webContents.removeListener('render-process-gone', rejectInterruptedHandoffs);
+						window.webContents.removeListener('render-process-gone', clearInterruptedKeybindings);
 					}));
 					const windowControlsOverlay = new WindowControlsOverlay(colors => {
 						if (titleBarStyle === 'custom' && (process.platform === 'win32' || process.platform === 'linux')) window.setTitleBarOverlay(colors);
@@ -1638,12 +1600,12 @@ export class AshApplication extends Disposable {
 						{
 							channel: AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL,
 							validate: validateAgentsWindowHandoffTake,
-							invoke: () => session.takeHandoff(),
+							invoke: () => this.windowsMainService.takeManagedWindowHandoff(AGENTS_WINDOW_KEY),
 						},
 						{
 							channel: AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL,
 							validate: validateAgentsWindowHandoffComplete,
-							invoke: (result: unknown) => session.completeHandoff(result as IAgentsWindowHandoffResult),
+							invoke: (result: unknown) => this.windowsMainService.completeManagedWindowHandoff(AGENTS_WINDOW_KEY, result as IAgentsWindowHandoffResult),
 						},
 						{
 							channel: RETURN_TO_WORKBENCH_CHANNEL,
@@ -1692,7 +1654,7 @@ export class AshApplication extends Disposable {
 		await this.selectSessionsWorkspace(session, workspace, resolvedWorkspace);
 		if (!wasOpen) this.windowSessionStateHandler.windowOpened();
 		if (handoff) {
-			const completed = session.enqueueHandoff(handoff);
+			const completed = this.windowsMainService.enqueueManagedWindowHandoff(AGENTS_WINDOW_KEY, handoff);
 			const window = this.windowsMainService.managedWindow(AGENTS_WINDOW_KEY);
 			if (!window) throw new Error('Agents Window is unavailable for handoff');
 			window.webContents.send(AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL);
@@ -1706,59 +1668,24 @@ export class AshApplication extends Disposable {
 		}
 	}
 
-	private async performShellCommand(operation: 'install' | 'uninstall'): Promise<string> {
-		if (process.platform !== 'darwin') throw new Error('Shell command installation requires macOS');
-		if (!app.isPackaged) throw new Error('Shell command installation requires a packaged Ash application');
-		const appBundle = dirname(dirname(dirname(process.execPath)));
-		if (!basename(appBundle).endsWith('.app')) throw new Error('The Ash application bundle is unavailable');
-		const launcher = `#!/bin/sh\n# Ash desktop launcher\nexec /usr/bin/open -n -a '${appBundle.replaceAll("'", "'\\''")}' --args "$@"\n`;
-		const { stdout: shellPath } = await promisify(execFile)(process.env.SHELL ?? '/bin/zsh', ['-lc', 'printf %s "$PATH"'], { encoding: 'utf8', timeout: 5_000 });
-		const eligible = new Set(['/usr/local/bin', '/opt/homebrew/bin', join(homedir(), '.local', 'bin'), join(homedir(), 'bin')]);
-		const directories = [...new Set(shellPath.split(delimiter).filter(path => eligible.has(path)))];
-		if (directories.length === 0) throw new Error('Add a writable bin directory to PATH before installing the ash command');
-		for (const directory of directories) {
-			const commandPath = join(directory, 'ash');
-			let existing: Awaited<ReturnType<typeof lstat>> | undefined;
-			try { existing = await lstat(commandPath); } catch (error) {
-				if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-			}
-			if (existing) {
-				if (!existing.isFile() || !(await readFile(commandPath, 'utf8')).startsWith('#!/bin/sh\n# Ash desktop launcher\n')) {
-					throw new Error(`${commandPath} belongs to another installation`);
-				}
-				if (operation === 'uninstall') await unlink(commandPath);
-				else {
-					await writeFile(commandPath, launcher);
-					await chmod(commandPath, 0o755);
-				}
-				return commandPath;
-			}
-			if (operation === 'install') {
-				try { await access(directory, constants.W_OK); } catch { continue; }
-				await writeFile(commandPath, launcher, { flag: 'wx', mode: 0o755 });
-				return commandPath;
-			}
-		}
-		throw new Error(operation === 'install' ? 'No writable bin directory is available in PATH' : 'The ash command is not installed in PATH');
-	}
-
 	private resolveRendererEntry(kind: "workbench" | "sessions" | "remoteRuntimeInstall"): RendererEntry {
 		const entry = kind === "workbench"
 			? "workbench"
 			: kind === "sessions"
-				? AshSessionsRendererEntry
+				? 'sessions'
 				: "remoteRuntimeInstall";
 		const directory = kind === "remoteRuntimeInstall" ? "remote-runtime-install" : kind;
+		const relativePath = kind === 'sessions'
+			? `sessions/electron-browser/${entry}.html`
+			: `electron-browser/${directory}/${entry}.html`;
 		const file = join(
 			this.rendererRoot,
-			"electron-browser",
-			directory,
-			`${entry}.html`,
+			relativePath,
 		);
 		const rendererUrl = process.env.ASH_RENDERER_URL;
 		const useDevelopmentUrl = !app.isPackaged && rendererUrl !== undefined;
 		const baseUrl = useDevelopmentUrl
-			? new URL(`/electron-browser/${directory}/${entry}.html`, rendererUrl).href
+			? new URL(`/${relativePath}`, rendererUrl).href
 			: pathToFileURL(file).href;
 		return {
 			file,
@@ -1801,66 +1728,12 @@ export class AshApplication extends Disposable {
 				classifyRuntimeError: () => WorkspaceTransitionFailureKind.RuntimeUnavailable,
 			};
 		}
-		const launcher = supervisor.options.enabled ? supervisor.options.processLauncher : undefined;
-		if (!(launcher instanceof AppServerDaemonLauncher) && !(launcher instanceof RemoteAppServerProcessLauncher)) {
-			throw new Error("Workspace connection has no directory launcher");
-		}
-		const appServerWorkspace = createAppServerWorkspaceTransitionAdapter(supervisor,
-			(root, grant, workspaceId, previousWorkspaceId) => this.reconnectAppServerWorkspace(supervisor, launcher, root, grant, workspaceId, previousWorkspaceId, workspaceHost));
+		const appServerWorkspace = createAppServerWorkspaceTransitionAdapter(supervisor, workspaceHost);
 		return {
 			runtime: appServerWorkspace,
 			classifyRuntimeError: (error) => appServerWorkspace.classifyRuntimeError(error),
 			recovery: appServerWorkspace,
 		};
-	}
-
-	private async reconnectAppServerWorkspace(
-		supervisor: AppServerConnectionRelay,
-		launcher: AppServerDaemonLauncher | RemoteAppServerProcessLauncher,
-		root: string | undefined,
-		grant: DirGrant,
-		workspaceId: string,
-		previousWorkspaceId: string,
-		workspaceHost: RendererWorkspaceHost,
-	): Promise<void> {
-		const previous = launcher instanceof AppServerDaemonLauncher
-			? { kind: "local" as const, launcher, environment: launcher.environment, root: launcher.environment.ASH_WORKSPACE_ROOT }
-			: { kind: "remote" as const, launcher, root: launcher.workspaceRoot };
-		if (root !== undefined) await workspaceHost.persistDirectoryGrant(root, grant);
-		await supervisor.stop();
-		if (previous.kind === "local") {
-			const environment = { ...previous.environment };
-			if (root === undefined) {
-				delete environment.ASH_WORKSPACE_ROOT;
-				delete environment.ASH_DIR_GRANT_SOURCE;
-			} else {
-				environment.ASH_WORKSPACE_ROOT = root;
-				environment.ASH_DIR_GRANT_SOURCE = 'userConfig';
-			}
-			previous.launcher.replaceEnvironment(environment);
-		} else {
-			previous.launcher.replaceWorkspaceRoot(root);
-		}
-		try {
-			await supervisor.start();
-			await workspaceHost.setFolders(root === undefined ? [] : [{ id: workspaceId, path: root, grant: { type: "config" } }]);
-		} catch (error) {
-			await supervisor.stop();
-			if (previous.kind === "local") {
-				previous.launcher.replaceEnvironment(previous.environment);
-			} else {
-				previous.launcher.replaceWorkspaceRoot(previous.root);
-			}
-			try {
-				await supervisor.start();
-				await workspaceHost.setFolders(previous.root
-					? [{ id: previousWorkspaceId, path: previous.root, grant: { type: "config" } }]
-					: []);
-			} catch (rollbackError) {
-				throw new AggregateError([error, rollbackError], "Workspace authority switch and rollback both failed");
-			}
-			throw error;
-		}
 	}
 
 	private async resolveRemoteFolderWorkspace(

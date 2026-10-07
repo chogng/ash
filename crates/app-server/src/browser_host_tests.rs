@@ -24,7 +24,7 @@ fn terminal_errors_release_registration_without_sending_cancellation() {
         host.register(
             7,
             ClientBrowserCapability {
-                version: 2,
+                version: 3,
                 observe: true,
                 input: true,
             },
@@ -59,7 +59,7 @@ fn browser_requests_bind_targets_and_resources_to_the_exact_connection() {
     host.register(
         7,
         ClientBrowserCapability {
-            version: 2,
+            version: 3,
             observe: true,
             input: true,
         },
@@ -205,7 +205,7 @@ fn disconnect_fails_pending_requests_and_forgets_target_ownership() {
     host.register(
         3,
         ClientBrowserCapability {
-            version: 2,
+            version: 3,
             observe: true,
             input: true,
         },
@@ -239,7 +239,7 @@ fn cancellation_retires_the_request_and_accepts_its_late_terminal_response() {
     host.register(
         11,
         ClientBrowserCapability {
-            version: 2,
+            version: 3,
             observe: true,
             input: true,
         },
@@ -294,7 +294,7 @@ fn task_binding_never_borrows_another_window_or_a_replayed_command() {
         host.register(
             owner,
             ClientBrowserCapability {
-                version: 2,
+                version: 3,
                 observe: true,
                 input: true,
             },
@@ -388,7 +388,7 @@ fn user_page_sharing_requires_host_acknowledgement_and_the_exact_thread_and_conn
     host.register(
         7,
         ClientBrowserCapability {
-            version: 2,
+            version: 3,
             observe: true,
             input: true,
         },
@@ -435,6 +435,12 @@ fn user_page_sharing_requires_host_acknowledgement_and_the_exact_thread_and_conn
                     .unwrap(),
                 7
             );
+            for operation in [BrowserHostOperation::Input, BrowserHostOperation::Lifecycle] {
+                assert_eq!(
+                    host.target_owner(&target, operation),
+                    Err(BrowserError::TargetUnavailable(target.clone()))
+                );
+            }
             let mut other = browser_host(Arc::new(Mutex::new(ResourceStore::default())));
             other.state = Arc::clone(&host.state);
             other.owner = Some(7);
@@ -453,4 +459,127 @@ fn user_page_sharing_requires_host_acknowledgement_and_the_exact_thread_and_conn
     }
     host.unregister(7);
     assert!(host.state.lock().unwrap().shared_targets.is_empty());
+}
+
+#[test]
+fn browser_network_requests_use_exact_tool_authority_and_fail_closed_after_release() {
+    use ash_core::ToolService;
+    let mut host = browser_host(Arc::new(Mutex::new(ResourceStore::default())));
+    host.owner = Some(7);
+    let outbound = NotificationQueue::default();
+    host.register(
+        7,
+        ClientBrowserCapability {
+            version: 3,
+            observe: true,
+            input: true,
+        },
+        outbound.clone(),
+    );
+    let interactions = Arc::new(BrowserNetworkInteractions::default());
+    let review = crate::browser_tool::BrowserToolService::new(Arc::new(browser_host(Arc::new(
+        Mutex::new(ResourceStore::default()),
+    ))))
+    .prepare(&ash_protocol::ToolCall {
+        id: ash_protocol::ToolCallId::new("open-call").unwrap(),
+        name: ash_protocol::ToolName::new("browser_open").unwrap(),
+        arguments: json!({"url":"https://allowed.test/"}),
+    })
+    .unwrap();
+    let source = CancellationSource::new();
+    let lease = Arc::new(
+        host.with_network_policy(
+            crate::network_policy::ExecutionNetworkPolicy::new(
+                review,
+                "turn:open-call".into(),
+                interactions.clone(),
+            ),
+            &source.token(),
+        )
+        .unwrap(),
+    );
+    let worker = {
+        let lease = Arc::clone(&lease);
+        thread::spawn(move || {
+            lease.host.create_target(
+                CreateBrowserTargetRequest {
+                    url: "https://allowed.test/".into(),
+                },
+                &CancellationSource::new().token(),
+            )
+        })
+    };
+    let create = next_request(&outbound);
+    let params = ash_app_server_protocol::protocol::browser::BrowserNetworkAuthorizeParams {
+        network_token: create["params"]["networkToken"].as_str().unwrap().into(),
+        url: "https://allowed.test/script".into(),
+        method: "GET".into(),
+    };
+    assert!(!lease.host.authorize_network(8, &params));
+    assert!(lease.host.authorize_network(7, &params));
+    assert!(!lease.host.authorize_network(
+        7,
+        &ash_app_server_protocol::protocol::browser::BrowserNetworkAuthorizeParams {
+            url: "https://blocked.test/redirect".into(),
+            ..params.clone()
+        }
+    ));
+    assert!(!lease.host.authorize_network(
+        7,
+        &ash_app_server_protocol::protocol::browser::BrowserNetworkAuthorizeParams {
+            url: "wss://allowed.test/socket".into(),
+            ..params.clone()
+        }
+    ));
+    lease
+        .host
+        .clients
+        .handle_response(
+            7,
+            json!({"jsonrpc":"2.0","id":create["id"],"result":{"targetId":"network-page"}}),
+        )
+        .unwrap();
+    worker.join().unwrap().unwrap();
+    assert_eq!(interactions.reviews.lock().unwrap().len(), 2);
+    source.cancel();
+    assert!(!lease.host.authorize_network(7, &params));
+    let state = Arc::clone(&lease.host.state);
+    drop(lease);
+    assert!(state.lock().unwrap().network_grants.is_empty());
+}
+
+#[derive(Default)]
+struct BrowserNetworkInteractions {
+    reviews: Mutex<Vec<ash_action_policy::ActionReviewRequest>>,
+}
+impl ash_core::ToolInteractionService for BrowserNetworkInteractions {
+    fn approve_network(
+        &self,
+        request: &ash_action_policy::ActionReviewRequest,
+        _: &CancellationToken,
+    ) -> Result<ash_protocol::ActionApprovalDecision, core_api::CoreError> {
+        use core_api::ActionPolicyService;
+        assert!(matches!(
+            crate::browser_tool::BrowserToolPolicy
+                .decide(request, &CancellationSource::new().token()),
+            Ok(ash_action_policy::ExecutionDecision::AskUser(_))
+        ));
+        let allowed = request
+            .action()
+            .required_capabilities()
+            .iter()
+            .any(|capability| capability.scope().contains("allowed.test:443"));
+        self.reviews.lock().unwrap().push(request.clone());
+        Ok(if allowed {
+            ash_protocol::ActionApprovalDecision::ApproveOnce
+        } else {
+            ash_protocol::ActionApprovalDecision::Decline
+        })
+    }
+    fn request_user_input(
+        &self,
+        _: ash_protocol::RequestUserInput,
+    ) -> Result<ash_core::ToolUserInputOutcome, core_api::CoreError> {
+        Err(core_api::CoreError::Policy("unexpected user input".into()))
+    }
 }

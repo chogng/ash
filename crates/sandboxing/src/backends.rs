@@ -14,11 +14,77 @@ pub struct SandboxBackends {
     backends: Vec<(&'static str, Arc<dyn SandboxBackend>)>,
 }
 
+/// Preparation readiness for one candidate and policy; it does not promise a successful launch.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SandboxDiagnostic {
+    pub backend: String,
+    pub network: crate::NetworkAccess,
+    pub readiness: SandboxReadiness,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SandboxReadiness {
+    Ready,
+    Unsupported(String),
+    Unavailable(String),
+}
+
 impl SandboxBackends {
     /// Registers implementations in preference order. Only UnsupportedPolicy
     /// permits considering the next candidate; operational failures stop selection.
     pub fn new(backends: Vec<(&'static str, Arc<dyn SandboxBackend>)>) -> Self {
         Self { backends }
+    }
+
+    /// Checks each candidate without launching a child or weakening the requested isolation.
+    pub fn diagnostics(
+        &self,
+        command: &SandboxCommand,
+        scope: &SandboxScope,
+    ) -> Vec<SandboxDiagnostic> {
+        self.backends
+            .iter()
+            .flat_map(|(name, backend)| {
+                [
+                    crate::NetworkAccess::Denied,
+                    crate::NetworkAccess::Allowed,
+                    crate::NetworkAccess::Managed,
+                ]
+                .into_iter()
+                .map(|network| {
+                    // Preparation only: these endpoints are never bound or used to start a child.
+                    let command = if network == crate::NetworkAccess::Managed {
+                        command
+                            .clone()
+                            .with_network_proxy(crate::ManagedNetworkAccess::new(
+                                std::num::NonZeroU16::new(1).unwrap(),
+                                std::num::NonZeroU16::new(1).unwrap(),
+                            ))
+                    } else {
+                        command.clone()
+                    };
+                    let policy = SandboxPolicy::new(crate::FileSystemAccess::ReadOnly, network);
+                    let readiness = match backend.prepare_scoped(&command, policy, scope) {
+                        Ok(prepared) if prepared.kind() == SandboxKind::Restricted => {
+                            SandboxReadiness::Ready
+                        }
+                        Ok(_) => SandboxReadiness::Unavailable(
+                            "backend did not prepare restricted execution".into(),
+                        ),
+                        Err(SandboxError::UnsupportedPolicy(reason)) => {
+                            SandboxReadiness::Unsupported(reason)
+                        }
+                        Err(error) => SandboxReadiness::Unavailable(error.to_string()),
+                    };
+                    SandboxDiagnostic {
+                        backend: (*name).into(),
+                        network,
+                        readiness,
+                    }
+                })
+                .collect::<Vec<_>>()
+            })
+            .collect()
     }
 }
 

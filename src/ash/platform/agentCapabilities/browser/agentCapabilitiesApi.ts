@@ -19,6 +19,11 @@ export function createAppServerAgentCapabilitiesApi(connection: AppServerProtoco
 				})),
 				localProcessSandboxConfigured: result.localProcessSandboxConfigured,
 				sandboxBackends: result.sandboxBackends,
+				sandboxDiagnostics: result.sandboxDiagnostics.map(diagnostic => ({
+					backend: diagnostic.backend,
+					network: diagnostic.network,
+					readiness: { ...diagnostic.readiness },
+				})),
 				directoryGrantsReadable: result.directoryGrantsReadable,
 			};
 		},

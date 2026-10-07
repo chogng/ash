@@ -20,6 +20,8 @@ test('application tools update the visible sidebar, preserve focus, persist and 
 	await expect.poll(() => page.evaluate(() => !!window.ashAppToolsIntegration)).toBe(true);
 	const group = await page.evaluate(async () => await window.ashAppToolsIntegration.call({ type: 'createSection', name: '<Review>' }) as { sectionId: string; });
 	await expect(page.getByRole('heading', { name: '<Review>', exact: true })).toBeVisible();
+	await expect(page.getByRole('heading', { name: '<Review>', exact: true })).toHaveCSS('font-size', '12px');
+	await expect(page.getByRole('heading', { name: '<Review>', exact: true })).toHaveCSS('font-weight', '600');
 	await page.evaluate(sectionId => window.ashAppToolsIntegration.call({ type: 'moveSession', sessionId: 'session-2', sectionId }), group.sectionId);
 	const rows = page.locator('.ash-sessions-list-item');
 	await expect(rows).toHaveText(['Task 2', 'Task 1']);
@@ -74,6 +76,8 @@ test('disposing the application adapter releases its host and rejects late termi
 	await expect.poll(() => page.evaluate(() => !!window.ashAppToolsIntegration)).toBe(true);
 	expect(await page.evaluate(() => window.ashAppToolsIntegration.call({ type: 'confetti' }))).toEqual({ fired: true });
 	await expect(page.locator('.ash-app-confetti')).toHaveCount(1);
+	await expect(page.locator('.ash-app-confetti')).toHaveAttribute('aria-hidden', 'true');
+	await expect(page.locator('.ash-app-confetti-particle').first()).toHaveCSS('font-size', '13px');
 	const pending = page.evaluate(async () => {
 		try { await window.ashAppToolsIntegration.call({ type: 'openTerminal' }); return 'accepted'; }
 		catch (error) { return String(error); }
@@ -88,4 +92,21 @@ test('disposing the application adapter releases its host and rejects late termi
 		try { await window.ashAppToolsIntegration.call({ type: 'listSections' }); return 'accepted'; }
 		catch (error) { return String(error); }
 	})).toBe('Error: Method not found');
+});
+
+test('sidebar headings and celebration particles resolve typography in every theme', async ({ page }) => {
+	await page.emulateMedia({ reducedMotion: 'no-preference' });
+	for (const theme of ['light', 'dark', 'hcLight', 'hcDark']) {
+		await page.goto(`/appTools.html?theme=${theme}`);
+		await expect.poll(() => page.evaluate(() => !!window.ashAppToolsIntegration)).toBe(true);
+		const name = `Review ${theme}`;
+		await page.evaluate(name => window.ashAppToolsIntegration.call({ type: 'createSection', name }), name);
+		const heading = page.getByRole('heading', { name, exact: true });
+		await expect(heading).toHaveCSS('font-size', '12px');
+		await expect(heading).toHaveCSS('font-weight', '600');
+		expect(await page.evaluate(() => window.ashAppToolsIntegration.call({ type: 'confetti' }))).toEqual({ fired: true });
+		await expect(page.locator('.ash-app-confetti-particle').first()).toHaveCSS('font-size', '13px');
+		await page.evaluate(() => window.ashAppToolsIntegration.disposeHost());
+		await expect(page.locator('.ash-app-confetti')).toHaveCount(0);
+	}
 });

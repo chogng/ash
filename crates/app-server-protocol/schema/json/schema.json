@@ -922,6 +922,12 @@
           },
           "type": "array"
         },
+        "sandboxDiagnostics": {
+          "items": {
+            "$ref": "#/$defs/SandboxDiagnosticDto"
+          },
+          "type": "array"
+        },
         "tools": {
           "items": {
             "$ref": "#/$defs/AgentToolCapabilityDto"
@@ -933,6 +939,7 @@
         "tools",
         "localProcessSandboxConfigured",
         "sandboxBackends",
+        "sandboxDiagnostics",
         "directoryGrantsReadable"
       ],
       "type": "object"
@@ -4153,6 +4160,7 @@
           "type": "boolean"
         },
         "version": {
+          "description": "Version 3 enforces backend authorization for every network request from an isolated agent page.",
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
@@ -4184,6 +4192,12 @@
     },
     "BrowserCreateParams": {
       "properties": {
+        "networkToken": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "threadId": {
           "description": "The durable Thread owning this request; a transport connection is not an agent identity.",
           "minLength": 1,
@@ -4225,6 +4239,44 @@
       ],
       "type": "object"
     },
+    "BrowserNetworkAuthorizeParams": {
+      "additionalProperties": false,
+      "description": "Authorizes one observed Chromium request against the live tool authority on this connection.",
+      "properties": {
+        "method": {
+          "maxLength": 32,
+          "minLength": 1,
+          "type": "string"
+        },
+        "networkToken": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "url": {
+          "maxLength": 8192,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "networkToken",
+        "url",
+        "method"
+      ],
+      "type": "object"
+    },
+    "BrowserNetworkAuthorizeResult": {
+      "properties": {
+        "allowed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "allowed"
+      ],
+      "type": "object"
+    },
     "BrowserObserveParams": {
       "properties": {
         "includeAccessibilityTree": {
@@ -4235,6 +4287,12 @@
         },
         "includeScreenshot": {
           "type": "boolean"
+        },
+        "networkToken": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "targetId": {
           "minLength": 1,
@@ -4430,6 +4488,12 @@
       "properties": {
         "action": {
           "$ref": "#/$defs/BrowserPerformActionDto"
+        },
+        "networkToken": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "threadId": {
           "minLength": 1,
@@ -5832,6 +5896,22 @@
             },
             "params": {
               "$ref": "#/$defs/BrowserSharingSetParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "browser/network/authorize",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/BrowserNetworkAuthorizeParams"
             }
           },
           "required": [
@@ -12460,6 +12540,22 @@
             },
             "result": {
               "type": "null"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "browser/network/authorize",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/BrowserNetworkAuthorizeResult"
             }
           },
           "required": [
@@ -42088,6 +42184,82 @@
         "replaySafety"
       ],
       "type": "object"
+    },
+    "SandboxDiagnosticDto": {
+      "description": "Current read-only preparation checks. Every real command is still checked before launch.",
+      "properties": {
+        "backend": {
+          "type": "string"
+        },
+        "network": {
+          "$ref": "#/$defs/SandboxNetworkModeDto"
+        },
+        "readiness": {
+          "$ref": "#/$defs/SandboxReadinessDto"
+        }
+      },
+      "required": [
+        "backend",
+        "network",
+        "readiness"
+      ],
+      "type": "object"
+    },
+    "SandboxNetworkModeDto": {
+      "enum": [
+        "denied",
+        "allowed",
+        "managed"
+      ],
+      "type": "string"
+    },
+    "SandboxReadinessDto": {
+      "oneOf": [
+        {
+          "properties": {
+            "type": {
+              "const": "ready",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "reason": {
+              "type": "string"
+            },
+            "type": {
+              "const": "unsupported",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "reason"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "reason": {
+              "type": "string"
+            },
+            "type": {
+              "const": "unavailable",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "reason"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "ScanOptions": {
       "additionalProperties": false,

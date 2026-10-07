@@ -266,6 +266,32 @@ impl ToolService for BrowserToolService {
     ) -> Result<ToolExecutionOutput, CoreError> {
         self.execute_with_facts(call, authorization, cancellation, facts)
     }
+
+    fn execute_streaming_with_facts_and_interactions(
+        &self,
+        call: &ToolCall,
+        _: &ToolAuthorization,
+        cancellation: &CancellationToken,
+        facts: &ash_core::ToolExecutionFacts,
+        interactions: Arc<dyn ash_core::ToolInteractionService>,
+        _: &mut dyn ash_core::ToolOutputSink,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        let identity = facts.execution_identity().ok_or_else(|| {
+            CoreError::Policy("browser network authority requires a turn identity".into())
+        })?;
+        let lease = self
+            .browser_for(facts)?
+            .with_network_policy(
+                crate::network_policy::ExecutionNetworkPolicy::new(
+                    self.prepare(call)?,
+                    format!("{}:{}", identity.turn_id(), call.id),
+                    interactions,
+                ),
+                cancellation,
+            )
+            .map_err(browser_error)?;
+        self.execute_request(call, cancellation, &lease.host)
+    }
 }
 
 impl BrowserToolService {
@@ -406,7 +432,10 @@ impl ActionPolicyService for BrowserToolPolicy {
             .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
         if request.action_policy_revision().as_str() != BROWSER_POLICY_REVISION
             || request.provenance().source() != &ActionSource::BuiltInTool
-            || request.action().kind() != &ActionKind::BrowserInteraction
+            || !matches!(
+                request.action().kind(),
+                ActionKind::BrowserInteraction | ActionKind::NetworkRequest
+            )
             || !matches!(request.phase(), ActionReviewPhase::Initial)
             || !matches!(
                 request.sandbox(),
@@ -418,7 +447,12 @@ impl ActionPolicyService for BrowserToolPolicy {
                 .required_capabilities()
                 .iter()
                 .any(|capability| {
-                    capability.kind() != &CapabilityKind::UserInterface
+                    capability.kind()
+                        != if request.action().kind() == &ActionKind::NetworkRequest {
+                            &CapabilityKind::Network
+                        } else {
+                            &CapabilityKind::UserInterface
+                        }
                         || capability.scope().trim().is_empty()
                 })
         {

@@ -2154,6 +2154,28 @@ impl AppServer {
         }
         match client_method(&request.method) {
             Some(ClientMethod::Initialize) => unreachable!("initialize handled before gate"),
+            Some(ClientMethod::BrowserNetworkAuthorize) => {
+                let params: ash_app_server_protocol::protocol::browser::BrowserNetworkAuthorizeParams = decode(&request.params)?;
+                let policy = self.calls.network_policy();
+                let allowed = !params.network_token.is_empty()
+                    && params.network_token.len() <= 256
+                    && !params.url.is_empty()
+                    && params.url.len() <= 8192
+                    && !params.method.is_empty()
+                    && params.method.len() <= 32
+                    && cancellation.check().is_ok()
+                    && policy.check_url(&params.url).is_ok()
+                    && self
+                        .browser_host
+                        .authorize_network(connection.connection_id, &params)
+                    && policy.check_url(&params.url).is_ok()
+                    && cancellation.check().is_ok();
+                result(
+                    &ash_app_server_protocol::protocol::browser::BrowserNetworkAuthorizeResult {
+                        allowed,
+                    },
+                )
+            }
             Some(ClientMethod::BrowserSharingSet) => {
                 if !connection.supports_dir_permissions_host() {
                     return Err(RpcError::new(-32000, AppServerErrorName::ResourceNotOwner));

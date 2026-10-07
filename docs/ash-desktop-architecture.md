@@ -939,7 +939,7 @@ popup 请求只以 `openRequested` 事件返回已验证 URL，不会由远程�
 可收到目标 state、加载失败、popup 请求、renderer 崩溃和关闭事件，但不能获得底层 Electron
 对象。
 
-Desktop 在 `initialize` 中声明浏览器宿主能力版本 2，并注册四个必须携带 `threadId` 的 Server → Client 请求：
+Desktop 在 `initialize` 中声明浏览器宿主能力版本 3，并注册四个必须携带 `threadId` 的 Server → Client 请求：
 
 - `browser/create` 创建隔离且默认隐藏的目标；
 - `browser/observe` 返回 URL、标题、加载状态，以及可选的 accessibility tree、DOM snapshot 和
@@ -964,9 +964,27 @@ Desktop connection，新建目标、后续观察、动作和关闭同时核对 c
 `browser_type`、`browser_scroll`、`browser_back`、`browser_reload`、`browser_screenshot` 和
 `browser_close`。Rust 重新执行 URL、目标与 node ID 校验，并把每次动作建模为
 `BrowserInteraction` + `UserInterface` capability；当前策略要求一次性用户批准，Electron Main
-不能自行放宽。完整浏览器工具面只有在当前 Environment tool composition 已建立，并且至少一个 version 2 connection 同时声明
+不能自行放宽。完整浏览器工具面只有在当前 Environment tool composition 已建立，并且至少一个 version 3 connection 同时声明
 `observe + input` 时才进入当前 Tool generation；最后一个完整宿主断开时会原子移除，Environment runtime 切换则重建对应 Tool generation。
 反向 RPC handler 可以继续注册，但 Agent 无法在没有 live browser host 与动作批准时发起操作。
+
+每次浏览器工具调用还持有独立的网络授权，由 Rust `BrowserHost` 绑定发起连接并在工具结束、取消或断线时释放。
+`browser/create`、`browser/observe`、`browser/perform` 携带可选的 `networkToken`；缺少授权时 Agent 页面拒绝 HTTP(S) 请求。
+Chromium Session 的 `onBeforeRequest` 对 HTTP(S) 导航、重定向、子资源和 fetch 逐条请求
+`browser/network/authorize`。WebSocket 在握手前拒绝，因为 Chromium 的连接清理不能撤销已建立的 WebSocket。
+App Server 先检查当前 `network.allowedHosts`，再通过 Core 的网络审批端口评审精确的
+协议、主机、端口和方法，并在回复前再次检查配置与授权是否仍有效。策略与审批凭据保留在后端。
+宿主撤销页面授权时拒绝待处理请求并关闭 Session 的网络连接；Agent 弹窗不能创建不受此策略约束的用户页面。
+共享用户页面只允许观察，Agent 的输入和导航必须使用隔离的 Agent Session。没有页面身份的后台请求默认拒绝。
+
+这条链路还不能作为完整网络沙箱：Electron 44.4.5 的 WebTransport 不经过 `onBeforeRequest`，
+即使 HTTP(S) 请求被拒绝，仍可发出 QUIC UDP 包。`disable_non_proxied_udp` 限制 WebRTC 的直接 UDP，
+但不提供按工具撤销所有传输的能力。完整隔离还需要把 Agent Session 接入后端拥有、可撤销的代理，
+并封闭绕过该代理的传输；在此之前只能保证上述 HTTP(S) 请求的策略检查。
+
+`agent/capabilities/read` 的 `sandboxDiagnostics` 区分准备通过、策略不受支持和后端不可用，并报告原因。
+检查复用实际执行的 sandbox backend，针对当前授权目录执行只读进程准备，不启动子进程；网络禁用、开放和受管模式分别检查。
+它不保证具体命令或 PTY 可以启动，这些请求仍在启动前按实际策略校验。
 
 ### 7.2 当前限制与计划演进
 

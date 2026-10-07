@@ -3,7 +3,7 @@ import { isCancellationError } from '../../base/common/errors.js';
 import { app, protocol } from 'electron/main';
 import { Schemas } from '../../base/common/network.js';
 import { basename, dirname, join } from 'node:path';
-import { AshApplicationId, AshApplicationName, AshRendererDirectory, AshSessionsRendererEntry, AshUserDataFolderName } from '../common/application.js';
+import { AshApplicationId, AshApplicationName, AshRendererDirectory, AshUserDataFolderName } from '../common/application.js';
 import { developmentArtifactsPath } from '../../platform/environment/node/developmentArtifacts.js';
 import { getDefaultUserDataPath } from '../../platform/environment/node/userDataPath.js';
 import { resolveHome } from '../../platform/home/node/home.js';
@@ -122,7 +122,7 @@ function resolvePackagedRendererRoot(rendererRoot: string): string {
 	const packagedRoot = join(rendererRoot, AshRendererDirectory);
 	const requiredEntries = [
 		join(packagedRoot, 'electron-browser', 'workbench', 'workbench.html'),
-		join(packagedRoot, 'electron-browser', 'sessions', `${AshSessionsRendererEntry}.html`),
+		join(packagedRoot, 'sessions', 'electron-browser', 'sessions.html'),
 	];
 	const missing = requiredEntries.filter(entry => !existsSync(entry));
 	if (missing.length > 0) throw new Error(`Packaged Ash renderer is incomplete: ${missing.join(', ')}`);

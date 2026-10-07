@@ -3,9 +3,21 @@ import { test } from 'mocha';
 import { Emitter } from '../../../../base/common/event.js';
 import { colorSchemeChannel } from '../../electron-main/nativeHostIpc.js';
 import type { IColorScheme } from '../../../window/common/window.js';
-import { isAdmin } from '../../electron-main/nativeHostMainService.js';
+import { isAdmin, performShellCommand } from '../../electron-main/nativeHostMainService.js';
 import { nativeHostIpcRoutes, type INativeHostMainService } from '../../electron-main/nativeHostIpc.js';
-import { NATIVE_HOST_IS_ADMIN_CHANNEL } from '../../common/nativeHost.js';
+import { NATIVE_HOST_IS_ADMIN_CHANNEL, NATIVE_HOST_SHELL_COMMAND_CHANNEL } from '../../common/nativeHost.js';
+
+test('shell command IPC reaches the system host and rejects an unsupported installation before writing files', async () => {
+	const route = nativeHostIpcRoutes({
+		performShellCommand: operation => performShellCommand(operation, { isPackaged: false, executablePath: process.execPath }),
+	} as INativeHostMainService).find(route => route.channel === NATIVE_HOST_SHELL_COMMAND_CHANNEL)!;
+	assert.throws(() => route.validate('erase'), /Invalid shell command operation/);
+	for (const operation of ['install', 'uninstall']) {
+		await assert.rejects(async () => route.invoke(route.validate(operation)), process.platform === 'darwin'
+			? /requires a packaged Ash application/
+			: /requires macOS/);
+	}
+});
 
 test('desktop privilege reads use the desktop process and accept no renderer arguments', async () => {
 	if (process.platform !== 'win32') {

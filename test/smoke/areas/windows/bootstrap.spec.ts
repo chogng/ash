@@ -109,7 +109,7 @@ try {
 		const result = await runUntilExit({ ...configuration, args: configuration.args.map(argument => argument === desktop ? entry : argument) });
 		expect(result.code).toBe(1);
 		expect(result.output).toContain('Packaged Ash renderer is incomplete');
-		expect(result.output).toContain(hasWorkbench ? 'sessions-code.html' : 'workbench.html');
+		expect(result.output).toContain(hasWorkbench ? join('sessions', 'electron-browser', 'sessions.html') : 'workbench.html');
 	});
 }
 

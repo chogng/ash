@@ -62,12 +62,22 @@ export class CodeWindow<TWindow extends ICodeWindowHandle> extends Disposable {
 			// Windows may size the constructor frame using the primary display's DPI.
 			// Apply the outer DIP rectangle on the created window's display before
 			// placement tracking captures it or maximize/fullscreen changes its mode.
-			window.setBounds({ x, y, width, height });
-			const actual = window.getBounds();
-			if (actual.width !== width || actual.height !== height) {
-				// Fractional DPI can round the Windows frame outward. Read back its
-				// size to remove that difference instead of saving it on every restart.
-				window.setBounds({ x, y, width: width - (actual.width - width), height: height - (actual.height - height) });
+			let requestedWidth = width;
+			let requestedHeight = height;
+			for (let attempt = 0; attempt < 4; attempt++) {
+				window.setBounds({ x, y, width: requestedWidth, height: requestedHeight });
+				const actual = window.getBounds();
+				if (actual.width === width && actual.height === height) {
+					break;
+				}
+				// Fractional DPI can map adjacent DIP requests to the same outer size.
+				// Accumulate corrections across that plateau before placement is tracked;
+				// bound attempts in case OS constraints make the saved size unreachable.
+				requestedWidth -= actual.width - width;
+				requestedHeight -= actual.height - height;
+				if (requestedWidth <= 0 || requestedHeight <= 0) {
+					break;
+				}
 			}
 		}
 		window.once('ready-to-show', () => {

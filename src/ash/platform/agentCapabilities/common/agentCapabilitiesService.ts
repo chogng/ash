@@ -17,7 +17,14 @@ export interface AgentCapabilitiesSnapshot {
 	readonly tools: readonly AgentToolCapability[];
 	readonly localProcessSandboxConfigured: boolean;
 	readonly sandboxBackends: readonly string[];
+	readonly sandboxDiagnostics: readonly SandboxDiagnostic[];
 	readonly directoryGrantsReadable: boolean;
+}
+
+export interface SandboxDiagnostic {
+	readonly backend: string;
+	readonly network: 'denied' | 'allowed' | 'managed';
+	readonly readiness: { readonly type: 'ready'; } | { readonly type: 'unsupported' | 'unavailable'; readonly reason: string; };
 }
 
 /** Read-only view of the current Agent tool and sandbox configuration. */

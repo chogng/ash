@@ -55,6 +55,12 @@ use crate::protocol::agent::AgentThread;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::agent::AgentToolCapabilityDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::agent::SandboxDiagnosticDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::agent::SandboxNetworkModeDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::agent::SandboxReadinessDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::agent::ToolAuthorityDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::agent::ToolExposureDto;
@@ -236,6 +242,10 @@ use crate::protocol::browser::BrowserCreateParams;
 use crate::protocol::browser::BrowserCreateResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::browser::BrowserElementTargetDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::browser::BrowserNetworkAuthorizeParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::browser::BrowserNetworkAuthorizeResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::browser::BrowserObserveParams;
 #[cfg(any(test, feature = "export"))]
@@ -3024,6 +3034,12 @@ client_methods! {
         response: (),
         serialization: ConnectionExclusive("browserSharing"),
     },
+    BrowserNetworkAuthorize => "browser/network/authorize" {
+        params: BrowserNetworkAuthorizeParams,
+        response: BrowserNetworkAuthorizeResult,
+        // Chromium must be able to ask while its originating tool awaits the host response.
+        serialization: None,
+    },
     EnvDirsSet => "env/dirs/set" {
         params: EnvDirsSetParams,
         response: EnvDirsSetResult,
@@ -5243,6 +5259,8 @@ typescript_bindings! {
     BrowserBinaryPayload,
     BrowserCloseParams,
     BrowserCreateParams,
+    BrowserNetworkAuthorizeParams,
+    BrowserNetworkAuthorizeResult,
     BrowserSharingSetParams,
     BrowserCreateResult,
     BrowserElementTargetDto,
@@ -5416,6 +5434,9 @@ typescript_bindings! {
     AgentRoleEntry,
     AgentRoleListResult,
     AgentCapabilitiesReadResult,
+    SandboxDiagnosticDto,
+    SandboxNetworkModeDto,
+    SandboxReadinessDto,
     AgentToolCapabilityDto,
     ToolAuthorityDto,
     ToolExposureDto,

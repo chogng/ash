@@ -97,5 +97,31 @@ pub struct AgentCapabilitiesReadResult {
     pub tools: Vec<AgentToolCapabilityDto>,
     pub local_process_sandbox_configured: bool,
     pub sandbox_backends: Vec<String>,
+    pub sandbox_diagnostics: Vec<SandboxDiagnosticDto>,
     pub directory_grants_readable: bool,
+}
+
+/// Current read-only preparation checks. Every real command is still checked before launch.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SandboxDiagnosticDto {
+    pub backend: String,
+    pub network: SandboxNetworkModeDto,
+    pub readiness: SandboxReadinessDto,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum SandboxNetworkModeDto {
+    Denied,
+    Allowed,
+    Managed,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum SandboxReadinessDto {
+    Ready,
+    Unsupported { reason: String },
+    Unavailable { reason: String },
 }

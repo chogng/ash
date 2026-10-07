@@ -14,6 +14,8 @@ mod model;
 mod process;
 mod scope;
 pub use backends::SandboxBackends;
+pub use backends::SandboxDiagnostic;
+pub use backends::SandboxReadiness;
 pub use model::FileSystemIsolation;
 pub use model::HostAclChanges;
 pub use model::SandboxLaunch;

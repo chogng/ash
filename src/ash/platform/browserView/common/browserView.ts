@@ -70,6 +70,7 @@ export interface IBrowserViewState {
 }
 
 export type BrowserViewEvent =
+	| { readonly type: 'networkRequested'; readonly targetId: string; readonly requestId: string; readonly networkToken: string; readonly url: string; readonly method: string; }
 	| { readonly type: 'created'; readonly info: IBrowserViewInfo; }
 	| { readonly type: 'sharingChanged'; readonly targetId: string; readonly threadIds: readonly string[]; }
 	| { readonly type: 'permissionRequested'; readonly targetId: string; readonly requestId: string; readonly origin: string; readonly permission: string; }

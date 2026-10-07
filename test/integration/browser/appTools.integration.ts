@@ -20,6 +20,10 @@ import type { ISessionsManagementService } from '../../../src/ash/sessions/servi
 import type { ISessionsService } from '../../../src/ash/sessions/services/sessions/browser/sessionsService.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
 import { languagePackCatalog } from '../../../src/ash/workbench/services/localization/common/localizationCatalog.zh-CN.js';
+import '../../../src/ash/platform/theme/common/sizes/baseSizes.js';
+import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
+import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 
 if (new URL(location.href).searchParams.get('locale') === 'zh-CN') setNlsMessages('zh-CN', languagePackCatalog.bundles);
 class Transport implements AppServerTransport {
@@ -44,6 +48,11 @@ class Transport implements AppServerTransport {
 	}
 }
 const resources = new DisposableStore();
+const colorThemes = { dark: darkColorTheme, light: lightColorTheme, hcDark: highContrastDarkColorTheme, hcLight: highContrastLightColorTheme };
+const themeId = new URL(location.href).searchParams.get('theme') as keyof typeof colorThemes | null;
+const colorTheme = themeId && Object.hasOwn(colorThemes, themeId) ? colorThemes[themeId] : darkColorTheme;
+const theme = resources.add(new TestThemeService(colorTheme));
+resources.add(bindColorTheme(theme, document.documentElement));
 const transport = new Transport();
 const client = new AppServerProtocolClient(transport);
 resources.add(toDisposable(() => client.dispose()));

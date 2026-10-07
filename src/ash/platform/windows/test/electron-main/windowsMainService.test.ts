@@ -15,7 +15,7 @@ import type { IAnyWorkspaceIdentifier } from '../../../workspace/common/workspac
 import { createEmptyWorkspaceIdentifier, getSingleFolderWorkspaceIdentifier } from '../../../workspaces/node/workspaces.js';
 import { WindowsMainService, windowOperationIpcRoute, workspaceRecoveryIpcRoute, type IWorkbenchWindow } from '../../electron-main/windowsMainService.js';
 import type { IOpenConfiguration } from '../../electron-main/windows.js';
-import { WINDOW_OPEN_FILES_CHANNEL, validateWindowFilesRequest, validateWindowFilesResponse } from '../../../window/common/window.js';
+import { WINDOW_OPEN_FILES_CHANNEL, validateWindowFilesRequest, validateWindowFilesResponse, validateAgentsWindowHandoffComplete } from '../../../window/common/window.js';
 import { WindowsStateHandler } from '../../electron-main/windowsStateHandler.js';
 import { Event } from '../../../../base/common/event.js';
 import { WorkspaceOpenTargetKind } from '../../../environment/common/argv.js';
@@ -94,8 +94,8 @@ class TestWindow implements IWorkbenchWindow<TestWindow> {
 		getZoomLevel: (): number => this.zoomLevel,
 		getZoomFactor: (): number => 1.2 ** this.zoomLevel,
 		setZoomLevel: (level: number): void => { this.zoomLevel = level; },
-		on: (event: 'zoom-changed' | 'did-start-loading' | 'render-process-gone', listener: () => void): void => { const listeners = event === 'zoom-changed' ? this.zoomListeners : this.rendererListeners.get(event) ?? new Set<() => void>(); listeners.add(listener); if (event !== 'zoom-changed') this.rendererListeners.set(event, listeners); },
-		off: (event: 'zoom-changed' | 'did-start-loading' | 'render-process-gone', listener: () => void): void => { if (this.destroyed) throw new Error('Object has been destroyed'); (event === 'zoom-changed' ? this.zoomListeners : this.rendererListeners.get(event))?.delete(listener); },
+		on: (event: 'zoom-changed' | 'did-start-loading' | 'render-process-gone' | 'did-start-navigation', listener: (() => void) | ((event: unknown, url: string, inPlace: boolean, mainFrame: boolean) => void)): void => { const listeners = event === 'zoom-changed' ? this.zoomListeners : this.rendererListeners.get(event) ?? new Set<() => void>(); listeners.add(listener as () => void); if (event !== 'zoom-changed') this.rendererListeners.set(event, listeners); },
+		off: (event: 'zoom-changed' | 'did-start-loading' | 'render-process-gone' | 'did-start-navigation', listener: (() => void) | ((event: unknown, url: string, inPlace: boolean, mainFrame: boolean) => void)): void => { if (this.destroyed) throw new Error('Object has been destroyed'); (event === 'zoom-changed' ? this.zoomListeners : this.rendererListeners.get(event))?.delete(listener as () => void); },
 		send: (channel: string, level: unknown): void => { this.messages.push({ channel, level }); },
 		once: (event: 'render-process-gone', listener: () => void): void => { const listeners = this.rendererListeners.get(event) ?? new Set<() => void>(); listeners.add(listener); this.rendererListeners.set(event, listeners); },
 	};
@@ -164,6 +164,11 @@ class TestWindow implements IWorkbenchWindow<TestWindow> {
 	public emitZoomChanged(): void { for (const listener of this.zoomListeners) listener(); }
 	public emitFullscreenChanged(fullscreen: boolean): void { this.fullscreen = fullscreen; for (const listener of this.fullscreenListeners.get(fullscreen ? 'enter-full-screen' : 'leave-full-screen') ?? []) listener(); }
 	public emitRendererEvent(event: 'did-start-loading' | 'render-process-gone'): void { for (const listener of this.rendererListeners.get(event) ?? []) listener(); }
+	public emitNavigation(inPlace: boolean, mainFrame: boolean): void {
+		for (const listener of this.rendererListeners.get('did-start-navigation') ?? []) {
+			(listener as (event: unknown, url: string, inPlace: boolean, mainFrame: boolean) => void)(undefined, 'http://localhost/sessions', inPlace, mainFrame);
+		}
+	}
 }
 
 test('file launches wait for renderer readiness, reject replies from another window and retain wait requests until close', async () => {
@@ -440,6 +445,47 @@ test('WindowsMainService owns an independent Sessions window after the Workbench
 	service.perform(sessions, { kind: 'focusSelf' });
 	await service.closeManagedWindow('workspace');
 	assert.deepEqual({ current: service.managedWindow('workspace'), released, closed }, { current: undefined, released: 1, closed: 1 });
+});
+
+test('managed window handoffs are ordered, acknowledged once and rejected with their renderer document', async () => {
+	using service = createWindowsService(() => [], async () => undefined);
+	const options = {
+		title: 'Agents', state: { mode: WindowMode.Normal, width: 1180, height: 780 },
+		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
+		initialize: async (_window: TestWindow, _resources: DisposableStore) => { },
+	};
+	await service.openManagedWindow('agents', () => new TestWindow(1, 'Agents'), options, () => { });
+	const request = { conversation: { sessionId: 'session', threadId: 'thread' } };
+	const first = service.enqueueManagedWindowHandoff('agents', request);
+	const second = service.enqueueManagedWindowHandoff('agents', request);
+	const taken = service.takeManagedWindowHandoff('agents')!;
+	assert.deepEqual(taken.options, request);
+	service.completeManagedWindowHandoff('agents', validateAgentsWindowHandoffComplete({ id: taken.id }));
+	await first;
+	assert.throws(() => service.completeManagedWindowHandoff('agents', { id: taken.id }), /not pending/);
+	const failed = service.takeManagedWindowHandoff('agents')!;
+	const failedResult = assert.rejects(second, /Occupied draft/);
+	service.completeManagedWindowHandoff('agents', { id: failed.id, error: 'Occupied draft' });
+	await failedResult;
+	assert.equal(service.takeManagedWindowHandoff('agents'), undefined);
+	assert.throws(() => validateAgentsWindowHandoffComplete({ id: taken.id, unexpected: true }), TypeError);
+
+	for (const interruption of ['reload', 'crash', 'close'] as const) {
+		await service.openManagedWindow('agents', () => new TestWindow(1, 'Agents'), options, () => { });
+		const window = service.managedWindow('agents')!;
+		const pending = service.enqueueManagedWindowHandoff('agents', request);
+		const stale = service.takeManagedWindowHandoff('agents')!;
+		const rejected = assert.rejects(pending, interruption === 'reload' ? /reloaded before/ : /closed before/);
+		window.emitNavigation(true, true);
+		window.emitNavigation(false, false);
+		if (interruption === 'reload') { window.emitNavigation(false, true); }
+		else if (interruption === 'crash') { window.emitRendererEvent('render-process-gone'); }
+		else { await service.closeManagedWindow('agents'); }
+		await rejected;
+		assert.equal(service.takeManagedWindowHandoff('agents'), undefined);
+		assert.throws(() => service.completeManagedWindowHandoff('agents', { id: stale.id }), /not pending/);
+	}
+	await assert.rejects(service.enqueueManagedWindowHandoff('agents', request), /unavailable/);
 });
 
 test('WindowsMainService waits for a managed window to close before reopening it', async () => {

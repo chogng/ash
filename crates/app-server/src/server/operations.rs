@@ -329,7 +329,7 @@ impl AppServer {
             .browser
             .as_ref()
             .is_some_and(|capability| {
-                capability.version != 2 || (!capability.observe && !capability.input)
+                capability.version != 3 || (!capability.observe && !capability.input)
             })
         {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
@@ -486,10 +486,59 @@ impl AppServer {
         #[cfg(not(windows))]
         let candidates = vec!["mxc".to_owned()];
         let sandbox_backends = if configured { candidates } else { Vec::new() };
+        let dir = self
+            .env_runtime
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .selected_grant
+            .as_ref()
+            .map(|grant| grant.dir().clone());
+        let sandbox_diagnostics = if let Some(dir) = dir.filter(|_| configured) {
+            use ash_app_server_protocol::protocol::agent::SandboxDiagnosticDto;
+            use ash_app_server_protocol::protocol::agent::SandboxNetworkModeDto;
+            use ash_app_server_protocol::protocol::agent::SandboxReadinessDto;
+            let executable = std::env::current_exe()
+                .map_err(|_| RpcError::new(-32603, AppServerErrorName::InternalError))?;
+            let mut sandbox =
+                exec_server::LocalSandbox::new(ash_install_context::InstallContext::current());
+            if let Some(helper) = &self.pty_helper {
+                sandbox = sandbox.with_pty_helper(helper.clone());
+            }
+            let command = ash_sandboxing::SandboxCommand::new(
+                executable,
+                Vec::<String>::new(),
+                dir.canonical_path(),
+            );
+            sandbox
+                .build()
+                .diagnostics(&command, &ash_sandboxing::SandboxScope::single(dir))
+                .into_iter()
+                .map(|diagnostic| SandboxDiagnosticDto {
+                    backend: diagnostic.backend,
+                    network: match diagnostic.network {
+                        ash_sandboxing::NetworkAccess::Denied => SandboxNetworkModeDto::Denied,
+                        ash_sandboxing::NetworkAccess::Allowed => SandboxNetworkModeDto::Allowed,
+                        ash_sandboxing::NetworkAccess::Managed => SandboxNetworkModeDto::Managed,
+                    },
+                    readiness: match diagnostic.readiness {
+                        ash_sandboxing::SandboxReadiness::Ready => SandboxReadinessDto::Ready,
+                        ash_sandboxing::SandboxReadiness::Unsupported(reason) => {
+                            SandboxReadinessDto::Unsupported { reason }
+                        }
+                        ash_sandboxing::SandboxReadiness::Unavailable(reason) => {
+                            SandboxReadinessDto::Unavailable { reason }
+                        }
+                    },
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
         result(&AgentCapabilitiesReadResult {
             tools,
             local_process_sandbox_configured: configured,
             sandbox_backends,
+            sandbox_diagnostics,
             directory_grants_readable: connection.supports_dir_permissions_host(),
         })
     }

@@ -106,7 +106,7 @@ test('Open in Agents reuses one window across Workbench workspaces', async ({ ap
 		});
 
 		await waitForElectronWindowState(application, agentsPage, { focused: true });
-		await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().filter(window => window.webContents.getURL().includes('sessions-code.html')).length)).toBe(1);
+		await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().filter(window => window.webContents.getURL().includes('sessions/electron-browser/sessions.html')).length)).toBe(1);
 		await expect.poll(() => application.windows().length).toBe(3);
 		await expect.poll(() => canonicalWorkspacePath(agentsPage)).toBe(await realpath(secondWorkspace.directory));
 		await expect(agentsPage.locator('.ash-code-sessions-window')).toBeVisible();

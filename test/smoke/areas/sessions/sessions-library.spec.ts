@@ -52,7 +52,7 @@ test('Sessions Library coordinates independent container Views and a retained br
 	if (target.kind === 'browser') { await page.setViewportSize({ width: 640, height: 780 }); }
 	else {
 		if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
-		await application.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows().find(window => window.webContents.getURL().includes('sessions-code.html'))!.setSize(640, 780); });
+		await application.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows().find(window => window.webContents.getURL().includes('sessions/electron-browser/sessions.html'))!.setSize(640, 780); });
 	}
 	await expect(library).toHaveClass(/narrow/);
 	await expect.poll(() => library.evaluate(element => [...element.querySelectorAll<HTMLElement>('*')].filter(child => child.scrollWidth > child.clientWidth && getComputedStyle(child).overflowX === 'visible').map(child => ({ className: child.className, width: child.clientWidth, contentWidth: child.scrollWidth })))).toEqual([]);

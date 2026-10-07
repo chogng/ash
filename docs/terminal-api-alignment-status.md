@@ -217,3 +217,35 @@ Chromium Terminal Playwright 22 项通过，新增 3 项经过生产服务注册
 ### 固定产品入口
 
 用户确认退出剩余模式注册表及其调用链。已删除 `workbench/common/workbenchMode.ts`、`workbench/common/workbenchModeMigration.ts` 与专属注册表测试；模式目录和服务聚合入口已在前一批退出。产品标题和固定 Sessions 页面由 `code/common/application.ts` 提供，两端入口只向 Workbench 传入标题，Sessions profile 仅描述页面身份与返回路径。用户进一步确认清除存储的产品维度：启动参数、IPC 与正常读写不再使用 `applicationId`；存储 owner 单向迁移旧 Code/Academic 数据，冲突沿用 Code 值并保留原始备份。构建、窗口创建与恢复不选择模式；旧设置与链接不参与启动，旧窗口记录由现有窗口状态 owner 去掉模式字段，真实 Academic 存储迁移保留在存储 owner。
+
+### Code 启动目录与职责收敛
+
+审计 `src/ash/code` 原有 17 个文件：与本机 VS Code 源码同路径的文件为 7 个，Ash 独有文件为 10 个。上游独有的 20 个文件包含 CLI、bootstrap 和测试；Ash 使用 Rust CLI 与 Vite 构建，缺少这些文件不能单独证明能力遗漏，也不应以空实现补齐目录。
+
+下表覆盖原有全部 17 个文件，路径相对 `src/ash/code/`：
+
+| 文件 | 最终职责与处理 |
+| --- | --- |
+| `common/application.ts`、`common/codeSessionsProfile.ts` | 保留产品常量和唯一的 Sessions profile；构建向 Desktop bootstrap 提供 metadata，Sessions 不反向导入 Code。 |
+| `electron-main/main.ts`、`electron-main/app.ts` | 保留应用启动与产品装配；Main 的 renderer 检查和加载入口迁移到新 Sessions URL。 |
+| `electron-utility/sharedProcess/sharedProcessMain.ts` | 保留 shared-process 启动入口。 |
+| `electron-browser/workbench/workbench.ts`、`workbench.html` | 保留 Desktop Workbench 入口。 |
+| `browser/workbench/workbench.ts`、`workbench.html` | 保留 Web Workbench 入口。 |
+| `browser/sessions/sessions-code.ts`、`sessions-code.html` | 保留 Ash 的 Web Sessions 产品入口及现有 URL；上游无此入口不构成删除理由。 |
+| `electron-browser/remote-runtime-install/remoteRuntimeInstall.ts`、`.html`、`.css` | 保留远程运行包安装窗口的产品入口和展示资源，执行与连接仍属于 Remote platform。 |
+| `electron-browser/sessions/sessions-code.ts`、`sessions-code.html` | 用户确认后迁移到 `src/ash/sessions/electron-browser/sessions.ts`、`sessions.html`；两个旧文件删除，目标与上游同路径，HTML、构建、Main、automation 与 smoke 消费者同批迁移。 |
+| `test/electron-main/workspaceLaunchArguments.test.ts` | 保留启动参数装配的回归测试。 |
+
+`app.ts` 退出三个执行 owner：Shell 安装算法由现有 `platform/native/electron-main/nativeHostMainService.ts` 承接；本地/SSH Workspace 连接替换与失败回滚由 `platform/workspaces/electron-main/appServerWorkspaceTransition.ts` 承接；待交接队列、一次性确认和 reload/crash/close 中断由 `platform/windows/electron-main/windowsMainService.ts` 随接收窗口释放。共享交接 IPC 契约归 `platform/window/common/window.ts`，Sessions 保留返回 Workbench 的产品动作和草稿消费。
+
+构建仍以 Code 为 Vite root，既有 Workbench/Web URL 保持稳定；现有 `workbenchEntryPlugin` 将新 Desktop URL 挂载到 Sessions 的真实 HTML 与 TS 源码，正式打包也输出 `sessions/electron-browser/sessions.html`。这不是旧路径转发，两个旧 Desktop 路径不再参与生产构建或加载。迁移后 Code 目录为 15 个文件，7 个同路径、8 个明确保留的 Ash 差异；没有复制上游实现或增加缺乏调用方的层。
+
+本批 Windows 验证：正常单测入口 9 个文件共 80 项通过，runner 自测 5 项通过；Vite 的实际开发服务/打包与配置测试 5 项通过。Desktop Main/Renderer、Web 构建、Renderer/build-tools/automation 类型检查通过；22 个受影响 TS 文件格式检查及定向 diff 检查通过。最初 HTML mount 的全模块 load hook 引入构建性能提示，改为精确输入过滤后重新打包，提示已消失。
+
+初次真实 Playwright 验证中，Electron 草稿交接/占用拒绝、关闭 Workbench 后 Sessions 独立使用与返回重开、两个打包缺页启动场景共 4 项通过；Web 的 Sessions 打开、菜单及返回 Workbench 1 项通过。较长的 Desktop 打开/返回场景完成新路径加载、IPC、重载与窗口重开后，在末尾的尺寸恢复断言失败：预期 1002×702，实际 1003×703，位置一致。该轮没有放宽断言，也没有修改窗口尺寸实现，因此当时未报告该完整场景通过。交接 smoke 的陈旧双草稿期望已按当前 Chat/Code 共用 Session 草稿的行为同步，仍保留初次转移、占用拒绝与源/目标内容断言。Playwright 保留 NO_COLOR/FORCE_COLOR 环境提示；macOS Shell 实际安装与真实 SSH transport 未在此 Windows 环境验证。
+
+初次全仓 stylelint 另有 3 个未知变量错误，位于当时未修改的 `sessions/browser/parts/sidebar/media/sessionsList.css`（`--ash-font-size-label1`、`--ash-font-weight-semi-bold`）和 `sessions/contrib/appTools/browser/media/appToolsHost.css`（`--ash-font-size-heading3`）；入口迁移当时没有 CSS 改动，也没有放宽 lint 规则。
+
+用户随后要求修复这两项问题。真实 Electron 在 Windows 125% 缩放下复现：请求 1002×702 与 1001×701 都返回 1003×703，单次补偿停留在取整区间；继续累积补偿到请求 1000×700 后，返回保存的 1002×702。`CodeWindow` 现在在窗口状态跟踪前最多执行 4 次尺寸读回与累积补偿，达到目标即停止，非正请求立即退出，避免 OS 尺寸约束导致无界重试。现有 Electron 场景增加连续三次关闭/重开，仍逐次严格比较完整矩形；调查用的全局 hook 已移除。
+
+三个 CSS 引用已回到已注册的 `--ash-fontSize-label1`、`--ash-fontWeight-semiBold` 与 `--ash-fontSize-heading3`；没有新增变量或放宽 lint。App Tools 的现有浏览器集成 fixture 接入实际主题绑定，覆盖分组标题与装饰粒子的计算样式、四种主题、键盘焦点、减少动态效果和释放，6 项 Playwright 全部通过。窗口定向单测 76 项与 runner 自测 5 项通过；正常 Desktop 构建、automation 编译通过，真实 Electron 的草稿交接和包含连续三次重开的完整打开/返回场景 2 项通过。stylelint 检查 258 个 CSS 文件，0 错误、0 设计建议。构建曾提示 Vite CSS 插件耗时占比较高，Playwright 仍有颜色环境提示；没有类型或打包错误。

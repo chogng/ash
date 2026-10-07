@@ -8,9 +8,14 @@ test('Web development and builds use only browser entries and preserve Desktop o
 	const web = (await loadConfigFromFile({ command: 'serve', mode: 'web' }, path))!.config;
 	const desktop = (await loadConfigFromFile({ command: 'build', mode: 'production' }, path))!.config;
 	const inputs = web.build!.rolldownOptions!.input as Record<string, string>;
+	const desktopInputs = desktop.build!.rolldownOptions!.input as Record<string, string>;
 	assert.deepEqual(Object.keys(inputs), ['browser/workbench/workbench', 'browser/sessions/sessions-code']);
 	assert.deepEqual(web.server!.warmup!.clientFiles, Object.values(inputs));
 	assert.match(web.build!.outDir!, /[\\/]web[\\/]ash$/);
 	assert.match(desktop.build!.outDir!, /[\\/]renderer[\\/]ash$/);
-	assert.ok(Object.keys(desktop.build!.rolldownOptions!.input!).some(entry => entry.startsWith('electron-browser/')));
+	assert.ok(Object.keys(desktopInputs).some(entry => entry.startsWith('electron-browser/')));
+	assert.ok(Object.hasOwn(desktopInputs, 'sessions/electron-browser/sessions'));
+	assert.equal(desktop.define!['import.meta.env.ASH_SESSIONS_PROFILE'], JSON.stringify({
+		id: 'code-sessions', label: 'Code Sessions', titlebarActionId: 'ash.code.open-sessions', workbenchRelativePath: '../workbench/workbench.html',
+	}));
 });

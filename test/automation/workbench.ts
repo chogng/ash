@@ -84,7 +84,7 @@ export class Workbench {
 				page.locator('[data-action-id="ash.code.open-sessions"] button').click(),
 			]);
 		} else {
-			const existing = page.context().pages().find(candidate => new URL(candidate.url()).pathname.endsWith('/sessions-code.html'));
+			const existing = page.context().pages().find(candidate => new URL(candidate.url()).pathname.endsWith('/sessions/electron-browser/sessions.html'));
 			[page] = await Promise.all([
 				existing ? Promise.resolve(existing) : page.context().waitForEvent('page'),
 				page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click(),

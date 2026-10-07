@@ -79,6 +79,30 @@ suite('Browser view ownership and operations', () => {
 		assert.equal(f.observations.length, 2);
 	});
 
+	test('network authority serializes different pages sharing an agent session', async () => {
+		using f = fixture();
+		await f.create();
+		using host = f.createHost();
+		const sibling = await host.create({ threadId: 'thread-one', url: 'about:blank' }, { signal: signal() });
+		const started = promiseWithResolvers<void>();
+		const finish = promiseWithResolvers<void>();
+		const order: string[] = [];
+		f.observe = async pageId => {
+			order.push(pageId);
+			if (pageId === id) { started.resolve(); await finish.promise; }
+			return { targetId: pageId, url: f.url, title: f.title, loading: false };
+		};
+		const first = host.observe({ threadId: 'thread-one', targetId: id, networkToken: 'first-tool', ...observation }, { signal: signal() });
+		await started.promise;
+		const second = host.observe({ threadId: 'thread-one', targetId: sibling.targetId, networkToken: 'second-tool', ...observation }, { signal: signal() });
+		await Promise.resolve();
+		await Promise.resolve();
+		assert.deepEqual(order, [id]);
+		finish.resolve();
+		await Promise.all([first, second]);
+		assert.deepEqual(order, [id, sibling.targetId]);
+	});
+
 	test('an observation reads the state after preceding navigation', async () => {
 		using f = fixture();
 		const page = await f.create();
@@ -222,6 +246,8 @@ test('sharing grants only the chosen thread and revocation cancels its operation
 	using host = f.createHost();
 	await f.manager.getOrCreateBrowserView(id, { initialUrl: 'about:blank', owner: { type: 'user' }, session: { scope: BrowserViewStorageScope.Workspace } });
 	await f.manager.setSharing(id, ['thread-one']);
+	await assert.rejects(host.perform({ threadId: 'thread-one', action: { type: 'reload', targetId: id } }, { signal: signal() }), /BrowserNetworkIsolationRequired/);
+	await assert.rejects(host.close({ threadId: 'thread-one', targetId: id }), /BrowserNetworkIsolationRequired/);
 	assert.throws(() => host.observe({ threadId: 'thread-two', targetId: id, ...observation }, { signal: signal() }), /BrowserTargetAccessDenied/);
 	const started = promiseWithResolvers<void>();
 	const finish = promiseWithResolvers<void>();
@@ -265,7 +291,7 @@ export function fixture() {
 		getRemoteNetwork() { return f.remote ? { authority: 'ssh-remote+test', tunnels: { openProxy: () => f.proxy() } as unknown as import('../../../remote/electron-main/sshRemoteTunnelService.js').SshRemoteTunnelService } : undefined; }, createSession: (partition: string) => {
 			let session = partitions.get(partition);
 			if (!session) {
-				session = Object.assign(new EventEmitter(), { setPermissionCheckHandler: () => { }, setPermissionRequestHandler: () => { }, setDevicePermissionHandler: () => { }, setProxy: async () => { }, closeAllConnections: async () => { } }) as unknown as Electron.Session;
+				session = Object.assign(new EventEmitter(), { webRequest: { onBeforeRequest: () => {} }, setPermissionCheckHandler: () => { }, setPermissionRequestHandler: () => { }, setDevicePermissionHandler: () => { }, setProxy: async () => { }, closeAllConnections: async () => { } }) as unknown as Electron.Session;
 				partitions.set(partition, session);
 			}
 			return session;
@@ -275,6 +301,7 @@ export function fixture() {
 			let destroyed = false;
 			let bounds = { x: 0, y: 0, width: 0, height: 0 };
 			Object.assign(pageContents, {
+				id: children.size + 1,
 				setWebRTCIPHandlingPolicy: () => { },
 				session: browserStorage,
 				setWindowOpenHandler: () => { }, isDestroyed: () => destroyed, isLoading: () => f.loading,

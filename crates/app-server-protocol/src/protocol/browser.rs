@@ -23,6 +23,9 @@ pub struct BrowserCreateParams {
     pub thread_id: String,
     #[schemars(length(min = 1, max = 8192))]
     pub url: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub network_token: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -37,6 +40,9 @@ pub struct BrowserCreateResult {
 pub struct BrowserObserveParams {
     #[schemars(length(min = 1))]
     pub thread_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub network_token: Option<String>,
     #[schemars(length(min = 1))]
     pub target_id: String,
     pub include_accessibility_tree: bool,
@@ -138,6 +144,9 @@ impl BrowserPerformActionDto {
 pub struct BrowserPerformParams {
     #[schemars(length(min = 1))]
     pub thread_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub network_token: Option<String>,
     pub action: BrowserPerformActionDto,
 }
 
@@ -155,4 +164,22 @@ pub struct BrowserCloseParams {
     pub thread_id: String,
     #[schemars(length(min = 1))]
     pub target_id: String,
+}
+
+/// Authorizes one observed Chromium request against the live tool authority on this connection.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BrowserNetworkAuthorizeParams {
+    #[schemars(length(min = 1, max = 256))]
+    pub network_token: String,
+    #[schemars(length(min = 1, max = 8192))]
+    pub url: String,
+    #[schemars(length(min = 1, max = 32))]
+    pub method: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowserNetworkAuthorizeResult {
+    pub allowed: bool,
 }

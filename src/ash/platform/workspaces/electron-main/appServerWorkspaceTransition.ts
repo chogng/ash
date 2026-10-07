@@ -3,6 +3,9 @@ import type { IDisposable } from "../../../base/common/lifecycle.js";
 import type { AppServerConnectionState } from "../../app-server/common/appServerApi.js";
 import { AppServerRemoteError } from "../../app-server/common/appServerError.js";
 import type { AppServerConnectionRelay } from "../../app-server/electron-main/appServerConnectionRelay.js";
+import { AppServerDaemonLauncher } from '../../app-server-daemon/electron-main/appServerDaemonLauncher.js';
+import { RemoteAppServerProcessLauncher } from '../../remote/electron-main/remoteAppServerProcessLauncher.js';
+import type { RendererWorkspaceHost } from './rendererWorkspaceHost.js';
 import { type IWorkspaceRuntimeSwitcher, type IWorkspaceTransitionContext, type IWorkspaceTransitionFailure, type IWorkspaceTransitionRecoveryRouter, WorkspaceTransitionFailureKind, WorkspaceTransitionRecovery } from "./workspaceTransitionMainService.js";
 
 export interface IAppServerWorkspaceTransitionHost {
@@ -95,11 +98,73 @@ interface IWaitUntilReadyOptions {
 
 export function createAppServerWorkspaceTransitionAdapter(
 	supervisor: AppServerConnectionRelay,
-	switchWorkspace: (root: string, grant: DirGrant, workspaceId: string, previousWorkspaceId: string) => Promise<void>,
+	workspaceHost: RendererWorkspaceHost,
 ): AppServerWorkspaceTransitionAdapter {
+	resolveWorkspaceLauncher(supervisor);
 	return new AppServerWorkspaceTransitionAdapter({
 		getState: () => supervisor.state,
-		switchWorkspace,
+		switchWorkspace: (root, grant, workspaceId, previousWorkspaceId) => reconnectAppServerWorkspace(supervisor, workspaceHost, root, grant, workspaceId, previousWorkspaceId),
 		onStateChange: (listener) => supervisor.onStateChange(listener),
 	});
+}
+
+/** Replaces the window's authority and restores the previous connection if the new scope fails. */
+export async function reconnectAppServerWorkspace(
+	supervisor: AppServerConnectionRelay,
+	workspaceHost: RendererWorkspaceHost,
+	root: string | undefined,
+	grant: DirGrant,
+	workspaceId: string,
+	previousWorkspaceId: string,
+): Promise<void> {
+	const launcher = resolveWorkspaceLauncher(supervisor);
+	const previous = launcher instanceof AppServerDaemonLauncher
+		? { kind: 'local' as const, launcher, environment: launcher.environment, root: launcher.environment.ASH_WORKSPACE_ROOT }
+		: { kind: 'remote' as const, launcher, root: launcher.workspaceRoot };
+	if (root !== undefined) {
+		await workspaceHost.persistDirectoryGrant(root, grant);
+	}
+	// Only this window's connection is replaced; the shared profile backend keeps running.
+	await supervisor.stop();
+	if (previous.kind === 'local') {
+		const environment = { ...previous.environment };
+		if (root === undefined) {
+			delete environment.ASH_WORKSPACE_ROOT;
+			delete environment.ASH_DIR_GRANT_SOURCE;
+		} else {
+			environment.ASH_WORKSPACE_ROOT = root;
+			environment.ASH_DIR_GRANT_SOURCE = 'userConfig';
+		}
+		previous.launcher.replaceEnvironment(environment);
+	} else {
+		previous.launcher.replaceWorkspaceRoot(root);
+	}
+	try {
+		await supervisor.start();
+		await workspaceHost.setFolders(root === undefined ? [] : [{ id: workspaceId, path: root, grant: { type: 'config' } }]);
+	} catch (error) {
+		await supervisor.stop();
+		if (previous.kind === 'local') {
+			previous.launcher.replaceEnvironment(previous.environment);
+		} else {
+			previous.launcher.replaceWorkspaceRoot(previous.root);
+		}
+		try {
+			await supervisor.start();
+			await workspaceHost.setFolders(previous.root
+				? [{ id: previousWorkspaceId, path: previous.root, grant: { type: 'config' } }]
+				: []);
+		} catch (rollbackError) {
+			throw new AggregateError([error, rollbackError], 'Workspace authority switch and rollback both failed');
+		}
+		throw error;
+	}
+}
+
+function resolveWorkspaceLauncher(supervisor: AppServerConnectionRelay): AppServerDaemonLauncher | RemoteAppServerProcessLauncher {
+	const launcher = supervisor.options.enabled ? supervisor.options.processLauncher : undefined;
+	if (!(launcher instanceof AppServerDaemonLauncher) && !(launcher instanceof RemoteAppServerProcessLauncher)) {
+		throw new Error('Workspace connection has no directory launcher');
+	}
+	return launcher;
 }

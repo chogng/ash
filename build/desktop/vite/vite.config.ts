@@ -2,6 +2,7 @@ import { localizationPlugin } from "../../resources/localization.ts";
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
 import { AshRendererDirectory, AshSessionsRendererEntry } from "../../../src/ash/code/common/application.js";
+import { codeSessionsProfile } from '../../../src/ash/code/common/codeSessionsProfile.js';
 import { desktopBuildPath } from "../paths.ts";
 import { buildMetricsPlugin } from './buildMetricsPlugin.ts';
 import { desktopStartupTracePlugin } from './desktopStartupTracePlugin.ts';
@@ -30,7 +31,7 @@ export default defineConfig(({ mode }) => {
 	};
 	const sessionsInputs = {
 		[`browser/sessions/${AshSessionsRendererEntry}`]: resolve(sourceRoot, `browser/sessions/${AshSessionsRendererEntry}.html`),
-		[`electron-browser/sessions/${AshSessionsRendererEntry}`]: resolve(sourceRoot, `electron-browser/sessions/${AshSessionsRendererEntry}.html`),
+		'sessions/electron-browser/sessions': resolve(sourceRoot, 'sessions/electron-browser/sessions.html'),
 	};
 	const remoteRuntimeInstallInput = {
 		"electron-browser/remote-runtime-install/remoteRuntimeInstall": resolve(sourceRoot, "electron-browser/remote-runtime-install/remoteRuntimeInstall.html"),
@@ -48,12 +49,17 @@ export default defineConfig(({ mode }) => {
 		publicDir: resolve(repositoryRoot, "resources/server"),
 		define: {
 			__ASH_WEB_APP_SERVER__: JSON.stringify(webAppServerEnabled),
+			'import.meta.env.ASH_SESSIONS_PROFILE': JSON.stringify(codeSessionsProfile),
 		},
 		plugins: [
 			buildMetricsPlugin(),
 			localizationPlugin(),
 			hotReloadPlugin({ desktopRoot }),
-			workbenchEntryPlugin(browserEntryPath),
+			workbenchEntryPlugin(browserEntryPath, webOnly ? undefined : {
+				url: '/sessions/electron-browser/sessions.html',
+				sourceFile: resolve(sourceRoot, '../sessions/electron-browser/sessions.html'),
+				inputFile: sessionsInputs['sessions/electron-browser/sessions'],
+			}),
 			productIconsPlugin(),
 			browserExtensionsPlugin(),
 			{

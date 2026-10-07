@@ -33,6 +33,7 @@ export class BrowserView extends Disposable {
 	private laidOut = false;
 	private visible = false;
 	private readonly emitEvent: (event: BrowserViewEvent) => void;
+	private networkToken: string | null = null;
 
 	constructor(options: BrowserViewOptions) {
 		super();
@@ -42,8 +43,8 @@ export class BrowserView extends Disposable {
 		this.creation = options.creation;
 		this.window = options.window;
 		this.url = options.initialUrl;
-		if (options.network) {
-			this._register(options.network);
+		if (options.network) { this._register(options.network); }
+		if (options.network || this.creation.owner.type === 'agent') {
 			// SOCKS carries TCP traffic; WebRTC must not open direct UDP sockets outside that policy.
 			this.webContents.setWebRTCIPHandlingPolicy('disable_non_proxied_udp');
 		}
@@ -57,6 +58,7 @@ export class BrowserView extends Disposable {
 		this.window.contentView.addChildView(this.view);
 		this.configureSecurity();
 		this._register(this.session.permissions.attach(this.id, this.webContents, event => this.emit(event)));
+		this._register(this.session.attachNetwork(this.id, this.webContents, this.creation.owner, () => this.networkToken, event => this.emit(event)));
 		this.listen();
 		this.emit({ type: 'created', info: this.getInfo() });
 		void this.view.webContents.loadURL(this.url).catch(() => {
@@ -70,6 +72,14 @@ export class BrowserView extends Disposable {
 		return this.debuggerOwner ??= this._register(new BrowserViewDebugger(this.webContents));
 	}
 	public waitForLoad(signal: AbortSignal): Promise<void> { return waitForLoad(this, signal); }
+	public async setNetworkAuthority(token: string | null): Promise<void> {
+		if (this.creation.owner.type !== 'agent') { throw new Error('BrowserNetworkIsolationRequired'); }
+		if (this.networkToken === token) { return; }
+		this.networkToken = token;
+		this.session.cancelNetworkRequests(this.webContents.id);
+		// Retiring authority also fails in-flight HTTP requests and clears pooled connections.
+		await this.session.electronSession.closeAllConnections();
+	}
 	layout(bounds: IBrowserViewBounds): void {
 		const scale = this.window.webContents.getZoomFactor();
 		this.view.setBounds({ x: Math.round(bounds.x * scale), y: Math.round(bounds.y * scale), width: Math.round(bounds.width * scale), height: Math.round(bounds.height * scale) });
@@ -80,16 +90,29 @@ export class BrowserView extends Disposable {
 		if (visible === this.visible) return;
 		this.visible = visible; this.view.setVisible(visible); this.emitState();
 	}
-	loadURL(url: string, signal: AbortSignal = this.signal): Promise<void> { return this.runOperation(signal, s => this.navigate(normalizeBrowserViewUrl(url), s)); }
+	loadURL(url: string, signal: AbortSignal = this.signal, networkToken?: string | null): Promise<void> { return this.runOperation(signal, s => this.navigate(normalizeBrowserViewUrl(url), s), networkToken); }
 	goBack(): Promise<void> { return this.runOperation(this.signal, async () => { const h = this.webContents.navigationHistory; if (h.canGoBack()) { this.errorDescription = undefined; h.goBack(); } }); }
 	goForward(): Promise<void> { return this.runOperation(this.signal, async () => { const h = this.webContents.navigationHistory; if (h.canGoForward()) { this.errorDescription = undefined; h.goForward(); } }); }
 	reload(): Promise<void> { return this.runOperation(this.signal, async () => { this.errorDescription = undefined; this.webContents.reload(); }); }
 	stop(): void { this.webContents.stop(); }
 	focus(): void { if (this.visible) this.webContents.focus(); }
 
-	public runOperation<R>(requestSignal: AbortSignal, execute: (signal: AbortSignal) => Promise<R>): Promise<R> {
+	public runOperation<R>(requestSignal: AbortSignal, execute: (signal: AbortSignal) => Promise<R>, networkToken?: string | null): Promise<R> {
 		const signal = AbortSignal.any([requestSignal, this.signal]);
-		const operation = this.operationTurn.then(() => { throwIfAborted(signal); return execute(signal); });
+		const operation = this.operationTurn.then(() => {
+			throwIfAborted(signal);
+			if (networkToken === undefined) { return execute(signal); }
+			return this.session.runNetworkOperation(async () => {
+				throwIfAborted(signal);
+				await this.setNetworkAuthority(networkToken);
+				using cancellation = addAbortListener(signal, () => { void this.setNetworkAuthority(null).catch(() => {}); });
+				try { throwIfAborted(signal); return await execute(signal); }
+				finally {
+					await this.debuggerOwner?.whenIdle();
+					if (!this.isDisposed) { await this.setNetworkAuthority(null); }
+				}
+			});
+		});
 		// Cancellation releases the caller, while Chromium retains its turn until the command finishes.
 		// A worker can disconnect before a previously issued Chromium command has completed.
 		// Keep the page's next turn behind that command even though the caller already received its error.
@@ -100,6 +123,8 @@ export class BrowserView extends Disposable {
 		const contents = this.view.webContents;
 
 		contents.setWindowOpenHandler(({ url }) => {
+			// Agent popups must not create an unrestricted user page outside their request authority.
+			if (this.creation.owner.type === 'agent') { return { action: 'deny' }; }
 			try {
 				this.emit({
 					type: "openRequested",

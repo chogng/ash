@@ -24,19 +24,68 @@ pub(crate) fn for_execution(
     execution_id: String,
     interactions: Arc<dyn ToolInteractionService>,
 ) -> NetworkPolicyHandle {
-    NetworkPolicyHandle::new(ExecutionNetworkPolicy {
+    NetworkPolicyHandle::new(ExecutionNetworkPolicy::new(
         parent,
         execution_id,
         interactions,
-        sequence: AtomicU64::new(0),
-    })
+    ))
 }
 
-struct ExecutionNetworkPolicy {
+pub(crate) struct ExecutionNetworkPolicy {
     parent: ActionReviewRequest,
     execution_id: String,
     interactions: Arc<dyn ToolInteractionService>,
     sequence: AtomicU64,
+}
+
+impl ExecutionNetworkPolicy {
+    pub(crate) fn new(
+        parent: ActionReviewRequest,
+        execution_id: String,
+        interactions: Arc<dyn ToolInteractionService>,
+    ) -> Self {
+        Self {
+            parent,
+            execution_id,
+            interactions,
+            sequence: AtomicU64::new(0),
+        }
+    }
+
+    pub(crate) fn decide_blocking(
+        &self,
+        target: NetworkRequest,
+        cancellation: &CancellationToken,
+    ) -> NetworkDecision {
+        let review = self.review(target);
+        match self.interactions.approve_network(&review, cancellation) {
+            Ok(ActionApprovalDecision::ApproveOnce) => NetworkDecision::Allow,
+            Ok(ActionApprovalDecision::Decline) => {
+                NetworkDecision::Deny("network request denied by policy or user".into())
+            }
+            Err(error) => NetworkDecision::Deny(error.to_string()),
+        }
+    }
+
+    fn review(&self, target: NetworkRequest) -> ActionReviewRequest {
+        let sequence = self.sequence.fetch_add(1, Ordering::Relaxed);
+        let canonical = serde_json::to_vec(&serde_json::json!({
+            "execution": self.execution_id, "parent": self.parent.action().digest().as_str(),
+            "sequence": sequence, "protocol": target.protocol().as_str(),
+            "host": target.host(), "port": target.port(), "method": target.method(),
+        }))
+        .expect("network request contains serializable primitives");
+        ActionReviewRequest::new(
+            ResolvedAction::new(ActionDigest::from_canonical_bytes(canonical), ActionKind::NetworkRequest,
+                format!("{} connection to {}", target.protocol().as_str(), target.authority()),
+                CapabilitySet::new([Capability::new(CapabilityKind::Network,
+                    format!("{}://{}", target.protocol().as_str(), target.authority()))]))
+                .with_network_target(target.protocol().as_str(), target.host(), Some(target.port())),
+            self.parent.provenance().clone(),
+            SandboxCompatibility::NotApplicable { reason: "the host enforces this exact network request independently of process containment".into() },
+            self.parent.action_policy_revision().clone(),
+        )
+    }
 }
 
 impl NetworkPolicy for ExecutionNetworkPolicy {
@@ -45,44 +94,7 @@ impl NetworkPolicy for ExecutionNetworkPolicy {
         target: NetworkRequest,
         cancellation: CancellationToken,
     ) -> NetworkDecisionFuture<'_> {
-        let sequence = self.sequence.fetch_add(1, Ordering::Relaxed);
-        let canonical = serde_json::to_vec(&serde_json::json!({
-            "execution": self.execution_id,
-            "parent": self.parent.action().digest().as_str(),
-            "sequence": sequence,
-            "protocol": target.protocol().as_str(),
-            "host": target.host(),
-            "port": target.port(),
-            "method": target.method(),
-        }))
-        .expect("network request contains serializable primitives");
-        let review = ActionReviewRequest::new(
-            ResolvedAction::new(
-                ActionDigest::from_canonical_bytes(canonical),
-                ActionKind::NetworkRequest,
-                format!(
-                    "{} connection to {}",
-                    target.protocol().as_str(),
-                    target.authority()
-                ),
-                CapabilitySet::new([Capability::new(
-                    CapabilityKind::Network,
-                    format!("{}://{}", target.protocol().as_str(), target.authority()),
-                )]),
-            )
-            .with_network_target(
-                target.protocol().as_str(),
-                target.host(),
-                Some(target.port()),
-            ),
-            self.parent.provenance().clone(),
-            SandboxCompatibility::NotApplicable {
-                reason:
-                    "the managed proxy enforces this request while the process remains sandboxed"
-                        .into(),
-            },
-            self.parent.action_policy_revision().clone(),
-        );
+        let review = self.review(target);
         let interactions = Arc::clone(&self.interactions);
         Box::pin(async move {
             // Core's durable interaction waiter is synchronous. Keep it off the proxy IO thread.

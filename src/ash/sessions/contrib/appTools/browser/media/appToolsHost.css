@@ -9,5 +9,5 @@
 .ash-app-confetti-particle {
 	position: absolute;
 	top: 0;
-	font-size: var(--ash-font-size-heading3);
+	font-size: var(--ash-fontSize-heading3);
 }

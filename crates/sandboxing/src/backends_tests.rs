@@ -125,6 +125,44 @@ impl SandboxProcess for Completed {
 fn policy() -> SandboxPolicy {
     SandboxPolicy::new(FileSystemAccess::DirectoryWrite, NetworkAccess::Denied)
 }
+
+#[test]
+fn diagnostics_report_each_policy_and_candidate_without_starting_a_child() {
+    let ready = Candidate::new("ready", Behavior::Ready);
+    let starts = Arc::clone(&ready.starts);
+    let backends = SandboxBackends::new(vec![
+        ("ready", Arc::new(ready)),
+        (
+            "unsupported",
+            Arc::new(Candidate::new("unsupported", Behavior::Unsupported)),
+        ),
+        (
+            "broken",
+            Arc::new(Candidate::new("broken", Behavior::Broken)),
+        ),
+    ]);
+    let dir = Dir::open_local(".").unwrap();
+    let diagnostics = backends.diagnostics(
+        &SandboxCommand::new("command", Vec::<String>::new(), dir.canonical_path()),
+        &SandboxScope::single(dir),
+    );
+    assert_eq!(diagnostics.len(), 9);
+    assert_eq!(
+        diagnostics
+            .iter()
+            .take(3)
+            .map(|check| (&check.network, &check.readiness))
+            .collect::<Vec<_>>(),
+        vec![
+            (&NetworkAccess::Denied, &SandboxReadiness::Ready),
+            (&NetworkAccess::Allowed, &SandboxReadiness::Ready),
+            (&NetworkAccess::Managed, &SandboxReadiness::Ready)
+        ]
+    );
+    assert!(diagnostics[3..6].iter().all(|check| matches!(&check.readiness, SandboxReadiness::Unsupported(reason) if reason == "unsupported")));
+    assert!(diagnostics[6..].iter().all(|check| matches!(&check.readiness, SandboxReadiness::Unavailable(reason) if reason.contains("integrity"))));
+    assert_eq!(starts.load(Ordering::SeqCst), 0);
+}
 fn manager(candidates: Vec<Candidate>) -> SandboxManager<SandboxBackends> {
     SandboxManager::new(
         Dir::open_local(".").unwrap(),

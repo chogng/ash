@@ -43,6 +43,33 @@ struct BrowserHostState {
     owner_revision: u64,
     target_owners: BTreeMap<String, BrowserTargetOwner>,
     shared_targets: BTreeMap<String, (u64, Vec<ash_protocol::ThreadId>)>,
+    network_grants: BTreeMap<String, BrowserNetworkGrant>,
+}
+
+struct BrowserNetworkGrant {
+    owner: u64,
+    policy: Arc<crate::network_policy::ExecutionNetworkPolicy>,
+    cancellation: ash_async_utils::CancellationSource,
+}
+
+/// Keeps request authority alive only while its originating browser tool is executing.
+pub(crate) struct BrowserNetworkLease {
+    pub(crate) host: BrowserHost,
+}
+
+impl Drop for BrowserNetworkLease {
+    fn drop(&mut self) {
+        let mut state = self
+            .host
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(token) = &self.host.network_token
+            && let Some(grant) = state.network_grants.remove(token)
+        {
+            grant.cancellation.cancel();
+        }
+    }
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -62,6 +89,7 @@ pub(crate) struct BrowserHost {
     pub(crate) clients: Arc<crate::client_host::ClientHost>,
     owner: Option<u64>,
     thread_id: Option<ash_protocol::ThreadId>,
+    network_token: Option<String>,
 }
 
 impl BrowserHost {
@@ -75,6 +103,7 @@ impl BrowserHost {
             clients,
             owner: None,
             thread_id: None,
+            network_token: None,
         }
     }
 
@@ -95,9 +124,87 @@ impl BrowserHost {
             clients: Arc::clone(&self.clients),
             owner: Some(owner),
             thread_id: Some(thread.clone()),
+            network_token: None,
         };
         scoped.create_owner()?;
         Ok(scoped)
+    }
+
+    pub(crate) fn with_network_policy(
+        mut self,
+        policy: crate::network_policy::ExecutionNetworkPolicy,
+        cancellation: &CancellationToken,
+    ) -> Result<BrowserNetworkLease, BrowserError> {
+        let owner = self.create_owner()?;
+        let source = cancellation.child_source();
+        let token = format!("browser-network-{}", source.id());
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| BrowserError::CapabilityUnavailable)?;
+        if !state.owners.contains_key(&owner) || state.network_grants.len() >= 128 {
+            return Err(BrowserError::CapabilityUnavailable);
+        }
+        state.network_grants.insert(
+            token.clone(),
+            BrowserNetworkGrant {
+                owner,
+                policy: Arc::new(policy),
+                cancellation: source,
+            },
+        );
+        drop(state);
+        self.network_token = Some(token);
+        Ok(BrowserNetworkLease { host: self })
+    }
+
+    pub(crate) fn authorize_network(
+        &self,
+        owner: u64,
+        params: &ash_app_server_protocol::protocol::browser::BrowserNetworkAuthorizeParams,
+    ) -> bool {
+        let grant = {
+            let state = self
+                .state
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            state
+                .network_grants
+                .get(&params.network_token)
+                .filter(|grant| grant.owner == owner)
+                .map(|grant| (Arc::clone(&grant.policy), grant.cancellation.token()))
+        };
+        let Some((policy, cancellation)) = grant else {
+            return false;
+        };
+        let Ok(url) = url::Url::parse(&params.url) else {
+            return false;
+        };
+        if !url.username().is_empty() || url.password().is_some() {
+            return false;
+        }
+        let protocol = match url.scheme() {
+            "http" => network_proxy::NetworkProtocol::Http,
+            "https" => network_proxy::NetworkProtocol::HttpsConnect,
+            _ => return false,
+        };
+        let Some(host) = url.host_str() else {
+            return false;
+        };
+        let Some(port) = url.port_or_known_default() else {
+            return false;
+        };
+        let Ok(target) =
+            network_proxy::NetworkRequest::new(protocol, host.trim_matches(['[', ']']), port)
+        else {
+            return false;
+        };
+        cancellation.check().is_ok()
+            && matches!(
+                policy.decide_blocking(target.with_method(&params.method), &cancellation),
+                network_proxy::NetworkDecision::Allow
+            )
+            && cancellation.check().is_ok()
     }
 
     pub(crate) fn register(
@@ -131,6 +238,13 @@ impl BrowserHost {
         state
             .target_owners
             .retain(|_, owner| owner.connection_id != connection_id);
+        state.network_grants.retain(|_, grant| {
+            if grant.owner == connection_id {
+                grant.cancellation.cancel();
+                return false;
+            }
+            true
+        });
         state
             .shared_targets
             .retain(|_, (owner, _)| *owner != connection_id);
@@ -222,7 +336,7 @@ impl BrowserHost {
             .owners
             .get(&selected)
             .filter(|owner| {
-                owner.capability.version == 2 && owner.capability.observe && owner.capability.input
+                owner.capability.version == 3 && owner.capability.observe && owner.capability.input
             })
             .map(|_| selected)
             .ok_or(BrowserError::CapabilityUnavailable)
@@ -244,6 +358,9 @@ impl BrowserHost {
             }
             target_owner.connection_id
         } else {
+            if !matches!(required, BrowserHostOperation::Observe) {
+                return Err(BrowserError::TargetUnavailable(target_id.clone()));
+            }
             let (owner, _) = state
                 .shared_targets
                 .get(&target_id.0)
@@ -364,6 +481,7 @@ impl BrowserCapability for BrowserHost {
             HostMethod::BrowserCreate,
             &BrowserCreateParams {
                 thread_id: self.thread_id()?.to_string(),
+                network_token: self.network_token.clone(),
                 url: request.url,
             },
             cancellation,
@@ -407,6 +525,7 @@ impl BrowserCapability for BrowserHost {
             HostMethod::BrowserObserve,
             &BrowserObserveParams {
                 thread_id: self.thread_id()?.to_string(),
+                network_token: self.network_token.clone(),
                 target_id: request.target_id.0,
                 include_accessibility_tree: request.include_accessibility_tree,
                 include_dom_snapshot: request.include_dom_snapshot,
@@ -434,6 +553,7 @@ impl BrowserCapability for BrowserHost {
             HostMethod::BrowserPerform,
             &BrowserPerformParams {
                 thread_id: self.thread_id()?.to_string(),
+                network_token: self.network_token.clone(),
                 action: browser_action_dto(action),
             },
             cancellation,

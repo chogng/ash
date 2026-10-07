@@ -2629,7 +2629,8 @@ test('Open in Agents moves the IDE chat draft and preserves drafts when the targ
 	driver.diagnostics.consoleErrors.splice(driver.diagnostics.consoleErrors.indexOf(rejectedHandoff), 1);
 	targetEditor = new Editor(sessionsPage.locator('.ash-sessions-chat-slot.active:visible'));
 	activityNavigation = sessionsPage.locator('.ash-sessions-activity-content');
-	await targetEditor.waitForEditorContents(contents => contents === 'Continue reviewing this change in Agents Window');
+	// Chat and Code share this Session's draft, including the edit made before close.
+	await targetEditor.waitForEditorContents(contents => contents === 'Keep this Code draft during handoff');
 	await expect(sourceLine).toHaveText('Keep this second draft in the IDE');
 	await activityNavigation.getByRole('button', { name: 'Code', exact: true }).click();
 	await targetEditor.waitForEditorContents(contents => contents === 'Keep this Code draft during handoff');
@@ -2686,7 +2687,7 @@ test('Agents macOS fullscreen hides window controls and restores them on exit', 
 	const spacer = sessionsPage.locator('.ash-sessions-window-controls-spacer');
 	await expect(spacer).toBeVisible();
 	await application.evaluate(({ app, BrowserWindow }) => {
-		const window = BrowserWindow.getAllWindows().find(candidate => candidate.webContents.getURL().includes('sessions-code.html'));
+		const window = BrowserWindow.getAllWindows().find(candidate => candidate.webContents.getURL().includes('sessions/electron-browser/sessions.html'));
 		if (!window) throw new Error('Sessions window is missing');
 		window.show();
 		app.focus({ steal: true });
@@ -2694,14 +2695,14 @@ test('Agents macOS fullscreen hides window controls and restores them on exit', 
 	});
 	await waitForElectronWindowState(application, sessionsPage, { focused: true });
 	await application.evaluate(({ BrowserWindow }) => {
-		const window = BrowserWindow.getAllWindows().find(candidate => candidate.webContents.getURL().includes('sessions-code.html'))!;
+		const window = BrowserWindow.getAllWindows().find(candidate => candidate.webContents.getURL().includes('sessions/electron-browser/sessions.html'))!;
 		window.setFullScreen(true);
 	});
 	await waitForElectronWindowState(application, sessionsPage, { fullScreen: true });
 	await expect(sessionsPage.locator('#app')).toHaveClass(/ash-sessions-fullscreen/u);
 	await expect(spacer).toBeHidden();
 	await application.evaluate(({ BrowserWindow }) => {
-		const window = BrowserWindow.getAllWindows().find(candidate => candidate.webContents.getURL().includes('sessions-code.html'));
+		const window = BrowserWindow.getAllWindows().find(candidate => candidate.webContents.getURL().includes('sessions/electron-browser/sessions.html'));
 		if (!window) throw new Error('Sessions window is missing');
 		window.setFullScreen(false);
 	});
@@ -2917,7 +2918,7 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 		}));
 	});
 	expect(sessionWindowState).toHaveLength(2);
-	expect(sessionWindowState.some((window: { readonly url: string; }) => window.url.includes("sessions-code.html"))).toBe(true);
+	expect(sessionWindowState.some((window: { readonly url: string; }) => window.url.includes("sessions/electron-browser/sessions.html"))).toBe(true);
 	const windowIds = sessionWindowState.map((window: { readonly id: number; }) => window.id).sort((left: number, right: number) => left - right);
 	await openSessions.click();
 	await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(window => window.id).sort((left, right) => left - right))).toEqual(windowIds);
@@ -2940,7 +2941,7 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 		return ipc.invoke('ash:sessions:return-to-workbench');
 	})).rejects.toThrow(/Untrusted renderer IPC sender/);
 	const expectedBounds = await application.evaluate(({ BrowserWindow }) => {
-		const child = BrowserWindow.getAllWindows().find(window => window.webContents.getURL().includes('sessions-code.html'));
+		const child = BrowserWindow.getAllWindows().find(window => window.webContents.getURL().includes('sessions/electron-browser/sessions.html'));
 		if (!child) throw new Error('Sessions window is missing');
 		child.setBounds({ ...child.getBounds(), width: 1000, height: 700 });
 		return child.getBounds();
@@ -2951,18 +2952,24 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	await closed;
 	await expect.poll(() => application.windows().length).toBe(1);
 	await expect(workbenchPage.locator(".ash-workbench")).toBeVisible();
-	await openSessions.click();
-	await expect.poll(() => application.windows().length).toBe(2);
-	const reopenedPage = application.windows().find(page => page !== workbenchPage);
-	if (!reopenedPage) throw new Error('Reopened Sessions window is missing');
-	await expect(reopenedPage.locator('.ash-code-sessions-window')).toBeVisible();
-	await expect.poll(() => application.evaluate(({ BrowserWindow }) => {
-		const child = BrowserWindow.getAllWindows().find(window => window.webContents.getURL().includes('sessions-code.html'));
-		return child?.getBounds();
-	})).toEqual(expectedBounds);
-	const reopenedClosed = reopenedPage.waitForEvent('close');
-	await returnFromSessions(reopenedPage, application);
-	await reopenedClosed;
+	// Repeated restoration must not accumulate fractional-DPI frame rounding.
+	for (let reopen = 0; reopen < 3; reopen++) {
+		await openSessions.click();
+		await expect.poll(() => application.windows().length).toBe(2);
+		const reopenedPage = application.windows().find(page => page !== workbenchPage);
+		if (!reopenedPage) {
+			throw new Error('Reopened Sessions window is missing');
+		}
+		await expect(reopenedPage.locator('.ash-code-sessions-window')).toBeVisible();
+		await expect.poll(() => application.evaluate(({ BrowserWindow }) => {
+			const child = BrowserWindow.getAllWindows().find(window => window.webContents.getURL().includes('sessions/electron-browser/sessions.html'));
+			return child?.getBounds();
+		})).toEqual(expectedBounds);
+		const reopenedClosed = reopenedPage.waitForEvent('close');
+		await returnFromSessions(reopenedPage, application);
+		await reopenedClosed;
+		await expect.poll(() => application.windows().length).toBe(1);
+	}
 	const parentClosed = workbenchPage.waitForEvent('close');
 	await application.evaluate(({ BrowserWindow }) => {
 		const parent = BrowserWindow.getAllWindows().find(window => !window.isDestroyed() && !window.webContents.isDestroyed() && window.webContents.getURL().includes('workbench.html'));

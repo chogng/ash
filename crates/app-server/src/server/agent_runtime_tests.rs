@@ -740,7 +740,7 @@ fn rpc_turn_executes_browser_tool_only_on_its_originating_window() {
         call(
             connection,
             "initialize",
-            json!({"clientInfo":{"name":"desktop-test","version":"1"},"capabilities":{"browser":{"version":2,"observe":true,"input":true}}}),
+            json!({"clientInfo":{"name":"desktop-test","version":"1"},"capabilities":{"browser":{"version":3,"observe":true,"input":true}}}),
         );
     }
     call(
@@ -762,12 +762,47 @@ fn rpc_turn_executes_browser_tool_only_on_its_originating_window() {
         );
         let deadline = Instant::now() + Duration::from_secs(5);
         let mut created_page = false;
+        let mut network_params = None;
         loop {
             for request in connection.outbound_notifications.drain() {
                 if request["method"] == "browser/create" {
                     assert_eq!(index, 0, "a Web task must not borrow a desktop browser");
                     assert!(!created_page);
                     created_page = true;
+                    let params = json!({
+                        "networkToken": request["params"]["networkToken"],
+                        "url": "https://example.test/script", "method": "GET"
+                    });
+                    assert!(
+                        params["networkToken"]
+                            .as_str()
+                            .is_some_and(|token| !token.is_empty())
+                    );
+                    assert_eq!(
+                        call(&mut first, "browser/network/authorize", params.clone())["allowed"],
+                        false
+                    );
+                    assert_eq!(
+                        call(connection, "browser/network/authorize", params.clone())["allowed"],
+                        true
+                    );
+                    let policy = server.calls.network_policy();
+                    policy.update(ash_http_client::NetworkAccess::Hosts(
+                        ["example.test".to_owned()].into_iter().collect(),
+                    ));
+                    let mut redirect = params.clone();
+                    redirect["url"] = json!("https://redirect.test/");
+                    assert_eq!(
+                        call(connection, "browser/network/authorize", redirect)["allowed"],
+                        false
+                    );
+                    policy.update(ash_http_client::NetworkAccess::Hosts(Default::default()));
+                    assert_eq!(
+                        call(connection, "browser/network/authorize", params.clone())["allowed"],
+                        false
+                    );
+                    policy.update(ash_http_client::NetworkAccess::Any);
+                    network_params = Some(params);
                     assert!(server.client_host.handle_response(connection.connection_id, json!({"jsonrpc":"2.0","id":request["id"],"result":{"targetId":"browser_target_test"}})).unwrap());
                 }
             }
@@ -797,6 +832,12 @@ fn rpc_turn_executes_browser_tool_only_on_its_originating_window() {
             std::thread::sleep(Duration::from_millis(10));
         }
         assert_eq!(created_page, index == 0);
+        if let Some(params) = network_params {
+            assert_eq!(
+                call(connection, "browser/network/authorize", params)["allowed"],
+                false
+            );
+        }
     }
     server.close_connection(first);
     server.close_connection(second);

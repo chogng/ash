@@ -59,6 +59,51 @@ test('CodeWindow applies Windows startup bounds before tracking and showing ever
 	}
 });
 
+test('CodeWindow restores saved dimensions across fractional DPI rounding plateaus', function () {
+	if (process.platform !== 'win32') {
+		this.skip();
+	}
+	const window = new TestWindow();
+	const saved = { x: 454, y: 206, width: 1002, height: 702 };
+	// At 125% scaling, both 1002/1001 and 702/701 requests produced the same
+	// outer size. The next lower request reached the saved physical rectangle.
+	window.setBounds = bounds => {
+		window.bounds = {
+			...bounds,
+			width: bounds.width >= 1001 ? 1003 : 1002,
+			height: bounds.height >= 701 ? 703 : 702,
+		};
+	};
+	using host = new CodeWindow(() => window, {
+		state: { mode: WindowMode.Normal, ...saved },
+		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
+		title: 'Sessions',
+	}, new DisposableStore());
+	assert.deepEqual(host.win.getBounds(), saved);
+	host.win.emit('ready-to-show');
+	assert.deepEqual(host.win.getBounds(), saved);
+});
+
+test('CodeWindow stops compensating when OS constraints prevent restoring the saved size', function () {
+	if (process.platform !== 'win32') {
+		this.skip();
+	}
+	const window = new TestWindow();
+	let requests = 0;
+	window.setBounds = bounds => {
+		assert.ok(bounds.width > 0 && bounds.height > 0);
+		requests++;
+		window.bounds = { ...bounds, width: Math.max(bounds.width, 1500), height: Math.max(bounds.height, 1000) };
+	};
+	using host = new CodeWindow(() => window, {
+		state: { mode: WindowMode.Normal, x: 20, y: 30, width: 1002, height: 702 },
+		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
+		title: 'Sessions',
+	}, new DisposableStore());
+	assert.ok(requests <= 4);
+	assert.deepEqual(host.win.getBounds(), { x: 20, y: 30, width: 1500, height: 1000 });
+});
+
 test('CodeWindow restores state when ready and releases resources when closed', () => {
 	const resources = new DisposableStore();
 	let released = 0;

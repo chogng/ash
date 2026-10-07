@@ -40,6 +40,8 @@ Workbench / 编辑器调用方
 
 Web 页面使用另一条接入路径：浏览器直接连接经过认证的 App Server WebSocket，不经过 Electron Main；领域 Service 与 API 的职责仍相同。详细连接生命周期见[前端连接与浏览器能力](design/app-server-connection.md)。
 
+工作区切换由 [Workspace 运行时适配器](../src/ash/platform/workspaces/electron-main/appServerWorkspaceTransition.ts)执行：先持久化目录授权，再替换本窗口的连接与本地环境或 SSH 根目录，确认后更新目录；失败时恢复原连接和目录，两次失败都保留在错误中。`code/electron-main/app.ts` 只装配适配器及窗口上下文，不再拥有这套切换与回滚算法。此操作不停止 profile 共用的后台服务。
+
 ## 与 VS Code 的关系
 
 VS Code 的 Service 是前端取得能力的一种接口形式，也不意味着 Service 实现自己创建进程。其 Electron Main 创建 shared process（`src/vs/platform/sharedProcess/electron-main/sharedProcess.ts`）；扩展宿主由 Main 中的 `ExtensionHostStarter` 创建，Renderer 通过注册的远程 Service 请求它。Ash 可以借鉴“调用接口与进程生命周期分开”的边界，但 Rust App Server 是 Ash 自己的业务后端，不对应 VS Code 的某一个通用后端进程。

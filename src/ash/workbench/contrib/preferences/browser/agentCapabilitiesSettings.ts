@@ -108,6 +108,27 @@ export class AgentCapabilitiesSettings extends Disposable {
 		this.addNote(catalog.localProcessSandboxConfigured
 			? `${this.label('capabilities.sandbox.backends', 'Configured backend candidates:')} ${catalog.sandboxBackends.join(', ')}`
 			: this.label('capabilities.sandbox.unavailable', 'Local process execution is not configured in this environment.'));
+		if (catalog.sandboxDiagnostics.length) {
+			this.addNote(this.label('capabilities.sandbox.preflight', 'Read-only process preparation checks for the current directory. Each command and terminal is checked again before launch.'));
+			const networkLabels = {
+				denied: this.label('capabilities.sandbox.network.denied', 'Network denied'),
+				allowed: this.label('capabilities.sandbox.network.allowed', 'Network allowed'),
+				managed: this.label('capabilities.sandbox.network.managed', 'Managed network'),
+			};
+			const readinessLabels = {
+				ready: this.label('capabilities.sandbox.ready', 'Preparation passed'),
+				unsupported: this.label('capabilities.sandbox.unsupported', 'Policy unsupported'),
+				unavailable: this.label('capabilities.sandbox.backendUnavailable', 'Backend unavailable'),
+			};
+			const list = h(this.content.ownerDocument, 'ul');
+			for (const diagnostic of catalog.sandboxDiagnostics) {
+				const item = h(this.content.ownerDocument, 'li');
+				const reason = diagnostic.readiness.type === 'ready' ? '' : `: ${diagnostic.readiness.reason}`;
+				item.textContent = `${diagnostic.backend} · ${networkLabels[diagnostic.network]} · ${readinessLabels[diagnostic.readiness.type]}${reason}`;
+				list.append(item);
+			}
+			this.content.append(list);
+		}
 		const heading = h(this.content.ownerDocument, 'h4');
 		heading.textContent = this.label('capabilities.sandbox.directories', 'Configured directory grants');
 		this.content.append(heading);

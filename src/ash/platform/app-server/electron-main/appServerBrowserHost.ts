@@ -37,12 +37,17 @@ export class AppServerBrowserHost extends Disposable {
 	async create(params: BrowserCreateParams, context: { signal: AbortSignal; }) {
 		this.assertNotDisposed();
 		const signal = AbortSignal.any([context.signal, this.cancellation.signal]);
-		const view = await this.views.createTarget(params.url, params.threadId, signal);
+		const view = await this.views.createTarget('about:blank', params.threadId, signal);
 		if (signal.aborted) {
 			view.dispose();
 			signal.throwIfAborted();
 		}
-		return { targetId: view.id };
+		try {
+			await view.waitForLoad(signal);
+			await view.loadURL(params.url, signal, params.networkToken ?? null);
+			return { targetId: view.id };
+		}
+		catch (error) { view.dispose(); throw error; }
 	}
 	observe(params: BrowserObserveParams, context: { signal: AbortSignal; }) {
 		const { view, signal } = this.target(params.targetId, params.threadId, context.signal);
@@ -51,15 +56,16 @@ export class AppServerBrowserHost extends Disposable {
 			const state = view.getState();
 			// Main owns the visible URL and authoritative load state; the worker only observes Chromium.
 			return { ...observation, url: state.url, title: state.title, loading: state.loading };
-		});
+		}, view.getInfo().owner.type === 'agent' ? params.networkToken ?? null : undefined);
 	}
 	async perform(params: BrowserPerformParams, context: { signal: AbortSignal; }) {
 		const { view, signal } = this.target(params.action.targetId, params.threadId, context.signal);
-		if (params.action.type === 'navigate') { await view.loadURL(params.action.url, signal); }
-		else { await this.automate(view, params.threadId, signal, id => this.playwright.performAction(id, params.threadId, view.id, params.action)); }
+		if (view.getInfo().owner.type !== 'agent') { throw new Error('BrowserNetworkIsolationRequired'); }
+		if (params.action.type === 'navigate') { await view.loadURL(params.action.url, signal, params.networkToken ?? null); }
+		else { await this.automate(view, params.threadId, signal, id => this.playwright.performAction(id, params.threadId, view.id, params.action), params.networkToken ?? null); }
 		return { targetId: view.id };
 	}
-	private automate<T>(view: BrowserView, sessionId: string, signal: AbortSignal, execute: (id: string) => Promise<T>): Promise<T> {
+	private automate<T>(view: BrowserView, sessionId: string, signal: AbortSignal, execute: (id: string) => Promise<T>, networkToken?: string | null): Promise<T> {
 		return view.runOperation(signal, async operationSignal => {
 			await view.waitForLoad(operationSignal);
 			const id = randomUUID();
@@ -72,10 +78,11 @@ export class AppServerBrowserHost extends Disposable {
 			operationSignal.throwIfAborted();
 			await view.waitForLoad(operationSignal);
 			return result;
-		});
+		}, networkToken);
 	}
 	async close(params: BrowserCloseParams): Promise<null> {
-		this.views.validateAgentAccess(params.targetId, params.threadId);
+		const view = this.views.validateAgentAccess(params.targetId, params.threadId);
+		if (view.getInfo().owner.type !== 'agent') { throw new Error('BrowserNetworkIsolationRequired'); }
 		try { await this.views.destroyBrowserView(params.targetId); return null; }
 		finally { this.hostedTargets.delete(params.targetId); }
 	}
@@ -113,6 +120,16 @@ export class AppServerBrowserHost extends Disposable {
 			finally { clearTimeout(timer); this.operations.delete(request.id); }
 		};
 		return [
+			{
+				channel: 'ash:browser-host:network', validate: value => {
+					if (!isRecord(value) || Object.keys(value).length !== 3 || typeof value.targetId !== 'string' || typeof value.requestId !== 'string' || typeof value.allowed !== 'boolean') { throw new TypeError('Invalid browser network response'); }
+					return value;
+				}, invoke: value => {
+					const response = value as { targetId: string; requestId: string; allowed: boolean; };
+					const view = this.views.tryGetBrowserView(response.targetId);
+					view?.session.respondToNetworkRequest(view.webContents.id, response.requestId, response.allowed);
+				},
+			},
 			{
 				channel: 'ash:browser-host:sharing', validate: operation, invoke: value => run(value, async params => {
 					const sharing = decodeAppServerServerRequestParams('browser/sharing/set', params);

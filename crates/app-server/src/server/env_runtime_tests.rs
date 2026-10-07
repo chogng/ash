@@ -853,6 +853,65 @@ fn restricted_dir_installs_only_non_executable_services() {
 }
 
 #[test]
+fn sandbox_capabilities_report_each_configured_backend_and_network_policy() {
+    let dir = TestDir::new("sandbox-diagnostics", "readable.txt");
+    let server = server().with_local_env_host(None, host_policy()).unwrap();
+    server
+        .commit_full_env_runtime(
+            dir.authorization(),
+            test_local_tools(),
+            test_grep(),
+            server.local_env_host.as_ref().unwrap(),
+        )
+        .unwrap();
+    let mut connection = server.connection();
+    server.handle_json(
+        &mut connection,
+        &serde_json::json!({
+            "jsonrpc":"2.0", "id":1, "method":"initialize",
+            "params":{"clientInfo":{"name":"sandbox-test","version":"1"},"capabilities":{}}
+        })
+        .to_string(),
+    );
+    let response: serde_json::Value = serde_json::from_str(
+        &server.handle_json(
+            &mut connection,
+            &serde_json::json!({
+                "jsonrpc":"2.0", "id":2, "method":"agent/capabilities/read", "params":{}
+            })
+            .to_string(),
+        ),
+    )
+    .unwrap();
+    assert!(response.get("error").is_none(), "{response}");
+    assert_eq!(response["result"]["localProcessSandboxConfigured"], true);
+    let result = &response["result"];
+    let diagnostics = result["sandboxDiagnostics"].as_array().unwrap();
+    assert_eq!(
+        diagnostics.len(),
+        result["sandboxBackends"].as_array().unwrap().len() * 3
+    );
+    for backend in result["sandboxBackends"].as_array().unwrap() {
+        for network in ["denied", "allowed", "managed"] {
+            let diagnostic = diagnostics
+                .iter()
+                .find(|entry| &entry["backend"] == backend && entry["network"] == network)
+                .unwrap();
+            match diagnostic["readiness"]["type"].as_str().unwrap() {
+                "ready" => assert!(diagnostic["readiness"].get("reason").is_none()),
+                "unsupported" | "unavailable" => assert!(
+                    !diagnostic["readiness"]["reason"]
+                        .as_str()
+                        .unwrap()
+                        .is_empty()
+                ),
+                state => panic!("unknown readiness: {state}"),
+            }
+        }
+    }
+}
+
+#[test]
 fn browser_tools_follow_capable_connection_lifecycle_with_explicit_permissions() {
     let dir = TestDir::new("browser-capability", "readable.txt");
     let server = server().with_local_env_host(None, host_policy()).unwrap();
@@ -879,7 +938,7 @@ fn browser_tools_follow_capable_connection_lifecycle_with_explicit_permissions()
                 "params": {
                     "clientInfo": { "name": "desktop-test", "version": "1" },
                     "capabilities": {
-                        "browser": { "version": 2, "observe": true, "input": false }
+                        "browser": { "version": 3, "observe": true, "input": false }
                     }
                 }
             })
@@ -906,7 +965,7 @@ fn browser_tools_follow_capable_connection_lifecycle_with_explicit_permissions()
                 "params": {
                     "clientInfo": { "name": "desktop-test-2", "version": "1" },
                     "capabilities": {
-                        "browser": { "version": 2, "observe": true, "input": true }
+                        "browser": { "version": 3, "observe": true, "input": true }
                     }
                 }
             })

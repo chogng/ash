@@ -2470,6 +2470,7 @@ fn agent_capabilities_read_reports_unconfigured_local_execution() {
     assert_eq!(response["result"]["tools"], serde_json::json!([]));
     assert_eq!(response["result"]["localProcessSandboxConfigured"], false);
     assert_eq!(response["result"]["sandboxBackends"], serde_json::json!([]));
+    assert_eq!(response["result"]["sandboxDiagnostics"], serde_json::json!([]));
     assert_eq!(response["result"]["directoryGrantsReadable"], false);
 }
 

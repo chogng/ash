@@ -7,6 +7,13 @@
   `environmentId` 指明所属环境，`dirId` 指明目录身份。URI 本身不提供文件访问权限。
 - Rust DTO 与方法注册表是唯一协议来源；修改后必须从仓库根运行 `just generate-protocol`，并提交 JSON Schema、三张 TypeScript 方法映射与运行时解码器。
 
+`agent/capabilities/read.sandboxDiagnostics` 返回当前目录只读进程的后端准备状态，分别检查 denied、allowed、managed 网络策略；
+`ready` 只表示准备通过，`unsupported` 和 `unavailable` 携带原因，不保证命令或 PTY 启动成功。
+浏览器宿主能力版本 3 的 `browser/create`、`browser/observe`、`browser/perform` 可携带工具调用的 `networkToken`。
+宿主通过 `browser/network/authorize` 提交 token、URL 和 HTTP 方法，结果为 `allowed`；token 绑定发起连接，在工具结束、取消或断线后失效。
+该请求不占用浏览器动作的串行作用域，否则等待网络授权的导航无法完成。HTTP(S) 逐请求评审，WebSocket 当前拒绝；共享用户页面只允许观察。
+当前宿主的检查范围是 HTTP(S)，不能作为完整网络沙箱；WebTransport 绕过 Electron 请求拦截，完整隔离仍需可撤销的后端代理，见 [桌面架构](../../docs/ash-desktop-architecture.md#71-当前实现)。
+
 `model/list` 的 `ModelCatalogEntry.settings` 返回当前连接和目录生效后的模型请求配置，来源类型为共享 protocol 的 `ModelSettings`。列表不暴露基础提示词正文。新执行使用同一批目录资料绑定模型默认参数和预算，目录刷新只影响后续执行。
 
 ## 编译与导出

@@ -7,6 +7,31 @@ import { parseWorkspaceIdentifier, type IAnyWorkspaceIdentifier } from '../../wo
 
 export const WORKSPACE_RECOVERY_CHANNEL = 'ash:window:restoreWorkspaces';
 export const WINDOW_OPEN_EXTERNAL_URI_CHANNEL = 'ash:window:openExternalUri';
+export const AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL = 'ash:sessions:handoff-available';
+export const AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL = 'ash:sessions:handoff-take';
+export const AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL = 'ash:sessions:handoff-complete';
+
+export interface IAgentsWindowHandoffResult {
+	readonly id: string;
+	readonly error?: string;
+}
+
+export function validateAgentsWindowHandoffTake(value: unknown): undefined {
+	if (value !== undefined) {
+		throw new TypeError('Agents Window handoff take does not accept parameters');
+	}
+	return undefined;
+}
+
+export function validateAgentsWindowHandoffComplete(value: unknown): IAgentsWindowHandoffResult {
+	if (!isRecord(value)) {
+		throw new TypeError('Invalid Agents Window handoff result');
+	}
+	if (Object.keys(value).some(key => key !== 'id' && key !== 'error') || typeof value.id !== 'string' || !value.id || value.error !== undefined && typeof value.error !== 'string') {
+		throw new TypeError('Invalid Agents Window handoff result');
+	}
+	return value as unknown as IAgentsWindowHandoffResult;
+}
 
 /** Backend catalog readers request windows using ordinary workspace identities only. */
 export function validateWorkspaceRecovery(value: unknown): readonly IAnyWorkspaceIdentifier[] {

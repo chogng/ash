@@ -139,6 +139,24 @@ const localizationService: ILocalizationService = {
 	translate: (_bundle, _key, fallback) => fallback,
 };
 
+test('Sandbox diagnostics render Chinese readiness and preserve backend reasons as text', async () => {
+	const { AgentCapabilitiesSettings } = await import('../../browser/agentCapabilitiesSettings.js');
+	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	const root = h(browserEnvironment.window.document, 'div');
+	using panel = new AgentCapabilitiesSettings(root, {
+		read: async () => ({ tools: [], localProcessSandboxConfigured: true, sandboxBackends: ['mxc'], directoryGrantsReadable: false,
+			sandboxDiagnostics: [{ backend: 'mxc', network: 'managed', readiness: { type: 'unsupported', reason: '<script>diagnostic</script>' } }] }),
+	}, { onDidChangeConnectionState: Event.None } as IRemoteAgentService,
+	{ onDidChangePermissions: Event.None } as IDirPermissionsService, {
+		whenReady: Promise.resolve(), translate: (bundle, key, fallback) => chinese.bundles[bundle]?.[key] ?? fallback,
+	});
+	panel.setView('sandbox');
+	await nextTurn();
+	assert.match(root.textContent ?? '', /mxc · 受管网络 · 不支持此策略: <script>diagnostic<\/script>/);
+	assert.match(root.textContent ?? '', /只读进程准备检查/);
+	assert.equal(root.querySelector('script'), null);
+});
+
 test('DefaultSettings projects only Configuration Registry metadata', () => {
 	const registry = new ConfigurationRegistry();
 	const visible = registry.registerConfiguration({
@@ -773,6 +791,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 				tools: [{ name: 'read_file', description: 'Read a file.', source: 'local', sourceDetails: ['ash-app-server'], exposure: 'direct', authority: 'directoryRead' }],
 				localProcessSandboxConfigured: true,
 				sandboxBackends: ['mxc'],
+				sandboxDiagnostics: [{ backend: 'mxc', network: 'managed', readiness: { type: 'unsupported', reason: '<script>diagnostic</script>' } }],
 				directoryGrantsReadable: true,
 			};
 		},
@@ -1057,6 +1076,10 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	root.querySelector<HTMLElement>('[data-settings-category-id="sandbox"]')?.click();
 	await nextTurn();
 	assert.match(root.querySelector('.ash-agent-capabilities-settings')?.textContent ?? '', /\/workspace/);
+	const sandboxPanel = root.querySelector('.ash-agent-capabilities-settings')!;
+	assert.match(sandboxPanel.textContent ?? '', /Policy unsupported/);
+	assert.match(sandboxPanel.textContent ?? '', /<script>diagnostic<\/script>/);
+	assert.equal(sandboxPanel.querySelector('script'), null);
 	root.querySelector<HTMLElement>('[data-settings-category-id="tools"]')?.click();
 	await nextTurn();
 	assert.equal(capabilityReads, 3);

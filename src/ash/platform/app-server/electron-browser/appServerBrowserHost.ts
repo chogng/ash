@@ -11,6 +11,13 @@ export function registerAppServerBrowserHost(client: AppServerProtocolClient): I
 	const handlers = new DisposableStore();
 	const sharedPages = new Set<string>();
 	const pageEvents = subscribe<BrowserViewEvent>(BROWSER_VIEW_EVENT_CHANNEL, event => {
+		if (event.type === 'networkRequested') {
+			void (async () => {
+				let allowed = false;
+				try { allowed = (await client.request(APP_SERVER_METHODS['browser/network/authorize'], { networkToken: event.networkToken, url: event.url, method: event.method })).allowed; }
+				finally { await invoke('ash:browser-host:network', { targetId: event.targetId, requestId: event.requestId, allowed }); }
+			})().catch(error => console.error('Browser network authorization failed', error));
+		}
 		if (event.type === 'closed' && sharedPages.delete(event.targetId)) {
 			void client.request(APP_SERVER_METHODS['browser/sharing/set'], { targetId: event.targetId, threadIds: [] }).catch(error => console.error('Closed browser page authorization release failed', error));
 		}

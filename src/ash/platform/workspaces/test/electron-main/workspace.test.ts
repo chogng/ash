@@ -149,7 +149,7 @@ test("workspaces service resolves ordered folders from VS Code workspace files",
 			};
 		},
 		async readFile(path) {
-			assert.equal(path, configPath);
+			assert.equal(path, URI.file(configPath).fsPath);
 			return `{
 				// VS Code-compatible JSONC workspace folders.
 				"folders": [
@@ -165,10 +165,10 @@ test("workspaces service resolves ordered folders from VS Code workspace files",
 
 	const workspace = await service.resolveWorkspace(identity);
 	assert.equal(workspace.name, "team");
-	assert.equal(workspace.configuration?.fsPath, configPath);
+	assert.equal(workspace.configuration?.fsPath, URI.file(configPath).fsPath);
 	assert.deepEqual(workspace.folders.map(folder => ({ name: folder.name, index: folder.index, path: folder.uri.fsPath })), [
-		{ name: "Web Client", index: 0, path: resolve("canonical", "apps", "web") },
-		{ name: "api", index: 1, path: resolve("api") },
+		{ name: "Web Client", index: 0, path: URI.file(resolve("canonical", "apps", "web")).fsPath },
+		{ name: "api", index: 1, path: URI.file(resolve("api")).fsPath },
 	]);
 	assert.notEqual(workspace.folders[0]?.id, workspace.folders[1]?.id);
 	assert.equal(new WorkspaceContextService(workspace).getWorkbenchState(), WorkbenchState.WORKSPACE);
@@ -351,12 +351,12 @@ test("workspace transition commits only after the runtime accepts the folder", a
 	assert.equal(accepted.status, WorkspaceTransitionStatus.Applied);
 	assert.ok(accepted.workspace);
 	assert.equal(context.getWorkspace().id, accepted.workspace.id);
-	assert.deepEqual(runtimeSwitches, [acceptedPath]);
+	assert.deepEqual(runtimeSwitches, [URI.file(acceptedPath).fsPath]);
 	assert.deepEqual(grants, [acceptedGrant]);
 
 	const unchanged = await transitions.transitionToFolder(acceptedPath);
 	assert.equal(unchanged.status, WorkspaceTransitionStatus.Unchanged);
-	assert.deepEqual(runtimeSwitches, [acceptedPath]);
+	assert.deepEqual(runtimeSwitches, [URI.file(acceptedPath).fsPath]);
 
 	const rejected = await transitions.transitionToFolder(resolve("rejected"));
 	assert.equal(rejected.status, WorkspaceTransitionStatus.Failed);
@@ -419,15 +419,15 @@ test("workspace transition serializes concurrent folder requests", async () => {
 	const second = transitions.transitionToFolder(secondPath);
 	await new Promise<void>((resolveTurn) => setImmediate(resolveTurn));
 
-	assert.deepEqual(switchedPaths, [firstPath]);
+	assert.deepEqual(switchedPaths, [URI.file(firstPath).fsPath]);
 	assert.deepEqual(context.getWorkspace(), UNKNOWN_EMPTY_WINDOW_WORKSPACE);
 	releaseFirstSwitch();
 	await Promise.all([first, second]);
 
-	assert.deepEqual(switchedPaths, [firstPath, secondPath]);
+	assert.deepEqual(switchedPaths, [URI.file(firstPath).fsPath, URI.file(secondPath).fsPath]);
 	const current = context.getWorkspace();
 	assert.ok(isSingleFolderWorkspaceIdentifier(current));
-	assert.equal(current.uri.fsPath, secondPath);
+	assert.equal(current.uri.fsPath, URI.file(secondPath).fsPath);
 });
 
 test("workspace transition exposes phases and safely retries recovered runtime loss", async () => {

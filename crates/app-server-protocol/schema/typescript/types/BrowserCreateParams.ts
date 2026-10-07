@@ -5,4 +5,4 @@ export type BrowserCreateParams = {
 /**
  * The durable Thread owning this request; a transport connection is not an agent identity.
  */
-threadId: string, url: string, };
+threadId: string, url: string, networkToken?: string, };

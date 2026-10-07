@@ -79,6 +79,7 @@ pub struct AgentInteractionCapability {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct BrowserCapability {
+    /// Version 3 enforces backend authorization for every network request from an isolated agent page.
     pub version: u32,
     pub observe: bool,
     pub input: bool,

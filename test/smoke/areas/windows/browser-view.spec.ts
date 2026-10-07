@@ -8,6 +8,76 @@ interface BrowserPrompt { options: Electron.MessageBoxOptions; respond: (result:
 import type { IBrowserViewInfo } from '../../../../src/ash/platform/browserView/common/browserView.js';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { browserNetworkToken, installBrowserNetworkPolicy } from '../../../automation/browserNetwork.js';
+import { createHash } from 'node:crypto';
+import type { Socket } from 'node:net';
+
+test('agent network authorizes subresources, rejects WebSocket and redirects and releases authority after the tool', async ({ target, application, workbench }) => {
+	test.skip(target.kind !== 'electron', 'Request enforcement belongs to Chromium');
+	const deniedRequests: string[] = [];
+	const denied = createServer((request, response) => { deniedRequests.push(request.url!); response.end('blocked'); });
+	await new Promise<void>(resolve => denied.listen(0, '127.0.0.1', resolve));
+	const deniedAddress = denied.address();
+	if (!deniedAddress || typeof deniedAddress === 'string') { throw new Error('Missing denied endpoint'); }
+	const deniedUrl = `http://127.0.0.1:${deniedAddress.port}/`;
+	const requests: string[] = [];
+	const sockets = new Set<Socket>();
+	let upgraded = 0;
+	let finishImage: (() => void) | undefined;
+	const origin = createServer((request, response) => {
+		requests.push(request.url!);
+		if (request.url === '/redirect') { response.writeHead(302, { Location: deniedUrl }); response.end(); return; }
+		if (request.url === '/data') { response.end('allowed-data'); return; }
+		if (request.url === '/image') {
+			finishImage = () => { response.setHeader('Content-Type', 'image/svg+xml'); response.end('<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>'); };
+			return;
+		}
+		response.setHeader('Content-Type', 'text/html');
+		response.end(`<title>Agent network</title><img src="/image"><script>
+		fetch('/data').then(r => r.text()).then(value => window.data = value);
+		window.socket = new WebSocket('ws://' + location.host + '/socket');
+		</script>`);
+	});
+	origin.on('upgrade', (request, socket) => {
+		const connection = socket as Socket;
+		sockets.add(connection); connection.once('close', () => sockets.delete(connection));
+		const accept = createHash('sha1').update(String(request.headers['sec-websocket-key']) + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
+		connection.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
+		upgraded++;
+	});
+	await new Promise<void>(resolve => origin.listen(0, '127.0.0.1', resolve));
+	const address = origin.address();
+	if (!address || typeof address === 'string') { throw new Error('Missing allowed endpoint'); }
+	const url = `http://127.0.0.1:${address.port}/`;
+	const electron = application as ElectronApplication;
+	const page = workbench.page;
+	const call = (method: string, params: Record<string, unknown>) => page.evaluate(({ method, params }) => {
+		return (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke(`ash:browser-host:${method}`, { id: crypto.randomUUID(), params });
+	}, { method, params: { threadId: 'network-test-thread', ...(method === 'close' ? {} : { networkToken: browserNetworkToken }), ...params } });
+	try {
+		await installBrowserNetworkPolicy(electron, url);
+		const pending = call('create', { url });
+		await expect.poll(() => ({ image: !!finishImage, data: requests.includes('/data') })).toEqual({ image: true, data: true });
+		finishImage!();
+		finishImage = undefined;
+		const created = decodeAppServerServerRequestResult('browser/create', await pending);
+		await expect.poll(() => sockets.size).toBe(0);
+		expect(upgraded).toBe(0);
+		expect(await electron.evaluate(async ({ BrowserWindow }, url) => {
+			const view = BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).find(child => 'webContents' in child && (child as Electron.WebContentsView).webContents.getURL() === url) as Electron.WebContentsView;
+			return view.webContents.executeJavaScript("fetch('/after-tool').then(() => 'allowed', () => 'denied')");
+		}, url)).toBe('denied');
+		expect(requests).not.toContain('/after-tool');
+		await expect(call('perform', { action: { type: 'navigate', targetId: created.targetId, url: `${url}redirect` } })).rejects.toThrow();
+		expect(deniedRequests).toEqual([]);
+		await call('close', { targetId: created.targetId });
+	} finally {
+		finishImage?.();
+		for (const socket of sockets) { socket.destroy(); }
+		origin.closeAllConnections(); denied.closeAllConnections();
+		await Promise.all([new Promise<void>(resolve => origin.close(() => resolve())), new Promise<void>(resolve => denied.close(() => resolve()))]);
+	}
+});
 
 test('downloads report completion and cancellation and closing a page releases the active download', async ({ target, application, workbench, testWorkspace }) => {
 	test.skip(target.kind !== 'electron', 'Downloads belong to the desktop page session');
@@ -120,11 +190,13 @@ test('sharing a user page exposes only that page to the chosen thread and revoca
 	});
 	const call = (method: string, params: Record<string, unknown>) => page.evaluate(({ method, params }) => {
 		return (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke(`ash:browser-host:${method}`, { id: crypto.randomUUID(), params });
-	}, { method, params });
+	}, { method, params: ['create', 'observe', 'perform'].includes(method) ? { networkToken: browserNetworkToken, ...params } : params });
 	const observe = { threadId: 'share-test-thread', targetId: info.id, includeAccessibilityTree: false, includeDomSnapshot: false, includeScreenshot: false };
 	await expect(call('observe', observe)).rejects.toThrow(/BrowserTargetAccessDenied/);
 	await call('sharing', { targetId: info.id, threadIds: ['share-test-thread'] });
 	expect(decodeAppServerServerRequestResult('browser/observe', await call('observe', observe)).targetId).toBe(info.id);
+	await expect(call('perform', { threadId: observe.threadId, action: { type: 'reload', targetId: info.id } })).rejects.toThrow(/BrowserNetworkIsolationRequired/);
+	await expect(call('close', { threadId: observe.threadId, targetId: info.id })).rejects.toThrow(/BrowserNetworkIsolationRequired/);
 	await expect(call('observe', { ...observe, threadId: 'another-thread' })).rejects.toThrow(/BrowserTargetAccessDenied/);
 	if (target.appServerMode === 'required') {
 		const electron = application as ElectronApplication;
@@ -157,7 +229,7 @@ test('browser automation runs in one separate process and its crash retains manu
 	const page = workbench.page;
 	const invoke = (method: string, params: Record<string, unknown>) => page.evaluate(({ method, params }) => {
 		return (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke(`ash:browser-host:${method}`, { id: crypto.randomUUID(), params: { threadId: 'crash-test-thread', ...params } });
-	}, { method, params });
+	}, { method, params: ['create', 'observe', 'perform'].includes(method) ? { networkToken: browserNetworkToken, ...params } : params });
 	const created = decodeAppServerServerRequestResult('browser/create', await invoke('create', { url: 'about:blank' }));
 	const options = { targetId: created.targetId, includeAccessibilityTree: true, includeDomSnapshot: false, includeScreenshot: false };
 	await invoke('observe', options);
@@ -245,8 +317,9 @@ test('desktop browser agent observes loaded pages, edits fields and follows navi
 	const electron = application as ElectronApplication;
 	const hostCall = (method: string, params: Record<string, unknown>) => page.evaluate(({ method, params }) => {
 		return (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke(`ash:browser-host:${method}`, { id: crypto.randomUUID(), params: { threadId: 'browser-smoke-thread', ...params } });
-	}, { method, params });
+	}, { method, params: ['create', 'observe', 'perform'].includes(method) ? { networkToken: browserNetworkToken, ...params } : params });
 	try {
+		await installBrowserNetworkPolicy(electron, url);
 		const created = decodeAppServerServerRequestResult('browser/create', await hostCall('create', { url }));
 		await expect(hostCall('observe', { threadId: 'other-thread', targetId: created.targetId, includeAccessibilityTree: true, includeDomSnapshot: false, includeScreenshot: false })).rejects.toThrow(/BrowserTargetAccessDenied/);
 		const observe = async (includeScreenshot = false) => decodeAppServerServerRequestResult('browser/observe', await hostCall('observe', { targetId: created.targetId, includeAccessibilityTree: true, includeDomSnapshot: false, includeScreenshot }));
@@ -304,6 +377,7 @@ test('desktop browser opens visible pages, navigates history, resizes and releas
 	const electron = application as ElectronApplication;
 	const page = workbench.page;
 	try {
+		await installBrowserNetworkPolicy(electron, url);
 		await page.keyboard.press('ControlOrMeta+Shift+P');
 		await page.getByPlaceholder('Type the name of a command to run').fill('Browser: Open Browser');
 		await page.keyboard.press('Enter');
@@ -380,7 +454,7 @@ test('desktop browser opens visible pages, navigates history, resizes and releas
 		const hostCall = (method: string, params: Record<string, unknown>) => page.evaluate(({ method, params }) => {
 			const bridge = (globalThis as unknown as { ash: ISandboxGlobals; }).ash;
 			return bridge.ipcRenderer.invoke(`ash:browser-host:${method}`, { id: crypto.randomUUID(), params: { threadId: 'browser-smoke-thread', ...params } });
-		}, { method, params });
+		}, { method, params: ['create', 'observe', 'perform'].includes(method) ? { networkToken: browserNetworkToken, ...params } : params });
 		const created = decodeAppServerServerRequestResult('browser/create', await hostCall('create', { url }));
 		await expect(page.locator('.ash-browser-editor')).toBeVisible();
 		await expect.poll(async () => (await views()).filter(view => view.url === url && view.visible).length).toBe(1);
@@ -401,7 +475,7 @@ test('desktop browser opens visible pages, navigates history, resizes and releas
 		const slow = decodeAppServerServerRequestResult('browser/create', await hostCall('create', { url: 'about:blank' }));
 		const requestId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 		const pending = page.evaluate(({ id, url, targetId }) => {
-			return (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke('ash:browser-host:perform', { id, params: { threadId: 'browser-smoke-thread', action: { type: 'navigate', targetId, url } } }).then(() => 'completed', () => 'cancelled');
+			return (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke('ash:browser-host:perform', { id, params: { threadId: 'browser-smoke-thread', networkToken: 'browser-test-authority', action: { type: 'navigate', targetId, url } } }).then(() => 'completed', () => 'cancelled');
 		}, { id: requestId, url: `${url}slow`, targetId: slow.targetId });
 		await expect.poll(() => finishSlowLoad !== undefined).toBe(true);
 		await page.evaluate(id => (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke('ash:browser-host:cancel', { id }), requestId);
