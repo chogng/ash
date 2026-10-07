@@ -87,6 +87,41 @@ test('Copy menu replacement does not overwrite the next menu focus origin', asyn
 	await expect(query).toBeFocused();
 });
 
+test('Copy menu release on hiding Search and refreshing rows preserves outside editor focus', async ({ page }) => {
+	await page.goto('/search.html');
+	await page.evaluate(() => {
+		const editor = document.createElement('div');
+		editor.contentEditable = 'true';
+		editor.setAttribute('role', 'textbox');
+		editor.setAttribute('aria-label', 'Outside editor');
+		document.body.append(editor);
+	});
+	const editor = page.getByRole('textbox', { name: 'Outside editor', exact: true });
+	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
+	await query.fill('needle');
+	await query.press('Enter');
+	await expect(page.getByRole('status')).toHaveText('1 results');
+	const tree = page.getByRole('tree', { name: 'Search results', exact: true });
+	const result = tree.getByRole('treeitem', { name: 'Line 1, column 7: const needle = true;', exact: true });
+	await result.click();
+	await tree.press('Shift+F10');
+	await expect(page.getByRole('menuitem', { name: 'Copy', exact: true })).toBeVisible();
+	await editor.focus();
+	await page.evaluate(() => window.ashSearchIntegration.setSearchVisible(false));
+	await expect(page.getByRole('menu')).toHaveCount(0);
+	await expect(tree).toBeHidden();
+	await expect(editor).toBeFocused();
+	await page.evaluate(() => window.ashSearchIntegration.setSearchVisible(true));
+	await result.click();
+	await tree.press('Shift+F10');
+	await expect(page.getByRole('menuitem', { name: 'Copy', exact: true })).toBeVisible();
+	await editor.focus();
+	await page.getByRole('button', { name: 'Refresh search', exact: true }).evaluate((button: HTMLButtonElement) => button.click());
+	await expect(page.getByRole('menu')).toHaveCount(0);
+	await expect(page.getByRole('status')).toHaveText('1 results');
+	await expect(editor).toBeFocused();
+});
+
 test('Dismiss updates retained results and focus while refresh restores the searched files', async ({ page }) => {
 	await page.goto('/search.html');
 	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
