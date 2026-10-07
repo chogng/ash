@@ -477,8 +477,17 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 			const column = (row.originalChanges[0]?.startColumn ?? 0) + 1;
 			this.originalEditor.revealRange(new Range(lineNumber, column, lineNumber, column), ScrollType.Immediate);
 		} else if (this.inlineView) {
-			const lineNumber = Math.min(this.model.modified.getLineCount(), Math.max(1, (row.originalLineIndex ?? 0) + 1));
-			this.modifiedEditor.revealRange(new Range(lineNumber, 1, lineNumber, 1), ScrollType.Immediate);
+			// A removed line lives in a zone after its preceding modified line, not at its original line number.
+			let precedingRow = rowIndex - 1;
+			while (precedingRow >= 0 && rows[precedingRow]!.modifiedLineIndex === undefined) {
+				precedingRow--;
+			}
+			const precedingLine = rows[precedingRow]?.modifiedLineIndex;
+			const top = precedingLine === undefined
+				? this.modifiedEditor.getOption(EditorOption.padding).top
+				: this.modifiedEditor.getBottomForLineNumber(precedingLine + 1);
+			const zoneTop = top + (rowIndex - precedingRow - 1) * this.modifiedEditor.getOption(EditorOption.lineHeight);
+			this.modifiedEditor.setScrollTop(Math.max(0, zoneTop - this.modifiedEditor.getLayoutInfo().height / 2), ScrollType.Immediate);
 		}
 		if (announce) {
 			const changedRows = rows.flatMap((candidate, index) => candidate.kind === LineDiffKind.Unchanged ? [] : [index]);

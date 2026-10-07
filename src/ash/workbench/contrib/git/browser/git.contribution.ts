@@ -37,15 +37,16 @@ import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/c
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { IWorkingCopyService } from '../../../services/workingCopy/common/workingCopyService.js';
-import { ISCMService, ISCMViewService, SCMHistoryBusyContext, SCMHistoryProviderIdContext } from '../../scm/common/scm.js';
+import { ISCMService, ISCMViewService, SCMHistoryBusyContext, SCMHistoryProviderIdContext, SCMProviderContext, SCMBusyContext, SCMCanCommitContext, type ISCMRepository } from '../../scm/common/scm.js';
 import { IQuickDiffService } from '../../scm/common/quickDiff.js';
 import { IGitService, type GitStatus } from '../common/gitService.js';
 import { GitQuickDiffProvider } from './gitQuickDiffProvider.js';
-import { GitSCMContribution } from './gitSCMProvider.js';
+import { GitSCMContribution, GitSCMProvider } from './gitSCMProvider.js';
 import { ViewsRegistry } from '../../../common/views.js';
 import { VIEW_PANE_ID } from '../../scm/common/scm.js';
 import { AppServerAvailableContext, BrowserLocalFolderSupportContext, OpenFolderWorkspaceSupportContext, WorkspaceFolderCountContext } from '../../../common/contextkeys.js';
 import { IsNativeContext } from '../../../../platform/contextkey/common/contextkeys.js';
+import { IOutputService } from '../../../services/output/common/output.js';
 import { GitCloneCommandId } from '../common/gitCommands.js';
 
 const noWorkspaceFolders = WorkspaceFolderCountContext.isEqualTo(0);
@@ -183,6 +184,126 @@ registerWorkbenchContribution('workbench.contrib.gitQuickDiffProvider', Workbenc
 	return resources;
 });
 
+const gitTitleWhen = SCMProviderContext.isEqualTo('git');
+const gitTitleEnabled = ContextKeyExpr.and(gitTitleWhen, SCMBusyContext.isEqualTo(false));
+const gitCommitMenu = MenuId.for('git.commit');
+const gitChangesMenu = MenuId.for('git.changes');
+const gitPullPushMenu = MenuId.for('git.pullpush');
+const gitBranchMenu = MenuId.for('git.branch');
+const gitRemoteMenu = MenuId.for('git.remotes');
+const gitStashMenu = MenuId.for('git.stash');
+const gitTagsMenu = MenuId.for('git.tags');
+const gitWorktreesMenu = MenuId.for('git.worktrees');
+
+const gitSubmenus = [
+	{ menu: gitCommitMenu, title: localize2('git.menu.commit', 'Commit') },
+	{ menu: gitChangesMenu, title: localize2('git.menu.changes', 'Changes') },
+	{ menu: gitPullPushMenu, title: localize2('git.menu.pullpush', 'Pull, Push') },
+	{ menu: gitBranchMenu, title: localize2('git.menu.branch', 'Branch') },
+	{ menu: gitRemoteMenu, title: localize2('git.menu.remote', 'Remote') },
+	{ menu: gitStashMenu, title: localize2('git.menu.stash', 'Stash') },
+	{ menu: gitTagsMenu, title: localize2('git.menu.tags', 'Tags') },
+	{ menu: gitWorktreesMenu, title: localize2('git.menu.worktrees', 'Worktrees') },
+];
+for (const [order, entry] of gitSubmenus.entries()) {
+	MenusRegistry.appendMenuItem(MenuId.SCMTitle, { submenu: entry.menu, title: entry.title, group: '2_git', order, when: gitTitleWhen });
+}
+
+// Menu entries reuse the registered repository commands and their prompts and error handling.
+const gitTitleCommands = [
+	{ id: 'git.commit', title: localize2('git.menu.commitStaged', 'Commit Staged'), icon: Lxicon.check, menu: MenuId.SCMTitle, group: 'navigation', order: 1, precondition: SCMCanCommitContext.isEqualTo(true) },
+	{ id: 'git.refresh', title: localize2('git.menu.refresh', 'Refresh'), icon: Lxicon.refresh, menu: MenuId.SCMTitle, group: 'navigation', order: 2 },
+	{ id: 'ash.git.pull', title: localize2('git.menu.pull', 'Pull'), menu: MenuId.SCMTitle, group: '1_git', order: 1 },
+	{ id: 'ash.git.push', title: localize2('git.menu.push', 'Push'), menu: MenuId.SCMTitle, group: '1_git', order: 2 },
+	{ id: GitCloneCommandId, title: localize2('git.menu.clone', 'Clone'), menu: MenuId.SCMTitle, group: '1_git', order: 3, precondition: IsNativeContext.isEqualTo(true) },
+	{ id: 'git.switchBranch', title: localize2('git.menu.checkout', 'Checkout to…'), menu: MenuId.SCMTitle, group: '1_git', order: 4 },
+	{ id: 'ash.git.fetch', title: localize2('git.menu.fetch', 'Fetch'), menu: MenuId.SCMTitle, group: '1_git', order: 5 },
+	{ id: 'git.commit', title: localize2('git.menu.commitStaged', 'Commit Staged'), menu: gitCommitMenu, group: '1_commit', order: 1, precondition: SCMCanCommitContext.isEqualTo(true) },
+	{ id: 'git.commitAmend', title: localize2('git.menu.amend', 'Amend Last Commit…'), menu: gitCommitMenu, group: '2_commit', order: 1 },
+	{ id: 'git.undoCommit', title: localize2('git.menu.undoCommit', 'Undo Last Commit'), menu: gitCommitMenu, group: '2_commit', order: 2 },
+	{ id: 'git.stageAll', title: localize2('git.menu.stageAll', 'Stage All Changes'), menu: gitChangesMenu, group: '1_changes', order: 1 },
+	{ id: 'git.unstageAll', title: localize2('git.menu.unstageAll', 'Unstage All Changes'), menu: gitChangesMenu, group: '1_changes', order: 2 },
+	{ id: 'git.cleanAll', title: localize2('git.menu.discardAll', 'Discard All Changes…'), menu: gitChangesMenu, group: '2_changes', order: 1 },
+	{ id: 'ash.git.pull', title: localize2('git.menu.pull', 'Pull'), menu: gitPullPushMenu, group: '1_remote', order: 1 },
+	{ id: 'ash.git.push', title: localize2('git.menu.push', 'Push'), menu: gitPullPushMenu, group: '1_remote', order: 2 },
+	{ id: 'ash.git.fetch', title: localize2('git.menu.fetch', 'Fetch'), menu: gitPullPushMenu, group: '1_remote', order: 3 },
+	{ id: 'git.branch', title: localize2('git.menu.createBranch', 'Create Branch…'), menu: gitBranchMenu, group: '1_branch', order: 1 },
+	{ id: 'git.switchBranch', title: localize2('git.menu.checkout', 'Checkout to…'), menu: gitBranchMenu, group: '1_branch', order: 2 },
+	{ id: 'git.renameBranch', title: localize2('git.menu.renameBranch', 'Rename Branch…'), menu: gitBranchMenu, group: '1_branch', order: 3 },
+	{ id: 'git.deleteBranch', title: localize2('git.menu.deleteBranch', 'Delete Branch…'), menu: gitBranchMenu, group: '1_branch', order: 4 },
+	{ id: 'git.deleteRemoteBranch', title: localize2('git.menu.deleteRemoteBranch', 'Delete Remote Branch…'), menu: gitBranchMenu, group: '1_branch', order: 5 },
+	{ id: 'git.merge', title: localize2('git.menu.merge', 'Merge Branch…'), menu: gitBranchMenu, group: '2_integration', order: 1 },
+	{ id: 'git.rebase', title: localize2('git.menu.rebase', 'Rebase Branch…'), menu: gitBranchMenu, group: '2_integration', order: 2 },
+	{ id: 'git.cherryPick', title: localize2('git.menu.cherryPick', 'Cherry-Pick Commit…'), menu: gitBranchMenu, group: '2_integration', order: 3 },
+	{ id: 'git.continue', title: localize2('git.menu.continue', 'Continue Merge, Rebase or Cherry-Pick'), menu: gitBranchMenu, group: '3_integration', order: 1 },
+	{ id: 'git.abort', title: localize2('git.menu.abort', 'Abort Merge, Rebase or Cherry-Pick'), menu: gitBranchMenu, group: '3_integration', order: 2 },
+	{ id: 'git.addRemote', title: localize2('git.menu.addRemote', 'Add Remote…'), menu: gitRemoteMenu, group: '1_remote', order: 1 },
+	{ id: 'git.removeRemote', title: localize2('git.menu.removeRemote', 'Remove Remote…'), menu: gitRemoteMenu, group: '1_remote', order: 2 },
+	{ id: 'git.stash', title: localize2('git.menu.stashChanges', 'Stash Changes…'), menu: gitStashMenu, group: '1_stash', order: 1 },
+	{ id: 'git.stashApply', title: localize2('git.menu.applyStash', 'Apply Stash…'), menu: gitStashMenu, group: '2_stash', order: 1 },
+	{ id: 'git.stashPop', title: localize2('git.menu.popStash', 'Pop Stash…'), menu: gitStashMenu, group: '2_stash', order: 2 },
+	{ id: 'git.stashDrop', title: localize2('git.menu.dropStash', 'Delete Stash…'), menu: gitStashMenu, group: '2_stash', order: 3 },
+	{ id: 'git.createTag', title: localize2('git.menu.createTag', 'Create Tag…'), menu: gitTagsMenu, group: '1_tag', order: 1 },
+	{ id: 'git.deleteTag', title: localize2('git.menu.deleteTag', 'Delete Tag…'), menu: gitTagsMenu, group: '1_tag', order: 2 },
+	{ id: 'git.createWorktree', title: localize2('git.menu.createWorktree', 'Create Worktree…'), menu: gitWorktreesMenu, group: '1_worktree', order: 1 },
+	{ id: 'git.openWorktree', title: localize2('git.menu.openWorktree', 'Open Worktree…'), menu: gitWorktreesMenu, group: '1_worktree', order: 2 },
+	{ id: 'git.deleteWorktree', title: localize2('git.menu.deleteWorktree', 'Delete Worktree…'), menu: gitWorktreesMenu, group: '1_worktree', order: 3 },
+	{ id: 'git.showOutput', title: localize2('git.menu.showOutput', 'Show Git Output'), menu: MenuId.SCMTitle, group: '3_output', order: 1 },
+];
+for (const entry of gitTitleCommands) {
+	MenusRegistry.appendMenuItem(entry.menu, {
+		command: {
+			id: entry.id, title: entry.title, icon: 'icon' in entry ? entry.icon : undefined,
+			precondition: ContextKeyExpr.and(gitTitleEnabled, 'precondition' in entry ? entry.precondition : undefined)
+		}, group: entry.group, order: entry.order, when: gitTitleWhen
+	});
+}
+
+const providerActions = [
+	{ id: 'git.commit', title: localize2('git.commitCommand', 'Git: Commit Staged'), run: (provider: GitSCMProvider) => provider.input.accept() },
+	{ id: 'git.refresh', title: localize2('git.refreshCommand', 'Git: Refresh'), run: (provider: GitSCMProvider) => provider.refresh() },
+	{ id: 'git.stageAll', title: localize2('git.stageAllCommand', 'Git: Stage All Changes'), run: (provider: GitSCMProvider) => provider.stageAll() },
+	{ id: 'git.unstageAll', title: localize2('git.unstageAllCommand', 'Git: Unstage All Changes'), run: (provider: GitSCMProvider) => provider.unstageAll() },
+	{ id: 'git.cleanAll', title: localize2('git.discardAllCommand', 'Git: Discard All Changes'), run: (provider: GitSCMProvider) => provider.discardAll() },
+];
+for (const action of providerActions) {
+	registerAction2(class extends Action2 {
+		constructor() { super({ id: action.id, title: action.title, f1: true }); }
+		public override async run(accessor: ServicesAccessor, repositoryId?: string): Promise<void> {
+			const repository = repositoryId === undefined ? accessor.get(ISCMViewService).activeRepository : accessor.get(ISCMService).getRepository(repositoryId);
+			if (repository?.provider instanceof GitSCMProvider && !repository.provider.isBusy) await action.run(repository.provider);
+		}
+	});
+}
+
+// The channel records the same provider diagnostics visible in Changes, including operation failures.
+registerWorkbenchContribution('workbench.contrib.gitOutput', WorkbenchPhase.BlockRestore, accessor => {
+	const resources = new DisposableStore();
+	const channel = resources.add(accessor.get(IOutputService).createChannel({ id: 'git', label: 'Git', kind: 'output', source: 'core' }));
+	const scm = accessor.get(ISCMService);
+	const listeners = resources.add(new DisposableMap<string, DisposableStore>());
+	const attach = (repository: ISCMRepository): void => {
+		if (repository.provider.providerId !== 'git' || listeners.has(repository.id)) return;
+		const lifetime = listeners.set(repository.id, new DisposableStore());
+		let lastMessage: string | undefined;
+		const update = (): void => {
+			const message = repository.provider.statusMessage;
+			if (message && message !== lastMessage) channel.appendLine({ severity: 'information', category: repository.provider.label, text: message });
+			lastMessage = message;
+		};
+		lifetime.add(repository.provider.onDidChangeResources(update));
+		update();
+	};
+	for (const repository of scm.repositories) attach(repository);
+	resources.add(scm.onDidAddRepository(attach));
+	resources.add(scm.onDidRemoveRepository(repository => listeners.deleteAndDispose(repository.id)));
+	return resources;
+});
+registerAction2(class extends Action2 {
+	constructor() { super({ id: 'git.showOutput', title: localize2('git.showOutputCommand', 'Git: Show Git Output'), f1: true }); }
+	public override run(accessor: ServicesAccessor): void { accessor.get(IOutputService).showChannel('git'); }
+});
+
 interface GitHistoryActionTarget {
 	readonly repositoryId: string | undefined;
 	runTitleOperation(operation?: () => Promise<unknown>): Promise<void>;
@@ -202,13 +323,15 @@ abstract class GitHistoryAction extends Action2 {
 
 	protected async runRemote(accessor: ServicesAccessor, target: unknown, operation: (gitService: IGitService, repositoryId?: string) => Promise<GitStatus>): Promise<void> {
 		const gitService = accessor.get(IGitService);
-		const repositoryId = isGitHistoryActionTarget(target) ? target.repositoryId : undefined;
+		const repositoryId = isGitHistoryActionTarget(target) ? target.repositoryId : typeof target === 'string' ? target : undefined;
 		const run = () => operation(gitService, repositoryId);
 		if (isGitHistoryActionTarget(target)) {
 			await target.runTitleOperation(run);
 			return;
 		}
-		await run();
+		const provider = repositoryId === undefined ? accessor.get(ISCMViewService).activeRepository?.provider : accessor.get(ISCMService).getRepository(repositoryId)?.provider;
+		if (provider instanceof GitSCMProvider) { await provider.runTitleOperation(run); }
+		else { await run(); }
 	}
 }
 

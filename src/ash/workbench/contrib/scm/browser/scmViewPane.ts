@@ -14,14 +14,18 @@ import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { registerOpenEditorListeners } from '../../../../platform/editor/browser/editor.js';
 import { WorkbenchObjectTree } from '../../../../platform/list/browser/listService.js';
-import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
+import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IResourceIconRenderer, IResourceLabelService, type ResourceLabels } from '../../../browser/labels.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { SCMInputWidget } from './scmInput.js';
 import { ViewPane, ViewWelcomeController, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { ViewsRegistry } from '../../../common/views.js';
-import { ISCMService, ISCMViewService, type ISCMProvider, type ISCMResource, type ISCMResourceGroup } from '../common/scm.js';
+import { ISCMService, ISCMViewService, SCMProviderContext, SCMBusyContext, SCMCanCommitContext, SCMViewModeContext, SCMViewSortKeyContext, type SCMViewMode, type SCMViewSortKey, type ISCMProvider, type ISCMResource, type ISCMResourceGroup } from '../common/scm.js';
+import type { IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
+import { IMenuService, MenuId } from '../../../../platform/actions/common/actions.js';
+import { IContextKeyService, type IScopedContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 
@@ -44,6 +48,15 @@ export class ScmViewPane extends ViewPane {
 	private readonly actionViewItems = new Set<ScmActionViewItem>();
 	private renderedProvider: ISCMProvider | undefined;
 	private renderedGroups: readonly ISCMResourceGroup[] | undefined;
+	private readonly titleToolbar = this._register(new MutableDisposable<MenuWorkbenchToolBar>());
+	private readonly titleContext: IScopedContextKeyService;
+	private readonly providerContext: IContextKey<string>;
+	private readonly busyContext: IContextKey<boolean>;
+	private readonly canCommitContext: IContextKey<boolean>;
+	private readonly viewModeContext: IContextKey<SCMViewMode>;
+	private readonly viewSortKeyContext: IContextKey<SCMViewSortKey>;
+	private _viewMode: SCMViewMode;
+	private _viewSortKey: SCMViewSortKey;
 	private commitTooltip = 'Commit staged changes';
 
 	constructor(
@@ -56,8 +69,22 @@ export class ScmViewPane extends ViewPane {
 		@IConfigurationService configurationService: IConfigurationService,
 		@IResourceIconRenderer resourceIconRenderer: IResourceIconRenderer,
 		@IInstantiationService instantiationService: IInstantiationService,
+		@IMenuService private readonly menuService: IMenuService,
+		@IContextKeyService contextKeyService: IContextKeyService,
+		@IStorageService private readonly storageService: IStorageService,
 	) {
 		super(container, options);
+		this.titleContext = this._register(contextKeyService.createScoped(this.element));
+		this.providerContext = SCMProviderContext.bindTo(this.titleContext);
+		this.busyContext = SCMBusyContext.bindTo(this.titleContext);
+		this.canCommitContext = SCMCanCommitContext.bindTo(this.titleContext);
+		this.viewModeContext = SCMViewModeContext.bindTo(this.titleContext);
+		this.viewSortKeyContext = SCMViewSortKeyContext.bindTo(this.titleContext);
+		this._viewMode = storageService.get('scm.viewMode', StorageScope.WORKSPACE) === 'list' ? 'list' : 'tree';
+		const sortKey = storageService.get('scm.viewSortKey', StorageScope.WORKSPACE);
+		this._viewSortKey = sortKey === 'name' || sortKey === 'status' ? sortKey : 'path';
+		this.viewModeContext.set(this._viewMode);
+		this.viewSortKeyContext.set(this._viewSortKey);
 		this.resourceLabels = this._register(resourceLabelService.createGroup());
 		this.contentElement.classList.add('ash-scm');
 		const document = container.ownerDocument;
@@ -107,7 +134,7 @@ export class ScmViewPane extends ViewPane {
 		};
 		updateTwistieLayout();
 		this._register(resourceIconRenderer.onDidChangeResourceIcons(updateTwistieLayout));
-		this.tree.element.setAttribute('aria-description', localize('scm.changesTreeHelp', 'Files are grouped by directory. Use Up and Down to navigate and preview files, Left to collapse, and Right to expand a group or directory. Press Enter or Space on a directory to toggle it. Press Enter on a file to open and pin it, or Space to preview while keeping focus here. Hold Ctrl, Command, or Alt when clicking or pressing Enter to open in a side group. Double-click pins the file and focuses its editor. Press F1 for Git branch, worktree, stash, tag and remote commands, integration continue or abort, and partial staging.'));
+		this.tree.element.setAttribute('aria-description', localize('scm.changesTreeHelp', 'Use the title toolbar to commit or refresh, and More Actions to change list, tree and sorting or run Git operations. Files are grouped by directory. Use Up and Down to navigate and preview files, Left to collapse, and Right to expand a group or directory. Press Enter or Space on a directory to toggle it. Press Enter on a file to open and pin it, or Space to preview while keeping focus here. Hold Ctrl, Command, or Alt when clicking or pressing Enter to open in a side group. Double-click pins the file and focuses its editor. Press F1 for Git branch, worktree, stash, tag and remote commands, integration continue or abort, and partial staging.'));
 		this.welcomeController = this._register(instantiationService.createInstance(ViewWelcomeController, this.contentElement, this, ViewsRegistry));
 		this._register(this.onDidFocus(() => {
 			if (this.welcomeController.enabled && configurationService.getValue<boolean>(AccessibilityVerbositySettingId.Scm) !== false) {
@@ -154,6 +181,12 @@ export class ScmViewPane extends ViewPane {
 	private bindProvider(): void {
 		const provider = this.provider;
 		this.providerListener.value = provider?.onDidChangeResources(() => this.render());
+		// Capture the repository when constructing actions; a later selection must not retarget an open menu.
+		this.titleToolbar.clear();
+		this.titleToolbar.value = new MenuWorkbenchToolBar(this.headerActionsElement, this.menuService, this.contextMenuProvider, MenuId.SCMTitle, {
+			ariaLabel: localize('scm.titleActions', 'Source control actions'),
+			contextKeyService: this.titleContext, menuOptions: { arg: this.scmViewService.activeRepository?.id },
+		});
 		this.render();
 	}
 
@@ -171,10 +204,35 @@ export class ScmViewPane extends ViewPane {
 		}
 	}
 
+	public get viewMode(): SCMViewMode { return this._viewMode; }
+	public set viewMode(mode: SCMViewMode) {
+		if (this._viewMode === mode) return;
+		this._viewMode = mode;
+		this.viewModeContext.set(mode);
+		this.storageService.store('scm.viewMode', mode, StorageScope.WORKSPACE, StorageTarget.USER);
+		this.renderedGroups = undefined;
+		this.render();
+	}
+
+	public get viewSortKey(): SCMViewSortKey { return this._viewSortKey; }
+	public set viewSortKey(key: SCMViewSortKey) {
+		if (this._viewSortKey === key) return;
+		this._viewSortKey = key;
+		this.viewSortKeyContext.set(key);
+		this.storageService.store('scm.viewSortKey', key, StorageScope.WORKSPACE, StorageTarget.USER);
+		this.renderedGroups = undefined;
+		this.render();
+	}
+
 	private render(): void {
 		if (this.isDisposed) return;
 		const active = this.scmViewService.activeRepository;
 		const provider = active?.provider;
+		this.titleContext.bufferChangeEvents(() => {
+			this.providerContext.set(provider?.providerId ?? '');
+			this.busyContext.set(provider?.isBusy === true);
+			this.canCommitContext.set(provider?.isBusy !== true && provider?.input.enabled === true && provider.input.canAccept);
+		});
 		this.commitForm.hidden = !provider;
 		this.commitForm.classList.toggle('hidden', !provider);
 		this.commitInput.input = provider?.input;
@@ -201,12 +259,20 @@ export class ScmViewPane extends ViewPane {
 				}
 				return {
 					element: { id: JSON.stringify([active!.id, group.id]), group },
-					children: this.resourceChildren(resources.root, active!.id),
+					children: this.viewMode === 'tree' ? this.resourceChildren(resources.root, active!.id) : this.listChildren(group, active!.id),
 				};
 			}));
 		}
 		for (const item of this.actionViewItems) item.setBusy(provider?.isBusy === true);
 		this.viewWelcomeState.fire();
+	}
+
+	private listChildren(group: ISCMResourceGroup, repositoryId: string): ObjectTreeElement<TreeElement>[] {
+		return [...group.resources].sort((left, right) => {
+			const primary = this.viewSortKey === 'name' ? basename(left.path).localeCompare(basename(right.path))
+				: this.viewSortKey === 'status' ? left.decorations.kind.localeCompare(right.decorations.kind) : 0;
+			return primary || left.path.localeCompare(right.path);
+		}).map(resource => ({ element: { id: JSON.stringify([repositoryId, group.id, extUriBiasedIgnorePathCase.getComparisonKey(resource.sourceUri)]), resource } }));
 	}
 
 	private resourceChildren(parent: IResourceNode<ISCMResource, ISCMResourceGroup>, repositoryId: string): ObjectTreeElement<TreeElement>[] {

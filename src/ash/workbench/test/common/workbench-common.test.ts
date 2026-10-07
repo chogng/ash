@@ -284,7 +284,7 @@ test("dialogs model publishes and settles renderer items", async () => {
 });
 
 test("view registrations are ordered and disposed atomically", () => {
-	const registry = new WorkbenchViewRegistry();
+	using registry = new WorkbenchViewRegistry();
 	const changes: string[] = [];
 	using registered = registry.onDidRegisterViews(
 		(event) => changes.push(
@@ -347,7 +347,7 @@ test("view registrations are ordered and disposed atomically", () => {
 });
 
 test("file views register after their host container", async () => {
-	const registry = new WorkbenchViewRegistry();
+	using registry = new WorkbenchViewRegistry();
 	registry.registerStaticViewContainer({
 		id: WorkbenchViewContainerId.Sidebar,
 		title: "Navigation",

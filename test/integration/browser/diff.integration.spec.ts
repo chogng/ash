@@ -15,6 +15,35 @@ test.afterEach(async ({ page }) => {
 	await page.evaluate(() => window.ashDiffIntegration?.dispose());
 });
 
+test('session Changes retains collapse and scroll through hiding, refresh and deferred restoration', async ({ page }) => {
+	await openDiffPage(page);
+	await page.evaluate(() => window.ashDiffIntegration.openSessionChanges());
+	const message = page.locator('#session-changes .ash-sessions-editor-message');
+	await expect(message).toBeHidden();
+	const editor = page.locator('#session-changes .stanza-multi-diff-editor');
+	const firstHeader = editor.getByRole('button', { name: /file-0.ts/ });
+	await firstHeader.click();
+	await expect(firstHeader).toHaveAttribute('aria-expanded', 'false');
+	await editor.evaluate(element => { element.scrollTop = 100; });
+	await expect.poll(() => page.evaluate(() => (window.ashDiffIntegration.readSessionViewState() as { scrollTop?: number; } | null)?.scrollTop)).toBe(100);
+	await page.evaluate(() => window.ashDiffIntegration.setSessionChangesVisible(false));
+	await expect(editor).toHaveCount(0);
+	await page.evaluate(() => window.ashDiffIntegration.setSessionChangesVisible(true));
+	await expect(editor).toBeVisible();
+	await expect(message).toBeHidden();
+	await expect(firstHeader).toHaveAttribute('aria-expanded', 'false');
+	await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBe(100);
+	await page.evaluate(() => window.ashDiffIntegration.refreshSessionChanges());
+	await expect(firstHeader).toHaveAttribute('aria-expanded', 'false');
+	await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBe(100);
+	await page.evaluate(() => window.ashDiffIntegration.reopenSessionChanges());
+	await expect(firstHeader).toHaveAttribute('aria-expanded', 'false');
+	await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBe(100);
+	await page.evaluate(() => window.ashDiffIntegration.switchSessionChanges());
+	await expect(firstHeader).toHaveAttribute('aria-expanded', 'true');
+	await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBe(0);
+});
+
 test('multi-diff exposes the active file control and retains it while focus leaves the editor', async ({ page }) => {
 	await openDiffPage(page);
 	const files = page.locator('#multi .stanza-multi-diff-editor-section');
@@ -831,6 +860,59 @@ test('wrapped and inserted lines stay aligned while the two editors scroll', asy
 		const lines = window.ashDiffIntegration.linePositions(3, 4);
 		return { moved: lines.originalScrollTop > 0, gap: Math.abs(lines.originalScrollTop - lines.modifiedScrollTop) };
 	})).toEqual({ moved: true, gap: 0 });
+});
+
+test('unchanged wrapped lines stay aligned across unequal split widths and repeated layout', async ({ page }) => {
+	await openDiffPage(page);
+	const shared = 'unchanged long text '.repeat(40);
+	const tail = Array.from({ length: 60 }, (_, index) => `tail ${index}`);
+	await page.evaluate(([original, modified]) => {
+		window.ashDiffIntegration.setComparisonText(original, modified);
+		window.ashDiffIntegration.setViewMode(true, false, 900);
+		window.ashDiffIntegration.toggleWordWrap();
+	}, [`head\n${shared}\nbefore\n${tail.join('\n')}`, `head\n${shared}\nafter\n${tail.join('\n')}`]);
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	const separator = page.locator('#single').getByRole('separator');
+	await separator.focus();
+	for (let step = 0; step < 8; step++) {
+		await separator.press('ArrowLeft');
+	}
+	await expect(separator).not.toHaveAttribute('aria-valuenow', '50');
+	const gap = () => page.evaluate(() => {
+		const lines = window.ashDiffIntegration.linePositions(3, 3);
+		return Math.abs(lines.originalTop - lines.modifiedTop);
+	});
+	await expect.poll(gap).toBeLessThan(1);
+	for (const width of [600, 900, 800]) {
+		await page.locator('#single').evaluate((element, width) => { element.style.width = `${width}px`; }, width);
+		await expect.poll(gap).toBeLessThan(1);
+	}
+	for (let step = 0; step < 16; step++) {
+		await separator.press('ArrowRight');
+	}
+	await expect.poll(gap).toBeLessThan(1);
+	await page.evaluate(() => window.ashDiffIntegration.scrollModified(360));
+	await expect.poll(() => page.evaluate(() => {
+		const lines = window.ashDiffIntegration.linePositions(4, 4);
+		return { gap: Math.abs(lines.originalTop - lines.modifiedTop), scrollGap: Math.abs(lines.originalScrollTop - lines.modifiedScrollTop) };
+	})).toEqual({ gap: 0, scrollGap: 0 });
+});
+
+test('inline navigation reveals deleted text after earlier insertions', async ({ page }) => {
+	await openDiffPage(page);
+	const shared = Array.from({ length: 60 }, (_, index) => `shared ${index}`);
+	const inserted = Array.from({ length: 30 }, (_, index) => `inserted ${index}`);
+	const tail = Array.from({ length: 20 }, (_, index) => `tail ${index}`);
+	await page.evaluate(([original, modified]) => {
+		window.ashDiffIntegration.setComparisonText(original, modified);
+		window.ashDiffIntegration.setViewMode(false, false, 900);
+	}, [['head', ...shared, 'removed target', ...tail].join('\n'), ['head', ...inserted, ...shared, ...tail].join('\n')]);
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	const editor = page.locator('#single .stanza-diff-editor');
+	await editor.focus();
+	await page.keyboard.press('Shift+F7');
+	const removed = editor.locator('.stanza-diff-inline-original-line').filter({ hasText: 'removed target' });
+	await expect(removed).toBeInViewport();
 });
 
 test('multi diff wraps editable columns and repositions sections through resize and collapse', async ({ page }) => {

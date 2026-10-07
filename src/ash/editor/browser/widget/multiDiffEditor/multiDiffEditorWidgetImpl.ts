@@ -65,6 +65,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 	private configuredWordWrap: boolean;
 	private temporaryWordWrap: boolean | undefined;
 	private viewportWidth = 0;
+	private projecting = false;
 	private viewportHeight = 0;
 	private syncingEditorScroll = false;
 	private layoutRefreshScheduled = false;
@@ -86,13 +87,13 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		this._register(toDisposable(() => this.navigationAbortController.abort()));
 		this.viewModel = new MultiDiffEditorViewModel(this.items);
 		this.workbenchUIElementFactory = options.workbenchUIElementFactory;
-		this.lineHeight = options.lineHeight ?? DEFAULT_LINE_HEIGHT;
+		const rawLineHeight = options.lineHeight ?? DEFAULT_LINE_HEIGHT;
 		this.overscanRowCount = options.overscanRowCount ?? DEFAULT_OVERSCAN_ROW_COUNT;
 		this.loopChanges = options.loopChanges ?? true;
 		this.showLineNumbers = options.showLineNumbers ?? true;
 		this.configuredWordWrap = options.wordWrap ?? false;
 		this.editorOptions = {
-			lineHeight: options.lineHeight,
+			lineHeight: rawLineHeight,
 			fontFamily: options.fontFamily,
 			fontSize: options.fontSize,
 			fontLigatures: options.fontLigatures,
@@ -103,8 +104,10 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 			fontFamily: options.fontFamily,
 			fontSize: options.fontSize,
 			fontLigatures: options.fontLigatures,
-			lineHeight: this.lineHeight,
+			lineHeight: rawLineHeight,
 		}, getWindow(options.container).devicePixelRatio);
+		// Virtual rows and child editors must use the same computed height for automatic and relative settings.
+		this.lineHeight = this.fontInfoSettings.lineHeight;
 		const ownerDocument = options.container.ownerDocument;
 		this.scrollView = this._register(new CompressedVirtualizedScrollView(
 			options.container,
@@ -308,6 +311,10 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 	}
 
 	private refreshLayout(): void {
+		if (this.projecting) {
+			this.scheduleLayoutRefresh();
+			return;
+		}
 		const previousLayouts = this.layouts.slice();
 		const previousScrollTop = this.scrollView.getLogicalScrollTop();
 		let wrapping: { readonly fontInfo: FontInfo; readonly column: number; } | undefined;
@@ -343,55 +350,65 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 
 	/** Mount editors only around the viewport; file models remain owned by the caller. */
 	private project(): void {
-		const viewportTop = this.scrollView.getLogicalScrollTop();
-		const overscan = this.overscanRowCount * this.lineHeight;
-		const { start, end } = this.scrollView.project(overscan);
-		for (let index = start; index < end; index++) {
-			const item = this.items[index]!;
-			const section = this.sections.get(index)!;
-			const layout = this.layouts[index]!;
-			const rendered = this.scrollView.renderedRange(layout, overscan);
-			section.layout(this.scrollView.isCompressed
-				? { top: rendered.top, height: rendered.height, bodyHeight: Math.max(0, rendered.height - MULTI_DIFF_HEADER_HEIGHT) }
-				: layout, this.viewportWidth, this.viewportHeight);
-			if (this.viewModel.isCollapsed(item.id)) {
-				section.unmount();
-				continue;
+		if (this.projecting) {
+			this.scheduleLayoutRefresh();
+			return;
+		}
+		// Editor layout and restoration can synchronously scroll; finish this mount pass before changing its range.
+		this.projecting = true;
+		try {
+			const viewportTop = this.scrollView.getLogicalScrollTop();
+			const overscan = this.overscanRowCount * this.lineHeight;
+			const { start, end } = this.scrollView.project(overscan);
+			for (let index = start; index < end; index++) {
+				const item = this.items[index]!;
+				const section = this.sections.get(index)!;
+				const layout = this.layouts[index]!;
+				const rendered = this.scrollView.renderedRange(layout, overscan);
+				section.layout(this.scrollView.isCompressed
+					? { top: rendered.top, height: rendered.height, bodyHeight: Math.max(0, rendered.height - MULTI_DIFF_HEADER_HEIGHT) }
+					: layout, this.viewportWidth, this.viewportHeight);
+				if (this.viewModel.isCollapsed(item.id)) {
+					section.unmount();
+					continue;
+				}
+				if (!item.model) {
+					if (item.state === 'unresolved') void item.resolve().catch(() => undefined);
+					continue;
+				}
+				if (!section.editor) {
+					section.mount(this.instantiationService.createInstance(DiffEditorWidget, {
+						container: section.editorHostDomNode,
+						model: item.model,
+						originalAriaLabel: item.originalLabel,
+						modifiedAriaLabel: item.modifiedLabel,
+						readOnly: item.readOnly,
+						scrollBeyondLastLine: false,
+						wordWrap: this.wordWrap,
+						...this.editorOptions,
+					}));
+					section.layoutEditor(this.viewportWidth);
+				}
+				const editor = section.editor!;
+				const contentHeight = Math.max(editor.originalEditor.getContentHeight(), editor.modifiedEditor.getContentHeight());
+				if (contentHeight > 0 && Math.abs(contentHeight - (this.measuredHeights.get(item.id) ?? layout.bodyHeight)) > 1) {
+					this.measuredHeights.set(item.id, contentHeight);
+					this.scheduleLayoutRefresh();
+				}
+				const desiredScroll = Math.max(0, viewportTop - layout.top);
+				this.syncingEditorScroll = true;
+				try {
+					if (editor.originalEditor.getScrollTop() !== desiredScroll) editor.originalEditor.setScrollTop(desiredScroll);
+					if (editor.modifiedEditor.getScrollTop() !== desiredScroll) editor.modifiedEditor.setScrollTop(desiredScroll);
+				} finally {
+					this.syncingEditorScroll = false;
+				}
+				if (this.viewModel.activeChange?.itemId === item.id && editor.currentChangeRow !== this.viewModel.activeChange.rowIndex) {
+					editor.revealChangeRow(this.viewModel.activeChange.rowIndex, false);
+				}
 			}
-			if (!item.model) {
-				if (item.state === 'unresolved') void item.resolve().catch(() => undefined);
-				continue;
-			}
-			if (!section.editor) {
-				section.mount(this.instantiationService.createInstance(DiffEditorWidget, {
-					container: section.editorHostDomNode,
-					model: item.model,
-					originalAriaLabel: item.originalLabel,
-					modifiedAriaLabel: item.modifiedLabel,
-					readOnly: item.readOnly,
-					scrollBeyondLastLine: false,
-					wordWrap: this.wordWrap,
-					...this.editorOptions,
-				}));
-				section.layoutEditor(this.viewportWidth);
-			}
-			const editor = section.editor!;
-			const contentHeight = Math.max(editor.originalEditor.getContentHeight(), editor.modifiedEditor.getContentHeight());
-			if (contentHeight > 0 && Math.abs(contentHeight - (this.measuredHeights.get(item.id) ?? layout.bodyHeight)) > 1) {
-				this.measuredHeights.set(item.id, contentHeight);
-				this.scheduleLayoutRefresh();
-			}
-			const desiredScroll = Math.max(0, viewportTop - layout.top);
-			this.syncingEditorScroll = true;
-			try {
-				if (editor.originalEditor.getScrollTop() !== desiredScroll) editor.originalEditor.setScrollTop(desiredScroll);
-				if (editor.modifiedEditor.getScrollTop() !== desiredScroll) editor.modifiedEditor.setScrollTop(desiredScroll);
-			} finally {
-				this.syncingEditorScroll = false;
-			}
-			if (this.viewModel.activeChange?.itemId === item.id && editor.currentChangeRow !== this.viewModel.activeChange.rowIndex) {
-				editor.revealChangeRow(this.viewModel.activeChange.rowIndex, false);
-			}
+		} finally {
+			this.projecting = false;
 		}
 	}
 

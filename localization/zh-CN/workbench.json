@@ -1,5 +1,6 @@
 {
   "ash": {
+    "toolbar.moreActions": "更多操作",
     "contextkey.unterminatedString": "字符串未结束。",
     "contextkey.unterminatedRegex": "正则表达式未结束。",
     "contextkey.unexpectedToken": "意外的标记“{0}”。",
@@ -21,7 +22,7 @@
     "navigateDown": "转到下方视图",
     "focusNextPart": "聚焦下一个区域",
     "focusPreviousPart": "聚焦上一个区域",
-    "accessibility.editorRegions": "<keybinding:workbench.action.focusNextPart> 移到下一个可见的工作台区域；<keybinding:workbench.action.focusPreviousPart> 移到上一个区域。按方向转到视图的命令会先经过编辑器分组，再离开编辑区。隐藏的区域会被跳过。",
+    "accessibility.editorRegions": "<keybinding:workbench.action.focusNextPart> 移到下一个可见的工作台区域；<keybinding:workbench.action.focusPreviousPart> 移到上一个区域。按方向转到视图的命令会先经过编辑器分组，再离开编辑区。隐藏的区域会被跳过。主侧栏的“更多操作”菜单可显示或隐藏各个视图、移动主侧栏，以及更改活动栏的位置和尺寸。最后一个可见视图不能隐藏。",
     "appServer.protocol.majorMismatch": "Ash 后端协议主版本不匹配：客户端要求 {0}，后端返回 {1}",
     "appServer.protocol.schemaMismatch": "Ash 前后端协议指纹不匹配：客户端要求 {0}，后端返回 {1}。请重新构建并启动对应的后端。",
     "appServer.protocol.missingCapability": "Ash 后端缺少必需能力 {0}",
@@ -961,7 +962,14 @@
     "quickAccess.fileSearchFailed": "无法搜索文件：{0}",
     "quickInput.searching": "正在搜索…",
     "terminal.context.closed": "此终端已关闭",
-    "search.focus": "在文件中搜索"
+    "search.focus": "在文件中搜索",
+    "workbench.activityBarCommand.default": "将活动栏移到侧边",
+    "workbench.activityBarCommand.top": "将活动栏移到顶部",
+    "workbench.activityBarCommand.bottom": "将活动栏移到底部",
+    "workbench.activityBarCommand.hide": "隐藏活动栏",
+    "workbench.activityBarSizeCommand.default": "使用默认活动栏尺寸",
+    "workbench.activityBarSizeCommand.compact": "使用紧凑活动栏",
+    "workbench.togglePrimarySideBarPosition": "切换主侧栏位置"
   },
   "ash.menu": {
     "file": "文件",

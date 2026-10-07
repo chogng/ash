@@ -1,7 +1,8 @@
 import '../../../src/ash/workbench/contrib/scm/browser/quickDiff.contribution.js';
 import { addDisposableListener } from '../../../src/ash/base/browser/dom.js';
 import { CancellationToken, CancellationTokenSource } from '../../../src/ash/base/common/cancellation.js';
-import { DisposableStore, toDisposable, type IDisposable } from '../../../src/ash/base/common/lifecycle.js';
+import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../src/ash/base/common/lifecycle.js';
+import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
@@ -27,6 +28,19 @@ import { CommandsRegistry } from '../../../src/ash/platform/commands/common/comm
 import { MenusRegistry, MenuId } from '../../../src/ash/platform/actions/common/actions.js';
 import type { DiffEditorSelectionHunkToolbarContext } from '../../../src/ash/editor/browser/widget/diffEditor/features/gutterFeature.js';
 import type { IDiffEditorOptions } from '../../../src/ash/editor/common/config/editorOptions.js';
+import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
+import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
+import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
+import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
+import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
+import { BrowserTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/browser/browserTextModelService.js';
+import { EditorPanes } from '../../../src/ash/workbench/browser/editor.js';
+import { isEditorPaneWithViewState } from '../../../src/ash/workbench/browser/parts/editor/editorWithViewState.js';
+import { MultiDiffEditor } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditor.js';
+import { matchMultiDiffEditor } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
+import { IChatService, type TurnChangeSetSummary } from '../../../src/ash/workbench/services/chat/common/chatService.js';
+import { ISessionsManagementService } from '../../../src/ash/sessions/services/sessions/common/sessionsManagement.js';
+import { SessionChangesEditor } from '../../../src/ash/sessions/contrib/changes/browser/sessionChangesEditor.js';
 
 // Display language is fixed before constructing widgets, as it is at product startup.
 if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
@@ -88,8 +102,70 @@ let compressedEditor: MultiDiffEditorWidget | undefined;
 let compressedViewState: unknown;
 let lastHunkAction: { text: string; originalStart: number; modifiedStart: number; } | undefined;
 let themeBinding: IDisposable | undefined;
+const sessionPane = resources.add(new MutableDisposable<SessionChangesEditor>());
+const sessionChanges = resources.add(new Emitter<{ sessionId: string; threadId: string; }>());
+let sessionServices: ReturnType<typeof editorServices.createChild> | undefined;
+
+function createSessionChangesPane(): SessionChangesEditor {
+	if (!sessionServices) {
+		sessionServices = resources.add(editorServices.createChild());
+		sessionServices.registerInstance(IThemeService, editorServices.themeService);
+		sessionServices.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'diff-integration', flushInterval: 0 })));
+		sessionServices.registerInstance(IDialogService, { confirm: async () => ({ confirmed: false }) } as unknown as IDialogService);
+		sessionServices.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
+		sessionServices.registerInstance(ISessionsManagementService, { sessions: [{ sessionId: 'review' }, { sessionId: 'other' }] } as unknown as ISessionsManagementService);
+		const summary: TurnChangeSetSummary = {
+			changeSetId: 'review-change', sessionId: 'review', threadId: 'review-thread', turnId: 'review-turn', repositoryId: 'review-repository',
+			captureState: 'sealed', messageState: 'unconfigured', commitState: 'idle', committedPaths: [], revision: 1,
+			statistics: { files: 8, additions: 8, deletions: 8 }, dependencies: [], externalDependencyPaths: [], warnings: [], conflictPaths: [],
+		};
+		sessionServices.registerInstance(IChatService, {
+			onDidUpdateTurnChanges: sessionChanges.event,
+			onDidBecomeReady: Event.None,
+			listTurnChanges: async () => [summary],
+			readTurnChange: async () => ({ summary, files: Array.from({ length: 8 }, (_, index) => ({ path: `file-${index}.ts`, kind: 'modified', binary: false, additions: 1, deletions: 1 })) }),
+			readTurnChangeFile: async (_sessionId: string, _threadId: string, _changeSetId: string, path: string) => ({ path, binary: false, truncated: false, before: `before\n${'shared\n'.repeat(30)}`, after: `after\n${'shared\n'.repeat(30)}` }),
+		} as unknown as IChatService);
+		const models = resources.add(new BrowserTextModelService({
+			onDidChange: Event.None,
+			resolve: async request => ({ resource: request.resource, text: request.bootstrapText ?? '', revision: undefined }),
+			save: async () => { throw new Error('Session review is read-only'); },
+		}));
+		resources.add(EditorPanes.registerEditorPane({
+			id: 'integration.sessionMultiDiff', name: 'Session review', canOpen: matchMultiDiffEditor,
+			create: () => sessionServices!.createInstance(MultiDiffEditor, { modelService: models, createComputationService: () => service.createComputationService(), lineHeight: 0 }),
+		}));
+	}
+	const pane = sessionServices.createInstance(SessionChangesEditor, {});
+	sessionPane.value = pane;
+	pane.create(document.getElementById('session-changes')!);
+	pane.layout({ width: 800, height: 240 });
+	return pane;
+}
 
 const harness = {
+	async openSessionChanges(): Promise<void> {
+		const pane = createSessionChangesPane();
+		pane.setVisible(true);
+		await pane.setInput({ resource: URI.parse('ash-session-changes:/review?thread=review-thread') }, new AbortController().signal);
+	},
+	setSessionChangesVisible(visible: boolean): void { sessionPane.value!.setVisible(visible); },
+	refreshSessionChanges(): void { sessionChanges.fire({ sessionId: 'review', threadId: 'review-thread' }); },
+	readSessionViewState(): unknown {
+		const pane = sessionPane.value!;
+		return isEditorPaneWithViewState(pane) ? pane.saveViewState() : null;
+	},
+	async reopenSessionChanges(): Promise<void> {
+		const state = this.readSessionViewState();
+		sessionPane.clear();
+		const pane = createSessionChangesPane();
+		await pane.setInput({ resource: URI.parse('ash-session-changes:/review?thread=review-thread') }, new AbortController().signal);
+		if (isEditorPaneWithViewState(pane)) pane.restoreViewState(state);
+		pane.setVisible(true);
+	},
+	async switchSessionChanges(): Promise<void> {
+		await sessionPane.value!.setInput({ resource: URI.parse('ash-session-changes:/other?thread=other-thread') }, new AbortController().signal);
+	},
 	activeMultiControl(): string | undefined {
 		return multi.getActiveControl()?.modifiedEditor.getModel()?.getText();
 	},

@@ -31,8 +31,14 @@ test('display language stays unchanged until restart and initializes Chinese com
 	await expect(page.getByRole('button', { name: '管理', exact: true })).toBeVisible();
 	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
 	const scmWelcome = page.locator('[data-view-id="ash.gitView"]').getByRole('region', { name: '欢迎', exact: true });
-	await expect(scmWelcome).toContainText('打开包含 Git 仓库的文件夹');
-	await expect(scmWelcome.getByRole('button', { name: '打开文件夹', exact: true })).toBeVisible();
+	// A connected Web session opens the backend workspace; desktop and UI-only hosts can start empty.
+	if (target.kind === 'browser' && target.appServerMode === 'required') {
+		await expect(scmWelcome).toContainText('打开的文件夹中没有 Git 仓库。初始化仓库以开始跟踪更改。');
+		await expect(scmWelcome.getByRole('button', { name: '初始化仓库', exact: true })).toBeVisible();
+	} else {
+		await expect(scmWelcome).toContainText('打开包含 Git 仓库的文件夹');
+		await expect(scmWelcome.getByRole('button', { name: '打开文件夹', exact: true })).toBeVisible();
+	}
 	if (target.kind === 'electron') await expect(scmWelcome.getByRole('button', { name: '克隆仓库', exact: true })).toBeVisible();
 	if (target.appServerMode === 'required') {
 		await workbench.quickaccess.runCommand('ash.call.open');
@@ -46,9 +52,9 @@ test('display language stays unchanged until restart and initializes Chinese com
 	}
 	await page.keyboard.press('F1');
 	const commands = page.locator('.ash-quick-pick');
-	await commands.getByRole('combobox').fill('创建分支');
+	await workbench.quickaccess.search('>创建分支');
 	await expect(commands.locator('.ash-quick-pick-row-label', { hasText: 'Git: 创建分支' })).toBeVisible();
-	await commands.getByRole('combobox').fill('Preferences: Change Keyboard Layout');
+	await workbench.quickaccess.search('>Preferences: Change Keyboard Layout');
 	await expect(commands.locator('.ash-quick-pick-row-label', { hasText: '首选项：更改键盘布局' })).toBeVisible();
 	await commands.getByRole('combobox').press('Enter');
 	const layouts = page.getByRole('dialog', { name: '选择键盘布局' });
@@ -93,7 +99,7 @@ test('display language picker opens Marketplace with language packs selected', a
 	await expect(page.getByRole('button', { name: 'Manage', exact: true })).toBeVisible();
 	await page.keyboard.press('F1');
 	let picker = page.locator('.ash-quick-pick');
-	await picker.getByRole('combobox').fill('Configure Display Language');
+	await workbench.quickaccess.search('>Configure Display Language');
 	await picker.getByRole('combobox').press('Enter');
 
 	picker = page.getByRole('dialog', { name: 'Select Display Language' });
@@ -101,4 +107,29 @@ test('display language picker opens Marketplace with language packs selected', a
 	await picker.getByRole('combobox').press('Enter');
 	await expect(picker).toHaveCount(0);
 	await expect(page.locator('.ash-marketplace').getByLabel('Capability')).toHaveValue('localization');
+});
+
+
+test('Chinese sidebar overflow localizes registered layout commands', async ({ workbench, application, restartWorkbench }) => {
+	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+	const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
+	await picker.getByRole('combobox').fill('简体中文');
+	await picker.getByRole('combobox').press('Enter');
+	({ workbench, application } = await restartWorkbench());
+	const page = workbench.page;
+	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	const sidebar = page.locator('[data-part="sidebar"]');
+	const openSidebarMenu = () => sidebar.locator('.ash-pane-composite-title-part-actions').getByRole('button', { name: '更多操作', exact: true }).click();
+	const sidebarMenu = await workbench.menus.inspect(application, openSidebarMenu);
+	expect(sidebarMenu).toEqual(expect.arrayContaining([
+		expect.objectContaining({ label: '更改', checked: true, enabled: false }),
+		expect.objectContaining({ label: '将主侧栏移到右侧', enabled: true }),
+		expect.objectContaining({ label: '活动栏位置', enabled: true }),
+		expect.objectContaining({ label: '活动栏大小', enabled: true }),
+	]));
+	await workbench.menus.select(application, openSidebarMenu, ['活动栏位置', '顶部']);
+	await expect(sidebar.locator('.ash-sidebar-composite-bar-top .ash-composite-bar')).toBeVisible();
+	await workbench.quickaccess.runCommand('workbench.action.activityBarLocation.default');
+	await expect(page.locator('[data-part="activitybar"]')).toBeVisible();
+
 });

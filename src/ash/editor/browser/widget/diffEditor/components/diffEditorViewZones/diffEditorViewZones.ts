@@ -109,7 +109,8 @@ export class DiffEditorViewZones extends Disposable {
 		for (const [rowIndex, row] of rows.entries()) {
 			if (row.originalLineIndex !== undefined) originalAfterLineNumber = row.originalLineIndex + 1;
 			if (row.modifiedLineIndex !== undefined) modifiedAfterLineNumber = row.modifiedLineIndex + 1;
-			if (row.kind === LineDiffKind.Unchanged && !comparison) continue;
+			// Equal text can occupy different heights when the split gives each side a different wrapping width.
+			if (row.kind === LineDiffKind.Unchanged && !wordWrap && !comparison) continue;
 			const originalHeight = row.originalLineIndex === undefined ? 0 : this.lineHeightFor(this.originalEditor, row.originalLineIndex + 1, wordWrap);
 			const modifiedHeight = row.modifiedLineIndex === undefined ? 0 : this.lineHeightFor(this.modifiedEditor, row.modifiedLineIndex + 1, wordWrap);
 			const rowHeight = Math.max(originalHeight, modifiedHeight);

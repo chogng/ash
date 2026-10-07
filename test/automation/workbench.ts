@@ -6,6 +6,7 @@ import { Terminal } from './terminal.js';
 import { Dialogs } from './dialogs.js';
 import { Search } from './search.js';
 import { Menus } from './menus.js';
+import { Git } from './git.js';
 import type { PlaywrightTarget } from './testTarget.js';
 import { installMainChannelTestClient } from './mainProcessIpc.js';
 
@@ -19,6 +20,7 @@ export class Workbench {
 	readonly dialogs: Dialogs;
 	readonly search: Search;
 	readonly menus: Menus;
+	readonly git: Git;
 
 	constructor(readonly page: Page) {
 		this.element = page.locator(".ash-workbench");
@@ -29,6 +31,7 @@ export class Workbench {
 		this.dialogs = new Dialogs(page);
 		this.search = new Search(page);
 		this.menus = new Menus(page);
+		this.git = new Git(page, this.menus);
 	}
 
 	async waitForReady(): Promise<void> {

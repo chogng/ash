@@ -1,15 +1,19 @@
 import { Emitter, type Event } from "../../base/common/event.js";
 import {
+	Disposable, DisposableMap, DisposableStore,
 	type IDisposable,
 	toDisposable,
 } from "../../base/common/lifecycle.js";
-import type {
-	ContextKeyExpression,
+import {
+	ContextKeyExpr, type ContextKeyExpression,
 } from "../../platform/contextkey/common/contextkey.js";
 import type { SyncDescriptor } from "../../platform/instantiation/common/descriptors.js";
 import type { Icon } from "../../base/common/icon.js";
 import { createServiceIdentifier } from "../../platform/instantiation/common/instantiation.js";
-import type { LocalizationKey } from "../../nls.js";
+import { localize2, type LocalizationKey } from "../../nls.js";
+import { Action2, MenuId, registerAction2 } from '../../platform/actions/common/actions.js';
+import type { ServicesAccessor } from '../../platform/instantiation/common/instantiation.js';
+import { ActiveViewletContext, getVisibleViewContextKey } from './contextkeys.js';
 
 /** Workbench region capable of hosting registered view containers. */
 export enum ViewContainerLocation {
@@ -145,12 +149,13 @@ export const WorkbenchViewContainerId = Object.freeze({
  * Registrations are atomic: duplicate or invalid batches do not modify the
  * previous registry state. Disposing a container also removes its views.
  */
-export class WorkbenchViewRegistry {
+export class WorkbenchViewRegistry extends Disposable {
 	private readonly welcomeContents = new Map<string, Set<IViewContentDescriptor>>();
-	private readonly welcomeContentChanged = new Emitter<string>();
+	private readonly welcomeContentChanged = this._register(new Emitter<string>());
 	readonly onDidChangeViewWelcomeContent = this.welcomeContentChanged.event;
 
 	registerViewWelcomeContent(id: string, content: IViewContentDescriptor): IDisposable {
+		this.assertNotDisposed();
 		validateId(id, 'view');
 		if (typeof content.content !== 'string' || !content.content.trim()) {
 			throw new TypeError('View welcome content must not be empty');
@@ -176,12 +181,13 @@ export class WorkbenchViewRegistry {
 		new Map<string, IRegisteredViewContainer>();
 	private readonly views = new Map<string, IRegisteredView>();
 	private readonly _onDidRegisterViewContainer =
-		new Emitter<IViewContainerDescriptor>();
+		this._register(new Emitter<IViewContainerDescriptor>());
 	private readonly _onDidDeregisterViewContainer =
-		new Emitter<IViewContainerDescriptor>();
-	private readonly _onDidRegisterViews = new Emitter<IViewsChangeEvent>();
-	private readonly _onDidDeregisterViews = new Emitter<IViewsChangeEvent>();
+		this._register(new Emitter<IViewContainerDescriptor>());
+	private readonly _onDidRegisterViews = this._register(new Emitter<IViewsChangeEvent>());
+	private readonly _onDidDeregisterViews = this._register(new Emitter<IViewsChangeEvent>());
 	private nextOrder = 1;
+	private readonly viewActions = this._register(new DisposableMap<string, DisposableStore>());
 
 	readonly onDidRegisterViewContainer:
 		Event<IViewContainerDescriptor> =
@@ -211,6 +217,7 @@ export class WorkbenchViewRegistry {
 	private addViewContainer(
 		descriptor: IViewContainerDescriptor,
 	): IRegisteredViewContainer {
+		this.assertNotDisposed();
 		validateId(descriptor.id, "view container");
 		validateTitle(descriptor.title, "View container");
 		if (this.containers.has(descriptor.id)) {
@@ -243,6 +250,7 @@ export class WorkbenchViewRegistry {
 		if (this.containers.get(descriptor.id) !== registered) return;
 		const views = this.getViews(descriptor.id);
 		for (const view of views) this.views.delete(view.id);
+		this.viewActions.deleteAndDispose(descriptor.id);
 		if (views.length > 0) {
 			this._onDidDeregisterViews.fire({
 				container: descriptor,
@@ -273,6 +281,7 @@ export class WorkbenchViewRegistry {
 		containerId: string,
 		descriptors: readonly IViewDescriptor[],
 	): readonly IRegisteredView[] {
+		this.assertNotDisposed();
 		const container = this.containers.get(containerId)?.descriptor;
 		if (!container) {
 			throw new Error(`Unknown view container: ${containerId}`);
@@ -301,6 +310,7 @@ export class WorkbenchViewRegistry {
 		for (const registration of registrations) {
 			this.views.set(registration.descriptor.id, registration);
 		}
+		this.registerViewActions(container);
 		const views = sortViews(registrations);
 		if (views.length > 0) {
 			this._onDidRegisterViews.fire({ container, views });
@@ -322,10 +332,52 @@ export class WorkbenchViewRegistry {
 		const containerId = removed[0].containerId;
 		const container = this.containers.get(containerId)?.descriptor;
 		if (!container) return;
+		this.registerViewActions(container);
 		this._onDidDeregisterViews.fire({
 			container,
 			views: sortViews(removed),
 		});
+	}
+
+	private registerViewActions(container: IViewContainerDescriptor): void {
+		const actions = new DisposableStore();
+		this.viewActions.set(container.id, actions);
+		const views = this.getViews(container.id);
+		for (const view of views) {
+			const visible = ContextKeyExpr.has(getVisibleViewContextKey(view.id));
+			// The declaration owns the command lifetime. Resolve the model from
+			// the invoking window, rather than capturing a window in this registry.
+			actions.add(registerAction2(class extends Action2 {
+				constructor() {
+					super({
+						id: `${view.id}.toggleVisibility`,
+						title: view.localizationKey ? localize2(view.localizationKey, view.title) : view.title,
+						toggled: visible,
+						precondition: view.canToggleVisibility === false ? ContextKeyExpr.false() : ContextKeyExpr.and(view.when, ContextKeyExpr.or(
+							ContextKeyExpr.not(getVisibleViewContextKey(view.id)), ...views.filter(other => other.id !== view.id).map(other => ContextKeyExpr.has(getVisibleViewContextKey(other.id))),
+						)),
+						menu: container.location === ViewContainerLocation.Sidebar ? { id: MenuId.SidebarTitle, group: '1_views', order: view.order, when: ContextKeyExpr.and(ActiveViewletContext.isEqualTo(container.id), view.when) } : undefined,
+					});
+				}
+				override run(accessor: ServicesAccessor): void {
+					const service = accessor.get(IViewDescriptorService);
+					if (service.getViewContainerForView(view.id)?.id !== container.id || view.canToggleVisibility === false) return;
+					const model = service.getViewContainerModel(container.id);
+					if (!model.activeViewDescriptors.some(active => active.id === view.id)) return;
+					const isVisible = model.isVisible(view.id);
+					if (isVisible && model.visibleViewDescriptors.length <= 1) return;
+					model.setVisible(view.id, !isVisible);
+				}
+			}));
+		}
+	}
+
+	protected override disposeCore(): void {
+		// Static declarations live with their registry; window models observe
+		// their removal before the registry releases its event emitters.
+		for (const container of [...this.containers.values()]) this.removeViewContainer(container);
+		this.welcomeContents.clear();
+		super.disposeCore();
 	}
 
 	getViewContainers(

@@ -338,3 +338,81 @@ test.describe('Pane motion', () => {
 		expect(state).toEqual({ expanded: state.target, target: state.target, collapsed: 28, hidden: true, inert: true, animations: 0 });
 	});
 });
+
+
+test('sidebar overflow registers view visibility and layout commands', async ({ workbench, application }) => {
+	const page = workbench.page;
+	const sidebar = page.locator('[data-part="sidebar"]');
+	const activitybar = page.locator('[data-part="activitybar"]');
+	await page.getByRole('tab', { name: 'Explorer', exact: true }).first().click();
+	const open = () => sidebar.locator('.ash-pane-composite-title-part-actions').getByRole('button', { name: 'More Actions', exact: true }).click();
+	const items = () => workbench.menus.inspect(application, open);
+	const initial = await items();
+	expect(initial).toEqual(expect.arrayContaining([
+		expect.objectContaining({ label: 'Open Editors', checked: false, enabled: true }),
+		expect.objectContaining({ label: 'Move Primary Side Bar Right', enabled: true }),
+		expect.objectContaining({ label: 'Activity Bar Position', enabled: true }),
+		expect.objectContaining({ label: 'Activity Bar Size', enabled: true }),
+		expect.objectContaining({ label: 'Hide Primary Side Bar', enabled: true }),
+	]));
+	await workbench.menus.select(application, open, ['Open Editors']);
+	const editors = sidebar.locator('[data-view-id="workbench.explorer.openEditorsView"]');
+	await expect(editors).toBeVisible();
+	expect(await items()).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Open Editors', checked: true })]));
+	await workbench.menus.select(application, open, ['Open Editors']);
+	await expect(editors).toBeHidden();
+	await workbench.menus.select(application, open, ['Move Primary Side Bar Right']);
+	await expect(sidebar).toHaveClass(/sidebar-right/u);
+	expect(await items()).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Move Primary Side Bar Left' })]));
+	await workbench.quickaccess.runCommand('workbench.action.toggleSidebarPosition');
+	await expect(sidebar).not.toHaveClass(/sidebar-right/u);
+	await workbench.menus.select(application, open, ['Activity Bar Size', 'Compact']);
+	await expect(activitybar).toHaveClass(/compact/u);
+	await workbench.quickaccess.runCommand('workbench.action.activityBar.size.default');
+	await expect(activitybar).not.toHaveClass(/compact/u);
+	await workbench.menus.select(application, open, ['Activity Bar Position', 'Top']);
+	await expect(activitybar).toBeHidden();
+	await expect(sidebar.locator('.ash-sidebar-composite-bar-top .ash-composite-bar')).toBeVisible();
+	expect((await items()).some(item => item.label === 'Activity Bar Size')).toBe(false);
+	expect(await workbench.menus.inspect(application, open, ['Activity Bar Position'])).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Top', checked: true })]));
+	await workbench.quickaccess.runCommand('workbench.action.activityBarLocation.bottom');
+	await expect(sidebar.locator('.ash-sidebar-composite-bar-bottom .ash-composite-bar')).toBeVisible();
+	await workbench.quickaccess.runCommand('workbench.action.activityBarLocation.hide');
+	await expect(sidebar.locator('.ash-composite-bar')).toBeHidden();
+	await workbench.quickaccess.runCommand('workbench.action.activityBarLocation.default');
+	await expect(activitybar).toBeVisible();
+	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+	const gitItems = await items();
+	expect(gitItems.some(item => item.label === 'Open Editors')).toBe(false);
+	expect(gitItems).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Changes', checked: true, enabled: false })]));
+	await workbench.menus.select(application, open, ['Hide Primary Side Bar']);
+	await expect(sidebar).toBeHidden();
+	await workbench.quickaccess.runCommand('workbench.action.toggleSideBar');
+	await expect(sidebar).toBeVisible();
+});
+
+
+test.describe('Git sidebar visibility menus', () => {
+	test.use({ openWorkspace: true, gitRepository: true });
+	test('Git sidebar overflow toggles panes and protects the last visible view', async ({ target, workbench, application }) => {
+		test.skip(target.appServerMode !== 'required', 'Git panes require the connected App Server');
+		const page = workbench.page;
+		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		const sidebar = page.locator('[data-part="sidebar"]');
+		const open = () => sidebar.locator('.ash-pane-composite-title-part-actions').getByRole('button', { name: 'More Actions', exact: true }).click();
+		for (const [label, id] of [['Graph', 'ash.gitGraph'], ['Agent Review', 'ash.gitAgentReview']] as const) {
+			const pane = sidebar.locator(`[data-view-id="${id}"]`);
+			await expect(pane).toBeVisible();
+			await workbench.menus.select(application, open, [label]);
+			await expect(pane).toBeHidden();
+		}
+		expect(await workbench.menus.inspect(application, open)).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Changes', checked: true, enabled: false })]));
+		await workbench.menus.select(application, open, ['Graph']);
+		await expect(sidebar.locator('[data-view-id="ash.gitGraph"]')).toBeVisible();
+		await workbench.menus.select(application, open, ['Changes']);
+		await expect(sidebar.locator('[data-view-id="ash.gitView"]')).toBeHidden();
+		expect(await workbench.menus.inspect(application, open)).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Graph', checked: true, enabled: false })]));
+		await workbench.menus.select(application, open, ['Changes']);
+		await expect(sidebar.locator('[data-view-id="ash.gitView"]')).toBeVisible();
+	});
+});

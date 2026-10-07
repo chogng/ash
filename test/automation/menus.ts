@@ -46,7 +46,7 @@ export class Menus {
 		await expect(menu).toBeVisible();
 		const items = await menu.locator('[role^="menuitem"]').evaluateAll(elements => elements.map(element => ({
 			label: element.getAttribute('aria-label') ?? element.textContent!.trim(),
-			enabled: element.getAttribute('aria-disabled') !== 'true',
+			enabled: !element.matches(':disabled') && element.getAttribute('aria-disabled') !== 'true',
 			checked: element.getAttribute('aria-checked') === 'true',
 		})));
 		for (let level = 0; level <= path.length; level++) { await this.page.keyboard.press('Escape'); }

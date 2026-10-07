@@ -4,10 +4,12 @@ import type { IResourceEditorInput, IEditorPane, IEditorControl } from '../../..
 import { Dimension, h, type IDimension } from '../../../../base/browser/dom.js';
 import './media/sessionChangesEditor.css';
 import { MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { extUri } from '../../../../base/common/resources.js';
 import { localize } from '../../../../nls.js';
 import { IChatService } from '../../../../workbench/services/chat/common/chatService.js';
 import { EditorPanes } from '../../../../workbench/browser/editor.js';
 import { type EditorPaneCreationOptions, EditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
+import { isEditorPaneWithViewState, type IEditorPaneWithViewState } from '../../../../workbench/browser/parts/editor/editorWithViewState.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { createTurnMultiDiffEditorInput } from '../../../browser/turnMultiDiffSource.js';
 import type { MultiDiffEditorInput } from '../../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
@@ -16,13 +18,15 @@ import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../.
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 
 /** Resolves the selected conversation's changes only while its editor content is visible. */
-export class SessionChangesEditor extends EditorPane implements IEditorPane {
+export class SessionChangesEditor extends EditorPane implements IEditorPaneWithViewState {
 	public readonly id = 'ash.sessions.changesEditor';
+	public readonly viewStateTypeId = 'ash.sessions.changesEditor';
 	private readonly comparison = this._register(new MutableDisposable<IEditorPane>());
 	private domNode!: HTMLDivElement;
 	private messageDomNode!: HTMLParagraphElement;
 	private input: IResourceEditorInput | undefined;
 	private comparisonInput: MultiDiffEditorInput | undefined;
+	private viewState: unknown;
 	private dimension: IDimension = Dimension.Zero;
 	private visible = false;
 	private revision = 0;
@@ -76,6 +80,9 @@ export class SessionChangesEditor extends EditorPane implements IEditorPane {
 	}
 
 	public override async setInput(input: IResourceEditorInput, _signal: AbortSignal): Promise<void> {
+		if (this.input && !extUri.isEqual(this.input.resource, input.resource)) {
+			this.clearInput();
+		}
 		this.input = input;
 		await this.refresh();
 	}
@@ -83,6 +90,7 @@ export class SessionChangesEditor extends EditorPane implements IEditorPane {
 	public override clearInput(): void {
 		this.input = undefined;
 		this.comparisonInput = undefined;
+		this.viewState = undefined;
 		this.revision++;
 		this.pending.clear();
 		this.comparison.clear();
@@ -96,6 +104,9 @@ export class SessionChangesEditor extends EditorPane implements IEditorPane {
 	}
 
 	public override setVisible(visibility: boolean): void {
+		if (!visibility && this.visible) {
+			this.viewState = this.saveViewState();
+		}
 		super.setVisible(visibility);
 		const visible = visibility;
 		if (this.visible === visible) {
@@ -128,12 +139,28 @@ export class SessionChangesEditor extends EditorPane implements IEditorPane {
 		return this.comparison.value?.getControl();
 	}
 
+	public saveViewState(): unknown {
+		const pane = this.comparison.value;
+		const state = pane && isEditorPaneWithViewState(pane) ? pane.saveViewState() : undefined;
+		return state ?? this.viewState ?? null;
+	}
+
+	public restoreViewState(state: unknown): void {
+		this.viewState = state;
+		const pane = this.comparison.value;
+		if (state != null && pane && isEditorPaneWithViewState(pane)) {
+			pane.restoreViewState(state);
+		}
+	}
+
 	private async refresh(): Promise<void> {
 		const input = this.input;
 		if (!input || !this.visible || this.isDisposed) {
 			return;
 		}
 		const revision = ++this.revision;
+		// Resolving changes replaces the child pane; keep its snapshot until the new widget can restore it.
+		this.viewState = this.saveViewState();
 		this.pending.clear();
 		this.comparison.clear();
 		this.comparisonInput = undefined;
@@ -173,6 +200,7 @@ export class SessionChangesEditor extends EditorPane implements IEditorPane {
 			}
 			this.messageDomNode.hidden = true;
 			pane.layout(this.dimension);
+			this.restoreViewState(this.viewState);
 			pane.setVisible(true);
 		} catch (error) {
 			if (!this.isDisposed && revision === this.revision) {

@@ -1,3 +1,4 @@
+import { localize } from "../../../../nls.js";
 import type { IContextMenuProvider } from "../../contextmenu.js";
 import type { IAction } from "../../../common/actions.js";
 import { Separator } from "../../../common/actions.js";
@@ -112,8 +113,8 @@ export class ToolBar extends Disposable {
 
 class MoreActionsAction implements IAction {
 	readonly id = "ash.toolbar.moreActions";
-	readonly label = "More Actions";
-	readonly tooltip = "More Actions";
+	readonly label = localize("toolbar.moreActions", "More Actions");
+	readonly tooltip = this.label;
 	readonly icon = Lxicon.ellipsis;
 	readonly enabled = true;
 	readonly checked = undefined;

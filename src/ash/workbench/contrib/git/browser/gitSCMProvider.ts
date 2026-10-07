@@ -251,6 +251,25 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 		return { id, label, tooltip: label, icon, enabled: true, checked: undefined, run: () => { void this.mutatePaths(action, paths); } };
 	}
 
+	public async runTitleOperation(operation: () => Promise<unknown>): Promise<void> {
+		await this.runAction(async () => { await operation(); });
+	}
+
+	public async stageAll(): Promise<void> {
+		const changes = this.status?.changes.filter(change => change.conflicted || change.worktreeStatus !== 'unmodified') ?? [];
+		await this.mutatePaths('stage', uniquePaths(changes.flatMap(changePaths)));
+	}
+
+	public async unstageAll(): Promise<void> {
+		const changes = this.status?.changes.filter(change => !change.conflicted && change.indexStatus !== 'unmodified') ?? [];
+		await this.mutatePaths('unstage', uniquePaths(changes.flatMap(changePaths)));
+	}
+
+	public async discardAll(): Promise<void> {
+		const changes = this.status?.changes.filter(isDiscardable) ?? [];
+		await this.mutatePaths('discard', uniquePaths(changes.map(change => change.path)));
+	}
+
 	private async runAction(run: () => Promise<void>): Promise<void> {
 		if (this.busy) return;
 		this.setBusy(true);

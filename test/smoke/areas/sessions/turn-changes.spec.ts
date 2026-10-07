@@ -1,4 +1,5 @@
 import { expect, test } from '../../../automation/test.js';
+import { QuickAccess } from '../../../automation/quickaccess.js';
 import { AppServerProtocolClient } from '../../../../src/ash/platform/agentHost/browser/appServerProtocolClient.js';
 import { ChildProcessJsonlTransport } from '../../../../src/ash/platform/agentHost/node/childProcessJsonlTransport.js';
 import { createAppServerDaemonLauncher } from '../../../../src/ash/platform/app-server-daemon/electron-main/appServerDaemonLauncher.js';
@@ -67,6 +68,19 @@ test('Turn file selection commits a reviewed file and keeps another Session sepa
 			await page.locator('.ash-editor-title-control').getByRole('tab', { name: 'Changes', exact: true }).click();
 		};
 		await open('Selected files A');
+		const commands = new QuickAccess(page);
+		await commands.runCommand('ash.sessions.showEditor');
+		const review = page.locator('.ash-sessions-changes-editor .stanza-multi-diff-editor');
+		await expect(review).toBeVisible();
+		const fileHeader = review.getByRole('button', { name: /main.ts/ });
+		await fileHeader.click();
+		await expect(fileHeader).toHaveAttribute('aria-expanded', 'false');
+		await commands.runCommand('ash.sessions.hideEditor');
+		await expect(review).toHaveCount(0);
+		await commands.runCommand('ash.sessions.showEditor');
+		await expect(fileHeader).toHaveAttribute('aria-expanded', 'false');
+		await fileHeader.click();
+		await expect(fileHeader).toHaveAttribute('aria-expanded', 'true');
 		const changes = page.locator('.ash-sessions-changes');
 		const rows = changes.getByRole('treeitem');
 		await expect(rows).toHaveCount(2);
@@ -76,7 +90,7 @@ test('Turn file selection commits a reviewed file and keeps another Session sepa
 		await message.fill('commit selected A');
 		await message.press('Enter');
 		await expect(page.getByRole('button', { name: 'Commit this preview', exact: true })).toBeVisible();
-		await expect(page.locator('[data-part="editor"]')).toContainText('const value = 42;');
+		await expect(page.locator('.ash-sessions-frame-end[data-part="editor"]')).toContainText('const value = 42;');
 		await page.getByRole('button', { name: 'Commit this preview', exact: true }).click();
 		await expect.poll(async () => (await client.request(APP_SERVER_METHODS['turnChanges/list'], a)).changeSets[0]?.commitState).toBe('partiallyCommitted');
 		const git = async (...args: string[]): Promise<string> => (await run('git', args, { cwd: testWorkspace.directory })).stdout.trim();

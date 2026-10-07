@@ -1,7 +1,7 @@
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { Lxicon } from "../../../../base/common/lxicons.js";
-import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
@@ -30,7 +30,7 @@ import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import './media/scmMergeEditor.css';
 import './scm.service.contribution.js';
-import { ISCMService, ISCMViewService, SCMHistoryBusyContext, VIEW_PANE_ID } from '../common/scm.js';
+import { ISCMService, ISCMViewService, SCMHistoryBusyContext, SCMProviderContext, SCMViewModeContext, SCMViewSortKeyContext, VIEW_PANE_ID, type SCMViewMode, type SCMViewSortKey } from '../common/scm.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
@@ -38,7 +38,54 @@ import { restoreFocus } from '../../../../base/browser/focus.js';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { FocusedViewContext } from '../../../common/contextkeys.js';
+import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { REPOSITORIES_VIEW_PANE_ID, SCMRepositoriesViewPane } from './scmRepositoriesViewPane.js';
+
+const scmViewSortMenu = MenuId.for('SCMViewSort');
+MenusRegistry.appendMenuItem(MenuId.SCMTitle, {
+	submenu: scmViewSortMenu, title: localize2('scm.viewSort', 'View & Sort'),
+	when: ContextKeyExpr.notEquals(SCMProviderContext.key, ''), group: '0_view', order: 2,
+});
+
+for (const mode of ['list', 'tree'] as const) {
+	const title = mode === 'list' ? localize2('scm.viewAsList', 'View as List') : localize2('scm.viewAsTree', 'View as Tree');
+	registerAction2(class extends Action2 {
+		constructor() {
+			super({
+				id: mode === 'list' ? 'workbench.scm.action.setListViewMode' : 'workbench.scm.action.setTreeViewMode', title,
+				toggled: SCMViewModeContext.isEqualTo(mode), menu: [
+					{ id: scmViewSortMenu, group: '1_viewmode', order: mode === 'list' ? 1 : 2 },
+					{ id: MenuId.SCMTitle, group: '0_view', order: 1, when: ContextKeyExpr.and(ContextKeyExpr.notEquals(SCMProviderContext.key, ''), ContextKeyExpr.notEquals(SCMViewModeContext.key, mode)) },
+				]
+			});
+		}
+		public override run(accessor: ServicesAccessor): void {
+			const pane = accessor.get(IViewsService).getViewWithId<ScmViewPane>(VIEW_PANE_ID);
+			if (pane) pane.viewMode = mode satisfies SCMViewMode;
+		}
+	});
+}
+
+const sortActions = [
+	{ key: 'path', title: localize2('scm.sortByPath', 'Sort Changes by Path') },
+	{ key: 'name', title: localize2('scm.sortByName', 'Sort Changes by Name') },
+	{ key: 'status', title: localize2('scm.sortByStatus', 'Sort Changes by Status') },
+] as const;
+for (const [order, action] of sortActions.entries()) {
+	registerAction2(class extends Action2 {
+		constructor() {
+			super({
+				id: `workbench.scm.action.setSortKey.${action.key}`, title: action.title,
+				precondition: SCMViewModeContext.isEqualTo('list'), toggled: SCMViewSortKeyContext.isEqualTo(action.key),
+				menu: { id: scmViewSortMenu, group: '2_sort', order }
+			});
+		}
+		public override run(accessor: ServicesAccessor): void {
+			const pane = accessor.get(IViewsService).getViewWithId<ScmViewPane>(VIEW_PANE_ID);
+			if (pane) pane.viewSortKey = action.key satisfies SCMViewSortKey;
+		}
+	});
+}
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 
@@ -258,7 +305,7 @@ export function registerGitViews(
 			title: "Changes",
 			localizationKey: { bundle: "ash.views", key: "changes" },
 			order: 1,
-			canToggleVisibility: false,
+			canToggleVisibility: true,
 			ctorDescriptor: new SyncDescriptor(ScmViewPane),
 		},
 		{
@@ -268,7 +315,7 @@ export function registerGitViews(
 			order: 2,
 			when: ContextKeyExpr.greater('scm.providerCount', 0),
 			collapsed: true,
-			canToggleVisibility: false,
+			canToggleVisibility: true,
 			ctorDescriptor: new SyncDescriptor(ScmAgentReviewViewPane),
 		},
 		{
@@ -278,7 +325,7 @@ export function registerGitViews(
 			order: 3,
 			when: ContextKeyExpr.greater('scm.historyProviderCount', 0),
 			collapsed: true,
-			canToggleVisibility: false,
+			canToggleVisibility: true,
 			ctorDescriptor: new SyncDescriptor(SCMHistoryViewPane),
 		},
 	]);

@@ -10,6 +10,7 @@ export const DEFAULT_OVERSCAN_ROW_COUNT = 8;
 export interface IMultiDiffEditorWidgetOptions {
 	readonly container: HTMLElement;
 	readonly model: IMultiDiffEditorModel;
+	/** Raw editor line height: zero derives it from font size, and values below eight are multipliers. */
 	readonly lineHeight?: number;
 	readonly fontFamily?: string;
 	readonly fontSize?: number;
@@ -31,7 +32,7 @@ export function validateMultiDiffEditorOptions(options: IMultiDiffEditorWidgetOp
 	validateDocumentDiffItems(options.model.items);
 	const lineHeight = options.lineHeight ?? DEFAULT_LINE_HEIGHT;
 	const overscanRowCount = options.overscanRowCount ?? DEFAULT_OVERSCAN_ROW_COUNT;
-	if (!isFiniteNumber(lineHeight) || lineHeight <= 0) throw new RangeError('Multi-diff editor line height must be positive and finite');
+	if (!isFiniteNumber(lineHeight) || lineHeight < 0) throw new RangeError('Multi-diff editor line height must be non-negative and finite');
 	if (!isNonNegativeSafeInteger(overscanRowCount)) throw new RangeError('Multi-diff editor overscan row count must be a non-negative safe integer');
 	if (options.fontFamily !== undefined && (typeof options.fontFamily !== 'string' || !options.fontFamily.trim())) throw new TypeError('Multi-diff editor font family must be a non-empty string');
 	if (options.fontSize !== undefined && (!isFiniteNumber(options.fontSize) || options.fontSize <= 0)) throw new RangeError('Multi-diff editor font size must be positive and finite');

@@ -1,3 +1,4 @@
+import { LayoutActionsContext } from '../../browser/actions/layoutActions.js';
 import { createTestComponentServices, registerTestComponentServices, createTestEditorServices } from '../common/testEditorServices.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { ContextKeyExpr } from '../../../platform/contextkey/common/contextkey.js';
@@ -393,6 +394,7 @@ test('Activity Bar badge setting applies on startup and preserves per-icon choic
 		bar.setBadge('second', 2);
 		bar.toggleBadgeEnablement('second');
 		const globalBar = { domNode: dom.window.document.createElement('div'), getContextMenuActions: () => [] };
+		harness.services.registerInstance(IMenuService, new MenuService(disposables.add(new CommandService(harness.services)), contextKeys));
 		disposables.add(harness.services.createInstance(ActivitybarPart, harness.container, bar, globalBar));
 		const first = (): HTMLElement => bar.domNode.querySelector('[data-action-id="first"]')!;
 		assert.equal(bar.domNode.querySelector('.ash-count-badge'), null);
@@ -1678,7 +1680,7 @@ test('Activity Bar context menu persists hidden views and keeps one pinned view'
 	const activitybar = firstBar.add(createTestActivitybar(dom.window.document.body, compositeBar, globalBar, configuration, localization));
 	activitybar.domNode.dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true }));
 	assert.deepEqual(actions.slice(0, 2).map(action => [action.label, action.checked]), [['Explorer', true], ['Search', true]]);
-	assert.ok(actions.some(action => action.id === 'workbench.action.activityBar.position'));
+	assert.ok(actions.some(action => action.id === 'submenu.ActivityBarPositionMenu'));
 	const search = activitybar.domNode.querySelector<HTMLElement>('[data-action-id="ash.search"]');
 	assert.ok(search);
 	search.dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true }));
@@ -2218,12 +2220,16 @@ test('Pane composite service reveals retained Parts and publishes visibility cha
 	assert.deepEqual({ events: runtimeEvents, context: context.getValue('focusedView'), retained: first!.isDisposed }, { events: beforeDisposal, context: '', retained: false });
 });
 
-function createTestActivitybar(container: HTMLElement, composites: InstanceType<typeof CompositeBar>, global: ConstructorParameters<typeof ActivitybarPart>[2], configuration: ConstructorParameters<typeof ActivitybarPart>[3], localization: ConstructorParameters<typeof ActivitybarPart>[4]): InstanceType<typeof ActivitybarPart> {
+function createTestActivitybar(container: HTMLElement, composites: InstanceType<typeof CompositeBar>, global: ConstructorParameters<typeof ActivitybarPart>[2], configuration: ConstructorParameters<typeof ActivitybarPart>[3], localization: ILocalizationService): InstanceType<typeof ActivitybarPart> {
 	const services = createTestComponentServices(paneStorage);
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(PanelLocalizationService, localization);
+	const contexts = new ContextKeyService();
+	const layoutContext = new LayoutActionsContext(configuration, contexts);
+	const commands = new CommandService(services);
+	services.registerInstance(IMenuService, new MenuService(commands, contexts));
 	const part = registerTestComponentServices(services).createInstance(ActivitybarPart, container, composites, global);
 	// This fixture container belongs to the created Part's test lifetime.
-	suiteTeardown(() => services.dispose());
+	suiteTeardown(() => { layoutContext.dispose(); contexts.dispose(); commands.dispose(); services.dispose(); });
 	return part;
 }

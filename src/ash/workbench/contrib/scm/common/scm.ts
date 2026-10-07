@@ -117,3 +117,11 @@ export const ISCMViewService = createServiceIdentifier<ISCMViewService>('scmView
 
 export const SCMHistoryBusyContext = new RawContextKey<boolean>('scmHistoryBusy', false);
 export const SCMHistoryProviderIdContext = new RawContextKey<string>('scmHistoryProviderId', '');
+
+export const SCMProviderContext = new RawContextKey<string>('scmProvider', '');
+export const SCMBusyContext = new RawContextKey<boolean>('scmBusy', false);
+export const SCMCanCommitContext = new RawContextKey<boolean>('scmCanCommit', false);
+export type SCMViewMode = 'list' | 'tree';
+export type SCMViewSortKey = 'path' | 'name' | 'status';
+export const SCMViewModeContext = new RawContextKey<SCMViewMode>('scmViewMode', 'tree');
+export const SCMViewSortKeyContext = new RawContextKey<SCMViewSortKey>('scmViewSortKey', 'path');

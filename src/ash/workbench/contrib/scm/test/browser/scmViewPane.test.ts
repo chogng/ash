@@ -33,8 +33,8 @@ import type { IContextMenuProvider } from "../../../../../base/browser/contextme
 import { AnchorAxisAlignment, AnchorPosition } from "../../../../../base/common/layout.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
-import { MenuId, registerAction2 } from "../../../../../platform/actions/common/actions.js";
-import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
+import { IMenuService, MenuId, registerAction2 } from "../../../../../platform/actions/common/actions.js";
+import { ICommandService } from "../../../../../platform/commands/common/commands.js";
 import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
 import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
 import { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
@@ -42,7 +42,7 @@ import type { HoverSetupOptions, IHoverService, IManagedHover } from "../../../.
 import { IResourceLabelService, ResourceLabels, DEFAULT_LABELS_CONTAINER, IResourceIconRenderer } from "../../../../browser/labels.js";
 import { GitWorkspaceError, IGitService, type GitCommitDetails, type GitRepository, type GraphQuery, type GitStatus } from "../../../../../workbench/contrib/git/common/gitService.js";
 import { IEditorService, type EditorOpenOptions, type EditorOpenTarget } from "../../../../../workbench/services/editor/common/editorService.js";
-import type { IViewsService } from '../../../../../workbench/services/views/common/viewsService.js';
+import { IViewsService } from '../../../../../workbench/services/views/common/viewsService.js';
 import { WorkbenchState, IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import type { IWorkingCopyService } from '../../../../../workbench/services/workingCopy/common/workingCopyService.js';
 import { CommandService } from "../../../../../workbench/services/commands/common/commandService.js";
@@ -55,6 +55,9 @@ import { GitSCMContribution, GitSCMProvider, type GitSCMProviderServices } from 
 import { SCMService } from '../../common/scmService.js';
 import { SCMViewService } from '../../browser/scmViewService.js';
 import { SCMRepositoriesViewPane } from '../../browser/scmRepositoriesViewPane.js';
+import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { IStorageService, StorageScope } from '../../../../../platform/storage/common/storage.js';
+import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { ISCMService, ISCMViewService, VIEW_PANE_ID, type ISCMProvider } from '../../common/scm.js';
 
 const testDialogs: IDialogService = {
@@ -168,7 +171,7 @@ test("Git contribution registers Repositories before Changes and hides it for a 
 	try {
 		const { WorkbenchViewRegistry, WorkbenchViewContainerId } = await import("../../../../../workbench/common/views.js");
 		const { GIT_AGENT_REVIEW_VIEW_ID, GIT_GRAPH_VIEW_ID, registerGitViews } = await import("../../../../../workbench/contrib/scm/browser/scm.contribution.js");
-		const registry = new WorkbenchViewRegistry();
+		using registry = new WorkbenchViewRegistry();
 
 		registerGitViews(registry);
 
@@ -204,7 +207,7 @@ test('SCM panes follow repository and history availability through the window co
 		using services = new InstantiationService();
 		services.registerInstance(IContextKeyService, context);
 		services.registerInstance(ISCMService, scm);
-		const registry = new WorkbenchViewRegistry();
+		using registry = new WorkbenchViewRegistry();
 		registerGitViews(registry);
 		using model = new ViewContainerModel(registry.getViewContainer(WorkbenchViewContainerId.Git)!, registry, context);
 		using host = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['workbench.contrib.scmRepositories']);
@@ -1005,6 +1008,75 @@ test("ScmAgentReviewViewPane exposes an explicit empty state", async () => {
 	}
 });
 
+test('Changes title actions execute on their captured repository and retain view and sort choices', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>');
+	const globals = installDomGlobals(browser);
+	try {
+		await import('../../../git/browser/git.contribution.js');
+		await import('../../browser/scm.contribution.js');
+		const { ScmViewPane } = await import('../../browser/scmViewPane.js');
+		using resources = new DisposableStore();
+		using dependencies = createTestEditorServices(undefined, undefined, browser.window.document);
+		using services = dependencies.createChild();
+		using scm = new SCMService();
+		using views = new SCMViewService(scm);
+		const calls: string[] = [];
+		const repositories = ['first', 'second'].map(id => ({ id, label: id, path: `/${id}`, root: URI.file(`/${id}`) }));
+		const snapshots = new Map(repositories.map(repository => [repository.id, {
+			repositoryId: repository.id, streamInstanceId: 'stream', revision: 1, workspacePath: repository.path,
+			head: { type: 'branch' as const, name: 'main', objectId: '1234567', upstream: undefined },
+			changes: [change('a/z.ts', 'unmodified', 'modified'), change('b/a.ts', 'unmodified', 'added')],
+		} satisfies GitStatus]));
+		const staging = new DeferredPromise<GitStatus>();
+		const git = {
+			onDidChangeRepositoryStatus: Event.None, onDidBecomeReady: Event.None,
+			status: async (id: string) => snapshots.get(id)!,
+			stage: async (_paths: readonly string[], id: string) => { calls.push(id); return staging.p; },
+		} as unknown as IGitService;
+		for (const repository of repositories) {
+			const provider = resources.add(new GitSCMProvider(git, repository, {} as GitHistoryProvider, testGitProviderServices()));
+			resources.add(scm.registerSCMProvider(provider));
+		}
+		services.registerInstance(ISCMService, scm);
+		services.registerInstance(ISCMViewService, views);
+		services.registerInstance(IContextMenuService, testContextMenuProvider);
+		using commands = new CommandService(services);
+		services.registerInstance(ICommandService, commands);
+		const { registerCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
+		const menus = new MenuService(commands, services.get(IContextKeyService));
+		services.registerInstance(IMenuService, menus);
+		registerCodeEditorServices(services);
+		using pane = services.createInstance(ScmViewPane, browser.window.document.body, { id: VIEW_PANE_ID, title: 'Changes' });
+		services.registerInstance(IViewsService, { getViewWithId: () => pane } as unknown as IViewsService);
+		browser.window.document.body.append(pane.element);
+		await waitFor(() => pane.element.querySelectorAll('.ash-scm-change').length === 2);
+		const context = services.get(IContextKeyService).getContext(pane.element);
+		assert.equal(context.getValue('scmViewMode'), 'tree');
+		using scoped = services.get(IContextKeyService).createScoped(pane.element.querySelector<HTMLElement>('.ash-scm')!);
+		const captured = menus.getMenuActions(MenuId.for('git.changes'), { arg: 'first' }, scoped);
+		const stage = captured.flatMap(([, actions]) => actions).find(action => action.id === 'git.stageAll')!;
+		views.selectRepository('second');
+		const operation = stage.run();
+		assert.deepEqual(calls, ['first']);
+		assert.equal(scm.getRepository('first')!.provider.isBusy, true);
+		views.selectRepository('first');
+		assert.equal(pane.element.querySelector<HTMLButtonElement>('[aria-label="Refresh"]')?.disabled, true);
+		await staging.complete({ ...snapshots.get('first')!, revision: 2, changes: [] });
+		await operation;
+		assert.equal(scm.getRepository('first')!.provider.isBusy, false);
+		views.selectRepository('second');
+		await commands.executeCommand('workbench.scm.action.setListViewMode');
+		assert.equal(pane.element.querySelectorAll('.ash-scm-folder').length, 0);
+		await commands.executeCommand('workbench.scm.action.setSortKey.name');
+		assert.deepEqual([...pane.element.querySelectorAll('.ash-scm-change-open')].map(element => element.getAttribute('aria-label')), ['Open changes for b/a.ts', 'Open changes for a/z.ts']);
+		assert.equal(dependencies.get(IStorageService).get('scm.viewMode', StorageScope.WORKSPACE), 'list');
+		assert.equal(dependencies.get(IStorageService).get('scm.viewSortKey', StorageScope.WORKSPACE), 'name');
+	} finally {
+		browser.window.close();
+		for (const name of globals) Reflect.deleteProperty(globalThis, name);
+	}
+});
+
 test('ScmViewPane folds groups through the shared tree and keeps state when resources refresh', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
 	const installedGlobals = installDomGlobals(browser);
@@ -1049,7 +1121,8 @@ test('ScmViewPane folds groups through the shared tree and keeps state when reso
 	setNlsResolver((bundle, key, fallback) => chinese.bundles[bundle]?.[key] ?? fallback);
 	try {
 		const { ScmViewPane } = await import('../../browser/scmViewPane.js');
-		using services = new InstantiationService();
+		using dependencies = createTestEditorServices(undefined, undefined, browser.window.document);
+		using services = dependencies.createChild();
 		using configuration = new InMemoryConfigurationService();
 		using scm = new SCMService();
 		using views = new SCMViewService(scm);
@@ -1338,10 +1411,11 @@ test("ScmViewPane groups App Server Git status", async () => {
 		services.registerInstance(IConfigurationService, configuration);
 		const { registerCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
 		registerCodeEditorServices(services);
+		using titleCommands = new CommandService(services);
 		using pane = new ScmViewPane(browser.window.document.body, {
 			id: VIEW_PANE_ID,
 			title: "Changes",
-		}, scmService, viewService, testResourceLabelService(), testContextMenuProvider, configuration, testFileIconThemeService(), services);
+		}, scmService, viewService, testResourceLabelService(), testContextMenuProvider, configuration, testFileIconThemeService(), services, new MenuService(titleCommands, decorationServices.get(IContextKeyService)), decorationServices.get(IContextKeyService), decorationServices.get(IStorageService));
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector(".ash-scm-status")?.textContent === "4 changed files");
 
@@ -1569,14 +1643,14 @@ test("ScmViewPane accepts a restarted Git stream and rejects its retired predece
 		using provider = new GitSCMProvider(gitService, gitService.repositories[0], {} as GitHistoryProvider, testGitProviderServices());
 		using repository = scmService.registerSCMProvider(provider);
 		using configuration = new InMemoryConfigurationService();
-		using editorServices = new InstantiationService();
-		editorServices.registerInstance(IConfigurationService, configuration);
+		using editorServices = createTestEditorServices(configuration, undefined, browser.window.document);
 		const { registerCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
 		registerCodeEditorServices(editorServices);
+		using titleCommands = new CommandService(editorServices);
 		using pane = new ScmViewPane(browser.window.document.body, {
 			id: "ash.git.restart",
 			title: "Changes",
-		}, scmService, viewService, testResourceLabelService(), testContextMenuProvider, configuration, testFileIconThemeService(), editorServices);
+		}, scmService, viewService, testResourceLabelService(), testContextMenuProvider, configuration, testFileIconThemeService(), editorServices, new MenuService(titleCommands, editorServices.get(IContextKeyService)), editorServices.get(IContextKeyService), editorServices.get(IStorageService));
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector('[aria-label="Open changes for before.ts"]') !== null);
 		assert.equal(pane.element.querySelector(".ash-scm-branch"), null);

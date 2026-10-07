@@ -68,6 +68,7 @@ export class MenuId {
 	static readonly CommandCenter = new MenuId("CommandCenter");
 	static readonly GlobalActivity = new MenuId("GlobalActivity");
 	static readonly SidebarTitle = new MenuId('SidebarTitle');
+	static readonly ActivityBarPositionMenu = new MenuId('ActivityBarPositionMenu');
 	static readonly TitleBar = new MenuId("TitleBar");
 	static readonly TitleBarLeft = new MenuId("TitleBarLeft");
 	static readonly TitleBarAdjacentCenter = new MenuId("TitleBarAdjacentCenter");
@@ -89,6 +90,7 @@ export class MenuId {
 	static readonly ChatTitle = new MenuId("ChatTitle");
 	static readonly ChatTitleLayout = new MenuId("ChatTitleLayout");
 	static readonly AgentSidebarTitle = new MenuId("AgentSidebarTitle");
+	static readonly SCMTitle = new MenuId('SCMTitle');
 	static readonly SCMHistoryTitle = new MenuId('SCMHistoryTitle');
 	static readonly SCMHistoryItemContext = new MenuId("SCMHistoryItemContext");
 	static readonly SCMHistoryItemChangeContext = new MenuId("SCMHistoryItemChangeContext");

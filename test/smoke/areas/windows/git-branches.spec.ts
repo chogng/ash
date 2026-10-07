@@ -41,16 +41,14 @@ test('Git branch picker explains occupancy and switches after the other worktree
 	}
 });
 
-test('Git branch command switches branches and the status bar opens the branch picker', async ({ target, testWorkspace, workbench }) => {
+test('Git branch menu switches branches and the status bar opens the branch picker', async ({ application, target, testWorkspace, workbench }) => {
 	test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
 
 	const cwd = testWorkspace.directory;
 	await run('git', ['branch', 'topic'], { cwd });
 
 	const page = workbench.page;
-	await page.keyboard.press('F1');
-	await page.locator('.ash-quick-pick').getByRole('combobox').fill('Git: Switch Branch');
-	await page.keyboard.press('Enter');
+	await workbench.git.selectTitleMenu(application, ['Checkout to…']);
 	const picker = page.locator('.ash-quick-pick');
 	await expect(picker.locator('.ash-quick-pick-row-label', { hasText: /^topic$/ })).toBeVisible();
 	await picker.locator('.ash-quick-pick-row-label', { hasText: /^topic$/ }).click();
@@ -59,9 +57,13 @@ test('Git branch command switches branches and the status bar opens the branch p
 
 	await page.locator('[data-statusbar-item-id="ash.status.git.branch"]').click();
 	await expect(picker.locator('.ash-quick-pick-row-label', { hasText: /^main$/ })).toBeVisible();
+	await page.keyboard.press('Escape');
+	await workbench.git.selectTitleMenu(application, ['Branch', 'Checkout to…']);
+	await picker.locator('.ash-quick-pick-row-label', { hasText: /^main$/ }).click();
+	await expect.poll(async () => (await run('git', ['branch', '--show-current'], { cwd })).stdout.trim()).toBe('main');
 });
 
-test('Git branch command preserves local edits when Git rejects the switch', async ({ target, testWorkspace, workbench }) => {
+test('Git branch menu preserves local edits when Git rejects the switch', async ({ application, target, testWorkspace, workbench }) => {
 	test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
 	const cwd = testWorkspace.directory;
 	await run('git', ['switch', '-c', 'topic'], { cwd });
@@ -72,9 +74,7 @@ test('Git branch command preserves local edits when Git rejects the switch', asy
 	await writeFile(testWorkspace.file, 'const value = 3;\n');
 
 	const page = workbench.page;
-	await page.keyboard.press('F1');
-	await page.locator('.ash-quick-pick').getByRole('combobox').fill('Git: Switch Branch');
-	await page.keyboard.press('Enter');
+	await workbench.git.selectTitleMenu(application, ['Branch', 'Checkout to…']);
 	const picker = page.locator('.ash-quick-pick');
 	await expect(picker.locator('.ash-quick-pick-row-label', { hasText: /^topic$/ })).toBeVisible();
 	await picker.locator('.ash-quick-pick-row-label', { hasText: /^topic$/ }).click();
@@ -88,7 +88,7 @@ test.describe('Git branch lifecycle', () => {
 		test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
 	});
 
-	test('Git branch lifecycle creates at HEAD, updates history references and deletes through confirmation', async ({ application, testWorkspace, workbench }) => {
+	test('Changes title branch menu creates at HEAD, updates history references and deletes through confirmation', async ({ application, testWorkspace, workbench }) => {
 		const cwd = testWorkspace.directory;
 		const page = workbench.page;
 		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
@@ -96,7 +96,7 @@ test.describe('Git branch lifecycle', () => {
 		await history.locator('.ash-pane-view-header').click();
 		await expect(history.getByRole('treeitem', { name: /Initial/ }).first()).toBeVisible();
 
-		await workbench.quickaccess.runCommand('git.branch');
+		await workbench.git.selectTitleMenu(application, ['Branch', 'Create Branch…']);
 		const input = page.getByRole('textbox', { name: 'Git: Create Branch', exact: true });
 		await input.fill('ui-topic');
 		await input.press('Enter');
@@ -104,7 +104,7 @@ test.describe('Git branch lifecycle', () => {
 		expect((await run('git', ['branch', '--show-current'], { cwd })).stdout.trim()).toBe('main');
 		await expect(history.getByRole('button', { name: /(?:^|, )ui-topic(?:, |$)/u })).toBeVisible();
 
-		await workbench.quickaccess.runCommand('git.deleteBranch');
+		await workbench.git.selectTitleMenu(application, ['Branch', 'Delete Branch…']);
 		const picker = page.locator('.ash-quick-pick');
 		await picker.getByRole('combobox').fill('ui-topic');
 		await workbench.dialogs.confirm(application, 'Git: Delete Branch', 'Delete Branch', () => picker.getByRole('combobox').press('Enter'));
