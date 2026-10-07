@@ -95,6 +95,7 @@ file-system 实施；编辑器的未保存内容和外部变更冲突仍由前�
 
 - `terminal::TerminalService` 拥有桌面交互式 PTY、连接所有权、输出缓存和短期重连租约；不承担前端屏幕与窗口恢复。
 - Windows 自动发现 PowerShell 时跳过 Store 包和 WindowsApps 别名，并检查解析后的目标；其他 WindowsApps 框架中的可用程序保留。PATH 没有兼容版本时检查 `PROGRAMFILES/PowerShell/7/pwsh.exe`，Windows PowerShell 仍从系统目录发现。目录、环境及发现结果由执行器冻结，显式进程请求不在启动失败后替换程序或重跑。
+- 安全进程环境先按变量名筛选白名单，再转换变量值；无法表示为 Unicode 的名称或值直接忽略，合法 Unicode 值保留。无关变量和凭据不传入终端，终端身份变量仍由执行器设置。
 - TCP 进程接口支持管道与受限 PTY；`processStart.input` 选择 `terminal` 并提供行列数，后续可写入、调整尺寸、中断或取消。
 - Windows 宿主通过 `MxcSandbox::with_pty_helper` 提供内部启动器；App Server 嵌入方使用 `AppServerOptions::with_pty_helper`。Windows MXC 未配置启动器时拒绝受限 PTY。
 - Unix 的受限 PTY 直接由 MXC SDK 分配；Windows MXC 的内部启动器继承宿主分配的终端。目录、网络及文件身份约束保持有效。
@@ -115,8 +116,21 @@ file-system 实施；编辑器的未保存内容和外部变更冲突仍由前�
 
 协议、大小限制及错误见 [exec-server-protocol](../exec-server-protocol/README.md)。
 
+[Windows 执行验收](tests/execution/windows.rs) 复用现有宿主测试设施，启动实际 `ash-exec-server.exe`
+并通过鉴权 RPC 验证 ConPTY 输入与尺寸、重连去重、只读拒写、取消与后代回收，以及管道双流和
+退出后的完整输出。用例默认忽略，由 [PSEC 验收入口](../../scripts/test-psec.ps1) 在 Windows
+逐项显式运行；缺能力模式另验证实际服务在执行前拒绝。报告记录测试程序和产品可执行文件的
+SHA-256，只有实际运行成功才移除对应未覆盖范围。交叉编译不能代替这些运行结果；App Server
+产品调用链仍需独立验收。
+
 ```sh
 just test ash-exec-server
 just check ash-exec-server --no-default-features --lib
 just rust-warnings ash-exec-server
+```
+
+```powershell
+./scripts/test-psec.ps1 -Capability required
+# 固定为缺少 PSEC 的测试环境使用 absent，验证执行前拒绝：
+./scripts/test-psec.ps1 -Capability absent
 ```

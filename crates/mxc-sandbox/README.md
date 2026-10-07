@@ -60,7 +60,7 @@ SDK 的 Seatbelt 策略固定可写根以及只读、拒绝路径的祖先目录
 - Windows 的 Rust SDK 仍不支持 ProcessContainer 分配 PTY，因此宿主通过 `with_pty_helper` 提供启动器。`utils-pty` 启动该程序的 `--ash-mxc-pty` 角色，产品入口先调用 `arg0::dispatch`。
 - Windows 交接格式归 Ash，包含具体命令、显式环境、文件和网络策略、准备阶段的文件身份。内部角色通过官方发布的 1.0 契约重建 SDK 请求，不反序列化 SDK 内部执行模型。新增宿主 ACL 授权字段会被拒绝。
 - Windows 交接请求最多 1 MiB UTF-8，按字符边界拆成不超过 8 KiB 的环境项；帮助进程检查块数、总字节数、缺块、重复键及多余字段。工作负载环境与启动器环境分开，传输变量不注入工作负载，显式空环境保持为空。PSEC 所需的 `SYSTEMROOT` 和 `LOCALAPPDATA` 由执行器提供。
-- `tests/pty.rs` 在 Unix 实际验证输入、resize、环境、只读拒绝、退出、前台作业中断和回收；Windows 普通回归验证帮助进程入口，[PSEC 终端用例](tests/pty/windows.rs) 另检查真实终端输入、尺寸、大环境、传输变量隔离、只读拒写、退出码及后代回收。这些用例须在支持 PSEC 的系统显式执行，已接入 `scripts/test-psec.ps1`；交叉编译不代表对应系统已通过运行验收。
+- `tests/pty.rs` 在 Unix 实际验证输入、resize、环境、只读拒绝、退出、前台作业中断和回收；Windows 普通回归验证帮助进程入口，[PSEC 终端用例](tests/pty/windows.rs) 另检查真实终端输入、尺寸、大环境、传输变量隔离、只读拒写、退出码及后代回收。[执行服务验收](../exec-server/README.md#pty-边界) 通过产品可执行文件和 RPC 检查帮助进程装配、重连与退出输出。这些用例须在支持 PSEC 的系统显式执行，已接入 `scripts/test-psec.ps1`；交叉编译不代表对应系统已通过运行验收。
 
 ## SDK 依赖
 

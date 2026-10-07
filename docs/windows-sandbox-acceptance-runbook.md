@@ -35,11 +35,11 @@ just test ash-mxc-sandbox --lib --test windows
 
 这是固定测试环境的预期，不是产品按版本分流的代码。产品仍按本次请求准备结果选择 MXC 或账户后端，严格策略不降低要求，启动错误不重跑。三种运行器的 PSEC 预期均已有 CI 结果，见 [补充验收](#2026-10-02-psecwslc-与网络补充验收)。镜像能力改变时测试应失败并要求复核，不能自动把失败变为通过。Windows 11 x64 和具体旧版客户端仍需对应运行器，不由 Server 或 ARM64 结果替代。
 
-PSEC 检查不安装账户、不改变系统权限。`test-psec.ps1 -Capability absent` 只在适配器明确返回 `UnsupportedPolicy` 时通过；其他准备故障仍失败。默认 `required` 则必须先成功创建 PSEC 环境，再逐项运行命令、文件和生命周期测试，汇总全部失败。不存在的测试名不能计为通过。
+PSEC 检查不安装账户、不改变系统权限。`test-psec.ps1 -Capability absent` 只在适配器明确返回 `UnsupportedPolicy` 且独立执行服务拒绝启动工作负载时通过；其他准备故障仍失败。默认 `required` 则必须先成功创建 PSEC 环境，再逐项运行命令、文件和生命周期测试，汇总全部失败。不存在的测试名不能计为通过。
 
 账户任务在独立的临时托管机器上运行 `test-windows-sandbox.ps1`，按已有安装计划创建账户，执行测试，并在 finally 中移除安装；同时运行后端选择与禁止重跑测试。手动 `self-hosted` 只运行 PSEC 成功路径，要求 `self-hosted`、`Windows`、`psec` 标签，以及 PowerShell 7、Python 3.11+、Rustup 和 MSVC 工具链。
 
-PSEC 报告包含系统版本、架构、工具链、MXC pin、各项退出码和输出。ARM64 另通过 `probe-psec-network.py` 保存系统报告的 PSEC 版本与 `NetworkIngress` 标志；这项只读查询不创建环境、不启动命令，也不宣布 Managed 支持。账户结果见独立任务日志及安装计划。能力不支持用例通过只证明拒绝行为，不是 PSEC 成功证明。PSEC ConPTY、完整网络矩阵、App Server 产品链路及 WSL 尚未纳入此任务。
+PSEC 报告包含系统版本、架构、工具链、MXC pin、测试及产品程序的 SHA-256、各项退出码和输出。ARM64 另通过 `probe-psec-network.py` 保存系统报告的 PSEC 版本与 `NetworkIngress` 标志；这项只读查询不创建环境、不启动命令，也不宣布 Managed 支持。账户结果见独立任务日志及安装计划。能力不支持用例通过只证明拒绝行为，不是 PSEC 成功证明。ConPTY 及[独立执行服务 RPC](../crates/exec-server/README.md#pty-边界) 用例已接入此入口，只有逐项实际通过后才在报告中标记覆盖；新增 RPC 用例尚待 Windows 运行结果。完整网络矩阵、App Server 产品链路及 WSL 尚未纳入此任务。
 
 账户 CI 为受限子进程测试启用 `ASH_WINDOWS_SANDBOX_DIAGNOSTICS`：超过原有 10 秒期限时，在终止 Job 前保存 CPU 时间、线程栈及模块转储，再继续原有失败和清理。诊断只针对受控测试子进程，不包含堆内存，随账户 artifact 保存；正常完成的子进程记录执行时间。
 

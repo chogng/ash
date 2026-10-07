@@ -1,14 +1,21 @@
-#![cfg(unix)]
+#![cfg(any(unix, windows))]
+
+#[cfg(windows)]
+#[path = "execution/windows.rs"]
+mod windows;
 
 use exec_server::ExecClient;
 use exec_server::RemoteEndpoint;
+#[cfg(unix)]
 use exec_server_protocol::ExecError;
 use exec_server_protocol::ProcessRead;
 use exec_server_protocol::ProcessSnapshot;
+#[cfg(unix)]
 use exec_server_protocol::ProcessStart;
 use exec_server_protocol::ProcessState;
 use exec_server_protocol::Request;
 use exec_server_protocol::Response;
+#[cfg(unix)]
 use exec_server_protocol::WriteCondition;
 use std::io::BufRead;
 use std::io::BufReader;
@@ -22,6 +29,7 @@ struct Host {
     child: Child,
     root: tempfile::TempDir,
     endpoint: RemoteEndpoint,
+    #[cfg(unix)]
     address: std::net::SocketAddr,
 }
 impl Host {
@@ -59,6 +67,7 @@ impl Host {
             child,
             root,
             endpoint,
+            #[cfg(unix)]
             address: record["address"].as_str().unwrap().parse().unwrap(),
         }
     }
@@ -73,6 +82,7 @@ impl Drop for Host {
     }
 }
 
+#[cfg(unix)]
 fn command(id: &str, script: &str) -> ProcessStart {
     ProcessStart {
         operation_id: id.into(),
@@ -109,6 +119,7 @@ fn finish(client: &ExecClient, id: &str) -> ProcessSnapshot {
     }
 }
 
+#[cfg(unix)]
 #[test]
 fn process_survives_connection_replacement_without_reexecution() {
     let host = Host::start();
@@ -137,6 +148,7 @@ fn process_survives_connection_replacement_without_reexecution() {
     ));
 }
 
+#[cfg(unix)]
 #[test]
 fn cancellation_reaches_the_process_and_reports_a_terminal_state() {
     let host = Host::start();
@@ -165,6 +177,7 @@ fn cancellation_reaches_the_process_and_reports_a_terminal_state() {
     assert_eq!(finish(&client, "cancel").state, ProcessState::Cancelled);
 }
 
+#[cfg(unix)]
 #[test]
 fn file_writes_require_the_current_revision_and_reject_escape() {
     let host = Host::start();
@@ -230,6 +243,7 @@ fn file_writes_require_the_current_revision_and_reject_escape() {
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn process_input_works_after_reconnecting() {
     let host = Host::start();
@@ -265,6 +279,7 @@ fn process_input_works_after_reconnecting() {
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn host_ceiling_blocks_writes_even_for_authenticated_clients() {
     let host = Host::with_access("read-only");
@@ -292,6 +307,7 @@ fn host_ceiling_blocks_writes_even_for_authenticated_clients() {
     assert!(!host.root.path().join("denied").exists());
 }
 
+#[cfg(unix)]
 #[test]
 fn rejects_wrong_credential_version_and_incarnation_before_mutation() {
     use std::io::Write;
@@ -345,6 +361,7 @@ fn rejects_wrong_credential_version_and_incarnation_before_mutation() {
     }
 }
 
+#[cfg(unix)]
 #[test]
 fn output_is_bounded_and_timeout_is_a_terminal_state() {
     let host = Host::start();
@@ -369,6 +386,7 @@ fn output_is_bounded_and_timeout_is_a_terminal_state() {
     assert_eq!(finish(&client, "timeout").state, ProcessState::TimedOut);
 }
 
+#[cfg(unix)]
 #[test]
 fn shutdown_reaps_active_processes() {
     let mut host = Host::start();
@@ -414,6 +432,7 @@ fn shutdown_reaps_active_processes() {
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn restricted_terminal_survives_reconnect_and_resizes() {
     let host = Host::start();
@@ -476,6 +495,7 @@ fn restricted_terminal_survives_reconnect_and_resizes() {
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn restricted_terminal_cannot_write_outside_host_ceiling() {
     let host = Host::with_access("read-only");
@@ -493,6 +513,7 @@ fn restricted_terminal_cannot_write_outside_host_ceiling() {
     assert!(!host.root.path().join("denied").exists());
 }
 
+#[cfg(unix)]
 #[test]
 fn cancelling_a_restricted_terminal_reaps_its_child() {
     let host = Host::start();
@@ -534,6 +555,7 @@ fn cancelling_a_restricted_terminal_reaps_its_child() {
     }
 }
 
+#[cfg(unix)]
 #[test]
 fn interrupting_a_restricted_terminal_stops_the_workload() {
     let host = Host::start();
@@ -564,6 +586,7 @@ fn interrupting_a_restricted_terminal_stops_the_workload() {
     assert_ne!(snapshot.state, ProcessState::Exited { code: Some(0) });
 }
 
+#[cfg(unix)]
 #[test]
 fn completed_output_remains_available_after_another_process_starts() {
     let host = Host::start();
@@ -582,6 +605,7 @@ fn completed_output_remains_available_after_another_process_starts() {
     assert_eq!(retained.stdout, first.stdout);
 }
 
+#[cfg(unix)]
 #[test]
 fn persistent_connection_preserves_buffered_request_frames() {
     use std::io::Write;
@@ -613,6 +637,7 @@ fn persistent_connection_preserves_buffered_request_frames() {
     }
 }
 
+#[cfg(unix)]
 #[test]
 fn process_read_waits_for_output_and_limits_the_wait_budget() {
     let host = Host::start();

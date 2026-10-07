@@ -12,7 +12,7 @@ $report = [ordered]@{
     runnerImage = $env:ImageVersion
     expectedCapability = $Capability
     scope = 'PSEC preparation, scoped files, exit codes, process cleanup, cross-execution isolation; Managed refusal'
-    notCovered = @('PSEC ConPTY', 'Allowed/Denied network traffic matrix', 'App Server product chain', 'WSL')
+    notCovered = @('PSEC ConPTY', 'Execution-service RPC', 'Allowed/Denied network traffic matrix', 'App Server product chain', 'WSL')
     commands = @()
 }
 
@@ -46,28 +46,35 @@ try {
     $report.stage = 'build'
     $report | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $output 'report.json') -Encoding utf8
     # Build once, then run these exact executables for every acceptance phase.
-    & python -B scripts/cargo.py test -p ash-mxc-sandbox --lib --test windows --test pty --locked --no-run --message-format=json `
+    & python -B scripts/cargo.py test -p ash-mxc-sandbox -p ash-exec-server --lib --test windows --test pty --test execution --locked --no-run --message-format=json `
         2> (Join-Path $output 'build.log') | Set-Content -LiteralPath (Join-Path $output 'build.jsonl') -Encoding utf8
     if ($LASTEXITCODE -ne 0) { throw "Test build failed; see $output/build.log" }
     $artifacts = @(Get-Content -LiteralPath (Join-Path $output 'build.jsonl') | ForEach-Object {
         $message = $_ | ConvertFrom-Json
-        if ($message.reason -eq 'compiler-artifact' -and $message.executable -and $message.profile.test) {
+        if ($message.reason -eq 'compiler-artifact' -and $message.executable) {
             $message
         }
     })
     $unit = @($artifacts | Where-Object { $_.target.name -eq 'mxc_sandbox' })
     $windows = @($artifacts | Where-Object { $_.target.name -eq 'windows' })
     $pty = @($artifacts | Where-Object { $_.target.name -eq 'pty' })
-    if ($unit.Count -ne 1 -or $windows.Count -ne 1 -or $pty.Count -ne 1) { throw 'Expected exactly one library, Windows acceptance and PTY executable' }
-    $report.binaries = @($unit[0].executable, $windows[0].executable, $pty[0].executable) | ForEach-Object { Get-FileHash -LiteralPath $_ -Algorithm SHA256 }
+    $execUnit = @($artifacts | Where-Object { $_.target.name -eq 'exec_server' -and $_.profile.test })
+    $rpc = @($artifacts | Where-Object { $_.target.name -eq 'execution' })
+    $server = @($artifacts | Where-Object { $_.target.name -eq 'ash-exec-server' -and -not $_.profile.test })
+    if ($unit.Count -ne 1 -or $windows.Count -ne 1 -or $pty.Count -ne 1 -or $execUnit.Count -ne 1 -or $rpc.Count -ne 1 -or $server.Count -ne 1) {
+        throw 'Expected exactly one executable per acceptance target, including the product execution service'
+    }
+    $report.binaries = @($unit[0].executable, $windows[0].executable, $pty[0].executable, $execUnit[0].executable, $rpc[0].executable, $server[0].executable) | ForEach-Object { Get-FileHash -LiteralPath $_ -Algorithm SHA256 }
     $report.stage = 'regressions'
     Invoke-Test 'unit' $unit[0].executable @('--nocapture')
     Invoke-Test 'regressions' $windows[0].executable @('--nocapture')
     Invoke-Test 'pty-regressions' $pty[0].executable @('--nocapture')
+    Invoke-Test 'exec-unit' $execUnit[0].executable @('--nocapture', '--test-threads=1')
     $report.stage = 'capability'
     if ($Capability -eq 'absent') {
         $report.scope = 'Confirmed PSEC unavailability before execution; Managed refusal'
         Invoke-Test 'capability-absent' $windows[0].executable @('missing_psec_is_reported_before_execution', '--ignored', '--exact', '--nocapture')
+        Invoke-Test 'rpc-capability-absent' $rpc[0].executable @('windows::rpc_strict_sandbox_refuses_missing_psec_before_execution', '--ignored', '--exact', '--nocapture')
         $report.status = 'passed-unsupported-capability'
         $report.stage = 'complete'
         return
@@ -101,9 +108,22 @@ try {
             $failures += $_.Exception.Message
         }
     }
+    foreach ($test in @(
+        'windows::psec_rpc_terminal_reconnect_preserves_execution_resize_and_exit_output',
+        'windows::psec_rpc_pipe_preserves_stdin_stderr_and_exit_output',
+        'windows::psec_rpc_terminal_read_only_ceiling_blocks_writes',
+        'windows::psec_rpc_terminal_cancellation_reaps_workload_and_descendants'
+    )) {
+        try {
+            Invoke-Test ($test.Replace('::', '-')) $rpc[0].executable @($test, '--ignored', '--exact', '--nocapture')
+        } catch {
+            $failures += $_.Exception.Message
+        }
+    }
     if ($failures.Count -gt 0) { throw ($failures -join "`n") }
     $report.scope += '; ConPTY input, resize, large environment, read-only files and process-tree cleanup'
-    $report.notCovered = @($report.notCovered | Where-Object { $_ -ne 'PSEC ConPTY' })
+    $report.scope += '; product execution-service RPC, reconnect idempotency, pipe streams and drained exit output'
+    $report.notCovered = @($report.notCovered | Where-Object { $_ -ne 'PSEC ConPTY' -and $_ -ne 'Execution-service RPC' })
     $report.status = 'passed-listed-scope'
     $report.stage = 'complete'
 } catch {
