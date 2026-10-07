@@ -613,7 +613,9 @@ test("More Actions opens an anchored Menu with actionable list items", async () 
 	const menus = new MenuService(commands, contexts);
 	using contextViews = new BrowserContextViewService(host);
 	const notificationMessages: string[] = [];
-	const notifications = { error: (message: string) => { notificationMessages.push(message); } } as unknown as INotificationService;
+	let errorReported!: () => void;
+	const errorFeedback = new Promise<void>(resolve => { errorReported = resolve; });
+	const notifications = { error: (message: string) => { notificationMessages.push(message); errorReported(); } } as unknown as INotificationService;
 	using contextMenus = new BrowserContextMenuService(
 		menus,
 		contexts,
@@ -689,12 +691,10 @@ test("More Actions opens an anchored Menu with actionable list items", async () 
 	assert.ok(nextMore);
 	nextMore.click();
 	host.querySelector<HTMLButtonElement>("[data-action-id='fail'] button")?.click();
-	await Promise.resolve();
-	await Promise.resolve();
-	assert.equal(
-		notificationMessages[0],
-		"Action failed after the menu closed",
-	);
+	assert.equal(nextMore.getAttribute("aria-expanded"), "false");
+	assert.equal(host.querySelector(".ash-menu"), null);
+	await errorFeedback;
+	assert.deepEqual(notificationMessages, ["Action failed after the menu closed"]);
 
 	dom.window.close();
 	for (const name of ["window", "Node", "Element", "HTMLElement"]) {
