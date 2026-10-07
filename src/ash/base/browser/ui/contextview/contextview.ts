@@ -2,7 +2,7 @@ import { Emitter } from "../../../common/event.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../common/lifecycle.js";
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, type IRectangle, layout2d } from "../../../common/layout.js";
 import { addDisposableListener, getActiveElement, getWindow, isHTMLElement, isNode, h } from "../../dom.js";
-import { restoreFocus } from "../../focus.js";
+import { isAncestorOfActiveElement, isFocusable, restoreFocus } from "../../focus.js";
 import { getViewport } from "../../geometry.js";
 import { observeResize } from "../../observer.js";
 
@@ -246,6 +246,13 @@ export class ContextView
 	): void {
 		const options = this.options;
 		if (!options) return;
+		// Removing content loses its active element; a newer view or modal owns its own focus.
+		const activeElement = getActiveElement(this.element.ownerDocument);
+		// Related hosts such as submenus delegate focus return even when mounted outside this DOM.
+		const shouldRestoreFocus = options.focusRestore === ContextViewFocusRestore.Previous &&
+			!isTargetInAnotherModal(activeElement, this.element) &&
+			((isTopmostContextView(this) && isAncestorOfActiveElement(this.element)) ||
+				(activeElement !== null && options.isTargetWithin?.(activeElement) === true));
 		this.options = undefined;
 		unregisterVisibleContextView(this);
 		this.visibleListeners.clear();
@@ -256,8 +263,9 @@ export class ContextView
 		this.restoreFocusTo = undefined;
 		try {
 			if (
-				options.focusRestore === ContextViewFocusRestore.Previous &&
-				restoreFocusTo
+				shouldRestoreFocus &&
+				restoreFocusTo &&
+				isFocusable(restoreFocusTo)
 			) {
 				restoreFocus(restoreFocusTo);
 			}
