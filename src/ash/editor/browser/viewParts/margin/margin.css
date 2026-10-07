@@ -1,6 +1,6 @@
 /* Both gutter surfaces follow the dimensions written by Margin. */
 .stanza-editor .margin {
-	background: var(--ash-editor-gutter-background);
+	background: var(--ash-editorGutter-background);
 	user-select: none;
 }
 

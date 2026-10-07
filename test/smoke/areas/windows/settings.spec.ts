@@ -42,7 +42,7 @@ test('Color settings suggest registered keys and descriptions with keyboard and 
 	await key.press('Enter');
 	await row.locator('[data-pattern-part="value"]').fill('#00000029');
 	await row.locator('[data-pattern-part="value"]').press('Tab');
-	await expect.poll(() => page.locator('#app').evaluate(element => getComputedStyle(element).getPropertyValue('--ash-sessions-input-shadow').trim())).toBe('rgba(0, 0, 0, 0.16)');
+	await expect.poll(() => page.locator('#app').evaluate(element => getComputedStyle(element).getPropertyValue('--ash-sessions-inputShadow').trim())).toBe('rgba(0, 0, 0, 0.16)');
 
 	await colors.getByRole('button', { name: 'Add Color', exact: true }).click();
 	row = colors.locator('.ash-string-map-row').last();

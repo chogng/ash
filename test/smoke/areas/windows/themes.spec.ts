@@ -63,11 +63,21 @@ test('Seti extension fonts render in Explorer and editor tabs and can be switche
 });
 
 test('Workbench follows system color changes without reopening the window', async ({ application, workbench }) => {
-	await workbench.setAppearance(application, 'dark');
-	await expect(workbench.element).toHaveAttribute('data-color-theme', 'ash-dark');
-	await workbench.setAppearance(application, 'light');
-	await expect(workbench.element).toHaveAttribute('data-color-theme', 'ash-light');
-	await expect.poll(() => workbench.element.evaluate(element => getComputedStyle(element).colorScheme)).toBe('light');
+	for (const scheme of ['dark', 'light'] as const) {
+		await workbench.setAppearance(application, scheme);
+		await expect(workbench.element).toHaveAttribute('data-color-theme', `ash-${scheme}`);
+		await expect.poll(() => workbench.element.evaluate(element => {
+			const style = getComputedStyle(element);
+			return {
+				colorScheme: style.colorScheme,
+				fontSize: style.getPropertyValue('--ash-fontSize-body1'),
+				fontWeight: style.getPropertyValue('--ash-fontWeight-semiBold'),
+				itemInset: style.getPropertyValue('--ash-tabList-itemContentInset'),
+				oldFontSize: style.getPropertyValue('--ash-font-size-body1'),
+				oldFontWeight: style.getPropertyValue('--ash-font-weight-semi-bold'),
+			};
+		})).toEqual({ colorScheme: scheme, fontSize: '13px', fontWeight: '600', itemInset: '6px', oldFontSize: '', oldFontWeight: '' });
+	}
 });
 
 test('Explorer keeps selection distinct from hover and reflects keyboard focus', async ({ application, target, workbench }) => {
@@ -103,8 +113,9 @@ test('Explorer keeps selection distinct from hover and reflects keyboard focus',
 	}
 });
 
-test('Modern Activity Bar keeps selected styling above hover in high contrast', async ({ application, workbench }) => {
+test('Modern Activity Bar keeps selected styling above hover in high contrast', async ({ workbench }) => {
 	const page = workbench.page;
+	await workbench.openExplorer();
 	const bar = page.locator('[data-part="activitybar"]');
 	const selected = bar.locator('.ash-composite-bar-item.checked').first();
 	const other = bar.getByRole('tab', { name: 'Search', exact: true });
@@ -264,7 +275,7 @@ test('structured theme settings persist scoped colors and token rules after relo
 		await expect(row.locator('[data-pattern-part="value"]')).toBeEnabled();
 		await expect(setting.locator('.ash-string-map-row')).toHaveCount(1);
 	}
-	await expect.poll(() => workbench.element.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-selection-background').trim())).toBe('#123456');
+	await expect.poll(() => workbench.element.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-selectionBackground').trim())).toBe('#123456');
 	await page.getByRole('dialog', { name: 'Ash Settings' }).locator('.ash-modal-editor-close').click();
 	await page.reload();
 	await workbench.waitForReady();
@@ -274,5 +285,5 @@ test('structured theme settings persist scoped colors and token rules after relo
 		await expect(row.locator('[data-pattern-part="key"]')).toHaveValue(entry.key);
 		await expect(row.locator('[data-pattern-part="value"]')).toHaveValue(JSON.stringify(entry.value));
 	}
-	await expect.poll(() => workbench.element.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-selection-background').trim())).toBe('#123456');
+	await expect.poll(() => workbench.element.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-selectionBackground').trim())).toBe('#123456');
 });

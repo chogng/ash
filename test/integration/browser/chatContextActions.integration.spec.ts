@@ -125,8 +125,8 @@ test('attachment names fit a narrow composer and use the high contrast border', 
 	await page.setViewportSize({ width: 320, height: 600 });
 	await page.locator('main').evaluate(element => {
 		element.style.width = '260px';
-		element.style.setProperty('--ash-contrast-border', 'rgb(255, 255, 255)');
-		element.style.setProperty('--ash-stroke-thickness', '1px');
+		element.style.setProperty('--ash-contrastBorder', 'rgb(255, 255, 255)');
+		element.style.setProperty('--ash-strokeThickness', '1px');
 	});
 	await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
 	const chooser = page.waitForEvent('filechooser');

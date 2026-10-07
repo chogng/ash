@@ -4,7 +4,7 @@
 }
 
 .ash-editor-lightbulb.has-preferred-fix {
-	color: var(--ash-text-link-active-foreground);
+	color: var(--ash-textLink-activeForeground);
 }
 
 .ash-editor-lightbulb .ash-button {

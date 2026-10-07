@@ -143,14 +143,14 @@ test('standalone themes preserve overrides for later contributions and stop noti
 	overrides['editor.background'] = '#ffffff';
 	const changes: string[] = [];
 	using listener = service.onDidColorThemeChange(value => changes.push(value.getColorCss('test.standaloneLate')!));
-	registerColor('test.standaloneLate', { dark: 'editor.background', light: '#abcdef', highContrastDark: 'editor.background', highContrastLight: '#000000' }, { description: 'Late standalone test.', owner: 'test' });
+	registerColor('test.standaloneLate', { dark: 'editor.background', light: '#abcdef', hcDark: 'editor.background', hcLight: '#000000' }, { description: 'Late standalone test.', owner: 'test' });
 	assert.deepEqual({ before: before['test.standaloneLate'], value: theme.colors['test.standaloneLate'], changes }, {
 		before: undefined, value: '#101010', changes: ['#101010'],
 	});
 	assert.equal(theme.getColorCss('editor.background'), '#101010');
 	assert.equal(theme.colorEntries, theme.colorEntries);
 	service.dispose();
-	registerColor('test.standaloneAfterDispose', { dark: '#000000', light: '#ffffff', highContrastDark: '#000000', highContrastLight: '#ffffff' }, { description: 'Disposed standalone test.', owner: 'test' });
+	registerColor('test.standaloneAfterDispose', { dark: '#000000', light: '#ffffff', hcDark: '#000000', hcLight: '#ffffff' }, { description: 'Disposed standalone test.', owner: 'test' });
 	assert.deepEqual(changes, ['#101010']);
 });
 
@@ -204,14 +204,14 @@ test('standalone themes track forced colors without losing the selected theme', 
 test('editor identifiers retain their CSS variables', () => {
 	assert.equal(
 		colorCssVariable(editorMultiCursorSecondaryBackground),
-		'--ash-editor-multi-cursor-secondary-background',
+		'--ash-editorMultiCursor-secondary-background',
 	);
-	assert.equal(colorCssVariable(editorLineHighlight), '--ash-editor-line-highlight-background');
-	assert.equal(colorCssVariable(editorInactiveLineHighlight), '--ash-editor-inactive-line-highlight-background');
-	assert.equal(colorCssVariable(editorLineHighlightBorder), '--ash-editor-line-highlight-border');
-	assert.equal(colorCssVariable(editorRuler), '--ash-editor-ruler-foreground');
-	assert.equal(colorCssVariable(editorOverviewRulerBorder), '--ash-editor-overview-ruler-border');
-	assert.equal(colorCssVariable(editorOverviewRulerBackground), '--ash-editor-overview-ruler-background');
+	assert.equal(colorCssVariable(editorLineHighlight), '--ash-editor-lineHighlightBackground');
+	assert.equal(colorCssVariable(editorInactiveLineHighlight), '--ash-editor-inactiveLineHighlightBackground');
+	assert.equal(colorCssVariable(editorLineHighlightBorder), '--ash-editor-lineHighlightBorder');
+	assert.equal(colorCssVariable(editorRuler), '--ash-editorRuler-foreground');
+	assert.equal(colorCssVariable(editorOverviewRulerBorder), '--ash-editorOverviewRuler-border');
+	assert.equal(colorCssVariable(editorOverviewRulerBackground), '--ash-editorOverviewRuler-background');
 });
 
 test('current-line colors preserve transparent fills and high-contrast borders', () => {
@@ -234,13 +234,13 @@ test('editor ruler colors preserve the editor theme contract', () => {
 	assert.deepEqual({
 		dark: darkColorTheme.colors[editorRuler],
 		light: lightColorTheme.colors[editorRuler],
-		highContrastDark: highContrastDarkColorTheme.colors[editorRuler],
-		highContrastLight: highContrastLightColorTheme.colors[editorRuler],
+		hcDark: highContrastDarkColorTheme.colors[editorRuler],
+		hcLight: highContrastLightColorTheme.colors[editorRuler],
 	}, {
 		dark: '#5a5a5a',
 		light: '#d3d3d3',
-		highContrastDark: '#ffffff',
-		highContrastLight: '#292929',
+		hcDark: '#ffffff',
+		hcLight: '#292929',
 	});
 });
 

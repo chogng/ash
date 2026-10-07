@@ -1,6 +1,38 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { expect, test } from '../../../automation/test.js';
+
+test('Markdown preview loads an image relative to a workspace document', async ({ target, testWorkspace, workbench }) => {
+	test.skip(target.appServerMode !== 'required', 'Workspace files require the connected App Server.');
+	const documents = join(testWorkspace.directory, 'preview-docs');
+	const assets = join(testWorkspace.directory, 'preview-assets');
+	await mkdir(documents);
+	await mkdir(assets);
+	await writeFile(join(assets, 'diagram space.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="16"><rect width="24" height="16" fill="green"/></svg>');
+	const document = join(documents, 'preview.md');
+	await writeFile(document, '# Workspace resources\n\n![Workspace diagram](../preview-assets/diagram%20space.svg)');
+	const page = workbench.page;
+	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
+	await page.keyboard.press('ControlOrMeta+N');
+	const source = workbench.editors.groupAt(0);
+	await source.editor.waitForEditorFocus();
+	const transfer = await page.evaluateHandle(uri => {
+		const value = new DataTransfer();
+		value.setData('text/uri-list', uri);
+		return value;
+	}, pathToFileURL(document).href);
+	try {
+		await source.title.locator('.ash-tab-list:visible [role="tablist"]').dispatchEvent('drop', { dataTransfer: transfer });
+	} finally {
+		await transfer.dispose();
+	}
+	await source.editor.waitForEditorContents(text => text.includes('# Workspace resources'));
+	await workbench.quickaccess.runCommand('markdown.reopenAsPreview');
+	const content = source.content.frameLocator('iframe.ash-webview:visible').frameLocator('iframe');
+	await expect(content.getByRole('heading', { name: 'Workspace resources', exact: true })).toBeVisible();
+	await expect.poll(() => content.getByRole('img', { name: 'Workspace diagram', exact: true }).evaluate((image: HTMLImageElement) => ({ width: image.naturalWidth, height: image.naturalHeight }))).toEqual({ width: 24, height: 16 });
+});
 
 test('Markdown extension owns preview commands and shares unsaved text across editor views', async ({ workbench, application }) => {
 	const page = workbench.page;
@@ -26,7 +58,7 @@ test('Markdown extension owns preview commands and shares unsaved text across ed
 	await expect(split).toHaveAttribute('aria-label', 'Split Right');
 	await expect(split.locator('[data-ash-icon-id="split-horizontal"]')).toBeVisible();
 	await source.title.locator('[data-action-id="markdown.reopenAsPreview"] button').click();
-	const frame = source.content.frameLocator('iframe.ash-webview:visible');
+	const frame = source.content.frameLocator('iframe.ash-webview:visible').frameLocator('iframe');
 	await expect(frame.getByRole('heading', { name: 'Shared draft', exact: true })).toBeVisible();
 	await expect(source.tabs).toHaveCount(2);
 	for (const theme of ['Ash High Contrast Dark', 'Ash High Contrast Light']) {
@@ -78,7 +110,7 @@ test('Markdown extension owns preview commands and shares unsaved text across ed
 	await previewSide.click();
 	await expect(workbench.editors.groups).toHaveCount(2);
 	const side = workbench.editors.groupAt(1);
-	await expect(side.content.frameLocator('iframe.ash-webview').getByRole('heading', { name: 'Shared draft', exact: true })).toBeVisible();
+	await expect(side.content.frameLocator('iframe.ash-webview').frameLocator('iframe').getByRole('heading', { name: 'Shared draft', exact: true })).toBeVisible();
 	const boxes = await workbench.editors.groups.evaluateAll(groups => groups.map(group => {
 		const box = group.getBoundingClientRect();
 		return { x: box.x, y: box.y, width: box.width };
@@ -87,7 +119,7 @@ test('Markdown extension owns preview commands and shares unsaved text across ed
 	expect(Math.abs(boxes[1]!.y - boxes[0]!.y)).toBeLessThan(2);
 	await side.title.locator('[data-action-id="workbench.action.splitEditor"] button').click();
 	await expect(workbench.editors.groups).toHaveCount(3);
-	await expect(workbench.editors.groupAt(2).content.frameLocator('iframe.ash-webview').getByRole('heading', { name: 'Shared draft', exact: true })).toBeVisible();
+	await expect(workbench.editors.groupAt(2).content.frameLocator('iframe.ash-webview').frameLocator('iframe').getByRole('heading', { name: 'Shared draft', exact: true })).toBeVisible();
 	const third = workbench.editors.groupAt(2);
 	await page.keyboard.down('Alt');
 	const splitDown = third.title.locator('[data-action-id="workbench.action.splitEditor"] button');
@@ -97,7 +129,7 @@ test('Markdown extension owns preview commands and shares unsaved text across ed
 	await page.keyboard.up('Alt');
 	await expect(workbench.editors.groups).toHaveCount(4);
 	const lower = workbench.editors.groupAt(3);
-	await expect(lower.content.frameLocator('iframe.ash-webview').getByRole('heading', { name: 'Shared draft', exact: true })).toBeVisible();
+	await expect(lower.content.frameLocator('iframe.ash-webview').frameLocator('iframe').getByRole('heading', { name: 'Shared draft', exact: true })).toBeVisible();
 	const thirdBox = await third.element.boundingBox();
 	const lowerBox = await lower.element.boundingBox();
 	expect(lowerBox!.y).toBeGreaterThanOrEqual(thirdBox!.y + thirdBox!.height);
@@ -120,7 +152,7 @@ test('Markdown tab menus reopen the clicked document while another tab is active
 	await transfer.dispose();
 	await group.editor.waitForEditorContents(text => text.includes('# Second document'));
 	await workbench.menus.select(application, () => group.tabs.filter({ hasText: 'first.md' }).click({ button: 'right' }), ['Open Preview']);
-	const frame = group.content.frameLocator('iframe.ash-webview:visible');
+	const frame = group.content.frameLocator('iframe.ash-webview:visible').frameLocator('iframe');
 	await expect(frame.getByRole('heading', { name: 'First document', exact: true })).toBeVisible();
 	await expect(group.tabs).toHaveCount(4);
 	await workbench.menus.select(application, () => group.tabs.filter({ hasText: 'second.md' }).click({ button: 'right' }), ['Reopen Editor With...']);
@@ -129,6 +161,79 @@ test('Markdown tab menus reopen the clicked document while another tab is active
 	await expect(group.tabs).toHaveCount(4);
 	await workbench.menus.select(application, () => group.title.getByRole('button', { name: 'Select editor: Markdown Preview', exact: true }).click(), ['Text Editor']);
 	await group.editor.waitForEditorContents(text => text.includes('# Second document'));
+});
+
+test('Markdown rich editor follows theme colors and shows keyboard focus in every theme', async ({ workbench }) => {
+	const page = workbench.page;
+	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
+	await page.keyboard.press('ControlOrMeta+N');
+	const group = workbench.editors.groupAt(0);
+	await group.editor.waitForEditorFocus();
+	const transfer = await page.evaluateHandle(() => {
+		const transfer = new DataTransfer();
+		transfer.items.add(new File(['# Theme colors\n\n[Link](https://example.com)\n\n> Quoted text\n\n```js\nconst value = 1;\n```\n\n| Header |\n| --- |\n| Cell |'], 'theme.md', { type: 'text/markdown' }));
+		return transfer;
+	});
+	try {
+		await group.title.locator('.ash-tab-list:visible [role="tablist"]').dispatchEvent('drop', { dataTransfer: transfer });
+	} finally {
+		await transfer.dispose();
+	}
+	await group.editor.waitForEditorContents(text => text.includes('# Theme colors'));
+	await workbench.quickaccess.runCommand('markdown.reopenAsRichEditor');
+	const frame = group.content.frameLocator('iframe.ash-webview:visible').frameLocator('iframe');
+	const editor = frame.getByLabel('Markdown rich text editor', { exact: true });
+	const bold = frame.getByRole('button', { name: 'Bold', exact: true });
+	await expect(editor).toBeVisible();
+	for (const theme of ['Ash Light', 'Ash Dark', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
+		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
+		await workbench.quickaccess.search(theme);
+		await workbench.quickaccess.input.press('Enter');
+		await expect(workbench.quickaccess.element).toHaveCount(0);
+		const palette = await workbench.element.evaluate(element => {
+			const probe = document.createElement('span');
+			element.appendChild(probe);
+			try {
+				return Object.fromEntries(['button-foreground', 'button-secondaryBackground', 'button-hoverBackground', 'focusBorder', 'border', 'widget-border', 'text-codeBlockBackground', 'accent-foreground', 'error-foreground', 'editorCursor-foreground', 'editor-lineHighlightBackground', 'description-foreground'].map(name => {
+					probe.style.backgroundColor = `var(--ash-${name})`;
+					return [name, getComputedStyle(probe).backgroundColor];
+				}));
+			} finally {
+				probe.remove();
+			}
+		});
+		const foreground = await workbench.element.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-foreground').trim());
+		await expect(frame.locator('html')).toHaveCSS('--ash-editor-foreground', foreground);
+		await expect.poll(() => editor.evaluate(element => {
+			const probe = document.createElement('span');
+			element.appendChild(probe);
+			try {
+				return ['--md-cursor-background', '--md-block-active-background', '--md-html-comment-foreground'].map(property => {
+					probe.style.backgroundColor = `var(${property})`;
+					return getComputedStyle(probe).backgroundColor;
+				});
+			} finally {
+				probe.remove();
+			}
+		})).toEqual([palette['editorCursor-foreground'], palette['editor-lineHighlightBackground'], palette['description-foreground']]);
+		await page.mouse.move(0, 0);
+		await expect(bold).toHaveCSS('color', palette['button-foreground']!);
+		await expect(bold).toHaveCSS('background-color', palette['button-secondaryBackground']!);
+		await expect(frame.getByRole('toolbar')).toHaveCSS('border-bottom-color', palette['border']!);
+		await expect(editor.locator('.md-code-block')).toHaveCSS('background-color', palette['text-codeBlockBackground']!);
+		await expect(editor.locator('.md-blockquote')).toHaveCSS('border-left-color', palette['widget-border']!);
+		await expect(editor.getByRole('link')).toHaveCSS('color', palette['accent-foreground']!);
+		await expect(editor.getByRole('cell', { name: 'Header', exact: true })).toHaveCSS('border-top-color', palette['widget-border']!);
+		await expect(frame.getByRole('status')).toHaveCSS('color', palette['error-foreground']!);
+		await editor.focus();
+		await page.keyboard.press('Alt+F10');
+		await expect(bold).toBeFocused();
+		await expect(bold).toHaveCSS('outline-style', 'solid');
+		await expect(bold).toHaveCSS('outline-width', '1px');
+		await expect(bold).toHaveCSS('outline-color', palette['focusBorder']!);
+		await bold.hover();
+		await expect(bold).toHaveCSS('background-color', palette['button-hoverBackground']!);
+	}
 });
 
 test('Markdown rich editor shares text and history with the source editor', async ({ workbench }) => {
@@ -146,7 +251,7 @@ test('Markdown rich editor shares text and history with the source editor', asyn
 	await transfer.dispose();
 	await group.editor.waitForEditorContents(text => text.includes('# Rich document'));
 	await workbench.quickaccess.runCommand('markdown.reopenAsRichEditor');
-	const frame = group.content.frameLocator('iframe.ash-webview:visible');
+	const frame = group.content.frameLocator('iframe.ash-webview:visible').frameLocator('iframe');
 	const editor = frame.getByLabel('Markdown rich text editor', { exact: true });
 	await expect(editor).toBeVisible();
 	await editor.click();
@@ -180,7 +285,7 @@ test('Markdown rich editor saves files and refreshes from an open source tab', a
 	await group.editor.waitForEditorContents(text => text.includes('# Rich saved'));
 	await workbench.quickaccess.runCommand('markdown.showRichEditor');
 	await expect(group.tabs.filter({ hasText: 'rich-saved.md' })).toHaveCount(2);
-	const frame = group.content.frameLocator('iframe.ash-webview:visible');
+	const frame = group.content.frameLocator('iframe.ash-webview:visible').frameLocator('iframe');
 	const editor = frame.getByLabel('Markdown rich text editor', { exact: true });
 	await expect(editor).toBeVisible();
 	await editor.click();
@@ -222,7 +327,7 @@ test('Markdown rich editor respects readonly rules and rejects stale document ed
 	await transfer.dispose();
 	await group.editor.waitForEditorContents(text => text.includes('# Protected document'));
 	await workbench.quickaccess.runCommand('markdown.reopenAsRichEditor');
-	const frame = group.content.frameLocator('iframe.ash-webview:visible');
+	const frame = group.content.frameLocator('iframe.ash-webview:visible').frameLocator('iframe');
 	const editor = frame.getByLabel('Markdown rich text editor', { exact: true });
 	await expect(editor).toBeVisible();
 	for (const readonly of [true, false]) {
@@ -355,7 +460,7 @@ test('Markdown rich editor localizes its toolbar and accessibility help in Chine
 	await transfer.dispose();
 	await group.editor.waitForEditorContents(text => text.includes('中文文档'));
 	await workbench.quickaccess.runCommand('markdown.reopenAsRichEditor');
-	const frame = group.content.frameLocator('iframe.ash-webview:visible');
+	const frame = group.content.frameLocator('iframe.ash-webview:visible').frameLocator('iframe');
 	await expect(frame.getByRole('toolbar', { name: 'Markdown 格式', exact: true })).toBeVisible();
 	const editor = frame.getByLabel('Markdown 富文本编辑器', { exact: true });
 	await expect(editor).toContainText('中文文档');

@@ -4,7 +4,7 @@
 	overflow: auto;
 	color: var(--ash-foreground);
 	background: var(--ash-editor-background);
-	font-size: var(--ash-font-size-body1);
+	font-size: var(--ash-fontSize-body1);
 }
 
 .ash-issue-reporter .issue-reporter-content {
@@ -18,8 +18,8 @@
 
 .ash-issue-reporter h1 {
 	margin: 0;
-	font-size: var(--ash-font-size-heading2);
-	font-weight: var(--ash-font-weight-semi-bold);
+	font-size: var(--ash-fontSize-heading2);
+	font-weight: var(--ash-fontWeight-semiBold);
 }
 
 .ash-issue-reporter .issue-reporter-field {
@@ -35,8 +35,8 @@
 	font: inherit;
 	color: var(--ash-input-foreground);
 	background: var(--ash-input-background);
-	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
-	border-radius: var(--ash-corner-radius-small);
+	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border-radius: var(--ash-cornerRadius-small);
 	padding: var(--ash-spacing-size80);
 	min-width: 0;
 }
@@ -77,7 +77,7 @@
 }
 .ash-issue-reporter .issue-reporter-hint {
 	color: var(--ash-description-foreground);
-	font-size: var(--ash-font-size-body2);
+	font-size: var(--ash-fontSize-body2);
 }
 .ash-issue-reporter .issue-reporter-status.error {
 	color: var(--ash-error-foreground);
@@ -87,6 +87,6 @@
 .ash-issue-reporter a:focus-visible,
 .ash-issue-reporter summary:focus-visible,
 .ash-issue-reporter pre:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }

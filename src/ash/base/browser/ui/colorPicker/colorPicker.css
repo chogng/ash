@@ -8,16 +8,16 @@
 	padding: var(--ash-spacing-size160);
 	color: var(--ash-foreground);
 	background: var(--ash-editor-background);
-	font-size: var(--ash-font-size-label1);
-	font-weight: var(--ash-font-weight-regular);
-	border-radius: var(--ash-corner-radius-x-large);
+	font-size: var(--ash-fontSize-label1);
+	font-weight: var(--ash-fontWeight-regular);
+	border-radius: var(--ash-cornerRadius-xLarge);
 }
 
 .ash-color-picker-heading {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
-	font-weight: var(--ash-font-weight-semi-bold);
+	font-weight: var(--ash-fontWeight-semiBold);
 }
 
 .ash-color-picker.embedded {
@@ -32,7 +32,7 @@
 	position: relative;
 	aspect-ratio: 1;
 	flex-shrink: 0;
-	border-radius: var(--ash-corner-radius-medium);
+	border-radius: var(--ash-cornerRadius-medium);
 	background:
 		linear-gradient(to top, #000, transparent),
 		linear-gradient(to right, #fff, transparent),
@@ -49,7 +49,7 @@
 	height: var(--ash-spacing-size120);
 	border: 2px solid #fff;
 	box-shadow: 0 0 0 1px #000;
-	border-radius: var(--ash-corner-radius-circle);
+	border-radius: var(--ash-cornerRadius-circle);
 	transform: translate(-50%, -50%);
 	pointer-events: none;
 }
@@ -60,8 +60,8 @@
 	min-width: 0;
 	width: 100%;
 	height: var(--ash-spacing-size320);
-	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
-	border-radius: var(--ash-corner-radius-small);
+	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border-radius: var(--ash-cornerRadius-small);
 	padding: var(--ash-spacing-size40);
 	color: var(--ash-input-foreground);
 	background: var(--ash-input-background);
@@ -74,7 +74,7 @@
 	height: var(--ash-spacing-size200);
 	padding: 0;
 	margin: 0;
-	border-radius: var(--ash-corner-radius-circle);
+	border-radius: var(--ash-cornerRadius-circle);
 	cursor: pointer;
 }
 
@@ -94,7 +94,7 @@
 
 .ash-color-picker-checker {
 	height: var(--ash-spacing-size200);
-	border-radius: var(--ash-corner-radius-circle);
+	border-radius: var(--ash-cornerRadius-circle);
 	background: repeating-conic-gradient(
 			var(--ash-input-background) 0% 25%,
 			var(--ash-description-foreground) 0% 50%
@@ -115,7 +115,7 @@
 	width: var(--ash-spacing-size200);
 	height: var(--ash-spacing-size200);
 	border: 2px solid #fff;
-	border-radius: var(--ash-corner-radius-circle);
+	border-radius: var(--ash-cornerRadius-circle);
 	box-shadow: 0 0 0 1px #000;
 	background: transparent;
 }
@@ -184,8 +184,8 @@
 	position: absolute;
 	width: var(--ash-spacing-size200);
 	height: var(--ash-spacing-size200);
-	border: var(--ash-stroke-thickness) solid var(--ash-border);
-	border-radius: var(--ash-corner-radius-small);
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+	border-radius: var(--ash-cornerRadius-small);
 	background:
 		linear-gradient(
 			var(--ash-color-picker-value),
@@ -202,7 +202,7 @@
 .ash-color-picker-area:focus-visible,
 .ash-color-picker input:focus-visible,
 .ash-color-picker select:focus-visible {
-	outline: 2px solid var(--ash-focus-border);
+	outline: 2px solid var(--ash-focusBorder);
 	outline-offset: 2px;
 }
 

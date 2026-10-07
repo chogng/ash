@@ -103,7 +103,7 @@ test('persisted color customizations override themes, update live, and restore t
 		], ['#456789', '#112233', 0.65, theme.tokenColors]);
 		assert.equal(active.getColorTheme().getColor('editor.inactiveSelectionBackground')?.rgba.r, 69);
 		await configuration.updateValue(WorkbenchConfiguration.colorCustomizations, { 'editor.inactiveSelectionBackground': '#765432' });
-		assert.equal(browser.window.document.body.style.getPropertyValue('--ash-editor-inactive-selection-background'), '#765432');
+		assert.equal(browser.window.document.body.style.getPropertyValue('--ash-editor-inactiveSelectionBackground'), '#765432');
 		assert.equal(active.getColorTheme().getColorCss('editor.selectionForeground'), '#abcdef');
 		await configuration.updateValue(WorkbenchConfiguration.colorCustomizations, undefined);
 		assert.equal(active.getColorTheme(), theme);
@@ -217,6 +217,21 @@ test('theme exports contain standard fields and resolved colors', () => {
 	assert.ok(jsonRegistry.getSchemaContributions().schemas[colorThemeSchemaId]?.properties?.colors?.properties?.['editor.background']);
 });
 
+test('high contrast theme types round trip through user documents and color defaults', () => {
+	for (const [type, background] of [['hcDark', '#000000'], ['hcLight', '#ffffff']] as const) {
+		const theme = parseUserColorTheme(JSON.stringify({ name: 'Contrast Test', type, colors: { 'editor.foreground': '#123456' } }));
+		const source = serializeUserColorThemeDraft(theme, theme.label);
+		const restored = parseUserColorTheme(source);
+		assert.deepEqual({
+			type: theme.colorScheme,
+			exportedType: JSON.parse(source).type,
+			restoredType: restored.colorScheme,
+			background: restored.getColorCss('editor.background'),
+			foreground: restored.getColorCss('editor.foreground'),
+		}, { type, exportedType: type, restoredType: type, background, foreground: '#123456' });
+	}
+});
+
 test('active user themes apply overrides for colors registered after theme loading', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
 	try {
@@ -236,11 +251,11 @@ test('active user themes apply overrides for colors registered after theme loadi
 		const before = theme.colorEntries;
 		const changes: string[] = [];
 		using listener = active.onDidColorThemeChange(value => changes.push(value.getColorCss('test.workbenchLate')!));
-		registerColor('test.workbenchLate', { dark: 'editorCursor.foreground', light: '#123456', highContrastDark: 'editorCursor.foreground', highContrastLight: '#000000' }, { description: 'Late workbench test.', owner: 'test' });
+		registerColor('test.workbenchLate', { dark: 'editorCursor.foreground', light: '#123456', hcDark: 'editorCursor.foreground', hcLight: '#000000' }, { description: 'Late workbench test.', owner: 'test' });
 		assert.deepEqual({
 			before: before.find(entry => entry.id === 'test.workbenchLate'),
 			resolved: theme.colors['test.workbenchLate'],
-			css: browser.window.document.body.style.getPropertyValue('--ash-test-workbench-late'),
+			css: browser.window.document.body.style.getPropertyValue('--ash-test-workbenchLate'),
 			changes,
 			tokenRules: theme.tokenColors,
 		}, {
@@ -357,6 +372,9 @@ test('theme file owner migrates aliases and transforms once before registration'
 	try {
 		const legacy = JSON.parse(await readFile(join(process.cwd(), 'src/ash/workbench/services/themes/test/browser/fixtures/resolver.json'), 'utf8'));
 		await writeFile(join(directory, 'old-name.json'), JSON.stringify(legacy.theme));
+		for (const [id, colorScheme] of [['legacy-hc-dark', 'high-contrast-dark'], ['legacy-hc-light', 'high-contrast-light']]) {
+			await writeFile(join(directory, `${id}-old.json`), JSON.stringify({ version: 1, id, label: id, colorScheme, colors: { 'editor.foreground': '#123456' } }));
+		}
 		await writeFile(join(directory, 'broken.json'), '{');
 		await writeFile(join(directory, 'ignored.txt'), 'keep');
 		using files = new DiskFileSystemProvider([URI.file(directory)]);
@@ -366,13 +384,19 @@ test('theme file owner migrates aliases and transforms once before registration'
 		const theme = parseUserColorTheme(migrated, 'resolver-test');
 		for (const [key, value] of Object.entries(legacy.expected)) assert.equal(theme.getColorCss(key), value, key);
 		assert.equal(JSON.parse(migrated).version, undefined);
+		for (const [id, type] of [['legacy-hc-dark', 'hcDark'], ['legacy-hc-light', 'hcLight']]) {
+			const source = await readFile(join(directory, `${id}.json`), 'utf8');
+			assert.equal(JSON.parse(source).type, type);
+			assert.equal(parseUserColorTheme(source).colorScheme, type);
+			assert.equal(parseUserColorTheme(source).getColorCss('editor.foreground'), '#123456');
+		}
 		assert.deepEqual(await files.readDirectory(URI.file(directory)), first);
 		try {
 			assert.equal(WorkbenchThemesRegistry.getColorTheme('resolver-test')?.label, 'Resolver Test');
 			assert.deepEqual(service.issues.map(issue => issue.file), ['broken.json']);
 		} finally { service.dispose(); }
 		assert.equal(WorkbenchThemesRegistry.getColorTheme('resolver-test'), undefined);
-		assert.deepEqual((await readdir(directory)).sort(), ['broken.json', 'ignored.txt', 'resolver-test.json']);
+		assert.deepEqual((await readdir(directory)).sort(), ['broken.json', 'ignored.txt', 'legacy-hc-dark.json', 'legacy-hc-light.json', 'resolver-test.json']);
 	} finally { await rm(directory, { recursive: true, force: true }); }
 });
 

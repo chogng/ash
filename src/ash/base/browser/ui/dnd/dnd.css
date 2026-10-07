@@ -11,6 +11,6 @@
 }
 
 .ash-dnd-drop-target {
-	outline: 2px solid var(--ash-focus-border);
+	outline: 2px solid var(--ash-focusBorder);
 	outline-offset: -2px;
 }

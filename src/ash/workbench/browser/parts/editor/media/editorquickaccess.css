@@ -3,7 +3,7 @@
 	width: var(--ash-spacing-size160);
 	height: var(--ash-spacing-size160);
 	border: 0;
-	border-radius: var(--ash-corner-radius-small);
+	border-radius: var(--ash-cornerRadius-small);
 	color: var(--ash-description-foreground);
 	background: transparent;
 	cursor: pointer;
@@ -12,11 +12,11 @@
 .ash-editor-quick-pick-item .ash-quick-pick-row-action:hover,
 .ash-editor-quick-pick-item .ash-quick-pick-row-action:focus-visible {
 	color: var(--ash-foreground);
-	background: var(--ash-list-hover-background);
+	background: var(--ash-list-hoverBackground);
 }
 
 .ash-editor-quick-pick-item .ash-quick-pick-row-action:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
 
@@ -26,12 +26,12 @@
 
 .ash-editor-quick-pick-item.dirty .ash-quick-pick-row-action::before {
 	content: "●";
-	font-size: var(--ash-font-size-body2);
+	font-size: var(--ash-fontSize-body2);
 }
 
 .ash-editor-quick-pick-item.dirty .ash-quick-pick-row-action:hover::before,
 .ash-editor-quick-pick-item.dirty
 	.ash-quick-pick-row-action:focus-visible::before {
 	content: "×";
-	font-size: var(--ash-lxicon-font-size);
+	font-size: var(--ash-lxiconFontSize);
 }

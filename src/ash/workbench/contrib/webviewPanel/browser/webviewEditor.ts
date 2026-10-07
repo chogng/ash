@@ -20,6 +20,9 @@ import { IWebviewService, type IWebviewElement } from '../../webview/browser/web
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { ITextModelResourceService } from '../../../services/textmodelResolver/common/textModelResourceService.js';
 import { CustomTextEditorModel } from '../../customEditor/common/customTextEditorModel.js';
+import { dirname } from '../../../../base/common/resources.js';
+import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { asWebviewUri } from '../../webview/common/webview.js';
 
 export interface CustomTextEditorDocument {
 	readonly uri: string;
@@ -72,6 +75,7 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 		@IFilesConfigurationService private readonly filesConfiguration: IFilesConfigurationService,
 		@INotificationService private readonly notifications: INotificationService,
 		@IWebviewService private readonly webviews: IWebviewService,
+		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IStorageService storageService: IStorageService,
 	) {
 		super(provider.viewType, themes, storageService);
@@ -122,7 +126,8 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 					}
 					const variables = Object.entries(this.themes.getColorTheme().colors).map(([id, value]) => `${colorCssVariable(id)}:${value}`).join(';');
 					this.editable = content.update !== undefined;
-					this.renderedHtml = `<style>:root{${variables}}</style>${content.html}`;
+					const base = asWebviewUri(input.resource).toString().replaceAll('&', '&amp;').replaceAll('"', '&quot;');
+					this.renderedHtml = `<base href="${base}"><style>:root{${variables}}</style>${content.html}`;
 					if (this.webview.value) {
 						if (content.update !== undefined) {
 							this.webview.value.postMessage({ type: 'theme', variables });
@@ -168,11 +173,18 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 	}
 
 	private createWebview(input: IResourceEditorInput, html: string): void {
-		this.webview.value = this.webviews.createWebviewElement({ title: this.provider.displayName, options: { forwardKeyboardEvents: true } });
+		this.webview.value = this.webviews.createWebviewElement({
+			title: this.provider.displayName,
+			options: { forwardKeyboardEvents: true },
+			contentOptions: {
+				allowScripts: true,
+				localResourceRoots: [...this.workspace.getWorkspace().folders.map(folder => folder.uri), ...(input.resource.scheme === Schemas.untitled ? [] : [dirname(input.resource)])],
+			},
+		});
 		const webview = this.webview.value;
 		webview.setHtml(html);
 		const resources = this.inputResources.value!;
-		// An opaque iframe cannot bubble its keyboard events into the owning editor group.
+		// The isolated document cannot bubble keyboard events into the owning editor group.
 		resources.add(webview.onDidKeyboardEvent(event => webview.element.dispatchEvent(event)));
 		const updateHint = (): void => {
 			const hint = this.accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.WebviewEditor);

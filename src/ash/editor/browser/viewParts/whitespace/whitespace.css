@@ -4,5 +4,5 @@
 	pointer-events: none;
 	white-space: pre;
 	font: inherit;
-	color: var(--ash-editor-whitespace-foreground);
+	color: var(--ash-editorWhitespace-foreground);
 }

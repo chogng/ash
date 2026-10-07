@@ -508,20 +508,24 @@ Markdown Preview、自定义编辑器和发布说明页都通过注入的服务�
 网页浏览、导航历史、Cookie、CDP 或 Agent Browser Target；后者属于第 7 节的
 `WebContentsView` 能力。
 
-`WebviewElement` 创建 `srcdoc` iframe，并固定以下边界：
+`WebviewElement` 为每个实例创建独立来源的 iframe。桌面端使用 `ash-webview://<uuid>`，
+本机 Web 使用当前端口上的 `<uuid>.localhost`。宿主通过 `IWorkbenchEnvironmentService`
+提供地址；部署到其他域名时，Web embedder 必须提供 `webviewEndpoint`，其 `{{uuid}}`
+必须区分不同来源，且来源使用 HTTPS。该来源负责提供构建生成的 Webview HTML 和 worker 资源。
+两个端共享以下边界：
 
 ```text
-sandbox: allow-scripts
-无 allow-same-origin / forms / popups / downloads / top-navigation
-opaque origin + credentialless
-固定 iframe CSP 与 document CSP
-无 connect / nested frame / object / form action
+sandbox: allow-scripts allow-same-origin，仅共享该实例的独立来源
+无 Workbench DOM 访问 / forms / popups / downloads / top-navigation
+引导页注册资源 worker，文档由独立的内容 iframe 承载
+内容 CSP 只允许映射资源及 data/blob 图片，脚本由 allowScripts 控制
+无外部 network / nested frame / object / form action
 无 Electron preload、Ash renderer API 或 Node capability
 ```
 
 内容通过 `acquireAshWebviewApi().postMessage()` 发送 structured-clone 数据。宿主只接收
-`event.source === iframe.contentWindow` 且当前文档 channel 匹配的 envelope；宿主向 iframe
-发送消息时因为 opaque origin 必须使用 `targetOrigin: "*"`，iframe 内容因此有义务检查
+`event.source === iframe.contentWindow`、实例来源和当前文档 channel 都匹配的 envelope。
+宿主向引导页发送消息时指定实例来源，引导页再向内容页发送原始消息；内容检查
 `event.source === parent`。
 
 宿主 `postMessage()` 返回 `Promise<boolean>`，在页面完成加载并注册消息处理程序前排队，
@@ -529,11 +533,17 @@ opaque origin + credentialless
 独立 channel，旧文档的就绪、焦点和内容消息不会作用于新文档。相同 HTML 不重新加载，
 保留输入等页面状态。容器只能挂载一次，因为移动 iframe 会重新加载内容。
 
-当前实现拥有 DOM sandbox、HTML replacement、focus、双向 message、实例登记与释放。
-跨位置保留内容的 overlay、独立 origin endpoint、远程/本地资源映射、端口映射、find widget、
-state persistence 和权限扩展尚未实现。引入这些能力时必须保留独立 origin，不能通过加入
-`allow-same-origin` 来绕过资源加载问题。当前也尚未接管 iframe 自身的页面跳转；在加入链接
-打开策略前，调用方只应提供产品控制的 HTML。
+`asWebviewUri()` 保留文件路径层级，将资源映射到仅由 worker 回应的资源来源。
+图片、CSS、字体及模块相对导入都经过 `WebviewElement`、`localResourceRoots` 检查和已有
+`IFileService`；Webview 的目录许可只收窄文件服务的授权，不增加磁盘访问权。
+桌面协议和本机 Web HTTP 入口只向实例来源提供引导 HTML 和 worker，不负责读取工作区文件；
+本机 Web 的认证、工作区与 App Server 接口仍只接受原 Workbench host。
+引导页持有待处理请求，文档替换或关闭时结束这些请求；worker 不保留页面状态，空闲回收后
+可以重新向存活引导页请求资源。文件服务已发起的读取完成后也不会发回旧文档。
+
+当前实现拥有 DOM sandbox、HTML replacement、focus、双向 message、实例登记与释放、
+独立来源和受限资源读取。跨位置保留内容的 overlay、端口映射、find widget 和 state persistence
+尚未实现。当前也尚未接管 iframe 自身的页面跳转；调用方仍只应提供产品控制的 HTML。
 
 ### 6.3 Markdown
 
@@ -549,7 +559,7 @@ Workbench 短内容
   → marked
   → DOMPurify allowlist
   → MarkdownPreview
-  → WebviewElement（opaque-origin sandbox iframe）
+  → WebviewElement（独立来源的 sandbox iframe）
 ```
 
 `base/browser/domSanitize.ts` 是 DOMPurify 的唯一直接适配器，为目标 document 创建隔离的
@@ -567,11 +577,12 @@ sanitizer 实例，防止 hook 跨窗口或跨消费者泄漏。`base/browser/ma
 
 当前 allowlist 覆盖标题、段落、列表、表格、代码块、引用和任务复选框等标准 Markdown
 结构，拒绝脚本、事件属性、内联样式、SVG/MathML 与未知元素。链接只保留 `http:`、
-`https:` 和页内 fragment，并由宿主接管点击；图片只保留 base64 PNG、JPEG、GIF 和 WebP，
-不会直接读取本地文件或请求远程资源。预览消息仍需通过 `WebviewElement` 的 source/channel
+`https:`、页内 fragment 和源文档允许的本地链接，并由宿主接管点击；图片经过 URL policy，
+本地图片进一步映射到 Webview 资源来源，由文件服务在允许的目录内读取。
+预览消息仍需通过 `WebviewElement` 的 source/origin/channel
 校验，并在 `MarkdownPreview` 中再次做 exact-shape validation。
 
-当前没有语法高亮、Markdown 扩展插件、Mermaid、KaTeX、工作区相对资源 URI 映射、滚动同步
+当前没有语法高亮、Markdown 扩展插件、Mermaid、KaTeX、滚动同步
 或预览状态持久化。这些属于后续能力，加入时必须继续保持“解析后统一 sanitize，再进入隔离
 容器”的顺序。
 

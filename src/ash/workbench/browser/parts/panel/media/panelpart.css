@@ -1,13 +1,13 @@
 .ash-workbench-panel {
 	overflow: hidden;
 	border: 0;
-	border-top: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-top: var(--ash-strokeThickness) solid var(--ash-border);
 	border-radius: 0;
 	background: var(--ash-panel-background);
 }
 
 .ash-panel-title-control {
-	border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
 }
 
 .ash-workbench-panel > .ash-composite-content {

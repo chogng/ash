@@ -1,8 +1,8 @@
 .ash-editor-group[data-editor-drop-direction]::after {
 	position: absolute;
 	z-index: 20;
-	border: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-	background: color-mix(in srgb, var(--ash-focus-border) 18%, transparent);
+	border: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	background: color-mix(in srgb, var(--ash-focusBorder) 18%, transparent);
 	content: "";
 	pointer-events: none;
 }

@@ -30,7 +30,7 @@
 	position: absolute;
 	left: 0;
 	width: 100%;
-	background-color: var(--ash-minimap-slider-background);
+	background-color: var(--ash-minimapSlider-background);
 	pointer-events: none;
 }
 
@@ -45,14 +45,14 @@
 	.stanza-editor-minimap-hover-slider:hover
 	.stanza-editor-minimap-slider {
 	opacity: 1;
-	background-color: var(--ash-minimap-slider-hover-background);
+	background-color: var(--ash-minimapSlider-hoverBackground);
 }
 
 .stanza-editor
 	.minimap.stanza-editor-minimap-dragging
 	.stanza-editor-minimap-slider {
 	opacity: 1;
-	background-color: var(--ash-minimap-slider-active-background);
+	background-color: var(--ash-minimapSlider-activeBackground);
 }
 
 @media (prefers-reduced-motion: reduce) {

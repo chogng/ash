@@ -32,7 +32,7 @@
 	color: inherit;
 	background: transparent;
 	border: 0;
-	border-radius: var(--ash-corner-radius-small);
+	border-radius: var(--ash-cornerRadius-small);
 	padding: 0 var(--ash-spacing-size40);
 	height: 20px;
 	max-width: 40ch;
@@ -44,7 +44,7 @@
 
 .ash-breadcrumb-item:hover {
 	color: var(--ash-breadcrumbs-widget-hover, var(--ash-foreground));
-	background: var(--ash-button-hover-background);
+	background: var(--ash-button-hoverBackground);
 }
 
 .ash-breadcrumb-item.current,
@@ -57,7 +57,7 @@
 }
 
 .ash-breadcrumb-item:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
 

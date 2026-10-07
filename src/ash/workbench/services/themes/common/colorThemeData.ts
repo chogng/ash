@@ -181,11 +181,10 @@ export function parseSemanticTokenRules(colors: ColorThemeDocument['semanticToke
 
 /** Exports resolved colors, so user documents contain no aliases or transform expressions. */
 export function serializeUserColorThemeDraft(theme: IColorTheme, label: string): string {
-	const type = theme.colorScheme === ColorScheme.HighContrastDark ? 'hcDark' : theme.colorScheme === ColorScheme.HighContrastLight ? 'hcLight' : theme.colorScheme;
 	const document: ColorThemeDocument = {
 		$schema: colorThemeSchemaId,
 		name: label,
-		type,
+		type: theme.colorScheme,
 		colors: Object.fromEntries(theme.colorEntries.flatMap(({ id, value }) => value ? [[id, Color.Format.CSS.formatHexA(value, true)]] : [])),
 		tokenColors: theme.tokenColors?.map(rule => ({ scope: rule.scopes, settings: rule.settings })) ?? [],
 		...(theme.semanticHighlighting === undefined ? {} : { semanticHighlighting: theme.semanticHighlighting }),

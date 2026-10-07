@@ -98,7 +98,7 @@
 
 .ash-testing summary:focus-visible,
 .ash-testing-output pre:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
 

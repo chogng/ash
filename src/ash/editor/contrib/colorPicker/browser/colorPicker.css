@@ -17,11 +17,11 @@
 	overflow-y: auto;
 	padding: var(--ash-spacing-size160);
 	color: var(--ash-editor-foreground);
-	background: var(--ash-editor-widget-background);
-	border: var(--ash-stroke-thickness) solid var(--ash-editor-widget-border);
-	border-radius: var(--ash-corner-radius-large);
+	background: var(--ash-editor-widgetBackground);
+	border: var(--ash-strokeThickness) solid var(--ash-editor-widgetBorder);
+	border-radius: var(--ash-cornerRadius-large);
 	box-shadow: var(--ash-shadow-lg);
-	font-size: var(--ash-font-size-label1);
+	font-size: var(--ash-fontSize-label1);
 }
 
 .stanza-editor-color-picker[hidden] {
@@ -54,8 +54,8 @@
 	padding: 0 var(--ash-spacing-size60);
 	color: var(--ash-input-foreground);
 	background: var(--ash-input-background);
-	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
-	border-radius: var(--ash-corner-radius-small);
+	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border-radius: var(--ash-cornerRadius-small);
 	font: inherit;
 }
 
@@ -65,6 +65,6 @@
 }
 
 .stanza-editor-color-picker-presentation:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-	outline-offset: var(--ash-stroke-thickness);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: var(--ash-strokeThickness);
 }

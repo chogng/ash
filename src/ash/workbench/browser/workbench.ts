@@ -1,6 +1,7 @@
 import { IFileSearchService } from '../../platform/search/common/fileSearch.js';
 import { BrowserFileSearchService } from '../../platform/search/browser/browserFileSearchService.js';
 import { AppServerAvailableContext } from '../common/contextkeys.js';
+import { IWorkbenchEnvironmentService } from '../services/environment/common/environmentService.js';
 import { localize } from '../../nls.js';
 import { Schemas } from '../../base/common/network.js';
 import type { IFileSystemProvider } from '../../platform/files/common/fileSystemProviderService.js';
@@ -316,6 +317,7 @@ import { IClipboardService } from "../../platform/clipboard/common/clipboardServ
 /** Host-specific inputs required to construct a workbench. */
 export interface IStartWorkbenchOptions {
 	readonly productName: string;
+	readonly environmentService: IWorkbenchEnvironmentService;
 	readonly defaultLayout?: WorkbenchDefaultLayout;
 	readonly api: IRendererHost;
 	readonly browserFileSystemProvider?: HTMLFileSystemProvider;
@@ -348,6 +350,7 @@ export interface IStartWorkbenchOptions {
 /** Starts the browser workbench and binds its commands to the initial UI. */
 export async function startWorkbench({
 	productName,
+	environmentService,
 	defaultLayout,
 	api,
 	browserFileSystemProvider,
@@ -414,6 +417,7 @@ export async function startWorkbench({
 			createWindow,
 			createTextDocumentHost,
 			createURLService,
+			environmentService,
 		);
 	} catch (error) {
 		userDataFiles?.dispose();
@@ -478,6 +482,7 @@ export class Workbench extends Disposable {
 		createWindow: ((services: IInstantiationService) => IDisposable) | undefined,
 		createTextDocumentHost: ((services: IInstantiationService) => IDisposable) | undefined,
 		createURLService: IStartWorkbenchOptions['createURLService'],
+		environmentService: IWorkbenchEnvironmentService,
 	) {
 		super();
 		performance.mark('ash.workbench.constructor-start');
@@ -488,6 +493,7 @@ export class Workbench extends Disposable {
 			serviceCollection.set(id, descriptor);
 		}
 		const services = this._register(new InstantiationService(serviceCollection));
+		services.registerInstance(IWorkbenchEnvironmentService, environmentService);
 		const embedderTerminals = services.get(IEmbedderTerminalService);
 		this.window = {
 			createTerminal: async options => {

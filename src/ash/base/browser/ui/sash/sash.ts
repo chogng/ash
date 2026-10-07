@@ -43,8 +43,8 @@ export interface SashDragEvent {
 	readonly altKey: boolean;
 }
 
-const SashDragAreaSizeProperty = "--ash-sash-drag-area-size";
-const SashHoverFeedbackSizeProperty = "--ash-sash-hover-feedback-size";
+const SashDragAreaSizeProperty = "--ash-sash-dragAreaSize";
+const SashHoverFeedbackSizeProperty = "--ash-sash-hoverFeedbackSize";
 const SashHoverDelayProperty = "--ash-sash-hover-delay";
 const DefaultSashHoverDelay = 300;
 let nextSashSettingsBindingId = 1;

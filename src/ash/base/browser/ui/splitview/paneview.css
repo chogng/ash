@@ -21,16 +21,16 @@
 	height: 28px;
 	flex: 0 0 28px;
 	align-items: center;
-	border-radius: var(--ash-corner-radius-small);
+	border-radius: var(--ash-cornerRadius-small);
 	padding: 0 4px;
 	font-size: 12px;
-	font-weight: var(--ash-font-weight-semi-bold);
+	font-weight: var(--ash-fontWeight-semiBold);
 }
 .ash-pane-view-header[hidden] {
 	display: none;
 }
 .ash-pane-view-header:hover {
-	background: var(--ash-toolbar-hover-background);
+	background: var(--ash-toolbar-hoverBackground);
 }
 .ash-pane-view-header-button {
 	display: flex;
@@ -39,7 +39,7 @@
 	flex: 1 1 auto;
 	align-items: center;
 	border: 0;
-	border-radius: var(--ash-corner-radius-small);
+	border-radius: var(--ash-cornerRadius-small);
 	background: transparent;
 	color: inherit;
 	cursor: pointer;
@@ -51,7 +51,7 @@
 	background: transparent;
 }
 .ash-pane-view-header-button:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
 .ash-pane-view-header-twisty-container {

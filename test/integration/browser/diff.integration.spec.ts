@@ -112,7 +112,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await expect(links.locator(':scope > svg > path')).toHaveAttribute('d', geometry!);
 		await page.evaluate(() => {
 			document.documentElement.style.setProperty('--ash-description-foreground', 'rgb(90, 110, 130)');
-			document.documentElement.style.setProperty('--ash-stroke-thickness', '1px');
+			document.documentElement.style.setProperty('--ash-strokeThickness', '1px');
 		});
 		await expect(button).toHaveAccessibleName(localized(locale, 'Moved original lines 2–3 to modified lines 5–6', '原始第 2–3 行已移动到修改后的第 5–6 行'));
 		await expect(links.locator(':scope > svg')).toHaveCSS('stroke', 'rgb(90, 110, 130)');
@@ -319,9 +319,9 @@ test('diff feature geometry follows wrapping and collapse, and selecting hidden 
 		return contains(ranges.original) && contains(ranges.modified);
 	}).toBe(true);
 	await page.evaluate(() => {
-		document.documentElement.dataset.colorScheme = 'high-contrast-dark';
-		document.documentElement.style.setProperty('--ash-contrast-border', 'rgb(10, 20, 30)');
-		document.documentElement.style.setProperty('--ash-stroke-thickness', '1px');
+		document.documentElement.dataset.colorScheme = 'hcDark';
+		document.documentElement.style.setProperty('--ash-contrastBorder', 'rgb(10, 20, 30)');
+		document.documentElement.style.setProperty('--ash-strokeThickness', '1px');
 		window.ashDiffIntegration.scrollModified(window.ashDiffIntegration.linePositions(26, 61).originalTop);
 	});
 	await expect(page.locator('#single .ash-diff-moved-block').first()).toHaveCSS('outline-color', 'rgb(10, 20, 30)');
@@ -397,19 +397,19 @@ test('diff decorations render themed lines, gutter signs, and overview markers',
 	const insertedSign = editor.locator('.stanza-diff-insert-sign .ash-icon').first();
 	const removedMarker = editor.locator('.stanza-diff-overview-marker.removed').first();
 	const insertedMarker = editor.locator('.stanza-diff-overview-marker.inserted').first();
-	await page.evaluate(() => document.documentElement.style.setProperty('--ash-lxicon-font-size-compact', '12px'));
+	await page.evaluate(() => document.documentElement.style.setProperty('--ash-lxiconFontSize-compact', '12px'));
 	await expect(removedSign).toHaveAttribute('aria-hidden', 'true');
 	await expect(insertedSign).toHaveAttribute('aria-hidden', 'true');
 	await expect(removedSign).toHaveCSS('width', '12px');
 	await expect(insertedSign).toHaveCSS('width', '12px');
 	await page.evaluate(() => {
 		const root = document.documentElement;
-		root.style.setProperty('--ash-diff-editor-removed-line-background', 'rgb(250, 220, 220)');
-		root.style.setProperty('--ash-diff-editor-inserted-line-background', 'rgb(220, 250, 220)');
-		root.style.setProperty('--ash-diff-editor-gutter-removed-line-background', 'rgb(240, 180, 180)');
-		root.style.setProperty('--ash-diff-editor-gutter-inserted-line-background', 'rgb(180, 240, 180)');
-		root.style.setProperty('--ash-diff-editor-overview-removed-foreground', 'rgb(200, 40, 40)');
-		root.style.setProperty('--ash-diff-editor-overview-inserted-foreground', 'rgb(40, 160, 40)');
+		root.style.setProperty('--ash-diffEditor-removedLineBackground', 'rgb(250, 220, 220)');
+		root.style.setProperty('--ash-diffEditor-insertedLineBackground', 'rgb(220, 250, 220)');
+		root.style.setProperty('--ash-diffEditorGutter-removedLineBackground', 'rgb(240, 180, 180)');
+		root.style.setProperty('--ash-diffEditorGutter-insertedLineBackground', 'rgb(180, 240, 180)');
+		root.style.setProperty('--ash-diffEditorOverview-removedForeground', 'rgb(200, 40, 40)');
+		root.style.setProperty('--ash-diffEditorOverview-insertedForeground', 'rgb(40, 160, 40)');
 	});
 	await expect(removedLine).toHaveCSS('background-color', 'rgb(250, 220, 220)');
 	await expect(insertedLine).toHaveCSS('background-color', 'rgb(220, 250, 220)');
@@ -493,9 +493,9 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await viewer.getByRole('button', { name: localized(locale, 'Next difference', '下一处差异') }).click();
 		await expect(viewer.locator('[role="status"]')).toHaveText(localized(locale, 'Difference 2 of 2', '第 2 处差异，共 2 处'));
 		await page.evaluate(() => {
-			document.documentElement.dataset.colorScheme = 'high-contrast-dark';
-			document.documentElement.style.setProperty('--ash-contrast-border', 'rgb(10, 20, 30)');
-			document.documentElement.style.setProperty('--ash-stroke-thickness', '1px');
+			document.documentElement.dataset.colorScheme = 'hcDark';
+			document.documentElement.style.setProperty('--ash-contrastBorder', 'rgb(10, 20, 30)');
+			document.documentElement.style.setProperty('--ash-strokeThickness', '1px');
 		});
 		await expect(viewer).toHaveCSS('border-top-color', 'rgb(10, 20, 30)');
 		await expect(viewer.getByRole('button', { name: localized(locale, 'Next difference', '下一处差异') })).toHaveCSS('border-top-color', 'rgb(10, 20, 30)');
@@ -531,9 +531,9 @@ test('inline changes mark the empty side of pure insertions and deletions', asyn
 	await page.evaluate(() => window.ashDiffIntegration.setComparisonText('before after', 'before new after'));
 	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
 	await page.evaluate(() => {
-		document.documentElement.style.setProperty('--ash-stroke-thickness', '1px');
-		document.documentElement.style.setProperty('--ash-diff-editor-removed-line-marker', 'rgb(200, 40, 40)');
-		document.documentElement.style.setProperty('--ash-diff-editor-removed-text-background', 'rgb(250, 220, 220)');
+		document.documentElement.style.setProperty('--ash-strokeThickness', '1px');
+		document.documentElement.style.setProperty('--ash-diffEditor-removedLineMarker', 'rgb(200, 40, 40)');
+		document.documentElement.style.setProperty('--ash-diffEditor-removedTextBackground', 'rgb(250, 220, 220)');
 	});
 	const originalAnchor = page.locator('#single .stanza-diff-editor-side.original .stanza-diff-inline-removed-empty');
 	await expect(originalAnchor).toBeVisible();
@@ -697,10 +697,10 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		expect(lineIsVisible((await page.evaluate(() => window.ashDiffIntegration.visibleDiffRanges())).modified)).toBe(false);
 		await expect(regions.last().locator('.ash-diff-hidden-region-symbol')).toHaveText('Shared section');
 		await page.evaluate(() => {
-			document.documentElement.dataset.colorScheme = 'high-contrast-dark';
-			document.documentElement.style.setProperty('--ash-contrast-border', 'rgb(10, 20, 30)');
-			document.documentElement.style.setProperty('--ash-stroke-thickness', '1px');
-			document.documentElement.style.setProperty('--ash-focus-border', 'rgb(100, 150, 200)');
+			document.documentElement.dataset.colorScheme = 'hcDark';
+			document.documentElement.style.setProperty('--ash-contrastBorder', 'rgb(10, 20, 30)');
+			document.documentElement.style.setProperty('--ash-strokeThickness', '1px');
+			document.documentElement.style.setProperty('--ash-focusBorder', 'rgb(100, 150, 200)');
 		});
 		await expect(regions.first().locator('.ash-diff-hidden-region-content')).toHaveCSS('border-top-color', 'rgb(10, 20, 30)');
 		const showMore = regions.first().getByRole('button', { name: localized(locale, 'Show 2 more lines above', '向上显示更多 2 行') });
@@ -931,10 +931,10 @@ test('multi diff keeps the visible file in place when an earlier comparison chan
 test('multi diff mounts only nearby file headers and restores collapsed state after scrolling away', async ({ page }) => {
 	await openDiffPage(page);
 	await page.evaluate(() => {
-		document.documentElement.style.setProperty('--ash-stroke-thickness', '1px');
-		document.documentElement.style.setProperty('--ash-multi-diff-editor-background', 'rgb(18, 27, 36)');
-		document.documentElement.style.setProperty('--ash-multi-diff-editor-header-background', 'rgb(37, 46, 55)');
-		document.documentElement.style.setProperty('--ash-multi-diff-editor-border', 'rgb(56, 65, 74)');
+		document.documentElement.style.setProperty('--ash-strokeThickness', '1px');
+		document.documentElement.style.setProperty('--ash-multiDiffEditor-background', 'rgb(18, 27, 36)');
+		document.documentElement.style.setProperty('--ash-multiDiffEditor-headerBackground', 'rgb(37, 46, 55)');
+		document.documentElement.style.setProperty('--ash-multiDiffEditor-border', 'rgb(56, 65, 74)');
 	});
 	await page.evaluate(() => window.ashDiffIntegration.showManyComparisons(120));
 	const editor = page.locator('#many .stanza-multi-diff-editor');

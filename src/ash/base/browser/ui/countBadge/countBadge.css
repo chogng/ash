@@ -6,16 +6,16 @@
 	flex: 0 0 auto;
 	align-items: center;
 	justify-content: center;
-	border-radius: var(--ash-corner-radius-circle);
+	border-radius: var(--ash-cornerRadius-circle);
 	padding: 0 var(--ash-spacing-size60);
 	color: var(--ash-badge-foreground);
 	background: var(--ash-badge-background);
-	font-size: var(--ash-font-size-label2);
-	font-weight: var(--ash-font-weight-regular);
+	font-size: var(--ash-fontSize-label2);
+	font-weight: var(--ash-fontWeight-regular);
 	font-variant-numeric: tabular-nums;
 	line-height: 1;
 	white-space: nowrap;
-	outline: var(--ash-stroke-thickness) solid var(--ash-contrast-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
 	outline-offset: -1px;
 }
 
@@ -23,7 +23,7 @@
 	min-width: var(--ash-spacing-size160);
 	height: var(--ash-spacing-size160);
 	padding: 0 var(--ash-spacing-size40);
-	font-size: var(--ash-font-size-label3);
+	font-size: var(--ash-fontSize-label3);
 }
 
 .ash-count-badge.accent {

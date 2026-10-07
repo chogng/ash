@@ -2,10 +2,14 @@ import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { ButtonActionViewItem, type ActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { CountBadge } from '../../../../base/browser/ui/countBadge/countBadge.js';
+import type { TreeElement as ObjectTreeElement } from '../../../../base/browser/ui/tree/tree.js';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { ResourceTree, type IResourceNode } from '../../../../base/common/resourceTree.js';
+import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
+import { FileKind } from '../../../../platform/files/common/files.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { registerOpenEditorListeners } from '../../../../platform/editor/browser/editor.js';
@@ -23,6 +27,7 @@ export const GIT_VIEW_ID = 'ash.gitView';
 
 type TreeElement =
 	| { readonly id: string; readonly group: ISCMResourceGroup; }
+	| { readonly id: string; readonly folder: IResourceNode<ISCMResource, ISCMResourceGroup>; }
 	| { readonly id: string; readonly resource: ISCMResource; };
 
 /** Displays resources and actions from the selected SCM provider. */
@@ -81,19 +86,19 @@ export class ScmViewPane extends ViewPane {
 			ariaLabel: localize('scm.changesTree', 'Source control changes'),
 			scrolling: 'managed',
 			modelOptions: { identityProvider: { getId: element => element.id } },
-			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: element => 'group' in element ? element.group.label : element.resource.path },
+			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: element => 'group' in element ? element.group.label : 'folder' in element ? element.folder.name : element.resource.path },
 			expandOnlyOnTwistieClick: false,
 			expandOnDoubleClick: false,
 			reuseRows: true,
 			onDidRemoveRow: row => {
-				const content = row.querySelector<HTMLElement>('.ash-scm-section-heading, .ash-scm-change');
+				const content = row.querySelector<HTMLElement>('.ash-scm-section-heading, .ash-scm-change, .ash-scm-folder');
 				if (content) { this.renderedRows.deleteAndDispose(content); }
 			},
-			renderElement: element => 'group' in element ? this.renderGroup(element.group) : this.renderResource(element),
+			renderElement: element => 'group' in element ? this.renderGroup(element.group) : 'folder' in element ? this.renderFolder(element.folder) : this.renderResource(element),
 		}));
 		const updateTwistieLayout = () => {
 			const theme = resourceIconRenderer.getFileIconTheme();
-			// In a flat changes list, file icons occupy the empty arrow column even when the theme supplies folder icons.
+			// Leaf file icons occupy the unused arrow column; folders retain their expansion arrows.
 			this.tree.updateOptions({
 				twistieAdditionalCssClass: element => 'resource' in element && theme.hasFileIcons
 					? 'ash-tree-twistie-hidden'
@@ -102,11 +107,11 @@ export class ScmViewPane extends ViewPane {
 		};
 		updateTwistieLayout();
 		this._register(resourceIconRenderer.onDidChangeResourceIcons(updateTwistieLayout));
-		this.tree.element.setAttribute('aria-description', localize('scm.changesTreeHelp', 'Use Up and Down to preview files, Left to collapse, and Right to expand a group. Press Enter to open and pin a file, or Space to preview while keeping focus here. Hold Ctrl, Command, or Alt when clicking or pressing Enter to open in a side group. Double-click pins the file and focuses its editor. Press F1 for Git branch, worktree, stash, tag and remote commands, integration continue or abort, and partial staging.'));
+		this.tree.element.setAttribute('aria-description', localize('scm.changesTreeHelp', 'Files are grouped by directory. Use Up and Down to navigate and preview files, Left to collapse, and Right to expand a group or directory. Press Enter or Space on a directory to toggle it. Press Enter on a file to open and pin it, or Space to preview while keeping focus here. Hold Ctrl, Command, or Alt when clicking or pressing Enter to open in a side group. Double-click pins the file and focuses its editor. Press F1 for Git branch, worktree, stash, tag and remote commands, integration continue or abort, and partial staging.'));
 		this._register(this.tree.onDidOpen(event => {
 			if ('resource' in event.element) {
 				void event.element.resource.open(event.editorOptions, event.sideBySide);
-			} else if (event.browserEvent.type === 'keydown') {
+			} else if ('key' in event.browserEvent && (event.browserEvent.key === 'Enter' || event.browserEvent.key === ' ')) {
 				this.tree.toggleCollapsed(event.element.id);
 			}
 		}));
@@ -174,14 +179,42 @@ export class ScmViewPane extends ViewPane {
 			this.renderedProvider = provider;
 			this.renderedGroups = groups;
 			// Provider snapshots replace group objects; repository/group identities keep tree state stable.
-			this.tree.setChildren((groups ?? []).map(group => ({
-				element: { id: JSON.stringify([active!.id, group.id]), group },
-				children: group.resources.map(resource => ({
-					element: { id: JSON.stringify([active!.id, group.id, resource.path]), resource },
-				})),
-			})));
+			this.tree.setChildren((groups ?? []).map(group => {
+				const resources = new ResourceTree<ISCMResource, ISCMResourceGroup>(group, provider!.rootUri, extUriBiasedIgnorePathCase);
+				for (const resource of group.resources) {
+					resources.add(resource.sourceUri, resource);
+				}
+				return {
+					element: { id: JSON.stringify([active!.id, group.id]), group },
+					children: this.resourceChildren(resources.root, active!.id),
+				};
+			}));
 		}
 		for (const item of this.actionViewItems) item.setBusy(provider?.isBusy === true);
+	}
+
+	private resourceChildren(parent: IResourceNode<ISCMResource, ISCMResourceGroup>, repositoryId: string): ObjectTreeElement<TreeElement>[] {
+		const nodes = [...parent.children].sort((left, right) => Number(left.element !== undefined) - Number(right.element !== undefined) || left.name.localeCompare(right.name));
+		return nodes.map(node => {
+			const id = JSON.stringify([repositoryId, node.context.id, extUriBiasedIgnorePathCase.getComparisonKey(node.uri)]);
+			return node.element
+				? { element: { id, resource: node.element } }
+				: { element: { id, folder: node }, children: this.resourceChildren(node, repositoryId) };
+		});
+	}
+
+	private renderFolder(folder: IResourceNode<ISCMResource, ISCMResourceGroup>): HTMLElement {
+		const row = h(this.element.ownerDocument, 'div');
+		row.className = 'ash-scm-folder';
+		const resources = this.renderedRows.set(row, new DisposableStore());
+		const label = resources.add(this.resourceLabels.create(row));
+		label.setResource({ resource: folder.uri, name: folder.name }, {
+			fileKind: FileKind.Directory,
+			title: folder.relativePath.slice(1),
+			extraClasses: ['ash-scm-change-label'],
+		});
+		row.append(label.element);
+		return row;
 	}
 
 	private renderGroup(group: ISCMResourceGroup): HTMLElement {

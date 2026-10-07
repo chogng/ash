@@ -41,7 +41,7 @@
 .ash-markdown blockquote.ash-markdown-alert {
 	background: var(--ash-input-background);
 	border-left-color: var(--ash-markdown-alert-color, var(--ash-border));
-	border-radius: var(--ash-corner-radius-small);
+	border-radius: var(--ash-cornerRadius-small);
 	color: var(--ash-foreground);
 	padding: 0.6em 0.9em;
 }
@@ -81,14 +81,14 @@
 
 .ash-markdown code {
 	background: var(--ash-input-background);
-	border-radius: var(--ash-corner-radius-small);
+	border-radius: var(--ash-cornerRadius-small);
 	padding: 0.12em 0.3em;
 }
 
 .ash-markdown pre {
 	background: var(--ash-input-background);
-	border: var(--ash-stroke-thickness) solid var(--ash-border);
-	border-radius: var(--ash-corner-radius-small);
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+	border-radius: var(--ash-cornerRadius-small);
 	overflow: auto;
 	padding: 0.8em;
 }
@@ -116,7 +116,7 @@
 
 .ash-markdown th,
 .ash-markdown td {
-	border: var(--ash-stroke-thickness) solid var(--ash-border);
+	border: var(--ash-strokeThickness) solid var(--ash-border);
 	padding: 0.35em 0.65em;
 }
 

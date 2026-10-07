@@ -315,6 +315,13 @@ where
     M: Fn(String) -> String + Send + Sync + 'static,
 {
     if header(&request, "host") != Some(boundary.host.as_str()) {
+        // Isolated webviews receive only their trusted bootstrap assets. Product,
+        // session and workspace routes retain the exact Workbench host boundary.
+        if header(&request, "host").is_some_and(|host| {
+            is_webview_bootstrap_request(host, &boundary.host, request.uri().path())
+        }) {
+            return Ok(static_response(&request, &boundary).await);
+        }
         return Ok(response(StatusCode::FORBIDDEN, "Invalid host"));
     }
     if !request.uri().path().starts_with("/ash/") {
@@ -564,6 +571,46 @@ async fn static_response(request: &Request<Incoming>, boundary: &Boundary) -> Re
         .header("cache-control", "no-cache")
         .body(Full::new(Bytes::from(content)))
         .expect("static response")
+}
+
+fn is_webview_bootstrap_request(host: &str, workbench_host: &str, path: &str) -> bool {
+    let Some((hostname, port)) = host.rsplit_once(':') else {
+        return false;
+    };
+    if workbench_host.rsplit_once(':').map(|(_, port)| port) != Some(port) {
+        return false;
+    }
+    let Some(instance) = hostname.strip_suffix(".localhost") else {
+        return false;
+    };
+    let mut groups = instance.split('-');
+    for length in [8, 4, 4, 4, 12] {
+        if !groups.next().is_some_and(|group| {
+            group.len() == length && group.bytes().all(|byte| byte.is_ascii_hexdigit())
+        }) {
+            return false;
+        }
+    }
+    if groups.next().is_some() {
+        return false;
+    }
+    let Some(asset) = path.strip_prefix("/assets/") else {
+        return false;
+    };
+    let hash = asset
+        .strip_prefix("index-")
+        .and_then(|value| value.strip_suffix(".html"))
+        .or_else(|| {
+            asset
+                .strip_prefix("service-worker-")
+                .and_then(|value| value.strip_suffix(".js"))
+        });
+    hash.is_some_and(|hash| {
+        !hash.is_empty()
+            && hash
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+    })
 }
 
 fn response(status: StatusCode, text: &str) -> Response<Body> {

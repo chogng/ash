@@ -7,18 +7,18 @@
 }
 
 .ash-tree:focus-visible:not(.has-focused-item) {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
 
 .ash-tree-row.find-match .ash-tree-contents {
 	text-decoration: underline;
-	text-decoration-color: var(--ash-focus-border);
+	text-decoration-color: var(--ash-focusBorder);
 	text-underline-offset: 2px;
 }
 
 .ash-tree-row.drag-over {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
 
@@ -31,7 +31,7 @@
 	left: 0;
 	flex-direction: column;
 	background: inherit;
-	box-shadow: 0 1px 0 var(--ash-tree-indent-guides-stroke);
+	box-shadow: 0 1px 0 var(--ash-tree-indentGuidesStroke);
 }
 
 .ash-tree-sticky-container.empty {
@@ -50,7 +50,7 @@
 	align-items: center;
 	overflow: hidden;
 	border: 0;
-	border-radius: var(--ash-corner-radius-small);
+	border-radius: var(--ash-cornerRadius-small);
 	background: transparent;
 	color: inherit;
 	cursor: default;
@@ -81,21 +81,21 @@
 	width: var(--ash-tree-indent, 8px);
 	box-sizing: border-box;
 	flex: 0 0 var(--ash-tree-indent, 8px);
-	border-left: var(--ash-stroke-thickness) solid transparent;
+	border-left: var(--ash-strokeThickness) solid transparent;
 }
 
 .ash-tree-indent-guides-always .ash-tree-indent-guide,
 .ash-tree-indent-guides-onHover:hover .ash-tree-indent-guide {
-	border-left-color: var(--ash-tree-inactive-indent-guides-stroke);
+	border-left-color: var(--ash-tree-inactiveIndentGuidesStroke);
 }
 
 .ash-tree-indent-guides-always .ash-tree-indent-guide.active,
 .ash-tree-indent-guides-onHover .ash-tree-indent-guide.active {
-	border-left-color: var(--ash-tree-indent-guides-stroke);
+	border-left-color: var(--ash-tree-indentGuidesStroke);
 }
 
 .ash-tree-row:hover {
-	background: var(--ash-list-hover-background);
+	background: var(--ash-list-hoverBackground);
 }
 
 .ash-tree-row.focused {
@@ -103,21 +103,21 @@
 }
 
 .ash-tree-selection-subtle .ash-tree-row.selected {
-	background: var(--ash-list-hover-background);
+	background: var(--ash-list-hoverBackground);
 }
 
 .ash-tree-selection-active .ash-tree-row.selected {
-	background: var(--ash-list-inactive-selection-background);
+	background: var(--ash-list-inactiveSelectionBackground);
 }
 
 .ash-tree-selection-active:focus .ash-tree-row.selected {
-	--ash-description-foreground: var(--ash-list-active-selection-foreground);
-	color: var(--ash-list-active-selection-foreground);
-	background: var(--ash-list-active-selection-background);
+	--ash-description-foreground: var(--ash-list-activeSelectionForeground);
+	color: var(--ash-list-activeSelectionForeground);
+	background: var(--ash-list-activeSelectionBackground);
 }
 
 .ash-tree:focus-visible .ash-tree-row.focused {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
 

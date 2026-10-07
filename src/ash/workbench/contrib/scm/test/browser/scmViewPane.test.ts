@@ -991,6 +991,7 @@ test('ScmViewPane folds groups through the shared tree and keeps state when reso
 	let groups = [{ id: 'changes', label: 'Changes', resources: [resource('first.ts')], actions: [groupAction] }];
 	const provider: ISCMProvider = {
 		...testSCMProvider('repo-1', 'workspace'),
+		rootUri: URI.file('/workspace'),
 		get groups() { return groups; },
 		onDidChangeResources: changes.event,
 		refresh: async () => {
@@ -1022,7 +1023,7 @@ test('ScmViewPane folds groups through the shared tree and keeps state when reso
 		const group = (): HTMLElement => tree.querySelector<HTMLElement>('[role="treeitem"][aria-level="1"]')!;
 		const key = (value: string): void => { tree.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: value, bubbles: true })); };
 		assert.equal(tree.getAttribute('aria-label'), '源代码管理更改');
-		assert.ok(tree.getAttribute('aria-description')?.includes('左方向键折叠分组'));
+		assert.ok(tree.getAttribute('aria-description')?.includes('左方向键折叠分组或目录'));
 		assert.ok(tree.getAttribute('aria-description')?.includes('侧边分组'));
 		const retainedFile = tree.querySelector<HTMLButtonElement>('[aria-label="Open first.ts"]')!;
 		assert.equal(retainedFile.querySelector<HTMLElement>('[data-file-icon]')?.dataset.fileIcon, 'first');
@@ -1090,6 +1091,32 @@ test('ScmViewPane folds groups through the shared tree and keeps state when reso
 		assert.equal(browser.window.document.activeElement, tree);
 		await pane.refresh();
 		assert.equal(browser.window.document.activeElement, tree, 'Git row replacement retains preview focus');
+		groups = [{ ...groups[0], resources: [resource('src/one.ts'), resource('src/nested/two.ts'), resource('third.ts')] }];
+		changes.fire();
+		const folder = (): HTMLElement => [...tree.querySelectorAll<HTMLElement>('[role="treeitem"]')].find(row => row.querySelector('.ash-scm-folder .ash-icon-label-text')?.textContent === 'src')!;
+		assert.deepEqual([...tree.querySelectorAll<HTMLElement>('[role="treeitem"]')].map(row => [row.querySelector('.ash-icon-label-text, .ash-scm-section-label')?.textContent, row.getAttribute('aria-level')]), [
+			['Changes', '1'], ['src', '2'], ['nested', '3'], ['two.ts', '4'], ['one.ts', '3'], ['third.ts', '2'],
+		]);
+		const opensBeforeFolder = opened.length;
+		key('Home');
+		assert.equal(group().getAttribute('aria-expanded'), 'true');
+		key('ArrowDown');
+		assert.equal(folder().getAttribute('aria-expanded'), 'true', 'Keyboard navigation does not toggle a directory');
+		folder().querySelector<HTMLElement>('.ash-scm-folder')!.click();
+		assert.equal(folder().getAttribute('aria-expanded'), 'false');
+		groups = [{ ...groups[0], resources: [...groups[0].resources, resource('src/three.ts')] }];
+		changes.fire();
+		assert.equal(folder().getAttribute('aria-expanded'), 'false', 'Directory identity retains folding across provider snapshots');
+		assert.equal(tree.querySelector('[aria-label="Open src/one.ts"]'), null);
+		key('ArrowRight');
+		assert.equal(folder().getAttribute('aria-expanded'), 'true');
+		key('Enter');
+		assert.equal(folder().getAttribute('aria-expanded'), 'false');
+		key(' ');
+		assert.equal(folder().getAttribute('aria-expanded'), 'true');
+		assert.equal(opened.length, opensBeforeFolder, 'Directory navigation never opens a file');
+		tree.querySelector<HTMLButtonElement>('[aria-label="Open src/nested/two.ts"]')!.click();
+		assert.deepEqual(opened.at(-1), { path: 'src/nested/two.ts', pinned: false });
 		using otherRepository = scm.registerSCMProvider({ ...provider, id: 'repo-2' });
 		group().querySelector<HTMLElement>('.ash-tree-twistie')!.click();
 		views.selectRepository(otherRepository.id);
@@ -1156,7 +1183,7 @@ test("ScmViewPane groups App Server Git status", async () => {
 		repositoryId: "repo-1",
 		streamInstanceId: "git-stream-1",
 		revision: 1,
-		workspacePath: ".",
+		workspacePath: "/workspace",
 		head: {
 			type: "branch",
 			name: "main",
@@ -1320,8 +1347,8 @@ test("ScmViewPane groups App Server Git status", async () => {
 		const multiDiffInput = opened[3].input as IResourceEditorInput & { readonly items: readonly { readonly goToFile?: IResourceEditorInput; }[]; };
 		assert.equal(multiDiffInput.items.length, 2);
 		assert.deepEqual(multiDiffInput.items.map((item) => item.goToFile?.resource.toString()), [
-			"file:///src/working.ts",
-			"file:///both.ts",
+			"file:///workspace/src/working.ts",
+			"file:///workspace/both.ts",
 		]);
 		assert.equal(opened[3].options?.pinned, true);
 		const conflictOpen = pane.element.querySelector<HTMLButtonElement>('button[aria-label="Open merge conflict in conflict.ts"]');
@@ -1332,7 +1359,7 @@ test("ScmViewPane groups App Server Git status", async () => {
 		const conflictInput = opened[4].input;
 		assert.ok(isScmMergeEditorInput(conflictInput));
 		assert.equal(conflictInput.resource.toString(), 'git-merge:/repo-1/conflict.ts');
-		assert.equal(conflictInput.resultResource.toString(), 'file:///conflict.ts');
+		assert.equal(conflictInput.resultResource.toString(), 'file:///workspace/conflict.ts');
 		assert.equal(conflictInput.readOnly, undefined);
 		assert.equal(opened[4].options?.pinned, false);
 		assert.equal(changeFileRequests.length, changeFileCount);
@@ -1454,7 +1481,7 @@ test("ScmViewPane accepts a restarted Git stream and rejects its retired predece
 		repositoryId: "repo-1",
 		streamInstanceId: "git-stream-before-restart",
 		revision: 20,
-		workspacePath: ".",
+		workspacePath: "/workspace",
 		head: { type: "branch", name: "before", objectId: "1111111", upstream: undefined },
 		changes: [change("before.ts", "unmodified", "modified")],
 	};
@@ -1462,7 +1489,7 @@ test("ScmViewPane accepts a restarted Git stream and rejects its retired predece
 		repositoryId: "repo-1",
 		streamInstanceId: "git-stream-after-restart",
 		revision: 1,
-		workspacePath: ".",
+		workspacePath: "/workspace",
 		head: { type: "branch", name: "after", objectId: "2222222", upstream: undefined },
 		changes: [],
 	};

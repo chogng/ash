@@ -33,7 +33,7 @@
 
 .ash-disassembly-status {
 	padding: 0 var(--ash-spacing-size80) var(--ash-spacing-size40);
-	font-size: var(--ash-font-size-label1);
+	font-size: var(--ash-fontSize-label1);
 	color: var(--ash-description-foreground);
 }
 
@@ -54,9 +54,9 @@
 }
 
 .ash-disassembly-text.current {
-	background: var(--ash-list-active-selection-background);
-	color: var(--ash-list-active-selection-foreground);
-	font-weight: var(--ash-font-weight-semi-bold);
+	background: var(--ash-list-activeSelectionBackground);
+	color: var(--ash-list-activeSelectionForeground);
+	font-weight: var(--ash-fontWeight-semiBold);
 }
 
 .ash-disassembly .ash-button.checked {

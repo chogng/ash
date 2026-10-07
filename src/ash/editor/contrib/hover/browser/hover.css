@@ -5,14 +5,11 @@
 	max-height: calc(100vh - 48px);
 	overflow-y: auto;
 	padding: var(--ash-spacing-size60) var(--ash-spacing-size100);
-	color: var(--ash-editor-hover-foreground, var(--ash-editor-foreground));
-	background: var(
-		--ash-editor-hover-background,
-		var(--ash-editor-background)
-	);
-	border: var(--ash-stroke-thickness) solid
-		var(--ash-editor-hover-border, var(--ash-editor-border));
-	border-radius: var(--ash-corner-radius-large);
+	color: var(--ash-editor-hoverForeground, var(--ash-editor-foreground));
+	background: var(--ash-editor-hoverBackground, var(--ash-editor-background));
+	border: var(--ash-strokeThickness) solid
+		var(--ash-editor-hoverBorder, var(--ash-editor-border));
+	border-radius: var(--ash-cornerRadius-large);
 	box-shadow: var(--ash-shadow-lg);
 	white-space: pre-wrap;
 	font-family: var(--ash-font-family, system-ui, sans-serif);
@@ -30,7 +27,7 @@
 
 .stanza-editor-hover.ash-high-contrast {
 	box-shadow: none;
-	border-color: var(--ash-contrast-border);
+	border-color: var(--ash-contrastBorder);
 }
 
 .stanza-editor-hover-content + .stanza-editor-hover-content {

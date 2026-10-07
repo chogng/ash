@@ -50,8 +50,8 @@
 }
 
 .ash-getting-started-name {
-	font-size: var(--ash-font-size-heading1);
-	font-weight: var(--ash-font-weight-semi-bold);
+	font-size: var(--ash-fontSize-heading1);
+	font-weight: var(--ash-fontWeight-semiBold);
 	letter-spacing: 0.06em;
 	line-height: 1;
 }
@@ -74,40 +74,40 @@
 	min-width: 0;
 	min-height: 60px;
 	padding: 10px 16px;
-	border: var(--ash-stroke-thickness) solid
-		var(--ash-editor-welcome-card-border);
-	border-radius: var(--ash-corner-radius-large);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-editorWelcome-cardBorder);
+	border-radius: var(--ash-cornerRadius-large);
 	flex-direction: row;
 	align-items: center;
 	justify-content: flex-start;
 	gap: 10px;
 	color: var(--ash-foreground);
-	background: var(--ash-editor-welcome-card-background);
+	background: var(--ash-editorWelcome-cardBackground);
 	font: inherit;
 	text-align: left;
 	cursor: pointer;
 	transition:
-		background-color var(--ash-animation-duration-fast) ease,
-		border-color var(--ash-animation-duration-fast) ease;
+		background-color var(--ash-animation-durationFast) ease,
+		border-color var(--ash-animation-durationFast) ease;
 }
 
 .ash-getting-started-card:hover {
-	background: var(--ash-editor-welcome-card-hover-background);
+	background: var(--ash-editorWelcome-cardHoverBackground);
 }
 
 .ash-getting-started-card:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: 2px;
 }
 
 .ash-getting-started-card.featured {
-	border-color: var(--ash-editor-welcome-featured-card-border);
-	color: var(--ash-editor-welcome-featured-card-foreground);
-	background: var(--ash-editor-welcome-featured-card-background);
+	border-color: var(--ash-editorWelcome-featuredCardBorder);
+	color: var(--ash-editorWelcome-featuredCardForeground);
+	background: var(--ash-editorWelcome-featuredCardBackground);
 }
 
 .ash-getting-started-card.featured:hover {
-	background: var(--ash-editor-welcome-featured-card-hover-background);
+	background: var(--ash-editorWelcome-featuredCardHoverBackground);
 }
 
 .ash-getting-started-card.is-disabled {
@@ -124,15 +124,15 @@
 }
 
 .ash-getting-started-card-icon .ash-icon {
-	width: var(--ash-lxicon-font-size);
-	height: var(--ash-lxicon-font-size);
+	width: var(--ash-lxiconFontSize);
+	height: var(--ash-lxiconFontSize);
 }
 
 .ash-getting-started-card-label {
 	min-width: 0;
 	overflow: hidden;
 	font-size: 13px;
-	font-weight: var(--ash-font-weight-regular);
+	font-weight: var(--ash-fontWeight-regular);
 	line-height: 1.2;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -145,8 +145,8 @@
 .ash-getting-started-recent h2 {
 	margin: 0;
 	color: var(--ash-description-foreground);
-	font-size: var(--ash-font-size-heading2);
-	font-weight: var(--ash-font-weight-regular);
+	font-size: var(--ash-fontSize-heading2);
+	font-weight: var(--ash-fontWeight-regular);
 }
 
 .ash-getting-started-recent-list {

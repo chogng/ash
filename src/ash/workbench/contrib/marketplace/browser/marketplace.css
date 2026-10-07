@@ -6,7 +6,7 @@
 	min-height: 0;
 	overflow: auto;
 	padding: 12px;
-	font-size: var(--ash-font-size-body1);
+	font-size: var(--ash-fontSize-body1);
 }
 .ash-marketplace label {
 	display: flex;
@@ -29,8 +29,8 @@
 	font: inherit;
 	color: var(--ash-input-foreground);
 	background: var(--ash-input-background);
-	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
-	border-radius: var(--ash-corner-radius-small);
+	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border-radius: var(--ash-cornerRadius-small);
 }
 .ash-marketplace .marketplace-detail {
 	white-space: pre-wrap;
@@ -42,6 +42,6 @@
 	cursor: pointer;
 }
 .ash-marketplace :focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: 2px;
 }

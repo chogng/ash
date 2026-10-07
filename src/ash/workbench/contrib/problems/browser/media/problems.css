@@ -15,9 +15,9 @@
 .ash-problems-filter {
 	flex: 1 1 220px;
 	min-width: 120px;
-	border: var(--ash-stroke-thickness) solid
+	border: var(--ash-strokeThickness) solid
 		color-mix(in srgb, currentColor 25%, transparent);
-	border-radius: var(--ash-corner-radius-small);
+	border-radius: var(--ash-cornerRadius-small);
 	padding: 6px 8px;
 	color: inherit;
 	background: color-mix(in srgb, currentColor 6%, transparent);
@@ -25,8 +25,8 @@
 }
 
 .ash-problems-filter:focus {
-	border-color: var(--ash-focus-border);
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	border-color: var(--ash-focusBorder);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 }
 
 .ash-problems-severities {
@@ -35,8 +35,8 @@
 }
 
 .ash-problems-severity {
-	border: var(--ash-stroke-thickness) solid transparent;
-	border-radius: var(--ash-corner-radius-small);
+	border: var(--ash-strokeThickness) solid transparent;
+	border-radius: var(--ash-cornerRadius-small);
 	padding: 4px 8px;
 	color: inherit;
 	background: transparent;
@@ -54,7 +54,7 @@
 
 .ash-problems-severity:focus-visible,
 .ash-problems-item-button:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
 
@@ -90,7 +90,7 @@
 
 .ash-problems-file-name {
 	overflow: hidden;
-	font-weight: var(--ash-font-weight-semi-bold);
+	font-weight: var(--ash-fontWeight-semiBold);
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }

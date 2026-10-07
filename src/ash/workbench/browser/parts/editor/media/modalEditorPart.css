@@ -5,7 +5,7 @@
 	align-items: center;
 	justify-content: center;
 	padding: 32px;
-	background: var(--ash-dialog-backdrop-background);
+	background: var(--ash-dialog-backdropBackground);
 	inset: 0;
 }
 
@@ -15,14 +15,14 @@
 
 .ash-modal-editor {
 	display: flex;
-	width: min(var(--ash-modal-editor-width), calc(100vw - 64px));
-	height: min(var(--ash-modal-editor-height), calc(100vh - 64px));
+	width: min(var(--ash-modalEditor-width), calc(100vw - 64px));
+	height: min(var(--ash-modalEditor-height), calc(100vh - 64px));
 	min-width: 0;
 	min-height: 320px;
 	overflow: hidden;
 	flex-direction: column;
-	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
-	border-radius: var(--ash-corner-radius-large);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-large);
 	outline: none;
 	color: var(--ash-foreground);
 	background: var(--ash-editor-background);
@@ -30,7 +30,7 @@
 }
 
 .ash-modal-editor:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
 
@@ -41,14 +41,14 @@
 	align-items: center;
 	justify-content: space-between;
 	padding: 0 8px 0 16px;
-	border-bottom: var(--ash-stroke-thickness) solid var(--ash-widget-border);
-	background: var(--ash-title-bar-background);
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	background: var(--ash-titleBar-background);
 }
 
 .ash-modal-editor-title {
 	margin: 0;
-	font-size: var(--ash-font-size-heading3);
-	font-weight: var(--ash-font-weight-semi-bold);
+	font-size: var(--ash-fontSize-heading3);
+	font-weight: var(--ash-fontWeight-semiBold);
 }
 
 .ash-modal-editor-close {

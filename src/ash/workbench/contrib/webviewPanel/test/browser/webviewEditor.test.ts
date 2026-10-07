@@ -13,7 +13,7 @@ import { INotificationService } from '../../../../../platform/notification/commo
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { IFileTextModelService, ITextModelResourceService, type TextModelReference } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
-import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
+import { createTestEditorServices, getWebviewHtml } from '../../../../test/common/testEditorServices.js';
 import { WebviewEditor, type CustomTextEditorContent, type CustomTextEditorProvider } from '../../browser/webviewEditor.js';
 
 function createEditor(store: DisposableStore, options: {
@@ -80,7 +80,7 @@ suite('Webview editor input lifecycle', () => {
 		assert.equal(firstSignal?.aborted, true);
 		assert.deepEqual(editor.workingCopies.getAll().map(copy => copy.backup()), ['Second']);
 		assert.equal(editor.models.getModel(first.resource), null);
-		assert.match(editor.pane.getControl()!.element.srcdoc, /<h1>Second<\/h1>/u);
+		assert.match(getWebviewHtml(editor.pane.getControl()!.element), /<h1>Second<\/h1>/u);
 	});
 
 	test('a late file stat cannot attach old listeners or render over the new input', async () => {
@@ -163,7 +163,7 @@ suite('Webview editor input lifecycle', () => {
 		await rejected;
 		assert.equal(signal.aborted, true);
 		assert.equal(editor.pane.getControl()!.element, frame);
-		assert.match(frame.srcdoc, /<h1>Second<\/h1>/u);
+		assert.match(getWebviewHtml(frame), /<h1>Second<\/h1>/u);
 		assert.deepEqual(editor.workingCopies.getAll().map(copy => copy.backup()), ['Second']);
 	});
 
@@ -183,6 +183,6 @@ suite('Webview editor input lifecycle', () => {
 		assert.deepEqual(editor.workingCopies.getAll(), []);
 		assert.equal(editor.pane.getControl(), undefined);
 		await editor.pane.setInput(second, abortSignal());
-		assert.match(editor.pane.getControl()!.element.srcdoc, /<h1>Second<\/h1>/u);
+		assert.match(getWebviewHtml(editor.pane.getControl()!.element), /<h1>Second<\/h1>/u);
 	});
 });

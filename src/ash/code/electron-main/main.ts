@@ -1,6 +1,7 @@
 import { AshApplication, type AppServerStartupMode } from "./app.js";
 import { isCancellationError } from '../../base/common/errors.js';
-import { app } from 'electron/main';
+import { app, protocol } from 'electron/main';
+import { Schemas } from '../../base/common/network.js';
 import { basename, dirname, join } from 'node:path';
 import { AshApplicationId, AshApplicationName, AshRendererDirectory, AshSessionsRendererEntry, AshUserDataFolderName } from '../common/application.js';
 import { developmentArtifactsPath } from '../../platform/environment/node/developmentArtifacts.js';
@@ -17,6 +18,7 @@ import { access, writeFile } from 'node:fs/promises';
 
 /** Starts the Electron product and its fixed Workbench/Sessions entries. */
 export async function startElectronApplication(): Promise<void> {
+	protocol.registerSchemesAsPrivileged([{ scheme: Schemas.vscodeWebview, privileges: { standard: true, secure: true, supportFetchAPI: true, allowServiceWorkers: true } }]);
 	const profileRoot = resolveHome();
 	const migrationConflict = await migrateLegacyLocalProfile({ legacyUserDataRoot: app.getPath('userData'), profileRoot });
 	if (migrationConflict) console.error(`Settings migration conflict: ${migrationConflict.legacyPath} and ${migrationConflict.settingsPath}`);

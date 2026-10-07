@@ -36,6 +36,7 @@ import { ElectronWindow } from './window.js';
 import { registerLocalTranscriptionService } from '../services/localTranscription/electron-browser/localTranscriptionService.js';
 import { NativeWorkbenchStorageService } from '../services/storage/electron-browser/storageService.js';
 import { LoggerChannelClient } from '../../platform/log/common/logIpc.js';
+import { ElectronWorkbenchEnvironmentService } from '../services/environment/electron-browser/environmentService.js';
 
 /** Owns desktop startup and the resources of one renderer window. */
 export class DesktopMain extends Disposable {
@@ -86,6 +87,7 @@ export class DesktopMain extends Disposable {
 			performance.mark('ash.desktop.workbench-start');
 			const workbench = this._register(await startWorkbench({
 				...this.options,
+				environmentService: new ElectronWorkbenchEnvironmentService(),
 				createURLService: services => {
 					services.registerInstance(IMainProcessService, mainProcessService);
 					return services.createInstance(RelayURLService, windowId as number);

@@ -8,8 +8,8 @@
 	color: var(--ash-editor-foreground);
 	white-space: normal;
 	background: var(--ash-dialog-background);
-	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
-	border-radius: var(--ash-corner-radius-small);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-small);
 	box-shadow: 0 4px 12px var(--ash-widget-shadow);
 }
 
@@ -43,7 +43,7 @@
 	color: var(--ash-input-foreground);
 	font: inherit;
 	background: var(--ash-input-background);
-	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
+	border: var(--ash-strokeThickness) solid var(--ash-input-border);
 	outline: none;
 }
 
@@ -52,7 +52,7 @@
 }
 
 .stanza-editor-find-input:focus {
-	border-color: var(--ash-focus-border);
+	border-color: var(--ash-focusBorder);
 }
 
 .stanza-editor-find-input.invalid {
@@ -79,7 +79,7 @@
 	line-height: 22px;
 	background: transparent;
 	border: 0;
-	border-radius: var(--ash-corner-radius-small);
+	border-radius: var(--ash-cornerRadius-small);
 }
 
 .stanza-editor-find-button svg {
@@ -91,7 +91,7 @@
 .stanza-editor-find-button:hover,
 .stanza-editor-find-button.checked,
 .stanza-editor-find-button.find-options-highlight {
-	background: var(--ash-button-hover-background);
+	background: var(--ash-button-hoverBackground);
 }
 
 .stanza-editor-find-button:disabled {
@@ -103,25 +103,25 @@
 }
 
 .stanza-editor-find-button:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
 
 .stanza-editor-find-replace-toggle {
-	font-size: var(--ash-font-size-heading2);
+	font-size: var(--ash-fontSize-heading2);
 }
 
 .stanza-editor .findMatch {
-	background: var(--ash-search-match-background);
+	background: var(--ash-search-matchBackground);
 }
 
 .stanza-editor .currentFindMatch {
 	background: color-mix(
 		in srgb,
-		var(--ash-search-match-background) 70%,
-		var(--ash-focus-border)
+		var(--ash-search-matchBackground) 70%,
+		var(--ash-focusBorder)
 	);
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 }
 
 @media (forced-colors: active) {
@@ -133,6 +133,6 @@
 	.stanza-editor .findMatch,
 	.stanza-editor .currentFindMatch {
 		background: transparent;
-		outline: var(--ash-stroke-thickness) solid CanvasText;
+		outline: var(--ash-strokeThickness) solid CanvasText;
 	}
 }

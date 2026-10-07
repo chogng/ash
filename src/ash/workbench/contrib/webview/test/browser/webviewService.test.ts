@@ -8,14 +8,27 @@ import { getSingletonServiceDescriptors } from '../../../../../platform/instanti
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { IWebviewService, type IWebview } from '../../browser/webview.js';
+import { registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import { MarkdownPreview } from '../../../markdown/browser/markdownPreview.js';
+import { IFileService } from '../../../../../platform/files/common/files.js';
+import { MemoryFileService } from '../../../bulkEdit/test/browser/bulkEditTestServices.js';
 
 suite('Webview service', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
-	test('production registration creates tracked containers and clears only the current focus', () => {
+	test('container creation rejects missing file and host environment services', () => {
 		const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IWebviewService)!;
 		using instantiation = new InstantiationService(new ServiceCollection(descriptor));
+		const service = instantiation.get(IWebviewService);
+		assert.throws(() => service.createWebviewElement({ title: 'Missing files', options: {} }), /Unknown service: fileService/);
+		instantiation.registerInstance(IFileService, new MemoryFileService([]));
+		assert.throws(() => service.createWebviewElement({ title: 'Missing environment', options: {} }), /Unknown service: workbenchEnvironmentService/);
+		assert.deepEqual([...service.webviews], []);
+	});
+
+	test('production registration creates tracked containers and clears only the current focus', () => {
+		const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IWebviewService)!;
+		using instantiation = registerTestComponentServices(new InstantiationService(new ServiceCollection(descriptor)));
 		const service = instantiation.get(IWebviewService);
 		using first = service.createWebviewElement({ title: 'First', options: {} });
 		using second = service.createWebviewElement({ title: 'Second', options: {} });
@@ -40,7 +53,7 @@ suite('Webview service', () => {
 		using missing = new InstantiationService();
 		assert.throws(() => missing.createInstance(MarkdownPreview, document.body, {}), /Unknown service: webviewService/);
 		const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IWebviewService)!;
-		using instantiation = new InstantiationService(new ServiceCollection(descriptor));
+		using instantiation = registerTestComponentServices(new InstantiationService(new ServiceCollection(descriptor)));
 		const service = instantiation.get(IWebviewService);
 		using preview = instantiation.createInstance(MarkdownPreview, document.body, { title: 'Preview', markdown: '# Preview' });
 		assert.equal([...service.webviews].length, 1);

@@ -19,19 +19,19 @@
 	box-sizing: border-box;
 	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
 	border: 1px solid var(--ash-border);
-	border-radius: var(--ash-corner-radius-small);
+	border-radius: var(--ash-cornerRadius-small);
 	background: var(--ash-input-background);
 	color: var(--ash-foreground);
-	font-size: var(--ash-font-size-label1);
+	font-size: var(--ash-fontSize-label1);
 	text-decoration: none;
 }
 
 .ash-session-chat-input-pr:hover {
-	background: var(--ash-list-hover-background);
+	background: var(--ash-list-hoverBackground);
 }
 
 .ash-session-chat-input-pr:focus-visible {
-	outline: 1px solid var(--ash-focus-border);
+	outline: 1px solid var(--ash-focusBorder);
 	outline-offset: 2px;
 }
 
@@ -54,11 +54,11 @@
 	flex: 0 0 auto;
 	min-height: 28px;
 	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
-	border: var(--ash-stroke-thickness) solid var(--ash-border);
-	border-radius: var(--ash-corner-radius-small);
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+	border-radius: var(--ash-cornerRadius-small);
 	background: transparent;
 	color: var(--ash-description-foreground);
-	font-size: var(--ash-font-size-label1);
+	font-size: var(--ash-fontSize-label1);
 	cursor: pointer;
 }
 
@@ -67,11 +67,11 @@
 }
 
 .ash-session-chat-input-pr-action:hover {
-	background: var(--ash-list-hover-background);
+	background: var(--ash-list-hoverBackground);
 }
 
 .ash-session-chat-input-pr-action:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
 

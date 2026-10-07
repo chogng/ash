@@ -44,7 +44,7 @@ import { GitQuickDiffProvider } from './gitQuickDiffProvider.js';
 import { GitSCMContribution } from './gitSCMProvider.js';
 
 const ignoredResourceForeground = registerColor('gitDecoration.ignoredResourceForeground', {
-	dark: '#8c8c8c', light: '#767676', highContrastDark: foreground, highContrastLight: foreground,
+	dark: '#8c8c8c', light: '#767676', hcDark: foreground, hcLight: foreground,
 }, { description: 'Foreground color for files ignored by Git.', owner: 'git.decorations' });
 
 interface IgnoreQuery {

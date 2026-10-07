@@ -12,8 +12,8 @@
 	width: 100%;
 	min-width: 0;
 	padding: var(--ash-spacing-size60) var(--ash-spacing-size80);
-	border: var(--ash-stroke-thickness) solid var(--ash-border);
-	border-radius: var(--ash-corner-radius-small);
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+	border-radius: var(--ash-cornerRadius-small);
 	color: var(--ash-input-foreground);
 	background: var(--ash-input-background);
 }
@@ -32,8 +32,8 @@
 	margin: var(--ash-spacing-size80) var(--ash-spacing-size80)
 		var(--ash-spacing-size40);
 	color: var(--ash-description-foreground);
-	font-size: var(--ash-font-size-label2);
-	font-weight: var(--ash-font-weight-semi-bold);
+	font-size: var(--ash-fontSize-label2);
+	font-weight: var(--ash-fontWeight-semiBold);
 }
 
 .ash-agent-sessions-group ul {
@@ -51,7 +51,7 @@
 	gap: var(--ash-spacing-size20);
 	padding: var(--ash-spacing-size80);
 	border: 0;
-	border-radius: var(--ash-corner-radius-small);
+	border-radius: var(--ash-cornerRadius-small);
 	color: var(--ash-foreground);
 	background: transparent;
 	font: inherit;
@@ -70,21 +70,21 @@
 .ash-agent-session-description,
 .ash-agent-sessions-empty {
 	color: var(--ash-description-foreground);
-	font-size: var(--ash-font-size-label2);
+	font-size: var(--ash-fontSize-label2);
 }
 
 .ash-agent-session-row:hover {
-	background: var(--ash-list-hover-background);
+	background: var(--ash-list-hoverBackground);
 }
 
 .ash-agent-session-row.selected {
-	background: var(--ash-sessions-selection-background);
+	background: var(--ash-sessions-selectionBackground);
 }
 
 .ash-agent-session-row:focus-visible,
 .ash-agent-sessions-search:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-	outline-offset: calc(-1 * var(--ash-stroke-thickness));
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
 }
 
 .ash-agent-sessions-empty {

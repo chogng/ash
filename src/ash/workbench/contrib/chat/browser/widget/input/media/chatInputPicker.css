@@ -1,7 +1,7 @@
 .ash-chat-input-picker-split {
 	display: flex;
 	align-items: center;
-	border-radius: var(--ash-corner-radius-circle);
+	border-radius: var(--ash-cornerRadius-circle);
 }
 
 .ash-chat-input-picker-button {
@@ -19,7 +19,7 @@
 }
 
 .ash-chat-input-picker-button:hover {
-	background: var(--ash-toolbar-hover-background);
+	background: var(--ash-toolbar-hoverBackground);
 }
 
 .ash-chat-input-picker-button.hidden {
@@ -27,7 +27,7 @@
 }
 
 .ash-chat-input-picker-button:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
 

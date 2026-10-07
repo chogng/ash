@@ -8,17 +8,17 @@
 .ash-chat-model-picker-control {
 	min-width: 0;
 	max-width: 100%;
-	gap: var(--ash-action-bar-gap);
+	gap: var(--ash-actionBar-gap);
 }
 
 /* Effort is a peer control, so both triggers share typography and pill geometry, including in narrow layouts. */
 .ash-chat-model-picker-control > .ash-chat-input-picker-button {
 	min-width: 0;
-	height: var(--ash-toolbar-action-size);
-	min-height: var(--ash-toolbar-action-size);
+	height: var(--ash-toolbar-actionSize);
+	min-height: var(--ash-toolbar-actionSize);
 	padding: 0 var(--ash-spacing-size80);
-	border-radius: var(--ash-corner-radius-circle);
-	font-size: var(--ash-font-size-body1);
+	border-radius: var(--ash-cornerRadius-circle);
+	font-size: var(--ash-fontSize-body1);
 }
 
 .ash-chat-model-picker-control > .ash-chat-input-model-action {
@@ -60,13 +60,13 @@
 
 .ash-chat-model-picker-empty-message {
 	color: var(--ash-foreground);
-	font-size: var(--ash-font-size-body1);
-	font-weight: var(--ash-font-weight-semi-bold);
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-semiBold);
 }
 
 .ash-chat-model-picker-empty-guidance {
 	color: var(--ash-description-foreground);
-	font-size: var(--ash-font-size-label2);
+	font-size: var(--ash-fontSize-label2);
 }
 
 .ash-chat-model-picker-empty > .ash-button {
@@ -84,17 +84,17 @@
 
 .ash-chat-model-configuration-menu {
 	min-width: 160px;
-	font-size: var(--ash-font-size-label1);
+	font-size: var(--ash-fontSize-label1);
 }
 
 .ash-chat-model-configuration-heading {
 	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
 	color: var(--ash-description-foreground);
-	font-size: var(--ash-font-size-label2);
+	font-size: var(--ash-fontSize-label2);
 }
 
 .ash-chat-model-picker-footer {
-	border-top: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+	border-top: var(--ash-strokeThickness) solid var(--ash-widget-border);
 }
 
 .ash-chat-model-picker-details-menu {
@@ -108,8 +108,8 @@
 	overflow-y: auto;
 	max-width: calc(100vw - var(--ash-spacing-size160));
 	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
-	border: var(--ash-stroke-thickness) solid var(--ash-border);
-	border-radius: var(--ash-corner-radius-large);
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+	border-radius: var(--ash-cornerRadius-large);
 	color: var(--ash-foreground);
 	background: var(--ash-editor-background);
 	box-shadow: 0 2px 8px var(--ash-widget-shadow);
@@ -134,14 +134,14 @@
 }
 
 .ash-chat-model-card:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: var(--ash-spacing-size20);
 }
 
 .ash-chat-model-card-description {
 	margin: 0 0 var(--ash-spacing-size80);
 	color: var(--ash-description-foreground);
-	font-size: var(--ash-font-size-label2);
+	font-size: var(--ash-fontSize-label2);
 	overflow-wrap: anywhere;
 }
 
@@ -150,7 +150,7 @@
 }
 
 .ash-high-contrast .ash-chat-model-picker-details-menu {
-	border-color: var(--ash-contrast-border);
+	border-color: var(--ash-contrastBorder);
 	box-shadow: none;
 }
 

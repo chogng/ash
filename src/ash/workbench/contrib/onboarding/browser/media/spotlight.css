@@ -8,8 +8,8 @@
 .ash-onboarding-spotlight-frame {
 	position: absolute;
 	box-sizing: border-box;
-	border: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-	border-radius: var(--ash-corner-radius-small);
+	border: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	border-radius: var(--ash-cornerRadius-small);
 	pointer-events: none;
 }
 
@@ -18,8 +18,8 @@
 	box-sizing: border-box;
 	width: min(360px, calc(100% - 24px));
 	padding: var(--ash-spacing-size160);
-	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
-	border-radius: var(--ash-corner-radius-large);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-large);
 	background: var(--ash-editor-background);
 	color: var(--ash-foreground);
 	box-shadow: 0 8px 28px var(--ash-widget-shadow);
@@ -28,13 +28,13 @@
 
 .ash-onboarding-spotlight-card h2 {
 	margin: 0 0 var(--ash-spacing-size80);
-	font-size: var(--ash-font-size-heading3);
-	font-weight: var(--ash-font-weight-semi-bold);
+	font-size: var(--ash-fontSize-heading3);
+	font-weight: var(--ash-fontWeight-semiBold);
 }
 
 .ash-onboarding-spotlight-card p {
 	margin: 0 0 var(--ash-spacing-size120);
-	font-size: var(--ash-font-size-body1);
+	font-size: var(--ash-fontSize-body1);
 }
 
 .ash-onboarding-spotlight-progress {

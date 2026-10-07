@@ -3,10 +3,10 @@ import { contrastBorder, foreground, mutedForeground, selectionBackground, selec
 import { listHoverBackground } from "./listColors.js";
 
 const owner = "platform.theme.input";
-const color = (id: string, dark: string, light: string, highContrastDark: string, highContrastLight: string, description: string): string =>
-	registerColor(id, { dark, light, highContrastDark, highContrastLight }, { description, owner });
+const color = (id: string, dark: string, light: string, hcDark: string, hcLight: string, description: string): string =>
+	registerColor(id, { dark, light, hcDark, hcLight }, { description, owner });
 const alias = (id: string, value: string, description: string): string => registerColor(id, {
-	dark: value, light: value, highContrastDark: value, highContrastLight: value,
+	dark: value, light: value, hcDark: value, hcLight: value,
 }, { description, owner });
 
 export const inputForeground = alias("input.foreground", foreground, "Input text foreground.");
@@ -23,7 +23,7 @@ export const buttonSecondaryBackground = color("button.secondaryBackground", "#3
 export const primaryButtonForeground = color("button.primaryForeground", "#ffffff", "#ffffff", selectionForeground, selectionForeground, "Primary button foreground.");
 export const primaryButtonBackground = registerColor("button.primaryBackground", {
 	dark: buttonBackground, light: buttonBackground,
-	highContrastDark: selectionBackground, highContrastLight: selectionBackground,
+	hcDark: selectionBackground, hcLight: selectionBackground,
 }, { description: "Primary button background.", owner });
 export const primaryButtonHoverBackground = color("button.primaryHoverBackground", "#1177bb", "#006cbe", selectionBackground, selectionBackground, "Hovered primary button background.");
 

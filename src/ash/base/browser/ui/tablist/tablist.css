@@ -13,7 +13,7 @@
 }
 
 .ash-tab-list-inset .ash-tab-list-scroll-content > .ash-action-bar {
-	padding: 0 var(--ash-tab-list-content-inset);
+	padding: 0 var(--ash-tabList-contentInset);
 }
 
 .ash-tab-list-inset {
@@ -51,7 +51,7 @@
 	position: absolute;
 	top: 0;
 	left: 100%;
-	width: var(--ash-action-bar-gap);
+	width: var(--ash-actionBar-gap);
 	height: 100%;
 	content: "";
 	pointer-events: auto;
@@ -64,7 +64,7 @@
 	top: 100%;
 	left: 0;
 	width: 100%;
-	height: var(--ash-action-bar-gap);
+	height: var(--ash-actionBar-gap);
 	content: "";
 	pointer-events: auto;
 }
@@ -78,7 +78,7 @@
 	height: 100%;
 	content: "";
 	pointer-events: none;
-	background: var(--ash-focus-border);
+	background: var(--ash-focusBorder);
 }
 
 .ash-tab.ash-dnd-drop-before::before {
@@ -93,13 +93,13 @@
 	display: flex;
 	box-sizing: border-box;
 	min-width: 0;
-	padding: 0 var(--ash-tab-list-item-content-inset);
+	padding: 0 var(--ash-tabList-itemContentInset);
 	border: 0;
 	color: inherit;
 	background: transparent;
 	cursor: inherit;
 	font: inherit;
-	font-weight: var(--ash-font-weight-semi-bold);
+	font-weight: var(--ash-fontWeight-semiBold);
 }
 
 .ash-tab-label > .ash-icon-label {
@@ -109,7 +109,7 @@
 .ash-tab-list-inset .ash-tab {
 	min-width: 64px;
 	max-width: 180px;
-	border-radius: var(--ash-corner-radius-small);
+	border-radius: var(--ash-cornerRadius-small);
 	color: var(--ash-description-foreground);
 	background: var(--ash-tab-list-inactive-background, transparent);
 }
@@ -118,13 +118,13 @@
 	color: var(--ash-foreground);
 	background: color-mix(
 		in srgb,
-		var(--ash-tab-list-active-background) 65%,
+		var(--ash-tabList-activeBackground) 65%,
 		var(--ash-tab-list-inactive-background, transparent)
 	);
 }
 
 .ash-tab-list .ash-tab.checked {
-	background: var(--ash-tab-list-active-background);
+	background: var(--ash-tabList-activeBackground);
 }
 
 .ash-tab-list-inset .ash-tab:hover,
@@ -176,7 +176,7 @@
 }
 
 .ash-tab-list-inset .ash-tab-label:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
 
@@ -207,11 +207,11 @@
 }
 
 .ash-tab-actions .ash-action-view-item.icon .ash-button {
-	width: var(--ash-toolbar-action-size);
-	min-width: var(--ash-toolbar-action-size);
-	height: var(--ash-toolbar-action-size);
-	min-height: var(--ash-toolbar-action-size);
-	flex: 0 0 var(--ash-toolbar-action-size);
+	width: var(--ash-toolbar-actionSize);
+	min-width: var(--ash-toolbar-actionSize);
+	height: var(--ash-toolbar-actionSize);
+	min-height: var(--ash-toolbar-actionSize);
+	flex: 0 0 var(--ash-toolbar-actionSize);
 	padding: 0;
 	border: 0;
 	color: inherit;
@@ -223,9 +223,9 @@
 }
 
 .ash-tab-actions .ash-action-view-item.icon .ash-button:hover {
-	background: var(--ash-toolbar-hover-background);
+	background: var(--ash-toolbar-hoverBackground);
 }
 
 .ash-tab.checked .ash-tab-actions .ash-action-view-item.icon .ash-button:hover {
-	background: var(--ash-toolbar-hover-background);
+	background: var(--ash-toolbar-hoverBackground);
 }

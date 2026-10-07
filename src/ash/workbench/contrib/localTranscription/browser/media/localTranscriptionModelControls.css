@@ -4,8 +4,8 @@
 	min-width: 0;
 	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
 	gap: var(--ash-spacing-size80);
-	font-size: var(--ash-font-size-label1);
-	font-weight: var(--ash-font-weight-regular);
+	font-size: var(--ash-fontSize-label1);
+	font-weight: var(--ash-fontWeight-regular);
 	line-height: 1.5;
 }
 

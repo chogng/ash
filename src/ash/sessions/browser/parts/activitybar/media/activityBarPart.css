@@ -1,5 +1,5 @@
 .ash-sessions-activitybar {
-	background: var(--ash-title-bar-background);
+	background: var(--ash-titleBar-background);
 }
 
 .ash-sessions-activity-content {
@@ -56,15 +56,15 @@
 	place-items: center;
 	padding: 0;
 	border: 0;
-	border-radius: var(--ash-corner-radius-large);
-	color: var(--ash-sessions-activity-bar-inactive-foreground);
+	border-radius: var(--ash-cornerRadius-large);
+	color: var(--ash-sessions-activityBar-inactiveForeground);
 	background: transparent;
 }
 
 .ash-sessions-activity-content.compact .ash-sessions-activity-item {
 	width: var(--ash-spacing-size280);
 	height: var(--ash-spacing-size280);
-	border-radius: var(--ash-corner-radius-medium);
+	border-radius: var(--ash-cornerRadius-medium);
 }
 
 .ash-sessions-activity-content.horizontal .ash-sessions-activity-item {
@@ -75,8 +75,8 @@
 
 .ash-sessions-activity-item:not(:disabled):hover,
 .ash-sessions-activity-item.selected:not(:disabled) {
-	color: var(--ash-sessions-activity-bar-foreground);
-	background: var(--ash-sessions-selection-background);
+	color: var(--ash-sessions-activityBar-foreground);
+	background: var(--ash-sessions-selectionBackground);
 }
 
 .ash-sessions-activity-item .ash-icon {
@@ -88,7 +88,7 @@
 	.ash-sessions-activity-item:is(.selected, :hover):not(:disabled):not(
 		:focus-visible
 	) {
-	outline: var(--ash-stroke-thickness) solid var(--ash-contrast-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
 	outline-offset: -1px;
 }
 

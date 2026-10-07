@@ -3,10 +3,10 @@ import { foreground } from '../../../../platform/theme/common/colors/baseColors.
 import { editorBackground, editorForeground } from '../../../../platform/theme/common/colors/editorColors.js';
 
 const owner = 'terminal.presentation';
-const color = (id: string, dark: string, light: string, highContrastDark: string, highContrastLight: string, description: string): string =>
-	registerColor(id, { dark, light, highContrastDark, highContrastLight }, { description, owner });
+const color = (id: string, dark: string, light: string, hcDark: string, hcLight: string, description: string): string =>
+	registerColor(id, { dark, light, hcDark, hcLight }, { description, owner });
 const alias = (id: string, value: string, description: string): string => registerColor(id, {
-	dark: value, light: value, highContrastDark: value, highContrastLight: value,
+	dark: value, light: value, hcDark: value, hcLight: value,
 }, { description, owner });
 
 export const terminalBackground = alias('terminal.background', editorBackground, 'Terminal background.');

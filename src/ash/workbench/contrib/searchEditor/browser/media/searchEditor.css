@@ -16,14 +16,14 @@
 	display: flex;
 	min-width: 0;
 	align-items: start;
-	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
-	border-radius: var(--ash-corner-radius-small);
+	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border-radius: var(--ash-cornerRadius-small);
 	background: var(--ash-input-background);
 	color: var(--ash-input-foreground);
 }
 
 .ash-search-editor-query-field:focus-within {
-	border-color: var(--ash-focus-border);
+	border-color: var(--ash-focusBorder);
 }
 
 .ash-search-editor-query {
@@ -45,7 +45,7 @@
 
 .ash-search-editor-status {
 	padding: 0 12px 4px;
-	font-size: var(--ash-font-size-label1);
+	font-size: var(--ash-fontSize-label1);
 	color: var(--ash-description-foreground);
 }
 

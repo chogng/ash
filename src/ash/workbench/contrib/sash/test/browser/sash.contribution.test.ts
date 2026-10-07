@@ -105,11 +105,11 @@ function assertSashStyles(
 	assert.ok(targetWindow);
 	const style = targetWindow.getComputedStyle(sash);
 	assert.equal(
-		style.getPropertyValue("--ash-sash-drag-area-size"),
+		style.getPropertyValue("--ash-sash-dragAreaSize"),
 		dragAreaSize,
 	);
 	assert.equal(
-		style.getPropertyValue("--ash-sash-hover-feedback-size"),
+		style.getPropertyValue("--ash-sash-hoverFeedbackSize"),
 		hoverFeedbackSize,
 	);
 	assert.equal(

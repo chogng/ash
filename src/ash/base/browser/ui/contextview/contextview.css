@@ -11,8 +11,8 @@
 .ash-context-view-default {
 	color: var(--ash-foreground);
 	background: var(--ash-editor-background);
-	border: var(--ash-stroke-thickness) solid var(--ash-border);
-	border-radius: var(--ash-corner-radius-medium);
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+	border-radius: var(--ash-cornerRadius-medium);
 	box-shadow: 0 2px 8px var(--ash-widget-shadow);
 	overflow: auto;
 }
@@ -20,23 +20,23 @@
 .ash-context-view-dialog {
 	color: var(--ash-foreground);
 	background: var(--ash-editor-background);
-	border: var(--ash-stroke-thickness) solid var(--ash-border);
-	border-radius: var(--ash-corner-radius-x-large);
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+	border-radius: var(--ash-cornerRadius-xLarge);
 	box-shadow: 0 4px 16px var(--ash-widget-shadow);
 	overflow: auto;
 }
 
-[data-color-scheme="high-contrast-dark"] .ash-context-view-dialog,
-[data-color-scheme="high-contrast-light"] .ash-context-view-dialog {
-	border-color: var(--ash-contrast-border);
+[data-color-scheme="hcDark"] .ash-context-view-dialog,
+[data-color-scheme="hcLight"] .ash-context-view-dialog {
+	border-color: var(--ash-contrastBorder);
 	box-shadow: none;
 }
 
 .ash-context-view-hover {
 	color: var(--ash-hover-foreground);
 	background: var(--ash-hover-background);
-	border: var(--ash-stroke-thickness) solid var(--ash-hover-border);
-	border-radius: var(--ash-corner-radius-medium);
+	border: var(--ash-strokeThickness) solid var(--ash-hover-border);
+	border-radius: var(--ash-cornerRadius-medium);
 	box-shadow: 0 4px 16px var(--ash-hover-shadow);
 	overflow: visible;
 }
@@ -53,14 +53,14 @@
 
 .ash-context-view-hover.ash-context-view-above::before {
 	bottom: -5px;
-	border-right: var(--ash-stroke-thickness) solid var(--ash-hover-border);
-	border-bottom: var(--ash-stroke-thickness) solid var(--ash-hover-border);
+	border-right: var(--ash-strokeThickness) solid var(--ash-hover-border);
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-hover-border);
 }
 
 .ash-context-view-hover.ash-context-view-below::before {
 	top: -5px;
-	border-top: var(--ash-stroke-thickness) solid var(--ash-hover-border);
-	border-left: var(--ash-stroke-thickness) solid var(--ash-hover-border);
+	border-top: var(--ash-strokeThickness) solid var(--ash-hover-border);
+	border-left: var(--ash-strokeThickness) solid var(--ash-hover-border);
 }
 
 .ash-context-view-hover.ash-context-view-align-left::before {
@@ -85,8 +85,8 @@
 	bottom: auto;
 	left: -5px;
 	border: 0;
-	border-bottom: var(--ash-stroke-thickness) solid var(--ash-hover-border);
-	border-left: var(--ash-stroke-thickness) solid var(--ash-hover-border);
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-hover-border);
+	border-left: var(--ash-strokeThickness) solid var(--ash-hover-border);
 }
 
 .ash-context-view-hover.ash-context-view-axis-horizontal.ash-context-view-above::before {
@@ -95,6 +95,6 @@
 	bottom: auto;
 	left: auto;
 	border: 0;
-	border-top: var(--ash-stroke-thickness) solid var(--ash-hover-border);
-	border-right: var(--ash-stroke-thickness) solid var(--ash-hover-border);
+	border-top: var(--ash-strokeThickness) solid var(--ash-hover-border);
+	border-right: var(--ash-strokeThickness) solid var(--ash-hover-border);
 }

@@ -375,7 +375,7 @@ browserTest('Browser Sessions Code shows Files and Changes and retains the selec
 	await page.keyboard.press('Escape');
 	await expect(auxiliary.locator('[data-view-id="sessions.files.explorer.empty"]')).toBeFocused();
 	const commands = new QuickAccess(page);
-	for (const [theme, scheme] of [['Ash Light', 'light'], ['Ash Dark', 'dark'], ['Ash High Contrast Dark', 'high-contrast-dark'], ['Ash High Contrast Light', 'high-contrast-light']]) {
+	for (const [theme, scheme] of [['Ash Light', 'light'], ['Ash Dark', 'dark'], ['Ash High Contrast Dark', 'hcDark'], ['Ash High Contrast Light', 'hcLight']]) {
 		await page.goto('/browser/workbench/workbench.html');
 		await new Workbench(page).waitForReady();
 		await commands.runCommand('workbench.action.selectTheme');

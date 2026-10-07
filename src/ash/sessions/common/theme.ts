@@ -7,29 +7,29 @@ import { hoverBorder } from '../../platform/theme/common/colors/componentColors.
 registerColor('sessions.tooltip.background', {
 	dark: '#000000',
 	light: '#000000',
-	highContrastDark: '#000000',
-	highContrastLight: '#000000',
+	hcDark: '#000000',
+	hcLight: '#000000',
 }, { description: 'Background of tooltips in the Sessions window.', owner: 'sessions' });
 
 registerColor('sessions.tooltip.foreground', {
 	dark: '#ffffff',
 	light: '#ffffff',
-	highContrastDark: '#ffffff',
-	highContrastLight: '#ffffff',
+	hcDark: '#ffffff',
+	hcLight: '#ffffff',
 }, { description: 'Text color of tooltips in the Sessions window.', owner: 'sessions' });
 
 registerColor('sessions.tooltip.border', {
 	dark: hoverBorder,
 	light: hoverBorder,
-	highContrastDark: '#ffffff',
-	highContrastLight: '#ffffff',
+	hcDark: '#ffffff',
+	hcLight: '#ffffff',
 }, { description: 'Border of tooltips in the Sessions window.', owner: 'sessions' });
 
 export const sessionsAccentGlow = registerColor("sessions.accentGlow", {
 	dark: transparent(primaryButtonBackground, 0.16),
 	light: transparent(primaryButtonBackground, 0.16),
-	highContrastDark: null,
-	highContrastLight: null,
+	hcDark: null,
+	hcLight: null,
 }, { description: "Glow around the sessions title bar accent.", owner: "sessions.titlebar", needsTransparency: true });
 
 // Sessions owns navigation colors independently of Workbench: idle icons are muted,
@@ -37,29 +37,29 @@ export const sessionsAccentGlow = registerColor("sessions.accentGlow", {
 registerColor('sessions.activityBar.foreground', {
 	dark: '#ffffff',
 	light: '#000000',
-	highContrastDark: '#ffffff',
-	highContrastLight: '#000000',
+	hcDark: '#ffffff',
+	hcLight: '#000000',
 }, { description: 'Hovered or selected Activity Bar icon color in the Sessions window.', owner: 'sessions.activitybar' });
 
 // High-contrast themes retain full icon contrast; the outline also identifies hover and selection.
 registerColor('sessions.activityBar.inactiveForeground', {
 	dark: '#999999',
 	light: '#808080',
-	highContrastDark: '#ffffff',
-	highContrastLight: '#000000',
+	hcDark: '#ffffff',
+	hcLight: '#000000',
 }, { description: 'Unselected Activity Bar icon color in the Sessions window.', owner: 'sessions.activitybar' });
 
 registerColor('sessions.selectionBackground', {
 	dark: '#303030',
 	light: '#f0f0f0',
-	highContrastDark: '#333333',
-	highContrastLight: '#dddddd',
+	hcDark: '#333333',
+	hcLight: '#dddddd',
 }, { description: 'Selected item background in the Sessions window.', owner: 'sessions' });
 
 // Input cards keep their elevation when a theme changes the shadow of general floating widgets.
 registerColor('sessions.inputShadow', {
 	dark: '#00000066',
 	light: '#00000029',
-	highContrastDark: null,
-	highContrastLight: null,
+	hcDark: null,
+	hcLight: null,
 }, { description: 'Shadow around the Sessions input card.', owner: 'sessions.chat' });

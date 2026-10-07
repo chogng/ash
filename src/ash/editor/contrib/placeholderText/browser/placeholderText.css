@@ -9,5 +9,5 @@
 }
 
 .stanza-editor-embedded .stanza-editor-placeholder-text {
-	color: var(--ash-input-placeholder-foreground);
+	color: var(--ash-input-placeholderForeground);
 }

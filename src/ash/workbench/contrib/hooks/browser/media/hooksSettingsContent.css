@@ -17,16 +17,16 @@
 }
 
 .ash-hooks-event summary:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: var(--ash-spacing-size20);
 }
 
 .ash-hooks-event {
 	margin-block: var(--ash-spacing-size80);
 	padding: var(--ash-spacing-size120);
-	border: var(--ash-stroke-thickness) solid var(--ash-contrast-border);
-	border-radius: var(--ash-corner-radius-medium);
-	background: var(--ash-editor-widget-background);
+	border: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
+	border-radius: var(--ash-cornerRadius-medium);
+	background: var(--ash-editor-widgetBackground);
 }
 
 .ash-hooks-event summary {
@@ -35,7 +35,7 @@
 }
 
 .ash-hooks-event > summary {
-	font-weight: var(--ash-font-weight-semi-bold);
+	font-weight: var(--ash-fontWeight-semiBold);
 }
 
 .ash-hooks-declaration {

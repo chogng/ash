@@ -1,11 +1,11 @@
 .ash-workbench-titlebar {
 	position: relative;
-	color: var(--ash-title-bar-foreground);
+	color: var(--ash-titleBar-foreground);
 	flex-direction: row;
 	align-items: center;
 	justify-content: space-between;
 	padding: 0 12px;
-	background: var(--ash-title-bar-background);
+	background: var(--ash-titleBar-background);
 }
 
 .ash-workbench-titlebar .ash-workbench-part-title {
@@ -39,7 +39,7 @@
 	top: 50%;
 	display: flex;
 	align-items: center;
-	color: var(--ash-title-bar-action-foreground);
+	color: var(--ash-titleBar-actionForeground);
 	transform: translateY(-50%);
 }
 
@@ -66,7 +66,7 @@
 	display: flex;
 	height: 100%;
 	align-items: center;
-	color: var(--ash-title-bar-action-foreground);
+	color: var(--ash-titleBar-actionForeground);
 }
 
 .ash-auxiliary-titlebar {

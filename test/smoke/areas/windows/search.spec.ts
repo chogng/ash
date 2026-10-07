@@ -124,7 +124,7 @@ test('Search keeps options inside the query and preserves collapsed file filters
 			const options = element.querySelector('.ash-search-query-options')!.getBoundingClientRect();
 			const style = getComputedStyle(field);
 			const probe = document.createElement('span');
-			probe.style.color = 'var(--ash-focus-border)';
+			probe.style.color = 'var(--ash-focusBorder)';
 			element.append(probe);
 			const focusBorder = getComputedStyle(probe).color;
 			probe.remove();

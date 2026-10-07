@@ -17,11 +17,11 @@ body {
 	flex-wrap: wrap;
 	gap: 4px;
 	padding: 8px;
-	border-bottom: 1px solid var(--ash-panel-border);
+	border-bottom: 1px solid var(--ash-border);
 }
 .ash-markdown-toolbar button,
 .ash-markdown-link-form button {
-	color: var(--ash-button-secondaryForeground);
+	color: var(--ash-button-foreground);
 	background: var(--ash-button-secondaryBackground);
 	border: 1px solid var(--ash-widget-border);
 	border-radius: 4px;
@@ -30,7 +30,7 @@ body {
 	cursor: pointer;
 }
 .ash-markdown-toolbar button:hover {
-	background: var(--ash-button-secondaryHoverBackground);
+	background: var(--ash-button-hoverBackground);
 }
 .ash-markdown-toolbar button:disabled {
 	opacity: 0.5;
@@ -53,7 +53,7 @@ input:focus-visible,
 	padding: 24px;
 	--md-cursor-background: var(--ash-editorCursor-foreground);
 	--md-block-active-background: var(--ash-editor-lineHighlightBackground);
-	--md-html-comment-foreground: var(--ash-descriptionForeground);
+	--md-html-comment-foreground: var(--ash-description-foreground);
 	--md-html-comment-hover-foreground: var(--ash-editor-foreground);
 }
 .ash-markdown-content h1 {
@@ -70,7 +70,7 @@ input:focus-visible,
 	margin: 0.5em 0;
 }
 .ash-markdown-content .md-code-block {
-	background: var(--ash-textCodeBlock-background);
+	background: var(--ash-text-codeBlockBackground);
 	padding: 12px;
 	border-radius: 4px;
 }
@@ -78,24 +78,24 @@ input:focus-visible,
 	font-family: ui-monospace, monospace;
 }
 .ash-markdown-content .md-blockquote {
-	border-left: 3px solid var(--ash-textBlockQuote-border);
+	border-left: 3px solid var(--ash-widget-border);
 	padding-left: 16px;
 }
 .ash-markdown-content a,
 .ash-markdown-content [role="link"] {
-	color: var(--ash-textLink-foreground);
+	color: var(--ash-accent-foreground);
 }
 .ash-markdown-content table {
 	border-collapse: collapse;
 }
 .ash-markdown-content td,
 .ash-markdown-content th {
-	border: 1px solid var(--ash-panel-border);
+	border: 1px solid var(--ash-widget-border);
 	padding: 4px 8px;
 }
 .ash-markdown-status {
 	padding-inline: 12px;
-	color: var(--ash-errorForeground);
+	color: var(--ash-error-foreground);
 }
 .ash-markdown-link-form {
 	padding: 8px;

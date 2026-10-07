@@ -20,8 +20,8 @@
 }
 
 .ash-advisor-settings-copy > h4 {
-	font-size: var(--ash-font-size-body1);
-	font-weight: var(--ash-font-weight-semi-bold);
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-semiBold);
 }
 
 .ash-advisor-settings-copy > p {

@@ -7,7 +7,7 @@
 .ash-output-filter-bar {
 	flex: 0 0 auto;
 	padding: 6px 8px;
-	border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
 }
 
 .ash-output-filter-input {
@@ -17,12 +17,12 @@
 	padding: 2px 8px;
 	color: var(--ash-input-foreground);
 	background: var(--ash-input-background);
-	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
+	border: var(--ash-strokeThickness) solid var(--ash-input-border);
 	outline: none;
 }
 
 .ash-output-filter-input:focus {
-	border-color: var(--ash-focus-border);
+	border-color: var(--ash-focusBorder);
 }
 
 .ash-output-content {

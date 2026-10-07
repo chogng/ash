@@ -4,7 +4,7 @@
 	gap: var(--ash-spacing-size120);
 	min-width: 0;
 	padding: var(--ash-spacing-size160);
-	font-size: var(--ash-font-size-body1);
+	font-size: var(--ash-fontSize-body1);
 }
 
 .ash-language-server-settings > p {

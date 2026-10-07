@@ -81,7 +81,7 @@
 }
 
 .ash-icon-label.bold {
-	font-weight: var(--ash-font-weight-semi-bold);
+	font-weight: var(--ash-fontWeight-semiBold);
 }
 .ash-icon-label.italic {
 	font-style: italic;
@@ -90,7 +90,7 @@
 	text-decoration: line-through;
 }
 .ash-icon-label-highlight {
-	background: var(--ash-search-match-background);
+	background: var(--ash-search-matchBackground);
 }
 .ash-icon-label-inline-icon {
 	display: inline-flex;
@@ -122,8 +122,8 @@
 }
 
 .ash-icon-label-suffix-icon .ash-icon {
-	width: var(--ash-lxicon-font-size-compact);
-	height: var(--ash-lxicon-font-size-compact);
+	width: var(--ash-lxiconFontSize-compact);
+	height: var(--ash-lxiconFontSize-compact);
 }
 
 .ash-icon-label-suffix-icon[hidden] {

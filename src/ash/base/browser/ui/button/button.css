@@ -5,8 +5,8 @@
 	gap: 6px;
 	min-height: 28px;
 	padding: 4px 10px;
-	border: var(--ash-stroke-thickness) solid transparent;
-	border-radius: var(--ash-corner-radius-small);
+	border: var(--ash-strokeThickness) solid transparent;
+	border-radius: var(--ash-cornerRadius-small);
 	color: var(--ash-button-foreground);
 	background: transparent;
 	font: inherit;
@@ -38,7 +38,7 @@
 	display: none;
 }
 .ash-button:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
 .ash-button:disabled {
@@ -53,12 +53,12 @@
 }
 
 .ash-button-primary {
-	color: var(--ash-button-primary-foreground);
-	background: var(--ash-button-primary-background);
+	color: var(--ash-button-primaryForeground);
+	background: var(--ash-button-primaryBackground);
 }
 
 .ash-button-primary:not(:disabled):hover {
-	background: var(--ash-button-primary-hover-background);
+	background: var(--ash-button-primaryHoverBackground);
 }
 
 .ash-button-primary:not(:disabled):active {
@@ -68,15 +68,15 @@
 .ash-button-secondary {
 	border-color: var(--ash-widget-border);
 	color: var(--ash-button-foreground);
-	background: var(--ash-button-secondary-background);
+	background: var(--ash-button-secondaryBackground);
 }
 
 .ash-button-secondary:not(:disabled):hover {
-	background: var(--ash-button-hover-background);
+	background: var(--ash-button-hoverBackground);
 }
 
 .ash-button-secondary:not(:disabled):active {
-	background: var(--ash-button-active-background);
+	background: var(--ash-button-activeBackground);
 }
 
 .ash-button-danger {

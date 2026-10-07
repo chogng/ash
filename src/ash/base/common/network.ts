@@ -2,6 +2,7 @@
 export namespace Schemas {
 	export const data = 'data';
 	export const vscodeUserData = 'ash-userdata';
+	export const vscodeWebview = 'ash-webview';
 	export const file = 'file';
 	export const untitled = 'untitled';
 	export const http = 'http';

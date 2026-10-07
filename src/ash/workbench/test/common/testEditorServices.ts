@@ -27,7 +27,11 @@ import { darkColorTheme } from '../../../platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../platform/theme/test/common/testThemeService.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../services/storage/browser/storageService.js';
-import type { IFileService } from '../../../platform/files/common/files.js';
+import { IFileService } from '../../../platform/files/common/files.js';
+import { MemoryFileService } from '../../contrib/bulkEdit/test/browser/bulkEditTestServices.js';
+import { IWorkbenchEnvironmentService } from '../../services/environment/common/environmentService.js';
+import { BrowserWorkbenchEnvironmentService } from '../../services/environment/browser/environmentService.js';
+import { mainWindow } from '../../../base/browser/window.js';
 import { FilesConfigurationService, IFilesConfigurationService } from '../../services/filesConfiguration/common/filesConfigurationService.js';
 import { TextFileService } from '../../services/textfile/common/textFileService.js';
 import { IWebviewService } from '../../contrib/webview/browser/webview.js';
@@ -60,6 +64,13 @@ export function createTestComponentServices(storage?: IStorageService, parent?: 
 }
 
 export function registerTestComponentServices(services: InstantiationService, document: Document = globalThis.document): InstantiationService {
+	if (!services.has(IWorkbenchEnvironmentService)) {
+		const location = document.defaultView!.location;
+		services.registerInstance(IWorkbenchEnvironmentService, new BrowserWorkbenchEnvironmentService(location, `http://{{uuid}}.localhost${location.port ? `:${location.port}` : ''}`));
+	}
+	if (!services.has(IFileService)) {
+		services.registerInstance(IFileService, new MemoryFileService([]));
+	}
 	if (!services.has(IWebviewService)) {
 		services.registerSingleton(IWebviewService, () => services.createInstance(WebviewService));
 	}
@@ -80,6 +91,26 @@ class TestStorageBackend implements Storage {
 	public key(index: number): string | null { return [...this.values.keys()][index] ?? null; }
 	public removeItem(key: string): void { this.values.delete(key); }
 	public setItem(key: string, value: string): void { this.values.set(key, value); }
+}
+
+/** Observes the document handed to the real bootstrap across the iframe message boundary. */
+export function getWebviewHtml(element: HTMLIFrameElement): string {
+	const target = element.contentWindow!;
+	const original = target.postMessage;
+	const url = new URL(element.src);
+	const channel = new URLSearchParams(url.hash.slice(1)).get('channel');
+	let html: string | undefined;
+	target.postMessage = (message: { type: string; html: string; }) => {
+		if (message.type === 'document') html = message.html;
+	};
+	try {
+		const ownerWindow = element.ownerDocument.defaultView!;
+		ownerWindow.dispatchEvent(new mainWindow.MessageEvent('message', { source: target, origin: `${url.protocol}//${url.host}`, data: { channel, type: 'bootstrap-ready' } }));
+		if (html === undefined) throw new Error('Webview did not send its current document');
+		return html;
+	} finally {
+		target.postMessage = original;
+	}
 }
 
 /** Assembles the real label owner for editor tests without an extension icon theme. */

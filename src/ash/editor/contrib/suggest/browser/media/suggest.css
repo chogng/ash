@@ -10,8 +10,8 @@
 	color: var(--ash-editor-foreground);
 	white-space: normal;
 	background: var(--ash-dialog-background);
-	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
-	border-radius: var(--ash-corner-radius-small);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-small);
 	box-shadow: 0 4px 12px var(--ash-widget-shadow);
 }
 
@@ -31,8 +31,8 @@
 }
 
 .stanza-editor-completion-option.focused {
-	color: var(--ash-list-active-selection-foreground);
-	background: var(--ash-list-active-selection-background);
+	color: var(--ash-list-activeSelectionForeground);
+	background: var(--ash-list-activeSelectionBackground);
 }
 
 .stanza-editor-completion-kind {
@@ -60,7 +60,7 @@
 .stanza-editor-completion-label strong,
 .stanza-editor-completion-detail strong {
 	color: var(--ash-editor-foreground);
-	font-weight: var(--ash-font-weight-semi-bold);
+	font-weight: var(--ash-fontWeight-semiBold);
 }
 
 .stanza-editor-completion-option.focused strong {

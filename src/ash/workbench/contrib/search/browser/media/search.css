@@ -46,14 +46,14 @@
 	min-width: 0;
 	min-height: 26px;
 	box-sizing: border-box;
-	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
-	border-radius: var(--ash-corner-radius-small);
+	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border-radius: var(--ash-cornerRadius-small);
 	color: var(--ash-input-foreground);
 	background: var(--ash-input-background);
 }
 
 .ash-search-query-field:focus-within {
-	border-color: var(--ash-focus-border);
+	border-color: var(--ash-focusBorder);
 }
 
 .ash-search-query {
@@ -73,7 +73,7 @@
 }
 
 .ash-search-query::placeholder {
-	color: var(--ash-input-placeholder-foreground);
+	color: var(--ash-input-placeholderForeground);
 }
 
 .ash-search-query-options {
@@ -101,14 +101,14 @@
 	display: grid;
 	min-width: 0;
 	gap: 4px;
-	font-size: var(--ash-font-size-label1);
+	font-size: var(--ash-fontSize-label1);
 }
 
 .ash-search-status {
 	flex: 0 0 auto;
 	margin-bottom: 8px;
 	color: var(--ash-description-foreground);
-	font-size: var(--ash-font-size-label1);
+	font-size: var(--ash-fontSize-label1);
 }
 
 .ash-search-status:empty {
@@ -148,7 +148,7 @@
 .ash-search-file-count {
 	margin-left: auto;
 	opacity: 0.65;
-	font-size: var(--ash-font-size-label2);
+	font-size: var(--ash-fontSize-label2);
 }
 
 .ash-search-match {
@@ -172,5 +172,5 @@
 
 .ash-search-preview mark {
 	color: inherit;
-	background: var(--ash-search-match-background);
+	background: var(--ash-search-matchBackground);
 }

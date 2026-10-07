@@ -374,7 +374,7 @@ function parseColors(value: unknown, extensionId: string): readonly ColorContrib
 		return {
 			id, description: requiredString(color.description, 'Color description', 1024), owner: extensionId, defaults: {
 				light: parse(defaults.light), dark: parse(defaults.dark),
-				highContrastDark: parse(defaults.highContrast ?? defaults.dark), highContrastLight: parse(defaults.highContrastLight ?? defaults.light),
+				hcDark: parse(defaults.highContrast ?? defaults.dark), hcLight: parse(defaults.highContrastLight ?? defaults.light),
 			}
 		};
 	});

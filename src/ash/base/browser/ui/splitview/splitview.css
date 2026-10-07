@@ -31,7 +31,7 @@
 .ash-split-view-vertical.animated > .ash-split-view-pane,
 .ash-split-view-vertical.animated > .ash-sash {
 	transition-property: top, height;
-	transition-duration: var(--ash-animation-duration-fast);
+	transition-duration: var(--ash-animation-durationFast);
 	transition-timing-function: ease-out;
 }
 .ash-reduce-motion .ash-split-view-vertical > .ash-split-view-pane,
@@ -51,11 +51,11 @@
 }
 .ash-split-view-horizontal.ash-split-view-separator-border
 	> .ash-split-view-pane:not(:first-child)::before {
-	width: var(--ash-stroke-thickness);
+	width: var(--ash-strokeThickness);
 	height: 100%;
 }
 .ash-split-view-vertical.ash-split-view-separator-border
 	> .ash-split-view-pane:not(:first-child)::before {
 	width: 100%;
-	height: var(--ash-stroke-thickness);
+	height: var(--ash-strokeThickness);
 }

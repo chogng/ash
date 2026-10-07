@@ -121,7 +121,7 @@ async function readComposerShadow(card: Locator): Promise<{ shadow: string; them
 		};
 		return {
 			shadow: style.boxShadow,
-			themeOpacity: opacity(style.getPropertyValue('--ash-sessions-input-shadow')),
+			themeOpacity: opacity(style.getPropertyValue('--ash-sessions-inputShadow')),
 			layerOpacities: [...style.boxShadow.matchAll(/(?:rgba?|color)\([^)]*\)/gu)].map(match => opacity(match[0])),
 		};
 	});
@@ -191,8 +191,8 @@ test('Sessions Design canvas keeps grid and cursor readable across themes', asyn
 	for (const [theme, scheme] of [
 		['Ash Light', 'light'],
 		['Ash Dark', 'dark'],
-		['Ash High Contrast Dark', 'high-contrast-dark'],
-		['Ash High Contrast Light', 'high-contrast-light'],
+		['Ash High Contrast Dark', 'hcDark'],
+		['Ash High Contrast Light', 'hcLight'],
 	]) {
 		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
 		const picker = workbench.page.locator('.ash-quick-pick');
@@ -216,7 +216,7 @@ test('Sessions Design canvas keeps grid and cursor readable across themes', asyn
 		const canvas = page.getByRole('region', { name: 'Design canvas' });
 		const viewport = canvas.locator('.ash-canvas-viewport');
 		const tools = canvas.locator('.ash-design-tools-widget');
-		const chromeBackground = scheme === 'high-contrast-light' ? 'rgb(255, 255, 255)' : scheme === 'high-contrast-dark' ? 'rgb(0, 0, 0)' : 'rgb(24, 24, 24)';
+		const chromeBackground = scheme === 'hcLight' ? 'rgb(255, 255, 255)' : scheme === 'hcDark' ? 'rgb(0, 0, 0)' : 'rgb(24, 24, 24)';
 		await expect(tools).toHaveCSS('background-color', chromeBackground);
 		await expect(tools).toHaveCSS('border-radius', '12px');
 		if (scheme.startsWith('high-contrast')) { await expect(tools).toHaveCSS('box-shadow', 'none'); }
@@ -236,7 +236,7 @@ test('Sessions Design canvas keeps grid and cursor readable across themes', asyn
 			probe.style.color = 'var(--ash-foreground)';
 			const foreground = getComputedStyle(probe).color;
 			probe.remove();
-			return { cursorColor, foreground, grid: styles.getPropertyValue('--ash-canvas-grid-line').trim(), contrast: styles.getPropertyValue('--ash-contrast-border').trim() };
+			return { cursorColor, foreground, grid: styles.getPropertyValue('--ash-canvas-grid-line').trim(), contrast: styles.getPropertyValue('--ash-contrastBorder').trim() };
 		});
 		expect(colors.cursorColor).toBe(colors.foreground);
 		if (scheme.startsWith('high-contrast')) {
@@ -1482,7 +1482,7 @@ test('Sessions composer configuration leaves Workbench input defaults unchanged'
 	await defaultInput.getByRole('textbox', { name: 'Chat message' }).focus();
 	const focusBorder = await defaultInput.evaluate(element => {
 		const probe = document.createElement('span');
-		probe.style.color = 'var(--ash-focus-border)';
+		probe.style.color = 'var(--ash-focusBorder)';
 		element.append(probe);
 		const color = getComputedStyle(probe).color;
 		probe.remove();
@@ -1554,7 +1554,7 @@ test('Sessions input shadow has its own theme color when general widget shadows 
 		const card = page.locator(`.${presentation === 'Chat' ? 'cowork' : 'chat'}-composer :is(.ash-chat-input-container,.ash-cowork-input-container)`).first();
 		await expect.poll(() => card.evaluate(element => {
 			const style = getComputedStyle(element);
-			return [style.getPropertyValue('--ash-widget-shadow').trim(), style.getPropertyValue('--ash-sessions-input-shadow').trim()];
+			return [style.getPropertyValue('--ash-widget-shadow').trim(), style.getPropertyValue('--ash-sessions-inputShadow').trim()];
 		})).toEqual(['rgba(0, 0, 0, 0)', 'rgba(18, 52, 86, 0.4)']);
 		await expectFloatingComposerHover(card, card.getByRole('textbox', { name: 'Chat message' }), page.getByRole('button', { name: 'Hide sidebar', exact: true }));
 	}
@@ -1728,7 +1728,7 @@ test('Sessions input card keeps a visible border without shadow or focus outline
 			await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
 			page = await opened;
 		}
-		await expect(page.locator('#app')).toHaveAttribute('data-color-scheme', theme.endsWith('Dark') ? 'high-contrast-dark' : 'high-contrast-light');
+		await expect(page.locator('#app')).toHaveAttribute('data-color-scheme', theme.endsWith('Dark') ? 'hcDark' : 'hcLight');
 		const frame = page.locator('.ash-sessions-content-card');
 		expect(await frame.evaluate(element => Math.round(parseFloat(getComputedStyle(element).borderRightWidth)))).toBe(1);
 		await expect(frame).toHaveCSS('box-shadow', 'none');
@@ -1928,7 +1928,7 @@ test('Sessions navigation retains its own selection and hover skin while changin
 	await expect(chat).toHaveCSS('width', '36px');
 	await expect(chat).toHaveCSS('height', '36px');
 	// Shared toolbar theme overrides must not change Sessions navigation feedback.
-	const hoverVariables = ['--ash-toolbar-hover-background', '--ash-sessions-selection-background'];
+	const hoverVariables = ['--ash-toolbar-hoverBackground', '--ash-sessions-selectionBackground'];
 	const previousHoverStyles = await navigation.evaluate((element, variables) => {
 		const style = (element as HTMLElement).style;
 		const previous = variables.map(variable => ({ variable, value: style.getPropertyValue(variable), priority: style.getPropertyPriority(variable) }));
@@ -2781,10 +2781,10 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	await expect(sessionsPage.locator("#app")).toHaveAttribute("data-workbench-state", "empty");
 	await workbench.setAppearance(application, "dark", sessionsPage);
 	await expect(sessionsPage.locator("#app")).toHaveAttribute("data-color-theme", "ash-dark");
-	await expect.poll(() => sessionsPage.locator("#app").evaluate(element => getComputedStyle(element).getPropertyValue("--ash-title-bar-background").trim())).toBe("#1e1e1e");
+	await expect.poll(() => sessionsPage.locator("#app").evaluate(element => getComputedStyle(element).getPropertyValue("--ash-titleBar-background").trim())).toBe("#1e1e1e");
 	await workbench.setAppearance(application, "light", sessionsPage);
 	await expect(sessionsPage.locator("#app")).toHaveAttribute("data-color-theme", "ash-light");
-	await expect.poll(() => sessionsPage.locator("#app").evaluate(element => getComputedStyle(element).getPropertyValue("--ash-title-bar-background").trim())).toBe("#ffffff");
+	await expect.poll(() => sessionsPage.locator("#app").evaluate(element => getComputedStyle(element).getPropertyValue("--ash-titleBar-background").trim())).toBe("#ffffff");
 	const originalThemeSettings = await sessionsPage.evaluate(async () => {
 		const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
 		const snapshot = await ipc.invoke('ash:configuration:read') as { readonly revision: number; readonly document: { readonly version: 1; readonly source: string; }; };
@@ -3076,8 +3076,8 @@ test('Workbench and Sessions tooltips keep separate colors across themes', async
 	for (const [theme, scheme, background, foreground] of [
 		['Ash Light', 'light', 'rgb(243, 243, 243)', 'rgb(97, 97, 97)'],
 		['Ash Dark', 'dark', 'rgb(37, 37, 38)', 'rgb(204, 204, 204)'],
-		['Ash High Contrast Dark', 'high-contrast-dark', 'rgb(12, 20, 31)', 'rgb(255, 255, 255)'],
-		['Ash High Contrast Light', 'high-contrast-light', 'rgb(255, 255, 255)', 'rgb(41, 41, 41)'],
+		['Ash High Contrast Dark', 'hcDark', 'rgb(12, 20, 31)', 'rgb(255, 255, 255)'],
+		['Ash High Contrast Light', 'hcLight', 'rgb(255, 255, 255)', 'rgb(41, 41, 41)'],
 	]) {
 		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
 		const picker = workbench.page.locator('.ash-quick-pick');
@@ -3241,7 +3241,7 @@ test('Sessions titlebar sidebar toggle stays transparent at rest with hover and 
 			await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
 			page = await opened;
 		}
-		await expect(page.locator('#app')).toHaveAttribute('data-color-scheme', theme.endsWith('Dark') ? 'high-contrast-dark' : 'high-contrast-light');
+		await expect(page.locator('#app')).toHaveAttribute('data-color-scheme', theme.endsWith('Dark') ? 'hcDark' : 'hcLight');
 		const navigation = page.locator('.ash-sessions-activity-content');
 		const chat = navigation.getByRole('button', { name: 'Chat' });
 		const library = navigation.getByRole('button', { name: 'Library' });

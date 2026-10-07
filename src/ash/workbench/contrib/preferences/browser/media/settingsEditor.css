@@ -21,8 +21,8 @@
 	min-width: 0;
 	min-height: 0;
 	overflow: hidden;
-	border-right: var(--ash-stroke-thickness) solid var(--ash-widget-border);
-	background: var(--ash-side-bar-background);
+	border-right: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	background: var(--ash-sideBar-background);
 }
 
 .ash-settings-sidebar-scrollable,
@@ -63,9 +63,9 @@
 
 .ash-settings-page h3 {
 	margin: 0 0 8px;
-	color: var(--ash-settings-header-foreground);
-	font-size: var(--ash-font-size-heading2);
-	font-weight: var(--ash-font-weight-semi-bold);
+	color: var(--ash-settings-headerForeground);
+	font-size: var(--ash-fontSize-heading2);
+	font-weight: var(--ash-fontWeight-semiBold);
 }
 
 .ash-settings-description {
@@ -108,7 +108,7 @@
 
 	.ash-settings-sidebar {
 		border-right: 0;
-		border-bottom: var(--ash-stroke-thickness) solid
+		border-bottom: var(--ash-strokeThickness) solid
 			var(--ash-widget-border);
 	}
 

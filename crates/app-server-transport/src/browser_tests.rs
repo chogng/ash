@@ -295,6 +295,82 @@ fn static_assets_cannot_escape_the_launch_root_or_accept_another_host() {
 }
 
 #[test]
+fn isolated_webview_hosts_receive_only_bootstrap_assets() {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()
+        .unwrap();
+    let directory = tempfile::tempdir().unwrap();
+    let assets = directory.path().join("assets");
+    std::fs::create_dir(&assets).unwrap();
+    std::fs::write(assets.join("index-test.html"), "bootstrap").unwrap();
+    std::fs::write(assets.join("service-worker-test.js"), "worker").unwrap();
+    std::fs::write(assets.join("main.js"), "product").unwrap();
+    runtime.block_on(async {
+        let listener = start_browser_listener(
+            BrowserOptions {
+                session_directory: None,
+                workspace: None,
+                port: 0,
+                assets: Some(directory.path().to_owned()),
+                origin: None,
+            },
+            |_, _| panic!("An isolated webview must never open a product connection"),
+            |_| panic!("An isolated webview must never acquire a product session"),
+        )
+        .await
+        .unwrap();
+        let host = format!(
+            "550e8400-e29b-41d4-a716-446655440000.localhost:{}",
+            listener.address.port()
+        );
+        let request = |host: &str, method: &str, path: &str| {
+            let mut socket = std::net::TcpStream::connect(listener.address).unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            write!(socket, "{method} {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n").unwrap();
+            let mut response = String::new();
+            socket.read_to_string(&mut response).unwrap();
+            response
+        };
+        let bootstrap = request(&host, "GET", "/assets/index-test.html?worker=isolated");
+        assert!(bootstrap.starts_with("HTTP/1.1 200"));
+        assert!(bootstrap.ends_with("bootstrap"));
+        let worker = request(&host, "GET", "/assets/service-worker-test.js");
+        assert!(worker.starts_with("HTTP/1.1 200"));
+        assert!(worker.contains("text/javascript"));
+        assert!(worker.ends_with("worker"));
+        for path in [
+            "/",
+            "/browser/workbench/workbench.html",
+            "/assets/main.js",
+            "/assets/index-test.html/../main.js",
+            "/assets/index-%2e%2e.html",
+            "/ash/session",
+            "/ash/workspace/list",
+            "/ash/workspace/open",
+            "/ash/app-server",
+        ] {
+            for method in ["GET", "POST"] {
+                let denied = request(&host, method, path);
+                assert!(denied.starts_with("HTTP/1.1 403"), "{method} {path}: {denied}");
+            }
+        }
+        assert!(request(&host, "POST", "/assets/index-test.html").starts_with("HTTP/1.1 405"));
+        for other_host in [
+            format!("not-a-uuid.localhost:{}", listener.address.port()),
+            "550e8400-e29b-41d4-a716-446655440000.localhost:0".to_owned(),
+            format!("550e8400-e29b-41d4-a716-446655440000.attacker.test:{}", listener.address.port()),
+        ] {
+            assert!(request(&other_host, "GET", "/assets/index-test.html").starts_with("HTTP/1.1 403"));
+        }
+        listener.shutdown().await.unwrap();
+    });
+}
+
+#[test]
 fn expired_tickets_and_sessions_cannot_be_used() {
     let mut authority = Authority {
         ticket: Some((digest("ticket"), Instant::now() - Duration::from_secs(1))),

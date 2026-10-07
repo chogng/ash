@@ -1,5 +1,7 @@
 import { DEFAULT_FONT_FAMILY } from "../../../../base/browser/fonts.js";
-import { getWindow } from "../../../../base/browser/dom.js";
+import { getWindow, h } from "../../../../base/browser/dom.js";
+import { mainWindow } from '../../../../base/browser/window.js';
+import { dirname } from '../../../../base/common/resources.js';
 import {
 	isSafeMarkdownLink,
 	renderWorkbenchMarkdown,
@@ -14,8 +16,9 @@ import {
 
 	toDisposable,
 } from "../../../../base/common/lifecycle.js";
-import type { URI } from "../../../../base/common/uri.js";
+import { URI } from "../../../../base/common/uri.js";
 import { IWebviewService, type IWebviewElement } from "../../webview/browser/webview.js";
+import { asWebviewUri } from '../../webview/common/webview.js';
 
 export interface MarkdownPreviewOptions {
 	readonly markdown?: string;
@@ -108,7 +111,7 @@ const LINK_BRIDGE_SCRIPT = `
 `;
 
 /**
- * Renders a full Markdown document inside the opaque-origin iframe boundary.
+ * Renders a full Markdown document inside its isolated webview.
  */
 export class MarkdownPreview extends Disposable {
 	private readonly ownerDocument: Document;
@@ -127,6 +130,7 @@ export class MarkdownPreview extends Disposable {
 		this.webview = this._register(webviews.createWebviewElement({
 			title: options.title ?? "Markdown preview",
 			options: {},
+			contentOptions: { allowScripts: true, localResourceRoots: this.baseUri ? [dirname(this.baseUri)] : [] },
 		}));
 		this.element = this.webview.element;
 		this._register(this.webview.onMessage(({ message }) => {
@@ -159,9 +163,17 @@ export class MarkdownPreview extends Disposable {
 			ownerDocument: this.ownerDocument,
 			markdown: markdownContent,
 		}, parserHtml);
+		const content = h(mainWindow.document, 'template');
+		content.innerHTML = safeHtml;
+		for (const image of content.content.querySelectorAll('img[src]')) {
+			const source = image.getAttribute('src')!;
+			if (URL.canParse(source)) {
+				image.setAttribute('src', asWebviewUri(URI.parse(source)).toString());
+			}
+		}
 		this.webview.setHtml(
 			`<style>${PREVIEW_STYLE}</style>` +
-			`<main class="ash-markdown-preview">${safeHtml}</main>` +
+			`<main class="ash-markdown-preview">${content.innerHTML}</main>` +
 			`<script>${LINK_BRIDGE_SCRIPT}</script>`,
 		);
 	}

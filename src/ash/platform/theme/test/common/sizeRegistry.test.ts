@@ -20,6 +20,11 @@ test('size contributions remain sealed after startup', () => {
 	assert.throws(() => sizes.registerSize('late.size', size(1), metadata), /registry is sealed/);
 });
 
-test('size identifiers use Ash CSS variables', () => {
-	assert.equal(asCssVariableName('strokeThickness'), '--ash-stroke-thickness');
+test('size identifiers preserve camelCase segments in Ash CSS variables', () => {
+	assert.deepEqual([
+		asCssVariableName('strokeThickness'),
+		asCssVariableName('fontSize.body1'),
+		asCssVariableName('fontWeight.semiBold'),
+		asCssVariableName('tabList.itemContentInset'),
+	], ['--ash-strokeThickness', '--ash-fontSize-body1', '--ash-fontWeight-semiBold', '--ash-tabList-itemContentInset']);
 });

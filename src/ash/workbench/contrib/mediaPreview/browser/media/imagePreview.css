@@ -40,9 +40,9 @@
 	flex: 0 0 auto;
 	background-color: var(--ash-editor-background);
 	background-image: conic-gradient(
-		var(--ash-editor-widget-background) 25%,
+		var(--ash-editor-widgetBackground) 25%,
 		transparent 0 50%,
-		var(--ash-editor-widget-background) 0 75%,
+		var(--ash-editor-widgetBackground) 0 75%,
 		transparent 0
 	);
 	background-size: var(--ash-spacing-size160) var(--ash-spacing-size160);
@@ -51,7 +51,7 @@
 .ash-image-preview-summary {
 	flex: 0 0 auto;
 	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
-	font-size: var(--ash-font-size-label1);
+	font-size: var(--ash-fontSize-label1);
 	color: var(--ash-description-foreground);
 	overflow: hidden;
 	white-space: nowrap;
@@ -60,6 +60,6 @@
 
 .ash-image-preview:focus-visible,
 .ash-image-preview-viewport:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }

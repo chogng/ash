@@ -1,5 +1,5 @@
 :is(.ash-workbench, .ash-auxiliary-window-container).modern-ui
 	.ash-workbench-editor {
-	border: var(--ash-stroke-thickness) solid var(--ash-border);
-	border-radius: var(--ash-corner-radius-large);
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+	border-radius: var(--ash-cornerRadius-large);
 }

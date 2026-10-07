@@ -5,11 +5,11 @@
 }
 
 .ash-link:not(.disabled):hover {
-	color: var(--ash-text-link-active-foreground);
+	color: var(--ash-textLink-activeForeground);
 }
 
 .ash-link:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: var(--ash-spacing-size20);
 }
 

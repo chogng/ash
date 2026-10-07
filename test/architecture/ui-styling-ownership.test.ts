@@ -87,7 +87,7 @@ test("Workbench owns the horizontal ActionBar hover skin", async () => {
 	assert.doesNotMatch(actionBarCss, /:hover/);
 	assert.match(workbenchCss, /\.ash-workbench\s+:where\(\s*\.ash-action-bar:not\(\.vertical\)[^{}]*\.ash-button:not\(:disabled\):hover\s*\)/);
 	assert.match(workbenchCss, /\.ash-workbench\s+:where\(\s*\.ash-action-bar:not\(\.vertical\)[^{}]*\.ash-action-label:not\(:disabled\):hover\s*\)/);
-	assert.match(workbenchCss, /background: var\(--ash-toolbar-hover-background\)/);
+	assert.match(workbenchCss, /background: var\(--ash-toolbar-hoverBackground\)/);
 });
 
 test("ToolBar icon actions center their content in the 22px borderless hit area", async () => {
@@ -99,10 +99,10 @@ test("ToolBar icon actions center their content in the 22px borderless hit area"
 	assert.match(sizeSource, /dimension\("toolbar\.actionSize", 22,/);
 	assert.match(
 		toolbarCss,
-		/\.ash-toolbar \.ash-action-view-item\.icon > \.ash-button \{[^}]*width: var\(--ash-toolbar-action-size\);[^}]*border: 0;[^}]*padding: 0;/s,
+		/\.ash-toolbar \.ash-action-view-item\.icon > \.ash-button \{[^}]*width: var\(--ash-toolbar-actionSize\);[^}]*border: 0;[^}]*padding: 0;/s,
 	);
-	assert.match(tabListCss, /\.ash-tab-actions \.ash-action-view-item\.icon \.ash-button \{[^}]*width: var\(--ash-toolbar-action-size\);[^}]*padding: 0;[^}]*border: 0;/s);
-	assert.match(compositeBarCss, /\.ash-composite-bar-overflow > \.ash-composite-bar-action \{[^}]*width: var\(--ash-toolbar-action-size\);[^}]*height: var\(--ash-toolbar-action-size\);[^}]*padding: 0;[^}]*border: 0;/s);
+	assert.match(tabListCss, /\.ash-tab-actions \.ash-action-view-item\.icon \.ash-button \{[^}]*width: var\(--ash-toolbar-actionSize\);[^}]*padding: 0;[^}]*border: 0;/s);
+	assert.match(compositeBarCss, /\.ash-composite-bar-overflow > \.ash-composite-bar-action \{[^}]*width: var\(--ash-toolbar-actionSize\);[^}]*height: var\(--ash-toolbar-actionSize\);[^}]*padding: 0;[^}]*border: 0;/s);
 });
 
 test("TabList and CompositeBar each own their pointer interaction styling", async () => {
@@ -128,7 +128,7 @@ test("TabList preserves the standard close-action hover background", async () =>
 	const editorTabsCss = await readFile(join(sourceRoot, "workbench", "browser", "parts", "editor", "media", "multiEditorTabsControl.css"), "utf8");
 	const chatTabsCss = await readFile(join(sourceRoot, "workbench", "contrib", "chat", "browser", "widgetHosts", "viewPane", "media", "multiChatTabsControl.css"), "utf8");
 
-	assert.match(tabListCss, /\.ash-tab-actions \.ash-action-view-item\.icon \.ash-button:hover\s*\{[^}]*background: var\(--ash-toolbar-hover-background\);/s);
+	assert.match(tabListCss, /\.ash-tab-actions \.ash-action-view-item\.icon \.ash-button:hover\s*\{[^}]*background: var\(--ash-toolbar-hoverBackground\);/s);
 	assert.doesNotMatch(editorTabsCss, /--ash-tab-list-(?:checked-)?action-hover-background/);
 	assert.doesNotMatch(chatTabsCss, /--ash-tab-list-(?:checked-)?action-hover-background/);
 });
@@ -148,7 +148,7 @@ test("Split actions own their joined geometry outside Terminal", async () => {
 	const terminalCss = await readFile(join(sourceRoot, "workbench", "contrib", "terminal", "browser", "view", "media", "terminal.css"), "utf8");
 	const workbenchCss = await readFile(join(sourceRoot, "workbench", "browser", "media", "style.css"), "utf8");
 
-	assert.match(dropdownCss, /\.ash-dropdown-with-primary-action-view-item\s*\{[^}]*display: flex;[^}]*gap: 0;[^}]*border-radius: var\(--ash-corner-radius-small\);/s);
+	assert.match(dropdownCss, /\.ash-dropdown-with-primary-action-view-item\s*\{[^}]*display: flex;[^}]*gap: 0;[^}]*border-radius: var\(--ash-cornerRadius-small\);/s);
 	assert.match(workbenchCss, /\.ash-dropdown-with-primary-action-view-item:not\(\.disabled\):hover/);
 	assert.doesNotMatch(terminalCss, /ash-terminal-(?:new|profile)-action/);
 	assert.doesNotMatch(terminalCss, /margin-right:\s*-2px/);

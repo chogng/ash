@@ -113,7 +113,7 @@ test('link colors and keyboard focus follow all four product themes', async ({ p
 			element.after(expected);
 			expected.style.color = 'var(--ash-accent-foreground)';
 			const color = getComputedStyle(expected).color;
-			expected.style.color = 'var(--ash-focus-border)';
+			expected.style.color = 'var(--ash-focusBorder)';
 			const focus = getComputedStyle(expected).color;
 			expected.remove();
 			return { color: style.color, expected: color, focus: style.outlineColor, expectedFocus: focus, outline: style.outlineStyle, width: style.outlineWidth, focused: element.matches(':focus-visible'), underline: style.textDecorationLine };
@@ -203,7 +203,7 @@ test('Output severity and filter focus use theme colors in all four themes', asy
 			element.after(probe);
 			probe.style.color = 'var(--ash-warning-foreground)';
 			const warningColor = getComputedStyle(probe).color;
-			probe.style.color = 'var(--ash-focus-border)';
+			probe.style.color = 'var(--ash-focusBorder)';
 			const focusColor = getComputedStyle(probe).color;
 			probe.remove();
 			const input = document.querySelector('#output .ash-output-filter-input')!;

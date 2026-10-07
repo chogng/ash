@@ -222,7 +222,7 @@ test('standalone editor shows the themed outline while its input is focused', as
 	await page.locator('#caller .stanza-editor-input').focus();
 	await expect(editor).toHaveCSS('outline-style', 'solid');
 	await expect(editor).toHaveCSS('outline-color', /^rgb/);
-	expect(await editor.evaluate(node => getComputedStyle(node).getPropertyValue('--ash-focus-border').trim())).not.toBe('');
+	expect(await editor.evaluate(node => getComputedStyle(node).getPropertyValue('--ash-focusBorder').trim())).not.toBe('');
 	await page.evaluate(() => (document.activeElement as HTMLElement).blur());
 	await expect(editor).toHaveCSS('outline-style', 'none');
 	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
@@ -859,7 +859,7 @@ test.describe('contribution lifecycle', () => {
 			await expect(buttons.last()).toBeFocused();
 			const focus = await buttons.last().evaluate(element => {
 				const style = getComputedStyle(element);
-				return { width: style.outlineWidth, color: style.outlineColor, token: style.getPropertyValue('--ash-focus-border').trim() };
+				return { width: style.outlineWidth, color: style.outlineColor, token: style.getPropertyValue('--ash-focusBorder').trim() };
 			});
 			expect(focus.width).toBe('1px');
 			expect(focus.token).not.toBe('');
@@ -6598,7 +6598,7 @@ test('code action preview preserves partial selection, focus and expanded change
 		await page.evaluate(theme => window.ashStandaloneIntegration.setActionMenuTheme(theme), theme);
 		const style = await pane.locator('.ash-bulk-edit-entry').evaluate(element => {
 			const computed = getComputedStyle(element);
-			return { border: computed.borderStyle, width: computed.borderWidth, color: computed.borderColor, contrast: computed.getPropertyValue('--ash-contrast-border') };
+			return { border: computed.borderStyle, width: computed.borderWidth, color: computed.borderColor, contrast: computed.getPropertyValue('--ash-contrastBorder') };
 		});
 		expect(style.border).toBe('solid');
 		expect(parseFloat(style.width)).toBeGreaterThan(0);

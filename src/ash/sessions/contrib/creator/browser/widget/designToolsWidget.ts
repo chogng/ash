@@ -30,8 +30,8 @@ export const designModeActions = [
 	[DesignMode.Code, 'sessions.design.codeMode', 'Code', Lxicon.code],
 ] as const;
 
-registerColor('sessions.design.chromeBackground', { light: '#181818', dark: '#181818', highContrastDark: '#000000', highContrastLight: '#ffffff' }, { owner: 'sessions.design', description: localize('color.sessions.design.chromeBackground', 'Background of the Design toolbar and menus.') });
-registerColor('sessions.design.chromeForeground', { light: '#f0f0f0', dark: '#f0f0f0', highContrastDark: '#ffffff', highContrastLight: '#000000' }, { owner: 'sessions.design', description: localize('color.sessions.design.chromeForeground', 'Foreground of the Design toolbar and menus.') });
+registerColor('sessions.design.chromeBackground', { light: '#181818', dark: '#181818', hcDark: '#000000', hcLight: '#ffffff' }, { owner: 'sessions.design', description: localize('color.sessions.design.chromeBackground', 'Background of the Design toolbar and menus.') });
+registerColor('sessions.design.chromeForeground', { light: '#f0f0f0', dark: '#f0f0f0', hcDark: '#ffffff', hcLight: '#000000' }, { owner: 'sessions.design', description: localize('color.sessions.design.chromeForeground', 'Foreground of the Design toolbar and menus.') });
 
 /** Owns tool chrome and keyboard navigation; the editor owns the active tool and mode. */
 export class DesignToolsWidget extends Disposable {

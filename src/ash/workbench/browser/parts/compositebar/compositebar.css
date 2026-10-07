@@ -14,24 +14,24 @@
 	flex: 1 1 auto;
 	align-items: center;
 	gap: 2px;
-	padding: 0 var(--ash-composite-bar-content-inset);
+	padding: 0 var(--ash-compositeBar-contentInset);
 	overflow: hidden;
 }
 
 .ash-composite-bar-overflow {
 	display: flex;
 	align-items: center;
-	flex: 0 0 var(--ash-toolbar-action-size);
+	flex: 0 0 var(--ash-toolbar-actionSize);
 }
 
 .ash-composite-bar-overflow > .ash-composite-bar-action {
-	width: var(--ash-toolbar-action-size);
-	min-width: var(--ash-toolbar-action-size);
-	height: var(--ash-toolbar-action-size);
-	min-height: var(--ash-toolbar-action-size);
+	width: var(--ash-toolbar-actionSize);
+	min-width: var(--ash-toolbar-actionSize);
+	height: var(--ash-toolbar-actionSize);
+	min-height: var(--ash-toolbar-actionSize);
 	padding: 0;
 	border: 0;
-	color: var(--ash-composite-bar-inactive-foreground);
+	color: var(--ash-compositeBar-inactiveForeground);
 }
 
 .ash-composite-bar-overflow > .ash-composite-bar-action .ash-icon {
@@ -50,7 +50,7 @@
 	min-height: var(--ash-tab-height);
 	border: 0;
 	border-radius: 0;
-	color: var(--ash-composite-bar-inactive-foreground);
+	color: var(--ash-compositeBar-inactiveForeground);
 	cursor: pointer;
 }
 
@@ -65,7 +65,7 @@
 }
 
 .ash-composite-bar-label > .ash-action-bar {
-	font-size: var(--ash-font-size-body1);
+	font-size: var(--ash-fontSize-body1);
 	line-height: 20px;
 }
 
@@ -80,8 +80,8 @@
 }
 
 .ash-composite-bar-item.checked {
-	color: var(--ash-composite-bar-foreground);
-	background: var(--ash-tab-list-active-background);
+	color: var(--ash-compositeBar-foreground);
+	background: var(--ash-tabList-activeBackground);
 }
 
 .ash-composite-bar-action {
@@ -98,11 +98,11 @@
 	opacity: 0.6;
 	cursor: inherit;
 	font: inherit;
-	font-weight: var(--ash-font-weight-semi-bold);
+	font-weight: var(--ash-fontWeight-semiBold);
 }
 
 .ash-composite-bar-item:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
 
@@ -129,8 +129,8 @@
 }
 
 .ash-composite-bar-icon .ash-composite-bar-badge {
-	color: var(--ash-activity-bar-badge-foreground);
-	background: var(--ash-activity-bar-badge-background);
+	color: var(--ash-activityBarBadge-foreground);
+	background: var(--ash-activityBarBadge-background);
 	position: absolute;
 	right: 0;
 	bottom: 0;
@@ -209,7 +209,7 @@
 	width: 2px;
 	height: 100%;
 	content: "";
-	background: var(--ash-focus-border);
+	background: var(--ash-focusBorder);
 }
 
 .ash-composite-bar-vertical
@@ -243,7 +243,7 @@
 	position: absolute;
 	top: 0;
 	left: 100%;
-	width: var(--ash-action-bar-gap);
+	width: var(--ash-actionBar-gap);
 	height: 100%;
 	content: "";
 	pointer-events: auto;
@@ -258,7 +258,7 @@
 	height: 100%;
 	content: "";
 	pointer-events: none;
-	background: var(--ash-focus-border);
+	background: var(--ash-focusBorder);
 }
 
 .ash-composite-bar-item.ash-dnd-drop-before::before {

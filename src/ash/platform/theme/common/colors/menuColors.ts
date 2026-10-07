@@ -3,10 +3,10 @@ import { foreground, selectionBackground, selectionForeground } from "./baseColo
 import { listHoverBackground } from "./listColors.js";
 
 const owner = "platform.theme.menu";
-const color = (id: string, dark: string, light: string, highContrastDark: string, highContrastLight: string, description: string): string =>
-	registerColor(id, { dark, light, highContrastDark, highContrastLight }, { description, owner });
+const color = (id: string, dark: string, light: string, hcDark: string, hcLight: string, description: string): string =>
+	registerColor(id, { dark, light, hcDark, hcLight }, { description, owner });
 const alias = (id: string, value: string, highContrastValue: string, description: string): string => registerColor(id, {
-	dark: value, light: value, highContrastDark: highContrastValue, highContrastLight: highContrastValue,
+	dark: value, light: value, hcDark: highContrastValue, hcLight: highContrastValue,
 }, { description, owner });
 
 export const menuForeground = color("menu.foreground", "#cccccc", "#000000", foreground, foreground, "Command menu item foreground.");

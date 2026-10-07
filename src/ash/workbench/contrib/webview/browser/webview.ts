@@ -1,6 +1,7 @@
 import type { CodeWindow } from '../../../../base/browser/window.js';
 import type { Event } from '../../../../base/common/event.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
+import type { URI } from '../../../../base/common/uri.js';
 import { createDecorator } from '../../../../platform/instantiation/common/instantiation.js';
 
 export const IWebviewService = createDecorator<IWebviewService>('webviewService');
@@ -17,6 +18,12 @@ export interface IWebviewService {
 export interface WebviewInitInfo {
 	readonly title: string | undefined;
 	readonly options: WebviewOptions;
+	readonly contentOptions?: WebviewContentOptions;
+}
+
+export interface WebviewContentOptions {
+	readonly allowScripts?: boolean;
+	readonly localResourceRoots?: readonly URI[];
 }
 
 export interface WebviewOptions {

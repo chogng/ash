@@ -9,15 +9,15 @@ const owner = "platform.theme.minimap";
 const alias = (id: string, value: string, description: string): string => registerColor(id, {
 	dark: value,
 	light: value,
-	highContrastDark: value,
-	highContrastLight: value,
+	hcDark: value,
+	hcLight: value,
 }, { description, owner });
 
 registerColor("minimap.shadow", {
 	dark: transparent("#000000", 0.08),
 	light: transparent("#000000", 0.08),
-	highContrastDark: null,
-	highContrastLight: null,
+	hcDark: null,
+	hcLight: null,
 }, { description: "Minimap shadow indicating content beyond the right edge.", owner });
 
 export const minimapSliderBackground = alias("minimapSlider.background", scrollbarSliderBackground, "Minimap viewport slider background.");

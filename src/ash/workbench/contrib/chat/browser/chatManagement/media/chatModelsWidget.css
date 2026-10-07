@@ -1,8 +1,8 @@
 .ash-chat-models-widget {
 	min-width: 0;
 	padding: var(--ash-spacing-size160);
-	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
-	border-radius: var(--ash-corner-radius-medium);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-medium);
 }
 
 .ash-chat-models-widget [hidden] {
@@ -52,9 +52,9 @@
 }
 
 .ash-chat-models-table th {
-	font-weight: var(--ash-font-weight-regular);
+	font-weight: var(--ash-fontWeight-regular);
 	color: var(--ash-description-foreground);
-	font-size: var(--ash-font-size-label1);
+	font-size: var(--ash-fontSize-label1);
 }
 
 .ash-chat-models-table th:first-child {
@@ -77,7 +77,7 @@
 }
 
 .ash-chat-models-test-status {
-	font-size: var(--ash-font-size-label1);
+	font-size: var(--ash-fontSize-label1);
 }
 
 .ash-chat-models-test-status::before {
@@ -86,8 +86,8 @@
 	width: var(--ash-spacing-size80);
 	height: var(--ash-spacing-size80);
 	margin-right: var(--ash-spacing-size80);
-	border: var(--ash-stroke-thickness) solid var(--ash-contrast-border);
-	border-radius: var(--ash-corner-radius-circle);
+	border: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
+	border-radius: var(--ash-cornerRadius-circle);
 	background: var(--ash-charts-orange);
 }
 
@@ -109,7 +109,7 @@
 .ash-chat-models-note {
 	margin: var(--ash-spacing-size80) 0 0;
 	color: var(--ash-description-foreground);
-	font-size: var(--ash-font-size-label1);
+	font-size: var(--ash-fontSize-label1);
 }
 
 .ash-chat-models-note.is-error {

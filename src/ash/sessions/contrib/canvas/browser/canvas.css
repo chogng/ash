@@ -21,13 +21,13 @@
 	background-image:
 		linear-gradient(
 			to right,
-			var(--ash-canvas-grid-line) var(--ash-stroke-thickness),
-			transparent var(--ash-stroke-thickness)
+			var(--ash-canvas-grid-line) var(--ash-strokeThickness),
+			transparent var(--ash-strokeThickness)
 		),
 		linear-gradient(
 			to bottom,
-			var(--ash-canvas-grid-line) var(--ash-stroke-thickness),
-			transparent var(--ash-stroke-thickness)
+			var(--ash-canvas-grid-line) var(--ash-strokeThickness),
+			transparent var(--ash-strokeThickness)
 		);
 	background-size: calc(
 			var(--ash-canvas-grid-size) * var(--ash-canvas-scale, 1)
@@ -49,9 +49,9 @@
 	cursor: crosshair;
 }
 
-[data-color-scheme="high-contrast-dark"] .ash-canvas-viewport,
-[data-color-scheme="high-contrast-light"] .ash-canvas-viewport {
-	--ash-canvas-grid-line: var(--ash-contrast-border);
+[data-color-scheme="hcDark"] .ash-canvas-viewport,
+[data-color-scheme="hcLight"] .ash-canvas-viewport {
+	--ash-canvas-grid-line: var(--ash-contrastBorder);
 	background-color: var(--ash-editor-background);
 }
 
@@ -64,8 +64,8 @@
 }
 
 .ash-canvas-viewport.focused {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-	outline-offset: calc(-1 * var(--ash-stroke-thickness));
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
 }
 
 .ash-canvas-world {
@@ -87,7 +87,7 @@
 	overflow: visible;
 	pointer-events: none;
 	fill: none;
-	stroke: var(--ash-focus-border);
+	stroke: var(--ash-focusBorder);
 	stroke-width: 2px;
 }
 

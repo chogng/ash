@@ -4,36 +4,33 @@
 	max-width: min(480px, calc(100% - 16px));
 	padding: 6px 8px;
 	color: var(--ash-editor-foreground);
-	background: var(
-		--ash-editor-hover-background,
-		var(--ash-editor-background)
-	);
-	border: var(--ash-stroke-thickness) solid var(--ash-editor-border);
-	border-radius: var(--ash-corner-radius-small);
-	box-shadow: 0 4px 14px var(--ash-editor-widget-shadow);
+	background: var(--ash-editor-hoverBackground, var(--ash-editor-background));
+	border: var(--ash-strokeThickness) solid var(--ash-editor-border);
+	border-radius: var(--ash-cornerRadius-small);
+	box-shadow: 0 4px 14px var(--ash-editor-widgetShadow);
 }
 
 .stanza-editor-parameter-hints-signature.active {
-	font-weight: var(--ash-font-weight-semi-bold);
+	font-weight: var(--ash-fontWeight-semiBold);
 }
 
 .stanza-editor-parameter-hints-parameter.active {
-	color: var(--ash-list-active-selection-foreground);
-	background: var(--ash-list-active-selection-background);
-	border-radius: var(--ash-corner-radius-x-small);
+	color: var(--ash-list-activeSelectionForeground);
+	background: var(--ash-list-activeSelectionBackground);
+	border-radius: var(--ash-cornerRadius-xSmall);
 	padding: 0 2px;
-	font-weight: var(--ash-font-weight-semi-bold);
+	font-weight: var(--ash-fontWeight-semiBold);
 }
 
 .stanza-editor-parameter-hints-documentation {
 	margin-top: 6px;
 	padding-top: 6px;
-	border-top: var(--ash-stroke-thickness) solid var(--ash-editor-border);
+	border-top: var(--ash-strokeThickness) solid var(--ash-editor-border);
 	color: var(
-		--ash-editor-description-foreground,
+		--ash-editor-descriptionForeground,
 		var(--ash-editor-foreground)
 	);
-	font-size: var(--ash-font-size-body2);
+	font-size: var(--ash-fontSize-body2);
 	line-height: 1.4;
 	overflow-wrap: anywhere;
 	white-space: pre-wrap;

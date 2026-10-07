@@ -2239,7 +2239,7 @@ export const languagePackCatalog: LanguagePackCatalog = {
 			"scm.activity.changes": "{0} changed files",
 			"scm.activity.oneChange": "1 changed file",
 			"scm.changesTree": "Source control changes",
-			"scm.changesTreeHelp": "Use Up and Down to preview files, Left to collapse, and Right to expand a group. Press Enter to open and pin a file, or Space to preview while keeping focus here. Hold Ctrl, Command, or Alt when clicking or pressing Enter to open in a side group. Double-click pins the file and focuses its editor. Press F1 for Git branch, worktree, stash, tag and remote commands, integration continue or abort, and partial staging.",
+			"scm.changesTreeHelp": "Files are grouped by directory. Use Up and Down to navigate and preview files, Left to collapse, and Right to expand a group or directory. Press Enter or Space on a directory to toggle it. Press Enter on a file to open and pin it, or Space to preview while keeping focus here. Hold Ctrl, Command, or Alt when clicking or pressing Enter to open in a side group. Double-click pins the file and focuses its editor. Press F1 for Git branch, worktree, stash, tag and remote commands, integration continue or abort, and partial staging.",
 			"scm.emptyWindow": "Open a folder to use source control.",
 			"scm.history.actions": "History actions",
 			"scm.history.additions": "{0} insertions(+)",

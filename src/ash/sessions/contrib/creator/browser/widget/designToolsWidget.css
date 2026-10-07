@@ -1,9 +1,9 @@
 .ash-design-tools-widget {
-	--ash-button-foreground: var(--ash-sessions-design-chrome-foreground);
-	--ash-action-bar-toggled-background: color-mix(
+	--ash-button-foreground: var(--ash-sessions-design-chromeForeground);
+	--ash-actionBar-toggledBackground: color-mix(
 		in srgb,
-		var(--ash-sessions-design-chrome-foreground) 20%,
-		var(--ash-sessions-design-chrome-background)
+		var(--ash-sessions-design-chromeForeground) 20%,
+		var(--ash-sessions-design-chromeBackground)
 	);
 
 	display: flex;
@@ -12,13 +12,13 @@
 	box-sizing: border-box;
 	max-width: calc(100% - 32px);
 	padding: var(--ash-spacing-size60);
-	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
-	border-radius: var(--ash-corner-radius-x-large);
-	background: var(--ash-sessions-design-chrome-background);
-	color: var(--ash-sessions-design-chrome-foreground);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-xLarge);
+	background: var(--ash-sessions-design-chromeBackground);
+	color: var(--ash-sessions-design-chromeForeground);
 	box-shadow: 0 4px 16px var(--ash-widget-shadow);
 	overflow-x: auto;
-	font-size: var(--ash-font-size-label1);
+	font-size: var(--ash-fontSize-label1);
 }
 
 .ash-design-tools-widget .ash-button {
@@ -40,31 +40,27 @@
 
 /* Menus live in the context-view host, outside the canvas DOM. */
 .ash-context-view-menu:has(> .ash-design-menu) {
-	--ash-editor-background: var(--ash-sessions-design-chrome-background);
-	--ash-foreground: var(--ash-sessions-design-chrome-foreground);
-	--ash-button-foreground: var(--ash-sessions-design-chrome-foreground);
+	--ash-editor-background: var(--ash-sessions-design-chromeBackground);
+	--ash-foreground: var(--ash-sessions-design-chromeForeground);
+	--ash-button-foreground: var(--ash-sessions-design-chromeForeground);
 	--ash-border: color-mix(
 		in srgb,
-		var(--ash-sessions-design-chrome-foreground) 20%,
-		var(--ash-sessions-design-chrome-background)
+		var(--ash-sessions-design-chromeForeground) 20%,
+		var(--ash-sessions-design-chromeBackground)
 	);
-	--ash-menu-selection-background: color-mix(
+	--ash-menu-selectionBackground: color-mix(
 		in srgb,
-		var(--ash-sessions-design-chrome-foreground) 20%,
-		var(--ash-sessions-design-chrome-background)
+		var(--ash-sessions-design-chromeForeground) 20%,
+		var(--ash-sessions-design-chromeBackground)
 	);
-	--ash-menu-selection-foreground: var(
-		--ash-sessions-design-chrome-foreground
-	);
-	--ash-muted-foreground: var(--ash-sessions-design-chrome-foreground);
-	border-radius: var(--ash-corner-radius-x-large);
+	--ash-menu-selectionForeground: var(--ash-sessions-design-chromeForeground);
+	--ash-muted-foreground: var(--ash-sessions-design-chromeForeground);
+	border-radius: var(--ash-cornerRadius-xLarge);
 }
 
-[data-color-scheme="high-contrast-dark"]
-	.ash-context-view-menu:has(> .ash-design-menu),
-[data-color-scheme="high-contrast-light"]
-	.ash-context-view-menu:has(> .ash-design-menu) {
-	--ash-border: var(--ash-contrast-border);
+[data-color-scheme="hcDark"] .ash-context-view-menu:has(> .ash-design-menu),
+[data-color-scheme="hcLight"] .ash-context-view-menu:has(> .ash-design-menu) {
+	--ash-border: var(--ash-contrastBorder);
 	box-shadow: none;
 }
 
@@ -75,8 +71,8 @@
 	gap: var(--ash-spacing-size40);
 }
 
-[data-color-scheme="high-contrast-dark"] .ash-design-tools-widget,
-[data-color-scheme="high-contrast-light"] .ash-design-tools-widget {
-	border-color: var(--ash-contrast-border);
+[data-color-scheme="hcDark"] .ash-design-tools-widget,
+[data-color-scheme="hcLight"] .ash-design-tools-widget {
+	border-color: var(--ash-contrastBorder);
 	box-shadow: none;
 }

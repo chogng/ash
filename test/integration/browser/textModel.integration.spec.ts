@@ -271,7 +271,7 @@ test('modern minimap corners apply to main and auxiliary hosts and leave flat ho
 	await page.addStyleTag({ path: fileURLToPath(new URL('../../../src/ash/workbench/contrib/modernUI/browser/media/roundedCorners.css', import.meta.url)) });
 	const host = page.locator('body');
 	// This editor fixture has no Workbench theme service; provide its size token.
-	await host.evaluate(element => element.style.setProperty('--ash-corner-radius-small', '4px'));
+	await host.evaluate(element => element.style.setProperty('--ash-cornerRadius-small', '4px'));
 	const slider = page.locator('.stanza-editor-minimap-slider');
 	for (const root of ['ash-workbench', 'ash-auxiliary-window-container']) {
 		await host.evaluate((element, root) => element.setAttribute('class', `${root} modern-ui`), root);
@@ -555,7 +555,7 @@ for (const theme of ['light', 'dark', 'contrast', 'contrastLight'] as const) {
 					const textIndex = stack.findIndex(node => node.closest('.view-lines'));
 					const backgroundIndex = stack.indexOf(element);
 					const root = element.closest('.stanza-editor')!;
-					const backgroundToken = focused ? '--ash-editor-selection-background' : '--ash-editor-inactive-selection-background';
+					const backgroundToken = focused ? '--ash-editor-selectionBackground' : '--ash-editor-inactiveSelectionBackground';
 					return {
 						textAboveBackground: textIndex >= 0 && backgroundIndex > textIndex,
 						hasBackground: getComputedStyle(element).backgroundColor !== 'rgba(0, 0, 0, 0)',
@@ -1011,8 +1011,8 @@ test("cursor layer retains nodes, animates stable moves, and resolves multi-curs
 	await expect(retainedCaret).toHaveAttribute("data-retained-identity", "true");
 
 	await editor.evaluate(element => {
-		element.style.setProperty("--ash-editor-multi-cursor-primary-foreground", "#010203");
-		element.style.setProperty("--ash-editor-multi-cursor-secondary-foreground", "#040506");
+		element.style.setProperty("--ash-editorMultiCursor-primary-foreground", "#010203");
+		element.style.setProperty("--ash-editorMultiCursor-secondary-foreground", "#040506");
 	});
 	const countChangeTransitions = await page.evaluate(() => {
 		window.ashTextModelIntegration.setCursors([
@@ -1098,9 +1098,9 @@ test("short documents have no false scroll range and use a proportional hover sl
 	const minimap = page.locator('.minimap');
 	const slider = page.locator('.stanza-editor-minimap-slider');
 	await page.locator('.stanza-editor').evaluate(element => {
-		element.style.setProperty('--ash-minimap-slider-background', '#010203');
-		element.style.setProperty('--ash-minimap-slider-hover-background', '#040506');
-		element.style.setProperty('--ash-minimap-slider-active-background', '#070809');
+		element.style.setProperty('--ash-minimapSlider-background', '#010203');
+		element.style.setProperty('--ash-minimapSlider-hoverBackground', '#040506');
+		element.style.setProperty('--ash-minimapSlider-activeBackground', '#070809');
 	});
 	await expect(slider).toHaveCSS('opacity', '0');
 	await expect(slider).toHaveCSS('background-color', 'rgb(1, 2, 3)');
@@ -1573,11 +1573,11 @@ test('selection, gutter, whitespace and line numbers resolve editor colors in al
 			await expect(editor.locator('.view-overlays').first()).toHaveClass(focused ? /\bfocused\b/u : /^(?!.*\bfocused\b)/u);
 			const colors = await editor.evaluate((element, focused) => {
 				const entries = [
-					['.stanza-editor-selection', 'background-color', focused ? '--ash-editor-selection-background' : '--ash-editor-inactive-selection-background'],
-					['.margin', 'background-color', '--ash-editor-gutter-background'],
-					['.stanza-editor-whitespace', 'color', '--ash-editor-whitespace-foreground'],
-					['.line-numbers.active-line-number', 'color', '--ash-editor-line-number-active-foreground'],
-					['.line-numbers:not(.active-line-number)', 'color', '--ash-editor-line-number-foreground'],
+					['.stanza-editor-selection', 'background-color', focused ? '--ash-editor-selectionBackground' : '--ash-editor-inactiveSelectionBackground'],
+					['.margin', 'background-color', '--ash-editorGutter-background'],
+					['.stanza-editor-whitespace', 'color', '--ash-editorWhitespace-foreground'],
+					['.line-numbers.active-line-number', 'color', '--ash-editorLineNumber-activeForeground'],
+					['.line-numbers:not(.active-line-number)', 'color', '--ash-editorLineNumber-foreground'],
 				];
 				return entries.map(([selector, property, token]) => {
 					const target = element.querySelector(selector!);

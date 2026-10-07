@@ -12,8 +12,8 @@ export function projectExtensionTokenTheme(catalog: ExtensionThemeCatalog, color
 }
 
 function selectTheme(themes: readonly ExtensionThemeDefinition[], colorScheme: ColorScheme): ExtensionThemeDefinition | undefined {
-	const expected = colorScheme === "dark" ? "vs-dark" : colorScheme === "light" ? "vs" : colorScheme === "high-contrast-dark" ? "hc-black" : "hc-light";
-	const fallback = colorScheme === "dark" || colorScheme === "high-contrast-dark" ? "vs-dark" : "vs";
+	const expected = colorScheme === "dark" ? "vs-dark" : colorScheme === "light" ? "vs" : colorScheme === "hcDark" ? "hc-black" : "hc-light";
+	const fallback = colorScheme === "dark" || colorScheme === "hcDark" ? "vs-dark" : "vs";
 	return themes.find(theme => theme.uiTheme === expected) ?? themes.find(theme => theme.uiTheme === fallback);
 }
 

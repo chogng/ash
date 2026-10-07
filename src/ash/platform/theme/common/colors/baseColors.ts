@@ -1,8 +1,8 @@
 import { registerColor, transparent } from "../colorUtils.js";
 
 const owner = "platform.theme";
-const color = (id: string, dark: string, light: string, highContrastDark: string | null, highContrastLight: string | null, description: string): string =>
-	registerColor(id, { dark, light, highContrastDark, highContrastLight }, { description, owner });
+const color = (id: string, dark: string, light: string, hcDark: string | null, hcLight: string | null, description: string): string =>
+	registerColor(id, { dark, light, hcDark, hcLight }, { description, owner });
 
 export const foreground = color("foreground", "#cccccc", "#3b3b3b", "#ffffff", "#000000", "Default foreground color.");
 export const descriptionForeground = color("description.foreground", "#b8b8b8", "#616161", foreground, foreground, "Foreground for descriptive text.");
@@ -17,15 +17,15 @@ export const border = color("border", "#2b2b2b", "#e5e5e5", "contrastBorder", "c
 export const contrastBorder = registerColor("contrastBorder", {
 	dark: null,
 	light: null,
-	highContrastDark: "#ffffff",
-	highContrastLight: "#000000",
+	hcDark: "#ffffff",
+	hcLight: "#000000",
 }, { description: "Extra border separating elements in high contrast themes.", owner });
 export const widgetBorder = color("widget.border", "#454545", "#d4d4d4", contrastBorder, contrastBorder, "Border around floating widgets.");
 export const widgetShadow = registerColor("widget.shadow", {
 	dark: transparent("#000000", 0.36),
 	light: transparent("#000000", 0.16),
-	highContrastDark: null,
-	highContrastLight: null,
+	hcDark: null,
+	hcLight: null,
 }, { description: "Shadow around floating widgets.", owner });
 export const selectionForeground = color("selection.foreground", "#ffffff", "#000000", "#000000", "#ffffff", "Selected text foreground.");
 export const selectionBackground = color("selection.background", "#264f78", "#add6ff", "#ffffff", "#000000", "Selected text background.");

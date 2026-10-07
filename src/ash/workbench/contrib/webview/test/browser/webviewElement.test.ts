@@ -1,16 +1,26 @@
 import '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
-import { suite, test } from 'mocha';
+import { suite, test, setup, teardown } from 'mocha';
 import { mainWindow } from '../../../../../base/browser/window.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { WebviewElement } from '../../browser/webviewElement.js';
+import { createTestComponentServices } from '../../../../test/common/testEditorServices.js';
+import type { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import type { WebviewInitInfo } from '../../browser/webview.js';
+
+let services: InstantiationService;
+
+function createWebview(initInfo: WebviewInitInfo): WebviewElement {
+	return services.createInstance(WebviewElement, initInfo);
+}
 
 function mount(webview: WebviewElement): void {
 	webview.mountTo(document.body, mainWindow);
 }
 
 function message(webview: WebviewElement, data: unknown, source: Window | null = webview.element.contentWindow): void {
-	mainWindow.dispatchEvent(new mainWindow.MessageEvent('message', { source, data }));
+	const url = new URL(webview.element.src);
+	mainWindow.dispatchEvent(new mainWindow.MessageEvent('message', { source, data, origin: `${url.protocol}//${url.host}` }));
 }
 
 function lifecycle(webview: WebviewElement, type: string, channel = webview.element.getAttribute('data-ash-webview-channel')): void {
@@ -18,33 +28,31 @@ function lifecycle(webview: WebviewElement, type: string, channel = webview.elem
 }
 
 suite('Webview element', () => {
+	teardown(() => services.dispose());
 	ensureNoDisposablesAreLeakedInTestSuite();
+	setup(() => { services = createTestComponentServices(); });
 
-	test('creates an opaque-origin sandbox document and clears it on disposal', () => {
-		using webview = new WebviewElement({ title: 'Markdown preview', options: {} });
+	test('creates an isolated sandbox origin and releases it on disposal', () => {
+		using webview = createWebview({ title: 'Markdown preview', options: {} });
 		webview.setHtml('<h1>Preview</h1>');
 		mount(webview);
 		assert.deepEqual({
 			sandbox: webview.element.getAttribute('sandbox'),
 			referrer: webview.element.getAttribute('referrerpolicy'),
-			credentialless: webview.element.getAttribute('credentialless'),
 			title: webview.element.title,
 			connected: webview.element.isConnected,
 		}, {
-			sandbox: 'allow-scripts', referrer: 'no-referrer', credentialless: '',
+			sandbox: 'allow-scripts allow-same-origin', referrer: 'no-referrer',
 			title: 'Markdown preview', connected: true,
 		});
-		assert.match(webview.element.getAttribute('csp')!, /connect-src 'none'/);
-		assert.match(webview.element.srcdoc, /Content-Security-Policy/);
-		assert.match(webview.element.srcdoc, /default-src 'none'/);
-		assert.match(webview.element.srcdoc, /acquireAshWebviewApi/);
-		assert.match(webview.element.srcdoc, /<h1>Preview<\/h1>/);
+		assert.match(new URL(webview.element.src).hostname, /^[\w-]+\.localhost$/);
+		assert.notEqual(new URL(webview.element.src).origin, mainWindow.location.origin);
 		webview.dispose();
 		assert.deepEqual({ connected: webview.element.isConnected, html: webview.element.srcdoc }, { connected: false, html: '' });
 	});
 
 	test('accepts only the owned iframe source and current document channel', () => {
-		using webview = new WebviewElement({ title: 'Messages', options: {} });
+		using webview = createWebview({ title: 'Messages', options: {} });
 		mount(webview);
 		const received: unknown[] = [];
 		using listener = webview.onMessage(event => received.push(event.message));
@@ -60,14 +68,14 @@ suite('Webview element', () => {
 	});
 
 	test('queues messages before the first document and flushes once ready', async () => {
-		using webview = new WebviewElement({ title: 'Queued', options: {} });
+		using webview = createWebview({ title: 'Queued', options: {} });
 		const first = webview.postMessage('first');
 		webview.setHtml('<p>Document</p>');
 		mount(webview);
 		const sent: unknown[] = [];
 		const target = webview.element.contentWindow!;
 		const original = target.postMessage;
-		target.postMessage = value => { sent.push(value); };
+		target.postMessage = value => { sent.push(value.message); };
 		try {
 			const second = webview.postMessage('second');
 			assert.deepEqual(sent, []);
@@ -84,7 +92,7 @@ suite('Webview element', () => {
 	});
 
 	test('replacement discards old pending messages and ignores late readiness', async () => {
-		using webview = new WebviewElement({ title: 'Replacement', options: {} });
+		using webview = createWebview({ title: 'Replacement', options: {} });
 		mount(webview);
 		const oldChannel = webview.element.getAttribute('data-ash-webview-channel');
 		const discarded = webview.postMessage('old');
@@ -93,7 +101,7 @@ suite('Webview element', () => {
 		const sent: unknown[] = [];
 		const target = webview.element.contentWindow!;
 		const original = target.postMessage;
-		target.postMessage = value => { sent.push(value); };
+		target.postMessage = value => { sent.push(value.message); };
 		try {
 			const current = webview.postMessage('current');
 			lifecycle(webview, 'ready', oldChannel);
@@ -107,7 +115,7 @@ suite('Webview element', () => {
 	});
 
 	test('identical HTML keeps the document and its pending messages', async () => {
-		using webview = new WebviewElement({ title: 'Same document', options: {} });
+		using webview = createWebview({ title: 'Same document', options: {} });
 		webview.setHtml('<p>Same</p>');
 		mount(webview);
 		const channel = webview.element.getAttribute('data-ash-webview-channel');
@@ -119,17 +127,17 @@ suite('Webview element', () => {
 	});
 
 	test('preserves transfers and rejects a failed send without stranding later messages', async () => {
-		using webview = new WebviewElement({ title: 'Transfers', options: {} });
+		using webview = createWebview({ title: 'Transfers', options: {} });
 		mount(webview);
 		const target = webview.element.contentWindow!;
 		const original = target.postMessage;
 		const buffer = new ArrayBuffer(4);
 		const sent: unknown[] = [];
 		target.postMessage = (value: unknown, origin?: string | WindowPostMessageOptions, transfer?: Transferable[]) => {
-			if (value === 'invalid') {
+			if ((value as { message: unknown; }).message === 'invalid') {
 				throw new mainWindow.DOMException('Cannot clone message', 'DataCloneError');
 			}
-			sent.push({ value, origin, transfer });
+			sent.push({ value: (value as { message: unknown; }).message, origin, transfer });
 		};
 		try {
 			const rejected = assert.rejects(webview.postMessage('invalid'), { name: 'DataCloneError' });
@@ -137,7 +145,7 @@ suite('Webview element', () => {
 			lifecycle(webview, 'ready');
 			await rejected;
 			assert.equal(await transferred, true);
-			assert.deepEqual(sent, [{ value: buffer, origin: '*', transfer: [buffer] }]);
+			assert.deepEqual(sent, [{ value: buffer, origin: new URL(webview.element.src).origin, transfer: [buffer] }]);
 			await assert.rejects(webview.postMessage('invalid'), { name: 'DataCloneError' });
 		} finally {
 			target.postMessage = original;
@@ -145,7 +153,7 @@ suite('Webview element', () => {
 	});
 
 	test('disposal discards pending messages and releases message and focus listeners', async () => {
-		using webview = new WebviewElement({ title: 'Disposed', options: {} });
+		using webview = createWebview({ title: 'Disposed', options: {} });
 		mount(webview);
 		const target = webview.element.contentWindow!;
 		const channel = webview.element.getAttribute('data-ash-webview-channel');
@@ -166,7 +174,7 @@ suite('Webview element', () => {
 	});
 
 	test('forwards valid keyboard events only when enabled', () => {
-		using webview = new WebviewElement({ title: 'Keyboard', options: { forwardKeyboardEvents: true } });
+		using webview = createWebview({ title: 'Keyboard', options: { forwardKeyboardEvents: true } });
 		mount(webview);
 		const events: string[] = [];
 		using listener = webview.onDidKeyboardEvent(event => events.push(event.key));
@@ -174,7 +182,7 @@ suite('Webview element', () => {
 		const event = { channel, type: 'keydown', key: 'F1', code: 'F1', altKey: false, ctrlKey: false, metaKey: false, shiftKey: false, repeat: false };
 		message(webview, { ...event, ctrlKey: 'invalid' });
 		message(webview, event);
-		using disabled = new WebviewElement({ title: 'No forwarding', options: {} });
+		using disabled = createWebview({ title: 'No forwarding', options: {} });
 		mount(disabled);
 		using disabledListener = disabled.onDidKeyboardEvent(() => events.push('disabled'));
 		message(disabled, { ...event, channel: disabled.element.getAttribute('data-ash-webview-channel') + ':keyboard' });

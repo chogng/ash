@@ -7,7 +7,7 @@
 	min-width: 0;
 	color: var(--ash-foreground);
 	background: var(--ash-editor-background);
-	font-size: var(--ash-font-size-body1);
+	font-size: var(--ash-fontSize-body1);
 }
 .ash-creator[hidden],
 .ash-creator-home[hidden],
@@ -24,8 +24,8 @@
 }
 .ash-creator-title {
 	margin: 0;
-	font-size: var(--ash-font-size-heading2);
-	font-weight: var(--ash-font-weight-semi-bold);
+	font-size: var(--ash-fontSize-heading2);
+	font-weight: var(--ash-fontWeight-semiBold);
 }
 .ash-creator-home {
 	overflow: auto;
@@ -34,7 +34,7 @@
 }
 .ash-creator-introduction {
 	margin: 0 0 var(--ash-spacing-size240);
-	font-size: var(--ash-font-size-body1);
+	font-size: var(--ash-fontSize-body1);
 	line-height: 1.5;
 	color: var(--ash-description-foreground);
 }
@@ -54,12 +54,12 @@
 	gap: var(--ash-spacing-size120);
 	min-width: 0;
 	padding: var(--ash-spacing-size200);
-	border: var(--ash-stroke-thickness) solid var(--ash-border);
-	border-radius: var(--ash-corner-radius-large);
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+	border-radius: var(--ash-cornerRadius-large);
 }
 .ash-creator-mode-description {
 	margin: 0;
-	font-size: var(--ash-font-size-body1);
+	font-size: var(--ash-fontSize-body1);
 	line-height: 1.5;
 	color: var(--ash-description-foreground);
 }
@@ -68,7 +68,7 @@
 	justify-content: flex-start;
 }
 [data-color-scheme^="high-contrast-"] .ash-creator-mode-card {
-	border-color: var(--ash-contrast-border);
+	border-color: var(--ash-contrastBorder);
 }
 .ash-creator-workspaces {
 	flex: 1;

@@ -9,8 +9,8 @@
 
 .ash-select-box .ash-dropdown-indicator > .ash-icon,
 .ash-select-box-option-check > .ash-icon {
-	width: var(--ash-lxicon-font-size);
-	height: var(--ash-lxicon-font-size);
+	width: var(--ash-lxiconFontSize);
+	height: var(--ash-lxiconFontSize);
 }
 
 .ash-select-box-list {
@@ -32,18 +32,18 @@
 	gap: 6px;
 	min-height: 24px;
 	padding: 4px 6px;
-	border-radius: var(--ash-corner-radius-x-small);
+	border-radius: var(--ash-cornerRadius-xSmall);
 	outline: none;
 	cursor: pointer;
 }
 
 .ash-select-box-option-active {
 	color: var(--ash-foreground);
-	background: var(--ash-list-hover-background);
+	background: var(--ash-list-hoverBackground);
 }
 
 .ash-select-box-option:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
 
@@ -90,8 +90,8 @@
 	box-sizing: border-box;
 	gap: var(--ash-spacing-size40);
 	padding: 0 6px;
-	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
-	border-radius: var(--ash-corner-radius-medium);
+	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border-radius: var(--ash-cornerRadius-medium);
 	color: var(--ash-input-foreground);
 	background: var(--ash-input-background);
 	font: inherit;
@@ -103,7 +103,7 @@
 }
 
 .ash-select-box-field > .ash-select-box-button:focus-visible {
-	border-color: var(--ash-focus-border);
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-	outline-offset: var(--ash-stroke-thickness);
+	border-color: var(--ash-focusBorder);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: var(--ash-strokeThickness);
 }

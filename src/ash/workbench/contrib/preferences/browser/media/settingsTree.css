@@ -24,8 +24,8 @@
 .ash-configuration-settings-group h4 {
 	margin: 0;
 	color: var(--ash-foreground);
-	font-size: var(--ash-font-size-heading3);
-	font-weight: var(--ash-font-weight-semi-bold);
+	font-size: var(--ash-fontSize-heading3);
+	font-weight: var(--ash-fontWeight-semiBold);
 }
 
 .ash-configuration-settings-group-description {

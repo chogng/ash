@@ -24,6 +24,6 @@
 
 .ash-debug-breakpoint-gutter.conditional::before {
 	box-sizing: border-box;
-	border: var(--ash-stroke-thickness) solid currentColor;
+	border: var(--ash-strokeThickness) solid currentColor;
 	background: transparent;
 }

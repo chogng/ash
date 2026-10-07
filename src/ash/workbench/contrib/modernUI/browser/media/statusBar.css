@@ -1,6 +1,6 @@
 :is(.ash-workbench, .ash-auxiliary-window-container).modern-ui
 	:is(.ash-statusbar-item, .ash-statusbar-item-label) {
-	border-radius: var(--ash-corner-radius-small);
+	border-radius: var(--ash-cornerRadius-small);
 }
 
 :is(.ash-workbench, .ash-auxiliary-window-container).modern-ui

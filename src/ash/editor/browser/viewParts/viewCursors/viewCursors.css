@@ -7,33 +7,33 @@
 	position: absolute;
 	overflow: hidden;
 	box-sizing: border-box;
-	background-color: var(--ash-editor-cursor-foreground);
-	border-color: var(--ash-editor-cursor-foreground);
-	color: var(--ash-editor-cursor-background);
+	background-color: var(--ash-editorCursor-foreground);
+	border-color: var(--ash-editorCursor-foreground);
+	color: var(--ash-editorCursor-background);
 }
 
 .stanza-editor .cursors-layer > .cursor.cursor-primary {
-	background-color: var(--ash-editor-multi-cursor-primary-foreground);
-	border-color: var(--ash-editor-multi-cursor-primary-foreground);
-	color: var(--ash-editor-multi-cursor-primary-background);
+	background-color: var(--ash-editorMultiCursor-primary-foreground);
+	border-color: var(--ash-editorMultiCursor-primary-foreground);
+	color: var(--ash-editorMultiCursor-primary-background);
 }
 
 .stanza-editor .cursors-layer > .cursor.cursor-secondary {
-	background-color: var(--ash-editor-multi-cursor-secondary-foreground);
-	border-color: var(--ash-editor-multi-cursor-secondary-foreground);
-	color: var(--ash-editor-multi-cursor-secondary-background);
+	background-color: var(--ash-editorMultiCursor-secondary-foreground);
+	border-color: var(--ash-editorMultiCursor-secondary-foreground);
+	color: var(--ash-editorMultiCursor-secondary-background);
 }
 
-[data-color-scheme="high-contrast-dark"]
+[data-color-scheme="hcDark"]
 	.stanza-editor
 	.cursors-layer.has-selection
 	> .cursor,
-[data-color-scheme="high-contrast-light"]
+[data-color-scheme="hcLight"]
 	.stanza-editor
 	.cursors-layer.has-selection
 	> .cursor {
-	border-left: var(--ash-stroke-thickness) solid currentColor;
-	border-right: var(--ash-stroke-thickness) solid currentColor;
+	border-left: var(--ash-strokeThickness) solid currentColor;
+	border-right: var(--ash-strokeThickness) solid currentColor;
 }
 
 /* -- smooth-caret-animation -- */
@@ -45,7 +45,7 @@
 .stanza-editor .cursors-layer.cursor-block-outline-style > .cursor {
 	background: transparent !important;
 	border-style: solid;
-	border-width: var(--ash-stroke-thickness);
+	border-width: var(--ash-strokeThickness);
 }
 
 /* -- underline-style -- */
@@ -57,7 +57,7 @@
 
 /* -- underline-thin-style -- */
 .stanza-editor .cursors-layer.cursor-underline-thin-style > .cursor {
-	border-bottom-width: var(--ash-stroke-thickness);
+	border-bottom-width: var(--ash-strokeThickness);
 	border-bottom-style: solid;
 	background: transparent !important;
 }

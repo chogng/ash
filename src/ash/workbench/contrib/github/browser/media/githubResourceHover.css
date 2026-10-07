@@ -5,18 +5,18 @@
 	min-width: 0;
 	max-width: 360px;
 	padding: var(--ash-spacing-size40);
-	font-size: var(--ash-font-size-body1);
-	font-weight: var(--ash-font-weight-regular);
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-regular);
 }
 
 .ash-github-resource-hover.compact {
 	gap: var(--ash-spacing-size40);
-	font-size: var(--ash-font-size-label1);
+	font-size: var(--ash-fontSize-label1);
 }
 
 .ash-github-hover-title {
 	min-width: 0;
-	font-weight: var(--ash-font-weight-semi-bold);
+	font-weight: var(--ash-fontWeight-semiBold);
 }
 
 .ash-github-hover-title > .ash-github-hover-link {
@@ -32,7 +32,7 @@
 
 .ash-github-hover-repository,
 .ash-github-hover-metadata {
-	font-size: var(--ash-font-size-label2);
+	font-size: var(--ash-fontSize-label2);
 }
 
 .ash-github-hover-metadata {
@@ -49,11 +49,11 @@
 	color: var(--ash-accent-foreground);
 	overflow-wrap: anywhere;
 	text-decoration: underline;
-	border-radius: var(--ash-corner-radius-small);
+	border-radius: var(--ash-cornerRadius-small);
 }
 
 .ash-github-hover-link:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 }
 
 .ash-github-hover-description {

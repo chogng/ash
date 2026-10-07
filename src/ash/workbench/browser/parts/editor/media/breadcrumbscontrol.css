@@ -7,7 +7,7 @@
 	overflow: hidden;
 	padding: 0 var(--ash-spacing-size100);
 	color: var(--ash-description-foreground);
-	font-size: var(--ash-font-size-label1);
+	font-size: var(--ash-fontSize-label1);
 	white-space: nowrap;
 }
 
@@ -43,6 +43,6 @@
 }
 
 .ash-breadcrumbs-editor-type:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-	outline-offset: calc(-1 * var(--ash-stroke-thickness));
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
 }

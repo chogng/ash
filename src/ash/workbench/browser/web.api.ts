@@ -20,6 +20,8 @@ import type { IEmbedderTerminalOptions } from '../services/terminal/common/embed
  */
 export interface IWebWorkbenchHost {
 	readonly api: IRendererHost;
+	/** A separately hosted copy of the webview assets; {{uuid}} identifies an isolated origin. */
+	readonly webviewEndpoint?: string;
 	readonly urlCallbackProvider?: IURLCallbackProvider;
 	readonly webWorkspaceClient?: IWebWorkspaceClient;
 	readonly workspace?: IAnyWorkspaceIdentifier;
@@ -30,6 +32,7 @@ export interface IWebWorkbenchHost {
 /** Inputs used to create one browser-hosted Workbench instance. */
 export interface IWebWorkbenchConstructionOptions {
 	readonly productName: string;
+	readonly webviewEndpoint?: string;
 	readonly createTextDocumentHost?: (services: IInstantiationService) => IDisposable;
 	readonly api: IRendererHost;
 	readonly urlCallbackProvider?: IURLCallbackProvider;

@@ -166,8 +166,8 @@ function suggestionStyles(icons: ReadonlyMap<string, FileIconDefinition>, normal
 			: `${selector}::before{${common}content:${cssString(icon.character)};color:${icon.color || 'inherit'};font-family:${cssString(icon.fontFamily)};font-size:${icon.fontSize};font-weight:${icon.fontWeight};font-style:${icon.fontStyle};line-height:16px;}`);
 	};
 	const base = ':where(.ash-workbench) .ash-themed-file-icon';
-	const lightBase = ':where(.ash-workbench[data-color-scheme="light"],.ash-workbench[data-color-scheme="high-contrast-light"]) .ash-themed-file-icon';
-	const contrastBase = ':where(.ash-workbench[data-color-scheme="high-contrast-dark"],.ash-workbench[data-color-scheme="high-contrast-light"]) .ash-themed-file-icon';
+	const lightBase = ':where(.ash-workbench[data-color-scheme="light"],.ash-workbench[data-color-scheme="hcLight"]) .ash-themed-file-icon';
+	const contrastBase = ':where(.ash-workbench[data-color-scheme="hcDark"],.ash-workbench[data-color-scheme="hcLight"]) .ash-themed-file-icon';
 	const defaults = (prefix: string, associations: Associations): void => {
 		add(`${prefix}.file-icon`, associations.file);
 		add(`${prefix}.folder-icon`, associations.folder);

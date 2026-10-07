@@ -20,19 +20,19 @@ import { inputBackground as defaultInputBackground } from "./inputColors.js";
 import { listHoverBackground as defaultListHoverBackground } from "./listColors.js";
 
 const owner = "editor.presentation";
-const color = (id: string, dark: string, light: string, highContrastDark: string, highContrastLight: string, description: string): string =>
-	registerColor(id, { dark, light, highContrastDark, highContrastLight }, { description, owner });
+const color = (id: string, dark: string, light: string, hcDark: string, hcLight: string, description: string): string =>
+	registerColor(id, { dark, light, hcDark, hcLight }, { description, owner });
 const alias = (id: string, value: string, description: string): string => registerColor(id, {
-	dark: value, light: value, highContrastDark: value, highContrastLight: value,
+	dark: value, light: value, hcDark: value, hcLight: value,
 }, { description, owner });
 
 export const editorBackground = registerColor("editor.background", {
 	dark: "#1e1e1e", light: "#ffffff",
-	highContrastDark: "#000000", highContrastLight: "#ffffff",
+	hcDark: "#000000", hcLight: "#ffffff",
 }, { description: "Editor background.", owner });
 export const editorForeground = registerColor("editor.foreground", {
 	dark: "#d4d4d4", light: "#333333",
-	highContrastDark: "#ffffff", highContrastLight: "#000000",
+	hcDark: "#ffffff", hcLight: "#000000",
 }, { description: "Editor foreground.", owner });
 
 export const tokenCommentForeground = color("editor.token.commentForeground", "#6a9955", "#008000", "#80ff80", "#006b00", "Foreground for comment tokens independently of their syntax or semantic source.");
@@ -68,7 +68,7 @@ export const inlineCompletionForeground = alias("editor.inlineCompletionForegrou
 export const compositionBorder = color("editor.compositionBorder", "#a0a0a0", "#a0a0a0", contrastBorder, contrastBorder, "Border under text in an active input method composition.");
 export const foldBackground = registerColor(
 	'editor.foldBackground',
-	{ dark: transparent(selectionBackground, 0.3), light: transparent(selectionBackground, 0.3), highContrastDark: null, highContrastLight: null },
+	{ dark: transparent(selectionBackground, 0.3), light: transparent(selectionBackground, 0.3), hcDark: null, hcLight: null },
 	{ description: 'Background behind collapsed editor ranges.', owner, needsTransparency: true },
 );
 export const foldPlaceholderForeground = color('editor.foldPlaceholderForeground', '#808080', '#808080', foreground, foreground, 'Foreground for the collapsed-range placeholder.');
@@ -87,15 +87,15 @@ export const diffInsertedLineGutter = alias('diffEditorGutter.insertedLineBackgr
 export const diffRemovedLineGutter = alias('diffEditorGutter.removedLineBackground', diffRemovedLineBackground, 'Background for the margin beside removed diff lines.');
 export const diffOverviewRulerInserted = registerColor('diffEditorOverview.insertedForeground', {
 	dark: transparent(diffInsertedLineMarker, 0.55), light: transparent(diffInsertedLineMarker, 0.55),
-	highContrastDark: diffInsertedLineMarker, highContrastLight: diffInsertedLineMarker,
+	hcDark: diffInsertedLineMarker, hcLight: diffInsertedLineMarker,
 }, { description: 'Overview ruler marker for inserted diff lines.', owner });
 export const diffOverviewRulerRemoved = registerColor('diffEditorOverview.removedForeground', {
 	dark: transparent(diffRemovedLineMarker, 0.55), light: transparent(diffRemovedLineMarker, 0.55),
-	highContrastDark: diffRemovedLineMarker, highContrastLight: diffRemovedLineMarker,
+	hcDark: diffRemovedLineMarker, hcLight: diffRemovedLineMarker,
 }, { description: 'Overview ruler marker for removed diff lines.', owner });
 
 const legacy = (id: string, value: string, description: string): string => registerColor(id, {
-	dark: value, light: value, highContrastDark: value, highContrastLight: value,
+	dark: value, light: value, hcDark: value, hcLight: value,
 }, { deprecated: "Use the corresponding editor.token.* token.", description, owner });
 export const semanticTokenCommentForeground = legacy("editor.semanticToken.commentForeground", tokenCommentForeground, "Compatibility alias for comment token foreground.");
 export const semanticTokenKeywordForeground = legacy("editor.semanticToken.keywordForeground", tokenKeywordForeground, "Compatibility alias for keyword token foreground.");

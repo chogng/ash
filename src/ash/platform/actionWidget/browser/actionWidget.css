@@ -5,16 +5,16 @@
 	overflow: auto;
 	color: var(--ash-foreground);
 	background: var(--ash-editor-background);
-	border: var(--ash-stroke-thickness) solid var(--ash-border);
-	border-radius: var(--ash-corner-radius-large);
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+	border-radius: var(--ash-cornerRadius-large);
 	box-shadow: var(--ash-shadow-lg);
-	font-size: var(--ash-font-size-body1);
-	font-weight: var(--ash-font-weight-regular);
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-regular);
 }
 
-[data-color-scheme="high-contrast-dark"] .ash-action-widget,
-[data-color-scheme="high-contrast-light"] .ash-action-widget {
-	border-color: var(--ash-contrast-border);
+[data-color-scheme="hcDark"] .ash-action-widget,
+[data-color-scheme="hcLight"] .ash-action-widget {
+	border-color: var(--ash-contrastBorder);
 }
 
 .ash-action-widget-filter,
@@ -51,8 +51,8 @@
 .ash-action-widget-header {
 	padding: var(--ash-spacing-size80);
 	color: var(--ash-description-foreground);
-	font-size: var(--ash-font-size-label1);
-	font-weight: var(--ash-font-weight-semi-bold);
+	font-size: var(--ash-fontSize-label1);
+	font-weight: var(--ash-fontWeight-semiBold);
 	white-space: normal;
 	overflow-wrap: anywhere;
 }

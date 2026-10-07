@@ -5,7 +5,7 @@
 	flex: 0 0 44px;
 	align-items: center;
 	padding: 6px 12px;
-	border-bottom: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-widget-border);
 	background: var(--ash-editor-background);
 }
 
@@ -28,7 +28,7 @@
 .ash-settings-search-filter.is-open,
 .ash-settings-search-filter.checked {
 	color: var(--ash-foreground);
-	background: var(--ash-toolbar-hover-background);
+	background: var(--ash-toolbar-hoverBackground);
 }
 
 .ash-settings-search-filter > .ash-button-content > .ash-button-label {
@@ -38,19 +38,19 @@
 .ash-settings-search-input input {
 	height: 30px;
 	padding: 4px 10px;
-	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
-	border-radius: var(--ash-corner-radius-small);
+	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border-radius: var(--ash-cornerRadius-small);
 	outline: none;
 	color: var(--ash-input-foreground);
 	background: var(--ash-input-background);
 }
 
 .ash-settings-search-input input:focus {
-	border-color: var(--ash-focus-border);
+	border-color: var(--ash-focusBorder);
 }
 
 .ash-settings-search-input input::placeholder {
-	color: var(--ash-input-placeholder-foreground);
+	color: var(--ash-input-placeholderForeground);
 }
 
 .ash-configuration-setting {
@@ -66,11 +66,11 @@
 }
 
 .ash-configuration-setting:hover {
-	background: var(--ash-settings-row-hover-background);
+	background: var(--ash-settings-rowHoverBackground);
 }
 
 .ash-configuration-setting:focus-within {
-	background: var(--ash-settings-focused-row-background);
+	background: var(--ash-settings-focusedRowBackground);
 }
 
 .ash-configuration-setting > .ash-setting-item-actions {
@@ -85,7 +85,7 @@
 }
 
 .ash-configuration-setting-title {
-	font-weight: var(--ash-font-weight-semi-bold);
+	font-weight: var(--ash-fontWeight-semiBold);
 }
 
 .ash-configuration-setting-description {
@@ -146,7 +146,7 @@
 
 .ash-setting-item-actions-trigger:hover {
 	color: var(--ash-foreground);
-	background: var(--ash-toolbar-hover-background);
+	background: var(--ash-toolbar-hoverBackground);
 }
 
 .ash-setting-item-actions-trigger > .ash-button-content > .ash-button-label {
@@ -182,8 +182,8 @@
 .ash-general-setting-control:not(.ash-select-box),
 .ash-editor-setting-text {
 	padding: 0 8px;
-	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
-	border-radius: var(--ash-corner-radius-small);
+	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border-radius: var(--ash-cornerRadius-small);
 	outline: none;
 	color: var(--ash-input-foreground);
 	background: var(--ash-input-background);
@@ -191,8 +191,8 @@
 }
 
 .ash-general-setting-control:not(.ash-select-box):focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-	outline-offset: var(--ash-stroke-thickness);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: var(--ash-strokeThickness);
 }
 
 .ash-general-setting-control[type="number"] {
@@ -207,7 +207,7 @@
 }
 
 .ash-editor-setting-text:focus-visible {
-	border-color: var(--ash-focus-border);
+	border-color: var(--ash-focusBorder);
 }
 
 .ash-string-map-setting {
@@ -227,7 +227,7 @@
 	flex-direction: column;
 	padding: var(--ash-spacing-size60) var(--ash-spacing-size80);
 	gap: var(--ash-spacing-size20);
-	border-radius: var(--ash-corner-radius-small);
+	border-radius: var(--ash-cornerRadius-small);
 	cursor: pointer;
 }
 
@@ -236,15 +236,15 @@
 }
 
 .ash-settings-key-description {
-	font-size: var(--ash-font-size-body2);
+	font-size: var(--ash-fontSize-body2);
 	color: var(--ash-description-foreground);
 }
 
 .ash-settings-key-option.focused {
 	color: var(--ash-foreground);
-	background: var(--ash-list-hover-background);
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-	outline-offset: calc(-1 * var(--ash-stroke-thickness));
+	background: var(--ash-list-hoverBackground);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
 }
 
 .ash-settings-key-option.focused > .ash-settings-key-description {
@@ -271,8 +271,8 @@
 	min-height: 24px;
 	box-sizing: border-box;
 	padding: 0 8px;
-	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
-	border-radius: var(--ash-corner-radius-small);
+	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border-radius: var(--ash-cornerRadius-small);
 	outline: none;
 	color: var(--ash-input-foreground);
 	background: var(--ash-input-background);
@@ -280,7 +280,7 @@
 }
 
 .ash-string-map-row input:focus-visible {
-	border-color: var(--ash-focus-border);
+	border-color: var(--ash-focusBorder);
 }
 
 .ash-string-map-row input[aria-invalid="true"] {

@@ -14,7 +14,6 @@ import { editorBackground } from "../../common/colors/editorColors.js";
 import { menuSelectionBackground, menuSelectionForeground } from "../../common/colors/menuColors.js";
 import { TestThemeService } from "../common/testThemeService.js";
 import { registerColor } from "../../common/colorUtils.js";
-import { asCssVariableName } from "../../common/sizeUtils.js";
 
 test("floating elevation is shared in light and dark themes and removed in high contrast", () => {
 	using service = new TestThemeService(lightColorTheme);
@@ -53,20 +52,25 @@ test("color theme binding applies changes and restores prior root styles", () =>
 	assert.equal(target.style.getPropertyValue(foregroundVariable), "#cccccc");
 	assert.equal(target.style.getPropertyValue(background), "#1e1e1e");
 	assert.equal(target.style.getPropertyValue(sashHoverBackground), "#007acc");
+	assert.equal(target.style.getPropertyValue('--ash-sash-hoverBackground'), '#007acc');
+	assert.equal(target.style.getPropertyValue('--ash-sash-hover-background'), '');
 	assert.equal(target.style.getPropertyValue(menuSelectionForegroundVariable), "#cccccc");
 	assert.equal(target.style.getPropertyValue(menuSelectionBackgroundVariable), "#2a2d2e");
 	assert.equal(target.style.getPropertyValue(actionBarToggledBackgroundVariable), "#37373d");
 	assert.equal(target.style.getPropertyValue(tabListActiveBackgroundVariable), "#37373d");
 	assert.equal(target.style.getPropertyValue("color-scheme"), "dark");
-	assert.equal(target.style.getPropertyValue(asCssVariableName("scrollbar.size")), "10px");
-	assert.equal(target.style.getPropertyValue(asCssVariableName("tabList.contentInset")), "4px");
-	assert.equal(target.style.getPropertyValue(asCssVariableName("tabList.itemContentInset")), "6px");
-	assert.equal(target.style.getPropertyValue(asCssVariableName("fontSize.body1")), "13px");
-	assert.equal(target.style.getPropertyValue(asCssVariableName("fontSize.label2")), "11px");
-	assert.equal(target.style.getPropertyValue(asCssVariableName("fontWeight.regular")), "400");
-	assert.equal(target.style.getPropertyValue(asCssVariableName("spacing.size80")), "8px");
-	assert.equal(target.style.getPropertyValue(asCssVariableName("cornerRadius.circle")), "9999px");
-	assert.equal(target.style.getPropertyValue(asCssVariableName("lxiconFontSize.compact")), "12px");
+	assert.equal(target.style.getPropertyValue("--ash-scrollbar-size"), "10px");
+	assert.equal(target.style.getPropertyValue("--ash-tabList-contentInset"), "4px");
+	assert.equal(target.style.getPropertyValue("--ash-tabList-itemContentInset"), "6px");
+	assert.equal(target.style.getPropertyValue("--ash-fontSize-body1"), "13px");
+	assert.equal(target.style.getPropertyValue("--ash-fontWeight-semiBold"), "600");
+	assert.equal(target.style.getPropertyValue("--ash-font-size-body1"), "");
+	assert.equal(target.style.getPropertyValue("--ash-font-weight-semi-bold"), "");
+	assert.equal(target.style.getPropertyValue("--ash-fontSize-label2"), "11px");
+	assert.equal(target.style.getPropertyValue("--ash-fontWeight-regular"), "400");
+	assert.equal(target.style.getPropertyValue("--ash-spacing-size80"), "8px");
+	assert.equal(target.style.getPropertyValue("--ash-cornerRadius-circle"), "9999px");
+	assert.equal(target.style.getPropertyValue("--ash-lxiconFontSize-compact"), "12px");
 	assert.equal(target.getAttribute("data-color-theme"), "ash-dark");
 
 	service.setColorTheme(lightColorTheme);
@@ -86,14 +90,14 @@ test("color theme binding applies changes and restores prior root styles", () =>
 	assert.equal(target.style.getPropertyValue(sashHoverBackground), "");
 	assert.equal(target.style.getPropertyValue(actionBarToggledBackgroundVariable), "");
 	assert.equal(target.style.getPropertyValue(tabListActiveBackgroundVariable), "");
-	assert.equal(target.style.getPropertyValue(asCssVariableName("scrollbar.size")), "");
-	assert.equal(target.style.getPropertyValue(asCssVariableName("tabList.contentInset")), "");
-	assert.equal(target.style.getPropertyValue(asCssVariableName("tabList.itemContentInset")), "");
-	assert.equal(target.style.getPropertyValue(asCssVariableName("fontSize.body1")), "");
-	assert.equal(target.style.getPropertyValue(asCssVariableName("fontWeight.regular")), "");
-	assert.equal(target.style.getPropertyValue(asCssVariableName("spacing.size80")), "");
-	assert.equal(target.style.getPropertyValue(asCssVariableName("cornerRadius.circle")), "");
-	assert.equal(target.style.getPropertyValue(asCssVariableName("lxiconFontSize.compact")), "");
+	assert.equal(target.style.getPropertyValue("--ash-scrollbar-size"), "");
+	assert.equal(target.style.getPropertyValue("--ash-tabList-contentInset"), "");
+	assert.equal(target.style.getPropertyValue("--ash-tabList-itemContentInset"), "");
+	assert.equal(target.style.getPropertyValue("--ash-fontSize-body1"), "");
+	assert.equal(target.style.getPropertyValue("--ash-fontWeight-regular"), "");
+	assert.equal(target.style.getPropertyValue("--ash-spacing-size80"), "");
+	assert.equal(target.style.getPropertyValue("--ash-cornerRadius-circle"), "");
+	assert.equal(target.style.getPropertyValue("--ash-lxiconFontSize-compact"), "");
 	assert.equal(target.style.getPropertyValue("color-scheme"), "only light");
 	assert.equal(target.getAttribute("data-color-theme"), "host-theme");
 	assert.equal(target.getAttribute("data-color-scheme"), null);
@@ -109,7 +113,7 @@ test("theme binding applies later color contributions and restores their origina
 	target.style.setProperty(property, 'hotpink', 'important');
 	const before = darkColorTheme.colorEntries;
 	using binding = bindColorTheme(service, target as unknown as HTMLElement);
-	registerColor('test.lateBinding', { dark: '#123456', light: '#abcdef', highContrastDark: '#ffffff', highContrastLight: '#000000' }, { description: 'Late binding test.', owner: 'test' });
+	registerColor('test.lateBinding', { dark: '#123456', light: '#abcdef', hcDark: '#ffffff', hcLight: '#000000' }, { description: 'Late binding test.', owner: 'test' });
 	assert.deepEqual({
 		oldEntry: before.find(entry => entry.id === 'test.lateBinding'),
 		resolved: darkColorTheme.getColorCss('test.lateBinding'),

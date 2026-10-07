@@ -5,7 +5,7 @@
 	flex-wrap: wrap;
 	gap: 4px;
 	padding: 6px 12px;
-	border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
 	background: var(--ash-editor-background);
 }
 
@@ -18,7 +18,7 @@
 	align-items: center;
 	gap: 6px;
 	padding-inline: 6px;
-	border-inline: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-inline: var(--ash-strokeThickness) solid var(--ash-border);
 }
 
 .stanza-structured-format-select-control {
@@ -33,8 +33,8 @@
 	min-width: 88px;
 	height: 24px;
 	padding-inline: 6px;
-	border: var(--ash-stroke-thickness) solid var(--ash-border);
-	border-radius: var(--ash-corner-radius-small);
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+	border-radius: var(--ash-cornerRadius-small);
 	color: var(--ash-editor-foreground);
 	background: var(--ash-input-background, var(--ash-editor-background));
 	font: inherit;
@@ -45,8 +45,8 @@
 }
 
 .stanza-structured-format-select:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-	outline-offset: var(--ash-stroke-thickness);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: var(--ash-strokeThickness);
 }
 
 .stanza-structured-format-code-context {
@@ -65,7 +65,7 @@
 	box-sizing: border-box;
 	flex: 0 0 240px;
 	overflow: auto;
-	border-inline-end: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-inline-end: var(--ash-strokeThickness) solid var(--ash-border);
 	color: var(--ash-editor-foreground);
 	background: var(--ash-editor-background);
 }
@@ -74,7 +74,7 @@
 	padding: 12px 16px 8px;
 	color: var(--ash-editor-foreground);
 	font-size: 0.85em;
-	font-weight: var(--ash-font-weight-semi-bold);
+	font-weight: var(--ash-fontWeight-semiBold);
 	text-transform: uppercase;
 }
 
@@ -103,11 +103,11 @@
 
 .stanza-document-outline-entry:hover,
 .stanza-document-outline-entry:focus-visible {
-	background: var(--ash-toolbar-hover-background);
+	background: var(--ash-toolbar-hoverBackground);
 }
 
 .stanza-document-outline-entry:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
 
@@ -156,7 +156,7 @@
 
 .ash-academic-title {
 	padding-bottom: 16px;
-	border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
 }
 
 .ash-academic-abstract {
@@ -198,7 +198,7 @@
 
 .stanza-document-text-input:focus-visible,
 .stanza-document-rich-text-input:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
 
@@ -211,21 +211,21 @@
 	cursor: pointer;
 }
 .stanza-document-inline-image.stanza-document-inline-node-selected {
-	outline: 2px solid var(--ash-focus-border);
+	outline: 2px solid var(--ash-focusBorder);
 	outline-offset: 2px;
 }
 .stanza-document-inline-node {
 	display: inline-block;
 	margin: 0 2px;
 	padding: 0 4px;
-	border: var(--ash-stroke-thickness) solid var(--ash-border);
-	border-radius: var(--ash-corner-radius-small);
-	background: var(--ash-toolbar-hover-background);
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+	border-radius: var(--ash-cornerRadius-small);
+	background: var(--ash-toolbar-hoverBackground);
 	cursor: pointer;
 }
 .stanza-document-inline-node.stanza-document-inline-node-selected {
-	outline: 2px solid var(--ash-focus-border);
-	outline-offset: var(--ash-stroke-thickness);
+	outline: 2px solid var(--ash-focusBorder);
+	outline-offset: var(--ash-strokeThickness);
 }
 .ash-citation {
 	display: inline-block;
@@ -240,19 +240,19 @@
 	text-decoration-color: var(--ash-error-foreground);
 }
 .ash-citation.stanza-document-inline-node-selected {
-	outline: 2px solid var(--ash-focus-border);
-	outline-offset: var(--ash-stroke-thickness);
+	outline: 2px solid var(--ash-focusBorder);
+	outline-offset: var(--ash-strokeThickness);
 }
 .ash-citation-bibliography {
 	margin-top: 24px;
 	padding-top: 12px;
-	border-top: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-top: var(--ash-strokeThickness) solid var(--ash-border);
 }
 .ash-citation-reference {
 	margin: 6px 0;
 }
 .stanza-document-mark-strong {
-	font-weight: var(--ash-font-weight-semi-bold);
+	font-weight: var(--ash-fontWeight-semiBold);
 }
 .stanza-document-mark-em {
 	font-style: italic;
@@ -268,8 +268,8 @@
 }
 .stanza-document-mark-code {
 	padding: 0 2px;
-	border-radius: var(--ash-corner-radius-small);
-	background: var(--ash-text-code-block-background);
+	border-radius: var(--ash-cornerRadius-small);
+	background: var(--ash-text-codeBlockBackground);
 	font-family: var(--ash-font-family-monospace);
 }
 .stanza-document-mark-link {
@@ -278,85 +278,70 @@
 }
 
 .stanza-document-remote-selection {
-	border-radius: var(--ash-corner-radius-x-small);
+	border-radius: var(--ash-cornerRadius-xSmall);
 	box-decoration-break: clone;
 }
 
 .stanza-document-remote-selection-0 {
 	background: color-mix(
 		in srgb,
-		var(--ash-collaboration-selection0-background) 26%,
+		var(--ash-collaboration-selection0Background) 26%,
 		transparent
 	);
 }
 .stanza-document-remote-selection-1 {
 	background: color-mix(
 		in srgb,
-		var(--ash-collaboration-selection1-background) 26%,
+		var(--ash-collaboration-selection1Background) 26%,
 		transparent
 	);
 }
 .stanza-document-remote-selection-2 {
 	background: color-mix(
 		in srgb,
-		var(--ash-collaboration-selection2-background) 26%,
+		var(--ash-collaboration-selection2Background) 26%,
 		transparent
 	);
 }
 .stanza-document-remote-selection-3 {
 	background: color-mix(
 		in srgb,
-		var(--ash-collaboration-selection3-background) 26%,
+		var(--ash-collaboration-selection3Background) 26%,
 		transparent
 	);
 }
 
-:is(
-		[data-color-scheme="high-contrast-dark"],
-		[data-color-scheme="high-contrast-light"]
-	)
+:is([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
 	.stanza-document-remote-selection {
 	background: var(--ash-editor-background);
 }
 
-:is(
-		[data-color-scheme="high-contrast-dark"],
-		[data-color-scheme="high-contrast-light"]
-	)
+:is([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
 	.stanza-document-remote-selection-0 {
-	outline: var(--ash-stroke-thickness) solid
-		var(--ash-collaboration-selection0-background);
+	outline: var(--ash-strokeThickness) solid
+		var(--ash-collaboration-selection0Background);
 }
-:is(
-		[data-color-scheme="high-contrast-dark"],
-		[data-color-scheme="high-contrast-light"]
-	)
+:is([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
 	.stanza-document-remote-selection-1 {
-	outline: var(--ash-stroke-thickness) solid
-		var(--ash-collaboration-selection1-background);
+	outline: var(--ash-strokeThickness) solid
+		var(--ash-collaboration-selection1Background);
 }
-:is(
-		[data-color-scheme="high-contrast-dark"],
-		[data-color-scheme="high-contrast-light"]
-	)
+:is([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
 	.stanza-document-remote-selection-2 {
-	outline: var(--ash-stroke-thickness) solid
-		var(--ash-collaboration-selection2-background);
+	outline: var(--ash-strokeThickness) solid
+		var(--ash-collaboration-selection2Background);
 }
-:is(
-		[data-color-scheme="high-contrast-dark"],
-		[data-color-scheme="high-contrast-light"]
-	)
+:is([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
 	.stanza-document-remote-selection-3 {
-	outline: var(--ash-stroke-thickness) solid
-		var(--ash-collaboration-selection3-background);
+	outline: var(--ash-strokeThickness) solid
+		var(--ash-collaboration-selection3Background);
 }
 
 .stanza-document-code-block {
 	padding: 12px 16px;
-	border: var(--ash-stroke-thickness) solid var(--ash-border);
-	border-radius: var(--ash-corner-radius-medium);
-	background: var(--ash-text-code-block-background);
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+	border-radius: var(--ash-cornerRadius-medium);
+	background: var(--ash-text-codeBlockBackground);
 	font-family: var(--ash-font-family-monospace);
 }
 
@@ -388,7 +373,7 @@
 .stanza-document-table-cell {
 	min-width: 120px;
 	padding: 8px;
-	border: var(--ash-stroke-thickness) solid var(--ash-border);
+	border: var(--ash-strokeThickness) solid var(--ash-border);
 	vertical-align: top;
 }
 

@@ -1,5 +1,6 @@
 import { AshWorkbenchName, AshSessionsRendererEntry } from '../common/application.js';
 import { randomUUID } from 'node:crypto';
+import { WebviewProtocolProvider } from '../../platform/webview/electron-main/webviewProtocolProvider.js';
 import { isAdmin } from '../../platform/native/electron-main/nativeHostMainService.js';
 import { ChecksumService, checksumChannel } from '../../platform/checksum/node/checksumService.js';
 import { URLHandlerChannel, URLHandlerChannelClient } from '../../platform/url/common/urlIpc.js';
@@ -415,6 +416,7 @@ export class AshApplication extends Disposable {
 		if (!app.isReady()) {
 			throw new Error("Ash application startup requires Electron to be ready");
 		}
+		this._register(new WebviewProtocolProvider(this.rendererRoot, process.env.ASH_RENDERER_URL));
 		if (process.platform === "darwin") {
 			assertDefined(app.dock, 'macOS Dock API is unavailable');
 			// Dock customization must not gate creation of the first Workbench window.

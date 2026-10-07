@@ -6,9 +6,9 @@
 	max-width: 100%;
 	padding-left: var(--ash-spacing-size80);
 	color: var(--ash-foreground);
-	background: var(--ash-button-secondary-background);
-	border: var(--ash-stroke-thickness) solid var(--ash-contrast-border);
-	border-radius: var(--ash-corner-radius-small);
+	background: var(--ash-button-secondaryBackground);
+	border: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
+	border-radius: var(--ash-cornerRadius-small);
 }
 
 .ash-chat-attachment-label {

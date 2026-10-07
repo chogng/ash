@@ -1,6 +1,6 @@
 .ash-sessions-files-view,
 .ash-sessions-files-empty-view {
-	background: var(--ash-auxiliary-bar-background);
+	background: var(--ash-auxiliaryBar-background);
 }
 
 .ash-sessions-files-empty-content {
@@ -14,7 +14,7 @@
 	margin: auto;
 	padding: var(--ash-spacing-size240);
 	color: var(--ash-description-foreground);
-	font-size: var(--ash-font-size-label1);
+	font-size: var(--ash-fontSize-label1);
 	line-height: 1.5;
 	text-align: center;
 	overflow-wrap: anywhere;

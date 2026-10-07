@@ -14,7 +14,7 @@ import {
 import {
 	MarkdownPreview,
 } from "../../browser/markdownPreview.js";
-import { createTestComponentServices } from '../../../../test/common/testEditorServices.js';
+import { createTestComponentServices, getWebviewHtml } from '../../../../test/common/testEditorServices.js';
 import {
 	MarkdownDocumentView,
 } from "../../../../../workbench/contrib/markdown/browser/markdownDocumentRenderer.js";
@@ -464,7 +464,7 @@ test("Markdown task lists use the shared Checkbox presentation", () => {
 	dom.window.close();
 });
 
-test("MarkdownPreview sanitizes content before creating iframe srcdoc", () => {
+test("MarkdownPreview sanitizes content before sending the webview document", () => {
 	const dom = createDom();
 	using services = createTestComponentServices(undefined, undefined, dom.window.document);
 	const preview = services.createInstance(MarkdownPreview, dom.window.document.body, {
@@ -484,16 +484,16 @@ test("MarkdownPreview sanitizes content before creating iframe srcdoc", () => {
 		].join("\n"),
 	});
 
-	assert.match(preview.element.srcdoc, /<h1>Preview<\/h1>/);
-	assert.match(preview.element.srcdoc, /<table>/);
-	assert.match(preview.element.srcdoc, /blockquote class="ash-markdown-alert ash-markdown-alert-note"/);
-	assert.match(preview.element.srcdoc, /ash-markdown-alert-label/);
-	assert.match(preview.element.srcdoc, /ash-markdown-preview/);
-	assert.match(preview.element.srcdoc, /acquireAshWebviewApi/);
-	assert.doesNotMatch(preview.element.srcdoc, /data-evil/);
-	assert.doesNotMatch(preview.element.srcdoc, /onerror/i);
+	assert.match(getWebviewHtml(preview.element), /<h1>Preview<\/h1>/);
+	assert.match(getWebviewHtml(preview.element), /<table>/);
+	assert.match(getWebviewHtml(preview.element), /blockquote class="ash-markdown-alert ash-markdown-alert-note"/);
+	assert.match(getWebviewHtml(preview.element), /ash-markdown-alert-label/);
+	assert.match(getWebviewHtml(preview.element), /ash-markdown-preview/);
+	assert.match(getWebviewHtml(preview.element), /acquireAshWebviewApi/);
+	assert.doesNotMatch(getWebviewHtml(preview.element), /data-evil/);
+	assert.doesNotMatch(getWebviewHtml(preview.element), /onerror/i);
 	assert.doesNotMatch(
-		preview.element.srcdoc,
+		getWebviewHtml(preview.element),
 		/href\s*=\s*["']javascript:/i,
 	);
 
@@ -509,14 +509,15 @@ test("MarkdownPreview resolves and validates relative resources against the sour
 		markdown: "[source](../src/file.ts) ![image](../assets/pixel.png)",
 		baseUri,
 	});
-	assert.match(preview.element.srcdoc, /href="file:\/\/\/workspace\/src\/file\.ts"/);
-	assert.match(preview.element.srcdoc, /src="file:\/\/\/workspace\/assets\/pixel\.png"/);
+	assert.match(getWebviewHtml(preview.element), /href="file:\/\/\/workspace\/src\/file\.ts"/);
+	assert.match(getWebviewHtml(preview.element), /src="https:\/\/resources\.ash-webview\.invalid\/file\/a\/workspace\/assets\/pixel\.png"/);
 	const links: string[] = [];
 	const registration = preview.onDidOpenLink(href => links.push(href));
 	const channel = preview.element.getAttribute("data-ash-webview-channel");
 	assert.ok(channel);
 	dom.window.dispatchEvent(new dom.window.MessageEvent("message", {
 		source: preview.element.contentWindow,
+		origin: new URL(preview.element.src).origin,
 		data: {
 			channel,
 			message: { type: "openLink", href: "file:///workspace/src/file.ts" },
@@ -544,6 +545,7 @@ test("MarkdownPreview validates iframe link messages before emitting", () => {
 
 	dom.window.dispatchEvent(new dom.window.MessageEvent("message", {
 		source: preview.element.contentWindow,
+		origin: new URL(preview.element.src).origin,
 		data: {
 			channel,
 			message: {
@@ -554,6 +556,7 @@ test("MarkdownPreview validates iframe link messages before emitting", () => {
 	}));
 	dom.window.dispatchEvent(new dom.window.MessageEvent("message", {
 		source: preview.element.contentWindow,
+		origin: new URL(preview.element.src).origin,
 		data: {
 			channel,
 			message: {
@@ -565,6 +568,7 @@ test("MarkdownPreview validates iframe link messages before emitting", () => {
 	}));
 	dom.window.dispatchEvent(new dom.window.MessageEvent("message", {
 		source: preview.element.contentWindow,
+		origin: new URL(preview.element.src).origin,
 		data: {
 			channel,
 			message: {
@@ -597,6 +601,7 @@ test("workbench Markdown document view owns link policy and updates", () => {
 
 	dom.window.dispatchEvent(new dom.window.MessageEvent("message", {
 		source: view.element.contentWindow,
+		origin: new URL(view.element.src).origin,
 		data: {
 			channel,
 			message: {
@@ -606,10 +611,10 @@ test("workbench Markdown document view owns link policy and updates", () => {
 		},
 	}));
 	assert.deepEqual(links, ["https://example.com/workbench"]);
-	assert.match(view.element.srcdoc, /href="file:\/\/\/workspace\/source\.ts"/);
+	assert.match(getWebviewHtml(view.element), /href="file:\/\/\/workspace\/source\.ts"/);
 
 	view.setMarkdown("## Updated");
-	assert.match(view.element.srcdoc, /<h2>Updated<\/h2>/);
+	assert.match(getWebviewHtml(view.element), /<h2>Updated<\/h2>/);
 	view.dispose();
 	assert.throws(() => view.setMarkdown("late"), /already disposed/);
 	dom.window.close();

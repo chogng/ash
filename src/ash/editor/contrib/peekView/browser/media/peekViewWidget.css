@@ -2,7 +2,7 @@
   z-index: 9;
   background: var(--ash-editor-background);
   box-shadow: 0 6px 18px var(--ash-widget-shadow);
-  outline: var(--ash-stroke-thickness) solid var(--ash-contrast-border);
+  outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
 }
 
 .stanza-editor-peek-view > .stanza-editor-zone-widget-container {
@@ -15,7 +15,7 @@
   padding: 4px 8px;
   color: var(--ash-description-foreground);
   font-size: 11px;
-  border-bottom: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+  border-bottom: var(--ash-strokeThickness) solid var(--ash-widget-border);
 }
 
 .stanza-editor-peek-view-body {

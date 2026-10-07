@@ -15,7 +15,7 @@
 	flex: 0 0 auto;
 	gap: 4px;
 	padding: 4px;
-	border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
 }
 .ash-browser-toolbar input {
 	flex: 1;
@@ -25,11 +25,11 @@
 .ash-browser-toolbar input {
 	color: var(--ash-editor-foreground);
 	background: var(--ash-editor-background);
-	border: var(--ash-stroke-thickness) solid var(--ash-border);
+	border: var(--ash-strokeThickness) solid var(--ash-border);
 	font: inherit;
 }
 .ash-browser-toolbar :focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
 .ash-browser-toolbar button:disabled {
@@ -40,7 +40,7 @@
 	overflow: hidden;
 	white-space: nowrap;
 	text-overflow: ellipsis;
-	font-size: var(--ash-font-size-body2);
+	font-size: var(--ash-fontSize-body2);
 	color: var(--ash-description-foreground);
 }
 .ash-browser-viewport {

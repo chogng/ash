@@ -8,7 +8,7 @@
 .ash-tasks-run,
 .ash-task-run-button {
 	border: 0;
-	border-radius: var(--ash-corner-radius-small);
+	border-radius: var(--ash-cornerRadius-small);
 	color: inherit;
 	background: transparent;
 	font: inherit;
@@ -42,12 +42,12 @@
 
 .ash-tasks-run:hover,
 .ash-task-run-button:hover {
-	background: var(--ash-toolbar-hover-background);
+	background: var(--ash-toolbar-hoverBackground);
 }
 
 .ash-tasks-run:focus-visible,
 .ash-task-run-button:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
 
@@ -69,7 +69,7 @@
 
 .ash-task-run {
 	margin-top: 6px;
-	border-top: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-top: var(--ash-strokeThickness) solid var(--ash-border);
 	padding-top: 6px;
 }
 

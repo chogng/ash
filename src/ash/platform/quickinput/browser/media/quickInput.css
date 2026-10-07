@@ -20,29 +20,29 @@
 	max-height: min(520px, calc(100vh - 48px));
 	overflow: hidden;
 	flex-direction: column;
-	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
-	border-radius: var(--ash-corner-radius-medium);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-medium);
 	color: var(--ash-foreground);
-	background: var(--ash-quick-input-background);
+	background: var(--ash-quickInput-background);
 	box-shadow: 0 8px 32px var(--ash-widget-shadow);
 }
 
 .ash-quick-pick-input {
 	padding: 8px;
-	border-bottom: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-widget-border);
 }
 
 .ash-quick-pick-input input {
 	height: 32px;
 	padding: 0 10px;
-	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
+	border: var(--ash-strokeThickness) solid var(--ash-input-border);
 	outline: none;
 	color: var(--ash-input-foreground);
 	background: var(--ash-input-background);
 }
 
 .ash-quick-pick-input input:focus {
-	border-color: var(--ash-focus-border);
+	border-color: var(--ash-focusBorder);
 }
 
 .ash-quick-pick-list {
@@ -66,7 +66,7 @@
 }
 
 .ash-quick-pick-list .ash-list-row {
-	border-radius: var(--ash-corner-radius-small);
+	border-radius: var(--ash-cornerRadius-small);
 }
 
 .ash-quick-pick-row-content {
@@ -79,13 +79,13 @@
 }
 
 .ash-quick-pick-list .ash-list-row.is-active {
-	color: var(--ash-list-active-selection-foreground);
-	background: var(--ash-list-active-selection-background);
+	color: var(--ash-list-activeSelectionForeground);
+	background: var(--ash-list-activeSelectionBackground);
 }
 
 .ash-quick-pick-list-menu .ash-list-row.is-active {
-	color: var(--ash-menu-selection-foreground);
-	background: var(--ash-menu-selection-background);
+	color: var(--ash-menu-selectionForeground);
+	background: var(--ash-menu-selectionBackground);
 }
 
 .ash-quick-pick-row-text {
@@ -177,10 +177,10 @@
 .ash-quick-pick-row-keybinding {
 	flex: 0 0 auto;
 	padding: 2px 6px;
-	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
-	border-radius: var(--ash-corner-radius-small);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-small);
 	color: var(--ash-description-foreground);
-	background: var(--ash-keybinding-label-background);
+	background: var(--ash-keybindingLabel-background);
 	font: inherit;
 	font-size: 11px;
 }

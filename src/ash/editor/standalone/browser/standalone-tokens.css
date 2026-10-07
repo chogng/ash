@@ -6,7 +6,7 @@
 	) {
 	font-family: var(--ash-font-family, system-ui, sans-serif);
 	font-size: 13px;
-	font-weight: var(--ash-font-weight-regular);
+	font-weight: var(--ash-fontWeight-regular);
 	letter-spacing: normal;
 	line-height: 1.4;
 }
@@ -16,6 +16,6 @@
 }
 
 .stanza-editor.stanza-editor-focus-owner-editor:focus-within {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }

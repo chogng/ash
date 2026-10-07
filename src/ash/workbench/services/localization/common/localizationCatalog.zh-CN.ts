@@ -2239,7 +2239,7 @@ export const languagePackCatalog: LanguagePackCatalog = {
 			"scm.activity.changes": "{0} 个已更改文件",
 			"scm.activity.oneChange": "1 个已更改文件",
 			"scm.changesTree": "源代码管理更改",
-			"scm.changesTreeHelp": "使用上下方向键预览文件，左方向键折叠分组，右方向键展开分组。按 Enter 打开并固定文件，按空格预览并保留此处焦点。点击或按 Enter 时按住 Ctrl、Command 或 Alt，可在侧边分组打开。双击固定文件并聚焦其编辑器。按 F1 使用 Git 分支、工作树、储藏、标签、远端、继续或中止整合操作，以及部分暂存命令。",
+			"scm.changesTreeHelp": "文件按目录分组。使用上下方向键导航并预览文件，左方向键折叠分组或目录，右方向键展开分组或目录。在目录上按 Enter 或空格切换折叠状态。在文件上按 Enter 打开并固定文件，按空格预览并保留此处焦点。点击或按 Enter 时按住 Ctrl、Command 或 Alt，可在侧边分组打开。双击固定文件并聚焦其编辑器。按 F1 使用 Git 分支、工作树、储藏、标签、远端、继续或中止整合操作，以及部分暂存命令。",
 			"scm.emptyWindow": "打开文件夹以使用源代码管理。",
 			"scm.history.actions": "历史记录操作",
 			"scm.history.additions": "新增 {0} 行（+）",

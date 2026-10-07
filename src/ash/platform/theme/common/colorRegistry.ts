@@ -9,8 +9,8 @@ export type ColorIdentifier = string;
 export interface ColorDefaults {
 	readonly dark: ColorValue;
 	readonly light: ColorValue;
-	readonly highContrastDark: ColorValue;
-	readonly highContrastLight: ColorValue;
+	readonly hcDark: ColorValue;
+	readonly hcLight: ColorValue;
 }
 
 export type ColorTransform =
@@ -103,7 +103,7 @@ export class ColorRegistry extends Disposable {
 			const contribution = this.colors.get(id);
 			if (!contribution) throw new Error(`Unknown color token reference: ${id}`);
 			resolving.push(id);
-			const source = Object.hasOwn(overrides, id) ? overrides[id] : defaultsForScheme(contribution.defaults, scheme);
+			const source = Object.hasOwn(overrides, id) ? overrides[id] : contribution.defaults[scheme];
 			const value = resolveColorValue(source, resolveIdentifier);
 			resolving.pop();
 			if (contribution.needsTransparency && value?.rgba.a === 1) {
@@ -116,15 +116,6 @@ export class ColorRegistry extends Disposable {
 			if (!this.colors.has(id)) throw new Error(`Unknown color token override: ${id}`);
 		}
 		return Object.freeze(this.getColors().map((contribution) => Object.freeze({ ...contribution, value: resolveIdentifier(contribution.id) })));
-	}
-}
-
-function defaultsForScheme(defaults: ColorDefaults, scheme: ColorScheme): ColorValue {
-	switch (scheme) {
-		case ColorScheme.Dark: return defaults.dark;
-		case ColorScheme.Light: return defaults.light;
-		case ColorScheme.HighContrastDark: return defaults.highContrastDark;
-		case ColorScheme.HighContrastLight: return defaults.highContrastLight;
 	}
 }
 

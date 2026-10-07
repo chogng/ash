@@ -199,7 +199,7 @@ for (const theme of ['Ash High Contrast Dark', 'Ash High Contrast Light']) {
 			await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
 			page = await opened;
 		}
-		await expect(page.locator('#app')).toHaveAttribute('data-color-scheme', theme.endsWith('Dark') ? 'high-contrast-dark' : 'high-contrast-light');
+		await expect(page.locator('#app')).toHaveAttribute('data-color-scheme', theme.endsWith('Dark') ? 'hcDark' : 'hcLight');
 		const navigation = page.locator('.ash-sessions-activity-content');
 		const chat = navigation.getByRole('button', { name: 'Chat', exact: true });
 		const library = navigation.getByRole('button', { name: 'Library', exact: true });

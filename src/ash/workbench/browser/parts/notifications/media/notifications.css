@@ -16,9 +16,9 @@
 	gap: 10px;
 	align-items: flex-start;
 	padding: 10px 12px;
-	border: var(--ash-stroke-thickness) solid
+	border: var(--ash-strokeThickness) solid
 		var(--ash-widget-border, var(--ash-foreground));
-	border-radius: var(--ash-corner-radius-medium);
+	border-radius: var(--ash-cornerRadius-medium);
 	color: var(--ash-foreground);
 	background: var(--ash-editor-background, var(--ash-workbench-background));
 	box-shadow: 0 4px 16px var(--ash-widget-shadow);
@@ -46,9 +46,9 @@
 .ash-notification-close,
 .ash-notifications-center button,
 .ash-notifications-toggle {
-	border: var(--ash-stroke-thickness) solid
+	border: var(--ash-strokeThickness) solid
 		var(--ash-button-border, var(--ash-foreground));
-	border-radius: var(--ash-corner-radius-small);
+	border-radius: var(--ash-cornerRadius-small);
 	color: inherit;
 	background: var(--ash-button-background, transparent);
 	cursor: pointer;
@@ -71,9 +71,9 @@
 	max-height: min(70vh, calc(100% - 48px));
 	display: flex;
 	flex-direction: column;
-	border: var(--ash-stroke-thickness) solid
+	border: var(--ash-strokeThickness) solid
 		var(--ash-widget-border, var(--ash-foreground));
-	border-radius: var(--ash-corner-radius-medium);
+	border-radius: var(--ash-cornerRadius-medium);
 	color: var(--ash-foreground);
 	background: var(--ash-editor-background, var(--ash-workbench-background));
 	box-shadow: 0 6px 24px var(--ash-widget-shadow);
@@ -86,7 +86,7 @@
 	align-items: center;
 	gap: 8px;
 	padding: 8px 12px;
-	border-bottom: var(--ash-stroke-thickness) solid
+	border-bottom: var(--ash-strokeThickness) solid
 		var(--ash-widget-border, var(--ash-foreground));
 }
 .ash-notifications-center-header h2 {
@@ -114,7 +114,7 @@
 .ash-notifications-center button:focus-visible,
 .ash-notification button:focus-visible,
 .ash-notifications-toggle:focus-visible {
-	outline: 2px solid var(--ash-focus-border, currentColor);
+	outline: 2px solid var(--ash-focusBorder, currentColor);
 	outline-offset: 2px;
 }
 .ash-notifications-remove {

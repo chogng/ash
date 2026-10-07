@@ -586,7 +586,7 @@ test('extension theme contributions activate together, retain the last valid cat
 	let invalid = false;
 	const manifest = () => descriptorWithManifest({
 		name: 'demo', publisher: 'ash', version: '1.0.0', contributes: {
-			colors: [{ id: 'test.extensionAccent', description: 'Extension accent', defaults: { light: '#123456', dark: '#654321' } }],
+			colors: [{ id: 'test.extensionAccent', description: 'Extension accent', defaults: { light: '#123456', dark: '#654321', highContrast: '#fedcba', highContrastLight: '#aabbcc' } }],
 			semanticTokenTypes: [{ id: 'testCustomFunction', description: 'Custom function', superType: invalid ? 'missingType' : 'function' }],
 			semanticTokenModifiers: [{ id: 'testCustomModifier', description: 'Custom modifier' }],
 			semanticTokenScopes: [{ language: 'typescript', scopes: { testCustomFunction: ['entity.name.function.custom'] } }],
@@ -595,6 +595,10 @@ test('extension theme contributions activate together, retain the last valid cat
 	});
 	using service = new AppServerExtensionService({ api: { list: async () => ({ generation, extensions: contributed ? [manifest()] : [], diagnostics: [] }), readResource: async () => { throw new Error('Unexpected resource'); } }, textMateService: emptyTextMateService() });
 	await service.start();
+	for (const [type, expected] of [['hcDark', '#fedcba'], ['hcLight', '#aabbcc']]) {
+		const contrast = parseUserColorTheme(JSON.stringify({ name: 'Extension contrast', type, colors: {} }));
+		assert.equal(contrast.getColorCss('test.extensionAccent'), expected);
+	}
 	const themed = parseUserColorTheme(JSON.stringify({
 		name: 'Extension mappings', colors: { 'test.extensionAccent': '#abcdef' },
 		tokenColors: [{ scope: 'entity.name.function.custom', settings: { foreground: '#112233', fontStyle: 'italic' } }],

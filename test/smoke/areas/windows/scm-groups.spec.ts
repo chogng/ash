@@ -13,6 +13,40 @@ test.describe('SCM editor groups', () => {
 		await writeFile(testWorkspace.file, 'const value = 2;\n');
 	});
 
+	test('SCM directories fold with the keyboard and retain state across Git refreshes', async ({ testWorkspace, workbench }) => {
+		await mkdir(join(testWorkspace.directory, 'src/nested'), { recursive: true });
+		await writeFile(join(testWorkspace.directory, 'src/first.ts'), 'export const first = 1;\n');
+		await writeFile(join(testWorkspace.directory, 'src/nested/second.ts'), 'export const second = 2;\n');
+		const page = workbench.page;
+		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		const tree = page.getByRole('tree', { name: 'Source control changes', exact: true });
+		const folder = tree.getByRole('treeitem').filter({ has: page.locator('.ash-scm-folder').filter({ has: page.getByText('src', { exact: true }) }) });
+		const first = tree.getByRole('button', { name: 'Open changes for src/first.ts', exact: true });
+		await expect(first).toBeVisible();
+		await expect(first.locator('xpath=ancestor::*[@role="treeitem"][1]')).toHaveAttribute('aria-level', '3');
+		await expect(tree.getByRole('button', { name: 'Open changes for src/nested/second.ts', exact: true }).locator('xpath=ancestor::*[@role="treeitem"][1]')).toHaveAttribute('aria-level', '4');
+		await tree.press('Home');
+		await tree.press('ArrowDown');
+		await expect(folder).toHaveAttribute('aria-expanded', 'true');
+		await folder.locator('.ash-scm-folder').click();
+		await expect(folder).toHaveAttribute('aria-expanded', 'false');
+		await expect(first).toHaveCount(0);
+		await writeFile(join(testWorkspace.directory, 'src/third.ts'), 'export const third = 3;\n');
+		await expect(page.locator('.ash-scm-section-count')).toHaveText('4');
+		await expect(folder).toHaveAttribute('aria-expanded', 'false');
+		await expect(first).toHaveCount(0);
+		await tree.press('ArrowRight');
+		await expect(folder).toHaveAttribute('aria-expanded', 'true');
+		await tree.press('Enter');
+		await expect(folder).toHaveAttribute('aria-expanded', 'false');
+		await tree.press('Space');
+		await expect(folder).toHaveAttribute('aria-expanded', 'true');
+		await expect(tree.getByRole('button', { name: 'Open changes for src/third.ts', exact: true })).toBeVisible();
+		await first.click();
+		await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'first.ts' })).toHaveCount(1);
+		await expect(tree).toBeFocused();
+	});
+
 	test('Git Quick Diff opens its baseline and updates decorations for unsaved edits', async ({ testWorkspace, workbench }) => {
 		const page = workbench.page;
 		await workbench.openExplorer();
@@ -160,7 +194,7 @@ test.describe('SCM editor groups', () => {
 		const row = tree.getByRole('treeitem').filter({ has: page.getByRole('button', { name: 'Open changes for src/details.ts', exact: true }) });
 		await expect(row).toBeVisible();
 		const retained = await row.elementHandle();
-		await expect.poll(() => metrics(row)).toEqual({ arrowWidth: hasFileIcons ? 0 : 16, contentOffset: hasFileIcons ? 16 : 38, guideOffset: 16 });
+		await expect.poll(() => metrics(row)).toEqual({ arrowWidth: hasFileIcons ? 0 : 16, contentOffset: hasFileIcons ? 24 : 46, guideOffset: 16 });
 
 		await workbench.quickaccess.runCommand('workbench.action.openSettings');
 		const settings = page.getByRole('dialog', { name: 'Ash Settings' });
@@ -169,7 +203,7 @@ test.describe('SCM editor groups', () => {
 		const indent = settings.getByRole('spinbutton', { name: 'Tree indentation', exact: true });
 		await indent.fill('16');
 		await indent.press('Tab');
-		await expect.poll(() => metrics(row)).toEqual({ arrowWidth: hasFileIcons ? 0 : 16, contentOffset: hasFileIcons ? 24 : 46, guideOffset: 16 });
+		await expect.poll(() => metrics(row)).toEqual({ arrowWidth: hasFileIcons ? 0 : 16, contentOffset: hasFileIcons ? 40 : 62, guideOffset: 16 });
 		await search.fill('@id:workbench.tree.renderIndentGuides');
 		const mode = settings.locator('[data-configuration-key="workbench.tree.renderIndentGuides"]').getByRole('combobox');
 		await mode.click();
@@ -180,12 +214,12 @@ test.describe('SCM editor groups', () => {
 			await workbench.quickaccess.runCommand('workbench.action.selectIconTheme');
 			await workbench.quickaccess.select(theme);
 			const icons = theme === 'Seti' && hasFileIcons;
-			const expected = { arrowWidth: icons ? 0 : 16, contentOffset: icons ? 24 : 46, guideOffset: 16 };
+			const expected = { arrowWidth: icons ? 0 : 16, contentOffset: icons ? 40 : 62, guideOffset: 16 };
 			await expect.poll(() => metrics(row)).toEqual(expected);
 			expect(await retained!.evaluate(element => element.isConnected)).toBe(true);
 			await page.locator('.ash-composite-bar-item[data-action-id="ash.sidebar"]').click();
 			await expect(explorer.getByRole('tree')).toHaveClass(/ash-tree-indent-guides-none/u);
-			await expect.poll(() => metrics(file)).toEqual(expected);
+			await expect.poll(() => metrics(file)).toEqual({ ...expected, contentOffset: icons ? 24 : 46 });
 			await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
 		}
 		const group = tree.getByRole('treeitem').filter({ has: page.getByText('Changes', { exact: true }) });

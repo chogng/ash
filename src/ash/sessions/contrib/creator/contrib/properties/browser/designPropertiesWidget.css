@@ -8,7 +8,7 @@
 	align-items: stretch;
 	gap: 0;
 	padding: 0;
-	font-size: var(--ash-font-size-label1);
+	font-size: var(--ash-fontSize-label1);
 	line-height: 1.4;
 }
 
@@ -19,14 +19,14 @@
 .ash-design-properties-heading {
 	margin: 0;
 	padding: var(--ash-spacing-size160);
-	font-size: var(--ash-font-size-body1);
-	font-weight: var(--ash-font-weight-semi-bold);
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-semiBold);
 }
 
 .ash-design-property-section {
 	min-width: 0;
 	padding: var(--ash-spacing-size160);
-	border-top: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-top: var(--ash-strokeThickness) solid var(--ash-border);
 }
 
 .ash-design-property-section[hidden],
@@ -37,8 +37,8 @@
 
 .ash-design-property-section > summary {
 	padding: 0;
-	font-size: var(--ash-font-size-body1);
-	font-weight: var(--ash-font-weight-semi-bold);
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-semiBold);
 	cursor: pointer;
 	list-style: none;
 	display: flex;
@@ -52,7 +52,7 @@
 
 .ash-design-property-disclosure::after {
 	content: "+";
-	font-weight: var(--ash-font-weight-regular);
+	font-weight: var(--ash-fontWeight-regular);
 	color: var(--ash-description-foreground);
 }
 
@@ -62,8 +62,8 @@
 
 .ash-design-property-section > h3 {
 	margin: 0 0 var(--ash-spacing-size120);
-	font-size: var(--ash-font-size-body1);
-	font-weight: var(--ash-font-weight-semi-bold);
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-semiBold);
 }
 
 .ash-design-page-properties {
@@ -110,8 +110,8 @@
 	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
 	color: var(--ash-input-foreground);
 	background: var(--ash-input-background);
-	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
-	border-radius: var(--ash-corner-radius-medium);
+	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border-radius: var(--ash-cornerRadius-medium);
 	font: inherit;
 }
 
@@ -121,8 +121,8 @@
 	gap: var(--ash-spacing-size80);
 	padding-left: var(--ash-spacing-size80);
 	background: var(--ash-input-background);
-	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
-	border-radius: var(--ash-corner-radius-medium);
+	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border-radius: var(--ash-cornerRadius-medium);
 	color: var(--ash-description-foreground);
 }
 
@@ -146,7 +146,7 @@
 .ash-sessions-design-properties textarea:focus-visible,
 .ash-sessions-design-properties select:focus-visible,
 .ash-design-property-section > summary:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
 
@@ -187,8 +187,8 @@
 .ash-design-fill-row {
 	display: flex;
 	align-items: stretch;
-	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
-	border-radius: var(--ash-corner-radius-medium);
+	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border-radius: var(--ash-cornerRadius-medium);
 	background: var(--ash-input-background);
 	min-width: 0;
 }
@@ -198,8 +198,8 @@
 	flex: 1;
 	min-width: 0;
 	border: 0;
-	border-radius: var(--ash-corner-radius-medium) 0 0
-		var(--ash-corner-radius-medium);
+	border-radius: var(--ash-cornerRadius-medium) 0 0
+		var(--ash-cornerRadius-medium);
 }
 
 .ash-sessions-design-properties .ash-design-fill-opacity {
@@ -208,7 +208,7 @@
 	gap: 0;
 	width: 64px;
 	padding-right: var(--ash-spacing-size80);
-	border-left: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-left: var(--ash-strokeThickness) solid var(--ash-border);
 	flex-shrink: 0;
 }
 
@@ -221,8 +221,8 @@
 .ash-design-guide-row {
 	padding: var(--ash-spacing-size80);
 	background: var(--ash-input-background);
-	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
-	border-radius: var(--ash-corner-radius-medium);
+	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border-radius: var(--ash-cornerRadius-medium);
 }
 
 .ash-design-export-row {
@@ -235,7 +235,7 @@
 }
 
 .ash-design-properties-heading:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
 
@@ -243,8 +243,8 @@
 	width: var(--ash-spacing-size200);
 	height: var(--ash-spacing-size200);
 	flex-shrink: 0;
-	border: var(--ash-stroke-thickness) solid var(--ash-border);
-	border-radius: var(--ash-corner-radius-small);
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+	border-radius: var(--ash-cornerRadius-small);
 	background:
 		linear-gradient(var(--ash-design-fill), var(--ash-design-fill)),
 		repeating-conic-gradient(

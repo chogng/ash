@@ -491,7 +491,7 @@ for (const surface of ['chat', 'cowork']) {
 		await page.mouse.move(0, 0);
 		await expect(control).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 		for (const background of ['rgb(45, 45, 45)', 'rgb(225, 225, 225)', 'rgb(255, 255, 0)']) {
-			await control.evaluate((element, value) => element.style.setProperty('--ash-toolbar-hover-background', value), background);
+			await control.evaluate((element, value) => element.style.setProperty('--ash-toolbar-hoverBackground', value), background);
 			await model.hover();
 			await expect(model).toHaveCSS('background-color', background);
 			await expect(options).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');

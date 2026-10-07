@@ -28,12 +28,12 @@ import { GitHistoryProvider } from './gitHistoryProvider.js';
 type ChangeSide = 'index' | 'worktree';
 type PathAction = 'stage' | 'unstage' | 'discard';
 
-const modifiedForeground = registerColor('gitDecoration.modifiedResourceForeground', { dark: '#e2c08d', light: '#895503', highContrastDark: foreground, highContrastLight: foreground }, { description: 'Foreground color for files modified in Git.', owner: 'git.decorations' });
-const addedForeground = registerColor('gitDecoration.addedResourceForeground', { dark: '#81b88b', light: '#587c0c', highContrastDark: foreground, highContrastLight: foreground }, { description: 'Foreground color for files added in Git.', owner: 'git.decorations' });
-const deletedForeground = registerColor('gitDecoration.deletedResourceForeground', { dark: '#c74e39', light: '#ad0707', highContrastDark: foreground, highContrastLight: foreground }, { description: 'Foreground color for files deleted in Git.', owner: 'git.decorations' });
-const renamedForeground = registerColor('gitDecoration.renamedResourceForeground', { dark: '#73c991', light: '#007100', highContrastDark: foreground, highContrastLight: foreground }, { description: 'Foreground color for files renamed in Git.', owner: 'git.decorations' });
-const untrackedForeground = registerColor('gitDecoration.untrackedResourceForeground', { dark: '#73c991', light: '#007100', highContrastDark: foreground, highContrastLight: foreground }, { description: 'Foreground color for untracked files in Git.', owner: 'git.decorations' });
-const conflictingForeground = registerColor('gitDecoration.conflictingResourceForeground', { dark: '#e4676b', light: '#ad0707', highContrastDark: foreground, highContrastLight: foreground }, { description: 'Foreground color for files with Git conflicts.', owner: 'git.decorations' });
+const modifiedForeground = registerColor('gitDecoration.modifiedResourceForeground', { dark: '#e2c08d', light: '#895503', hcDark: foreground, hcLight: foreground }, { description: 'Foreground color for files modified in Git.', owner: 'git.decorations' });
+const addedForeground = registerColor('gitDecoration.addedResourceForeground', { dark: '#81b88b', light: '#587c0c', hcDark: foreground, hcLight: foreground }, { description: 'Foreground color for files added in Git.', owner: 'git.decorations' });
+const deletedForeground = registerColor('gitDecoration.deletedResourceForeground', { dark: '#c74e39', light: '#ad0707', hcDark: foreground, hcLight: foreground }, { description: 'Foreground color for files deleted in Git.', owner: 'git.decorations' });
+const renamedForeground = registerColor('gitDecoration.renamedResourceForeground', { dark: '#73c991', light: '#007100', hcDark: foreground, hcLight: foreground }, { description: 'Foreground color for files renamed in Git.', owner: 'git.decorations' });
+const untrackedForeground = registerColor('gitDecoration.untrackedResourceForeground', { dark: '#73c991', light: '#007100', hcDark: foreground, hcLight: foreground }, { description: 'Foreground color for untracked files in Git.', owner: 'git.decorations' });
+const conflictingForeground = registerColor('gitDecoration.conflictingResourceForeground', { dark: '#e4676b', light: '#ad0707', hcDark: foreground, hcLight: foreground }, { description: 'Foreground color for files with Git conflicts.', owner: 'git.decorations' });
 
 export interface GitSCMProviderServices {
 	readonly commandService: ICommandService;

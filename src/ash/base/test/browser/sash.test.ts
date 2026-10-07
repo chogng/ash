@@ -39,12 +39,12 @@ test("Sash settings are scoped to a subtree and clean up their projection", () =
 		});
 		assert.equal(
 			dom.window.getComputedStyle(sash)
-				.getPropertyValue("--ash-sash-drag-area-size"),
+				.getPropertyValue("--ash-sash-dragAreaSize"),
 			"12px",
 		);
 		assert.equal(
 			dom.window.getComputedStyle(sash)
-				.getPropertyValue("--ash-sash-hover-feedback-size"),
+				.getPropertyValue("--ash-sash-hoverFeedbackSize"),
 			"6px",
 		);
 		assert.equal(

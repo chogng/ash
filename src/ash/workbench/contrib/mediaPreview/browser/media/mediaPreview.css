@@ -31,13 +31,13 @@
 
 .ash-media-preview-player:focus-visible,
 .ash-media-preview:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
 
 .ash-media-preview-summary {
 	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
-	font-size: var(--ash-font-size-label1);
+	font-size: var(--ash-fontSize-label1);
 	color: var(--ash-description-foreground);
 	overflow: hidden;
 	white-space: nowrap;

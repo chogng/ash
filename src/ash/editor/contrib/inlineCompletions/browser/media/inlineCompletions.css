@@ -2,8 +2,8 @@
 	position: absolute;
 	z-index: 4;
 	color: var(
-		--ash-editor-inline-completion-foreground,
-		var(--ash-editor-description-foreground)
+		--ash-editor-inlineCompletionForeground,
+		var(--ash-editor-descriptionForeground)
 	);
 	pointer-events: none;
 	white-space: pre;

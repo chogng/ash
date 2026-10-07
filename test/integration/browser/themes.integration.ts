@@ -147,7 +147,7 @@ iconSelectBox.layout({ width: 240, height: 180 });
 resources.add(iconSelectBox.onDidSelect(icon => { iconSelectHost.dataset.selectedIcon = icon.id; }));
 window.disposeIconSelectBox = () => iconSelectBox.dispose();
 window.registerLateThemeColor = () => {
-	registerColor('test.browserLate', { dark: '#123456', light: '#abcdef', highContrastDark: '#ffffff', highContrastLight: '#000000' }, { description: 'Late browser test.', owner: 'test' });
+	registerColor('test.browserLate', { dark: '#123456', light: '#abcdef', hcDark: '#ffffff', hcLight: '#000000' }, { description: 'Late browser test.', owner: 'test' });
 };
 window.disposeThemeRoot = () => themes.dispose();
 window.selectColorTheme = id => configuration.updateValue(WorkbenchConfiguration.colorTheme, id);

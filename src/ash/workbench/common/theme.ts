@@ -5,18 +5,18 @@ import { accentBackground, border, contrastBorder, descriptionForeground, foregr
 import type { IColorTheme } from "../../platform/theme/common/themeService.js";
 
 const colorOwner = "workbench.shell";
-const color = (id: string, dark: string, light: string, highContrastDark: string, highContrastLight: string, description: string): string =>
-	registerColor(id, { dark, light, highContrastDark, highContrastLight }, { description, owner: colorOwner });
+const color = (id: string, dark: string, light: string, hcDark: string, hcLight: string, description: string): string =>
+	registerColor(id, { dark, light, hcDark, hcLight }, { description, owner: colorOwner });
 const alias = (id: string, value: string, description: string): string =>
-	registerColor(id, { dark: value, light: value, highContrastDark: value, highContrastLight: value }, { description, owner: colorOwner });
+	registerColor(id, { dark: value, light: value, hcDark: value, hcLight: value }, { description, owner: colorOwner });
 
 alias("sectionHeader.foreground", descriptionForeground, "Section header foreground.");
 const workbenchBackground = color("workbench.background", "#1e1e1e", "#ffffff", "#000000", "#ffffff", "Workbench root background.");
 registerColor("editorGroup.border", {
 	dark: border,
 	light: border,
-	highContrastDark: contrastBorder,
-	highContrastLight: contrastBorder,
+	hcDark: contrastBorder,
+	hcLight: contrastBorder,
 }, { description: "Border between editor groups.", owner: colorOwner });
 color("editor.tabBackground", "#252526", "#EEEEEE", "#000000", "#ffffff", "Background for inactive Editor tabs.");
 color("editorGroupHeader.tabsBackground", "#252526", "#F3F3F3", "#000000", "#ffffff", "Background of the Editor tab strip.");
@@ -28,11 +28,11 @@ color('modernActivityBarItem.activeForeground', foreground, '#1f1f1f', foregroun
 color("titleBar.foreground", foreground, "#1f1f1f", foreground, foreground, "Title bar foreground.");
 export const titleBarActionForeground = color("titleBar.actionForeground", "#b8b8b8", "#424242", foreground, foreground, "Title bar action foreground.");
 color("titleBar.hoverBackground", "#333333", "#e5e5e5", "#333333", "#dddddd", "Hovered title bar item background.");
-registerColor('commandCenter.foreground', { dark: foreground, light: '#424242', highContrastDark: '#ffffff', highContrastLight: '#000000' }, { description: 'Command Center search text and icon.', owner: colorOwner });
-registerColor('commandCenter.background', { dark: '#2b2b2b', light: '#f6f6f6', highContrastDark: '#000000', highContrastLight: '#ffffff' }, { description: 'Command Center search background.', owner: colorOwner });
-registerColor('commandCenter.border', { dark: '#454545', light: '#d0d0d0', highContrastDark: contrastBorder, highContrastLight: contrastBorder }, { description: 'Command Center search border.', owner: colorOwner });
-registerColor('commandCenter.hoverBackground', { dark: '#333333', light: '#ebebeb', highContrastDark: '#333333', highContrastLight: '#dddddd' }, { description: 'Hovered Command Center search background.', owner: colorOwner });
-registerColor('commandCenter.activeBorder', { dark: '#888888', light: '#888888', highContrastDark: contrastBorder, highContrastLight: contrastBorder }, { description: 'Active Command Center search border.', owner: colorOwner });
+registerColor('commandCenter.foreground', { dark: foreground, light: '#424242', hcDark: '#ffffff', hcLight: '#000000' }, { description: 'Command Center search text and icon.', owner: colorOwner });
+registerColor('commandCenter.background', { dark: '#2b2b2b', light: '#f6f6f6', hcDark: '#000000', hcLight: '#ffffff' }, { description: 'Command Center search background.', owner: colorOwner });
+registerColor('commandCenter.border', { dark: '#454545', light: '#d0d0d0', hcDark: contrastBorder, hcLight: contrastBorder }, { description: 'Command Center search border.', owner: colorOwner });
+registerColor('commandCenter.hoverBackground', { dark: '#333333', light: '#ebebeb', hcDark: '#333333', hcLight: '#dddddd' }, { description: 'Hovered Command Center search background.', owner: colorOwner });
+registerColor('commandCenter.activeBorder', { dark: '#888888', light: '#888888', hcDark: contrastBorder, hcLight: contrastBorder }, { description: 'Active Command Center search border.', owner: colorOwner });
 
 const sideBarBackground = color("sideBar.background", "#252526", "#F8F8F8", "#000000", "#ffffff", "Primary side bar background.");
 alias('activityBar.background', sideBarBackground, 'Activity Bar background.');
@@ -42,11 +42,11 @@ alias("auxiliaryBar.background", sideBarBackground, "Auxiliary side bar backgrou
 alias("panel.background", sideBarBackground, "Panel background.");
 const emptyExplorerOpenFolderBackground = registerColor("files.emptyExplorerOpenFolderBackground", {
 	dark: accentBackground, light: accentBackground,
-	highContrastDark: selectionBackground, highContrastLight: selectionBackground,
+	hcDark: selectionBackground, hcLight: selectionBackground,
 }, { description: "Background for the Empty Explorer Open Folder action.", owner: "files.presentation" });
 registerColor("files.emptyExplorerOpenFolderHoverBackground", {
 	dark: emptyExplorerOpenFolderBackground, light: emptyExplorerOpenFolderBackground,
-	highContrastDark: emptyExplorerOpenFolderBackground, highContrastLight: emptyExplorerOpenFolderBackground,
+	hcDark: emptyExplorerOpenFolderBackground, hcLight: emptyExplorerOpenFolderBackground,
 }, { description: "Hovered background for the Empty Explorer Open Folder action.", owner: "files.presentation" });
 color("compositeBar.foreground", "#ffffff", "#1f1f1f", foreground, foreground, "Active composite bar foreground.");
 color("compositeBar.inactiveForeground", "#858585", "#616161", foreground, foreground, "Inactive composite bar foreground.");

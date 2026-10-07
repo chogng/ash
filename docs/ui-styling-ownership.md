@@ -74,7 +74,7 @@ Mode–model 与 model–effort 的按钮边缘间距必须相同；两处都消
 
 | 范围                         | 所有者与实现位置                                     | 约定                                                                                                                                 |
 | ---------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| 输入区工具栏排列             | `ChatInputPart` 的 `chat.css`                        | 相邻 action 使用 `--ash-action-bar-gap`                                                                                              |
+| 输入区工具栏排列             | `ChatInputPart` 的 `chat.css`                        | 相邻 action 使用 `--ash-actionBar-gap`                                                                                              |
 | Model 与 effort 内部布局     | `ModelPickerWidget` 的 `modelPicker.css`             | 两个入口共用 `fontSize.body1`、`cornerRadius.circle`、`toolbar.actionSize` 和左右 `spacing.size80`；内部间距同样使用 `actionBar.gap` |
 | 两个入口的标签与交互         | `ModelPickerWidget` 与 `ModelPickerConfiguration`    | 各自保留按钮语义、Tab 停靠点和浮层焦点恢复                                                                                           |
 | 入口悬停、键盘焦点与文本截断 | `chatInputPickerActionItem` 的 `chatInputPicker.css` | 各入口独立高亮；文本保留省略号，完整内容由 hover 提供                                                                                |
@@ -178,7 +178,7 @@ Menu 的 pointer hover 与键盘导航必须汇入同一个 `focusedEntry`，并
 
 ## Selector 规则
 
-Workbench 的固定横向几何使用物理方向 CSS。仅需左右 inset 时，写作 `padding: 0 <value>`；不要使用 `padding-inline`、`margin-inline` 或其他 `*-inline` logical property。token 仍表达数值，例如 `padding: 0 var(--ash-tab-list-item-content-inset)`。
+Workbench 的固定横向几何使用物理方向 CSS。仅需左右 inset 时，写作 `padding: 0 <value>`；不要使用 `padding-inline`、`margin-inline` 或其他 `*-inline` logical property。token 仍表达数值，例如 `padding: 0 var(--ash-tabList-itemContentInset)`。
 
 允许组件修改自己的内部结构：
 
@@ -263,7 +263,7 @@ Design token 回答“值是什么”，组件 CSS 回答“何时使用这个�
 
 ```text
 Theme registry
-  → --ash-tab-list-active-background
+  → --ash-tabList-activeBackground
   → tablist.css 的 .ash-tab.checked
 ```
 
@@ -271,18 +271,9 @@ Theme 不判断某个 tab 是否 active，Part 也不选择 active token。`TabL
 
 ## 字体层级
 
-字体角色由字号与强调程度两个正交 token 组合，不增加 `body1Strong`、`label1Bold` 之类的复合 token。`fontSize.*` 回答文本处于哪个阅读层级；`fontWeight.*` 回答它是否需要强调。这样同一强调语义能在不同字号间保持一致，也避免把 600 或 400 重新写成局部魔法数。
+字号角色、字重与 CSS 用法统一由 [字体 token 规范](../.github/instructions/design-tokens.instructions.md#font-size--font-size) 维护；Sessions 的文字角色由 [Sessions 设计规范](../.agents/skills/sessions-design-philosophy/SKILL.md#字体与留白) 独立定义。本文只定义组件与宿主的字体样式所有权。
 
-| 文本语义             | 字号 token                                    | 字重 token            |
-| -------------------- | --------------------------------------------- | --------------------- |
-| 常规正文             | `fontSize.body1`                              | `fontWeight.regular`  |
-| 常规标签 / 次级标题  | `fontSize.label1`                             | `fontWeight.regular`  |
-| 元数据               | `fontSize.label2`                             | `fontWeight.regular`  |
-| 控件 / 导航 / 当前项 | `fontSize.body1` 或 `fontSize.label1`         | `fontWeight.medium`   |
-| 强调正文 / Pane tab  | `fontSize.body1`                              | `fontWeight.semiBold` |
-| 强调标题             | 对应 `fontSize.heading*` 或 `fontSize.label1` | `fontWeight.semiBold` |
-
-`TabList` 基座拥有 tab label 的统一强调字重 `fontWeight.semiBold` 与标准高度 `tab.height`（24px）；其 `inset` presentation 统一拥有 Editor 与 Chat 使用的内缩、圆角、截断渐变和 focus 几何，两个组合控件只投影各自的非选中背景 token。`CompositeBar`、Terminal tabs 等组合控件通过 presentation 决定字号、行高和内部间距，并只能调整直接托管的 TabList root 以完成对齐。Part 不得用深层 selector 改写这些字体规则。系统提供 regular（400）、medium（500）与 semiBold（600）三级，不使用 700 弥补层级或间距问题。
+`TabList` 基座拥有 tab label 的统一强调字重 `fontWeight.semiBold` 与标准高度 `tab.height`（24px）；其 `inset` presentation 统一拥有 Editor 与 Chat 使用的内缩、圆角、截断渐变和 focus 几何，两个组合控件只提供各自的非选中背景 token。`CompositeBar`、Terminal tabs 等组合控件通过 presentation 决定字号、行高和内部间距，并只能调整直接托管的 TabList root 以完成对齐。Part 不得用深层 selector 改写这些字体规则。
 
 新增视觉规则时：
 

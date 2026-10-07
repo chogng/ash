@@ -51,7 +51,14 @@ function validateUserColorThemeDocument(value: unknown): IUserColorThemeDocument
 	if (document.$schema !== undefined && document.$schema !== USER_COLOR_THEME_SCHEMA_URL) throw new Error(`User theme $schema must be '${USER_COLOR_THEME_SCHEMA_URL}'`);
 	if (typeof document.id !== "string" || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(document.id)) throw new Error("User theme id must be lowercase kebab-case");
 	if (typeof document.label !== "string" || document.label.trim() !== document.label || document.label.length < 1 || document.label.length > 80) throw new Error("User theme label must contain 1 to 80 trimmed characters");
-	if (!Object.values(ColorScheme).includes(document.colorScheme as ColorScheme)) throw new Error(`Unknown user theme colorScheme: ${String(document.colorScheme)}`);
+	let colorScheme: ColorScheme;
+	switch (document.colorScheme) {
+		case 'dark': colorScheme = ColorScheme.Dark; break;
+		case 'light': colorScheme = ColorScheme.Light; break;
+		case 'high-contrast-dark': colorScheme = ColorScheme.HighContrastDark; break;
+		case 'high-contrast-light': colorScheme = ColorScheme.HighContrastLight; break;
+		default: throw new Error(`Unknown user theme colorScheme: ${String(document.colorScheme)}`);
+	}
 	const colors = record(document.colors, "colors");
 	const entries = Object.entries(colors);
 	if (entries.length > 512) throw new Error("User theme contains more than 512 color overrides");
@@ -64,7 +71,7 @@ function validateUserColorThemeDocument(value: unknown): IUserColorThemeDocument
 		version: 1,
 		id: document.id,
 		label: document.label,
-		colorScheme: document.colorScheme as ColorScheme,
+		colorScheme,
 		colors: Object.freeze(overrides),
 	});
 }

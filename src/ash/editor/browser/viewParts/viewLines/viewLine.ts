@@ -63,7 +63,7 @@ export class ViewLine {
 	}
 
 	public onSelectionChanged(): boolean {
-		if (this._options.themeType === 'high-contrast-dark' || this._options.themeType === 'high-contrast-light' || this._options.renderWhitespace === 'selection') {
+		if (this._options.themeType === 'hcDark' || this._options.themeType === 'hcLight' || this._options.renderWhitespace === 'selection') {
 			this._isMaybeInvalid = true;
 			return true;
 		}

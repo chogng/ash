@@ -9,7 +9,7 @@
 .ash-sessions-design-selection {
 	display: none;
 	fill: none;
-	stroke: var(--ash-focus-border);
+	stroke: var(--ash-focusBorder);
 	stroke-width: 2px;
 	vector-effect: non-scaling-stroke;
 }

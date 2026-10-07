@@ -6,8 +6,8 @@
 .ash-models-settings-api-row h5 {
 	margin: 0;
 	color: var(--ash-foreground);
-	font-size: var(--ash-font-size-body1);
-	font-weight: var(--ash-font-weight-regular);
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-regular);
 	overflow: hidden;
 	white-space: nowrap;
 	text-overflow: ellipsis;
@@ -51,7 +51,7 @@
 .ash-models-settings-note {
 	margin: var(--ash-spacing-size40) 0 0;
 	color: var(--ash-description-foreground);
-	font-size: var(--ash-font-size-label1);
+	font-size: var(--ash-fontSize-label1);
 }
 
 .ash-models-settings-note[role="alert"],

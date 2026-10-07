@@ -17,5 +17,5 @@
 .stanza-editor-language-preview {
 	height: 180px;
 	min-width: 0;
-	border-top: var(--ash-stroke-thickness) solid var(--ash-widget-border);
+	border-top: var(--ash-strokeThickness) solid var(--ash-widget-border);
 }

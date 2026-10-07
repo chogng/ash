@@ -767,9 +767,9 @@ test('minimap slider follows its theme color in the running editor', async ({ ta
 	const colors = await slider.evaluate(element => {
 		const minimap = element.parentElement!;
 		const initial = getComputedStyle(element).backgroundColor;
-		minimap.style.setProperty('--ash-minimap-slider-background', '#123456');
+		minimap.style.setProperty('--ash-minimapSlider-background', '#123456');
 		const overridden = getComputedStyle(element).backgroundColor;
-		minimap.style.removeProperty('--ash-minimap-slider-background');
+		minimap.style.removeProperty('--ash-minimapSlider-background');
 		return { initial, overridden, restored: getComputedStyle(element).backgroundColor };
 	});
 	expect(colors.initial).not.toBe('rgba(0, 0, 0, 0)');

@@ -214,7 +214,7 @@ test('high contrast file associations and font descriptors reach resource and su
 		assert.deepEqual([icon.character, icon.fontWeight, icon.fontStyle], ['H', '700', 'italic']);
 	}
 	assert.match(theme.styleSheetContent, /font-weight:700;font-style:italic/);
-	assert.match(theme.styleSheetContent, /data-color-scheme="high-contrast-dark"/);
+	assert.match(theme.styleSheetContent, /data-color-scheme="hcDark"/);
 	await assert.rejects(FileIconThemeData.load('invalid-font', 'Invalid font', {
 		fonts: [{ id: 'icons', weight: 'heavy', src: [{ path: 'icons.woff', format: 'woff' }] }], iconDefinitions: {},
 	}, async () => new Uint8Array([1])), /weight or style/);

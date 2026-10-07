@@ -1,6 +1,6 @@
 .ash-multi-editor-tabs-control {
-	--ash-tab-list-active-background: var(--ash-editor-background);
-	--ash-tab-list-inactive-background: var(--ash-editor-tab-background);
+	--ash-tabList-activeBackground: var(--ash-editor-background);
+	--ash-tab-list-inactive-background: var(--ash-editor-tabBackground);
 
 	display: flex;
 	min-width: 0;
@@ -18,8 +18,8 @@
 
 .ash-multi-row-editor-tabs-control > .ash-multi-editor-tabs-control {
 	width: 100%;
-	height: var(--ash-pane-title-height);
-	flex: 0 0 var(--ash-pane-title-height);
+	height: var(--ash-pane-titleHeight);
+	flex: 0 0 var(--ash-pane-titleHeight);
 }
 
 .ash-multi-row-editor-tabs-control > .ash-multi-editor-tabs-control[hidden] {
@@ -78,7 +78,7 @@
 	.ash-tab[data-state="conflict"]
 	.ash-tab-primary-action
 	button::after {
-	border-radius: var(--ash-corner-radius-x-small);
+	border-radius: var(--ash-cornerRadius-xSmall);
 	color: var(--ash-warning-foreground);
 	transform: rotate(45deg);
 }

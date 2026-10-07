@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; worker-src 'self'; frame-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+	<style>html, body, iframe { width: 100%; height: 100%; margin: 0; border: 0; display: block; } body { overflow: hidden; }</style>
+</head>
+<body>
+<script>
+(() => {
+	const channel = new URLSearchParams(location.hash.slice(1)).get('channel');
+	const workerUrl = new URL(new URLSearchParams(location.search).get('worker'));
+	const host = parent;
+	const notify = message => host.postMessage({ ...message, channel }, '*');
+	let frame;
+	let documentChannel;
+	let documentContent;
+	let nextRequest = 0;
+	const resourcePorts = new Map();
+	let registration;
+	let closed = false;
+	const discardRequests = () => {
+		for (const request of resourcePorts.values()) {
+			request.port.postMessage({ status: 410 });
+			request.port.close();
+		}
+		resourcePorts.clear();
+	};
+	const close = () => {
+		if (closed) return;
+		closed = true;
+		discardRequests();
+		frame?.remove();
+		void registration?.unregister();
+	};
+	window.addEventListener('pagehide', close, { once: true });
+	window.addEventListener('focus', () => frame?.contentWindow?.focus());
+	navigator.serviceWorker.addEventListener('message', event => {
+		if (event.source !== navigator.serviceWorker.controller || event.ports.length !== 1) return;
+		const request = event.data;
+		const responsePort = event.ports[0];
+		if (closed || request.documentChannel !== documentChannel) {
+			responsePort.postMessage({ status: 410 });
+			responsePort.close();
+		} else if (request.type === 'load-document') {
+			responsePort.postMessage({ status: 200, mimeType: 'text/html; charset=utf-8', body: documentContent });
+			responsePort.close();
+		} else if (request.type === 'load-resource') {
+			const id = ++nextRequest;
+			resourcePorts.set(id, { port: responsePort, channel: documentChannel });
+			notify({ type: 'load-resource', id, documentChannel, url: request.url });
+		}
+	});
+	window.addEventListener('message', event => {
+		if (closed) return;
+		const messageChannel = event.data?.channel;
+		if (event.source === frame?.contentWindow && [documentChannel, `${documentChannel}:lifecycle`, `${documentChannel}:keyboard`].includes(messageChannel)) {
+			host.postMessage(event.data, '*');
+			return;
+		}
+		if (event.source !== host || event.data?.channel !== channel) return;
+		const message = event.data;
+		switch (message.type) {
+			case 'document':
+				discardRequests();
+				documentChannel = message.documentChannel;
+				documentContent = message.html;
+				document.title = message.title;
+				frame?.remove();
+				frame = document.createElement('iframe');
+				frame.sandbox = 'allow-scripts allow-same-origin';
+				frame.title = message.title;
+				frame.src = new URL(`document/${encodeURIComponent(documentChannel)}`, workerUrl).href;
+				document.body.append(frame);
+				break;
+			case 'message':
+				if (message.documentChannel === documentChannel) {
+					frame.contentWindow.postMessage(message.message, location.origin, message.transfer);
+				}
+				break;
+			case 'resource-response':
+				const request = resourcePorts.get(message.id);
+				if (request && request.channel === message.documentChannel) {
+					resourcePorts.delete(message.id);
+					request.port.postMessage({ status: message.status, mimeType: message.mimeType, body: message.bytes }, message.bytes ? [message.bytes] : []);
+					request.port.close();
+				}
+				break;
+			case 'focus':
+				frame?.contentWindow?.focus();
+				break;
+			case 'title':
+				document.title = message.title;
+				if (frame) frame.title = message.title;
+				break;
+			case 'shutdown':
+				close();
+				break;
+		}
+	});
+	(async () => {
+		if (workerUrl.protocol !== location.protocol || workerUrl.host !== location.host) throw new Error('Resource worker must share the isolated origin');
+		registration = await navigator.serviceWorker.register(workerUrl.href);
+		await navigator.serviceWorker.ready;
+		if (!navigator.serviceWorker.controller) {
+			await new Promise(resolve => navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true }));
+		}
+		if (closed) {
+			void registration.unregister();
+			return;
+		}
+		notify({ type: 'bootstrap-ready' });
+	})().catch(error => notify({ type: 'bootstrap-error', error: String(error) }));
+})();
+</script>
+</body>
+</html>

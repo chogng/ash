@@ -6,10 +6,10 @@
 	box-sizing: border-box;
 	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
 	color: var(--ash-editor-foreground);
-	background: var(--ash-editor-widget-background);
-	border: var(--ash-stroke-thickness) solid var(--ash-editor-widget-border);
-	border-radius: var(--ash-corner-radius-large);
-	font-size: var(--ash-font-size-label1);
+	background: var(--ash-editor-widgetBackground);
+	border: var(--ash-strokeThickness) solid var(--ash-editor-widgetBorder);
+	border-radius: var(--ash-cornerRadius-large);
+	font-size: var(--ash-fontSize-label1);
 }
 
 .ash-chat-editing-overlay[hidden] {
@@ -23,10 +23,10 @@
 }
 
 .ash-chat-editing-added {
-	background-color: var(--ash-diff-editor-inserted-line-background);
+	background-color: var(--ash-diffEditor-insertedLineBackground);
 }
 .ash-chat-editing-gutter {
-	border-left: 2px solid var(--ash-diff-editor-inserted-text-background);
+	border-left: 2px solid var(--ash-diffEditor-insertedTextBackground);
 }
 
 .ash-chat-editing-deleted {
@@ -34,15 +34,15 @@
 	white-space: pre;
 	overflow: auto;
 	color: var(--ash-editor-foreground);
-	background-color: var(--ash-diff-editor-removed-line-background);
+	background-color: var(--ash-diffEditor-removedLineBackground);
 }
 
 .hc-black .ash-chat-editing-overlay,
 .hc-light .ash-chat-editing-overlay {
-	border-color: var(--ash-contrast-border);
+	border-color: var(--ash-contrastBorder);
 }
 
 .hc-black .ash-chat-editing-gutter,
 .hc-light .ash-chat-editing-gutter {
-	border-color: var(--ash-contrast-border);
+	border-color: var(--ash-contrastBorder);
 }

@@ -35,7 +35,7 @@ code {
 pre {
 	padding: 16px;
 	overflow: auto;
-	background: var(--ash-text-code-block-background);
+	background: var(--ash-text-codeBlockBackground);
 }
 blockquote {
 	margin-left: 0;
@@ -46,7 +46,7 @@ a {
 	color: var(--ash-link-foreground);
 }
 a:focus-visible {
-	outline: 1px solid var(--ash-focus-border);
+	outline: 1px solid var(--ash-focusBorder);
 }
 table {
 	border-collapse: collapse;

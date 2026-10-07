@@ -140,7 +140,7 @@ test('Sessions Library imports real images and preserves favorites and collectio
 
 test('Sessions Library keeps text and keyboard focus readable across themes', async ({ application, target, workbench }) => {
 	let page = workbench.page;
-	for (const [theme, scheme] of [['Ash Light', 'light'], ['Ash Dark', 'dark'], ['Ash High Contrast Dark', 'high-contrast-dark'], ['Ash High Contrast Light', 'high-contrast-light']]) {
+	for (const [theme, scheme] of [['Ash Light', 'light'], ['Ash Dark', 'dark'], ['Ash High Contrast Dark', 'hcDark'], ['Ash High Contrast Light', 'hcLight']]) {
 		if (target.kind === 'browser') {
 			await page.goto('/browser/workbench/workbench.html');
 			await workbench.waitForReady();
@@ -173,7 +173,7 @@ test('Sessions Library keeps text and keyboard focus readable across themes', as
 			if (scheme.startsWith('high-contrast')) {
 				const colors = await item.evaluate(element => {
 					const probe = document.createElement('span');
-					probe.style.color = 'var(--ash-contrast-border)'; element.append(probe);
+					probe.style.color = 'var(--ash-contrastBorder)'; element.append(probe);
 					const contrast = getComputedStyle(probe).color; probe.remove();
 					return { border: getComputedStyle(element).borderTopColor, contrast };
 				});

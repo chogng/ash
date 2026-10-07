@@ -1,6 +1,6 @@
 .ash-workbench-sidebar {
-	border-right: var(--ash-stroke-thickness) solid var(--ash-border);
-	background: var(--ash-side-bar-background);
+	border-right: var(--ash-strokeThickness) solid var(--ash-border);
+	background: var(--ash-sideBar-background);
 }
 
 .ash-sessions-navigation-view {
@@ -23,7 +23,7 @@
 
 .ash-sessions-window .ash-workbench-sidebar .ash-sessions-activity-host {
 	flex: 0 0 auto;
-	background: var(--ash-side-bar-background);
+	background: var(--ash-sideBar-background);
 }
 
 .ash-sessions-window
@@ -33,9 +33,9 @@
 }
 
 .ash-sessions-window .ash-workbench-sidebar .ash-sessions-activity-host.top {
-	border-bottom: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
 }
 
 .ash-sessions-window .ash-workbench-sidebar .ash-sessions-activity-host.bottom {
-	border-top: var(--ash-stroke-thickness) solid var(--ash-border);
+	border-top: var(--ash-strokeThickness) solid var(--ash-border);
 }

@@ -21,8 +21,8 @@
 	flex: 0 0 auto;
 	margin: 8px 12px 0;
 	padding: 6px 8px;
-	border: var(--ash-stroke-thickness) solid var(--ash-border);
-	border-radius: var(--ash-corner-radius-small);
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+	border-radius: var(--ash-cornerRadius-small);
 	color: var(--ash-description-foreground);
 	font-size: 11px;
 	overflow: hidden;
@@ -42,7 +42,7 @@
 }
 
 .ash-chat-input-part {
-	--ash-chat-input-focus-border: var(--ash-focus-border);
+	--ash-chat-input-focus-border: var(--ash-focusBorder);
 	display: flex;
 	flex-direction: column;
 }
@@ -76,8 +76,8 @@
 	flex: 0 0 auto;
 	margin: 0 10px 8px;
 	padding: 8px;
-	border: var(--ash-stroke-thickness) solid var(--ash-focus-border);
-	border-radius: var(--ash-corner-radius-medium);
+	border: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	border-radius: var(--ash-cornerRadius-medium);
 	color: var(--ash-foreground);
 	background: var(--ash-input-background);
 	font-size: 12px;
@@ -119,7 +119,7 @@
 .ash-chat-interaction-form input,
 .ash-chat-interaction-form select {
 	padding: 6px;
-	border: var(--ash-stroke-thickness) solid var(--ash-border);
+	border: var(--ash-strokeThickness) solid var(--ash-border);
 	color: inherit;
 	background: var(--ash-editor-background);
 }
@@ -132,9 +132,9 @@
 	flex-direction: column;
 	min-height: var(--ash-chat-input-min-height, 140px);
 	padding: var(--ash-chat-input-padding, var(--ash-spacing-size80));
-	border: var(--ash-stroke-thickness) solid
+	border: var(--ash-strokeThickness) solid
 		var(--ash-chat-input-border, var(--ash-input-border));
-	border-radius: var(--ash-chat-input-radius, var(--ash-corner-radius-large));
+	border-radius: var(--ash-chat-input-radius, var(--ash-cornerRadius-large));
 	background: var(--ash-input-background);
 }
 
@@ -149,8 +149,8 @@
 		0 8px 24px
 			color-mix(in srgb, var(--ash-chat-input-shadow) 12%, transparent);
 	transition:
-		border-color var(--ash-animation-duration-normal) ease,
-		box-shadow var(--ash-animation-duration-normal) ease;
+		border-color var(--ash-animation-durationNormal) ease,
+		box-shadow var(--ash-animation-durationNormal) ease;
 }
 
 .ash-chat-input-part.floating-card
@@ -239,18 +239,18 @@
 	width: 100%;
 	min-width: 0;
 	align-items: center;
-	height: var(--ash-toolbar-action-size);
-	min-height: var(--ash-toolbar-action-size);
-	flex: 0 0 var(--ash-toolbar-action-size);
+	height: var(--ash-toolbar-actionSize);
+	min-height: var(--ash-toolbar-actionSize);
+	flex: 0 0 var(--ash-toolbar-actionSize);
 	/* Match the model picker's internal gap; a separate value makes spacing depend on stylesheet load order. */
-	gap: var(--ash-action-bar-gap);
+	gap: var(--ash-actionBar-gap);
 	margin-top: var(--ash-chat-input-toolbar-gap, var(--ash-spacing-size40));
 	padding: 0;
 }
 
 .ash-chat-input-action {
-	height: var(--ash-toolbar-action-size);
-	min-height: var(--ash-toolbar-action-size);
+	height: var(--ash-toolbar-actionSize);
+	min-height: var(--ash-toolbar-actionSize);
 }
 
 .ash-chat-input-toolbars.ash-toolbar
@@ -260,7 +260,7 @@
 	min-width: 0;
 	gap: 0;
 	padding: 0 var(--ash-spacing-size80);
-	border-radius: var(--ash-corner-radius-circle);
+	border-radius: var(--ash-cornerRadius-circle);
 	background: color-mix(
 		in srgb,
 		var(--ash-button-foreground) 10%,
@@ -326,8 +326,8 @@
 }
 
 .ash-chat-input-mode-indicator > .ash-icon {
-	width: var(--ash-lxicon-font-size-compact);
-	height: var(--ash-lxicon-font-size-compact);
+	width: var(--ash-lxiconFontSize-compact);
+	height: var(--ash-lxiconFontSize-compact);
 }
 
 .ash-chat-input-toolbars
@@ -344,8 +344,8 @@
 }
 
 .ash-chat-input-mic-action {
-	width: var(--ash-toolbar-action-size);
-	min-width: var(--ash-toolbar-action-size);
+	width: var(--ash-toolbar-actionSize);
+	min-width: var(--ash-toolbar-actionSize);
 	padding: 4px;
 	color: var(--ash-description-foreground);
 	border-radius: 50%;
@@ -356,8 +356,8 @@
 }
 
 .ash-chat-input-mic-action.checked {
-	color: var(--ash-button-primary-foreground);
-	background: var(--ash-button-primary-background);
+	color: var(--ash-button-primaryForeground);
+	background: var(--ash-button-primaryBackground);
 }
 
 .ash-chat-input-toolbars .ash-chat-input-mic {
@@ -385,12 +385,12 @@
 .ash-chat-input-toolbars .ash-chat-input-send-action,
 .ash-chat-input-toolbars .ash-chat-input-voice-action,
 .ash-chat-input-interrupt-action {
-	width: var(--ash-toolbar-action-size);
-	min-width: var(--ash-toolbar-action-size);
+	width: var(--ash-toolbar-actionSize);
+	min-width: var(--ash-toolbar-actionSize);
 	padding: 4px;
 	border-radius: 50%;
-	color: var(--ash-button-primary-foreground);
-	background: var(--ash-button-primary-background);
+	color: var(--ash-button-primaryForeground);
+	background: var(--ash-button-primaryBackground);
 }
 
 .ash-chat-input-toolbars .ash-chat-input-send-action.disabled,
@@ -407,7 +407,7 @@
 .ash-chat-input-toolbars .ash-chat-input-send-action:hover,
 .ash-chat-input-toolbars .ash-chat-input-voice-action:hover,
 .ash-chat-input-interrupt-action:hover {
-	background: var(--ash-button-primary-hover-background);
+	background: var(--ash-button-primaryHoverBackground);
 }
 
 .ash-chat-input-toolbars .ash-chat-input-send-action.disabled:hover,

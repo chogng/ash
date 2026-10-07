@@ -86,40 +86,40 @@
 }
 
 .ash-statusbar-item.remote-kind {
-	color: var(--ash-status-bar-item-remote-foreground);
-	background: var(--ash-status-bar-item-remote-background);
+	color: var(--ash-statusBarItem-remoteForeground);
+	background: var(--ash-statusBarItem-remoteBackground);
 }
 
 .ash-statusbar-item-label:hover:not(.disabled) {
-	color: var(--ash-status-bar-item-hover-foreground);
-	background: var(--ash-status-bar-item-hover-background);
+	color: var(--ash-statusBarItem-hoverForeground);
+	background: var(--ash-statusBarItem-hoverBackground);
 }
 
 .ash-statusbar-item.compact-group-hover > .ash-statusbar-item-label {
-	color: var(--ash-status-bar-item-hover-foreground);
-	background: var(--ash-status-bar-item-hover-background);
+	color: var(--ash-statusBarItem-hoverForeground);
+	background: var(--ash-statusBarItem-hoverBackground);
 }
 
 .ash-statusbar-item.compact-entry-hover > .ash-statusbar-item-label {
 	background-image: linear-gradient(
-		var(--ash-status-bar-item-compact-hover-background),
-		var(--ash-status-bar-item-compact-hover-background)
+		var(--ash-statusBarItem-compactHoverBackground),
+		var(--ash-statusBarItem-compactHoverBackground)
 	);
 }
 
 .ash-statusbar-item.remote-kind
 	> .ash-statusbar-item-label:hover:not(.disabled) {
-	color: var(--ash-status-bar-item-remote-hover-foreground);
-	background: var(--ash-status-bar-item-remote-hover-background);
+	color: var(--ash-statusBarItem-remoteHoverForeground);
+	background: var(--ash-statusBarItem-remoteHoverBackground);
 }
 
 .ash-statusbar-item-label:active:not(.disabled) {
-	background: var(--ash-status-bar-item-active-background);
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	background: var(--ash-statusBarItem-activeBackground);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
 
 .ash-statusbar-item-label:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }

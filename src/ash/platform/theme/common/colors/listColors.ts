@@ -1,8 +1,8 @@
 import { registerColor, transparent } from "../colorUtils.js";
 
 const owner = "platform.theme.list";
-const color = (id: string, dark: string, light: string, highContrastDark: string, highContrastLight: string, description: string): string =>
-	registerColor(id, { dark, light, highContrastDark, highContrastLight }, { description, owner });
+const color = (id: string, dark: string, light: string, hcDark: string, hcLight: string, description: string): string =>
+	registerColor(id, { dark, light, hcDark, hcLight }, { description, owner });
 
 export const listHoverBackground = color("list.hoverBackground", "#2a2d2e", "#e8e8e8", "#333333", "#dddddd", "Hovered list row background.");
 export const listActiveSelectionForeground = color("list.activeSelectionForeground", "#ffffff", "#ffffff", "#000000", "#ffffff", "Active list selection foreground.");
@@ -12,6 +12,6 @@ export const treeIndentGuidesStroke = color("tree.indentGuidesStroke", "#585858"
 export const treeInactiveIndentGuidesStroke = registerColor("tree.inactiveIndentGuidesStroke", {
 	dark: transparent(treeIndentGuidesStroke, 0.4),
 	light: transparent(treeIndentGuidesStroke, 0.4),
-	highContrastDark: "#ffffff",
-	highContrastLight: "#000000",
+	hcDark: "#ffffff",
+	hcLight: "#000000",
 }, { description: "Inactive tree indentation guide stroke.", owner });

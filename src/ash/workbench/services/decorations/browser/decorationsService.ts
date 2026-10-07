@@ -208,7 +208,7 @@ export class DecorationsService extends Disposable implements IDecorationsServic
 				rules.push(`.ash-icon-label.${className}-color > .ash-icon-label-container { color: var(${colorCssVariable(data.color)}); }`);
 			}
 			if (typeof data.letter === 'string') {
-				rules.push(`.ash-icon-label.${className}-badge::after { content: ${cssString(data.letter)}; flex: 0 0 auto; font-size: var(--ash-font-size-label2); color: ${data.color ? `var(${colorCssVariable(data.color)})` : 'inherit'}; }`);
+				rules.push(`.ash-icon-label.${className}-badge::after { content: ${cssString(data.letter)}; flex: 0 0 auto; font-size: var(--ash-fontSize-label2); color: ${data.color ? `var(${colorCssVariable(data.color)})` : 'inherit'}; }`);
 			} else if (data.letter) {
 				const color = data.letter.color?.id ?? data.color;
 				rules.push(`.ash-icon-label.${className}-icon { --ash-icon-label-suffix-icon-color: ${color ? `var(${colorCssVariable(color)})` : 'currentColor'}; }`);

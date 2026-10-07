@@ -17,7 +17,7 @@
 	padding: var(--ash-spacing-size40) var(--ash-spacing-size20)
 		var(--ash-spacing-size80);
 	color: var(--ash-description-foreground);
-	font-size: var(--ash-font-size-label1);
+	font-size: var(--ash-fontSize-label1);
 }
 
 .ash-bulk-edit-list {
@@ -30,8 +30,8 @@
 
 .ash-bulk-edit-entry {
 	margin-bottom: var(--ash-spacing-size60);
-	border: var(--ash-stroke-thickness) solid var(--ash-border);
-	border-radius: var(--ash-corner-radius-small);
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+	border-radius: var(--ash-cornerRadius-small);
 	padding: var(--ash-spacing-size80);
 	background: var(--ash-editor-background);
 }
@@ -49,7 +49,7 @@
 
 .ash-bulk-edit-kind {
 	color: var(--ash-description-foreground);
-	font-size: var(--ash-font-size-body2);
+	font-size: var(--ash-fontSize-body2);
 }
 
 .ash-bulk-edit-resource {
@@ -60,7 +60,7 @@
 .ash-bulk-edit-detail {
 	margin: var(--ash-spacing-size40) 0 0 var(--ash-spacing-size240);
 	color: var(--ash-description-foreground);
-	font-size: var(--ash-font-size-label1);
+	font-size: var(--ash-fontSize-label1);
 }
 
 .ash-bulk-edit-entry.has-error .ash-bulk-edit-detail {
@@ -70,18 +70,18 @@
 .ash-bulk-edit-text-change {
 	margin: var(--ash-spacing-size60) 0 0 var(--ash-spacing-size240);
 	color: var(--ash-description-foreground);
-	font-size: var(--ash-font-size-label1);
+	font-size: var(--ash-fontSize-label1);
 }
 
 .ash-bulk-edit-text-change pre {
 	max-height: 180px;
 	margin: var(--ash-spacing-size60) 0 0;
 	overflow: auto;
-	border: var(--ash-stroke-thickness) solid var(--ash-border);
+	border: var(--ash-strokeThickness) solid var(--ash-border);
 	padding: var(--ash-spacing-size60);
 	color: var(--ash-editor-foreground);
 	background: var(--ash-editor-background);
-	font: var(--ash-font-size-body2)/1.4 var(--ash-font-family-monospace);
+	font: var(--ash-fontSize-body2)/1.4 var(--ash-font-family-monospace);
 	white-space: pre-wrap;
 	overflow-wrap: anywhere;
 }
@@ -94,7 +94,7 @@
 
 .ash-bulk-edit-group-label {
 	padding: var(--ash-spacing-size80) 0;
-	font-weight: var(--ash-font-weight-semi-bold);
+	font-weight: var(--ash-fontWeight-semiBold);
 	overflow-wrap: anywhere;
 }
 
@@ -114,10 +114,10 @@
 
 .ash-bulk-edit input:focus-visible,
 .ash-bulk-edit summary:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: 2px;
 }
 
 [data-color-scheme^="high-contrast"] .ash-bulk-edit-entry {
-	border-color: var(--ash-contrast-border);
+	border-color: var(--ash-contrastBorder);
 }

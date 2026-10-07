@@ -863,7 +863,7 @@ test.describe('SCM folding', () => {
 			await expect(selected).toHaveAttribute('aria-selected', 'true');
 			await expect.poll(() => selected.evaluate(element => {
 				const style = getComputedStyle(element);
-				const token = style.getPropertyValue('--ash-list-active-selection-background').trim();
+				const token = style.getPropertyValue('--ash-list-activeSelectionBackground').trim();
 				const probe = document.createElement('span');
 				probe.style.backgroundColor = token;
 				element.append(probe);

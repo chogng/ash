@@ -1,6 +1,14 @@
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { mainWindow, type CodeWindow } from "../../../../base/browser/window.js";
 import { Emitter } from "../../../../base/common/event.js";
+import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
+import { isCancellationError } from '../../../../base/common/errors.js';
+import { URI } from '../../../../base/common/uri.js';
+import { Schemas } from '../../../../base/common/network.js';
+import { IFileService } from '../../../../platform/files/common/files.js';
+import { IWorkbenchEnvironmentService } from '../../../services/environment/common/environmentService.js';
+import { webviewGenericCspSource } from '../common/webview.js';
+import { loadLocalResource } from './resourceLoading.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IWebviewElement, WebviewInitInfo, WebviewMessageReceivedEvent } from "./webview.js";
 
@@ -13,26 +21,20 @@ const MAX_WEBVIEW_HTML_LENGTH = 16 * 1024 * 1024;
 const MAX_WEBVIEW_TITLE_LENGTH = 512;
 const WEBVIEW_CONTENT_SECURITY_POLICY = [
 	"default-src 'none'",
-	"img-src data: blob:",
-	"media-src data: blob:",
-	"font-src data:",
-	"style-src 'unsafe-inline'",
-	"script-src 'unsafe-inline'",
-	"connect-src 'none'",
+	`img-src ${webviewGenericCspSource} data: blob:`,
+	`media-src ${webviewGenericCspSource} data: blob:`,
+	`font-src ${webviewGenericCspSource} data:`,
+	`style-src 'unsafe-inline' ${webviewGenericCspSource}`,
+	`connect-src ${webviewGenericCspSource}`,
 	"frame-src 'none'",
 	"object-src 'none'",
-	"base-uri 'none'",
+	`base-uri ${webviewGenericCspSource}`,
 	"form-action 'none'",
 ].join("; ");
 
-let webviewInstanceCounter = 0;
-
 /**
- * Hosts controlled HTML in an opaque-origin sandboxed iframe.
- *
- * Content gets script execution and a narrow `acquireAshWebviewApi()` message
- * function, but no same-origin access, navigation, forms, downloads, network
- * connections, Electron APIs, or Ash renderer capabilities.
+ * Owns one isolated origin. Its worker routes resource reads through the existing
+ * file service; sandbox same-origin permission never exposes the Workbench origin.
  */
 export class WebviewElement extends Disposable implements IWebviewElement {
 	private readonly messages = this._register(new Emitter<WebviewMessageReceivedEvent>());
@@ -47,6 +49,13 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 	public readonly onDidDispose = this.disposed.event;
 	private readonly mountListeners = this._register(new MutableDisposable<DisposableStore>());
 	private readonly instanceChannel: string;
+	private readonly frameOrigin: string;
+	private readonly bootstrapUrl: URL;
+	private readonly localResourceRoots: readonly URI[];
+	private readonly allowScripts: boolean;
+	private readonly resourceRequests = this._register(new MutableDisposable());
+	private documentCancellation: CancellationTokenSource | undefined;
+	private isBootstrapReady = false;
 	private readonly forwardKeyboardEvents: boolean;
 	private readonly pendingMessages: {
 		message: unknown;
@@ -62,32 +71,52 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 	private isMounted = false;
 	public readonly element: HTMLIFrameElement;
 
-	constructor(initInfo: WebviewInitInfo) {
+	constructor(
+		initInfo: WebviewInitInfo,
+		@IFileService private readonly files: IFileService,
+		@IWorkbenchEnvironmentService environment: IWorkbenchEnvironmentService,
+	) {
 		super();
-		const instanceId = `webview_${++webviewInstanceCounter}`;
+		const instanceId = crypto.randomUUID();
 		this.instanceChannel = `ash-webview:${instanceId}`;
+		const endpoint = environment.webviewExternalEndpoint.replace('{{uuid}}', instanceId);
+		const bootstrapAsset = new URL('./pre/index.html', import.meta.url);
+		const workerAsset = new URL('./pre/service-worker.js?no-inline', import.meta.url);
+		// File-hosted bundles use filesystem URLs; the isolated host exposes their asset names.
+		const assetPath = (asset: URL): string => asset.protocol === `${Schemas.file}:`
+			? `assets/${asset.pathname.slice(asset.pathname.lastIndexOf('/') + 1)}`
+			: asset.pathname.replace(/^\//, '');
+		this.bootstrapUrl = new URL(assetPath(bootstrapAsset), `${endpoint}/`);
+		const workerUrl = new URL(assetPath(workerAsset), `${endpoint}/`);
+		this.frameOrigin = `${this.bootstrapUrl.protocol}//${this.bootstrapUrl.host}`;
+		this.bootstrapUrl.searchParams.set('worker', workerUrl.href);
+		this.bootstrapUrl.hash = new URLSearchParams({ channel: this.instanceChannel }).toString();
+		this.localResourceRoots = [...(initInfo.contentOptions?.localResourceRoots ?? [])];
+		this.allowScripts = initInfo.contentOptions?.allowScripts === true;
 		this.forwardKeyboardEvents = initInfo.options.forwardKeyboardEvents === true;
 		const element = h(mainWindow.document, "iframe");
 		this.element = element;
 		element.name = instanceId;
 		element.className = "ash-webview";
 		element.tabIndex = 0;
-		element.setAttribute("sandbox", "allow-scripts");
+		element.setAttribute("sandbox", "allow-scripts allow-same-origin");
 		element.setAttribute("referrerpolicy", "no-referrer");
-		element.setAttribute("credentialless", "");
-		element.setAttribute("csp", WEBVIEW_CONTENT_SECURITY_POLICY);
 		element.setAttribute("title", validateTitle(initInfo.title ?? "Webview"));
 		element.style.border = "0";
 		element.style.display = "block";
 		element.style.width = "100%";
 		element.style.height = "100%";
 		this._register(toDisposable(() => {
+			if (this.isBootstrapReady && element.isConnected) {
+				this.sendControl({ type: 'shutdown' });
+			}
+			this.resourceRequests.clear();
 			this.mountListeners.clear();
 			this.discardPendingMessages();
 			// Owners must receive blur and disposal before the registered emitters are released.
 			this.setFocused(false);
 			this.disposed.fire();
-			element.srcdoc = "";
+			element.src = 'about:blank';
 			element.remove();
 		}));
 	}
@@ -99,22 +128,47 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 		if (this.isMounted) {
 			throw new Error("WebviewElement is already mounted");
 		}
+		if (this.frameOrigin === targetWindow.location.origin) {
+			throw new Error('Webview origin must be isolated from the Workbench');
+		}
 		this.isMounted = true;
 		const listeners = new DisposableStore();
 		this.mountListeners.value = listeners;
-		listeners.add(addDisposableListener(this.element, "focus", () => this.setFocused(true)));
+		listeners.add(addDisposableListener(this.element, "focus", () => {
+			this.setFocused(true);
+			// DOM focus targets the outer iframe; keyboard input belongs to its content document.
+			if (this.isBootstrapReady) {
+				this.sendControl({ type: 'focus' });
+			}
+		}));
 		listeners.add(addDisposableListener(this.element, "blur", () => this.setFocused(false)));
 		listeners.add(addDisposableListener<MessageEvent>(targetWindow, "message", event => {
 			const contentWindow = this.element.contentWindow;
-			if (!contentWindow || event.source !== contentWindow) {
+			if (!contentWindow || event.source !== contentWindow || event.origin !== this.frameOrigin) {
+				return;
+			}
+			if (event.data?.channel === this.instanceChannel) {
+				if (event.data.type === 'bootstrap-ready') {
+					this.isBootstrapReady = true;
+					this.sendDocument();
+				} else if (event.data.type === 'load-resource') {
+					void this.loadResource(event.data);
+				} else if (event.data.type === 'bootstrap-error') {
+					console.error('Webview bootstrap failed', event.data.error);
+					this.discardPendingMessages();
+				}
 				return;
 			}
 			if (event.data?.channel === `${this.channel}:lifecycle`) {
 				if (event.data.type === "ready") {
 					this.isReady = true;
+					// Focus can precede bootstrap or document loading when an editor pane opens.
+					if (this.element.ownerDocument.activeElement === this.element) {
+						this.sendControl({ type: 'focus' });
+					}
 					for (const pending of this.pendingMessages.splice(0)) {
 						try {
-							contentWindow.postMessage(pending.message, "*", [...pending.transfer]);
+							this.sendContentMessage(pending.message, pending.transfer);
 							pending.resolve(true);
 						} catch (error) {
 							pending.reject(error);
@@ -144,6 +198,7 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 		if (this.html === undefined) {
 			this.setHtml("");
 		}
+		this.element.src = this.bootstrapUrl.href;
 		parent.append(this.element);
 	}
 
@@ -160,16 +215,19 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 		this.isReady = false;
 		// Each document has its own channel: late readiness or edits cannot reach its replacement.
 		this.channel = `${this.instanceChannel}:${++this.documentVersion}`;
+		const cancellation = new CancellationTokenSource();
+		this.resourceRequests.value = toDisposable(() => cancellation.dispose(true));
+		this.documentCancellation = cancellation;
 		this.element.setAttribute("data-ash-webview-channel", this.channel);
-		this.element.srcdoc = createWebviewDocument(this.channel, html, this.forwardKeyboardEvents);
+		this.sendDocument();
 	}
 
 	public setTitle(title: string): void {
 		this.assertNotDisposed();
 		this.element.setAttribute("title", validateTitle(title));
+		this.sendControl({ type: 'title', title });
 	}
 
-	/** The opaque document requires targetOrigin '*'; content must check event.source === parent. */
 	public async postMessage(message: unknown, transfer: readonly ArrayBuffer[] = []): Promise<boolean> {
 		if (this.isDisposed) {
 			return false;
@@ -177,13 +235,74 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 		if (!this.isReady) {
 			return new Promise<boolean>((resolve, reject) => this.pendingMessages.push({ message, transfer, resolve, reject }));
 		}
-		this.element.contentWindow!.postMessage(message, "*", [...transfer]);
+		this.sendContentMessage(message, transfer);
 		return true;
 	}
 
 	public focus(): void {
 		this.assertNotDisposed();
 		this.element.focus();
+		this.sendControl({ type: 'focus' });
+	}
+
+	private sendControl(message: object, transfer: readonly ArrayBuffer[] = []): void {
+		this.element.contentWindow?.postMessage({ ...message, channel: this.instanceChannel }, this.frameOrigin, [...transfer]);
+	}
+
+	private sendContentMessage(message: unknown, transfer: readonly ArrayBuffer[]): void {
+		this.sendControl({ type: 'message', documentChannel: this.channel, message, transfer }, transfer);
+	}
+
+	private sendDocument(): void {
+		if (this.isBootstrapReady && this.html !== undefined) {
+			this.sendControl({
+				type: 'document',
+				documentChannel: this.channel,
+				title: this.element.title,
+				html: createWebviewDocument(this.channel, this.html, this.forwardKeyboardEvents, this.allowScripts),
+			});
+		}
+	}
+
+	private async loadResource(request: { readonly id?: unknown; readonly documentChannel?: unknown; readonly url?: unknown; }): Promise<void> {
+		if (!Number.isSafeInteger(request.id) || typeof request.url !== 'string' || request.documentChannel !== this.channel) {
+			return;
+		}
+		const channel = this.channel;
+		const token = this.documentCancellation!.token;
+		let response: Awaited<ReturnType<typeof loadLocalResource>>;
+		try {
+			const url = new URL(request.url);
+			const resourcePath = /^\/([a-z][a-z\d+.-]*)\/a([^/]*)(\/.*)$/.exec(url.pathname);
+			if (url.origin !== webviewGenericCspSource || !resourcePath) {
+				response = { status: 403, mimeType: 'application/octet-stream' };
+			} else {
+				const resource = URI.from({
+					scheme: resourcePath[1]!,
+					authority: decodeURIComponent(resourcePath[2]!),
+					path: decodeURIComponent(resourcePath[3]!),
+				});
+				response = await loadLocalResource(resource, { roots: this.localResourceRoots }, this.files, token);
+			}
+		} catch (error) {
+			if (isCancellationError(error)) {
+				return;
+			}
+			console.error('Webview resource read failed', error);
+			response = { status: 500, mimeType: 'application/octet-stream' };
+		}
+		if (this.isDisposed || token.isCancellationRequested || channel !== this.channel) {
+			return;
+		}
+		const bytes = response.bytes?.slice().buffer;
+		this.sendControl({
+			type: 'resource-response',
+			id: request.id,
+			documentChannel: channel,
+			status: response.status,
+			mimeType: response.mimeType,
+			bytes,
+		}, bytes ? [bytes] : []);
 	}
 
 	private setFocused(focused: boolean): void {
@@ -205,7 +324,9 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 	}
 }
 
-function createWebviewDocument(channel: string, html: string, forwardKeyboardEvents: boolean): string {
+function createWebviewDocument(channel: string, html: string, forwardKeyboardEvents: boolean, allowScripts: boolean): string {
+	const nonce = crypto.randomUUID();
+	const policy = `${WEBVIEW_CONTENT_SECURITY_POLICY}; script-src ${allowScripts ? `'unsafe-inline' ${webviewGenericCspSource}` : `'nonce-${nonce}'`}`;
 	// Wait for content scripts to register handlers before delivering queued host messages.
 	const bootstrap = `(() => {
     const channel = ${JSON.stringify(channel)};
@@ -246,10 +367,10 @@ function createWebviewDocument(channel: string, html: string, forwardKeyboardEve
 <html>
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="${escapeAttribute(WEBVIEW_CONTENT_SECURITY_POLICY)
+  <meta http-equiv="Content-Security-Policy" content="${escapeAttribute(policy)
 		}">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <script>${bootstrap}</script>
+  <script nonce="${nonce}">${bootstrap}</script>
 </head>
 <body>${html}</body>
 </html>`;

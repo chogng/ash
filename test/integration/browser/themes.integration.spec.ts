@@ -1,5 +1,33 @@
 import { expect, test } from '@playwright/test';
 
+test('size tokens preserve camelCase and resolve in every color theme', async ({ page }) => {
+	await page.goto('/themes.html');
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	for (const id of ['ash-dark', 'ash-light', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+		await page.evaluate(id => window.selectColorTheme(id), id);
+		await expect.poll(() => page.locator('#root').evaluate(element => {
+			const probe = document.createElement('span');
+			probe.style.fontSize = 'var(--ash-fontSize-body1)';
+			probe.style.fontWeight = 'var(--ash-fontWeight-semiBold)';
+			probe.style.borderRadius = 'var(--ash-cornerRadius-medium)';
+			element.append(probe);
+			try {
+				const rootStyle = getComputedStyle(element);
+				const style = getComputedStyle(probe);
+				return {
+					fontSize: style.fontSize,
+					fontWeight: style.fontWeight,
+					borderRadius: style.borderRadius,
+					oldFontSize: rootStyle.getPropertyValue('--ash-font-size-body1'),
+					oldFontWeight: rootStyle.getPropertyValue('--ash-font-weight-semi-bold'),
+				};
+			} finally {
+				probe.remove();
+			}
+		})).toEqual({ fontSize: '13px', fontWeight: '600', borderRadius: '6px', oldFontSize: '', oldFontWeight: '' });
+	}
+});
+
 test('resource decorations resolve asynchronously, follow themes and clear after provider removal', async ({ page }) => {
 	await page.goto('/themes.html');
 	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
@@ -78,13 +106,13 @@ test('an active workbench theme includes later colors and restores host variable
 	await page.goto('/themes.html');
 	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 	const root = page.locator('#root');
-	await root.evaluate(element => element.style.setProperty('--ash-test-browser-late', '#fedcba', 'important'));
+	await root.evaluate(element => element.style.setProperty('--ash-test-browserLate', '#fedcba', 'important'));
 	await page.evaluate(() => window.registerLateThemeColor());
-	expect(await root.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-test-browser-late'))).toBe('#123456');
+	expect(await root.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-test-browserLate'))).toBe('#123456');
 	await page.getByRole('button', { name: 'Light', exact: true }).click();
-	expect(await root.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-test-browser-late'))).toBe('#abcdef');
+	expect(await root.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-test-browserLate'))).toBe('#abcdef');
 	await page.evaluate(() => window.disposeThemeRoot());
-	expect(await root.evaluate(element => [element.style.getPropertyValue('--ash-test-browser-late'), element.style.getPropertyPriority('--ash-test-browser-late')])).toEqual(['#fedcba', 'important']);
+	expect(await root.evaluate(element => [element.style.getPropertyValue('--ash-test-browserLate'), element.style.getPropertyPriority('--ash-test-browserLate')])).toEqual(['#fedcba', 'important']);
 	expect(errors).toEqual([]);
 });
 
@@ -146,7 +174,7 @@ test('nested high contrast theme does not inherit an outer shadow color', async 
 	await page.evaluate(() => window.mountNestedHighContrastWidget());
 	try {
 		const nested = page.locator('#nested-high-contrast-root');
-		await expect(nested).toHaveAttribute('data-color-scheme', 'high-contrast-dark');
+		await expect(nested).toHaveAttribute('data-color-scheme', 'hcDark');
 		expect(await nested.locator('.ash-context-view-default').evaluate(element => getComputedStyle(element).boxShadow)).toBe('none');
 	} finally {
 		await page.evaluate(() => window.disposeNestedHighContrastWidget());

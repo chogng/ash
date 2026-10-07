@@ -6,8 +6,8 @@
 	padding: 4px;
 	color: var(--ash-editor-foreground);
 	background: var(--ash-dialog-background);
-	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
-	border-radius: var(--ash-corner-radius-small);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-small);
 	box-shadow: 0 4px 12px var(--ash-widget-shadow);
 }
 
@@ -21,15 +21,15 @@
 	color: var(--ash-button-foreground);
 	background: transparent;
 	border: 0;
-	border-radius: var(--ash-corner-radius-small);
+	border-radius: var(--ash-cornerRadius-small);
 }
 
 .stanza-editor-find-options-widget button:hover,
 .stanza-editor-find-options-widget button.checked {
-	background: var(--ash-button-hover-background);
+	background: var(--ash-button-hoverBackground);
 }
 
 .stanza-editor-find-options-widget button:focus-visible {
-	outline: var(--ash-stroke-thickness) solid var(--ash-focus-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }

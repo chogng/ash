@@ -4,6 +4,6 @@
 		var(--ash-warning-foreground) 22%,
 		transparent
 	);
-	border-bottom: var(--ash-stroke-thickness) dotted
+	border-bottom: var(--ash-strokeThickness) dotted
 		var(--ash-warning-foreground);
 }

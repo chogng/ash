@@ -780,13 +780,13 @@ test('theme color settings update editor colors and restore defaults when remove
 	await editor.waitForEditorFocus();
 	await page.keyboard.insertText('prefix selected suffix');
 	const overrides = [
-		['editor.selectionBackground', '#123456', '--ash-editor-selection-background'],
-		['editor.inactiveSelectionBackground', '#654321', '--ash-editor-inactive-selection-background'],
-		['editor.selectionForeground', '#fedcba', '--ash-editor-selection-foreground'],
+		['editor.selectionBackground', '#123456', '--ash-editor-selectionBackground'],
+		['editor.inactiveSelectionBackground', '#654321', '--ash-editor-inactiveSelectionBackground'],
+		['editor.selectionForeground', '#fedcba', '--ash-editor-selectionForeground'],
 		['scrollbar.background', '#112233', '--ash-scrollbar-background'],
-		['scrollbarSlider.background', '#234567', '--ash-scrollbar-slider-background'],
-		['scrollbarSlider.hoverBackground', '#345678', '--ash-scrollbar-slider-hover-background'],
-		['scrollbarSlider.activeBackground', '#456789', '--ash-scrollbar-slider-active-background'],
+		['scrollbarSlider.background', '#234567', '--ash-scrollbarSlider-background'],
+		['scrollbarSlider.hoverBackground', '#345678', '--ash-scrollbarSlider-hoverBackground'],
+		['scrollbarSlider.activeBackground', '#456789', '--ash-scrollbarSlider-activeBackground'],
 		['widget.shadow', '#56789a', '--ash-widget-shadow'],
 		['minimap.shadow', '#6789ab', '--ash-minimap-shadow'],
 	] as const;

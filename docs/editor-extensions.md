@@ -80,6 +80,9 @@ Workspace edit 的 `entries` 按顺序执行：`kind: textDocument` 带 `resourc
 
 该扩展还提供 Markdown 预览及富文本编辑器，使用 `@vscode/markdown-editor` 以 Markdown 源码驱动排版。
 工作台通用 `WebviewEditor` 承载这些视图，`CustomTextEditorModel` 引用源码的共享文本模型。
+预览用源文档 URI 作为资源基址；相对图片、样式、字体和模块路径通过隔离 Webview 的资源通道加载。
+允许读取的目录是当前工作区与源文档目录，实际读取还必须满足已有文件服务的授权。
+切换文档和关闭视图后，旧请求不会向新页面发送结果。
 富文本视图只保留当前显示内容，编辑必须带上共享模型的版本；撤销、重做、保存和关闭确认均由同一文档状态决定。
 版本冲突保留视图中的草稿，并提供重新载入操作。库资源由 Worker 创建、工作台在沙箱内加载，
 不占用文档编辑消息的 JSON 限额；Worker 退出时释放资源 URL。

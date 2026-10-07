@@ -14,8 +14,8 @@
 	color: var(--ash-editor-foreground);
 	white-space: pre-wrap;
 	background: var(--ash-dialog-background);
-	border: var(--ash-stroke-thickness) solid var(--ash-widget-border);
-	border-radius: var(--ash-corner-radius-small);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-small);
 	box-shadow: 0 4px 12px var(--ash-widget-shadow);
 }
 
