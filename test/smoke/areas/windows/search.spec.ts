@@ -405,6 +405,7 @@ test('Search translates query options and file filters into Chinese', async ({ t
 	await expect(query).toBeFocused();
 	await workbench.page.getByRole('toolbar', { name: 'Search result actions', exact: true }).getByRole('button', { name: '更多操作', exact: true }).click();
 	await expect(workbench.page.getByRole('menuitem', { name: '移除结果', exact: true })).toBeVisible();
+	await expect(workbench.page.getByRole('menuitem', { name: '复制全部结果', exact: true })).toBeVisible();
 	await workbench.page.keyboard.press('Escape');
 	await workbench.quickaccess.runCommand('search.action.openNewEditor');
 	const editorQuery = workbench.page.getByRole('textbox', { name: '搜索编辑器查询', exact: true });
@@ -414,4 +415,61 @@ test('Search translates query options and file filters into Chinese', async ({ t
 	await expect(workbench.page.getByRole('dialog').getByRole('textbox')).toHaveValue(/搜索编辑器[\s\S]*\.code-search/);
 	await workbench.page.keyboard.press('Escape');
 	await expect(editorQuery).toBeFocused();
+});
+
+test('Search Copy All copies current retained results through the host clipboard', async ({ target, workbench, testWorkspace, application }) => {
+	test.skip(target.appServerMode !== 'required', 'Uses actual workspace searches and the host clipboard.');
+	const contents = [
+		['src/file10.ts', 'ash_copy_token ten\n'],
+		['src/file2.ts', 'ash_copy_token first\nash_copy_token second\n'],
+		['root.ts', 'ash_copy_token root\n'],
+	] as const;
+	await mkdir(join(testWorkspace.directory, 'src'), { recursive: true });
+	for (const [path, content] of contents) { await writeFile(join(testWorkspace.directory, path), content); }
+	const page = workbench.page;
+	// Seed known test content before any clipboard read; never inspect the user's previous clipboard.
+	if (target.kind === 'browser') {
+		await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+		await page.evaluate(() => navigator.clipboard.writeText('ash-search-copy-fixture'));
+	} else {
+		await (application as ElectronApplication).evaluate(async ({ clipboard }) => { await clipboard.writeText('ash-search-copy-fixture'); });
+	}
+	const readCopied = () => target.kind === 'browser'
+		? page.evaluate(() => navigator.clipboard.readText())
+		: (application as ElectronApplication).evaluate(({ clipboard }) => clipboard.readText());
+	await workbench.search.open();
+	const toolbar = page.getByRole('toolbar', { name: 'Search result actions', exact: true });
+	await toolbar.getByRole('button', { name: 'More Actions', exact: true }).click();
+	await expect(page.getByRole('menuitem', { name: 'Copy All', exact: true })).toHaveAttribute('aria-disabled', 'true');
+	await page.keyboard.press('Escape');
+	await workbench.search.search('ash_copy_token');
+	await expect(workbench.search.status).toHaveText('4 results');
+	const copyAll = async () => {
+		await toolbar.getByRole('button', { name: 'More Actions', exact: true }).click();
+		await page.getByRole('menuitem', { name: 'Copy All', exact: true }).click();
+	};
+	const delimiter = process.platform === 'win32' ? '\r\n' : '\n';
+	const pathLabel = (path: string) => join(testWorkspace.directory, path).replace(/^([a-z]):/i, (_prefix, drive: string) => drive.toUpperCase() + ':');
+	const blocks = [
+		[pathLabel('src/file2.ts'), '  1,1: ash_copy_token first', '  2,1: ash_copy_token second'].join(delimiter),
+		[pathLabel('src/file10.ts'), '  1,1: ash_copy_token ten'].join(delimiter),
+		[pathLabel('root.ts'), '  1,1: ash_copy_token root'].join(delimiter),
+	];
+	await page.getByRole('button', { name: 'Collapse all results', exact: true }).click();
+	await copyAll();
+	await expect.poll(readCopied).toBe(blocks.join(delimiter + delimiter));
+	const tree = workbench.search.element.getByRole('tree');
+	await tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path', { hasText: 'src/file10.ts' }) }).click();
+	await toolbar.getByRole('button', { name: 'More Actions', exact: true }).click();
+	await page.getByRole('menuitem', { name: 'Dismiss', exact: true }).click();
+	await expect(workbench.search.status).toHaveText('3 results');
+	await copyAll();
+	await expect.poll(readCopied).toBe([blocks[0], blocks[2]].join(delimiter + delimiter));
+	await writeFile(join(testWorkspace.directory, 'root.ts'), 'ash_copy_token root\nash_copy_token latest\n');
+	await page.getByRole('button', { name: 'Refresh search', exact: true }).click();
+	await expect(workbench.search.status).toHaveText('5 results');
+	await copyAll();
+	await expect.poll(readCopied).toBe([blocks[0], blocks[1], blocks[2] + delimiter + '  2,1: ash_copy_token latest'].join(delimiter + delimiter));
+	for (const [path, content] of contents.slice(0, 2)) { expect(await readFile(join(testWorkspace.directory, path), 'utf8')).toBe(content); }
+	expect(await readFile(join(testWorkspace.directory, 'root.ts'), 'utf8')).toBe('ash_copy_token root\nash_copy_token latest\n');
 });

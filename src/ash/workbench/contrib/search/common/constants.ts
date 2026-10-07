@@ -5,6 +5,7 @@ export const FOCUS_SEARCH_COMMAND_ID = "workbench.action.findInFiles";
 
 export const enum SearchCommandIds {
 	RemoveActionId = 'search.action.remove',
+	CopyAllCommandId = 'search.action.copyAll',
 }
 
 export const SearchContext = {

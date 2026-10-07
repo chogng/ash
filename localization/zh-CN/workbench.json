@@ -99,6 +99,8 @@
     "search.matchLabel": "第 {0} 行，第 {1} 列：{2}",
     "search.dismiss": "移除结果",
     "search.dismissHelp": "移除结果会从列表中去除选中的匹配、文件或文件夹，不会删除文件。在结果树中按 <keybinding:search.action.remove>，或使用更多操作中的“移除结果”。按住 Ctrl 或 Command 点击可选择多个结果。刷新会重新搜索文件。",
+    "search.copyAll": "复制全部结果",
+    "search.copyAllHelp": "更多操作中的“复制全部结果”会将当前保留结果的文件路径、行列位置和匹配行文本写入剪贴板，包括折叠的结果。已移除的结果不会复制。复制不会更改文件或停止搜索。",
     "search.helpHint": "按 Alt+F1 查看搜索无障碍帮助。",
     "search.verbosityTitle": "搜索无障碍帮助",
     "search.verbosityDescription": "搜索获得焦点时，提示如何打开无障碍帮助。",

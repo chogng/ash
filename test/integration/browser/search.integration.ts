@@ -39,6 +39,9 @@ import { IViewsService } from '../../../src/ash/workbench/services/views/common/
 import type { IView } from '../../../src/ash/workbench/common/views.js';
 import { SearchCommandIds } from '../../../src/ash/workbench/contrib/search/common/constants.js';
 import { SearchAccessibilityHelp } from '../../../src/ash/workbench/contrib/search/browser/searchAccessibilityHelp.js';
+import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
+import { BrowserClipboardService } from '../../../src/ash/platform/clipboard/browser/clipboardService.js';
+import { ILabelService, LabelService } from '../../../src/ash/platform/label/common/labelService.js';
 
 if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
 	setNlsMessages('zh-CN', builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
@@ -52,6 +55,8 @@ const queries: IContentSearchQuery[] = [];
 const opened: { resource: string; options: EditorOpenOptions | undefined; target: EditorOpenTarget | undefined; }[] = [];
 let finishLateSearch: (() => void) | undefined;
 let cancelled = 0;
+const clipboardWrites: string[] = [];
+let clipboardFailure = false;
 const instantiation = store.add(new InstantiationService());
 const commands = store.add(new CommandService(instantiation));
 instantiation.registerInstance(ICommandService, commands);
@@ -64,11 +69,18 @@ instantiation.registerInstance(IContextMenuService, menus);
 instantiation.registerInstance(IHoverService, store.add(new HoverService(configuration, contextView, menus)));
 const workspace = store.add(new WorkspaceContextService({
 	id: 'workspace', folders: [
-		{ id: 'first', name: 'workspace', index: 0, uri: URI.file('/workspace') },
+		{ id: 'first', name: 'workspace', index: 0, uri: new URLSearchParams(location.search).has('windows') ? URI.from({ scheme: 'file', path: '/c:/workspace' }) : URI.file('/workspace') },
 		{ id: 'second', name: 'other', index: 1, uri: URI.parse('ssh://host/other') },
 	]
 }));
 instantiation.registerInstance(IWorkspaceContextService, workspace);
+instantiation.registerInstance(ILabelService, store.add(new LabelService(workspace)));
+instantiation.registerInstance(IClipboardService, new BrowserClipboardService({
+	writeText: async value => {
+		if (clipboardFailure) { throw new Error('Clipboard permission denied'); }
+		clipboardWrites.push(value);
+	}
+} as Clipboard));
 instantiation.registerInstance(IStorageService, store.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'search-integration', flushInterval: 0 })));
 const editing = store.add(new BulkEditTestServices([[URI.file('/workspace/src/main.ts'), 'const needle = true;']]));
 instantiation.registerInstance(ITextModelResourceService, editing.models);
@@ -86,6 +98,13 @@ instantiation.registerInstance(IContentSearchService, {
 	search: async (query, options) => {
 		queries.push(query);
 		const first = { dirId: 'first', path: 'src/main.ts', lineNumber: 1, preview: 'const needle = true;', ranges: [{ start: 6, end: 12 }] };
+		if (query.text === 'windows') {
+			options?.onProgress?.([
+				{ ...first, path: 'root.ts', lineNumber: 2, preview: 'needle', ranges: [{ start: 0, end: 6 }] },
+				{ ...first, lineNumber: 9, preview: 'needle\r\nnext', ranges: [{ start: 0, end: 12 }] },
+			]);
+			return { resultCount: 2, limitHit: false, error: undefined };
+		}
 		if (query.text === 'large') {
 			options?.onProgress?.(Array.from({ length: 1000 }, (_, index) => ({ ...first, lineNumber: index + 1 })));
 			return { resultCount: 1000, limitHit: false, error: undefined };
@@ -134,6 +153,9 @@ instantiation.registerInstance(IViewsService, {
 });
 window.addEventListener('pagehide', () => store.dispose(), { once: true });
 window.ashSearchIntegration = {
+	copyAll: () => commands.executeCommand<void>(SearchCommandIds.CopyAllCommandId),
+	clipboardWrites: () => [...clipboardWrites],
+	setClipboardFailure: value => { clipboardFailure = value; },
 	dismiss: () => commands.executeCommand<void>(SearchCommandIds.RemoveActionId),
 	help: () => {
 		using provider = new SearchAccessibilityHelp().getProvider(instantiation);
@@ -152,6 +174,9 @@ window.ashSearchIntegration = {
 declare global {
 	interface Window {
 		ashSearchIntegration: {
+			copyAll(): Promise<void>;
+			clipboardWrites(): readonly string[];
+			setClipboardFailure(value: boolean): void;
 			dismiss(): Promise<void>;
 			help(): string | undefined;
 			snapshot(): { query: string; content: string; matchCount: number; } | undefined;

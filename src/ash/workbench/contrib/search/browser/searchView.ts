@@ -566,6 +566,13 @@ export class SearchView extends ViewPane {
 			},
 		], [
 			{
+				id: SearchCommandIds.CopyAllCommandId,
+				label: localize("search.copyAll", "Copy All"),
+				tooltip: "",
+				enabled: hasResults,
+				run: () => this.commands.executeCommand(SearchCommandIds.CopyAllCommandId),
+			},
+			{
 				id: SearchCommandIds.RemoveActionId,
 				label: localize("search.dismiss", "Dismiss"),
 				tooltip: "",

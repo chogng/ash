@@ -36,6 +36,10 @@ import { IViewsService } from "../../../../services/views/common/viewsService.js
 import type { IView } from "../../../../common/views.js";
 import type { SearchView } from "../../browser/searchView.js";
 import { SEARCH_VIEW_ID, SearchCommandIds } from "../../common/constants.js";
+import { IClipboardService } from "../../../../../platform/clipboard/common/clipboardService.js";
+import { BrowserClipboardService } from "../../../../../platform/clipboard/browser/clipboardService.js";
+import { ILabelService, LabelService } from "../../../../../platform/label/common/labelService.js";
+import { isWindows, OperatingSystem } from "../../../../../base/common/platform.js";
 
 const matches: readonly ContentSearchMatch[] = [
 	{
@@ -291,7 +295,7 @@ function installDomGlobals(browser: JSDOM): readonly string[] {
 	return Object.keys(globals);
 }
 
-function createServices(store: DisposableStore, browser: JSDOM, search: IContentSearchService, configured?: WorkbenchConfigurationService): InstantiationService {
+function createServices(store: DisposableStore, browser: JSDOM, search: IContentSearchService, configured?: WorkbenchConfigurationService, workspace?: WorkspaceContextService): InstantiationService {
 	const configuration = configured ?? store.add(new WorkbenchConfigurationService());
 	const services = store.add(new InstantiationService());
 	services.registerInstance(ICommandService, store.add(new CommandService(services)));
@@ -302,7 +306,8 @@ function createServices(store: DisposableStore, browser: JSDOM, search: IContent
 	services.registerInstance(IContextKeyService, store.add(new ContextKeyService()));
 	services.registerInstance(IContextMenuService, menus);
 	services.registerInstance(IHoverService, store.add(new HoverService(configuration, contextView, menus)));
-	services.registerInstance(IWorkspaceContextService, store.add(new WorkspaceContextService({ id: "workspace", uri: URI.file("/workspace") })));
+	services.registerInstance(IWorkspaceContextService, workspace ?? store.add(new WorkspaceContextService({ id: "workspace", uri: URI.file("/workspace") })));
+	services.registerInstance(ILabelService, store.add(new LabelService(services.get(IWorkspaceContextService), OperatingSystem.Linux)));
 	services.registerInstance(IEditorService, { onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [], openEditor: async () => { }, focusActiveEditor() { } });
 	services.registerInstance(IStorageService, store.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: "workspace", flushInterval: 0 })));
 	services.registerInstance(ISearchHistoryService, store.add(services.createInstance(SearchHistoryService)));
@@ -413,6 +418,135 @@ test('Dismiss during a running search retains the job and accepts later batches 
 		finish!();
 		await waitFor(() => view.getSearchResultSnapshot()?.matchCount === 2);
 		assert.equal(view.element.querySelector('[role="status"]')!.textContent, '2 results');
+	} finally {
+		finish?.();
+		browser.window.close();
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
+	}
+});
+
+test('Copy All formats the retained model in root, folder, filename and range order without changing it', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	const globals = installDomGlobals(browser);
+	const block = 'context\r\n  needle\r\nnext\r\nunused';
+	const delivered: ContentSearchMatch[] = [
+		{ dirId: 'other', path: 'src/file2.ts', lineNumber: 8, preview: 'remote needle', ranges: [{ start: 7, end: 13 }] },
+		{ dirId: 'workspace', path: 'alpha.ts', lineNumber: 1, preview: 'root needle', ranges: [{ start: 5, end: 11 }] },
+		{ dirId: 'workspace', path: 'src/file10.ts', lineNumber: 3, preview: 'ten needle', ranges: [{ start: 4, end: 10 }] },
+		{ dirId: 'workspace', path: 'src/file2.ts', lineNumber: 20, preview: 'a needle b needle', ranges: [{ start: 11, end: 17 }, { start: 2, end: 8 }] },
+		{ dirId: 'workspace', path: 'src/file2.ts', lineNumber: 10, preview: block, ranges: [{ start: block.indexOf('needle'), end: block.indexOf('next') + 4 }] },
+		{ dirId: 'workspace', path: 'src/nested/z.ts', lineNumber: 4, preview: 'nested needle', ranges: [{ start: 7, end: 13 }] },
+	];
+	const written: string[] = [];
+	try {
+		using store = new DisposableStore();
+		const workspace = store.add(new WorkspaceContextService({
+			id: 'multi', folders: [
+				{ id: 'workspace', name: 'workspace', index: 0, uri: URI.file('/workspace') },
+				{ id: 'other', name: 'other', index: 1, uri: URI.parse('ssh://host/other') },
+			]
+		}));
+		const services = createServices(store, browser, {
+			search: async (_query, options) => {
+				options?.onProgress?.(delivered);
+				return { resultCount: 7, limitHit: false, error: undefined };
+			}
+		}, undefined, workspace);
+		services.registerInstance(IClipboardService, new BrowserClipboardService({ writeText: async value => { written.push(value); } } as Clipboard));
+		const { SearchView } = await import('../../browser/searchView.js');
+		await import('../../browser/searchActionsCopy.js');
+		await import('../../browser/searchActionsRemoveReplace.js');
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
+		registerView(services, view);
+		input(view.element, 'Search workspace').value = 'needle';
+		view.element.querySelector('form')!.dispatchEvent(new browser.window.Event('submit', { cancelable: true }));
+		await waitFor(() => view.getSearchResultSnapshot()?.matchCount === 7);
+		const before = view.getSearchResultSnapshot();
+		const modelOrder = view.searchResult.files.map(file => [file.id, ...file.matches.map(match => match.id)]);
+		for (const file of view.searchResult.files) { view.getControl().collapse(file.id); }
+		await services.get(ICommandService).executeCommand(SearchCommandIds.CopyAllCommandId);
+		const delimiter = isWindows ? '\r\n' : '\n';
+		const blocks = [
+			'/workspace/src/nested/z.ts' + delimiter + '  4,8: nested needle',
+			'/workspace/src/file2.ts' + delimiter + ['  11,3:   needle\n  12:   next', '  20,3: a needle b needle', '  20,12: a needle b needle'].join(delimiter),
+			'/workspace/src/file10.ts' + delimiter + '  3,5: ten needle',
+			'/workspace/alpha.ts' + delimiter + '  1,6: root needle',
+			'/other/src/file2.ts' + delimiter + '  8,8: remote needle',
+		];
+		assert.deepEqual(written, [blocks.join(delimiter + delimiter)]);
+		assert.deepEqual(view.getSearchResultSnapshot(), before);
+		assert.deepEqual(view.searchResult.files.map(file => [file.id, ...file.matches.map(match => match.id)]), modelOrder);
+		const dismissed = view.searchResult.files.find(file => file.path === 'src/file10.ts')!;
+		view.getControl().setFocus(dismissed.id);
+		view.getControl().setSelection([dismissed.id]);
+		await services.get(ICommandService).executeCommand(SearchCommandIds.RemoveActionId);
+		await services.get(ICommandService).executeCommand(SearchCommandIds.CopyAllCommandId);
+		assert.equal(written[1], blocks.filter(block => !block.startsWith('/workspace/src/file10.ts')).join(delimiter + delimiter));
+		assert.equal(view.getSearchResultSnapshot()?.matchCount, 6);
+		assert.ok(!view.getSearchResultSnapshot()?.content.includes('file10.ts'));
+	} finally {
+		browser.window.close();
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
+	}
+});
+
+test('Copy All uses the latest running batch and leaves the search and clipboard failure intact', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	const globals = installDomGlobals(browser);
+	const written: string[] = [];
+	const denied = new Error('Clipboard permission denied');
+	let rejectWrite = false;
+	let finish: (() => void) | undefined;
+	let addBatch: (() => void) | undefined;
+	let aborted = false;
+	try {
+		using store = new DisposableStore();
+		const services = createServices(store, browser, {
+			search: async (_query, options) => {
+				options?.signal?.addEventListener('abort', () => { aborted = true; }, { once: true });
+				options?.onProgress?.([matches[0]!]);
+				addBatch = () => options?.onProgress?.([matches[1]!]);
+				await new Promise<void>(resolve => { finish = resolve; });
+				return { resultCount: 2, limitHit: false, error: undefined };
+			}
+		});
+		services.registerInstance(IClipboardService, new BrowserClipboardService({
+			writeText: async value => {
+				if (rejectWrite) { throw denied; }
+				written.push(value);
+			}
+		} as Clipboard));
+		const { SearchView } = await import('../../browser/searchView.js');
+		await import('../../browser/searchActionsCopy.js');
+		await import('../../browser/searchActionsRemoveReplace.js');
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
+		registerView(services, view);
+		const commands = services.get(ICommandService);
+		await commands.executeCommand(SearchCommandIds.CopyAllCommandId);
+		assert.deepEqual(written, ['']);
+		input(view.element, 'Search workspace').value = 'needle';
+		view.element.querySelector('form')!.dispatchEvent(new browser.window.Event('submit', { cancelable: true }));
+		await waitFor(() => addBatch !== undefined);
+		await commands.executeCommand(SearchCommandIds.CopyAllCommandId);
+		view.getControl().setFocus(view.searchResult.files[0]!.matches[0]!.id);
+		await commands.executeCommand(SearchCommandIds.RemoveActionId);
+		addBatch!();
+		await commands.executeCommand(SearchCommandIds.CopyAllCommandId);
+		const delimiter = isWindows ? '\r\n' : '\n';
+		assert.deepEqual(written.slice(1), [
+			'/workspace/src/main.ts' + delimiter + '  4,7: const needle = true;',
+			'/workspace/src/main.ts' + delimiter + '  9,5: use(needle);',
+		]);
+		rejectWrite = true;
+		const before = view.searchResult.files[0]!.matches.map(match => match.id);
+		await assert.rejects(commands.executeCommand(SearchCommandIds.CopyAllCommandId), error => error === denied);
+		assert.deepEqual(view.searchResult.files[0]!.matches.map(match => match.id), before);
+		assert.equal(written.length, 3);
+		assert.equal(aborted, false);
+		assert.equal(view.getControl().element.getAttribute('aria-busy'), 'true');
+		finish!();
+		await waitFor(() => view.getControl().element.getAttribute('aria-busy') === 'false');
+		assert.equal(view.getSearchResultSnapshot()?.matchCount, 1);
 	} finally {
 		finish?.();
 		browser.window.close();

@@ -287,3 +287,58 @@ test('search context snapshot preserves query, file locations and matches and ex
 	expect(await page.evaluate(() => window.ashSearchIntegration.snapshot())).toBeUndefined();
 	await page.evaluate(() => window.ashSearchIntegration.finishLateSearch());
 });
+
+test('Copy All includes collapsed retained results and excludes dismissed occurrences', async ({ page }) => {
+	await page.goto('/search.html');
+	await page.evaluate(() => window.ashSearchIntegration.copyAll());
+	expect(await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['']);
+	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
+	await query.fill('中文');
+	await query.press('Enter');
+	await expect(page.getByRole('status')).toHaveText('3 results');
+	const tree = page.getByRole('tree', { name: 'Search results', exact: true });
+	await tree.locator('.ash-tree-twistie').first().click();
+	const before = await page.evaluate(() => window.ashSearchIntegration.snapshot());
+	await page.evaluate(() => window.ashSearchIntegration.copyAll());
+	expect(await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['', '/workspace/src/main.ts\n  1,6: 中文😀 needle needle\n  1,13: 中文😀 needle needle\n\n/other/src/main.ts\n  8,7: const needle = true;']);
+	expect(await page.evaluate(() => window.ashSearchIntegration.snapshot())).toEqual(before);
+	await tree.locator('.ash-tree-twistie').first().click();
+	await tree.locator('.ash-search-match').first().click();
+	await page.evaluate(() => window.ashSearchIntegration.dismiss());
+	await page.evaluate(() => window.ashSearchIntegration.copyAll());
+	expect((await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).at(-1)).toBe('/workspace/src/main.ts\n  1,13: 中文😀 needle needle\n\n/other/src/main.ts\n  8,7: const needle = true;');
+	await page.evaluate(() => window.ashSearchIntegration.setClipboardFailure(true));
+	await expect(page.evaluate(() => window.ashSearchIntegration.copyAll())).rejects.toThrow('Clipboard permission denied');
+	await expect(page.getByRole('status')).toHaveText('2 results');
+	expect((await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).length).toBe(3);
+});
+
+test('Copy All reads the latest incremental results and its help is translated', async ({ page }) => {
+	await page.goto('/search.html?locale=zh-CN');
+	const query = page.getByRole('textbox', { name: '搜索工作区', exact: true });
+	await query.fill('slow');
+	await query.press('Enter');
+	const tree = page.getByRole('tree', { name: '搜索结果', exact: true });
+	await expect(tree).toHaveAttribute('aria-busy', 'true');
+	await page.evaluate(() => window.ashSearchIntegration.copyAll());
+	expect((await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).at(-1)).toBe('/workspace/src/main.ts\n  1,7: const needle = true;');
+	await page.evaluate(() => window.ashSearchIntegration.finishLateSearch());
+	await expect(tree).toHaveAttribute('aria-busy', 'false');
+	await page.evaluate(() => window.ashSearchIntegration.copyAll());
+	expect((await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).at(-1)).toBe('/workspace/src/main.ts\n  1,7: const needle = true;\n\n/workspace/late.ts\n  1,7: const needle = true;');
+	expect(await page.evaluate(() => window.ashSearchIntegration.cancelled())).toBe(0);
+	expect(await page.evaluate(() => window.ashSearchIntegration.help())).toContain('已移除的结果不会复制');
+});
+
+test.describe('Windows Copy All formatting', () => {
+	test.use({ userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/143.0.0.0 Safari/537.36' });
+	test('Copy All uses Windows labels and block separators while preserving multi-line previews', async ({ page }) => {
+		await page.goto('/search.html?windows=1');
+		const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
+		await query.fill('windows');
+		await query.press('Enter');
+		await expect(page.getByRole('status')).toHaveText('2 results');
+		await page.evaluate(() => window.ashSearchIntegration.copyAll());
+		expect(await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['C:\\workspace\\src\\main.ts\r\n  9,1: needle\n  10:  next\r\n\r\nC:\\workspace\\root.ts\r\n  2,1: needle']);
+	});
+});

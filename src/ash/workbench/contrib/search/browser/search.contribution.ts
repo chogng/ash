@@ -16,6 +16,7 @@ import { IReplaceService } from "./replace.js";
 import { ReplaceService } from "./replaceService.js";
 import '../../searchEditor/browser/searchEditor.contribution.js';
 import './searchActionsRemoveReplace.js';
+import './searchActionsCopy.js';
 
 AccessibleViewRegistry.register(new SearchAccessibilityHelp());
 registerSingleton(ISearchHistoryService, SearchHistoryService, InstantiationType.Delayed);
