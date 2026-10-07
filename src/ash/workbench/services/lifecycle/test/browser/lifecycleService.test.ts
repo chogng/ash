@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
+import { DeferredPromise } from "../../../../../base/common/async.js";
 import { BrowserLifecycleService } from "../../browser/lifecycleService.js";
 import { LifecyclePhase, StartupKind, ShutdownVetoError } from '../../common/lifecycle.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
@@ -183,6 +184,88 @@ test('the browser renderer requires registered lifecycle dependencies at constru
 	services.registerInstance(ILogService, new NullLoggerService());
 	assert.throws(() => services.createInstance(BrowserLifecycleService, options), /storageService/);
 	browser.window.close();
+});
+
+test('shutdown final callbacks run after all ordinary joins settle and retain every failure', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>');
+	try {
+		using services = createLifecycleServices(browser);
+		using lifecycle = services.createInstance(BrowserLifecycleService, { ownerWindow: browser.window as unknown as Window, onError: () => undefined });
+		const ordinary = new DeferredPromise<void>();
+		const failure = new Error('ordinary join failed');
+		const finalFailure = new Error('final join failed');
+		const events: string[] = [];
+		lifecycle.onWillShutdown(event => {
+			event.join(ordinary.p, 'ordinary');
+			event.join(async () => { events.push('final'); throw finalFailure; }, 'final backup');
+		});
+		const shutdown = lifecycle.shutdown('windowClose');
+		const rejected = assert.rejects(shutdown, error => error instanceof AggregateError && error.errors.length === 2 && error.errors[0].cause === failure && error.errors[1].cause === finalFailure);
+		assert.deepEqual(events, []);
+		await ordinary.error(failure);
+		await rejected;
+		assert.deepEqual(events, ['final']);
+	} finally {
+		browser.window.close();
+	}
+});
+
+test('overall shutdown failure resets state after every final join and permits repeated attempts', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>');
+	try {
+		using services = createLifecycleServices(browser);
+		using lifecycle = services.createInstance(BrowserLifecycleService, { ownerWindow: browser.window as unknown as Window, onError: () => undefined });
+		const final = new DeferredPromise<void>();
+		const finalStarted = new DeferredPromise<void>();
+		const events: string[] = [];
+		let attempt = 0;
+		lifecycle.onDidShutdownError(reason => {
+			assert.equal(lifecycle.willShutdown, false);
+			events.push(`failed:${reason}`);
+		});
+		lifecycle.onDidShutdown(reason => events.push(`completed:${reason}`));
+		lifecycle.onWillShutdown(event => {
+			attempt++;
+			event.join(attempt < 3 ? Promise.reject(new Error('join failed')) : Promise.resolve(), 'ordinary');
+			if (attempt === 1) event.join(() => { void finalStarted.complete(undefined); return final.p; }, 'delayed final');
+		});
+		const first = lifecycle.shutdown('windowClose');
+		const rejected = assert.rejects(first, /shutdown participants failed/);
+		await finalStarted.p;
+		assert.deepEqual({ events, willShutdown: lifecycle.willShutdown }, { events: [], willShutdown: true });
+		assert.equal(lifecycle.shutdown('reload'), first);
+		await final.complete(undefined);
+		await rejected;
+		await assert.rejects(lifecycle.shutdown('reload'), /shutdown participants failed/);
+		await lifecycle.shutdown('quit');
+		assert.deepEqual(events, ['failed:windowClose', 'failed:reload', 'completed:quit']);
+	} finally {
+		browser.window.close();
+	}
+});
+
+test('shutdown final callbacks recapture stale state before publishing overall success', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>');
+	try {
+		using services = createLifecycleServices(browser);
+		using lifecycle = services.createInstance(BrowserLifecycleService, { ownerWindow: browser.window as unknown as Window, onError: () => undefined });
+		let generation = 0;
+		let captured = -1;
+		let captures = 0;
+		const completed: number[] = [];
+		lifecycle.onWillShutdown(event => event.join(() => {
+			captured = generation;
+			captures++;
+			const write = Promise.resolve();
+			if (captures === 1) void write.then(() => { generation++; });
+			return write;
+		}, 'final backup', () => captured === generation));
+		lifecycle.onDidShutdown(() => completed.push(captured));
+		await lifecycle.shutdown('quit');
+		assert.deepEqual({ captured, generation, captures, completed }, { captured: 1, generation: 1, captures: 2, completed: [1] });
+	} finally {
+		browser.window.close();
+	}
 });
 
 function createLifecycleServices(browser: JSDOM, navigationType = 'navigate'): InstantiationService {

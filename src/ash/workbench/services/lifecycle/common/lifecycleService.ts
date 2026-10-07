@@ -11,6 +11,7 @@ export abstract class AbstractLifecycleService extends Disposable implements ILi
 	private readonly beforeShutdownErrorEmitter = this._register(new Emitter<IBeforeShutdownErrorEvent>());
 	private readonly shutdownVetoEmitter = this._register(new Emitter<void>());
 	private readonly willShutdownEmitter = this._register(new Emitter<IWillShutdownEvent>());
+	private readonly didShutdownErrorEmitter = this._register(new Emitter<ShutdownReason>());
 	private readonly didShutdownEmitter = this._register(new Emitter<ShutdownReason>());
 	private readonly phaseWaiters = new Map<LifecyclePhase, { readonly promise: Promise<void>; readonly resolve: () => void; }>();
 	private _phase = LifecyclePhase.Starting;
@@ -22,6 +23,7 @@ export abstract class AbstractLifecycleService extends Disposable implements ILi
 	public readonly onBeforeShutdownError = this.beforeShutdownErrorEmitter.event;
 	public readonly onShutdownVeto = this.shutdownVetoEmitter.event;
 	public readonly onWillShutdown = this.willShutdownEmitter.event;
+	public readonly onDidShutdownError = this.didShutdownErrorEmitter.event;
 	public readonly onDidShutdown = this.didShutdownEmitter.event;
 	public readonly startupKind: StartupKind;
 
@@ -97,10 +99,12 @@ export abstract class AbstractLifecycleService extends Disposable implements ILi
 		// Publish the promise before firing events because participants may request shutdown again.
 		this.shutdownPromise = new Promise<void>((complete, fail) => { resolve = complete; reject = fail; });
 		void this.beginShutdown(reason).then(resolve, error => {
+			const joinedShutdown = this._willShutdown;
 			this._willShutdown = false;
 			this.shutdownReason = undefined;
 			this.shutdownPromise = undefined;
 			this.storageService.remove('lifecycle.lastShutdownReason', StorageScope.WORKSPACE);
+			if (joinedShutdown) this.didShutdownErrorEmitter.fire(reason);
 			reject(error);
 		});
 		return this.shutdownPromise;
@@ -128,23 +132,33 @@ export abstract class AbstractLifecycleService extends Disposable implements ILi
 		this._willShutdown = true;
 		this.shutdownReason = reason;
 		this.logService.trace('lifecycle', `Window shutdown: ${reason}`);
-		const operations: { readonly label: string; readonly operation: Promise<unknown>; }[] = [];
+		const operations: { readonly label: string; readonly operation: Promise<unknown> | (() => Promise<unknown>); readonly isCurrent?: () => boolean; }[] = [];
 		accepting = true;
 		this.willShutdownEmitter.fire({
 			reason,
-			join: (operation, label) => {
+			join: (operation, label, isCurrent) => {
 				if (!accepting) {
 					throw new Error('Shutdown participants must join synchronously during onWillShutdown');
 				}
 				if (!label.trim()) {
 					throw new TypeError('Shutdown participant label must not be empty');
 				}
-				operations.push({ label, operation });
+				operations.push({ label, operation, isCurrent });
 			},
 		});
 		accepting = false;
-		const results = await Promise.allSettled(operations.map(candidate => candidate.operation));
-		const failures = results.flatMap((result, index) => result.status === 'rejected' ? [new Error(`Shutdown participant '${operations[index]!.label}' failed`, { cause: result.reason })] : []);
+		const failures: Error[] = [];
+		// Final captures must observe edits made while ordinary shutdown joins were waiting.
+		for (const phase of [operations.filter(candidate => typeof candidate.operation !== 'function'), operations.filter(candidate => typeof candidate.operation === 'function')]) {
+			let pending = phase;
+			do {
+				const results = await Promise.allSettled(pending.map(candidate => typeof candidate.operation === 'function' ? Promise.resolve().then(candidate.operation) : candidate.operation));
+				failures.push(...results.flatMap((result, index) => result.status === 'rejected' ? [new Error(`Shutdown participant '${pending[index]!.label}' failed`, { cause: result.reason })] : []));
+				if (failures.length > 0) break;
+				// Check synchronously with completion: a promise observer can edit after its write resolves.
+				pending = phase.filter(candidate => typeof candidate.operation === 'function' && candidate.isCurrent && !candidate.isCurrent());
+			} while (pending.length > 0);
+		}
 		if (failures.length > 0) {
 			throw new AggregateError(failures, 'One or more shutdown participants failed');
 		}

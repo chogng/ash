@@ -55,7 +55,7 @@ test('local history captures successful saves, honors exclusion and retention, a
 			await textFiles.save({ resource, text }, new AbortController().signal);
 		}
 		const joining: Promise<unknown>[] = [];
-		shutdown.fire({ reason: 'quit', join: operation => { joining.push(operation); } });
+		shutdown.fire({ reason: 'quit', join: operation => { joining.push(typeof operation === 'function' ? Promise.resolve().then(operation) : operation); } });
 		await Promise.all(joining);
 		assert.equal(joining.length, 1);
 		const entries = await history.getEntries(resource, CancellationToken.None);

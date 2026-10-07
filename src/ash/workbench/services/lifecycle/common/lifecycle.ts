@@ -38,7 +38,8 @@ export class ShutdownVetoError extends Error {
 
 export interface IWillShutdownEvent {
 	readonly reason: ShutdownReason;
-	join(operation: Promise<unknown>, label: string): void;
+	/** Promise joins settle first. Final callbacks may repeat until their current-state check permits completion. */
+	join(operation: Promise<unknown> | (() => Promise<unknown>), label: string, isCurrent?: () => boolean): void;
 }
 
 /** Owns startup milestones and coordinates shutdown before window resources are disposed. */
@@ -51,6 +52,8 @@ export interface ILifecycleService {
 	readonly onBeforeShutdownError: Event<IBeforeShutdownErrorEvent>;
 	readonly onShutdownVeto: Event<void>;
 	readonly onWillShutdown: Event<IWillShutdownEvent>;
+	/** Fires after all joins settle on failure and state resets, before the host resumes editing. */
+	readonly onDidShutdownError: Event<ShutdownReason>;
 	readonly onDidShutdown: Event<ShutdownReason>;
 	/** Resolves when this milestone or a later phase is reached. */
 	when(phase: LifecyclePhase): Promise<void>;

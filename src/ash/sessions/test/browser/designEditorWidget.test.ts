@@ -142,7 +142,7 @@ const fileProvider: IFileSystemProvider = {
 	},
 };
 services.registerSingleton(IFileService, () => createTestFileService(fileProvider));
-services.registerInstance(ILifecycleService, { startupKind: StartupKind.NewWindow, phase: LifecyclePhase.Ready, willShutdown: false, onBeforeShutdown: AshEvent.None, onBeforeShutdownError: AshEvent.None, onShutdownVeto: AshEvent.None, onWillShutdown: AshEvent.None, onDidShutdown: AshEvent.None, when: async () => { }, shutdown: async () => { } });
+services.registerInstance(ILifecycleService, { startupKind: StartupKind.NewWindow, phase: LifecyclePhase.Ready, willShutdown: false, onBeforeShutdown: AshEvent.None, onBeforeShutdownError: AshEvent.None, onShutdownVeto: AshEvent.None, onWillShutdown: AshEvent.None, onDidShutdownError: AshEvent.None, onDidShutdown: AshEvent.None, when: async () => { }, shutdown: async () => { } });
 
 suiteTeardown(() => {
 	colorContextView.dispose();

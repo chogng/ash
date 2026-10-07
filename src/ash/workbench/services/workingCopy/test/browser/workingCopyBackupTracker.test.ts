@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
+import { JSDOM } from "jsdom";
+import { BrowserLifecycleService } from "../../../lifecycle/browser/lifecycleService.js";
+import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
+import { ILogService, NullLoggerService } from "../../../../../platform/log/common/log.js";
+import { IStorageService, WillSaveStateReason } from "../../../../../platform/storage/common/storage.js";
+import { BrowserStorageService } from "../../../storage/browser/storageService.js";
 import { Emitter } from "../../../../../base/common/event.js";
 import { DeferredPromise } from "../../../../../base/common/async.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../../../base/common/lifecycle.js";
@@ -132,6 +138,7 @@ test('working-copy backup shutdown drains before editor unregister and database 
 	database.events.length = 0;
 
 	await tracker.shutdown();
+	tracker.completeShutdown();
 	owner.dispose();
 	const drainError = await tracker.flush().then(() => undefined, error => error as Error);
 	assert.deepEqual({ events: database.events, errors: errors.map(error => (error as Error).name), drainError: drainError?.name }, {
@@ -139,7 +146,7 @@ test('working-copy backup shutdown drains before editor unregister and database 
 	});
 });
 
-test('working-copy backup shutdown retains the final dirty snapshot and ignores late producers', async () => {
+test('working-copy backup shutdown retains edits made while final writes are pending', async () => {
 	using workingCopies = new BrowserWorkingCopyService();
 	using backups = new ControlledBackups();
 	const ownerWindow = new TestWindow();
@@ -152,21 +159,37 @@ test('working-copy backup shutdown retains the final dirty snapshot and ignores 
 	await firstWrite.entered.p;
 	copy.change('final');
 	const staleTimers = ownerWindow.snapshotTimers();
+	const captured = new DeferredPromise<void>();
+	copy.duringBackup = () => { void captured.complete(undefined); };
 	const shutdown = tracker.shutdown();
 	let settled = false;
 	void shutdown.then(() => { settled = true; });
 	assert.equal(tracker.shutdown(), shutdown);
 	assert.equal(tracker.flush(), shutdown);
+	await captured.p;
 	copy.change('late');
-	registration.dispose();
 	for (const callback of staleTimers) callback();
 	assert.deepEqual({ settled, timers: ownerWindow.pendingTimers, calls: backups.calls }, { settled: false, timers: 0, calls: ['store:first'] });
 	await firstWrite.release.complete(undefined);
 	await shutdown;
+	tracker.completeShutdown();
+	tracker.completeShutdown();
 	tracker.dispose();
 	tracker.dispose();
 	assert.equal(tracker.shutdown(), shutdown);
-	assert.deepEqual({ content: (await backups.list()).map(backup => backup.content), calls: backups.calls }, { content: ['final'], calls: ['store:first', 'store:final'] });
+	assert.deepEqual({ content: (await backups.list()).map(backup => backup.content), calls: backups.calls }, { content: ['late'], calls: ['store:first', 'store:final', 'store:late'] });
+});
+
+test('working-copy backup shutdown captures synchronous edits reentered from backup', async () => {
+	using workingCopies = new BrowserWorkingCopyService();
+	using backups = new MemoryBackups();
+	using tracker = new WorkingCopyBackupTracker(workingCopies, backups, new TestWindow() as unknown as Window);
+	using copy = new TestWorkingCopy(URI.file('/shutdown/reentrant.ts'));
+	using registration = workingCopies.register(copy);
+	copy.change('captured');
+	copy.duringBackup = () => copy.change('reentrant edit');
+	await tracker.shutdown();
+	assert.deepEqual((await backups.list()).map(backup => backup.content), ['reentrant edit']);
 });
 
 test('working-copy backup shutdown awaits an in-flight clean delete', async () => {
@@ -185,10 +208,11 @@ test('working-copy backup shutdown awaits an in-flight clean delete', async () =
 	const shutdown = tracker.shutdown();
 	let settled = false;
 	void shutdown.then(() => { settled = true; });
-	registration.dispose();
 	assert.equal(settled, false);
 	await deletion.release.complete(undefined);
 	await shutdown;
+	tracker.completeShutdown();
+	registration.dispose();
 	assert.deepEqual({ backups: await backups.list(), calls: backups.calls }, { backups: [], calls: ['store:saved', 'delete'] });
 });
 
@@ -244,6 +268,229 @@ for (const operation of ['store', 'delete'] as const) {
 	});
 }
 
+for (const failingJoin of ['backup', 'storage', 'other'] as const) {
+	test(`working-copy backups resume editing and retry after the overall ${failingJoin} join fails`, async () => {
+		const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test/' });
+		try {
+			Object.defineProperty(browser.window.performance, 'getEntriesByType', { value: () => [] });
+			using services = new InstantiationService();
+			services.registerInstance(ILogService, new NullLoggerService());
+			services.registerSingleton(IStorageService, () => new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'backup-retry', flushInterval: 0 }));
+			using lifecycle = services.createInstance(BrowserLifecycleService, { ownerWindow: browser.window as unknown as Window, onError: () => undefined });
+			using workingCopies = new BrowserWorkingCopyService();
+			using backups = new ControlledBackups();
+			const ownerWindow = new TestWindow();
+			const errors: unknown[] = [];
+			using tracker = new WorkingCopyBackupTracker(workingCopies, backups, ownerWindow as unknown as Window, error => errors.push(error));
+			using copy = new TestWorkingCopy(URI.file('/shutdown/retry.ts'));
+			using registration = workingCopies.register(copy);
+			copy.change('last durable');
+			await tracker.flush();
+			const events: string[] = [];
+			let shouldFail = true;
+			const pendingJoin = new DeferredPromise<void>();
+			const failedStore = failingJoin === 'backup' ? backups.holdNext('store') : undefined;
+			const failure = new Error(`Injected ${failingJoin} join failure`);
+			lifecycle.onDidShutdownError(() => {
+				events.push('overall failure');
+				tracker.cancelShutdown();
+			});
+			lifecycle.onDidShutdown(() => { events.push('completed'); tracker.completeShutdown(); });
+			lifecycle.onWillShutdown(event => {
+				event.join(tracker.shutdown().then(() => { events.push('backup drained'); }), 'backup');
+				if (shouldFail) {
+					const operation = failingJoin === 'storage' ? services.get(IStorageService).flush(WillSaveStateReason.SHUTDOWN).then(() => pendingJoin.p) : pendingJoin.p;
+					event.join(operation, failingJoin === 'backup' ? 'pending other join' : failingJoin);
+				}
+			});
+			copy.change('attempt content');
+			const first = lifecycle.shutdown('windowClose');
+			assert.equal(lifecycle.shutdown('quit'), first);
+			const rejection = assert.rejects(first, /shutdown participants failed/);
+			if (failedStore) {
+				await failedStore.entered.p;
+				await failedStore.release.error(failure);
+			} else {
+				await tracker.shutdown();
+			}
+			copy.change('while another join waits');
+			assert.deepEqual({ events: events.filter(event => event === 'overall failure'), timers: ownerWindow.pendingTimers }, { events: [], timers: 0 });
+			if (failedStore) {
+				assert.equal((await backups.list())[0]?.content, 'last durable');
+				await pendingJoin.complete(undefined);
+			} else {
+				await pendingJoin.error(failure);
+			}
+			await rejection;
+			copy.change('after cancelled close');
+			ownerWindow.runTimers();
+			const flushError = await tracker.flush().then(() => undefined, error => error);
+			assert.deepEqual({ events: events.filter(event => event === 'overall failure'), flushError, content: (await backups.list())[0]?.content, willShutdown: lifecycle.willShutdown }, {
+				events: ['overall failure'], flushError: undefined, content: 'after cancelled close', willShutdown: false,
+			});
+			shouldFail = false;
+			await lifecycle.shutdown('windowClose');
+			assert.equal(events.at(-1), 'completed');
+			assert.deepEqual(errors, []);
+		} finally {
+			browser.window.close();
+		}
+	});
+}
+
+test('working-copy backup cancellation is idempotent and retracks the current registry', async () => {
+	using workingCopies = new BrowserWorkingCopyService();
+	using backups = new ControlledBackups();
+	const ownerWindow = new TestWindow();
+	using tracker = new WorkingCopyBackupTracker(workingCopies, backups, ownerWindow as unknown as Window);
+	using closed = new TestWorkingCopy(URI.file('/shutdown/closed.ts'));
+	using added = new TestWorkingCopy(URI.file('/shutdown/added.ts'));
+	const closedRegistration = workingCopies.register(closed);
+	try {
+		closed.change('closed draft');
+		await tracker.shutdown();
+		closedRegistration.dispose();
+		added.change('new draft');
+		using addedRegistration = workingCopies.register(added);
+		tracker.cancelShutdown();
+		tracker.cancelShutdown();
+		await tracker.flush();
+		assert.deepEqual((await backups.list()).map(backup => backup.content), ['new draft']);
+		const second = tracker.shutdown();
+		assert.equal(tracker.shutdown(), second);
+		await second;
+	} finally {
+		closedRegistration.dispose();
+	}
+});
+
+test('final backup join captures edits through the overall result and stops producers only on success', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test/' });
+	try {
+		Object.defineProperty(browser.window.performance, 'getEntriesByType', { value: () => [] });
+		using services = new InstantiationService();
+		services.registerInstance(ILogService, new NullLoggerService());
+		services.registerSingleton(IStorageService, () => new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'final-backup', flushInterval: 0 }));
+		using lifecycle = services.createInstance(BrowserLifecycleService, { ownerWindow: browser.window as unknown as Window, onError: () => undefined });
+		using workingCopies = new BrowserWorkingCopyService();
+		using backups = new ControlledBackups();
+		const ownerWindow = new TestWindow();
+		using tracker = new WorkingCopyBackupTracker(workingCopies, backups, ownerWindow as unknown as Window);
+		using copy = new TestWorkingCopy(URI.file('/shutdown/final.ts'));
+		using registration = workingCopies.register(copy);
+		copy.change('before checks');
+		const joined = new DeferredPromise<void>();
+		const otherJoin = new DeferredPromise<void>();
+		lifecycle.onBeforeShutdown(event => event.veto(tracker.flush().then(() => false), 'backup check'));
+		lifecycle.onWillShutdown(event => {
+			event.join(services.get(IStorageService).flush(WillSaveStateReason.SHUTDOWN), 'storage');
+			event.join(otherJoin.p, 'other');
+			event.join(() => tracker.shutdown(), 'final backups', () => tracker.isShutdownCurrent);
+			void joined.complete(undefined);
+		});
+		lifecycle.onDidShutdown(() => tracker.completeShutdown());
+		lifecycle.onDidShutdownError(reason => { if (reason !== 'pageHide') tracker.cancelShutdown(); });
+		const shutdown = lifecycle.shutdown('windowClose');
+		await joined.p;
+		copy.change('during other join');
+		const finalWrite = backups.holdNext('store');
+		copy.duringBackup = () => { void tracker.shutdown().then(() => copy.change('after backup drain before outcome')); };
+		await otherJoin.complete(undefined);
+		await finalWrite.entered.p;
+		copy.change('during final write');
+		await finalWrite.release.complete(undefined);
+		await shutdown;
+		copy.change('after completed close');
+		ownerWindow.runTimers();
+		await tracker.flush();
+		assert.deepEqual({ content: (await backups.list()).map(backup => backup.content), calls: backups.calls, timers: ownerWindow.pendingTimers }, {
+			content: ['after backup drain before outcome'], calls: ['store:before checks', 'store:during other join', 'store:during final write', 'store:after backup drain before outcome'], timers: 0,
+		});
+	} finally {
+		browser.window.close();
+	}
+});
+
+test('failed backup capture preserves durable content and repeated cancellation permits a fresh shutdown', async () => {
+	using workingCopies = new BrowserWorkingCopyService();
+	using backups = new MemoryBackups();
+	using tracker = new WorkingCopyBackupTracker(workingCopies, backups, new TestWindow() as unknown as Window);
+	using copy = new TestWorkingCopy(URI.file('/shutdown/capture-error.ts'));
+	using registration = workingCopies.register(copy);
+	copy.change('last valid snapshot');
+	await tracker.flush();
+	copy.change('failed capture');
+	const error = new Error('Injected serialization failure');
+	copy.duringBackup = () => { throw error; };
+	const failed = tracker.shutdown();
+	assert.equal(tracker.shutdown(), failed);
+	await assert.rejects(failed, value => value instanceof AggregateError && value.errors.includes(error));
+	assert.deepEqual((await backups.list()).map(backup => backup.content), ['last valid snapshot']);
+	tracker.cancelShutdown();
+	tracker.cancelShutdown();
+	copy.change('retry content');
+	await tracker.flush();
+	const retried = tracker.shutdown();
+	assert.notEqual(retried, failed);
+	assert.equal(tracker.shutdown(), retried);
+	await retried;
+	tracker.completeShutdown();
+	assert.deepEqual((await backups.list()).map(backup => backup.content), ['retry content']);
+});
+
+test('backup shutdown retains the existing last registered dirty copy for a shared resource', async () => {
+	using workingCopies = new BrowserWorkingCopyService();
+	using backups = new MemoryBackups();
+	using tracker = new WorkingCopyBackupTracker(workingCopies, backups, new TestWindow() as unknown as Window);
+	const resource = URI.file('/shutdown/shared.ts');
+	using first = new TestWorkingCopy(resource);
+	using second = new TestWorkingCopy(resource);
+	using firstRegistration = workingCopies.register(first);
+	using secondRegistration = workingCopies.register(second);
+	first.change('first copy');
+	second.change('second copy');
+	await tracker.flush();
+	assert.deepEqual((await backups.list()).map(backup => backup.content), ['second copy']);
+	await tracker.shutdown();
+	tracker.completeShutdown();
+	assert.deepEqual((await backups.list()).map(backup => backup.content), ['second copy']);
+});
+
+test('failed pagehide drains before forced host disposal without restarting database operations', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test/' });
+	try {
+		Object.defineProperty(browser.window.performance, 'getEntriesByType', { value: () => [] });
+		using services = new InstantiationService();
+		services.registerInstance(ILogService, new NullLoggerService());
+		services.registerSingleton(IStorageService, () => new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'forced-pagehide', flushInterval: 0 }));
+		using lifecycle = services.createInstance(BrowserLifecycleService, { ownerWindow: browser.window as unknown as Window, onError: () => undefined });
+		using workingCopies = new BrowserWorkingCopyService();
+		using owner = new DisposableStore();
+		const database = new ClosingDatabase();
+		const backups = owner.add(new IndexedDbWorkingCopyBackupService('forced-pagehide', database.factory));
+		const errors: unknown[] = [];
+		const tracker = owner.add(new WorkingCopyBackupTracker(workingCopies, backups, new TestWindow() as unknown as Window, error => errors.push(error)));
+		using copy = new TestWorkingCopy(URI.file('/shutdown/pagehide.ts'));
+		const registration = workingCopies.register(copy);
+		owner.add(toDisposable(() => { database.events.push('editor.dispose'); registration.dispose(); }));
+		copy.change('durable despite another failure');
+		lifecycle.onWillShutdown(event => {
+			event.join(Promise.reject(new Error('Injected other join failure')), 'other');
+			event.join(() => tracker.shutdown(), 'final backup', () => tracker.isShutdownCurrent);
+		});
+		lifecycle.onDidShutdown(() => tracker.completeShutdown());
+		lifecycle.onDidShutdownError(reason => { if (reason !== 'pageHide') tracker.cancelShutdown(); });
+		const shutdown = lifecycle.shutdown('pageHide').finally(() => owner.dispose());
+		await assert.rejects(shutdown, /shutdown participants failed/);
+		await tracker.flush();
+		assert.deepEqual({ events: database.events, errors, contents: [...database.records.values()].map(record => record.content) }, {
+			events: ['transaction', 'editor.dispose', 'database.close'], errors: [], contents: ['durable despite another failure'],
+		});
+	} finally {
+		browser.window.close();
+	}
+});
+
 /** Exercises the real backup service's await-database/transaction/close boundary without persistent data. */
 class ClosingDatabase {
 	readonly events: string[] = [];
@@ -284,11 +531,12 @@ class TestWorkingCopy extends Disposable implements IWorkingCopy {
 	isDirty = false;
 	readonly hasExternalChange = false;
 	private content = "";
+	duringBackup: (() => void) | undefined;
 
 	constructor(resource: URI) { super(); this.resource = resource; }
 	change(content: string): void { this.content = content; const becameDirty = !this.isDirty; this.isDirty = true; this.contentChanges.fire(); if (becameDirty) this.dirtyChanges.fire(); }
 	markClean(): void { this.isDirty = false; this.dirtyChanges.fire(); }
-	backup(): string { return this.content; }
+	backup(): string { const content = this.content; const callback = this.duringBackup; this.duringBackup = undefined; callback?.(); return content; }
 	restoreBackup(content: string): void { this.change(content); }
 	async save(): Promise<void> { this.markClean(); }
 	async saveAs(): Promise<void> { this.markClean(); }

@@ -803,7 +803,13 @@ export class Workbench extends Disposable {
 			event.veto(workingCopyBackupTracker.flush().then(() => false), 'working-copy backup flush');
 		}));
 		this._register(lifecycleService.onWillShutdown(event => {
-			event.join(workingCopyBackupTracker.shutdown().then(() => storage.flush(WillSaveStateReason.SHUTDOWN)), "Workbench storage flush");
+			event.join(storage.flush(WillSaveStateReason.SHUTDOWN), "Workbench storage flush");
+			event.join(() => workingCopyBackupTracker.shutdown(), "Working-copy backup drain", () => workingCopyBackupTracker.isShutdownCurrent);
+		}));
+		this._register(lifecycleService.onDidShutdown(() => workingCopyBackupTracker.completeShutdown()));
+		this._register(lifecycleService.onDidShutdownError(reason => {
+			// pagehide hosts dispose even on failure; resuming there would race a closing database.
+			if (reason !== 'pageHide') workingCopyBackupTracker.cancelShutdown();
 		}));
 		const outputService = services.get(IOutputService);
 		const systemOutputService = this._register(new SystemOutputService(outputService, api.appServer));
