@@ -6,7 +6,7 @@ import { AppServerRemoteError } from "../../../../platform/app-server/common/app
 import { createDisconnectedFileApi } from "../../../../platform/files/browser/fileApi.js";
 import { BrowserFileService, workspaceResourceFromPath } from "../../../../platform/files/browser/fileService.js";
 import { FileKind, FileNotFoundError, FileRevisionConflictError } from "../../../../platform/files/common/files.js";
-import type { FsChanged } from "../../../app-server/common/generated/index.js";
+import type { FsChanged } from "../../../../../../crates/app-server-protocol/schema/typescript/index.js";
 import { workspaceRelativePath, type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { WorkspaceContextService } from "../../../../workbench/services/workspaces/browser/workspaceContextService.js";
 import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/remote.js";

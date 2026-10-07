@@ -5,8 +5,8 @@ import { promisify } from 'node:util';
 import { developmentAshPackagePath } from './runtimeStore.ts';
 import { prepareAppServer } from './appServer.ts';
 import { buildAppServerEnvironment, type AppServerHostPlatform } from '../../src/ash/platform/app-server/common/appServerEnvironment.ts';
-import { decodeWebListenInfo } from '../../src/ash/platform/app-server/common/generated/WebProtocolDecoder.ts';
-import type { WebListenInfo } from '../../src/ash/platform/app-server/common/generated/WebListenInfo.ts';
+import { decodeWebListenInfo } from '../../crates/app-server-protocol/schema/typescript/WebProtocolDecoder.ts';
+import type { WebListenInfo } from '../../crates/app-server-protocol/schema/typescript/WebListenInfo.ts';
 
 interface WebLaunch {
 	readonly info: WebListenInfo;

@@ -3,8 +3,8 @@ import { invokeExtensionHost, normalizeExtensionHostChanged, normalizeExtensionH
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
 import type { AppServerProtocolClient } from "../../app-server/browser/appServerProtocolClient.js";
 import { appServerRequest } from "../../app-server/browser/appServerRequest.js";
-import { APP_SERVER_SERVER_REQUESTS } from '../../app-server/common/generated/index.js';
-import type { JsonValue as ProtocolJsonValue } from '../../app-server/common/generated/index.js';
+import { APP_SERVER_SERVER_REQUESTS } from '../../../../../crates/app-server-protocol/schema/typescript/index.js';
+import type { JsonValue as ProtocolJsonValue } from '../../../../../crates/app-server-protocol/schema/typescript/index.js';
 import type { ExtensionClientHandler } from '../common/extensionHostApi.js';
 import { inertSubscription } from "../../renderer/browser/disconnectedHost.js";
 import { Disposable, DisposableMap, combinedDisposable, toDisposable } from '../../../base/common/lifecycle.js';

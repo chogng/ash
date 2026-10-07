@@ -9,7 +9,7 @@ test("clean removes outputs and tool caches while preserving dependencies and li
 	const root = await mkdtemp(join(tmpdir(), "ash-clean-"));
 	t.after(() => rm(root, { recursive: true, force: true }));
 	const removed = [".build/desktop/output", "target/debug/output", "dist/package", "test/integration/browser/dist/index.html", "__pycache__/cache", ".pytest_cache/cache", ".ruff_cache/cache", "node_modules/.vite/deps/cache", "node_modules/.vite-temp/config.mjs", "build/lib/__pycache__/cache", "build/code/__pycache__/cache", "scripts/__pycache__/cache", "scripts/.pytest_cache/cache", "build/.ruff_cache/cache"];
-	const preserved = ["build/lib/source.py", "node_modules/tool/index.js", "build/node_modules/tool/__pycache__/cache", "scripts/.venv/__pycache__/cache", "external/__pycache__/cache", ".ash/config.json", "third_party/.cache/runtime", "src/ash/platform/app-server/common/generated/index.ts", "src/ash/base/common/productIcons.ts"];
+	const preserved = ["build/lib/source.py", "node_modules/tool/index.js", "build/node_modules/tool/__pycache__/cache", "scripts/.venv/__pycache__/cache", "external/__pycache__/cache", ".ash/config.json", "third_party/.cache/runtime", "crates/app-server-protocol/schema/typescript/index.ts", "src/ash/base/common/productIcons.ts"];
 	for (const file of [...removed, ...preserved]) {
 		await mkdir(join(root, file, ".."), { recursive: true });
 		await writeFile(join(root, file), "keep");

@@ -3,7 +3,7 @@ import type {
 	TeamMessagePostParams, TeamMessagePostResult, TeamReadParams, TeamReadResult,
 	TeamRunListParams, TeamRunListResult, TeamRunReadParams, TeamRunReadResult,
 	TeamRunAttachParams, TeamRunStartParams, TeamRunStartResult,
-} from '../../app-server/common/generated/index.js';
+} from '../../../../../crates/app-server-protocol/schema/typescript/index.js';
 
 /** Product-host Team operations exposed to browser and Electron renderers. */
 export interface ITeamApi {

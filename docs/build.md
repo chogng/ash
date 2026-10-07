@@ -198,7 +198,7 @@ Sherpa ONNX 静态库使用按版本共享的校验缓存，位于 `third_party/
 
 `just rust-warnings` 检查新生成与已缓存的编译警告，保持 `RUSTFLAGS` 与普通构建一致，避免生成另一套产物。
 
-生成的前端协议副本位于 `src/ash/platform/app-server/common/generated/`，可由 `pnpm protocol:sync` 重建。受版本控制的图标工厂使用 `pnpm icons:generate` 更新。
+前端与构建工具直接消费 `crates/app-server-protocol/schema/typescript/` 的已提交协议快照；修改后端协议后使用 `pnpm protocol:generate` 更新，并运行 `pnpm typecheck:protocol`。受版本控制的图标工厂使用 `pnpm icons:generate` 更新。
 
 ## Rust 依赖检查与构建测量
 

@@ -1,4 +1,4 @@
-import type { MarketplaceAcquireCapabilityParams, MarketplaceAcquiredCapabilityDto, MarketplaceArtifactHandleDto, MarketplaceDownloadParams, MarketplaceGetParams, MarketplaceInstallParams, MarketplaceInstalledPackageDto, MarketplaceListInstalledResult, MarketplaceOpenResourceParams, MarketplacePackageDetailsDto, MarketplaceReleaseCapabilityParams, MarketplaceResourceContentDto, MarketplaceSearchParams, MarketplaceSearchResult, MarketplaceUninstallParams, MarketplaceUpdateParams } from "../../app-server/common/generated/index.js";
+import type { MarketplaceAcquireCapabilityParams, MarketplaceAcquiredCapabilityDto, MarketplaceArtifactHandleDto, MarketplaceDownloadParams, MarketplaceGetParams, MarketplaceInstallParams, MarketplaceInstalledPackageDto, MarketplaceListInstalledResult, MarketplaceOpenResourceParams, MarketplacePackageDetailsDto, MarketplaceReleaseCapabilityParams, MarketplaceResourceContentDto, MarketplaceSearchParams, MarketplaceSearchResult, MarketplaceUninstallParams, MarketplaceUpdateParams } from "../../../../../crates/app-server-protocol/schema/typescript/index.js";
 
 /** Transport API mirroring the generic App Server Marketplace contract. */
 export interface IMarketplaceApi {
@@ -9,8 +9,8 @@ export interface IMarketplaceApi {
 	update(params: MarketplaceUpdateParams): Promise<MarketplaceInstalledPackageDto>;
 	uninstall(params: MarketplaceUninstallParams): Promise<void>;
 	listInstalled(): Promise<MarketplaceListInstalledResult>;
-	editorExtensions(): Promise<import('../../app-server/common/generated/index.js').MarketplaceEditorExtensionsResult>;
-	setEditorExtensionPolicy(params: import('../../app-server/common/generated/index.js').MarketplaceEditorExtensionPolicyParams): Promise<import('../../app-server/common/generated/index.js').MarketplaceEditorExtensionsResult>;
+	editorExtensions(): Promise<import('../../../../../crates/app-server-protocol/schema/typescript/index.js').MarketplaceEditorExtensionsResult>;
+	setEditorExtensionPolicy(params: import('../../../../../crates/app-server-protocol/schema/typescript/index.js').MarketplaceEditorExtensionPolicyParams): Promise<import('../../../../../crates/app-server-protocol/schema/typescript/index.js').MarketplaceEditorExtensionsResult>;
 	acquireCapability(params: MarketplaceAcquireCapabilityParams): Promise<MarketplaceAcquiredCapabilityDto>;
 	releaseCapability(params: MarketplaceReleaseCapabilityParams): Promise<void>;
 	openResource(params: MarketplaceOpenResourceParams): Promise<MarketplaceResourceContentDto>;

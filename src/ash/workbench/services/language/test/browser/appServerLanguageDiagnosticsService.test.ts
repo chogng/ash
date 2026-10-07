@@ -11,7 +11,7 @@ import { type IServerEventApi } from "../../../../../platform/app-server/common/
 import { AppServerRemoteError } from "../../../../../platform/app-server/common/appServerError.js";
 import { type ILanguageApi } from "../../../../../platform/language/common/languageApi.js";
 import { type IDirPermissionsService } from "../../../../../platform/dirPermissions/common/dirPermissionsService.js";
-import { type PermissionDto, type ServerNotification } from '../../../../../platform/app-server/common/generated/index.js';
+import { type PermissionDto, type ServerNotification } from '../../../../../../../crates/app-server-protocol/schema/typescript/index.js';
 import { WorkspaceContextService } from "../../../workspaces/browser/workspaceContextService.js";
 import { type CodeIntelligenceDocumentSnapshot, type ICodeIntelligenceDocumentService } from "../../../codeIntelligence/common/codeIntelligenceDocumentService.js";
 import { AppServerLanguageDiagnosticsService } from "../../browser/appServerLanguageDiagnosticsService.js";

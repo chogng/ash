@@ -1,7 +1,7 @@
 import { URI } from '../../../base/common/uri.js';
 import type { AppServerProtocolClient } from '../../app-server/browser/appServerProtocolClient.js';
 import { AppServerRemoteError } from '../../app-server/common/appServerError.js';
-import { APP_SERVER_METHODS, type BackupRecordDto } from '../../app-server/common/generated/index.js';
+import { APP_SERVER_METHODS, type BackupRecordDto } from '../../../../../crates/app-server-protocol/schema/typescript/index.js';
 import { BackupError, type IBackupContent, type IBackupRecord, type IBackupService, type IBackupWorkspace } from '../common/backup.js';
 
 /** Uses the renderer's existing connection; backups survive that connection's lifetime. */

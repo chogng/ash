@@ -1,9 +1,8 @@
 import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
-import { syncProtocol } from './sync.ts';
 import { pythonCommand } from '../python.ts';
 
-/** Refreshes the canonical Rust-owned snapshot before updating its frontend consumer. */
+/** Refreshes the Rust-owned protocol snapshot consumed directly by frontend adapters and build tools. */
 export async function generateProtocol(signal?: AbortSignal): Promise<void> {
 	await new Promise<void>((resolvePromise, reject) => {
 		const { command, args } = pythonCommand(['-B', 'build/runtime/protocol.py']);
@@ -17,7 +16,6 @@ export async function generateProtocol(signal?: AbortSignal): Promise<void> {
 		});
 	});
 	signal?.throwIfAborted();
-	await syncProtocol();
 }
 
 if (import.meta.main) await generateProtocol();

@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'mocha';
-import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH } from '../../../app-server/common/generated/index.js';
+import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH } from '../../../../../../crates/app-server-protocol/schema/typescript/index.js';
 import { AppServerDaemonLauncher, createAppServerDaemonLauncher } from '../../electron-main/appServerDaemonLauncher.js';
 
 test('packaged daemon connections use verified binaries and an explicit workspace environment', async () => {

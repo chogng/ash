@@ -4,7 +4,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { AppServerCallService } from '../../browser/appServerCallService.js';
 import { AppServerProtocolClient } from '../../../app-server/browser/appServerProtocolClient.js';
 import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, type AppServerTransport } from '../../../app-server/common/appServerTransport.js';
-import { APP_SERVER_SCHEMA_HASH, APP_SERVER_PROTOCOL_MAJOR, type InitializeResult, type ServerCapabilities, type CallStatus } from '../../../app-server/common/generated/index.js';
+import { APP_SERVER_SCHEMA_HASH, APP_SERVER_PROTOCOL_MAJOR, type InitializeResult, type ServerCapabilities, type CallStatus } from '../../../../../../crates/app-server-protocol/schema/typescript/index.js';
 import { DisposableTracker, installDisposableTracker } from '../../../../base/common/lifecycle.js';
 
 class Transport implements AppServerTransport {

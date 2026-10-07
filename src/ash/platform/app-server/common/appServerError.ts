@@ -1,4 +1,4 @@
-import type { AppServerErrorData, AppServerErrorName } from './generated/index.js';
+import type { AppServerErrorData, AppServerErrorName } from '../../../../../crates/app-server-protocol/schema/typescript/index.js';
 
 /** Transport-independent error returned by an App Server request. */
 export class AppServerRemoteError extends Error {

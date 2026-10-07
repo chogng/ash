@@ -1,6 +1,6 @@
 import { localize } from '../../../nls.js';
 import { createUuid } from '../../../base/common/uuid.js';
-import type { ProviderConfigDto, ProviderModelsListFailureCodeDto } from '../../app-server/common/generated/index.js';
+import type { ProviderConfigDto, ProviderModelsListFailureCodeDto } from '../../../../../crates/app-server-protocol/schema/typescript/index.js';
 import type { AppServerProtocolClient } from "../../app-server/browser/appServerProtocolClient.js";
 import { appServerRequest, voidResult } from "../../app-server/browser/appServerRequest.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";

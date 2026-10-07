@@ -1,4 +1,4 @@
-import type { ContentSearchCancelParams, ContentSearchReadParams, ContentSearchReadResult, ContentSearchStartParams, ContentSearchStartResult } from "../../app-server/common/generated/index.js";
+import type { ContentSearchCancelParams, ContentSearchReadParams, ContentSearchReadResult, ContentSearchStartParams, ContentSearchStartResult } from "../../../../../crates/app-server-protocol/schema/typescript/index.js";
 
 export interface IContentSearchApi {
 	start(params: ContentSearchStartParams): Promise<ContentSearchStartResult>;

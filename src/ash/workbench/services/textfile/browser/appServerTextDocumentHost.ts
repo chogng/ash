@@ -6,7 +6,7 @@ import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js
 import type { LanguageWorkspaceEdit, LanguageWorkspaceEditEntry } from '../../../../editor/common/languages.js';
 import { ITextModelService, type ITextModelService as ITextModelServiceContract, type IResolvedTextEditorModel } from '../../../../editor/common/services/resolverService.js';
 import { AppServerProtocolClient } from '../../../../platform/app-server/browser/appServerProtocolClient.js';
-import { APP_SERVER_SERVER_REQUESTS, type TextDocumentApplyParams, type TextDocumentApplyResult, type TextDocumentReadResult, type TextDocumentListResult } from '../../../../platform/app-server/common/generated/index.js';
+import { APP_SERVER_SERVER_REQUESTS, type TextDocumentApplyParams, type TextDocumentApplyResult, type TextDocumentReadResult, type TextDocumentListResult } from '../../../../../../crates/app-server-protocol/schema/typescript/index.js';
 import { FileNotFoundError } from '../../../../platform/files/common/files.js';
 import { WorkspaceEditConflictError } from '../../../../editor/browser/services/bulkEditService.js';
 import { IWorkingCopyService, type IWorkingCopyService as IWorkingCopyServiceContract } from '../../workingCopy/common/workingCopyService.js';

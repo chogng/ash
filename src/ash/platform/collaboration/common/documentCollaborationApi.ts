@@ -1,10 +1,10 @@
-import type { DocumentCollaborationOpenParams } from "../../app-server/common/generated/index.js";
-import type { DocumentCollaborationOpenResult } from "../../app-server/common/generated/index.js";
-import type { DocumentCollaborationPresenceParams } from "../../app-server/common/generated/index.js";
-import type { DocumentCollaborationPresenceReadParams } from "../../app-server/common/generated/index.js";
-import type { DocumentCollaborationPresenceSnapshot } from "../../app-server/common/generated/index.js";
-import type { DocumentCollaborationSubmitParams } from "../../app-server/common/generated/index.js";
-import type { DocumentCollaborationSubmitResult } from "../../app-server/common/generated/index.js";
+import type { DocumentCollaborationOpenParams } from "../../../../../crates/app-server-protocol/schema/typescript/index.js";
+import type { DocumentCollaborationOpenResult } from "../../../../../crates/app-server-protocol/schema/typescript/index.js";
+import type { DocumentCollaborationPresenceParams } from "../../../../../crates/app-server-protocol/schema/typescript/index.js";
+import type { DocumentCollaborationPresenceReadParams } from "../../../../../crates/app-server-protocol/schema/typescript/index.js";
+import type { DocumentCollaborationPresenceSnapshot } from "../../../../../crates/app-server-protocol/schema/typescript/index.js";
+import type { DocumentCollaborationSubmitParams } from "../../../../../crates/app-server-protocol/schema/typescript/index.js";
+import type { DocumentCollaborationSubmitResult } from "../../../../../crates/app-server-protocol/schema/typescript/index.js";
 
 /** Typed transport boundary for server-ordered structured-document collaboration. */
 export interface IDocumentCollaborationApi {

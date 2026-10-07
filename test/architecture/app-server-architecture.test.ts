@@ -1,14 +1,17 @@
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { test } from 'mocha';
 import ts from 'typescript';
 import { findDesktopRoot } from './testPaths.js';
 
 const sourceRoot = resolve(findDesktopRoot(import.meta.dirname), 'src/ash');
-const generatedRoot = resolve(sourceRoot, 'platform/app-server/common/generated');
+const generatedRoot = resolve(findDesktopRoot(import.meta.dirname), 'crates/app-server-protocol/schema/typescript');
 
 test('generated protocol dependencies stay in transport contracts and runtime adapters', () => {
+	assert.equal(existsSync(join(generatedRoot, 'index.ts')), true, 'consumers share the Rust-owned protocol snapshot');
+	assert.equal(existsSync(resolve(sourceRoot, '../../generated/app-server')), false, 'retired protocol snapshot');
+	assert.equal(existsSync(join(sourceRoot, 'platform/app-server/common/generated')), false, 'retired frontend protocol copy');
 	const violations: string[] = [];
 	for (const file of files(sourceRoot)) {
 		const name = relative(sourceRoot, file).replaceAll('\\', '/');
@@ -24,16 +27,15 @@ test('generated protocol dependencies stay in transport contracts and runtime ad
 			|| name === 'workbench/contrib/chat/common/languageModels.ts';
 		// Generated product definitions are metadata, not wire data or transport APIs.
 		const metadataOnly = source.statements.filter(ts.isImportDeclaration).every(statement => {
-			if (!ts.isStringLiteral(statement.moduleSpecifier) || !statement.moduleSpecifier.text.includes('generated/')) return true;
+			if (!ts.isStringLiteral(statement.moduleSpecifier) || protocolPath(file, statement.moduleSpecifier.text) === undefined) return true;
 			const bindings = statement.importClause?.namedBindings;
 			return bindings && ts.isNamedImports(bindings) && bindings.elements.every(element =>
 				['APPROVAL_MODE_DEFINITIONS', 'PRODUCT_SLASH_COMMANDS'].includes((element.propertyName ?? element.name).text));
 		});
 		function visit(node: ts.Node): void {
 			if (ts.isStringLiteral(node) && node.text.startsWith('.')) {
-				const target = relative(generatedRoot, resolve(dirname(file), node.text)).replaceAll('\\', '/');
-				const generated = target !== '..' && !target.startsWith('../') && !target.includes(':');
-				if (node.text.includes('generated/app-server') || generated && (!allowed && !metadataOnly || target.startsWith('types/'))) violations.push(`${name}: ${node.text}`);
+				const target = protocolPath(file, node.text);
+				if (node.text.includes('generated/app-server') || node.text.includes('app-server/common/generated') || target !== undefined && (!allowed && !metadataOnly || target.startsWith('types/'))) violations.push(`${name}: ${node.text}`);
 			}
 			ts.forEachChild(node, visit);
 		}
@@ -41,6 +43,12 @@ test('generated protocol dependencies stay in transport contracts and runtime ad
 	}
 	assert.deepEqual(violations, [], 'UI, editor, and public domain services must use frontend-owned contracts');
 });
+
+function protocolPath(file: string, specifier: string): string | undefined {
+	if (!specifier.startsWith('.')) return undefined;
+	const target = relative(generatedRoot, resolve(dirname(file), specifier)).replaceAll('\\', '/');
+	return target === '..' || target.startsWith('../') || target.includes(':') ? undefined : target;
+}
 
 function files(directory: string): string[] {
 	return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {

@@ -1274,17 +1274,17 @@ Kimi 订阅登录使用 device-code flow，没有本地 callback listener：App 
 - Rust DTO 与 registry：`crates/app-server-protocol/src/protocol/`
 - JSON Schema：`crates/app-server-protocol/schema/json/schema.json`
 - TypeScript 入口：`crates/app-server-protocol/schema/typescript/index.ts`
-- Desktop 生成入口：`src/ash/platform/app-server/common/generated/index.ts`
+- 前端与构建工具直接引用同一个 TypeScript 入口，不生成消费副本。
 
 修改契约后执行：
 
 ```bash
-pnpm run generate:protocol
+pnpm run protocol:generate
 ```
 
-Rust DTO 与 registry 是唯一协议来源；`schema/typescript` 是提交到 Git 的生成快照，前端 `common/generated` 是不提交的消费副本。`protocol:generate` 先更新快照，再同步前端副本；禁止手改两处生成物。
+Rust DTO 与 registry 是唯一协议来源；`schema/typescript` 是提交到 Git 的生成快照，也是前端和构建工具共用的协议产物。`protocol:generate` 直接更新快照；禁止手改生成物。
 
-纯前端构建通过 `pnpm protocol:sync` 同步快照，不运行 Cargo。同步会移除退场类型，保留未变文件的时间戳，并在源快照缺失或目标包含手写文件时失败。联合开发的后端 watcher 和开发包准备入口在发布后端前重新生成协议。
+纯前端构建直接使用已提交的快照，不复制协议文件，也不运行 Cargo。`pnpm typecheck:protocol` 严格检查这份快照，受影响的前端类型检查和构建验证真实消费方。联合开发的后端 watcher 和开发包准备入口在发布后端前重新生成协议。
 
 生成类型只用于协议客户端、领域通信接口和运行时 adapter；领域服务、编辑器与 UI 使用前端自有类型。WebSocket 只传输消息，`initialize` 负责主版本、生成协议指纹和必需能力可用性检查。schema hash 不同会阻断连接；允许扩展的结果对象可增加字段，严格对象、未知枚举和未声明通知仍须经过解码规则校验，不会因握手通过而跳过。
 
@@ -1410,7 +1410,7 @@ Thread 保存普通 Coding Turn 的顾问选择策略；接受 Turn 时将解析
 | 前端公共契约与工作区生命周期 | `src/ash/platform/testing/common/testExecutionService.ts`、`src/ash/workbench/services/testing/common/testingService.ts`、同级 `browser/testingService.ts` |
 | 协议适配                     | `src/ash/platform/testing/browser/appServerTestExecutionService.ts`                                                                                               |
 | 测试树与编辑器按钮           | `src/ash/workbench/contrib/testing/browser/testingViewPane.ts`、`testingEditorContribution.ts`                                                                    |
-| 协议与生成物                 | `crates/app-server-protocol/src/protocol/testing.rs`、`schema/typescript/`，包括 method map 和 `AppServerProtocolDecoder.ts`；Renderer 绑定由生成任务同步                |
+| 协议与生成物                 | `crates/app-server-protocol/src/protocol/testing.rs`、`schema/typescript/`，包括 method map 和 `AppServerProtocolDecoder.ts`；Renderer 直接引用同一份快照                |
 
 桌面调用沿用 `appServerProtocolClient.ts` → `appServerMessagePortTransport.ts` → `appServerConnectionRelay.ts` → 共享 App Server。前两者位于 `src/ash/platform/app-server/` 的 `browser/`、`electron-browser/`，Relay 与进程启动入口 `appServerProcessLauncher.ts` 位于 `electron-main/`。每个 Renderer 使用独立连接，进程由现有启动层共享。本次新增测试领域，没有替换旧 Host。测试脚本保留既有 Tasks 与终端执行链，不生成单条测试结果。
 

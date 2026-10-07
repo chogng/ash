@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process';
 import { cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { AshApplicationId } from '../../src/ash/code/common/application.ts';
-import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH } from '../../src/ash/platform/app-server/common/generated/protocol.ts';
+import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH } from '../../crates/app-server-protocol/schema/typescript/protocol.ts';
 
 const repositoryRoot = resolve(import.meta.dirname, '../..');
 const appRoot = repositoryRoot;

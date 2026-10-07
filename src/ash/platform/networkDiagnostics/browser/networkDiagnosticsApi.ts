@@ -1,7 +1,7 @@
 import type { AppServerProtocolClient } from '../../app-server/browser/appServerProtocolClient.js';
 import { appServerRequest } from '../../app-server/browser/appServerRequest.js';
 import { generateUuid } from '../../../base/common/uuid.js';
-import type { NetworkReadResult } from '../../app-server/common/generated/index.js';
+import type { NetworkReadResult } from '../../../../../crates/app-server-protocol/schema/typescript/index.js';
 import type { UnavailableOperation } from '../../renderer/browser/disconnectedHost.js';
 import type { INetworkDiagnosticsService, NetworkSnapshot } from '../common/networkDiagnosticsService.js';
 

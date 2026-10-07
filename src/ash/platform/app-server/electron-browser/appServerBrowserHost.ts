@@ -1,6 +1,6 @@
 import { generateUuid } from '../../../base/common/uuid.js';
-import { APP_SERVER_SERVER_REQUESTS, APP_SERVER_METHODS } from '../common/generated/index.js';
-import { decodeAppServerServerRequestResult } from '../common/generated/AppServerProtocolDecoder.js';
+import { APP_SERVER_SERVER_REQUESTS, APP_SERVER_METHODS } from '../../../../../crates/app-server-protocol/schema/typescript/index.js';
+import { decodeAppServerServerRequestResult } from '../../../../../crates/app-server-protocol/schema/typescript/AppServerProtocolDecoder.js';
 import { DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import type { IDisposable } from '../../../base/common/lifecycle.js';
 import type { AppServerProtocolClient } from '../browser/appServerProtocolClient.js';

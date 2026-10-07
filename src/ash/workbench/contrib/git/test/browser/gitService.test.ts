@@ -3,7 +3,7 @@ import { test } from "mocha";
 import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../base/common/uri.js";
 import type { IAppServerApi, IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
-import type { GitRepositoriesResult, ServerNotification } from '../../../../../platform/app-server/common/generated/index.js';
+import type { GitRepositoriesResult, ServerNotification } from '../../../../../../../crates/app-server-protocol/schema/typescript/index.js';
 import { NullLoggerService } from '../../../../../platform/log/common/log.js';
 import type { IGitApi } from "../../../../../platform/git/common/gitApi.js";
 import { WorkbenchConfigurationService } from '../../../../services/configuration/browser/configurationService.js';

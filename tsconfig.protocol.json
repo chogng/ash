@@ -5,5 +5,5 @@
     "strict": true,
     "types": []
   },
-  "include": ["src/ash/platform/app-server/common/generated/**/*.ts"]
+  "include": ["crates/app-server-protocol/schema/typescript/**/*.ts"]
 }

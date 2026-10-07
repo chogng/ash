@@ -1,6 +1,6 @@
 import { AppServerRemoteError } from '../../app-server/common/appServerError.js';
-import { APP_SERVER_METHODS } from '../../app-server/common/generated/index.js';
-import { decodeAppServerRequestParams } from '../../app-server/common/generated/AppServerProtocolDecoder.js';
+import { APP_SERVER_METHODS } from '../../../../../crates/app-server-protocol/schema/typescript/index.js';
+import { decodeAppServerRequestParams } from '../../../../../crates/app-server-protocol/schema/typescript/AppServerProtocolDecoder.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { isRecord } from '../../../base/common/types.js';
 import { type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
@@ -9,7 +9,7 @@ import { invoke, subscribe } from '../../ipc/electron-browser/rendererIpc.js';
 import { parseWorkspace } from '../../workspace/common/workspace.js';
 import { createWorkspaceContextApi } from '../../workspace/electron-browser/workspaceContextApi.js';
 import { getRemoteWorkspacePath, isRemoteResource } from '../../remote/common/remote.js';
-import type { EnvDirSetEntry, PermissionDto } from '../../app-server/common/generated/index.js';
+import type { EnvDirSetEntry, PermissionDto } from '../../../../../crates/app-server-protocol/schema/typescript/index.js';
 import { DEVELOPMENT_DIR_PERMISSIONS, READ_DIR_PERMISSIONS, type IWorkspaceTrustRequestService } from '../../workspace/common/workspaceTrust.js';
 
 export async function initializeWorkspace(client: AppServerProtocolClient, workspaceTrust: IWorkspaceTrustRequestService): Promise<void> {

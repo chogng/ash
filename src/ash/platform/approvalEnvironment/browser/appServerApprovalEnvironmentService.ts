@@ -1,5 +1,5 @@
-import { APP_SERVER_METHODS } from '../../app-server/common/generated/index.js';
-import type { EnvironmentEntry as EntryDto, ApprovalEnvironmentReadResult as ProfileDto, ApprovalEnvironmentScanResult as DraftDto } from '../../app-server/common/generated/index.js';
+import { APP_SERVER_METHODS } from '../../../../../crates/app-server-protocol/schema/typescript/index.js';
+import type { EnvironmentEntry as EntryDto, ApprovalEnvironmentReadResult as ProfileDto, ApprovalEnvironmentScanResult as DraftDto } from '../../../../../crates/app-server-protocol/schema/typescript/index.js';
 import type { AppServerProtocolClient } from '../../app-server/browser/appServerProtocolClient.js';
 import { AppServerRemoteError } from '../../app-server/common/appServerError.js';
 import { localize } from '../../../nls.js';

@@ -1,6 +1,6 @@
-import type { DocumentCollaborationOpenResult } from "../../app-server/common/generated/index.js";
-import type { DocumentCollaborationSubmitResult } from "../../app-server/common/generated/index.js";
-import type { DocumentCollaborationPresenceSnapshot } from "../../app-server/common/generated/index.js";
+import type { DocumentCollaborationOpenResult } from "../../../../../crates/app-server-protocol/schema/typescript/index.js";
+import type { DocumentCollaborationSubmitResult } from "../../../../../crates/app-server-protocol/schema/typescript/index.js";
+import type { DocumentCollaborationPresenceSnapshot } from "../../../../../crates/app-server-protocol/schema/typescript/index.js";
 import { invoke } from "../../ipc/electron-browser/rendererIpc.js";
 import type { IDocumentCollaborationApi } from "../common/documentCollaborationApi.js";
 

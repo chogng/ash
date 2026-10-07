@@ -13,7 +13,7 @@ for (const profile of ['default', 'custom'] as const) {
 		for (const directory of ['build/desktop/launch', 'node_modules/typescript/bin', 'node_modules/electron']) {
 			await mkdir(join(root, directory), { recursive: true });
 		}
-		for (const name of ['build/source-layout.json', 'build/desktop/launch/electron.ts', 'build/desktop/host.ts', 'build/desktop/paths.ts', 'build/desktop/appServer.ts', 'build/python.ts', 'build/protocol/generate.ts', 'build/protocol/sync.ts']) {
+		for (const name of ['build/source-layout.json', 'build/desktop/launch/electron.ts', 'build/desktop/host.ts', 'build/desktop/paths.ts', 'build/desktop/appServer.ts', 'build/python.ts', 'build/protocol/generate.ts']) {
 			await mkdir(join(root, name, '..'), { recursive: true });
 			await copyFile(resolve(import.meta.dirname, '../../..', name), join(root, name));
 		}

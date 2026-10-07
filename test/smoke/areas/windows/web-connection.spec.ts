@@ -7,7 +7,7 @@ import { promisify } from 'node:util';
 import { tmpdir } from 'node:os';
 import { launchElectron } from '../../../automation/playwrightElectron.js';
 import type { ISandboxGlobals } from "../../../../src/ash/base/parts/sandbox/electron-browser/sandboxTypes.js";
-import { decodeAppServerServerRequestResult } from '../../../../src/ash/platform/app-server/common/generated/AppServerProtocolDecoder.js';
+import { decodeAppServerServerRequestResult } from '../../../../crates/app-server-protocol/schema/typescript/AppServerProtocolDecoder.js';
 import type { Page } from '@playwright/test';
 import { appServerDaemonExecutablePath, appServerExecutablePath } from '../../../../src/ash/platform/app-server-daemon/node/appServerDaemonPackage.js';
 import { URI } from '../../../../src/ash/base/common/uri.js';

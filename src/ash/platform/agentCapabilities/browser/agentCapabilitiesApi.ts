@@ -1,6 +1,6 @@
 import type { AppServerProtocolClient } from '../../app-server/browser/appServerProtocolClient.js';
 import { appServerRequest } from '../../app-server/browser/appServerRequest.js';
-import type { ToolSourceProvenance } from '../../app-server/common/generated/index.js';
+import type { ToolSourceProvenance } from '../../../../../crates/app-server-protocol/schema/typescript/index.js';
 import type { UnavailableOperation } from '../../renderer/browser/disconnectedHost.js';
 import type { AgentCapabilitiesSnapshot, IAgentCapabilitiesService } from '../common/agentCapabilitiesService.js';
 

@@ -86,7 +86,7 @@ test('watcher stops before the backend build when protocol generation fails', as
 	assert.deepEqual(commands, [pythonCommand(['-B', 'build/runtime/protocol.py'])]);
 });
 
-test('watcher invokes the Python backend builder after protocol synchronization', async (t) => {
+test('watcher invokes the Python backend builder after protocol generation', async (t) => {
 	const commands: string[] = [];
 	const failure = Promise.withResolvers<string>();
 	t.after(() => {

@@ -19,7 +19,6 @@ test("aggregate and standalone unit commands prepare inputs once and stop on pre
 		"prepare:extensions": "extensions",
 		"localization:generate": "localization",
 		"typecheck:common": "common",
-		"protocol:sync": "protocol",
 		"icons:check": "icons",
 	})) scripts[name] = `node record.ts ${operation}`;
 	await writeFile(join(directory, "package.json"), JSON.stringify({ private: true, type: "module", scripts }));
@@ -34,12 +33,11 @@ test("aggregate and standalone unit commands prepare inputs once and stop on pre
 	const executable = script ? process.execPath : pnpm;
 	const prefix = script ? [pnpm] : [];
 	for (const [command, expected, failure] of [
-		["test:main", ["styles", "tools", "output", "localization", "extensions", "protocol", "common", "icons", "unit"], ""],
+		["test:main", ["styles", "tools", "output", "localization", "extensions", "common", "icons", "unit"], ""],
 		["test:main", ["styles"], "styles"],
-		["test:unit", ["output", "localization", "extensions", "protocol", "common", "icons", "unit"], ""],
-		["test:editor:unit", ["output", "localization", "extensions", "protocol", "common", "icons", "editor"], ""],
-		["test:main", ["styles", "tools", "output", "localization", "extensions", "protocol", "common"], "common"],
-		["test:main", ["styles", "tools", "output", "localization", "extensions", "protocol"], "protocol"],
+		["test:unit", ["output", "localization", "extensions", "common", "icons", "unit"], ""],
+		["test:editor:unit", ["output", "localization", "extensions", "common", "icons", "editor"], ""],
+		["test:main", ["styles", "tools", "output", "localization", "extensions", "common"], "common"],
 	] as const) {
 		await writeFile(join(directory, "operations.jsonl"), "");
 		const result = spawnSync(executable, [...prefix, "run", command], {

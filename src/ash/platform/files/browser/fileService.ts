@@ -1,5 +1,5 @@
-import type { FsFileType, FsGetMetadataParams, FsGetMetadataResult, FsReadBinaryFileParams, FsReadBinaryFileResult, FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult, FsWriteBinaryFileParams, FsWriteFileParams, FsWriteFileResult, ResourceMetadataResult, ResourceReadResult } from "../../app-server/common/generated/index.js";
-import type { FsChanged } from "../../app-server/common/generated/index.js";
+import type { FsFileType, FsGetMetadataParams, FsGetMetadataResult, FsReadBinaryFileParams, FsReadBinaryFileResult, FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult, FsWriteBinaryFileParams, FsWriteFileParams, FsWriteFileResult, ResourceMetadataResult, ResourceReadResult } from "../../../../../crates/app-server-protocol/schema/typescript/index.js";
+import type { FsChanged } from "../../../../../crates/app-server-protocol/schema/typescript/index.js";
 import type { IResourceApi } from "../../app-server/common/appServerApi.js";
 import { AppServerRemoteError } from "../../app-server/common/appServerError.js";
 import { decodeBase64 } from "../../../base/common/buffer.js";
@@ -19,12 +19,12 @@ export interface IFileSystemApi {
 	readBinaryFile(params: FsReadBinaryFileParams): Promise<FsReadBinaryFileResult>;
 	writeFile(params: FsWriteFileParams): Promise<FsWriteFileResult>;
 	writeBinaryFile(params: FsWriteBinaryFileParams): Promise<FsWriteFileResult>;
-	createFile(params: import("../../app-server/common/generated/index.js").FsCreateFileParams): Promise<FsGetMetadataResult>;
-	createDirectory(params: import("../../app-server/common/generated/index.js").FsCreateDirectoryParams): Promise<FsGetMetadataResult>;
-	copy(params: import("../../app-server/common/generated/index.js").FsCopyParams): Promise<void>;
-	pasteSystemFiles(params: import("../../app-server/common/generated/index.js").FsPasteSystemFilesParams): Promise<boolean>;
-	rename(params: import("../../app-server/common/generated/index.js").FsRenameParams): Promise<void>;
-	delete(params: import("../../app-server/common/generated/index.js").FsDeleteParams): Promise<void>;
+	createFile(params: import("../../../../../crates/app-server-protocol/schema/typescript/index.js").FsCreateFileParams): Promise<FsGetMetadataResult>;
+	createDirectory(params: import("../../../../../crates/app-server-protocol/schema/typescript/index.js").FsCreateDirectoryParams): Promise<FsGetMetadataResult>;
+	copy(params: import("../../../../../crates/app-server-protocol/schema/typescript/index.js").FsCopyParams): Promise<void>;
+	pasteSystemFiles(params: import("../../../../../crates/app-server-protocol/schema/typescript/index.js").FsPasteSystemFilesParams): Promise<boolean>;
+	rename(params: import("../../../../../crates/app-server-protocol/schema/typescript/index.js").FsRenameParams): Promise<void>;
+	delete(params: import("../../../../../crates/app-server-protocol/schema/typescript/index.js").FsDeleteParams): Promise<void>;
 }
 
 export interface BrowserFileServiceOptions {

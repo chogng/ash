@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Emitter } from '../../../../../base/common/event.js';
 import type { IServerEventApi } from '../../../../../platform/app-server/common/appServerApi.js';
-import type { ServerNotification } from '../../../../../platform/app-server/common/generated/index.js';
+import type { ServerNotification } from '../../../../../../../crates/app-server-protocol/schema/typescript/index.js';
 import type { IDirPermissionsApi } from '../../../../../platform/dirPermissions/common/dirPermissionsApi.js';
 import type { DirPermission } from '../../../../../platform/dirPermissions/common/dirPermissionsService.js';
 import { AppServerDirPermissionsService } from '../../browser/appServerDirPermissionsService.js';

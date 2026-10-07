@@ -33,7 +33,7 @@ import { CommandService } from '../../../src/ash/workbench/services/commands/com
 import { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
 import { IPluginService } from '../../../src/ash/platform/plugins/common/pluginService.js';
 import type { IPluginApi } from '../../../src/ash/platform/plugins/common/pluginApi.js';
-import type { PluginPackageDto, PluginPackageCommandParams } from '../../../src/ash/platform/app-server/common/generated/index.js';
+import type { PluginPackageDto, PluginPackageCommandParams } from '../../../crates/app-server-protocol/schema/typescript/index.js';
 import { AppServerPluginService } from '../../../src/ash/workbench/services/plugins/browser/appServerPluginService.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { WorkbenchQuickInputService } from '../../../src/ash/workbench/services/quickinput/browser/quickInputService.js';

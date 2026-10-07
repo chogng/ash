@@ -4,7 +4,7 @@ import { localize } from '../../../nls.js';
 import type { AppServerProtocolClient } from '../../app-server/browser/appServerProtocolClient.js';
 import { appServerRequest } from '../../app-server/browser/appServerRequest.js';
 import { AppServerRemoteError } from '../../app-server/common/appServerError.js';
-import type { AssetVersionResult } from '../../app-server/common/generated/index.js';
+import type { AssetVersionResult } from '../../../../../crates/app-server-protocol/schema/typescript/index.js';
 import type { AssetCatalog, AssetCollection, AssetImport, AssetVersion, IAssetService } from '../common/assetService.js';
 
 /** Only this adapter handles generated DTOs; the backend owns all committed content and metadata. */

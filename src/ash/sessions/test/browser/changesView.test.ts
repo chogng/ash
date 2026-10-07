@@ -12,7 +12,7 @@ import { IAccessibleViewService } from '../../../platform/accessibility/browser/
 import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
 import { createDisconnectedRendererApi } from '../../../platform/app-server/browser/rendererApi.js';
-import type { TurnChangesReadResult } from '../../../platform/app-server/common/generated/index.js';
+import type { TurnChangesReadResult } from '../../../../../crates/app-server-protocol/schema/typescript/index.js';
 import { WorkbenchConfigurationService } from '../../../workbench/services/configuration/browser/configurationService.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import { NotificationService } from '../../../workbench/services/notification/common/notificationService.js';

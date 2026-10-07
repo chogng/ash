@@ -5,7 +5,7 @@ import { buildMetricsPlugin } from './buildMetricsPlugin.ts';
 import { rendererOutput } from './rendererOutput.ts';
 
 test('keeps the generated App Server decoder separate from shared renderer code', async () => {
-	const decoder = 'fixture/generated/AppServerProtocolDecoder.ts';
+	const decoder = 'fixture/crates/app-server-protocol/schema/typescript/AppServerProtocolDecoder.ts';
 	const sharedService = 'fixture/sharedService.ts';
 	const source = `import { schema } from '${decoder}';\nimport { service } from '${sharedService}';\nglobalThis.fixture = [schema, service];`;
 	const result = await build({

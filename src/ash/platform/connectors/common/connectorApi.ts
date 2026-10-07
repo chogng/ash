@@ -1,4 +1,4 @@
-import type { ConnectorApiTokenConnectParams, ConnectorCommandResultDto, ConnectorDisconnectParams, ConnectorDisconnectResultDto, ConnectorListResult } from "../../app-server/common/generated/index.js";
+import type { ConnectorApiTokenConnectParams, ConnectorCommandResultDto, ConnectorDisconnectParams, ConnectorDisconnectResultDto, ConnectorListResult } from "../../../../../crates/app-server-protocol/schema/typescript/index.js";
 
 export interface ConnectorOAuthConnectParams {
 	readonly commandId: string;

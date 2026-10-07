@@ -29,7 +29,6 @@ node_modules/
 dist/
 debug.log
 .pnpm-store/
-src/ash/platform/app-server/common/generated/
 src/ash/platform/extensions/common/generated/
 schemas/app-server/
 

@@ -6,13 +6,13 @@ import { isCancellationError } from "../../../../base/common/errors.js";
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { isRecord } from "../../../../base/common/types.js";
 import { AppServerRemoteError } from "../../../../platform/app-server/common/appServerError.js";
-import { APP_SERVER_METHODS, APP_SERVER_SERVER_REQUESTS, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH, type InitializeResult, type ServerNotification } from "../../common/generated/index.js";
+import { APP_SERVER_METHODS, APP_SERVER_SERVER_REQUESTS, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH, type InitializeResult, type ServerNotification } from "../../../../../../crates/app-server-protocol/schema/typescript/index.js";
 import { connectWebRendererApi } from "../../../../platform/app-server/browser/webRendererApi.js";
 import { WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION, type AppServerTransport } from "../../common/appServerTransport.js";
 import { AppServerProtocolClient } from "../../../../platform/app-server/browser/appServerProtocolClient.js";
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { GitHubError, GitHubErrorCode, GitHubIssueState, GitHubMergeMethod } from '../../../github/common/githubService.js';
-import type { BrowserCreateParams } from '../../common/generated/index.js';
+import type { BrowserCreateParams } from '../../../../../../crates/app-server-protocol/schema/typescript/index.js';
 
 const githubRepository = { host: 'github.com', owner: 'team', name: 'repo' };
 const githubIssue = { number: 7, title: 'Issue', url: 'https://github.com/team/repo/issues/7', updatedAt: '2026-10-04', state: 'open', labels: ['bug'], assignees: ['owner'] };

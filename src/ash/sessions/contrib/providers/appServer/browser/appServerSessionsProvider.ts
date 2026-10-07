@@ -1,4 +1,4 @@
-import type { AgentTreeNodeProjection as AgentTreeNodeDto, Session as SessionDto, SessionThreadProjection as ThreadDto, TurnStatus as TurnStatusDto } from "../../../../../platform/app-server/common/generated/index.js";
+import type { AgentTreeNodeProjection as AgentTreeNodeDto, Session as SessionDto, SessionThreadProjection as ThreadDto, TurnStatus as TurnStatusDto } from "../../../../../../../crates/app-server-protocol/schema/typescript/index.js";
 import { Emitter } from "../../../../../base/common/event.js";
 import { canceled } from "../../../../../base/common/errors.js";
 import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";

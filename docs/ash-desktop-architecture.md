@@ -216,7 +216,7 @@ Electron 自动化共用 `test/automation/playwrightElectron.ts` 的进程启动
 桌面锁定时直接报告环境错误，不把它当作窗口切换成功。进程退出后才停止测试 daemon，
 进程退出和 daemon 停止分别使用各自的期限。
 
-`src/ash/platform/app-server/common/generated/` 消费 Rust 协议 crate 的生成快照，不手写 wire DTO。纯前端构建只同步快照，协议修改通过 `pnpm generate:protocol` 更新；职责和验证见 [App Server 协议来源](ash-app-server-api.md#12-权威来源)。
+前端 adapter 和构建工具直接引用 `crates/app-server-protocol/schema/typescript/` 的生成快照，不手写 wire DTO，也不生成消费副本。纯前端构建使用已提交的快照，协议修改通过 `pnpm protocol:generate` 更新；职责和验证见 [App Server 协议来源](ash-app-server-api.md#12-权威来源)。
 生成的 `APP_SERVER_SCHEMA_HASH` 是 bundled Desktop 的 exact-schema 基线；Electron Main
 必须比较 initialize response，hash 不一致时不得创建业务窗口或进入 Ready。
 
