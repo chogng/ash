@@ -1406,11 +1406,16 @@ pub fn open_app_server_with_codebase_providers(
             codex_home,
             Arc::clone(&profile_secrets),
             Arc::clone(client),
-            ash_chatgpt::ChatGptAuthManagement::Automatic,
+            ash_chatgpt::ChatGptAuthManagement::Codex,
         ),
         None => ChatGptOAuth::production(codex_home, Arc::clone(&profile_secrets))
             .map_err(|error| OpenAppServerError(error.to_string()))?,
     };
+    let chatgpt_plan = ash_chatgpt::ChatGptPlanOAuth::with_client(
+        Arc::clone(&profile_secrets),
+        options.profile_root.join("chatgpt-plan.lock"),
+        Arc::clone(&model_client),
+    );
     let kimi_oauth = match &model_operation_client {
         Some(client) => KimiOAuth::with_client(Arc::clone(&profile_secrets), Arc::clone(client)),
         None => KimiOAuth::production(Arc::clone(&profile_secrets))
@@ -1473,6 +1478,7 @@ pub fn open_app_server_with_codebase_providers(
     .with_response_diagnostics(Arc::new(diagnostics.clone()))
     .with_local_tokenizers(local_tokenizers)
     .with_chatgpt_oauth(Arc::clone(&chatgpt_oauth))
+    .with_chatgpt_plan(Arc::clone(&chatgpt_plan))
     .with_kimi_oauth(Arc::clone(&kimi_oauth))
     .with_glm_accounts(glm_accounts.clone())
     .with_supergrok_oauth(Arc::clone(&supergrok_oauth));
@@ -1536,6 +1542,7 @@ pub fn open_app_server_with_codebase_providers(
     )
     .map_err(|error| OpenAppServerError(error.to_string()))?;
     let mut login_drivers: Vec<Arc<dyn InteractiveLoginDriver>> = vec![
+        chatgpt_plan.clone(),
         chatgpt_oauth.clone(),
         kimi_oauth.clone(),
         supergrok_oauth.clone(),
@@ -1554,6 +1561,9 @@ pub fn open_app_server_with_codebase_providers(
             .and_then(|service| service.with_account_metadata_refreshers(metadata_refreshers))
             .map_err(|error| OpenAppServerError(error.to_string()))?,
     );
+    chatgpt_plan
+        .install_login_service(&login_service)
+        .map_err(|error| OpenAppServerError(error.to_string()))?;
     chatgpt_oauth
         .install_login_service(&login_service)
         .map_err(|error| OpenAppServerError(error.to_string()))?;
@@ -1571,6 +1581,7 @@ pub fn open_app_server_with_codebase_providers(
         .install_login_service(&login_service)
         .map_err(|error| OpenAppServerError(error.to_string()))?;
     let subscription_connections = vec![
+        ash_chatgpt::CHATGPT_PLAN_PROVIDER_ID,
         ash_chatgpt::CHATGPT_SUBSCRIPTION_PROVIDER_ID,
         ash_kimi::KIMI_PROVIDER_ID,
         supergrok::SUPERGROK_SUBSCRIPTION_PROVIDER_ID,
@@ -2553,6 +2564,7 @@ impl ModelCatalog for ConfigBackedModelService {
                 matches!(
                     id.as_str(),
                     "chatgpt-subscription"
+                        | "chatgpt-plan"
                         | "kimi-subscription"
                         | "kimi-desktop"
                         | "kimi-cli"

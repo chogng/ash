@@ -17,6 +17,7 @@
 > - Secret persistence：[`secrets.md`](secrets.md)
 > - Interactive login control plane：[`login.md`](login.md)
 > - 订阅接入方式：[`subscriptions.md`](subscriptions.md)
+> - 请求字段、消息顺序与提示词校验：[多 provider 核对](../ash-rs/model-provider-info/docs/model-template.md#11-远端请求校验2026-10-06-核对)
 
 ## 快速理解
 
@@ -298,14 +299,14 @@ Provider 的共同点只到“调用前需要可用身份”为止。供应商�
 ChatGPT 订阅使用本地 Agent loop：
 
 ```text
-ash-app-server → ash-login → ash-chatgpt → OpenAI device OAuth / Codex 兼容登录存储
+ash-app-server → ash-login → ash-chatgpt → Codex 只读复用 / Ash 独立 OAuth 注册
                                       │
                                       └─ fresh ResolvedApiTarget
                                                ↓
 Ash TurnExecutor → ash-model-provider → OpenAI Responses codec → ChatGPT subscription service
 ```
 
-ChatGPT 订阅与 OpenAI API 模型都属于 `openai`。订阅账户就绪时，目录与文本请求使用 ChatGPT 认证目标；否则使用 OpenAI API 配置。一次订阅请求失败不会改用 API key，也不接受自定义 ChatGPT 地址。
+ChatGPT 两条订阅连接与 OpenAI API 模型都属于 `openai`。自动选择按有效本机 Codex 登录（`chatgpt-subscription`）、Ash 独立授权（`chatgpt-plan`）、Platform API key 排序；显式连接配置直接绑定对应路径。凭据、刷新锁、断开状态及目录范围彼此隔离。运行时绑定连接和账号，优先级变化只影响后来创建的绑定；请求失败不切换连接或改用 API key。详见[ChatGPT 账户边界](models/chatgpt.md)。
 
 Kimi Code 订阅使用本地 Agent loop：
 

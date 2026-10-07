@@ -16,12 +16,15 @@ base64 = { workspace = true }
 chrono = { workspace = true }
 dirs = { workspace = true }
 fs2 = { workspace = true }
+getrandom = { workspace = true }
+jsonwebtoken = { workspace = true }
 sha2 = { workspace = true }
 tempfile = { workspace = true }
 toml = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 urlencoding = { workspace = true }
+url = { workspace = true }
 zeroize = { workspace = true }
 ash-async-utils = { workspace = true }
 ash-client = { workspace = true }

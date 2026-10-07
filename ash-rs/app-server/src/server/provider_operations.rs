@@ -77,6 +77,7 @@ impl AppServer {
                 let oauth = matches!(
                     entry.connection.as_str(),
                     "chatgpt-subscription"
+                        | "chatgpt-plan"
                         | "kimi-subscription"
                         | "xai-subscription"
                         | "bigmodel-coding-plan"

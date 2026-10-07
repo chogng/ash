@@ -6,6 +6,8 @@
 
 官方字段对照覆盖标题中的六家；产品目录也包含 DeepSeek、Meta 等供应商，具体条目以 [`models.json`](../models.json) 为准。接入配置规则见 [模型接入配置](../../../docs/config.md#模型接入配置)。
 
+请求字段、消息顺序、提示词内容与思考历史的远端校验于 **2026-10-06** 单独核对，见 [第 11 节](#11-远端请求校验2026-10-06-核对)。该节区分官方接口要求、仓库已有实测和当前编码缺口，不把生成成功等同于工具续答兼容。
+
 ## 1. 声明归属
 
 `models.json` 放在 `model-provider-info` 合理：模型规格、完整基础提示词、参数支持声明属于共享数据。`models-manager` 负责目录来源、刷新、合并和选择。通用规范不要求把端点、认证和全部厂商请求 JSON 塞进模型条目。
@@ -264,7 +266,7 @@ Claude 的常规系统指导使用顶层 `system`；新型号另有带 beta 头�
 | 工具           | 已有工具和并行能力标记、工具输出预算                                      | 工具选择、strict、schema 子集、数量限制、结果/历史协议               |
 | 接入           | 已有 API profile、独立流式/语音协议、计数声明                             | 型号＋操作级参数绑定和限制；Google 新协议需独立实现后才可声明已接入  |
 | 退役公告       | 已有连接范围内的公告与可选确定日期，菜单徽标消费（见第 10 节）             | 其他接入公告来源尚未自动接入；静态清单不声明接入特定日期             |
-| 缓存与状态     | 协议实现已有部分缓存、会话行为                                            | 可审阅的型号/操作声明，TTL、失效条件、历史与实际 usage 语义          |
+| 缓存与状态     | 协议实现已有部分缓存、会话行为；思考历史重放存在已确认的编码缺口（见第 11 节） | 可审阅的型号/操作声明，TTL、失效条件、历史与实际 usage 语义          |
 
 完整性的检查单位是“实际能否按正确条件构造请求并解析结果”。Codex 的展示顺序、升级提示、搜索工具选择等还包含自身产品策略；这些字段要有 Ash 的明确负责方和调用用途，不能为了增加行数照抄。
 
@@ -340,3 +342,63 @@ Codex 示例 JSON 还可能含有不在这份 `ModelInfo` 中的字段，例如 
 models-manager 合并并记录来源，App Server 输出可选 retirement，前端适配为 camelCase。
 确定日期和无日期公告、撤回公告均有真实菜单消费者；原始公告的检索与维护仍归目录来源，
 不在 Renderer 抓取网页或维护另一份型号时间表。
+
+## 11. 远端请求校验（2026-10-06 核对）
+
+远端会校验实际 HTTP 请求中的字段、值和消息结构；部分协议还会检查思考历史或提示词内容。固定厂商提示词并不是所有模型接入的共同要求。目前有明确仓库实测证据要求固定系统文本块的是 **BigModel Start Plan**；其他已查接口主要限制参数、历史和工具往返格式。
+
+本节覆盖当前目录相关的 GPT、Claude、Gemini、GLM、Kimi、Grok、DeepSeek 和 Meta 接入。官方文档与源码在 2026-10-06 核对，本次没有重新进行账户实连。旧型号、其他区域、私有网关和未列出的账户配置不自动继承表中结论。“未发现固定正文要求”表示当前证据没有声明这项要求，不是已经通过实测排除服务端检查。
+
+### 11.1 校验的对象
+
+| 对象            | 需要区分的行为                                                                         | 对 Ash 的意义                                                                                   |
+| --------------- | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| 本地模型声明    | `model_messages.system_instructions`、工具说明、模式和 Agent 身份指导属于 Ash 本地数据 | 不把 `model_messages` 容器或目录字段原样发送。Core 组装指导，`ash-api` 编码成端点实际支持的字段 |
+| 请求字段        | 字段名、嵌套位置、类型、枚举、范围、必填项和参数组合                                   | 本地字段同义不代表远端接受同名 JSON；未知或不支持字段可能被拒绝，也可能被忽略                   |
+| JSON 对象键顺序 | 本次未发现这些文本生成端点要求 `model`、`messages` 等键按固定顺序排列                  | 不为没有证据的键顺序限制设计新字段；不能把这一结论扩展到 multipart 或其他传输协议               |
+| 数组与历史顺序  | 消息、内容块、并行工具调用和结果属于有序内容                                           | 保留协议要求的顺序、Call/Result ID 和不透明元数据，不按 UI 展示需要重排模型历史                 |
+| 提示词内容      | 自定义指导、输出模式要求的文本、端点要求的固定文本、内容审核是不同约束                 | 支持自定义 system/developer 指导不证明任意请求都被接受；内容审核也不等于固定模板检查            |
+| 缓存与思考历史  | 缓存未命中影响成本或速度；思考签名或必需历史缺失可能使续答报错                         | 历史校验不能只归入缓存，保持提示词不变也不能弥补签名或推理字段丢失                              |
+
+[RFC 8259](https://datatracker.ietf.org/doc/html/rfc8259) 将 JSON 对象定义为无序键值集合，将数组定义为有序序列。这是格式语义，不是对所有网关实现的保证。以下表格只记录有证据的端点行为。
+
+### 11.2 各接入的已知规则
+
+| Provider、型号与接入                                                        | 请求字段、顺序或历史校验                                                                                                                                                                       | 提示词内容与证据边界                                                                                                                                     | 依据                                                                                                                                                                                                                                                                                                     |
+| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GPT 公开 API；具体能力按型号                                                | 开启 `strict` 的结构化输出会拒绝不支持的 JSON Schema                                                                                                                                           | `json_object` 模式要求上下文出现 `JSON`，否则报错；这是输出模式的内容条件，没有据此要求 Codex 的固定系统正文                                             | [结构化输出与 JSON mode](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses)                                                                                                                                                                                            |
+| GPT 官方订阅 SIWC；`api.openai.com/v1/responses`                            | 要求 `store: false`、`stream: true` 和数组 `input`；拒绝显式 system 消息；不接受 `temperature`、`max_output_tokens` 等字段；函数或 custom 工具用 namespace 或 `additional_tools` 输入项        | 官方明确支持自定义 `instructions` 或 developer 消息；限制属于此订阅接入，不能套给普通 API key 或旧 Codex 后端                                            | [Preview limitations](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations)                                                                                                                                                                                                  |
+| GPT 的 Codex 订阅后端；`chatgpt.com/backend-api/codex`                      | 与 SIWC 公共 Responses 路由分开核对；本次未取得覆盖全部服务端校验的公开契约                                                                                                                    | 现有适配器传递 Ash 指导，不能仅凭客户端源码证明不存在固定文本检查；保持待确认                                                                            | [Ash ChatGPT 路由](../../chatgpt/src/oauth.rs)、[接入选择](../../model-provider/src/provider.rs)                                                                                                                                                                                                         |
+| Claude `claude-opus-5-5`、`claude-sonnet-5-5`、`claude-fable-5-1`；Messages | 回传 thinking 的签名绑定其之前的 system、tools 和消息。前缀改变时，2026-08-31 起新建账户或显式采用 `prefix_mismatch_behavior: error` 的请求会返回 400；部分扩展字段要求对应 beta header        | 约束的是旧思考块与历史是否匹配，未发现必须使用 Claude Code 固定正文的要求。没有更改前缀时可以继续追加工具结果和新用户消息                                | [Thinking block no longer matches the conversation](https://platform.claude.com/docs/en/api/errors#thinking-block-no-longer-matches-the-conversation)                                                                                                                                                    |
+| Gemini 3 系列；GenerateContent 与 OpenAI 兼容 Chat Completions              | 当前工具调用轮次须回传思考签名；兼容接口位置为 `tool_calls[].extra_content.google.thought_signature`。缺失签名会 400；并行调用按 `FC1, FC2, FR1, FR2` 重放，交错为 `FC1, FR1, FC2, FR2` 会 400 | 支持自定义系统指导；未发现固定正文要求。Gemini 2.5 的签名要求不同，不继承 Gemini 3 规则；Interactions 的 thought step 也不使用此字段路径                 | [Thought signatures](https://ai.google.dev/gemini-api/docs/generate-content/thought-signatures)、[兼容接口](https://ai.google.dev/gemini-api/docs/openai)                                                                                                                                                |
+| Kimi `kimi-k3`、`kimi-k2.7-code`、`kimi-k2.6`；公开 Chat Completions        | K3、K2.7 Code 必须保留历史 assistant 的 `reasoning_content`；K2.6 工具循环需保留本轮思考，跨轮保留由 `thinking.keep` 决定。字段及允许值按型号区分                                              | 官方 CLI 支持自定义系统提示词，未发现统一固定正文要求；公开 API 规则不自动证明 Desktop 网关或 OAuth 订阅接入的全部行为                                   | [Thinking Models](https://platform.kimi.ai/docs/guide/use-thinking-models)、[自定义 Agent](https://moonshotai.github.io/kimi-cli/en/customization/agents.html)                                                                                                                                           |
+| Kimi Code；`api.kimi.com/coding/v1`，以及 Desktop／CLI 独立连接             | 官方支持第三方 Coding Agent；具体网关仍需验证字段、思考历史和工具续答                                                                                                                          | 官方要求保留客户端真实身份。支持第三方工具及可自定义提示词是正面证据，不能用于保证所有网关均无其他限制；Desktop 网关仍待单独确认                         | [第三方 Agent 接入](https://www.kimi.com/en/help/kimi-code/third-party-agents)、[Ash 接入范围](../../kimi/README.md)                                                                                                                                                                                     |
+| GLM 标准 API／Coding Plan；GLM-5.3 等型号                                   | 无效参数有接口错误；Coding Plan 默认开启思考保留，标准 API 默认关闭。启用保留时须回传完整、未修改的 `reasoning_content`；文档说明乱序或编辑影响质量和缓存，未据此保证一定返回 400              | 未发现固定正文要求；GLM-5.3、5.3 Flash 强制思考，不能套用其他型号的关闭开关。此规则不涵盖 Start Plan 网关                                                | [Thinking Mode](https://docs.z.ai/guides/capabilities/thinking-mode)、[错误码](https://docs.z.ai/api-reference/api-code)                                                                                                                                                                                 |
+| BigModel Start Plan；仓库实测型号 `glm-5.3-flash`；Anthropic 兼容网关       | 2026-10-02 实测缺少两个固定 system 文本块或将它们合并均返回 HTTP 405／3012；保留两个独立块后生成、工具往返和多轮会话成功                                                                       | 确实有固定文本与分块要求；这些是仓库既有实测，不是官方长期接口承诺。Z.AI Start Plan 相同适配有模拟覆盖，尚未实连确认                                     | [GLM 实测记录](../../../docs/models/glm.md#start-plan)、[固定块选择](../../model-provider/src/providers/start_plan.rs)                                                                                                                                                                                   |
+| DeepSeek `deepseek-flash`、`deepseek-v4-pro`；思考模式 Chat Completions     | 请求带 `tools` 时，所有后续请求都须完整回传历史 `reasoning_content`，包括没有调用工具的轮次；缺失会 400。思考模式中的 `temperature`、presence/frequency penalty 被接受但不生效                 | 未发现固定正文要求；明确区分字段被接受与参数实际生效                                                                                                     | [Thinking Mode](https://api-docs.deepseek.com/guides/thinking_mode/)                                                                                                                                                                                                                                     |
+| Grok／SuperGrok 代理；Grok Build Responses 调用链                           | 官方客户端源码记录推理内容缺少 `type: reasoning_text` 会 400，reasoning 的输出字段 `status` 不能直接作为输入回传。公开 API 的 effort 允许值也按 Grok 4.5／4.6／4.7 区分                        | 未找到代理强制固定正文的证据；客户端源码不能证明服务端没有其他校验。源码对照固定在 `37949780c144e37df692e3d669051a21fec24f20`，不冒充 Ash 当前适配器版本 | [官方请求源码](https://github.com/xai-org/grok-build/blob/37949780c144e37df692e3d669051a21fec24f20/crates/codegen/xai-grok-sampling-types/src/conversation/responses.rs#L171)、[型号推理规则](https://docs.x.ai/developers/model-capabilities/text/reasoning)、[Ash 代理范围](../../supergrok/README.md) |
+| Meta `muse-spark-1.3`；Chat Completions                                     | 不支持的参数返回 400，例如 `n > 1`、`modalities` 和误用 Responses 的 `text.format`；工具调用与结果配对、对话结构校验较严格                                                                     | 官方示例支持自定义 developer 指导，未发现 Muse Code 固定正文要求；不把 Messages／Responses 的规则自动套到此接入                                          | [Chat completion](https://dev.meta.ai/docs/protocols/chat-completions)                                                                                                                                                                                                                                   |
+| Ollama、自定义 OpenAI 兼容服务、第三方模型托管                              | 本次没有逐端点核对；字段名兼容不能证明值、工具 schema 和历史处理兼容                                                                                                                           | 保持未知，不能从兼容协议或模型名字推断固定提示词与否                                                                                                     | [接入配置](../../../docs/config.md#模型接入配置)                                                                                                                                                                                                                                                         |
+
+### 11.3 Ash 当前编码缺口
+
+以下是 2026-10-06 对当前工作区的静态代码核对，不是本次复现的远端错误，也不把已有的第一轮生成测试写成完整兼容证明。
+
+| 调用路径                  | 观察到的实现                                                                                                                                                                                     | 尚未完成的行为与影响                                                                              |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| Chat Completions 思考历史 | [响应解析](../../ash-api/src/endpoint/chat_completions.rs)读取 `reasoning_content`，但 `convert_message` 只编码角色、普通内容和工具调用，没有回传该字段                                          | Kimi／DeepSeek 的必需思考历史、GLM 的保留思考不能由当前编码完整重放；第一轮成功不代表工具续答成功 |
+| Gemini 兼容接口的工具签名 | 同一 `convert_message` 只重建工具 ID、类型、函数名和参数，没有保留 `extra_content.google.thought_signature`                                                                                      | 签名没有进入完整保存与重放链路；Gemini 3 工具续答有明确协议风险                                   |
+| Claude thinking 块        | [SSE 解码](../../ash-api/src/sse/anthropic_messages.rs)收集 signature；[最终响应解析](../../ash-api/src/endpoint/anthropic.rs)将 thinking 转成普通推理文本，未完整保留签名块及 redacted thinking | 尚未建立完整 thinking 历史的持久化、恢复和回传链路；SSE 能读取签名不等于运行时能重放它            |
+
+### 11.4 设计与验收
+
+接入约束由 `model-provider-info` 描述，`model-provider` 选择实际连接，`ash-api` 按该端点编码和解析。Core 继续拥有 Ash 的工具执行与任务编排。模型条目的提示词不承担远端字段白名单，也不能用提示词修复缺失的签名或推理字段。不透明思考数据必须能随会话完整保存、恢复，并按来源协议重放；不能用可见摘要替代。
+
+后续验证以 **连接、端点、具体型号及配置** 为单位，保留日期、上游版本、脱敏错误码与终止结果：
+
+1. 核对实际发送 JSON 的字段名、位置、类型和允许值；区分被拒绝、被忽略与实际生效，不能只看 HTTP 200。
+2. 验证自定义 Ash 指导、真实工具调用、工具结果和续答的完整链路，再验证多轮与会话恢复。模型列表或无工具的短回复只证明对应操作。
+3. 对协议要求的数组顺序、签名、推理历史和 Call/Result 配对做边界验证；保存完整模型返回，不丢弃字段后重建近似历史。
+4. 只有文档或明确测试支持的固定文本、客户端版本及请求头才作为接入限制记录。未知限制标为待确认；新增声明不能代替实际编码和验收。
+
+本节仅记录调研、已有验证和待补能力，没有修改上述编码缺口，也没有为 SIWC、旧 Codex 后端、Kimi 各网关和所有套餐新增实连验证。

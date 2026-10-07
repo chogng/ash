@@ -599,8 +599,9 @@ presentation diff，不得直接读取 Git revision 或复制 Git 统计规则�
 `git/graph` 首次接受 `limit`（1–1000），后续请求携带服务端返回的不透明 `cursor`；服务端为一次
 traversal 启动单个 bounded `git log --all --topo-order` 进程，并只在启动时读取 local branch refs、
 本地已经 fetch 的 `refs/remotes/*` 以及 configured remote 的 `name` 和可选 credential-free identity
-（`provider`、`host`、`owner`、`repository`）。返回 `hasMore` 和继续请求所需的 `nextCursor`；状态
-变化、mutation 或连接关闭会使游标失效。symbolic remote refs（例如 `origin/HEAD`）不会作为 branch
+（`provider`、`host`、`owner`、`repository`）。新遍历创建游标前同步当前状态；迟到的文件监听通知
+若只报告本次遍历已观察到的变化，不会使它失效。返回 `hasMore` 和继续请求所需的 `nextCursor`；
+遍历开始后的状态变化、mutation 或连接关闭会使游标失效。symbolic remote refs（例如 `origin/HEAD`）不会作为 branch
 ref 返回。协议不暴露 raw remote URL、token 或本地 `gh` 登录配置；因此该方法表示 local Git
 repository snapshot，不是 GitHub API、PR、Checks 或 review 查询。Desktop Workbench 可在用户设置中开启自动 fetch；Desktop SCM
 负责自动消费后续页并合并全部 commit；它可据此显示不同 graph lane 颜色、local/remote ref labels
@@ -1182,26 +1183,25 @@ provider/models/updated
 - 空账号返回 `InvalidParams`；未安装账户能力返回 `AccountUnavailable`，Kimi 未登录或认证被拒绝返回 `AccountAuthenticationRequired`；不支持的 provider 返回 `AccountRateLimitsUnavailable`；账号变化返回 `AccountChanged`；其他上游失败返回 `AccountOperationFailed`。错误不包含上游正文、地址或凭据。
 - 协议、类型映射和运行时 decoder 由 Rust registry 统一生成；界面展示仍由产品客户端实现。
 
-`account/read` 读取各 driver 当前凭据和登录服务中的账户状态，不等待远端资料或模型目录。被同一供应商后续登录、登出、读取或账户更新取代的旧读取结果不会发布为新版本。`account/login/start` 在已有凭据由 Codex 管理且需要重新登录时返回 `AccountExternalLoginRequired`（code `-32030`，`data.kind` 同名）。客户端应提示用户先在 Codex 完成登录，再重新连接；错误不转发供应商原始消息。
+`account/read` 读取各 driver 当前凭据和登录服务中的账户状态，不等待远端资料或模型目录。被同一供应商后续登录、登出、读取或账户更新取代的旧读取结果不会发布为新版本。本机 `chatgpt-subscription` 的 `account/login/start` 在凭据缺失或需要重新登录时返回 `AccountExternalLoginRequired`（code `-32030`，`data.kind` 同名）。客户端应提示用户先在 Codex 完成登录，再重新连接；错误不转发供应商原始消息。
 
-当前交互登录 method：
+ChatGPT 的两条登录入口分别为：
 
-```rust
-pub enum AccountLoginMethod {
-    OpenAiChatGptBrowser,
-    OpenAiChatGptDeviceCode,
-    KimiDeviceCode,
-    XaiDeviceCode,
-}
-```
+| 登录参数 | 连接 | 行为 |
+| --- | --- | --- |
+| `{ type: "openAiChatGptDeviceCode" }` 或 `{ type: "openAiChatGptBrowser" }` | `chatgpt-subscription` | 连接已有有效 Codex 凭据；缺失或过期返回 `AccountExternalLoginRequired`，不创建或刷新共享 token |
+| `{ type: "chatGptPlanBrowser", accountId: null }` | `chatgpt-plan` | 发起 Ash 独立浏览器授权和新注册 |
+| `{ type: "chatGptPlanBrowser", accountId: "<registration ID>" }` | `chatgpt-plan` | 使用该 Ash 注册已签发的 client ID 重新授权，核对原账号身份 |
+
+其他供应商的登录方法和所有 DTO 从 [Rust 协议定义](../ash-rs/app-server-protocol/src/protocol/account.rs) 生成，不在文档中维护另一份枚举。两条 ChatGPT 连接的凭据、取消、登出和目录范围各自独立；自动选择顺序为有效本机登录、Ash 独立登录、Platform API key。详见[账户边界](models/chatgpt.md)。
 
 上述 RPC、带版本的 `accounts[]` 和 `account/login/completed` / `account/updated` 主动通知已实现，并通过注入的 multi-driver `LoginService` 工作；未安装服务时返回稳定 `AccountUnavailable`。`account/logout` 必须携带 provider，避免同时登录多个供应商时误删另一账户。
 
 本地 App Server 在后台定期核对可能由其他进程修改的账户凭据，检查间隔为 60 秒；Ash 自己的登录和登出会立即发布账户变化。远端套餐和模型请求只针对已就绪的登录账户；没有已就绪账户时不发起远端请求。已就绪的 Super Grok 与 Kimi 账户以及各订阅的模型目录每 5 分钟检查一次，账户身份或套餐变化时提前刷新模型。`account/updated` 只在账户状态改变时发布。`provider/models/updated` 包含 connection、账户 ID、组织、套餐和模型查询结果（models、empty 或 failed）；客户端只把它应用到身份与套餐仍匹配的账户。订阅页进入时只在缺少账户状态时读取，后续变化由通知更新。
 
-本地默认组合安装 `ash-chatgpt`、`ash-kimi` 与 `ash-supergrok` driver。`account/login/start` 直接向对应 authorization server 请求 device code，并在本机后台轮询。API key 继续属于对应模型凭据领域，不进入 account/login payload。
+本地默认组合安装两条 `ash-chatgpt` 连接及 `ash-kimi`、`ash-supergrok` 等 driver。独立 ChatGPT 使用浏览器 OAuth；本机 ChatGPT 只读复用 Codex 登录；Kimi 和 Super Grok 请求 device code 并在后台轮询。API key 继续属于对应模型凭据领域，不进入 account/login payload。
 
-Provider 是否支持 interactive login、credential 的实际所有者和 refresh 语义由 [`ash-login`](login.md) 的 exact driver 决定。ChatGPT、Kimi 与 Super Grok 的 driver 各自执行本地 device OAuth、SecretStore persistence 与 refresh。Ash App Server 只编排和映射 redacted control plane：
+Provider 是否支持 interactive login、credential 的实际所有者和 refresh 语义由 [`ash-login`](login.md) 的 exact driver 决定。Ash 独立 ChatGPT、Kimi 与 Super Grok 的 driver 各自管理授权、SecretStore persistence 与 refresh；本机 ChatGPT 不接管 Codex 的凭据维护。Ash App Server 只编排和映射 redacted control plane：
 
 ```text
 app-server-protocol/src/protocol/account.rs

@@ -127,6 +127,9 @@ impl AppServer {
     pub(super) fn account_login_start(&self, params: &Value) -> Result<Value, RpcError> {
         let params: AccountLoginStartParams = decode(params)?;
         let method = match params.method {
+            AccountLoginMethodDto::ChatGptPlanBrowser { account_id } => {
+                LoginMethod::ChatGptPlanBrowser { account_id }
+            }
             AccountLoginMethodDto::OpenAiChatGptBrowser => LoginMethod::OpenAiChatGptBrowser,
             AccountLoginMethodDto::OpenAiChatGptDeviceCode => LoginMethod::OpenAiChatGptDeviceCode,
             AccountLoginMethodDto::KimiDeviceCode => LoginMethod::KimiDeviceCode,

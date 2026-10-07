@@ -77,7 +77,7 @@ fn device_flow_creates_codex_compatible_credentials_and_subscription_headers() {
         home.path().to_path_buf(),
         secrets.clone(),
         client.clone(),
-        ChatGptAuthManagement::Codex,
+        ChatGptAuthManagement::Ash,
     );
     let driver: Arc<dyn InteractiveLoginDriver> = runtime.clone();
     let service = Arc::new(LoginService::new(driver).unwrap());
@@ -280,7 +280,7 @@ fn cancellation_and_shutdown_prevent_late_tokens_from_creating_auth_json() {
             home.path().into(),
             Arc::new(MemorySecretStore::default()),
             client.clone(),
-            ChatGptAuthManagement::Codex,
+            ChatGptAuthManagement::Ash,
         );
         let weak = Arc::downgrade(&runtime);
         let service = Arc::new(LoginService::new(runtime.clone()).unwrap());

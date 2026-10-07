@@ -10,6 +10,10 @@ mod kimi;
 mod meta;
 mod ollama;
 mod openai;
+
+pub(crate) fn chatgpt_plan_definition() -> ProviderDefinition {
+    openai::plan_definition()
+}
 mod openai_compatible;
 mod xai;
 pub(super) mod zai;

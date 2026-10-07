@@ -27,7 +27,12 @@ fn catalog_reports_every_builtin_without_exposing_values() {
 
     let catalog = service.catalog().unwrap();
 
-    assert_eq!(catalog.len(), 20);
+    assert_eq!(catalog.len(), 21);
+    assert!(catalog.iter().any(|entry| {
+        entry.connection.as_str() == "chatgpt-plan"
+            && entry.api_key_policy == ApiKeyPolicy::Unsupported
+            && !entry.api_key_configured
+    }));
     assert!(catalog.iter().any(|entry| {
         entry.provider == openai
             && entry.api_key_policy == ApiKeyPolicy::Required

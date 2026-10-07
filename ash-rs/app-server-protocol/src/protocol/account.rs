@@ -112,6 +112,11 @@ pub struct AccountCreditBalanceDto {
 #[serde(tag = "type", rename_all = "camelCase")]
 #[ts(tag = "type", rename_all = "camelCase")]
 pub enum AccountLoginMethodDto {
+    ChatGptPlanBrowser {
+        #[serde(rename = "accountId")]
+        #[ts(rename = "accountId")]
+        account_id: Option<String>,
+    },
     OpenAiChatGptBrowser,
     OpenAiChatGptDeviceCode,
     KimiDeviceCode,
@@ -121,8 +126,14 @@ pub enum AccountLoginMethodDto {
     BigModelStartPlanBrowser,
     ZaiStartPlanBrowser,
     GitHubBrowser,
-    GitHubEnterpriseBrowser { host: String },
+    GitHubEnterpriseBrowser {
+        host: String,
+    },
 }
+
+#[cfg(test)]
+#[path = "account_tests.rs"]
+mod tests;
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

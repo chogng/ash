@@ -67,6 +67,10 @@ pub struct AccountState {
 /// Interactive login flow selected by a product client.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum LoginMethod {
+    /// A missing account starts a new registration; an ID reuses only that registration.
+    ChatGptPlanBrowser {
+        account_id: Option<String>,
+    },
     OpenAiChatGptBrowser,
     OpenAiChatGptDeviceCode,
     KimiDeviceCode,
@@ -76,12 +80,15 @@ pub enum LoginMethod {
     BigModelStartPlanBrowser,
     ZaiStartPlanBrowser,
     GitHubBrowser,
-    GitHubEnterpriseBrowser { host: String },
+    GitHubEnterpriseBrowser {
+        host: String,
+    },
 }
 
 impl LoginMethod {
     pub fn provider_id(&self) -> &'static str {
         match self {
+            Self::ChatGptPlanBrowser { .. } => "chatgpt-plan",
             Self::OpenAiChatGptBrowser | Self::OpenAiChatGptDeviceCode => "chatgpt-subscription",
             Self::KimiDeviceCode => "kimi-subscription",
             Self::XaiDeviceCode => "xai-subscription",

@@ -597,7 +597,7 @@ fn registry_merge_has_explicit_conflict_semantics() {
 fn builtins_are_valid_and_include_all_supported_adapters() {
     let registry = ProviderConfigRegistry::builtin();
     assert_eq!(registry.providers().count(), 12);
-    assert_eq!(registry.connections().len(), 20);
+    assert_eq!(registry.connections().len(), 21);
     assert_eq!(
         registry.get(&provider_id("openai")).unwrap().adapter,
         ProviderAdapter::OpenAi

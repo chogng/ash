@@ -1,101 +1,67 @@
 # ChatGPT 订阅账户
 
-Ash 的 ChatGPT 订阅可以使用 Codex 已有的登录。检测到 Codex 时，Ash 只读取凭据；没有 Codex 时，Ash 可以自己登录并维护兼容的认证记录。模型请求仍由 Ash 执行，不会启动 Codex Agent。账户额度与其他订阅的对比见[订阅计划接入与额度](../subscriptions.md)，套餐名称见[订阅套餐一览](plans-and-pricing.md)。
+Ash 提供两条独立的 ChatGPT 订阅连接。同一模型厂商仍为 `openai`，连接身份决定凭据所有者、请求目标和目录范围。安装 Codex 不会禁止用户选择 Ash 独立授权。
 
-## 职责
+| 连接 | 用途 | 凭据所有者 | 请求目标 |
+| --- | --- | --- | --- |
+| `chatgpt-subscription` | 复用本机已有且有效的 Codex 登录 | Codex；Ash 产品入口始终只读 | `https://chatgpt.com/backend-api/codex/responses` |
+| `chatgpt-plan` | 使用 ChatGPT 独立授权 Ash，无需安装 Codex | Ash profile 的 SecretStore | `https://api.openai.com/v1/responses` |
+| `openai` | OpenAI Platform API key | Ash 的 API key 存储 | Platform API |
 
-| 所有者                  | 职责                                                              |
-| ----------------------- | ----------------------------------------------------------------- |
-| `ash-chatgpt`           | 选择凭据管理者；只读复用，或在无 Codex 时登录、刷新并维护兼容文件 |
-| `ash-login`             | 登录、立即连接成功、取消、账户状态和通知                          |
-| `ash-model-provider`    | 使用当前 access token 调用固定的 ChatGPT 订阅 Responses 服务      |
-| Ash profile SecretStore | 只保存是否断开此连接；不保存 ChatGPT token 副本                   |
+两种订阅授权不能交换 token 或只替换 base URL。它们都由 Ash Core 执行 Agent loop，不启动 Codex Agent。独立授权的公共接口见[官方模型与推理文档](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference)。
 
-订阅和 OpenAI Platform API key 使用独立的凭据与计费路径，不能互相转换或在失败后切换。
+## 职责与修改入口
 
-## 存储与首次登录
+连接选择和请求绑定主要由 `ash-model-provider` 负责，凭据隔离由 `ash-chatgpt` 负责。这里选择的是同一模型厂商的登录连接，不改变已选定的模型或 Agent Role。
 
-路径以运行 Ash 后端的主机为准。优先使用 `CODEX_HOME`，与 Codex 一样要求显式指定的目录已存在，并解析其规范路径；未设置时使用用户主目录的 `~/.codex`，允许它在首次登录前不存在。不会自动查找仓库中的 `.codex`。不修改现有 `config.toml`。只读模式保持认证文件原样；Ash 管理模式会受校验地更新认证记录。
+| Crate | 职责 | 修改入口 |
+| --- | --- | --- |
+| `ash-model-provider-info` | 定义连接身份、接入约束和自动选择的优先顺序 | [`connection.rs`](../../ash-rs/model-provider-info/src/connection.rs) 的 `connection_priority` |
+| `ash-model-provider` | 比较可用连接并选择请求路径；固定模型的连接与账号，检查请求前后的身份，禁止失败后跨连接切换；按连接与账号划分目录范围 | [`provider.rs`](../../ash-rs/model-provider/src/provider.rs) 的 `ModelProviderRuntime::preferred_connections` 和账号校验；[`catalog`](../../ash-rs/model-provider/src/catalog.rs) |
+| `ash-chatgpt` | 只读复用 Codex 凭据，或维护 Ash 独立授权的注册、token、刷新锁和回调生命周期；两套凭据互不读写 | 本机复用的 [`oauth.rs`](../../ash-rs/chatgpt/src/oauth.rs)；独立授权的 [`plan.rs`](../../ash-rs/chatgpt/src/plan.rs) |
+| `ash-login` | 统一登录、取消、登出、账户状态与通知，按连接分发给对应登录驱动 | [`service.rs`](../../ash-rs/login/src/service.rs) |
+| `ash-app-server` | 组装两个登录驱动及模型运行时，暴露账户与连接 RPC；连接列表使用同一优先级定义 | [`local.rs`](../../ash-rs/app-server/src/local.rs)；[`provider_operations.rs`](../../ash-rs/app-server/src/server/provider_operations.rs) |
 
-按照 Codex 的 `cli_auth_credentials_store` 选择读取位置：默认 `file` 读取 `auth.json`；`keyring` 读取既有的 `Codex Auth` 条目；`auto` 在钥匙串没有条目时读取文件。钥匙串访问失败必须报告错误，不转向另一个可能过期或属于其他账户的存储。
+调整默认顺序时修改 `ash-model-provider-info`，调整可用性判断或绑定行为时修改 `ash-model-provider`，调整认证存储、刷新或登出隔离时修改 `ash-chatgpt`。
 
-只读加载只保留 access token、身份与有效期，不反序列化 refresh token。认证模式遵循 Codex 的显式 `auth_mode` 及旧文件模式判定；已有 API key 等其他认证模式不会被当成 ChatGPT 订阅。用户配置的登录方式和 workspace 限制仍须匹配。
+## 优先级与请求绑定
 
-凭据完全缺失时，用户可从 `/config → Providers → ChatGPT subscription` 发起设备码登录。Ash Code 收到登录链接后自动尝试打开本机浏览器；打开失败时仍显示链接和代码。成功后创建以下 Codex 结构：
+自动选择只比较当前可用的连接，顺序为本机 Codex 登录、Ash 独立登录、已配置的 Platform API key。安装探测不参与选择；过期、损坏、已断开或被拒绝的本机凭据不会阻止独立入口使用。凭据可用只证明本地认证状态，远端模型和套餐权限由实际请求确认。
 
-```json
-{
-  "auth_mode": "chatgpt",
-  "OPENAI_API_KEY": null,
-  "tokens": {
-    "id_token": "<ID token>",
-    "access_token": "<access token>",
-    "refresh_token": "<refresh token>",
-    "account_id": "<account ID>"
-  },
-  "last_refresh": "<RFC 3339 UTC timestamp>"
-}
-```
+调用方显式传入连接配置时，按该连接构建模型，不再应用自动优先级。模型运行时固定连接及账号身份；新登录、目录刷新和优先级变化只影响后来创建的绑定。每次请求既检查当前账号，也检查与实际 token 同时解析出的账号，拒绝切换账号的竞态。一次请求的 401、429、网络或流式失败都不能切换到另一条连接或 API key。
 
-首次授权得到的 refresh token 按 Codex 格式保存。只读复用时不使用它；Ash 管理时用它续期，并保存服务端返回的新值。文件以 0600 权限创建，通过原子、不覆盖的提交方式发布；登录期间若 Codex 已创建文件，则停止写入。取消和后端退出阻止迟到的授权结果写文件。
+目录范围包含连接及账号身份，独立入口不读取 Codex 的模型缓存。发现开始后的账号切换使结果失效，不能把另一注册的模型写入原范围。两条连接可以并行使用；如果上游将它们计入同一订阅额度，客户端隔离不产生额外额度。
 
-当前支持普通文件与直接钥匙串读取。Codex 的加密 secrets 后端和仅进程内认证明确报告不支持，不生成替代文件。配置要求仅使用钥匙串且其中没有凭据时，首次登录需由 Codex 完成。
+## 本机 Codex 登录
 
-## 使用、断开与重新连接
+路径以运行 Ash 后端的主机为准。优先使用 `CODEX_HOME`，显式目录必须已存在并解析为规范路径；未设置时使用 `~/.codex`。不自动查找仓库中的 `.codex`，不修改 `config.toml`。
 
-每次模型请求重新读取当前凭据；后台也会观察账户存储变化并通知客户端，`account/read` 可读取当时的账户状态。迟到的读取不会覆盖该供应商后来完成的登录、登出、读取或账户更新。只读模式不刷新；Ash 管理模式在需要时刷新。损坏记录不当成缺失，不改用 API key。
+按 Codex 的 `cli_auth_credentials_store` 读取既有存储：`file` 读取 `auth.json`，`keyring` 读取 `Codex Auth` 条目，`auto` 在钥匙串没有条目时读取文件。钥匙串访问失败报告错误，不能转向其他账号或旧存储。加密 secrets 后端和仅进程内认证仍明确报告不支持。
 
-复用模式断开只保存 Ash profile 的停用标志，Codex 仍可正常使用原账户。自管模式登出会清除所维护的当前账户认证，下一次可在 Ash 重新登录。重新连接已有有效凭据返回 `connected`，发布账户完成通知，不打开浏览器；缺失或 Ash 管理的凭据永久失效、用户再次登录时，返回设备码挑战。重新登录完成前保留旧记录，完成时校验它未被其他写入替换。
+只读加载不反序列化 refresh token。遵循 Codex 的 `auth_mode`、旧记录模式判定、登录方式和 workspace 限制；已有 API key 不当成订阅凭据。损坏记录不当成缺失。
 
-Codex 管理的凭据过期时，TUI 提示先在 Codex 登录，再返回 Ash 重新连接。Ash 不接管这次续期；登录接口的稳定错误见 [App Server 账号接口](../ash-app-server-api.md#11-account-与登录)。
+本机入口不创建、刷新、替换或删除 Codex 凭据。缺失、过期或失效时，登录控制面返回 `AccountExternalLoginRequired`，需在 Codex 完成登录。重新连接已有有效凭据立即完成，不打开新的 OAuth 流。断开只保存 Ash profile 中该连接的停用标志，不影响 Codex，也不改变 `chatgpt-plan`。
 
-不改变 Codex 的文件并不等于模型调用没有副作用：请求仍消耗同一账户的订阅额度。
+每次模型请求读取当前外部凭据。明确 HTTP 401 且未交付模型事件时，最多重读一次；只有同一用户和 workspace 的外部 token 已更新才允许重试。Ash 不刷新共享 token，已开始的流不重放。账户额度查询同样使用只读身份，并拒绝返回换账号后的迟到结果。
 
-## 无 Codex 时的维护
+底层显式的 Ash 管理模式保留 Codex 格式认证兼容性测试；产品的本机复用入口不选择该模式，也不因安装状态改变凭据所有者。
 
-生产模式从 PATH、常见 macOS 应用位置及 VS Code OpenAI 扩展查找 Codex 可执行文件，只检查文件，不启动 Codex。后续检测到安装后，不再启动新的刷新。测试通过显式管理模式隔离安装状态。
+## Ash 独立授权
 
-维护规则对齐 Codex AuthManager：
+`ChatGptPlanBrowser` 通过 Sign in with ChatGPT 动态注册取得独立 `client_id`，请求身份权限及 `resource.invoke`、`chatgpt.tokens.use.direct`。PKCE、state、nonce 和经过签名验证的 ID token 绑定本次授权。回调使用随机 loopback 端口，不占用 Codex 的固定回调端口。
 
-- access token 到期前约 5 分钟刷新；不能取得到期时间（包括不透明 access token）时，按 `last_refresh` 超过 8 天判断。
-- 使用相同 OAuth token endpoint、client ID 和 refresh_token grant；刷新响应未返回的 ID/access/refresh token 保留原值，成功后更新 `last_refresh`。
-- 暂时失败不丢弃仍有效的 access token；永久失效绑定当前记录缓存，停止反复刷新，账户显示需要重新登录。用户可直接在 Ash 完成重新登录。
+一个 profile 保留自己的 agent host ID；账号映射由 issuer、已签发 client ID 和验证后的 subject 确定，不能按 email 合并不同工作区注册。token 与注册保存在 `provider/chatgpt-plan/registrations-v1`，刷新使用 profile 自己的 `chatgpt-plan.lock`。这条路径不读写 Codex home 或 `Codex Auth` 条目。
 
-同一 Codex home 的多个 Ash 实例通过 `ash-auth.lock` 串行更新。锁后重新读取；发布前再次校验记录和存储位置；文件通过临时文件原子替换，直接钥匙串也校验当前记录再写入。刷新保留未知字段，不把 Ash 管理字段写进 auth.json。
+同一 profile 的多实例通过锁串行刷新：锁后重新读取当前 token，成功后保存替换 refresh token。遵守 `earliest_refresh_at`；明确终止的 grant 错误清除相应 session，暂时失败保留原记录。刷新身份必须与原注册相同。
 
-只有明确的 HTTP 401，且没有交付任何模型事件时，才进行一次重读/刷新与模型重试；已接受流中的错误不触发重放。请求绑定凭据中的用户 ID 与工作区 ID，恢复前后必须同时匹配；同一工作区内换用户也会停止重试。缺少任一身份字段时不能发起已认证请求或刷新。刷新返回新 ID token 时也必须保持原身份，第二次拒绝后停止自动恢复。
+取消后的授权结果不能保存。回调线程只保留网络操作资源；profile 后端退出会取消授权并释放监听，不保留凭据所有者。成功登录和登出推进持久选择版本；在另一实例登录或登出之后到达的旧回调不能重新激活账号。登出只撤销该 Ash 注册并清除对应 token，保留 host ID 和注册映射供下次登录。远端撤销失败仍清除本地凭据并报告未确认，不操作 Codex 连接。
 
-Codex 不使用 Ash 的锁，因此不能把安装探测与写入前校验描述为跨产品原子互斥。刷新已开始时会完成受校验的持久化；已观察到外部修改则停止覆盖，后续采用新记录。
+独立授权只向公共 Responses 发送 bearer token，要求 `store=false`、`stream=true`。模型目录从同一账号的公共 `models` 接口读取，保持服务端顺序。认证及刷新合同见[注册与登录](https://developers.openai.com/siwc/token-sharing-open-source/sign-in)、[token 参考](https://developers.openai.com/siwc/token-sharing-open-source/token-reference)。完整浏览器登录和真实推理尚未在本次变更中实连验收；双入口 UI 也不属于本次后端隔离修改。
 
-## 对齐与验证
+## 验证
 
-兼容参照为与 Ash 仓库同级的 `codex` 仓库，提交 `d3ee328ee6af47ba540a489bb590cb96acbdd8ba`：
+合成凭据测试覆盖双入口同时可用时的优先级、显式连接、模型绑定后的优先级变化、解析 token 时的换账号竞态、401 不跨连接重试、目录范围隔离、多实例单次刷新、取消、后端退出释放回调、迟到回调以及 Codex 文件保持不变。
 
-- `codex-rs/login/src/auth/storage.rs`、`auth/manager.rs`：存储路径、模式和结构；
-- `codex-rs/login/src/token_data.rs`：token 字段与身份信息；
-- `codex-rs/login/src/device_code_auth.rs`、`server.rs`：设备授权、交换与首次存储。
+使用 `just verify ash-chatgpt` 和 `just verify ash-model-provider` 验证所属包。App Server 登录方法变化须运行 `just generate-protocol`、协议测试、生成 TypeScript 严格检查和受影响客户端检查。
 
-模型请求保留 Ash 的来源标识。开源实现兼容性不代表接口具有独立的稳定性承诺；升级需验证存储、登录、取消、错误分类和流式响应。
-
-**本功能所有真实模型测试固定使用 `gpt-5.6-luna`、`reasoning.effort=low`，禁止改用其他模型、默认思考强度或刷新真实凭据。** 首次创建和故障测试使用隔离目录与合成 token；用官方 Codex CLI 验证生成文件可读，不能用真实登录覆盖用户账户。
-
-本次 ChatGPT 认证实现、命令和结果见[认证兼容验收](../../ash-rs/docs/changes/chatgpt-auth/verification.md)。账号额度查询已通过 `account/rateLimits/read` 提供；缺失数据保留“未提供”。丰富响应项和完整流式断线恢复仍属于后续能力。
-
-额度查询的真实账号验证不调用模型：运行 `just test ash-chatgpt live_codex_usage_is_read_only -- --ignored --nocapture` 验证只读认证与后端接口，运行 `just test ash-tui live_usage_command_through_local_app_server -- --ignored --nocapture` 验证 `/usage` 到本地 App Server 的完整链路。后者要求已安装 Codex CLI 与现有文件凭据，两项测试都检查源 `auth.json` 未改变；正常测试默认忽略真实账号调用。
-
-参考：[官方认证文档](https://developers.openai.com/codex/auth)、[OpenAI 工程师对第三方客户端的说明](https://github.com/openai/codex/discussions/8338)。
-
-## ChatGPT 当前状态与待完成项
-
-以下保留订阅服务其余能力的现状；认证维护的本次验收见上文链接。
-
-| 能力                    | 状态     | 完成门                                                                                                                                               |
-| ----------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| OAuth 与 Responses 目标 | 进行中   | 对真实服务做版本漂移探测；登录或响应合约不兼容时安全失败并给出可行动错误，绝不改用 Platform API key。                                                |
-| 丰富响应项              | 尚未完成 | 把订阅 Responses 支持的响应项映射为统一的持久化 Item 与通知；重连后只从统一状态重建，Desktop 不依赖供应商 DTO。                                      |
-| 图片输入                | 已实现   | 继续通过工作区附件授权、MIME、字节与像素边界进入受控的模型输入。                                                                                     |
-| 敏感交互输入            | 进行中   | 按 [`secrets.md`](../secrets.md#8-交互式敏感输入) 的一次性交付边界响应 `isSecret` 请求，不进入普通 transcript、Thread Item、错误、Debug 或观测数据。 |
-| 账户摘要与限流状态      | 部分具备 | 已提供账户摘要、账号额度接口与 TUI `/usage` 即时查询；尚无后台限流观察。额度仅用于展示，不门禁静态模型目录，真实失败仍归属准确 Turn。                |
-| 登录与流式故障矩阵      | 尚未完成 | 覆盖 device poll、外部凭据轮换、401、429、流截断、取消和恢复；token 不泄露，不确定的模型调用结果不重放，所有等待都有终态。                           |
-
-升级或发布这条路径前，至少运行登录、只读凭据更新、流式、重连、错误分类和脱敏测试。任何线上字段无法映射为统一 Item 时必须明确失败或标记未支持，不能静默丢弃。
+所有真实模型测试固定使用 `gpt-5.6-luna`、`reasoning.effort=low`，不得刷新真实 Codex 凭据。默认测试不调用用户真实账户；已有只读验收入口为 `just test ash-chatgpt live_codex_usage_is_read_only -- --ignored --nocapture` 与 `just test ash-tui live_usage_command_through_local_app_server -- --ignored --nocapture`。原 Codex 格式实现的历史验收见[认证兼容验收](../../ash-rs/docs/changes/chatgpt-auth/verification.md)。

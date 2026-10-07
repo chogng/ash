@@ -372,6 +372,7 @@ dunce = "1"
 ed25519-dalek = "3.0.0"
 ec4rs = "1.2.0"
 getrandom = "0.2"
+jsonwebtoken = { version = "10.4.0", default-features = false, features = ["aws_lc_rs"] }
 futures = "0.3"
 fs2 = "0.4.3"
 global-hotkey = "0.8.0"

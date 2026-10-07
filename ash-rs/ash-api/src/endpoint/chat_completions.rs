@@ -417,6 +417,7 @@ fn parse_usage(endpoint: ApiEndpoint, usage: Option<&Value>) -> Option<ModelUsag
             .pointer("/prompt_tokens_details/cached_tokens")
             .and_then(Value::as_u64),
         ApiEndpoint::OpenAiResponses
+        | ApiEndpoint::ChatGptPlanResponses
         | ApiEndpoint::ChatGptResponses
         | ApiEndpoint::XaiSubscriptionResponses
         | ApiEndpoint::AnthropicMessages

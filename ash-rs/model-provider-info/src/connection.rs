@@ -8,6 +8,7 @@ use ash_protocol::ProviderId;
 pub enum ModelConnectionRuntime {
     ProviderApi,
     ChatGptSubscription,
+    ChatGptPlan,
     KimiCode,
     KimiDesktop,
     KimiCli,
@@ -27,7 +28,7 @@ pub struct ModelConnectionDefinition {
 /// These service identities share a model vendor, but never share credentials.
 pub fn connection_provider(connection: &ModelConnectionId) -> ProviderId {
     let provider = match connection.as_str() {
-        "chatgpt-subscription" => "openai",
+        "chatgpt-subscription" | "chatgpt-plan" => "openai",
         "kimi-subscription" => "kimi",
         "xai-subscription" => "xai",
         "bigmodel"
@@ -50,7 +51,10 @@ pub fn connection_priority(connection: &ModelConnectionId) -> u8 {
         "zai-start-plan" => 3,
         "bigmodel" => 4,
         "zai" => 5,
-        "chatgpt-subscription" | "kimi-subscription" | "xai-subscription" => 0,
+        "chatgpt-subscription" => 0,
+        "chatgpt-plan" => 1,
+        "openai" => 2,
+        "kimi-subscription" | "xai-subscription" => 0,
         _ => 1,
     }
 }
@@ -132,6 +136,12 @@ pub fn builtin_connections() -> Vec<ModelConnectionDefinition> {
             runtime,
         ));
     }
+    connections.push(declare(
+        ModelConnectionId::new("chatgpt-plan").expect("constant connection"),
+        crate::providers::chatgpt_plan_definition(),
+        ProviderAccessMode::Subscription,
+        ModelConnectionRuntime::ChatGptPlan,
+    ));
     connections
 }
 

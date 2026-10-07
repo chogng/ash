@@ -1,5 +1,8 @@
 use super::*;
 
+#[path = "chatgpt_login_tests.rs"]
+mod chatgpt_login;
+
 #[path = "local_mcp_catalog_tests.rs"]
 mod mcp_catalog;
 use crate::ConnectionState;

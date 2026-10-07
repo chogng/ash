@@ -68,6 +68,23 @@ pub(crate) fn complete(
     client: &dyn OperationClient,
     cancellation: &CancellationToken,
 ) -> Result<ModelResponse, ApiError> {
+    if endpoint == ApiEndpoint::ChatGptPlanResponses {
+        struct Collect;
+        impl ApiStreamSink for Collect {
+            fn emit(&mut self, _: crate::ModelStreamEvent) -> Result<(), ApiError> {
+                Ok(())
+            }
+        }
+        return stream(
+            endpoint,
+            target,
+            model,
+            request,
+            client,
+            cancellation,
+            &mut Collect,
+        );
+    }
     let target = request_target(endpoint, target, model, request)?;
     let response = crate::requests::post_json(
         client,
@@ -243,7 +260,10 @@ pub(super) fn build_request(
             Value::Array(convert_input(
                 &request.input,
                 cache_support(model),
-                if endpoint == ApiEndpoint::ChatGptResponses {
+                if matches!(
+                    endpoint,
+                    ApiEndpoint::ChatGptResponses | ApiEndpoint::ChatGptPlanResponses
+                ) {
                     None
                 } else {
                     request.prompt_cache_prefix_end
@@ -308,9 +328,16 @@ pub(super) fn build_request(
     }
     body.insert("include".into(), json!(["reasoning.encrypted_content"]));
     if let Some(max_output_tokens) = request.max_output_tokens {
-        body.insert("max_output_tokens".into(), json!(max_output_tokens));
+        if endpoint != ApiEndpoint::ChatGptPlanResponses {
+            body.insert("max_output_tokens".into(), json!(max_output_tokens));
+        }
     }
     if let Some(temperature) = request.temperature {
+        if endpoint == ApiEndpoint::ChatGptPlanResponses {
+            return Err(ApiError::InvalidRequest(
+                "ChatGPT plan usage does not accept temperature".into(),
+            ));
+        }
         body.insert("temperature".into(), json!(temperature));
     }
     if let Some(prompt_cache_key) = &request.prompt_cache_key {
@@ -318,6 +345,24 @@ pub(super) fn build_request(
             "prompt_cache_key".into(),
             Value::String(prompt_cache_key.clone()),
         );
+    }
+    if endpoint == ApiEndpoint::ChatGptPlanResponses {
+        body.insert("stream".into(), Value::Bool(true));
+        let input = body
+            .get_mut("input")
+            .and_then(Value::as_array_mut)
+            .expect("encoded input array");
+        // Ash's frozen instruction messages retain their order; this route accepts developer
+        // guidance rather than system items. Tool permissions and execution remain in Core.
+        for item in input.iter_mut() {
+            if item.get("role").and_then(Value::as_str) == Some("system") {
+                item["role"] = json!("developer");
+            }
+        }
+        if !request.tools.is_empty() {
+            input.insert(0, json!({"type":"additional_tools", "tools": request.tools.iter().map(convert_tool).collect::<Vec<_>>() }));
+            body.remove("tools");
+        }
     }
     Ok(Value::Object(body))
 }

@@ -25,6 +25,7 @@ use ash_async_utils::CancellationSource;
 use ash_async_utils::CancellationToken;
 use ash_chatgpt::ChatGptApiTarget;
 use ash_chatgpt::ChatGptOAuth;
+use ash_chatgpt::ChatGptPlanOAuth;
 use ash_client::AshClient;
 use ash_client::ClientError;
 use ash_client::ClientRequest;
@@ -71,7 +72,14 @@ use std::sync::atomic::Ordering;
 #[path = "provider_tests.rs"]
 mod tests;
 
+#[cfg(test)]
+#[path = "chatgpt_connections_tests.rs"]
+mod chatgpt_connections_tests;
+
 enum ProviderConnection {
+    ChatGptPlan {
+        auth: Arc<ChatGptPlanOAuth>,
+    },
     ChatGpt {
         auth: Arc<ChatGptOAuth>,
     },
@@ -97,6 +105,7 @@ enum ProviderConnection {
 
 #[derive(Clone)]
 enum ProviderTarget {
+    ChatGptPlan(Arc<ChatGptPlanOAuth>),
     Fixed(ResolvedApiTarget),
     ChatGpt(Arc<ChatGptOAuth>),
     Xai(Arc<supergrok::SuperGrokOAuth>),
@@ -107,6 +116,7 @@ enum ProviderTarget {
 }
 
 enum ResolvedProviderTarget<'a> {
+    ChatGptPlan(ResolvedApiTarget),
     Fixed(&'a ResolvedApiTarget),
     ChatGpt(ChatGptApiTarget),
     Xai(supergrok::SuperGrokApiTarget),
@@ -119,6 +129,7 @@ enum ResolvedProviderTarget<'a> {
 impl ResolvedProviderTarget<'_> {
     fn api_target(&self) -> &ResolvedApiTarget {
         match self {
+            Self::ChatGptPlan(target) => target,
             Self::Fixed(target) => target,
             Self::Kimi(target) | Self::KimiDesktop(target) | Self::KimiCli(target) => target,
             Self::Glm(target) => &target.target,
@@ -129,6 +140,7 @@ impl ResolvedProviderTarget<'_> {
 
     fn into_api_target(self) -> ResolvedApiTarget {
         match self {
+            Self::ChatGptPlan(target) => target,
             Self::Fixed(target) => target.clone(),
             Self::Kimi(target) | Self::KimiDesktop(target) | Self::KimiCli(target) => target,
             Self::Glm(target) => target.target,
@@ -138,6 +150,20 @@ impl ResolvedProviderTarget<'_> {
     }
 
     fn ensure_account(&self, expected: &Option<String>) -> Result<(), ModelProviderError> {
+        // The credential snapshot can change after the pre-call identity read.
+        // Compare the account issued with the actual headers before dispatch.
+        if matches!(self, Self::ChatGptPlan(_) | Self::ChatGpt(_)) {
+            let ash_client::RequestIdentity::Account { account_id, .. } =
+                self.api_target().binding().identity()
+            else {
+                unreachable!("ChatGPT targets always carry an account identity");
+            };
+            if expected.as_deref() != Some(account_id.as_str()) {
+                return Err(ModelProviderError::Credential(
+                    "the connection account changed or is no longer ready".into(),
+                ));
+            }
+        }
         if let Self::Glm(target) = self
             && expected.as_deref() != Some(target.account_id.as_str())
         {
@@ -152,6 +178,9 @@ impl ResolvedProviderTarget<'_> {
 impl ProviderTarget {
     fn identity(&self) -> Result<Option<String>, ModelProviderError> {
         match self {
+            Self::ChatGptPlan(auth) => auth
+                .account_id()
+                .map_err(|error| ModelProviderError::Credential(error.to_string())),
             Self::Fixed(_) => Ok(None),
             Self::ChatGpt(auth) => auth
                 .model_execution_identity()
@@ -171,6 +200,7 @@ impl ProviderTarget {
 
     fn endpoint(&self, direct: ApiEndpoint) -> ApiEndpoint {
         match self {
+            Self::ChatGptPlan(_) => ApiEndpoint::ChatGptPlanResponses,
             Self::ChatGpt(_) => ApiEndpoint::ChatGptResponses,
             Self::Xai(_) => ApiEndpoint::XaiSubscriptionResponses,
             Self::Fixed(_)
@@ -203,6 +233,10 @@ impl ProviderTarget {
 
     fn resolve(&self) -> Result<ResolvedProviderTarget<'_>, ModelProviderError> {
         match self {
+            Self::ChatGptPlan(auth) => auth
+                .api_target()
+                .map(ResolvedProviderTarget::ChatGptPlan)
+                .map_err(|error| ModelProviderError::Credential(error.to_string())),
             Self::Fixed(target) => Ok(ResolvedProviderTarget::Fixed(target)),
             Self::Kimi(auth) => auth
                 .api_target()
@@ -374,6 +408,10 @@ impl Provider {
         }
         let adapter = providers::instantiate(definition.adapter, &config);
         let (target, remote_measurement) = match connection {
+            ProviderConnection::ChatGptPlan { auth } => (
+                ProviderTarget::ChatGptPlan(auth),
+                RemoteMeasurement::Disabled,
+            ),
             ProviderConnection::Direct {
                 headers: credentials,
             } => {
@@ -681,6 +719,7 @@ impl Provider {
                     Err(_) => AuthRecovery::Failed,
                 });
                 if let Some(renewed) = recovered? {
+                    renewed.ensure_account(&self.account_identity)?;
                     let retry_client = AttemptClient::new(&diagnostic);
                     let response = self.execute_attempt(
                         &renewed,
@@ -930,6 +969,7 @@ pub struct ModelProviderRuntime {
     credentials: Option<ProviderCredentialService>,
     local_tokenizers: Arc<dyn LocalTokenizerService>,
     chatgpt_oauth: Option<Arc<ChatGptOAuth>>,
+    chatgpt_plan: Option<Arc<ChatGptPlanOAuth>>,
     kimi_oauth: Option<Arc<KimiOAuth>>,
     kimi_desktop: Option<Arc<KimiDesktop>>,
     kimi_cli: Option<Arc<KimiCli>>,
@@ -977,11 +1017,12 @@ impl ModelProviderRuntime {
                 continue;
             }
             let ready = match connection.id.as_str() {
+                "chatgpt-plan" => runtime
+                    .chatgpt_plan
+                    .as_ref()
+                    .is_some_and(|auth| auth.account_id().is_ok_and(|id| id.is_some())),
                 "chatgpt-subscription" => match &runtime.chatgpt_oauth {
-                    Some(auth) => auth
-                        .account_id()
-                        .map_err(|error| ModelProviderError::Credential(error.to_string()))?
-                        .is_some(),
+                    Some(auth) => auth.model_execution_identity().is_ok_and(|id| id.is_some()),
                     None => false,
                 },
                 "kimi-subscription" => match &runtime.kimi_oauth {
@@ -1070,6 +1111,7 @@ impl ModelProviderRuntime {
             credentials: None,
             local_tokenizers: Arc::new(LocalTokenizerRegistry::new()),
             chatgpt_oauth: None,
+            chatgpt_plan: None,
             kimi_oauth: None,
             kimi_desktop: None,
             kimi_cli: None,
@@ -1101,6 +1143,7 @@ impl ModelProviderRuntime {
             credentials: Some(credentials),
             local_tokenizers: Arc::new(LocalTokenizerRegistry::new()),
             chatgpt_oauth: None,
+            chatgpt_plan: None,
             kimi_oauth: None,
             kimi_desktop: None,
             kimi_cli: None,
@@ -1172,6 +1215,11 @@ impl ModelProviderRuntime {
     /// Installs the ChatGPT OAuth authority used by subscription model rows.
     pub fn with_chatgpt_oauth(mut self, chatgpt_oauth: Arc<ChatGptOAuth>) -> Self {
         self.chatgpt_oauth = Some(chatgpt_oauth);
+        self
+    }
+
+    pub fn with_chatgpt_plan(mut self, auth: Arc<ChatGptPlanOAuth>) -> Self {
+        self.chatgpt_plan = Some(auth);
         self
     }
 
@@ -1328,6 +1376,20 @@ impl ModelProviderRuntime {
     ) -> Result<Option<ModelCatalogBinding>, ModelProviderError> {
         let runtime = self.with_configs([config])?;
         let normalized = runtime.configs.normalize(config)?;
+        if normalized.connection.as_str() == "chatgpt-plan" {
+            return self
+                .chatgpt_plan
+                .as_ref()
+                .map(|auth| {
+                    crate::catalog::chatgpt_plan_catalog_binding(
+                        &normalized,
+                        Arc::clone(auth),
+                        Arc::clone(&self.client),
+                    )
+                })
+                .transpose()
+                .map(Option::flatten);
+        }
         if normalized.access_mode == ProviderAccessMode::Subscription
             && normalized.provider.as_str() == "xai"
         {
@@ -1582,6 +1644,18 @@ impl ModelProviderRuntime {
                 ))
             })?;
         match connection.runtime {
+            ModelConnectionRuntime::ChatGptPlan => {
+                let auth = self.chatgpt_plan.as_ref().ok_or_else(|| {
+                    ModelProviderError::Credential(
+                        "ChatGPT plan authorization is unavailable".into(),
+                    )
+                })?;
+                auth.api_target()
+                    .map_err(|error| ModelProviderError::Credential(error.to_string()))?;
+                Ok(ProviderConnection::ChatGptPlan {
+                    auth: Arc::clone(auth),
+                })
+            }
             ModelConnectionRuntime::XaiSubscription => self.xai_connection(),
             ModelConnectionRuntime::GlmSubscription => {
                 let auth = self

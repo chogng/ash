@@ -60,3 +60,18 @@ pub(super) fn subscription_definition() -> ProviderDefinition {
     };
     definition
 }
+
+/// Public ChatGPT plan grants expose text generation and account-specific discovery only.
+pub(super) fn plan_definition() -> ProviderDefinition {
+    let mut definition = default_provider(
+        "openai",
+        "ChatGPT Plan (Ash)",
+        ProviderAdapter::OpenAi,
+        ApiProfile::OpenAiResponses,
+        "https://api.openai.com/v1",
+    )
+    .with_native_streaming();
+    definition.api_key_policy = crate::ApiKeyPolicy::Unsupported;
+    definition.defaults.approval_review_model = crate::ApprovalReviewModelDefault::ActiveModel;
+    definition
+}

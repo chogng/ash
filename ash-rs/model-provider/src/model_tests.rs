@@ -2416,6 +2416,7 @@ fn every_builtin_provider_applies_its_authentication_without_subscription_header
             .filter(|connection| !matches!(
                 connection.runtime,
                 model_provider_info::ModelConnectionRuntime::ChatGptSubscription
+                    | model_provider_info::ModelConnectionRuntime::ChatGptPlan
                     | model_provider_info::ModelConnectionRuntime::KimiCode
                     | model_provider_info::ModelConnectionRuntime::KimiDesktop
                     | model_provider_info::ModelConnectionRuntime::KimiCli

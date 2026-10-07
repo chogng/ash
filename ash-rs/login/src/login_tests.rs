@@ -131,7 +131,8 @@ impl InteractiveLoginDriver for FakeDriver {
                 verification_url: "https://auth.example.test/device".into(),
                 user_code: "ABCD-EFGH".into(),
             },
-            LoginMethod::KimiDeviceCode
+            LoginMethod::ChatGptPlanBrowser { .. }
+            | LoginMethod::KimiDeviceCode
             | LoginMethod::XaiDeviceCode
             | LoginMethod::BigModelBrowser
             | LoginMethod::ZaiBrowser

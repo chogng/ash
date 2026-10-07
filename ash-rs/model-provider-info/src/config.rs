@@ -70,7 +70,8 @@ impl ModelProviderConfig {
 
     pub fn access_mode(&self) -> ProviderAccessMode {
         match self.connection.as_str() {
-            "chatgpt-subscription"
+            "chatgpt-plan"
+            | "chatgpt-subscription"
             | "kimi-subscription"
             | "kimi-desktop"
             | "kimi-cli"

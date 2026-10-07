@@ -5,10 +5,13 @@ mod credential;
 mod device_flow;
 mod maintenance;
 mod oauth;
+mod plan;
 mod speed;
 mod storage;
 
 pub use maintenance::ChatGptAuthManagement;
+pub use plan::CHATGPT_PLAN_PROVIDER_ID;
+pub use plan::ChatGptPlanOAuth;
 
 pub use storage::codex_home;
 

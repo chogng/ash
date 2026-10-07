@@ -98,8 +98,8 @@ impl ChatGptApiTarget {
                 ash_client::RequestBinding::new(
                     purpose,
                     ash_client::RequestIdentity::account(
-                        "chatgpt",
-                        format!("{}:{}", identity.user_id, identity.account_id),
+                        CHATGPT_SUBSCRIPTION_PROVIDER_ID,
+                        format!("{}\0{}", identity.user_id, identity.account_id),
                         credential.credential_revision,
                     ),
                 ),
@@ -133,7 +133,7 @@ impl ChatGptOAuth {
             codex_home,
             secrets,
             Arc::new(AshClient::new(Arc::new(transport))),
-            ChatGptAuthManagement::Automatic,
+            ChatGptAuthManagement::Codex,
         ))
     }
 
@@ -487,6 +487,14 @@ impl InteractiveLoginDriver for ChatGptOAuth {
                 revision: credential.storage_revision,
             }
         } else {
+            // This connection borrows Codex's session. Independent Ash authorization
+            // belongs to chatgpt-plan and must never create a shared Codex credential.
+            if !self.maintenance.management.is_ash() {
+                return Err(LoginError::new(
+                    LoginErrorKind::ExternalLoginRequired,
+                    "Codex now manages authentication; complete sign-in there",
+                ));
+            }
             self.auth.ensure_creatable().map_err(login_driver_error)?;
             LoginWrite::Create
         };

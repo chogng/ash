@@ -169,6 +169,24 @@
       "oneOf": [
         {
           "properties": {
+            "accountId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "chatGptPlanBrowser",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
             "type": {
               "const": "openAiChatGptBrowser",
               "type": "string"
