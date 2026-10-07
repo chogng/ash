@@ -248,8 +248,9 @@ fn psec_filesystem_aliases_keep_read_only_and_denied_overrides() {
         Path::new(&std::env::var_os("SystemRoot").unwrap()).join("System32/cmd.exe"),
     )
     .args(["/d", "/c", "mklink", "/J"])
-    .arg(&junction)
-    .arg(&config)
+    // Keep cmd arguments in DOS spelling; the policy still uses canonical paths.
+    .arg(dunce::simplified(&junction))
+    .arg(dunce::simplified(&config))
     .output()
     .unwrap();
     assert!(linked.status.success(), "{linked:?}");
