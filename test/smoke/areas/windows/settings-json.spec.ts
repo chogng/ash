@@ -213,7 +213,8 @@ test('Preferred paste and drop JSON completions use registered provider kinds', 
 	}
 });
 
-test('Settings JSON opens a pinned tab, reveals a value, saves immediately and persists Chinese labels', async ({ target, workbench, restartWorkbench }) => {
+test('Settings JSON opens a pinned tab, reveals a value, saves immediately and persists Chinese labels', async ({ target, workbench, restartWorkbench, runningApplication }) => {
+	const diagnostics = runningApplication.diagnostics;
 	let page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
@@ -250,6 +251,7 @@ test('Settings JSON opens a pinned tab, reveals a value, saves immediately and p
 	await settings.locator('.ash-modal-editor-close').click();
 	await page.reload();
 	await workbench.waitForReady();
+	await expect(diagnostics.consoleErrors.filter(error => /Failed to update working-copy backup|InvalidStateError|database connection is closing/u.test(error))).toEqual([]);
 	await workbench.settingsEditor.openUserSettingsUI();
 	await workbench.settingsEditor.selectEditorCategory('editor-fonts');
 	await settings.getByRole('searchbox').fill('@id:editor.fontSize');
@@ -279,6 +281,7 @@ test('Settings JSON opens a pinned tab, reveals a value, saves immediately and p
 	await expect(group.tabs.filter({ hasText: '用户设置（JSON）' })).toHaveCount(1);
 	await expect(group.editor.input).toBeFocused();
 	await expect(group.content.locator('.stanza-editor-accessibility-status')).toContainText('2');
+	await expect(diagnostics.consoleErrors.filter(error => /Failed to update working-copy backup|InvalidStateError|database connection is closing/u.test(error))).toEqual([]);
 });
 
 for (const locale of ['en', 'zh-CN']) {

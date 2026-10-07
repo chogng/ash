@@ -803,7 +803,7 @@ export class Workbench extends Disposable {
 			event.veto(workingCopyBackupTracker.flush().then(() => false), 'working-copy backup flush');
 		}));
 		this._register(lifecycleService.onWillShutdown(event => {
-			event.join(workingCopyBackupTracker.flush().then(() => storage.flush(WillSaveStateReason.SHUTDOWN)), "Workbench storage flush");
+			event.join(workingCopyBackupTracker.shutdown().then(() => storage.flush(WillSaveStateReason.SHUTDOWN)), "Workbench storage flush");
 		}));
 		const outputService = services.get(IOutputService);
 		const systemOutputService = this._register(new SystemOutputService(outputService, api.appServer));
