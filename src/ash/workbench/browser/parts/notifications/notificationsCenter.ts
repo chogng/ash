@@ -14,6 +14,7 @@ export interface INotificationsCenter {
 	show(): void;
 	hide(): void;
 	toggle(): void;
+	clearAll(): void;
 }
 export const INotificationsCenter = createServiceIdentifier<INotificationsCenter>("notificationsCenter");
 export const NotificationsFocusedContext = new RawContextKey<boolean>("notificationsFocus", false);
@@ -59,7 +60,7 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 			}));
 			this._register(toDisposable(() => focused.reset()));
 		}
-		this._register(addDisposableListener(this.clearButton, "click", () => service.clear()));
+		this._register(addDisposableListener(this.clearButton, "click", () => this.clearAll()));
 		this._register(addDisposableListener(hide, "click", () => this.hide()));
 		this._register(addDisposableListener(this.list, "click", event => {
 			const Element = document.defaultView?.Element;
@@ -69,12 +70,16 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 			if (remove) service.remove(Number(remove.dataset.notificationRemove));
 		}));
 		this._register(service.onDidAdd(() => this.render()));
-		this._register(service.onDidRemove(() => this.render()));
+		this._register(service.onDidRemove(() => {
+			// Close before replacing focused rows; an explicitly opened empty center stays open.
+			if (this.open && service.getNotifications().length === 0) this.hide();
+			this.render();
+		}));
 		this._register(addDisposableListener(this.panel, "keydown", event => {
 			if (event.key === "Delete") {
 				const target = event.target as HTMLElement;
 				const row = target.closest<HTMLElement>("[data-notification-id]");
-				if (row) { event.preventDefault(); service.remove(Number(row.dataset.notificationId)); this.list.querySelector<HTMLElement>("[data-notification-id]")?.focus(); }
+				if (row) { event.preventDefault(); service.remove(Number(row.dataset.notificationId)); }
 			}
 		}));
 		const onEscape = (event: KeyboardEvent): void => {
@@ -108,6 +113,7 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 	private readonly toasts: NotificationsToasts;
 
 	show(): void {
+		if (this.isDisposed) return;
 		if (this.open) { this.panel.focus(); return; }
 		this.previousFocus = this.panel.ownerDocument.activeElement;
 		this.open = true; this.panel.hidden = false; this.toasts.setHidden(true);
@@ -115,13 +121,30 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 	}
 
 	hide(): void {
-		if (!this.open) return;
-		this.open = false; this.panel.hidden = true; this.toasts.setHidden(false);
-		if (this.previousFocus instanceof this.panel.ownerDocument.defaultView!.HTMLElement) this.previousFocus.focus();
+		if (this.isDisposed || !this.open) return;
+		const document = this.panel.ownerDocument;
+		const restoreFocus = this.panel.contains(document.activeElement);
+		const previousFocus = this.previousFocus;
 		this.previousFocus = null;
+		this.open = false; this.panel.hidden = true; this.toasts.setHidden(false);
+		if (restoreFocus && previousFocus instanceof document.defaultView!.HTMLElement && previousFocus.isConnected) previousFocus.focus();
 	}
 
 	toggle(): void { if (this.open) this.hide(); else this.show(); }
+
+	clearAll(): void {
+		if (this.isDisposed) return;
+		// Focus and removal callbacks can add records or reopen the center during this operation.
+		const items = this.service.getNotifications();
+		this.hide();
+		for (const item of items) this.service.remove(item.id);
+	}
+
+	protected override disposeCore(): void {
+		this.open = false;
+		this.previousFocus = null;
+		super.disposeCore();
+	}
 
 	private render(): void {
 		const document = this.panel.ownerDocument;
