@@ -38,7 +38,7 @@ test.describe('SCM editor groups', () => {
 		await writeFile(testWorkspace.file, 'const value = 2;\n');
 	});
 
-	test('SCM group Collapse All folds only the target group recursively and survives Git refresh', async ({ testWorkspace, workbench }) => {
+	test('SCM group Collapse All folds only the target group recursively and survives Git refresh', async ({ application, testWorkspace, workbench }) => {
 		await prepareGroupChanges(testWorkspace.directory);
 		const page = workbench.page;
 		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
@@ -54,8 +54,7 @@ test.describe('SCM editor groups', () => {
 		const focus = await tree.getAttribute('aria-activedescendant');
 		const selection = await tree.locator('[aria-selected="true"]').evaluateAll(rows => rows.map(row => row.id));
 		const before = await groupRepositoryState(testWorkspace.directory);
-		await group('Changes').locator('.ash-scm-section-label').click({ button: 'right' });
-		await page.getByRole('menuitem', { name: 'Collapse All', exact: true }).click();
+		await workbench.menus.select(application, () => group('Changes').locator('.ash-scm-section-label').click({ button: 'right' }), ['Collapse All']);
 		await expect(group('Changes')).toHaveAttribute('aria-expanded', 'true');
 		await expect(folder('changes', 'src')).toHaveAttribute('aria-expanded', 'false');
 		await expect(folder('changes', 'other')).toHaveAttribute('aria-expanded', 'false');
@@ -77,9 +76,19 @@ test.describe('SCM editor groups', () => {
 		await expect(tree.getByRole('button', { name: 'Open staged changes for src/nested/two.ts', exact: true })).toBeVisible();
 	});
 
-	test('SCM group Collapse All supports keyboard dismissal and stays out of list mode', async ({ testWorkspace, workbench }) => {
+	test('SCM group Collapse All supports keyboard dismissal and stays out of list mode', async ({ application, testWorkspace, workbench }) => {
 		await prepareGroupChanges(testWorkspace.directory);
 		const page = workbench.page;
+		// Escape and DOM focus need the browser menu; the other cases retain the desktop's default menu.
+		if (await workbench.menus.isSystemMenu(application)) {
+			await workbench.settingsEditor.openUserSettingsUI();
+			await workbench.settingsEditor.selectGroup('workbench');
+			await workbench.settingsEditor.selectCategory('layout');
+			await workbench.settingsEditor.element.locator('[data-configuration-key="window.menuStyle"]').getByRole('combobox').click();
+			await page.getByRole('option', { name: 'Custom', exact: true }).click();
+			await workbench.settingsEditor.element.locator('.ash-modal-editor-close').click();
+			await expect.poll(() => workbench.menus.isSystemMenu(application)).toBe(false);
+		}
 		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
 		const tree = page.getByRole('tree', { name: 'Source control changes', exact: true });
 		await expect(tree.getByRole('button', { name: 'Open staged changes for src/nested/two.ts', exact: true })).toBeVisible();
@@ -101,7 +110,7 @@ test.describe('SCM editor groups', () => {
 		await expect(tree).toBeFocused();
 		await expect(tree).toHaveAttribute('aria-activedescendant', focus!);
 		expect(await groupRepositoryState(testWorkspace.directory)).toEqual(before);
-		await workbench.quickaccess.runCommand('workbench.scm.action.setListViewMode');
+		await workbench.menus.select(application, () => page.getByRole('toolbar', { name: 'Source control actions', exact: true }).getByRole('button', { name: 'More Actions', exact: true }).click(), ['View as List']);
 		await expect(tree.locator('.ash-scm-folder')).toHaveCount(0);
 		await tree.getByRole('treeitem').filter({ has: page.locator('.ash-scm-section-label').getByText('Staged Changes', { exact: true }) }).locator('.ash-scm-section-label').click({ button: 'right' });
 		await expect(page.getByRole('menuitem', { name: 'Collapse All', exact: true })).toHaveCount(0);
@@ -112,13 +121,13 @@ test.describe('SCM editor groups', () => {
 		expect(await groupRepositoryState(testWorkspace.directory)).toEqual(before);
 	});
 
-	test('SCM group Collapse All localizes after restarting in Chinese', async ({ testWorkspace, workbench, restartWorkbench }) => {
+	test('SCM group Collapse All localizes after restarting in Chinese', async ({ application, testWorkspace, workbench, restartWorkbench }) => {
 		await prepareGroupChanges(testWorkspace.directory);
 		await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 		const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
 		await picker.getByRole('combobox').fill('简体中文');
 		await picker.getByRole('combobox').press('Enter');
-		({ workbench } = await restartWorkbench());
+		({ application, workbench } = await restartWorkbench());
 		const page = workbench.page;
 		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
 		const tree = page.getByRole('tree', { name: '源代码管理更改', exact: true });
@@ -127,8 +136,7 @@ test.describe('SCM editor groups', () => {
 		const before = await groupRepositoryState(testWorkspace.directory);
 		await tree.focus();
 		await tree.press('Home');
-		await tree.press('Shift+F10');
-		await page.getByRole('menuitem', { name: '全部折叠', exact: true }).click();
+		await workbench.menus.select(application, () => tree.press('Shift+F10'), ['全部折叠']);
 		await expect(tree.getByRole('button', { name: 'Open staged changes for src/nested/two.ts', exact: true })).toHaveCount(0);
 		await expect(tree.getByRole('button', { name: 'Open changes for src/nested/two.ts', exact: true })).toBeVisible();
 		await expect(tree).toBeFocused();
