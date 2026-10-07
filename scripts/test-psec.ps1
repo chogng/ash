@@ -46,7 +46,7 @@ try {
     $report.stage = 'build'
     $report | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $output 'report.json') -Encoding utf8
     # Build once, then run these exact executables for every acceptance phase.
-    & python -B scripts/cargo.py test -p ash-mxc-sandbox --lib --test windows --locked --no-run --message-format=json `
+    & python -B scripts/cargo.py test -p ash-mxc-sandbox --lib --test windows --test pty --locked --no-run --message-format=json `
         2> (Join-Path $output 'build.log') | Set-Content -LiteralPath (Join-Path $output 'build.jsonl') -Encoding utf8
     if ($LASTEXITCODE -ne 0) { throw "Test build failed; see $output/build.log" }
     $artifacts = @(Get-Content -LiteralPath (Join-Path $output 'build.jsonl') | ForEach-Object {
@@ -57,11 +57,13 @@ try {
     })
     $unit = @($artifacts | Where-Object { $_.target.name -eq 'mxc_sandbox' })
     $windows = @($artifacts | Where-Object { $_.target.name -eq 'windows' })
-    if ($unit.Count -ne 1 -or $windows.Count -ne 1) { throw 'Expected exactly one library and one Windows acceptance executable' }
-    $report.binaries = @($unit[0].executable, $windows[0].executable) | ForEach-Object { Get-FileHash -LiteralPath $_ -Algorithm SHA256 }
+    $pty = @($artifacts | Where-Object { $_.target.name -eq 'pty' })
+    if ($unit.Count -ne 1 -or $windows.Count -ne 1 -or $pty.Count -ne 1) { throw 'Expected exactly one library, Windows acceptance and PTY executable' }
+    $report.binaries = @($unit[0].executable, $windows[0].executable, $pty[0].executable) | ForEach-Object { Get-FileHash -LiteralPath $_ -Algorithm SHA256 }
     $report.stage = 'regressions'
     Invoke-Test 'unit' $unit[0].executable @('--nocapture')
     Invoke-Test 'regressions' $windows[0].executable @('--nocapture')
+    Invoke-Test 'pty-regressions' $pty[0].executable @('--nocapture')
     $report.stage = 'capability'
     if ($Capability -eq 'absent') {
         $report.scope = 'Confirmed PSEC unavailability before execution; Managed refusal'
@@ -77,6 +79,7 @@ try {
         'psec_cmd_preserves_output_and_exit_code',
         'psec_powershell_preserves_output_and_exit_code',
         'scoped_execution_preserves_grants_metadata_and_exit_code_authenticity',
+        'psec_filesystem_aliases_keep_read_only_and_denied_overrides',
         'timeout_and_cancellation_terminate_descendants',
         'subsequent_executions_cannot_write_files_owned_by_an_earlier_execution',
         'ordinary_exit_reaps_background_descendants'
@@ -87,7 +90,20 @@ try {
             $failures += $_.Exception.Message
         }
     }
+    foreach ($test in @(
+        'psec_terminal_input_resize_large_environment_and_exit_code',
+        'psec_terminal_keeps_read_only_files_unchanged',
+        'psec_terminal_close_reaps_workload_and_descendants'
+    )) {
+        try {
+            Invoke-Test $test $pty[0].executable @($test, '--ignored', '--exact', '--nocapture')
+        } catch {
+            $failures += $_.Exception.Message
+        }
+    }
     if ($failures.Count -gt 0) { throw ($failures -join "`n") }
+    $report.scope += '; ConPTY input, resize, large environment, read-only files and process-tree cleanup'
+    $report.notCovered = @($report.notCovered | Where-Object { $_ -ne 'PSEC ConPTY' })
     $report.status = 'passed-listed-scope'
     $report.stage = 'complete'
 } catch {

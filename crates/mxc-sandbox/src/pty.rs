@@ -17,9 +17,6 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 pub const PTY_HELPER_ARGUMENT: &str = "--ash-mxc-pty";
-const REQUEST_ENV: &str = "ASH_MXC_PTY_REQUEST";
-// Leave space in Windows' environment block for loader-required system variables.
-const MAX_REQUEST_BYTES: usize = 16 * 1024;
 
 pub(super) fn prepare(
     command: &SandboxCommand,
@@ -46,10 +43,8 @@ pub(super) fn prepare(
 /// Internal process entrypoint, dispatched by arg0 before product startup.
 /// The parent supplies a bounded, prepared request; diagnostics never echo the payload.
 pub fn run_pty_helper() -> Result<i32, String> {
-    let encoded = std::env::var(REQUEST_ENV).map_err(|_| "missing PTY launch request")?;
-    if encoded.len() > MAX_REQUEST_BYTES {
-        return Err("PTY launch request exceeds limit".into());
-    }
+    let encoded =
+        crate::pty_transport::decode(std::env::vars_os()).map_err(|error| error.to_string())?;
     use std::io::IsTerminal;
     if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
         return Err("PTY helper requires terminal stdio".into());
@@ -79,10 +74,9 @@ impl SandboxLaunch for Launch {
         self.request.set_env(environment);
         let encoded = serde_json::to_string(&self.request)
             .map_err(|_| crate::unavailable("cannot encode PTY launch"))?;
-        if encoded.len() > MAX_REQUEST_BYTES {
-            return Err(crate::unavailable("PTY launch request exceeds limit"));
-        }
-        let mut helper_env = HashMap::from([(REQUEST_ENV.to_owned(), encoded)]);
+        let mut helper_env = HashMap::new();
+        crate::pty_transport::encode(&encoded, &mut helper_env)
+            .map_err(|error| crate::unavailable(error.to_string()))?;
         // Only loader-required variables enter the helper. Workload variables are inside the
         // prepared request, and MXC supplies those after applying the sandbox.
         for key in ["SystemRoot", "WINDIR"] {

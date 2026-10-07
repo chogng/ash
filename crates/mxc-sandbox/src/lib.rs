@@ -3,6 +3,8 @@ mod policy;
 mod process;
 #[cfg(windows)]
 mod pty;
+#[cfg(any(windows, test))]
+mod pty_transport;
 mod request;
 #[cfg(target_os = "macos")]
 mod seatbelt;

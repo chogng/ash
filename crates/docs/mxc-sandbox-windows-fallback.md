@@ -4,7 +4,7 @@ Ash 保留 macOS/Linux 使用 MXC、Windows 按请求能力选择 PSEC 或账户
 
 > 状态：已有普通命令、PTY 适配、精确路径与执行前模式快照、结构化 PSEC 准备门禁和 Windows UI 请求策略。可配置路径授权、PSEC 受管代理及完整跨平台验收尚未完成。
 >
-> Owner：`crates` 沙箱系统。MXC 接口更新日期：2026-10-02；原始 Codex 对比基线保留。
+> Owner：`crates` 沙箱系统。MXC 接口更新日期：2026-10-02；Codex 对比更新日期：2026-10-07。
 
 本文维护 Codex 对齐范围、MXC 文档依据、平台选择、接入方式及实施验收。权限类型、宿主 ACL 授权、账户模型及所有权由 [沙箱架构](../../docs/sandboxing.md) 维护；系统操作与历史证据由 [Windows 验收手册](../../docs/windows-sandbox-acceptance-runbook.md) 维护。本文是实现要求，不是功能对齐或安全验收通过声明。
 
@@ -20,7 +20,7 @@ Ash 保留 macOS/Linux 使用 MXC、Windows 按请求能力选择 PSEC 或账户
 
 ## Codex 能力对齐范围
 
-参考基线为本地 Codex `da20788df913189878ebca7f4963d8a363ee6bf2`，范围限于本地沙箱与命令执行，不包含模型、云端容器或整个 Codex 产品。固定测试基线后比较相同平台、相同权限及相同命令；参考产品拒绝的组合不被误写成普遍可用能力。
+参考基线为本地 Codex `95ec468619386ebb93506ac2091a48e5a558d25c`，范围限于本地沙箱与命令执行，不包含模型、云端容器或整个 Codex 产品。固定测试基线后比较相同平台、相同权限及相同命令；参考产品拒绝的组合不被误写成普遍可用能力。
 
 | 能力                                   | Ash 当前状态                                                       | 本方案的完成要求                                           |
 | -------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------- |
@@ -34,7 +34,7 @@ Ash 保留 macOS/Linux 使用 MXC、Windows 按请求能力选择 PSEC 或账户
 | 取消、超时、输出与异常恢复             | 已有部分实现/证据                                                  | 等待预算与硬超时分开，保留尾部输出及清理错误               |
 | 安装、诊断与兼容支持                   | 有 Windows 独立安装与历史排错记录                                  | 验证工具环境、代理身份、UI 设置及发布包，错误可定位        |
 
-Codex 源码依据：[文件权限模型](https://github.com/openai/codex/blob/da20788df913189878ebca7f4963d8a363ee6bf2/codex-rs/protocol/src/permissions.rs)、[Windows 执行会话](https://github.com/openai/codex/blob/da20788df913189878ebca7f4963d8a363ee6bf2/codex-rs/windows-sandbox-rs/src/unified_exec/mod.rs)。账户模型不能满足 Strict 的边界单独记录，不把额外的 Strict 要求当作 Codex 账户方案已经提供的保证。
+Codex 源码依据：[文件权限模型](https://github.com/openai/codex/blob/95ec468619386ebb93506ac2091a48e5a558d25c/codex-rs/protocol/src/permissions.rs)、[Windows 执行会话](https://github.com/openai/codex/blob/95ec468619386ebb93506ac2091a48e5a558d25c/codex-rs/windows-sandbox-rs/src/unified_exec/mod.rs)。账户模型不能满足 Strict 的边界单独记录，不把额外的 Strict 要求当作 Codex 账户方案已经提供的保证。
 
 ## MXC 文档复核与接入纠正
 
@@ -128,6 +128,8 @@ flowchart TD
 MXC 的正式代理模式是 `runtimeConfig.networkProxy` 加 Windows `allowedProxyPeer`，由调用方先启动代理。仅设置环境变量或 IP 白名单没有代理身份绑定，也不会取得所需的系统回环能力。
 
 当前 [Ash 请求转换](../mxc-sandbox/src/policy.rs) 在 Windows 明确拒绝不能保持禁止入站的 Managed 请求，不生成宽泛回环允许规则。Unix 使用 `runtimeConfig.networkProxy`；PTY 交接显式保留代理端点。[现有测试](../mxc-sandbox/src/sandbox_tests.rs) 验证拒绝的策略不会被放宽，PSEC 成功路径仍需实机验收。
+
+Codex `95ec468619386ebb93506ac2091a48e5a558d25c` 的 MXC 适配器采用整个 IPv4/IPv6 宿主回环允许规则，并要求 `allow_local_binding = true`。该实现允许宿主本地服务与监听，其受管网络保证不同于 Ash；不能以 Codex 可启动 Managed 为依据放宽本节要求。当前对照基线与采用边界见 [Windows 候选评估](../../docs/sandboxing.md#windows-候选评估)。
 
 最终接入要求：
 
@@ -292,7 +294,7 @@ Windows Managed 请求仍受官方代理模型的入站耦合限制。当前适�
 | Linux/macOS 隔离               | macOS 27.0.1 ARM64 的文件边界与终端已有实测；网络/私有 IPC 完整矩阵及 Intel Mac 未验收          | [Linux 测试](../mxc-sandbox/tests/linux.rs)、[macOS 测试](../mxc-sandbox/src/sandbox_tests.rs)、[验收范围](../../MXC-TODO.md) |
 | 异常恢复                       | 已有部分账户日志恢复证据，完整崩溃组合未覆盖                                                   | [验收手册](../../docs/windows-sandbox-acceptance-runbook.md)                                                                        |
 
-Codex 核对基线为 `da20788df913189878ebca7f4963d8a363ee6bf2`。该提交已有 MXC PSEC 代码，但默认 Windows 选择仍为限制令牌后端，MXC 在选择入口用于可用性记录；不能据此宣称这套组合已在 Codex 默认执行链验收。具体源码与采用边界见 [Windows 候选评估](../../docs/sandboxing.md#windows-候选评估)。
+Codex 核对基线已更新为 `95ec468619386ebb93506ac2091a48e5a558d25c`。当前代码支持显式 MXC 和默认关闭的本地优先选项，已接入实际执行链、RPC 与 ConPTY；测试用例存在不能替代对应系统的通过证据。Ash 已增加 PowerShell 自动发现过滤、分块 PTY 交接和 PSEC 终端/文件别名验收用例，Windows 成功执行仍以实际验收为准。具体源码、网络差异及采用边界见 [Windows 候选评估](../../docs/sandboxing.md#windows-候选评估)。
 
 ## 实施顺序
 

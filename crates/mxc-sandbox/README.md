@@ -59,8 +59,8 @@ SDK 的 Seatbelt 策略固定可写根以及只读、拒绝路径的祖先目录
 - Unix 直接使用 SDK 的 `StdioMode::Pty`，由 SDK 分配终端并启动 Bubblewrap 或 Seatbelt。Ash 接入终端输入、合并输出、resize、前台作业中断及进程树关闭。
 - Windows 的 Rust SDK 仍不支持 ProcessContainer 分配 PTY，因此宿主通过 `with_pty_helper` 提供启动器。`utils-pty` 启动该程序的 `--ash-mxc-pty` 角色，产品入口先调用 `arg0::dispatch`。
 - Windows 交接格式归 Ash，包含具体命令、显式环境、文件和网络策略、准备阶段的文件身份。内部角色通过官方发布的 1.0 契约重建 SDK 请求，不反序列化 SDK 内部执行模型。新增宿主 ACL 授权字段会被拒绝。
-- Windows 交接环境项最多 16 KiB。工作负载环境与启动器环境分开，显式空环境保持为空。PSEC 所需的 `SYSTEMROOT` 和 `LOCALAPPDATA` 由执行器提供。
-- `tests/pty.rs` 在 Unix 实际验证输入、resize、环境、只读拒绝、退出、前台作业中断和回收；Windows 验证帮助进程入口。交叉编译不代表对应系统已通过运行验收。
+- Windows 交接请求最多 1 MiB UTF-8，按字符边界拆成不超过 8 KiB 的环境项；帮助进程检查块数、总字节数、缺块、重复键及多余字段。工作负载环境与启动器环境分开，传输变量不注入工作负载，显式空环境保持为空。PSEC 所需的 `SYSTEMROOT` 和 `LOCALAPPDATA` 由执行器提供。
+- `tests/pty.rs` 在 Unix 实际验证输入、resize、环境、只读拒绝、退出、前台作业中断和回收；Windows 普通回归验证帮助进程入口，[PSEC 终端用例](tests/pty/windows.rs) 另检查真实终端输入、尺寸、大环境、传输变量隔离、只读拒写、退出码及后代回收。这些用例须在支持 PSEC 的系统显式执行，已接入 `scripts/test-psec.ps1`；交叉编译不代表对应系统已通过运行验收。
 
 ## SDK 依赖
 
@@ -73,6 +73,10 @@ SDK 的 Seatbelt 策略固定可写根以及只读、拒绝路径的祖先目录
 升级时固定 commit、对照上游复核补丁，再验证消费者及平台行为。该 pin 是源码快照，上游已移除早期预览说明；这不替代产品自己的隔离验收。[上游源码](https://github.com/microsoft/mxc/tree/c45e7d5a485036d88f469aa363efaa3c651564bc)
 
 ## 验证
+
+2026-10-07 的 Codex 对照修改在 macOS ARM64 上通过适配器 34 项库测试和 7 项实际 PTY 测试，1 项需要显式局域网地址的用例未运行；执行服务库及 15 项执行集成回归串行通过，PowerShell 路径分类定向回归通过。两 crate 的 Windows ARM64/x64 全部测试目标通过编译及 warning 门禁，但本轮没有运行新增的 Windows PSEC/ConPTY 用例。Windows 验收脚本只有在逐项实际通过后才记录对应范围成功。
+
+本轮执行服务普通 Cargo 构建和 Bazel 适配器库构建通过。Bazel 的固定 SDK 裁剪清单已补入 MXC 进程回收所需的 `libproc`，此前失败的 PTY 测试与执行服务可执行目标已成功构建；Bazel 运行的 7 项 PTY 测试通过，执行服务实际启动及 SIGTERM 退出验证通过。首次并发执行服务回归停在既有延迟输出测试，单独及串行复测通过，该逻辑未修改。
 
 2026-10-06 在 macOS 27.0.1（build 26A434）ARM64 上实测：适配器库 27 项、PTY 7 项、`sandboxing` 库 20 项及 SDK Seatbelt 策略生成 89 项测试通过，前端已有 glob 的 3 项测试通过。新增用例通过真实 SDK 子进程验证祖先目录移动、未创建的元数据、执行后新文件的拒绝/只读规则、Unicode 字面量与受限 `fcntl`，PTY 另覆盖同一持续路径策略。新版 macOS 的基础文件与终端行为已有实机证据；网络流量矩阵、私有 IPC 完整矩阵与 Intel Mac 仍待验收。
 

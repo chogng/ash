@@ -132,9 +132,11 @@ Codex 的专用账户实现是行为参考。Ash 不直接注册其产品 crate�
 - 自动安装、刷新 ACL、重试及较弱模式切换必须符合 Ash 的独立授权和不自动重跑契约。
 - NUL 设备权限、可写目录扫描、隐藏父目录下的授权例外、PowerShell/PTY 和异常恢复需要同一套端到端测试。
 
-已核对本地 Codex `da20788df913189878ebca7f4963d8a363ee6bf2` 的实际调用链。接入范围包括执行器、安装程序和代理；仅复制命令运行器不能满足 Ash 的契约。
+2026-10-07 已核对本地 Codex `95ec468619386ebb93506ac2091a48e5a558d25c` 的实际调用链。它已将 MXC 接入命令执行、文件写入 helper、RPC 进程控制与 ConPTY，不能继续用旧基线 `da20788d` 的“仅记录可用性”概括当前实现。显式 `windows.sandbox = "mxc"` 要求 MXC；默认关闭的 `features.prefer_mxc` 在配置和运行时能力允许时优先选择本地 MXC，命令启动失败不切换后端。源码依据见 [执行选择与启动](https://github.com/openai/codex/blob/95ec468619386ebb93506ac2091a48e5a558d25c/codex-rs/sandboxing/src/manager.rs)、[选择配置](https://github.com/openai/codex/blob/95ec468619386ebb93506ac2091a48e5a558d25c/codex-rs/core/src/config/windows_sandbox_config.rs) 和 [ConPTY RPC 用例](https://github.com/openai/codex/blob/95ec468619386ebb93506ac2091a48e5a558d25c/codex-rs/exec-server/tests/exec_process.rs)。代码接入及测试用例存在，不证明所有系统已完成实机验收或 MXC 已默认启用。
 
-该提交已包含 PSEC 请求与启动实现，但默认 Windows 平台选择仍是 `WindowsRestrictedToken`；`sandboxing/src/windows_mxc.rs` 只记录 PSEC 可用性，未见默认执行路径调用 MXC 启动器。因此不能把它作为“Codex 已在默认路径完成 PSEC 与账户选择验收”的证据。Codex 不提升权限的限制令牌路径不能实施同样的读限制，不能与专用账户路径合并评价。源码依据见 [默认选择](https://github.com/openai/codex/blob/da20788df913189878ebca7f4963d8a363ee6bf2/codex-rs/sandboxing/src/manager.rs)、[可用性记录](https://github.com/openai/codex/blob/da20788df913189878ebca7f4963d8a363ee6bf2/codex-rs/sandboxing/src/windows_mxc.rs) 和 [Windows 策略限制](https://github.com/openai/codex/blob/da20788df913189878ebca7f4963d8a363ee6bf2/codex-rs/sandboxing/src/windows.rs)。
+Codex 的 MXC 受管网络允许整个 IPv4/IPv6 宿主回环及其入站，因此要求 `allow_local_binding = true`；它没有提供 Ash 的“仅本次代理端点、禁止未授权入站”保证，不能复制该策略来解除 Ash 的严格 Managed 拒绝。具体策略见 [Codex 请求转换](https://github.com/openai/codex/blob/95ec468619386ebb93506ac2091a48e5a558d25c/codex-rs/mxc-sandbox/src/policy.rs)。Ash 保留完整请求能力检查，以及仅在明确不支持时检查下一候选的契约。
+
+本轮借鉴其 PowerShell Store 路径过滤、分块环境传输及终端/对象别名验收场景：自动 shell 发现归 `exec-server`，PTY 请求编解码归 `mxc-sandbox`，真实 PSEC 用例由 [验收脚本](../scripts/test-psec.ps1) 显式执行。Codex 使用 MXC `6cd3d58f` 的分包结构，Ash 继续使用较新的 `c45e7d5a` 单包及既有安全补丁；升级或移植须复核具体行为。Codex 不提升权限的限制令牌路径不能实施与专用账户相同的读限制，仍分别评价。接入范围包括执行器、安装程序和代理，仅复制命令运行器不能满足 Ash 的契约。
 
 | Codex 源码                                                                 | 已确认的行为                                                                     | Ash 接入要求                                                                                                  |
 | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |

@@ -102,6 +102,40 @@ fn explicit_empty_environment_stays_empty_after_terminal_handoff() {
 }
 
 #[test]
+fn chunked_terminal_handoff_keeps_large_environment_and_prepared_file_authority() {
+    let temp = tempfile::tempdir().unwrap();
+    let dir = Dir::open_local(temp.path()).unwrap();
+    let mut prepared = request(&dir);
+    let value = "🧊中文=\\\"".repeat(4000);
+    prepared.set_env(&[("WORKLOAD_VALUE".into(), value.clone())]);
+    let mut helper_environment = std::collections::HashMap::new();
+    crate::pty_transport::encode(
+        &serde_json::to_string(&prepared).unwrap(),
+        &mut helper_environment,
+    )
+    .unwrap();
+    let decoded: Request =
+        serde_json::from_str(&crate::pty_transport::decode(helper_environment.iter()).unwrap())
+            .unwrap();
+    assert_eq!(
+        decoded.inner.env,
+        Some(vec![format!("WORKLOAD_VALUE={value}")])
+    );
+    assert!(!decoded.inner.inherit_default_env);
+    assert_eq!(decoded.inner.script_code, prepared.inner.script_code);
+    assert_eq!(
+        decoded.inner.policy.readwrite_paths,
+        prepared.inner.policy.readwrite_paths
+    );
+    assert_eq!(
+        decoded.inner.policy.denied_paths,
+        prepared.inner.policy.denied_paths
+    );
+    assert_eq!(decoded.snapshot, prepared.snapshot);
+    decoded.snapshot.validate().unwrap();
+}
+
+#[test]
 fn terminal_handoff_cannot_add_host_acl_authority() {
     let temp = tempfile::tempdir().unwrap();
     let dir = Dir::open_local(temp.path()).unwrap();

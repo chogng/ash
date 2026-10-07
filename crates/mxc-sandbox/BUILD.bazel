@@ -11,7 +11,7 @@ rust_test(
     name = "pty-tests",
     crate_name = "pty",
     crate_root = "tests/pty.rs",
-    srcs = ["tests/pty.rs", "tests/pty/cases.rs"],
+    srcs = ["tests/pty.rs", "tests/pty/cases.rs", "tests/pty/windows.rs"],
     edition = "2024",
     use_libtest_harness = False,
     # These scenarios exercise the OS sandbox and its terminal on the host.

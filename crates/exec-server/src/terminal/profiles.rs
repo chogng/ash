@@ -131,7 +131,11 @@ fn discover_profiles(environment: &HashMap<String, String>) -> Vec<TerminalProfi
 #[cfg(windows)]
 fn platform_profiles(environment: &HashMap<String, String>) -> Vec<TerminalProfileSpec> {
     let mut profiles = Vec::new();
-    if let Some(program) = resolve_on_path(environment, "pwsh.exe") {
+    if let Some(program) = powershell_on_path(environment).or_else(|| {
+        let program = Path::new(environment_value(environment, "PROGRAMFILES")?)
+            .join("PowerShell/7/pwsh.exe");
+        usable_powershell(&program).then_some(program)
+    }) {
         profiles.push(profile("powershell", "PowerShell", program));
     }
     if let Some(system_root) = environment_value(environment, "SYSTEMROOT") {
@@ -236,6 +240,39 @@ fn resolve_on_path(environment: &HashMap<String, String>, executable: &str) -> O
     std::env::split_paths(path)
         .map(|directory| directory.join(executable))
         .find(|candidate| candidate.is_file())
+}
+
+#[cfg(windows)]
+fn powershell_on_path(environment: &HashMap<String, String>) -> Option<PathBuf> {
+    let path = environment_value(environment, "PATH")?;
+    std::env::split_paths(path)
+        .map(|directory| directory.join("pwsh.exe"))
+        .find(|candidate| usable_powershell(candidate))
+}
+
+#[cfg(windows)]
+fn usable_powershell(path: &Path) -> bool {
+    path.is_file()
+        && !store_powershell(path)
+        && std::fs::canonicalize(path).is_ok_and(|resolved| !store_powershell(&resolved))
+}
+
+#[cfg(any(windows, test))]
+fn store_powershell(path: &Path) -> bool {
+    // Store aliases and packaged PowerShell cannot start in PSEC. Other
+    // framework executables under WindowsApps can still be usable.
+    path.as_os_str()
+        .to_string_lossy()
+        .split(['\\', '/'])
+        .skip_while(|component| !component.eq_ignore_ascii_case("WindowsApps"))
+        .nth(1)
+        .is_some_and(|component| {
+            component.eq_ignore_ascii_case("pwsh.exe")
+                || component.eq_ignore_ascii_case("powershell.exe")
+                || component
+                    .to_ascii_lowercase()
+                    .starts_with("microsoft.powershell")
+        })
 }
 
 fn environment_value<'a>(environment: &'a HashMap<String, String>, key: &str) -> Option<&'a str> {

@@ -94,6 +94,7 @@ file-system 实施；编辑器的未保存内容和外部变更冲突仍由前�
 ## PTY 边界
 
 - `terminal::TerminalService` 拥有桌面交互式 PTY、连接所有权、输出缓存和短期重连租约；不承担前端屏幕与窗口恢复。
+- Windows 自动发现 PowerShell 时跳过 Store 包和 WindowsApps 别名，并检查解析后的目标；其他 WindowsApps 框架中的可用程序保留。PATH 没有兼容版本时检查 `PROGRAMFILES/PowerShell/7/pwsh.exe`，Windows PowerShell 仍从系统目录发现。目录、环境及发现结果由执行器冻结，显式进程请求不在启动失败后替换程序或重跑。
 - TCP 进程接口支持管道与受限 PTY；`processStart.input` 选择 `terminal` 并提供行列数，后续可写入、调整尺寸、中断或取消。
 - Windows 宿主通过 `MxcSandbox::with_pty_helper` 提供内部启动器；App Server 嵌入方使用 `AppServerOptions::with_pty_helper`。Windows MXC 未配置启动器时拒绝受限 PTY。
 - Unix 的受限 PTY 直接由 MXC SDK 分配；Windows MXC 的内部启动器继承宿主分配的终端。目录、网络及文件身份约束保持有效。

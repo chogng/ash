@@ -5,12 +5,15 @@ use ash_async_utils::CancellationSource;
 use ash_file_access::Dir;
 use ash_install_context::InstallContext;
 use ash_sandboxing::FileSystemAccess;
+use ash_sandboxing::MissingPathBehavior;
 use ash_sandboxing::NetworkAccess;
 use ash_sandboxing::SandboxBackend;
 use ash_sandboxing::SandboxCommand;
 use ash_sandboxing::SandboxDirAccess;
 use ash_sandboxing::SandboxDirGrant;
 use ash_sandboxing::SandboxKind;
+use ash_sandboxing::SandboxPathAccess;
+use ash_sandboxing::SandboxPathRule;
 use ash_sandboxing::SandboxPolicy;
 use ash_sandboxing::SandboxScope;
 use ash_tool_executor::ApprovalPolicy;
@@ -225,6 +228,91 @@ fn scoped_execution_preserves_grants_metadata_and_exit_code_authenticity() {
     for name in [".agents", ".codex", ".ash"] {
         assert!(!work.canonical_path().join(name).exists());
     }
+}
+
+#[test]
+#[ignore = "requires PSEC object-level filesystem restrictions"]
+fn psec_filesystem_aliases_keep_read_only_and_denied_overrides() {
+    let temp = tempfile::tempdir().unwrap();
+    let dir = Dir::open_local(temp.path()).unwrap();
+    let config = dir.canonical_path().join("config");
+    let junction = dir.canonical_path().join("config-alias");
+    let secret = dir.canonical_path().join("secret.txt");
+    let secret_alias = dir.canonical_path().join("secret-alias.txt");
+    std::fs::create_dir(&config).unwrap();
+    std::fs::write(config.join("settings.txt"), "original").unwrap();
+    std::fs::write(&secret, "secret-canary").unwrap();
+    std::fs::hard_link(&secret, &secret_alias).unwrap();
+    let linked = std::process::Command::new(
+        Path::new(&std::env::var_os("SystemRoot").unwrap()).join("System32/cmd.exe"),
+    )
+    .args(["/d", "/c", "mklink", "/J"])
+    .arg(&junction)
+    .arg(&config)
+    .output()
+    .unwrap();
+    assert!(linked.status.success(), "{linked:?}");
+    let scope = SandboxScope::single(dir.clone())
+        .with_path_rules(vec![
+            SandboxPathRule::exact(
+                dir.clone(),
+                "config",
+                SandboxPathAccess::ReadOnly,
+                MissingPathBehavior::Reject,
+            )
+            .unwrap(),
+            SandboxPathRule::exact(
+                dir.clone(),
+                "secret.txt",
+                SandboxPathAccess::Denied,
+                MissingPathBehavior::Reject,
+            )
+            .unwrap(),
+        ])
+        .unwrap();
+    let script = format!(
+        "$ErrorActionPreference='Stop'; \
+         function MustDeny([scriptblock]$action) {{ try {{ & $action }} catch {{ return }}; throw 'restriction was not enforced' }}; \
+         MustDeny {{ [IO.File]::ReadAllText({secret}) }}; \
+         MustDeny {{ [IO.File]::ReadAllText({secret_alias}) }}; \
+         MustDeny {{ [IO.File]::WriteAllText({secret},'modified') }}; \
+         MustDeny {{ [IO.File]::WriteAllText({secret_alias},'modified') }}; \
+         MustDeny {{ [IO.File]::WriteAllText({settings},'modified') }}; \
+         MustDeny {{ [IO.File]::WriteAllText({alias_settings},'modified') }}; \
+         [IO.File]::WriteAllText({allowed},'allowed'); Write-Output 'alias-policy-ok'; exit 0",
+        secret = literal(&secret),
+        secret_alias = literal(&secret_alias),
+        settings = literal(&config.join("settings.txt")),
+        alias_settings = literal(&junction.join("settings.txt")),
+        allowed = literal(&dir.canonical_path().join("allowed.txt")),
+    );
+    let result = executor(&dir, Duration::from_secs(30))
+        .execute_scoped_with_network(
+            powershell(script),
+            CommandExecutionAuthority::Sandboxed(sandbox_policy(
+                FileSystemAccess::DirectoryWrite,
+                NetworkAccess::Denied,
+            )),
+            &CancellationSource::new().token(),
+            Some(&scope),
+            None,
+        )
+        .unwrap();
+    let CommandExecutionOutcome::Completed(output) = result else {
+        panic!("{result:?}")
+    };
+    assert_eq!(output.exit_code, Some(0), "{output:?}");
+    assert!(output.stdout.contains("alias-policy-ok"), "{output:?}");
+    assert!(!output.stdout.contains("secret-canary"), "{output:?}");
+    assert_eq!(
+        std::fs::read_to_string(config.join("settings.txt")).unwrap(),
+        "original"
+    );
+    assert_eq!(std::fs::read_to_string(&secret).unwrap(), "secret-canary");
+    assert_eq!(
+        std::fs::read_to_string(dir.canonical_path().join("allowed.txt")).unwrap(),
+        "allowed"
+    );
 }
 
 #[test]

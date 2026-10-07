@@ -53,6 +53,25 @@ fn tracked_windows_shells_launch_with_shell_integration_markers() {
     );
 }
 
+#[test]
+fn powershell_store_paths_are_distinguished_from_other_windowsapps_frameworks() {
+    for path in [
+        r"C:\Users\user\AppData\Local\Microsoft\WindowsApps\pwsh.exe",
+        r"C:\Users\user\AppData\Local\Microsoft\WindowsApps\PowerShell.exe",
+        r"C:\Program Files\WindowsApps\Microsoft.PowerShell_test\pwsh.exe",
+        r"C:\Program Files\wInDoWsApPs\Microsoft.PowerShellPreview_test\pwsh.exe",
+    ] {
+        assert!(store_powershell(Path::new(path)), "{path}");
+    }
+    for path in [
+        r"C:\Program Files\WindowsApps\Ash.Runtime_test\dependencies\powershell\pwsh.exe",
+        r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe",
+        r"C:\portable\NotWindowsApps\pwsh.exe",
+    ] {
+        assert!(!store_powershell(Path::new(path)), "{path}");
+    }
+}
+
 #[cfg(windows)]
 #[test]
 fn windows_discovers_zsh_from_path() {
@@ -66,4 +85,61 @@ fn windows_discovers_zsh_from_path() {
 
     let profiles = platform_profiles(&environment);
     assert!(profiles.iter().any(|profile| profile.profile_id == "zsh"));
+}
+
+#[cfg(windows)]
+#[test]
+fn discovery_skips_store_powershell_and_keeps_compatible_frameworks() {
+    let root = tempfile::tempdir().unwrap();
+    let alias = root.path().join("wInDoWsApPs");
+    let package = alias.join("Microsoft.PowerShellPreview_test");
+    let framework = alias.join("Ash.Runtime_test/dependencies/powershell");
+    for directory in [&alias, &package, &framework] {
+        std::fs::create_dir_all(directory).unwrap();
+        std::fs::write(directory.join("pwsh.exe"), []).unwrap();
+    }
+    let environment = HashMap::from([(
+        "PATH".into(),
+        std::env::join_paths([&alias, &package, &framework])
+            .unwrap()
+            .into_string()
+            .unwrap(),
+    )]);
+    let profiles = discover_profiles(&environment);
+    let powershell = profiles
+        .iter()
+        .find(|profile| profile.profile_id == "powershell")
+        .unwrap();
+    assert_eq!(Path::new(&powershell.program), framework.join("pwsh.exe"));
+}
+
+#[cfg(windows)]
+#[test]
+fn discovery_uses_installed_powershell_when_path_only_has_a_store_alias() {
+    let root = tempfile::tempdir().unwrap();
+    let alias = root.path().join("WindowsApps");
+    let installed = root.path().join("Program Files/PowerShell/7");
+    for directory in [&alias, &installed] {
+        std::fs::create_dir_all(directory).unwrap();
+        std::fs::write(directory.join("pwsh.exe"), []).unwrap();
+    }
+    let environment = HashMap::from([
+        ("PATH".into(), alias.to_str().unwrap().into()),
+        (
+            "PROGRAMFILES".into(),
+            root.path().join("Program Files").to_str().unwrap().into(),
+        ),
+    ]);
+    let profiles = discover_profiles(&environment);
+    let powershell = profiles
+        .iter()
+        .find(|profile| profile.profile_id == "powershell")
+        .unwrap();
+    assert_eq!(Path::new(&powershell.program), installed.join("pwsh.exe"));
+    std::fs::remove_file(installed.join("pwsh.exe")).unwrap();
+    assert!(
+        discover_profiles(&environment)
+            .iter()
+            .all(|profile| profile.profile_id != "powershell")
+    );
 }
