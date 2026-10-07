@@ -261,7 +261,11 @@ Thread 提交不走普通 `git/commit`。`git-turn-changes` 保存每轮不可�
   detached HEAD 保留的提交；游标启动时读取一次 refs 和 configured remote identity，并通过 `hasMore` 与
   `nextCursor` 表示是否还有下一页。remote identity 只保留 provider、host、owner、repository，原始
   URL、token 和 `gh` 登录配置不会进入协议；状态变化、mutation 或连接关闭会使游标失效；
-- `git/fetch` 接受 `mode: "default" | "all"`；省略时沿用 all-remotes prune，默认远端模式执行 `git fetch --prune`。手动 Fetch 仍获取全部远端。`git/pull` 仅允许 fast-forward，`git/push` 使用 Git 当前
+- `git/fetch` 接受 `mode: "default" | "all"`；省略时沿用 all-remotes prune，默认远端模式执行 `git fetch --prune`。
+  命令面板的 `git.fetchAll`（Git: Fetch From All Remotes）、SCM 顶部及 Pull, Push 菜单与 Graph 标题的 Fetch 按钮共用这一命令，
+  固定操作仓库后以 `mode: "all"` 获取全部远端；无远端时提示并跳过 fetch，失败沿用 Git 错误提示。
+  操作不修改 HEAD、index 或工作文件；此命令不提供 `git.fetch` 的远端选择语义。
+  `git/pull` 仅允许 fast-forward，`git/push` 使用 Git 当前
   upstream/default 配置；所有 remote operation 都是 non-interactive；
 - 文件、提交和切分支操作返回新的 `GitStatusResult`；创建/删除分支返回分支列表，后端同时推进状态 revision、清理旧 graph cursor 并通知所有连接。worktree 操作返回路径或清单，不改变当前检出的分支；首次打开 View 也会自动刷新；
 - App Server 监听已授权目录、Git metadata 和目录上层 repository `.gitignore`，以 100ms

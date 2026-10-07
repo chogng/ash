@@ -285,6 +285,8 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 		changes: [],
 	};
 	const gitService = {
+		getRepository: async (repositoryId: string) => ({ id: repositoryId }),
+		catalog: async () => ({ tags: [], stashes: [], remotes: ['origin'], operation: undefined }),
 		onDidBecomeReady: (listener: () => void) => {
 			readySubscriptions += 1;
 			return readyChanges.event(listener);
@@ -330,6 +332,8 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 		},
 	} as unknown as IGitService;
 	services.registerInstance(IGitService, gitService);
+	using fetchNotifications = new NotificationService();
+	services.registerInstance(INotificationService, fetchNotifications);
 
 	try {
 		using history = createHistoryViewFixture(gitService);
@@ -341,7 +345,7 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 		assert.equal(readySubscriptions, 1);
 
 		const remoteActionItems = [...pane.element.querySelectorAll<HTMLElement>(".ash-pane-view-header-actions .ash-action-view-item")];
-		assert.deepEqual(remoteActionItems.map((item) => item.dataset.actionId), ["ash.git.fetch", "ash.git.pull", "ash.git.push", "ash.git.graph.refresh"]);
+		assert.deepEqual(remoteActionItems.map((item) => item.dataset.actionId), ["git.fetchAll", "ash.git.pull", "ash.git.push", "ash.git.graph.refresh"]);
 		assert.equal(remoteActionItems.filter((item) => item.querySelector(".ash-icon")).length, 4);
 		pane.setCollapsed(true);
 		assert.equal(pane.element.querySelector<HTMLElement>(".ash-pane-view-header-actions")?.hidden, true);
@@ -446,7 +450,7 @@ test("SCMHistoryViewPane renders a repository history page", async () => {
 		assert.equal(retired.querySelector('.ash-scm-graph-hover-author'), null, 'A replaced card ignores its pending details result');
 		delayedDetails = undefined;
 
-		const fetch = pane.element.querySelector<HTMLButtonElement>('[data-action-id="ash.git.fetch"] > button');
+		const fetch = pane.element.querySelector<HTMLButtonElement>('[data-action-id="git.fetchAll"] > button');
 		assert.ok(fetch);
 		fetch.click();
 		await waitFor(() => remoteRepositoryIds.length === 1 && graphRequests.length === 3);

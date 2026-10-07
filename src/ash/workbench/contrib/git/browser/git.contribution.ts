@@ -217,7 +217,7 @@ const gitTitleCommands = [
 	{ id: 'ash.git.push', title: localize2('git.menu.push', 'Push'), menu: MenuId.SCMTitle, group: '1_git', order: 2 },
 	{ id: GitCloneCommandId, title: localize2('git.menu.clone', 'Clone'), menu: MenuId.SCMTitle, group: '1_git', order: 3, precondition: IsNativeContext.isEqualTo(true) },
 	{ id: 'git.switchBranch', title: localize2('git.menu.checkout', 'Checkout to…'), menu: MenuId.SCMTitle, group: '1_git', order: 4 },
-	{ id: 'ash.git.fetch', title: localize2('git.menu.fetch', 'Fetch'), menu: MenuId.SCMTitle, group: '1_git', order: 5 },
+	{ id: 'git.fetchAll', title: localize2('git.menu.fetch', 'Fetch'), menu: MenuId.SCMTitle, group: '1_git', order: 5 },
 	{ id: 'git.commit', title: localize2('git.menu.commitStaged', 'Commit Staged'), menu: gitCommitMenu, group: '1_commit', order: 1, precondition: SCMCanCommitContext.isEqualTo(true) },
 	{ id: 'git.commitAmend', title: localize2('git.menu.amend', 'Amend Last Commit…'), menu: gitCommitMenu, group: '2_commit', order: 1 },
 	{ id: 'git.undoCommit', title: localize2('git.menu.undoCommit', 'Undo Last Commit'), menu: gitCommitMenu, group: '2_commit', order: 2 },
@@ -226,7 +226,7 @@ const gitTitleCommands = [
 	{ id: 'git.cleanAll', title: localize2('git.menu.discardAll', 'Discard All Changes…'), menu: gitChangesMenu, group: '2_changes', order: 1 },
 	{ id: 'ash.git.pull', title: localize2('git.menu.pull', 'Pull'), menu: gitPullPushMenu, group: '1_remote', order: 1 },
 	{ id: 'ash.git.push', title: localize2('git.menu.push', 'Push'), menu: gitPullPushMenu, group: '1_remote', order: 2 },
-	{ id: 'ash.git.fetch', title: localize2('git.menu.fetch', 'Fetch'), menu: gitPullPushMenu, group: '1_remote', order: 3 },
+	{ id: 'git.fetchAll', title: localize2('git.menu.fetch', 'Fetch'), menu: gitPullPushMenu, group: '1_remote', order: 3 },
 	{ id: 'git.branch', title: localize2('git.menu.createBranch', 'Create Branch…'), menu: gitBranchMenu, group: '1_branch', order: 1 },
 	{ id: 'git.switchBranch', title: localize2('git.menu.checkout', 'Checkout to…'), menu: gitBranchMenu, group: '1_branch', order: 2 },
 	{ id: 'git.renameBranch', title: localize2('git.menu.renameBranch', 'Rename Branch…'), menu: gitBranchMenu, group: '1_branch', order: 3 },
@@ -335,12 +335,45 @@ abstract class GitHistoryAction extends Action2 {
 	}
 }
 
-registerAction2(class GitFetchAction extends GitHistoryAction {
+registerAction2(class GitFetchAllAction extends Action2 {
 	constructor() {
-		super('ash.git.fetch', 'Fetch', 'Fetch Git remotes', Lxicon.repoFetch, 1);
+		super({
+			id: 'git.fetchAll',
+			title: localize2('git.fetchAllTitle', 'Git: Fetch From All Remotes'),
+			shortTitle: localize2('git.fetchAllShortTitle', 'Fetch'),
+			tooltip: localize2('git.fetchAllTooltip', 'Fetch from all Git remotes'),
+			icon: Lxicon.repoFetch,
+			f1: true,
+			precondition: SCMHistoryBusyContext.isEqualTo(false),
+			menu: { id: MenuId.SCMHistoryTitle, when: SCMHistoryProviderIdContext.isEqualTo('git'), group: 'navigation', order: 1 },
+		});
 	}
-	override run(accessor: ServicesAccessor, target: unknown): Promise<void> {
-		return this.runRemote(accessor, target, (gitService, repositoryId) => gitService.fetch(repositoryId));
+	override async run(accessor: ServicesAccessor, target: unknown): Promise<void> {
+		const gitService = accessor.get(IGitService);
+		const notifications = accessor.get(INotificationService);
+		const historyTarget = isGitHistoryActionTarget(target) ? target : undefined;
+		const repositoryId = typeof target === 'string' ? target : historyTarget?.repositoryId ?? accessor.get(ISCMViewService).activeRepository?.id ?? gitService.activeRepository?.id;
+		try {
+			// Catalog reads can outlive a repository selection; bind every request to this invocation.
+			const repository = await gitService.getRepository(repositoryId);
+			const provider = historyTarget ? undefined : accessor.get(ISCMService).getRepository(repository.id)?.provider;
+			const fetch = async (): Promise<void> => {
+				if ((await gitService.catalog(repository.id)).remotes.length === 0) {
+					notifications.warning(localize('git.fetchAllNoRemotes', 'This repository has no remotes configured to fetch from.'));
+					return;
+				}
+				await gitService.fetch(repository.id);
+			};
+			if (historyTarget) {
+				await historyTarget.runTitleOperation(fetch);
+			} else if (provider instanceof GitSCMProvider) {
+				await provider.runTitleOperation(fetch);
+			} else {
+				await fetch();
+			}
+		} catch (error) {
+			notifications.error(gitErrorMessage(error));
+		}
 	}
 });
 
