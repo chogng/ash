@@ -20,8 +20,10 @@ The browser path is:
    references to the channel's stable `output:` URI through `ITextModelService`.
    Both display the same read-only text model and receive append, replace, and clear.
    Structured text/severity/category filters belong to the Output service; the panel
-   applies them as hidden lines without changing the shared text. Workspace file
-   locations are supplied to the editor link registry by `OutputLinkProvider`.
+   applies them as hidden lines without changing the shared text. Ordinary Output
+   text filtering matches complete model lines, independently of how producers batch
+   or split writes. Log channels match their structured records, including multiline
+   continuations. Workspace file locations are supplied to the editor link registry by `OutputLinkProvider`.
 4. Selecting a channel updates the service and persists its id in workspace
    storage; if that producer returns later, the selection is restored.
 

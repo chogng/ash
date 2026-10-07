@@ -181,12 +181,14 @@ export class OutputViewPane extends ViewPane {
 		let line = 1;
 		let previousEndedWithCarriageReturn = false;
 		for (const entry of active.entries) {
-			const matches = this.filters.matches(entry);
+			const recordMatches = active.kind === 'log' && this.filters.matches(entry);
 			const text = previousEndedWithCarriageReturn && entry.text.startsWith('\n') ? entry.text.slice(1) : entry.text;
 			previousEndedWithCarriageReturn = entry.text.endsWith('\r');
 			const count = (text.match(/\r\n|\r|\n/g) ?? []).length;
 			const end = line + count - (/[\r\n]$/.test(entry.text) || text.length === 0 ? 1 : 0);
 			for (let number = line; number <= end; number++) {
+				// Ordinary output is a stream: one model line may span or share producer writes.
+				const matches = active.kind === 'log' ? recordMatches : this.filters.matches({ ...entry, text: model.getLineContent(number) });
 				visibleLines.set(number, Boolean(visibleLines.get(number)) || matches);
 				severities.set(number, entry.severity);
 			}
