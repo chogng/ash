@@ -28,7 +28,7 @@ export class WorkbenchContextKeysHandler extends Disposable {
 			this.bindOpenFolderKey(contextKeyService);
 			this.bindWorkingCopyKeys(contextKeyService, workingCopyService);
 			this.bindLayoutKeys(contextKeyService, layoutService);
-			this.bindEditorKeys(contextKeyService, editorGroupsService, editorService);
+			this._register(new WorkbenchEditorContextKeysHandler(contextKeyService, editorGroupsService, editorService));
 		});
 	}
 
@@ -95,8 +95,12 @@ export class WorkbenchContextKeysHandler extends Disposable {
 		}));
 		this._register(toDisposable(() => resetContextKeys(contextKeyService, [...visibilityKeys.values(), panelMaximized])));
 	}
+}
 
-	private bindEditorKeys(contextKeyService: IContextKeyService, editorGroupsService: IEditorGroupsService, editorService: IEditorService): void {
+/** Shares window editor bindings with Sessions without requiring its layout to be Workbench layout. */
+export class WorkbenchEditorContextKeysHandler extends Disposable {
+	constructor(contextKeyService: IContextKeyService, editorGroupsService: IEditorGroupsService, editorService: IEditorService) {
+		super();
 		const keys = bufferContextKeyChanges(contextKeyService, () => ({
 			activeEditorGroupEmpty: ActiveEditorGroupEmptyContext.bindTo(contextKeyService),
 			activeEditorGroupIndex: ActiveEditorGroupIndexContext.bindTo(contextKeyService),

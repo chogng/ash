@@ -105,6 +105,7 @@ const { EditorContextKeyController } = await import(
 const { WorkbenchConfiguration } = await import('../../../../../common/configuration.js');
 
 const { createTestWorkbenchContextKeysHandler } = await import('../../../../../../workbench/test/common/testWorkbenchContextKeys.js');
+const { WorkbenchEditorContextKeysHandler } = await import('../../../../../../workbench/browser/contextkeys.js');
 const {
 	EditorGroupWatermarkEntries,
 } = await import(
@@ -1810,6 +1811,110 @@ test("EditorPart preserves working tabs and opens a failure in its own tab", asy
 
 	editor.dispose();
 	dom.window.close();
+});
+
+test('window editor context keys follow group switching, close and History reopening', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using domCleanup = toDisposable(() => dom.window.close());
+	dom.window.HTMLElement.prototype.scrollTo = () => undefined;
+	using services = createTestEditorServices(undefined, undefined, dom.window.document);
+	const contextKeys = services.get(IContextKeyService);
+	const registry = new EditorPaneRegistry();
+	registry.registerEditorPane(descriptor('ash.test.windowContexts', '.ts', () => new TestEditorPane('ash.test.windowContexts')));
+	using editor = createEditorPart(dom.window.document.body, { registry, contextKeyService: contextKeys }, services);
+	using editors = new BrowserEditorService(editor);
+	services.registerInstance(IEditorPart, editor);
+	using history = services.createInstance(HistoryService);
+	using bindings = new WorkbenchEditorContextKeysHandler(contextKeys, editors, editors);
+	const state = () => ({
+		empty: contextKeys.getValue('activeEditorGroupEmpty'),
+		index: contextKeys.getValue('activeEditorGroupIndex'),
+		last: contextKeys.getValue('activeEditorGroupLast'),
+		multiple: contextKeys.getValue('multipleEditorGroups'),
+		visible: contextKeys.getValue('editorIsOpen'),
+	});
+	assert.deepEqual(state(), { empty: true, index: 1, last: true, multiple: false, visible: false });
+	const first = input('C:/project/first-context.ts');
+	const second = input('C:/project/second-context.ts');
+	const firstGroup = editor.activeGroup;
+	await firstGroup.openEditor(first, { pinned: true });
+	const secondGroup = editor.addGroup(firstGroup.id, Direction.Right);
+	await secondGroup.openEditor(second, { pinned: true });
+	editor.activateGroup(secondGroup.id);
+	assert.deepEqual(state(), { empty: false, index: 2, last: true, multiple: true, visible: true });
+	editor.activateGroup(firstGroup.id);
+	assert.deepEqual(state(), { empty: false, index: 1, last: false, multiple: true, visible: true });
+	await firstGroup.closeEditor(first);
+	assert.equal(contextKeys.getValue('editorIsOpen'), true);
+	await secondGroup.closeEditor(second);
+	assert.deepEqual({ empty: state().empty, visible: state().visible }, { empty: true, visible: false });
+	await history.reopenLastClosedEditor();
+	assert.equal(editor.activeInput?.resource.toString(), second.resource.toString());
+	assert.deepEqual({ empty: state().empty, visible: state().visible }, { empty: false, visible: true });
+	await editor.closeAllEditors({ skipConfirmation: true });
+	assert.deepEqual({ empty: state().empty, visible: state().visible }, { empty: true, visible: false });
+});
+
+test('window editor context keys exclude hidden groups and include a visible modal editor', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using domCleanup = toDisposable(() => dom.window.close());
+	dom.window.HTMLElement.prototype.scrollTo = () => undefined;
+	using contextKeys = new ContextKeyService();
+	const registry = new EditorPaneRegistry();
+	registry.registerEditorPane(descriptor('ash.test.visibleContexts', '.ts', () => new TestEditorPane('ash.test.visibleContexts')));
+	using editor = createEditorPart(dom.window.document.body, { registry, contextKeyService: contextKeys });
+	using editors = new BrowserEditorService(editor);
+	using bindings = new WorkbenchEditorContextKeysHandler(contextKeys, editors, editors);
+	const documents = editor.activeGroup;
+	const document = input('C:/project/document-context.ts');
+	await documents.openEditor(document, { pinned: true });
+	const pages = editor.addGroup(documents.id, Direction.Right);
+	await pages.openEditor(input('C:/project/retained-page-context.ts'), { pinned: true });
+	editor.setGroupVisible(pages.id, false);
+	editor.activateGroup(documents.id);
+	await documents.closeEditor(document);
+	assert.deepEqual({ retained: pages.inputs.length, visible: editors.visibleEditors.length, context: contextKeys.getValue('editorIsOpen') }, { retained: 1, visible: 0, context: false });
+	editor.setGroupVisible(pages.id, true);
+	assert.equal(contextKeys.getValue('editorIsOpen'), true);
+	editor.activateGroup(pages.id);
+	assert.equal(contextKeys.getValue('activeEditorGroupEmpty'), false);
+	editor.setGroupVisible(pages.id, false);
+	const modal = input('C:/project/modal-context.ts');
+	await editor.openEditor(modal, {}, 'modalGroup');
+	assert.deepEqual({ visible: editors.visibleEditors, context: contextKeys.getValue('editorIsOpen') }, { visible: [modal], context: true });
+	await editor.closeEditor(modal);
+	assert.deepEqual({ visible: editors.visibleEditors, context: contextKeys.getValue('editorIsOpen') }, { visible: [], context: false });
+});
+
+test('window editor context keys release subscriptions and pending readiness on disposal', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using domCleanup = toDisposable(() => dom.window.close());
+	dom.window.HTMLElement.prototype.scrollTo = () => undefined;
+	using contextKeys = new ContextKeyService();
+	const registry = new EditorPaneRegistry();
+	registry.registerEditorPane(descriptor('ash.test.disposedContexts', '.ts', () => new TestEditorPane('ash.test.disposedContexts')));
+	using editor = createEditorPart(dom.window.document.body, { registry, contextKeyService: contextKeys });
+	using editors = new BrowserEditorService(editor);
+	const file = input('C:/project/disposed-context.ts');
+	await editor.openEditor(file, { pinned: true });
+	const bindings = new WorkbenchEditorContextKeysHandler(contextKeys, editors, editors);
+	assert.equal(contextKeys.getValue('editorIsOpen'), true);
+	bindings.dispose();
+	const keys = ['activeEditorGroupEmpty', 'activeEditorGroupIndex', 'activeEditorGroupLast', 'multipleEditorGroups', 'editorIsOpen'];
+	const changes: string[][] = [];
+	using listener = contextKeys.onDidChangeContext(event => {
+		const changed = [...event.keys].filter(key => keys.includes(key));
+		if (changed.length) changes.push(changed);
+	});
+	await editors.whenReady;
+	await editor.closeEditor(file);
+	const group = editor.addGroup(editor.activeGroup.id, Direction.Right);
+	await group.openEditor(file, { pinned: true });
+	editor.activateGroup(group.id);
+	assert.deepEqual(keys.map(key => contextKeys.getValue(key)), [false, 0, false, false, false]);
+	assert.deepEqual(changes, []);
+	using nextBindings = new WorkbenchEditorContextKeysHandler(contextKeys, editors, editors);
+	assert.deepEqual(keys.map(key => contextKeys.getValue(key)), [false, 2, true, true, true]);
 });
 
 test('editor context keys follow preview, readonly, dirty, and close transitions', async () => {

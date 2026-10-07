@@ -23,6 +23,9 @@ import { ITurnChangesApi } from '../../platform/turnChanges/common/turnChangesAp
 import { AppServerAvailableContext, IsSessionsWindowContext, WorkspaceFolderCountContext } from '../../workbench/common/contextkeys.js';
 import { EditorPanes } from '../../workbench/browser/editor.js';
 import { EditorContextKeyController } from '../../workbench/browser/parts/editor/editorContextKeys.js';
+import { WorkbenchEditorContextKeysHandler } from '../../workbench/browser/contextkeys.js';
+import '../../workbench/browser/parts/editor/editorActions.js';
+import '../../workbench/browser/parts/editor/editorCommands.js';
 import { IAppServerApi as AppServerApiId, IServerEventApi as ServerEventApiId } from '../../platform/agentHost/common/appServerApi.js';
 import { ILanguageModelsService, LanguageModelsService } from '../../workbench/contrib/chat/common/languageModels.js';
 import { ILanguageModelsConfigurationService } from '../../workbench/contrib/chat/common/languageModelsConfiguration.js';
@@ -637,6 +640,7 @@ export abstract class Workbench extends Disposable {
 			openGlobalKeybindingSettings: textual => workbenchPreferences.openGlobalKeybindingSettings(textual),
 		});
 		services.registerInstance(IEditorGroupsService, editors);
+		this._register(new WorkbenchEditorContextKeysHandler(contextKeys, editors, editors));
 		services.registerInstance(IHistoryService, this._register(services.createInstance(HistoryService)));
 		this._register(services.createInstance(TextFileEditorTracker, ownerWindow));
 		auxiliarybar = this._register(services.createInstance(AuxiliaryBarPart, this.domNode));
