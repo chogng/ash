@@ -7,6 +7,16 @@ import { expect, test } from '../../../automation/test.js';
 
 const run = promisify(execFile);
 
+// Palette acceptance precedes fetch completion, so the first remote ref may still be absent.
+async function readRemoteHead(cwd: string, remote: string): Promise<string | undefined> {
+	try {
+		return (await run('git', ['rev-parse', '--verify', '--quiet', `refs/remotes/${remote}/main`], { cwd })).stdout.trim();
+	} catch (error) {
+		if (typeof error === 'object' && error !== null && 'code' in error && error.code === 1) { return undefined; }
+		throw error;
+	}
+}
+
 test.describe('Git Fetch', () => {
 	test.use({ gitRepository: true });
 	test.beforeEach(async ({ target }) => {
@@ -53,8 +63,8 @@ test.describe('Git Fetch', () => {
 			await expect(workbench.quickaccess.items).toHaveCount(1);
 			await expect(workbench.quickaccess.items).toContainText('Git: Fetch From All Remotes');
 			await workbench.quickaccess.input.press('Enter');
-			await expect.poll(() => git('rev-parse', 'refs/remotes/origin/main')).toBe(firstHead);
-			await expect.poll(() => git('rev-parse', 'refs/remotes/backup/main')).toBe(firstHead);
+			await expect.poll(() => readRemoteHead(cwd, 'origin')).toBe(firstHead);
+			await expect.poll(() => readRemoteHead(cwd, 'backup')).toBe(firstHead);
 			expect(await snapshot()).toEqual(before);
 
 			await writeFile(join(producer, 'remote-only.ts'), 'export const remoteValue = 2;\n');
@@ -70,7 +80,7 @@ test.describe('Git Fetch', () => {
 			if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
 			await expect(toggle).toHaveAttribute('aria-expanded', 'true');
 			const fetch = graph.locator('[data-action-id="git.fetchAll"] button');
-			await expect(fetch).toHaveAccessibleName('Fetch from all Git remotes');
+			await expect(fetch).toHaveAccessibleName('Git: Fetch From All Remotes');
 			await fetch.focus();
 			await page.keyboard.press('Enter');
 			await expect.poll(() => git('rev-parse', 'refs/remotes/origin/main')).toBe(secondHead);
@@ -243,7 +253,7 @@ test.describe('Git Fetch', () => {
 			await run('git', ['remote', 'add', 'backup', backup], { cwd });
 			const head = (await run('git', ['rev-parse', 'HEAD'], { cwd })).stdout;
 			await workbench.quickaccess.runCommand('git.fetch');
-			await expect.poll(async () => (await run('git', ['rev-parse', 'refs/remotes/backup/main'], { cwd })).stdout.trim()).toBe(await publish('rev-parse', 'HEAD'));
+			await expect.poll(() => readRemoteHead(cwd, 'backup')).toBe(await publish('rev-parse', 'HEAD'));
 			await expect(workbench.page.getByRole('dialog', { name: 'Select a remote to fetch', exact: true })).toBeHidden();
 			expect((await run('git', ['rev-parse', 'HEAD'], { cwd })).stdout).toBe(head);
 			expect((await run('git', ['status', '--porcelain=v1'], { cwd })).stdout).toBe('');
