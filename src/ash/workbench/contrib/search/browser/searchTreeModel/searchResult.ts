@@ -112,4 +112,34 @@ export class SearchResultImpl {
 		this.fileMatches.clear();
 		this.matchIds.clear();
 	}
+
+	/** Dismisses retained results; later batches may add the same matches again. */
+	public batchRemove(elementsToRemove: RenderableMatch[]): void {
+		const selected = new Set(elementsToRemove);
+		const prune = (folder: SearchFolderMatch, removeChildren: boolean): void => {
+			for (const [id, child] of folder.children) {
+				if (child.kind === 'folder') {
+					prune(child, removeChildren || selected.has(child));
+					if (!child.children.size) { folder.children.delete(id); }
+					continue;
+				}
+				const removeFile = removeChildren || selected.has(child);
+				for (let index = child.matches.length - 1; index >= 0; index--) {
+					const match = child.matches[index]!;
+					if (removeFile || selected.has(match)) {
+						this.matchIds.delete(match.id);
+						child.matches.splice(index, 1);
+					}
+				}
+				if (!child.matches.length) {
+					folder.children.delete(id);
+					this.fileMatches.delete(extUri.getComparisonKey(child.resource));
+				}
+			}
+		};
+		for (const [id, root] of this.roots) {
+			prune(root, selected.has(root));
+			if (!root.children.size) { this.roots.delete(id); }
+		}
+	}
 }

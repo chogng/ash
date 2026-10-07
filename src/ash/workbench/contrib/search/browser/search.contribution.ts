@@ -6,7 +6,7 @@ import { SEARCH_VIEW_ID, FOCUS_SEARCH_COMMAND_ID } from '../common/constants.js'
 import { Lxicon } from "../../../../base/common/lxicons.js";
 import { SyncDescriptor } from "../../../../platform/instantiation/common/descriptors.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
-import { SearchViewPane } from "./searchViewPane.js";
+import { SearchView } from "./searchView.js";
 import "./media/search.css";
 import { AccessibleViewRegistry } from "../../../../platform/accessibility/browser/accessibleViewRegistry.js";
 import { SearchAccessibilityHelp } from "./searchAccessibilityHelp.js";
@@ -15,6 +15,7 @@ import { ISearchHistoryService, SearchHistoryService } from "../common/searchHis
 import { IReplaceService } from "./replace.js";
 import { ReplaceService } from "./replaceService.js";
 import '../../searchEditor/browser/searchEditor.contribution.js';
+import './searchActionsRemoveReplace.js';
 
 AccessibleViewRegistry.register(new SearchAccessibilityHelp());
 registerSingleton(ISearchHistoryService, SearchHistoryService, InstantiationType.Delayed);
@@ -47,6 +48,6 @@ export function registerSearchViews(
 		localizationKey: { bundle: "ash.views", key: "search" },
 		order: 1,
 		canToggleVisibility: false,
-		ctorDescriptor: new SyncDescriptor(SearchViewPane),
+		ctorDescriptor: new SyncDescriptor(SearchView),
 	}]);
 }

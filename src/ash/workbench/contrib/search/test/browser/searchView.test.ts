@@ -30,6 +30,12 @@ import { BulkEditTestServices } from "../../../bulkEdit/test/browser/bulkEditTes
 import { ITextModelResourceService } from "../../../../services/textmodelResolver/common/textModelResourceService.js";
 import { IBulkEditService } from "../../../../../editor/browser/services/bulkEditService.js";
 import { IDialogService } from "../../../../../platform/dialogs/common/dialogs.js";
+import { ICommandService } from "../../../../../platform/commands/common/commands.js";
+import { CommandService } from "../../../../services/commands/common/commandService.js";
+import { IViewsService } from "../../../../services/views/common/viewsService.js";
+import type { IView } from "../../../../common/views.js";
+import type { SearchView } from "../../browser/searchView.js";
+import { SEARCH_VIEW_ID, SearchCommandIds } from "../../common/constants.js";
 
 const matches: readonly ContentSearchMatch[] = [
 	{
@@ -99,7 +105,7 @@ test("BrowserContentSearchService pulls bounded batches and releases the job", a
 	assert.equal(cancelCount, 1);
 });
 
-test("SearchViewPane submits typed filters and groups highlighted matches", async () => {
+test("SearchView submits typed filters and groups highlighted matches", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>", { url: "https://ash.test" });
 	const installedGlobals = installDomGlobals(browser);
 	let submitted: IContentSearchQuery | undefined;
@@ -118,10 +124,10 @@ test("SearchViewPane submits typed filters and groups highlighted matches", asyn
 	try {
 		using store = new DisposableStore();
 		const services = createServices(store, browser, service);
-		const { SearchViewPane } = await import(
-			"../../../../../workbench/contrib/search/browser/searchViewPane.js"
+		const { SearchView } = await import(
+			"../../../../../workbench/contrib/search/browser/searchView.js"
 		);
-		using pane = services.createInstance(SearchViewPane,
+		using pane = services.createInstance(SearchView,
 			browser.window.document.body,
 			{
 				id: "ash.search",
@@ -185,7 +191,7 @@ test("SearchViewPane submits typed filters and groups highlighted matches", asyn
 	}
 });
 
-test("SearchViewPane applies configured query defaults and result limits", async () => {
+test("SearchView applies configured query defaults and result limits", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>", { url: "https://ash.test" });
 	const installedGlobals = installDomGlobals(browser);
 	using configuration = new WorkbenchConfigurationService();
@@ -206,8 +212,8 @@ test("SearchViewPane applies configured query defaults and result limits", async
 	try {
 		using store = new DisposableStore();
 		const services = createServices(store, browser, service, configuration);
-		const { SearchViewPane } = await import("../../../../../workbench/contrib/search/browser/searchViewPane.js");
-		using pane = services.createInstance(SearchViewPane, browser.window.document.body, { id: "ash.search", title: "Search" });
+		const { SearchView } = await import("../../../../../workbench/contrib/search/browser/searchView.js");
+		using pane = services.createInstance(SearchView, browser.window.document.body, { id: "ash.search", title: "Search" });
 		browser.window.document.body.append(pane.element);
 		input(pane.element, "Search workspace").value = "Needle";
 		assert.equal(pane.element.querySelector('button[aria-label="Match Case"]')?.getAttribute('aria-pressed'), "true");
@@ -256,7 +262,7 @@ async function waitFor(
 	const deadline = Date.now() + timeoutMillis;
 	while (!condition()) {
 		if (Date.now() >= deadline) {
-			throw new Error("Timed out waiting for SearchViewPane");
+			throw new Error("Timed out waiting for SearchView");
 		}
 		await new Promise((resolve) => setTimeout(resolve, 0));
 	}
@@ -288,6 +294,7 @@ function installDomGlobals(browser: JSDOM): readonly string[] {
 function createServices(store: DisposableStore, browser: JSDOM, search: IContentSearchService, configured?: WorkbenchConfigurationService): InstantiationService {
 	const configuration = configured ?? store.add(new WorkbenchConfigurationService());
 	const services = store.add(new InstantiationService());
+	services.registerInstance(ICommandService, store.add(new CommandService(services)));
 	const menus: IContextMenuService = { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { }, hideContextMenu() { } };
 	const contextView = store.add(new BrowserContextViewService(browser.window.document.body));
 	services.registerInstance(ContentSearchServiceId, search);
@@ -307,3 +314,108 @@ function createServices(store: DisposableStore, browser: JSDOM, search: IContent
 	services.registerInstance(IReplaceService, services.createInstance(ReplaceService));
 	return services;
 }
+
+function registerView(services: InstantiationService, view: SearchView): void {
+	view.setVisible(true);
+	view.element.ownerDocument.body.append(view.element);
+	services.registerInstance(IViewsService, {
+		onDidChangeViewContainerVisibility: Event.None,
+		onDidChangeViewVisibility: Event.None,
+		onDidChangeFocusedView: Event.None,
+		isViewContainerVisible: () => true,
+		isViewContainerActive: () => true,
+		openViewContainer: async () => null,
+		closeViewContainer() { },
+		getVisibleViewContainer: () => null,
+		getActiveViewPaneContainerWithId: () => null,
+		getFocusedView: () => null,
+		getFocusedViewName: () => 'Search',
+		isViewVisible: id => id === SEARCH_VIEW_ID,
+		openView: async <T extends IView>(): Promise<T | null> => view as unknown as T,
+		closeView() { },
+		getActiveViewWithId: <T extends IView>(id: string) => id === SEARCH_VIEW_ID ? view as unknown as T : null,
+		getViewWithId: <T extends IView>(id: string) => id === SEARCH_VIEW_ID ? view as unknown as T : null,
+		focusView: async () => { view.focus(); return true; },
+	});
+}
+
+test('Dismiss runs the registered command, restores focus and updates retained snapshots until refresh', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	const globals = installDomGlobals(browser);
+	const delivered = [...matches, { ...matches[0]!, path: 'other.ts' }];
+	try {
+		using store = new DisposableStore();
+		const services = createServices(store, browser, {
+			search: async (_query, options) => {
+				options?.onProgress?.(delivered);
+				return { resultCount: delivered.length, limitHit: true, error: undefined };
+			}
+		});
+		const { SearchView } = await import('../../browser/searchView.js');
+		await import('../../browser/searchActionsRemoveReplace.js');
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
+		registerView(services, view);
+		input(view.element, 'Search workspace').value = 'needle';
+		view.element.querySelector('form')!.dispatchEvent(new browser.window.Event('submit', { cancelable: true }));
+		await waitFor(() => view.getSearchResultSnapshot()?.matchCount === 3);
+		const tree = view.getControl();
+		const file = view.searchResult.files[0]!;
+		const next = file.matches[1]!;
+		tree.setFocus(file.matches[0]!.id);
+		tree.setSelection([file.matches[0]!.id]);
+		await services.get(ICommandService).executeCommand(SearchCommandIds.RemoveActionId);
+		assert.deepEqual({ count: view.getSearchResultSnapshot()?.matchCount, focused: tree.focus?.id, status: view.element.querySelector('[role="status"]')!.textContent }, {
+			count: 2, focused: next.id, status: '2 results (result limit reached)',
+		});
+		assert.match(view.getSearchResultSnapshot()!.content, /# File: file:\/\/\/workspace\/src\/main\.ts\n  9:5-9:11: needle\n\n/);
+		tree.setSelection([next.id, view.searchResult.files[1]!.id]);
+		await services.get(ICommandService).executeCommand(SearchCommandIds.RemoveActionId);
+		await services.get(ICommandService).executeCommand(SearchCommandIds.RemoveActionId);
+		assert.deepEqual({ count: view.searchResult.count, focused: tree.focus, snapshot: view.getSearchResultSnapshot(), status: view.element.querySelector('[role="status"]')!.textContent }, {
+			count: 0, focused: undefined, snapshot: undefined, status: 'No results found.',
+		});
+		assert.equal(browser.window.document.activeElement, tree.element);
+		view.element.querySelector<HTMLButtonElement>('button[aria-label="Refresh search"]')!.click();
+		await waitFor(() => view.getSearchResultSnapshot()?.matchCount === 3);
+	} finally {
+		browser.window.close();
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
+	}
+});
+
+test('Dismiss during a running search retains the job and accepts later batches before completion', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	const globals = installDomGlobals(browser);
+	let finish: (() => void) | undefined;
+	try {
+		using store = new DisposableStore();
+		const services = createServices(store, browser, {
+			search: async (_query, options) => {
+				options?.onProgress?.(matches.slice(0, 1));
+				await new Promise<void>(resolve => { finish = () => { options?.onProgress?.(matches); resolve(); }; });
+				return { resultCount: 3, limitHit: false, error: undefined };
+			}
+		});
+		const { SearchView } = await import('../../browser/searchView.js');
+		await import('../../browser/searchActionsRemoveReplace.js');
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
+		registerView(services, view);
+		input(view.element, 'Search workspace').value = 'needle';
+		view.element.querySelector('form')!.dispatchEvent(new browser.window.Event('submit', { cancelable: true }));
+		await waitFor(() => finish !== undefined);
+		const tree = view.getControl();
+		const file = view.searchResult.files[0]!;
+		tree.setFocus(file.id);
+		await services.get(ICommandService).executeCommand(SearchCommandIds.RemoveActionId);
+		assert.deepEqual({ count: view.searchResult.count, busy: tree.element.getAttribute('aria-busy'), status: view.element.querySelector('[role="status"]')!.textContent }, {
+			count: 0, busy: 'true', status: '0 results…',
+		});
+		finish!();
+		await waitFor(() => view.getSearchResultSnapshot()?.matchCount === 2);
+		assert.equal(view.element.querySelector('[role="status"]')!.textContent, '2 results');
+	} finally {
+		finish?.();
+		browser.window.close();
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
+	}
+});

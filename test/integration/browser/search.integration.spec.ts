@@ -1,5 +1,73 @@
 import { expect, test } from '@playwright/test';
 
+test('Dismiss updates retained results and focus while refresh restores the searched files', async ({ page }) => {
+	await page.goto('/search.html');
+	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
+	await query.fill('中文');
+	await query.press('Enter');
+	const tree = page.getByRole('tree', { name: 'Search results', exact: true });
+	await expect(page.getByRole('status')).toHaveText('3 results');
+	await tree.locator('.ash-search-match').first().click();
+	await page.evaluate(() => window.ashSearchIntegration.dismiss());
+	await expect(page.getByRole('status')).toHaveText('2 results');
+	await expect(tree).toBeFocused();
+	await expect(tree.locator('.ash-search-match')).toHaveCount(2);
+	const activeId = await tree.getAttribute('aria-activedescendant');
+	await expect(page.locator(`[id="${activeId}"]`)).toHaveAccessibleName('Line 1, column 13: 中文😀 needle needle');
+	expect(await page.evaluate(() => window.ashSearchIntegration.snapshot()?.matchCount)).toBe(2);
+	await tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path', { hasText: 'workspace • src/main.ts' }) }).click();
+	await page.evaluate(() => window.ashSearchIntegration.dismiss());
+	await expect(page.locator('.ash-search-file-path')).toHaveText(['other • src/main.ts']);
+	await page.getByRole('button', { name: 'Refresh search', exact: true }).click();
+	await expect(page.getByRole('status')).toHaveText('3 results');
+});
+
+test('Dismiss leaves a running search active and incorporates later result batches', async ({ page }) => {
+	await page.goto('/search.html');
+	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
+	await query.fill('slow');
+	await query.press('Enter');
+	const tree = page.getByRole('tree', { name: 'Search results', exact: true });
+	await expect(tree).toHaveAttribute('aria-busy', 'true');
+	await tree.locator('.ash-search-match').click();
+	await page.evaluate(() => window.ashSearchIntegration.dismiss());
+	await expect(page.getByRole('status')).toHaveText('0 results…');
+	await expect(tree).toHaveAttribute('aria-busy', 'true');
+	expect(await page.evaluate(() => window.ashSearchIntegration.cancelled())).toBe(0);
+	await page.evaluate(() => window.ashSearchIntegration.finishLateSearch());
+	await expect(tree).toHaveAttribute('aria-busy', 'false');
+	await expect(page.locator('.ash-search-file-path')).toHaveText(['workspace • late.ts']);
+	await expect(page.getByRole('status')).toHaveText('1 results');
+});
+
+test('Dismiss handles a file and its selected child together through multiple selection', async ({ page }) => {
+	await page.goto('/search.html');
+	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
+	await query.fill('中文');
+	await query.press('Enter');
+	const tree = page.getByRole('tree', { name: 'Search results', exact: true });
+	const file = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path', { hasText: 'workspace • src/main.ts' }) });
+	await file.click();
+	await tree.locator('.ash-search-match').first().click({ modifiers: ['ControlOrMeta'] });
+	await expect(tree.locator('[role="treeitem"][aria-selected="true"]')).toHaveCount(2);
+	await page.evaluate(() => window.ashSearchIntegration.dismiss());
+	await expect(page.getByRole('status')).toHaveText('1 results');
+	await expect(page.locator('.ash-search-file-path')).toHaveText(['other • src/main.ts']);
+	await expect(tree).toBeFocused();
+});
+
+test('Dismiss and its accessibility guidance use the Chinese language catalog', async ({ page }) => {
+	await page.goto('/search.html?locale=zh-CN');
+	const query = page.getByRole('textbox', { name: '搜索工作区', exact: true });
+	await query.fill('needle');
+	await query.press('Enter');
+	await expect(page.getByRole('status')).toHaveText('1 个结果');
+	await page.locator('.ash-search-match').click();
+	expect(await page.evaluate(() => window.ashSearchIntegration.help())).toContain('不会删除文件');
+	await page.evaluate(() => window.ashSearchIntegration.dismiss());
+	await expect(page.getByRole('status')).toHaveText('未找到结果。');
+});
+
 test('registered Search keeps query controls and labeled filters usable at the minimum sidebar width', async ({ page }) => {
 	await page.goto('/search.html');
 	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });

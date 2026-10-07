@@ -3,6 +3,63 @@ import { basename, join } from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import type { ElectronApplication } from '@playwright/test';
 
+test('Search Dismiss removes retained matches, files and folders without changing disk contents', async ({ target, workbench, testWorkspace }) => {
+	test.skip(target.appServerMode !== 'required', 'Uses actual workspace content searches.');
+	const contents = [
+		['main.ts', 'ash_dismiss_token first\nash_dismiss_token second\n'],
+		['src/source.ts', 'ash_dismiss_token source\n'],
+		['docs/notes.md', 'ash_dismiss_token docs\n'],
+	] as const;
+	await mkdir(join(testWorkspace.directory, 'src'), { recursive: true });
+	await mkdir(join(testWorkspace.directory, 'docs'), { recursive: true });
+	for (const [path, content] of contents) { await writeFile(join(testWorkspace.directory, path), content); }
+	await workbench.search.open();
+	await workbench.search.search('ash_dismiss_token');
+	const page = workbench.page;
+	const search = workbench.search.element;
+	const tree = search.getByRole('tree');
+	const toolbar = page.getByRole('toolbar', { name: 'Search result actions', exact: true });
+	const dismissKey = process.platform === 'darwin' ? 'Meta+Backspace' : 'Delete';
+	await expect(workbench.search.status).toHaveText('4 results');
+	await workbench.search.query.press(dismissKey);
+	await expect(workbench.search.status).toHaveText('4 results');
+	await workbench.search.query.fill('ash_dismiss_token');
+	await search.locator('.ash-search-match', { hasText: 'ash_dismiss_token first' }).click();
+	await tree.press(dismissKey);
+	await expect(workbench.search.status).toHaveText('3 results');
+	await expect(tree).toBeFocused();
+	const next = tree.getByRole('treeitem', { name: 'Line 2, column 1: ash_dismiss_token second', exact: true });
+	await expect(next).toHaveAttribute('aria-selected', 'true');
+	await expect(tree).toHaveAttribute('aria-activedescendant', (await next.getAttribute('id'))!);
+	await toolbar.getByRole('button', { name: 'More Actions', exact: true }).click();
+	await page.getByRole('menuitemcheckbox', { name: 'View as tree', exact: true }).click();
+	await tree.getByRole('treeitem', { name: 'src', exact: true }).click();
+	await toolbar.getByRole('button', { name: 'More Actions', exact: true }).click();
+	await page.getByRole('menuitem', { name: 'Dismiss', exact: true }).click();
+	await expect(workbench.search.status).toHaveText('2 results');
+	await expect(tree.getByRole('treeitem', { name: 'src', exact: true })).toHaveCount(0);
+	await tree.getByRole('treeitem').filter({ has: search.locator('.ash-search-file-path', { hasText: 'main.ts' }) }).click();
+	await toolbar.getByRole('button', { name: 'More Actions', exact: true }).click();
+	await page.getByRole('menuitem', { name: 'Dismiss', exact: true }).click();
+	await expect(workbench.search.files).toHaveText(['notes.md']);
+	await expect(workbench.search.status).toHaveText('1 results');
+	await toolbar.getByRole('button', { name: 'More Actions', exact: true }).click();
+	await page.getByRole('menuitem', { name: 'Open results in Search Editor', exact: true }).click();
+	const resultEditor = page.locator('.ash-search-editor');
+	await expect(resultEditor).toBeVisible();
+	await expect(resultEditor).toContainText('notes.md');
+	await expect(resultEditor).not.toContainText('source.ts');
+	await expect(resultEditor).not.toContainText('main.ts');
+	await search.locator('.ash-search-match', { hasText: 'ash_dismiss_token docs' }).click();
+	await tree.press(dismissKey);
+	await expect(workbench.search.status).toHaveText('No results found.');
+	await expect(tree.getByRole('treeitem')).toHaveCount(0);
+	await expect(tree).toBeFocused();
+	await page.getByRole('button', { name: 'Refresh search', exact: true }).click();
+	await expect(workbench.search.status).toHaveText('4 results');
+	for (const [path, content] of contents) { expect(await readFile(join(testWorkspace.directory, path), 'utf8')).toBe(content); }
+});
+
 test('Search submits case, regex and file filters to workspace search', async ({ target, workbench, testWorkspace }) => {
 	test.skip(target.appServerMode !== 'required', 'Uses the real workspace search service.');
 	await workbench.search.open();
@@ -343,9 +400,12 @@ test('Search translates query options and file filters into Chinese', async ({ t
 	const query = search.getByRole('textbox', { name: '搜索工作区', exact: true });
 	await query.focus();
 	await query.press('Alt+F1');
-	await expect(workbench.page.getByRole('dialog').getByRole('textbox')).toHaveValue(/跨文件搜索/);
+	await expect(workbench.page.getByRole('dialog').getByRole('textbox')).toHaveValue(/跨文件搜索[\s\S]*移除结果[\s\S]*不会删除文件/);
 	await workbench.page.keyboard.press('Escape');
 	await expect(query).toBeFocused();
+	await workbench.page.getByRole('toolbar', { name: 'Search result actions', exact: true }).getByRole('button', { name: '更多操作', exact: true }).click();
+	await expect(workbench.page.getByRole('menuitem', { name: '移除结果', exact: true })).toBeVisible();
+	await workbench.page.keyboard.press('Escape');
 	await workbench.quickaccess.runCommand('search.action.openNewEditor');
 	const editorQuery = workbench.page.getByRole('textbox', { name: '搜索编辑器查询', exact: true });
 	await expect(editorQuery).toBeVisible();

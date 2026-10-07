@@ -51,3 +51,46 @@ test('Search results map UTF-16 offsets in a CRLF preview block to an editor ran
 	result.add([{ dirId: 'workspace', path: 'main.ts', lineNumber: 4, preview: '中文😀 first\r\nsecond end', ranges: [{ start: 5, end: 18 }] }]);
 	assert.deepEqual({ ...result.files[0]!.matches[0]!.range }, { startLineNumber: 4, startColumn: 6, endLineNumber: 5, endColumn: 7 });
 });
+
+test('Dismiss removes mixed levels once, keeps other roots and prunes empty branches', () => {
+	const result = new SearchResultImpl([
+		{ id: 'first', name: 'first', index: 0, uri: URI.file('/first') },
+		{ id: 'second', name: 'second', index: 1, uri: URI.file('/second') },
+	]);
+	const line = { lineNumber: 1, preview: 'needle needle', ranges: [{ start: 0, end: 6 }, { start: 7, end: 13 }] };
+	result.add([
+		{ ...line, dirId: 'first', path: 'src/a.ts' },
+		{ ...line, ranges: line.ranges.slice(0, 1), dirId: 'first', path: 'src/nested/b.ts' },
+		{ ...line, dirId: 'first', path: 'docs/c.ts' },
+		{ ...line, ranges: line.ranges.slice(0, 1), dirId: 'first', path: 'keep.ts' },
+		{ ...line, ranges: line.ranges.slice(0, 1), dirId: 'second', path: 'src/a.ts' },
+	]);
+	const folder = [...result.children[0]!.children.values()].find(child => child.name === 'src')!;
+	const firstFile = result.files[0]!;
+	const docs = result.files[2]!;
+	const selected = [folder, firstFile, firstFile.matches[0]!, docs.matches[0]!, result.files[4]!, folder];
+	result.batchRemove(selected);
+	result.batchRemove(selected);
+	assert.deepEqual({ count: result.count, files: result.files.map(file => [file.resource.toString(), file.matches.length]), roots: result.children.map(root => root.name) }, {
+		count: 2,
+		files: [[URI.file('/first/docs/c.ts').toString(), 1], [URI.file('/first/keep.ts').toString(), 1]],
+		roots: ['first'],
+	});
+	result.batchRemove([docs.matches[0]!]);
+	assert.deepEqual([...result.children[0]!.children.values()].map(child => child.name), ['keep.ts']);
+	result.batchRemove([...result.children]);
+	assert.deepEqual({ count: result.count, files: result.files, children: result.children }, { count: 0, files: [], children: [] });
+});
+
+test('Later search batches can restore dismissed matches and stale selections cannot remove them', () => {
+	const result = new SearchResultImpl([{ id: 'workspace', name: 'workspace', index: 0, uri: URI.file('/workspace') }]);
+	const raw = { dirId: 'workspace', path: 'src/main.ts', lineNumber: 1, preview: 'needle', ranges: [{ start: 0, end: 6 }] };
+	result.add([raw]);
+	const folder = result.children[0]!;
+	const file = result.files[0]!;
+	const match = file.matches[0]!;
+	result.batchRemove([match]);
+	result.add([raw, { ...raw, lineNumber: 2 }]);
+	result.batchRemove([folder, file, match]);
+	assert.deepEqual({ count: result.count, lines: result.files[0]!.matches.map(match => match.range.startLineNumber) }, { count: 2, lines: [1, 2] });
+});

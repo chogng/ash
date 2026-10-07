@@ -6,7 +6,7 @@ import { Button } from "../../../../base/browser/ui/button/button.js";
 import { InputBox } from "../../../../base/browser/ui/inputbox/inputbox.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
 import { localize } from "../../../../nls.js";
-import { type IContentSearchQuery, IContentSearchService, type ContentSearchMatchRange } from "../../../../platform/search/common/search.js";
+import { type IContentSearchQuery, type IContentSearchComplete, IContentSearchService, type ContentSearchMatchRange } from "../../../../platform/search/common/search.js";
 import { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import { WorkbenchObjectTree, type ResourceOpenEvent } from "../../../../platform/list/browser/listService.js";
 import { WorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
@@ -18,8 +18,10 @@ import { EditorOpenSource, TextEditorSelectionSource } from "../../../../platfor
 import type { ObjectTreeElement, ObjectTreeNode } from "../../../../base/browser/ui/tree/objectTreeModel.js";
 import { SearchResultImpl, type RenderableMatch, type SearchMatch } from "./searchTreeModel/searchResult.js";
 import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
+import type { IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
 import { AccessibilityVerbositySettingId } from "../../../../platform/accessibility/browser/accessibleView.js";
-import { SearchContext } from "../common/constants.js";
+import { SearchCommandIds, SearchContext } from "../common/constants.js";
+import { ICommandService } from "../../../../platform/commands/common/commands.js";
 import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
 import { ContentSearchConfiguration } from "../common/searchConfiguration.js";
 import { HistoryNavigator } from "../../../../base/common/history.js";
@@ -31,7 +33,7 @@ import { SearchEditorID } from "../../searchEditor/browser/constants.js";
 import { serializeSearchResultForEditor } from "../../searchEditor/browser/searchEditorSerialization.js";
 
 /** Workspace content-search form and incrementally populated result tree. */
-export class SearchViewPane extends ViewPane {
+export class SearchView extends ViewPane {
 	private readonly searchService: IContentSearchService;
 	private readonly queryInput: HTMLTextAreaElement;
 	private caseSensitive = false;
@@ -54,6 +56,7 @@ export class SearchViewPane extends ViewPane {
 	private readonly statusElement: HTMLDivElement;
 	private readonly resultsElement: HTMLDivElement;
 	private readonly tree: WorkbenchObjectTree<RenderableMatch>;
+	private readonly resultFocused: IContextKey<boolean>;
 	private readonly resultActions: WorkbenchToolBar;
 	private readonly rowHovers = this._register(new DisposableMap<HTMLElement, IManagedHover>());
 	private result: SearchResultImpl;
@@ -62,6 +65,8 @@ export class SearchViewPane extends ViewPane {
 	private lastOpenedMatchId: string | undefined;
 	private searchController: AbortController | undefined;
 	private searchRevision = 0;
+	private searchCompletion: Pick<IContentSearchComplete, "limitHit" | "error"> | undefined;
+	private searchCancelled = false;
 
 	constructor(
 		container: HTMLElement,
@@ -76,6 +81,7 @@ export class SearchViewPane extends ViewPane {
 		@ISearchHistoryService private readonly historyService: ISearchHistoryService,
 		@IReplaceService private readonly replaceService: IReplaceService,
 		@IDialogService private readonly dialogs: IDialogService,
+		@ICommandService private readonly commands: ICommandService,
 	) {
 		super(container, options);
 		this.searchService = searchService;
@@ -197,7 +203,7 @@ export class SearchViewPane extends ViewPane {
 			scrolling: "managed",
 			getHeight: () => 22,
 			openOnSingleClick: true,
-			multipleSelectionSupport: false,
+			multipleSelectionSupport: true,
 			expandOnlyOnTwistieClick: true,
 			modelOptions: { identityProvider: { getId: element => element.id }, defaultCollapseState: "expanded" },
 			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: element => element.kind === "match" ? element.preview : element.name },
@@ -209,6 +215,9 @@ export class SearchViewPane extends ViewPane {
 		}));
 		this.tree.element.setAttribute("aria-busy", "false");
 		this.tree.domNode.classList.add("ash-search-results-tree");
+		// Scope the shortcut to the tree so deleting text in a query cannot dismiss results.
+		const resultContext = this._register(scopedContext.createScoped(this.tree.domNode));
+		this.resultFocused = SearchContext.FileMatchOrMatchFocusKey.bindTo(resultContext);
 		const updateAriaHint = () => {
 			const hint = configurationService.getValue<boolean>(AccessibilityVerbositySettingId.Find) ? localize("search.helpHint", "Press Alt+F1 for search accessibility help.") : "";
 			this.queryInput.setAttribute("aria-description", hint);
@@ -366,6 +375,8 @@ export class SearchViewPane extends ViewPane {
 		const controller = new AbortControllerConstructor();
 		this.searchController = controller;
 		const revision = ++this.searchRevision;
+		this.searchCompletion = undefined;
+		this.searchCancelled = false;
 		this.result = new SearchResultImpl(this.workspaceContext.getWorkspace().folders);
 		this.resultQuery = this.query(text);
 		this.lastOpenedMatchId = undefined;
@@ -391,25 +402,16 @@ export class SearchViewPane extends ViewPane {
 				},
 			);
 			if (this.isDisposed || revision !== this.searchRevision) return;
-			if (complete.error) {
-				this.statusElement.textContent = complete.error;
-			} else if (complete.resultCount === 0) {
-				this.statusElement.textContent = localize("search.noResults", "No results found.");
-			} else {
-				this.statusElement.textContent =
-					complete.limitHit
-						? localize("search.limitReached", "{0} results (result limit reached)", this.result.count)
-						: localize("search.results", "{0} results", this.result.count);
-			}
+			this.searchCompletion = complete;
+			this.updateSearchResultCount();
 		} catch (error) {
 			if (
 				this.isDisposed ||
 				revision !== this.searchRevision ||
 				isAbortError(error)
 			) return;
-			this.statusElement.textContent = error instanceof Error
-				? error.message
-				: localize("search.failed", "Workspace search failed.");
+			this.searchCompletion = { limitHit: false, error: error instanceof Error ? error.message : localize("search.failed", "Workspace search failed.") };
+			this.updateSearchResultCount();
 		} finally {
 			if (!this.isDisposed && revision === this.searchRevision) {
 				this.tree.element.setAttribute("aria-busy", "false");
@@ -450,8 +452,9 @@ export class SearchViewPane extends ViewPane {
 		this.searchController = undefined;
 		// Invalidate callbacks immediately; some providers finish a batch after receiving cancellation.
 		this.searchRevision++;
+		this.searchCancelled = true;
 		this.tree.element.setAttribute("aria-busy", "false");
-		this.statusElement.textContent = localize("search.cancelled", "Search stopped. {0} results retained.", this.result.count);
+		this.updateSearchResultCount();
 		this.updateResultActions();
 	}
 
@@ -461,6 +464,8 @@ export class SearchViewPane extends ViewPane {
 		this.searchController?.abort();
 		this.searchController = undefined;
 		this.searchRevision++;
+		this.searchCompletion = undefined;
+		this.searchCancelled = false;
 		this.result.clear();
 		this.resultQuery = undefined;
 		this.lastOpenedMatchId = undefined;
@@ -476,7 +481,34 @@ export class SearchViewPane extends ViewPane {
 		return { query: this.resultQuery.text, content: serializeSearchResultForEditor(this.resultQuery, this.result), matchCount: this.result.count };
 	}
 
+	public get searchResult(): SearchResultImpl { return this.result; }
+
+	public getControl(): WorkbenchObjectTree<RenderableMatch> { return this.tree; }
+
+	public async queueRefreshTree(): Promise<void> {
+		if (this.isDisposed) { return; }
+		this.renderResults();
+		this.updateSearchResultCount();
+	}
+
+	private updateSearchResultCount(): void {
+		if (this.searchCompletion?.error) {
+			this.statusElement.textContent = this.searchCompletion.error;
+		} else if (this.searchCancelled) {
+			this.statusElement.textContent = localize("search.cancelled", "Search stopped. {0} results retained.", this.result.count);
+		} else if (this.searchController && !this.searchCompletion) {
+			this.statusElement.textContent = localize("search.progress", "{0} results…", this.result.count);
+		} else if (!this.result.count) {
+			this.statusElement.textContent = localize("search.noResults", "No results found.");
+		} else {
+			this.statusElement.textContent = this.searchCompletion?.limitHit
+				? localize("search.limitReached", "{0} results (result limit reached)", this.result.count)
+				: localize("search.results", "{0} results", this.result.count);
+		}
+	}
+
 	private updateResultActions(): void {
+		this.resultFocused.set(this.tree.focus !== undefined && !this.replaceController);
 		const hasResults = this.result.count > 0;
 		const canReplace = hasResults && !this.searchController && !this.replaceController;
 		this.replaceActions.setActions([
@@ -533,6 +565,13 @@ export class SearchViewPane extends ViewPane {
 				},
 			},
 		], [
+			{
+				id: SearchCommandIds.RemoveActionId,
+				label: localize("search.dismiss", "Dismiss"),
+				tooltip: "",
+				enabled: this.tree.focus !== undefined && !this.replaceController,
+				run: () => this.commands.executeCommand(SearchCommandIds.RemoveActionId),
+			},
 			{
 				id: "search.openEditor",
 				label: localize("searchEditor.open", "Open results in Search Editor"),

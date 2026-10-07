@@ -10,7 +10,7 @@ import { WorkbenchConfigurationService } from '../../../src/ash/workbench/servic
 import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { registerSearchViews } from '../../../src/ash/workbench/contrib/search/browser/search.contribution.js';
 import { SEARCH_VIEW_ID } from '../../../src/ash/workbench/contrib/search/common/constants.js';
-import { SearchViewPane } from '../../../src/ash/workbench/contrib/search/browser/searchViewPane.js';
+import { SearchView } from '../../../src/ash/workbench/contrib/search/browser/searchView.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
 import { Event } from '../../../src/ash/base/common/event.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
@@ -33,6 +33,12 @@ import { ISearchHistoryService, SearchHistoryService } from '../../../src/ash/wo
 import { IReplaceService } from '../../../src/ash/workbench/contrib/search/browser/replace.js';
 import { ReplaceService } from '../../../src/ash/workbench/contrib/search/browser/replaceService.js';
 import { IWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/common/workingCopyService.js';
+import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
+import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
+import { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
+import type { IView } from '../../../src/ash/workbench/common/views.js';
+import { SearchCommandIds } from '../../../src/ash/workbench/contrib/search/common/constants.js';
+import { SearchAccessibilityHelp } from '../../../src/ash/workbench/contrib/search/browser/searchAccessibilityHelp.js';
 
 if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
 	setNlsMessages('zh-CN', builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
@@ -47,6 +53,8 @@ const opened: { resource: string; options: EditorOpenOptions | undefined; target
 let finishLateSearch: (() => void) | undefined;
 let cancelled = 0;
 const instantiation = store.add(new InstantiationService());
+const commands = store.add(new CommandService(instantiation));
+instantiation.registerInstance(ICommandService, commands);
 const configuration = store.add(new WorkbenchConfigurationService());
 instantiation.registerInstance(IConfigurationService, configuration);
 instantiation.registerInstance(IContextKeyService, store.add(new ContextKeyService()));
@@ -101,12 +109,36 @@ const registry = new WorkbenchViewRegistry();
 registerSearchViews(registry);
 const host = document.querySelector<HTMLElement>('#search')!;
 const pane = instantiation.createInstance(registry.getView(SEARCH_VIEW_ID)!.ctorDescriptor, host, { id: SEARCH_VIEW_ID, title: 'Search' });
-if (!(pane instanceof SearchViewPane)) { throw new Error('Search registration did not create SearchViewPane'); }
+if (!(pane instanceof SearchView)) { throw new Error('Search registration did not create SearchView'); }
 store.add(pane);
 pane.setVisible(true);
 pane.layout(600, 0, 280);
+instantiation.registerInstance(IViewsService, {
+	onDidChangeViewContainerVisibility: Event.None,
+	onDidChangeViewVisibility: Event.None,
+	onDidChangeFocusedView: Event.None,
+	isViewContainerVisible: () => true,
+	isViewContainerActive: () => true,
+	openViewContainer: async () => null,
+	closeViewContainer() { },
+	getVisibleViewContainer: () => null,
+	getActiveViewPaneContainerWithId: () => null,
+	getFocusedView: () => null,
+	getFocusedViewName: () => 'Search',
+	isViewVisible: id => id === SEARCH_VIEW_ID,
+	openView: async <T extends IView>(): Promise<T | null> => pane as unknown as T,
+	closeView() { },
+	getActiveViewWithId: <T extends IView>(id: string) => id === SEARCH_VIEW_ID ? pane as unknown as T : null,
+	getViewWithId: <T extends IView>(id: string) => id === SEARCH_VIEW_ID ? pane as unknown as T : null,
+	focusView: async () => { pane.focus(); return true; },
+});
 window.addEventListener('pagehide', () => store.dispose(), { once: true });
 window.ashSearchIntegration = {
+	dismiss: () => commands.executeCommand<void>(SearchCommandIds.RemoveActionId),
+	help: () => {
+		using provider = new SearchAccessibilityHelp().getProvider(instantiation);
+		return provider?.provideContent();
+	},
 	snapshot: () => pane.getSearchResultSnapshot(),
 	queries,
 	opened,
@@ -120,6 +152,8 @@ window.ashSearchIntegration = {
 declare global {
 	interface Window {
 		ashSearchIntegration: {
+			dismiss(): Promise<void>;
+			help(): string | undefined;
 			snapshot(): { query: string; content: string; matchCount: number; } | undefined;
 			readonly queries: readonly IContentSearchQuery[];
 			readonly opened: readonly { resource: string; options: EditorOpenOptions | undefined; target: EditorOpenTarget | undefined; }[];
