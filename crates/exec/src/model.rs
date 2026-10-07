@@ -71,6 +71,9 @@ pub struct ExecRunRequest {
     pub run_id: ExecRunId,
     pub entry: ExecEntry,
     pub approval: HeadlessApprovalMode,
+    /// Exact selection for this Turn; omission retains the product's configured selection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<ash_protocol::ModelRef>,
 }
 
 impl ExecRunRequest {
@@ -79,6 +82,7 @@ impl ExecRunRequest {
             run_id: ExecRunId::generate(),
             entry,
             approval: HeadlessApprovalMode::default(),
+            model: None,
         }
     }
 
@@ -89,6 +93,11 @@ impl ExecRunRequest {
 
     pub fn with_approval_mode(mut self, approval: HeadlessApprovalMode) -> Self {
         self.approval = approval;
+        self
+    }
+
+    pub fn with_model(mut self, model: ash_protocol::ModelRef) -> Self {
+        self.model = Some(model);
         self
     }
 }

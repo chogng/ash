@@ -15,6 +15,10 @@ pub struct RolloutTrace {
     pub session_id: SessionId,
     pub threads: Vec<ThreadRolloutTrace>,
     pub history_prefixes: Vec<ash_history::HistoryPrefix>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub diagnostics: Option<crate::DiagnosticTrace>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub graph: Option<crate::TraceGraph>,
 }
 
 /// One durable Thread history within a [`RolloutTrace`].
@@ -60,6 +64,21 @@ pub fn capture_session_trace(
         return Err(RolloutTraceError::SessionNotFound(session_id.clone()));
     }
 
+    let history_prefixes = retained_prefixes(thread_store, &threads)?;
+    Ok(RolloutTrace {
+        format_version: ROLLOUT_TRACE_FORMAT_VERSION,
+        session_id: session_id.clone(),
+        threads,
+        history_prefixes,
+        diagnostics: None,
+        graph: None,
+    })
+}
+
+pub(crate) fn retained_prefixes(
+    thread_store: &dyn ThreadStore,
+    threads: &[ThreadRolloutTrace],
+) -> Result<Vec<ash_history::HistoryPrefix>, RolloutTraceError> {
     let mut prefixes = std::collections::BTreeMap::new();
     let mut pending = threads
         .iter()
@@ -85,10 +104,5 @@ pub fn capture_session_trace(
         }));
         prefixes.insert(reference.digest.as_str().to_string(), prefix);
     }
-    Ok(RolloutTrace {
-        format_version: ROLLOUT_TRACE_FORMAT_VERSION,
-        session_id: session_id.clone(),
-        threads,
-        history_prefixes: prefixes.into_values().collect(),
-    })
+    Ok(prefixes.into_values().collect())
 }

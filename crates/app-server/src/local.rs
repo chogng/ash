@@ -872,7 +872,10 @@ impl LocalProfileRuntime {
         let attachments = open_attachments(state.profile_root(), network_policy.clone())?;
         let repository = LocalStateRepository::open(&state).map_err(open_error)?;
         let threads = repository
-            .recover_threads_with_attachments(attachments)
+            .recover_threads_with_attachments_and_trace_recorder(
+                attachments,
+                Arc::new(ash_rollout_trace::TraceRecorder::from_environment()),
+            )
             .map_err(open_error)?;
         threads
             .install_time_context_provider(Arc::new(crate::time_context::ConfigTimeContext::new(
@@ -1146,7 +1149,10 @@ pub fn open_app_server_with_codebase_providers(
             let attachments = open_attachments(&options.profile_root, network_policy.clone())?;
             let repository = LocalStateRepository::open(&state_runtime).map_err(open_error)?;
             let threads = repository
-                .recover_threads_with_attachments(attachments)
+                .recover_threads_with_attachments_and_trace_recorder(
+                    attachments,
+                    Arc::new(ash_rollout_trace::TraceRecorder::from_environment()),
+                )
                 .map_err(open_error)?;
             (database_path, threads, config)
         }
@@ -1164,10 +1170,15 @@ pub fn open_app_server_with_codebase_providers(
                 .map_err(|error| OpenAppServerError(error.0))?;
             network_policy.update(network_access(&snapshot.values.network));
             let attachments = open_attachments(&options.profile_root, network_policy.clone())?;
-            let threads = Arc::new(ThreadController::with_store_and_attachments(
-                Arc::new(InMemoryThreadStore::default()),
-                attachments,
-            ));
+            let threads = Arc::new(
+                ThreadController::with_store_and_attachments(
+                    Arc::new(InMemoryThreadStore::default()),
+                    attachments,
+                )
+                .with_trace_recorder(Arc::new(
+                    ash_rollout_trace::TraceRecorder::from_environment(),
+                )),
+            );
             (database_path, threads, config)
         }
     };

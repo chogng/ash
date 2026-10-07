@@ -5,6 +5,7 @@ use std::fmt;
 /// Failure while reading a durable rollout into a trace artifact.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum RolloutTraceError {
+    InvalidParameters(String),
     SessionNotFound(SessionId),
     ThreadList(ThreadStoreError),
     ThreadStore {
@@ -16,6 +17,7 @@ pub enum RolloutTraceError {
 impl fmt::Display for RolloutTraceError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::InvalidParameters(message) => formatter.write_str(message),
             Self::SessionNotFound(session_id) => {
                 write!(formatter, "Session not found: {session_id}")
             }

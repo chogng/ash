@@ -6,6 +6,7 @@ mod attachment_preparation;
 mod browser;
 mod context;
 mod context_manager;
+mod diagnostic_model;
 mod history;
 mod hooks;
 mod message_checkpoint;

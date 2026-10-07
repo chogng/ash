@@ -14,6 +14,7 @@ name = "ash_core"
 path = "src/lib.rs"
 
 [dependencies]
+ash-rollout-trace = { workspace = true }
 opentelemetry = { workspace = true, features = ["trace"] }
 guardian-context = { workspace = true }
 audio = { workspace = true }

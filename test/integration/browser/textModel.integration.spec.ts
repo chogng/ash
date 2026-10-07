@@ -330,8 +330,8 @@ test('proportional minimap preserves glyph height and repaints its document wind
 
 for (const deviceScaleFactor of [1, 2]) {
 	for (const size of ['proportional', 'fit', 'fill'] as const) {
-		test(`minimap shares scrollbar endpoints with size=${size} at pixel ratio ${deviceScaleFactor}`, async ({ browser }) => {
-			const context = await browser.newContext({ deviceScaleFactor });
+		test(`minimap shares scrollbar endpoints with size=${size} at pixel ratio ${deviceScaleFactor}`, async ({ browser, baseURL }) => {
+			const context = await browser.newContext({ deviceScaleFactor, baseURL });
 			const page = await context.newPage();
 			try {
 				await openEditor(page);

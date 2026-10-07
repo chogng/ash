@@ -1,6 +1,6 @@
 # Agent Harness 设计
 
-> 状态：Accepted（2026-08-03）；实现状态最后核对于 2026-09-13。
+> 状态：Accepted（2026-08-03）；评测与 Trace 状态最后核对于 2026-10-07。
 > 定位：回答"Core 的 agent loop 具体怎么搭起来"——一次模型调用长什么样、Turn 内循环与
 > 失败弹性、steering、提示词组织、工具选择与注册时机、上下文裁剪压缩、prompt cache、评测。
 >
@@ -41,7 +41,7 @@
 | Prompt cache       | 前缀稳定 + 断点标注                        | 已实现：Anthropic tools/system/滚动 user 三断点、cached usage 与 scope 回归已接通                                                                   |
 | 多 Tool Call/响应  | 模型一次响应多个调用                       | 已实现：`parallel_tool_calls: true`，调用先完整持久化再按顺序执行，避免并行写副作用                                                                 |
 | 计划工具           | 长任务显式计划状态                         | ✅ `update_plan` 提交 durable `PlanUpdated`；Turn 与 Desktop 只投影最新 canonical plan，恢复/replay 保持一致                                        |
-| 评测               | 任务集 + 指标回路                          | Core、App Server 和 Desktop 覆盖确定性行为；真实任务 baseline 与 production telemetry 尚未接入                                                      |
+| 评测               | 任务集 + 指标回路                          | 已接通真实 `ash exec` 任务 runner、独立 verifier、重复运行与基线比较；当前只有 3 个种子任务，真实模型质量 baseline 与 production telemetry 尚未建立 |
 
 ## 2. 一次模型调用的目标形态
 
@@ -431,6 +431,10 @@ authoring 规则以最严格交集为准：
 ### 14.1 真实开发任务集
 
 真实模型行为对比应按下列层次建立独立 benchmark。它们是模型/profile 质量声明和多 Agent 收益声明的前置证据，不是机械执行边界的替代品：
+
+当前 [任务评测](../test/agent-eval/README.md) 通过真实产品无界面入口运行固定 fixture，并验收保存的
+Turn 变更；报告关联可导入 Sessions Trace 的历史、逐次模型 attempt、语义请求／响应与执行关系。首批 3 个手写用例是基础契约种子，后续按真实失败
+扩充任务并保留独立验收任务。脚本化 HTTP 模型的产品 smoke 只证明调用链；真实模型比较需另行运行相同任务。
 
 | 层  | 数量 | 内容                       | 考察                                       |
 | --- | ---- | -------------------------- | ------------------------------------------ |

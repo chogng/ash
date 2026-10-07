@@ -299,7 +299,10 @@ impl TurnExecutor {
                 threads.attachments(),
             ),
         );
-        let compaction = Arc::new(ModelContextCompactionService::new(model.clone()));
+        let compaction = Arc::new(ModelContextCompactionService::new(
+            model.clone(),
+            Arc::clone(&threads.trace_recorder),
+        ));
         let code_mode = CodeModeBroker::new(
             Arc::clone(&threads),
             Arc::clone(&tools),
@@ -506,9 +509,10 @@ impl TurnExecutor {
             };
         }
         if self.model_compaction {
-            executor.compaction = Arc::new(ModelContextCompactionService::new(Arc::clone(
-                &executor.model,
-            )));
+            executor.compaction = Arc::new(ModelContextCompactionService::new(
+                Arc::clone(&executor.model),
+                Arc::clone(&executor.threads.trace_recorder),
+            ));
         }
         let queued_thread_id = thread_id.clone();
         let queued_turn_id = turn_id.clone();
@@ -1161,10 +1165,28 @@ impl TurnExecutor {
                     invocation.context().source_thread_sequence(),
                     cancellation.clone(),
                 );
-                match self
-                    .model
-                    .stream(model, &request, cancellation, &mut stream)
-                {
+                let mut attempt = self.threads.trace_recorder.start_attempt(
+                    ash_rollout_trace::InferenceContext {
+                        session_id: invocation.session_id().clone(),
+                        thread_id: thread_id.clone(),
+                        turn_id: turn_id.clone(),
+                        source_thread_sequence: invocation.context().source_thread_sequence(),
+                        model: frozen_model.clone(),
+                        purpose: ash_rollout_trace::InferencePurpose::Agent,
+                    },
+                    &request,
+                );
+                let response = self.model.stream(
+                    model,
+                    &request,
+                    cancellation,
+                    &mut crate::diagnostic_model::DiagnosticStream {
+                        attempt: &mut attempt,
+                        downstream: Some(&mut stream),
+                    },
+                );
+                crate::diagnostic_model::finish_attempt(&mut attempt, &response);
+                match response {
                     Ok(response) => {
                         self.threads
                             .record_model_invocation(
@@ -1544,6 +1566,20 @@ impl TurnExecutor {
         request: &ContextCompactionRequest,
         cancellation: &CancellationToken,
     ) -> Result<(ContextCompactionResult, u64), ExecutionFailure> {
+        let snapshot = self
+            .threads
+            .read_thread(thread_id)
+            .map_err(ExecutionFailure::persistence)?;
+        let request = request
+            .clone()
+            .with_trace_context(ash_rollout_trace::InferenceContext {
+                session_id: snapshot.session_id,
+                thread_id: thread_id.clone(),
+                turn_id: turn_id.clone(),
+                source_thread_sequence: request.source_thread_sequence(),
+                model: request.generator_model().cloned(),
+                purpose: ash_rollout_trace::InferencePurpose::Compaction,
+            });
         if let HookEventDecision::Deny { reason } =
             self.compaction_hook(HookEvent::PreCompact, thread_id, turn_id, cancellation)?
         {
@@ -1599,7 +1635,7 @@ impl TurnExecutor {
             };
             retry_invalid_model_response(|| {
                 self.compaction
-                    .compact(request, cancellation, &mut record_model_usage)
+                    .compact(&request, cancellation, &mut record_model_usage)
             })
         };
         if let Some(error) = usage_recording_error {

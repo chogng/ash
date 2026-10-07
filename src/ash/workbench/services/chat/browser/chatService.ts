@@ -9,6 +9,7 @@ import type { ITurnChangesApi } from "../../../../platform/turnChanges/common/tu
 import type { ModelRef, SessionId, ThreadId } from "../common/chatService.js";
 import type { AdvisorConfig, ConfigureAdvisorOptions, ConsultAdvisorOptions, CompactContextOptions, IChatService, InterruptTurnOptions, ResolveInteractionOptions, SkillSelectorDefinition, SlashCommandDefinition, StartTurnOptions, SteerTurnOptions, Thread, ThreadGoalUpdate, ThreadItem, ThreadSubscription, ThreadTranscriptEntry, ThreadTranscriptSnapshot, ThreadTranscriptUpdateEnvelope, ThreadUpdate, ThreadUpdateEnvelope, TurnChangeDetails, TurnChangeSetSummary, TurnCommitSelection, TurnCommitPreview, TurnChangesUpdate } from "../common/chatService.js";
 import type { ResolvedChatContext } from '../common/chatContextService.js';
+import { parseAgentTracePage, parseAgentTraceDiagnosticPage, parseAgentTraceGraph, type AgentTracePage, type AgentTraceDiagnosticPage, type AgentTraceGraph } from '../common/agentTrace.js';
 
 export interface ChatServiceOptions {
 	readonly modelApi: IModelApi;
@@ -23,6 +24,7 @@ export interface ChatServiceOptions {
 
 /** App Server-backed implementation of the frontend Chat service. */
 export class ChatService extends Disposable implements IChatService {
+	private readonly _onDidChangeSession = this._register(new Emitter<{ readonly sessionId: SessionId; readonly agentTreeChanged: boolean; }>());
 	private readonly _onDidUpdateThread = this._register(new Emitter<ThreadUpdateEnvelope>());
 	private readonly _onDidUpdateThreadTranscript = this._register(new Emitter<ThreadTranscriptUpdateEnvelope>());
 	private readonly _onDidUpdateGoal = this._register(new Emitter<ThreadGoalUpdate>());
@@ -32,6 +34,7 @@ export class ChatService extends Disposable implements IChatService {
 	private readonly _onDidChangeQueue = this._register(new Emitter<void>());
 	private readonly threadSubscriptions = new Map<string, { owners: Set<object>; pending: Set<Promise<ThreadSubscription>>; }>();
 
+	readonly onDidChangeSession = this._onDidChangeSession.event;
 	readonly onDidUpdateThread = this._onDidUpdateThread.event;
 	readonly onDidUpdateThreadTranscript = this._onDidUpdateThreadTranscript.event;
 	readonly onDidUpdateGoal = this._onDidUpdateGoal.event;
@@ -43,6 +46,7 @@ export class ChatService extends Disposable implements IChatService {
 	constructor(private readonly options: ChatServiceOptions) {
 		super();
 		const events = options.eventApi.subscribe((event) => {
+			if (event.method === 'session/changed') this._onDidChangeSession.fire({ ...event.params });
 			if (event.method === "queue/changed") this._onDidChangeQueue.fire();
 			if (event.method === "session/thread/update") this._onDidUpdateThread.fire(toThreadUpdate(event.params));
 			if (event.method === "session/thread/transcript/update") this._onDidUpdateThreadTranscript.fire(toThreadTranscriptUpdate(event.params));
@@ -86,6 +90,24 @@ export class ChatService extends Disposable implements IChatService {
 	async readThread(sessionId: SessionId, threadId: ThreadId): Promise<{ readonly thread: Thread; readonly transcript: ThreadTranscriptSnapshot; }> {
 		const result = await this.options.threadApi.read({ sessionId, threadId });
 		return { thread: toThread(result.thread), transcript: toThreadTranscriptSnapshot(result.transcript) };
+	}
+
+	async readTrace(sessionId: SessionId, after: Readonly<Record<string, number>>): Promise<AgentTracePage> {
+		const page = await this.options.threadApi.readTrace({ sessionId, after: { ...after }, limit: 500 });
+		return parseAgentTracePage(page.trace, page.cursors, page.hasMore, sessionId, after);
+	}
+
+	async readTraceDiagnostics(sessionId: SessionId, after: number): Promise<AgentTraceDiagnosticPage> {
+		const page = await this.options.threadApi.readTraceDiagnostics({ sessionId, after, limit: 500 });
+		return parseAgentTraceDiagnosticPage(page.diagnostics, page.cursor, page.hasMore, after);
+	}
+
+	async readTracePayload(sessionId: SessionId, captureId: string, payloadId: string): Promise<unknown> {
+		return (await this.options.threadApi.readTracePayload({ sessionId, captureId, payloadId })).payload;
+	}
+
+	async readTraceGraph(sessionId: SessionId): Promise<AgentTraceGraph> {
+		return parseAgentTraceGraph((await this.options.threadApi.readTraceGraph({ sessionId })).graph);
 	}
 
 	async subscribeThread(sessionId: SessionId, threadId: ThreadId, afterSequence: number, owner: object): Promise<ThreadSubscription> {

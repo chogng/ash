@@ -16,6 +16,9 @@ use ash_utils_image::PromptImageDetailLimits;
 /// Implementations must preserve event order and should return an error when the receiving
 /// execution can no longer safely consume a delta, such as after cancellation.
 pub trait ModelStreamSink {
+    /// Observes the provider-neutral request after attachment materialization, before transport.
+    /// Diagnostic consumers record this locally; other consumers incur no additional work.
+    fn request_prepared(&mut self, _: &ModelRequest) {}
     fn emit(&mut self, event: ModelStreamEvent) -> Result<(), CoreError>;
 }
 

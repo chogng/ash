@@ -104,6 +104,7 @@ pub(crate) trait ExecConnection {
         thread_id: ThreadId,
         expected_sequence: u64,
         approval_mode: ApprovalMode,
+        model: Option<ash_protocol::ModelRef>,
         input: Vec<InputItem>,
     ) -> Result<TurnStartResult, ConnectionError>;
 
@@ -287,6 +288,7 @@ impl ExecConnection for ServerConnection {
         thread_id: ThreadId,
         expected_sequence: u64,
         approval_mode: ApprovalMode,
+        model: Option<ash_protocol::ModelRef>,
         input: Vec<InputItem>,
     ) -> Result<TurnStartResult, ConnectionError> {
         match self
@@ -299,7 +301,7 @@ impl ExecConnection for ServerConnection {
                     expected_sequence,
                     mode: ash_protocol::CollaborationMode::Agent,
                     approval_mode,
-                    model: None,
+                    model,
                     reasoning_effort: None,
                     tool_mode: None,
                     input,

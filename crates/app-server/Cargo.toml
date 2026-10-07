@@ -140,6 +140,7 @@ ash-protocol = { workspace = true }
 ash-projects = { workspace = true }
 ash-teams = { workspace = true }
 ash-rollout = { workspace = true }
+ash-rollout-trace = { workspace = true }
 ash-state = { workspace = true }
 ash-sandboxing = { workspace = true }
 ash-file-access = { workspace = true }

@@ -81,6 +81,31 @@ fn completed_turn_emits_terminal_event_and_last_agent_message() {
 }
 
 #[test]
+fn explicit_model_is_forwarded_to_the_turn_request() {
+    let ids = TestIds::new();
+    let mut connection = FakeConnection::new(
+        &ids,
+        vec![
+            thread(&ids, 1, vec![]),
+            thread(&ids, 2, vec![turn(&ids, TurnStatus::Completed, vec![])]),
+        ],
+    );
+    let model = ash_protocol::ModelRef::new(
+        ash_protocol::ProviderId::new("fixture-provider").unwrap(),
+        ash_protocol::ModelId::new("fixture-model").unwrap(),
+    );
+    test_runner()
+        .run_connected(
+            &mut connection,
+            new_request().with_model(model.clone()),
+            &mut DiscardExecEventSink,
+            &NeverCancelled,
+        )
+        .unwrap();
+    assert_eq!(connection.start_models, vec![Some(model)]);
+}
+
+#[test]
 fn cancellation_sends_typed_interrupt_and_waits_for_interrupted_state() {
     let ids = TestIds::new();
     let mut connection = FakeConnection::new(
@@ -290,6 +315,7 @@ fn session(ids: &TestIds) -> Session {
         title: "test run".into(),
         status: SessionStatus::Active,
         execution_target: None,
+        model: None,
         manager: Default::default(),
         threads: vec![],
     }
@@ -355,6 +381,7 @@ struct FakeConnection {
     preparation_calls: Vec<&'static str>,
     fork_parent: Option<ThreadId>,
     start_sequences: Vec<u64>,
+    start_models: Vec<Option<ash_protocol::ModelRef>>,
 }
 
 impl FakeConnection {
@@ -374,6 +401,7 @@ impl FakeConnection {
             preparation_calls: Vec::new(),
             fork_parent: None,
             start_sequences: Vec::new(),
+            start_models: Vec::new(),
         }
     }
 }
@@ -444,9 +472,11 @@ impl ExecConnection for FakeConnection {
         _thread_id: ThreadId,
         expected_sequence: u64,
         _approval_mode: ApprovalMode,
+        model: Option<ash_protocol::ModelRef>,
         _input: Vec<InputItem>,
     ) -> Result<TurnStartResult, ConnectionError> {
         self.start_sequences.push(expected_sequence);
+        self.start_models.push(model);
         Ok(TurnStartResult {
             turn_id: TurnId::new("turn-test").unwrap(),
             sequence: 2,

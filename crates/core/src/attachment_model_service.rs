@@ -184,12 +184,9 @@ impl ModelService for AttachmentModelService {
         cancellation: &CancellationToken,
         sink: &mut dyn ModelStreamSink,
     ) -> Result<ModelResponse, CoreError> {
-        self.inner.stream(
-            selection,
-            &self.materialize(selection, request)?,
-            cancellation,
-            sink,
-        )
+        let request = self.materialize(selection, request)?;
+        sink.request_prepared(&request);
+        self.inner.stream(selection, &request, cancellation, sink)
     }
 }
 

@@ -48,6 +48,10 @@ export function createDisconnectedModelApi(unavailable: UnavailableOperation): I
 
 export function createDisconnectedThreadApi(unavailable: UnavailableOperation): IThreadApi {
 	return {
+		readTrace: () => unavailable('thread.readTrace'),
+		readTraceDiagnostics: () => unavailable('thread.readTraceDiagnostics'),
+		readTracePayload: () => unavailable('thread.readTracePayload'),
+		readTraceGraph: () => unavailable('thread.readTraceGraph'),
 		read: () => unavailable("thread.read"),
 		configureAdvisor: () => unavailable("thread.configureAdvisor"),
 		subscribe: () => unavailable("thread.subscribe"),
@@ -181,6 +185,10 @@ export function createAppServerModelApi(connection: AppServerProtocolClient): IM
 
 export function createAppServerThreadApi(connection: AppServerProtocolClient): IThreadApi {
 	return {
+		readTrace: params => appServerRequest(connection, 'session/trace/read', params),
+		readTraceDiagnostics: params => appServerRequest(connection, 'session/trace/diagnostics/read', params),
+		readTracePayload: params => appServerRequest(connection, 'session/trace/payload/read', params),
+		readTraceGraph: params => appServerRequest(connection, 'session/trace/graph/read', params),
 		read: (params) => appServerRequest(connection, "session/thread/read", params),
 		configureAdvisor: async (params) => {
 			const result = await appServerRequest(connection, "session/request", sessionRequest(params, { type: "configureAdvisor", threadId: params.threadId, expectedSequence: params.expectedSequence, selection: params.selection }));

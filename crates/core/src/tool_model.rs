@@ -1,7 +1,6 @@
 use crate::ContextBudget;
 use crate::CoreError;
 use crate::ModelSelection;
-use crate::ModelService;
 use crate::ThreadController;
 use crate::ToolExecutionIdentity;
 use crate::context::ContextAssembler;
@@ -95,10 +94,8 @@ impl ToolModel {
             .ok_or_else(|| {
                 CoreError::Execution("auxiliary model was not captured at Turn start".into())
             })?;
-        let model = crate::attachment_model_service::AttachmentModelService::new(
-            model,
-            self.threads.attachments(),
-        );
+        // The Turn owner freezes the attachment-aware service. Reuse that pipeline so a
+        // consultation materializes each attachment once and records the final request once.
         let budget = match model.context_budget(selection)? {
             ContextBudget::ProviderManaged => ContextBudget::ProviderManaged,
             ContextBudget::CoreManaged {
@@ -165,7 +162,27 @@ impl ToolModel {
         model_request.reasoning = request.reasoning;
         let billing_scope = model.billing_scope(selection)?;
         let started = timestamp()?;
-        let response = model.invoke(selection, &model_request, cancellation);
+        let mut attempt = self.threads.trace_recorder.start_attempt(
+            ash_rollout_trace::InferenceContext {
+                session_id: request.identity.session_id().clone(),
+                thread_id: thread_id.clone(),
+                turn_id: turn_id.clone(),
+                source_thread_sequence: source_sequence,
+                model: Some(request.model.clone()),
+                purpose: ash_rollout_trace::InferencePurpose::Tool,
+            },
+            &model_request,
+        );
+        let response = model.stream(
+            selection,
+            &model_request,
+            cancellation,
+            &mut crate::diagnostic_model::DiagnosticStream {
+                attempt: &mut attempt,
+                downstream: None,
+            },
+        );
+        crate::diagnostic_model::finish_attempt(&mut attempt, &response);
         let completed = timestamp()?;
         self.threads.record_model_invocation_for_tool(
             thread_id,

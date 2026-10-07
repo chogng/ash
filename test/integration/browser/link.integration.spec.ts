@@ -215,11 +215,11 @@ test('Output severity and filter focus use theme colors in all four themes', asy
 	}
 });
 
-test('touch activation opens an ordinary link once', async ({ browser }) => {
-	const context = await browser.newContext({ hasTouch: true });
+test('touch activation opens an ordinary link once', async ({ browser, baseURL }) => {
+	const context = await browser.newContext({ hasTouch: true, baseURL });
 	try {
 		const page = await context.newPage();
-		await page.goto('http://127.0.0.1:5185/link.html');
+		await page.goto('/link.html');
 		await page.getByRole('button', { name: 'Documentation', exact: true }).tap();
 		await expect.poll(() => page.evaluate(() => window.ashLinkIntegration.opened)).toEqual(['https://example.test/docs']);
 	} finally {

@@ -105,6 +105,7 @@ where
             thread_id.clone(),
             thread.sequence,
             protocol_approval_mode(request.approval),
+            request.model.clone(),
             request.entry.input().to_vec(),
         )
         .map_err(|error| app_server_error("start Turn", error))?;

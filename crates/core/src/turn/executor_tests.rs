@@ -102,6 +102,8 @@ mod activity_tests;
 mod context_compaction_tests;
 #[path = "context_inspection_tests.rs"]
 mod context_inspection_tests;
+#[path = "diagnostic_trace_tests.rs"]
+mod diagnostic_trace_tests;
 
 #[test]
 fn completes_a_text_turn_from_durable_context() {

@@ -1,0 +1,162 @@
+.ash-agent-trace {
+	display: flex;
+	flex-direction: column;
+	box-sizing: border-box;
+	min-width: 0;
+	min-height: 0;
+	padding: 16px;
+	gap: 12px;
+	color: var(--ash-foreground);
+	background: var(--ash-editor-background);
+	container-type: inline-size;
+}
+
+.ash-agent-trace-toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+
+.ash-agent-trace-toolbar > .ash-inputbox {
+	flex: 1 1 180px;
+	min-width: 120px;
+}
+
+.ash-agent-trace-status,
+.ash-agent-trace-summary {
+	margin: 0;
+	font-size: 12px;
+	line-height: 1.5;
+}
+
+.ash-agent-trace-summary {
+	color: var(--ash-descriptionForeground);
+}
+
+.ash-agent-trace-body {
+	display: grid;
+	grid-template-columns: minmax(220px, 1fr) minmax(240px, 1fr);
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+	gap: 16px;
+}
+
+.ash-agent-trace-list,
+.ash-agent-trace-detail-column {
+	min-width: 0;
+	min-height: 0;
+	overflow: auto;
+}
+
+.ash-agent-trace-thread > h2,
+.ash-agent-trace-turn > h3 {
+	margin: 12px 0 8px;
+	font-size: 12px;
+	font-weight: 600;
+	overflow-wrap: anywhere;
+}
+
+.ash-agent-trace-children,
+.ash-agent-trace-turn {
+	margin-left: 12px;
+	padding-left: 8px;
+	border-left: 1px solid var(--ash-widget-border, transparent);
+}
+
+.ash-agent-trace-event {
+	display: block;
+	box-sizing: border-box;
+	width: 100%;
+	padding: 8px;
+	margin: 2px 0;
+	border: 1px solid transparent;
+	border-radius: 4px;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	font-size: 12px;
+	text-align: left;
+	line-height: 1.5;
+	overflow-wrap: anywhere;
+	cursor: pointer;
+}
+
+.ash-agent-trace-event:hover {
+	background: var(--ash-list-hoverBackground);
+}
+
+.ash-agent-trace-event.selected {
+	background: var(--ash-list-inactiveSelectionBackground);
+	color: var(--ash-list-inactiveSelectionForeground, inherit);
+	border-color: var(--ash-contrastActiveBorder, transparent);
+}
+
+.ash-agent-trace-event.failed {
+	color: var(--ash-errorForeground);
+}
+
+.ash-agent-trace-event:focus-visible,
+.ash-agent-trace-details:focus-visible {
+	outline: 1px solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+
+.ash-agent-trace-details {
+	margin: 0;
+	padding: 12px;
+	border: 1px solid var(--ash-widget-border, transparent);
+	border-radius: 4px;
+	font-family: var(--ash-editor-font-family, monospace);
+	font-size: 12px;
+	line-height: 1.5;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	user-select: text;
+}
+
+.ash-agent-trace [hidden] {
+	display: none;
+}
+
+@container (max-width: 560px) {
+	.ash-agent-trace-body {
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: minmax(120px, 1fr) minmax(120px, 1fr);
+	}
+}
+
+.ash-agent-trace-detail-column {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+.ash-agent-trace-detail-column > .ash-agent-trace-details {
+	flex: 1;
+	min-height: 0;
+	overflow: auto;
+}
+.ash-agent-trace-relations {
+	flex-shrink: 0;
+	max-height: 35%;
+	overflow: auto;
+	font-size: 12px;
+	overflow-wrap: anywhere;
+}
+.ash-agent-trace-relations:empty { display: none; }
+.ash-agent-trace-relation {
+	display: block;
+	width: 100%;
+	padding: 4px;
+	border: 1px solid var(--ash-widget-border, transparent);
+	border-radius: 4px;
+	background: var(--ash-button-secondaryBackground);
+	color: var(--ash-button-secondaryForeground);
+	font: inherit;
+	text-align: left;
+	overflow-wrap: anywhere;
+	cursor: pointer;
+}
+.ash-agent-trace-relation:disabled { opacity: 0.6; cursor: default; }
+.ash-agent-trace-relation:focus-visible { outline: 1px solid var(--ash-focusBorder); outline-offset: -1px; }

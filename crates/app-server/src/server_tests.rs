@@ -2199,6 +2199,310 @@ fn session_first_flow_exposes_derived_session_and_canonical_thread_models() {
 }
 
 #[test]
+fn session_trace_pages_preserve_real_turns_forks_and_incremental_history_without_execution() {
+    use core_api::AgentRuntime;
+    let model = Arc::new(RecordingModel::default());
+    let server = server_with_model(model.clone());
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let session = create_session(&server, &mut connection, 2, "trace-session");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let root = create_thread(&server, &mut connection, 3, "trace-root", session_id, 1);
+    let root_id = root["result"]["value"]["threadId"].as_str().unwrap();
+    let started = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":4,"method":"session/request",
+            "params":{"commandId":"trace-turn","sessionId":session_id,"request":{"type":"startTurn","threadId":root_id,"expectedSequence":1,"input":[{"type":"text","text":"trace input"}]}}
+        }),
+    );
+    assert!(started.get("result").is_some(), "{started}");
+    wait_for_latest_turn(&server, root_id, TurnStatus::Completed);
+    let fork = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":5,"method":"session/request",
+            "params":{"commandId":"trace-fork","sessionId":session_id,"request":{"type":"forkThread","parentThreadId":root_id,"title":"branch"}}
+        }),
+    );
+    assert!(fork.get("result").is_some(), "{fork}");
+    let identity = ash_protocol::SessionId::new(session_id).unwrap();
+    let expected = server
+        .agent_runtime()
+        .read_session_trace(&identity)
+        .unwrap();
+    let calls_before = model.requests().len();
+    let mut cursors = serde_json::json!({});
+    let mut events = std::collections::BTreeMap::<String, Vec<serde_json::Value>>::new();
+    let mut request_id = 10;
+    loop {
+        request_id += 1;
+        let page = call(
+            &server,
+            &mut connection,
+            serde_json::json!({
+                "jsonrpc":"2.0","id":request_id,"method":"session/trace/read",
+                "params":{"sessionId":session_id,"after":cursors,"limit":2}
+            }),
+        );
+        assert!(page.get("result").is_some(), "{page}");
+        let page = &page["result"];
+        let trace = &page["trace"];
+        assert_eq!(trace["sessionId"], session_id);
+        for prefix in trace["historyPrefixes"].as_array().unwrap() {
+            assert!(
+                serde_json::to_value(&expected.history_prefixes)
+                    .unwrap()
+                    .as_array()
+                    .unwrap()
+                    .contains(prefix)
+            );
+        }
+        let mut count = 0;
+        for thread in trace["threads"].as_array().unwrap() {
+            let thread_id = thread["threadId"].as_str().unwrap();
+            let batch = thread["events"].as_array().unwrap();
+            for event in batch {
+                assert!(
+                    event["sequence"].as_u64().unwrap() > cursors[thread_id].as_u64().unwrap_or(0)
+                );
+            }
+            count += batch.len();
+            events
+                .entry(thread_id.to_owned())
+                .or_default()
+                .extend(batch.iter().cloned());
+        }
+        assert!(count <= 2);
+        cursors = page["cursors"].clone();
+        if page["hasMore"] == false {
+            break;
+        }
+        assert!(count > 0);
+        assert!(request_id < 100);
+    }
+    for thread in &expected.threads {
+        assert_eq!(
+            events[thread.thread_id.as_str()],
+            serde_json::to_value(&thread.events)
+                .unwrap()
+                .as_array()
+                .unwrap()
+                .clone()
+        );
+    }
+    assert_eq!(
+        server
+            .agent_runtime()
+            .read_session_trace(&identity)
+            .unwrap(),
+        expected
+    );
+    assert_eq!(model.requests().len(), calls_before);
+    for (offset, params, code) in [
+        (
+            1,
+            serde_json::json!({"sessionId":session_id,"after":{"other-thread":1},"limit":10}),
+            -32602,
+        ),
+        (
+            2,
+            serde_json::json!({"sessionId":session_id,"after":{root_id:999_999},"limit":10}),
+            -32602,
+        ),
+        (
+            3,
+            serde_json::json!({"sessionId":session_id,"limit":0}),
+            -32602,
+        ),
+        (
+            4,
+            serde_json::json!({"sessionId":session_id,"limit":501}),
+            -32602,
+        ),
+        (
+            5,
+            serde_json::json!({"sessionId":"missing-trace-session","limit":10}),
+            -32011,
+        ),
+    ] {
+        let failed = call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc":"2.0","id":100+offset,"method":"session/trace/read","params":params}),
+        );
+        assert_eq!(failed["error"]["code"], code, "{failed}");
+    }
+    let started = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":110,"method":"session/request",
+            "params":{"commandId":"trace-second-turn","sessionId":session_id,"request":{"type":"startTurn","threadId":root_id,"expectedSequence":cursors[root_id],"input":[{"type":"text","text":"new trace input"}]}}
+        }),
+    );
+    assert!(started.get("result").is_some(), "{started}");
+    wait_for_latest_turn(&server, root_id, TurnStatus::Completed);
+    let page = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":111,"method":"session/trace/read","params":{"sessionId":session_id,"after":cursors,"limit":500}}),
+    );
+    assert!(!page["result"]["hasMore"].as_bool().unwrap());
+    for thread in page["result"]["trace"]["threads"].as_array().unwrap() {
+        let events = thread["events"].as_array().unwrap();
+        if thread["threadId"] == root_id {
+            assert!(
+                events
+                    .iter()
+                    .any(|event| event["event"]["type"] == "turnCompleted")
+            );
+            assert!(
+                events
+                    .iter()
+                    .any(|event| event["event"]["type"] == "modelInvocationRecorded")
+            );
+        } else {
+            assert!(events.is_empty());
+        }
+    }
+}
+
+#[test]
+fn session_trace_diagnostics_rpc_pages_payloads_and_graph_preserve_attempt_identity() {
+    let root = tempfile::tempdir().unwrap();
+    let model = Arc::new(RecordingModel::default());
+    let threads = Arc::new(
+        ThreadController::with_store(Arc::new(InMemoryThreadStore::default())).with_trace_recorder(
+            Arc::new(ash_rollout_trace::TraceRecorder::new(Some(
+                root.path().into(),
+            ))),
+        ),
+    );
+    let server = AppServer::new(threads, model.clone()).with_ephemeral_env_state();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let created = create_session(&server, &mut connection, 2, "diagnostic-session");
+    let session = created["result"]["session"]["sessionId"].as_str().unwrap();
+    let created = create_thread(&server, &mut connection, 3, "diagnostic-thread", session, 1);
+    let thread = created["result"]["value"]["threadId"].as_str().unwrap();
+    let started = call(
+        &server,
+        &mut connection,
+        serde_json::json!({ "jsonrpc": "2.0", "id": 4, "method": "session/request", "params": { "commandId": "diagnostic-turn", "sessionId": session, "request": { "type": "startTurn", "threadId": thread, "expectedSequence": 1, "input": [{ "type": "text", "text": "saved request input" }] } } }),
+    );
+    assert!(started.get("result").is_some(), "{started}");
+    wait_for_latest_turn(&server, thread, TurnStatus::Completed);
+    let mut after = 0;
+    let mut events = Vec::new();
+    let mut capture = serde_json::Value::Null;
+    loop {
+        let page = call(
+            &server,
+            &mut connection,
+            serde_json::json!({ "jsonrpc": "2.0", "id": 10 + after, "method": "session/trace/diagnostics/read", "params": { "sessionId": session, "after": after, "limit": 1 } }),
+        );
+        assert!(page.get("result").is_some(), "{page}");
+        let result = &page["result"];
+        events.extend(
+            result["diagnostics"]["events"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .cloned(),
+        );
+        if capture.is_null() {
+            capture = result["diagnostics"]["captureId"].clone();
+        }
+        assert_eq!(capture, result["diagnostics"]["captureId"]);
+        after = result["cursor"].as_u64().unwrap();
+        if result["hasMore"] == false {
+            break;
+        }
+        assert!(after < 10);
+    }
+    assert_eq!(
+        events
+            .iter()
+            .map(|event| event["event"]["type"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        [
+            "modelAttemptStarted",
+            "modelRequestPrepared",
+            "modelAttemptCompleted"
+        ]
+    );
+    let reference = &events[1]["event"]["requestPayload"];
+    let payload = call(
+        &server,
+        &mut connection,
+        serde_json::json!({ "jsonrpc": "2.0", "id": 20, "method": "session/trace/payload/read", "params": { "sessionId": session, "captureId": capture, "payloadId": reference["payloadId"] } }),
+    );
+    assert_eq!(
+        payload["result"]["payload"],
+        serde_json::to_value(&model.requests()[0]).unwrap()
+    );
+    let graph = call(
+        &server,
+        &mut connection,
+        serde_json::json!({ "jsonrpc": "2.0", "id": 21, "method": "session/trace/graph/read", "params": { "sessionId": session } }),
+    );
+    assert!(
+        graph["result"]["graph"]["nodes"]
+            .as_object()
+            .unwrap()
+            .values()
+            .any(|node| node["kind"] == "modelAttempt")
+    );
+    for (id, method, params, code) in [
+        (
+            22,
+            "session/trace/payload/read",
+            serde_json::json!({ "sessionId": session, "captureId": "wrong", "payloadId": reference["payloadId"] }),
+            -32602,
+        ),
+        (
+            23,
+            "session/trace/payload/read",
+            serde_json::json!({ "sessionId": session, "captureId": capture, "payloadId": "../../secret" }),
+            -32011,
+        ),
+        (
+            24,
+            "session/trace/diagnostics/read",
+            serde_json::json!({ "sessionId": session, "after": 100, "limit": 10 }),
+            -32602,
+        ),
+        (
+            25,
+            "session/trace/diagnostics/read",
+            serde_json::json!({ "sessionId": session, "limit": 501 }),
+            -32602,
+        ),
+        (
+            26,
+            "session/trace/graph/read",
+            serde_json::json!({ "sessionId": "another-session" }),
+            -32011,
+        ),
+    ] {
+        let failed = call(
+            &server,
+            &mut connection,
+            serde_json::json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params }),
+        );
+        assert_eq!(failed["error"]["code"], code, "{failed}");
+    }
+    assert_eq!(
+        model.requests().len(),
+        1,
+        "inspection cannot execute the model"
+    );
+}
+
+#[test]
 fn new_session_invalidates_other_connections_without_a_session_subscription() {
     let server = server();
     let mut creator = server.connection();

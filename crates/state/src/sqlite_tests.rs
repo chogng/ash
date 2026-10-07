@@ -1320,3 +1320,43 @@ fn sqlite_catalog_model_upgrade_requires_history_rebuild_and_preserves_root_mode
     drop(connection);
     fs::remove_file(path).unwrap();
 }
+
+#[test]
+fn event_ranges_read_only_the_requested_committed_index_and_reject_gaps() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("range.sqlite");
+    let store = SqliteThreadStore::open(&path).unwrap();
+    append_recent_activity(&store, "range", "/project", 1, 4);
+    let thread = ThreadId::new("range").unwrap();
+    let expected = store.load(&thread).unwrap();
+    let page = store.load_range(&thread, 2, 3).unwrap();
+    assert_eq!(page.current_sequence, expected.len() as u64);
+    assert_eq!(page.events, expected[2..5]);
+    assert!(
+        store
+            .load_range(&thread, expected.len() as u64 + 1, 1)
+            .is_err()
+    );
+    assert!(store.load_range(&thread, 0, 0).is_err());
+    assert!(store.load_range(&thread, 0, 501).is_err());
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    connection
+        .execute(
+            "DELETE FROM thread_events WHERE thread_id = 'range' AND sequence = 1",
+            [],
+        )
+        .unwrap();
+    // An unrelated earlier damaged record must not be read again for a later page.
+    assert_eq!(
+        store.load_range(&thread, 2, 3).unwrap().events,
+        expected[2..5]
+    );
+    assert!(store.load_range(&thread, 0, 2).is_err());
+    connection
+        .execute(
+            "DELETE FROM thread_events WHERE thread_id = 'range' AND sequence = 4",
+            [],
+        )
+        .unwrap();
+    assert!(store.load_range(&thread, 2, 3).is_err());
+}

@@ -131,10 +131,15 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	const transcriptUpdates = new Emitter<import("../../../workbench/services/chat/common/chatService.js").ThreadTranscriptUpdateEnvelope>();
 	const ready = new Emitter<void>();
 	const chatService: IChatService & ILanguageModelsService = {
+		readTrace: async () => ({ trace: { formatVersion: 3, sessionId: 'session', threads: [], historyPrefixes: [] }, cursors: {}, hasMore: false }),
+		readTraceDiagnostics: async () => ({ diagnostics: { formatVersion: 1, captureId: null, recordingStatus: 'disabled', droppedRecords: 0, events: [] }, cursor: 0, hasMore: false }),
+		readTracePayload: async () => undefined,
+		readTraceGraph: async () => ({ nodes: {}, edges: [], warnings: [] }),
 		configureAdvisor: async () => { },
 		consultAdvisor: async () => { },
 		readAdvisorDefault: async () => null,
 		saveAdvisorDefault: async () => { },
+		onDidChangeSession: Event.None,
 		onDidUpdateThread: threadUpdates.event,
 		onDidUpdateThreadTranscript: transcriptUpdates.event,
 		onDidUpdateGoal: () => toDisposable(() => { }),

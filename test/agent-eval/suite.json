@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "id": "prefix-filter",
+      "source": "hand-authored contract seed",
+      "fixture": "fixtures/prefix-filter",
+      "prompt": "Fix select_names in app.py. Match a prefix case-insensitively while preserving input order and spelling. An empty prefix selects all entries, including empty names. Do not change the public function signature. Verify your work.",
+      "verifier": "verifiers/prefix_filter.py",
+      "verifierTimeoutSeconds": 10
+    },
+    {
+      "id": "line-endings",
+      "source": "hand-authored contract seed",
+      "fixture": "fixtures/line-endings",
+      "prompt": "Fix line_count in document.py. A document always has at least one line. LF, CRLF and CR each separate lines, and a trailing line break creates a final empty line. Mixed endings and Unicode content must work. Keep the public function signature. Verify your work.",
+      "verifier": "verifiers/line_endings.py",
+      "verifierTimeoutSeconds": 10
+    },
+    {
+      "id": "atomic-settings",
+      "source": "hand-authored contract seed",
+      "fixture": "fixtures/atomic-settings",
+      "prompt": "Fix Settings.reload in settings.py. Read and validate the complete JSON object before replacing the current settings. Require exactly a string name and a boolean enabled. Invalid JSON, extra or missing fields and wrong types must raise ValueError and keep the previous valid settings. A later valid reload must succeed. Keep the existing public API. Verify your work.",
+      "verifier": "verifiers/atomic_settings.py",
+      "verifierTimeoutSeconds": 10
+    }
+  ]
+}

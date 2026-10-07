@@ -41,6 +41,7 @@ pub struct ContextCompactionRequest {
     target_tokens: ContextTokenCount,
     generator_model: Option<ModelRef>,
     retention_prompt: Option<String>,
+    trace_context: Option<ash_rollout_trace::InferenceContext>,
 }
 
 impl ContextCompactionRequest {
@@ -70,6 +71,7 @@ impl ContextCompactionRequest {
                 FrozenModelSelection::Selected(model) => Some(model.clone()),
             },
             retention_prompt: None,
+            trace_context: None,
         }
     }
 
@@ -85,6 +87,14 @@ impl ContextCompactionRequest {
 
     pub const fn source_thread_sequence(&self) -> u64 {
         self.source_thread_sequence
+    }
+
+    pub(crate) fn with_trace_context(
+        mut self,
+        context: ash_rollout_trace::InferenceContext,
+    ) -> Self {
+        self.trace_context = Some(context);
+        self
     }
 
     pub const fn covered(&self) -> ContextSourceRange {
@@ -208,11 +218,18 @@ pub trait ContextCompactionService: Send + Sync {
 
 pub(crate) struct ModelContextCompactionService {
     model: Arc<dyn ModelService>,
+    trace_recorder: Arc<ash_rollout_trace::TraceRecorder>,
 }
 
 impl ModelContextCompactionService {
-    pub(crate) fn new(model: Arc<dyn ModelService>) -> Self {
-        Self { model }
+    pub(crate) fn new(
+        model: Arc<dyn ModelService>,
+        trace_recorder: Arc<ash_rollout_trace::TraceRecorder>,
+    ) -> Self {
+        Self {
+            model,
+            trace_recorder,
+        }
     }
 }
 
@@ -293,9 +310,25 @@ impl ContextCompactionService for ModelContextCompactionService {
                 ));
             }
         }
-        let response = self
-            .model
-            .invoke(model_selection, &model_request, cancellation)?;
+        let response = if let Some(context) = &request.trace_context {
+            let mut attempt = self
+                .trace_recorder
+                .start_attempt(context.clone(), &model_request);
+            let response = self.model.stream(
+                model_selection,
+                &model_request,
+                cancellation,
+                &mut crate::diagnostic_model::DiagnosticStream {
+                    attempt: &mut attempt,
+                    downstream: None,
+                },
+            );
+            crate::diagnostic_model::finish_attempt(&mut attempt, &response);
+            response?
+        } else {
+            self.model
+                .invoke(model_selection, &model_request, cancellation)?
+        };
         record_model_usage(response.usage.clone())?;
         if response.tool_calls().next().is_some() {
             return Err(CoreError::Context(

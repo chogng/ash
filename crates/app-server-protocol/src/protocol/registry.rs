@@ -1753,6 +1753,20 @@ use crate::protocol::session::SessionThreadSubscribeResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::session::SessionThreadUnsubscribeParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::session::SessionTraceDiagnosticsReadParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::session::SessionTraceDiagnosticsReadResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::session::SessionTraceGraphReadResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::session::SessionTracePayloadReadParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::session::SessionTracePayloadReadResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::session::SessionTraceReadParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::session::SessionTraceReadResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::session::SessionUnsubscribeParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::session::ThreadHistoryBoundary;
@@ -3183,6 +3197,26 @@ client_methods! {
     SessionRead => "session/read" {
         params: SessionReadParams,
         response: SessionResult,
+        serialization: SessionSharedRead,
+    },
+    SessionTraceRead => "session/trace/read" {
+        params: SessionTraceReadParams,
+        response: SessionTraceReadResult,
+        serialization: SessionSharedRead,
+    },
+    SessionTraceDiagnosticsRead => "session/trace/diagnostics/read" {
+        params: SessionTraceDiagnosticsReadParams,
+        response: SessionTraceDiagnosticsReadResult,
+        serialization: SessionSharedRead,
+    },
+    SessionTracePayloadRead => "session/trace/payload/read" {
+        params: SessionTracePayloadReadParams,
+        response: SessionTracePayloadReadResult,
+        serialization: SessionSharedRead,
+    },
+    SessionTraceGraphRead => "session/trace/graph/read" {
+        params: SessionReadParams,
+        response: SessionTraceGraphReadResult,
         serialization: SessionSharedRead,
     },
     SessionCatalogRead => "session/catalog/read" {
@@ -5596,6 +5630,13 @@ typescript_bindings! {
     ApprovalMode,
     SessionCreateParams,
     SessionReadParams,
+    SessionTraceReadParams,
+    SessionTraceReadResult,
+    SessionTraceDiagnosticsReadParams,
+    SessionTraceDiagnosticsReadResult,
+    SessionTracePayloadReadParams,
+    SessionTracePayloadReadResult,
+    SessionTraceGraphReadResult,
     MessageCheckpointsParams,
     MessageCheckpointsResult,
     MessageCheckpoint,

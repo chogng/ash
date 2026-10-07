@@ -37,4 +37,4 @@ pnpm test:editor:browser --project=chromium --grep 'restores'
 
 ## Debugging failures
 
-Diagnostics and traces are under `.build/desktop/playwright/editor-results`; the HTML report is under `editor-report`. Inspect state, DOM, logs, and traces when a test fails. Follow [Writing Tests](../../../.github/instructions/writing-tests.instructions.md) for fixture ownership and cleanup.
+Repository scripts give each run its own assets, OS-assigned server port, and `.build/desktop/playwright/editor-browser-<id>/` directory. The runner prints its URL and results path; diagnostics and traces are in `results/` and the HTML report is in `report/`. Browser contexts created by a spec must inherit its `baseURL`; do not hardcode port 5185. Direct Playwright config launches retain the default `editor-results` and `editor-report` paths. Inspect state, DOM, logs, and traces when a test fails. Follow [Writing Tests](../../../.github/instructions/writing-tests.instructions.md) for fixture ownership and cleanup.

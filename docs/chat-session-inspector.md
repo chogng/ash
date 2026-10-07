@@ -19,6 +19,44 @@ Session Inspector 始终跟随 Chat 当前选中的 `Session + Thread`，正式�
 再开一条 Thread 订阅。旧的 Chat 私有 Agent Sidebar ViewContainer、View 和全局开关已经移除；
 Workbench 通用 Agent Sidebar 不受影响。
 
+## 执行 Trace
+
+执行 Trace 编辑器、命令和无障碍支持由 `workbench/contrib/trace` 共享提供。普通 Workbench 的
+“开发人员：打开执行 Trace”（`ash.agentTrace.open`）打开可导入的页面；命令传入 Session ID 时读取
+该会话。Sessions 的“查看执行 Trace”（`sessions.trace.open`）取得当前 Session ID，切换 Code 布局，
+再调用同一个 Workbench 命令；没有当前会话时仍可导入 Trace。
+
+编辑器打开 Session 的持久历史，按 Thread、Turn 展示事件；子 Thread 嵌套在父 Thread 下。每个 Thread 保留
+自己的 sequence，不建立全局 Session 顺序。模型调用、用量、工具参数及结果、压缩、失败和取消
+可以从事件详情查看。
+
+界面通过 Chat 领域服务调用 `session/trace/read`，增量读取历史，再按现有 Thread 订阅跟随新事件。
+订阅 snapshot 补齐读取与订阅之间的空窗；共享 Chat 服务传递当前 Session 的 `session/changed`，
+触发读取以发现新子 Thread，编辑器不依赖 Sessions 目录服务。隐藏或关闭
+编辑器释放其订阅，重开读取后续历史；迟到的请求结果不会写回已关闭或切换的编辑器。
+
+筛选和“仅显示错误”只影响显示，导出保留全部已加载事实。导入支持评测保存的版本 3 rollout Trace，
+原始 envelope、共享历史前缀和未知字段保留；正文与执行关系也随导出保存。导入／导出限制为 64 MiB。
+评测命令和用例来源见 [任务评测](../test/agent-eval/README.md)。
+
+需要模型请求证据时，在启动 App Server 前设置 `ASH_ROLLOUT_TRACE_ROOT=/absolute/local/directory`。
+运行时启动时读取该开关；修改后需重启拥有 Thread 的 App Server。记录只写本地目录，不上传，
+失败不会改变 Turn 的执行结果。启用后记录 Agent、上下文压缩与工具内辅助模型的每次 attempt，
+包括失败重试、取消，以及终止前收到的部分输出；进程退出时仍未结束的 attempt 保留为未完成事实。
+
+“查看请求／响应”按需读取所选正文，并区分 Core 请求与附件转换后的 ModelService 请求。
+这些是 provider-neutral 语义输入，尚不包含 provider adapter 生成的 HTTP/WebSocket 字节，也不保存
+逐个 stream chunk。未启用、正文省略、存储不可用和不完整捕获都会明确显示；不能用当前上下文
+推测缺失的历史请求。正文可以包含用户和工具内容，分享导出前按实际数据审阅。
+
+“查看执行关系”按需读取从已保存事实归纳的关系，连接模型 attempt、工具及结果、Code Mode cell、
+运行时调用、终端操作、委派和消息投递；选择关联可以跳到源事件。关系不会改写业务历史，也不被用于
+恢复执行。诊断使用捕获内独立序号，与 Thread sequence 分开。启用诊断时，显示中的编辑器每秒读一次
+新增观察；隐藏或关闭会停止轮询并释放订阅。
+
+Tab 在控件、所选事件和可选择的 JSON 详情之间移动；方向键、Home 和 End 选择可见事件。
+界面提供无障碍帮助、Accessible View、verbosity 设置、主题色和中文词条。
+
 ## Turn 边界
 
 “一条消息”不自动等于一个 Turn，边界以 Core 真正开始和结束一次执行为准：

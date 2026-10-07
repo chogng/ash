@@ -490,6 +490,7 @@ dependencies = [
  "ash-remote",
  "ash-remote-profile-store",
  "ash-rollout",
+ "ash-rollout-trace",
  "ash-sandboxing",
  "ash-screen-capture",
  "ash-secrets",
@@ -1137,6 +1138,7 @@ dependencies = [
  "ash-model-accounting",
  "ash-prompts",
  "ash-protocol",
+ "ash-rollout-trace",
  "ash-sandboxing",
  "ash-thread-store",
  "ash-tools",
@@ -1160,6 +1162,7 @@ dependencies = [
  "ash-async-utils",
  "ash-context-engine",
  "ash-protocol",
+ "ash-rollout-trace",
  "ash-thread-store",
  "ash-utils-image",
  "serde_json",
@@ -2394,6 +2397,7 @@ dependencies = [
  "ash-core",
  "ash-core-api",
  "ash-protocol",
+ "ash-rollout-trace",
  "ash-state",
  "ash-thread-store",
 ]
@@ -2409,7 +2413,9 @@ dependencies = [
  "ash-rollout",
  "ash-state",
  "ash-thread-store",
+ "getrandom 0.2.17",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

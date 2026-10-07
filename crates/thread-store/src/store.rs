@@ -136,6 +136,13 @@ pub struct AppendBatchResult {
     pub event_count: usize,
 }
 
+/// A bounded, committed event range and the tail observed in the same storage snapshot.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ThreadEventPage {
+    pub events: Vec<StoredEvent>,
+    pub current_sequence: u64,
+}
+
 /// Execution authority recorded separately when immutable history changes profile ownership.
 /// An unbound remote history is readable but cannot start or resume Agent work.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -222,6 +229,35 @@ pub trait ThreadStore: agent_graph_store::AgentGraphStore {
     fn delete_session(&self, session_id: &SessionId) -> Result<Vec<ThreadId>, ThreadStoreError>;
 
     fn load(&self, thread_id: &ThreadId) -> Result<Vec<StoredEvent>, ThreadStoreError>;
+
+    /// Reads events strictly after a cursor. Indexed stores override this compatibility fallback.
+    fn load_range(
+        &self,
+        thread_id: &ThreadId,
+        after: u64,
+        limit: usize,
+    ) -> Result<ThreadEventPage, ThreadStoreError> {
+        if !(1..=500).contains(&limit) {
+            return Err(ThreadStoreError::InvalidBatch(
+                "event range limit must be 1..500".into(),
+            ));
+        }
+        let events = self.load(thread_id)?;
+        let current_sequence = events.last().map_or(0, |event| event.sequence);
+        if after > current_sequence {
+            return Err(ThreadStoreError::InvalidBatch(
+                "event cursor exceeds committed history".into(),
+            ));
+        }
+        Ok(ThreadEventPage {
+            events: events
+                .into_iter()
+                .filter(|event| event.sequence > after)
+                .take(limit)
+                .collect(),
+            current_sequence,
+        })
+    }
 
     /// Resolves and verifies a retained original prefix, including after source Thread deletion.
     fn load_history_prefix(

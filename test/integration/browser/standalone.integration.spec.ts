@@ -1741,12 +1741,14 @@ for (const inputKind of ['editContext', 'textarea'] as const) {
 		const findWidget = page.locator('#caller .stanza-editor-find-widget');
 		const sash = findWidget.getByRole('separator', { name: 'Resize find widget' });
 		await expect(sash).toBeVisible();
+		await sash.hover();
 		const initial = await findWidget.boundingBox();
 		const sashBox = await sash.boundingBox();
 		expect(initial).not.toBeNull();
 		expect(sashBox).not.toBeNull();
 		await page.mouse.move(sashBox!.x + sashBox!.width / 2, sashBox!.y + sashBox!.height / 2);
 		await page.mouse.down();
+		await expect(sash).toHaveClass(/ash-sash-active/);
 		await page.mouse.move(sashBox!.x + sashBox!.width / 2 - 16, sashBox!.y + sashBox!.height / 2);
 		await page.mouse.up();
 		await expect.poll(() => findWidget.evaluate(node => Math.round(node.getBoundingClientRect().width))).toBe(Math.round(initial!.width) + 16);
@@ -1779,7 +1781,7 @@ for (const inputKind of ['editContext', 'textarea'] as const) {
 		await page.emulateMedia({ forcedColors: 'active' });
 		await sash.hover();
 		await expect(sash).toHaveClass(/ash-sash-hover/);
-		expect(await sash.evaluate(node => getComputedStyle(node, '::after').backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
+		await expect.poll(() => sash.evaluate(node => getComputedStyle(node, '::after').backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
 

@@ -217,6 +217,22 @@ contract，不表示 scheduler job protocol，也不表示 remote process execut
 
 `ash-cli` 负责参数和帮助；`ash-exec` 负责这些参数解析后的运行语义。
 
+CLI 的 `ash exec --model provider/model --timeout-seconds 120 --trace-output trace.json
+--changes-output changes.json -- "任务"` 固定准确模型和 Turn 时间预算；超时仍先通过产品请求中断。
+`--trace-output` 在终态后调用正式 Trace 接口保存版本 3 rollout Trace，累计各页的历史前缀；
+已启用的本地诊断、请求／响应正文与执行关系一并导出。启用诊断需在拥有 App Server 的进程启动前设置
+`ASH_ROLLOUT_TRACE_ROOT`，对已运行的共享后端需先重启。未启用时仍可导出持久历史，并标记 disabled。
+`--changes-output`
+通过已有 `turnChanges/list`、`read`、`readFile` 保存本次 Turn 的不可变变更和保留的文件正文，等待
+异步封存最多 10 秒；它要求 Git 变更记录。文件存储缺失、截断和二进制标识原样保留，不伪装成完整内容。
+导出失败返回非零退出码，JSONL 中已经观察到的 canonical outcome 保留。
+
+变更产物版本为 1，包含 Session/Thread/Turn 身份及 `changeSets`；每项包含原始 `summary` 和
+`files: [{ file, content }]`，分别复用文件元数据与 `TurnChangesReadFileResult`。调用方应检查
+sealed、binary、truncated、文件 mode 与归属后验收。结果来自 Thread 隔离目录的保存事实，
+不能在来源 checkout 上直接运行 verifier。完整任务 runner 与使用命令见
+[任务评测](../test/agent-eval/README.md)。
+
 ## 7. 输出契约
 
 Human 输出可以演进；JSONL 与 scheduler event 是机器契约，必须 versioned、typed 且与 stdout

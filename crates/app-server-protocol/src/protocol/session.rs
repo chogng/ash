@@ -62,6 +62,69 @@ pub struct SessionReadParams {
     pub session_id: SessionId,
 }
 
+/// Per-Thread cursors preserve local ordering without inventing a global Session sequence.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SessionTraceReadParams {
+    pub session_id: SessionId,
+    #[serde(default)]
+    #[ts(type = "Record<string, number>")]
+    pub after: std::collections::BTreeMap<ThreadId, u64>,
+    pub limit: u32,
+}
+
+/// The versioned rollout artifact retains the original durable envelopes and history prefixes.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionTraceReadResult {
+    pub trace: serde_json::Value,
+    #[ts(type = "Record<string, number>")]
+    pub cursors: std::collections::BTreeMap<ThreadId, u64>,
+    pub has_more: bool,
+}
+
+/// Diagnostic order is independent from durable Thread cursors. Recording is local and opt-in.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SessionTraceDiagnosticsReadParams {
+    pub session_id: SessionId,
+    #[serde(default)]
+    #[ts(type = "number")]
+    pub after: u64,
+    pub limit: u32,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionTraceDiagnosticsReadResult {
+    pub diagnostics: serde_json::Value,
+    #[ts(type = "number")]
+    pub cursor: u64,
+    pub has_more: bool,
+}
+
+/// Payload identities must belong to this Session and capture; filesystem paths are never accepted.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SessionTracePayloadReadParams {
+    pub session_id: SessionId,
+    pub capture_id: String,
+    pub payload_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionTracePayloadReadResult {
+    pub payload: serde_json::Value,
+}
+
+/// Derived navigation is rebuilt only when requested, outside incremental history reads.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionTraceGraphReadResult {
+    pub graph: serde_json::Value,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionCatalogReadResult {

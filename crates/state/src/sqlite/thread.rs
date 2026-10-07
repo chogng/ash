@@ -247,6 +247,95 @@ impl ThreadStore for SqliteThreadStore {
             .map_err(storage_error)?;
         Ok(())
     }
+    fn load_range(
+        &self,
+        thread_id: &ThreadId,
+        after: u64,
+        limit: usize,
+    ) -> Result<ash_thread_store::ThreadEventPage, ThreadStoreError> {
+        if !(1..=500).contains(&limit) {
+            return Err(ThreadStoreError::InvalidBatch(
+                "event range limit must be 1..500".into(),
+            ));
+        }
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction_with_behavior(TransactionBehavior::Deferred)
+            .map_err(storage_error)?;
+        let current_sequence = transaction
+            .query_row(
+                "SELECT current_sequence FROM thread_streams WHERE thread_id = ?1",
+                [thread_id.as_str()],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()
+            .map_err(storage_error)?
+            .map(from_sql_integer)
+            .transpose()
+            .map_err(ThreadStoreError::Storage)?
+            .unwrap_or(0);
+        if after > current_sequence {
+            return Err(ThreadStoreError::InvalidBatch(
+                "event cursor exceeds committed history".into(),
+            ));
+        }
+        let events = {
+            let mut statement = transaction.prepare(
+                "SELECT events.sequence, events.event_id, events.schema_version, records.record_json, records.digest
+                 FROM thread_events AS events JOIN history_records AS records ON records.digest = events.record_digest
+                 WHERE events.thread_id = ?1 AND events.sequence > ?2 ORDER BY events.sequence LIMIT ?3",
+            ).map_err(storage_error)?;
+            let rows = statement
+                .query_map(
+                    params![
+                        thread_id.as_str(),
+                        to_sql_integer(after).map_err(ThreadStoreError::Storage)?,
+                        limit as i64
+                    ],
+                    |row| {
+                        Ok((
+                            row.get::<_, i64>(0)?,
+                            row.get::<_, String>(1)?,
+                            row.get::<_, u32>(2)?,
+                            row.get::<_, String>(3)?,
+                            row.get::<_, String>(4)?,
+                        ))
+                    },
+                )
+                .map_err(storage_error)?;
+            let mut events = Vec::new();
+            for row in rows {
+                let (sequence, event_id, schema_version, envelope, digest) =
+                    row.map_err(storage_error)?;
+                let sequence = from_sql_integer(sequence).map_err(ThreadStoreError::Storage)?;
+                let event = super::history::decode_record(&envelope, &digest)?;
+                if sequence != after + events.len() as u64 + 1
+                    || event.sequence != sequence
+                    || event.event_id.0 != event_id
+                    || event.schema_version != schema_version
+                    || event.thread_id != *thread_id
+                    || event.event.thread_id() != thread_id
+                {
+                    return Err(ThreadStoreError::Storage(
+                        "Thread event range disagrees with its committed envelope".into(),
+                    ));
+                }
+                events.push(event);
+            }
+            if events.len() as u64 != (current_sequence - after).min(limit as u64) {
+                return Err(ThreadStoreError::Storage(
+                    "Thread event range has a missing committed record".into(),
+                ));
+            }
+            events
+        };
+        transaction.commit().map_err(storage_error)?;
+        Ok(ash_thread_store::ThreadEventPage {
+            events,
+            current_sequence,
+        })
+    }
+
     fn load_history_prefix(
         &self,
         prefix: &ash_protocol::HistoryPrefixRef,

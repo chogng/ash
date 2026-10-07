@@ -1,19 +1,26 @@
 use super::*;
 use ash_core::CreateThreadRequest;
-use ash_protocol::{SessionId, ThreadId};
+use ash_protocol::SessionId;
+use ash_protocol::ThreadId;
 use ash_rollout::LocalStateRepository;
 use ash_state::StateRuntime;
 use std::fs;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
-fn temporary_root() -> std::path::PathBuf {
+pub(super) fn temporary_root() -> std::path::PathBuf {
+    // Parallel tests can observe the same clock tick; the ordinal gives each capture its own root.
+    static NEXT_ROOT: AtomicU64 = AtomicU64::new(0);
     std::env::temp_dir().join(format!(
-        "ash-rollout-trace-{}-{}",
+        "ash-rollout-trace-{}-{}-{}",
         std::process::id(),
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
-            .as_nanos()
+            .as_nanos(),
+        NEXT_ROOT.fetch_add(1, Ordering::Relaxed)
     ))
 }
 
@@ -103,5 +110,39 @@ fn trace_contains_the_complete_nested_history_prefix_closure() {
             assert!(retained.contains(prefix.digest.as_str()));
         }
     }
+    let mut after = std::collections::BTreeMap::new();
+    let mut retained_pages = std::collections::BTreeSet::new();
+    let mut event_count = 0;
+    loop {
+        let page = read_session_trace_page(
+            repository.thread_store().as_ref(),
+            &first.session_id,
+            &after,
+            1,
+        )
+        .unwrap();
+        event_count += page
+            .trace
+            .threads
+            .iter()
+            .map(|thread| thread.events.len())
+            .sum::<usize>();
+        for prefix in &page.trace.history_prefixes {
+            retained_pages.insert(prefix.reference().unwrap().digest.to_string());
+        }
+        after = page.cursors;
+        if !page.has_more {
+            break;
+        }
+    }
+    assert_eq!(retained_pages, retained);
+    assert_eq!(
+        event_count,
+        trace
+            .threads
+            .iter()
+            .map(|thread| thread.events.len())
+            .sum::<usize>()
+    );
     fs::remove_dir_all(root).unwrap();
 }

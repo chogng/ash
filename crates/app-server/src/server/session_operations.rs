@@ -305,6 +305,62 @@ impl AppServer {
         result(&self.session_result(&params.session_id)?)
     }
 
+    pub(super) fn session_trace_read(&self, params: &Value) -> Result<Value, RpcError> {
+        use ash_app_server_protocol::protocol::session::SessionTraceReadParams;
+        use ash_app_server_protocol::protocol::session::SessionTraceReadResult;
+
+        let params: SessionTraceReadParams = decode(params)?;
+        let page = self
+            .agent_runtime()
+            .read_session_trace_page(&params.session_id, &params.after, params.limit as usize)
+            .map_err(trace_error)?;
+        result(&SessionTraceReadResult {
+            trace: result(&page.trace)?,
+            cursors: page.cursors,
+            has_more: page.has_more,
+        })
+    }
+
+    pub(super) fn session_trace_diagnostics_read(&self, params: &Value) -> Result<Value, RpcError> {
+        use ash_app_server_protocol::protocol::session::SessionTraceDiagnosticsReadParams;
+        use ash_app_server_protocol::protocol::session::SessionTraceDiagnosticsReadResult;
+        let params: SessionTraceDiagnosticsReadParams = decode(params)?;
+        let page = self
+            .agent_runtime()
+            .read_trace_diagnostics(&params.session_id, params.after, params.limit as usize)
+            .map_err(trace_error)?;
+        result(&SessionTraceDiagnosticsReadResult {
+            diagnostics: result(&page.diagnostics)?,
+            cursor: page.cursor,
+            has_more: page.has_more,
+        })
+    }
+
+    pub(super) fn session_trace_payload_read(&self, params: &Value) -> Result<Value, RpcError> {
+        use ash_app_server_protocol::protocol::session::SessionTracePayloadReadParams;
+        use ash_app_server_protocol::protocol::session::SessionTracePayloadReadResult;
+        let params: SessionTracePayloadReadParams = decode(params)?;
+        result(&SessionTracePayloadReadResult {
+            payload: self
+                .agent_runtime()
+                .read_trace_payload(&params.session_id, &params.capture_id, &params.payload_id)
+                .map_err(trace_error)?,
+        })
+    }
+
+    pub(super) fn session_trace_graph_read(&self, params: &Value) -> Result<Value, RpcError> {
+        use ash_app_server_protocol::protocol::session::SessionTraceGraphReadResult;
+        let params: SessionReadParams = decode(params)?;
+        result(&SessionTraceGraphReadResult {
+            graph: result(
+                &self
+                    .agent_runtime()
+                    .read_trace_graph(&params.session_id)
+                    .map_err(trace_error)?,
+            )?,
+        })
+    }
+
     pub(super) fn session_catalog_read(&self, params: &Value) -> Result<Value, RpcError> {
         let params: SessionReadParams = decode(params)?;
         result(&SessionCatalogReadResult {
@@ -526,5 +582,17 @@ impl AppServer {
             subject: None,
             tool_name: None,
         });
+    }
+}
+
+// Cursor and capture identity failures are RPC parameter errors, while storage and missing
+// Session/payload failures retain the ordinary Core error contract.
+fn trace_error(error: core_api::CoreError) -> RpcError {
+    match error {
+        core_api::CoreError::InvalidInput(_) => RpcError::new(
+            -32602,
+            ash_app_server_protocol::protocol::error::AppServerErrorName::InvalidParams,
+        ),
+        error => core_error(error),
     }
 }

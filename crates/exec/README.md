@@ -25,12 +25,13 @@ Core、rollout、store、model provider、sandbox 或 `ash-tool-executor`。
 
 `ExecRunner::run` 是唯一产品执行入口。调用方提供：
 
-- `ExecRunRequest`：稳定 run identity、`ExecEntry` 与 `HeadlessApprovalMode`；
+- `ExecRunRequest`：稳定 run identity、`ExecEntry`、`HeadlessApprovalMode` 与可选 exact `ModelRef`；
 - `ExecEventSink`：按顺序接收完整事件，失败时不自动重试；
 - `ExecCancellation`：廉价、非阻塞的取消观察点。
 
 `ExecEntry` 明确区分 `New`、`Resume` 和 `Fork`，避免由多个 bool 或缺省 ID 推断入口意图。
 宿主在构造 `ExecRunner` 时提供 App Server 的 stdio 连接命令和客户端身份。根部 CLI 以此连接共享 profile 服务。
+`with_model` 将准确模型选择传给产品 `StartTurn`；省略时使用产品配置。模型调用与工具循环仍由 App Server/Core 拥有。
 
 `ExecEvent` 是 schema version 为 1 的展示/自动化 envelope。`ThreadUpdated` 机械携带 canonical
 `ThreadUpdateEnvelope`，不建立第二套 authoritative item 或 Turn 状态。`JsonLinesExecEventSink`

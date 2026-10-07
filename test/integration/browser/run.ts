@@ -1,9 +1,10 @@
-import { spawn, type ChildProcess } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { basename, resolve } from 'node:path';
+import { createServer, type Server } from 'node:http';
+import sirv from 'sirv';
 
 const desktopDirectory = resolve(import.meta.dirname, '../../..');
-const serverUrl = 'http://127.0.0.1:5185/textModel.html';
 const editorOnly = process.argv[2] === '--editor';
 const playwrightArgs = process.argv.slice(editorOnly ? 3 : 2);
 const testArgs = [
@@ -26,19 +27,32 @@ const outputParent = resolve(desktopDirectory, '.build/desktop');
 mkdirSync(outputParent, { recursive: true });
 // Another build can clear the shared output while the server is reading it.
 const assetsDirectory = mkdtempSync(resolve(outputParent, 'editor-browser-'));
-let server: ChildProcess | undefined;
+const resultsDirectory = resolve(outputParent, 'playwright', basename(assetsDirectory));
+let server: Server | undefined;
 let exitCode = 1;
 try {
 	const build = await run(process.execPath, ['node_modules/vite/bin/vite.js', 'build', '--config', 'test/integration/browser/vite.config.ts', '--outDir', assetsDirectory], process.env);
 	if (build !== 0) {
 		exitCode = build;
 	} else {
-		server = spawn(process.execPath, ['build/desktop/launch/web.ts', assetsDirectory, '5185'], {
-			cwd: desktopDirectory,
-			stdio: 'inherit',
+		server = createServer(sirv(assetsDirectory, { etag: true }));
+		await new Promise<void>((resolvePromise, reject) => {
+			server!.once('error', reject);
+			server!.listen(0, '127.0.0.1', () => {
+				server!.off('error', reject);
+				resolvePromise();
+			});
 		});
-		await waitForServer(serverUrl, server);
-		exitCode = await run(process.execPath, testArgs, testEnv);
+		const address = server.address();
+		if (!address || typeof address === 'string') throw new Error('Editor browser server requires a TCP address');
+		const serverUrl = `http://127.0.0.1:${address.port}`;
+		console.log(`Browser integration server: ${serverUrl}
+Browser integration results: ${resultsDirectory}`);
+		exitCode = await run(process.execPath, testArgs, {
+			...testEnv,
+			ASH_EDITOR_BROWSER_BASE_URL: serverUrl,
+			ASH_EDITOR_BROWSER_RUN_DIRECTORY: resultsDirectory,
+		});
 	}
 } finally {
 	if (server) await stop(server);
@@ -46,23 +60,6 @@ try {
 }
 
 process.exitCode = exitCode;
-
-async function waitForServer(url: string, child: ChildProcess): Promise<void> {
-	const deadline = Date.now() + 120_000;
-	while (Date.now() < deadline) {
-		if (child.exitCode !== null) {
-			throw new Error(`Editor browser server exited with code ${child.exitCode}`);
-		}
-		try {
-			const response = await fetch(url, { signal: AbortSignal.timeout(1_000) });
-			if (response.ok) {
-				return;
-			}
-		} catch { }
-		await new Promise(resolvePromise => setTimeout(resolvePromise, 100));
-	}
-	throw new Error(`Editor browser server did not become ready at ${url}`);
-}
 
 function run(command: string, args: readonly string[], env: NodeJS.ProcessEnv): Promise<number> {
 	return new Promise<number>((resolvePromise, reject) => {
@@ -78,16 +75,8 @@ function run(command: string, args: readonly string[], env: NodeJS.ProcessEnv): 
 	});
 }
 
-async function stop(child: ChildProcess): Promise<void> {
-	if (child.exitCode !== null) {
-		return;
-	}
-	child.kill('SIGTERM');
-	await Promise.race([
-		new Promise(resolvePromise => child.once('exit', resolvePromise)),
-		new Promise(resolvePromise => setTimeout(resolvePromise, 5_000)),
-	]);
-	if (child.exitCode === null) {
-		child.kill('SIGKILL');
-	}
+async function stop(server: Server): Promise<void> {
+	const closed = new Promise<void>(resolvePromise => server.close(() => resolvePromise()));
+	server.closeAllConnections();
+	await closed;
 }

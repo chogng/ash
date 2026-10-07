@@ -158,6 +158,8 @@ use ash_app_server_protocol::protocol::turn_changes::TurnChangesListParams;
 use ash_app_server_protocol::protocol::turn_changes::TurnChangesListResult;
 use ash_app_server_protocol::protocol::turn_changes::TurnChangesMutationParams;
 use ash_app_server_protocol::protocol::turn_changes::TurnChangesMutationResult;
+use ash_app_server_protocol::protocol::turn_changes::TurnChangesReadFileParams;
+use ash_app_server_protocol::protocol::turn_changes::TurnChangesReadFileResult;
 use ash_app_server_protocol::protocol::turn_changes::TurnChangesReadParams;
 use ash_app_server_protocol::protocol::turn_changes::TurnChangesReadResult;
 use ash_app_server_protocol::rpc::{JsonRpcId, JsonRpcRequest, JsonRpcResponse};
@@ -762,6 +764,13 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         self.call(ClientMethod::TurnChangesRead, params)
     }
 
+    pub fn read_turn_changes_file(
+        &mut self,
+        params: TurnChangesReadFileParams,
+    ) -> Result<TurnChangesReadFileResult, ClientError> {
+        self.call(ClientMethod::TurnChangesReadFile, params)
+    }
+
     pub fn generate_turn_commit_message(
         &mut self,
         params: TurnChangesMutationParams,
@@ -788,6 +797,43 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         params: SessionReadParams,
     ) -> Result<SessionResult, ClientError> {
         self.call(ClientMethod::SessionRead, params)
+    }
+
+    /// Reads durable trace pages using independent cursors for each Thread.
+    pub fn read_session_trace(
+        &mut self,
+        params: ash_app_server_protocol::protocol::session::SessionTraceReadParams,
+    ) -> Result<ash_app_server_protocol::protocol::session::SessionTraceReadResult, ClientError>
+    {
+        self.call(ClientMethod::SessionTraceRead, params)
+    }
+
+    pub fn read_trace_diagnostics(
+        &mut self,
+        params: ash_app_server_protocol::protocol::session::SessionTraceDiagnosticsReadParams,
+    ) -> Result<
+        ash_app_server_protocol::protocol::session::SessionTraceDiagnosticsReadResult,
+        ClientError,
+    > {
+        self.call(ClientMethod::SessionTraceDiagnosticsRead, params)
+    }
+
+    pub fn read_trace_payload(
+        &mut self,
+        params: ash_app_server_protocol::protocol::session::SessionTracePayloadReadParams,
+    ) -> Result<
+        ash_app_server_protocol::protocol::session::SessionTracePayloadReadResult,
+        ClientError,
+    > {
+        self.call(ClientMethod::SessionTracePayloadRead, params)
+    }
+
+    pub fn read_trace_graph(
+        &mut self,
+        params: ash_app_server_protocol::protocol::session::SessionReadParams,
+    ) -> Result<ash_app_server_protocol::protocol::session::SessionTraceGraphReadResult, ClientError>
+    {
+        self.call(ClientMethod::SessionTraceGraphRead, params)
     }
 
     pub fn list_sessions(&mut self) -> Result<SessionListResult, ClientError> {

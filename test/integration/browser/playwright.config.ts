@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { defineConfig } from "@playwright/test";
 
 // CLI file filters are ORed together. Keep the editor scope in testMatch so a
@@ -15,13 +16,15 @@ const editorSpecs = [
 	"tokenization.integration.spec.ts",
 ];
 
+const runDirectory = process.env.ASH_EDITOR_BROWSER_RUN_DIRECTORY;
+
 export default defineConfig({
 	testDir: ".",
 	testMatch: process.env.ASH_EDITOR_BROWSER_ONLY === "1" ? editorSpecs : "*.integration.spec.ts",
-	outputDir: "../../../.build/desktop/playwright/editor-results",
+	outputDir: runDirectory ? resolve(runDirectory, "results") : "../../../.build/desktop/playwright/editor-results",
 	fullyParallel: false,
 	workers: 1,
-	use: { baseURL: "http://127.0.0.1:5185" },
+	use: { baseURL: process.env.ASH_EDITOR_BROWSER_BASE_URL ?? "http://127.0.0.1:5185" },
 	projects: [
 		{ name: "chromium", testIgnore: "gpuText.integration.spec.ts", use: { browserName: "chromium" } },
 		{ name: "chrome-gpu", testMatch: "gpuText.integration.spec.ts", use: { browserName: "chromium", channel: "chrome", deviceScaleFactor: 1.25 } },
@@ -32,5 +35,5 @@ export default defineConfig({
 		reuseExistingServer: false,
 		timeout: 120_000,
 	},
-	reporter: [["list"], ["html", { outputFolder: "../../../.build/desktop/playwright/editor-report", open: "never" }]],
+	reporter: [["list"], ["html", { outputFolder: runDirectory ? resolve(runDirectory, "report") : "../../../.build/desktop/playwright/editor-report", open: "never" }]],
 });

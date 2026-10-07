@@ -14,6 +14,7 @@ pub use recent_tool_calls::RecentToolCallsQuery;
 pub use store::AppendBatchResult;
 pub use store::ThreadCatalogRecord;
 pub use store::ThreadEventBatch;
+pub use store::ThreadEventPage;
 pub use store::ThreadExecutionBinding;
 pub use store::ThreadStore;
 pub use store::session_from_catalog;

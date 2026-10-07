@@ -663,6 +663,46 @@ impl AgentRuntime for Runtime<'_> {
     fn list_sessions(&self) -> Result<Vec<ash_protocol::Session>, CoreError> {
         self.threads.list_sessions()
     }
+    fn read_session_trace(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<ash_rollout_trace::RolloutTrace, CoreError> {
+        self.threads.read_session_trace(session_id)
+    }
+
+    fn read_session_trace_page(
+        &self,
+        session_id: &SessionId,
+        after: &std::collections::BTreeMap<ThreadId, u64>,
+        limit: usize,
+    ) -> Result<ash_rollout_trace::TracePage, CoreError> {
+        self.threads
+            .read_session_trace_page(session_id, after, limit)
+    }
+    fn read_trace_diagnostics(
+        &self,
+        session_id: &SessionId,
+        after: u64,
+        limit: usize,
+    ) -> Result<ash_rollout_trace::DiagnosticPage, CoreError> {
+        self.threads
+            .read_trace_diagnostics(session_id, after, limit)
+    }
+    fn read_trace_payload(
+        &self,
+        session_id: &SessionId,
+        capture_id: &str,
+        payload_id: &str,
+    ) -> Result<serde_json::Value, CoreError> {
+        self.threads
+            .read_trace_payload(session_id, capture_id, payload_id)
+    }
+    fn read_trace_graph(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<ash_rollout_trace::TraceGraph, CoreError> {
+        self.threads.read_trace_graph(session_id)
+    }
     fn read_session_catalog(
         &self,
         session_id: &SessionId,

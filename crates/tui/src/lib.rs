@@ -102,6 +102,7 @@ pub fn client_capabilities() -> ClientCapabilities {
             dynamic_tools: None,
         }),
         browser: None,
+        app_tools: None,
         dir_permissions_host: Some(DirPermissionsHostCapability { version: 1 }),
         text_documents: None,
     }

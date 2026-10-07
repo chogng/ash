@@ -154,10 +154,15 @@ function unavailableChatService(): IChatService & ILanguageModelsService {
 	const pending = new Promise<never>(() => { });
 	const neverEvent = <T>(): Event<T> => () => toDisposable(() => { });
 	return {
+		readTrace: () => pending,
+		readTraceDiagnostics: async () => ({ diagnostics: { formatVersion: 1, captureId: null, recordingStatus: 'disabled', droppedRecords: 0, events: [] }, cursor: 0, hasMore: false }),
+		readTracePayload: async () => undefined,
+		readTraceGraph: async () => ({ nodes: {}, edges: [], warnings: [] }),
 		configureAdvisor: async () => { },
 		consultAdvisor: async () => { },
 		readAdvisorDefault: async () => null,
 		saveAdvisorDefault: async () => { },
+		onDidChangeSession: neverEvent<{ sessionId: string; agentTreeChanged: boolean; }>(),
 		onDidUpdateThread: neverEvent<ThreadUpdateEnvelope>(),
 		onDidUpdateThreadTranscript: neverEvent<ThreadTranscriptUpdateEnvelope>(),
 		onDidUpdateGoal: neverEvent<import("../../../workbench/services/chat/common/chatService.js").ThreadGoalUpdate>(),

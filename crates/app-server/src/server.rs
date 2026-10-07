@@ -2324,6 +2324,16 @@ impl AppServer {
             Some(ClientMethod::IssueRead) => self.issue_read(&request.params, cancellation),
             Some(ClientMethod::SessionCreate) => self.session_create(connection, &request.params),
             Some(ClientMethod::SessionRead) => self.session_read(&request.params),
+            Some(ClientMethod::SessionTraceRead) => self.session_trace_read(&request.params),
+            Some(ClientMethod::SessionTraceDiagnosticsRead) => {
+                self.session_trace_diagnostics_read(&request.params)
+            }
+            Some(ClientMethod::SessionTracePayloadRead) => {
+                self.session_trace_payload_read(&request.params)
+            }
+            Some(ClientMethod::SessionTraceGraphRead) => {
+                self.session_trace_graph_read(&request.params)
+            }
             Some(ClientMethod::SessionCatalogRead) => self.session_catalog_read(&request.params),
             Some(ClientMethod::MessageCheckpoints) => self.message_checkpoints(&request.params),
             Some(ClientMethod::AgentRead) => self.agent_read(&request.params),
