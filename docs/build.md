@@ -19,7 +19,7 @@
 
 安装 Rust、Just 和 Python 3.11 及以上版本。首次初始化使用 PATH 中的 `python3`；确认 `python3 -c 'import tomllib'` 成功。macOS 自带 Python 可能不满足要求，可用 `uv run --python 3.12 just install` 初始化；Apple Silicon 上的 Homebrew Python 3.12 也可将 `/opt/homebrew/opt/python@3.12/libexec/bin` 放在 PATH 前部。初始化后，Just 和前端构建入口优先复用 `scripts/.venv`，日常启动无需再包装 `uv run`。
 
-准备完整后端包时，macOS 还需要 Go 1.26 和系统 C/C++ 工具链来构建 LiveKit Server，见 [LiveKit Server](../third_party/livekit/README.md)。Linux 的完整后端构建需要 ALSA 开发库；沙箱构建需要 C 编译器和 libcap，见 [共享包构建](../build/runtime/README.md)。
+准备完整后端包时，macOS 还需要 Go 1.26 和系统 C/C++ 工具链来构建 LiveKit Server，见 [LiveKit Server](../third_party/livekit/README.md)。Linux 的完整后端构建需要 ALSA 开发库；沙箱构建需要 C 编译器和 libcap，见 [共享包构建](../build/README.md)。
 
 ### Windows 开发环境
 
@@ -166,6 +166,12 @@ bazel test //cli:tui-real-scenarios --test_output=errors --test_env=PATH
 
 ## 输出布局
 
+构建源码按职责组织：根目录 `remote/` 声明远端交付要求，`build/app_server.py` 和
+`build/remote.py` 是产品组装入口，`build/lib/` 持有共享依赖解析与包校验，
+`build/prepare.py` 准备共享开发包，`build/desktop/develop.py` 选择 Desktop 增量版本，
+`build/lib/development_store.py` 为 Desktop 和 Code 提供版本存储、租约与回收。
+源码布局与下面的输出布局分别维护；迁移构建源码不会改变现有开发包位置或租约。
+
 | 路径                                        | 内容                                                                      |
 | ------------------------------------------- | ------------------------------------------------------------------------- |
 | `.build/cargo/`                             | 默认 Cargo 输出，可由 `CARGO_TARGET_DIR` 覆盖                             |
@@ -194,11 +200,11 @@ Sherpa ONNX 静态库使用按版本共享的校验缓存，位于 `third_party/
 
 预算仅在显式清理时应用。回收保留锁文件，跳过正在构建、运行或完成不足一分钟的 profile，工作集可能暂时超限。自定义 `CARGO_TARGET_DIR` 不自动参与预算；仓库内的其他 Cargo 输出目录可用 `--target-dir` 指定。
 
-开发运行版本由发布器按租约回收，保留当前版本与仍在运行的版本。验证脚本应在结束时删除自行创建的临时编译、索引目录，只保留报告和复现材料；`just bench-build` 会自动清理自己的编译目录。开发包的发布与回收规则见 [共享包构建](../build/runtime/README.md)和 [Code 构建](../build/code/README.md)。
+开发运行版本由发布器按租约回收，保留当前版本与仍在运行的版本。验证脚本应在结束时删除自行创建的临时编译、索引目录，只保留报告和复现材料；`just bench-build` 会自动清理自己的编译目录。开发包的发布与回收规则见 [共享包构建](../build/README.md)和 [Code 构建](../build/code/README.md)。
 
 `just rust-warnings` 检查新生成与已缓存的编译警告，保持 `RUSTFLAGS` 与普通构建一致，避免生成另一套产物。
 
-前端与构建工具直接消费 `crates/app-server-protocol/schema/typescript/` 的已提交协议快照；修改后端协议后使用 `pnpm protocol:generate` 更新，并运行 `pnpm typecheck:protocol`。受版本控制的图标工厂使用 `pnpm icons:generate` 更新。
+前端与构建工具直接消费 `crates/app-server-protocol/schema/typescript/` 的已提交协议快照；修改后端协议后使用 `pnpm protocol:generate` 更新，并运行 `pnpm typecheck:protocol`。协议生成器与开发后端统一使用 `dev-small` profile，复用相同配置的依赖产物；生成器的 `export` feature 仍保留独立编译变体。受版本控制的图标工厂使用 `pnpm icons:generate` 更新。
 
 ## Rust 依赖检查与构建测量
 
@@ -268,10 +274,12 @@ just bench-build ash-cli --profile dev-small --jobs 4 --compare .build/build-hea
 | 2026-10-05，协议依赖拆分 | 队列、通话、协作、任务交付类型移入契约 crate 后，协议包空输出构建 43.50 → 32.26 秒，编译单元 255 → 174 | 热构建没有明显变化；完整产品仍需要执行、图片和 SQLite，未证明完整产品冷构建提速 |
 | 2026-10-01，实际协议编辑 | schema 按需启用、协议包优化级别降为 0 后，`just build-code` 重编译 14.10 → 8.74 秒                     | 开发 CLI 程序约增大 11%；冷构建波动较大，未给出稳定提速比例                     |
 
-工具库补齐没有证明产品构建提速；参数库拆分、过程宏优化与构建依赖 profile 对齐候选均未证明收益，未保留。原始测量保存在 `.build/build-health/`；已提交的详细记录可从本文 Git 历史查阅。
+2026-10-07，在同一 macOS arm64、Rust 1.98.0、12 个任务和已缓存依赖条件下，协议生成器从 `dev` 改用 `dev-small`：三轮触碰协议库源码时间戳后，生成阶段的中位数从 12.96 降到 7.35 秒；无改动重跑为 0.93 与 0.99 秒。生成器程序从 17.9 增至 23.1 MB，不进入产品包。此结果覆盖协议生成阶段，不代表完整桌面构建或实际协议字段编辑提速，也没有证明冷构建收益。
+
+工具库补齐没有证明产品构建提速；参数库拆分、过程宏优化与此前构建依赖 profile 对齐候选均未证明收益，未保留。原始测量保存在 `.build/build-health/`；已提交的详细记录可从本文 Git 历史查阅。
 
 ## 构建源码与仓库脚本边界
 
 根 `justfile` 和 `package.json` 声明命令并调用上述实现。`scripts/` 可以调用 `build/`；构建实现不反向调用仓库脚本。前端构建工具使用 TypeScript，后端构建和组包使用 Python。测试内容归对应产品，运行产物归 `.build/`。
 
-工具需要从仓库根发现的 Cargo、pnpm、Bazel 和 TypeScript 配置留在根目录；Node workspace 共用根锁文件。共享包布局和发布流程见 [构建器说明](../build/runtime/README.md)，桌面开发生命周期见 [前端开发](frontend.md)，文档站由独立的 `ash-docs` 仓库负责。
+工具需要从仓库根发现的 Cargo、pnpm、Bazel 和 TypeScript 配置留在根目录；Node workspace 共用根锁文件。共享包布局和发布流程见 [构建器说明](../build/README.md)，桌面开发生命周期见 [前端开发](frontend.md)，文档站由独立的 `ash-docs` 仓库负责。
