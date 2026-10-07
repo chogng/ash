@@ -2,7 +2,7 @@ package(default_visibility = ["//visibility:public"])
 
 filegroup(
     name = "archive_sources",
-    srcs = ["__init__.py", "archive.py", "//:build/__init__.py"],
+    srcs = ["__init__.py", "archive.py", "//build:__init__.py"],
 )
 
 filegroup(
@@ -10,7 +10,7 @@ filegroup(
     srcs = [
         "__init__.py",
         "signing.py",
-        "//:build/__init__.py",
+        "//build:__init__.py",
         "//build/darwin:python_sources",
         "//build/win32:python_sources",
     ],
@@ -18,15 +18,26 @@ filegroup(
 
 filegroup(
     name = "python_sources",
-    srcs = [
-        "__init__.py",
-        "cargo.py",
-        "cargo_cache.py",
-        "cargo_selection.py",
-        "file_lock.py",
-        "targets.py",
-        "v8.py",
-        "//:build/__init__.py",
+    srcs = glob(["*.py"], exclude = ["test_*.py", "package_test_support.py"]) + [
+        "//build:__init__.py",
         "//build/download:python_sources",
     ],
 )
+
+filegroup(
+    name = "assembly_sources",
+    srcs = [
+        "package-layout.json",
+        "package.py",
+        "livekit.py",
+        "//third_party/livekit:runtime-lock.json",
+        "//third_party/livekit:LICENSE",
+        "//third_party/livekit-rust-sdks:LICENSE",
+        "//third_party/livekit-rust-sdks:NOTICE",
+        "//third_party/livekit:NOTICE",
+        "//third_party/livekit:pkg/sfu/NOTICE",
+        "//build/download:python_sources",
+    ],
+)
+
+exports_files(["package_test_support.py"])

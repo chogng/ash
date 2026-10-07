@@ -22,7 +22,7 @@ for (const succeeds of [true, false]) {
 		t.mock.method(fs, 'readFileSync', () => JSON.stringify({ formatVersion: 1, sequence: 1, directory: `packages/0.1.0/${'a'.repeat(64)}` }));
 		t.mock.method(childProcess, 'spawn', (command: string, args: readonly string[]) => {
 			const child = new ChildProcess();
-			if (args.includes('build/runtime/prepare.py')) {
+			if (args.includes('build/prepare.py')) {
 				events.push('prepare');
 				setImmediate(() => { prepared = succeeds; child.emit('close', succeeds ? 0 : 1, null); });
 			} else {

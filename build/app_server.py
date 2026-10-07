@@ -7,20 +7,20 @@ import sys
 from pathlib import Path
 from typing import Optional, Sequence
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from build.lib.targets import TARGETS, default_target
 
-from build.runtime.bubblewrap import resolve_bubblewrap
-from build.runtime.cargo import build_binaries
-from build.runtime.layout import build_package_directory, load_protocol_metadata
-from build.runtime.livekit import resolve_livekit
-from build.runtime.node import resolve_node
-from build.runtime.ripgrep import resolve_ripgrep
-from build.runtime.tgrep import resolve_tgrep
-from build.runtime.version import read_workspace_version
+from build.lib.bubblewrap import resolve_bubblewrap
+from build.lib.package_binaries import build_binaries
+from build.lib.package import build_package_directory, load_protocol_metadata
+from build.lib.livekit import resolve_livekit
+from build.lib.node import resolve_node
+from build.lib.ripgrep import resolve_ripgrep
+from build.lib.tgrep import resolve_tgrep
+from build.lib.version import read_workspace_version
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 
 
 DEFAULT_LOCK = REPOSITORY_ROOT / "third_party" / "ripgrep" / "runtime-lock.json"
@@ -168,7 +168,10 @@ def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Names
 
 
 def main(arguments: Optional[Sequence[str]] = None) -> int:
-    args = parse_arguments(arguments)
+    return build_package(parse_arguments(arguments))
+
+
+def build_package(args: argparse.Namespace) -> int:
     target = args.target or default_target()
     spec = TARGETS[target]
     protocol_metadata = load_protocol_metadata(REPOSITORY_ROOT)

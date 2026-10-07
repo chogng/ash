@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from .cargo import validate_input_binary
+from .package_binaries import validate_input_binary
 from build.download.artifacts import (
     archive_is_valid,
     download_and_verify,

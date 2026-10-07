@@ -16,10 +16,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from build.lib.targets import TARGETS
 from build.code.package import build_code_package
-from build.runtime.build import main as build_main
-from build.runtime.build import parse_arguments as parse_build_arguments
-from build.runtime.bubblewrap import load_vendored_source, resolve_bubblewrap
-from build.runtime.layout import (
+from build.app_server import main as build_main
+from build.app_server import parse_arguments as parse_build_arguments
+from build.lib.bubblewrap import load_vendored_source, resolve_bubblewrap
+from build.lib.package import (
     build_package_directory,
     copy_builtin_extensions,
     file_sha256,
@@ -29,15 +29,15 @@ from build.runtime.layout import (
     require_verified_system_signing,
     system_signing_artifacts,
 )
-from build.runtime.node import (
+from build.lib.node import (
     NodeResolution,
     artifact_for_target,
     load_node_lock,
     resolve_node,
 )
-from build.runtime.ripgrep import load_lock, resolve_ripgrep
-from build.runtime.executable import ExecutableResolution
-from build.runtime.version import read_workspace_version
+from build.lib.ripgrep import load_lock, resolve_ripgrep
+from build.lib.executable import ExecutableResolution
+from build.lib.version import read_workspace_version
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
@@ -116,13 +116,13 @@ class PackageTests(unittest.TestCase):
                 return subprocess.CompletedProcess(command, 0, "\n".join(artifacts))
 
             with (
-                patch("build.runtime.cargo.cargo_environment", return_value={}),
+                patch("build.lib.package_binaries.cargo_environment", return_value={}),
                 patch(
-                    "build.runtime.build.resolve_livekit",
+                    "build.app_server.resolve_livekit",
                     return_value=executable_file(root / "livekit", b"livekit"),
                 ),
                 patch(
-                    "build.runtime.cargo.subprocess.run",
+                    "build.lib.package_binaries.subprocess.run",
                     side_effect=run_command,
                 ) as run,
             ):

@@ -123,7 +123,7 @@ async function assembleBundle(stage: string, bundlePath: string, options: Map<st
 async function buildBackend(stage: string): Promise<string> {
 	const backend = join(stage, 'backend');
 	await run(python, [
-		'-B', join(repositoryRoot, 'build', 'runtime', 'build.py'),
+		'-B', join(repositoryRoot, 'build', 'app_server.py'),
 		'--target', 'x86_64-pc-windows-msvc',
 		'--javascript-runtime', 'packaged-node',
 		'--package-dir', backend,

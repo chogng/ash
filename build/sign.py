@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from build.lib.targets import TARGETS, target_spec  # noqa: E402
@@ -17,7 +17,7 @@ from build.lib.signing import run_command  # noqa: E402
 from build.lib.signing import sha256  # noqa: E402
 from build.lib.signing import sign_and_verify  # noqa: E402
 from build.lib.signing import verify_command  # noqa: E402
-from build.runtime.layout import (  # noqa: E402
+from build.lib.package import (  # noqa: E402
     record_system_signing,
     system_signing_artifacts,
     validate_package_directory,

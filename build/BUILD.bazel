@@ -1,0 +1,19 @@
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["__init__.py", "prepare.py"])
+
+filegroup(
+    name = "package_sources",
+    srcs = [
+        "app_server.py",
+        "prepare.py",
+        "remote.py",
+        "search_smoke.py",
+        "sign.py",
+        "//build/desktop:python_sources",
+        "//build/lib:assembly_sources",
+        "//build/lib:python_sources",
+        "//build/lib:signing_sources",
+        "//remote:package.json",
+    ],
+)

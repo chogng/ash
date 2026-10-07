@@ -31,12 +31,12 @@ test('TypeScript project include patterns select existing sources', () => {
 });
 
 test("product build and launch tools have one owner while repository scripts remain shared", () => {
-	for (const directory of ["src/scripts", "scripts/desktop", "scripts/code", "build/remote", "app-rs", "app-ts", "ash-rs", "ash-cli", "code"]) {
+	for (const directory of ["src/scripts", "scripts/desktop", "scripts/code", "build/remote", "build/runtime", "app-rs", "app-ts", "ash-rs", "ash-cli", "code"]) {
 		const path = join(repositoryRoot, directory);
 		assert.equal(existsSync(path), false, `${directory} must not own product tooling`);
 	}
 	assert.equal(existsSync(join(repositoryRoot, "cli/Cargo.toml")), true);
-	for (const category of ["desktop", "code", "runtime", "download", "lib", "pnpm", "darwin", "win32", "linux", "resources"]) {
+	for (const category of ["desktop", "code", "download", "lib", "pnpm", "darwin", "win32", "linux", "resources"]) {
 		assert.equal(existsSync(join(import.meta.dirname, category)), true, category);
 	}
 	assert.equal(existsSync(join(repositoryRoot, "crates/tui/Cargo.toml")), true);
@@ -48,7 +48,7 @@ test("product build and launch tools have one owner while repository scripts rem
 		assert.equal(existsSync(join(repositoryRoot, "scripts", entry)), false, entry);
 	}
 	assert.equal(existsSync(join(repositoryRoot, "test/unit/mocha.ts")), true);
-	for (const entry of ["code/build.py", "runtime/build.py", "runtime/prepare.py"]) {
+	for (const entry of ["code/build.py", "app_server.py", "remote.py", "prepare.py", "desktop/develop.py", "lib/package.py", "lib/package-layout.json", "protocol/generate.py"]) {
 		assert.equal(existsSync(join(import.meta.dirname, entry)), true, entry);
 	}
 	for (const entry of ["run.py", "run_package.py", "install.sh", "install.ps1"]) {
@@ -69,10 +69,16 @@ test("product build and launch tools have one owner while repository scripts rem
 });
 
 test("frontend Node tools and backend package builders have separate language owners", () => {
-	for (const directory of ["desktop", "pnpm", "protocol", "resources"]) {
+	for (const directory of ["pnpm", "resources"]) {
 		assert.deepEqual(walk(join(import.meta.dirname, directory)).filter(path => extname(path) === ".py"), [], directory);
 	}
-	for (const directory of ["runtime", "code", "download", "lib", "darwin", "win32", "linux"]) {
+	for (const [directory, entries] of [
+		['desktop', ['__init__.py', 'develop.py', 'test_develop.py']],
+		['protocol', ['__init__.py', 'generate.py']],
+	] as const) {
+		assert.deepEqual(walk(join(import.meta.dirname, directory)).filter(path => extname(path) === '.py').map(path => path.slice(join(import.meta.dirname, directory).length + 1)).sort(), [...entries].sort(), directory);
+	}
+	for (const directory of ["code", "download", "lib", "darwin", "win32", "linux"]) {
 		const files = walk(join(import.meta.dirname, directory)).filter(path => extname(path) === ".ts");
 		const cssTooling = new Set([
 			join(import.meta.dirname, 'lib/stylelint/validateVariableNames.ts'),

@@ -75,8 +75,8 @@ jobs:
           import subprocess
           from pathlib import Path
           from build.lib.targets import TARGETS
-          from build.runtime.ripgrep import resolve_ripgrep
-          from build.runtime.tgrep import resolve_tgrep
+          from build.lib.ripgrep import resolve_ripgrep
+          from build.lib.tgrep import resolve_tgrep
 
           root = Path.cwd()
           target = TARGETS["x86_64-unknown-linux-gnu"]

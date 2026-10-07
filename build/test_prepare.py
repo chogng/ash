@@ -7,11 +7,45 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from build.runtime import prepare
+from build import prepare
 from build.lib.targets import TARGETS
 
 
 class PrepareTests(unittest.TestCase):
+    def test_assembly_changes_invalidate_the_package_without_tracking_frontend_or_tests(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for relative in (
+                "Cargo.toml",
+                "build/source-layout.json",
+                "build/download/artifacts.py",
+                "build/prepare.py",
+                "build/desktop/appServer.ts",
+                "build/lib/package-layout.json",
+                "build/lib/package.py",
+                "build/lib/test_package.py",
+                "build/lib/package_test_support.py",
+            ):
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("first")
+            first = prepare.package_input_digest(prepare.package_sources(root), {})
+            for relative in (
+                "build/desktop/appServer.ts",
+                "build/lib/test_package.py",
+                "build/lib/package_test_support.py",
+            ):
+                (root / relative).write_text("unrelated update")
+            self.assertEqual(
+                first, prepare.package_input_digest(prepare.package_sources(root), {})
+            )
+            (root / "build/lib/package-layout.json").write_text("updated layout")
+            self.assertNotEqual(
+                first, prepare.package_input_digest(prepare.package_sources(root), {})
+            )
+
     def test_development_modes_and_remote_catalog_are_explicit(self) -> None:
         self.assertEqual(
             "host-provided-node", prepare.parse_arguments([]).javascript_runtime

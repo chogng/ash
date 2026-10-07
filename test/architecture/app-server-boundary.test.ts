@@ -11,10 +11,10 @@ function source(path: string): string {
 }
 
 test("Desktop packages the shared backend host instead of the Ash Code CLI", () => {
-	const packageScript = source("build/runtime/prepare.py");
+	const packageScript = source("build/prepare.py");
 	const packageManifest = source("package.json");
 	const watcher = source("build/desktop/appServer.ts");
-	const backendBuilder = source("build/runtime/develop.py");
+	const backendBuilder = source("build/desktop/develop.py");
 	const electronMain = source("src/ash/code/electron-main/app.ts");
 	const forbiddenProductCrate = ["ash", "cli"].join("-");
 	const forbiddenProductPath = ["ash", "code", "cli"].join("/");
@@ -25,9 +25,9 @@ test("Desktop packages the shared backend host instead of the Ash Code CLI", () 
 	}
 	assert.match(packageScript, /"ash-app-server"/u);
 	assert.match(packageScript, /"ash-app-server-daemon"/u);
-	assert.match(packageManifest, /build\/runtime\/prepare\.py/u);
+	assert.match(packageManifest, /build\/prepare\.py/u);
 	assert.match(packageScript, /PROFILE = "dev-small"/u);
-	assert.match(watcher, /build\/runtime\/develop\.py/u);
+	assert.match(watcher, /build\/desktop\/develop\.py/u);
 	assert.match(backendBuilder, /current_package\(development_root/u);
 	assert.doesNotMatch(backendBuilder, /prepare_development_package/u);
 	assert.doesNotMatch(packageScript, /"--target",/u);

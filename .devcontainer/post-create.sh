@@ -17,4 +17,4 @@ sudo /usr/local/bin/ash-configure-electron-sandbox
 pnpm exec playwright install chromium
 
 # Fetch the locked Linux media server before the first full Web build.
-python -B build/runtime/livekit.py "$(rustc -vV | awk '$1 == "host:" { print $2 }')"
+python -B build/lib/livekit.py "$(rustc -vV | awk '$1 == "host:" { print $2 }')"

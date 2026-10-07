@@ -65,7 +65,7 @@ Electron 启动前并行准备键盘模块、前端生成资源和后端资源�
 
 开发启动器使用 `.build/desktop/dev/profile` 和 `.build/desktop/dev/user-data`，Workbench 与 Agents 共享开发数据；设置 `ASH_HOME` 可以指定其他开发配置。资源或运行工具锁文件修改后执行 VS Code 任务 `Prepare Ash Backend`，或 `pnpm prepare:backend`，准备完成后已运行的完整开发窗口会切换到新版本。
 
-需要单独监听桌面后端时，先执行 `pnpm prepare:backend`，再在仓库根目录执行 `pnpm dev:rust`。仅 UI、`dev:ui:connected`、`dev:web` 和 `dev:web:agents:ui` 不监听后端。后端开发包和下载规则见 [共享包构建](../build/runtime/README.md)。
+需要单独监听桌面后端时，先执行 `pnpm prepare:backend`，再在仓库根目录执行 `pnpm dev:rust`。仅 UI、`dev:ui:connected`、`dev:web` 和 `dev:web:agents:ui` 不监听后端。后端开发包和下载规则见 [共享包构建](../build/README.md)。
 
 ### 打开工作区
 

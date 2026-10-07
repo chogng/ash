@@ -293,7 +293,7 @@ def main(arguments: list[str] | None = None) -> int:
             )
         )
     ):
-        from build.runtime.tgrep import resolve_tgrep
+        from build.lib.tgrep import resolve_tgrep
 
         executable = resolve_tgrep(
             TARGETS[target],

@@ -55,7 +55,7 @@ class PackageRunnerTests(unittest.TestCase):
             subprocess_run.assert_has_calls(
                 [
                     call(
-                        [run_package.sys.executable, "-B", "build/runtime/prepare.py"],
+                        [run_package.sys.executable, "-B", "build/prepare.py"],
                         cwd=run_package.run.REPOSITORY_ROOT,
                         env=environment,
                         check=False,
@@ -119,7 +119,7 @@ class PackageRunnerTests(unittest.TestCase):
             subprocess_run.assert_has_calls(
                 [
                     call(
-                        [run_package.sys.executable, "-B", "build/runtime/prepare.py"],
+                        [run_package.sys.executable, "-B", "build/prepare.py"],
                         cwd=run_package.run.REPOSITORY_ROOT,
                         env=environment,
                         check=False,

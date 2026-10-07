@@ -9,7 +9,7 @@ import tarfile
 import tempfile
 from pathlib import Path
 
-from .cargo import validate_input_binary
+from .package_binaries import validate_input_binary
 from .executable import ExecutableResolution
 from build.download.artifacts import sha256
 from build.lib.file_lock import exclusive_lock

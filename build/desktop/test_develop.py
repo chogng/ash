@@ -9,7 +9,8 @@ import unittest
 from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import patch
-from build.runtime import develop
+from build.desktop import develop
+from build.lib import development_store
 
 
 def hold_process_lease(path, connection):
@@ -52,7 +53,7 @@ def publish_in_process(package, binary, directory, start, connection):
     start.wait(10)
     try:
         connection.send(
-            develop.publish_generation(
+            development_store.publish_generation(
                 Path(package), {"ash-app-server": Path(binary)}, Path(directory)
             )
         )
@@ -89,13 +90,13 @@ class DevelopTests(unittest.TestCase):
             root = Path(temporary)
             package = prepared_package(root)
             directory = root / "development"
-            first = develop.publish_generation(package, {}, directory)
+            first = development_store.publish_generation(package, {}, directory)
             binary = root / "ash-app-server"
             binary.write_text("changed")
             first_runtime = directory / "generations" / first[1]
             resource = Path("ash-resources/extensions/rust/package.json")
             with process_lease(first_runtime / ".lease"):
-                second = develop.publish_generation(
+                second = development_store.publish_generation(
                     package, {"ash-app-server": binary}, directory
                 )
                 for runtime in (
@@ -108,7 +109,7 @@ class DevelopTests(unittest.TestCase):
                         '{"name":"rust"}', (runtime / resource).read_text()
                     )
 
-    @unittest.skipUnless(develop.os.name == "nt", "Windows hard-link path boundary")
+    @unittest.skipUnless(os.name == "nt", "Windows hard-link path boundary")
     def test_resource_links_support_long_windows_paths(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path("\\\\?\\" + temporary)
@@ -124,7 +125,9 @@ class DevelopTests(unittest.TestCase):
                 resource.parent.mkdir(parents=True)
                 resource.write_text("long grammar")
                 directory = root / "development"
-                _, generation = develop.publish_generation(package, {}, directory)
+                _, generation = development_store.publish_generation(
+                    package, {}, directory
+                )
                 self.assertEqual(
                     "long grammar",
                     (
@@ -142,14 +145,15 @@ class DevelopTests(unittest.TestCase):
             root = Path(temporary)
             package = prepared_package(root)
             directory = root / "development"
-            first = develop.publish_generation(package, {}, directory)
+            first = development_store.publish_generation(package, {}, directory)
             pointer = directory / "current.json"
             self.assertEqual(
                 {"version": 3, "runtime": "generations/" + first[1]},
                 json.loads(pointer.read_text()),
             )
             self.assertEqual(
-                (False, first[1]), develop.publish_generation(package, {}, directory)
+                (False, first[1]),
+                development_store.publish_generation(package, {}, directory),
             )
             binary = root / "ash-app-server"
             binary.write_text("new")
@@ -158,7 +162,7 @@ class DevelopTests(unittest.TestCase):
                 .stat()
                 .st_ino
             )
-            second = develop.publish_generation(
+            second = development_store.publish_generation(
                 package, {"ash-app-server": binary}, directory
             )
             self.assertTrue(second[0])
@@ -181,11 +185,11 @@ class DevelopTests(unittest.TestCase):
             root = Path(temporary)
             package = prepared_package(root)
             directory = root / "development"
-            _, first = develop.publish_generation(package, {}, directory)
-            old_digest = develop.sha256(package / "bin/ash-app-server")
+            _, first = development_store.publish_generation(package, {}, directory)
+            old_digest = development_store.sha256(package / "bin/ash-app-server")
             binary = root / "ash-app-server"
             binary.write_text("new")
-            _, current = develop.publish_generation(
+            _, current = development_store.publish_generation(
                 package, {"ash-app-server": binary}, directory
             )
             self.assertFalse((directory / "generations" / first).exists())
@@ -202,13 +206,13 @@ class DevelopTests(unittest.TestCase):
             root = Path(temporary)
             package = prepared_package(root)
             directory = root / "development"
-            _, first = develop.publish_generation(package, {}, directory)
+            _, first = development_store.publish_generation(package, {}, directory)
             runtime = directory / "generations" / first
-            old_digest = develop.sha256(package / "bin/ash-app-server")
+            old_digest = development_store.sha256(package / "bin/ash-app-server")
             binary = root / "ash-app-server"
             binary.write_text("new")
             with process_lease(runtime / ".lease"):
-                _, current = develop.publish_generation(
+                _, current = development_store.publish_generation(
                     package, {"ash-app-server": binary}, directory
                 )
                 self.assertEqual("old", (runtime / "bin/ash-app-server").read_text())
@@ -218,7 +222,7 @@ class DevelopTests(unittest.TestCase):
             orphan.write_text("unreferenced")
             self.assertEqual(
                 (False, current),
-                develop.publish_generation(
+                development_store.publish_generation(
                     package, {"ash-app-server": binary}, directory
                 ),
             )
@@ -269,7 +273,9 @@ class DevelopTests(unittest.TestCase):
                 )
                 for immutable in (directory / "objects").iterdir():
                     self.assertEqual(2, immutable.stat().st_nlink)
-                    self.assertEqual(immutable.name, develop.sha256(immutable))
+                    self.assertEqual(
+                        immutable.name, development_store.sha256(immutable)
+                    )
             finally:
                 for process in processes:
                     if process.is_alive():
@@ -337,13 +343,13 @@ class DevelopTests(unittest.TestCase):
             root = Path(temporary)
             package = prepared_package(root)
             directory = root / "development"
-            develop.publish_generation(package, {}, directory)
+            development_store.publish_generation(package, {}, directory)
             selected = (directory / "current.json").read_text()
             shutil.rmtree(package / "ash-resources")
             binary = root / "ash-app-server"
             binary.write_text("new")
             with self.assertRaises(FileNotFoundError):
-                develop.publish_generation(
+                development_store.publish_generation(
                     package, {"ash-app-server": binary}, directory
                 )
             self.assertEqual(selected, (directory / "current.json").read_text())

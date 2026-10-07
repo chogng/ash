@@ -15,8 +15,8 @@ const debounceMs = 250;
 
 /** Prepare before selecting a runtime: file watchers only observe changes after startup. */
 export async function prepareAppServer(javascriptRuntime: 'host-provided-node' | 'packaged-node'): Promise<void> {
-	const commands = [['-B', 'build/runtime/prepare.py', '--javascript-runtime', javascriptRuntime]];
-	if (javascriptRuntime === 'host-provided-node') commands.push(['-B', 'build/runtime/develop.py', '--select-prepared']);
+	const commands = [['-B', 'build/prepare.py', '--javascript-runtime', javascriptRuntime]];
+	if (javascriptRuntime === 'host-provided-node') commands.push(['-B', 'build/desktop/develop.py', '--select-prepared']);
 	for (const arguments_ of commands) {
 		const { command, args } = pythonCommand(arguments_);
 		await new Promise<void>((resolvePromise, reject) => {
@@ -102,8 +102,8 @@ export async function watchAppServer(options: { skipInitial?: boolean; javascrip
 		return new Promise<void>((resolvePromise, reject) => {
 			// Web owns a packaged Node runtime; Electron supplies Node from its host.
 			const buildArguments = options.javascriptRuntime === 'packaged-node'
-				? ['-B', 'build/runtime/prepare.py', '--javascript-runtime', 'packaged-node']
-				: ['-B', 'build/runtime/develop.py'];
+				? ['-B', 'build/prepare.py', '--javascript-runtime', 'packaged-node']
+				: ['-B', 'build/desktop/develop.py'];
 			const { command, args } = pythonCommand(buildArguments);
 			const child = spawn(command, args, { cwd: repositoryRoot, env: process.env, stdio: 'inherit', windowsHide: true });
 			activeBuild = child;

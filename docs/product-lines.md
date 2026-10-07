@@ -27,4 +27,4 @@ Session、Thread、Turn 和 ThreadItem 能力经过 App Server。各客户端持
 
 在仓库根目录运行 `just ash` 启动 Ash Electron 桌面端，`just ash-code` 启动 Ash Code CLI/TUI，`pnpm dev:web` 或 `pnpm dev:web:full` 启动 Web。Desktop 的 Code Workbench 与 Academic 文档贡献是同一产品内的功能，详见 [Workbench 模式](workbench-modes.md)。
 
-实现入口见 [CLI](../cli/README.md)、[TUI](../crates/tui/README.md)、[前端开发](frontend.md)、[Desktop 架构](ash-desktop-architecture.md)和 [运行包构建](../build/runtime/README.md)。
+实现入口见 [CLI](../cli/README.md)、[TUI](../crates/tui/README.md)、[前端开发](frontend.md)、[Desktop 架构](ash-desktop-architecture.md)和 [运行包构建](../build/README.md)。

@@ -5,7 +5,7 @@ import { pythonCommand } from '../python.ts';
 /** Refreshes the Rust-owned protocol snapshot consumed directly by frontend adapters and build tools. */
 export async function generateProtocol(signal?: AbortSignal): Promise<void> {
 	await new Promise<void>((resolvePromise, reject) => {
-		const { command, args } = pythonCommand(['-B', 'build/runtime/protocol.py']);
+		const { command, args } = pythonCommand(['-B', 'build/protocol/generate.py']);
 		const child = spawn(command, args, {
 			cwd: resolve(import.meta.dirname, '../..'), stdio: 'inherit', windowsHide: true, signal,
 		});

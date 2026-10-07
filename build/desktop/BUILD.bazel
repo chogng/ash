@@ -1,0 +1,12 @@
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "python_sources",
+    srcs = [
+        "__init__.py",
+        "develop.py",
+        "//build:prepare.py",
+        "//build/lib:assembly_sources",
+        "//build/lib:python_sources",
+    ],
+)

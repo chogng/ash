@@ -8,7 +8,7 @@ from pathlib import Path
 from pathlib import PurePosixPath
 from typing import Any, Dict, List, Optional
 
-from .cargo import validate_input_binary
+from .package_binaries import validate_input_binary
 from build.lib.cargo import cargo_profile_directory
 from build.lib.cargo import resolve_cargo_target_directory
 from build.lib.targets import TargetSpec

@@ -8,13 +8,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from build.runtime.sign import sign_package
-from build.runtime.layout import require_verified_system_signing
-from build.runtime.layout import system_signing_artifacts
-from build.runtime.layout import validate_package_directory
-from build.runtime.test_support import create_runtime_package
+from build.sign import sign_package
+from build.lib.package import require_verified_system_signing
+from build.lib.package import system_signing_artifacts
+from build.lib.package import validate_package_directory
+from build.lib.package_test_support import create_runtime_package
 from build.lib.targets import target_spec
 from build.lib.signing import sha256
 from build.darwin.notarize import notarize
@@ -140,10 +140,10 @@ class SystemSigningTests(unittest.TestCase):
             commands = []
             with (
                 patch(
-                    "build.runtime.sign.system_signing_artifacts",
+                    "build.sign.system_signing_artifacts",
                     return_value={"cli": artifact},
                 ),
-                patch("build.runtime.sign.record_system_signing") as record,
+                patch("build.sign.record_system_signing") as record,
             ):
                 sign_package(
                     package,

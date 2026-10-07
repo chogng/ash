@@ -112,7 +112,7 @@ async function verifyRuntime(identity: ReleaseIdentity, archive: string, directo
 		'from pathlib import Path',
 		'import sys',
 		'from build.lib.targets import target_spec',
-		'from build.runtime.layout import validate_package_directory, require_verified_system_signing, system_signing_artifacts',
+		'from build.lib.package import validate_package_directory, require_verified_system_signing, system_signing_artifacts',
 		'from build.lib.signing import run_command, verify_command',
 		'package, spec = Path(sys.argv[1]), target_spec(sys.argv[2])',
 		'validate_package_directory(package, spec)',
@@ -128,7 +128,7 @@ async function verifyRuntime(identity: ReleaseIdentity, archive: string, directo
 		assert.equal(result.stdout.trim(), `ash ${identity.version}`);
 	}
 	// Reuse the package's RPC lifecycle and search checks, including missing host search tools.
-	const python = pythonCommand(['-B', 'build/runtime/search_smoke.py', '--package-dir', directory, '--report', join(output, 'search.json')]);
+	const python = pythonCommand(['-B', 'build/search_smoke.py', '--package-dir', directory, '--report', join(output, 'search.json')]);
 	await run(python.command, python.args);
 }
 

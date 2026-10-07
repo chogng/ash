@@ -17,9 +17,10 @@ class BuildCommandTests(unittest.TestCase):
         commands = {
             "code/archive.py": "--output",
             "code/package.py": "--runtime-package",
-            "runtime/build.py": "--javascript-runtime",
-            "runtime/prepare.py": "--javascript-runtime",
-            "runtime/sign.py": "--verify-only",
+            "app_server.py": "--javascript-runtime",
+            "remote.py": "--javascript-runtime",
+            "prepare.py": "--javascript-runtime",
+            "sign.py": "--verify-only",
             "darwin/notarize.py": "--staple",
         }
         with tempfile.TemporaryDirectory() as temporary:

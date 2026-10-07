@@ -291,6 +291,11 @@ SSH launcher 使用 `BatchMode=yes`，不会在后台窗口等待密码输入。
 
 ## 运行时安装、升级与回滚
 
+远端分发要求由根目录 [`remote/package.json`](../remote/package.json) 声明。
+`just remote-package --target <target> --package-dir <directory>` 通过
+[`build/remote.py`](../build/remote.py) 读取支持平台和随包 Node 要求，再复用
+[`共享包构建`](../build/README.md)；该入口组装完整目录，正式发布 catalog 的自动化仍未完成。
+
 Remote runtime artifact 必须是 canonical layout version 2 的 rootless `tar.gz`，并使用
 `javascriptRuntime.kind=packagedNode`。它包含 `bin/ash-app-server`、`bin/ash-remote-server`、`bin/ash-app-server-daemon`、`ash-path/rg`、Node、Skills、Extensions、
 product services 与平台 sandbox 资源；安装器不会用裸二进制伪装成完整 `ash code` runtime。
@@ -426,14 +431,14 @@ target、非规范/符号链接路径、大小或 SHA-256 不匹配，并在远�
 开发/发布包可选择离线 bundle：
 
 ```text
-python3 -B build/runtime/prepare.py \
+python3 -B build/prepare.py \
   --remote-runtime-bundle <bundle-directory>
 ```
 
 也可生成只绑定网络发布目录的轻量产品包；URL 与摘要随后由平台应用签名认证：
 
 ```text
-python3 -B build/runtime/prepare.py \
+python3 -B build/prepare.py \
   --remote-runtime-catalog-url https://releases.example/ash/<version>/catalog.json \
   --remote-runtime-catalog-sha256 <catalog-digest>
 ```

@@ -221,7 +221,7 @@ Electron 自动化共用 `test/automation/playwrightElectron.ts` 的进程启动
 必须比较 initialize response，hash 不一致时不得创建业务窗口或进入 Ready。
 
 开发态与发布态共享 canonical Ash package contract。Python 开发组装器
-`build/runtime/prepare.py` 按 target、JavaScript runtime 与 build profile 组装不可变 debug
+`build/prepare.py` 按 target、JavaScript runtime 与 build profile 组装不可变 debug
 package；Rust package store 在完整文件清单校验通过后发布编号 manifest，并用进程 lease 保护正在运行的 package。它读取 production builder
 使用的同一份 runtime lock、校验 archive digest。`appServerDaemonExecutablePath()` 在开发态选择该
 package root，在发布态选择 Electron `resourcesPath`，两者都只启动

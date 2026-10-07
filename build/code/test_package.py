@@ -10,9 +10,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from build.runtime.layout import package_build_id
+from build.lib.package import package_build_id
 from build.code.package import build_code_package  # noqa: E402
-from build.runtime.test_support import create_runtime_package  # noqa: E402
+from build.lib.package_test_support import create_runtime_package  # noqa: E402
 
 
 class CodePackageTests(unittest.TestCase):

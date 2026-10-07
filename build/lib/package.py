@@ -18,7 +18,9 @@ from .executable import ExecutableResolution
 from build.lib.targets import TargetSpec
 
 
-LAYOUT = json.loads(Path(__file__).with_suffix(".json").read_text(encoding="utf-8"))
+LAYOUT = json.loads(
+    Path(__file__).with_name("package-layout.json").read_text(encoding="utf-8")
+)
 LAYOUT_VERSION = LAYOUT["layoutVersion"]
 METADATA_FILE = "ash-package.json"
 SKILL_NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")

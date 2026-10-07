@@ -44,7 +44,7 @@ try {
 	const backend = options.backendPackage ?? join(stage, 'backend');
 	if (!options.backendPackage) {
 		await run(process.env.PYTHON ?? 'python3', [
-			'-B', join(repositoryRoot, 'build', 'runtime', 'build.py'),
+			'-B', join(repositoryRoot, 'build', 'app_server.py'),
 			'--target', target,
 			'--javascript-runtime', 'packaged-node',
 			'--package-dir', backend,
@@ -107,7 +107,7 @@ try {
 	if (!options.unsigned) {
 		// Embedded signatures change helper bytes. Refresh their identity, then seal the containing app again.
 		await run(process.env.PYTHON ?? 'python3', [
-			'-B', join(repositoryRoot, 'build', 'runtime', 'sign.py'),
+			'-B', join(repositoryRoot, 'build', 'sign.py'),
 			'--package-dir', join(bundlePath, 'Contents', 'Resources'), '--target', target, '--verify-only',
 		], repositoryRoot);
 		await run('codesign', ['--force', '--sign', signingIdentity!, '--timestamp', '--options', 'runtime', '--preserve-metadata=entitlements,requirements,flags', bundlePath], repositoryRoot);

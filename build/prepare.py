@@ -13,22 +13,22 @@ import uuid
 from pathlib import Path
 from urllib.parse import urlsplit
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from build.download.artifacts import sha256
 from build.lib.cargo import read_source_layout
 from build.lib.targets import TARGETS, TargetSpec, default_target
-from build.runtime.bubblewrap import BubblewrapResolution, load_vendored_source
-from build.runtime.cargo import build_binaries
-from build.runtime.layout import LAYOUT, build_package_directory, load_protocol_metadata
-from build.runtime.livekit import resolve_livekit
-from build.runtime.node import resolve_node
-from build.runtime.ripgrep import resolve_ripgrep
-from build.runtime.tgrep import resolve_tgrep
-from build.runtime.version import read_workspace_version
+from build.lib.bubblewrap import BubblewrapResolution, load_vendored_source
+from build.lib.package_binaries import build_binaries
+from build.lib.package import LAYOUT, build_package_directory, load_protocol_metadata
+from build.lib.livekit import resolve_livekit
+from build.lib.node import resolve_node
+from build.lib.ripgrep import resolve_ripgrep
+from build.lib.tgrep import resolve_tgrep
+from build.lib.version import read_workspace_version
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[1]
 PROFILE = "dev-small"
 MANIFEST_NAME = re.compile(r"\d{20}\.json\Z")
 PACKAGE_DIRECTORY = re.compile(r"packages/[0-9A-Za-z][0-9A-Za-z.+-]*/[a-f0-9]{64}\Z")
@@ -210,17 +210,18 @@ def record_package_inputs(
 
 
 def package_sources(root: Path) -> list[Path]:
-    runtime = Path(__file__).parent
-    sources = [runtime / "layout.json", root / "Cargo.toml"]
-    sources += [
-        path
-        for path in runtime.glob("*.py")
-        if not path.name.startswith("test_") and path.name != "__init__.py"
+    # Track assembly and preparation inputs, without making Desktop source or
+    # unrelated product entrypoints invalidate the shared development package.
+    sources = [
+        root / "build/lib/package-layout.json",
+        root / "build/prepare.py",
+        root / "Cargo.toml",
     ]
     sources += [
         path
         for path in (root / "build/lib").glob("*.py")
-        if not path.name.startswith("test_") and path.name != "__init__.py"
+        if not path.name.startswith("test_")
+        and path.name not in {"__init__.py", "package_test_support.py"}
     ]
     sources.append(root / "build/download/artifacts.py")
     sources.append(root / "build/source-layout.json")

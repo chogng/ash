@@ -18,7 +18,7 @@ const execFileAsync = promisify(execFile);
 async function publish(source: string, directory: string, identity: string): Promise<string> {
 	const marker = join(directory, 'test-generation');
 	await writeFile(marker, identity);
-	const script = 'import json,sys; from pathlib import Path; from build.runtime.develop import publish_generation; changed,generation=publish_generation(Path(sys.argv[1]), {"test-generation":Path(sys.argv[2])}, Path(sys.argv[3])); print(json.dumps({"generation":generation}))';
+	const script = 'import json,sys; from pathlib import Path; from build.lib.development_store import publish_generation; changed,generation=publish_generation(Path(sys.argv[1]), {"test-generation":Path(sys.argv[2])}, Path(sys.argv[3])); print(json.dumps({"generation":generation}))';
 	const result = await execFileAsync(process.execPath, [resolve(desktopDirectory, 'build/python.ts'), '-B', '-c', script, source, marker, directory], { cwd: desktopDirectory, windowsHide: true });
 	return (JSON.parse(result.stdout) as { generation: string; }).generation;
 }

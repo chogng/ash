@@ -10,7 +10,7 @@
 | 开发桌面端、浏览器界面或编辑器 | [前端开发](frontend.md)                                                              |
 | 修改命令行或终端界面           | [CLI](../cli/README.md)、[TUI](../crates/tui/README.md)                              |
 | 判断功能属于哪一端、哪个模块   | [产品与宿主边界](product-lines.md)、[系统架构](architecture.md)                      |
-| 构建或发布运行包               | [共享运行包](../build/runtime/README.md)、[产品更新](product-update-architecture.md) |
+| 构建或发布运行包               | [共享运行包](../build/README.md)、[产品更新](product-update-architecture.md) |
 
 工具版本和命令在构建指南维护；各模块的实现、约束和测试入口在相邻 README。
 

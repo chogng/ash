@@ -23,8 +23,8 @@ for (const javascriptRuntime of ['host-provided-node', 'packaged-node'] as const
 			const preparation = prepareAppServer(javascriptRuntime);
 			if (succeeds) await preparation;
 			else await assert.rejects(preparation, /backend preparation exited with status 1/);
-			const expected = [pythonCommand(['-B', 'build/runtime/prepare.py', '--javascript-runtime', javascriptRuntime])];
-			if (succeeds && javascriptRuntime === 'host-provided-node') expected.push(pythonCommand(['-B', 'build/runtime/develop.py', '--select-prepared']));
+			const expected = [pythonCommand(['-B', 'build/prepare.py', '--javascript-runtime', javascriptRuntime])];
+			if (succeeds && javascriptRuntime === 'host-provided-node') expected.push(pythonCommand(['-B', 'build/desktop/develop.py', '--select-prepared']));
 			assert.deepEqual(commands, expected);
 		});
 	}
@@ -83,7 +83,7 @@ test('watcher stops before the backend build when protocol generation fails', as
 	const stop = await watchAppServer();
 	t.after(stop);
 	assert.match(await failure.promise, /Protocol generation exited with status 1/);
-	assert.deepEqual(commands, [pythonCommand(['-B', 'build/runtime/protocol.py'])]);
+	assert.deepEqual(commands, [pythonCommand(['-B', 'build/protocol/generate.py'])]);
 });
 
 test('watcher invokes the Python backend builder after protocol generation', async (t) => {
@@ -105,7 +105,7 @@ test('watcher invokes the Python backend builder after protocol generation', asy
 	const stop = await watchAppServer();
 	t.after(stop);
 	assert.match(await failure.promise, /backend build exited with status 1/);
-	assert.deepEqual(commands, ['build/runtime/protocol.py', 'build/runtime/develop.py']);
+	assert.deepEqual(commands, ['build/protocol/generate.py', 'build/desktop/develop.py']);
 });
 
 for (const succeeds of [true, false]) {
@@ -130,7 +130,7 @@ for (const succeeds of [true, false]) {
 		t.after(stop);
 		await completed.promise;
 		assert.deepEqual({ commands, reloads }, {
-			commands: [pythonCommand(['-B', 'build/runtime/protocol.py']).args, pythonCommand(['-B', 'build/runtime/prepare.py', '--javascript-runtime', 'packaged-node']).args],
+			commands: [pythonCommand(['-B', 'build/protocol/generate.py']).args, pythonCommand(['-B', 'build/prepare.py', '--javascript-runtime', 'packaged-node']).args],
 			reloads: succeeds ? 1 : 0,
 		});
 	});

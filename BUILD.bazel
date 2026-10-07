@@ -93,7 +93,6 @@ alias(
 exports_files([
     "Cargo.lock",
     "Cargo.toml",
-    "build/__init__.py",
 ])
 
 filegroup(

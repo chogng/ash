@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 import unittest
 
-from build.runtime.search_smoke import RpcProcess
+from build.search_smoke import RpcProcess
 
 
 REPLY = """

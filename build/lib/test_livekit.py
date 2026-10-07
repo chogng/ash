@@ -8,7 +8,7 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-from build.runtime.livekit import resolve_livekit
+from build.lib.livekit import resolve_livekit
 
 
 class LivekitTests(unittest.TestCase):
@@ -30,10 +30,10 @@ class LivekitTests(unittest.TestCase):
                 )
             )
             with (
-                patch("build.runtime.livekit.sys.platform", "darwin"),
-                patch("build.runtime.livekit.shutil.which", return_value=None),
+                patch("build.lib.livekit.sys.platform", "darwin"),
+                patch("build.lib.livekit.shutil.which", return_value=None),
                 patch(
-                    "build.runtime.livekit.download_and_verify",
+                    "build.lib.livekit.download_and_verify",
                     side_effect=AssertionError("unexpected download"),
                 ),
             ):
@@ -63,7 +63,7 @@ class LivekitTests(unittest.TestCase):
             lock_path.parent.mkdir(parents=True)
             lock_path.write_text(json.dumps(lock))
             with patch(
-                "build.runtime.livekit.download_and_verify",
+                "build.lib.livekit.download_and_verify",
                 side_effect=AssertionError("unexpected download"),
             ):
                 executable = resolve_livekit("x86_64-pc-windows-msvc", root=root)

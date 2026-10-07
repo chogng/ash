@@ -10,14 +10,14 @@ from pathlib import Path
 from unittest.mock import patch
 
 from build.lib.targets import TARGETS
-from build.runtime.cargo import build_binaries, cargo_environment
-from build.runtime.cargo import resolve_windows_sandbox_binary
+from build.lib.package_binaries import build_binaries, cargo_environment
+from build.lib.package_binaries import resolve_windows_sandbox_binary
 
 
 class CargoBuildTests(unittest.TestCase):
     def setUp(self) -> None:
         cache = patch(
-            "build.runtime.cargo.leased_cache",
+            "build.lib.package_binaries.leased_cache",
             side_effect=lambda _root, **_options: nullcontext(),
         )
         cache.start()
@@ -33,13 +33,15 @@ class CargoBuildTests(unittest.TestCase):
         path.chmod(0o755)
         return path
 
-    @patch.dict("build.runtime.cargo.os.environ", {"CARGO_BUILD_JOBS": "4"}, clear=True)
+    @patch.dict(
+        "build.lib.package_binaries.os.environ", {"CARGO_BUILD_JOBS": "4"}, clear=True
+    )
     @patch(
-        "build.runtime.cargo.resolve_v8_cargo_env",
+        "build.lib.package_binaries.resolve_v8_cargo_env",
         return_value={"RUSTY_V8_ARCHIVE": "/locked/v8"},
     )
     @patch(
-        "build.runtime.cargo.resolve_sherpa_cargo_env",
+        "build.lib.package_binaries.resolve_sherpa_cargo_env",
         return_value={"SHERPA_ONNX_LIB_DIR": "/locked/speech"},
     )
     def test_shared_runtime_prepares_locked_speech_inputs(self, speech, v8) -> None:
@@ -56,8 +58,8 @@ class CargoBuildTests(unittest.TestCase):
     def test_prebuilt_inputs_skip_cargo_and_v8_resolution(self) -> None:
         inputs = {"ash-app-server": self.executable("prebuilt")}
         with (
-            patch("build.runtime.cargo.subprocess.run") as run,
-            patch("build.runtime.cargo.cargo_environment") as environment,
+            patch("build.lib.package_binaries.subprocess.run") as run,
+            patch("build.lib.package_binaries.cargo_environment") as environment,
         ):
             result = build_binaries(
                 self.root, self.spec, inputs, cargo="cargo", cargo_profile="release"
@@ -76,9 +78,11 @@ class CargoBuildTests(unittest.TestCase):
         }
         completed = subprocess.CompletedProcess(["cargo"], 0, json.dumps(artifact))
         with (
-            patch("build.runtime.cargo.subprocess.run", return_value=completed) as run,
             patch(
-                "build.runtime.cargo.cargo_environment",
+                "build.lib.package_binaries.subprocess.run", return_value=completed
+            ) as run,
+            patch(
+                "build.lib.package_binaries.cargo_environment",
                 return_value={"V8": "locked"},
             ) as environment,
         ):
@@ -108,10 +112,10 @@ class CargoBuildTests(unittest.TestCase):
         stale.chmod(0o755)
         with (
             patch(
-                "build.runtime.cargo.subprocess.run",
+                "build.lib.package_binaries.subprocess.run",
                 return_value=subprocess.CompletedProcess(["cargo"], 0, ""),
             ),
-            patch("build.runtime.cargo.cargo_environment", return_value={}),
+            patch("build.lib.package_binaries.cargo_environment", return_value={}),
             self.assertRaisesRegex(RuntimeError, "did not report an executable"),
         ):
             build_binaries(
@@ -129,12 +133,12 @@ class CargoBuildTests(unittest.TestCase):
         }
         with (
             patch(
-                "build.runtime.cargo.subprocess.run",
+                "build.lib.package_binaries.subprocess.run",
                 return_value=subprocess.CompletedProcess(
                     ["cargo"], 101, json.dumps(diagnostic)
                 ),
             ),
-            patch("build.runtime.cargo.cargo_environment", return_value={}),
+            patch("build.lib.package_binaries.cargo_environment", return_value={}),
             patch("sys.stderr", new_callable=io.StringIO) as stderr,
             self.assertRaises(subprocess.CalledProcessError) as error,
         ):
@@ -150,7 +154,7 @@ class CargoBuildTests(unittest.TestCase):
 
     def test_windows_sandbox_rejects_other_targets_before_building(self) -> None:
         with (
-            patch("build.runtime.cargo.subprocess.run") as run,
+            patch("build.lib.package_binaries.subprocess.run") as run,
             self.assertRaisesRegex(RuntimeError, "requires a Windows target"),
         ):
             resolve_windows_sandbox_binary(
@@ -167,12 +171,12 @@ class CargoBuildTests(unittest.TestCase):
         }
         with (
             patch(
-                "build.runtime.cargo.subprocess.run",
+                "build.lib.package_binaries.subprocess.run",
                 return_value=subprocess.CompletedProcess(
                     ["cargo"], 0, json.dumps(artifact)
                 ),
             ),
-            patch("build.runtime.cargo.cargo_environment") as environment,
+            patch("build.lib.package_binaries.cargo_environment") as environment,
         ):
             result = resolve_windows_sandbox_binary(
                 self.root, TARGETS["x86_64-pc-windows-msvc"], None, "cargo", "release"
@@ -182,7 +186,7 @@ class CargoBuildTests(unittest.TestCase):
 
     def test_windows_service_rejects_other_targets_before_building(self) -> None:
         with (
-            patch("build.runtime.cargo.subprocess.run") as run,
+            patch("build.lib.package_binaries.subprocess.run") as run,
             self.assertRaisesRegex(RuntimeError, "requires a Windows target"),
         ):
             build_binaries(
@@ -209,10 +213,10 @@ class CargoBuildTests(unittest.TestCase):
         )
         with (
             patch(
-                "build.runtime.cargo.subprocess.run",
+                "build.lib.package_binaries.subprocess.run",
                 return_value=subprocess.CompletedProcess(["cargo"], 0, artifacts),
             ) as run,
-            patch("build.runtime.cargo.cargo_environment") as environment,
+            patch("build.lib.package_binaries.cargo_environment") as environment,
         ):
             result = build_binaries(
                 self.root,

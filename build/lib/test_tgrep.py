@@ -10,7 +10,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from build.runtime.tgrep import resolve_tgrep
+from build.lib.tgrep import resolve_tgrep
 from build.lib.targets import TARGETS
 
 
@@ -64,14 +64,12 @@ class TgrepTests(unittest.TestCase):
                     target.write_bytes(b"built search engine")
 
             with (
-                patch("build.runtime.tgrep.subprocess.run", side_effect=run),
+                patch("build.lib.tgrep.subprocess.run", side_effect=run),
                 patch(
-                    "build.runtime.tgrep.subprocess.check_output",
+                    "build.lib.tgrep.subprocess.check_output",
                     return_value="toolchain",
                 ),
-                patch(
-                    "build.runtime.tgrep.default_target", return_value="other-target"
-                ),
+                patch("build.lib.tgrep.default_target", return_value="other-target"),
             ):
                 first = resolve_tgrep(
                     TARGETS["aarch64-apple-darwin"], lock, root / "cache"
@@ -103,14 +101,12 @@ class TgrepTests(unittest.TestCase):
                     executable.write_bytes(b"published engine")
 
             with (
-                patch("build.runtime.tgrep.subprocess.run", side_effect=run),
+                patch("build.lib.tgrep.subprocess.run", side_effect=run),
                 patch(
-                    "build.runtime.tgrep.subprocess.check_output",
+                    "build.lib.tgrep.subprocess.check_output",
                     return_value="toolchain",
                 ),
-                patch(
-                    "build.runtime.tgrep.default_target", return_value="other-target"
-                ),
+                patch("build.lib.tgrep.default_target", return_value="other-target"),
             ):
                 first = resolve_tgrep(
                     TARGETS["aarch64-apple-darwin"], lock, root / "cache"
@@ -119,7 +115,7 @@ class TgrepTests(unittest.TestCase):
                 legacy.mkdir()
                 (legacy / "old.rlib").write_bytes(b"compiler cache")
                 with patch(
-                    "build.runtime.tgrep.subprocess.run",
+                    "build.lib.tgrep.subprocess.run",
                     side_effect=AssertionError("unexpected rebuild"),
                 ):
                     repeated = resolve_tgrep(
@@ -164,19 +160,17 @@ class TgrepTests(unittest.TestCase):
 
             with (
                 patch(
-                    "build.runtime.tgrep.tempfile.TemporaryDirectory",
+                    "build.lib.tgrep.tempfile.TemporaryDirectory",
                     side_effect=lambda **kwargs: temporary_directory(
                         dir=root / "cache", **kwargs
                     ),
                 ),
-                patch("build.runtime.tgrep.subprocess.run", side_effect=run),
+                patch("build.lib.tgrep.subprocess.run", side_effect=run),
                 patch(
-                    "build.runtime.tgrep.subprocess.check_output",
+                    "build.lib.tgrep.subprocess.check_output",
                     return_value="toolchain",
                 ),
-                patch(
-                    "build.runtime.tgrep.default_target", return_value="other-target"
-                ),
+                patch("build.lib.tgrep.default_target", return_value="other-target"),
             ):
                 result = resolve_tgrep(
                     TARGETS["aarch64-apple-darwin"], lock, root / "cache"
@@ -196,9 +190,9 @@ class TgrepTests(unittest.TestCase):
                     raise subprocess.CalledProcessError(1, command)
 
             with (
-                patch("build.runtime.tgrep.subprocess.run", side_effect=run),
+                patch("build.lib.tgrep.subprocess.run", side_effect=run),
                 patch(
-                    "build.runtime.tgrep.subprocess.check_output",
+                    "build.lib.tgrep.subprocess.check_output",
                     return_value="toolchain",
                 ),
             ):
@@ -217,7 +211,7 @@ class TgrepTests(unittest.TestCase):
                 lock = self.fixture(root)
                 (root / filename).write_bytes(b"corrupt")
                 with patch(
-                    "build.runtime.tgrep.subprocess.run",
+                    "build.lib.tgrep.subprocess.run",
                     side_effect=AssertionError("unexpected build"),
                 ):
                     with self.assertRaisesRegex(RuntimeError, "checksum mismatch"):
@@ -238,7 +232,7 @@ class TgrepTests(unittest.TestCase):
             data["source"]["sha256"] = hashlib.sha256(source.read_bytes()).hexdigest()
             lock.write_text(json.dumps(data))
             with patch(
-                "build.runtime.tgrep.subprocess.check_output", return_value="toolchain"
+                "build.lib.tgrep.subprocess.check_output", return_value="toolchain"
             ):
                 with self.assertRaisesRegex(
                     RuntimeError, "Invalid tgrep source archive"
