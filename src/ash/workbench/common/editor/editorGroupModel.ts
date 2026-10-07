@@ -39,7 +39,7 @@ export class EditorGroupModel {
 	private selectionAnchor: EditorInstanceId | undefined;
 	private locked = false;
 
-	constructor(id?: EditorGroupId) {
+	constructor(id?: EditorGroupId, public readonly editorLimit?: 1) {
 		this.id = id ?? `editor-group-${++editorGroupId}`;
 		const match = /^editor-group-(\d+)$/u.exec(this.id);
 		if (match) {
@@ -113,7 +113,7 @@ export class EditorGroupModel {
 
 	public openEditor(input: IResourceEditorInput, options: IEditorOpenOptions = {}): IEditorOpenResult {
 		const existing = this.editors[this.indexOf(input)];
-		const replaced = existing ?? (options.pinned === false ? this.editors.find(editor => editor.preview) : undefined);
+		const replaced = existing ?? (this.editorLimit === 1 ? this.editors[0] : options.pinned === false ? this.editors.find(editor => editor.preview) : undefined);
 		const editor: EditorEntry = {
 			input,
 			instanceId: existing?.instanceId ?? options.instanceId ?? nextEditorInstanceId(),

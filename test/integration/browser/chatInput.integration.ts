@@ -6,6 +6,11 @@ import { FileKind, IFileService } from '../../../src/ash/platform/files/common/f
 import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
 import { IEditorGroupsService } from '../../../src/ash/workbench/services/editor/common/editorGroupsService.js';
 import { IWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/common/workingCopyService.js';
+import { QuickAccessController } from '../../../src/ash/platform/quickinput/browser/quickAccess.js';
+import { IQuickAccessController } from '../../../src/ash/platform/quickinput/common/quickAccess.js';
+import { IHistoryService } from '../../../src/ash/workbench/services/history/common/history.js';
+import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
+import '../../../src/ash/workbench/contrib/quickaccess/browser/quickAccess.contribution.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { QuickInputController } from '../../../src/ash/platform/quickinput/browser/quickInputController.js';
 import { IChatContextPickService } from '../../../src/ash/workbench/services/chat/common/chatContextService.js';
@@ -38,9 +43,16 @@ import { darkColorTheme } from '../../../src/ash/platform/theme/common/colorThem
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { EventType, Gesture } from '../../../src/ash/base/browser/touch.js';
 import { addDisposableListener, stopEvent } from '../../../src/ash/base/browser/dom.js';
+import { setARIAContainer } from '../../../src/ash/base/browser/ui/aria/aria.js';
+import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
+import { IHostService } from '../../../src/ash/workbench/services/host/browser/host.js';
+import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
+import { IChatService } from '../../../src/ash/workbench/services/chat/common/chatService.js';
+import { IGitHubService } from '../../../src/ash/platform/github/common/githubService.js';
+import { IGitService } from '../../../src/ash/workbench/contrib/git/common/gitService.js';
 
 declare global {
-	interface Window { ashChatInputIntegration: { refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; denyAcceleration(id: string): void; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; }; }
+	interface Window { ashChatInputIntegration: { refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; denyAcceleration(id: string): void; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; }; }
 }
 
 const locale = new URLSearchParams(location.search).get('locale');
@@ -49,6 +61,7 @@ if (locale) {
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? fallback, parameters));
 }
 const resources = new DisposableStore();
+setARIAContainer(document.body);
 resources.add(bindColorTheme(resources.add(new TestThemeService(darkColorTheme)), document.body));
 if (new URLSearchParams(location.search).has('gestureAncestor')) {
 	const main = document.querySelector('main')!;
@@ -56,6 +69,59 @@ if (new URLSearchParams(location.search).has('gestureAncestor')) {
 	resources.add(addDisposableListener(main, EventType.Tap, event => { stopEvent(event); document.querySelector('output')!.textContent = 'Ancestor tap'; }));
 }
 const services = resources.add(new InstantiationService());
+const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6Z1kAAAAASUVORK5CYII='), character => character.charCodeAt(0));
+services.registerInstance(IClipboardService, {
+	readImage: async () => new URLSearchParams(location.search).has('emptyClipboard') ? new Uint8Array() : png,
+	readText: async () => '', writeText: async () => { }, readResources: async () => ({ resources: [], operation: 'copy' }), writeResources: async () => { }, hasResources: async () => false,
+});
+services.registerInstance(IHostService, { hasFocus: true, onDidChangeFocus: Event.None, restart: async () => { }, openWindow: async () => { }, getScreenshot: async () => new URLSearchParams(location.search).has('cancelScreenshot') ? undefined : png });
+services.registerInstance(IChatSessionNavigationService, {
+	getActiveConversation: () => ({ sessionId: 'active-session', threadId: 'active-thread' }),
+	getConversations: () => [{ sessionId: 'active-session', threadId: 'active-thread', title: 'Current session' }, { sessionId: 'previous-session', threadId: 'previous-thread', title: 'Earlier design' }],
+	appendToActiveDraft: () => { }, captureActiveDraft: async () => undefined, openConversation: async () => { },
+});
+services.registerInstance(IChatService, {
+	readThread: async (sessionId: string, threadId: string) => ({ transcript: { sessionId, threadId, durableSequence: 2, revision: 1, entries: [
+		{ type: 'item', transient: false, item: { type: 'userMessage', text: 'Design the attachment picker' } },
+		{ type: 'item', transient: false, item: { type: 'agentMessage', text: 'Use one resource search owner' } },
+		{ type: 'item', transient: false, item: { type: 'reasoning', text: 'Private reasoning is not attached' } },
+	] } }),
+} as unknown as IChatService);
+services.registerInstance(IGitService, {
+	listRepositories: async () => [{ id: 'repo', label: 'workspace' }],
+	graph: async () => ({ remotes: [{ name: 'origin', identity: { provider: 'github', host: 'github.com', owner: 'team', repository: 'alpha' } }] }),
+} as unknown as IGitService);
+const githubReads = document.createElement('output');
+githubReads.setAttribute('aria-label', 'GitHub reads');
+githubReads.textContent = '[]';
+document.body.append(githubReads);
+const recordGitHubRead = (value: unknown): void => { githubReads.textContent = JSON.stringify([...JSON.parse(githubReads.textContent!), value]); };
+const gitHubSearchWaiters = new Map<string, () => void>();
+const gitHubContextService: Pick<IGitHubService, 'listAccounts' | 'listIssues' | 'readIssue' | 'listPullRequests' | 'readPullRequest' | 'listPullRequestFiles'> = {
+	listAccounts: async () => new URLSearchParams(location.search).has('noGitHubAccount') ? [] : [{ id: 'account', login: 'developer', host: 'github.com', status: 'ready', credentialRevision: 1n }, ...(new URLSearchParams(location.search).has('multipleGitHubAccounts') ? [{ id: 'work-account', login: 'work-developer', host: 'github.company.test', status: 'ready' as const, credentialRevision: 2n }] : [])],
+	listIssues: async (repository, _state, query, page, token) => {
+		recordGitHubRead({ type: 'issues', repository, query, page });
+		if (query && new URLSearchParams(location.search).has('deferGitHubSearch')) {
+			await new Promise<void>(resolve => gitHubSearchWaiters.set(query, resolve));
+			recordGitHubRead({ type: 'completed', repository, query, cancelled: token?.isCancellationRequested });
+		}
+		return { items: [{ number: page === 1 ? 12 : 13, title: query === 'older' ? 'Old result' : page === 1 ? 'Attachment issue' : 'Follow-up issue', state: 'open', url: '', updatedAt: '', labels: [], assignees: [] }], nextPage: page === 1 ? 2 : null, notice: '' };
+	},
+	readIssue: async (repository, number) => {
+		recordGitHubRead({ type: 'issue', repository, number });
+		return { number, title: 'Attachment issue', state: 'open', url: `https://${repository.host}/${repository.owner}/${repository.name}/issues/${number}`, body: 'Issue body', updatedAt: '', labels: [], assignees: [], comments: [{ id: 1, body: 'Issue discussion', url: '', updatedAt: '' }] };
+	},
+	listPullRequests: async (repository, _state, page) => {
+		recordGitHubRead({ type: 'pullRequests', repository, page });
+		return { items: [await gitHubContextService.readPullRequest(repository, 24)], nextPage: null };
+	},
+	readPullRequest: async (repository, number) => {
+		recordGitHubRead({ type: 'pullRequest', repository, number });
+		return { number, title: 'Picker improvement', state: 'open', url: `https://${repository.host}/${repository.owner}/${repository.name}/pull/${number}`, body: 'PR body', headBranch: 'feature', baseBranch: 'main', headCommit: 'abc123', draft: false, mergedAt: null, mergeable: true, headRepository: null, autoMerge: false };
+	},
+	listPullRequestFiles: async () => ({ items: [{ status: 'modified', filename: 'picker.ts', patch: '+attach context', additions: 1, deletions: 0, changes: 1, previousFilename: null }], nextPage: null, limitReached: false }),
+};
+services.registerInstance(IGitHubService, gitHubContextService as unknown as IGitHubService);
 services.registerSingleton(IActionWidgetService, () => services.createInstance(ActionWidgetService));
 services.registerInstance(IContextViewService, resources.add(new BrowserContextViewService(document.body)));
 const accessibleView = { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService;
@@ -121,6 +187,13 @@ const notifications = resources.add(new NotificationService());
 services.registerInstance(INotificationService, notifications);
 const quickInput = resources.add(new QuickInputController(document.body));
 services.registerInstance(IQuickInputService, quickInput);
+services.registerInstance(IQuickAccessController, resources.add(services.createInstance(QuickAccessController)));
+services.registerInstance(IHistoryService, { getHistory: () => [{ resource: URI.file('/workspace/closed.ts') }], goBack: async () => { }, goForward: async () => { } } satisfies IHistoryService);
+const openedEditors = document.createElement('output');
+openedEditors.setAttribute('aria-label', 'Opened editor count');
+openedEditors.textContent = '0';
+document.body.append(openedEditors);
+services.registerInstance(IEditorService, { openEditor: async () => { openedEditors.textContent = String(Number(openedEditors.textContent) + 1); } } as unknown as IEditorService);
 const contextPicks = new ChatContextPickService();
 services.registerInstance(IChatContextPickService, contextPicks);
 resources.add(contextPicks.registerPicker({
@@ -144,6 +217,7 @@ const searchCompleted = document.createElement('output');
 searchCompleted.setAttribute('aria-label', 'Completed file search reads');
 document.body.append(searchReads, searchCompleted);
 services.registerInstance(IFileService, {
+	hasProvider: () => true,
 	readDirectory: async (resource: URI) => {
 		if (resource.path === '/workspace' && new URLSearchParams(location.search).has('deferFileSearch')) {
 			searchReads.textContent = String(++fileSearchReads);
@@ -216,6 +290,7 @@ function renderModels(): void {
 }
 part.render(state);
 window.ashChatInputIntegration = {
+	releaseGitHubSearch: query => { const release = gitHubSearchWaiters.get(query)!; gitHubSearchWaiters.delete(query); release(); },
 	releaseFileSearch: index => {
 		const release = fileSearchWaiters.get(index)!;
 		fileSearchWaiters.delete(index);

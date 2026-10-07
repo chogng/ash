@@ -8,6 +8,8 @@ export interface IHostService {
 	readonly onDidChangeFocus: Event<boolean>;
 	openWindow(options?: IOpenEmptyWindowOptions): Promise<void>;
 	restart(): Promise<void>;
+	/** Captures a PNG; browser hosts ask the user to choose a display surface. */
+	getScreenshot(): Promise<Uint8Array | undefined>;
 }
 
 export const IHostService = createServiceIdentifier<IHostService>('hostService');

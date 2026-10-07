@@ -55,10 +55,10 @@ test('Command Palette finds localized commands by their English title and report
 			hide() { },
 		} as unknown as IQuickPick<IQuickPickItem>;
 		resources.add(provider.provide(picker));
-		const item = filterQuickPickItems(picker.items, 'Start Debugging').find(candidate => candidate.description === 'test.commandFailure');
-		assert.ok(item);
+		const item = filterQuickPickItems(picker.items.filter((candidate): candidate is IQuickPickItem => !('type' in candidate)), 'Start Debugging').find(candidate => candidate.description === 'test.commandFailure');
+		assert.ok(item && !('type' in item));
 		assert.deepEqual([item.label, item.detail], ['启动调试', 'Start Debugging']);
-		assert.ok(filterQuickPickItems(picker.items, '启动调试').includes(item));
+		assert.ok(filterQuickPickItems(picker.items.filter((candidate): candidate is IQuickPickItem => !('type' in candidate)), '启动调试').includes(item));
 
 		accept.fire(item);
 		await Promise.resolve();
@@ -106,7 +106,7 @@ test('Command Palette does not show a dialog for cancelled commands', async () =
 	} as unknown as IQuickPick<IQuickPickItem>;
 	resources.add(provider.provide(picker));
 	const item = picker.items.find(candidate => candidate.label === 'Cancelled command');
-	assert.ok(item);
+	assert.ok(item && !('type' in item));
 
 	accept.fire(item);
 	await Promise.resolve();
@@ -140,8 +140,8 @@ test('Command Palette retains the focused embedded editor actions while its pick
 	resources.add(services.createInstance(CommandsQuickAccessProvider).provide(picker));
 	focused = false;
 	updated.fire();
-	const item = picker.items.find(candidate => candidate.description === 'test.outputCommand');
-	assert.ok(item);
+	const item = picker.items.find(candidate => !('type' in candidate) && candidate.description === 'test.outputCommand');
+	assert.ok(item && !('type' in item));
 	accept.fire(item);
 	await Promise.resolve();
 	assert.deepEqual(executed, [true]);

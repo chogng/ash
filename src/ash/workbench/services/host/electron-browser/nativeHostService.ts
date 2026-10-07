@@ -14,6 +14,8 @@ export class NativeHostService extends BrowserHostService {
 
 	public override restart(): Promise<void> { return invoke<void>(HOST_RESTART_CHANNEL); }
 
+	public override getScreenshot(): Promise<Uint8Array> { return invoke<Uint8Array>('ash:host:screenshot'); }
+
 	public override openWindow(options: IOpenEmptyWindowOptions = {}): Promise<void> {
 		return this.host.openWindow(options);
 	}

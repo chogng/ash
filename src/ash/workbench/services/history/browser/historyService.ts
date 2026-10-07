@@ -12,6 +12,10 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { ResourceGlobMatcher } from '../../../common/resources.js';
 import '../../filesConfiguration/common/filesConfigurationService.js';
+import { URI } from '../../../../base/common/uri.js';
+import { extUri } from '../../../../base/common/resources.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import type { IResourceEditorInput } from '../../../common/editor.js';
 
 interface HistoryEntry {
 	readonly editorId: string;
@@ -26,6 +30,7 @@ interface HistoryTimeline {
 
 /** Owns editor and location history and its command availability. */
 export class HistoryService extends Disposable implements IHistoryService {
+	private readonly recentlyOpened = new Map<string, IResourceEditorInput>();
 	private readonly timelines = new Map<GoFilter, HistoryTimeline>([
 		[GoFilter.NONE, { entries: [], index: -1 }],
 		[GoFilter.EDITS, { entries: [], index: -1 }],
@@ -46,9 +51,11 @@ export class HistoryService extends Disposable implements IHistoryService {
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@IConfigurationService configuration: IConfigurationService,
 		@IWorkspaceContextService workspace: IWorkspaceContextService,
+		@IStorageService private readonly storage: IStorageService,
 	) {
 		super();
 		this.resourceExcludeMatcher = this._register(new ResourceGlobMatcher(() => ({ ...configuration.getValue<IExpression>('files.exclude'), ...configuration.getValue<IExpression>('search.exclude') }), event => event.affectsConfiguration('files.exclude') || event.affectsConfiguration('search.exclude'), workspace, configuration));
+		this.restoreHistory();
 		this.canNavigateBack = contextKeyService.createKey('canNavigateBack', false);
 		this.canNavigateForward = contextKeyService.createKey('canNavigateForward', false);
 		this.canNavigateBackInEdits = contextKeyService.createKey('canNavigateBackInEditLocations', false);
@@ -67,6 +74,24 @@ export class HistoryService extends Disposable implements IHistoryService {
 		}));
 		this.recordActiveEditor();
 		this.listenToActivePane();
+	}
+
+	public getHistory(): readonly IResourceEditorInput[] {
+		return [...this.recentlyOpened.values()].reverse().filter(input => !this.resourceExcludeMatcher.matches(input.resource));
+	}
+
+	private restoreHistory(): void {
+		try {
+			const stored: unknown = JSON.parse(this.storage.get('history.recentlyOpened', StorageScope.WORKSPACE, '[]'));
+			if (!Array.isArray(stored)) return;
+			for (const value of stored.slice(-100)) {
+				if (typeof value !== 'string') continue;
+				try {
+					const resource = URI.parse(value);
+					if (resource.scheme && resource.path) this.recentlyOpened.set(extUri.getComparisonKey(resource), { resource });
+				} catch { /* A malformed stored entry must not prevent restoring other resources. */ }
+			}
+		} catch { /* An older or damaged history value starts an empty resource history. */ }
 	}
 
 	public async goBack(filter = GoFilter.NONE): Promise<void> {
@@ -96,6 +121,14 @@ export class HistoryService extends Disposable implements IHistoryService {
 	}
 
 	private recordActiveEditor(): void {
+		const active = this.editorPart.activeInput;
+		if (active && !this.resourceExcludeMatcher.matches(active.resource)) {
+			const key = extUri.getComparisonKey(active.resource);
+			this.recentlyOpened.delete(key);
+			this.recentlyOpened.set(key, { resource: active.resource });
+			if (this.recentlyOpened.size > 100) this.recentlyOpened.delete(this.recentlyOpened.keys().next().value!);
+			this.storage.store('history.recentlyOpened', JSON.stringify([...this.recentlyOpened.values()].map(input => input.resource.toString())), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		}
 		if (this.isNavigating) return;
 		const editorId = this.editorPart.getEditorState().activeEditor?.instanceId;
 		if (!editorId || !this.includeInHistory(editorId)) return;

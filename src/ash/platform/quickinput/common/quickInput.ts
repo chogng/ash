@@ -14,6 +14,19 @@ export interface IQuickPickItem {
 	readonly keybinding?: string;
 	readonly className?: string;
 	readonly buttons?: readonly IQuickPickItemButton[];
+	readonly iconClass?: string;
+	readonly alwaysShow?: boolean;
+}
+
+export interface IQuickPickSeparator {
+	readonly type: 'separator';
+	readonly label?: string;
+}
+
+export interface IKeyMods {
+	readonly ctrlCmd: boolean;
+	readonly alt: boolean;
+	readonly shift: boolean;
 }
 
 export interface IQuickPickItemButton {
@@ -45,7 +58,10 @@ export interface IQuickPick<TItem extends IQuickPickItem>
 	readonly onDidBlur: Event<void>;
 	readonly onDidTriggerItemButton: Event<{ readonly item: TItem; readonly button: IQuickPickItemButton; }>;
 
-	items: readonly TItem[];
+	items: readonly (TItem | IQuickPickSeparator)[];
+	busy?: boolean;
+	canAcceptInBackground?: boolean;
+	readonly keyMods?: IKeyMods;
 	ariaLabel: string;
 	placeholder: string;
 	value: string;
@@ -66,6 +82,7 @@ export interface IInputOptions {
 
 /** Creates Quick Input controllers hosted by one Workbench window. */
 export interface IQuickInputService {
+	readonly currentQuickInput?: IQuickPick<IQuickPickItem>;
 	createQuickPick<TItem extends IQuickPickItem>(): IQuickPick<TItem>;
 	input(options: IInputOptions): Promise<string | undefined>;
 }

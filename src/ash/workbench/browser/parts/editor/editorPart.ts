@@ -128,6 +128,8 @@ export const IEditorPart =
 
 /** Named collaborators used to construct the editor region. */
 export interface IEditorPartOptions {
+	/** Ash extension: reuse the editor host for single-content groups without changing ordinary multi-tab editors. */
+	readonly editorLimit?: 1;
 	readonly configurationService?: IConfigurationService;
 	readonly contextKeyService?: IContextKeyService;
 	readonly keybindingService?: IKeybindingService;
@@ -171,6 +173,9 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		}, undefined, disposables);
 	readonly onDidChangeModalVisibility: Event<boolean>;
 	private readonly gridSlot = this._register(new MutableDisposable<SerializableGrid<EditorGroupGridView>>());
+	private readonly gridChanges = this._register(new MutableDisposable<IDisposable>());
+	private readonly layoutEmitter = this._register(new Emitter<Dimension>());
+	public readonly onDidLayout = this.layoutEmitter.event;
 	private readonly groupHosts = this._register(new DisposableMap<EditorGroupId, EditorGroupHost>());
 	private readonly modalEditor: ModalEditorPart;
 	private readonly groupOptions: Omit<EditorGroupOptions, "onDidActivate" | "dragAndDrop">;
@@ -205,6 +210,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		this.titleDomNode.remove();
 		this.domNode.setAttribute("aria-label", "Editor");
 		this.groupOptions = {
+			editorLimit: options.editorLimit,
 			registry: options.registry ?? EditorPanes,
 			resolveOpenError: (error, input, openOptions, open) => this.resolveEditorOpenError(error, input, openOptions, open),
 			onWillOpenEditor: input => this.confirmLargeFileOpen(input),
@@ -252,6 +258,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			view: initial.view,
 			size: 1,
 		}, { styles: EDITOR_GROUP_GRID_STYLES });
+		this.observeGrid();
 		this._register(new EditorDropTarget(
 			this.contentDomNode,
 			target => this._groups.find(host => host.group.domNode.contains(target))?.group,
@@ -311,6 +318,30 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 
 	public activateGroup(id: EditorGroupId): void {
 		this.setActiveGroup(this.groupHosts.get(id)!.group);
+	}
+
+	public getSize(group: IEditorGroupView | EditorGroupId): IDimension {
+		return this.editorGrid.getViewSize(this.groupHosts.get(typeof group === 'string' ? group : group.id)!.view);
+	}
+
+	public setSize(group: IEditorGroupView | EditorGroupId, size: IDimension): void {
+		this.editorGrid.resizeView(this.groupHosts.get(typeof group === 'string' ? group : group.id)!.view, size);
+	}
+
+	public moveGroup(group: IEditorGroupView | EditorGroupId, location: IEditorGroupView | EditorGroupId, direction: GroupDirection): IEditorGroupView {
+		const source = this.groupHosts.get(typeof group === 'string' ? group : group.id)!;
+		const target = this.groupHosts.get(typeof location === 'string' ? location : location.id)!;
+		if (source === target) return source.group;
+		const directions = { [GroupDirection.LEFT]: Direction.Left, [GroupDirection.RIGHT]: Direction.Right, [GroupDirection.UP]: Direction.Up, [GroupDirection.DOWN]: Direction.Down };
+		this.editorGrid.moveView(source.view, Sizing.Split, target.view, directions[direction]);
+		this._groups.splice(this._groups.indexOf(source), 1);
+		this._groups.splice(this._groups.indexOf(target) + (direction === GroupDirection.LEFT || direction === GroupDirection.UP ? 0 : 1), 0, source);
+		this.layoutEditorContent();
+		return source.group;
+	}
+
+	public removeGroup(group: IEditorGroupView | EditorGroupId): void {
+		this.removeGroupHost(this.groupHosts.get(typeof group === 'string' ? group : group.id)!);
 	}
 
 	public findGroup(scope: IFindGroupScope, source: IEditorGroup = this._activeGroup): IEditorGroup | undefined {
@@ -407,7 +438,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 				if (!options.preserveFocus) this.setActiveGroup(host.group);
 				return pane;
 			} catch (error) {
-				if (!unlocked) this.removeGroup(host);
+				if (!unlocked) this.removeGroupHost(host);
 				throw error;
 			}
 		}
@@ -421,7 +452,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			}
 			return pane;
 		} catch (error) {
-			if (created) this.removeGroup(host);
+			if (created) this.removeGroupHost(host);
 			this.setActiveGroup(source);
 			throw error;
 		}
@@ -629,7 +660,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			}
 			created.group.focus();
 		} catch (error) {
-			this.removeGroup(created);
+			this.removeGroupHost(created);
 			this.setActiveGroup(previousActive);
 			throw error;
 		}
@@ -691,6 +722,11 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			host.group.setEditorContentVisible(this.editorContentVisible && this.editorGrid.isViewVisible(host.view));
 		}
 		this.editorGrid.layout(this.dimension.width - (visibleGroups.length > 1 ? inset : 0), this.dimension.height);
+		this.layoutEmitter.fire(this.dimension);
+	}
+
+	private observeGrid(): void {
+		this.gridChanges.value = this.editorGrid.onDidChange(() => this.layoutEmitter.fire(this.dimension));
 	}
 
 	public setEditorContentVisible(visible: boolean): void {
@@ -805,7 +841,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		return created;
 	}
 
-	private removeGroup(host: EditorGroupHost): void {
+	private removeGroupHost(host: EditorGroupHost): void {
 		const index = this._groups.indexOf(host);
 		if (index < 0) return;
 		if (this._groups.length === 1) throw new Error("EditorPart cannot remove its last group");
@@ -832,12 +868,12 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			void event.source.moveEditorTo(event.input, created.group, 0)
 				.then(() => {
 					const sourceHost = this._groups.find(host => host.group === event.source);
-					if (sourceHost && sourceHost.group.inputs.length === 0 && this._groups.length > 1) this.removeGroup(sourceHost);
+					if (sourceHost && sourceHost.group.inputs.length === 0 && this._groups.length > 1) this.removeGroupHost(sourceHost);
 					this.setActiveGroup(created.group);
 					created.group.focus();
 				})
 				.catch(error => {
-					if (this._groups.includes(created)) this.removeGroup(created);
+					if (this._groups.includes(created)) this.removeGroupHost(created);
 					console.error("Failed to split Editor tab", error);
 				});
 			return;
@@ -966,6 +1002,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			}, { styles: EDITOR_GROUP_GRID_STYLES })
 			: new SerializableGrid(this.contentDomNode, legacyGridDescriptor(hosts, groups, this.dimension), { styles: EDITOR_GROUP_GRID_STYLES });
 		this.gridSlot.value = grid;
+		this.observeGrid();
 		this._activeGroup = hosts[activeGroupIndex]!.group;
 		this.layoutEditorContent();
 		this.notifyConstraintsChanged();

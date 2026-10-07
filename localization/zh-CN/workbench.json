@@ -953,7 +953,13 @@
     "timeline.localHistory.invalidEntry": "本地历史条目需要资源和条目 ID。",
     "timeline.localHistory.compareLabel": "{0}（本地历史）",
     "tree.find": "在树中查找",
-    "tree.closeFind": "关闭查找"
+    "tree.closeFind": "关闭查找",
+    "quickAccess.searchFiles": "按名称搜索文件",
+    "quickAccess.files": "文件",
+    "quickAccess.recentlyOpened": "最近打开",
+    "quickAccess.workspaceResources": "工作区",
+    "quickAccess.fileSearchFailed": "无法搜索文件：{0}",
+    "quickInput.searching": "正在搜索…"
   },
   "ash.menu": {
     "file": "文件",

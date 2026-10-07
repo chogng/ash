@@ -130,6 +130,8 @@ import { EditorPart } from './parts/editor/editorPart.js';
 import { BrowserEditorService } from '../../workbench/services/editor/browser/browserEditorService.js';
 import { IEditorService } from '../../workbench/services/editor/common/editorService.js';
 import { IEditorGroupsService } from '../../workbench/services/editor/common/editorGroupsService.js';
+import { IHistoryService } from '../../workbench/services/history/common/history.js';
+import { HistoryService } from '../../workbench/services/history/browser/historyService.js';
 import { IViewDescriptorService } from '../../workbench/common/views.js';
 import { ViewDescriptorService } from '../../workbench/services/views/browser/viewDescriptorService.js';
 import { IViewsService } from '../../workbench/services/views/common/viewsService.js';
@@ -343,7 +345,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IDecorationsService, this._register(services.createInstance(DecorationsService, ownerDocument)));
 		services.registerSingleton(IResourceLabelService, () => services.createInstance(ResourceLabelService));
 		services.registerSingleton(IUntitledTextEditorService, () => services.createInstance(UntitledTextEditorService));
-		services.registerInstance(IClipboardService, new BrowserClipboardService(ownerWindow.navigator.clipboard));
+		if (!services.has(IClipboardService)) services.registerInstance(IClipboardService, new BrowserClipboardService(ownerWindow.navigator.clipboard));
 		const textFiles = this._register(services.createInstance(TextFileService, fileService));
 		services.registerInstance(ITextFileService, textFiles);
 		const workingCopies = this._register(new BrowserWorkingCopyService());
@@ -634,6 +636,7 @@ export abstract class Workbench extends Disposable {
 			openGlobalKeybindingSettings: textual => workbenchPreferences.openGlobalKeybindingSettings(textual),
 		});
 		services.registerInstance(IEditorGroupsService, editors);
+		services.registerInstance(IHistoryService, this._register(services.createInstance(HistoryService)));
 		this._register(services.createInstance(TextFileEditorTracker, ownerWindow));
 		auxiliarybar = this._register(services.createInstance(AuxiliaryBarPart, this.domNode));
 		services.registerInstance(ITerminalProcessService, options.api.terminal);

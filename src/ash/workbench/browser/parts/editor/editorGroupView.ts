@@ -59,6 +59,8 @@ import { associatedEditorId, DiffEditorAssociationsConfiguration, EditorAssociat
 /** Construction inputs for one independently navigable EditorGroup. */
 export interface EditorGroupOptions {
 	readonly id?: EditorGroupId;
+	/** Ash extension: a single-content host replaces its item even when pinned; VS Code groups normally retain multiple tabs. */
+	readonly editorLimit?: 1;
 	readonly registry: IEditorPaneRegistry;
 	readonly configurationService?: IConfigurationService;
 	readonly contextKeyService?: IContextKeyService;
@@ -164,11 +166,12 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	private dimension: IDimension = Dimension.Zero;
 	private contentRightInset = 0;
 	private contentVisible = true;
+	private titleVisible = true;
 	private openSequence = 0;
 
 	constructor(container: HTMLElement, options: EditorGroupOptions, @IInstantiationService instantiationService: IInstantiationService) {
 		super();
-		this.model = new EditorGroupModel(options.id);
+		this.model = new EditorGroupModel(options.id, options.editorLimit);
 		this.id = this.model.id;
 		this.registry = options.registry;
 		this.onOpenError = options.onOpenError;
@@ -435,6 +438,10 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		const sequence = ++this.openSequence;
 		this.cancelPendingOpen();
 		const existing = this.entry(input);
+		if (!existing && this.model.editorLimit === 1 && this.activeInput && !await this.confirmCloseEditor(this.activeInput)) {
+			throw new CancellationError('Replacing the editor was cancelled');
+		}
+		if (sequence !== this.openSequence) throw new EditorOpenSupersededError(input);
 		try {
 			const confirmation = this.onWillOpenEditor?.(input);
 			if (confirmation) await confirmation;
@@ -560,7 +567,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		// Completed panes and error pages can commit; cancelled loads retain the previous tab.
 		const pinned = options.pinned !== false || pane.workingCopy?.isDirty === true;
 		const preview = this.model.previewEditor;
-		const replacement = existing ?? (!pinned && preview ? this.entry(preview) : undefined);
+		const replacement = existing ?? (this.model.editorLimit === 1 ? this.entries[0] : !pinned && preview ? this.entry(preview) : undefined);
 		const closedState = replacement ? this.editorState(replacement) : undefined;
 		const result = this.model.openEditor(input, { ...options, pinned, ...(instanceId === undefined ? {} : { instanceId }) });
 		const state = result.editor;
@@ -572,7 +579,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		const entry = new EditorGroupEntry(state, paneInstance);
 		this.paneEntries.set(entry.instanceId, entry);
 		if (closedState) {
-			this.editorChangeEmitter.fire(Object.freeze({ kind: "editorClosed", editor: closedState, reason: existing ? "replace" : "previewReplace" }));
+			this.editorChangeEmitter.fire(Object.freeze({ kind: "editorClosed", editor: closedState, reason: existing || this.model.editorLimit === 1 ? "replace" : "previewReplace" }));
 		}
 		entry.labelListener.value = input.onDidChangeLabel?.(() => this.publishEditorState(entry));
 		if (isEditorPaneWithStatus(pane)) {
@@ -731,13 +738,20 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		this.groupDimension = dimension;
 		this.dimension = new Dimension(
 			Math.max(0, dimension.width - this.contentRightInset),
-			Math.max(0, dimension.height - this.titleControl.height),
+			Math.max(0, dimension.height - (this.titleVisible ? this.titleControl.height : 0)),
 		);
 		this.panes.layout(this.dimension);
 	}
 
 	public get titleHeight(): { readonly offset: number; readonly total: number; } {
-		return { offset: this.titleControl.height, total: this.titleControl.height };
+		const height = this.titleVisible ? this.titleControl.height : 0;
+		return { offset: height, total: height };
+	}
+
+	public setTitleVisible(visible: boolean): void {
+		this.titleVisible = visible;
+		this.titleControl.domNode.hidden = !visible;
+		this.layout(this.groupDimension);
 	}
 
 	public setContentRightInset(inset: number): void {

@@ -221,6 +221,7 @@ test('Explorer copy and cut paste selected files with conflict names', async () 
 	services.registerInstance(IExplorerService, explorer);
 	services.registerInstance(IClipboardService, {
 		readText: async () => '',
+		readImage: async () => new Uint8Array(),
 		writeText: async () => { },
 		readResources: async () => resourceClipboard,
 		writeResources: async (resources, operation) => { resourceClipboard = { resources: [...resources], operation }; },
@@ -263,6 +264,7 @@ test('Explorer paste keeps copy and cut operations across windows', async () => 
 	let clipboardResources: IClipboardResources = { resources: [], operation: 'copy' };
 	const clipboard = {
 		readText: async () => '',
+		readImage: async () => new Uint8Array(),
 		writeText: async () => { },
 		readResources: async () => clipboardResources,
 		writeResources: async (resources: readonly URI[], operation: 'copy' | 'move') => { clipboardResources = { resources: [...resources], operation }; },
@@ -327,6 +329,7 @@ test('Explorer cut across nested workspace roots copies before deleting the sour
 	services.registerInstance(IExplorerService, explorer);
 	services.registerInstance(IClipboardService, {
 		readText: async () => '',
+		readImage: async () => new Uint8Array(),
 		writeText: async () => { },
 		readResources: async () => clipboardResources,
 		writeResources: async (resources, operation) => { clipboardResources = { resources, operation }; },
@@ -446,6 +449,7 @@ test('Copy Path commands copy the active file and its workspace-relative path', 
 		services.registerInstance(IWorkspaceContextService, workspace);
 		services.registerInstance(IClipboardService, {
 			readText: async () => copied.at(-1) ?? '',
+			readImage: async () => new Uint8Array(),
 			writeText: async (value: string) => { copied.push(value); },
 			readResources: async () => ({ resources: [], operation: 'copy' }),
 			writeResources: async () => { },

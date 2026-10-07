@@ -239,6 +239,7 @@ test('clipboard actions contribute the standard editor and simple-editor menu co
 });
 
 class MemoryClipboardService implements IClipboardServiceContract {
+	async readImage(): Promise<Uint8Array> { return new Uint8Array(); }
 	text = '';
 	async readText(): Promise<string> { return this.text; }
 	async writeText(value: string): Promise<void> { this.text = value; }
@@ -249,6 +250,7 @@ class MemoryClipboardService implements IClipboardServiceContract {
 }
 
 class DeferredClipboardService implements IClipboardServiceContract {
+	async readImage(): Promise<Uint8Array> { return new Uint8Array(); }
 	async readResources(): Promise<{ resources: readonly never[]; operation: 'copy'; }> { return { resources: [], operation: 'copy' }; }
 	async writeResources(): Promise<void> { }
 	async hasResources(): Promise<boolean> { return false; }

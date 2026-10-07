@@ -784,7 +784,7 @@ test('macOS custom right activity bar menus open beside their buttons', async ({
 	test.skip(target.kind !== 'electron' || process.platform !== 'darwin', 'This scenario requires macOS Electron Code');
 	const page = workbench.page;
 	await page.getByRole('button', { name: 'Search commands' }).click();
-	await page.getByRole('dialog', { name: 'Search commands (type >, @, or ? for modes)' }).getByRole('combobox').fill('Ash Settings');
+	await page.getByRole('dialog', { name: 'Search files by name' }).getByRole('combobox').fill('>Ash Settings');
 	await page.keyboard.press('Enter');
 	await page.locator('[data-settings-group-id="workbench"]').click();
 	await page.locator('[data-settings-category-id="layout"]').click();
@@ -1534,7 +1534,7 @@ test('Quick Access scrolls its results within the list', async ({ workbench }) =
 	}).toPass({ timeout: 10_000 });
 });
 
-test('titlebar command center opens command search and restores focus', async ({ target, testWorkspace, workbench }) => {
+test('titlebar command center opens file search, switches to commands and restores focus', async ({ target, testWorkspace, workbench }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.selectTheme');
 	await page.locator('.ash-quick-pick').getByRole('combobox').fill('Ash Light');
@@ -1580,7 +1580,7 @@ test('titlebar command center opens command search and restores focus', async ({
 	const picker = page.locator('.ash-quick-pick');
 	const query = picker.getByRole('combobox');
 	await expect(query).toBeFocused();
-	await expect(query).toHaveAttribute('placeholder', 'Search commands (type >, @, or ? for modes)');
+	await expect(query).toHaveAttribute('placeholder', 'Search files by name');
 	await expect(page.locator('.ash-hover')).toHaveCount(0);
 	const initialPicker = await picker.elementHandle();
 	await query.fill('?');

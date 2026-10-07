@@ -6,12 +6,13 @@ import { HelpQuickAccessProvider } from '../../../../platform/quickinput/browser
 import { QuickAccessRegistry } from '../../../../platform/quickinput/common/quickAccess.js';
 import { localize } from '../../../../nls.js';
 import { CommandsQuickAccessProvider, ShowAllCommandsAction } from './commandsQuickAccess.js';
+import { AnythingQuickAccessProvider } from '../../search/browser/anythingQuickAccess.js';
 
 QuickAccessRegistry.register({
 	prefix: '',
-	get placeholder() { return localize('quickAccess.searchCommands', 'Search commands (type >, @, or ? for modes)'); },
-	get helpLabel() { return localize('quickAccess.commands', 'Commands'); },
-	ctor: CommandsQuickAccessProvider,
+	get placeholder() { return localize('quickAccess.searchFiles', 'Search files by name'); },
+	get helpLabel() { return localize('quickAccess.files', 'Files'); },
+	ctor: AnythingQuickAccessProvider,
 });
 QuickAccessRegistry.register({
 	prefix: '>',

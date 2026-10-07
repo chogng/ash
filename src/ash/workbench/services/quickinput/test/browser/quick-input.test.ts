@@ -89,6 +89,26 @@ test('Quick Pick item button fires without accepting its row', () => {
 	dom.window.close();
 });
 
+test('QuickInputList skips section headings and reports keyboard modifiers during acceptance', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	installDomGlobals(dom);
+	const list = new QuickInputList(dom.window.document.body);
+	const accepted: unknown[] = [];
+	list.onDidAccept(item => accepted.push({ label: item.label, ...list.keyMods }));
+	list.items = [{ type: 'separator', label: 'Recently opened' }, { label: 'main.ts' }];
+	list.focus(QuickPickFocus.First);
+	list.acceptActive(new dom.window.KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true }));
+	list.acceptActive(new dom.window.KeyboardEvent('keydown', { key: 'Enter', metaKey: true }));
+	list.acceptActive(new dom.window.KeyboardEvent('keydown', { key: 'Enter' }));
+	assert.deepEqual(accepted, [
+		{ label: 'main.ts', ctrlCmd: true, alt: false, shift: false },
+		{ label: 'main.ts', ctrlCmd: true, alt: false, shift: false },
+		{ label: 'main.ts', ctrlCmd: false, alt: false, shift: false },
+	]);
+	list.dispose();
+	dom.window.close();
+});
+
 test("QuickInputList owns filtering, looping focus, and acceptance", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	installDomGlobals(dom);
@@ -187,7 +207,7 @@ test("Command Palette filters, executes, closes, and restores focus", async () =
 		".ash-quick-pick-input input",
 	);
 	assert.ok(input);
-	input.value = "palette target";
+	input.value = ">palette target";
 	input.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
 	assert.deepEqual(
 		[...container.querySelectorAll(".ash-quick-pick-row-label")]
@@ -237,12 +257,12 @@ test('Quick Access switches search modes in one picker and restores focus on clo
 		services.registerInstance(IQuickAccessController, quickAccess);
 		const button = dom.window.document.querySelector('button')!;
 		button.focus();
-		quickAccess.show();
+		quickAccess.show('>');
 		const picker = dom.window.document.querySelector('.ash-quick-pick');
 		const input = picker?.querySelector<HTMLInputElement>('.ash-quick-pick-input input');
 		assert.ok(picker);
 		assert.ok(input);
-		assert.equal(input.placeholder, 'Search commands (type >, @, or ? for modes)');
+		assert.equal(input.placeholder, 'Type the name of a command to run');
 		input.value = '?';
 		input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
 		assert.equal(dom.window.document.querySelector('.ash-quick-pick'), picker);

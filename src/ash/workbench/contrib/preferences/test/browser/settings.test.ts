@@ -217,6 +217,7 @@ test('URL rule suggestions follow extension registration without changing saved 
 		contextViewProvider: contextView,
 		clipboardService: {
 			readText: async () => '', writeText: async () => { },
+			readImage: async () => new Uint8Array(),
 			readResources: async () => ({ resources: [], operation: 'copy' }),
 			writeResources: async () => { }, hasResources: async () => false,
 		},
@@ -688,6 +689,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	let hideMenu: ((didCancel: boolean) => void) | undefined;
 	const clipboardService: IClipboardService = {
 		readText: async () => '',
+		readImage: async () => new Uint8Array(),
 		readResources: async () => ({ resources: [], operation: 'copy' }),
 		writeResources: async () => { },
 		hasResources: async () => false,

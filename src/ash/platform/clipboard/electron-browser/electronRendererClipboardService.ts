@@ -8,6 +8,10 @@ export class ElectronRendererClipboardService implements IClipboardService {
 		return invoke<string>('ash:host:readClipboard');
 	}
 
+	public readImage(): Promise<Uint8Array> {
+		return invoke<Uint8Array>('ash:host:readClipboardImage');
+	}
+
 	public writeText(value: string): Promise<void> {
 		return invoke<void>('ash:host:writeClipboard', value);
 	}

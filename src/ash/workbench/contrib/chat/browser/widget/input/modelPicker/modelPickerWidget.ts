@@ -11,7 +11,6 @@ import { AccessibleViewRegistry } from '../../../../../../../platform/accessibil
 import { IActionWidgetService } from '../../../../../../../platform/actionWidget/browser/actionWidget.js';
 import type { ModelCatalogEntry } from '../../../../../../services/chat/common/modelCatalog.js';
 import type { IModelPickerDelegate } from './modelPickerActionItem.js';
-import { ILanguageModelsService } from '../../../../common/languageModels.js';
 import { ModelPickerDetailsMenu } from './modelPickerHover.js';
 import { buildModelPickerItems } from './modelPickerItems.js';
 import { ModelPickerConfiguration } from './modelPickerConfiguration.js';
@@ -30,7 +29,7 @@ export class ModelPickerWidget extends Disposable {
 	private enabled = true;
 	private readonly popup: MutableDisposable<DisposableStore>;
 
-	constructor(private readonly delegate: IModelPickerDelegate, @IActionWidgetService private readonly actionWidgetService: IActionWidgetService, @IAccessibleViewService private readonly accessibleViewService: IAccessibleViewService, @ILanguageModelsService private readonly languageModels: ILanguageModelsService, @IInstantiationService private readonly instantiationService: IInstantiationService) {
+	constructor(private readonly delegate: IModelPickerDelegate, @IActionWidgetService private readonly actionWidgetService: IActionWidgetService, @IAccessibleViewService private readonly accessibleViewService: IAccessibleViewService, @IInstantiationService private readonly instantiationService: IInstantiationService) {
 		super();
 		// Close the service-owned popup before releasing the controls attached to it.
 		this._register(toDisposable(() => this.hide()));
@@ -196,10 +195,7 @@ export class ModelPickerWidget extends Disposable {
 		const showDetails = (): void => {
 			if (active && hasNavigated) {
 				const { entry, row } = active;
-				detailsMenu.show({
-					entry,
-					setPreferences: update => this.languageModels.setModelPreferences(entry.model, update),
-				}, row);
+				detailsMenu.show(entry, row);
 			}
 		};
 		const isAutomatic = this.delegate.isAutomaticModel();
@@ -343,7 +339,7 @@ export class ModelPickerWidget extends Disposable {
 						{ type },
 						() => {
 							if (type === AccessibleViewType.Help) {
-								return localize('chat.modelPicker.help', 'Model menu. Space toggles Auto. When Auto is on, only its switch is shown. When Auto is off, Retirement badges show confirmed shutdown dates when available. Type to search, use Up and Down Arrow to browse models, and Enter to select. Right Arrow opens model settings. Tab moves between model settings. Space selects one acceleration option, turns it off, or turns long context on or off. Long context is off by default. Only one acceleration option can be selected. The model settings description explains how acceleration affects processing and usage. Use the model options button beside the model button to change thinking level or context size. Alt+Left Arrow returns to search. Escape closes the menu.');
+								return localize('chat.modelPicker.help', 'Model menu. Space toggles Auto. When Auto is on, only its switch is shown. When Auto is off, retirement badges show confirmed shutdown dates when available. Type to search, use Up and Down Arrow to browse models, and Enter to select. Right Arrow reads the model description when available. Use the model options button beside the model button to change thinking level or context size. Alt+Left Arrow returns to search. Escape closes the menu.');
 							}
 							return content.innerText;
 						},

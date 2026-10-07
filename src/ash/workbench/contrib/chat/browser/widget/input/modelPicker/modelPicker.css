@@ -120,33 +120,17 @@
 	left: auto;
 }
 
-/* The card hosts switch roots; each switch retains ownership of its track and focus state. */
-.ash-chat-model-card > .ash-switch,
-.ash-chat-model-card-context > .ash-switch {
-	width: 100%;
-	min-height: var(--ash-spacing-size280);
-}
-
-.ash-chat-model-card-context {
-	display: flex;
-	min-height: var(--ash-spacing-size280);
-	align-items: center;
-}
-
 .ash-chat-model-card:focus-visible {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: var(--ash-spacing-size20);
 }
 
 .ash-chat-model-card-description {
-	margin: 0 0 var(--ash-spacing-size80);
+	margin: 0;
 	color: var(--ash-description-foreground);
-	font-size: var(--ash-fontSize-label2);
+	font-size: var(--ash-fontSize-body2);
+	white-space: pre-wrap;
 	overflow-wrap: anywhere;
-}
-
-.ash-chat-model-card-error {
-	color: var(--ash-error-foreground);
 }
 
 .ash-high-contrast .ash-chat-model-picker-details-menu {

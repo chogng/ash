@@ -2,11 +2,27 @@ import { toDisposable, type IDisposable } from '../../../base/common/lifecycle.j
 import type { Event } from '../../../base/common/event.js';
 import type { Constructor } from '../../instantiation/common/descriptors.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
-import type { IQuickPick, IQuickPickItem } from './quickInput.js';
+import type { IQuickPick, IQuickPickItem, IQuickPickSeparator } from './quickInput.js';
+
+export interface IQuickAccessProviderRunOptions {
+	readonly handleAccept?: (item: IQuickPickItem, isBackgroundAccept: boolean) => void;
+}
+
+export interface AnythingQuickAccessProviderRunOptions extends IQuickAccessProviderRunOptions {
+	readonly includeFolders?: boolean;
+	readonly additionPicks?: readonly (IQuickPickItem | IQuickPickSeparator)[];
+	readonly filter?: (item: IQuickPickItem) => boolean;
+}
+
+export interface IQuickAccessOptions {
+	readonly placeholder?: string;
+	readonly enabledProviderPrefixes?: readonly string[];
+	readonly providerOptions?: IQuickAccessProviderRunOptions;
+}
 
 /** One search mode hosted by the shared Quick Access picker. */
 export interface IQuickAccessProvider {
-	provide(picker: IQuickPick<IQuickPickItem>, prefix: string, signal: AbortSignal): IDisposable;
+	provide(picker: IQuickPick<IQuickPickItem>, prefix: string, signal: AbortSignal, options?: IQuickAccessProviderRunOptions): IDisposable;
 }
 
 export interface IQuickAccessProviderDescriptor {
@@ -47,7 +63,7 @@ export class QuickAccessRegistry {
 
 export interface IQuickAccessController {
 	readonly onDidChangeVisibility: Event<boolean>;
-	show(value?: string): void;
+	show(value?: string, options?: IQuickAccessOptions): void;
 }
 
 export const IQuickAccessController = createServiceIdentifier<IQuickAccessController>('quickAccessController');

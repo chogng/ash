@@ -49,3 +49,6 @@
 	padding: 0 6px;
 	color: var(--ash-description-foreground);
 }
+.ash-editor-title-control[hidden] {
+	display: none;
+}

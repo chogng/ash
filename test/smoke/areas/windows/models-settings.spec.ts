@@ -281,9 +281,9 @@ test('Models Settings saves custom model IDs and keys and tests the configured e
 });
 
 
-test('Model acceleration copy follows the catalog and its preference survives a restart in Chinese', async ({ target, workbench, restartWorkbench }) => {
-	test.skip(target.appServerMode !== 'required', 'Uses the product model catalog and persisted connection preferences.');
-	const openModelCard = async (chinese: boolean, modelName = 'GPT-6.1 Sol'): Promise<void> => {
+test('Model descriptions retain provider copy after restarting in Chinese', async ({ target, workbench, restartWorkbench }) => {
+	test.skip(target.appServerMode !== 'required', 'Uses the product model catalog.');
+	const openModelCard = async (chinese: boolean): Promise<void> => {
 		const page = workbench.page;
 		if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 			await workbench.quickaccess.runCommand('workbench.action.toggleAuxiliaryBar');
@@ -293,43 +293,15 @@ test('Model acceleration copy follows the catalog and its preference survives a 
 		const automatic = picker.getByRole('switch', { name: chinese ? '自动' : 'Auto', exact: true });
 		if (await automatic.isChecked()) { await automatic.press('Space'); }
 		const search = picker.getByRole('combobox');
-		await search.fill(modelName);
-		await picker.getByText(modelName, { exact: true }).hover();
-		const card = page.locator('.ash-chat-model-card');
-		await expect(card).toHaveAttribute('aria-label', modelName);
-		await card.getByRole('switch').first().focus();
+		await search.fill('GPT-6.1 Sol');
+		await search.press('ArrowRight');
+		const card = picker.getByRole('region', { name: 'GPT-6.1 Sol', exact: true });
+		await expect(card).toBeFocused();
+		await expect(card).toHaveText('Latest workhorse model for coding and everyday work.');
+		await expect(card.getByRole('switch')).toHaveCount(0);
+		await card.press('Escape');
 	};
 	await openModelCard(false);
-	let card = workbench.page.locator('.ash-chat-model-card');
-	let fast = card.getByRole('switch', { name: 'Fast', exact: true });
-	await expect(card.getByRole('switch', { name: 'Ultra Fast', exact: true })).toHaveCount(0);
-	await expect(card.locator('.ash-chat-model-card-description')).toHaveText('Faster responses, increased usage');
-	await expect(fast).toHaveAttribute('aria-description', /Faster responses, increased usage/);
-	await expect(fast).toBeFocused();
-	const longContext = card.getByRole('switch', { name: 'Long context', exact: true });
-	await expect(longContext).not.toBeChecked();
-	await longContext.focus();
-	await longContext.press('Space');
-	await expect(longContext).toBeChecked();
-	await expect(longContext).not.toHaveAttribute('aria-busy', 'true');
-	await expect(longContext).toBeFocused();
-	await fast.focus();
-	await fast.press('Space');
-	await expect(fast).toBeChecked();
-	await expect(fast).not.toHaveAttribute('aria-busy', 'true');
-	await expect(fast).toBeFocused();
-	await fast.press('Escape');
-	await openModelCard(false, 'GPT-6 Astra');
-	let ultrafast = card.getByRole('switch', { name: 'Ultra Fast', exact: true });
-	await expect(fast).not.toBeChecked();
-	await expect(ultrafast).not.toBeChecked();
-	await ultrafast.focus();
-	await ultrafast.press('Space');
-	await expect(ultrafast).toBeChecked();
-	await expect(ultrafast).not.toHaveAttribute('aria-busy', 'true');
-	await expect(ultrafast).toBeFocused();
-	await expect(fast).not.toBeChecked();
-	await ultrafast.press('Escape');
 	await workbench.settingsEditor.openUserSettingsUI();
 	await workbench.settingsEditor.selectGroup('agents');
 	await workbench.settingsEditor.selectCategory('general');
@@ -338,33 +310,4 @@ test('Model acceleration copy follows the catalog and its preference survives a 
 	await workbench.page.getByRole('option', { name: '简体中文', exact: true }).click();
 	({ workbench } = await restartWorkbench());
 	await openModelCard(true);
-	card = workbench.page.locator('.ash-chat-model-card');
-	fast = card.getByRole('switch', { name: '快速', exact: true });
-	const restoredContext = card.getByRole('switch', { name: '长上下文', exact: true });
-	await expect(restoredContext).toBeChecked();
-	await restoredContext.focus();
-	await restoredContext.press('Space');
-	await expect(restoredContext).not.toBeChecked();
-	await expect(restoredContext).not.toHaveAttribute('aria-busy', 'true');
-	await fast.focus();
-	await expect(card.locator('.ash-chat-model-card-description')).toHaveText('响应更快，用量增加');
-	await expect(fast).toHaveAttribute('aria-description', /响应更快，用量增加/);
-	await expect(fast).toBeChecked();
-	await fast.press('Space');
-	await expect(fast).not.toBeChecked();
-	await expect(fast).not.toHaveAttribute('aria-busy', 'true');
-	await expect(fast).toBeFocused();
-	await fast.press('Escape');
-	await openModelCard(true, 'GPT-6 Astra');
-	ultrafast = card.getByRole('switch', { name: '超快速', exact: true });
-	await expect(ultrafast).toBeChecked();
-	await expect(ultrafast).toHaveAttribute('aria-description', /响应更快，用量增加/);
-	await expect(fast).not.toBeChecked();
-	await fast.press('Space');
-	await expect(fast).toBeChecked();
-	await expect(ultrafast).not.toBeChecked();
-	await expect(fast).not.toHaveAttribute('aria-busy', 'true');
-	await fast.press('Space');
-	await expect(fast).not.toBeChecked();
-	await expect(ultrafast).not.toBeChecked();
 });

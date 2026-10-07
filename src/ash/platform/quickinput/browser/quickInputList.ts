@@ -2,7 +2,7 @@ import { List } from "../../../base/browser/ui/list/listWidget.js";
 import { setRole } from "../../../base/browser/ui/aria/aria.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
-import type { IQuickPickItem, IQuickPickItemButton } from "../common/quickInput.js";
+import type { IKeyMods, IQuickPickItem, IQuickPickItemButton, IQuickPickSeparator } from "../common/quickInput.js";
 import { QuickPickFocus } from '../common/quickInput.js';
 import { h, stopEvent } from "../../../base/browser/dom.js";
 import { localize } from '../../../nls.js';
@@ -24,7 +24,9 @@ export class QuickInputList<TItem extends IQuickPickItem>
 	private readonly _onDidChangeActive =
 		this._register(new Emitter<QuickInputListActiveChangeEvent<TItem>>());
 	private readonly buttonEmitter = this._register(new Emitter<{ readonly item: TItem; readonly button: IQuickPickItemButton; }>());
-	private _items: readonly TItem[] = [];
+	private _items: readonly (TItem | IQuickPickSeparator)[] = [];
+	private readonly headings = new Map<TItem, string>();
+	public keyMods: IKeyMods = { ctrlCmd: false, alt: false, shift: false };
 	private _visibleItems: readonly TItem[] = [];
 	private maxHeight = Number.POSITIVE_INFINITY;
 	private query = "";
@@ -60,7 +62,8 @@ export class QuickInputList<TItem extends IQuickPickItem>
 		this.empty.hidden = true;
 		this.element.append(this.empty);
 
-		this._register(this.list.onDidAccept(({ item }) => {
+		this._register(this.list.onDidAccept(({ item, browserEvent }) => {
+			this.keyMods = { ctrlCmd: !!(browserEvent?.ctrlKey || browserEvent?.metaKey), alt: !!browserEvent?.altKey, shift: !!browserEvent?.shiftKey };
 			this._onDidAccept.fire(item);
 		}));
 		this._register(this.list.onDidChangeActive(({ item, rowId }) => {
@@ -72,11 +75,11 @@ export class QuickInputList<TItem extends IQuickPickItem>
 		return this.list.element.id;
 	}
 
-	get items(): readonly TItem[] {
+	get items(): readonly (TItem | IQuickPickSeparator)[] {
 		return this._items;
 	}
 
-	set items(items: readonly TItem[]) {
+	set items(items: readonly (TItem | IQuickPickSeparator)[]) {
 		this._items = [...items];
 		this.render();
 	}
@@ -121,8 +124,8 @@ export class QuickInputList<TItem extends IQuickPickItem>
 		}
 	}
 
-	acceptActive(): void {
-		this.list.acceptActive();
+	acceptActive(event?: KeyboardEvent): void {
+		this.list.acceptActive(event);
 	}
 
 	layout(maxHeight = this.maxHeight): void {
@@ -144,8 +147,20 @@ export class QuickInputList<TItem extends IQuickPickItem>
 	}
 
 	private render(): void {
+		this.headings.clear();
+		const candidates: TItem[] = [];
+		let heading: string | undefined;
+		for (const item of this._items) {
+			if ('type' in item && item.type === 'separator') {
+				heading = item.label;
+			} else {
+				const candidate = item as TItem;
+				candidates.push(candidate);
+				if (heading) this.headings.set(candidate, heading);
+			}
+		}
 		this._visibleItems = filterQuickPickItems(
-			this._items,
+			candidates,
 			this.query,
 		);
 		this.list.items = this._visibleItems;
@@ -159,7 +174,24 @@ export class QuickInputList<TItem extends IQuickPickItem>
 		const ownerDocument = this.element.ownerDocument;
 		const content = h(ownerDocument, "div");
 		content.className = "ash-quick-pick-row-content";
+		const index = this._visibleItems.indexOf(item);
+		const heading = this.headings.get(item);
+		if (heading && (index === 0 || this.headings.get(this._visibleItems[index - 1]) !== heading)) {
+			const separator = h(ownerDocument, 'div');
+			separator.className = 'ash-quick-pick-separator';
+			separator.setAttribute('role', 'separator');
+			separator.setAttribute('aria-label', heading);
+			separator.textContent = heading;
+			content.append(separator);
+			content.classList.add('has-separator');
+		}
 		if (item.className) content.classList.add(...item.className.split(/\s+/).filter(Boolean));
+		if (item.iconClass) {
+			const icon = h(ownerDocument, 'span');
+			icon.className = item.iconClass;
+			icon.setAttribute('aria-hidden', 'true');
+			content.append(icon);
+		}
 		const text = h(ownerDocument, "span");
 		text.className = "ash-quick-pick-row-text";
 		const label = h(ownerDocument, "span");
@@ -219,7 +251,7 @@ export function filterQuickPickItems<TItem extends IQuickPickItem>(
 		.map((item, index) => ({
 			item,
 			index,
-			score: scoreItem(item, tokens),
+			score: item.alwaysShow ? 0 : scoreItem(item, tokens),
 		}))
 		.filter((entry) => entry.score >= 0)
 		.sort((left, right) =>

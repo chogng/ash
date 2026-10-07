@@ -215,7 +215,7 @@ test('Git ignore preserves the server result when completion wins the cancellati
 
 const connectorHostServices = {
 	externalOpener: { openExternal: async () => true },
-	clipboardService: { readText: async () => '', writeText: async () => undefined, readResources: async () => ({ resources: [], operation: 'copy' as const }), writeResources: async () => undefined, hasResources: async () => false },
+	clipboardService: { readImage: async () => new Uint8Array(), readText: async () => '', writeText: async () => undefined, readResources: async () => ({ resources: [], operation: 'copy' as const }), writeResources: async () => undefined, hasResources: async () => false },
 };
 
 test('Web reconnect initializes again without replaying an uncertain write', async () => {

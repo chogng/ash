@@ -36,3 +36,20 @@ test('browser resource clipboard is shared across service instances and follows 
 		else Reflect.deleteProperty(globalThis, 'ClipboardItem');
 	}
 });
+
+test('browser image clipboard reads PNG bytes without consuming text or resource entries', async () => {
+	const bytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+	const clipboard = {
+		read: async () => [
+			{ types: ['text/plain'], getType: async () => { throw new Error('Text should not be read'); } },
+			{ types: ['image/png'], getType: async () => new Blob([bytes], { type: 'image/png' }) },
+		],
+	} as unknown as Clipboard;
+	assert.deepEqual(await new BrowserClipboardService(clipboard).readImage(), bytes);
+});
+
+test('browser image clipboard distinguishes a missing image from denied access', async () => {
+	assert.deepEqual(await new BrowserClipboardService({ read: async () => [] } as unknown as Clipboard).readImage(), new Uint8Array());
+	const denied = new Error('Clipboard access denied');
+	await assert.rejects(new BrowserClipboardService({ read: async () => { throw denied; } } as unknown as Clipboard).readImage(), error => error === denied);
+});

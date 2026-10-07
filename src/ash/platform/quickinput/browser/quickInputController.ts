@@ -19,6 +19,9 @@ export class QuickInputController extends Disposable {
 	private focusToRestore: HTMLElement | undefined;
 	public readonly onShow = this.shown.event;
 	public readonly onHide = this.hidden.event;
+	public get currentQuickInput(): IQuickPick<IQuickPickItem> | undefined {
+		return this.active instanceof QuickPick ? this.active : undefined;
+	}
 
 	constructor(container: HTMLElement, className?: string) {
 		super();

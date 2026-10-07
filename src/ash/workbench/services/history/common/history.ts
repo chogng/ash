@@ -1,4 +1,5 @@
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
+import type { IResourceEditorInput } from '../../../common/editor.js';
 
 export const enum GoFilter {
 	NONE,
@@ -8,6 +9,7 @@ export const enum GoFilter {
 
 /** Navigates through editors and locations visited in the current Workbench. */
 export interface IHistoryService {
+	getHistory(): readonly IResourceEditorInput[];
 	goBack(filter?: GoFilter): Promise<void>;
 	goForward(filter?: GoFilter): Promise<void>;
 }

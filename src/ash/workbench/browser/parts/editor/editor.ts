@@ -21,5 +21,6 @@ export interface IEditorGroupView extends IEditorGroup {
 	replaceEditor(input: IResourceEditorInput, replacement: IResourceEditorInput): Promise<void>;
 	moveEditorTo(input: IResourceEditorInput, target: IEditorGroupView, targetIndex: number): Promise<void>;
 	setContent(content: Element): Promise<boolean>;
+	setTitleVisible(visible: boolean): void;
 	layout(dimension: IDimension): void;
 }

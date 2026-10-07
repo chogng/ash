@@ -23,6 +23,14 @@ export function rendererSystemHostRoutes(
 		{ channel: 'ash:memory:collect', validate: value => { if (value !== undefined) { throw new Error('Unexpected memory collection arguments'); } }, invoke: () => collectElectronMemory(window) },
 		{ channel: 'ash:host:openExternal', validate: text, invoke: value => opener.openExternal(value as string) },
 		{ channel: 'ash:host:readClipboard', validate: value => { if (value !== undefined) { throw new Error('Unexpected clipboard arguments'); } }, invoke: () => clipboard.readText() },
+		{ channel: 'ash:host:readClipboardImage', validate: value => { if (value !== undefined) throw new Error('Unexpected clipboard arguments'); }, invoke: () => clipboard.readImage() },
+		{
+			channel: 'ash:host:screenshot', validate: value => { if (value !== undefined) throw new Error('Unexpected screenshot arguments'); }, invoke: async () => {
+				// The trusted router binds this route to its sender; another window can never be chosen by renderer input.
+				if (window.isDestroyed() || window.webContents.isDestroyed()) throw new Error('The screenshot window has closed');
+				return new Uint8Array((await window.webContents.capturePage()).toPNG());
+			}
+		},
 		{ channel: 'ash:host:writeClipboard', validate: text, invoke: value => clipboard.writeText(value as string) },
 		{
 			channel: 'ash:host:readClipboardResources', validate: value => { if (value !== undefined) throw new Error('Unexpected clipboard arguments'); }, invoke: async () => {

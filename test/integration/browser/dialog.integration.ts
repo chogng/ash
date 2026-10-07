@@ -125,7 +125,7 @@ window.ashDialogIntegration = {
 		} as unknown as IQuickPick<IQuickPickItem>;
 		commandResources.add(provider.provide(picker));
 		const item = picker.items.find(candidate => candidate.label === 'Failing command');
-		if (!item) throw new Error('Test command is missing from the Command Palette');
+		if (!item || 'type' in item) throw new Error('Test command is missing from the Command Palette');
 		accept.fire(item);
 	},
 };

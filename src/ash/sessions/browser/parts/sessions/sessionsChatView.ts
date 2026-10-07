@@ -89,8 +89,9 @@ export class SessionsChatView extends Disposable {
 		this.activePane.appendToDraft(text);
 	}
 
-	captureActiveDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined> {
-		return this.activePane?.captureDraft() ?? Promise.resolve(undefined);
+	async captureActiveDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined> {
+		await this.grid.whenReady();
+		return this.activePane?.captureDraft();
 	}
 
 	setVisible(visible: boolean): void {
@@ -101,10 +102,12 @@ export class SessionsChatView extends Disposable {
 	}
 
 	async captureDrafts(): Promise<ReadonlyMap<string, NonNullable<IOpenAgentsWindowOptions['draft']>>> {
+		await this.grid.whenReady();
 		return new Map(await Promise.all([...this.entries].map(async ([key, entry]) => [key, (await entry.pane.captureDraft())?.draft ?? { mode: entry.pane.model.inputState.mode, text: '', contexts: [] }] as const)));
 	}
 
 	async restoreDrafts(drafts: ReadonlyMap<string, NonNullable<IOpenAgentsWindowOptions['draft']>>): Promise<void> {
+		await this.grid.whenReady();
 		// Both UIs retain their live models; only unsent content moves when the product entry changes.
 		for (const [key, entry] of this.entries) {
 			const previous = await entry.pane.captureDraft();
@@ -154,7 +157,13 @@ export class SessionsChatView extends Disposable {
 			}
 			entry.update(selection, sameSelection(selection, active));
 			entry.element.classList.toggle('last-slot', selection === selections.at(-1));
-			gridEntries.push({ id: key, view: entry });
+			gridEntries.push({
+				id: key, view: entry, label: entry.label,
+				activate: () => this.activateSelection(selection),
+				close: () => this.closeSelection(selection),
+				setTabId: tabId => entry.pane.setTabId(tabId),
+				focus: () => entry.pane.focus(),
+			});
 		}
 		if (gridEntries.length === 0) {
 			gridEntries.push({ id: 'empty', view: this.empty });
@@ -230,7 +239,7 @@ class SessionsChatGridEntry extends Disposable implements IView {
 	readonly maximumWidth = Number.POSITIVE_INFINITY;
 	readonly minimumHeight = 240;
 	readonly maximumHeight = Number.POSITIVE_INFINITY;
-	private readonly title: HTMLSpanElement;
+	public label = '';
 	private selection: SessionsViewSelection;
 
 	constructor(container: HTMLElement, options: SessionsChatGridEntryOptions, @IInstantiationService services: IInstantiationService) {
@@ -239,34 +248,13 @@ class SessionsChatGridEntry extends Disposable implements IView {
 		this.selection = options.selection;
 		this.element = h(ownerDocument, "article");
 		this.element.className = "ash-sessions-chat-slot";
-		const header = h(ownerDocument, "div");
-		header.className = "ash-sessions-chat-slot-header";
-		const activate = h(ownerDocument, "button");
-		activate.type = "button";
-		activate.className = "ash-sessions-chat-slot-title";
-		this.title = h(ownerDocument, "span");
-		this.title.id = `ash-sessions-chat-slot-title-${++sessionsChatPaneInstanceId}`;
-		activate.append(this.title);
-		const close = h(ownerDocument, "button");
-		close.type = "button";
-		close.className = "ash-sessions-chat-slot-close";
-		close.setAttribute("aria-label", "Close visible session");
-		close.textContent = "×";
-		header.append(activate, close);
-		this.pane = this._register(options.createPane(this.element, `ash-sessions-conversation-pane-${sessionsChatPaneInstanceId}`, options.selection));
-		this.pane.setTabId(this.title.id);
+		this.pane = this._register(options.createPane(this.element, `ash-sessions-conversation-pane-${++sessionsChatPaneInstanceId}`, options.selection));
 		this.pane.setVisible(true);
-		this.element.append(header, this.pane.element);
-		this._register(addDisposableListener(activate, "click", () => this.pane.focus()));
-		this._register(addDisposableListener(close, "click", event => {
-			event.stopPropagation();
-			options.closeSelection(this.selection);
-		}));
+		this.element.append(this.pane.element);
 		this._register(addDisposableListener(this.element, "focusin", () => {
 			if (!this.element.classList.contains("active")) options.activateSelection(this.selection);
 		}));
 		this._register(addDisposableListener(this.element, "pointerdown", event => {
-			if (close.contains(event.target as Node)) return;
 			if (!this.element.classList.contains("active")) options.activateSelection(this.selection);
 		}));
 		this._register(toDisposable(() => this.element.remove()));
@@ -279,10 +267,10 @@ class SessionsChatGridEntry extends Disposable implements IView {
 		this.element.classList.toggle("active", active);
 		this.element.setAttribute("aria-current", active ? "true" : "false");
 		if (selection.kind === "session") {
-			this.title.textContent = selection.active.session.title.trim() || "Agent session";
+			this.label = selection.active.session.title.trim() || "Agent session";
 			void this.pane.model.selectThread(selection.active).catch(error => console.error("Failed to select Sessions Chat thread", error));
 		} else {
-			this.title.textContent = selection.session.title.trim() || "New code session";
+			this.label = selection.session.title.trim() || "New code session";
 			this.pane.model.selectUntitledSession(selection.session);
 		}
 	}

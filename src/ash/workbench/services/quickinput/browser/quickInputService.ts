@@ -27,6 +27,7 @@ export class WorkbenchQuickInputService
 	private readonly controller: QuickInputController;
 	private readonly inQuickInput: IContextKey<boolean>;
 	private readonly layoutService: ILayoutService | undefined;
+	public get currentQuickInput(): IQuickPick<IQuickPickItem> | undefined { return this.controller.currentQuickInput; }
 
 	constructor(options: WorkbenchQuickInputServiceOptions) {
 		super();

@@ -63,7 +63,7 @@ test('Chinese environment preparation keeps scan scope explicit and saves only r
 	const seen: string[] = [];
 	const sourceDetails: string[] = [];
 	const input: QuickInput = {
-		createQuickPick: <T extends IQuickPickItem>() => new Picker<T>(picker => {
+		createQuickPick: <T extends IQuickPickItem>(): IQuickPick<T> => new Picker<T>(picker => {
 			seen.push(picker.ariaLabel);
 			const source = picker.items.find(item => item.label === 'curl')?.detail;
 			if (source) { sourceDetails.push(source); }
@@ -120,7 +120,7 @@ test('closing a running environment scan calls the backend cancellation API and 
 	using commands = new CommandService(services);
 	// After cancellation the next environment picker closes, leaving the existing profile untouched.
 	services.registerInstance(IQuickInputService, {
-		createQuickPick: <T extends IQuickPickItem>() => new Picker<T>(picker => {
+		createQuickPick: <T extends IQuickPickItem>(): IQuickPick<T> => new Picker<T>(picker => {
 			if (picker.ariaLabel === 'Preparing review environment' || choices.length === 0) { picker.hide(); }
 			else { picker.choose(choices.shift()!); }
 		}), input: async () => undefined,
@@ -146,7 +146,7 @@ test('rescanning replaces untouched observations while retaining explicit edits 
 		services.registerInstance(ISessionsManagementService, { untitledSessions: [{ untitledSessionId: 'chosen', workspace: { type: 'local', root: '/chosen' } }] } as unknown as ISessionsManagementService);
 		services.registerInstance(INotificationService, { info() { }, error: (error: unknown) => { throw error; } } as unknown as INotificationService);
 		services.registerInstance(IQuickInputService, {
-			createQuickPick: <T extends IQuickPickItem>() => new Picker<T>(picker => { if (picker.ariaLabel !== 'Preparing review environment') { picker.choose(choices.shift()!); } }),
+			createQuickPick: <T extends IQuickPickItem>(): IQuickPick<T> => new Picker<T>(picker => { if (picker.ariaLabel !== 'Preparing review environment') { picker.choose(choices.shift()!); } }),
 			input: async () => 'pnpm build with pinned Node',
 		} satisfies QuickInput);
 		using commands = new CommandService(services);

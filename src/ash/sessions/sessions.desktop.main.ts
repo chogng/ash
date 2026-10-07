@@ -12,8 +12,11 @@ import { NativeHostService } from '../workbench/services/host/electron-browser/n
 import { ILanguagePackStore } from '../platform/languagePacks/common/languagePackStore.js';
 import { ElectronLanguagePackStore } from '../platform/languagePacks/electron-browser/languagePackStore.js';
 import { InstantiationType, registerSingleton } from '../platform/instantiation/common/extensions.js';
+import { IClipboardService } from '../platform/clipboard/common/clipboardService.js';
+import { ElectronRendererClipboardService } from '../platform/clipboard/electron-browser/electronRendererClipboardService.js';
 
 registerSingleton(IHostService, NativeHostService, InstantiationType.Delayed);
+registerSingleton(IClipboardService, ElectronRendererClipboardService, InstantiationType.Delayed);
 registerSingleton(ILanguagePackStore, ElectronLanguagePackStore, InstantiationType.Delayed);
 
 registerOpenAgentsWindowCommand();

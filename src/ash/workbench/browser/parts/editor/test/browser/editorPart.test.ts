@@ -1363,7 +1363,8 @@ test('HistoryService excludes configured resources and updates navigation when r
 		using contextKeys = new ContextKeyService();
 		using workspace = new WorkspaceContextService({ id: 'history', uri: URI.file('C:/project') });
 		using configuration = new InMemoryConfigurationService();
-		using history = new HistoryService(editor, contextKeys, configuration, workspace);
+		using historyServices = createTestEditorServices(undefined, undefined, dom.window.document);
+		using history = new HistoryService(editor, contextKeys, configuration, workspace, historyServices.get(IStorageService));
 		const first = input('C:/project/first.ts');
 		const excluded = input('C:/project/excluded.ts');
 		const third = input('C:/project/third.ts');
@@ -2607,3 +2608,30 @@ function createEditorParts(main: ConstructorParameters<typeof EditorParts>[0], w
 	const services = editorTestServices.add(createTestComponentServices(storage));
 	return services.createInstance(EditorParts, main, windows, factory, accessibility, storage);
 }
+
+test('recent file history retains closed resources and restores workspace history', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const registry = new EditorPaneRegistry();
+	registry.registerEditorPane(descriptor('test.editor.recentHistory', '.ts', () => new TestEditorPane('test.editor.recentHistory')));
+	try {
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		using services = createTestEditorServices(undefined, undefined, dom.window.document);
+		services.registerInstance(IEditorPart, editor);
+		const first = input('C:\\project\\first.ts');
+		const second = input('C:\\project\\second.ts');
+		const history = services.createInstance(HistoryService);
+		try {
+			await editor.openEditor(first, { pinned: true });
+			await editor.openEditor(second, { pinned: true });
+			await editor.openEditor(first, { pinned: true });
+			await editor.activeGroup.closeEditor(first, { skipConfirmation: true });
+			assert.deepEqual(history.getHistory().map(entry => entry.resource.toString()), [second.resource.toString(), first.resource.toString()]);
+		} finally {
+			history.dispose();
+		}
+		using restored = services.createInstance(HistoryService);
+		assert.deepEqual(restored.getHistory().map(entry => entry.resource.toString()), [second.resource.toString(), first.resource.toString()]);
+	} finally {
+		dom.window.close();
+	}
+});

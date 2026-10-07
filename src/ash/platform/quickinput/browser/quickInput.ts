@@ -13,6 +13,7 @@ import type {
 	IQuickPick,
 	IQuickPickItem,
 	IQuickPickItemButton,
+	IQuickPickSeparator,
 } from "../common/quickInput.js";
 import { QuickInputList } from "./quickInputList.js";
 import { QuickPickFocus } from '../common/quickInput.js';
@@ -39,6 +40,17 @@ export class QuickPick<TItem extends IQuickPickItem>
 	readonly element: HTMLDivElement;
 	private readonly inputBox: InputBox;
 	private readonly list: QuickInputList<TItem>;
+	private readonly progress: HTMLDivElement;
+	public canAcceptInBackground = false;
+	private _busy = false;
+	public get keyMods() { return this.list.keyMods; }
+	public get busy(): boolean { return this._busy; }
+	public set busy(value: boolean) {
+		this._busy = value;
+		this.progress.hidden = !value;
+		this.element.classList.toggle('busy', value);
+		this.element.setAttribute('aria-busy', String(value));
+	}
 	private readonly _onDidAccept = this._register(new Emitter<TItem>());
 	private readonly _onDidChangeValue = this._register(new Emitter<string>());
 	private readonly _onDidHide = this._register(new Emitter<void>());
@@ -75,8 +87,14 @@ export class QuickPick<TItem extends IQuickPickItem>
 			ariaExpanded: true,
 		}));
 		this.inputBox.element.classList.add("ash-quick-pick-input");
+		this.progress = h(ownerDocument, 'div');
+		this.progress.className = 'ash-quick-pick-progress';
+		this.progress.setAttribute('role', 'status');
+		this.progress.textContent = localize('quickInput.searching', 'Searching…');
+		this.progress.hidden = true;
 		this.element.append(
 			this.inputBox.element,
+			this.progress,
 			this.list.element,
 		);
 
@@ -107,7 +125,7 @@ export class QuickPick<TItem extends IQuickPickItem>
 		}));
 	}
 
-	get items(): readonly TItem[] {
+	get items(): readonly (TItem | IQuickPickSeparator)[] {
 		return this.list.items;
 	}
 
@@ -121,8 +139,9 @@ export class QuickPick<TItem extends IQuickPickItem>
 		setAriaAttribute(this.inputBox.inputElement, "label", value);
 	}
 
-	set items(items: readonly TItem[]) {
+	set items(items: readonly (TItem | IQuickPickSeparator)[]) {
 		this.list.items = items;
+		if (this.visible) this.layout();
 	}
 
 	get placeholder(): string {
@@ -229,7 +248,7 @@ export class QuickPick<TItem extends IQuickPickItem>
 				break;
 			case "Enter":
 				stopEvent(event);
-				this.list.acceptActive();
+				this.list.acceptActive(event);
 				break;
 			case "Escape":
 				stopEvent(event);

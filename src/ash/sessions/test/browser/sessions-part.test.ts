@@ -1,4 +1,4 @@
-import { createTestFileService, registerTestComponentServices } from '../../../workbench/test/common/testEditorServices.js';
+import { createTestFileService, registerTestComponentServices, createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
 import { IGitHubService as ISessionsGitHubService } from '../../contrib/github/browser/githubService.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import { IFileService, FileSystemProviderCapabilities } from '../../../platform/files/common/files.js';
@@ -257,7 +257,8 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	services.registerInstance(ILifecycleService, resources.add(services.createInstance(BrowserLifecycleService, { ownerWindow: dom.window as unknown as Window, onError: (error: unknown) => { throw error; } })));
 	const inputs: InstanceType<typeof NewChatInputWidget>[] = [];
 	const cowork = resources.add(services.createInstance(CoworkPaneFactory));
-	const part = registerTestComponentServices(services).createInstance(SessionsPart, dom.window.document.body, {
+	using editorServices = createTestEditorServices(undefined, services);
+	const part = registerTestComponentServices(editorServices).createInstance(SessionsPart, dom.window.document.body, {
 		sessionService,
 		chatService,
 		contextMenuService,
@@ -282,6 +283,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	const partListener = viewService.onDidChange(updatePart);
 	updatePart();
 
+	await part.captureActiveDraft();
 	assert.equal(part.domNode.dataset.part, "sessions");
 	assert.equal(part.domNode.querySelector(".ash-sessions-surface-header"), null);
 	assert.ok(part.domNode.querySelector(".ash-sessions-chat-view"));
@@ -301,10 +303,11 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	assert.equal(part.domNode.querySelectorAll('.ash-chat-input-tip').length, 0);
 	assert.equal(services.get(IChatTipService).getWelcomeTip(), undefined);
 
-	(part.domNode.querySelector(".ash-sessions-chat-slot-title") as HTMLButtonElement).click();
-	assert.ok(part.domNode.querySelector(".ash-sessions-chat-slot.active:first-of-type"));
+	(part.domNode.querySelector("[role=tab]") as HTMLElement).click();
+	assert.ok(part.domNode.querySelector(".ash-editor-group:first-of-type .ash-sessions-chat-slot.active"));
 
-	(part.domNode.querySelector(".ash-sessions-chat-slot-close") as HTMLButtonElement).click();
+	(part.domNode.querySelector(".ash-tab-close") as HTMLButtonElement).click();
+	await part.captureActiveDraft();
 	assert.equal(part.domNode.querySelectorAll(".ash-sessions-chat-slot").length, 1);
 	assert.ok(part.domNode.querySelector('.ash-sessions-chat-view.single-chat'));
 	const retainedInput = part.domNode.querySelector('.ash-chat-input-part');

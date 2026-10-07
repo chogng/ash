@@ -24,7 +24,7 @@ export function createTestLocaleService(configuration: IConfigurationService, la
 	services.registerInstance(ILanguagePackService, languagePacks);
 	services.registerInstance(ILanguagePackStore, store ?? { read: async locale => catalogs.get(locale), write: async catalog => { catalogs.set(catalog.locale, catalog); } });
 	services.registerInstance(IDialogService, { confirm: onConfirm } as unknown as IDialogService);
-	services.registerInstance(IHostService, { hasFocus: true, onDidChangeFocus: Event.None, restart: onRestart, openWindow: async () => { } });
+	services.registerInstance(IHostService, { hasFocus: true, onDidChangeFocus: Event.None, restart: onRestart, openWindow: async () => { }, getScreenshot: async () => undefined });
 	return services.createInstance(WorkbenchLocaleService);
 }
 

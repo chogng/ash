@@ -11,6 +11,14 @@ export class BrowserClipboardService implements IClipboardService {
 		return this.clipboard.readText();
 	}
 
+	async readImage(): Promise<Uint8Array> {
+		if (!this.clipboard) throw new Error('The browser clipboard is unavailable');
+		for (const item of await this.clipboard.read()) {
+			if (item.types.includes('image/png')) return new Uint8Array(await (await item.getType('image/png')).arrayBuffer());
+		}
+		return new Uint8Array();
+	}
+
 	async writeText(value: string): Promise<void> {
 		if (!this.clipboard) throw new Error('The browser clipboard is unavailable');
 		await this.clipboard.writeText(value);

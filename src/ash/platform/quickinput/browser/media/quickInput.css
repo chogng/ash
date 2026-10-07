@@ -78,6 +78,24 @@
 	padding: 6px 8px;
 }
 
+.ash-quick-pick-row-content.has-separator {
+	flex-wrap: wrap;
+}
+
+.ash-quick-pick-separator {
+	flex: 0 0 100%;
+	padding-top: var(--ash-spacing-size40);
+	border-top: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
+}
+
+.ash-quick-pick-progress {
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
+}
+
 .ash-quick-pick-list .ash-list-row.is-active {
 	color: var(--ash-list-activeSelectionForeground);
 	background: var(--ash-list-activeSelectionBackground);

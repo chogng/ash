@@ -1,7 +1,8 @@
 import { h } from '../../../../../../../base/browser/dom.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../../../../base/common/lifecycle.js';
 import type { ModelRef } from '../../../../../../services/chat/common/chatService.js';
-import { ModelCard, type IModelCardOptions } from './modelPickerCard.js';
+import type { ModelCatalogEntry } from '../../../../../../services/chat/common/modelCatalog.js';
+import { ModelCard } from './modelPickerCard.js';
 
 /** Owns the active model card and positions it beside the flat menu. */
 export class ModelPickerDetailsMenu extends Disposable {
@@ -18,13 +19,14 @@ export class ModelPickerDetailsMenu extends Disposable {
 		this._register(toDisposable(() => this.domNode.remove()));
 	}
 
-	public show(options: IModelCardOptions, row: HTMLElement): void {
-		if (!this.card.value || this.model?.provider !== options.entry.model.provider || this.model.model !== options.entry.model.model) {
+	public show(entry: ModelCatalogEntry, row: HTMLElement): void {
+		if (!entry.description?.trim()) { this.hide(); return; }
+		if (!this.card.value || this.model?.provider !== entry.model.provider || this.model.model !== entry.model.model) {
 			this.card.value = new ModelCard(this.picker.ownerDocument);
-			this.model = options.entry.model;
+			this.model = entry.model;
 			this.domNode.append(this.card.value.domNode);
 		}
-		this.card.value.update(options);
+		this.card.value.update(entry);
 		this.domNode.hidden = false;
 		const pickerBounds = this.picker.getBoundingClientRect();
 		const rowBounds = row.getBoundingClientRect();
