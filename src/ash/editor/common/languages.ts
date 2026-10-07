@@ -22,8 +22,6 @@ import { isNonEmptyArray } from '../../base/common/arrays.js';
 import { assertLanguageId } from './languages/language.js';
 import { type LanguageWorkerDocumentSynchronization } from './services/textModelSync/textModelSync.protocol.js';
 
-type Thenable<T> = PromiseLike<T>;
-
 export type ProviderResult<T> = T | undefined | null | Thenable<T | undefined | null>;
 
 export enum ExternalUriOpenerPriority {

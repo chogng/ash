@@ -1,5 +1,5 @@
-import { Emitter, Event } from './event.js';
-import { CancellationError } from './errors.js';
+import { Event } from './event.js';
+import { CancellationError, onUnexpectedError } from './errors.js';
 import { DisposableStore, toDisposable, type IDisposable } from './lifecycle.js';
 
 export interface CancellationToken {
@@ -37,7 +37,7 @@ export namespace CancellationToken {
 
 class MutableToken implements CancellationToken {
 	private isCancelled = false;
-	private emitter: Emitter<void> | undefined;
+	private listeners: Set<() => unknown> | undefined;
 
 	public get isCancellationRequested(): boolean {
 		return this.isCancelled;
@@ -45,9 +45,14 @@ class MutableToken implements CancellationToken {
 
 	public get onCancellationRequested(): CancellationEvent {
 		if (this.isCancelled) return shortcutEvent;
-		const emitter = this.emitter ??= new Emitter<void>();
 		return (listener, thisArgs, disposables) => {
-			const disposable = emitter.event(event => listener.call(thisArgs, event));
+			if (this.isCancelled) {
+				return shortcutEvent(listener, thisArgs, disposables);
+			}
+			const callback = (): unknown => listener.call(thisArgs, undefined);
+			const listeners = this.listeners ??= new Set<() => unknown>();
+			listeners.add(callback);
+			const disposable = toDisposable(() => listeners.delete(callback));
 			disposables?.push(disposable);
 			return disposable;
 		};
@@ -56,20 +61,36 @@ class MutableToken implements CancellationToken {
 	public cancel(): void {
 		if (this.isCancelled) return;
 		this.isCancelled = true;
-		this.emitter?.fire(undefined);
-		this.dispose();
+		// Cancellation is irreversible and must propagate before any buffered state events are published.
+		try {
+			for (const listener of [...(this.listeners ?? [])]) {
+				if (!this.listeners?.has(listener)) {
+					continue;
+				}
+				try {
+					listener();
+				} catch (error) {
+					try {
+						onUnexpectedError(error);
+					} catch (reportingError) {
+						console.error('Unexpected error while reporting a cancellation listener error', error, reportingError);
+					}
+				}
+			}
+		} finally {
+			this.dispose();
+		}
 	}
 
 	public dispose(): void {
-		this.emitter?.dispose();
-		this.emitter = undefined;
+		this.listeners?.clear();
+		this.listeners = undefined;
 	}
 }
 
 export class CancellationTokenSource implements IDisposable {
 	private tokenValue: CancellationToken | undefined;
 	private parentListener: IDisposable | undefined;
-	private isDisposed = false;
 
 	constructor(parent?: CancellationToken) {
 		this.parentListener = parent?.onCancellationRequested(this.cancel, this);
@@ -81,7 +102,6 @@ export class CancellationTokenSource implements IDisposable {
 	}
 
 	public cancel(): void {
-		if (this.isDisposed) return;
 		if (!this.tokenValue) {
 			this.tokenValue = CancellationToken.Cancelled;
 			return;
@@ -90,9 +110,7 @@ export class CancellationTokenSource implements IDisposable {
 	}
 
 	public dispose(cancel = false): void {
-		if (this.isDisposed) return;
 		if (cancel) this.cancel();
-		this.isDisposed = true;
 		this.parentListener?.dispose();
 		this.parentListener = undefined;
 		if (!this.tokenValue) {

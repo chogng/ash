@@ -2,7 +2,29 @@ import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { appendIcon, setIconResolver } from "../../browser/ui/lxicons/lxicon.js";
-import { registerLxicon } from "../../common/lxiconsUtil.js";
+import { getLxiconDefinition, registerLxicon } from "../../common/lxiconsUtil.js";
+import { Lxicon } from '../../common/lxicons.js';
+
+test('derived Lxicon IDs render SVGs and receive independent theme updates', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		const document = dom.window.document;
+		const derived = appendIcon(Lxicon.dialogError, document.body);
+		const source = appendIcon(Lxicon.error, document.body);
+		assert.equal(derived.getAttribute('data-ash-icon-id'), 'dialog-error');
+		assert.equal(derived.getAttribute('aria-hidden'), 'true');
+		assert.equal(derived.innerHTML, source.innerHTML);
+		const original = source.innerHTML;
+		const themed = () => '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/></svg>';
+		setIconResolver(document, icon => icon.id === Lxicon.dialogError.id ? themed : getLxiconDefinition(icon.id));
+		assert.equal(document.querySelector('[data-ash-icon-id="dialog-error"]'), derived);
+		assert.equal(derived.getAttribute('viewBox'), '0 0 24 24');
+		assert.equal(derived.querySelectorAll('circle').length, 1);
+		assert.equal(source.innerHTML, original);
+	} finally {
+		dom.window.close();
+	}
+});
 
 test("appendIcon parses one prototype per document and clones isolated SVG elements", () => {
 	const firstDocument = new JSDOM("<!doctype html><body></body>").window.document;

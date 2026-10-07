@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'mocha';
 import { Icon } from '../../../../base/common/icon.js';
-import { Lxicon } from '../../../../base/common/lxicons.js';
+import { Lxicon, getAllLxicons } from '../../../../base/common/lxicons.js';
 import { getIconRegistry, registerIcon, resolveIconDefinition } from '../../common/iconRegistry.js';
 
 let testIconId = 0;
@@ -9,6 +9,18 @@ function nextIconId(suffix: string): string {
 	testIconId += 1;
 	return `test-icon-${testIconId}-${suffix}`;
 }
+
+test('derived Lxicon defaults resolve through the product registry and preserve independent theme overrides', () => {
+	for (const icon of getAllLxicons()) {
+		assert.equal(getIconRegistry().getIcon(icon.id)?.defaults, resolveIconDefinition(icon));
+	}
+	const artwork = resolveIconDefinition(Lxicon.error);
+	assert.equal(resolveIconDefinition(Lxicon.dialogError), artwork);
+	const themed = () => '<svg viewBox="0 0 24 24"/>';
+	const theme = new Map([[Lxicon.dialogError.id, themed]]);
+	assert.equal(resolveIconDefinition(Lxicon.dialogError, theme), themed);
+	assert.equal(resolveIconDefinition(Lxicon.error, theme), artwork);
+});
 
 test('the icon registry exposes built-in Lxicons and semantic registrations', () => {
 	assert.equal(getIconRegistry().getIcon(Lxicon.add.id)?.defaults, resolveIconDefinition(Lxicon.add));

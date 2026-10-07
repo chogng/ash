@@ -1,4 +1,5 @@
 {
+  "files": ["src/typings/thenable.d.ts"],
   "compilerOptions": {
     "strict": true,
     "experimentalDecorators": true,

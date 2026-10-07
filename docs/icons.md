@@ -24,21 +24,21 @@ resources/icons/*.svg
 
 ## 2. 所有权
 
-| 能力                                                   | 当前 owner                                   | 状态                 |
-| ------------------------------------------------------ | -------------------------------------------- | -------------------- |
-| Canonical first-party SVG artwork                      | `resources/icons`                            | ✅                   |
-| Desktop generated SVG factories                        | `src/ash/base/common/productIcons.ts` | ✅                   |
-| Desktop built-in SVG catalog                           | `base/common/lxicons.ts` / `lxiconsUtil.ts`  | ✅                   |
-| Desktop semantic registration与resolution              | `platform/theme/common/iconRegistry.ts`      | ✅                   |
-| Desktop SVG creation and display                       | `base/browser/ui/lxicons`                    | ✅                   |
-| Desktop searchable SVG icon selector                   | `base/browser/ui/icons/iconSelectBox.ts`     | ✅，等待产品调用入口 |
-| Desktop product SVG theme selection                    | `workbench/services/themes`                  | ✅                   |
-| Rust semantic identity、definition 与 rendering mode   | `ash-icons`                                  | ✅                   |
-| Rust logical placement、tint 与 clip scene contract    | `zui::PaintIcon`                             | ✅                   |
-| Rust icon+text component geometry                      | `ash-ui-components::IconLabel`               | ✅                   |
-| Product command 与 icon selection                      | 各 product host                              | ✅                   |
-| Seti file-extension/theme resolution                   | `src/ash/platform/theme/browser`      | ✅，浏览器主题能力   |
-| Native symbolic mask、fixed-color atlas 与 render path | `ash-wgpu`                                   | ✅                   |
+| 能力                                                   | 当前 owner                                  | 状态                 |
+| ------------------------------------------------------ | ------------------------------------------- | -------------------- |
+| Canonical first-party SVG artwork                      | `resources/icons`                           | ✅                   |
+| Desktop generated SVG factories                        | `src/ash/base/common/productIcons.ts`       | ✅                   |
+| Desktop built-in identities and SVG definitions        | `base/common/lxicons.ts` / `lxiconsUtil.ts` | ✅                   |
+| Desktop semantic registration与resolution              | `platform/theme/common/iconRegistry.ts`     | ✅                   |
+| Desktop SVG creation and display                       | `base/browser/ui/lxicons`                   | ✅                   |
+| Desktop searchable SVG icon selector                   | `base/browser/ui/icons/iconSelectBox.ts`    | ✅，等待产品调用入口 |
+| Desktop product SVG theme selection                    | `workbench/services/themes`                 | ✅                   |
+| Rust semantic identity、definition 与 rendering mode   | `ash-icons`                                 | ✅                   |
+| Rust logical placement、tint 与 clip scene contract    | `zui::PaintIcon`                            | ✅                   |
+| Rust icon+text component geometry                      | `ash-ui-components::IconLabel`              | ✅                   |
+| Product command 与 icon selection                      | 各 product host                             | ✅                   |
+| Seti file-extension/theme resolution                   | `src/ash/platform/theme/browser`            | ✅，浏览器主题能力   |
+| Native symbolic mask、fixed-color atlas 与 render path | `ash-wgpu`                                  | ✅                   |
 
 `ash-icons` 不依赖 `zui` 或 `ash-ui-components`。`PaintIcon`、`IconLabel`、`Button` 和 `InputBox` 可以依赖 icon identity，但
 资源 crate 不得包含 component、font、layout、theme color、GPU 或 input routing。
@@ -49,7 +49,7 @@ VS Code 的 `base/browser/ui/icons/iconSelectBox.ts` 是图标选择控件。Ash
 ## 3. 身份与图稿
 
 - 产品接口传递 `Icon` / `IconId`，不传 filename 或 raw SVG；
-- Desktop 的 `Lxicon` 枚举内置图稿；产品界面有独立含义时，由所属模块调用 `registerIcon` 声明语义 ID，并以 `Lxicon` 作为默认图稿；
+- Desktop 的 `Lxicon` 提供内置图标入口，`getAllLxicons()` 供产品图标注册表枚举默认定义。产品界面有独立含义时，由所属模块调用 `registerIcon` 声明语义 ID，并以内置图标作为默认图稿；
 - 资源文件名可以生成内置图稿 ID，但不能代替产品组件的语义注册；
 - semantic ID 与 artwork 是多对一关系，允许稳定 alias 和无调用方迁移的 artwork 替换；
 - checked-in generated binding 保证 Cargo/Bazel compile action 不运行 generator；
@@ -58,6 +58,10 @@ VS Code 的 `base/browser/ui/icons/iconSelectBox.ts` 是图标选择控件。Ash
   tint；
 - renderer 不支持某种 mode 时必须显式失败，不能静默降级为错误颜色；
 - resource filename 是 artwork generation input，不是 component API。
+
+`Lxicon` 当前包含 Ash 已有 SVG 目录和有对应图稿的常用派生 ID（例如 `dialog-error`、
+`menu-selection`）。派生 ID 复用 SVG 定义，但可分别配置产品主题覆盖。当前尚未加入字体资源、字符映射或字体渲染。后续切换字体时，
+还需同步定义解析、浏览器渲染与资源打包，调用方继续传递稳定的图标 ID。
 
 ## 4. 当前实现
 
