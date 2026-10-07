@@ -1,6 +1,6 @@
 # Ash TypeScript 前端
 
-`src` 提供 Electron 桌面端和 Browser Workbench，包含 Renderer、Preload 和 Electron Main，通过 App Server 使用 Rust 后端。本 README 说明前端开发、启动和验证；环境安装、仓库通用命令及清理见 [构建指南](build.md#构建入口)。产品关系见 [产品线](product-lines.md)。
+本文面向修改 Ash 界面、编辑器和桌面宿主的开发者，说明启动方式、热更新、进程边界和验证入口。前端源码位于 `src/`，通过 App Server 使用 Rust 后端。环境安装、仓库通用命令及清理见[构建指南](build.md#构建入口)，职责划分见[产品与宿主边界](product-lines.md)。
 
 ## 启动项目
 
@@ -103,6 +103,21 @@ Browser 和 Electron 各使用一个 `workbench.html` 入口。`web.factory.ts` 
 完整 Web 模式通过认证 WebSocket 直接连接 App Server。一次性票据在当前页签兑换会话后从 URL 移除，刷新复用 `sessionStorage` 中的会话。启动器仍运行时，后端重启会重新认证和连接，不重发旧写请求。授权过期或被撤销后需打开新的认证链接；当前入口仅用于本机单用户，未提供公网认证和 TLS。
 
 嵌入方可在产品入口执行前设置 `globalThis.ashWebWorkbenchHost = { api, workspace }`，这是进程内能力契约，不接受不可信 JSON。未配置宿主的普通 Web 入口使用 disconnected API。认证和连接生命周期见 [前端连接与浏览器能力](design/app-server-connection.md)。
+
+### 开发浏览器扩展
+
+开发受信任的浏览器扩展时，将 `ASH_WEB_EXTENSION_PATHS` 设置为扩展包目录；多个目录用当前平台的路径分隔符连接。例如在 PowerShell 中：
+
+```powershell
+$env:ASH_WEB_EXTENSION_PATHS = (Resolve-Path test/fixtures/web-extension).Path
+pnpm dev:web
+```
+
+扩展包的 `browser` 字段指向打包后的 ES module，导出 `activate({ register })` 等 Ash Host API v1 入口。模块运行在页面持有的 Worker 中；Vite 监听包资源并更新快照。此入口用于受信任的开发输入，不代表已提供第三方扩展安装、完整 VS Code Extension API 或扩展沙箱。能力和限制见[编辑器扩展](editor-extensions.md)。
+
+### 独立调试 Stanza
+
+运行 `pnpm dev:stanza`，打开终端输出的地址；也可在 VS Code 选择 `Stanza Editor - Standalone` 后按 F5。页面通过 `globalThis.stanza` 暴露 API，可在浏览器控制台检查 `stanza.editor.getEditors()` 和 `stanza.editor.getModels()`。
 
 ## Electron sandbox 边界
 

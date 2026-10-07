@@ -1,77 +1,32 @@
-# 工程文档
+# Ash 工程文档
 
-普通开发直接完成实现和测试，按需更新现有文档；显式使用 `/develop` 时才采用[阶段产物与验收规则](development-workflow.md)。编写文档见[写作规范](../.github/instructions/documentation.instructions.md)。各模块的代码和测试入口在相邻 README。
+这里面向开发 Ash 的人，说明如何运行、修改和验证项目。产品介绍见[根 README](../README.md)，使用说明见 [Ash 用户文档](https://github.com/chogng/ash-docs)。
 
-## 意图驱动的 Agent 开发流程
+## 开始开发
 
-| 文档                                                 | 类型 | 一句话                                                          |
-| ---------------------------------------------------- | ---- | --------------------------------------------------------------- |
-| [`development-workflow.md`](development-workflow.md) | 规范 | 仅 `/develop` 使用的阶段产物、记录模板与验收规则                |
-| [`develop.md`](develop.md)                           | 设计 | 从自然对话到 Intent、Spec、Plan、实施、验收和收口的统一系统设计 |
+| 你要做什么                     | 从哪里开始                                                                           |
+| ------------------------------ | ------------------------------------------------------------------------------------ |
+| 安装工具、构建、测试或清理产物 | [构建与开发](build.md)                                                               |
+| 开发桌面端、浏览器界面或编辑器 | [前端开发](frontend.md)                                                              |
+| 修改命令行或终端界面           | [CLI](../cli/README.md)、[TUI](../crates/tui/README.md)                              |
+| 判断功能属于哪一端、哪个模块   | [产品与宿主边界](product-lines.md)、[系统架构](architecture.md)                      |
+| 构建或发布运行包               | [共享运行包](../build/runtime/README.md)、[产品更新](product-update-architecture.md) |
 
-## Agent 与运行时
+工具版本和命令在构建指南维护；各模块的实现、约束和测试入口在相邻 README。
 
-| 文档                                                                                     | 类型 | 一句话                                                                         |
-| ---------------------------------------------------------------------------------------- | ---- | ------------------------------------------------------------------------------ |
-| [`agent-tools-spec.md`](agent-tools-spec.md)                                             | 规格 | 逐工具 schema / 描述正文 / 错误文案 + 系统提示词扩写                           |
-| [`agent-harness-design.md`](agent-harness-design.md)                                     | 设计 | harness 行为策略：提示词、循环、失败、裁剪、压缩、缓存                         |
-| [`ash-agent-runtime-architecture.md`](ash-agent-runtime-architecture.md)                 | 设计 | 执行内核总体设计、组件状态总账、阶段 A–E                                       |
-| [`core.md`](core.md)                                                                     | 设计 | ash-core 的 ownership、组件、端口、提交顺序                                    |
-| [`core-context.md`](core-context.md)                                                     | 设计 | ContextPlan / Manager / checkpoint / compaction 机制                           |
-| [`core-multi-agent.md`](core-multi-agent.md)                                             | 设计 | 同 Session Agent 的委托、Fresh spawn、消息交付和隔离（部分实现，缺口见状态头） |
-| [`agent-customizations.md`](agent-customizations.md)                                     | 设计 | Instructions / Skills / Agents、`.ash` 与外部导入边界                          |
-| [`agents.md`](agents.md)                                                                 | 设计 | 内置与自定义 Agent 的统一定义、专化职责、启动来源和执行约束                    |
-| [`tools.md`](tools.md)                                                                   | 设计 | 工具三层契约、registry snapshot                                                |
-| [`exec.md`](exec.md)                                                                     | 设计 | 进程执行                                                                       |
-| [`core-plugins.md`](../crates/docs/core-plugins.md)                                      | 设计 | Plugin 来源、PluginsManager、包存储、activation 与 capability 接线             |
-| [`localization.md`](localization.md)                                                     | 设计 | 内置 locale catalog、Marketplace localization 包与 UI fallback                 |
-| [`plugins.md`](plugins.md) / [`connectors.md`](connectors.md) / [`skills.md`](skills.md) | 设计 | Plugin 扩展分发、Connector 外部账号连接与 Skill 指令运行时边界                 |
-| [`editor-extensions.md`](editor-extensions.md)                                           | 设计 | 声明式扩展与 Ash 原生可执行 Host v1 的双轨边界、信任、生命周期和产品接入状态   |
-| [`mcp.md`](mcp.md)                                                                       | 设计 | MCP 客户端协议会话、能力调用与 Connector ready binding                         |
-| [`slash-commands.md`](slash-commands.md)                                                 | 设计 | Slash Command 与统一斜杠启动面板边界                                           |
+## 理解系统
 
-## 协议与 API
+- **界面与宿主：** [Desktop 架构](ash-desktop-architecture.md)、[前后端连接](frontend-app-server-boundary.md)、[工作台与文档](workbench-modes.md)、[编辑器架构](editor-architecture.md)、[远程开发](remote-development.md)。
+- **后端与执行：** [Rust 架构](rust-architecture.md)、[Agent 运行时](ash-agent-runtime-architecture.md)、[Core](core.md)、[上下文管理](core-context.md)、[多 Agent](core-multi-agent.md)、[进程执行](exec.md)。
+- **协议与接口：** [领域身份](domain-model.md)、[协议](protocol.md)、[App Server API](ash-app-server-api.md)、[客户端](app-server-client.md)、[工具契约](agent-tools-spec.md)。
+- **配置与扩展：** [配置](config.md)、[模型接入](model-provider.md)、[登录](login.md)、[Agent 定制](agent-customizations.md)、[Skills](skills.md)、[Plugins](plugins.md)、[Connectors](connectors.md)、[MCP](mcp.md)、[编辑器扩展](editor-extensions.md)。
+- **权限与安全：** [权限](permissions.md)、[沙箱](sandboxing.md)、[环境访问](environment-access.md)、[工作区安全](workspace-security.md)、[凭据](secrets.md)。
+- **界面开发：** [浏览器基础](browser-foundation.md)、[样式职责](ui-styling-ownership.md)、[主题变量](design-tokens.md)、[面板与布局](workbench-pane-composite-design.md)、[菜单](menu-system.md)、[本地化](localization.md)。
 
-[`domain-model.md`](domain-model.md)（领域身份与命名）、[`protocol.md`](protocol.md)（canonical 产品契约）、
-[`ash-app-server-api.md`](ash-app-server-api.md)、[`app-server-client.md`](app-server-client.md)、
-[`ash-api.md`](ash-api.md)、[`ash-api-interface-requirements.md`](ash-api-interface-requirements.md)、
-[`ash-api-interface-template.md`](ash-api-interface-template.md)（模板）、
-[`ash-client.md`](ash-client.md)（参考）
+设计文档会区分当前实现和目标设计。功能是否可用应以其中的状态说明及对应实现、测试为准。
 
-## 模型与配置
+## 开发约定
 
-[`model-provider.md`](model-provider.md)、[`model-provider-info.md`](model-provider-info.md)、
-[`models-manager.md`](models-manager.md)、[`config.md`](config.md)、[`login.md`](login.md)、
-[`subscriptions.md`](subscriptions.md)（订阅接入与额度）、
-[订阅套餐一览](models/plans-and-pricing.md)、
-[ChatGPT](models/chatgpt.md)、[Kimi](models/kimi.md)、
-[Super Grok](models/supergrok.md)、[GLM](models/glm.md)、
-[开发者 API 模型价格](models/ash-host-models.md)、
-[`secrets.md`](secrets.md)
+修改前阅读 [AGENTS.md](../AGENTS.md) 和适用的[专项规范](../.github/instructions)。文档内容与位置遵循[文档写作规范](../.github/instructions/documentation.instructions.md)。
 
-## 安全与权限
-
-[`permissions.md`](permissions.md)、[`guardian.md`](guardian.md)、
-[`sandboxing.md`](sandboxing.md)、[`environment-access.md`](environment-access.md)、
-[`workspace-security.md`](workspace-security.md)（当前实现）、
-[`windows-sandbox-acceptance-runbook.md`](windows-sandbox-acceptance-runbook.md)（参考/手册）
-
-## 界面与体验
-
-## app 产品
-
-## 平台与产品
-
-[`architecture.md`](architecture.md)（总入口）、[`rust-architecture.md`](rust-architecture.md)、
-[`crates/tui/README.md`](../crates/tui/README.md)、[`workbench-modes.md`](workbench-modes.md)、
-[`product-lines.md`](product-lines.md)、[`remote-development.md`](remote-development.md)、[`git.md`](git.md)
-
-## 产品研究
-
-| 文档                   | 类型            | 一句话                                                                      |
-| ---------------------- | --------------- | --------------------------------------------------------------------------- |
-| [`delta.md`](delta.md) | 参考 / 体验指南 | Delta 核心能力、评论与审查操作、GitHub 与 Land 边界、完整体验请求及证据记录 |
-| [`figma-dev-mode-sites-make.md`](figma-dev-mode-sites-make.md) | 产品比较 | Figma Dev Mode、Sites 与 Make 的区别、重叠和使用建议 |
-| [`figma-dev-mode.md`](figma-dev-mode.md) | 参考 / 产品建议 | Design 开发检查、Code Connect、MCP、版本交接、权限与 Ash Design 的长期设计 |
-
-## 计划与迁移
+普通开发直接完成实现和测试，并更新受影响的现有文档。只有显式使用 `/develop` 时，才采用[阶段产物与验收流程](development-workflow.md)；其设计背景见[意图驱动开发](develop.md)。

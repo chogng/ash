@@ -10,7 +10,7 @@
 | ------------- | ------------------------------------------------------------------------------------------------------------- |
 | Rust          | [`rust-toolchain.toml`](../rust-toolchain.toml)                                                               |
 | Node.js       | [`.nvmrc`](../.nvmrc)；pnpm 使用 [`package.json`](../package.json) 中的 `devEngines.runtime` 自动获取固定版本 |
-| pnpm          | 根 [`package.json`](../package.json) 的 `packageManager`，安装方法见 [README](../README.md#quick-start)       |
+| pnpm          | 根 [`package.json`](../package.json) 的 `packageManager`，安装方法见[初始化](#初始化)                         |
 | Python        | [`scripts/pyproject.toml`](../scripts/pyproject.toml) 的 `requires-python`，建议 3.12                         |
 | Just          | 安装后确保 `just` 在 PATH 中                                                                                  |
 | Bazel（按需） | Bazelisk 读取 [`.bazelversion`](../.bazelversion)                                                             |
@@ -39,11 +39,13 @@
 
 ### 初始化
 
-1. 按 [README](../README.md#quick-start) 安装仓库指定的 pnpm。
+1. 使用 [pnpm 独立安装方式](https://pnpm.io/installation/)，安装根 [`package.json`](../package.json) 的 `packageManager` 指定版本。仓库安装检查要求版本一致。
 2. 执行 `pnpm install`，安装 Node workspace 依赖。
 3. 执行 `just install`，获取 Cargo 依赖并创建含固定版本 Ruff 和 codespell 的 `scripts/.venv`。Windows 缺少 PowerShell 7 时，此步骤会安装它；随后重启终端和编辑器以更新 PATH。
 
 直接执行 `node` 时使用 `.nvmrc` 指定版本；pnpm 脚本使用仓库固定的 Node。Node 启动的 Python 构建工具在 Windows 使用初始化创建的 `scripts/.venv/Scripts/python.exe`，可用 `PYTHON` 显式指定解释器；Just 在 Windows 使用 PATH 中的 `python`，其他平台使用 `python3`。
+
+pnpm 根据 `devEngines.runtime` 下载并使用固定的 Node 版本，通常不需要单独安装 Node。`pnpm install` 可在 PowerShell 与 Bash 中执行。运行 Electron 或 Browser Workbench 前需要前端依赖；只开发 CLI/TUI 时按所需 Rust 工具和后端资源准备环境。
 
 ### 项目命令
 
@@ -52,31 +54,30 @@
 | 产品                 | 命令               | F5 配置          |
 | -------------------- | ------------------ | ---------------- |
 | 完整 Electron 桌面端 | `just ash-desktop` | `Ash (Electron)` |
-| Rust 桌面端          | `just app`         | `Ash App (Rust)` |
 | 终端界面             | `just ash`         | `Ash Code (TUI)` |
 
 仅前端、只监听前端、完整 Web 和独立编辑器的区别及对应命令见 [前端启动方式](frontend.md#启动项目)。
 
 #### 构建与维护
 
-| 命令                                                        | 结果                                                                       |
-| ----------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `just build`                                                | 构建两个产品及其开发所需服务程序                                           |
-| `just build-code` / `just build-desktop` / `just build-app` | 构建指定产品                                                               |
-| `just build-rust`                                           | 构建根 Rust workspace                                                      |
-| `just check <package>`                                      | 检查指定 Rust 包                                                           |
-| `just lint`                                                 | 检查 Python 代码                                                           |
-| `just spellcheck`                                           | 检查仓库源码和文档中的常见英文拼写错误                                     |
-| `just fmt` / `just fmt-check`                               | 调用各语言工具，格式化或检查 Just、Rust、Python、TS/JS、配置与文档         |
-| `just rust-format` / `just rust-format-check`               | 单独格式化或检查 Rust，不需要前端依赖                                      |
-| `pnpm format:ts` / `pnpm format:ts:fix`                     | 检查或格式化第一方 TS/JS；可追加文件或目录                                 |
-| `pnpm format:config` / `pnpm format:config:fix`             | 用 Prettier 检查或格式化 JSON、YAML、Markdown、CSS、HTML                   |
-| `pnpm format` / `pnpm format:fix`                           | 检查或格式化上述前端源码、配置与文档                                       |
-| `pnpm typecheck:build`                                      | 检查 TypeScript 构建工具                                                   |
-| `pnpm stylelint`                                            | 只读检查生产 CSS 的变量和选择器，报告文件、行和列；可追加文件、目录或 glob |
-| `pnpm hygiene`                                              | 检查 CSS 变量和选择器，再用前端单测验证变量清单与注册表一致                |
-| `pnpm stylelint:update`                                     | 用真实颜色、尺寸注册表更新变量清单，保留组件变量；审阅生成差异后再检查     |
-| `pnpm clean`                                                | 清理本地产物和 Python 缓存                                                 |
+| 命令                                            | 结果                                                                       |
+| ----------------------------------------------- | -------------------------------------------------------------------------- |
+| `just build`                                    | 构建两个产品及其开发所需服务程序                                           |
+| `just build-code` / `just build-desktop`        | 构建指定产品                                                               |
+| `just build-rust`                               | 构建根 Rust workspace                                                      |
+| `just check <package>`                          | 检查指定 Rust 包                                                           |
+| `just lint`                                     | 检查 Python 代码                                                           |
+| `just spellcheck`                               | 检查仓库源码和文档中的常见英文拼写错误                                     |
+| `just fmt` / `just fmt-check`                   | 调用各语言工具，格式化或检查 Just、Rust、Python、TS/JS、配置与文档         |
+| `just rust-format` / `just rust-format-check`   | 单独格式化或检查 Rust，不需要前端依赖                                      |
+| `pnpm format:ts` / `pnpm format:ts:fix`         | 检查或格式化第一方 TS/JS；可追加文件或目录                                 |
+| `pnpm format:config` / `pnpm format:config:fix` | 用 Prettier 检查或格式化 JSON、YAML、Markdown、CSS、HTML                   |
+| `pnpm format` / `pnpm format:fix`               | 检查或格式化上述前端源码、配置与文档                                       |
+| `pnpm typecheck:build`                          | 检查 TypeScript 构建工具                                                   |
+| `pnpm stylelint`                                | 只读检查生产 CSS 的变量和选择器，报告文件、行和列；可追加文件、目录或 glob |
+| `pnpm hygiene`                                  | 检查 CSS 变量和选择器，再用前端单测验证变量清单与注册表一致                |
+| `pnpm stylelint:update`                         | 用真实颜色、尺寸注册表更新变量清单，保留组件变量；审阅生成差异后再检查     |
+| `pnpm clean`                                    | 清理本地产物和 Python 缓存                                                 |
 
 格式化工具按语言选择：TS/JS 使用 [`tsfmt.json`](../tsfmt.json)，Rust 使用 [`rustfmt.toml`](../rustfmt.toml)，Python 使用固定版本 Ruff，配置与文档使用 [Prettier](../.prettierrc.toml)。前端与 Rust 格式化入口只处理第一方源码；检查命令不修改文件。修改后优先检查受影响的文件，完整格式检查见 [Formatting CI](../.github/workflows/format.yml)。
 

@@ -1,159 +1,79 @@
 # Ash
 
-Ash is an agent workspace with an Electron/Web interface and a Rust CLI/TUI, sharing one Rust App Server contract.
+A workspace for code and AI agents.
 
-| Product  | Source                                        | Start              |
-| -------- | --------------------------------------------- | ------------------ |
-| Desktop  | [`src/`](src)                                 | `just ash-desktop` |
-| Terminal | [`cli/`](cli) and [`crates/tui/`](crates/tui) | `just ash`         |
+Ash brings a code editor, agent conversations, and development tools into one
+desktop app. Use the editor to work directly on your project, or open the Agents
+window to give a task its own conversation. Prefer the terminal? Ash Code lets
+you work with agents from the command line.
 
-[`crates/`](crates) contains the Rust backend and terminal crates. Crate ownership and build targets keep terminal presentation separate from the shared backend. Desktop packaging selects backend executables and does not include the CLI/TUI.
+[User guide](https://github.com/chogng/ash-docs) · [Get started](#getting-started) · [Development](docs/README.md)
 
-## Quick start
+## What you can do
 
-The commands below build and run Ash from source through Just. Tool requirements
-and initialization are described in [the build guide](docs/build.md#构建入口).
+- **Work on your project.** Edit files, search code, review diffs, and use Git,
+  terminals, and debugging tools alongside your conversations.
+- **Give agents real tasks.** Ask them to explore a repository, make changes, or
+  run commands. Follow their tool activity, respond to approval requests, and
+  inspect the result before continuing.
+- **Keep work in context.** Organize work into sessions and return to saved
+  conversations. Desktop and Ash Code share local accounts, settings, and saved
+  sessions when they use the same profile.
+- **Choose your models and tools.** Configure model providers, add reusable
+  Skills, and connect MCP servers for the tools your work needs.
 
-On Windows, prepare the tools listed in the
-[Windows requirements](docs/build.md#windows-开发环境).
-Test maintenance tools such as `cargo-insta` are installed separately when needed.
+## Desktop and terminal
 
-After installation, open Visual Studio Developer PowerShell for the target
-architecture. Use that shell for the product commands
-below so MSVC and Windows SDK environment variables reach the build processes.
-See [Windows environment responsibilities](docs/build.md#windows-开发环境).
+**Ash Desktop** combines the editor and project tools with a dedicated Agents
+window. Code and structured academic documents open in the same workspace.
 
-On macOS or Linux, install Rust and Python 3.11 or newer; Python 3.12 is
-recommended. Confirm that `python3` resolves to that version before running
-backend preparation or Desktop smoke tests. See the [build guide](docs/build.md#macos-与-linux-开发环境)
-for the macOS Homebrew path requirement.
+**Ash Code** provides an interactive terminal interface, saved sessions, and
+commands for asking questions or running tasks without an interactive UI. Once
+the CLI is installed, run these from your project directory:
 
-For Electron or Browser Workbench development, install the pnpm version declared
-by `package.json` using the [standalone installer](https://pnpm.io/installation/),
-then install workspace dependencies from the repository root. pnpm downloads and
-uses the Node version pinned in `devEngines.runtime`; `.nvmrc` pins the same
-version for commands run outside pnpm:
-
-```bash
-pnpm install
+```sh
+ash
+ash ask "Explain how this project is organized"
+ash exec "Review the current changes and run the relevant tests"
 ```
 
-This command works in PowerShell and Bash. The install check requires the exact
-declared pnpm version.
+## Getting started
 
-Build definitions live in [`build/`](build), while reproducible local artifacts are collected under the ignored `.build/` root. See [`docs/build.md`](docs/build.md) for the command and output layout.
+1. Open your project in Ash Desktop, or start Ash Code in its directory.
+2. Configure a model provider and select a model. Requests require valid
+   credentials for the provider you choose.
+3. Start with a task whose result you can check:
 
-Build both products through the repository-level command:
+   ```text
+   Find why the settings page does not refresh after saving. Fix the cause,
+   run the relevant tests, and explain what changed.
+   ```
 
-```bash
-just build
+The [user guide](https://github.com/chogng/ash-docs) covers sessions, Skills,
+MCP servers, and permissions.
+
+### Run from source
+
+Prepare your tools and dependencies using the [build guide](docs/build.md#构建入口),
+then run one of these commands from the repository root:
+
+```sh
+just ash-desktop  # Desktop app
+just ash          # Ash Code terminal interface
 ```
 
-Use `just build-code` or `just build-desktop` to build one product host.
-`just build-rust` remains the explicit full Rust workspace build.
+Browser development and its connected/UI-only modes are described in the
+[frontend guide](docs/frontend.md#启动项目). The browser entry is a local
+development environment; Ash does not currently provide a hosted Web service.
 
-`pnpm build` builds only the Electron and Browser workspace.
+## Development
 
-### `ash code`
-
-```bash
-just ash
-just ash ask "explain this repository"
-just ash exec "summarize the current changes"
-```
-
-### `ash` Electron Desktop
-
-```bash
-just ash-desktop
-```
-
-In VS Code, select `Ash (Electron)` and press F5 to run the same command. The product groups are `Ash Code (TUI)` and `Ash (Electron)`.
-`Ash (Electron, Frontend Watch Only)` also runs the Rust backend but only watches frontend
-and Electron host changes. `Ash Web (Chrome)` starts the independent Browser Workbench.
-Stopping either its server or Chrome debug session stops both, so the next F5 can reuse the port.
-
-Desktop starts the Code Workbench and provides a separate Agents window. Academic documents
-open in the same Workbench; startup does not select a product mode.
-
-For a Linux Electron Desktop, Web, and Rust backend environment, open the repository in the
-[Dev Container](docs/build.md#dev-containerlinux-desktopweb-与后端).
-
-### Browser Workbench
-
-```bash
-pnpm dev:web      # Browser Workbench at http://127.0.0.1:5173/, no Rust build
-pnpm dev:web:full # Rust-backed UI at http://127.0.0.1:5174/
-pnpm dev:web:agents # Sessions with App Server and frontend/backend watching
-pnpm dev:web:agents:ui # Sessions UI at http://127.0.0.1:5173/, no Rust build
-```
-
-The full Web mode is a local development integration, not a deployable Web service.
-
-For Sessions, select `Ash Sessions Web (Chrome)` with F5 to prepare the backend and
-open its authenticated Sessions page in the browser debugger. The UI-only configuration
-is `Ash Sessions Web (Chrome, UI Only)`. Both use Vite hot updates; connected Web commands
-also rebuild Rust sources and switch the managed backend after successful compilation,
-retaining browser authentication and unsent input. See [frontend development](docs/frontend.md#日常-web-开发).
-
-Use `Ash Web (Chrome)` with F5 for browser development. This mode opens, edits and saves
-browser-authorized local folders, restores dirty editors after reload, stores settings in IndexedDB,
-and loads the built-in languages, grammars, snippets and themes. Workspace text search reads the
-authorized folder directly. Process-backed terminals, tasks, debugging, Git and agent requests
-require the connected mode. This separation follows VS Code's browser development entrypoint;
-it does not imply full VS Code feature or Extension API compatibility.
-
-For a trusted browser extension under development, set `ASH_WEB_EXTENSION_PATHS` to its package
-directory (multiple directories use the platform path delimiter). The package's `browser` field
-points to a bundled ES module exporting `activate({ register })`. Registrations use Ash Host API v1;
-the module runs in a page-owned Worker. Vite watches package resources and reloads their snapshot.
-For example, in PowerShell:
-
-```powershell
-$env:ASH_WEB_EXTENSION_PATHS = (Resolve-Path test/fixtures/web-extension).Path
-pnpm dev:web
-```
-
-This is an explicit trusted development input, with no third-party installation or sandbox claim.
-Use `pnpm test:smoke:browser:dev` to test the development entry and
-`pnpm test:smoke:browser` to test the built Web artifacts.
-
-### Stanza standalone editor
-
-只调试 Stanza 编辑器本身时运行：
-
-```bash
-pnpm dev:stanza
-```
-
-然后打开 `http://127.0.0.1:5199/build/desktop/vite/stanza/index.html`。在 VS Code 中也可以选择
-`Stanza Editor - Standalone` 配置按 F5；它会自动启动 Vite 并打开浏览器调试。页面把完整 API 暴露为
-`globalThis.stanza`，可在浏览器控制台检查 `stanza.editor.getEditors()` 和
-`stanza.editor.getModels()`。
-
-## Repository map
-
-- [`src/`](src): Electron Main, Preload, Renderer, and Browser Workbench.
-- [`cli/`](cli): user-facing `ash` command and terminal launch.
-- [`crates/`](crates): Rust protocols, backend domains, runtime, and terminal crates.
-- [`build/`](build): build and packaging tools; generated artifacts go to `.build/`.
-- [`docs/`](docs): architecture and development documentation.
-
-## Where to read next
-
-- [Ash user documentation](https://github.com/chogng/ash-docs)
-- [Product lines and host boundaries](docs/product-lines.md)
-- [System architecture](docs/architecture.md)
-- [Ash Code documentation](crates/tui/README.md)
-- [Electron Desktop architecture](docs/ash-desktop-architecture.md)
-- [Shared Rust architecture](docs/rust-architecture.md)
-- [Remote development](docs/remote-development.md)
-- [Packaging](build/runtime/README.md)
-
-Crate-level implementation details live in the `README.md` next to each crate.
+Start with the [engineering documentation](docs/README.md) for setup, tests,
+architecture, and component ownership. Desktop and Ash Code share a Rust
+backend; the desktop interface is built with TypeScript, HTML, and CSS.
 
 ## License
 
-Ash's original code and materials are proprietary and all rights reserved. See [`LICENSE`](LICENSE).
-Third-party components remain governed by their own licenses and notices, including
-[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+Ash's original code and materials are proprietary and all rights reserved.
+See [LICENSE](LICENSE). Third-party components are governed by their respective
+licenses and [notices](THIRD_PARTY_NOTICES.md).
