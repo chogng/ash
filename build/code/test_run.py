@@ -120,6 +120,24 @@ class SourceRunnerTests(unittest.TestCase):
             check=False,
         )
 
+    def test_app_launch_does_not_select_or_restart_the_terminal_backend(self) -> None:
+        staged = self._executables(Path("C:/staged"))
+        arguments = ["app", ".", "--app-path", "Ash app"]
+        with (
+            patch.dict(run.os.environ, {"ASH_TGREP_PATH": "tgrep"}, clear=True),
+            patch.object(run, "build_binaries", return_value=(0, staged)),
+            patch.object(run, "stage_runtime", return_value=nullcontext(staged)),
+            patch.object(run.subprocess, "run") as subprocess_run,
+        ):
+            subprocess_run.return_value = run.subprocess.CompletedProcess([], 0)
+            self.assertEqual(run.main(arguments), 0)
+        subprocess_run.assert_called_once_with(
+            [str(staged["ash"]), *arguments],
+            cwd=run.REPOSITORY_ROOT,
+            env=run.runtime_environment({"ASH_TGREP_PATH": "tgrep"}, staged),
+            check=False,
+        )
+
     def test_build_binaries_uses_one_cargo_invocation(self) -> None:
         binaries = ["ash", "ash-app-server", "ash-voice-host"]
         with (

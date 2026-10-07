@@ -41,6 +41,7 @@ def requires_selected_server(arguments: list[str]) -> bool:
         "-h",
         "--version",
         "-V",
+        "app",
         "app-server",
         "remote",
         "update",

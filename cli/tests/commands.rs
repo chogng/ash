@@ -169,6 +169,8 @@ fn help_version_and_usage_errors_do_not_open_the_profile() {
         (vec!["--help"], 0),
         (vec!["--version"], 0),
         (vec!["exec", "--help"], 0),
+        (vec!["app", "--help"], 0),
+        (vec!["app", "--app-path"], 2),
         (vec!["mcp", "add", "--help"], 0),
         (vec!["login", "status", "--help"], 0),
         (vec!["not-a-command"], 2),
@@ -205,6 +207,125 @@ fn help_version_and_usage_errors_do_not_open_the_profile() {
         }
         assert!(!profile.exists(), "{args:?} opened the profile");
     }
+}
+
+#[test]
+fn app_help_and_errors_use_the_terminal_locale_without_opening_the_profile() {
+    let root = tempfile::tempdir().unwrap();
+    let profile = root.path().join("unused-profile");
+    let mut command = Command::new(cargo_bin::cargo_bin!("ash").unwrap());
+    command
+        .current_dir(root.path())
+        .env("ASH_HOME", &profile)
+        .env("LC_ALL", "zh_CN.UTF-8");
+    let output = command.args(["app", "--help"]).output().unwrap();
+    assert!(output.status.success());
+    let help = String::from_utf8(output.stdout).unwrap();
+    assert!(help.contains("打开 Ash 桌面应用"), "{help}");
+    assert!(help.contains("要打开的目录、文件或工作区文件"));
+    assert!(help.contains("--app-path"));
+    let output = Command::new(cargo_bin::cargo_bin!("ash").unwrap())
+        .args(["app", "--app-path", "missing-app", "."])
+        .current_dir(root.path())
+        .env("ASH_HOME", &profile)
+        .env("LC_ALL", "zh_CN.UTF-8")
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("无效的 Ash 桌面应用路径"));
+    assert!(!profile.exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn app_launch_forwards_default_and_relative_targets_without_starting_backend() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let root = tempfile::tempdir().unwrap();
+    let directory = root.path().canonicalize().unwrap();
+    let executable = directory.join("Ash test launcher");
+    std::fs::write(
+        &executable,
+        "#!/bin/sh\nprintf '%s\\n' \"$PWD\" \"${ELECTRON_RUN_AS_NODE-unset}\" \"$@\" > \"$APP_CAPTURE\"\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let workspace = directory.join("-project with 'quotes' and {0}");
+    std::fs::create_dir(&workspace).unwrap();
+    let profile = directory.join("unused-profile");
+    for (index, target) in [None, Some(workspace.file_name().unwrap())]
+        .into_iter()
+        .enumerate()
+    {
+        let capture = directory.join(format!("capture-{index}"));
+        let mut command = Command::new(cargo_bin::cargo_bin!("ash").unwrap());
+        command
+            .args(["app", "--app-path"])
+            .arg(&executable)
+            .current_dir(&directory)
+            .env("ASH_HOME", &profile)
+            .env("ASH_APP_SERVER_PATH", directory.join("missing-backend"))
+            .env("ELECTRON_RUN_AS_NODE", "1")
+            .env("APP_CAPTURE", &capture);
+        if let Some(target) = target {
+            command.arg("--").arg(target);
+        }
+        let output = command.output().unwrap();
+        assert!(output.status.success(), "{output:?}");
+        assert!(output.stdout.is_empty());
+        assert!(output.stderr.is_empty());
+        let expected = format!(
+            "{}\nunset\n--\n{}\n",
+            directory.display(),
+            if target.is_some() {
+                &workspace
+            } else {
+                &directory
+            }
+            .display()
+        );
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            if std::fs::read_to_string(&capture).ok().as_deref() == Some(&expected) {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "desktop launch did not forward {expected:?}"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(!profile.exists());
+    }
+    let output = Command::new(cargo_bin::cargo_bin!("ash").unwrap())
+        .arg("app")
+        .arg("missing-workspace")
+        .arg("--app-path")
+        .arg(&executable)
+        .current_dir(&directory)
+        .env("ASH_HOME", &profile)
+        .env("LC_ALL", "C")
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("Could not open workspace path"));
+    assert!(!profile.exists());
+
+    std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o644)).unwrap();
+    let output = Command::new(cargo_bin::cargo_bin!("ash").unwrap())
+        .args(["app", "--app-path"])
+        .arg(&executable)
+        .current_dir(&directory)
+        .env("ASH_HOME", &profile)
+        .env("LC_ALL", "C")
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("Could not launch the Ash desktop app")
+    );
+    assert!(!profile.exists());
 }
 
 #[test]

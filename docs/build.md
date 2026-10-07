@@ -17,7 +17,7 @@
 
 ### macOS 与 Linux 开发环境
 
-安装 Rust、Just 和 Python 3.11 及以上版本。Unix 构建入口使用 `python3`；运行前确认 `python3 -c 'import tomllib'` 成功。macOS 自带 Python 可能不满足要求，可使用 `uv run --python 3.12 just ash-desktop`；Apple Silicon 上的 Homebrew Python 3.12 也可将 `/opt/homebrew/opt/python@3.12/libexec/bin` 放在 PATH 前部。
+安装 Rust、Just 和 Python 3.11 及以上版本。首次初始化使用 PATH 中的 `python3`；确认 `python3 -c 'import tomllib'` 成功。macOS 自带 Python 可能不满足要求，可用 `uv run --python 3.12 just install` 初始化；Apple Silicon 上的 Homebrew Python 3.12 也可将 `/opt/homebrew/opt/python@3.12/libexec/bin` 放在 PATH 前部。初始化后，Just 和前端构建入口优先复用 `scripts/.venv`，日常启动无需再包装 `uv run`。
 
 准备完整后端包时，macOS 还需要 Go 1.26 和系统 C/C++ 工具链来构建 LiveKit Server，见 [LiveKit Server](../third_party/livekit/README.md)。Linux 的完整后端构建需要 ALSA 开发库；沙箱构建需要 C 编译器和 libcap，见 [共享包构建](../build/runtime/README.md)。
 
@@ -43,7 +43,7 @@
 2. 执行 `pnpm install`，安装 Node workspace 依赖。
 3. 执行 `just install`，获取 Cargo 依赖并创建含固定版本 Ruff 和 codespell 的 `scripts/.venv`。Windows 缺少 PowerShell 7 时，此步骤会安装它；随后重启终端和编辑器以更新 PATH。
 
-直接执行 `node` 时使用 `.nvmrc` 指定版本；pnpm 脚本使用仓库固定的 Node。Node 启动的 Python 构建工具在 Windows 使用初始化创建的 `scripts/.venv/Scripts/python.exe`，可用 `PYTHON` 显式指定解释器；Just 在 Windows 使用 PATH 中的 `python`，其他平台使用 `python3`。
+直接执行 `node` 时使用 `.nvmrc` 指定版本；pnpm 脚本使用仓库固定的 Node。Just 和 Node 启动的 Python 构建工具优先使用初始化创建的 `scripts/.venv`。Node 入口可用 `PYTHON` 显式指定解释器，Just 可用 `just --set python <解释器路径> <命令>` 覆盖；尚未初始化时，Just 使用 Windows 的 `python` 或其他平台的 `python3`。
 
 pnpm 根据 `devEngines.runtime` 下载并使用固定的 Node 版本，通常不需要单独安装 Node。`pnpm install` 可在 PowerShell 与 Bash 中执行。运行 Electron 或 Browser Workbench 前需要前端依赖；只开发 CLI/TUI 时按所需 Rust 工具和后端资源准备环境。
 
@@ -51,10 +51,10 @@ pnpm 根据 `devEngines.runtime` 下载并使用固定的 Node 版本，通常�
 
 #### 启动
 
-| 产品                 | 命令               | F5 配置          |
-| -------------------- | ------------------ | ---------------- |
-| 完整 Electron 桌面端 | `just ash-desktop` | `Ash (Electron)` |
-| 终端界面             | `just ash`         | `Ash Code (TUI)` |
+| 产品                 | 命令            | F5 配置          |
+| -------------------- | --------------- | ---------------- |
+| 完整 Electron 桌面端 | `just ash`      | `Ash (Electron)` |
+| 终端界面             | `just ash-code` | `Ash Code (TUI)` |
 
 仅前端、只监听前端、完整 Web 和独立编辑器的区别及对应命令见 [前端启动方式](frontend.md#启动项目)。
 
@@ -63,7 +63,7 @@ pnpm 根据 `devEngines.runtime` 下载并使用固定的 Node 版本，通常�
 | 命令                                            | 结果                                                                       |
 | ----------------------------------------------- | -------------------------------------------------------------------------- |
 | `just build`                                    | 构建两个产品及其开发所需服务程序                                           |
-| `just build-code` / `just build-desktop`        | 构建指定产品                                                               |
+| `just build-code` / `just build-ash`            | 构建指定产品                                                               |
 | `just build-rust`                               | 构建根 Rust workspace                                                      |
 | `just check <package>`                          | 检查指定 Rust 包                                                           |
 | `just lint`                                     | 检查 Python 代码                                                           |
@@ -83,7 +83,7 @@ pnpm 根据 `devEngines.runtime` 下载并使用固定的 Node 版本，通常�
 
 `just spellcheck` 使用固定版本 codespell，扫描范围和允许词分别由 [`.codespellrc`](../.codespellrc)、[`.codespellignore`](../.codespellignore) 维护。`pnpm stylelint` 检查生产 CSS 的变量与选择器；更新变量清单使用 `pnpm stylelint:update` 并审阅差异。
 
-验证完整开发包时使用 `just ash-package`，需要让 Code TUI 运行该包时使用 `just ash-package-run`。日常 `just ash` 只准备源码运行所需程序。
+验证完整开发包时使用 `just ash-package`，需要让 Code TUI 运行该包时使用 `just ash-package-run`。日常 `just ash-code` 只准备源码运行所需程序。
 
 ### 测试
 
@@ -160,7 +160,7 @@ bazel test //cli:tui-real-scenarios --test_output=errors --test_env=PATH
 
 安装 Docker 和 VS Code Dev Containers 扩展，执行 **Dev Containers: Reopen in Container**。配置见 [`.devcontainer/`](../.devcontainer)，首次创建需联网安装工具、项目依赖、Chromium 和后端资源。
 
-在容器终端执行 `just ash-desktop` 启动 Electron，在宿主机打开转发的 6080 端口，使用 VNC 密码 `vscode` 查看桌面。容器启用 `privileged` 并配置 Electron 沙箱权限；依赖和产物使用容器卷，与宿主机隔离。
+在容器终端执行 `just ash` 启动 Electron，在宿主机打开转发的 6080 端口，使用 VNC 密码 `vscode` 查看桌面。容器启用 `privileged` 并配置 Electron 沙箱权限；依赖和产物使用容器卷，与宿主机隔离。
 
 仅前端 Web 模式执行 `pnpm dev:web --host 0.0.0.0`，打开转发的 5173 端口。完整 Web 模式和 App Server 只监听容器回环地址，须在容器内运行 Playwright，不能通过端口转发在宿主机浏览器访问。Browser 测试执行 `pnpm test:desktop:smoke:browser` 或 `pnpm test:web-integration`；Electron Playwright 使用容器桌面。
 

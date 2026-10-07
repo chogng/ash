@@ -6,17 +6,17 @@
 
 完成 [环境初始化](build.md#初始化) 后，在仓库根目录选择启动方式：
 
-| 用途                                                 | 命令                                          | F5 配置                               |
-| ---------------------------------------------------- | --------------------------------------------- | ------------------------------------- |
-| 完整 Electron 桌面端，监听前后端变化                 | `pnpm dev:desktop`，等同于 `just ash-desktop` | `Ash (Electron)`                      |
-| 直接开发 Agents 窗口，监听前后端变化                 | `pnpm dev:agents`                             | `Ash (Electron, Agents)`              |
-| 完整 Electron 桌面端，仅监听前端和 Electron 宿主变化 | `pnpm dev:ui:connected`                       | `Ash (Electron, Frontend Watch Only)` |
-| Electron 界面，不构建或启动后端                      | `pnpm dev:desktop:ui`                         | —                                     |
-| 浏览器工作台、本地文件编辑，不构建或启动后端         | `pnpm dev:web`                                | `Ash Web (Chrome)`                    |
-| 浏览器与真实 App Server，监听前后端变化              | `pnpm dev:web:full`                           | —                                     |
-| 直接开发 Sessions Web，监听前后端变化                | `pnpm dev:web:agents`                         | `Ash Sessions Web (Chrome)`           |
-| Sessions Web 界面，不构建或启动后端                  | `pnpm dev:web:agents:ui`                      | `Ash Sessions Web (Chrome, UI Only)`  |
-| 独立 Stanza 编辑器                                   | `pnpm dev:stanza`                             | `Stanza Editor - Standalone`          |
+| 用途                                                 | 命令                          | F5 配置                               |
+| ---------------------------------------------------- | ----------------------------- | ------------------------------------- |
+| 完整 Electron 桌面端，监听前后端变化                 | `pnpm dev`，等同于 `just ash` | `Ash (Electron)`                      |
+| 直接开发 Agents 窗口，监听前后端变化                 | `pnpm dev:agents`             | `Ash (Electron, Agents)`              |
+| 完整 Electron 桌面端，仅监听前端和 Electron 宿主变化 | `pnpm dev:ui:connected`       | `Ash (Electron, Frontend Watch Only)` |
+| Electron 界面，不构建或启动后端                      | `pnpm dev:ui`                 | —                                     |
+| 浏览器工作台、本地文件编辑，不构建或启动后端         | `pnpm dev:web`                | `Ash Web (Chrome)`                    |
+| 浏览器与真实 App Server，监听前后端变化              | `pnpm dev:web:full`           | —                                     |
+| 直接开发 Sessions Web，监听前后端变化                | `pnpm dev:web:agents`         | `Ash Sessions Web (Chrome)`           |
+| Sessions Web 界面，不构建或启动后端                  | `pnpm dev:web:agents:ui`      | `Ash Sessions Web (Chrome, UI Only)`  |
+| 独立 Stanza 编辑器                                   | `pnpm dev:stanza`             | `Stanza Editor - Standalone`          |
 
 `Frontend Watch Only` 仍连接 Rust 后端，只是不监听后端源码变化。Web 模式可通过浏览器授权直接打开本地文件夹，使用 Explorer、编辑器、新建文件和保存；聊天、Git、终端、后端搜索及语言服务需要 App Server。Electron 仅 UI 模式的文件操作也需要后端。
 
@@ -44,7 +44,7 @@ Sessions Web 使用 `pnpm dev:web:agents`，直接打开终端输出的 Sessions
 
 完整 Web 开发由 Vite 管理 Rust 监听器和 Web 启动进程。保存 Rust 或 Cargo 文件后先同步协议、编译并发布含独立 Node 的开发包；成功后通过 `ensure-selected` 切换受管后端。编译失败保留当前后端。Web 启动进程持续持有原入口，使重启后的监听地址和浏览器授权继续有效；页面重连时保留会话选择和未发送输入。停止 Vite 会释放监听器和入口授权；其他客户端共用的后端仍按共享生命周期管理。连接后端的 F5 配置通过 `serverReadyAction` 打开动态认证链接，停止服务器调试会同时停止其 `Browser Debug`；只停止浏览器调试时服务器继续运行，可在调试工具栏停止服务器。仅界面 F5 配置保留服务器与浏览器双向停止。
 
-F5 配置见 [launch.json](../.vscode/launch.json)。macOS 的 Electron 入口通过 `uv run --python 3.12` 选择 Python；手动运行命令时，按 [macOS 环境要求](build.md#macos-与-linux-开发环境) 配置。
+F5 配置见 [launch.json](../.vscode/launch.json)。完成 [环境初始化](build.md#初始化) 后，F5 和手动启动共用仓库的 Python 环境，macOS 无需额外的 `uv run` 包装。
 
 当前使用 Code 工作台，共同装配代码与 Academic 文档编辑器；打开论文不需要切换模式，旧 Academic 模式数据在启动时迁移，见 [工作台与文档贡献](workbench-modes.md)。停止开发启动器使用 `Ctrl+C`；退出 Web 启动器会撤销该入口的浏览器授权，不终止其他客户端正在使用的后端。
 
@@ -65,7 +65,7 @@ Electron 启动前并行准备键盘模块、前端生成资源和后端资源�
 
 开发启动器使用 `.build/desktop/dev/profile` 和 `.build/desktop/dev/user-data`，Workbench 与 Agents 共享开发数据；设置 `ASH_HOME` 可以指定其他开发配置。资源或运行工具锁文件修改后执行 VS Code 任务 `Prepare Ash Backend`，或 `pnpm prepare:backend`，准备完成后已运行的完整开发窗口会切换到新版本。
 
-需要单独监听桌面后端时，先执行 `pnpm prepare:backend`，再在仓库根目录执行 `pnpm dev:desktop:rust`。仅 UI、`dev:ui:connected`、`dev:web` 和 `dev:web:agents:ui` 不监听后端。后端开发包和下载规则见 [共享包构建](../build/runtime/README.md)。
+需要单独监听桌面后端时，先执行 `pnpm prepare:backend`，再在仓库根目录执行 `pnpm dev:rust`。仅 UI、`dev:ui:connected`、`dev:web` 和 `dev:web:agents:ui` 不监听后端。后端开发包和下载规则见 [共享包构建](../build/runtime/README.md)。
 
 ### 打开工作区
 
@@ -151,7 +151,7 @@ iframe 通过 `acquireAshWebviewApi().postMessage()` 通信，宿主校验来源
 
 | 命令                            | 覆盖范围                                       |
 | ------------------------------- | ---------------------------------------------- |
-| `pnpm build:desktop`            | Electron Main、Preload 和 Renderer             |
+| `pnpm build`                    | Electron Main、Preload 和 Renderer             |
 | `pnpm build:stanza`             | 独立编辑器                                     |
 | `pnpm typecheck:renderer`       | Renderer 类型检查                              |
 | `pnpm test:main`                | 构建工具和前端单测                             |
@@ -181,7 +181,7 @@ Academic 文件打开与保存已纳入 `pnpm test:desktop:app`，直接在 Code
 ```powershell
 Remove-Item -LiteralPath .\node_modules -Recurse -Force
 pnpm install
-pnpm dev:desktop
+pnpm dev
 ```
 
 这里只删除生成的依赖目录。Electron 安装脚本由 [pnpm-workspace.yaml](../pnpm-workspace.yaml) 的 `allowBuilds` 管理。

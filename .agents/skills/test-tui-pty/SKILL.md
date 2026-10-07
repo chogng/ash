@@ -47,6 +47,6 @@ cargo insta accept --snapshot path/to/snapshot.snap
 
 After acceptance, rerun the same `just test-tui` filter without an update environment variable and confirm `find cli -name '*.snap.new' -print` returns no pending snapshots. Do not use `INSTA_UPDATE=always` as the ordinary update workflow.
 
-Use `just ash` for an interactive terminal run when it materially improves verification. When driving it programmatically, send text and Enter in separate writes, wait for a state-specific marker before the next action, and use an isolated profile or fixture for scenarios that write configuration or repository state. Interactive verification supplements automated tests; it does not replace them.
+Use `just ash-code` for an interactive terminal run when it materially improves verification. When driving it programmatically, send text and Enter in separate writes, wait for a state-specific marker before the next action, and use an isolated profile or fixture for scenarios that write configuration or repository state. Interactive verification supplements automated tests; it does not replace them.
 
 Playwright's `validate-ui-scenario` covers Ash's graphical Web/Electron window. It does not replace this PTY flow for `ash code` terminal behavior.

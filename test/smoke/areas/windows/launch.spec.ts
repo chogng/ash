@@ -1,13 +1,45 @@
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { writeFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { writeFile, mkdir, mkdtemp, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { promisify } from 'node:util';
 import { expect, test } from '../../../automation/test.js';
 import { launchElectron } from '../../../automation/playwrightElectron.js';
 import { toDisposable } from '../../../../src/ash/base/common/lifecycle.js';
 import type { ConsoleMessage, Page } from '@playwright/test';
+
+for (const launchKind of ['executable', 'bundle'] as const) test(`ash app hands the current directory to the real desktop window through ${launchKind === 'bundle' ? 'a bundle' : 'an executable'}`, async ({ application, target, testWorkspace }) => {
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'disabled' || process.platform === 'win32', 'This scenario uses a Unix development launcher without a backend.');
+	test.skip(launchKind === 'bundle' && process.platform !== 'darwin', 'Application bundles use macOS LaunchServices.');
+	const cli = process.env.ASH_CLI_EXECUTABLE;
+	test.skip(!cli, 'Set ASH_CLI_EXECUTABLE to the built ash CLI.');
+	if (!cli || !('windows' in application)) return;
+	const configuration = await application.evaluate(({ app }) => ({ executable: process.execPath, appPath: app.getAppPath(), userData: app.getPath('userData'), environment: process.env }));
+	const folder = join(testWorkspace.directory, "app project with 'quotes' and {0}");
+	await mkdir(folder);
+	const launcher = launchKind === 'bundle' ? join(testWorkspace.directory, 'Ash.app', 'Contents', 'MacOS', 'Ash') : join(testWorkspace.directory, 'launch Ash');
+	const quote = (value: string): string => `'${value.replace(/'/g, `'\\''`)}'`;
+	if (launchKind === 'bundle') {
+		await mkdir(join(testWorkspace.directory, 'Ash.app', 'Contents', 'MacOS'), { recursive: true });
+		await writeFile(join(testWorkspace.directory, 'Ash.app', 'Contents', 'Info.plist'), '<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>CFBundleExecutable</key><string>Ash</string><key>CFBundleIdentifier</key><string>com.ash.cli-launch-test</string><key>CFBundleName</key><string>Ash</string><key>CFBundlePackageType</key><string>APPL</string></dict></plist>');
+	}
+	await writeFile(launcher, `#!/bin/sh\nexec ${[configuration.executable, configuration.appPath, `--user-data-dir=${configuration.userData}`].map(quote).join(' ')} "$@"\n`, { mode: 0o755 });
+	const appPath = launchKind === 'bundle' ? join(testWorkspace.directory, 'Ash.app') : launcher;
+	await promisify(execFile)(resolve(cli), ['app', '--app-path', appPath, '.'], {
+		cwd: folder,
+		env: { ...configuration.environment, ELECTRON_RUN_AS_NODE: '1' },
+		timeout: 10_000,
+	});
+	await expect.poll(async () => {
+		const contexts = await Promise.all(application.windows().map(page => page.evaluate(async () => {
+			const ipc = (globalThis as unknown as { ash?: { ipcRenderer: { invoke(channel: string): Promise<{ folders: { uri: string; }[]; }>; }; }; }).ash?.ipcRenderer;
+			return ipc ? (await ipc.invoke('ash:workspace:context:read')).folders.map(folder => folder.uri) : [];
+		}).catch(() => [])));
+		return contexts.flat();
+	}).toContain(pathToFileURL(await realpath(folder)).href);
+});
 
 test('the first process opens its requested file after restoring the Workbench and positions its caret', async ({ target, testWorkspace }) => {
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Disk files require the Electron App Server.');

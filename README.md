@@ -24,7 +24,7 @@ you work with agents from the command line.
 
 ## Desktop and terminal
 
-**Ash Desktop** combines the editor and project tools with a dedicated Agents
+**Ash** combines the editor and project tools with a dedicated Agents
 window. Code and structured academic documents open in the same workspace.
 
 **Ash Code** provides an interactive terminal interface, saved sessions, and
@@ -33,13 +33,18 @@ the CLI is installed, run these from your project directory:
 
 ```sh
 ash
+ash app .
 ash ask "Explain how this project is organized"
 ash exec "Review the current changes and run the relevant tests"
 ```
 
+`ash app .` opens the current project in the installed Ash desktop app;
+`ash` opens the terminal interface. Use `ash app --app-path PATH .` to select
+a desktop installation outside the standard locations.
+
 ## Getting started
 
-1. Open your project in Ash Desktop, or start Ash Code in its directory.
+1. Open your project in Ash, or start Ash Code in its directory.
 2. Configure a model provider and select a model. Requests require valid
    credentials for the provider you choose.
 3. Start with a task whose result you can check:
@@ -58,8 +63,8 @@ Prepare your tools and dependencies using the [build guide](docs/build.md#构建
 then run one of these commands from the repository root:
 
 ```sh
-just ash-desktop  # Desktop app
-just ash          # Ash Code terminal interface
+just ash       # Ash desktop app
+just ash-code  # Ash Code terminal interface
 ```
 
 Browser development and its connected/UI-only modes are described in the

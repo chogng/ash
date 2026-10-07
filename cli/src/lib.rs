@@ -1,11 +1,13 @@
 //! Command parsing and product composition for the shared Ash command.
 
 mod announcement;
+mod app;
 mod doctor;
 mod exec;
 mod local_tui;
 mod login;
 mod management;
+mod nls;
 mod reconnect;
 mod remote;
 mod update;
@@ -31,6 +33,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    #[command(about = nls::text(nls::Message::AppAbout))]
+    App(app::Options),
     /// Run a prompt non-interactively and print the final answer.
     Ask {
         #[arg(required = true, num_args = 1..)]
@@ -117,6 +121,7 @@ pub fn run(arguments: impl IntoIterator<Item = impl Into<OsString> + Clone>) -> 
 fn dispatch(cli: Cli) -> Result<i32, CliError> {
     let result = match cli.command {
         None => local_tui::run(configured_dir()?, profile_root()?).map_err(CliError::failure),
+        Some(Command::App(options)) => app::run(options),
         Some(Command::Ask { prompt }) => exec::ask(prompt.join(" ")),
         Some(Command::Exec(options)) => exec::execute(options),
         Some(Command::Resume {

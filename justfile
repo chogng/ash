@@ -3,9 +3,12 @@ set positional-arguments := true
 set shell := ["sh", "-cu"]
 set windows-shell := ["pwsh", "-NoLogo", "-NoProfile", "-CommandWithArgs"]
 
-python := if os_family() == "windows" { "python" } else { "python3" }
 ruff := if os_family() == "windows" { "./scripts/.venv/Scripts/ruff.exe" } else { "./scripts/.venv/bin/ruff" }
 tools_python := if os_family() == "windows" { "./scripts/.venv/Scripts/python.exe" } else { "./scripts/.venv/bin/python" }
+
+# Reuse the initialized repository interpreter instead of an older system Python.
+
+python := if path_exists(tools_python) == "true" { tools_python } else if os_family() == "windows" { "python" } else { "python3" }
 recipe_args := if os_family() == "windows" { "@($args | Select-Object -Skip 1)" } else { '"$@"' }
 
 # Unit tests and PTY service binaries share one profile to reuse dependency outputs.
@@ -74,14 +77,14 @@ prune-build-cache *args:
     {{ python }} -B -m build.lib.cargo_cache {{ recipe_args }}
 
 # Build the terminal and Electron products from the repository root.
-build: build-code build-desktop
+build: build-code build-ash
 
 # Build the Ash Code CLI/TUI host and its development server programs.
 build-code:
     {{ python }} -B build/code/build.py
 
-# Build the Electron Desktop product.
-build-desktop:
+# Build the Ash Electron product.
+build-ash:
     pnpm build
 
 # Build the root Rust workspace with the locked V8 inputs when required.
@@ -152,8 +155,8 @@ generate-model-catalog-schema *args:
 generate-protocol:
     pnpm run protocol:generate
 
-# Launch the ash code TUI product from the current source tree.
-ash *args:
+# Launch the Ash Code TUI product from the current source tree.
+ash-code *args:
     {{ python }} -B build/code/run.py {{ recipe_args }}
 
 # Preview the Welcome pet's idle frame, all frames, or one named action.
@@ -168,8 +171,8 @@ ash-package *args:
 ash-package-run *args:
     {{ python }} -B build/code/run_package.py {{ recipe_args }}
 
-# Launch the ash Electron Desktop product.
-ash-desktop:
+# Launch the Ash Electron product.
+ash:
     pnpm dev
 
 # Build a shared App Server runtime package.

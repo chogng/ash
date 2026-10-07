@@ -2,7 +2,7 @@
 
 - 生成用户运行的 `ash` 程序和供该程序调用的 `ash_cli` 库。
 - 解析命令、生成帮助、校验参数组合，并分发到功能 crate。
-- 组装 TUI、本地与远程连接、非交互执行和产品更新。
+- 组装 TUI、本地与远程连接、非交互执行和产品更新，并启动已安装的桌面应用。
 - 通过共享 App Server 管理账户、MCP 配置、已安装插件及历史会话。
 - 保留后台服务的配置版本检查、精确包身份和权限边界。
 
@@ -16,6 +16,7 @@
 
 | 命令                                             | 行为                                                                                        |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| `ash app [PATH]`                                 | 打开已安装的 Ash 桌面应用，默认打开当前目录                                                 |
 | `ash ask PROMPT`                                 | 执行问题并输出最终回答                                                                      |
 | `ash exec [OPTIONS] PROMPT`                      | 非交互任务；支持 `--jsonl`、`--resume`、`--fork` 与审批模式                                 |
 | `ash resume SESSION_ID THREAD_ID`                | 恢复交互会话                                                                                |
@@ -42,6 +43,8 @@
 | `ash update [--channel latest\|stable]`          | 更新程序；`--status` 查看状态                                                               |
 
 - `exec` 中需要把选项样式的文字作为任务内容时，用 `--` 分隔。
+- `app` 接受目录、文件或工作区文件，先解析为绝对路径，再交给桌面已有启动入口处理。macOS 查找 `/Applications/Ash.app` 和 `~/Applications/Ash.app`；Windows 查找 `%LOCALAPPDATA%/Programs/Ash/Ash.exe` 及 Program Files 下的 Ash 安装。其他位置或 Linux 源码启动包装器使用 `--app-path PATH`；macOS 支持 `.app` 或可执行文件，其他平台使用可执行文件。未找到时返回错误，不自动下载安装。
+- `app` 不加载 profile 或启动 CLI 后端；桌面应用负责连接和窗口生命周期，CLI 完成交接后退出。`app` 命令的帮助及错误文案通过 `LC_ALL`、`LC_MESSAGES`、`LANG` 依次选择语言，支持英语、中文、日语和法语，未知语言使用英语。
 - 同一个插件 ID 安装了多个版本时，变更命令必须加 `--version VERSION`。启用不自动授予权限。
 - 管理命令连接当前 `ASH_HOME` 的 daemon；尚未运行时按既有生命周期启动。命令退出只关闭自身连接。
 - 本地连接复用当前 profile 选中的后台版本；首次没有后台包时，从完整的调用方安装包复制一份到 profile。CLI 更新不会替换正在运行的后台；明确执行 `ash app-server daemon ensure-selected` 才选择调用方的版本，切换可能中断任务。
@@ -184,3 +187,4 @@ just dependencies
 - `login_tests.rs` 验证精确登录身份、失败与断线处理。
 - `tests/commands.rs` 使用独立的临时 `ASH_HOME`、`CODEX_HOME` 和真实 CLI；夹具启动并回收 daemon，验证跨进程配置、插件权限、会话生命周期、诊断和退出码。
 - `tests/stdio.rs` 保留 App Server stdio 握手与隔离检查；完整 TUI 行为使用产品已有 PTY 场景。
+- `tests/commands.rs` 中的 `app_` 用例无需 App Server，验证真实 CLI 启动、路径透传、错误和中文帮助。设置 `ASH_CLI_EXECUTABLE` 为编译出的 `ash` 的绝对路径后，执行 `pnpm run test:smoke:ui:no-compile test/smoke/areas/windows/launch.spec.ts --grep 'ash app hands'`，通过真实 Electron 窗口验证交接；Unix 覆盖可执行文件，macOS 另覆盖 `.app` 与 LaunchServices。

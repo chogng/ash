@@ -6,10 +6,20 @@ import { pythonCommand, type PythonHost } from './python.ts';
 const arguments_ = ['-B', 'build/runtime/prepare.py'];
 
 test('python command honors the configured interpreter', () => {
-	assert.deepEqual(pythonCommand(arguments_, host('linux', { PYTHON: '/tools/python' })), {
+	assert.deepEqual(pythonCommand(arguments_, host('linux', { PYTHON: '/tools/python' }, () => true)), {
 		command: '/tools/python',
 		args: arguments_,
 	});
+});
+
+test('Unix Node tools reuse the initialized repository Python before host interpreters', () => {
+	const repositoryPython = resolve(import.meta.dirname, '../scripts/.venv/bin/python');
+	for (const platform of ['darwin', 'linux'] as const) {
+		assert.deepEqual(pythonCommand(arguments_, host(platform, {}, path => path === repositoryPython || path.startsWith('/opt/homebrew/'))), {
+			command: repositoryPython,
+			args: arguments_,
+		});
+	}
 });
 
 test('python command selects Homebrew Python on Apple Silicon', () => {

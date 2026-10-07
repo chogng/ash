@@ -67,6 +67,7 @@ test('source selection deduplicates files, excludes fixtures, and rejects unmatc
 });
 
 test('CLI reports file and location, fails on misspellings, and never updates the manifest', () => {
+	mkdirSync(join(root, '.build'), { recursive: true });
 	const directory = mkdtempSync(join(root, '.build/stylelint-case-'));
 	const file = join(directory, 'example.css');
 	const manifest = join(root, 'build/lib/stylelint/ash-known-variables.json');
@@ -170,6 +171,7 @@ test('design suggestions respect roles, on-scale spacing, computed geometry, and
 });
 
 test('CLI fails on prohibited selectors but design suggestions are read-only and keep a successful exit', () => {
+	mkdirSync(join(root, '.build'), { recursive: true });
 	const directory = mkdtempSync(join(root, '.build/stylelint-design-'));
 	const file = join(directory, 'component.css');
 	try {

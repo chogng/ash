@@ -31,9 +31,6 @@
 			},
 			"runOptions": {
 				"instanceLimit": 1
-			},
-			"osx": {
-				"command": "uv run --python 3.12 pnpm predev:web:full"
 			}
 		},
 		{
@@ -67,9 +64,6 @@
 			},
 			"runOptions": {
 				"instanceLimit": 1
-			},
-			"osx": {
-				"command": "uv run --python 3.12 pnpm prepare:backend"
 			}
 		},
 		{
@@ -111,9 +105,6 @@
 			"label": "Run Ash Server (Web)",
 			"type": "shell",
 			"command": "pnpm dev:web:full",
-			"osx": {
-				"command": "uv run --python 3.12 pnpm dev:web:full"
-			},
 			"isBackground": true,
 			"options": {
 				"cwd": "${workspaceFolder}"

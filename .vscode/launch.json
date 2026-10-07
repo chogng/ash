@@ -5,10 +5,7 @@
 			"name": "Ash Code (TUI)",
 			"type": "node-terminal",
 			"request": "launch",
-			"command": "just ash",
-			"osx": {
-				"command": "uv run --python 3.12 just ash"
-			},
+			"command": "just ash-code",
 			"cwd": "${workspaceFolder}",
 			"presentation": {
 				"group": "0_ash_code",
@@ -19,13 +16,13 @@
 			"name": "Ash (Electron)",
 			"type": "node-terminal",
 			"request": "launch",
-			"command": "bash ./scripts/ash-desktop.sh",
+			"command": "bash ./scripts/ash.sh",
 			"windows": {
-				"command": "cmd /d /c .\\scripts\\ash-desktop.bat"
+				"command": "cmd /d /c .\\scripts\\ash.bat"
 			},
 			"cwd": "${workspaceFolder}",
 			"presentation": {
-				"group": "1_ash_desktop",
+				"group": "1_ash",
 				"order": 1
 			}
 		},
@@ -33,13 +30,13 @@
 			"name": "Ash (Electron, Frontend Watch Only)",
 			"type": "node-terminal",
 			"request": "launch",
-			"command": "bash ./scripts/ash-desktop.sh --connected",
+			"command": "bash ./scripts/ash.sh --connected",
 			"windows": {
-				"command": "cmd /d /c .\\scripts\\ash-desktop.bat --connected"
+				"command": "cmd /d /c .\\scripts\\ash.bat --connected"
 			},
 			"cwd": "${workspaceFolder}",
 			"presentation": {
-				"group": "1_ash_desktop",
+				"group": "1_ash",
 				"order": 2
 			}
 		},
@@ -50,11 +47,8 @@
 			"command": "pnpm dev:agents",
 			"cwd": "${workspaceFolder}",
 			"presentation": {
-				"group": "1_ash_desktop",
+				"group": "1_ash",
 				"order": 3
-			},
-			"osx": {
-				"command": "uv run --python 3.12 pnpm dev:agents"
 			}
 		},
 		{
@@ -83,7 +77,7 @@
 				"killOnServerStop": true
 			},
 			"presentation": {
-				"group": "1_ash_desktop",
+				"group": "1_ash",
 				"order": 3
 			}
 		},
@@ -93,9 +87,7 @@
 			"request": "launch",
 			"url": "http://127.0.0.1:5173/",
 			"webRoot": "${workspaceFolder}",
-			"cascadeTerminateToConfigurations": [
-				"Ash Web (Chrome)"
-			],
+			"cascadeTerminateToConfigurations": ["Ash Web (Chrome)"],
 			"presentation": {
 				"hidden": true
 			}
@@ -128,7 +120,7 @@
 				"killOnServerStop": true
 			},
 			"presentation": {
-				"group": "1_ash_desktop",
+				"group": "1_ash",
 				"order": 4
 			}
 		},
@@ -159,7 +151,7 @@
 				"killOnServerStop": true
 			},
 			"presentation": {
-				"group": "1_ash_desktop",
+				"group": "1_ash",
 				"order": 5
 			}
 		},

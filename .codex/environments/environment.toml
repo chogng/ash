@@ -28,7 +28,7 @@ command = "pnpm exec cross-env ASH_WORKBENCH_MODE=academic pnpm run dev:web:full
 [[actions]]
 name = "app"
 icon = "debug"
-command = "just app"
+command = "just ash"
 
 [[actions]]
 name = "electron-code"

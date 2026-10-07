@@ -9,12 +9,116 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import venv
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class JustTests(unittest.TestCase):
+    @unittest.skipIf(os.name == "nt", "The desktop shell launcher runs on Unix")
+    def test_desktop_launch_modes_use_repository_commands_without_uv(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="ash desktop launch ") as directory:
+            folder = Path(directory)
+            (folder / "scripts").mkdir()
+            entry = folder / "scripts/ash.sh"
+            entry.write_text((ROOT / "scripts/ash.sh").read_text())
+            commands = folder / "bin"
+            commands.mkdir()
+            for command in ("just", "pnpm"):
+                executable = commands / command
+                executable.write_text(f"#!/bin/sh\nprintf '%s\\n' '{command}' \"$@\"\n")
+                executable.chmod(0o755)
+            for arguments, expected in [
+                ([], ["just", "ash"]),
+                (["--connected"], ["pnpm", "dev:ui:connected"]),
+            ]:
+                with self.subTest(arguments=arguments):
+                    result = subprocess.run(
+                        ["bash", str(entry), *arguments],
+                        env={**os.environ, "PATH": str(commands) + ":/usr/bin:/bin"},
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.stdout.splitlines(), expected)
+
+    @unittest.skipIf(os.name == "nt", "The pnpm probe uses a Unix shell")
+    def test_product_recipes_route_to_their_hosts_and_forward_terminal_arguments(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory(prefix="ash product commands ") as directory:
+            folder = Path(directory)
+            (folder / "justfile").write_text((ROOT / "justfile").read_text())
+            (folder / "build/code").mkdir(parents=True)
+            (folder / "build/code/run.py").write_text(
+                "import json, sys; print(json.dumps(sys.argv[1:]))"
+            )
+            commands = folder / "bin"
+            commands.mkdir()
+            pnpm = commands / "pnpm"
+            pnpm.write_text('#!/bin/sh\nprintf "%s\\n" "pnpm" "$@"\n')
+            pnpm.chmod(0o755)
+            environment = {
+                **os.environ,
+                "PATH": str(commands) + os.pathsep + os.environ.get("PATH", ""),
+            }
+            for recipe, expected in [("ash", "dev"), ("build-ash", "build")]:
+                with self.subTest(recipe=recipe):
+                    result = subprocess.run(
+                        ["just", "--justfile", str(folder / "justfile"), recipe],
+                        env=environment,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.stdout.splitlines(), ["pnpm", expected])
+            arguments = ["two words", "", "--flag", "$value", "a'b"]
+            result = subprocess.run(
+                [
+                    "just",
+                    "--justfile",
+                    str(folder / "justfile"),
+                    "--set",
+                    "python",
+                    sys.executable,
+                    "ash-code",
+                    *arguments,
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads(result.stdout), arguments)
+
+    def test_initialized_repository_python_is_used_without_changing_path(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="ash python environment ") as directory:
+            folder = Path(directory)
+            environment = folder / "scripts/.venv"
+            venv.EnvBuilder(with_pip=False, symlinks=os.name != "nt").create(
+                environment
+            )
+            probe = folder / "probe.py"
+            probe.write_text("import sys; print(sys.prefix)", encoding="utf-8")
+            (folder / "justfile").write_text(
+                (ROOT / "justfile").read_text(encoding="utf-8")
+                + "\nprobe:\n    {{ python }} probe.py\n",
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                ["just", "--justfile", str(folder / "justfile"), "probe"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(
+                Path(result.stdout.strip()).resolve(), environment.resolve()
+            )
+
     def run_tui_recipe(
         self, *args: str, build_exit: int = 0
     ) -> subprocess.CompletedProcess[str]:

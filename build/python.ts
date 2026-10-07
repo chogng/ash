@@ -13,7 +13,8 @@ const currentHost: PythonHost = { platform: process.platform, environment: proce
 export function pythonCommand(args: string[], host: PythonHost = currentHost): { command: string; args: string[]; } {
 	const configured = host.environment.PYTHON;
 	if (configured) return { command: configured, args };
-	if (host.platform === 'win32') return { command: resolve(import.meta.dirname, '../scripts/.venv/Scripts/python.exe'), args };
+	const repositoryPython = resolve(import.meta.dirname, '../scripts/.venv', host.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
+	if (host.fileExists(repositoryPython) || host.platform === 'win32') return { command: repositoryPython, args };
 	if (host.platform === 'darwin') {
 		for (const candidate of [
 			'/opt/homebrew/opt/python@3.12/libexec/bin/python3',

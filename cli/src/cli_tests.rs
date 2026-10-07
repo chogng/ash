@@ -11,6 +11,7 @@ fn command_graph_is_valid_and_defaults_to_interactive() {
 #[test]
 fn help_and_version_do_not_dispatch_commands() {
     for command in [
+        "app",
         "exec",
         "ask",
         "resume",
@@ -39,6 +40,24 @@ fn help_and_version_do_not_dispatch_commands() {
             .kind(),
         ErrorKind::DisplayVersion
     );
+}
+
+#[test]
+fn app_defaults_to_the_current_directory_and_accepts_an_explicit_installation() {
+    let Some(Command::App(options)) = Cli::try_parse_from(["ash", "app"]).unwrap().command else {
+        panic!("expected desktop command");
+    };
+    assert_eq!(options.path, PathBuf::from("."));
+    assert!(options.app_path.is_none());
+    let Some(Command::App(options)) =
+        Cli::try_parse_from(["ash", "app", "--app-path", "Ash.app", "my project"])
+            .unwrap()
+            .command
+    else {
+        panic!("expected desktop command");
+    };
+    assert_eq!(options.path, PathBuf::from("my project"));
+    assert_eq!(options.app_path, Some(PathBuf::from("Ash.app")));
 }
 
 #[test]

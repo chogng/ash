@@ -13,7 +13,7 @@
 ash-cli → crates/tui → ash-app-server-client → shared App Server crates
 ```
 
-从仓库根目录运行 `just ash`；构建使用 `just build-code`。检查与测试见[测试与支持边界](#测试与支持边界)。
+从仓库根目录运行 `just ash-code`；构建使用 `just build-code`。检查与测试见[测试与支持边界](#测试与支持边界)。
 
 ## 文件与职责
 
