@@ -3,14 +3,13 @@ import { ButtonActionViewItem, type ActionViewItemOptions } from '../../../../ba
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { CountBadge } from '../../../../base/browser/ui/countBadge/countBadge.js';
 import type { TreeElement as ObjectTreeElement } from '../../../../base/browser/ui/tree/tree.js';
-import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { ResourceTree, type IResourceNode } from '../../../../base/common/resourceTree.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { FileKind } from '../../../../platform/files/common/files.js';
-import { localize } from '../../../../nls.js';
+import { localize, localize2 } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { registerOpenEditorListeners } from '../../../../platform/editor/browser/editor.js';
 import { WorkbenchObjectTree } from '../../../../platform/list/browser/listService.js';
@@ -21,9 +20,11 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { SCMInputWidget } from './scmInput.js';
 import { ViewPane, ViewWelcomeController, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { ViewsRegistry } from '../../../common/views.js';
-import { ISCMService, ISCMViewService, SCMProviderContext, SCMBusyContext, SCMCanCommitContext, SCMViewModeContext, SCMViewSortKeyContext, type SCMViewMode, type SCMViewSortKey, type ISCMProvider, type ISCMResource, type ISCMResourceGroup } from '../common/scm.js';
+import { ISCMService, ISCMViewService, SCMProviderContext, SCMBusyContext, SCMCanCommitContext, SCMViewModeContext, SCMViewSortKeyContext, type SCMViewMode, type SCMViewSortKey, type ISCMProvider, type ISCMResource, type ISCMResourceGroup, type ISCMRepository, VIEW_PANE_ID } from '../common/scm.js';
 import type { IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
-import { IMenuService, MenuId } from '../../../../platform/actions/common/actions.js';
+import { Action2, IMenuService, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { IContextKeyService, type IScopedContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
@@ -65,7 +66,7 @@ export class ScmViewPane extends ViewPane {
 		@ISCMService private readonly scmService: ISCMService,
 		@ISCMViewService private readonly scmViewService: ISCMViewService,
 		@IResourceLabelService resourceLabelService: IResourceLabelService,
-		@IContextMenuService private readonly contextMenuProvider: IContextMenuProvider,
+		@IContextMenuService private readonly contextMenuProvider: IContextMenuService,
 		@IConfigurationService configurationService: IConfigurationService,
 		@IResourceIconRenderer resourceIconRenderer: IResourceIconRenderer,
 		@IInstantiationService instantiationService: IInstantiationService,
@@ -134,7 +135,7 @@ export class ScmViewPane extends ViewPane {
 		};
 		updateTwistieLayout();
 		this._register(resourceIconRenderer.onDidChangeResourceIcons(updateTwistieLayout));
-		this.tree.element.setAttribute('aria-description', localize('scm.changesTreeHelp', 'Use the title toolbar to commit or refresh, and More Actions to change list, tree and sorting or run Git operations. Files are grouped by directory. Use Up and Down to navigate and preview files, Left to collapse, and Right to expand a group or directory. Press Enter or Space on a directory to toggle it. Press Enter on a file to open and pin it, or Space to preview while keeping focus here. Hold Ctrl, Command, or Alt when clicking or pressing Enter to open in a side group. Double-click pins the file and focuses its editor. Press F1 for Git branch, worktree, stash, tag and remote commands, integration continue or abort, and partial staging.'));
+		this.tree.element.setAttribute('aria-description', localize('scm.changesTreeHelp', 'Use the title toolbar to commit or refresh, and More Actions to change list, tree and sorting or run Git operations. Files are grouped by directory. Use Up and Down to navigate and preview files, Left to collapse, and Right to expand a group or directory. Press Enter or Space on a directory to toggle it. Press Shift+F10 or the Context Menu key on a group in tree view, then choose Collapse All to fold its directories. Press Enter on a file to open and pin it, or Space to preview while keeping focus here. Hold Ctrl, Command, or Alt when clicking or pressing Enter to open in a side group. Double-click pins the file and focuses its editor. Press F1 for Git branch, worktree, stash, tag and remote commands, integration continue or abort, and partial staging.'));
 		this.welcomeController = this._register(instantiationService.createInstance(ViewWelcomeController, this.contentElement, this, ViewsRegistry));
 		this._register(this.onDidFocus(() => {
 			if (this.welcomeController.enabled && configurationService.getValue<boolean>(AccessibilityVerbositySettingId.Scm) !== false) {
@@ -146,6 +147,19 @@ export class ScmViewPane extends ViewPane {
 				void event.element.resource.open(event.editorOptions, event.sideBySide);
 			} else if ('key' in event.browserEvent && (event.browserEvent.key === 'Enter' || event.browserEvent.key === ' ')) {
 				this.tree.toggleCollapsed(event.element.id);
+			}
+		}));
+		this._register(addDisposableListener(this.tree.element, 'keydown', event => {
+			const keyboardEvent = event as KeyboardEvent;
+			if (keyboardEvent.target !== this.tree.element || !(keyboardEvent.key === 'ContextMenu' || (keyboardEvent.shiftKey && keyboardEvent.key === 'F10'))) {
+				return;
+			}
+			const focused = this.tree.focus;
+			if (focused && 'group' in focused && this.viewMode === 'tree') {
+				keyboardEvent.preventDefault();
+				keyboardEvent.stopPropagation();
+				const anchor = this.tree.element.ownerDocument.getElementById(this.tree.element.getAttribute('aria-activedescendant') ?? '') ?? this.tree.element;
+				this.showGroupMenu(focused.group, anchor);
 			}
 		}));
 		this._register(addDisposableListener(commitForm, 'submit', event => { event.preventDefault(); void this.commit(); }));
@@ -192,6 +206,40 @@ export class ScmViewPane extends ViewPane {
 
 	public async refresh(): Promise<void> {
 		await this.provider?.refresh();
+	}
+
+	public collapseAllResources(group: ISCMResourceGroup): void {
+		if (this.isDisposed || this.viewMode !== 'tree' || !this.provider?.groups.includes(group)) {
+			return;
+		}
+		const node = this.tree.model.rootNodes.find(node => 'group' in node.element && node.element.group === group);
+		if (!node) {
+			return;
+		}
+		for (const child of node.children) {
+			if ('folder' in child.element) {
+				this.tree.collapseRecursive(child.id);
+			}
+		}
+	}
+
+	private showGroupMenu(group: ISCMResourceGroup, anchor: HTMLElement, event?: MouseEvent): void {
+		const repository = this.scmViewService.activeRepository;
+		if (this.isDisposed || this.viewMode !== 'tree' || !repository?.provider.groups.includes(group)) {
+			return;
+		}
+		this.contextMenuProvider.showContextMenu({
+			menuId: MenuId.SCMResourceGroupContext,
+			contextKeyService: this.titleContext,
+			// Snapshots replace group objects, so both repository and group must still match when the menu runs.
+			menuActionOptions: { args: [group, repository] },
+			getAnchor: () => event ? { x: event.clientX, y: event.clientY, targetWindow: anchor.ownerDocument.defaultView ?? undefined } : anchor,
+			onHide: () => {
+				if (!this.isDisposed && this.scmViewService.activeRepository === repository) {
+					this.tree.domFocus();
+				}
+			},
+		});
 	}
 
 	private async commit(): Promise<void> {
@@ -309,6 +357,11 @@ export class ScmViewPane extends ViewPane {
 		label.textContent = group.label;
 		label.title = group.label;
 		heading.append(label);
+		resources.add(addDisposableListener(heading, 'contextmenu', event => {
+			event.preventDefault();
+			event.stopPropagation();
+			this.showGroupMenu(group, heading, event as MouseEvent);
+		}));
 		this.renderActionToolbar(heading, group.actions, `${group.label} actions`, resources).classList.add('ash-scm-section-actions');
 		const count = resources.add(new CountBadge(heading, { titleFormat: localize('scm.resourceCount', '{0} changes') }));
 		count.domNode.classList.add('ash-scm-section-count');
@@ -383,6 +436,24 @@ export class ScmViewPane extends ViewPane {
 		return toolbar.element;
 	}
 }
+
+registerAction2(class CollapseAllAction extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.scm.action.collapseAll',
+			title: localize2('scmCollapseAll', 'Collapse All'),
+			f1: false,
+			menu: { id: MenuId.SCMResourceGroupContext, group: '9_collapse', when: SCMViewModeContext.isEqualTo('tree') },
+		});
+	}
+
+	public override run(accessor: ServicesAccessor, group?: ISCMResourceGroup, repository?: ISCMRepository): void {
+		if (!group || !repository || accessor.get(ISCMViewService).activeRepository !== repository) {
+			return;
+		}
+		accessor.get(IViewsService).getViewWithId<ScmViewPane>(VIEW_PANE_ID)?.collapseAllResources(group);
+	}
+});
 
 class ScmActionViewItem extends ButtonActionViewItem {
 	constructor(action: IAction, private readonly isBusy: () => boolean, options: ActionViewItemOptions) { super(action, options); }

@@ -29,7 +29,7 @@ import { DialogResult, type IDialogService } from '../../../../../platform/dialo
 
 import { suite, test } from "mocha";
 import { JSDOM } from "jsdom";
-import type { IContextMenuProvider } from "../../../../../base/browser/contextmenu.js";
+import type { IContextMenuDelegate } from "../../../../../base/browser/contextmenu.js";
 import { AnchorAxisAlignment, AnchorPosition } from "../../../../../base/common/layout.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
@@ -38,6 +38,7 @@ import { ICommandService } from "../../../../../platform/commands/common/command
 import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
 import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
 import { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
+import { transformContextMenuDelegate } from '../../../../../platform/contextview/browser/contextMenuService.js';
 import type { HoverSetupOptions, IHoverService, IManagedHover } from "../../../../../platform/hover/browser/hoverService.js";
 import { IResourceLabelService, ResourceLabels, DEFAULT_LABELS_CONTAINER, IResourceIconRenderer } from "../../../../browser/labels.js";
 import { GitWorkspaceError, IGitService, type GitCommitDetails, type GitRepository, type GraphQuery, type GitStatus } from "../../../../../workbench/contrib/git/common/gitService.js";
@@ -59,6 +60,8 @@ import { IContextKeyService } from '../../../../../platform/contextkey/browser/c
 import { IStorageService, StorageScope } from '../../../../../platform/storage/common/storage.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { ISCMService, ISCMViewService, VIEW_PANE_ID, type ISCMProvider } from '../../common/scm.js';
+import type { ScmViewPane } from '../../browser/scmViewPane.js';
+import type { ISCMResourceGroup } from '../../common/scm.js';
 
 const testDialogs: IDialogService = {
 	onWillShowDialog: Event.None,
@@ -1081,6 +1084,201 @@ test('Changes title actions execute on their captured repository and retain view
 	}
 });
 
+type ResourceGroupMenuFixture = DisposableStore & {
+	readonly browser: JSDOM;
+	readonly pane: ScmViewPane;
+	readonly tree: HTMLElement;
+	readonly views: SCMViewService;
+	readonly menus: MenuService;
+	readonly commands: CommandService;
+	readonly group: (label: string) => HTMLElement;
+	readonly folder: (label: string, groupLabel?: string) => HTMLElement;
+	readonly key: (value: string, shiftKey?: boolean) => void;
+	readonly lastMenu: () => IContextMenuDelegate;
+	readonly menuCount: () => number;
+	readonly refresh: () => void;
+	readonly removeGroup: (label: string) => void;
+};
+
+async function createResourceGroupMenuFixture(): Promise<ResourceGroupMenuFixture> {
+	const resources = new DisposableStore();
+	const browser = new JSDOM('<!doctype html><body></body>');
+	const globals = installDomGlobals(browser);
+	resources.add(toDisposable(() => {
+		browser.window.close();
+		for (const name of globals) {
+			Reflect.deleteProperty(globalThis, name);
+		}
+	}));
+	try {
+		const { ScmViewPane } = await import('../../browser/scmViewPane.js');
+		const dependencies = resources.add(createTestEditorServices(undefined, undefined, browser.window.document));
+		const services = resources.add(dependencies.createChild());
+		const scm = resources.add(new SCMService());
+		const views = resources.add(new SCMViewService(scm));
+		const changes = resources.add(new Emitter<void>());
+		const resource = (path: string) => ({
+			sourceUri: URI.file(`/workspace/${path}`), path,
+			decorations: { badge: 'M', tooltip: 'Modified', kind: 'modified' },
+			openLabel: `Open ${path}`, actions: [], open: async () => { },
+		});
+		let groups: readonly ISCMResourceGroup[] = ['Staged Changes', 'Changes'].map((label, index) => ({
+			id: String(index), label,
+			resources: [resource('root.ts'), resource('src/one.ts'), resource('src/nested/two.ts'), resource('other/three.ts')],
+			actions: [],
+		}));
+		resources.add(scm.registerSCMProvider({
+			...testSCMProvider('first', 'first'), rootUri: URI.file('/workspace'),
+			get groups() { return groups; }, onDidChangeResources: changes.event,
+		}));
+		resources.add(scm.registerSCMProvider({
+			...testSCMProvider('second', 'second'), rootUri: URI.file('/workspace'),
+			// Reusing a group object must not let a captured menu retarget another repository.
+			groups,
+		}));
+		services.registerInstance(ISCMService, scm);
+		services.registerInstance(ISCMViewService, views);
+		const commands = resources.add(new CommandService(services));
+		services.registerInstance(ICommandService, commands);
+		const contextKeys = services.get(IContextKeyService);
+		const menus = new MenuService(commands, contextKeys);
+		services.registerInstance(IMenuService, menus);
+		let menu: IContextMenuDelegate | undefined;
+		let menuCount = 0;
+		services.registerInstance(IContextMenuService, {
+			onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
+			showContextMenu: delegate => { menu = transformContextMenuDelegate(delegate, menus, contextKeys); menuCount++; },
+			hideContextMenu: () => { menu?.onHide?.(true); },
+		});
+		const { registerCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
+		registerCodeEditorServices(services);
+		const pane = resources.add(services.createInstance(ScmViewPane, browser.window.document.body, { id: VIEW_PANE_ID, title: 'Changes' }));
+		services.registerInstance(IViewsService, { getViewWithId: () => pane } as unknown as IViewsService);
+		browser.window.document.body.append(pane.element);
+		const tree = pane.element.querySelector<HTMLElement>('[role="tree"]')!;
+		const group = (label: string): HTMLElement => [...tree.querySelectorAll<HTMLElement>('[role="treeitem"][aria-level="1"]')].find(row => row.querySelector('.ash-scm-section-label')?.textContent === label)!;
+		const folder = (label: string, groupLabel = 'Changes'): HTMLElement => {
+			const rows = [...tree.querySelectorAll<HTMLElement>('[role="treeitem"]')];
+			const following = rows.slice(rows.indexOf(group(groupLabel)) + 1);
+			const end = following.findIndex(row => row.getAttribute('aria-level') === '1');
+			return following.slice(0, end < 0 ? following.length : end).find(row => row.querySelector('.ash-scm-folder .ash-icon-label-text')?.textContent === label)!;
+		};
+		return Object.assign(resources, {
+			browser, pane, tree, views, menus, commands, group, folder,
+			key: (value: string, shiftKey = false) => { tree.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: value, shiftKey, bubbles: true, cancelable: true })); },
+			lastMenu: (): IContextMenuDelegate => { assert.ok(menu, 'The real group input must open a context menu'); return menu; },
+			menuCount: () => menuCount,
+			refresh: () => { groups = groups.map(group => ({ ...group, resources: [...group.resources, resource('src/added.ts')] })); changes.fire(); },
+			removeGroup: (label: string) => { groups = groups.filter(group => group.label !== label); changes.fire(); },
+		});
+	} catch (error) {
+		resources.dispose();
+		throw error;
+	}
+}
+
+test('SCM group right-click collapses only its directories recursively and retains tree state on refresh', async () => {
+	using fixture = await createResourceGroupMenuFixture();
+	const { browser, tree, group, folder, key } = fixture;
+	tree.focus();
+	key('Home');
+	const focus = tree.getAttribute('aria-activedescendant');
+	const selection = [...tree.querySelectorAll('[aria-selected="true"]')].map(row => row.id);
+	group('Changes').querySelector('.ash-scm-section-label')!.dispatchEvent(new browser.window.MouseEvent('contextmenu', { button: 2, bubbles: true, cancelable: true }));
+	const action = fixture.lastMenu().getActions().find(action => action.id === 'workbench.scm.action.collapseAll');
+	assert.ok(action, 'The group context menu must contribute Collapse All');
+	await action.run();
+	assert.equal(group('Changes').getAttribute('aria-expanded'), 'true');
+	assert.equal(folder('src').getAttribute('aria-expanded'), 'false');
+	assert.equal(folder('other').getAttribute('aria-expanded'), 'false');
+	assert.equal(folder('src', 'Staged Changes').getAttribute('aria-expanded'), 'true');
+	assert.equal(tree.querySelectorAll('[aria-label="Open root.ts"]').length, 2);
+	assert.equal(tree.getAttribute('aria-activedescendant'), focus);
+	assert.deepEqual([...tree.querySelectorAll('[aria-selected="true"]')].map(row => row.id), selection);
+	assert.equal(browser.window.document.activeElement, tree);
+	fixture.refresh();
+	assert.equal(folder('src').getAttribute('aria-expanded'), 'false');
+	folder('src').querySelector<HTMLElement>('.ash-scm-folder')!.click();
+	assert.equal(folder('nested').getAttribute('aria-expanded'), 'false', 'Reopening a parent must leave its descendants folded');
+	assert.equal(tree.querySelectorAll('[aria-label="Open src/added.ts"]').length, 2);
+});
+
+test('SCM group keyboard menu uses the focused group and Escape retains its expansion', async () => {
+	using fixture = await createResourceGroupMenuFixture();
+	const { browser, tree, group, folder, key } = fixture;
+	tree.focus();
+	key('Home');
+	key('F10', true);
+	assert.equal(fixture.lastMenu().getActions().filter(action => action.id === 'workbench.scm.action.collapseAll').length, 1);
+	fixture.lastMenu().onHide?.(true);
+	assert.equal(browser.window.document.activeElement, tree);
+	assert.equal(group('Staged Changes').getAttribute('aria-expanded'), 'true');
+	assert.equal(folder('src', 'Staged Changes').getAttribute('aria-expanded'), 'true');
+	key('ContextMenu');
+	await fixture.lastMenu().getActions().find(action => action.id === 'workbench.scm.action.collapseAll')!.run();
+	assert.equal(group('Staged Changes').getAttribute('aria-expanded'), 'true');
+	assert.equal(folder('src', 'Staged Changes').getAttribute('aria-expanded'), 'false');
+	assert.equal(folder('src').getAttribute('aria-expanded'), 'true');
+	assert.equal(browser.window.document.activeElement, tree);
+});
+
+test('SCM group menus reject captured contexts after a repository switch, snapshot replacement or disposal', async () => {
+	using fixture = await createResourceGroupMenuFixture();
+	fixture.tree.focus();
+	fixture.key('Home');
+	fixture.key('ContextMenu');
+	const action = fixture.lastMenu().getActions().find(action => action.id === 'workbench.scm.action.collapseAll')!;
+	fixture.views.selectRepository('second');
+	const newFocus = fixture.tree.querySelector<HTMLButtonElement>('[aria-label="Open root.ts"]')!;
+	newFocus.focus();
+	fixture.lastMenu().onHide?.(true);
+	await action.run();
+	assert.equal(fixture.folder('src', 'Staged Changes').getAttribute('aria-expanded'), 'true', 'A same-named group in another repository must remain open');
+	assert.equal(fixture.browser.window.document.activeElement, newFocus, 'The old menu must not steal focus in the new repository');
+	fixture.views.selectRepository('first');
+	const replacedHeading = fixture.group('Staged Changes').querySelector('.ash-scm-section-label')!;
+	const beforeRefreshMenuCount = fixture.menuCount();
+	fixture.refresh();
+	await action.run();
+	assert.equal(fixture.folder('src', 'Staged Changes').getAttribute('aria-expanded'), 'true', 'A replaced snapshot must invalidate the old group object');
+	replacedHeading.dispatchEvent(new fixture.browser.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+	assert.equal(fixture.menuCount(), beforeRefreshMenuCount, 'Replaced rows must release their context-menu listeners');
+	fixture.key('Home');
+	fixture.key('ContextMenu');
+	const removedGroupAction = fixture.lastMenu().getActions().find(action => action.id === 'workbench.scm.action.collapseAll')!;
+	fixture.removeGroup('Staged Changes');
+	await removedGroupAction.run();
+	assert.equal(fixture.folder('src').getAttribute('aria-expanded'), 'true');
+	fixture.key('Home');
+	fixture.key('ContextMenu');
+	const disposedAction = fixture.lastMenu().getActions().find(action => action.id === 'workbench.scm.action.collapseAll')!;
+	const menuCount = fixture.menuCount();
+	const retainedHeading = fixture.group('Changes').querySelector('.ash-scm-section-label')!;
+	fixture.pane.dispose();
+	await disposedAction.run();
+	retainedHeading.dispatchEvent(new fixture.browser.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+	assert.equal(fixture.menuCount(), menuCount, 'Released rows must not open further menus');
+});
+
+test('SCM group Collapse All is limited to tree group menus and excluded from the title and F1', async () => {
+	using fixture = await createResourceGroupMenuFixture();
+	const id = 'workbench.scm.action.collapseAll';
+	assert.equal(fixture.menus.getMenuActions(MenuId.CommandPalette).flatMap(([, actions]) => actions).some(action => action.id === id), false);
+	assert.equal(fixture.menus.getMenuActions(MenuId.SCMTitle).flatMap(([, actions]) => actions).some(action => action.id === id), false);
+	fixture.pane.viewMode = 'list';
+	fixture.group('Changes').querySelector('.ash-scm-section-label')!.dispatchEvent(new fixture.browser.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+	fixture.tree.focus();
+	fixture.key('Home');
+	fixture.key('F10', true);
+	assert.equal(fixture.menuCount(), 0);
+	fixture.pane.viewMode = 'tree';
+	fixture.key('Home');
+	fixture.key('ArrowDown');
+	fixture.key('ContextMenu');
+	assert.equal(fixture.menuCount(), 0, 'Directory focus is not a group context');
+	assert.equal(fixture.folder('src').getAttribute('aria-expanded'), 'true');
+});
+
 test('ScmViewPane folds groups through the shared tree and keeps state when resources refresh', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
 	const installedGlobals = installDomGlobals(browser);
@@ -1722,8 +1920,11 @@ function testFileIconThemeService(): IResourceIconRenderer {
 	};
 }
 
-const testContextMenuProvider: IContextMenuProvider = {
+const testContextMenuProvider: IContextMenuService = {
+	onDidShowContextMenu: Event.None,
+	onDidHideContextMenu: Event.None,
 	showContextMenu() { },
+	hideContextMenu() { },
 };
 
 function inactiveCommandService(): ICommandService {

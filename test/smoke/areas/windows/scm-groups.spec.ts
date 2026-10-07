@@ -6,11 +6,133 @@ import { expect, test } from '../../../automation/test.js';
 
 const run = promisify(execFile);
 
+const groupChangeFiles = ['root.ts', 'src/one.ts', 'src/nested/two.ts', 'other/three.ts'];
+
+async function prepareGroupChanges(directory: string): Promise<void> {
+	await mkdir(join(directory, 'src/nested'), { recursive: true });
+	await mkdir(join(directory, 'other'), { recursive: true });
+	for (const path of groupChangeFiles) {
+		await writeFile(join(directory, path), 'export const value = 1;\n');
+	}
+	await run('git', ['add', '--', ...groupChangeFiles], { cwd: directory });
+	for (const path of groupChangeFiles) {
+		await writeFile(join(directory, path), 'export const value = 2;\n');
+	}
+	await writeFile(join(directory, 'untracked.txt'), 'Keep this untracked file.\n');
+}
+
+async function groupRepositoryState(directory: string): Promise<unknown> {
+	const [head, index, status, contents] = await Promise.all([
+		run('git', ['rev-parse', 'HEAD'], { cwd: directory }),
+		run('git', ['ls-files', '--stage', '-z'], { cwd: directory }),
+		run('git', ['status', '--porcelain=v1', '-z'], { cwd: directory }),
+		Promise.all(['main.ts', 'untracked.txt', ...groupChangeFiles].map(path => readFile(join(directory, path), 'utf8'))),
+	]);
+	return { head: head.stdout, index: index.stdout, status: status.stdout, contents };
+}
+
 test.describe('SCM editor groups', () => {
 	test.use({ gitRepository: true });
 	test.beforeEach(async ({ target, testWorkspace }) => {
 		test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
 		await writeFile(testWorkspace.file, 'const value = 2;\n');
+	});
+
+	test('SCM group Collapse All folds only the target group recursively and survives Git refresh', async ({ testWorkspace, workbench }) => {
+		await prepareGroupChanges(testWorkspace.directory);
+		const page = workbench.page;
+		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		const tree = page.getByRole('tree', { name: 'Source control changes', exact: true });
+		const group = (label: string) => tree.getByRole('treeitem').filter({ has: page.locator('.ash-scm-section-label').getByText(label, { exact: true }) });
+		const folder = (groupId: string, label: string) => tree.locator(`[role="treeitem"][data-tree-id*='${JSON.stringify(groupId)}']`).filter({ has: page.locator('.ash-scm-folder').getByText(label, { exact: true }) });
+		await expect(tree.getByRole('button', { name: 'Open changes for src/nested/two.ts', exact: true })).toBeVisible();
+		await expect(tree.getByRole('button', { name: 'Open staged changes for src/nested/two.ts', exact: true })).toBeVisible();
+		await expect(group('Changes').locator('.ash-count-badge')).toHaveText('6');
+		await expect(group('Staged Changes').locator('.ash-count-badge')).toHaveText('4');
+		await tree.focus();
+		await tree.press('Home');
+		const focus = await tree.getAttribute('aria-activedescendant');
+		const selection = await tree.locator('[aria-selected="true"]').evaluateAll(rows => rows.map(row => row.id));
+		const before = await groupRepositoryState(testWorkspace.directory);
+		await group('Changes').locator('.ash-scm-section-label').click({ button: 'right' });
+		await page.getByRole('menuitem', { name: 'Collapse All', exact: true }).click();
+		await expect(group('Changes')).toHaveAttribute('aria-expanded', 'true');
+		await expect(folder('changes', 'src')).toHaveAttribute('aria-expanded', 'false');
+		await expect(folder('changes', 'other')).toHaveAttribute('aria-expanded', 'false');
+		await expect(folder('staged', 'src')).toHaveAttribute('aria-expanded', 'true');
+		await expect(tree.getByRole('button', { name: 'Open changes for root.ts', exact: true })).toBeVisible();
+		await expect(tree.getByRole('button', { name: 'Open staged changes for root.ts', exact: true })).toBeVisible();
+		await expect(tree).toBeFocused();
+		await expect(tree).toHaveAttribute('aria-activedescendant', focus!);
+		expect(await tree.locator('[aria-selected="true"]').evaluateAll(rows => rows.map(row => row.id))).toEqual(selection);
+		expect(await groupRepositoryState(testWorkspace.directory)).toEqual(before);
+		await writeFile(join(testWorkspace.directory, 'src/added.ts'), 'export const added = 3;\n');
+		await page.getByRole('toolbar', { name: 'Source control actions', exact: true }).getByRole('button', { name: 'Refresh', exact: true }).click();
+		await expect(group('Changes').locator('.ash-count-badge')).toHaveText('7');
+		await expect(folder('changes', 'src')).toHaveAttribute('aria-expanded', 'false');
+		await folder('changes', 'src').locator('.ash-scm-folder').click();
+		await expect(folder('changes', 'nested')).toHaveAttribute('aria-expanded', 'false');
+		await expect(tree.getByRole('button', { name: 'Open changes for src/added.ts', exact: true })).toBeVisible();
+		await expect(tree.getByRole('button', { name: 'Open changes for src/nested/two.ts', exact: true })).toHaveCount(0);
+		await expect(tree.getByRole('button', { name: 'Open staged changes for src/nested/two.ts', exact: true })).toBeVisible();
+	});
+
+	test('SCM group Collapse All supports keyboard dismissal and stays out of list mode', async ({ testWorkspace, workbench }) => {
+		await prepareGroupChanges(testWorkspace.directory);
+		const page = workbench.page;
+		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		const tree = page.getByRole('tree', { name: 'Source control changes', exact: true });
+		await expect(tree.getByRole('button', { name: 'Open staged changes for src/nested/two.ts', exact: true })).toBeVisible();
+		await tree.focus();
+		await tree.press('Home');
+		const focus = await tree.getAttribute('aria-activedescendant');
+		const before = await groupRepositoryState(testWorkspace.directory);
+		await tree.press('Shift+F10');
+		await expect(page.getByRole('menuitem', { name: 'Collapse All', exact: true })).toBeVisible();
+		await page.keyboard.press('Escape');
+		await expect(page.getByRole('menuitem', { name: 'Collapse All', exact: true })).toHaveCount(0);
+		await expect(tree).toBeFocused();
+		await expect(tree).toHaveAttribute('aria-activedescendant', focus!);
+		await expect(tree.getByRole('button', { name: 'Open staged changes for src/nested/two.ts', exact: true })).toBeVisible();
+		await tree.press('ContextMenu');
+		await page.getByRole('menuitem', { name: 'Collapse All', exact: true }).click();
+		await expect(tree.getByRole('button', { name: 'Open staged changes for src/nested/two.ts', exact: true })).toHaveCount(0);
+		await expect(tree.getByRole('button', { name: 'Open changes for src/nested/two.ts', exact: true })).toBeVisible();
+		await expect(tree).toBeFocused();
+		await expect(tree).toHaveAttribute('aria-activedescendant', focus!);
+		expect(await groupRepositoryState(testWorkspace.directory)).toEqual(before);
+		await workbench.quickaccess.runCommand('workbench.scm.action.setListViewMode');
+		await expect(tree.locator('.ash-scm-folder')).toHaveCount(0);
+		await tree.getByRole('treeitem').filter({ has: page.locator('.ash-scm-section-label').getByText('Staged Changes', { exact: true }) }).locator('.ash-scm-section-label').click({ button: 'right' });
+		await expect(page.getByRole('menuitem', { name: 'Collapse All', exact: true })).toHaveCount(0);
+		await tree.focus();
+		await tree.press('Home');
+		await tree.press('Shift+F10');
+		await expect(page.getByRole('menuitem', { name: 'Collapse All', exact: true })).toHaveCount(0);
+		expect(await groupRepositoryState(testWorkspace.directory)).toEqual(before);
+	});
+
+	test('SCM group Collapse All localizes after restarting in Chinese', async ({ testWorkspace, workbench, restartWorkbench }) => {
+		await prepareGroupChanges(testWorkspace.directory);
+		await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+		const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
+		await picker.getByRole('combobox').fill('简体中文');
+		await picker.getByRole('combobox').press('Enter');
+		({ workbench } = await restartWorkbench());
+		const page = workbench.page;
+		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		const tree = page.getByRole('tree', { name: '源代码管理更改', exact: true });
+		await expect(tree.getByRole('button', { name: 'Open staged changes for src/nested/two.ts', exact: true })).toBeVisible();
+		await expect(tree).toHaveAttribute('aria-description', /Shift\+F10.*全部折叠/u);
+		const before = await groupRepositoryState(testWorkspace.directory);
+		await tree.focus();
+		await tree.press('Home');
+		await tree.press('Shift+F10');
+		await page.getByRole('menuitem', { name: '全部折叠', exact: true }).click();
+		await expect(tree.getByRole('button', { name: 'Open staged changes for src/nested/two.ts', exact: true })).toHaveCount(0);
+		await expect(tree.getByRole('button', { name: 'Open changes for src/nested/two.ts', exact: true })).toBeVisible();
+		await expect(tree).toBeFocused();
+		expect(await groupRepositoryState(testWorkspace.directory)).toEqual(before);
 	});
 
 	test('SCM directories fold with the keyboard and retain state across Git refreshes', async ({ testWorkspace, workbench }) => {
