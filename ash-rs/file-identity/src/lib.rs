@@ -14,14 +14,14 @@ mod platform;
 mod platform;
 
 /// Filesystem identity used to compare observations within one validation operation.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 struct FileIdentity {
     volume: u64,
     object: [u8; 16],
 }
 
 /// Identity and hard-link count captured from one open file handle.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct FileInformation {
     identity: FileIdentity,
     number_of_links: u64,
@@ -39,7 +39,21 @@ impl FileInformation {
     /// that make a trust decision about later reads must inspect the handle used for that read
     /// with [`Self::from_file`] and compare the two observations.
     pub fn from_path(path: impl AsRef<Path>) -> io::Result<Self> {
-        Self::from_file(&File::open(path)?)
+        #[cfg(windows)]
+        let file = {
+            use std::os::windows::fs::OpenOptionsExt;
+            use windows_sys::Win32::Storage::FileSystem::FILE_FLAG_BACKUP_SEMANTICS;
+            use windows_sys::Win32::Storage::FileSystem::FILE_READ_ATTRIBUTES;
+            // Identity checks need attributes rather than file contents, and
+            // prepared directory grants must use the same handle-based check.
+            std::fs::OpenOptions::new()
+                .access_mode(FILE_READ_ATTRIBUTES)
+                .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+                .open(path)?
+        };
+        #[cfg(unix)]
+        let file = File::open(path)?;
+        Self::from_file(&file)
     }
 
     /// Returns whether both contemporaneous observations identify the same filesystem object.

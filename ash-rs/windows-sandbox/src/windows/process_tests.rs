@@ -20,7 +20,7 @@ fn audited_world_writable_files_are_denied_by_the_execution_acl() {
     );
     assert!(super::super::audit::world_writable(&path).unwrap());
     let mut acl =
-        wxc_common::filesystem_dacl::DaclManager::in_directory(&temp.path().join("journal"))
+        mxc_sdk::mxc_common::filesystem_dacl::DaclManager::in_directory(&temp.path().join("journal"))
             .unwrap();
     acl.deny_write_access("S-1-5-21-411-412-413-414", std::slice::from_ref(&path))
         .unwrap();
@@ -384,7 +384,7 @@ fn capture_child_timeout(process: HANDLE) {
     // Capture the still-running child before job teardown. The ten-second
     // assertion is unchanged; a dump distinguishes a blocked initializer from
     // cold-start work. Only explicitly enabled, controlled test children dump.
-    let library_path = wxc_common::system_dir::resolve_system_directory()
+    let library_path = mxc_sdk::mxc_common::system_dir::resolve_system_directory()
         .unwrap()
         .join("dbghelp.dll");
     let library = unsafe { LoadLibraryW(win::wide(library_path).as_ptr()) };

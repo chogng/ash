@@ -40,8 +40,8 @@ use windows_sys::Win32::Security::PROTECTED_DACL_SECURITY_INFORMATION;
 use windows_sys::Win32::Security::SetFileSecurityW;
 use windows_sys::Win32::System::Threading::GetExitCodeProcess;
 use windows_sys::Win32::System::Threading::WaitForSingleObject;
-use wxc_common::host_changes::HostAclScope;
-use wxc_common::models::ContainerPolicy;
+use crate::windows::filesystem::HostAclScope;
+use mxc_sdk::mxc_common::models::ContainerPolicy;
 
 struct Execution {
     runner_hash: String,
@@ -189,9 +189,9 @@ pub(super) fn prepare(
 }
 
 fn command_line(argv: &[String]) -> Result<String, SandboxError> {
-    let context = wxc_common::cmdline::CommandLineContext::WindowsCreateProcess;
+    let context = mxc_sdk::mxc_common::cmdline::CommandLineContext::WindowsCreateProcess;
     let render = |arguments: &[String]| {
-        wxc_common::cmdline::cmdline_from_argv_for_context(arguments, context).map_err(unavailable)
+        mxc_sdk::mxc_common::cmdline::cmdline_from_argv_for_context(arguments, context).map_err(unavailable)
     };
     let program = PathBuf::from(&argv[0]);
     let is_cmd = program

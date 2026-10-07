@@ -33,7 +33,7 @@ flowchart TD
 | 具体后端                     | 系统能力检查、进程创建、隔离与清理                                                          |
 | App Server / Hook / 独立服务 | 提供权限要求，通过 `LocalSandbox` 取得统一后端；不自行注册平台候选或判断系统版本            |
 
-后端 crate 依赖统一契约，统一契约不依赖 MXC 或 Codex。平台 crate 用于能力和依赖隔离，不按转发层数拆 crate。`windows-sandbox` 当前还直接使用固定 MXC 版本的 `wxc_common` 策略类型与 ACL 日志；这项共享依赖保留在后端内部，其变更必须同时验证两个消费者，不能宣称两个后端在实现依赖上完全独立。
+后端 crate 依赖统一契约，统一契约不依赖 MXC 或 Codex。平台 crate 用于能力和依赖隔离，不按转发层数拆 crate。`windows-sandbox` 当前还直接使用固定 MXC 版本的 `mxc-sdk` 的 `mxc_common` 策略类型与 ACL 日志；这项共享依赖保留在后端内部，其变更必须同时验证两个消费者，不能宣称两个后端在实现依赖上完全独立。
 授权语义见 [permissions.md](permissions.md)，审查语义见 [guardian.md](guardian.md)。
 
 ## 选择与执行
@@ -95,7 +95,7 @@ flowchart TD
 
 ## 持续执行与终端目标
 
-`tool-executor` 检查审批后调用 `exec-server`；`sandboxing::SandboxProcess` 提供管道、PTY、等待和关闭。MXC 的受限 PTY 通过宿主明确配置的内部启动器接入，macOS 已有真实进程覆盖，Linux 仍需实机验收。WindowsAccount 的 ConPTY 由账户运行器创建并持有，通过私有管道传递输入、输出、尺寸及中断；23H2 x64 的真实命令会话验收已通过。
+`tool-executor` 检查审批后调用 `exec-server`；`sandboxing::SandboxProcess` 提供管道、PTY、等待和关闭。Unix 的 MXC 受限 PTY 直接使用官方 SDK 创建的终端；Linux 已通过输入、尺寸、环境、只读权限、前台作业中断和回收测试，新 SDK 的 macOS 路径目前只有编译验证。Windows MXC 保留宿主明确配置的内部启动器。WindowsAccount 的 ConPTY 由账户运行器创建并持有，通过私有管道传递输入、输出、尺寸及中断；23H2 x64 的真实命令会话验收已通过。
 
 - `exec-server` 拥有持续执行的进程记录、输出游标、等待预算、硬超时、输入和终止；工具层和远程接口不复制这些状态。
 - 后端在准备阶段检查管道或 PTY 能力，创建时一并施加隔离。`utils/pty` 适配已被沙箱创建的进程；不能另开一个普通 shell 来实现交互。
@@ -107,7 +107,7 @@ flowchart TD
 
 ## MXC 接入边界
 
-- SDK 固定 `46ce71d0da7b97bb531a33e175bf4166ffa730c0`，请求直接使用发布的 1.0 类型；保留独立 ACL 授权、文件对象身份检查、目录例外及进程生命周期补丁。Linux 网络监控丢失提供进程时终止工作负载，进程树清理后才回收 PID。
+- SDK 固定 `c45e7d5a485036d88f469aa363efaa3c651564bc`，采用官方合并后的 `mxc-sdk 1.0.0`，请求直接使用发布的 1.0 类型。文件身份快照、ACL 授权范围和 Windows PTY 交接格式由 Ash 持有；SDK 保留目录例外、隔离边界及进程生命周期修正。Linux 网络监控丢失提供进程时终止工作负载，进程树清理后才回收 PID。
 - Windows 的 Ash 请求要求 MXC 只使用 PSEC；内部其他 ProcessContainer 实现不能代替它。准备阶段必须区分确定的能力不足与运行故障，不能把任意探测错误转换成 `UnsupportedPolicy`。
 - 按运行时能力检查 PSEC，不能用“24H2 以上”代替检查。
 - Linux 与 macOS 继续通过同一适配器接入 Bubblewrap 和 Seatbelt。Bubblewrap 在启动时安装禁止 `AF_VSOCK` 的 seccomp 过滤器，阻止 WSL 互操作创建不受 Linux 命名空间约束的 Windows 进程；过滤器由后代继承。
@@ -115,7 +115,7 @@ flowchart TD
 
 补丁来源与校验见 [MXC 依赖](../ash-rs/vendor/mxc/README.md)。原型源码与校验清单保存在本机 `.build/acceptance/mxc-local/prototype-source`，历史测试与系统清理结果保留在 [Windows 验收手册](windows-sandbox-acceptance-runbook.md)。
 
-固定 MXC `46ce71d0da7b97bb531a33e175bf4166ffa730c0` 的 [上游说明](https://github.com/microsoft/mxc/blob/46ce71d0da7b97bb531a33e175bf4166ffa730c0/README.md) 仍明确指出存在生成策略过于宽松的已知情况，当前 MXC profiles 不能被当作安全边界。Ash 的补丁和已有测试不自动消除该限制；产品只可声明经过审查和实机验证的具体保证，不能用 Seatbelt、Bubblewrap 或 PSEC 的名称代替策略验证。
+固定版本的 [上游说明](https://github.com/microsoft/mxc/blob/c45e7d5a485036d88f469aa363efaa3c651564bc/README.md) 已移除早期预览声明。Ash 的隔离保证仍以所用策略、受审查补丁和对应平台实机证据为依据；不能仅凭 SDK 版本或后端名称宣布完成产品验收。
 
 2026-09-12 另核对本地 MXC `567570084f1ebaca539b0a3186aeb68bca77788a` 的 SDK、平台及诊断文档。它用于发现接入限制和升级差异，不代表 Ash 已升级。文档中的 JSON、Rust SDK、命令行和设计提案分别核对，不能把某个入口的能力当作所有入口已实现；依据与失败原因见 [MXC 文档复核](../ash-rs/docs/mxc-sandbox-windows-fallback.md#mxc-文档复核与接入纠正)。
 
@@ -171,7 +171,7 @@ WindowsAccount 在执行前检查工作目录、Grant、临时目录、用户目
 | PSEC 受管代理与 Windows UI 策略                  | UI 策略下 cmd/PowerShell 在 25H2 ARM64 CI 上执行通过；该机器仅支持 PSEC 1.0，缺独立入口策略。严格 Managed 仍在准备阶段拒绝，正式代理身份及网络成功路径未完成；见 [契约复核](windows-sandbox-acceptance-runbook.md#2026-10-02-server-与-psec-契约复核)                                                                           |
 | MXC 与 Windows 账户后端的组合选择                | 已接线；两个隔离模型的真实组合验证待补                                                                                                                                                                                                                                                                                          |
 | 路径级规则、最小读取基线、受控 IPC               | 对齐目标；现有目录作用域及全禁 Unix socket 策略不足以覆盖                                                                                                                                                                                                                                                                       |
-| 沙箱内 PTY、持续输入与会话管理                   | macOS 已有真实进程测试；WindowsAccount 23H2 x64 的输入、尺寸、退出码、会话归属、权限与六种结束方式通过，见 [终端验收](windows-sandbox-acceptance-runbook.md#2026-10-02-codex-账户模型与交互终端验收)；Linux 未实机验收                                                                                                          |
+| 沙箱内 PTY、持续输入与会话管理                   | macOS 已有真实进程测试；WindowsAccount 23H2 x64 的输入、尺寸、退出码、会话归属、权限与六种结束方式通过，见 [终端验收](windows-sandbox-acceptance-runbook.md#2026-10-02-codex-账户模型与交互终端验收)；Linux 官方 SDK PTY 的 6 项实机测试通过；macOS 新 SDK 本轮仅编译                                                                                                          |
 | macOS MXC 执行、目录与代理隔离                   | 保留真实进程回归入口                                                                                                                                                                                                                                                                                                            |
 | Linux MXC 受管网络                               | WSL2 Ubuntu x64 的 NAT/mirrored HTTP/CONNECT/SOCKS、域名策略、IPv4/IPv6 与 TCP/UDP A/AAAA DNS 矩阵通过；两种模式另通过临时隧道出口的公网 IPv6 与端口 53 验证；NAT Windows IPv6 链路本地和 mirrored Windows IPv4 回环目标通过                                                                                                    |
 | Windows MXC PSEC                                 | Windows 11 25H2 ARM64 CI 的 7 项指定成功路径通过；23H2 x64 本机能力不足；PSEC 网络流量矩阵与 ConPTY 未验证                                                                                                                                                                                                                      |

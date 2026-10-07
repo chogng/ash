@@ -1,20 +1,19 @@
 //! Prepared MXC requests owned by the Ash adapter, independent of SDK dispatch.
 use crate::unavailable;
+use ash_sandboxing::FilesystemSnapshot;
 use ash_sandboxing::SandboxError;
+use mxc_sdk::mxc_common::logger::Logger;
+use mxc_sdk::mxc_common::logger::Mode;
+use mxc_sdk::mxc_common::models::ExecutionRequest;
+use mxc_sdk::mxc_common::sandbox_process::SandboxBackend;
+use mxc_sdk::mxc_common::sandbox_process::SandboxProcess;
+use mxc_sdk::mxc_common::sandbox_process::StdioMode;
 use serde::Deserialize;
 use serde::Serialize;
 use std::path::Path;
 use std::path::PathBuf;
-use wxc_common::filesystem_object::FilesystemSnapshot;
-use wxc_common::logger::Logger;
-use wxc_common::logger::Mode;
-use wxc_common::models::ExecutionRequest;
-use wxc_common::sandbox_process::SandboxBackend;
-use wxc_common::sandbox_process::SandboxProcess;
-use wxc_common::sandbox_process::StdioMode;
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Debug)]
 pub(super) struct Request {
     pub inner: ExecutionRequest,
     snapshot: FilesystemSnapshot,
@@ -24,6 +23,94 @@ pub(super) struct Request {
     proxy_port: Option<u16>,
     #[cfg(target_os = "macos")]
     seatbelt_deny_regexes: Vec<String>,
+}
+
+// The handoff carries Ash's concrete execution controls, never a serialized SDK
+// implementation model. Rebuilding through the published contract retains its validation.
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Handoff {
+    command_line: String,
+    cwd: String,
+    environment: Option<Vec<String>>,
+    readwrite_paths: Vec<String>,
+    readonly_paths: Vec<String>,
+    denied_paths: Vec<String>,
+    network: HandoffNetwork,
+    snapshot: FilesystemSnapshot,
+    bubblewrap: Option<PathBuf>,
+    private_ipc: Vec<String>,
+    #[cfg(target_os = "macos")]
+    seatbelt_deny_regexes: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+enum HandoffNetwork {
+    Allowed,
+    Denied,
+    Managed(u16),
+}
+
+impl Serialize for Request {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let network = match self.proxy_port {
+            Some(port) => HandoffNetwork::Managed(port),
+            None => match self.inner.policy.default_network_policy {
+                mxc_sdk::mxc_common::models::NetworkPolicy::Allow => HandoffNetwork::Allowed,
+                mxc_sdk::mxc_common::models::NetworkPolicy::Block => HandoffNetwork::Denied,
+            },
+        };
+        Handoff {
+            command_line: self.inner.script_code.clone(),
+            cwd: self.inner.working_directory.clone(),
+            environment: self.inner.env.clone(),
+            readwrite_paths: self.inner.policy.readwrite_paths.clone(),
+            readonly_paths: self.inner.policy.readonly_paths.clone(),
+            denied_paths: self.inner.policy.denied_paths.clone(),
+            network,
+            snapshot: self.snapshot.clone(),
+            bubblewrap: self.bubblewrap.clone(),
+            private_ipc: self.private_ipc.clone(),
+            #[cfg(target_os = "macos")]
+            seatbelt_deny_regexes: self.seatbelt_deny_regexes.clone(),
+        }
+        .serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Request {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let handoff = Handoff::deserialize(deserializer)?;
+        let (network, proxy_port) = match handoff.network {
+            HandoffNetwork::Allowed => (ash_sandboxing::NetworkAccess::Allowed, None),
+            HandoffNetwork::Denied => (ash_sandboxing::NetworkAccess::Denied, None),
+            HandoffNetwork::Managed(port) => (ash_sandboxing::NetworkAccess::Managed, Some(port)),
+        };
+        let files = mxc_sdk::mxc_common::models::ContainerPolicy {
+            readwrite_paths: handoff.readwrite_paths,
+            readonly_paths: handoff.readonly_paths,
+            denied_paths: handoff.denied_paths,
+            ..Default::default()
+        };
+        let mut inner = crate::policy::sdk_request(
+            handoff.command_line,
+            handoff.cwd,
+            files,
+            network,
+            proxy_port,
+        )
+        .map_err(serde::de::Error::custom)?;
+        inner.env = handoff.environment;
+        Ok(Self {
+            inner,
+            snapshot: handoff.snapshot,
+            bubblewrap: handoff.bubblewrap,
+            private_ipc: handoff.private_ipc,
+            proxy_port,
+            #[cfg(target_os = "macos")]
+            seatbelt_deny_regexes: handoff.seatbelt_deny_regexes,
+        })
+    }
 }
 
 impl Request {
@@ -85,11 +172,11 @@ impl Request {
             .validate()
             .map_err(|error| unavailable(error.to_string()))?;
         #[cfg(windows)]
-        process_container_common::base_container_runner::BaseContainerRunner::require_psec(
+        mxc_sdk::process_container_common::base_container_runner::BaseContainerRunner::require_psec(
             &self.inner,
         )
         .map_err(|error| {
-            if error.code == wxc_common::mxc_error::MxcErrorCode::UnsupportedContainment {
+            if error.code == mxc_sdk::mxc_common::mxc_error::MxcErrorCode::UnsupportedContainment {
                 SandboxError::UnsupportedPolicy(error.to_string())
             } else {
                 unavailable(error.to_string())
@@ -113,11 +200,12 @@ impl Request {
                         "continuous path rules cannot extend a Seatbelt profile override".into(),
                     ));
                 }
-                let mut profile = seatbelt_common::profile_builder::build_profile_with_proxy(
-                    &self.inner,
-                    self.inner.policy.network_proxy.address.as_ref(),
-                )
-                .map_err(SandboxError::UnsupportedPolicy)?;
+                let mut profile =
+                    mxc_sdk::seatbelt_common::profile_builder::build_profile_with_proxy(
+                        &self.inner,
+                        self.inner.policy.network_proxy.address.as_ref(),
+                    )
+                    .map_err(SandboxError::UnsupportedPolicy)?;
                 for regex in &self.seatbelt_deny_regexes {
                     profile.push_str(&format!(
                         "\n(deny file-read* file-write* (regex #\"{regex}\"))"
@@ -133,11 +221,11 @@ impl Request {
         let mut logger = Logger::new(Mode::Buffer);
         #[cfg(windows)]
         let mut backend =
-            process_container_common::base_container_runner::BaseContainerRunner::new();
+            mxc_sdk::process_container_common::base_container_runner::BaseContainerRunner::new();
         #[cfg(target_os = "linux")]
-        let mut backend = bwrap_common::bwrap_runner::BubblewrapScriptRunner::new();
+        let mut backend = mxc_sdk::bwrap_common::bwrap_runner::BubblewrapScriptRunner::new();
         #[cfg(target_os = "macos")]
-        let mut backend = seatbelt_common::seatbelt_runner::SeatbeltScriptRunner::new();
+        let mut backend = mxc_sdk::seatbelt_common::seatbelt_runner::SeatbeltScriptRunner::new();
         let result = backend
             .spawn(&self.inner, &mut logger, stdio)
             .map_err(spawn_error);
@@ -157,12 +245,12 @@ impl Request {
         policy.runtime_network_proxy_specified = self.proxy_port.is_some();
         policy.network_proxy.address = self
             .proxy_port
-            .map(|port| wxc_common::models::ProxyAddress::new("127.0.0.1".into(), port));
+            .map(|port| mxc_sdk::mxc_common::models::ProxyAddress::new("127.0.0.1".into(), port));
     }
 }
 
-fn spawn_error(error: wxc_common::models::ScriptResponse) -> SandboxError {
-    use wxc_common::models::FailurePhase;
+fn spawn_error(error: mxc_sdk::mxc_common::models::ScriptResponse) -> SandboxError {
+    use mxc_sdk::mxc_common::models::FailurePhase;
     let code = match error.failure_phase {
         FailurePhase::BackendUnavailable => "backend_unavailable",
         FailurePhase::Rejected => "policy_validation",
@@ -210,7 +298,7 @@ pub(super) fn host_paths(cwd: &Path) -> Result<Vec<String>, SandboxError> {
                         .path();
                     // Generated visibility does not authorize inaccessible objects.
                     // Explicit grants were captured separately and always fail closed.
-                    use wxc_common::filesystem_object::{
+                    use mxc_sdk::mxc_common::filesystem_object::{
                         ExistingObjectComparison, compare_existing_filesystem_objects,
                     };
                     if compare_existing_filesystem_objects(&path, &path)

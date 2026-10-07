@@ -10,6 +10,9 @@ doctest = false
 name = "ash_file_identity"
 path = "src/lib.rs"
 
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true, features = [
     "Win32_Foundation",

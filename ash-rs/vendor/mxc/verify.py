@@ -69,10 +69,19 @@ def main() -> None:
             destination_name = (Path("src") / package / target).as_posix()
             # The pinned tree contains mixed line endings. Read original Git
             # bytes so checkout autocrlf never changes the patch's old side.
-            a = subprocess.check_output(
+            original = subprocess.check_output(
                 ["git", "-C", str(origin), "show", "HEAD:" + name]
-            ).decode("utf-8") if old.exists() else ""
-            b = new.read_text(encoding="utf-8") if new.exists() else ""
+            ) if old.exists() else b""
+            current = new.read_bytes() if new.exists() else b""
+            try:
+                a = original.decode("utf-8")
+                b = current.decode("utf-8").replace("\r\n", "\n")
+            except UnicodeDecodeError:
+                # The consolidated SDK includes unchanged image/binary fixtures.
+                # They remain byte-identical to the pin, never silently omitted.
+                if original != current:
+                    raise SystemExit(f"unreviewed binary change: {destination_name}")
+                continue
             if path in renames:
                 chunks.append(
                     f"diff --git a/{name} b/{destination_name}\nrename from {name}\nrename to {destination_name}\n"

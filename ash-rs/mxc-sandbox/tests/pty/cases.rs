@@ -76,6 +76,33 @@ pub(super) fn trials() -> Vec<Trial> {
             assert_stopped(pid);
             Ok(())
         }),
+        Trial::test(
+            "interrupt_reaches_foreground_job_and_preserves_its_shell",
+            || {
+                let mut terminal = Terminal::start(
+                    r#"
+trap ':' INT
+set -m
+/bin/sh -c '
+    trap "printf \"job-interrupted\\n\"; exit 130" INT
+    sleep 60 &
+    printf "foreground-ready\n"
+    wait
+'
+code=$?
+printf 'shell-survived:%s\n' "$code"
+exit "$code"
+"#,
+                );
+                terminal.read_until("foreground-ready");
+                terminal.process.interrupt().unwrap();
+                terminal.read_until("job-interrupted");
+                terminal.read_until("shell-survived:");
+                assert_ne!(terminal.wait(), SandboxProcessExitStatus::Code(0));
+                terminal.assert_output_closed();
+                Ok(())
+            },
+        ),
         Trial::test("dropping_terminal_reaps_the_workload", || {
             let mut terminal = Terminal::start("printf 'pid=%s\\n' \"$$\"; exec sleep 60");
             terminal.read_until("\n");
@@ -101,8 +128,7 @@ impl Terminal {
     fn start(script: &str) -> Self {
         let root = tempfile::tempdir().unwrap();
         let dir = Dir::open_local(root.path()).unwrap();
-        let backend = MxcSandbox::new(InstallContext::current())
-            .with_pty_helper(super::helper().executable().to_owned());
+        let backend = MxcSandbox::new(InstallContext::current());
         let command = SandboxCommand::new("/bin/sh", ["-c", script], dir.canonical_path())
             .with_pty(TerminalSize { rows: 24, cols: 80 });
         let policy = SandboxPolicy::new(FileSystemAccess::ReadOnly, NetworkAccess::Denied);

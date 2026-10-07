@@ -67,7 +67,7 @@ fn windows_policy_allows_required_desktop_resources_but_keeps_sensitive_ui_block
     assert!(!policy.ui.disable);
     assert!(matches!(
         policy.ui.clipboard,
-        wxc_common::models::ClipboardPolicy::None
+        mxc_sdk::mxc_common::models::ClipboardPolicy::None
     ));
     assert!(!policy.ui.injection);
     assert_eq!(policy.base_process_ui.isolation, "desktop");

@@ -7,10 +7,17 @@ fn ordinary_product_commands_are_not_consumed() {
     }
 }
 
+#[cfg(windows)]
 #[test]
 fn malformed_pty_role_fails_before_reading_launch_authority() {
     assert_eq!(
         dispatch(["--ash-mxc-pty".into(), "unexpected".into()]),
         Some(Err("PTY helper accepts no arguments".into()))
     );
+}
+
+#[cfg(not(windows))]
+#[test]
+fn unix_has_no_pty_helper_role() {
+    assert!(dispatch(["--ash-mxc-pty".into()]).is_none());
 }

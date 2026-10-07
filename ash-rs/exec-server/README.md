@@ -94,8 +94,8 @@ file-system 实施；编辑器的未保存内容和外部变更冲突仍由前�
 
 - `terminal::TerminalService` 拥有桌面交互式 PTY、连接所有权、输出缓存和短期重连租约；不承担前端屏幕与窗口恢复。
 - TCP 进程接口支持管道与受限 PTY；`processStart.input` 选择 `terminal` 并提供行列数，后续可写入、调整尺寸、中断或取消。
-- 宿主通过 `MxcSandbox::with_pty_helper` 提供内部启动器；App Server 嵌入方使用 `AppServerOptions::with_pty_helper`。未配置时拒绝受限 PTY。
-- PTY 由执行宿主分配，内部启动器继承终端后交给 MXC；目录、网络及文件身份约束保持有效。
+- Windows 宿主通过 `MxcSandbox::with_pty_helper` 提供内部启动器；App Server 嵌入方使用 `AppServerOptions::with_pty_helper`。Windows MXC 未配置启动器时拒绝受限 PTY。
+- Unix 的受限 PTY 直接由 MXC SDK 分配；Windows MXC 的内部启动器继承宿主分配的终端。目录、网络及文件身份约束保持有效。
 - PTY 标准错误合并到标准输出；半关闭输入不适用于 PTY，调用方应发送终端 EOF 字符或取消进程。
 - 桌面 Terminal API 继续通过目录授权调用；不将桌面交互式终端作为远程沙箱命令的替代执行路径。
 

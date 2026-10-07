@@ -6,7 +6,7 @@
 
 ## 当前入口
 
-2026-10-02 起源码固定 MXC `46ce71d0da7b97bb531a33e175bf4166ffa730c0`，直接使用平台运行器及发布的 1.0 请求类型。下面 9 月 10–11 日的实机记录使用旧 pin `6cd3d58f05d3447e67109cfb75e042803b843ca4`，不作为新版验收通过证据。
+2026-10-07 起源码固定 MXC `c45e7d5a485036d88f469aa363efaa3c651564bc`，采用官方合并后的 `mxc-sdk 1.0.0`，直接使用平台运行器及发布的 1.0 请求类型。10 月 2 日记录使用 `46ce71d0da7b97bb531a33e175bf4166ffa730c0`，9 月 10–11 日记录使用 `6cd3d58f05d3447e67109cfb75e042803b843ca4`，均不作为新 pin 的运行通过证据。
 
 当前 MXC Windows 后端只接受完整 PSEC 能力。此前的账户原型已退出源码和产品包，不能再通过 `mxc-user` 或 `tests/local.ps1` 安装它。独立实现使用 `ash-windows-sandbox`，安装与验收需要明确授权；通过依据是下述当前源码的实机记录，不能沿用旧原型的结论。
 
@@ -42,6 +42,16 @@ PSEC 检查不安装账户、不改变系统权限。`test-psec.ps1 -Capability 
 PSEC 报告包含系统版本、架构、工具链、MXC pin、各项退出码和输出。ARM64 另通过 `probe-psec-network.py` 保存系统报告的 PSEC 版本与 `NetworkIngress` 标志；这项只读查询不创建环境、不启动命令，也不宣布 Managed 支持。账户结果见独立任务日志及安装计划。能力不支持用例通过只证明拒绝行为，不是 PSEC 成功证明。PSEC ConPTY、完整网络矩阵、App Server 产品链路及 WSL 尚未纳入此任务。
 
 账户 CI 为受限子进程测试启用 `ASH_WINDOWS_SANDBOX_DIAGNOSTICS`：超过原有 10 秒期限时，在终止 Job 前保存 CPU 时间、线程栈及模块转储，再继续原有失败和清理。诊断只针对受控测试子进程，不包含堆内存，随账户 artifact 保存；正常完成的子进程记录执行时间。
+
+## 2026-10-07 SDK 升级后的 Windows 复验
+
+本机为 Windows 11 专业版 23H2、build 22631、x64。`scripts/test-psec.ps1 -Capability absent` 实际通过：13 项适配器单元测试、2 项普通回归、1 项明确缺能力拒绝。状态为 `passed-unsupported-capability`，证明缺能力时在执行前拒绝，不证明 PSEC 成功执行。证据保存在 `.build/acceptance/mxc-upgrade-windows-20261007/psec/`。
+
+账户程序、服务、终端探针及网络探针已完成正常 Cargo 构建。新 SDK 的 ACL、继承恢复、账户文件策略与适配器测试已通过，详见 [适配器验证](../ash-rs/mxc-sandbox/README.md#验证)。执行服务首轮 34 项通过，1 项把带与不带 Windows 扩展路径前缀的同一目录判为不同目录；改为比较规范化后的实际目录，失败项复跑通过，warning 门禁通过。Windows 服务 9 项测试通过，覆盖真实认证管道、连续连接、延迟读取、受限客户端及安装权限；这轮测试不注册 SCM 服务或创建账户。
+
+管理员入口已准备在 `.build/acceptance/mxc-upgrade-windows-20261007/run-admin-acceptance.ps1`。首次提权启动返回“操作已被用户取消”，本次尚未创建测试账户、安装服务或改动 WFP。新版账户的真实执行、PTY、安装更新及清理仍等待管理员验收；新 pin 的 PSEC 成功路径需要具备完整能力的 Windows 主机。待验收范围与 Linux/macOS 交接见根目录 [MXC-TODO.md](../MXC-TODO.md)。
+
+普通权限下，账户库完整测试实际为 38 项通过、2 项需安装账户的用例忽略，包含真实受限令牌 PowerShell、ConPTY 和输出排空；账户库与服务的 warning 门禁通过。这些结果不代替独立账户登录、SCM 安装更新和完整执行链的管理员验收。
 
 ## 2026-10-02 服务及账户管理员验收
 

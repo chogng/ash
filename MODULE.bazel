@@ -167,23 +167,16 @@ crate.annotation(
     repositories = ["crates"],
 )
 
-# MXC keeps its Cargo workspace below the repository root.
-[
-    crate.annotation(
-        crate = name,
-        workspace_cargo_toml = "src/Cargo.toml",
-        repositories = ["crates"],
-    )
-    for name in [
-        "learning_mode_core",
-        "learning_mode_windows",
-        "lxc_common",
-        "mxc_config_contract",
-        "mxc_pty",
-        "mxc_telemetry",
-        "process_security_environment_spec",
-    ]
-]
+# The consolidated SDK stamps its Windows helper binaries during its build.
+# Use the existing LLVM toolchain for resources rather than a host Windows SDK.
+crate.annotation(
+    crate = "mxc-sdk",
+    build_script_tools = ["@llvm//tools:llvm-rc"],
+    build_script_env = {
+        "RC_PATH": "$(execpath @llvm//tools:llvm-rc)",
+    },
+    repositories = ["crates"],
+)
 
 crate.annotation(
     additive_build_file = "@rules_rs//3rd_party/aws-lc-sys:additive.BUILD.bazel",

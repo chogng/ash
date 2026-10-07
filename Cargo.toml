@@ -247,6 +247,7 @@ publish = false
 version = "0.1.0"
 
 [workspace.dependencies]
+mxc-sdk = { path = "ash-rs/vendor/mxc/mxc-sdk" }
 testing = { package = "ash-testing", path = "ash-rs/testing" }
 cli = { package = "ash-utils-cli", path = "ash-rs/utils/cli" }
 cargo-bin = { package = "ash-utils-cargo-bin", path = "ash-rs/utils/cargo-bin" }
@@ -255,9 +256,6 @@ aes-gcm = "0.10"
 whoami = "1"
 guardian-context = { package = "ash-guardian-context", path = "ash-rs/guardian-context" }
 mermaid = { package = "ash-mermaid", path = "code/mermaid" }
-process_container_common = { git = "https://github.com/microsoft/mxc", rev = "46ce71d0da7b97bb531a33e175bf4166ffa730c0" }
-bwrap_common = { path = "ash-rs/vendor/mxc/backends/bubblewrap/common" }
-seatbelt_common = { path = "ash-rs/vendor/mxc/backends/seatbelt/common" }
 async-trait = "0.1.92"
 livekit-net = { version = "=0.1.3", default-features = false }
 livekit-signaling = { version = "=0.1.2", default-features = false }
@@ -300,8 +298,6 @@ windows-sys-052 = { package = "windows-sys", version = "0.52" }
 # Explicit SDK API version; consumers retain their existing ABI and feature selection.
 windows-sys-061 = { package = "windows-sys", version = "0.61" }
 winreg = { version = "0.55" }
-mxc_config_contract = { git = "https://github.com/microsoft/mxc", rev = "46ce71d0da7b97bb531a33e175bf4166ffa730c0" }
-wxc_common = { path = "ash-rs/vendor/mxc/core/wxc_common" }
 async-io = "2.6.0"
 event-listener = "5.4.2"
 sleep = { package = "ash-sleep", path = "ash-rs/ext/sleep" }
@@ -721,9 +717,3 @@ unsafe_code = "forbid"
 
 [patch.crates-io]
 candle-onnx = { path = "third_party/candle-onnx" }
-
-[patch."https://github.com/microsoft/mxc"]
-process_container_common = { path = "ash-rs/vendor/mxc/backends/process_container/common" }
-wxc_common = { path = "ash-rs/vendor/mxc/core/wxc_common" }
-bwrap_common = { path = "ash-rs/vendor/mxc/backends/bubblewrap/common" }
-seatbelt_common = { path = "ash-rs/vendor/mxc/backends/seatbelt/common" }

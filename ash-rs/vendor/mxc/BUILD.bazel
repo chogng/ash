@@ -1,1 +1,1 @@
-exports_files(glob(["core/**", "backends/**"]) + ["LICENSE.md"])
+exports_files(glob(["mxc-sdk/**"]) + ["LICENSE.md"])

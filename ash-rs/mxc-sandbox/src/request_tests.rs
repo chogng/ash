@@ -8,8 +8,8 @@ use ash_sandboxing::{
 fn startup_diagnostics_keep_sdk_categories_and_system_errors_without_authorizing_replay() {
     use ash_sandboxing::SandboxDenialTiming;
     use ash_sandboxing::SandboxError;
-    use wxc_common::models::FailurePhase;
-    use wxc_common::models::ScriptResponse;
+    use mxc_sdk::mxc_common::models::FailurePhase;
+    use mxc_sdk::mxc_common::models::ScriptResponse;
 
     for (phase, code) in [
         (FailurePhase::Rejected, "policy_validation"),
@@ -63,15 +63,15 @@ fn terminal_handoff_preserves_explicit_environment_and_filesystem_identity() {
     assert!(!decoded.inner.inherit_default_env);
     assert_eq!(
         decoded.inner.source_contract,
-        Some(mxc_config_contract::ContractVersion::V1_0_0)
+        Some(mxc_sdk::mxc_contract::ContractVersion::V1_0_0)
     );
     assert_eq!(
         decoded.inner.network_enforcement_compatibility,
-        wxc_common::models::NetworkEnforcementCompatibility::Strict
+        mxc_sdk::mxc_common::models::NetworkEnforcementCompatibility::Strict
     );
     assert_eq!(
         decoded.inner.default_env_compatibility,
-        wxc_common::models::DefaultEnvCompatibility::DefaultBlock
+        mxc_sdk::mxc_common::models::DefaultEnvCompatibility::DefaultBlock
     );
     assert!(decoded.inner.lifecycle.destroy_on_exit);
     assert!(!decoded.inner.lifecycle.preserve_policy);
@@ -99,6 +99,15 @@ fn explicit_empty_environment_stays_empty_after_terminal_handoff() {
     assert!(!decoded.inner.inherit_default_env);
 }
 
+#[test]
+fn terminal_handoff_cannot_add_host_acl_authority() {
+    let temp = tempfile::tempdir().unwrap();
+    let dir = Dir::open_local(temp.path()).unwrap();
+    let mut value = serde_json::to_value(request(&dir)).unwrap();
+    value["host_acl_scope"] = serde_json::json!({ "roots": [dir.canonical_path()] });
+    assert!(serde_json::from_value::<Request>(value).is_err());
+}
+
 #[cfg(target_os = "linux")]
 #[test]
 fn backend_launch_failure_reaches_the_caller_with_the_sdk_diagnosis() {
@@ -106,7 +115,7 @@ fn backend_launch_failure_reaches_the_caller_with_the_sdk_diagnosis() {
     let dir = Dir::open_local(temp.path()).unwrap();
     let mut prepared = request(&dir);
     prepared.set_bubblewrap_executable(&temp.path().join("missing-bwrap"));
-    let error = match prepared.spawn(wxc_common::sandbox_process::StdioMode::Pipes) {
+    let error = match prepared.spawn(mxc_sdk::mxc_common::sandbox_process::StdioMode::Pipes) {
         Ok(_) => panic!("an unavailable selected executable must never start a workload"),
         Err(error) => error,
     };
@@ -149,7 +158,7 @@ fn terminal_handoff_keeps_managed_proxy_and_network_restrictions() {
     assert!(decoded.inner.policy.network_mode_specified);
     assert!(matches!(
         decoded.inner.policy.default_network_policy,
-        wxc_common::models::NetworkPolicy::Block
+        mxc_sdk::mxc_common::models::NetworkPolicy::Block
     ));
     assert!(!decoded.inner.policy.allow_local_network);
 }

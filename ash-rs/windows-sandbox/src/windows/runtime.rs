@@ -539,7 +539,7 @@ pub(super) fn remove(approved: &str) -> Result<()> {
     }
     for account in &state.accounts {
         let journal = root.join("acl").join(&account.sid);
-        let recovery = wxc_common::filesystem_dacl::recover_orphaned_state_in(&journal)
+        let recovery = mxc_sdk::mxc_common::filesystem_dacl::recover_orphaned_state_in(&journal)
             .map_err(|error| error.to_string())?;
         if !recovery.errors.is_empty() {
             return Err("ACL recovery is incomplete; keep the runtime journal for recovery".into());

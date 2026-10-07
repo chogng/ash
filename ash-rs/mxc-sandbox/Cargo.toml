@@ -10,9 +10,8 @@ name = "mxc_sandbox"
 doctest = false
 
 [dependencies]
+mxc-sdk = { workspace = true }
 log = { workspace = true }
-wxc_common = { workspace = true }
-mxc_config_contract = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 ash-utils-pty = { workspace = true }
@@ -21,15 +20,6 @@ dunce = { workspace = true }
 ash-install-context = { workspace = true }
 ash-sandboxing = { workspace = true }
 ash-file-access = { workspace = true }
-
-[target.'cfg(windows)'.dependencies]
-process_container_common = { workspace = true }
-
-[target.'cfg(target_os = "linux")'.dependencies]
-bwrap_common = { workspace = true }
-
-[target.'cfg(target_os = "macos")'.dependencies]
-seatbelt_common = { workspace = true }
 
 [dev-dependencies]
 test-binary-support = { workspace = true }

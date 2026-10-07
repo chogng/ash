@@ -1,90 +1,1584 @@
-diff --git a/src/core/wxc_common/Cargo.toml b/src/core/wxc_common/Cargo.toml
---- a/src/core/wxc_common/Cargo.toml
-+++ b/src/core/wxc_common/Cargo.toml
-@@ -1,49 +1,42 @@
+diff --git a/src/mxc-sdk/build/build_mxc_build_common.rs b/src/mxc-sdk/build/build_mxc_build_common.rs
+--- a/src/mxc-sdk/build/build_mxc_build_common.rs
++++ b/src/mxc-sdk/build/build_mxc_build_common.rs
+@@ -103,6 +103,10 @@
+     };
+     let output = compiler
+         .arg("/nologo")
++        // winresource writes UTF-8, including the copyright symbol. Neither
++        // the host ANSI codepage nor LLVM's default identifies that encoding.
++        .arg("/c")
++        .arg("65001")
+         .arg(format!("/fo{}", compiled_path.display()))
+         .arg(&resource_path)
+         .output()?;
+diff --git a/src/mxc-sdk/build.rs b/src/mxc-sdk/build.rs
+--- a/src/mxc-sdk/build.rs
++++ b/src/mxc-sdk/build.rs
+@@ -23,7 +23,7 @@
+ // The SDK build uses the release metadata subset. Runtime and executor modules
+ // include the remaining constants and stderr helpers.
+ #[allow(dead_code)]
+-#[path = "src/backends/nanvix/common/mod.rs"]
++#[path = "src/backends/nanvix/common.rs"]
+ mod nanvix_common;
+ 
+ fn main() -> Result<(), Box<dyn std::error::Error>> {
+diff --git a/src/mxc-sdk/Cargo.toml b/src/mxc-sdk/Cargo.toml
+--- a/src/mxc-sdk/Cargo.toml
++++ b/src/mxc-sdk/Cargo.toml
+@@ -1,8 +1,8 @@
  [package]
--name = "wxc_common"
+ name = "mxc-sdk"
 -version.workspace = true
 -edition.workspace = true
 -license.workspace = true
-+"name" = "wxc_common"
-+"version" = "0.9.0"
-+"edition" = "2021"
-+"license" = "MIT"
- 
- [features]
--microvm = ["dep:nanvix_common", "dep:uuid"]
--# Exposes telemetry test harnesses to downstream integration tests.
--test-support = []
-+"microvm" = ["dep:nanvix_common", "dep:uuid"]
-+"test-support" = []
++version = "1.0.0"
++edition = "2021"
++license = "MIT"
+ description = "Importable library for starting MXC sandboxes in-process, with streaming stdio."
+ repository = "https://github.com/microsoft/mxc"
+ readme = "README.md"
+@@ -44,68 +44,59 @@
+ schema-gen = ["dep:schemars"]
  
  [dependencies]
--serde = { workspace = true }
--serde_json = { workspace = true, features = ["raw_value"] }
--serde_path_to_error = { workspace = true }
--sha2 = { workspace = true }
--unicode-general-category = { workspace = true }
--thiserror = { workspace = true }
--base64 = { workspace = true }
--cidr = { workspace = true }
--url = { workspace = true }
--getrandom = { workspace = true }
--nanvix_common = { path = "../../backends/nanvix/common", optional = true }
--uuid = { workspace = true, optional = true }
--mxc_config_contract = { workspace = true }
--mxc_telemetry = { workspace = true }
-+"serde" = { "version" = "1", "features" = ["derive"] }
-+"serde_json" = { "version" = "1", "features" = ["raw_value"] }
-+"serde_path_to_error" = { "version" = "0.1" }
-+"sha2" = { "version" = "0.11" }
-+"unicode-general-category" = { "version" = "1" }
-+"thiserror" = { "version" = "2" }
-+"base64" = { "version" = "0.22" }
-+"cidr" = { "version" = "0.3.2" }
-+"url" = { "version" = "2" }
-+"getrandom" = { "version" = "0.2" }
-+"nanvix_common" = { "optional" = true, "git" = "https://github.com/microsoft/mxc", "rev" = "46ce71d0da7b97bb531a33e175bf4166ffa730c0" }
-+"uuid" = { "version" = "1", "features" = ["v4"], "optional" = true }
-+"mxc_config_contract" = { "git" = "https://github.com/microsoft/mxc", "rev" = "46ce71d0da7b97bb531a33e175bf4166ffa730c0" }
-+"mxc_telemetry" = { "git" = "https://github.com/microsoft/mxc", "rev" = "46ce71d0da7b97bb531a33e175bf4166ffa730c0" }
- 
--[target.'cfg(target_os = "windows")'.dependencies]
--windows = { workspace = true, features = [
--    "Win32_Foundation",
--    "Win32_Globalization",
--    "Win32_Storage_FileSystem",
--    "Win32_System_IO",
--    "Win32_System_WindowsProgramming",
--] }
--windows-core = { workspace = true }
--widestring = { workspace = true }
--winreg = { workspace = true }
-+[target."cfg(target_os = \"windows\")".dependencies]
-+"windows" = { "version" = "0.62", "features" = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_NetworkManagement_WindowsFirewall", "Win32_Security", "Win32_Security_Authorization", "Win32_Security_Credentials", "Win32_Security_Isolation", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Console", "Win32_System_Diagnostics_Debug", "Win32_System_Diagnostics_Etw", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Environment", "Win32_System_IO", "Win32_System_JobObjects", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Ole", "Win32_System_Pipes", "Win32_System_ProcessStatus", "Win32_System_Registry", "Win32_System_SystemInformation", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_Time", "Win32_System_Variant", "Win32_System_WindowsProgramming", "Win32_UI_Shell", "Win32_Globalization"] }
-+"windows-core" = { "version" = "0.62" }
-+"widestring" = { "version" = "1" }
-+"winreg" = { "version" = "0.55" }
- 
--[target.'cfg(unix)'.dependencies]
--libc = { workspace = true }
-+[target."cfg(unix)".dependencies]
-+"libc" = { "version" = "0.2" }
- 
- [dev-dependencies]
--filetime = "0.2"
--tempfile.workspace = true
-+"filetime" = "0.2"
-+"tempfile" = { "version" = "3" }
- 
- [build-dependencies]
+-anyhow.workspace = true
+-base64.workspace = true
+-chrono.workspace = true
+-cidr.workspace = true
+-flatbuffers.workspace = true
+-getrandom.workspace = true
+-libc.workspace = true
++anyhow = "1"
++base64 = "0.22"
++chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
++cidr = "0.3.2"
++flatbuffers = "25"
++getrandom = "0.2"
++libc = "0.2"
+ libloading = { version = "0.8", optional = true }
+-nix.workspace = true
+-same-file.workspace = true
+-schemars = { workspace = true, optional = true }
 -serde.workspace = true
 -serde_json.workspace = true
-+"serde" = { "version" = "1", "features" = ["derive"] }
-+"serde_json" = { "version" = "1", "features" = ["raw_value"] }
-diff --git a/src/core/wxc_common/src/cmdline.rs b/src/core/wxc_common/src/cmdline.rs
---- a/src/core/wxc_common/src/cmdline.rs
-+++ b/src/core/wxc_common/src/cmdline.rs
+-serde_path_to_error.workspace = true
+-sha2.workspace = true
+-tempfile.workspace = true
+-thiserror.workspace = true
+-tokio.workspace = true
++nix = { version = "0.29", features = ["fs", "mount", "sched", "signal", "net", "process", "user", "term"] }
++same-file = "1"
++schemars = { version = "0.8", optional = true }
++serde = { version = "1", features = ["derive"] }
++serde_json = { version = "1", features = ["raw_value"] }
++serde_path_to_error = "0.1"
++sha2 = "0.11"
++tempfile = "3"
++thiserror = "2"
++tokio = { version = "1", features = ["full"] }
+ tar = { version = "0.4", optional = true }
+-unicode-general-category.workspace = true
+-url.workspace = true
+-uuid.workspace = true
+-widestring.workspace = true
+-
++unicode-general-category = "1"
++url = "2"
++uuid = { version = "1", features = ["v4"] }
++widestring = "1"
+ [build-dependencies]
++# Bazel resolves these tools for the build host; only the Windows build script
++# uses them. Keeping them here makes the same SDK build through both consumers.
++cc = "1"
++winresource = { version = "0.1.31", default-features = false }
+ semver = "1"
+-serde.workspace = true
+-serde_json.workspace = true
+-sha2.workspace = true
+-uuid.workspace = true
++serde = { version = "1", features = ["derive"] }
++serde_json = { version = "1", features = ["raw_value"] }
++sha2 = "0.11"
++uuid = { version = "1", features = ["v4"] }
+ zip = { version = "2", default-features = false, features = ["deflate"], optional = true }
+ 
+ [dev-dependencies]
+ filetime = "0.2"
+-quick-xml.workspace = true
+-serde_json.workspace = true
+-tempfile.workspace = true
+-tokio = { workspace = true, features = ["test-util"] }
+-
++quick-xml = "0.41"
++serde_json = { version = "1", features = ["raw_value"] }
++tempfile = "3"
++tokio = { version = "1", features = ["full", "test-util"] }
+ [target.'cfg(target_arch = "x86_64")'.dependencies]
+ flate2 = { version = "1", optional = true }
+ hyperlight-unikraft = { version = "=0.17.0", default-features = false, optional = true }
+ ureq = { version = "3", optional = true }
+ 
+ [target.'cfg(target_os = "windows")'.dependencies]
+-tracelogging.workspace = true
+-windows = { workspace = true, features = [
+-    "Foundation",
+-    "UI",
+-    "Win32_Globalization",
+-    "Win32_Security_Cryptography",
+-    "Win32_Security_WinTrust",
+-    "Win32_System_EventLog",
+-] }
++tracelogging = "1.2"
++windows = { version = "0.62", features = ["Foundation", "UI", "Win32_Foundation", "Win32_Globalization", "Win32_NetworkManagement_WindowsFirewall", "Win32_Networking_WinSock", "Win32_Security", "Win32_Security_Authorization", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_Security_Isolation", "Win32_Security_WinTrust", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Console", "Win32_System_Diagnostics_Debug", "Win32_System_Diagnostics_Etw", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Environment", "Win32_System_EventLog", "Win32_System_IO", "Win32_System_JobObjects", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Ole", "Win32_System_Pipes", "Win32_System_ProcessStatus", "Win32_System_Registry", "Win32_System_SystemInformation", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_Time", "Win32_System_Variant", "Win32_System_WindowsProgramming", "Win32_UI_Shell"] }
+ windows-collections = { version = "0.3", optional = true }
+-windows-core.workspace = true
++windows-core = "0.62"
+ windows-future = { version = "0.3", optional = true }
+-winreg.workspace = true
+-
+-[target.'cfg(windows)'.build-dependencies]
+-cc = "1"
+-winresource = { version = "0.1.31", default-features = false }
++winreg = "0.55"
+ 
+ [[example]]
+ name = "isolation_session_console"
+diff --git a/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_command.rs b/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_command.rs
+--- a/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_command.rs
++++ b/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_command.rs
+@@ -14,7 +14,6 @@
+     ContainerPolicy, ExecutionRequest, NetworkAction, NetworkEnforcementCompatibility,
+     NetworkEnforcementMode, NetworkPolicy, ProxyAddress,
+ };
+-use crate::mxc_common::proxy_env::{is_managed_proxy_key, PROXY_SET_KEYS};
+ 
+ /// The fixed prefix of the command bwrap is asked to run.
+ ///
+@@ -630,7 +629,7 @@
+     denied_files: &HashSet<String>,
+ ) -> Vec<String> {
+     let network_mode = ResolvedNetworkMode::from_request(request, proxy_address.is_some());
+-    build_args_classified_with_mode(request, proxy_address, denied_files, network_mode)
++    build_args_classified_with_mode(request, proxy_address, denied_files, network_mode, crate::mxc_common::sandbox_process::StdioMode::Pipes)
+ }
+ 
+ /// Build Bubblewrap arguments using a previously resolved network mode.
+@@ -639,6 +638,7 @@
+     proxy_address: Option<&ProxyAddress>,
+     denied_files: &HashSet<String>,
+     network_mode: ResolvedNetworkMode,
++    stdio: crate::mxc_common::sandbox_process::StdioMode,
+ ) -> Vec<String> {
+     // -- Namespace isolation (all unshared by default) ---------------------
+     let mut args = Vec::new();
+@@ -713,7 +713,11 @@
+             // Read-only: already covered by the base ro-bind, but listed
+             // explicitly so the intent is clear and it overrides any rw parent.
+             FsIntent::ReadOnly => {
+-                args.extend(["--ro-bind".into(), mount.path.clone(), mount.path.clone()]);
++                args.extend([
++                    "--ro-bind-try".into(),
++                    mount.path.clone(),
++                    mount.path.clone(),
++                ]);
+             }
+             FsIntent::Denied => {
+                 if denied_files.contains(&mount.path) {
+@@ -725,40 +729,51 @@
+         }
+     }
+ 
++    if request
++        .policy
++        .readonly_paths
++        .iter()
++        .chain(&request.policy.readwrite_paths)
++        .any(|path| path == "/")
++    {
++        for (flag, path) in [("--proc", "/proc"), ("--dev", "/dev")] {
++            if !request
++                .policy
++                .denied_paths
++                .iter()
++                .any(|denied| path == denied || path.starts_with(&format!("{denied}/")))
++            {
++                args.extend([flag.into(), path.into()]);
++            }
++        }
++    }
++    for hidden in &request.policy.denied_paths {
++        if !denied_files.contains(hidden) {
++            args.extend(["--remount-ro".into(), hidden.clone()]);
++        }
++    }
++    // A caller-owned PTY already has a private session. Detaching again removes
++    // the workload's controlling terminal and disables interactive job control.
++    // Inherited terminal input still needs separation from the host's session.
++    if !matches!(stdio, crate::mxc_common::sandbox_process::StdioMode::Pty(_)) {
++        args.push("--new-session".into());
++    }
++
+     // -- Working directory -------------------------------------------------
+     if let Some(dir) = start_directory(request) {
+         args.extend(["--chdir".into(), dir]);
+     }
+ 
+-    // -- Environment -------------------------------------------------------
+-    // Clear the inherited environment, then set only the vars from the
+-    // request so the sandbox has a minimal, predictable environment.
++    // Bind the complete environment to the namespace-visible proxy endpoint.
+     args.push("--clearenv".into());
+-    for env_str in resolved_env(request) {
+-        // An entry with no `=` names no variable, so it is dropped here too.
+-        if let Some((key, value)) = env_str.split_once('=') {
+-            // When the proxy is active, drop any caller-supplied proxy env
+-            // entries so they cannot override the values we set below.
+-            if proxy_address.is_some() && is_managed_proxy_key(key) {
+-                continue;
+-            }
++    let resolved = resolved_env(request);
++    let env = match proxy_address {
++        Some(address) => crate::mxc_common::proxy_env::apply_cooperative_proxy_env(&resolved, &address.to_url()),
++        None => resolved,
++    };
++    for entry in env {
++        if let Some((key, value)) = entry.split_once('=') {
+             args.extend(["--setenv".into(), key.into(), value.into()]);
+-        }
+-    }
+-
+-    // -- Network proxy env vars -------------------------------------------
+-    // Cooperative env-var proxying: well-behaved tools (curl, requests,
+-    // etc.) honor these and route through the proxy where allow / block
+-    // enforcement happens. Tools that bypass these variables (raw sockets)
+-    // are NOT enforced -- this is a documented limitation of the
+-    // unprivileged proxy model.
+-    //
+-    // We deliberately do NOT set NO_PROXY here. Exempting any destination
+-    // would let cooperating clients bypass the configured proxy policy.
+-    if let Some(addr) = proxy_address {
+-        let url = addr.to_url();
+-        for key in PROXY_SET_KEYS {
+-            args.extend(["--setenv".into(), (*key).into(), url.clone()]);
+         }
+     }
+ 
+diff --git a/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_runner.rs b/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_runner.rs
+--- a/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_runner.rs
++++ b/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_runner.rs
+@@ -180,7 +180,10 @@
+         // Execution validation deliberately bypasses the advisory success
+         // cache: a prior platform-support query must not approve a different
+         // executable after `PATH` or its contents change.
+-        self.validate_prepared_with_probe(request, bwrap_version::probe_bwrap_uncached)
++        self.validate_prepared_with_probe(request, || match &request.bubblewrap_executable {
++            Some(path) => bwrap_version::probe_bwrap_at(path),
++            None => bwrap_version::probe_bwrap_uncached(),
++        })
+     }
+ 
+     /// `validate_prepared` with an injectable environment probe.
+@@ -420,6 +423,9 @@
+         logger: &mut Logger,
+         stdio: StdioMode,
+     ) -> Result<BwrapChild, ScriptResponse> {
++        let socket_filter = crate::bwrap_common::seccomp::SocketFilter::new().map_err(|error| {
++            ScriptResponse::error(&format!("Bubblewrap: failed to create socket filter: {error}"))
++        })?;
+         // 1. Start the network proxy if configured. Must happen before
+         //    arg-building so the proxy's loopback address can be injected as
+         //    HTTP_PROXY / HTTPS_PROXY into the sandbox environment.
+@@ -533,6 +539,7 @@
+             proxy_address,
+             denied_files,
+             network_mode,
++            stdio,
+         );
+         let mut network_startup = match proxy_network.as_ref() {
+             Some(network) => match network.configure_bwrap(&mut args, logger) {
+@@ -589,7 +596,13 @@
+         };
+ 
+         // 4. Spawn `bwrap`.
+-        let mut command = Command::new("bwrap");
++        let mut command = Command::new(
++            request
++                .bubblewrap_executable
++                .as_deref()
++                .unwrap_or_else(|| std::path::Path::new("bwrap")),
++        );
++        socket_filter.configure(&mut command);
+         command.args(&args);
+         let pty = match stdio {
+             StdioMode::Pipes => {
+@@ -752,8 +765,8 @@
+ /// A spawned `bwrap` sandbox: the child process, its parent-side pipe ends,
+ /// and the per-run network proxy / iptables state torn down once it exits.
+ struct BwrapChild {
+-    /// The lock is what keeps [`ProviderMonitor`]'s thread from signalling a
+-    /// pid this side has already reaped.
++    /// Exit observation leaves the leader unreaped until the monitor is joined
++    /// and the process group is terminated, keeping its PID reserved throughout.
+     child: Arc<Mutex<Child>>,
+     stdin: Option<ChildStdin>,
+     stdout: Option<InterruptibleReader>,
+@@ -801,6 +814,7 @@
+ /// [`BwrapChild`] (child, pipes, and per-run network state), tearing the network
+ /// state down once the child exits.
+ struct BubblewrapSandboxProcess {
++    reaped: bool,
+     inner: BwrapChild,
+     teardown_done: bool,
+ }
+@@ -809,6 +823,7 @@
+     fn new(child: BwrapChild) -> Self {
+         Self {
+             inner: child,
++            reaped: false,
+             teardown_done: false,
+         }
+     }
+@@ -834,6 +849,13 @@
+     fn await_outcome(&mut self) -> BwrapOutcome {
+         const MIN_POLL: Duration = Duration::from_millis(1);
+         const MAX_POLL: Duration = Duration::from_millis(50);
++
++        if self.reaped {
++            return match self.inner.lock_child().wait() {
++                Ok(status) => BwrapOutcome::Exited(status),
++                Err(error) => BwrapOutcome::Io(error),
++            };
++        }
+ 
+         let deadline = self
+             .inner
+@@ -841,18 +863,35 @@
+             .map(|timeout| self.inner.started + timeout);
+         let mut interval = MIN_POLL;
+         loop {
+-            let exited = match self.inner.lock_child().try_wait() {
+-                Ok(exited) => exited,
+-                Err(error) => return BwrapOutcome::Io(error),
+-            };
++            let exited =
++                match crate::mxc_common::sandbox_process::poll_child_exit(&self.inner.lock_child()) {
++                    Ok(exited) => exited,
++                    Err(error) => return BwrapOutcome::Io(error),
++                };
+             // Checked after the exit rather than before it: the monitor kills
+             // the sandbox, so a provider death shows up here as an ordinary
+             // exit that would otherwise be reported as the workload's own.
+             if self.provider_lost() {
+                 return BwrapOutcome::ProviderLost;
+             }
+-            if let Some(status) = exited {
+-                return BwrapOutcome::Exited(status);
++            if exited.is_some() {
++                // Join the monitor before reaping so it cannot inspect a PID
++                // after the leader's ownership has ended.
++                let lost = self
++                    .inner
++                    .monitor
++                    .take()
++                    .is_some_and(|mut monitor| monitor.disarm());
++                if lost {
++                    return BwrapOutcome::ProviderLost;
++                }
++                if let Err(error) = self.kill() {
++                    return BwrapOutcome::Io(error);
++                }
++                return match self.inner.lock_child().wait() {
++                    Ok(status) => BwrapOutcome::Exited(status),
++                    Err(error) => BwrapOutcome::Io(error),
++                };
+             }
+ 
+             let now = Instant::now();
+@@ -945,6 +984,10 @@
+             .as_ref()
+             .ok_or_else(|| std::io::Error::other("Bubblewrap process has no PTY"))?
+             .take_writer()
++    }
++
++    fn pty_interrupt(&self) -> std::io::Result<()> {
++        self.inner.pty.as_ref().ok_or_else(|| std::io::Error::other("process has no PTY"))?.interrupt()
+     }
+ 
+     fn pty_resize(&self, size: PtySize) -> std::io::Result<()> {
+@@ -1001,8 +1044,13 @@
+                 "Bubblewrap: script timed out",
+             ));
+         }
+-        if let Some(status) = self.inner.lock_child().try_wait()? {
+-            return Ok(Some(status.code().unwrap_or(-1)));
++        let status = if self.reaped {
++            self.inner.lock_child().try_wait()?.map(|status| status.code().unwrap_or(-1))
++        } else {
++            crate::mxc_common::sandbox_process::poll_child_exit(&self.inner.lock_child())?
++        };
++        if status.is_some() {
++            return Ok(status);
+         }
+         if self
+             .inner
+@@ -1034,10 +1082,10 @@
+         // No-op once the child has exited and been reaped: its pid/pgid can be
+         // recycled, so signaling it could hit an unrelated process (group). A
+         // reaped `Child` returns its cached status here without a syscall.
++        if self.reaped {
++            return Ok(());
++        }
+         let mut child = self.inner.lock_child();
+-        if child.try_wait()?.is_some() {
+-            return Ok(());
+-        }
+         if self.inner.group {
+             // Pipes and PTY modes give bwrap its own process group.
+             group_kill(&mut child)
+@@ -1148,6 +1196,7 @@
+             }
+         };
+ 
++        self.reaped = true;
+         cancel_and_join_discard(stdout_thread, &self.inner.stdout_canceller);
+         cancel_and_join_discard(stderr_thread, &self.inner.stderr_canceller);
+         if let Some(pty) = self.inner.pty.as_ref() {
+@@ -1174,6 +1223,10 @@
+         self.run_teardown();
+     }
+ }
++
++#[cfg(test)]
++#[path = "bwrap_runner_tests.rs"]
++mod lifecycle_tests;
+ 
+ /// Build the iptables manager for a Bubblewrap sandbox.
+ ///
+diff --git a/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_runner_tests.rs b/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_runner_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_runner_tests.rs
+@@ -0,0 +1,46 @@
++// Copyright (c) Microsoft Corporation.
++// Licensed under the MIT License.
++
++use super::*;
++
++#[test]
++fn exit_observation_keeps_the_leader_owned_until_wait_finishes() {
++    let child = Command::new("sh")
++        .args(["-c", "exit 17"])
++        .process_group(0)
++        .spawn()
++        .unwrap();
++    let mut process = BubblewrapSandboxProcess::new(BwrapChild {
++        child: Arc::new(Mutex::new(child)),
++        stdin: None,
++        stdout: None,
++        stderr: None,
++        stdout_canceller: None,
++        stderr_canceller: None,
++        group: true,
++        proxy: UnixProxyCoordinator::new(),
++        proxy_network: None,
++        fw_manager: None,
++        monitor: None,
++        pty: None,
++        started: Instant::now(),
++        timed_out: false,
++        termination_error: None,
++        timeout: Some(Duration::from_secs(10)),
++    });
++
++    let deadline = Instant::now() + Duration::from_secs(10);
++    while process.try_wait().unwrap().is_none() {
++        assert!(Instant::now() < deadline, "leader did not exit");
++        std::thread::sleep(Duration::from_millis(10));
++    }
++    assert_eq!(
++        crate::mxc_common::sandbox_process::poll_child_exit(&process.inner.lock_child()).unwrap(),
++        Some(17),
++        "observing exit must not release the PID before process-tree cleanup"
++    );
++    assert_eq!(process.wait().unwrap(), 17);
++    assert_eq!(process.try_wait().unwrap(), Some(17));
++    process.kill().unwrap();
++    assert_eq!(process.wait().unwrap(), 17);
++}
+diff --git a/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_version.rs b/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_version.rs
+--- a/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_version.rs
++++ b/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_version.rs
+@@ -38,6 +38,7 @@
+ ///
+ /// `--clearenv` is therefore the flag that sets the floor. If the argument
+ /// builder ever adopts a newer flag, raise this constant in the same change.
++/// The runner's `--seccomp` socket filter is also supported at this floor.
+ pub const MIN_BWRAP_VERSION: BwrapVersion = BwrapVersion::new(0, 5, 0);
+ 
+ /// Why [`MIN_BWRAP_VERSION`] is the compatibility floor.
+@@ -1168,3 +1169,15 @@
+         assert_eq!(first.join().unwrap(), Err(BwrapUnavailable::NotFound));
+     }
+ }
++
++/// Checks the exact executable bound to an embedding application's request.
++pub fn probe_bwrap_at(path: &Path) -> Result<BwrapVersion, BwrapUnavailable> {
++    probe_bwrap_uncached_with(|| {
++        run_version_command_until(
++            path,
++            &["--version"],
++            Instant::now() + BWRAP_VERSION_TIMEOUT,
++            BWRAP_VERSION_TIMEOUT,
++        )
++    })
++}
+diff --git a/src/mxc-sdk/src/backends/bubblewrap/common/mod.rs b/src/mxc-sdk/src/backends/bubblewrap/common.rs
+rename from src/mxc-sdk/src/backends/bubblewrap/common/mod.rs
+rename to src/mxc-sdk/src/backends/bubblewrap/common.rs
+--- a/src/mxc-sdk/src/backends/bubblewrap/common/mod.rs
++++ b/src/mxc-sdk/src/backends/bubblewrap/common.rs
+@@ -16,6 +16,7 @@
+ //! - [`bwrap_runner`] is gated to `target_os = "linux"` since it actually
+ //!   spawns the `bwrap` binary.
+ 
++
+ pub mod bwrap_command;
+ #[cfg(target_os = "linux")]
+ pub mod bwrap_runner;
+@@ -32,3 +33,6 @@
+ /// crate; every other item stays `pub(crate)`.
+ #[cfg(target_os = "linux")]
+ pub mod proxy_network;
++
++#[cfg(target_os = "linux")]
++mod seccomp;
+diff --git a/src/mxc-sdk/src/backends/bubblewrap/common/provider_monitor.rs b/src/mxc-sdk/src/backends/bubblewrap/common/provider_monitor.rs
+--- a/src/mxc-sdk/src/backends/bubblewrap/common/provider_monitor.rs
++++ b/src/mxc-sdk/src/backends/bubblewrap/common/provider_monitor.rs
+@@ -76,9 +76,12 @@
+             let Ok(mut child) = child.lock() else {
+                 return;
+             };
+-            // Signalling a reaped child could reach an unrelated process that
+-            // inherited its pid; holding the lock keeps the answer true.
+-            if matches!(child.try_wait(), Ok(None)) {
++            // Observe without reaping: the executor still owns process-tree
++            // cleanup, and the leader's PID must stay reserved until then.
++            if matches!(
++                crate::mxc_common::sandbox_process::poll_child_exit(&child),
++                Ok(None)
++            ) {
+                 let _ = if group {
+                     group_kill(&mut child)
+                 } else {
+@@ -116,100 +119,5 @@
+ }
+ 
+ #[cfg(test)]
+-mod tests {
+-    use super::*;
+-
+-    use nix::fcntl::{fcntl, FcntlArg, OFlag};
+-    use nix::unistd::pipe2;
+-    use std::os::fd::AsRawFd;
+-    use std::process::Command;
+-    use std::time::Instant;
+-
+-    /// The read end must not block, or a disarmed monitor could never notice.
+-    fn watch_pipe() -> (OwnedFd, OwnedFd) {
+-        let (reader, writer) = pipe2(OFlag::O_CLOEXEC).expect("pipe");
+-        let flags = fcntl(reader.as_raw_fd(), FcntlArg::F_GETFL).expect("read descriptor flags");
+-        fcntl(
+-            reader.as_raw_fd(),
+-            FcntlArg::F_SETFL(OFlag::from_bits_truncate(flags) | OFlag::O_NONBLOCK),
+-        )
+-        .expect("set descriptor nonblocking");
+-        (reader, writer)
+-    }
+-
+-    fn sleeping_sandbox() -> Arc<Mutex<Child>> {
+-        Arc::new(Mutex::new(
+-            Command::new("sleep").arg("30").spawn().expect("spawn"),
+-        ))
+-    }
+-
+-    fn exited_within(child: &Arc<Mutex<Child>>, budget: Duration) -> bool {
+-        let deadline = Instant::now() + budget;
+-        while Instant::now() < deadline {
+-            let exited = child
+-                .lock()
+-                .map(|mut child| matches!(child.try_wait(), Ok(Some(_))))
+-                .unwrap_or(false);
+-            if exited {
+-                return true;
+-            }
+-            thread::sleep(Duration::from_millis(10));
+-        }
+-        false
+-    }
+-
+-    fn reap(child: &Arc<Mutex<Child>>) {
+-        if let Ok(mut child) = child.lock() {
+-            let _ = child.kill();
+-            let _ = child.wait();
+-        }
+-    }
+-
+-    #[test]
+-    fn a_lost_provider_takes_the_sandbox_down_with_it() {
+-        let (watch, writer) = watch_pipe();
+-        let child = sleeping_sandbox();
+-        let mut monitor = ProviderMonitor::watch(watch, Arc::clone(&child), false);
+-
+-        drop(writer);
+-
+-        assert!(
+-            exited_within(&child, Duration::from_secs(10)),
+-            "the sandbox outlived the provider carrying its only route"
+-        );
+-        assert!(
+-            monitor.disarm(),
+-            "the loss must reach the run rather than being reported as a workload exit"
+-        );
+-        reap(&child);
+-    }
+-
+-    #[test]
+-    fn a_disarmed_monitor_leaves_the_sandbox_alone() {
+-        let (watch, writer) = watch_pipe();
+-        let child = sleeping_sandbox();
+-        let mut monitor = ProviderMonitor::watch(watch, Arc::clone(&child), false);
+-
+-        monitor.disarm();
+-        drop(writer);
+-
+-        assert!(
+-            !exited_within(&child, Duration::from_millis(500)),
+-            "teardown closing the watch must not be mistaken for a provider death"
+-        );
+-        assert!(!monitor.provider_lost());
+-        reap(&child);
+-    }
+-
+-    #[test]
+-    fn a_monitor_over_an_already_reaped_sandbox_still_settles() {
+-        let (watch, writer) = watch_pipe();
+-        let child = Arc::new(Mutex::new(Command::new("true").spawn().expect("spawn")));
+-        reap(&child);
+-        let mut monitor = ProviderMonitor::watch(watch, Arc::clone(&child), true);
+-
+-        drop(writer);
+-
+-        assert!(monitor.disarm(), "the loss is still worth reporting");
+-    }
+-}
++#[path = "provider_monitor_tests.rs"]
++mod tests;
+diff --git a/src/mxc-sdk/src/backends/bubblewrap/common/provider_monitor_tests.rs b/src/mxc-sdk/src/backends/bubblewrap/common/provider_monitor_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/src/mxc-sdk/src/backends/bubblewrap/common/provider_monitor_tests.rs
+@@ -0,0 +1,118 @@
++use super::*;
++
++use nix::fcntl::{fcntl, FcntlArg, OFlag};
++use nix::unistd::pipe2;
++use std::os::fd::AsRawFd;
++use std::process::Command;
++use std::time::Instant;
++
++/// The read end must not block, or a disarmed monitor could never notice.
++fn watch_pipe() -> (OwnedFd, OwnedFd) {
++    let (reader, writer) = pipe2(OFlag::O_CLOEXEC).expect("pipe");
++    let flags = fcntl(reader.as_raw_fd(), FcntlArg::F_GETFL).expect("read descriptor flags");
++    fcntl(
++        reader.as_raw_fd(),
++        FcntlArg::F_SETFL(OFlag::from_bits_truncate(flags) | OFlag::O_NONBLOCK),
++    )
++    .expect("set descriptor nonblocking");
++    (reader, writer)
++}
++
++fn sleeping_sandbox() -> Arc<Mutex<Child>> {
++    Arc::new(Mutex::new(
++        Command::new("sleep").arg("30").spawn().expect("spawn"),
++    ))
++}
++
++fn exited_within(child: &Arc<Mutex<Child>>, budget: Duration) -> bool {
++    let deadline = Instant::now() + budget;
++    while Instant::now() < deadline {
++        let exited = child
++            .lock()
++            .map(|child| {
++                matches!(
++                    crate::mxc_common::sandbox_process::poll_child_exit(&child),
++                    Ok(Some(_))
++                )
++            })
++            .unwrap_or(false);
++        if exited {
++            return true;
++        }
++        thread::sleep(Duration::from_millis(10));
++    }
++    false
++}
++
++fn reap(child: &Arc<Mutex<Child>>) {
++    if let Ok(mut child) = child.lock() {
++        let _ = child.kill();
++        let _ = child.wait();
++    }
++}
++
++#[test]
++fn a_lost_provider_takes_the_sandbox_down_with_it() {
++    let (watch, writer) = watch_pipe();
++    let child = sleeping_sandbox();
++    let mut monitor = ProviderMonitor::watch(watch, Arc::clone(&child), false);
++
++    drop(writer);
++
++    assert!(
++        exited_within(&child, Duration::from_secs(10)),
++        "the sandbox outlived the provider carrying its only route"
++    );
++    assert!(
++        monitor.disarm(),
++        "the loss must reach the run rather than being reported as a workload exit"
++    );
++    reap(&child);
++}
++
++#[test]
++fn a_disarmed_monitor_leaves_the_sandbox_alone() {
++    let (watch, writer) = watch_pipe();
++    let child = sleeping_sandbox();
++    let mut monitor = ProviderMonitor::watch(watch, Arc::clone(&child), false);
++
++    monitor.disarm();
++    drop(writer);
++
++    assert!(
++        !exited_within(&child, Duration::from_millis(500)),
++        "teardown closing the watch must not be mistaken for a provider death"
++    );
++    assert!(!monitor.provider_lost());
++    reap(&child);
++}
++
++#[test]
++fn a_monitor_over_an_already_reaped_sandbox_still_settles() {
++    let (watch, writer) = watch_pipe();
++    let child = Arc::new(Mutex::new(Command::new("true").spawn().expect("spawn")));
++    reap(&child);
++    let mut monitor = ProviderMonitor::watch(watch, Arc::clone(&child), true);
++
++    drop(writer);
++
++    assert!(monitor.disarm(), "the loss is still worth reporting");
++}
++
++#[test]
++fn provider_observation_leaves_an_exited_leader_unreaped() {
++    let (watch, writer) = watch_pipe();
++    let child = Arc::new(Mutex::new(Command::new("true").spawn().expect("spawn")));
++    assert!(exited_within(&child, Duration::from_secs(10)));
++    let mut monitor = ProviderMonitor::watch(watch, Arc::clone(&child), true);
++
++    drop(writer);
++    assert!(monitor.disarm());
++    let mut leader = child.lock().unwrap();
++    assert_eq!(
++        crate::mxc_common::sandbox_process::poll_child_exit(&leader).unwrap(),
++        Some(0),
++        "the monitor must not release the PID before process-tree cleanup"
++    );
++    assert!(leader.wait().unwrap().success());
++}
+diff --git a/src/mxc-sdk/src/backends/bubblewrap/common/seccomp.rs b/src/mxc-sdk/src/backends/bubblewrap/common/seccomp.rs
+new file mode 100644
+--- /dev/null
++++ b/src/mxc-sdk/src/backends/bubblewrap/common/seccomp.rs
+@@ -0,0 +1,109 @@
++// Licensed under the MIT License.
++
++//! Rejects VM-host sockets that bypass Linux network and filesystem namespaces.
++
++use nix::libc;
++use std::fs::File;
++use std::io;
++use std::io::Write;
++use std::os::fd::AsRawFd;
++use std::os::fd::FromRawFd;
++use std::os::unix::process::CommandExt;
++use std::process::Command;
++
++pub(crate) struct SocketFilter(File);
++
++impl SocketFilter {
++    pub(crate) fn new() -> io::Result<Self> {
++        // WSL's binfmt handler retains /init through an open kernel reference.
++        // Hiding /init or /run therefore cannot prevent Windows process creation.
++        // Its bridge first creates an AF_VSOCK listener, outside the Linux IP
++        // namespace. Block that operation for every workload and descendant.
++        let architecture = if cfg!(target_arch = "x86_64") {
++            0xc000_003e
++        } else if cfg!(target_arch = "aarch64") {
++            0xc000_00b7
++        } else {
++            return Err(io::Error::other("unsupported seccomp syscall architecture"));
++        };
++        let load = (libc::BPF_LD | libc::BPF_W | libc::BPF_ABS) as u16;
++        let equal = (libc::BPF_JMP | libc::BPF_JEQ | libc::BPF_K) as u16;
++        let ret = (libc::BPF_RET | libc::BPF_K) as u16;
++        let deny = libc::SECCOMP_RET_ERRNO | libc::EPERM as u32;
++        let mut instructions = vec![
++            instruction(
++                load,
++                0,
++                0,
++                std::mem::offset_of!(libc::seccomp_data, arch) as u32,
++            ),
++            instruction(equal, 1, 0, architecture),
++            instruction(ret, 0, 0, libc::SECCOMP_RET_KILL_PROCESS),
++            instruction(
++                load,
++                0,
++                0,
++                std::mem::offset_of!(libc::seccomp_data, nr) as u32,
++            ),
++        ];
++        if cfg!(target_arch = "x86_64") {
++            // x32 uses the x86_64 audit architecture but different syscall
++            // numbers. It must not bypass the socket-domain check below.
++            instructions.extend([
++                instruction(
++                    (libc::BPF_JMP | libc::BPF_JGE | libc::BPF_K) as u16,
++                    0,
++                    1,
++                    0x4000_0000,
++                ),
++                instruction(ret, 0, 0, deny),
++            ]);
++        }
++        instructions.extend([
++            instruction(equal, 1, 0, libc::SYS_socket as u32),
++            instruction(ret, 0, 0, libc::SECCOMP_RET_ALLOW),
++            instruction(
++                load,
++                0,
++                0,
++                std::mem::offset_of!(libc::seccomp_data, args) as u32,
++            ),
++            instruction(equal, 0, 1, libc::AF_VSOCK as u32),
++            instruction(ret, 0, 0, deny),
++            instruction(ret, 0, 0, libc::SECCOMP_RET_ALLOW),
++        ]);
++        let descriptor =
++            unsafe { libc::memfd_create(c"mxc-socket-filter".as_ptr(), libc::MFD_CLOEXEC) };
++        if descriptor < 0 {
++            return Err(io::Error::last_os_error());
++        }
++        let mut file = unsafe { File::from_raw_fd(descriptor) };
++        for item in instructions {
++            file.write_all(&item.code.to_ne_bytes())?;
++            file.write_all(&[item.jt, item.jf])?;
++            file.write_all(&item.k.to_ne_bytes())?;
++        }
++        // Bubblewrap reads the filter from the current descriptor offset.
++        std::io::Seek::rewind(&mut file)?;
++        Ok(Self(file))
++    }
++
++    pub(crate) fn configure(&self, command: &mut Command) {
++        let descriptor = self.0.as_raw_fd();
++        command.args(["--seccomp", &descriptor.to_string()]);
++        // Only the spawned bwrap inherits this descriptor; other concurrent
++        // children retain CLOEXEC. Bwrap consumes and closes it before exec.
++        unsafe {
++            command.pre_exec(move || {
++                if libc::fcntl(descriptor, libc::F_SETFD, 0) < 0 {
++                    return Err(io::Error::last_os_error());
++                }
++                Ok(())
++            });
++        }
++    }
++}
++
++fn instruction(code: u16, jt: u8, jf: u8, k: u32) -> libc::sock_filter {
++    libc::sock_filter { code, jt, jf, k }
++}
+diff --git a/src/mxc-sdk/src/backends/hyperlight/common/mod.rs b/src/mxc-sdk/src/backends/hyperlight/common.rs
+rename from src/mxc-sdk/src/backends/hyperlight/common/mod.rs
+rename to src/mxc-sdk/src/backends/hyperlight/common.rs
+diff --git a/src/mxc-sdk/src/backends/isolation_session/bindings/mod.rs b/src/mxc-sdk/src/backends/isolation_session/bindings.rs
+rename from src/mxc-sdk/src/backends/isolation_session/bindings/mod.rs
+rename to src/mxc-sdk/src/backends/isolation_session/bindings.rs
+diff --git a/src/mxc-sdk/src/backends/isolation_session/common/mod.rs b/src/mxc-sdk/src/backends/isolation_session/common.rs
+rename from src/mxc-sdk/src/backends/isolation_session/common/mod.rs
+rename to src/mxc-sdk/src/backends/isolation_session/common.rs
+diff --git a/src/mxc-sdk/src/backends/lxc/common/mod.rs b/src/mxc-sdk/src/backends/lxc/common.rs
+rename from src/mxc-sdk/src/backends/lxc/common/mod.rs
+rename to src/mxc-sdk/src/backends/lxc/common.rs
+--- a/src/mxc-sdk/src/backends/lxc/common/mod.rs
++++ b/src/mxc-sdk/src/backends/lxc/common.rs
+@@ -1,5 +1,6 @@
+ // Copyright (c) Microsoft Corporation.
+ // Licensed under the MIT License.
++
+ 
+ pub mod availability;
+ pub mod filesystem_mounts;
+diff --git a/src/mxc-sdk/src/backends/mod.rs b/src/mxc-sdk/src/backends.rs
+rename from src/mxc-sdk/src/backends/mod.rs
+rename to src/mxc-sdk/src/backends.rs
+diff --git a/src/mxc-sdk/src/backends/nanvix/binaries/mod.rs b/src/mxc-sdk/src/backends/nanvix/binaries.rs
+rename from src/mxc-sdk/src/backends/nanvix/binaries/mod.rs
+rename to src/mxc-sdk/src/backends/nanvix/binaries.rs
+diff --git a/src/mxc-sdk/src/backends/nanvix/common/mod.rs b/src/mxc-sdk/src/backends/nanvix/common.rs
+rename from src/mxc-sdk/src/backends/nanvix/common/mod.rs
+rename to src/mxc-sdk/src/backends/nanvix/common.rs
+diff --git a/src/mxc-sdk/src/backends/nanvix/runner/mod.rs b/src/mxc-sdk/src/backends/nanvix/runner.rs
+rename from src/mxc-sdk/src/backends/nanvix/runner/mod.rs
+rename to src/mxc-sdk/src/backends/nanvix/runner.rs
+--- a/src/mxc-sdk/src/backends/nanvix/runner/mod.rs
++++ b/src/mxc-sdk/src/backends/nanvix/runner.rs
+@@ -1247,8 +1247,8 @@
+     #[test]
+     fn public_directional_fixtures_enable_host_networking() {
+         for source in [
+-            include_str!("../../../../../../tests/configs/microvm_network.json"),
+-            include_str!("../../../../../../tests/configs/microvm_network_linux.json"),
++            include_str!("runner/../../../../../../tests/configs/microvm_network.json"),
++            include_str!("runner/../../../../../../tests/configs/microvm_network_linux.json"),
+         ] {
+             let mut logger = Logger::new(Mode::Buffer);
+             let parsed =
+diff --git a/src/mxc-sdk/src/backends/process_container/common/base_container_runner.rs b/src/mxc-sdk/src/backends/process_container/common/base_container_runner.rs
+--- a/src/mxc-sdk/src/backends/process_container/common/base_container_runner.rs
++++ b/src/mxc-sdk/src/backends/process_container/common/base_container_runner.rs
+@@ -15,6 +15,9 @@
+ 
+ use crate::learning_mode_core::DenialAnalyzer;
+ use crate::learning_mode_windows::{EtlDenialAnalyzer, LEARNING_MODE_API_SET};
++
++use crate::learning_mode_windows::LearningModeError;
++use windows::Win32::Foundation::ERROR_NOT_SUPPORTED;
+ use windows::Win32::Foundation::{
+     CloseHandle, GetLastError, SetHandleInformation, ERROR_CALL_NOT_IMPLEMENTED, E_NOTIMPL, HANDLE,
+     HANDLE_FLAG_INHERIT, WAIT_OBJECT_0, WAIT_TIMEOUT,
+@@ -28,6 +31,7 @@
+     STARTF_USESTDHANDLES, STARTUPINFOW,
+ };
+ use windows_core::{PCWSTR, PWSTR};
++use crate::mxc_common::mxc_error::{ApiFailure, MxcError};
+ 
+ use crate::mxc_common::api_set::is_api_set_implemented;
+ use crate::mxc_common::audit::{
+@@ -69,7 +73,7 @@
+ use crate::process_container_common::native_capture::CaptureSession;
+ use crate::process_container_common::proxy_coordinator::ProxyCoordinator;
+ use crate::process_container_common::secenv::{
+-    self, ProcessSecurityEnvironment, SecurityEnvironmentStartupInfo, SecurityEnvironmentSupport,
++    self, ProcessSecurityEnvironment, SecurityEnvironmentApi, SecurityEnvironmentStartupInfo, SecurityEnvironmentSupport,
+     SecurityEnvironmentVersion, PROCESS_SECURITY_ENVIRONMENT_FLAG_NONE,
+     SECURITY_ENVIRONMENT_API_SET,
+ };
+@@ -163,6 +167,58 @@
+     err == ERROR_CALL_NOT_IMPLEMENTED.0 || err == E_NOTIMPL.0 as u32
+ }
+ 
++fn hresult_from_win32(code: u32) -> u32 {
++    if code == 0 {
++        0
++    } else {
++        (code & 0x0000_ffff) | 0x8007_0000
++    }
++}
++
++fn psec_probe_error(error: LearningModeError) -> MxcError {
++    let unsupported = match &error {
++        LearningModeError::ApiSetUnavailable { .. } | LearningModeError::ExportMissing { .. } => {
++            true
++        }
++        LearningModeError::HResultCall { code, .. } => {
++            let code = *code as u32;
++            code == E_NOTIMPL.0 as u32
++                || code == hresult_from_win32(ERROR_CALL_NOT_IMPLEMENTED.0)
++                || code == hresult_from_win32(ERROR_NOT_SUPPORTED.0)
++        }
++        LearningModeError::ApiCall { code, .. } => {
++            *code == ERROR_CALL_NOT_IMPLEMENTED.0 || *code == ERROR_NOT_SUPPORTED.0
++        }
++        LearningModeError::DllLoad(_) | LearningModeError::InvalidInput { .. } => false,
++    };
++    let failure = match &error {
++        LearningModeError::ApiSetUnavailable { api_set, .. } => {
++            Some(ApiFailure::new(format!("IsApiSetImplemented({api_set})")))
++        }
++        LearningModeError::DllLoad(_) => Some(ApiFailure::new("LoadLibraryExW(processmodel.dll)")),
++        LearningModeError::ExportMissing { export, .. } => {
++            Some(ApiFailure::new(format!("GetProcAddress({export})")))
++        }
++        LearningModeError::HResultCall { function, code } => {
++            Some(ApiFailure::new(*function).with_native_code(format!("0x{:08X}", *code as u32)))
++        }
++        LearningModeError::ApiCall { function, code } => {
++            Some(ApiFailure::new(*function).with_native_code(code.to_string()))
++        }
++        LearningModeError::InvalidInput { .. } => None,
++    };
++    let message = error.to_string();
++    let mut result = if unsupported {
++        MxcError::unsupported_containment(message)
++    } else {
++        MxcError::backend_unavailable(message)
++    };
++    if let Some(failure) = failure {
++        result = result.with_api_failure(failure);
++    }
++    result
++}
++
+ trait CaptureSessionOps {
+     fn environment(&self) -> HANDLE;
+     fn finish(
+@@ -243,6 +299,84 @@
+ }
+ 
+ impl BaseContainerRunner {
++    /// Verifies that PSEC can implement this exact request without starting the
++    /// user command. Confirmed missing capabilities return UnsupportedContainment;
++    /// API, resource and cleanup failures retain their operation and native code.
++    pub fn require_psec(request: &ExecutionRequest) -> Result<(), MxcError> {
++        if request.policy.least_privilege_mode {
++            return Err(MxcError::unsupported_containment(
++                "PSEC does not support the requested least-privilege process mode",
++            ));
++        }
++        if request.policy.network_proxy.is_enabled()
++            && !request.policy.runtime_network_proxy_specified
++        {
++            return Err(MxcError::unsupported_containment(
++                "PSEC requires the runtime proxy contract for proxied networking",
++            ));
++        }
++
++        let api = SecurityEnvironmentApi::load().map_err(psec_probe_error)?;
++        let version = Self::choose_min_required_psec_version_for_request(request);
++        if !api
++            .supports_version(u32::from(version.major), u32::from(version.minor))
++            .map_err(psec_probe_error)?
++        {
++            return Err(MxcError::unsupported_containment(
++                "the required PSEC contract is unavailable",
++            ));
++        }
++        for (requested, capability, message) in [
++            (
++                !request.policy.denied_paths.is_empty(),
++                SecurityEnvironmentSupport::FileSystemDeny,
++                "PSEC cannot enforce the requested denied paths",
++            ),
++            (
++                !request.policy.enumerate_paths.is_empty(),
++                SecurityEnvironmentSupport::FileSystemEnumerate,
++                PSEC_ENUMERATE_PATHS_UNSUPPORTED_MSG,
++            ),
++            (
++                unrestricted_host_loopback_allowed(&request.policy),
++                SecurityEnvironmentSupport::NetworkIngress,
++                PSEC_INGRESS_UNSUPPORTED_MSG,
++            ),
++        ] {
++            if requested && !api.query_support(capability).map_err(psec_probe_error)? {
++                return Err(MxcError::unsupported_containment(message));
++            }
++        }
++        let ingress = version >= SecurityEnvironmentVersion::V1_1
++            && api
++                .query_support(SecurityEnvironmentSupport::NetworkIngress)
++                .map_err(psec_probe_error)?;
++        let specification = build_psec_v1_security_environment_spec(request, version, ingress);
++        if request.policy.capture_denials.is_some() {
++            let session =
++                CaptureSession::begin(&specification, PROCESS_SECURITY_ENVIRONMENT_FLAG_NONE)
++                    .map_err(psec_probe_error)?;
++            let startup = SecurityEnvironmentStartupInfo::new(
++                STARTUPINFOW::default(),
++                session.environment(),
++                &[],
++            );
++            let cleanup = session.finish(None);
++            // Both operations run before their results are returned, so failed
++            // startup preparation still closes the trace and environment.
++            startup.map(drop).map_err(psec_probe_error)?;
++            cleanup.map_err(psec_probe_error)?;
++            return Ok(());
++        }
++        let environment = api
++            .create(&specification, PROCESS_SECURITY_ENVIRONMENT_FLAG_NONE)
++            .map_err(psec_probe_error)?;
++        let startup =
++            SecurityEnvironmentStartupInfo::new(STARTUPINFOW::default(), environment.raw(), &[]);
++        environment.close();
++        startup.map(drop).map_err(psec_probe_error)
++    }
++
+     pub fn new() -> Self {
+         Self::default()
+     }
+@@ -3316,3 +3450,7 @@
+     // BaseContainer native-PSEC exception) is exercised as a consolidated
+     // matrix in `crate::guarded_capture`'s tests, so it is not duplicated here.
+ }
++
++#[cfg(test)]
++#[path = "psec_tests.rs"]
++mod psec_tests;
+diff --git a/src/mxc-sdk/src/backends/process_container/common/mod.rs b/src/mxc-sdk/src/backends/process_container/common.rs
+rename from src/mxc-sdk/src/backends/process_container/common/mod.rs
+rename to src/mxc-sdk/src/backends/process_container/common.rs
+diff --git a/src/mxc-sdk/src/backends/process_container/common/psec_tests.rs b/src/mxc-sdk/src/backends/process_container/common/psec_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/src/mxc-sdk/src/backends/process_container/common/psec_tests.rs
+@@ -0,0 +1,53 @@
++use super::*;
++
++#[test]
++fn psec_probe_classifies_only_confirmed_missing_capabilities_as_unsupported() {
++    for error in [
++        LearningModeError::ApiSetUnavailable {
++            api: "process security-environment",
++            api_set: "api-ms-win-security-basecontainer-l1-1-0",
++        },
++        LearningModeError::ExportMissing {
++            api: "process security-environment",
++            export: "CreateProcessSecurityEnvironment",
++            detail: "missing".into(),
++        },
++        LearningModeError::HResultCall {
++            function: "CreateProcessSecurityEnvironment",
++            code: E_NOTIMPL.0,
++        },
++        LearningModeError::ApiCall {
++            function: "UpdateProcThreadAttribute",
++            code: ERROR_NOT_SUPPORTED.0,
++        },
++    ] {
++        let result = psec_probe_error(error);
++        assert_eq!(
++            result.code,
++            crate::mxc_common::mxc_error::MxcErrorCode::UnsupportedContainment
++        );
++        assert!(result.operation().is_some());
++    }
++}
++
++#[test]
++fn psec_probe_preserves_operational_failures_instead_of_enabling_fallback() {
++    let error = psec_probe_error(LearningModeError::HResultCall {
++        function: "CreateProcessSecurityEnvironment",
++        code: windows::Win32::Foundation::E_ACCESSDENIED.0,
++    });
++
++    assert_eq!(
++        error.code,
++        crate::mxc_common::mxc_error::MxcErrorCode::BackendUnavailable
++    );
++    assert_eq!(error.operation(), Some("CreateProcessSecurityEnvironment"));
++    assert_eq!(error.native_code(), Some("0x80070005"));
++
++    let load = psec_probe_error(LearningModeError::DllLoad("bad image".into()));
++    assert_eq!(
++        load.code,
++        crate::mxc_common::mxc_error::MxcErrorCode::BackendUnavailable
++    );
++    assert_eq!(load.operation(), Some("LoadLibraryExW(processmodel.dll)"));
++}
+diff --git a/src/mxc-sdk/src/backends/seatbelt/common/mod.rs b/src/mxc-sdk/src/backends/seatbelt/common.rs
+rename from src/mxc-sdk/src/backends/seatbelt/common/mod.rs
+rename to src/mxc-sdk/src/backends/seatbelt/common.rs
+--- a/src/mxc-sdk/src/backends/seatbelt/common/mod.rs
++++ b/src/mxc-sdk/src/backends/seatbelt/common.rs
+@@ -14,6 +14,7 @@
+ //! - [`seatbelt_runner`] is gated to `target_os = "macos"` since it spawns
+ //!   `/usr/bin/sandbox-exec`.
+ 
++
+ pub mod default_env;
+ pub mod profile_builder;
+ pub mod seatbelt_policy;
+diff --git a/src/mxc-sdk/src/backends/seatbelt/common/profile_builder.rs b/src/mxc-sdk/src/backends/seatbelt/common/profile_builder.rs
+--- a/src/mxc-sdk/src/backends/seatbelt/common/profile_builder.rs
++++ b/src/mxc-sdk/src/backends/seatbelt/common/profile_builder.rs
+@@ -85,6 +85,29 @@
+     write_extra_seatbelt_rules(&mut out, request);
+     write_ui_rules(&mut out, request);
+ 
++    if request
++        .seatbelt
++        .as_ref()
++        .is_some_and(|config| !config.allow_unix_sockets)
++    {
++        let allowed = request
++            .seatbelt
++            .as_ref()
++            .expect("restricted Unix socket policy has Seatbelt configuration")
++            .allowed_unix_socket_paths
++            .iter()
++            .map(|path| resolve_policy_path(path))
++            .collect::<Result<Vec<_>, _>>()?;
++        if allowed.is_empty() {
++            out.push_str("(deny network-bind network-outbound (subpath \"/\"))\n");
++        } else {
++            out.push_str("(deny network-bind network-outbound (require-all (subpath \"/\")");
++            for path in allowed {
++                let _ = write!(out, " (require-not (subpath {}))", quote_scheme(&path));
++            }
++            out.push_str("))\n");
++        }
++    }
+     // Policy-derived deny rules go LAST so they win on conflict.
+     write_filesystem_deny(&mut out, &resolved);
+ 
+@@ -284,7 +307,7 @@
+         let readonly = resolve_all(&policy.readonly_paths)?;
+         let mut readwrite = resolve_all(&policy.readwrite_paths)?;
+ 
+-        // `denied` is emitted last and would override either allow anyway, but
++        // An exact denied path overrides either grant, so
+         // dropping the path keeps the emitted profile an honest description of
+         // the effective policy.
+         let mut readonly: Vec<String> = readonly;
+@@ -314,8 +337,8 @@
+     // makes the *deepest* intent win at every path — a `readonlyPaths` entry
+     // nested inside a broader `readwritePaths` subtree stays read-only rather
+     // than inheriting the parent's write grant. `deniedPaths` is deliberately
+-    // not part of this plan: it is emitted last so it outranks these filtered
+-    // allows regardless of depth.
++    // emitted separately so a denied ancestor can exclude explicit deeper grants,
++    // matching the specificity ordering used by the other filesystem backends.
+     out.push_str(";; --- policy.readonlyPaths / policy.readwritePaths (shallow-to-deep) ---\n");
+     for mount in resolve_path_plan(&paths.readwrite, &paths.readonly, &[]) {
+         let subpath = [mount.path.clone()];
+@@ -366,11 +389,31 @@
+         // whatever listens there. A Docker / ssh-agent / gpg-agent socket is a
+         // control plane, so that would be an escape.
+         out.push_str(";; --- policy.deniedPaths (override broader allow rules) ---\n");
+-        write_path_rule(
+-            out,
+-            "deny file-read* file-write* network-bind network-outbound",
+-            &paths.denied,
+-        );
++        for hidden in &paths.denied {
++            let exceptions = paths
++                .readonly
++                .iter()
++                .chain(&paths.readwrite)
++                .filter(|path| *path != hidden && std::path::Path::new(path).starts_with(hidden))
++                .collect::<Vec<_>>();
++            if exceptions.is_empty() {
++                write_path_rule(
++                    out,
++                    "deny file-read* file-write* network-bind network-outbound",
++                    &[hidden.clone()],
++                );
++            } else {
++                let _ = write!(
++                    out,
++                    "(deny file-read* file-write* network-bind network-outbound (require-all (subpath {})",
++                    quote_scheme(hidden)
++                );
++                for path in exceptions {
++                    let _ = write!(out, " (require-not (subpath {}))", quote_scheme(path));
++                }
++                out.push_str("))\n");
++            }
++        }
+     }
+ }
+ 
+@@ -1476,6 +1519,24 @@
+     }
+ 
+     #[test]
++    fn restricted_unix_sockets_reopen_only_the_execution_private_directory() {
++        let mut r = req();
++        r.policy.readwrite_paths = vec!["/tmp/work".into(), "/tmp/ash-exec".into()];
++        r.seatbelt = Some(SeatbeltConfig {
++            allow_unix_sockets: false,
++            allowed_unix_socket_paths: vec!["/tmp/ash-exec".into()],
++            ..Default::default()
++        });
++
++        let profile = build_profile(&r).unwrap();
++
++        assert!(profile.contains(
++            "(deny network-bind network-outbound (require-all (subpath \"/\") (require-not (subpath \"/private/tmp/ash-exec\"))))"
++        ));
++        assert!(profile.contains("(subpath \"/private/tmp/work\")"));
++    }
++
++    #[test]
+     fn denied_paths_deny_outbound_under_default_allow() {
+         // `defaultPolicy: allow` emits a bare `(allow network-outbound)`, which
+         // on its own grants AF_UNIX `connect()`. A denied subtree must still
+diff --git a/src/mxc-sdk/src/backends/seatbelt/common/seatbelt_runner.rs b/src/mxc-sdk/src/backends/seatbelt/common/seatbelt_runner.rs
+--- a/src/mxc-sdk/src/backends/seatbelt/common/seatbelt_runner.rs
++++ b/src/mxc-sdk/src/backends/seatbelt/common/seatbelt_runner.rs
+@@ -43,7 +43,7 @@
+ };
+ use crate::mxc_pty::{LivePty, PtySize as UnixPtySize};
+ 
+-use crate::seatbelt_common::default_env::{env_pairs, resolved_env, DEFAULT_SANDBOX_PATH};
++use crate::seatbelt_common::default_env::{resolved_env, DEFAULT_SANDBOX_PATH};
+ use crate::seatbelt_common::profile_builder::build_profile_with_proxy;
+ 
+ #[link(name = "proc")]
+@@ -77,26 +77,8 @@
+ 
+ const PROC_PID_UNIQUE_IDENTIFIER_INFO: libc::c_int = 17;
+ 
+-/// Env var keys the cooperative proxy manages. When a proxy is active these
+-/// are stripped from the caller-supplied environment so sandboxed code cannot
+-/// override the `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` values we inject (or
+-/// re-enable a `NO_PROXY` bypass). `ALL_PROXY` is the catch-all curl/libcurl
+-/// and many HTTP clients honor for every scheme, so leaving it caller-settable
+-/// would let sandboxed code redirect or bypass the proxy. Mirrors the
+-/// Bubblewrap backend's `PROXY_ENV_KEYS`.
+-const PROXY_ENV_KEYS: &[&str] = &[
+-    "HTTP_PROXY",
+-    "HTTPS_PROXY",
+-    "ALL_PROXY",
+-    "http_proxy",
+-    "https_proxy",
+-    "all_proxy",
+-    "NO_PROXY",
+-    "no_proxy",
+-];
+-
+ fn session_kill(child: &mut std::process::Child, session_id: libc::pid_t) -> std::io::Result<()> {
+-    let leader_result = match child.try_wait()? {
++    let leader_result = match crate::mxc_common::sandbox_process::poll_child_exit(child)? {
+         Some(_) => Ok(()),
+         None => child.kill(),
+     };
+@@ -207,18 +189,6 @@
+     Ok(pids)
+ }
+ 
+-/// Proxy env var keys injected (pointing at the resolved proxy URL) when a
+-/// proxy is active. `NO_PROXY` is intentionally absent — see the module docs
+-/// and [`resolve_environment`].
+-const PROXY_INJECT_KEYS: &[&str] = &[
+-    "HTTP_PROXY",
+-    "HTTPS_PROXY",
+-    "ALL_PROXY",
+-    "http_proxy",
+-    "https_proxy",
+-    "all_proxy",
+-];
+-
+ // ---------------------------------------------------------------------------
+ // FFI declarations for Apple's sandbox API (libsandbox.dylib).
+ //
+@@ -469,6 +439,7 @@
+     let session_id =
+         (new_session || matches!(stdio, StdioMode::Pty(_))).then_some(child.id() as libc::pid_t);
+     Ok(Box::new(SeatbeltSandboxProcess {
++        reaped: false,
+         child,
+         stdin,
+         stdout,
+@@ -627,6 +598,7 @@
+     // handle's `wait()` (or drop) runs.
+     let started = Instant::now();
+     Ok(Box::new(SeatbeltSandboxProcess {
++        reaped: false,
+         child,
+         stdin: None,
+         stdout: None,
+@@ -648,6 +620,7 @@
+ /// A running Seatbelt-sandboxed process: the child plus, for the pipes path,
+ /// its parent-side pipe ends. See [`SandboxProcess`] for the contract.
+ struct SeatbeltSandboxProcess {
++    reaped: bool,
+     child: std::process::Child,
+     /// Pipe ends — `Some` only for [`StdioMode::Pipes`]; `None` for inherited
+     /// stdio / Open mode (the streams are the binary's own, or detached). The
+@@ -760,6 +733,10 @@
+             .take_writer()
+     }
+ 
++    fn pty_interrupt(&self) -> std::io::Result<()> {
++        self.pty.as_ref().ok_or_else(|| std::io::Error::other("process has no PTY"))?.interrupt()
++    }
++
+     fn pty_resize(&self, size: PtySize) -> std::io::Result<()> {
+         self.pty
+             .as_ref()
+@@ -812,8 +789,13 @@
+                 "Seatbelt: process timed out",
+             ));
+         }
+-        if let Some(status) = self.child.try_wait()? {
+-            return Ok(Some(status.code().unwrap_or(-1)));
++        let status = if self.reaped {
++            self.child.try_wait()?.map(|status| status.code().unwrap_or(-1))
++        } else {
++            crate::mxc_common::sandbox_process::poll_child_exit(&self.child)?
++        };
++        if status.is_some() {
++            return Ok(status);
+         }
+         if self
+             .timeout
+@@ -840,14 +822,11 @@
+     }
+ 
+     fn kill(&mut self) -> std::io::Result<()> {
++        if self.reaped {
++            return Ok(());
++        }
+         if let Some(session_id) = self.session_id {
+             return session_kill(&mut self.child, session_id);
+-        }
+-        // No-op once the child has exited and been reaped: its pid/pgid can be
+-        // recycled, so signaling it could hit an unrelated process (group). A
+-        // reaped `Child` returns its cached status here without a syscall.
+-        if self.child.try_wait()?.is_some() {
+-            return Ok(());
+         }
+         if self.group {
+             // The child leads its own process group — signal the whole group so
+@@ -949,6 +928,7 @@
+             }
+         };
+ 
++        self.reaped = true;
+         cancel_and_join_discard(stdout_thread, &self.stdout_canceller);
+         cancel_and_join_discard(stderr_thread, &self.stderr_canceller);
+         if let Some(pty) = self.pty.as_ref() {
+@@ -966,6 +946,10 @@
+         // the handle is dropped without `wait()`, but never block destruction
+         // indefinitely when macOS does not make a signalled child reapable.
+         const DROP_REAP_TIMEOUT: Duration = Duration::from_secs(5);
++        if self.reaped {
++            self.run_cleanup();
++            return;
++        }
+         if let Some(session_id) = self.session_id {
+             let _ = terminate_session_and_reap(&mut self.child, session_id, DROP_REAP_TIMEOUT);
+         } else {
+@@ -1269,19 +1253,20 @@
+     working_directory: Option<&str>,
+ ) -> Vec<(String, String)> {
+     let resolved = resolved_env(request, working_directory);
+-    let strip_caller_proxy = proxy_address.is_some();
+-    let mut pairs: Vec<(String, String)> = env_pairs(&resolved)
++    let entries = match proxy_address {
++        Some(address) => {
++            crate::mxc_common::proxy_env::apply_cooperative_proxy_env(&resolved, &address.to_url())
++        }
++        None => resolved,
++    };
++    entries
+         .into_iter()
+-        .filter(|(key, _)| !strip_caller_proxy || !PROXY_ENV_KEYS.contains(key))
+-        .map(|(key, value)| (key.to_string(), value.to_string()))
+-        .collect();
+-    if let Some(addr) = proxy_address {
+-        let url = addr.to_url();
+-        for key in PROXY_INJECT_KEYS {
+-            pairs.push((key.to_string(), url.clone()));
+-        }
+-    }
+-    pairs
++        .filter_map(|entry| {
++            entry
++                .split_once('=')
++                .map(|(key, value)| (key.to_owned(), value.to_owned()))
++        })
++        .collect()
+ }
+ 
+ /// Write `content` to a temp file with a cryptographically random name and the
+diff --git a/src/mxc-sdk/src/backends/windows_sandbox/common/mod.rs b/src/mxc-sdk/src/backends/windows_sandbox/common.rs
+rename from src/mxc-sdk/src/backends/windows_sandbox/common/mod.rs
+rename to src/mxc-sdk/src/backends/windows_sandbox/common.rs
+--- a/src/mxc-sdk/src/backends/windows_sandbox/common/mod.rs
++++ b/src/mxc-sdk/src/backends/windows_sandbox/common.rs
+@@ -5,5 +5,6 @@
+ //! `wxc-windows-sandbox-daemon` host process, and the
+ //! `wxc-windows-sandbox-guest` agent inside the VM.
+ 
++
+ pub mod auth;
+ pub mod sandbox_protocol;
+diff --git a/src/mxc-sdk/src/backends/windows_sandbox/lifecycle/mod.rs b/src/mxc-sdk/src/backends/windows_sandbox/lifecycle.rs
+rename from src/mxc-sdk/src/backends/windows_sandbox/lifecycle/mod.rs
+rename to src/mxc-sdk/src/backends/windows_sandbox/lifecycle.rs
+diff --git a/src/mxc-sdk/src/backends/wslc/common/mod.rs b/src/mxc-sdk/src/backends/wslc/common.rs
+rename from src/mxc-sdk/src/backends/wslc/common/mod.rs
+rename to src/mxc-sdk/src/backends/wslc/common.rs
+--- a/src/mxc-sdk/src/backends/wslc/common/mod.rs
++++ b/src/mxc-sdk/src/backends/wslc/common.rs
+@@ -12,6 +12,7 @@
+ //! shared container lifecycle: run-to-completion (`ScriptRunner`, used by
+ //! `wxc-exec`) and streaming (`SandboxBackend`, in [`sandbox`], used by the
+ //! Rust SDK).
++
+ 
+ pub mod container_steps;
+ pub mod daemon_client;
+diff --git a/src/mxc-sdk/src/core/learning_mode_core/mod.rs b/src/mxc-sdk/src/core/learning_mode_core.rs
+rename from src/mxc-sdk/src/core/learning_mode_core/mod.rs
+rename to src/mxc-sdk/src/core/learning_mode_core.rs
+--- a/src/mxc-sdk/src/core/learning_mode_core/mod.rs
++++ b/src/mxc-sdk/src/core/learning_mode_core.rs
+@@ -32,6 +32,7 @@
+ 
+ #![deny(missing_docs)]
+ 
++
+ pub mod analyze;
+ pub mod emit;
+ pub mod model;
+diff --git a/src/mxc-sdk/src/core/learning_mode_windows/mod.rs b/src/mxc-sdk/src/core/learning_mode_windows.rs
+rename from src/mxc-sdk/src/core/learning_mode_windows/mod.rs
+rename to src/mxc-sdk/src/core/learning_mode_windows.rs
+--- a/src/mxc-sdk/src/core/learning_mode_windows/mod.rs
++++ b/src/mxc-sdk/src/core/learning_mode_windows.rs
+@@ -27,6 +27,7 @@
+ //! types are exported only on Windows.
+ 
+ use thiserror::Error;
++
+ 
+ pub mod guarded_wpr_protocol;
+ 
+diff --git a/src/mxc-sdk/src/core/mod.rs b/src/mxc-sdk/src/core.rs
+rename from src/mxc-sdk/src/core/mod.rs
+rename to src/mxc-sdk/src/core.rs
+--- a/src/mxc-sdk/src/core/mod.rs
++++ b/src/mxc-sdk/src/core.rs
+@@ -1,5 +1,6 @@
+ // Copyright (c) Microsoft Corporation.
+ // Licensed under the MIT License.
++
+ 
+ pub mod learning_mode_core;
+ pub mod learning_mode_windows;
+diff --git a/src/mxc-sdk/src/core/mxc_common/cmdline.rs b/src/mxc-sdk/src/core/mxc_common/cmdline.rs
+--- a/src/mxc-sdk/src/core/mxc_common/cmdline.rs
++++ b/src/mxc-sdk/src/core/mxc_common/cmdline.rs
 @@ -89,7 +89,14 @@
          }
          match context {
@@ -101,40 +1595,39 @@ diff --git a/src/core/wxc_common/src/cmdline.rs b/src/core/wxc_common/src/cmdlin
              }
              CommandLineContext::WindowsCommandProcessor => append_windows_cmd(&mut out, arg),
              CommandLineContext::PosixShell => append_posix_shell(&mut out, arg),
-diff --git a/src/core/wxc_common/src/config_contract_adapters/dev/mod.rs b/src/core/wxc_common/src/config_contract_adapters/dev.rs
-rename from src/core/wxc_common/src/config_contract_adapters/dev/mod.rs
-rename to src/core/wxc_common/src/config_contract_adapters/dev.rs
---- a/src/core/wxc_common/src/config_contract_adapters/dev/mod.rs
-+++ b/src/core/wxc_common/src/config_contract_adapters/dev.rs
-@@ -64,7 +64,7 @@
-     fn one_shot_preserves_process_container_enumerate_paths() {
-         let request = contract::parse_request(include_str!(concat!(
-             env!("CARGO_MANIFEST_DIR"),
--            "/../mxc_config_contract/tests/v1_1_0_alpha/fixtures/one_shot/valid/complete.json"
-+            "/tests/fixtures/config_contract/1.1.0-alpha/complete.json"
-         )))
-         .unwrap();
-         let AdaptedConfigRequest::OneShot(common) = adapt_request(request).unwrap() else {
-diff --git a/src/core/wxc_common/src/config_contract_adapters/dev/one_shot.rs b/src/core/wxc_common/src/config_contract_adapters/dev/one_shot.rs
---- a/src/core/wxc_common/src/config_contract_adapters/dev/one_shot.rs
-+++ b/src/core/wxc_common/src/config_contract_adapters/dev/one_shot.rs
-@@ -329,5 +329,5 @@
+diff --git a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev/mod.rs b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev.rs
+rename from src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev/mod.rs
+rename to src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev.rs
+--- a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev/mod.rs
++++ b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev.rs
+@@ -1,5 +1,6 @@
+ // Copyright (c) Microsoft Corporation.
+ // Licensed under the MIT License.
++
+ 
+ mod common;
+ mod one_shot;
+diff --git a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev/one_shot.rs b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev/one_shot.rs
+--- a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev/one_shot.rs
++++ b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev/one_shot.rs
+@@ -336,5 +336,5 @@
  }
  
  #[cfg(test)]
 -#[path = "one_shot_tests/mod.rs"]
 +#[path = "one_shot_tests.rs"]
  mod tests;
-diff --git a/src/core/wxc_common/src/config_contract_adapters/dev/one_shot_tests/mod.rs b/src/core/wxc_common/src/config_contract_adapters/dev/one_shot_tests.rs
-rename from src/core/wxc_common/src/config_contract_adapters/dev/one_shot_tests/mod.rs
-rename to src/core/wxc_common/src/config_contract_adapters/dev/one_shot_tests.rs
---- a/src/core/wxc_common/src/config_contract_adapters/dev/one_shot_tests/mod.rs
-+++ b/src/core/wxc_common/src/config_contract_adapters/dev/one_shot_tests.rs
-@@ -3,7 +3,11 @@
+diff --git a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev/one_shot_tests/mod.rs b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev/one_shot_tests.rs
+rename from src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev/one_shot_tests/mod.rs
+rename to src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev/one_shot_tests.rs
+--- a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev/one_shot_tests/mod.rs
++++ b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev/one_shot_tests.rs
+@@ -3,7 +3,12 @@
  
  use super::{contract, into_common_request_ir, wire};
  
 +#[path = "one_shot_tests/common.rs"]
++
  mod common;
 +#[path = "one_shot_tests/experimental.rs"]
  mod experimental;
@@ -142,26 +1635,27 @@ rename to src/core/wxc_common/src/config_contract_adapters/dev/one_shot_tests.rs
  mod stable_candidate;
 +#[path = "one_shot_tests/wslc.rs"]
  mod wslc;
-diff --git a/src/core/wxc_common/src/config_contract_adapters/dev/state_aware.rs b/src/core/wxc_common/src/config_contract_adapters/dev/state_aware.rs
---- a/src/core/wxc_common/src/config_contract_adapters/dev/state_aware.rs
-+++ b/src/core/wxc_common/src/config_contract_adapters/dev/state_aware.rs
-@@ -252,5 +252,5 @@
+diff --git a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev/state_aware.rs b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev/state_aware.rs
+--- a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev/state_aware.rs
++++ b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev/state_aware.rs
+@@ -253,5 +253,5 @@
  }
  
  #[cfg(test)]
 -#[path = "state_aware_tests/mod.rs"]
 +#[path = "state_aware_tests.rs"]
  mod tests;
-diff --git a/src/core/wxc_common/src/config_contract_adapters/dev/state_aware_tests/mod.rs b/src/core/wxc_common/src/config_contract_adapters/dev/state_aware_tests.rs
-rename from src/core/wxc_common/src/config_contract_adapters/dev/state_aware_tests/mod.rs
-rename to src/core/wxc_common/src/config_contract_adapters/dev/state_aware_tests.rs
---- a/src/core/wxc_common/src/config_contract_adapters/dev/state_aware_tests/mod.rs
-+++ b/src/core/wxc_common/src/config_contract_adapters/dev/state_aware_tests.rs
-@@ -1,9 +1,15 @@
+diff --git a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev/state_aware_tests/mod.rs b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev/state_aware_tests.rs
+rename from src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev/state_aware_tests/mod.rs
+rename to src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev/state_aware_tests.rs
+--- a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev/state_aware_tests/mod.rs
++++ b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev/state_aware_tests.rs
+@@ -1,9 +1,16 @@
  // Copyright (c) Microsoft Corporation.
  // Licensed under the MIT License.
  
 +#[path = "state_aware_tests/common.rs"]
++
  mod common;
 +#[path = "state_aware_tests/deprovision.rs"]
  mod deprovision;
@@ -173,32 +1667,56 @@ rename to src/core/wxc_common/src/config_contract_adapters/dev/state_aware_tests
  mod start;
 +#[path = "state_aware_tests/stop.rs"]
  mod stop;
-diff --git a/src/core/wxc_common/src/config_contract_adapters/mod.rs b/src/core/wxc_common/src/config_contract_adapters.rs
-rename from src/core/wxc_common/src/config_contract_adapters/mod.rs
-rename to src/core/wxc_common/src/config_contract_adapters.rs
-diff --git a/src/core/wxc_common/src/config_contract_adapters/v0_9/mod.rs b/src/core/wxc_common/src/config_contract_adapters/v0_9.rs
-rename from src/core/wxc_common/src/config_contract_adapters/v0_9/mod.rs
-rename to src/core/wxc_common/src/config_contract_adapters/v0_9.rs
-diff --git a/src/core/wxc_common/src/config_contract_adapters/v0_9/one_shot.rs b/src/core/wxc_common/src/config_contract_adapters/v0_9/one_shot.rs
---- a/src/core/wxc_common/src/config_contract_adapters/v0_9/one_shot.rs
-+++ b/src/core/wxc_common/src/config_contract_adapters/v0_9/one_shot.rs
-@@ -285,5 +285,5 @@
+diff --git a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/mod.rs b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters.rs
+rename from src/mxc-sdk/src/core/mxc_common/config_contract_adapters/mod.rs
+rename to src/mxc-sdk/src/core/mxc_common/config_contract_adapters.rs
+--- a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/mod.rs
++++ b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters.rs
+@@ -1,8 +1,11 @@
+ // Copyright (c) Microsoft Corporation.
+ // Licensed under the MIT License.
+ 
++
+ pub(crate) mod v0_9;
++
+ 
+ pub(crate) mod v1_0;
+ 
++
+ pub(crate) mod dev;
+diff --git a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9/mod.rs b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9.rs
+rename from src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9/mod.rs
+rename to src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9.rs
+--- a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9/mod.rs
++++ b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9.rs
+@@ -1,5 +1,6 @@
+ // Copyright (c) Microsoft Corporation.
+ // Licensed under the MIT License.
++
+ 
+ mod common;
+ mod one_shot;
+diff --git a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9/one_shot.rs b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9/one_shot.rs
+--- a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9/one_shot.rs
++++ b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9/one_shot.rs
+@@ -286,5 +286,5 @@
  }
  
  #[cfg(test)]
 -#[path = "one_shot_tests/mod.rs"]
 +#[path = "one_shot_tests.rs"]
  mod tests;
-diff --git a/src/core/wxc_common/src/config_contract_adapters/v0_9/one_shot_tests/mod.rs b/src/core/wxc_common/src/config_contract_adapters/v0_9/one_shot_tests.rs
-rename from src/core/wxc_common/src/config_contract_adapters/v0_9/one_shot_tests/mod.rs
-rename to src/core/wxc_common/src/config_contract_adapters/v0_9/one_shot_tests.rs
---- a/src/core/wxc_common/src/config_contract_adapters/v0_9/one_shot_tests/mod.rs
-+++ b/src/core/wxc_common/src/config_contract_adapters/v0_9/one_shot_tests.rs
-@@ -3,7 +3,11 @@
+diff --git a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9/one_shot_tests/mod.rs b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9/one_shot_tests.rs
+rename from src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9/one_shot_tests/mod.rs
+rename to src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9/one_shot_tests.rs
+--- a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9/one_shot_tests/mod.rs
++++ b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9/one_shot_tests.rs
+@@ -3,7 +3,12 @@
  
  use super::{contract, into_common_request_ir, wire};
  
 +#[path = "one_shot_tests/common.rs"]
++
  mod common;
 +#[path = "one_shot_tests/isolation_session.rs"]
  mod isolation_session;
@@ -206,26 +1724,27 @@ rename to src/core/wxc_common/src/config_contract_adapters/v0_9/one_shot_tests.r
  mod stable_candidate;
 +#[path = "one_shot_tests/wslc.rs"]
  mod wslc;
-diff --git a/src/core/wxc_common/src/config_contract_adapters/v0_9/state_aware.rs b/src/core/wxc_common/src/config_contract_adapters/v0_9/state_aware.rs
---- a/src/core/wxc_common/src/config_contract_adapters/v0_9/state_aware.rs
-+++ b/src/core/wxc_common/src/config_contract_adapters/v0_9/state_aware.rs
-@@ -229,5 +229,5 @@
+diff --git a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9/state_aware.rs b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9/state_aware.rs
+--- a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9/state_aware.rs
++++ b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9/state_aware.rs
+@@ -230,5 +230,5 @@
  }
  
  #[cfg(test)]
 -#[path = "state_aware_tests/mod.rs"]
 +#[path = "state_aware_tests.rs"]
  mod tests;
-diff --git a/src/core/wxc_common/src/config_contract_adapters/v0_9/state_aware_tests/mod.rs b/src/core/wxc_common/src/config_contract_adapters/v0_9/state_aware_tests.rs
-rename from src/core/wxc_common/src/config_contract_adapters/v0_9/state_aware_tests/mod.rs
-rename to src/core/wxc_common/src/config_contract_adapters/v0_9/state_aware_tests.rs
---- a/src/core/wxc_common/src/config_contract_adapters/v0_9/state_aware_tests/mod.rs
-+++ b/src/core/wxc_common/src/config_contract_adapters/v0_9/state_aware_tests.rs
-@@ -1,9 +1,15 @@
+diff --git a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9/state_aware_tests/mod.rs b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9/state_aware_tests.rs
+rename from src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9/state_aware_tests/mod.rs
+rename to src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9/state_aware_tests.rs
+--- a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9/state_aware_tests/mod.rs
++++ b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9/state_aware_tests.rs
+@@ -1,9 +1,16 @@
  // Copyright (c) Microsoft Corporation.
  // Licensed under the MIT License.
  
 +#[path = "state_aware_tests/common.rs"]
++
  mod common;
 +#[path = "state_aware_tests/deprovision.rs"]
  mod deprovision;
@@ -237,29 +1756,39 @@ rename to src/core/wxc_common/src/config_contract_adapters/v0_9/state_aware_test
  mod start;
 +#[path = "state_aware_tests/stop.rs"]
  mod stop;
-diff --git a/src/core/wxc_common/src/config_contract_adapters/v1_0/mod.rs b/src/core/wxc_common/src/config_contract_adapters/v1_0.rs
-rename from src/core/wxc_common/src/config_contract_adapters/v1_0/mod.rs
-rename to src/core/wxc_common/src/config_contract_adapters/v1_0.rs
-diff --git a/src/core/wxc_common/src/config_contract_adapters/v1_0/one_shot.rs b/src/core/wxc_common/src/config_contract_adapters/v1_0/one_shot.rs
---- a/src/core/wxc_common/src/config_contract_adapters/v1_0/one_shot.rs
-+++ b/src/core/wxc_common/src/config_contract_adapters/v1_0/one_shot.rs
-@@ -285,5 +285,5 @@
+diff --git a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0/mod.rs b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0.rs
+rename from src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0/mod.rs
+rename to src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0.rs
+--- a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0/mod.rs
++++ b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0.rs
+@@ -1,5 +1,6 @@
+ // Copyright (c) Microsoft Corporation.
+ // Licensed under the MIT License.
++
+ 
+ mod common;
+ mod one_shot;
+diff --git a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0/one_shot.rs b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0/one_shot.rs
+--- a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0/one_shot.rs
++++ b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0/one_shot.rs
+@@ -286,5 +286,5 @@
  }
  
  #[cfg(test)]
 -#[path = "one_shot_tests/mod.rs"]
 +#[path = "one_shot_tests.rs"]
  mod tests;
-diff --git a/src/core/wxc_common/src/config_contract_adapters/v1_0/one_shot_tests/mod.rs b/src/core/wxc_common/src/config_contract_adapters/v1_0/one_shot_tests.rs
-rename from src/core/wxc_common/src/config_contract_adapters/v1_0/one_shot_tests/mod.rs
-rename to src/core/wxc_common/src/config_contract_adapters/v1_0/one_shot_tests.rs
---- a/src/core/wxc_common/src/config_contract_adapters/v1_0/one_shot_tests/mod.rs
-+++ b/src/core/wxc_common/src/config_contract_adapters/v1_0/one_shot_tests.rs
-@@ -3,7 +3,11 @@
+diff --git a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0/one_shot_tests/mod.rs b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0/one_shot_tests.rs
+rename from src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0/one_shot_tests/mod.rs
+rename to src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0/one_shot_tests.rs
+--- a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0/one_shot_tests/mod.rs
++++ b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0/one_shot_tests.rs
+@@ -3,7 +3,12 @@
  
  use super::{contract, into_common_request_ir, wire};
  
 +#[path = "one_shot_tests/common.rs"]
++
  mod common;
 +#[path = "one_shot_tests/isolation_session.rs"]
  mod isolation_session;
@@ -267,26 +1796,27 @@ rename to src/core/wxc_common/src/config_contract_adapters/v1_0/one_shot_tests.r
  mod stable_candidate;
 +#[path = "one_shot_tests/wslc.rs"]
  mod wslc;
-diff --git a/src/core/wxc_common/src/config_contract_adapters/v1_0/state_aware.rs b/src/core/wxc_common/src/config_contract_adapters/v1_0/state_aware.rs
---- a/src/core/wxc_common/src/config_contract_adapters/v1_0/state_aware.rs
-+++ b/src/core/wxc_common/src/config_contract_adapters/v1_0/state_aware.rs
-@@ -229,5 +229,5 @@
+diff --git a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0/state_aware.rs b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0/state_aware.rs
+--- a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0/state_aware.rs
++++ b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0/state_aware.rs
+@@ -230,5 +230,5 @@
  }
  
  #[cfg(test)]
 -#[path = "state_aware_tests/mod.rs"]
 +#[path = "state_aware_tests.rs"]
  mod tests;
-diff --git a/src/core/wxc_common/src/config_contract_adapters/v1_0/state_aware_tests/mod.rs b/src/core/wxc_common/src/config_contract_adapters/v1_0/state_aware_tests.rs
-rename from src/core/wxc_common/src/config_contract_adapters/v1_0/state_aware_tests/mod.rs
-rename to src/core/wxc_common/src/config_contract_adapters/v1_0/state_aware_tests.rs
---- a/src/core/wxc_common/src/config_contract_adapters/v1_0/state_aware_tests/mod.rs
-+++ b/src/core/wxc_common/src/config_contract_adapters/v1_0/state_aware_tests.rs
-@@ -1,9 +1,15 @@
+diff --git a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0/state_aware_tests/mod.rs b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0/state_aware_tests.rs
+rename from src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0/state_aware_tests/mod.rs
+rename to src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0/state_aware_tests.rs
+--- a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0/state_aware_tests/mod.rs
++++ b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0/state_aware_tests.rs
+@@ -1,9 +1,16 @@
  // Copyright (c) Microsoft Corporation.
  // Licensed under the MIT License.
  
 +#[path = "state_aware_tests/common.rs"]
++
  mod common;
 +#[path = "state_aware_tests/deprovision.rs"]
  mod deprovision;
@@ -298,10 +1828,10 @@ rename to src/core/wxc_common/src/config_contract_adapters/v1_0/state_aware_test
  mod start;
 +#[path = "state_aware_tests/stop.rs"]
  mod stop;
-diff --git a/src/core/wxc_common/src/config_parser.rs b/src/core/wxc_common/src/config_parser.rs
---- a/src/core/wxc_common/src/config_parser.rs
-+++ b/src/core/wxc_common/src/config_parser.rs
-@@ -1204,6 +1204,8 @@
+diff --git a/src/mxc-sdk/src/core/mxc_common/config_parser.rs b/src/mxc-sdk/src/core/mxc_common/config_parser.rs
+--- a/src/mxc-sdk/src/core/mxc_common/config_parser.rs
++++ b/src/mxc-sdk/src/core/mxc_common/config_parser.rs
+@@ -1167,6 +1167,8 @@
          extra_mach_lookups,
      } = sb;
      SeatbeltConfig {
@@ -310,44 +1840,41 @@ diff --git a/src/core/wxc_common/src/config_parser.rs b/src/core/wxc_common/src/
          profile_override,
          gui_access: gui_access.unwrap_or(false),
          launch_method: launch_method.map(Into::into).unwrap_or_default(),
-@@ -1930,6 +1932,7 @@
+@@ -1625,6 +1627,7 @@
+     }
+ 
+     Ok(ExecutionRequest {
++        bubblewrap_executable: None,
          source_contract: Some(source_contract),
          network_enforcement_compatibility,
          default_env_compatibility,
-+        bubblewrap_executable: None,
-         container_id,
-         env,
-         inherit_default_env,
-@@ -2044,12 +2047,8 @@
-         Logger::new(Mode::Buffer)
+@@ -1737,11 +1740,7 @@
      }
  
--    fn repository_root() -> PathBuf {
+     fn repository_root() -> PathBuf {
 -        Path::new(env!("CARGO_MANIFEST_DIR"))
 -            .ancestors()
--            .nth(3)
+-            .nth(2)
 -            .unwrap()
 -            .to_path_buf()
-+    fn fixture_directory() -> PathBuf {
-+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/configs")
++        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
      }
  
      fn assert_exact_contract_bridge(
-@@ -3425,10 +3424,7 @@
+@@ -2996,9 +2995,7 @@
                  })),
              ),
          ] {
 -            let path = repository_root()
 -                .join("tests")
 -                .join("configs")
--                .join(fixture);
-+            let path = fixture_directory().join(fixture);
++            let path = repository_root().join("configs")
+                 .join(fixture);
              let json = fs::read_to_string(&path).unwrap();
              let encoded = base64_encode(json.as_bytes());
-             let requests = [
-diff --git a/src/core/wxc_common/src/filesystem_dacl.rs b/src/core/wxc_common/src/filesystem_dacl.rs
---- a/src/core/wxc_common/src/filesystem_dacl.rs
-+++ b/src/core/wxc_common/src/filesystem_dacl.rs
+diff --git a/src/mxc-sdk/src/core/mxc_common/filesystem_dacl.rs b/src/mxc-sdk/src/core/mxc_common/filesystem_dacl.rs
+--- a/src/mxc-sdk/src/core/mxc_common/filesystem_dacl.rs
++++ b/src/mxc-sdk/src/core/mxc_common/filesystem_dacl.rs
 @@ -10,7 +10,9 @@
  //!
  //! - **Inheritable ACEs**: on directories we apply `OBJECT_INHERIT_ACE |
@@ -852,7 +2379,7 @@ diff --git a/src/core/wxc_common/src/filesystem_dacl.rs b/src/core/wxc_common/sr
      Ok(None)
  }
  
-@@ -1870,6 +2212,7 @@
+@@ -1888,6 +2230,7 @@
      path: &Path,
      sid_str: &str,
      replay: &[PriorAce],
@@ -860,7 +2387,7 @@ diff --git a/src/core/wxc_common/src/filesystem_dacl.rs b/src/core/wxc_common/sr
  ) -> Result<(), DaclError> {
      let sid = OwnedSid::parse(sid_str)?;
      let path_w = wide(path);
-@@ -1900,30 +2243,10 @@
+@@ -1918,30 +2261,10 @@
      }
      result.and_then(|new_acl_dwords| {
          // `new_acl_dwords` is the freshly-built ACL buffer; we apply
@@ -893,7 +2420,7 @@ diff --git a/src/core/wxc_common/src/filesystem_dacl.rs b/src/core/wxc_common/sr
      })
  }
  
-@@ -2247,6 +2570,10 @@
+@@ -2272,6 +2595,10 @@
  // -------------------------------------------------------------------------
  
  #[cfg(test)]
@@ -904,7 +2431,7 @@ diff --git a/src/core/wxc_common/src/filesystem_dacl.rs b/src/core/wxc_common/sr
  mod tests {
      use super::*;
  
-@@ -2310,6 +2637,7 @@
+@@ -2335,6 +2662,7 @@
                      access_mask: 0x01FF,
                      inherit_flags: (OBJECT_INHERIT_ACE.0 | CONTAINER_INHERIT_ACE.0) as u8,
                  }],
@@ -912,7 +2439,7 @@ diff --git a/src/core/wxc_common/src/filesystem_dacl.rs b/src/core/wxc_common/sr
              }],
          };
          let bytes = serde_json::to_vec(&s).unwrap();
-@@ -2993,6 +3321,7 @@
+@@ -3023,6 +3351,7 @@
                  ace_type: AceType::Allow,
                  inheritable: false,
                  prior_state: Vec::new(),
@@ -920,10 +2447,10 @@ diff --git a/src/core/wxc_common/src/filesystem_dacl.rs b/src/core/wxc_common/sr
              }],
          };
          write_state_file(&synthetic, &s).unwrap();
-diff --git a/src/core/wxc_common/src/filesystem_dacl_tests.rs b/src/core/wxc_common/src/filesystem_dacl_tests.rs
+diff --git a/src/mxc-sdk/src/core/mxc_common/filesystem_dacl_tests.rs b/src/mxc-sdk/src/core/mxc_common/filesystem_dacl_tests.rs
 new file mode 100644
 --- /dev/null
-+++ b/src/core/wxc_common/src/filesystem_dacl_tests.rs
++++ b/src/mxc-sdk/src/core/mxc_common/filesystem_dacl_tests.rs
 @@ -0,0 +1,175 @@
 +// Copyright (c) Microsoft Corporation.
 +// Licensed under the MIT License.
@@ -1100,245 +2627,24 @@ new file mode 100644
 +    }
 +    assert_eq!(control & 0x0400, 0);
 +}
-diff --git a/src/core/wxc_common/src/filesystem_object.rs b/src/core/wxc_common/src/filesystem_object.rs
---- a/src/core/wxc_common/src/filesystem_object.rs
-+++ b/src/core/wxc_common/src/filesystem_object.rs
-@@ -62,21 +62,21 @@
- /// refer to the same underlying object even if reached via different names
- /// (bind mount, symlink, or hard link).
- #[cfg(unix)]
--#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, serde::Serialize, serde::Deserialize)]
- struct ObjectId {
-     dev: u64,
-     ino: u64,
- }
- 
- #[cfg(windows)]
--#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, serde::Serialize, serde::Deserialize)]
- struct ObjectId {
-     volume_serial: u64,
-     file_id: u128,
- }
- 
- #[cfg(not(any(unix, windows)))]
--#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, serde::Serialize, serde::Deserialize)]
- struct ObjectId {
-     _unused: u8,
- }
-@@ -93,6 +93,51 @@
-     /// permission denied, an unreachable mount, or another I/O error. This is
-     /// the fail-closed trigger when `deniedPaths` are present.
-     Unknown,
-+}
-+
-+/// Existing filesystem objects retained as the identity of a prepared request.
-+#[derive(Clone, Debug, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
-+pub struct FilesystemSnapshot {
-+    objects: Vec<(std::path::PathBuf, ObjectId)>,
-+}
-+
-+impl FilesystemSnapshot {
-+    pub fn capture(paths: impl IntoIterator<Item = std::path::PathBuf>) -> std::io::Result<Self> {
-+        let mut objects = Vec::new();
-+        for path in paths {
-+            let path = std::fs::canonicalize(path)?;
-+            let PathResolution::Object(identity) = resolve_object(&path) else {
-+                return Err(std::io::Error::other(format!(
-+                    "cannot capture filesystem identity for '{}'",
-+                    path.display()
-+                )));
-+            };
-+            objects.push((path, identity));
-+        }
-+        objects.sort_by(|left, right| left.0.cmp(&right.0));
-+        objects.dedup();
-+        Ok(Self { objects })
-+    }
-+
-+    pub fn paths(&self) -> impl Iterator<Item = &Path> {
-+        self.objects.iter().map(|(path, _)| path.as_path())
-+    }
-+
-+    pub fn validate(&self) -> std::io::Result<()> {
-+        for (path, expected) in &self.objects {
-+            if !matches!(resolve_object(path), PathResolution::Object(actual) if actual == *expected)
-+            {
-+                return Err(std::io::Error::new(
-+                    std::io::ErrorKind::PermissionDenied,
-+                    format!(
-+                        "filesystem object changed after preparation: '{}'",
-+                        path.display()
-+                    ),
-+                ));
-+            }
-+        }
-+        Ok(())
-+    }
- }
- 
- /// Result of comparing two paths by filesystem-object identity.
-diff --git a/src/core/wxc_common/src/host_changes.rs b/src/core/wxc_common/src/host_changes.rs
-new file mode 100644
---- /dev/null
-+++ b/src/core/wxc_common/src/host_changes.rs
-@@ -0,0 +1,45 @@
-+// Copyright (c) Microsoft Corporation.
-+// Licensed under the MIT License.
-+
-+//! Host mutation authority is independent of the sandbox's readable paths.
-+
-+use std::path::Path;
-+use std::path::PathBuf;
-+
-+/// The host paths on which an embedding application authorized ACL changes.
-+/// This value is never deserialized from a sandbox command or policy document.
-+#[derive(Clone, Debug, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
-+pub struct HostAclScope {
-+    objects: crate::filesystem_object::FilesystemSnapshot,
-+}
-+
-+impl HostAclScope {
-+    /// Resolve the independently authorized roots before preparing execution.
-+    pub fn new(paths: impl IntoIterator<Item = PathBuf>) -> std::io::Result<Self> {
-+        Ok(Self {
-+            objects: crate::filesystem_object::FilesystemSnapshot::capture(paths)?,
-+        })
-+    }
-+
-+    /// Require the actual target to remain inside the authorized roots.
-+    /// Missing, inaccessible, and redirected targets do not acquire authority.
-+    pub fn check(&self, path: &Path) -> std::io::Result<()> {
-+        self.objects.validate()?;
-+        let target = std::fs::canonicalize(path)?;
-+        if self.objects.paths().any(|root| target.starts_with(root)) {
-+            Ok(())
-+        } else {
-+            Err(std::io::Error::new(
-+                std::io::ErrorKind::PermissionDenied,
-+                format!(
-+                    "host ACL changes were not authorized for '{}'",
-+                    path.display()
-+                ),
-+            ))
-+        }
-+    }
-+}
-+
-+#[cfg(test)]
-+#[path = "host_changes_tests.rs"]
-+mod tests;
-diff --git a/src/core/wxc_common/src/host_changes_tests.rs b/src/core/wxc_common/src/host_changes_tests.rs
-new file mode 100644
---- /dev/null
-+++ b/src/core/wxc_common/src/host_changes_tests.rs
-@@ -0,0 +1,76 @@
-+use super::HostAclScope;
-+use std::path::PathBuf;
-+
-+#[test]
-+fn read_access_does_not_authorize_host_acl_mutation() {
-+    let temp = tempfile::tempdir().unwrap();
-+    let granted = temp.path().join("work");
-+    let outside = temp.path().join("work-other");
-+    std::fs::create_dir(&granted).unwrap();
-+    std::fs::create_dir(&outside).unwrap();
-+    let child = granted.join("file");
-+    std::fs::write(&child, b"data").unwrap();
-+    let scope = HostAclScope::new([granted.clone()]).unwrap();
-+    scope.check(&granted).unwrap();
-+    scope.check(&child).unwrap();
-+    for path in [temp.path(), outside.as_path()] {
-+        assert_eq!(
-+            scope.check(path).unwrap_err().kind(),
-+            std::io::ErrorKind::PermissionDenied
-+        );
-+    }
-+    assert!(HostAclScope::default().check(&granted).is_err());
-+    assert!(scope.check(&granted.join("missing")).is_err());
-+}
-+
-+#[test]
-+fn missing_roots_cannot_authorize_future_objects() {
-+    let temp = tempfile::tempdir().unwrap();
-+    assert!(HostAclScope::new([temp.path().join("missing")]).is_err());
-+    let empty = HostAclScope::new(Vec::<PathBuf>::new()).unwrap();
-+    assert!(empty.check(temp.path()).is_err());
-+}
-+
-+#[test]
-+fn replacing_an_authorized_directory_does_not_reuse_its_authority() {
-+    let temp = tempfile::tempdir().unwrap();
-+    let path = temp.path().join("work");
-+    std::fs::create_dir(&path).unwrap();
-+    let scope = HostAclScope::new([path.clone()]).unwrap();
-+    std::fs::rename(&path, temp.path().join("old-work")).unwrap();
-+    std::fs::create_dir(&path).unwrap();
-+    assert_eq!(
-+        scope.check(&path).unwrap_err().kind(),
-+        std::io::ErrorKind::PermissionDenied
-+    );
-+}
-+
-+#[test]
-+fn serialized_requests_cannot_grant_host_mutation_authority() {
-+    let request: crate::models::ExecutionRequest = serde_json::from_value(serde_json::json!({
-+        "host_acl_scope": {"roots": ["C:\\"]},
-+        "host_filesystem": "ReadWrite",
-+        "prepared_files": {"objects": []}
-+    }))
-+    .unwrap();
-+    let serialized = serde_json::to_value(request).unwrap();
-+    assert!(serialized.get("host_acl_scope").is_none());
-+    assert!(serialized.get("host_filesystem").is_none());
-+    assert!(serialized.get("prepared_files").is_none());
-+}
-+
-+#[cfg(unix)]
-+#[test]
-+fn a_link_cannot_expand_the_acl_scope() {
-+    let temp = tempfile::tempdir().unwrap();
-+    let work = temp.path().join("work");
-+    let outside = temp.path().join("outside");
-+    std::fs::create_dir(&work).unwrap();
-+    std::fs::create_dir(&outside).unwrap();
-+    std::os::unix::fs::symlink(&outside, work.join("link")).unwrap();
-+    let scope = HostAclScope::new([work.clone()]).unwrap();
-+    assert_eq!(
-+        scope.check(&work.join("link")).unwrap_err().kind(),
-+        std::io::ErrorKind::PermissionDenied
-+    );
-+}
-diff --git a/src/core/wxc_common/src/lib.rs b/src/core/wxc_common/src/lib.rs
---- a/src/core/wxc_common/src/lib.rs
-+++ b/src/core/wxc_common/src/lib.rs
-@@ -17,6 +17,7 @@
- pub mod filesystem_object;
- pub mod filesystem_resolve;
- pub mod hashing;
-+pub mod host_changes;
- pub mod id;
- pub mod log_symbols;
- pub mod logger;
-diff --git a/src/core/wxc_common/src/models.rs b/src/core/wxc_common/src/models.rs
---- a/src/core/wxc_common/src/models.rs
-+++ b/src/core/wxc_common/src/models.rs
-@@ -140,6 +140,12 @@
+diff --git a/src/mxc-sdk/src/core/mxc_common/mod.rs b/src/mxc-sdk/src/core/mxc_common.rs
+rename from src/mxc-sdk/src/core/mxc_common/mod.rs
+rename to src/mxc-sdk/src/core/mxc_common.rs
+diff --git a/src/mxc-sdk/src/core/mxc_common/models.rs b/src/mxc-sdk/src/core/mxc_common/models.rs
+--- a/src/mxc-sdk/src/core/mxc_common/models.rs
++++ b/src/mxc-sdk/src/core/mxc_common/models.rs
+@@ -140,6 +140,10 @@
  #[derive(Debug, Clone, Serialize, Deserialize)]
  #[serde(default)]
  pub struct SeatbeltConfig {
-+    /// Whether writable filesystem grants may also open pathname Unix sockets.
++    #[serde(skip)]
 +    pub allow_unix_sockets: bool,
-+    /// Embedding-only directories where pathname Unix sockets remain available
-+    /// when `allow_unix_sockets` is false.
 +    #[serde(skip)]
 +    pub allowed_unix_socket_paths: Vec<String>,
      /// Optional override of the generated TinyScheme profile.
      #[serde(rename = "profileOverride", skip_serializing_if = "Option::is_none")]
      pub profile_override: Option<String>,
-@@ -205,6 +211,8 @@
+@@ -205,6 +209,8 @@
  impl Default for SeatbeltConfig {
      fn default() -> Self {
          Self {
@@ -1347,87 +2653,19 @@ diff --git a/src/core/wxc_common/src/models.rs b/src/core/wxc_common/src/models.
              profile_override: None,
              gui_access: false,
              launch_method: LaunchMethod::default(),
-@@ -728,7 +736,8 @@
-     }
- }
+@@ -1037,6 +1043,8 @@
  
--#[derive(Debug, Clone, Default, Serialize)]
-+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-+#[serde(default)]
- pub struct ContainerPolicy {
-     pub least_privilege_mode: bool,
-     pub capabilities: Vec<String>,
-@@ -1035,18 +1044,25 @@
-     pub runtime: HyperlightRuntime,
- }
- 
--#[derive(Debug, Clone, Default, Serialize)]
-+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-+#[serde(default)]
+ #[derive(Debug, Clone, Default, Serialize)]
  pub struct ExecutionRequest {
++    #[serde(skip)]
++    pub bubblewrap_executable: Option<std::path::PathBuf>,
      /// Exact external contract that produced this request.
      ///
      /// Direct typed SDK construction has no external contract attribution.
--    #[serde(serialize_with = "serialize_source_contract")]
-+    #[serde(
-+        serialize_with = "serialize_source_contract",
-+        deserialize_with = "deserialize_source_contract"
-+    )]
-     pub source_contract: Option<mxc_config_contract::ContractVersion>,
-     /// Whether backends preserve pre-v0.8 network compatibility behavior or
-     /// enforce the current strict posture.
-     pub network_enforcement_compatibility: NetworkEnforcementCompatibility,
-     /// Whether backends supply the default `process.env` block.
-     pub default_env_compatibility: DefaultEnvCompatibility,
-+    /// Host-resolved executable; unavailable to untrusted serialized requests.
-+    #[serde(skip)]
-+    pub bubblewrap_executable: Option<std::path::PathBuf>,
-     /// Externally assigned container identifier.
-     pub container_id: String,
-     /// Environment variables as "KEY=VALUE" strings (from `process.env`).
-@@ -1120,7 +1136,7 @@
- }
- 
- /// Backend network behavior after exact contract normalization.
--#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
-+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
- #[serde(rename_all = "kebab-case")]
- pub enum NetworkEnforcementCompatibility {
-     /// Preserve compatibility behavior required by exact v0.6 and v0.7 JSON.
-@@ -1136,7 +1152,7 @@
- /// [`ExecutionRequest::source_contract`], which is external-JSON attribution
- /// and is cleared for typed SDK requests. A typed request built against an
- /// exact pre-0.9 contract keeps the pre-0.9 environment behavior.
--#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
-+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
- #[serde(rename_all = "kebab-case")]
- pub enum DefaultEnvCompatibility {
-     /// Preserve behavior required by exact v0.6, v0.7, and v0.8 JSON: the
-@@ -1159,6 +1175,20 @@
-     value
-         .map(mxc_config_contract::ContractVersion::as_str)
-         .serialize(serializer)
-+}
-+
-+fn deserialize_source_contract<'de, D>(
-+    deserializer: D,
-+) -> Result<Option<mxc_config_contract::ContractVersion>, D::Error>
-+where
-+    D: serde::Deserializer<'de>,
-+{
-+    Option::<String>::deserialize(deserializer)?
-+        .map(|value| {
-+            mxc_config_contract::ContractVersion::parse_exact(&value)
-+                .ok_or_else(|| serde::de::Error::custom("unsupported MXC source contract"))
-+        })
-+        .transpose()
- }
- 
- impl NetworkEnforcementCompatibility {
-diff --git a/src/core/wxc_common/src/policy_identity.rs b/src/core/wxc_common/src/policy_identity.rs
---- a/src/core/wxc_common/src/policy_identity.rs
-+++ b/src/core/wxc_common/src/policy_identity.rs
-@@ -192,6 +192,8 @@
+diff --git a/src/mxc-sdk/src/core/mxc_common/policy_identity.rs b/src/mxc-sdk/src/core/mxc_common/policy_identity.rs
+--- a/src/mxc-sdk/src/core/mxc_common/policy_identity.rs
++++ b/src/mxc-sdk/src/core/mxc_common/policy_identity.rs
+@@ -195,6 +195,8 @@
          source_contract: _excluded_source_contract,
          network_enforcement_compatibility,
          default_env_compatibility: _excluded_default_env_compatibility,
@@ -1436,9 +2674,9 @@ diff --git a/src/core/wxc_common/src/policy_identity.rs b/src/core/wxc_common/sr
          container_id,
          working_directory,
          script_timeout,
-diff --git a/src/core/wxc_common/src/proxy_env.rs b/src/core/wxc_common/src/proxy_env.rs
---- a/src/core/wxc_common/src/proxy_env.rs
-+++ b/src/core/wxc_common/src/proxy_env.rs
+diff --git a/src/mxc-sdk/src/core/mxc_common/proxy_env.rs b/src/mxc-sdk/src/core/mxc_common/proxy_env.rs
+--- a/src/mxc-sdk/src/core/mxc_common/proxy_env.rs
++++ b/src/mxc-sdk/src/core/mxc_common/proxy_env.rs
 @@ -50,10 +50,14 @@
      "HTTPS_PROXY",
      "ALL_PROXY",
@@ -1500,10 +2738,22 @@ diff --git a/src/core/wxc_common/src/proxy_env.rs b/src/core/wxc_common/src/prox
      }
  
      // Neutralize any inherited NO_PROXY: WSLc merges over the image's ENV, so
-diff --git a/src/core/wxc_common/src/sandbox_process.rs b/src/core/wxc_common/src/sandbox_process.rs
---- a/src/core/wxc_common/src/sandbox_process.rs
-+++ b/src/core/wxc_common/src/sandbox_process.rs
-@@ -920,3 +920,34 @@
+diff --git a/src/mxc-sdk/src/core/mxc_common/sandbox_process.rs b/src/mxc-sdk/src/core/mxc_common/sandbox_process.rs
+--- a/src/mxc-sdk/src/core/mxc_common/sandbox_process.rs
++++ b/src/mxc-sdk/src/core/mxc_common/sandbox_process.rs
+@@ -203,6 +203,11 @@
+             std::io::ErrorKind::Unsupported,
+             "this sandbox process is not attached to a pseudo-terminal",
+         ))
++    }
++
++    /// Interrupt the terminal's foreground process group without terminating its session.
++    fn pty_interrupt(&self) -> std::io::Result<()> {
++        Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "this sandbox process has no PTY interrupt support"))
+     }
+ 
+     /// Resize the pseudo-terminal.
+@@ -1068,3 +1073,34 @@
          assert!(status.success());
      }
  }
@@ -1538,14 +2788,14 @@ diff --git a/src/core/wxc_common/src/sandbox_process.rs b/src/core/wxc_common/sr
 +        -1
 +    }))
 +}
-diff --git a/src/core/wxc_common/src/telemetry/consent_cli.rs b/src/core/wxc_common/src/telemetry/consent_cli.rs
---- a/src/core/wxc_common/src/telemetry/consent_cli.rs
-+++ b/src/core/wxc_common/src/telemetry/consent_cli.rs
-@@ -821,21 +821,21 @@
+diff --git a/src/mxc-sdk/src/core/mxc_common/telemetry/consent_cli.rs b/src/mxc-sdk/src/core/mxc_common/telemetry/consent_cli.rs
+--- a/src/mxc-sdk/src/core/mxc_common/telemetry/consent_cli.rs
++++ b/src/mxc-sdk/src/core/mxc_common/telemetry/consent_cli.rs
+@@ -822,21 +822,21 @@
              (
                  include_str!(concat!(
                      env!("CARGO_MANIFEST_DIR"),
--                    "/../../../tests/fixtures/telemetry-consent/presenter-decision-yes.json"
+-                    "/../../tests/fixtures/telemetry-consent/presenter-decision-yes.json"
 +                    "/tests/fixtures/telemetry-consent/presenter-decision-yes.json"
                  )),
                  consent::ConsentDecision::Yes,
@@ -1553,7 +2803,7 @@ diff --git a/src/core/wxc_common/src/telemetry/consent_cli.rs b/src/core/wxc_com
              (
                  include_str!(concat!(
                      env!("CARGO_MANIFEST_DIR"),
--                    "/../../../tests/fixtures/telemetry-consent/presenter-decision-no.json"
+-                    "/../../tests/fixtures/telemetry-consent/presenter-decision-no.json"
 +                    "/tests/fixtures/telemetry-consent/presenter-decision-no.json"
                  )),
                  consent::ConsentDecision::No,
@@ -1561,104 +2811,409 @@ diff --git a/src/core/wxc_common/src/telemetry/consent_cli.rs b/src/core/wxc_com
              (
                  include_str!(concat!(
                      env!("CARGO_MANIFEST_DIR"),
--                    "/../../../tests/fixtures/telemetry-consent/presenter-decision-dismissed.json"
+-                    "/../../tests/fixtures/telemetry-consent/presenter-decision-dismissed.json"
 +                    "/tests/fixtures/telemetry-consent/presenter-decision-dismissed.json"
                  )),
                  consent::ConsentDecision::Dismissed,
              ),
-@@ -849,7 +849,7 @@
+@@ -850,7 +850,7 @@
          }
          let invalid = include_str!(concat!(
              env!("CARGO_MANIFEST_DIR"),
--            "/../../../tests/fixtures/telemetry-consent/presenter-decision-unknown-field.json"
+-            "/../../tests/fixtures/telemetry-consent/presenter-decision-unknown-field.json"
 +            "/tests/fixtures/telemetry-consent/presenter-decision-unknown-field.json"
          ));
          assert_eq!(
              parse_presenter_response(invalid, "request-a", 1)
-diff --git a/src/core/wxc_common/src/telemetry/mod.rs b/src/core/wxc_common/src/telemetry.rs
-rename from src/core/wxc_common/src/telemetry/mod.rs
-rename to src/core/wxc_common/src/telemetry.rs
-diff --git a/src/core/wxc_common/tests/fixtures/config_contract/1.1.0-alpha/complete.json b/src/core/wxc_common/tests/fixtures/config_contract/1.1.0-alpha/complete.json
-new file mode 100644
---- /dev/null
-+++ b/src/core/wxc_common/tests/fixtures/config_contract/1.1.0-alpha/complete.json
-@@ -0,0 +1,61 @@
-+{
-+  "version": "1.1.0-alpha",
-+  "containerId": "complete-example",
-+  "containment": "processcontainer",
-+  "lifecycle": {
-+    "destroyOnExit": false,
-+    "preservePolicy": true
-+  },
-+  "process": {
-+    "commandLine": "echo complete",
-+    "cwd": "/work",
-+    "env": [
-+      "EXAMPLE=value"
-+    ],
-+    "timeout": 1000
-+  },
-+  "filesystem": {
-+    "readwritePaths": [
-+      "/work"
-+    ],
-+    "readonlyPaths": [
-+      "/input"
-+    ],
-+    "deniedPaths": [
-+      "/secret"
-+    ]
-+  },
-+  "fallback": {
-+    "allowDaclMutation": false
-+  },
-+  "network": {
-+    "egress": {"default": "deny"},
-+    "ingress": {"default": "allow", "hostLoopback": "allow"}
-+  },
-+  "runtimeConfig": {
-+    "networkProxy": "http://127.0.0.1:8080"
-+  },
-+  "ui": {
-+    "disable": false,
-+    "clipboard": "read",
-+    "injection": true
-+  },
-+  "processContainer": {
-+    "leastPrivilege": true,
-+    "learningMode": false,
-+    "capabilities": [
-+      "internetClient"
-+    ],
-+    "filesystem": {
-+      "enumeratePaths": [
-+        "/metadata"
-+      ]
-+    },
-+    "ui": {
-+      "isolation": "container",
-+      "desktopSystemControl": false,
-+      "systemSettings": "none",
-+      "ime": false
+diff --git a/src/mxc-sdk/src/core/mxc_common/telemetry/mod.rs b/src/mxc-sdk/src/core/mxc_common/telemetry.rs
+rename from src/mxc-sdk/src/core/mxc_common/telemetry/mod.rs
+rename to src/mxc-sdk/src/core/mxc_common/telemetry.rs
+--- a/src/mxc-sdk/src/core/mxc_common/telemetry/mod.rs
++++ b/src/mxc-sdk/src/core/mxc_common/telemetry.rs
+@@ -10,6 +10,7 @@
+ //! IsDebugging, UTCReplace_AppSessionGuid) as Part C custom event data.
+ //!
+ //! On non-Windows platforms, all telemetry functions are no-ops.
++
+ 
+ pub mod consent;
+ pub mod consent_cli;
+diff --git a/src/mxc-sdk/src/core/mxc_contract/dev/mod.rs b/src/mxc-sdk/src/core/mxc_contract/dev.rs
+rename from src/mxc-sdk/src/core/mxc_contract/dev/mod.rs
+rename to src/mxc-sdk/src/core/mxc_contract/dev.rs
+--- a/src/mxc-sdk/src/core/mxc_contract/dev/mod.rs
++++ b/src/mxc-sdk/src/core/mxc_contract/dev.rs
+@@ -218,6 +218,7 @@
+     }
+ }
+ 
++
+ mod experimental;
+ mod network;
+ /// The development `1.1.0-alpha` one-shot configuration contract.
+diff --git a/src/mxc-sdk/src/core/mxc_contract/dev/state_aware/mod.rs b/src/mxc-sdk/src/core/mxc_contract/dev/state_aware.rs
+rename from src/mxc-sdk/src/core/mxc_contract/dev/state_aware/mod.rs
+rename to src/mxc-sdk/src/core/mxc_contract/dev/state_aware.rs
+--- a/src/mxc-sdk/src/core/mxc_contract/dev/state_aware/mod.rs
++++ b/src/mxc-sdk/src/core/mxc_contract/dev/state_aware.rs
+@@ -55,6 +55,7 @@
+     };
+ }
+ 
++
+ mod deprovision;
+ mod exec;
+ mod phase;
+diff --git a/src/mxc-sdk/src/core/mxc_contract/dev/state_aware/provision/mod.rs b/src/mxc-sdk/src/core/mxc_contract/dev/state_aware/provision.rs
+rename from src/mxc-sdk/src/core/mxc_contract/dev/state_aware/provision/mod.rs
+rename to src/mxc-sdk/src/core/mxc_contract/dev/state_aware/provision.rs
+--- a/src/mxc-sdk/src/core/mxc_contract/dev/state_aware/provision/mod.rs
++++ b/src/mxc-sdk/src/core/mxc_contract/dev/state_aware/provision.rs
+@@ -17,6 +17,7 @@
+     Wslc(WslcProvisionRequest),
+ }
+ 
++
+ mod containment;
+ mod isolation_session;
+ mod windows_sandbox;
+diff --git a/src/mxc-sdk/src/core/mxc_contract/mod.rs b/src/mxc-sdk/src/core/mxc_contract.rs
+rename from src/mxc-sdk/src/core/mxc_contract/mod.rs
+rename to src/mxc-sdk/src/core/mxc_contract.rs
+--- a/src/mxc-sdk/src/core/mxc_contract/mod.rs
++++ b/src/mxc-sdk/src/core/mxc_contract.rs
+@@ -22,10 +22,12 @@
+ //! exact request types for authoritative version-specific dispatch, including
+ //! the development contract's narrow phase probe for trailing CLI commands.
+ 
++
+ mod registry;
+ #[cfg(all(test, feature = "schema-gen"))]
+ mod schema_test_support;
+ mod version;
++
+ 
+ pub mod dev;
+ pub mod published;
+diff --git a/src/mxc-sdk/src/core/mxc_contract/published/mod.rs b/src/mxc-sdk/src/core/mxc_contract/published.rs
+rename from src/mxc-sdk/src/core/mxc_contract/published/mod.rs
+rename to src/mxc-sdk/src/core/mxc_contract/published.rs
+diff --git a/src/mxc-sdk/src/core/mxc_contract/published/v0_9_0_alpha/mod.rs b/src/mxc-sdk/src/core/mxc_contract/published/v0_9_0_alpha.rs
+rename from src/mxc-sdk/src/core/mxc_contract/published/v0_9_0_alpha/mod.rs
+rename to src/mxc-sdk/src/core/mxc_contract/published/v0_9_0_alpha.rs
+--- a/src/mxc-sdk/src/core/mxc_contract/published/v0_9_0_alpha/mod.rs
++++ b/src/mxc-sdk/src/core/mxc_contract/published/v0_9_0_alpha.rs
+@@ -218,6 +218,7 @@
+     }
+ }
+ 
++
+ mod network;
+ /// The published `0.9.0-alpha` one-shot configuration contract.
+ mod one_shot;
+diff --git a/src/mxc-sdk/src/core/mxc_contract/published/v0_9_0_alpha/state_aware/mod.rs b/src/mxc-sdk/src/core/mxc_contract/published/v0_9_0_alpha/state_aware.rs
+rename from src/mxc-sdk/src/core/mxc_contract/published/v0_9_0_alpha/state_aware/mod.rs
+rename to src/mxc-sdk/src/core/mxc_contract/published/v0_9_0_alpha/state_aware.rs
+--- a/src/mxc-sdk/src/core/mxc_contract/published/v0_9_0_alpha/state_aware/mod.rs
++++ b/src/mxc-sdk/src/core/mxc_contract/published/v0_9_0_alpha/state_aware.rs
+@@ -55,6 +55,7 @@
+     };
+ }
+ 
++
+ mod deprovision;
+ mod exec;
+ mod phase;
+diff --git a/src/mxc-sdk/src/core/mxc_contract/published/v0_9_0_alpha/state_aware/provision/mod.rs b/src/mxc-sdk/src/core/mxc_contract/published/v0_9_0_alpha/state_aware/provision.rs
+rename from src/mxc-sdk/src/core/mxc_contract/published/v0_9_0_alpha/state_aware/provision/mod.rs
+rename to src/mxc-sdk/src/core/mxc_contract/published/v0_9_0_alpha/state_aware/provision.rs
+--- a/src/mxc-sdk/src/core/mxc_contract/published/v0_9_0_alpha/state_aware/provision/mod.rs
++++ b/src/mxc-sdk/src/core/mxc_contract/published/v0_9_0_alpha/state_aware/provision.rs
+@@ -15,6 +15,7 @@
+     Wslc(WslcProvisionRequest),
+ }
+ 
++
+ mod containment;
+ mod isolation_session;
+ mod wslc;
+diff --git a/src/mxc-sdk/src/core/mxc_contract/published/v1_0_0/mod.rs b/src/mxc-sdk/src/core/mxc_contract/published/v1_0_0.rs
+rename from src/mxc-sdk/src/core/mxc_contract/published/v1_0_0/mod.rs
+rename to src/mxc-sdk/src/core/mxc_contract/published/v1_0_0.rs
+--- a/src/mxc-sdk/src/core/mxc_contract/published/v1_0_0/mod.rs
++++ b/src/mxc-sdk/src/core/mxc_contract/published/v1_0_0.rs
+@@ -218,6 +218,7 @@
+     }
+ }
+ 
++
+ mod network;
+ /// The published `1.0.0` one-shot configuration contract.
+ mod one_shot;
+diff --git a/src/mxc-sdk/src/core/mxc_contract/published/v1_0_0/state_aware/mod.rs b/src/mxc-sdk/src/core/mxc_contract/published/v1_0_0/state_aware.rs
+rename from src/mxc-sdk/src/core/mxc_contract/published/v1_0_0/state_aware/mod.rs
+rename to src/mxc-sdk/src/core/mxc_contract/published/v1_0_0/state_aware.rs
+--- a/src/mxc-sdk/src/core/mxc_contract/published/v1_0_0/state_aware/mod.rs
++++ b/src/mxc-sdk/src/core/mxc_contract/published/v1_0_0/state_aware.rs
+@@ -55,6 +55,7 @@
+     };
+ }
+ 
++
+ mod deprovision;
+ mod exec;
+ mod phase;
+diff --git a/src/mxc-sdk/src/core/mxc_contract/published/v1_0_0/state_aware/provision/mod.rs b/src/mxc-sdk/src/core/mxc_contract/published/v1_0_0/state_aware/provision.rs
+rename from src/mxc-sdk/src/core/mxc_contract/published/v1_0_0/state_aware/provision/mod.rs
+rename to src/mxc-sdk/src/core/mxc_contract/published/v1_0_0/state_aware/provision.rs
+--- a/src/mxc-sdk/src/core/mxc_contract/published/v1_0_0/state_aware/provision/mod.rs
++++ b/src/mxc-sdk/src/core/mxc_contract/published/v1_0_0/state_aware/provision.rs
+@@ -15,6 +15,7 @@
+     Wslc(WslcProvisionRequest),
+ }
+ 
++
+ mod containment;
+ mod isolation_session;
+ mod wslc;
+diff --git a/src/mxc-sdk/src/core/mxc_engine/mod.rs b/src/mxc-sdk/src/core/mxc_engine.rs
+rename from src/mxc-sdk/src/core/mxc_engine/mod.rs
+rename to src/mxc-sdk/src/core/mxc_engine.rs
+--- a/src/mxc-sdk/src/core/mxc_engine/mod.rs
++++ b/src/mxc-sdk/src/core/mxc_engine.rs
+@@ -28,6 +28,7 @@
+ //!   backend-availability probe (with effective isolation tier).
+ //! - [`Error`] / [`ErrorCode`] — the crate-owned error facade over
+ //!   `mxc_common`'s internal error type.
++
+ 
+ mod backend_registry;
+ mod dispatch;
+diff --git a/src/mxc-sdk/src/core/mxc_pty/mod.rs b/src/mxc-sdk/src/core/mxc_pty.rs
+rename from src/mxc-sdk/src/core/mxc_pty/mod.rs
+rename to src/mxc-sdk/src/core/mxc_pty.rs
+--- a/src/mxc-sdk/src/core/mxc_pty/mod.rs
++++ b/src/mxc-sdk/src/core/mxc_pty.rs
+@@ -611,6 +611,16 @@
+         }
+     }
+ 
++    /// Signal the current terminal foreground group. Shell jobs may have their own group,
++    /// so the child leader's PID cannot identify the recipient of an interactive interrupt.
++    pub fn interrupt(&self) -> std::io::Result<()> {
++        let group = unsafe { libc::tcgetpgrp(self.primary.as_raw_fd()) };
++        if group <= 0 || unsafe { libc::kill(-group, libc::SIGINT) } == -1 {
++            return Err(std::io::Error::last_os_error());
++        }
++        Ok(())
 +    }
-+  }
-+}
-diff --git a/src/core/wxc_common/tests/fixtures/configs/isolation_session_state_aware_provision_appid.json b/src/core/wxc_common/tests/fixtures/configs/isolation_session_state_aware_provision_appid.json
++
+     /// Resize the pseudo-terminal and notify its foreground process group.
+     pub fn resize(&self, size: PtySize) -> std::io::Result<()> {
+         use std::os::fd::AsRawFd;
+diff --git a/src/mxc-sdk/src/core/mxc_schema_support/mod.rs b/src/mxc-sdk/src/core/mxc_schema_support.rs
+rename from src/mxc-sdk/src/core/mxc_schema_support/mod.rs
+rename to src/mxc-sdk/src/core/mxc_schema_support.rs
+--- a/src/mxc-sdk/src/core/mxc_schema_support/mod.rs
++++ b/src/mxc-sdk/src/core/mxc_schema_support.rs
+@@ -3,6 +3,7 @@
+ 
+ //! Dependency-light rendering and SDK wire-type emission shared by MXC schema
+ //! generators.
++
+ 
+ mod cs_emit;
+ mod ts_emit;
+diff --git a/src/mxc-sdk/src/core/mxc_telemetry/mod.rs b/src/mxc-sdk/src/core/mxc_telemetry.rs
+rename from src/mxc-sdk/src/core/mxc_telemetry/mod.rs
+rename to src/mxc-sdk/src/core/mxc_telemetry.rs
+--- a/src/mxc-sdk/src/core/mxc_telemetry/mod.rs
++++ b/src/mxc-sdk/src/core/mxc_telemetry.rs
+@@ -106,7 +106,7 @@
+         }
+ 
+         // SAFETY: MXC_PROVIDER is a process-lifetime static declared inside
+-        // this module (via `include!("provider_def.rs")`), so its storage
++        // this module (via `include!("mxc_telemetry/provider_def.rs")`), so its storage
+         // outlives every ETW callback the tracelogging runtime installs
+         // against it. This function is however now called from library
+         // contexts too (`crate::mxc_engine::spawn_execution_request` is compiled into
+@@ -687,7 +687,7 @@
+ 
+     #[test]
+     fn event_names_preserve_collector_contract() {
+-        let source = include_str!("mod.rs");
++        let source = include_str!("mxc_telemetry.rs");
+         let provider_source = source
+             .split("// Tests")
+             .next()
+@@ -720,7 +720,7 @@
+ 
+     #[test]
+     fn winext_part_a_fields_preserve_privacy_contract() {
+-        let source = include_str!("mod.rs");
++        let source = include_str!("mxc_telemetry.rs");
+         let provider_source = source
+             .split("// Tests")
+             .next()
+@@ -962,7 +962,7 @@
+ // `cargo test`.
+ #[cfg(test)]
+ mod provider_codegen_tests {
+-    include!("provider_codegen.rs");
++    include!("mxc_telemetry/provider_codegen.rs");
+ 
+     #[test]
+     fn absent_guid_yields_plain_provider() {
+diff --git a/src/mxc-sdk/src/core/plm/mod.rs b/src/mxc-sdk/src/core/plm.rs
+rename from src/mxc-sdk/src/core/plm/mod.rs
+rename to src/mxc-sdk/src/core/plm.rs
+--- a/src/mxc-sdk/src/core/plm/mod.rs
++++ b/src/mxc-sdk/src/core/plm.rs
+@@ -4,6 +4,7 @@
+ //! Library surface for the permissive learning mode (PLM) crate.
+ //! Pure-data modules compile cross-platform; Windows-only items are
+ //! gated per-module. The `plm` binary in `main.rs` is Windows-only.
++
+ 
+ pub mod access_event;
+ #[cfg(target_os = "windows")]
+diff --git a/src/mxc-sdk/src/core/process_security_environment_spec/mod.rs b/src/mxc-sdk/src/core/process_security_environment_spec.rs
+rename from src/mxc-sdk/src/core/process_security_environment_spec/mod.rs
+rename to src/mxc-sdk/src/core/process_security_environment_spec.rs
+diff --git a/src/mxc-sdk/src/lib.rs b/src/mxc-sdk/src/lib.rs
+--- a/src/mxc-sdk/src/lib.rs
++++ b/src/mxc-sdk/src/lib.rs
+@@ -137,67 +137,65 @@
+ //! probing, execution, and backend implementations are doc-hidden compatibility
+ //! exports for workspace consumers rather than supported SDK entry points.
+ 
+-#[path = "backends/mod.rs"]
+-mod backend_modules;
+-#[path = "core/mod.rs"]
+-mod core_modules;
+-
+-#[doc(hidden)]
+-pub use backend_modules::bubblewrap::common as bwrap_common;
++mod backends;
++mod core;
++
++#[doc(hidden)]
++pub use backends::bubblewrap::common as bwrap_common;
+ #[doc(hidden)]
+ #[cfg(all(feature = "hyperlight", target_arch = "x86_64"))]
+-pub use backend_modules::hyperlight::common as hyperlight_common;
++pub use backends::hyperlight::common as hyperlight_common;
+ #[doc(hidden)]
+ #[cfg(all(target_os = "windows", feature = "isolation_session"))]
+-pub use backend_modules::isolation_session::bindings as isolation_session_bindings;
++pub use backends::isolation_session::bindings as isolation_session_bindings;
+ #[doc(hidden)]
+ #[cfg(all(target_os = "windows", feature = "isolation_session"))]
+-pub use backend_modules::isolation_session::common as isolation_session_common;
+-#[doc(hidden)]
+-pub use backend_modules::lxc::common as lxc_common;
++pub use backends::isolation_session::common as isolation_session_common;
++#[doc(hidden)]
++pub use backends::lxc::common as lxc_common;
+ #[doc(hidden)]
+ #[cfg(all(feature = "microvm", any(target_os = "windows", target_os = "linux")))]
+-pub use backend_modules::nanvix::binaries as nanvix_binaries;
++pub use backends::nanvix::binaries as nanvix_binaries;
+ #[doc(hidden)]
+ #[cfg(all(feature = "microvm", any(target_os = "windows", target_os = "linux")))]
+-pub use backend_modules::nanvix::common as nanvix_common;
++pub use backends::nanvix::common as nanvix_common;
+ #[doc(hidden)]
+ #[cfg(all(feature = "microvm", any(target_os = "windows", target_os = "linux")))]
+-pub use backend_modules::nanvix::runner as nanvix_runner;
++pub use backends::nanvix::runner as nanvix_runner;
+ #[doc(hidden)]
+ #[cfg(target_os = "windows")]
+-pub use backend_modules::process_container::common as process_container_common;
+-#[doc(hidden)]
+-pub use backend_modules::seatbelt::common as seatbelt_common;
++pub use backends::process_container::common as process_container_common;
++#[doc(hidden)]
++pub use backends::seatbelt::common as seatbelt_common;
+ #[doc(hidden)]
+ #[cfg(target_os = "windows")]
+-pub use backend_modules::windows_sandbox::common as windows_sandbox_common;
++pub use backends::windows_sandbox::common as windows_sandbox_common;
+ #[doc(hidden)]
+ #[cfg(target_os = "windows")]
+-pub use backend_modules::windows_sandbox::lifecycle as windows_sandbox_lifecycle;
++pub use backends::windows_sandbox::lifecycle as windows_sandbox_lifecycle;
+ #[doc(hidden)]
+ #[cfg(all(target_os = "windows", feature = "wslc"))]
+-pub use backend_modules::wslc::common as wslc_common;
+-#[doc(hidden)]
+-pub use core_modules::learning_mode_core;
+-#[doc(hidden)]
+-pub use core_modules::learning_mode_windows;
+-#[doc(hidden)]
+-pub use core_modules::mxc_common;
+-#[doc(hidden)]
+-pub use core_modules::mxc_contract;
+-#[doc(hidden)]
+-pub use core_modules::mxc_engine;
+-#[doc(hidden)]
+-pub use core_modules::mxc_pty;
+-#[doc(hidden)]
+-pub use core_modules::mxc_schema_support;
+-#[doc(hidden)]
+-pub use core_modules::mxc_telemetry;
+-#[doc(hidden)]
+-pub use core_modules::plm;
+-#[doc(hidden)]
+-pub use core_modules::process_security_environment_spec;
++pub use backends::wslc::common as wslc_common;
++#[doc(hidden)]
++pub use core::learning_mode_core;
++#[doc(hidden)]
++pub use core::learning_mode_windows;
++#[doc(hidden)]
++pub use core::mxc_common;
++#[doc(hidden)]
++pub use core::mxc_contract;
++#[doc(hidden)]
++pub use core::mxc_engine;
++#[doc(hidden)]
++pub use core::mxc_pty;
++#[doc(hidden)]
++pub use core::mxc_schema_support;
++#[doc(hidden)]
++pub use core::mxc_telemetry;
++#[doc(hidden)]
++pub use core::plm;
++#[doc(hidden)]
++pub use core::process_security_environment_spec;
+ 
+ mod configs;
+ mod options;
+diff --git a/src/mxc-sdk/src/policy/exact/mod.rs b/src/mxc-sdk/src/policy/exact.rs
+rename from src/mxc-sdk/src/policy/exact/mod.rs
+rename to src/mxc-sdk/src/policy/exact.rs
+--- a/src/mxc-sdk/src/policy/exact/mod.rs
++++ b/src/mxc-sdk/src/policy/exact.rs
+@@ -19,6 +19,7 @@
+         }
+     };
+ }
++
+ 
+ mod v1_0;
+ 
+diff --git a/src/mxc-sdk/tests/fixtures/configs/isolation_session_state_aware_provision.json b/src/mxc-sdk/tests/fixtures/configs/isolation_session_state_aware_provision.json
 new file mode 100644
 --- /dev/null
-+++ b/src/core/wxc_common/tests/fixtures/configs/isolation_session_state_aware_provision_appid.json
-@@ -0,0 +1,20 @@
++++ b/src/mxc-sdk/tests/fixtures/configs/isolation_session_state_aware_provision.json
+@@ -0,0 +1,15 @@
 +{
 +  "$schema": "../../schemas/stable/mxc-config.schema.1.0.0.json",
 +  "version": "1.0.0",
 +  "phase": "provision",
 +  "containment": "isolation_session",
-+  "isolationSession": {
-+    "provision": {
-+    "appId": "PFN:Contoso.App_8wekyb3d8bbwe"
-+    }
-+  },
 +  "network": {
 +    "egress": {
 +      "default": "allow"
@@ -1669,35 +3224,10 @@ new file mode 100644
 +    }
 +  }
 +}
-diff --git a/src/core/wxc_common/tests/fixtures/configs/isolation_session_state_aware_provision_appid_empty.json b/src/core/wxc_common/tests/fixtures/configs/isolation_session_state_aware_provision_appid_empty.json
+diff --git a/src/mxc-sdk/tests/fixtures/configs/wslc_state_aware_provision.json b/src/mxc-sdk/tests/fixtures/configs/wslc_state_aware_provision.json
 new file mode 100644
 --- /dev/null
-+++ b/src/core/wxc_common/tests/fixtures/configs/isolation_session_state_aware_provision_appid_empty.json
-@@ -0,0 +1,20 @@
-+{
-+  "$schema": "../../schemas/stable/mxc-config.schema.1.0.0.json",
-+  "version": "1.0.0",
-+  "phase": "provision",
-+  "containment": "isolation_session",
-+  "isolationSession": {
-+    "provision": {
-+    "appId": ""
-+    }
-+  },
-+  "network": {
-+    "egress": {
-+      "default": "allow"
-+    },
-+    "ingress": {
-+      "default": "allow",
-+      "hostLoopback": "allow"
-+    }
-+  }
-+}
-diff --git a/src/core/wxc_common/tests/fixtures/configs/wslc_state_aware_provision.json b/src/core/wxc_common/tests/fixtures/configs/wslc_state_aware_provision.json
-new file mode 100644
---- /dev/null
-+++ b/src/core/wxc_common/tests/fixtures/configs/wslc_state_aware_provision.json
++++ b/src/mxc-sdk/tests/fixtures/configs/wslc_state_aware_provision.json
 @@ -0,0 +1,14 @@
 +{
 +    "$schema": "../../schemas/stable/mxc-config.schema.1.0.0.json",
@@ -1713,1385 +3243,110 @@ new file mode 100644
 +        }
 +    }
 +}
-diff --git a/src/core/wxc_common/tests/fixtures/telemetry-consent/presenter-decision-dismissed.json b/src/core/wxc_common/tests/fixtures/telemetry-consent/presenter-decision-dismissed.json
+diff --git a/src/mxc-sdk/tests/fixtures/telemetry-consent/presenter-decision-dismissed.json b/src/mxc-sdk/tests/fixtures/telemetry-consent/presenter-decision-dismissed.json
 new file mode 100644
 --- /dev/null
-+++ b/src/core/wxc_common/tests/fixtures/telemetry-consent/presenter-decision-dismissed.json
++++ b/src/mxc-sdk/tests/fixtures/telemetry-consent/presenter-decision-dismissed.json
 @@ -0,0 +1 @@
 +{"challenge":"request-a","resourceVersion":1,"decision":"dismissed"}
-diff --git a/src/core/wxc_common/tests/fixtures/telemetry-consent/presenter-decision-no.json b/src/core/wxc_common/tests/fixtures/telemetry-consent/presenter-decision-no.json
+diff --git a/src/mxc-sdk/tests/fixtures/telemetry-consent/presenter-decision-no.json b/src/mxc-sdk/tests/fixtures/telemetry-consent/presenter-decision-no.json
 new file mode 100644
 --- /dev/null
-+++ b/src/core/wxc_common/tests/fixtures/telemetry-consent/presenter-decision-no.json
++++ b/src/mxc-sdk/tests/fixtures/telemetry-consent/presenter-decision-no.json
 @@ -0,0 +1 @@
 +{"challenge":"request-a","resourceVersion":1,"decision":"no"}
-diff --git a/src/core/wxc_common/tests/fixtures/telemetry-consent/presenter-decision-unknown-field.json b/src/core/wxc_common/tests/fixtures/telemetry-consent/presenter-decision-unknown-field.json
+diff --git a/src/mxc-sdk/tests/fixtures/telemetry-consent/presenter-decision-unknown-field.json b/src/mxc-sdk/tests/fixtures/telemetry-consent/presenter-decision-unknown-field.json
 new file mode 100644
 --- /dev/null
-+++ b/src/core/wxc_common/tests/fixtures/telemetry-consent/presenter-decision-unknown-field.json
++++ b/src/mxc-sdk/tests/fixtures/telemetry-consent/presenter-decision-unknown-field.json
 @@ -0,0 +1 @@
 +{"challenge":"request-a","resourceVersion":1,"decision":"yes","grant":true}
-diff --git a/src/core/wxc_common/tests/fixtures/telemetry-consent/presenter-decision-yes.json b/src/core/wxc_common/tests/fixtures/telemetry-consent/presenter-decision-yes.json
+diff --git a/src/mxc-sdk/tests/fixtures/telemetry-consent/presenter-decision-yes.json b/src/mxc-sdk/tests/fixtures/telemetry-consent/presenter-decision-yes.json
 new file mode 100644
 --- /dev/null
-+++ b/src/core/wxc_common/tests/fixtures/telemetry-consent/presenter-decision-yes.json
++++ b/src/mxc-sdk/tests/fixtures/telemetry-consent/presenter-decision-yes.json
 @@ -0,0 +1 @@
 +{"challenge":"request-a","resourceVersion":1,"decision":"yes"}
-diff --git a/src/backends/bubblewrap/common/Cargo.toml b/src/backends/bubblewrap/common/Cargo.toml
---- a/src/backends/bubblewrap/common/Cargo.toml
-+++ b/src/backends/bubblewrap/common/Cargo.toml
-@@ -1,17 +1,15 @@
- [package]
--name = "bwrap_common"
--version.workspace = true
--edition.workspace = true
--license.workspace = true
-+"name" = "bwrap_common"
-+"version" = "0.9.0"
-+"edition" = "2021"
-+"license" = "MIT"
+diff --git a/src/mxc-sdk/tests/mxc_contract/v0_9_0_alpha/state_aware/provision/mod.rs b/src/mxc-sdk/tests/mxc_contract/v0_9_0_alpha/state_aware/provision.rs
+rename from src/mxc-sdk/tests/mxc_contract/v0_9_0_alpha/state_aware/provision/mod.rs
+rename to src/mxc-sdk/tests/mxc_contract/v0_9_0_alpha/state_aware/provision.rs
+--- a/src/mxc-sdk/tests/mxc_contract/v0_9_0_alpha/state_aware/provision/mod.rs
++++ b/src/mxc-sdk/tests/mxc_contract/v0_9_0_alpha/state_aware/provision.rs
+@@ -1,6 +1,7 @@
+ // Copyright (c) Microsoft Corporation.
+ // Licensed under the MIT License.
  
- [dependencies]
--wxc_common = { workspace = true }
--lxc_common = { workspace = true }
--nix = { workspace = true }
--serde = { workspace = true }
--serde_json = { workspace = true }
--tempfile = { workspace = true }
--thiserror = { workspace = true }
--url = { workspace = true }
--
--[dev-dependencies]
-+"wxc_common" = { "path" = "../../../core/wxc_common" }
-+"lxc_common" = { "git" = "https://github.com/microsoft/mxc", "rev" = "46ce71d0da7b97bb531a33e175bf4166ffa730c0" }
-+"nix" = { "version" = "0.29", "features" = ["fs", "mount", "sched", "signal", "net", "process", "user", "term"] }
-+"serde" = { "version" = "1", "features" = ["derive"] }
-+"serde_json" = { "version" = "1", "features" = ["raw_value"] }
-+"tempfile" = { "version" = "3" }
-+"thiserror" = { "version" = "2" }
-+"url" = { "version" = "2" }
-diff --git a/src/backends/bubblewrap/common/src/bwrap_command.rs b/src/backends/bubblewrap/common/src/bwrap_command.rs
---- a/src/backends/bubblewrap/common/src/bwrap_command.rs
-+++ b/src/backends/bubblewrap/common/src/bwrap_command.rs
-@@ -14,7 +14,6 @@
-     ContainerPolicy, ExecutionRequest, NetworkAction, NetworkEnforcementCompatibility,
-     NetworkEnforcementMode, NetworkPolicy, ProxyAddress,
- };
--use wxc_common::proxy_env::{is_managed_proxy_key, PROXY_SET_KEYS};
+-#[path = "../../../support/state_aware/provision/isolation_session.rs"]
++#[path = "provision/../../../support/state_aware/provision/isolation_session.rs"]
+ mod isolation_session;
++#[path = "provision/wslc.rs"]
+ mod wslc;
+diff --git a/src/mxc-sdk/tests/mxc_contract/v0_9_0_alpha.rs b/src/mxc-sdk/tests/mxc_contract/v0_9_0_alpha.rs
+--- a/src/mxc-sdk/tests/mxc_contract/v0_9_0_alpha.rs
++++ b/src/mxc-sdk/tests/mxc_contract/v0_9_0_alpha.rs
+@@ -48,7 +48,7 @@
+ mod seatbelt;
+ #[path = "support/state_aware.rs"]
+ mod state_aware;
+-#[path = "v0_9_0_alpha/state_aware/provision/mod.rs"]
++#[path = "v0_9_0_alpha/state_aware/provision.rs"]
+ mod state_aware_provision;
+ #[path = "v0_9_0_alpha/wslc.rs"]
+ mod wslc;
+diff --git a/src/mxc-sdk/tests/mxc_contract/v1_0_0/state_aware/provision/mod.rs b/src/mxc-sdk/tests/mxc_contract/v1_0_0/state_aware/provision.rs
+rename from src/mxc-sdk/tests/mxc_contract/v1_0_0/state_aware/provision/mod.rs
+rename to src/mxc-sdk/tests/mxc_contract/v1_0_0/state_aware/provision.rs
+--- a/src/mxc-sdk/tests/mxc_contract/v1_0_0/state_aware/provision/mod.rs
++++ b/src/mxc-sdk/tests/mxc_contract/v1_0_0/state_aware/provision.rs
+@@ -1,6 +1,7 @@
+ // Copyright (c) Microsoft Corporation.
+ // Licensed under the MIT License.
  
- /// The fixed prefix of the command bwrap is asked to run.
- ///
-@@ -713,7 +712,11 @@
-             // Read-only: already covered by the base ro-bind, but listed
-             // explicitly so the intent is clear and it overrides any rw parent.
-             FsIntent::ReadOnly => {
--                args.extend(["--ro-bind".into(), mount.path.clone(), mount.path.clone()]);
-+                args.extend([
-+                    "--ro-bind-try".into(),
-+                    mount.path.clone(),
-+                    mount.path.clone(),
-+                ]);
-             }
-             FsIntent::Denied => {
-                 if denied_files.contains(&mount.path) {
-@@ -725,40 +728,46 @@
-         }
-     }
+-#[path = "../../../support/state_aware/provision/isolation_session.rs"]
++#[path = "provision/../../../support/state_aware/provision/isolation_session.rs"]
+ mod isolation_session;
++#[path = "provision/wslc.rs"]
+ mod wslc;
+diff --git a/src/mxc-sdk/tests/mxc_contract/v1_0_0.rs b/src/mxc-sdk/tests/mxc_contract/v1_0_0.rs
+--- a/src/mxc-sdk/tests/mxc_contract/v1_0_0.rs
++++ b/src/mxc-sdk/tests/mxc_contract/v1_0_0.rs
+@@ -48,7 +48,7 @@
+ mod seatbelt;
+ #[path = "support/state_aware.rs"]
+ mod state_aware;
+-#[path = "v1_0_0/state_aware/provision/mod.rs"]
++#[path = "v1_0_0/state_aware/provision.rs"]
+ mod state_aware_provision;
+ #[path = "v1_0_0/wslc.rs"]
+ mod wslc;
+diff --git a/src/mxc-sdk/tests/mxc_contract/v1_1_0_alpha/state_aware/provision/mod.rs b/src/mxc-sdk/tests/mxc_contract/v1_1_0_alpha/state_aware/provision.rs
+rename from src/mxc-sdk/tests/mxc_contract/v1_1_0_alpha/state_aware/provision/mod.rs
+rename to src/mxc-sdk/tests/mxc_contract/v1_1_0_alpha/state_aware/provision.rs
+--- a/src/mxc-sdk/tests/mxc_contract/v1_1_0_alpha/state_aware/provision/mod.rs
++++ b/src/mxc-sdk/tests/mxc_contract/v1_1_0_alpha/state_aware/provision.rs
+@@ -1,7 +1,9 @@
+ // Copyright (c) Microsoft Corporation.
+ // Licensed under the MIT License.
  
-+    if request
-+        .policy
-+        .readonly_paths
-+        .iter()
-+        .chain(&request.policy.readwrite_paths)
-+        .any(|path| path == "/")
-+    {
-+        for (flag, path) in [("--proc", "/proc"), ("--dev", "/dev")] {
-+            if !request
-+                .policy
-+                .denied_paths
-+                .iter()
-+                .any(|denied| path == denied || path.starts_with(&format!("{denied}/")))
-+            {
-+                args.extend([flag.into(), path.into()]);
-+            }
-+        }
-+    }
-+    for hidden in &request.policy.denied_paths {
-+        if !denied_files.contains(hidden) {
-+            args.extend(["--remount-ro".into(), hidden.clone()]);
-+        }
-+    }
-+    args.push("--new-session".into());
-+
-     // -- Working directory -------------------------------------------------
-     if let Some(dir) = start_directory(request) {
-         args.extend(["--chdir".into(), dir]);
-     }
- 
--    // -- Environment -------------------------------------------------------
--    // Clear the inherited environment, then set only the vars from the
--    // request so the sandbox has a minimal, predictable environment.
-+    // Bind the complete environment to the namespace-visible proxy endpoint.
-     args.push("--clearenv".into());
--    for env_str in resolved_env(request) {
--        // An entry with no `=` names no variable, so it is dropped here too.
--        if let Some((key, value)) = env_str.split_once('=') {
--            // When the proxy is active, drop any caller-supplied proxy env
--            // entries so they cannot override the values we set below.
--            if proxy_address.is_some() && is_managed_proxy_key(key) {
--                continue;
--            }
-+    let resolved = resolved_env(request);
-+    let env = match proxy_address {
-+        Some(address) => wxc_common::proxy_env::apply_cooperative_proxy_env(&resolved, &address.to_url()),
-+        None => resolved,
-+    };
-+    for entry in env {
-+        if let Some((key, value)) = entry.split_once('=') {
-             args.extend(["--setenv".into(), key.into(), value.into()]);
--        }
--    }
--
--    // -- Network proxy env vars -------------------------------------------
--    // Cooperative env-var proxying: well-behaved tools (curl, requests,
--    // etc.) honor these and route through the proxy where allow / block
--    // enforcement happens. Tools that bypass these variables (raw sockets)
--    // are NOT enforced -- this is a documented limitation of the
--    // unprivileged proxy model.
--    //
--    // We deliberately do NOT set NO_PROXY here. Exempting any destination
--    // would let cooperating clients bypass the configured proxy policy.
--    if let Some(addr) = proxy_address {
--        let url = addr.to_url();
--        for key in PROXY_SET_KEYS {
--            args.extend(["--setenv".into(), (*key).into(), url.clone()]);
-         }
-     }
- 
-diff --git a/src/backends/bubblewrap/common/src/bwrap_runner.rs b/src/backends/bubblewrap/common/src/bwrap_runner.rs
---- a/src/backends/bubblewrap/common/src/bwrap_runner.rs
-+++ b/src/backends/bubblewrap/common/src/bwrap_runner.rs
-@@ -179,7 +179,10 @@
-         // Execution validation deliberately bypasses the advisory success
-         // cache: a prior platform-support query must not approve a different
-         // executable after `PATH` or its contents change.
--        self.validate_prepared_with_probe(request, bwrap_version::probe_bwrap_uncached)
-+        self.validate_prepared_with_probe(request, || match &request.bubblewrap_executable {
-+            Some(path) => bwrap_version::probe_bwrap_at(path),
-+            None => bwrap_version::probe_bwrap_uncached(),
-+        })
-     }
- 
-     /// `validate_prepared` with an injectable environment probe.
-@@ -419,6 +422,9 @@
-         logger: &mut Logger,
-         stdio: StdioMode,
-     ) -> Result<BwrapChild, ScriptResponse> {
-+        let socket_filter = crate::seccomp::SocketFilter::new().map_err(|error| {
-+            ScriptResponse::error(&format!("Bubblewrap: failed to create socket filter: {error}"))
-+        })?;
-         // 1. Start the network proxy if configured. Must happen before
-         //    arg-building so the proxy's loopback address can be injected as
-         //    HTTP_PROXY / HTTPS_PROXY into the sandbox environment.
-@@ -588,7 +594,13 @@
-         };
- 
-         // 4. Spawn `bwrap`.
--        let mut command = Command::new("bwrap");
-+        let mut command = Command::new(
-+            request
-+                .bubblewrap_executable
-+                .as_deref()
-+                .unwrap_or_else(|| std::path::Path::new("bwrap")),
-+        );
-+        socket_filter.configure(&mut command);
-         command.args(&args);
-         match stdio {
-             StdioMode::Pipes => {
-@@ -722,8 +734,8 @@
- /// A spawned `bwrap` sandbox: the child process, its parent-side pipe ends,
- /// and the per-run network proxy / iptables state torn down once it exits.
- struct BwrapChild {
--    /// The lock is what keeps [`ProviderMonitor`]'s thread from signalling a
--    /// pid this side has already reaped.
-+    /// Exit observation leaves the leader unreaped until the monitor is joined
-+    /// and the process group is terminated, keeping its PID reserved throughout.
-     child: Arc<Mutex<Child>>,
-     stdin: Option<ChildStdin>,
-     stdout: Option<InterruptibleReader>,
-@@ -767,6 +779,7 @@
- /// [`BwrapChild`] (child, pipes, and per-run network state), tearing the network
- /// state down once the child exits.
- struct BubblewrapSandboxProcess {
-+    reaped: bool,
-     inner: BwrapChild,
-     teardown_done: bool,
- }
-@@ -775,6 +788,7 @@
-     fn new(child: BwrapChild) -> Self {
-         Self {
-             inner: child,
-+            reaped: false,
-             teardown_done: false,
-         }
-     }
-@@ -801,21 +815,45 @@
-         const MIN_POLL: Duration = Duration::from_millis(1);
-         const MAX_POLL: Duration = Duration::from_millis(50);
- 
-+        if self.reaped {
-+            return match self.inner.lock_child().wait() {
-+                Ok(status) => BwrapOutcome::Exited(status),
-+                Err(error) => BwrapOutcome::Io(error),
-+            };
-+        }
-+
-         let deadline = self.inner.timeout.map(|timeout| Instant::now() + timeout);
-         let mut interval = MIN_POLL;
-         loop {
--            let exited = match self.inner.lock_child().try_wait() {
--                Ok(exited) => exited,
--                Err(error) => return BwrapOutcome::Io(error),
--            };
-+            let exited =
-+                match wxc_common::sandbox_process::poll_child_exit(&self.inner.lock_child()) {
-+                    Ok(exited) => exited,
-+                    Err(error) => return BwrapOutcome::Io(error),
-+                };
-             // Checked after the exit rather than before it: the monitor kills
-             // the sandbox, so a provider death shows up here as an ordinary
-             // exit that would otherwise be reported as the workload's own.
-             if self.provider_lost() {
-                 return BwrapOutcome::ProviderLost;
-             }
--            if let Some(status) = exited {
--                return BwrapOutcome::Exited(status);
-+            if exited.is_some() {
-+                // Join the monitor before reaping so it cannot inspect a PID
-+                // after the leader's ownership has ended.
-+                let lost = self
-+                    .inner
-+                    .monitor
-+                    .take()
-+                    .is_some_and(|mut monitor| monitor.disarm());
-+                if lost {
-+                    return BwrapOutcome::ProviderLost;
-+                }
-+                if let Err(error) = self.kill() {
-+                    return BwrapOutcome::Io(error);
-+                }
-+                return match self.inner.lock_child().wait() {
-+                    Ok(status) => BwrapOutcome::Exited(status),
-+                    Err(error) => BwrapOutcome::Io(error),
-+                };
-             }
- 
-             let now = Instant::now();
-@@ -887,11 +925,14 @@
-     }
- 
-     fn try_wait(&mut self) -> std::io::Result<Option<i32>> {
--        Ok(self
--            .inner
--            .lock_child()
--            .try_wait()?
--            .map(|status| status.code().unwrap_or(-1)))
-+        if self.reaped {
-+            return Ok(self
-+                .inner
-+                .lock_child()
-+                .try_wait()?
-+                .map(|status| status.code().unwrap_or(-1)));
-+        }
-+        wxc_common::sandbox_process::poll_child_exit(&self.inner.lock_child())
-     }
- 
-     fn id(&self) -> u32 {
-@@ -902,10 +943,10 @@
-         // No-op once the child has exited and been reaped: its pid/pgid can be
-         // recycled, so signaling it could hit an unrelated process (group). A
-         // reaped `Child` returns its cached status here without a syscall.
-+        if self.reaped {
-+            return Ok(());
-+        }
-         let mut child = self.inner.lock_child();
--        if child.try_wait()?.is_some() {
--            return Ok(());
--        }
-         if self.inner.group {
-             // Pipes mode: bwrap leads its own process group — tree-kill it.
-             group_kill(&mut child)
-@@ -929,7 +970,9 @@
-         let stdout_thread = spawn_discard(self.inner.stdout.take());
-         let stderr_thread = spawn_discard(self.inner.stderr.take());
- 
--        let result = match self.await_outcome() {
-+        let outcome = self.await_outcome();
-+        self.inner.monitor.take();
-+        let result = match outcome {
-             BwrapOutcome::Exited(status) => Ok(status.code().unwrap_or(-1)),
-             BwrapOutcome::ProviderLost => {
-                 let _ = self.kill();
-@@ -960,6 +1003,7 @@
-             }
-         };
- 
-+        self.reaped = true;
-         cancel_and_join_discard(stdout_thread, &self.inner.stdout_canceller);
-         cancel_and_join_discard(stderr_thread, &self.inner.stderr_canceller);
-         self.run_teardown();
-@@ -982,6 +1026,10 @@
-         self.run_teardown();
-     }
- }
-+
-+#[cfg(test)]
-+#[path = "bwrap_runner_tests.rs"]
-+mod lifecycle_tests;
- 
- /// Build the iptables manager for a Bubblewrap sandbox.
- ///
-@@ -2073,16 +2121,16 @@
-     }
- 
-     #[test]
--    fn validate_accepts_host_rules_when_a_proxy_enforces_them_at_0_8() {
--        // The proxy is the mechanism, so a valid allow-default blocklist
--        // reaches the environmental probe instead of failing policy validation.
-+    fn validate_accepts_host_rules_when_the_builtin_proxy_enforces_them_at_0_8() {
-+        // Only the SDK's builtin test proxy consumes these host lists; an
-+        // external proxy owns its policy and does not receive them from MXC.
-         let mut req = base_request();
-         req.network_enforcement_compatibility = NetworkEnforcementCompatibility::Strict;
-         req.policy.default_network_policy = wxc_common::models::NetworkPolicy::Allow;
-         req.policy.blocked_hosts = vec!["evil.example.com".into()];
-         req.policy.network_proxy = ProxyConfig {
--            address: Some(ProxyAddress::new("127.0.0.1".into(), 3128)),
--            builtin_test_server: false,
-+            address: None,
-+            builtin_test_server: true,
-         };
- 
-         let unavailable = bwrap_version::BwrapUnavailable::NotFound;
-diff --git a/src/backends/bubblewrap/common/src/bwrap_runner_tests.rs b/src/backends/bubblewrap/common/src/bwrap_runner_tests.rs
-new file mode 100644
---- /dev/null
-+++ b/src/backends/bubblewrap/common/src/bwrap_runner_tests.rs
-@@ -0,0 +1,42 @@
-+// Copyright (c) Microsoft Corporation.
-+// Licensed under the MIT License.
-+
-+use super::*;
-+
-+#[test]
-+fn exit_observation_keeps_the_leader_owned_until_wait_finishes() {
-+    let child = Command::new("sh")
-+        .args(["-c", "exit 17"])
-+        .process_group(0)
-+        .spawn()
-+        .unwrap();
-+    let mut process = BubblewrapSandboxProcess::new(BwrapChild {
-+        child: Arc::new(Mutex::new(child)),
-+        stdin: None,
-+        stdout: None,
-+        stderr: None,
-+        stdout_canceller: None,
-+        stderr_canceller: None,
-+        group: true,
-+        proxy: UnixProxyCoordinator::new(),
-+        proxy_network: None,
-+        fw_manager: None,
-+        monitor: None,
-+        timeout: Some(Duration::from_secs(10)),
-+    });
-+
-+    let deadline = Instant::now() + Duration::from_secs(10);
-+    while process.try_wait().unwrap().is_none() {
-+        assert!(Instant::now() < deadline, "leader did not exit");
-+        std::thread::sleep(Duration::from_millis(10));
-+    }
-+    assert_eq!(
-+        wxc_common::sandbox_process::poll_child_exit(&process.inner.lock_child()).unwrap(),
-+        Some(17),
-+        "observing exit must not release the PID before process-tree cleanup"
-+    );
-+    assert_eq!(process.wait().unwrap(), 17);
-+    assert_eq!(process.try_wait().unwrap(), Some(17));
-+    process.kill().unwrap();
-+    assert_eq!(process.wait().unwrap(), 17);
-+}
-diff --git a/src/backends/bubblewrap/common/src/bwrap_version.rs b/src/backends/bubblewrap/common/src/bwrap_version.rs
---- a/src/backends/bubblewrap/common/src/bwrap_version.rs
-+++ b/src/backends/bubblewrap/common/src/bwrap_version.rs
-@@ -38,6 +38,7 @@
- ///
- /// `--clearenv` is therefore the flag that sets the floor. If the argument
- /// builder ever adopts a newer flag, raise this constant in the same change.
-+/// The runner's `--seccomp` socket filter is also supported at this floor.
- pub const MIN_BWRAP_VERSION: BwrapVersion = BwrapVersion::new(0, 5, 0);
- 
- /// Why [`MIN_BWRAP_VERSION`] is the compatibility floor.
-@@ -1168,3 +1169,15 @@
-         assert_eq!(first.join().unwrap(), Err(BwrapUnavailable::NotFound));
-     }
- }
-+
-+/// Checks the exact executable bound to an embedding application's request.
-+pub fn probe_bwrap_at(path: &Path) -> Result<BwrapVersion, BwrapUnavailable> {
-+    probe_bwrap_uncached_with(|| {
-+        run_version_command_until(
-+            path,
-+            &["--version"],
-+            Instant::now() + BWRAP_VERSION_TIMEOUT,
-+            BWRAP_VERSION_TIMEOUT,
-+        )
-+    })
-+}
-diff --git a/src/backends/bubblewrap/common/src/lib.rs b/src/backends/bubblewrap/common/src/lib.rs
---- a/src/backends/bubblewrap/common/src/lib.rs
-+++ b/src/backends/bubblewrap/common/src/lib.rs
-@@ -32,3 +32,5 @@
- /// crate; every other item stays `pub(crate)`.
- #[cfg(target_os = "linux")]
- pub mod proxy_network;
-+#[cfg(target_os = "linux")]
-+mod seccomp;
-diff --git a/src/backends/bubblewrap/common/src/provider_monitor.rs b/src/backends/bubblewrap/common/src/provider_monitor.rs
---- a/src/backends/bubblewrap/common/src/provider_monitor.rs
-+++ b/src/backends/bubblewrap/common/src/provider_monitor.rs
-@@ -76,9 +76,12 @@
-             let Ok(mut child) = child.lock() else {
-                 return;
-             };
--            // Signalling a reaped child could reach an unrelated process that
--            // inherited its pid; holding the lock keeps the answer true.
--            if matches!(child.try_wait(), Ok(None)) {
-+            // Observe without reaping: the executor still owns process-tree
-+            // cleanup, and the leader's PID must stay reserved until then.
-+            if matches!(
-+                wxc_common::sandbox_process::poll_child_exit(&child),
-+                Ok(None)
-+            ) {
-                 let _ = if group {
-                     group_kill(&mut child)
-                 } else {
-@@ -116,100 +119,5 @@
- }
- 
- #[cfg(test)]
--mod tests {
--    use super::*;
--
--    use nix::fcntl::{fcntl, FcntlArg, OFlag};
--    use nix::unistd::pipe2;
--    use std::os::fd::AsRawFd;
--    use std::process::Command;
--    use std::time::Instant;
--
--    /// The read end must not block, or a disarmed monitor could never notice.
--    fn watch_pipe() -> (OwnedFd, OwnedFd) {
--        let (reader, writer) = pipe2(OFlag::O_CLOEXEC).expect("pipe");
--        let flags = fcntl(reader.as_raw_fd(), FcntlArg::F_GETFL).expect("read descriptor flags");
--        fcntl(
--            reader.as_raw_fd(),
--            FcntlArg::F_SETFL(OFlag::from_bits_truncate(flags) | OFlag::O_NONBLOCK),
--        )
--        .expect("set descriptor nonblocking");
--        (reader, writer)
--    }
--
--    fn sleeping_sandbox() -> Arc<Mutex<Child>> {
--        Arc::new(Mutex::new(
--            Command::new("sleep").arg("30").spawn().expect("spawn"),
--        ))
--    }
--
--    fn exited_within(child: &Arc<Mutex<Child>>, budget: Duration) -> bool {
--        let deadline = Instant::now() + budget;
--        while Instant::now() < deadline {
--            let exited = child
--                .lock()
--                .map(|mut child| matches!(child.try_wait(), Ok(Some(_))))
--                .unwrap_or(false);
--            if exited {
--                return true;
--            }
--            thread::sleep(Duration::from_millis(10));
--        }
--        false
--    }
--
--    fn reap(child: &Arc<Mutex<Child>>) {
--        if let Ok(mut child) = child.lock() {
--            let _ = child.kill();
--            let _ = child.wait();
--        }
--    }
--
--    #[test]
--    fn a_lost_provider_takes_the_sandbox_down_with_it() {
--        let (watch, writer) = watch_pipe();
--        let child = sleeping_sandbox();
--        let mut monitor = ProviderMonitor::watch(watch, Arc::clone(&child), false);
--
--        drop(writer);
--
--        assert!(
--            exited_within(&child, Duration::from_secs(10)),
--            "the sandbox outlived the provider carrying its only route"
--        );
--        assert!(
--            monitor.disarm(),
--            "the loss must reach the run rather than being reported as a workload exit"
--        );
--        reap(&child);
--    }
--
--    #[test]
--    fn a_disarmed_monitor_leaves_the_sandbox_alone() {
--        let (watch, writer) = watch_pipe();
--        let child = sleeping_sandbox();
--        let mut monitor = ProviderMonitor::watch(watch, Arc::clone(&child), false);
--
--        monitor.disarm();
--        drop(writer);
--
--        assert!(
--            !exited_within(&child, Duration::from_millis(500)),
--            "teardown closing the watch must not be mistaken for a provider death"
--        );
--        assert!(!monitor.provider_lost());
--        reap(&child);
--    }
--
--    #[test]
--    fn a_monitor_over_an_already_reaped_sandbox_still_settles() {
--        let (watch, writer) = watch_pipe();
--        let child = Arc::new(Mutex::new(Command::new("true").spawn().expect("spawn")));
--        reap(&child);
--        let mut monitor = ProviderMonitor::watch(watch, Arc::clone(&child), true);
--
--        drop(writer);
--
--        assert!(monitor.disarm(), "the loss is still worth reporting");
--    }
--}
-+#[path = "provider_monitor_tests.rs"]
-+mod tests;
-diff --git a/src/backends/bubblewrap/common/src/provider_monitor_tests.rs b/src/backends/bubblewrap/common/src/provider_monitor_tests.rs
-new file mode 100644
---- /dev/null
-+++ b/src/backends/bubblewrap/common/src/provider_monitor_tests.rs
-@@ -0,0 +1,118 @@
-+use super::*;
-+
-+use nix::fcntl::{fcntl, FcntlArg, OFlag};
-+use nix::unistd::pipe2;
-+use std::os::fd::AsRawFd;
-+use std::process::Command;
-+use std::time::Instant;
-+
-+/// The read end must not block, or a disarmed monitor could never notice.
-+fn watch_pipe() -> (OwnedFd, OwnedFd) {
-+    let (reader, writer) = pipe2(OFlag::O_CLOEXEC).expect("pipe");
-+    let flags = fcntl(reader.as_raw_fd(), FcntlArg::F_GETFL).expect("read descriptor flags");
-+    fcntl(
-+        reader.as_raw_fd(),
-+        FcntlArg::F_SETFL(OFlag::from_bits_truncate(flags) | OFlag::O_NONBLOCK),
-+    )
-+    .expect("set descriptor nonblocking");
-+    (reader, writer)
-+}
-+
-+fn sleeping_sandbox() -> Arc<Mutex<Child>> {
-+    Arc::new(Mutex::new(
-+        Command::new("sleep").arg("30").spawn().expect("spawn"),
-+    ))
-+}
-+
-+fn exited_within(child: &Arc<Mutex<Child>>, budget: Duration) -> bool {
-+    let deadline = Instant::now() + budget;
-+    while Instant::now() < deadline {
-+        let exited = child
-+            .lock()
-+            .map(|child| {
-+                matches!(
-+                    wxc_common::sandbox_process::poll_child_exit(&child),
-+                    Ok(Some(_))
-+                )
-+            })
-+            .unwrap_or(false);
-+        if exited {
-+            return true;
-+        }
-+        thread::sleep(Duration::from_millis(10));
-+    }
-+    false
-+}
-+
-+fn reap(child: &Arc<Mutex<Child>>) {
-+    if let Ok(mut child) = child.lock() {
-+        let _ = child.kill();
-+        let _ = child.wait();
-+    }
-+}
-+
-+#[test]
-+fn a_lost_provider_takes_the_sandbox_down_with_it() {
-+    let (watch, writer) = watch_pipe();
-+    let child = sleeping_sandbox();
-+    let mut monitor = ProviderMonitor::watch(watch, Arc::clone(&child), false);
-+
-+    drop(writer);
-+
-+    assert!(
-+        exited_within(&child, Duration::from_secs(10)),
-+        "the sandbox outlived the provider carrying its only route"
-+    );
-+    assert!(
-+        monitor.disarm(),
-+        "the loss must reach the run rather than being reported as a workload exit"
-+    );
-+    reap(&child);
-+}
-+
-+#[test]
-+fn a_disarmed_monitor_leaves_the_sandbox_alone() {
-+    let (watch, writer) = watch_pipe();
-+    let child = sleeping_sandbox();
-+    let mut monitor = ProviderMonitor::watch(watch, Arc::clone(&child), false);
-+
-+    monitor.disarm();
-+    drop(writer);
-+
-+    assert!(
-+        !exited_within(&child, Duration::from_millis(500)),
-+        "teardown closing the watch must not be mistaken for a provider death"
-+    );
-+    assert!(!monitor.provider_lost());
-+    reap(&child);
-+}
-+
-+#[test]
-+fn a_monitor_over_an_already_reaped_sandbox_still_settles() {
-+    let (watch, writer) = watch_pipe();
-+    let child = Arc::new(Mutex::new(Command::new("true").spawn().expect("spawn")));
-+    reap(&child);
-+    let mut monitor = ProviderMonitor::watch(watch, Arc::clone(&child), true);
-+
-+    drop(writer);
-+
-+    assert!(monitor.disarm(), "the loss is still worth reporting");
-+}
-+
-+#[test]
-+fn provider_observation_leaves_an_exited_leader_unreaped() {
-+    let (watch, writer) = watch_pipe();
-+    let child = Arc::new(Mutex::new(Command::new("true").spawn().expect("spawn")));
-+    assert!(exited_within(&child, Duration::from_secs(10)));
-+    let mut monitor = ProviderMonitor::watch(watch, Arc::clone(&child), true);
-+
-+    drop(writer);
-+    assert!(monitor.disarm());
-+    let mut leader = child.lock().unwrap();
-+    assert_eq!(
-+        wxc_common::sandbox_process::poll_child_exit(&leader).unwrap(),
-+        Some(0),
-+        "the monitor must not release the PID before process-tree cleanup"
-+    );
-+    assert!(leader.wait().unwrap().success());
-+}
-diff --git a/src/backends/bubblewrap/common/src/seccomp.rs b/src/backends/bubblewrap/common/src/seccomp.rs
-new file mode 100644
---- /dev/null
-+++ b/src/backends/bubblewrap/common/src/seccomp.rs
-@@ -0,0 +1,109 @@
-+// Licensed under the MIT License.
-+
-+//! Rejects VM-host sockets that bypass Linux network and filesystem namespaces.
-+
-+use nix::libc;
-+use std::fs::File;
-+use std::io;
-+use std::io::Write;
-+use std::os::fd::AsRawFd;
-+use std::os::fd::FromRawFd;
-+use std::os::unix::process::CommandExt;
-+use std::process::Command;
-+
-+pub(crate) struct SocketFilter(File);
-+
-+impl SocketFilter {
-+    pub(crate) fn new() -> io::Result<Self> {
-+        // WSL's binfmt handler retains /init through an open kernel reference.
-+        // Hiding /init or /run therefore cannot prevent Windows process creation.
-+        // Its bridge first creates an AF_VSOCK listener, outside the Linux IP
-+        // namespace. Block that operation for every workload and descendant.
-+        let architecture = if cfg!(target_arch = "x86_64") {
-+            0xc000_003e
-+        } else if cfg!(target_arch = "aarch64") {
-+            0xc000_00b7
-+        } else {
-+            return Err(io::Error::other("unsupported seccomp syscall architecture"));
-+        };
-+        let load = (libc::BPF_LD | libc::BPF_W | libc::BPF_ABS) as u16;
-+        let equal = (libc::BPF_JMP | libc::BPF_JEQ | libc::BPF_K) as u16;
-+        let ret = (libc::BPF_RET | libc::BPF_K) as u16;
-+        let deny = libc::SECCOMP_RET_ERRNO | libc::EPERM as u32;
-+        let mut instructions = vec![
-+            instruction(
-+                load,
-+                0,
-+                0,
-+                std::mem::offset_of!(libc::seccomp_data, arch) as u32,
-+            ),
-+            instruction(equal, 1, 0, architecture),
-+            instruction(ret, 0, 0, libc::SECCOMP_RET_KILL_PROCESS),
-+            instruction(
-+                load,
-+                0,
-+                0,
-+                std::mem::offset_of!(libc::seccomp_data, nr) as u32,
-+            ),
-+        ];
-+        if cfg!(target_arch = "x86_64") {
-+            // x32 uses the x86_64 audit architecture but different syscall
-+            // numbers. It must not bypass the socket-domain check below.
-+            instructions.extend([
-+                instruction(
-+                    (libc::BPF_JMP | libc::BPF_JGE | libc::BPF_K) as u16,
-+                    0,
-+                    1,
-+                    0x4000_0000,
-+                ),
-+                instruction(ret, 0, 0, deny),
-+            ]);
-+        }
-+        instructions.extend([
-+            instruction(equal, 1, 0, libc::SYS_socket as u32),
-+            instruction(ret, 0, 0, libc::SECCOMP_RET_ALLOW),
-+            instruction(
-+                load,
-+                0,
-+                0,
-+                std::mem::offset_of!(libc::seccomp_data, args) as u32,
-+            ),
-+            instruction(equal, 0, 1, libc::AF_VSOCK as u32),
-+            instruction(ret, 0, 0, deny),
-+            instruction(ret, 0, 0, libc::SECCOMP_RET_ALLOW),
-+        ]);
-+        let descriptor =
-+            unsafe { libc::memfd_create(c"mxc-socket-filter".as_ptr(), libc::MFD_CLOEXEC) };
-+        if descriptor < 0 {
-+            return Err(io::Error::last_os_error());
-+        }
-+        let mut file = unsafe { File::from_raw_fd(descriptor) };
-+        for item in instructions {
-+            file.write_all(&item.code.to_ne_bytes())?;
-+            file.write_all(&[item.jt, item.jf])?;
-+            file.write_all(&item.k.to_ne_bytes())?;
-+        }
-+        // Bubblewrap reads the filter from the current descriptor offset.
-+        std::io::Seek::rewind(&mut file)?;
-+        Ok(Self(file))
-+    }
-+
-+    pub(crate) fn configure(&self, command: &mut Command) {
-+        let descriptor = self.0.as_raw_fd();
-+        command.args(["--seccomp", &descriptor.to_string()]);
-+        // Only the spawned bwrap inherits this descriptor; other concurrent
-+        // children retain CLOEXEC. Bwrap consumes and closes it before exec.
-+        unsafe {
-+            command.pre_exec(move || {
-+                if libc::fcntl(descriptor, libc::F_SETFD, 0) < 0 {
-+                    return Err(io::Error::last_os_error());
-+                }
-+                Ok(())
-+            });
-+        }
-+    }
-+}
-+
-+fn instruction(code: u16, jt: u8, jf: u8, k: u32) -> libc::sock_filter {
-+    libc::sock_filter { code, jt, jf, k }
-+}
-diff --git a/src/backends/seatbelt/common/Cargo.toml b/src/backends/seatbelt/common/Cargo.toml
---- a/src/backends/seatbelt/common/Cargo.toml
-+++ b/src/backends/seatbelt/common/Cargo.toml
-@@ -1,14 +1,11 @@
- [package]
--name = "seatbelt_common"
--version.workspace = true
--edition.workspace = true
--license.workspace = true
-+"name" = "seatbelt_common"
-+"version" = "0.9.0"
-+"edition" = "2021"
-+"license" = "MIT"
- 
- [dependencies]
--# Provides ExecutionRequest, ContainerPolicy, SeatbeltConfig, Logger, and
--# the ScriptRunner trait that seatbelt_runner implements. Same dep that
--# lxc_common uses.
--wxc_common = { workspace = true }
-+"wxc_common" = { "path" = "../../../core/wxc_common" }
- 
--[target.'cfg(target_os = "macos")'.dependencies]
--libc = { workspace = true }
-+[target."cfg(target_os = \"macos\")".dependencies]
-+"libc" = { "version" = "0.2" }
-diff --git a/src/backends/seatbelt/common/src/profile_builder.rs b/src/backends/seatbelt/common/src/profile_builder.rs
---- a/src/backends/seatbelt/common/src/profile_builder.rs
-+++ b/src/backends/seatbelt/common/src/profile_builder.rs
-@@ -85,6 +85,29 @@
-     write_extra_seatbelt_rules(&mut out, request);
-     write_ui_rules(&mut out, request);
- 
-+    if request
-+        .seatbelt
-+        .as_ref()
-+        .is_some_and(|config| !config.allow_unix_sockets)
-+    {
-+        let allowed = request
-+            .seatbelt
-+            .as_ref()
-+            .expect("restricted Unix socket policy has Seatbelt configuration")
-+            .allowed_unix_socket_paths
-+            .iter()
-+            .map(|path| resolve_policy_path(path))
-+            .collect::<Result<Vec<_>, _>>()?;
-+        if allowed.is_empty() {
-+            out.push_str("(deny network-bind network-outbound (subpath \"/\"))\n");
-+        } else {
-+            out.push_str("(deny network-bind network-outbound (require-all (subpath \"/\")");
-+            for path in allowed {
-+                let _ = write!(out, " (require-not (subpath {}))", quote_scheme(&path));
-+            }
-+            out.push_str("))\n");
-+        }
-+    }
-     // Policy-derived deny rules go LAST so they win on conflict.
-     write_filesystem_deny(&mut out, &resolved);
- 
-@@ -284,7 +307,7 @@
-         let readonly = resolve_all(&policy.readonly_paths)?;
-         let mut readwrite = resolve_all(&policy.readwrite_paths)?;
- 
--        // `denied` is emitted last and would override either allow anyway, but
-+        // An exact denied path overrides either grant, so
-         // dropping the path keeps the emitted profile an honest description of
-         // the effective policy.
-         let mut readonly: Vec<String> = readonly;
-@@ -314,8 +337,8 @@
-     // makes the *deepest* intent win at every path — a `readonlyPaths` entry
-     // nested inside a broader `readwritePaths` subtree stays read-only rather
-     // than inheriting the parent's write grant. `deniedPaths` is deliberately
--    // not part of this plan: it is emitted last so it outranks these filtered
--    // allows regardless of depth.
-+    // emitted separately so a denied ancestor can exclude explicit deeper grants,
-+    // matching the specificity ordering used by the other filesystem backends.
-     out.push_str(";; --- policy.readonlyPaths / policy.readwritePaths (shallow-to-deep) ---\n");
-     for mount in resolve_path_plan(&paths.readwrite, &paths.readonly, &[]) {
-         let subpath = [mount.path.clone()];
-@@ -366,11 +389,31 @@
-         // whatever listens there. A Docker / ssh-agent / gpg-agent socket is a
-         // control plane, so that would be an escape.
-         out.push_str(";; --- policy.deniedPaths (override broader allow rules) ---\n");
--        write_path_rule(
--            out,
--            "deny file-read* file-write* network-bind network-outbound",
--            &paths.denied,
--        );
-+        for hidden in &paths.denied {
-+            let exceptions = paths
-+                .readonly
-+                .iter()
-+                .chain(&paths.readwrite)
-+                .filter(|path| *path != hidden && std::path::Path::new(path).starts_with(hidden))
-+                .collect::<Vec<_>>();
-+            if exceptions.is_empty() {
-+                write_path_rule(
-+                    out,
-+                    "deny file-read* file-write* network-bind network-outbound",
-+                    &[hidden.clone()],
-+                );
-+            } else {
-+                let _ = write!(
-+                    out,
-+                    "(deny file-read* file-write* network-bind network-outbound (require-all (subpath {})",
-+                    quote_scheme(hidden)
-+                );
-+                for path in exceptions {
-+                    let _ = write!(out, " (require-not (subpath {}))", quote_scheme(path));
-+                }
-+                out.push_str("))\n");
-+            }
-+        }
-     }
- }
- 
-@@ -1476,6 +1519,24 @@
-     }
- 
-     #[test]
-+    fn restricted_unix_sockets_reopen_only_the_execution_private_directory() {
-+        let mut r = req();
-+        r.policy.readwrite_paths = vec!["/tmp/work".into(), "/tmp/ash-exec".into()];
-+        r.seatbelt = Some(SeatbeltConfig {
-+            allow_unix_sockets: false,
-+            allowed_unix_socket_paths: vec!["/tmp/ash-exec".into()],
-+            ..Default::default()
-+        });
-+
-+        let profile = build_profile(&r).unwrap();
-+
-+        assert!(profile.contains(
-+            "(deny network-bind network-outbound (require-all (subpath \"/\") (require-not (subpath \"/private/tmp/ash-exec\"))))"
-+        ));
-+        assert!(profile.contains("(subpath \"/private/tmp/work\")"));
-+    }
-+
-+    #[test]
-     fn denied_paths_deny_outbound_under_default_allow() {
-         // `defaultPolicy: allow` emits a bare `(allow network-outbound)`, which
-         // on its own grants AF_UNIX `connect()`. A denied subtree must still
-diff --git a/src/backends/seatbelt/common/src/seatbelt_runner.rs b/src/backends/seatbelt/common/src/seatbelt_runner.rs
---- a/src/backends/seatbelt/common/src/seatbelt_runner.rs
-+++ b/src/backends/seatbelt/common/src/seatbelt_runner.rs
-@@ -42,38 +42,8 @@
-     validate_common, validate_network_policy_support, NetworkPolicySupport,
- };
- 
--use crate::default_env::{env_pairs, resolved_env, DEFAULT_SANDBOX_PATH};
-+use crate::default_env::{resolved_env, DEFAULT_SANDBOX_PATH};
- use crate::profile_builder::build_profile_with_proxy;
--
--/// Env var keys the cooperative proxy manages. When a proxy is active these
--/// are stripped from the caller-supplied environment so sandboxed code cannot
--/// override the `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` values we inject (or
--/// re-enable a `NO_PROXY` bypass). `ALL_PROXY` is the catch-all curl/libcurl
--/// and many HTTP clients honor for every scheme, so leaving it caller-settable
--/// would let sandboxed code redirect or bypass the proxy. Mirrors the
--/// Bubblewrap backend's `PROXY_ENV_KEYS`.
--const PROXY_ENV_KEYS: &[&str] = &[
--    "HTTP_PROXY",
--    "HTTPS_PROXY",
--    "ALL_PROXY",
--    "http_proxy",
--    "https_proxy",
--    "all_proxy",
--    "NO_PROXY",
--    "no_proxy",
--];
--
--/// Proxy env var keys injected (pointing at the resolved proxy URL) when a
--/// proxy is active. `NO_PROXY` is intentionally absent — see the module docs
--/// and [`resolve_environment`].
--const PROXY_INJECT_KEYS: &[&str] = &[
--    "HTTP_PROXY",
--    "HTTPS_PROXY",
--    "ALL_PROXY",
--    "http_proxy",
--    "https_proxy",
--    "all_proxy",
--];
- 
- // ---------------------------------------------------------------------------
- // FFI declarations for Apple's sandbox API (libsandbox.dylib).
-@@ -309,6 +279,7 @@
-         };
- 
-     Ok(Box::new(SeatbeltSandboxProcess {
-+        reaped: false,
-         child,
-         stdin,
-         stdout,
-@@ -457,6 +428,7 @@
-     // inside Terminal. No streamable stdio; the temp files are removed once the
-     // handle's `wait()` (or drop) runs.
-     Ok(Box::new(SeatbeltSandboxProcess {
-+        reaped: false,
-         child,
-         stdin: None,
-         stdout: None,
-@@ -473,6 +445,7 @@
- /// A running Seatbelt-sandboxed process: the child plus, for the pipes path,
- /// its parent-side pipe ends. See [`SandboxProcess`] for the contract.
- struct SeatbeltSandboxProcess {
-+    reaped: bool,
-     child: std::process::Child,
-     /// Pipe ends — `Some` only for [`StdioMode::Pipes`]; `None` for inherited
-     /// stdio / Open mode (the streams are the binary's own, or detached). The
-@@ -557,10 +530,13 @@
-     }
- 
-     fn try_wait(&mut self) -> std::io::Result<Option<i32>> {
--        Ok(self
--            .child
--            .try_wait()?
--            .map(|status| status.code().unwrap_or(-1)))
-+        if self.reaped {
-+            return Ok(self
-+                .child
-+                .try_wait()?
-+                .map(|status| status.code().unwrap_or(-1)));
-+        }
-+        wxc_common::sandbox_process::poll_child_exit(&self.child)
-     }
- 
-     fn id(&self) -> u32 {
-@@ -571,7 +547,7 @@
-         // No-op once the child has exited and been reaped: its pid/pgid can be
-         // recycled, so signaling it could hit an unrelated process (group). A
-         // reaped `Child` returns its cached status here without a syscall.
--        if self.child.try_wait()?.is_some() {
-+        if self.reaped {
-             return Ok(());
-         }
-         if self.group {
-@@ -618,6 +594,7 @@
-             }
-         };
- 
-+        self.reaped = true;
-         cancel_and_join_discard(stdout_thread, &self.stdout_canceller);
-         cancel_and_join_discard(stderr_thread, &self.stderr_canceller);
-         self.run_cleanup();
-@@ -912,19 +889,20 @@
-     working_directory: Option<&str>,
- ) -> Vec<(String, String)> {
-     let resolved = resolved_env(request, working_directory);
--    let strip_caller_proxy = proxy_address.is_some();
--    let mut pairs: Vec<(String, String)> = env_pairs(&resolved)
-+    let entries = match proxy_address {
-+        Some(address) => {
-+            wxc_common::proxy_env::apply_cooperative_proxy_env(&resolved, &address.to_url())
-+        }
-+        None => resolved,
-+    };
-+    entries
-         .into_iter()
--        .filter(|(key, _)| !strip_caller_proxy || !PROXY_ENV_KEYS.contains(key))
--        .map(|(key, value)| (key.to_string(), value.to_string()))
--        .collect();
--    if let Some(addr) = proxy_address {
--        let url = addr.to_url();
--        for key in PROXY_INJECT_KEYS {
--            pairs.push((key.to_string(), url.clone()));
--        }
--    }
--    pairs
-+        .filter_map(|entry| {
-+            entry
-+                .split_once('=')
-+                .map(|(key, value)| (key.to_owned(), value.to_owned()))
-+        })
-+        .collect()
- }
- 
- /// Write `content` to a temp file with a cryptographically random name and the
-diff --git a/src/backends/process_container/common/Cargo.toml b/src/backends/process_container/common/Cargo.toml
---- a/src/backends/process_container/common/Cargo.toml
-+++ b/src/backends/process_container/common/Cargo.toml
-@@ -1,37 +1,30 @@
- [package]
--name = "process_container_common"
--version.workspace = true
--edition.workspace = true
--license.workspace = true
-+"name" = "process_container_common"
-+"version" = "0.9.0"
-+"edition" = "2021"
-+"license" = "MIT"
- 
- [features]
--# Enables the MXC_FORCE_TIER environment override for dedicated test executors.
--# Never enable this feature for production binaries.
--force-tier-testing = []
--# Compile-time gate for Tier 2 (AppContainer + BFS via bfscfg.exe).
--# OFF by default: production wxc-exec cannot resolve or spawn bfscfg.exe,
--# and `fallback_detector::detect` naturally falls through T2 to T3 because
--# `find_bfscfg_exe` returns `Ok(None)`. Enable explicitly on hosts where
--# bfscfg.exe is known safe to invoke.
--tier2_bfs = []
-+"force-tier-testing" = []
-+"tier2_bfs" = []
- 
- [dependencies]
--wxc_common = { workspace = true }
--serde = { workspace = true }
--serde_json = { workspace = true }
--thiserror = { workspace = true }
--getrandom = { workspace = true }
-+"wxc_common" = { "path" = "../../../core/wxc_common" }
-+"serde" = { "version" = "1", "features" = ["derive"] }
-+"serde_json" = { "version" = "1", "features" = ["raw_value"] }
-+"thiserror" = { "version" = "2" }
-+"getrandom" = { "version" = "0.2" }
- 
--[target.'cfg(target_os = "windows")'.dependencies]
--windows = { workspace = true }
--windows-core = { workspace = true }
--flatbuffers = { workspace = true }
--process_security_environment_spec = { workspace = true }
--widestring = { workspace = true }
--winreg = { workspace = true }
--learning_mode_windows = { workspace = true }
--learning_mode_core = { workspace = true }
-+[target."cfg(target_os = \"windows\")".dependencies]
-+"windows" = { "version" = "0.62", "features" = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_NetworkManagement_WindowsFirewall", "Win32_Security", "Win32_Security_Authorization", "Win32_Security_Credentials", "Win32_Security_Isolation", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Console", "Win32_System_Diagnostics_Debug", "Win32_System_Diagnostics_Etw", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Environment", "Win32_System_IO", "Win32_System_JobObjects", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Ole", "Win32_System_Pipes", "Win32_System_ProcessStatus", "Win32_System_Registry", "Win32_System_SystemInformation", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_Time", "Win32_System_Variant", "Win32_System_WindowsProgramming", "Win32_UI_Shell"] }
-+"windows-core" = { "version" = "0.62" }
-+"flatbuffers" = { "version" = "25" }
-+"process_security_environment_spec" = { "git" = "https://github.com/microsoft/mxc", "rev" = "46ce71d0da7b97bb531a33e175bf4166ffa730c0" }
-+"widestring" = { "version" = "1" }
-+"winreg" = { "version" = "0.55" }
-+"learning_mode_windows" = { "git" = "https://github.com/microsoft/mxc", "rev" = "46ce71d0da7b97bb531a33e175bf4166ffa730c0" }
-+"learning_mode_core" = { "git" = "https://github.com/microsoft/mxc", "rev" = "46ce71d0da7b97bb531a33e175bf4166ffa730c0" }
- 
- [dev-dependencies]
--tempfile.workspace = true
--learning_mode_windows = { workspace = true, features = ["test-support"] }
-+"tempfile" = { "version" = "3" }
-+"learning_mode_windows" = { "features" = ["test-support"], "git" = "https://github.com/microsoft/mxc", "rev" = "46ce71d0da7b97bb531a33e175bf4166ffa730c0" }
-diff --git a/src/backends/process_container/common/src/base_container_runner.rs b/src/backends/process_container/common/src/base_container_runner.rs
---- a/src/backends/process_container/common/src/base_container_runner.rs
-+++ b/src/backends/process_container/common/src/base_container_runner.rs
-@@ -15,6 +15,9 @@
- 
- use learning_mode_core::DenialAnalyzer;
- use learning_mode_windows::{EtlDenialAnalyzer, LEARNING_MODE_API_SET};
-+
-+use learning_mode_windows::LearningModeError;
-+use windows::Win32::Foundation::ERROR_NOT_SUPPORTED;
- use windows::Win32::Foundation::{
-     CloseHandle, GetLastError, SetHandleInformation, ERROR_CALL_NOT_IMPLEMENTED, E_NOTIMPL, HANDLE,
-     HANDLE_FLAG_INHERIT, WAIT_OBJECT_0, WAIT_TIMEOUT,
-@@ -28,6 +31,7 @@
-     STARTF_USESTDHANDLES, STARTUPINFOW,
- };
- use windows_core::{PCWSTR, PWSTR};
-+use wxc_common::mxc_error::{ApiFailure, MxcError};
- 
- use crate::base_container_helpers::{
-     build_psec_v1_security_environment_spec, has_conflicting_proxy_identity,
-@@ -46,8 +50,8 @@
- use crate::native_capture::CaptureSession;
- use crate::proxy_coordinator::ProxyCoordinator;
- use crate::secenv::{
--    self, ProcessSecurityEnvironment, SecurityEnvironmentStartupInfo, SecurityEnvironmentSupport,
--    SecurityEnvironmentVersion, PROCESS_SECURITY_ENVIRONMENT_FLAG_NONE,
-+    self, ProcessSecurityEnvironment, SecurityEnvironmentApi, SecurityEnvironmentStartupInfo,
-+    SecurityEnvironmentSupport, SecurityEnvironmentVersion, PROCESS_SECURITY_ENVIRONMENT_FLAG_NONE,
-     SECURITY_ENVIRONMENT_API_SET,
- };
- use wxc_common::api_set::is_api_set_implemented;
-@@ -151,6 +155,58 @@
-     err == ERROR_CALL_NOT_IMPLEMENTED.0 || err == E_NOTIMPL.0 as u32
- }
- 
-+fn hresult_from_win32(code: u32) -> u32 {
-+    if code == 0 {
-+        0
-+    } else {
-+        (code & 0x0000_ffff) | 0x8007_0000
-+    }
-+}
-+
-+fn psec_probe_error(error: LearningModeError) -> MxcError {
-+    let unsupported = match &error {
-+        LearningModeError::ApiSetUnavailable { .. } | LearningModeError::ExportMissing { .. } => {
-+            true
-+        }
-+        LearningModeError::HResultCall { code, .. } => {
-+            let code = *code as u32;
-+            code == E_NOTIMPL.0 as u32
-+                || code == hresult_from_win32(ERROR_CALL_NOT_IMPLEMENTED.0)
-+                || code == hresult_from_win32(ERROR_NOT_SUPPORTED.0)
-+        }
-+        LearningModeError::ApiCall { code, .. } => {
-+            *code == ERROR_CALL_NOT_IMPLEMENTED.0 || *code == ERROR_NOT_SUPPORTED.0
-+        }
-+        LearningModeError::DllLoad(_) | LearningModeError::InvalidInput { .. } => false,
-+    };
-+    let failure = match &error {
-+        LearningModeError::ApiSetUnavailable { api_set, .. } => {
-+            Some(ApiFailure::new(format!("IsApiSetImplemented({api_set})")))
-+        }
-+        LearningModeError::DllLoad(_) => Some(ApiFailure::new("LoadLibraryExW(processmodel.dll)")),
-+        LearningModeError::ExportMissing { export, .. } => {
-+            Some(ApiFailure::new(format!("GetProcAddress({export})")))
-+        }
-+        LearningModeError::HResultCall { function, code } => {
-+            Some(ApiFailure::new(*function).with_native_code(format!("0x{:08X}", *code as u32)))
-+        }
-+        LearningModeError::ApiCall { function, code } => {
-+            Some(ApiFailure::new(*function).with_native_code(code.to_string()))
-+        }
-+        LearningModeError::InvalidInput { .. } => None,
-+    };
-+    let message = error.to_string();
-+    let mut result = if unsupported {
-+        MxcError::unsupported_containment(message)
-+    } else {
-+        MxcError::backend_unavailable(message)
-+    };
-+    if let Some(failure) = failure {
-+        result = result.with_api_failure(failure);
-+    }
-+    result
-+}
-+
- trait CaptureSessionOps {
-     fn environment(&self) -> HANDLE;
-     fn finish(
-@@ -231,6 +287,84 @@
- }
- 
- impl BaseContainerRunner {
-+    /// Verifies that PSEC can implement this exact request without starting the
-+    /// user command. Confirmed missing capabilities return UnsupportedContainment;
-+    /// API, resource and cleanup failures retain their operation and native code.
-+    pub fn require_psec(request: &ExecutionRequest) -> Result<(), MxcError> {
-+        if request.policy.least_privilege_mode {
-+            return Err(MxcError::unsupported_containment(
-+                "PSEC does not support the requested least-privilege process mode",
-+            ));
-+        }
-+        if request.policy.network_proxy.is_enabled()
-+            && !request.policy.runtime_network_proxy_specified
-+        {
-+            return Err(MxcError::unsupported_containment(
-+                "PSEC requires the runtime proxy contract for proxied networking",
-+            ));
-+        }
-+
-+        let api = SecurityEnvironmentApi::load().map_err(psec_probe_error)?;
-+        let version = Self::choose_min_required_psec_version_for_request(request);
-+        if !api
-+            .supports_version(u32::from(version.major), u32::from(version.minor))
-+            .map_err(psec_probe_error)?
-+        {
-+            return Err(MxcError::unsupported_containment(
-+                "the required PSEC contract is unavailable",
-+            ));
-+        }
-+        for (requested, capability, message) in [
-+            (
-+                !request.policy.denied_paths.is_empty(),
-+                SecurityEnvironmentSupport::FileSystemDeny,
-+                "PSEC cannot enforce the requested denied paths",
-+            ),
-+            (
-+                !request.policy.enumerate_paths.is_empty(),
-+                SecurityEnvironmentSupport::FileSystemEnumerate,
-+                PSEC_ENUMERATE_PATHS_UNSUPPORTED_MSG,
-+            ),
-+            (
-+                unrestricted_host_loopback_allowed(&request.policy),
-+                SecurityEnvironmentSupport::NetworkIngress,
-+                PSEC_INGRESS_UNSUPPORTED_MSG,
-+            ),
-+        ] {
-+            if requested && !api.query_support(capability).map_err(psec_probe_error)? {
-+                return Err(MxcError::unsupported_containment(message));
-+            }
-+        }
-+        let ingress = version >= SecurityEnvironmentVersion::V1_1
-+            && api
-+                .query_support(SecurityEnvironmentSupport::NetworkIngress)
-+                .map_err(psec_probe_error)?;
-+        let specification = build_psec_v1_security_environment_spec(request, version, ingress);
-+        if request.policy.capture_denials.is_some() {
-+            let session =
-+                CaptureSession::begin(&specification, PROCESS_SECURITY_ENVIRONMENT_FLAG_NONE)
-+                    .map_err(psec_probe_error)?;
-+            let startup = SecurityEnvironmentStartupInfo::new(
-+                STARTUPINFOW::default(),
-+                session.environment(),
-+                &[],
-+            );
-+            let cleanup = session.finish(None);
-+            // Both operations run before their results are returned, so failed
-+            // startup preparation still closes the trace and environment.
-+            startup.map(drop).map_err(psec_probe_error)?;
-+            cleanup.map_err(psec_probe_error)?;
-+            return Ok(());
-+        }
-+        let environment = api
-+            .create(&specification, PROCESS_SECURITY_ENVIRONMENT_FLAG_NONE)
-+            .map_err(psec_probe_error)?;
-+        let startup =
-+            SecurityEnvironmentStartupInfo::new(STARTUPINFOW::default(), environment.raw(), &[]);
-+        environment.close();
-+        startup.map(drop).map_err(psec_probe_error)
-+    }
-+
-     pub fn new() -> Self {
-         Self::default()
-     }
-@@ -3289,3 +3423,7 @@
-     // BaseContainer native-PSEC exception) is exercised as a consolidated
-     // matrix in `crate::guarded_capture`'s tests, so it is not duplicated here.
- }
-+
-+#[cfg(test)]
-+#[path = "psec_tests.rs"]
-+mod psec_tests;
-diff --git a/src/backends/process_container/common/src/psec_tests.rs b/src/backends/process_container/common/src/psec_tests.rs
-new file mode 100644
---- /dev/null
-+++ b/src/backends/process_container/common/src/psec_tests.rs
-@@ -0,0 +1,53 @@
-+use super::*;
-+
-+#[test]
-+fn psec_probe_classifies_only_confirmed_missing_capabilities_as_unsupported() {
-+    for error in [
-+        LearningModeError::ApiSetUnavailable {
-+            api: "process security-environment",
-+            api_set: "api-ms-win-security-basecontainer-l1-1-0",
-+        },
-+        LearningModeError::ExportMissing {
-+            api: "process security-environment",
-+            export: "CreateProcessSecurityEnvironment",
-+            detail: "missing".into(),
-+        },
-+        LearningModeError::HResultCall {
-+            function: "CreateProcessSecurityEnvironment",
-+            code: E_NOTIMPL.0,
-+        },
-+        LearningModeError::ApiCall {
-+            function: "UpdateProcThreadAttribute",
-+            code: ERROR_NOT_SUPPORTED.0,
-+        },
-+    ] {
-+        let result = psec_probe_error(error);
-+        assert_eq!(
-+            result.code,
-+            wxc_common::mxc_error::MxcErrorCode::UnsupportedContainment
-+        );
-+        assert!(result.operation().is_some());
-+    }
-+}
-+
-+#[test]
-+fn psec_probe_preserves_operational_failures_instead_of_enabling_fallback() {
-+    let error = psec_probe_error(LearningModeError::HResultCall {
-+        function: "CreateProcessSecurityEnvironment",
-+        code: windows::Win32::Foundation::E_ACCESSDENIED.0,
-+    });
-+
-+    assert_eq!(
-+        error.code,
-+        wxc_common::mxc_error::MxcErrorCode::BackendUnavailable
-+    );
-+    assert_eq!(error.operation(), Some("CreateProcessSecurityEnvironment"));
-+    assert_eq!(error.native_code(), Some("0x80070005"));
-+
-+    let load = psec_probe_error(LearningModeError::DllLoad("bad image".into()));
-+    assert_eq!(
-+        load.code,
-+        wxc_common::mxc_error::MxcErrorCode::BackendUnavailable
-+    );
-+    assert_eq!(load.operation(), Some("LoadLibraryExW(processmodel.dll)"));
-+}
+-#[path = "../../../support/state_aware/provision/isolation_session.rs"]
++#[path = "provision/../../../support/state_aware/provision/isolation_session.rs"]
+ mod isolation_session;
++#[path = "provision/windows_sandbox.rs"]
+ mod windows_sandbox;
++#[path = "provision/wslc.rs"]
+ mod wslc;
+diff --git a/src/mxc-sdk/tests/mxc_contract/v1_1_0_alpha.rs b/src/mxc-sdk/tests/mxc_contract/v1_1_0_alpha.rs
+--- a/src/mxc-sdk/tests/mxc_contract/v1_1_0_alpha.rs
++++ b/src/mxc-sdk/tests/mxc_contract/v1_1_0_alpha.rs
+@@ -68,7 +68,7 @@
+ mod seatbelt;
+ #[path = "support/state_aware.rs"]
+ mod state_aware;
+-#[path = "v1_1_0_alpha/state_aware/provision/mod.rs"]
++#[path = "v1_1_0_alpha/state_aware/provision.rs"]
+ mod state_aware_provision;
+ #[path = "v1_1_0_alpha/wslc.rs"]
+ mod wslc;
+diff --git a/src/mxc-sdk/tests/unix_pty_contract/mod.rs b/src/mxc-sdk/tests/unix_pty_contract.rs
+rename from src/mxc-sdk/tests/unix_pty_contract/mod.rs
+rename to src/mxc-sdk/tests/unix_pty_contract.rs

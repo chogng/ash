@@ -30,7 +30,7 @@ fn restored_acl_journal_directory_does_not_block_runner_update() {
     let journal = temp.path().join("acl").join(&accounts[0].sid);
     let writable = temp.path().join("writable");
     std::fs::create_dir(&writable).unwrap();
-    let mut manager = wxc_common::filesystem_dacl::DaclManager::in_directory(&journal).unwrap();
+    let mut manager = mxc_sdk::mxc_common::filesystem_dacl::DaclManager::in_directory(&journal).unwrap();
     manager
         .grant_appcontainer_access(&accounts[0].sid, &[writable], &[])
         .unwrap();

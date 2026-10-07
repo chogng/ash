@@ -8,6 +8,7 @@ mod backends;
 mod dir;
 mod error;
 mod filesystem;
+mod filesystem_snapshot;
 mod manager;
 mod model;
 mod process;
@@ -28,6 +29,7 @@ pub use filesystem::ResolvedFileSystem;
 pub use filesystem::SandboxPathAccess;
 pub use filesystem::SandboxPathRule;
 pub use filesystem::reject_linked_file;
+pub use filesystem_snapshot::FilesystemSnapshot;
 pub use manager::{SandboxBackend, SandboxManager};
 pub use model::{
     FileSystemAccess, ManagedNetworkAccess, NetworkAccess, PreparedCommand, ProcessIo,

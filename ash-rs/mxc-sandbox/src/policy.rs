@@ -6,12 +6,12 @@ use ash_sandboxing::SandboxCommand;
 use ash_sandboxing::SandboxError;
 use ash_sandboxing::SandboxPolicy;
 use ash_sandboxing::SandboxScope;
-use mxc_config_contract::published::v1_0_0 as contract;
-use mxc_config_contract::published::v1_0_0::OptionalField;
+use mxc_sdk::mxc_common::models::ContainerPolicy;
+use mxc_sdk::mxc_contract::published::v1_0_0 as contract;
+use mxc_sdk::mxc_contract::published::v1_0_0::OptionalField;
 use std::path::Path;
 #[cfg(target_os = "macos")]
 use std::time::{Duration, Instant};
-use wxc_common::models::ContainerPolicy;
 
 pub(super) fn request(
     command: &SandboxCommand,
@@ -37,129 +37,35 @@ pub(super) fn request(
         return Err(unavailable("invalid command arguments"));
     }
     let context = if cfg!(windows) {
-        wxc_common::cmdline::CommandLineContext::WindowsCreateProcess
+        mxc_sdk::mxc_common::cmdline::CommandLineContext::WindowsCreateProcess
     } else {
-        wxc_common::cmdline::CommandLineContext::PosixShell
+        mxc_sdk::mxc_common::cmdline::CommandLineContext::PosixShell
     };
-    let script = wxc_common::cmdline::cmdline_from_argv_for_context(&argv, context)
+    let script = mxc_sdk::mxc_common::cmdline::cmdline_from_argv_for_context(&argv, context)
         .map_err(|error| unavailable(error.to_string()))?;
     let script = if cfg!(unix) {
         format!("exec {script}")
     } else {
         script
     };
-    let runtime_config = match (policy.network(), command.network_proxy()) {
-        (NetworkAccess::Managed, Some(proxy)) if proxy.ports()[0] == proxy.ports()[1] => {
-            #[cfg(windows)]
-            return Err(SandboxError::UnsupportedPolicy(
-                "Windows PSEC cannot enforce the requested managed-proxy path while denying unapproved inbound private-network traffic".into(),
-            ));
-            #[cfg(not(windows))]
-            {
-                OptionalField::present(contract::RuntimeConfig {
-                    network_proxy: OptionalField::present(format!(
-                        "http://127.0.0.1:{}",
-                        proxy.ports()[0]
-                    )),
-                })
+    let proxy_port = command
+        .network_proxy()
+        .map(|proxy| {
+            if proxy.ports()[0] != proxy.ports()[1] {
+                return Err(unavailable(
+                    "managed networking requires one execution-owned HTTP/SOCKS endpoint",
+                ));
             }
-        }
-        (NetworkAccess::Allowed | NetworkAccess::Denied, None) => OptionalField::default(),
-        _ => {
-            return Err(unavailable(
-                "managed networking requires one execution-owned HTTP/SOCKS endpoint",
-            ));
-        }
-    };
-    let action = || match policy.network() {
-        NetworkAccess::Allowed => contract::NetworkAction::Allow,
-        NetworkAccess::Denied | NetworkAccess::Managed => contract::NetworkAction::Deny,
-    };
-    #[cfg(windows)]
-    let (ui, process_container) = (
-        OptionalField::present(contract::Ui {
-            disable: OptionalField::present(false),
-            clipboard: OptionalField::present(contract::UiClipboard::None),
-            injection: OptionalField::present(false),
-        }),
-        OptionalField::present(contract::ProcessContainer {
-            least_privilege: OptionalField::default(),
-            learning_mode: OptionalField::default(),
-            capabilities: OptionalField::present(vec![
-                contract::ProcessContainerCapability::new("registryRead".into())
-                    .map_err(unavailable)?,
-            ]),
-            capture_denials: OptionalField::default(),
-            ui: OptionalField::present(contract::ProcessContainerUi {
-                isolation: OptionalField::present(contract::ProcessContainerUiIsolation::Desktop),
-                desktop_system_control: OptionalField::present(false),
-                system_settings: OptionalField::present("none".into()),
-                ime: OptionalField::present(false),
-            }),
-            filesystem: OptionalField::default(),
-            network: OptionalField::default(),
-        }),
-    );
-    #[cfg(not(windows))]
-    let (ui, process_container) = (OptionalField::default(), OptionalField::default());
-    let config = contract::OneShotRequest {
-        schema: OptionalField::default(),
-        comment: OptionalField::default(),
-        version: contract::Version::V1_0_0,
-        container_id: OptionalField::default(),
-        containment: OptionalField::present(if cfg!(windows) {
-            contract::OneShotContainment::ProcessContainer
-        } else if cfg!(target_os = "linux") {
-            contract::OneShotContainment::Bubblewrap
-        } else {
-            contract::OneShotContainment::Seatbelt
-        }),
-        process: contract::Process {
-            command_line: contract::NonEmptyString::new(script).map_err(unavailable)?,
-            cwd: OptionalField::present(text(command.working_directory())?),
-            env: OptionalField::default(),
-            inherit_default_env: OptionalField::present(false),
-            timeout: OptionalField::default(),
-        },
-        lifecycle: OptionalField::present(contract::Lifecycle {
-            destroy_on_exit: OptionalField::present(true),
-            preserve_policy: OptionalField::present(false),
-        }),
-        filesystem: OptionalField::present(contract::Filesystem {
-            readwrite_paths: OptionalField::present(filesystem.readwrite_paths),
-            readonly_paths: OptionalField::present(filesystem.readonly_paths),
-            denied_paths: OptionalField::present(filesystem.denied_paths),
-        }),
-        network: OptionalField::present(contract::Network {
-            egress: OptionalField::present(contract::NetworkEgress {
-                default: OptionalField::present(action()),
-                allow: OptionalField::default(),
-                deny: OptionalField::default(),
-            }),
-            ingress: OptionalField::present(contract::NetworkIngress {
-                default: OptionalField::present(action()),
-                host_loopback: OptionalField::present(action()),
-            }),
-        }),
-        // Ash selects the isolation model before launch. The SDK may not
-        // authorize host ACL changes or choose a different implementation.
-        fallback: OptionalField::present(contract::Fallback {
-            allow_dacl_mutation: OptionalField::present(false),
-        }),
-        runtime_config,
-        ui,
-        process_container,
-        seatbelt: OptionalField::default(),
-        lxc: OptionalField::default(),
-        wslc: OptionalField::default(),
-        telemetry: OptionalField::default(),
-    };
-    let mut logger = wxc_common::logger::Logger::new(wxc_common::logger::Mode::Buffer);
-    let inner = wxc_common::config_parser::load_one_shot_request_from_contract(
-        wxc_common::config_parser::ExactOneShotContract::V1_0(Box::new(config)),
-        &mut logger,
-    )
-    .map_err(|error| unavailable(error.to_string()))?;
+            Ok(proxy.ports()[0])
+        })
+        .transpose()?;
+    let inner = sdk_request(
+        script,
+        text(command.working_directory())?,
+        filesystem,
+        policy.network(),
+        proxy_port,
+    )?;
     let mut request = crate::request::Request::new(inner)?;
     if resolved_filesystem.host_read() == HostReadScope::Host {
         #[cfg(windows)]
@@ -349,3 +255,120 @@ fn with_sensitive_ipc_paths(filesystem: ContainerPolicy) -> ContainerPolicy {
 #[cfg(test)]
 #[path = "policy_tests.rs"]
 mod tests;
+
+pub(super) fn sdk_request(
+    script: String,
+    cwd: String,
+    filesystem: ContainerPolicy,
+    network: NetworkAccess,
+    proxy_port: Option<u16>,
+) -> Result<mxc_sdk::mxc_common::models::ExecutionRequest, SandboxError> {
+    #[cfg(windows)]
+    if network == NetworkAccess::Managed {
+        return Err(SandboxError::UnsupportedPolicy(
+            "Windows PSEC cannot enforce the requested managed-proxy path while denying unapproved inbound private-network traffic".into(),
+        ));
+    }
+    let runtime_config = match (network, proxy_port) {
+        (NetworkAccess::Managed, Some(port)) => OptionalField::present(contract::RuntimeConfig {
+            network_proxy: OptionalField::present(format!("http://127.0.0.1:{}", port)),
+        }),
+        (NetworkAccess::Allowed | NetworkAccess::Denied, None) => OptionalField::default(),
+        _ => {
+            return Err(unavailable(
+                "managed networking requires one execution-owned HTTP/SOCKS endpoint",
+            ));
+        }
+    };
+    let action = || match network {
+        NetworkAccess::Allowed => contract::NetworkAction::Allow,
+        NetworkAccess::Denied | NetworkAccess::Managed => contract::NetworkAction::Deny,
+    };
+    #[cfg(windows)]
+    let (ui, process_container) = (
+        OptionalField::present(contract::Ui {
+            disable: OptionalField::present(false),
+            clipboard: OptionalField::present(contract::UiClipboard::None),
+            injection: OptionalField::present(false),
+        }),
+        OptionalField::present(contract::ProcessContainer {
+            least_privilege: OptionalField::default(),
+            learning_mode: OptionalField::default(),
+            capabilities: OptionalField::present(vec![
+                contract::ProcessContainerCapability::new("registryRead".into())
+                    .map_err(unavailable)?,
+            ]),
+            capture_denials: OptionalField::default(),
+            ui: OptionalField::present(contract::ProcessContainerUi {
+                isolation: OptionalField::present(contract::ProcessContainerUiIsolation::Desktop),
+                desktop_system_control: OptionalField::present(false),
+                system_settings: OptionalField::present("none".into()),
+                ime: OptionalField::present(false),
+            }),
+            filesystem: OptionalField::default(),
+            network: OptionalField::default(),
+        }),
+    );
+    #[cfg(not(windows))]
+    let (ui, process_container) = (OptionalField::default(), OptionalField::default());
+    let config = contract::OneShotRequest {
+        schema: OptionalField::default(),
+        comment: OptionalField::default(),
+        version: contract::Version::V1_0_0,
+        container_id: OptionalField::default(),
+        containment: OptionalField::present(if cfg!(windows) {
+            contract::OneShotContainment::ProcessContainer
+        } else if cfg!(target_os = "linux") {
+            contract::OneShotContainment::Bubblewrap
+        } else {
+            contract::OneShotContainment::Seatbelt
+        }),
+        process: contract::Process {
+            command_line: contract::NonEmptyString::new(script).map_err(unavailable)?,
+            cwd: OptionalField::present(cwd),
+            env: OptionalField::default(),
+            inherit_default_env: OptionalField::present(false),
+            timeout: OptionalField::default(),
+        },
+        lifecycle: OptionalField::present(contract::Lifecycle {
+            destroy_on_exit: OptionalField::present(true),
+            preserve_policy: OptionalField::present(false),
+        }),
+        filesystem: OptionalField::present(contract::Filesystem {
+            readwrite_paths: OptionalField::present(filesystem.readwrite_paths),
+            readonly_paths: OptionalField::present(filesystem.readonly_paths),
+            denied_paths: OptionalField::present(filesystem.denied_paths),
+        }),
+        network: OptionalField::present(contract::Network {
+            egress: OptionalField::present(contract::NetworkEgress {
+                default: OptionalField::present(action()),
+                allow: OptionalField::default(),
+                deny: OptionalField::default(),
+            }),
+            ingress: OptionalField::present(contract::NetworkIngress {
+                default: OptionalField::present(action()),
+                host_loopback: OptionalField::present(action()),
+            }),
+        }),
+        // Ash selects the isolation model before launch. The SDK may not
+        // authorize host ACL changes or choose a different implementation.
+        fallback: OptionalField::present(contract::Fallback {
+            allow_dacl_mutation: OptionalField::present(false),
+        }),
+        runtime_config,
+        ui,
+        process_container,
+        seatbelt: OptionalField::default(),
+        lxc: OptionalField::default(),
+        wslc: OptionalField::default(),
+        telemetry: OptionalField::default(),
+    };
+    let mut logger =
+        mxc_sdk::mxc_common::logger::Logger::new(mxc_sdk::mxc_common::logger::Mode::Buffer);
+    let inner = mxc_sdk::mxc_common::config_parser::load_one_shot_request_from_contract(
+        mxc_sdk::mxc_common::config_parser::ExactOneShotContract::V1_0(Box::new(config)),
+        &mut logger,
+    )
+    .map_err(|error| unavailable(error.to_string()))?;
+    Ok(inner)
+}

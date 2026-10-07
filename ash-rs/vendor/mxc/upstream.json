@@ -1,10 +1,7 @@
 {
   "repository": "https://github.com/microsoft/mxc",
-  "revision": "46ce71d0da7b97bb531a33e175bf4166ffa730c0",
+  "revision": "c45e7d5a485036d88f469aa363efaa3c651564bc",
   "packages": {
-    "wxc_common": "core/wxc_common",
-    "bwrap_common": "backends/bubblewrap/common",
-    "seatbelt_common": "backends/seatbelt/common",
-    "process_container_common": "backends/process_container/common"
+    "mxc-sdk": "mxc-sdk"
   }
 }

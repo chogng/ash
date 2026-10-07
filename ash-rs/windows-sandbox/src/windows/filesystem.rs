@@ -5,6 +5,7 @@ use super::Execution;
 use super::win;
 use super::win::Handle;
 use super::win::Result;
+use mxc_sdk::mxc_common::filesystem_dacl::DaclManager;
 use std::collections::BTreeSet;
 use std::os::windows::fs::MetadataExt;
 use std::path::Path;
@@ -17,7 +18,40 @@ use windows_sys::Win32::Storage::FileSystem::FILE_READ_ATTRIBUTES;
 use windows_sys::Win32::Storage::FileSystem::FILE_SHARE_READ;
 use windows_sys::Win32::Storage::FileSystem::FILE_SHARE_WRITE;
 use windows_sys::Win32::Storage::FileSystem::OPEN_EXISTING;
-use wxc_common::filesystem_dacl::DaclManager;
+
+/// The host paths on which an embedding application authorized ACL changes.
+/// This value is never deserialized from a sandbox command or policy document.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub(super) struct HostAclScope {
+    objects: ash_sandboxing::FilesystemSnapshot,
+}
+
+impl HostAclScope {
+    /// Resolve the independently authorized roots before preparing execution.
+    pub fn new(paths: impl IntoIterator<Item = PathBuf>) -> std::io::Result<Self> {
+        Ok(Self {
+            objects: ash_sandboxing::FilesystemSnapshot::capture(paths)?,
+        })
+    }
+
+    /// Require the actual target to remain inside the authorized roots.
+    /// Missing, inaccessible, and redirected targets do not acquire authority.
+    pub fn check(&self, path: &Path) -> std::io::Result<()> {
+        self.objects.validate()?;
+        let target = std::fs::canonicalize(path)?;
+        if self.objects.paths().any(|root| target.starts_with(root)) {
+            Ok(())
+        } else {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                format!(
+                    "host ACL changes were not authorized for '{}'",
+                    path.display()
+                ),
+            ))
+        }
+    }
+}
 
 pub(super) struct Filesystem {
     manager: DaclManager,
@@ -165,9 +199,9 @@ impl Filesystem {
         }
         // Check delegation before any ACL change. An elevated setup process is
         // never used to reinterpret a caller's filesystem grants.
-        wxc_common::filesystem_access::check_delegation(&request.files)
+        mxc_sdk::mxc_common::filesystem_access::check_delegation(&request.files)
             .map_err(|error| error.to_string())?;
-        let report = wxc_common::filesystem_dacl::recover_orphaned_state_in(journal)
+        let report = mxc_sdk::mxc_common::filesystem_dacl::recover_orphaned_state_in(journal)
             .map_err(|error| error.to_string())?;
         if !report.errors.is_empty() {
             return Err("orphaned Windows ACL state must be recovered before execution".into());
@@ -211,7 +245,7 @@ impl Filesystem {
     }
 }
 
-pub(super) fn validate(policy: &wxc_common::models::ContainerPolicy) -> Result<()> {
+pub(super) fn validate(policy: &mxc_sdk::mxc_common::models::ContainerPolicy) -> Result<()> {
     use windows_sys::Win32::Storage::FileSystem::BY_HANDLE_FILE_INFORMATION;
     use windows_sys::Win32::Storage::FileSystem::GetFileInformationByHandle;
     let writable = policy

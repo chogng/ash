@@ -1,18 +1,23 @@
 use libtest_mimic::Arguments;
+#[cfg(windows)]
 use libtest_mimic::Trial;
+#[cfg(windows)]
 use test_binary_support::TestBinary;
 
-#[cfg(target_os = "macos")]
+#[cfg(unix)]
 #[path = "pty/cases.rs"]
 mod cases;
 
+#[cfg(windows)]
 fn helper() -> TestBinary {
     TestBinary::role(mxc_sandbox::PTY_HELPER_ARGUMENT).unwrap()
 }
 
 fn main() {
+    #[cfg(windows)]
     helper().dispatch(mxc_sandbox::run_pty_helper);
-    let mut tests = vec![Trial::test("helper_requires_a_launch_request", || {
+    #[cfg(windows)]
+    let tests = vec![Trial::test("helper_requires_a_launch_request", || {
         let output = helper()
             .command()
             .env_remove("ASH_MXC_PTY_REQUEST")
@@ -27,15 +32,7 @@ fn main() {
         );
         Ok(())
     })];
-    // These scenarios exercise Seatbelt. Linux and Windows require their respective
-    // sandbox backends on a real host; compiling this target does not validate them.
-    if cfg!(target_os = "macos") {
-        #[cfg(target_os = "macos")]
-        tests.extend(cases::trials());
-    } else {
-        tests.push(
-            Trial::test("pty_process_scenarios_require_macos", || Ok(())).with_ignored_flag(true),
-        );
-    }
+    #[cfg(unix)]
+    let tests = cases::trials();
     libtest_mimic::run(&Arguments::from_args(), tests).exit();
 }

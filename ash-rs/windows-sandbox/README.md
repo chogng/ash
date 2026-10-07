@@ -71,4 +71,4 @@ just test ash-app-server --lib windows_shell_turn_enforces_account_isolation_thr
 ./scripts/test-windows-sandbox.ps1 -Target x86_64-pc-windows-msvc -NetworkDnsServer '[2606:4700:4700::1111]:53' -NetworkPublicIpv6Http '[2606:4700:4700::1111]:80'
 ```
 
-网络连接进程归属实现参考 Codex `da20788df913189878ebca7f4963d8a363ee6bf2`；对应许可与归属保存在 `LICENSE-APACHE` 和 `NOTICE`。文件 ACL 日志复用固定版本的 `wxc_common`，不引入 Codex 的协议或产品配置。
+网络连接进程归属实现参考 Codex `da20788df913189878ebca7f4963d8a363ee6bf2`；对应许可与归属保存在 `LICENSE-APACHE` 和 `NOTICE`。文件 ACL 日志复用固定版本的 `mxc-sdk` 的 `mxc_common`，不引入 Codex 的协议或产品配置。

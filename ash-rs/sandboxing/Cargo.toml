@@ -11,6 +11,8 @@ name = "ash_sandboxing"
 path = "src/lib.rs"
 
 [dependencies]
+ash-file-identity = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 globset = { workspace = true }
 ash-utils-pty = { workspace = true }
 ash-file-access = { workspace = true }
@@ -19,6 +21,7 @@ ash-file-access = { workspace = true }
 winapi-util = { workspace = true }
 
 [dev-dependencies]
+serde_json = { workspace = true }
 tempfile = { workspace = true }
 
 [lints]

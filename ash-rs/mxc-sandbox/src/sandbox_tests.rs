@@ -131,10 +131,13 @@ fn processcontainer_requires_its_proxy_constraints_without_relaxing_the_request(
         "network": {"egress": {"default": "deny"}, "ingress": {"default": "deny", "hostLoopback": "deny"}},
         "runtimeConfig": {"networkProxy": "http://127.0.0.1:3128"}
     });
-    let mut logger = wxc_common::logger::Logger::new(wxc_common::logger::Mode::Buffer);
-    let error =
-        wxc_common::config_parser::load_mxc_request_from_json(&config.to_string(), &mut logger)
-            .unwrap_err();
+    let mut logger =
+        mxc_sdk::mxc_common::logger::Logger::new(mxc_sdk::mxc_common::logger::Mode::Buffer);
+    let error = mxc_sdk::mxc_common::config_parser::load_mxc_request_from_json(
+        &config.to_string(),
+        &mut logger,
+    )
+    .unwrap_err();
     let message = format!("{error:?}").to_ascii_lowercase();
     assert!(
         message.contains("proxy") && (message.contains("ingress") || message.contains("peer")),

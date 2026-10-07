@@ -47,29 +47,27 @@ Linux 网络提供进程退出时，SDK 监控终止工作负载并报告网络�
 
 ## PTY 启动
 
-- 宿主通过 `with_pty_helper` 明确提供启动器路径；`utils-pty` 分配 PTY 后启动该程序的 `--ash-mxc-pty` 内部角色。启动器必须在产品入口前调用 `arg0::dispatch`；适配器不自行解析当前可执行文件，未配置时拒绝受限 PTY。
-- 受信启动交接保存完整文件策略、受管代理端点、固定执行路径和准备阶段的文件身份；普通 MXC 配置仍不能反序列化这些授权字段。
-- 启动参数仅由宿主生成，通过有界环境项交给内部角色；序列化上限 16 KiB，超限在启动前拒绝。
-- 工作负载环境与启动器环境分开，MXC 在应用约束后设置工作负载环境。
-- 显式空环境保持为空，不隐式继承宿主变量；Windows PSEC 要求调用方提供 `SYSTEMROOT` 和 `LOCALAPPDATA`，执行器统一准备它们，缺失时拒绝启动。
-- Seatbelt、Bubblewrap 和 Windows PSEC 继承终端；Windows 不进入其他实现。
-- PTY 输入输出、尺寸、信号和进程树关闭归 Ash 执行句柄管理。
-- `tests/pty.rs` 是仅用于测试的最小宿主，直接调用本 crate 的 PTY 入口；通过 `test-binary-support` 在测试运行器启动前分派，独立验证终端输入、尺寸、权限、退出与回收。
-- macOS 真实进程测试覆盖断连输入、resize、只读拒绝和取消回收；Linux/Windows 交叉编译通过不代表实机验收。
+- Unix 直接使用 SDK 的 `StdioMode::Pty`，由 SDK 分配终端并启动 Bubblewrap 或 Seatbelt。Ash 接入终端输入、合并输出、resize、前台作业中断及进程树关闭。
+- Windows 的 Rust SDK 仍不支持 ProcessContainer 分配 PTY，因此宿主通过 `with_pty_helper` 提供启动器。`utils-pty` 启动该程序的 `--ash-mxc-pty` 角色，产品入口先调用 `arg0::dispatch`。
+- Windows 交接格式归 Ash，包含具体命令、显式环境、文件和网络策略、准备阶段的文件身份。内部角色通过官方发布的 1.0 契约重建 SDK 请求，不反序列化 SDK 内部执行模型。新增宿主 ACL 授权字段会被拒绝。
+- Windows 交接环境项最多 16 KiB。工作负载环境与启动器环境分开，显式空环境保持为空。PSEC 所需的 `SYSTEMROOT` 和 `LOCALAPPDATA` 由执行器提供。
+- `tests/pty.rs` 在 Unix 实际验证输入、resize、环境、只读拒绝、退出、前台作业中断和回收；Windows 验证帮助进程入口。交叉编译不代表对应系统已通过运行验收。
 
 ## SDK 依赖
 
-固定 Microsoft MXC `46ce71d0da7b97bb531a33e175bf4166ffa730c0`。
-为承接 Ash 的现有契约，部分上游 crate 以可审查源码补丁保存在
-[vendor/mxc](../vendor/mxc/README.md)，由根 Cargo patch 配置和 Bazel 使用。
-适配器直接依赖 `mxc_config_contract`、`wxc_common` 及对应平台 crate，不再依赖 `mxc-sdk` 或维护 `mxc_engine` 副本。请求直接构造已发布的 `1.0.0` Rust 类型，再交给 SDK 的契约转换入口；上游 `1.1.0-alpha` 仍是开发契约，crate 版本 `0.9.0` 不等于配置版本。
+固定 Microsoft MXC `c45e7d5a485036d88f469aa363efaa3c651564bc`，使用官方合并后的 `mxc-sdk 1.0.0` 单包。源码及可复核补丁保存在 [vendor/mxc](../vendor/mxc/README.md)，Cargo 与 Bazel 消费同一份源码。
 
-升级在 Ash 内维护：核对上游 release/stable 变更，固定 commit，复核必要补丁，再通过平台与打包验证。当前 pin 是本次审查的源码快照，不将其称为稳定发行版，也不自动追踪 HEAD。
+适配器使用 SDK 已提供的契约和平台运行器导出。公开的 `v1::spawn` 尚不能明确禁止 ACL 改动、锁定 PSEC 运行器或指定受信 Bubblewrap 路径，因此当前保留直接选择运行器的接入；不让 SDK 的实现选择改变 Ash 已确定的隔离要求。
 
-上游仍将此版本标为早期预览，接线与测试不代表生产隔离资格。
-[上游说明](https://github.com/microsoft/mxc/tree/46ce71d0da7b97bb531a33e175bf4166ffa730c0)
+文件身份快照由 `sandboxing` 持有，使用 `file-identity` 的句柄检查；Windows ACL 授权范围由 `windows-sandbox` 持有。SDK 补丁只处理隔离边界、平台能力诊断和资源生命周期。Unix PTY 复用官方实现，补充前台作业中断接口。
+
+升级时固定 commit、对照上游复核补丁，再验证消费者及平台行为。该 pin 是源码快照，上游已移除早期预览说明；这不替代产品自己的隔离验收。[上游源码](https://github.com/microsoft/mxc/tree/c45e7d5a485036d88f469aa363efaa3c651564bc)
 
 ## 验证
+
+2026-10-07 升级至 `c45e7d5a` 后，Windows 适配器 13 项单元测试、文件身份 11 项测试、文件快照 2 项测试、账户文件策略 8 项测试、SDK ACL 35 项测试与继承 2 项测试、PSEC 诊断 2 项测试通过。WSL2 中 Linux 适配器 11 项单元测试和文件快照 2 项测试通过，官方 PTY 的 6 项实机测试通过，覆盖前台作业中断后 shell 继续运行；文件/退出码、后代回收和 Windows 程序互操作绕过的 3 项回归通过。Linux SDK 的退出观察测试和 Seatbelt 策略生成 84 项测试通过；后者不代表 macOS 实际执行验证。
+
+Windows/Linux warning 门禁、Windows 执行服务 Cargo 构建、适配器 Bazel 构建及依赖检查通过。Bazel 会提示官方构建脚本的 3 条 `cargo:rustc-link-arg-bin` 指令不受支持：这些指令给 SDK 的辅助程序添加资源，本次 Ash 库目标不构建这些程序。该提示仍存在，不能据此宣布辅助程序已完成 Bazel 验证。macOS 本轮只完成包含测试目标的交叉编译，Windows PSEC 成功执行与 PTY 仍需对应系统验收。
 
 2026-10-02 在 Windows 11 23H2（build 22631）完成适配器、执行器、执行服务与账户后端的活动测试、执行服务 Cargo 构建、依赖检查和 warning 门禁。另显式运行 PSEC 不可用用例，确认执行前拒绝。同机 WSL2 的 Ubuntu 24.04.5 x64 已实际验证 Bubblewrap：NAT 和 mirrored 模式下，Linux 文件系统及 `/mnt/c` 上的目录权限、隐藏路径与别名、元数据保护、退出码、后代回收和 Windows 可执行文件互操作回归均通过，受管代理用例分别通过。正常构建、适配器及 SDK 的 check 和 warning 门禁通过；SDK 运行器测试 39 项通过。Windows 11 25H2 ARM64 CI 另有 7 项 PSEC 成功路径证据；它不能证明本机 x64 支持。macOS ARM64 仍只有本轮测试目标编译结果，Bazel 打包未验证。具体环境、原始失败及范围见 [WSL 验收记录](../../docs/windows-sandbox-acceptance-runbook.md#2026-10-02-wsl2-实机验收) 与 [补充验收](../../docs/windows-sandbox-acceptance-runbook.md#2026-10-02-psecwslc-与网络补充验收)。
 
@@ -101,7 +99,7 @@ mkdir -p .build/acceptance/wsl/fixtures
 TMPDIR="$PWD/.build/acceptance/wsl/fixtures" just test ash-mxc-sandbox --test wsl --locked -- --ignored --test-threads=1
 ```
 
-Bubblewrap 当前拒绝 Ash `Allowed` 所要求的全部入站权限；不能把该请求的拒绝当作允许网络的执行验收。`tests/network_matrix.rs` 另通过 CommandExecutor 验证 Denied/Managed：IPv4/IPv6 HTTP、CONNECT、SOCKS 的地址和域名授权、未获批目标拒绝、直接 TCP 与 TCP/UDP DNS 的 A/AAAA、实际接收计数和后代继承。NAT/mirrored 实机均通过；两种模式还通过临时隧道出口的公网 IPv6 HTTP 与 TCP/UDP DNS 验证。NAT 覆盖可达的 Windows IPv6 链路本地端口 53，mirrored 覆盖 Windows IPv4 回环；mirrored 的 Windows IPv6 宿主目标仍没有可达性对照。具体出口与清理证据见 [ACL 与 IPv6 复测](../../docs/windows-sandbox-acceptance-runbook.md#2026-10-02-acl-恢复与公网-ipv6-复测)。Linux PTY 未验证；独立 WSLC SDK 已实测但一次性清理报错，Ash 未接入它。
+Bubblewrap 当前拒绝 Ash `Allowed` 所要求的全部入站权限；不能把该请求的拒绝当作允许网络的执行验收。`tests/network_matrix.rs` 另通过 CommandExecutor 验证 Denied/Managed：IPv4/IPv6 HTTP、CONNECT、SOCKS 的地址和域名授权、未获批目标拒绝、直接 TCP 与 TCP/UDP DNS 的 A/AAAA、实际接收计数和后代继承。NAT/mirrored 实机均通过；两种模式还通过临时隧道出口的公网 IPv6 HTTP 与 TCP/UDP DNS 验证。NAT 覆盖可达的 Windows IPv6 链路本地端口 53，mirrored 覆盖 Windows IPv4 回环；mirrored 的 Windows IPv6 宿主目标仍没有可达性对照。具体出口与清理证据见 [ACL 与 IPv6 复测](../../docs/windows-sandbox-acceptance-runbook.md#2026-10-02-acl-恢复与公网-ipv6-复测)。独立 WSLC SDK 已实测但一次性清理报错，Ash 未接入它。
 
 ```sh
 python3 -B scripts/cargo.py build -p ash-network-proxy --example matrix

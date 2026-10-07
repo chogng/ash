@@ -1,9 +1,12 @@
 //! Converts Ash authority into Microsoft MXC SDK requests and adapts its process handles.
 mod policy;
 mod process;
+#[cfg(windows)]
 mod pty;
 mod request;
+#[cfg(windows)]
 pub use pty::PTY_HELPER_ARGUMENT;
+#[cfg(windows)]
 pub use pty::run_pty_helper;
 
 use ash_file_access::Dir;
@@ -22,6 +25,7 @@ use std::path::PathBuf;
 /// MXC-backed execution. Ash selects the backend; MXC creates processes and cleans up OS resources.
 pub struct MxcSandbox {
     runtime: InstallContext,
+    #[cfg(windows)]
     pty_helper: Option<PathBuf>,
 }
 
@@ -30,9 +34,11 @@ impl MxcSandbox {
     pub fn new(context: InstallContext) -> Self {
         Self {
             runtime: context,
+            #[cfg(windows)]
             pty_helper: None,
         }
     }
+    #[cfg(windows)]
     /// Supplies the host executable whose entrypoint dispatches the internal PTY role.
     pub fn with_pty_helper(mut self, executable: PathBuf) -> Self {
         self.pty_helper = Some(executable);
@@ -97,6 +103,7 @@ impl SandboxBackend for MxcSandbox {
             request.set_bubblewrap_executable(&path);
         }
         request.prepare()?;
+        #[cfg(windows)]
         if let ash_sandboxing::ProcessIo::Pty(size) = command.io() {
             let executable = self
                 .pty_helper
@@ -110,6 +117,7 @@ impl SandboxBackend for MxcSandbox {
                 request,
                 scope: scope.clone(),
                 cwd: command.working_directory().to_owned(),
+                io: command.io(),
             },
         ))
     }

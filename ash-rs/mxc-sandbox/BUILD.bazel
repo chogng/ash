@@ -14,7 +14,7 @@ rust_test(
     srcs = ["tests/pty.rs", "tests/pty/cases.rs"],
     edition = "2024",
     use_libtest_harness = False,
-    # Seatbelt must be initialized by the test's helper, outside Bazel's own sandbox.
+    # These scenarios exercise the OS sandbox and its terminal on the host.
     tags = ["no-sandbox"],
     deps = all_crate_deps(normal = True, normal_dev = True) + [":mxc-sandbox"],
 )

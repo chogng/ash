@@ -135,9 +135,13 @@ fn terminal_process_properties_follow_resize_and_reject_other_connections() {
         .create(1, terminal_request(TerminalLifecycle::Reconnectable))
         .unwrap();
     assert!(created.ready.pid > 0);
+    // Windows process paths can omit the extended-length prefix. The terminal
+    // must still start in the exact filesystem directory that was authorized.
     assert_eq!(
-        created.ready.cwd,
-        root.path().canonicalize().unwrap().to_str().unwrap()
+        std::path::Path::new(&created.ready.cwd)
+            .canonicalize()
+            .unwrap(),
+        root.path().canonicalize().unwrap()
     );
     assert_eq!(
         service.process_info(2, &created.terminal_id),

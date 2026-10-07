@@ -165,9 +165,9 @@ pub(super) fn spawn(
         "run".into(),
         input.to_string_lossy().into_owned(),
     ];
-    let command = wxc_common::cmdline::cmdline_from_argv_for_context(
+    let command = mxc_sdk::mxc_common::cmdline::cmdline_from_argv_for_context(
         &arguments,
-        wxc_common::cmdline::CommandLineContext::WindowsCreateProcess,
+        mxc_sdk::mxc_common::cmdline::CommandLineContext::WindowsCreateProcess,
     )
     .map_err(|error| error.to_string())?;
     let mut command = win::wide(command);
@@ -182,7 +182,7 @@ pub(super) fn spawn(
     // The trusted bootstrap has no workspace-relative operations. LogonW's
     // service-side cwd checks cannot use our private pinned runtime directory;
     // use the OS-resolved system directory while keeping the command's own cwd.
-    let worker_directory = wxc_common::system_dir::resolve_system_directory()
+    let worker_directory = mxc_sdk::mxc_common::system_dir::resolve_system_directory()
         .ok_or("could not resolve the Windows system directory")?;
     let started = unsafe {
         CreateProcessWithLogonW(

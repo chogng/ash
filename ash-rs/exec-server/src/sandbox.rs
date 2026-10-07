@@ -19,10 +19,21 @@ impl LocalSandbox {
         }
     }
 
-    /// Configures the executable that dispatches Ash's internal terminal role.
-    pub fn with_pty_helper(mut self, executable: PathBuf) -> Self {
-        self.mxc = self.mxc.with_pty_helper(executable);
-        self
+    /// Configures the Windows executable that dispatches Ash's internal terminal role.
+    /// Unix allocates its terminal through MXC and does not use this host setting.
+    pub fn with_pty_helper(self, executable: PathBuf) -> Self {
+        #[cfg(windows)]
+        {
+            Self {
+                mxc: self.mxc.with_pty_helper(executable),
+                ..self
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = executable;
+            self
+        }
     }
 
     /// Uses MXC first and, on Windows, the account backend for compatible requests.
