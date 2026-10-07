@@ -607,3 +607,72 @@ test('Search Copy uses result selection, explicit context rows and collapsed fol
 	await expect(workbench.search.status).toHaveText('4 results');
 	for (const [path, content] of contents) { expect(await readFile(join(testWorkspace.directory, path), 'utf8')).toBe(content); }
 });
+
+test('Search Copy menus preserve outside focus and release old row callbacks in Electron', async ({ target, application, workbench, testWorkspace }) => {
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Exercises Electron Browser menus with an actual workspace search.');
+	const page = workbench.page;
+	await writeFile(join(testWorkspace.directory, 'main.ts'), 'ash_copy_focus_token original\n');
+	await writeFile(join(testWorkspace.directory, 'other.ts'), 'ash_copy_focus_token other\n');
+	await page.evaluate(async () => {
+		const snapshot = await globalThis.ashTestMainProcess.call('configuration', 'read') as { revision: number; document: { version: 1; source: string; }; };
+		const source = JSON.stringify({ ...JSON.parse(snapshot.document.source), 'window.menuStyle': 'custom' });
+		await globalThis.ashTestMainProcess.call('configuration', 'update', { expectedRevision: snapshot.revision, document: { version: 1, source } });
+	});
+	await expect.poll(() => workbench.menus.isSystemMenu(application)).toBe(false);
+	await (application as ElectronApplication).evaluate(({ clipboard }) => clipboard.writeText('ash-copy-focus-fixture'));
+	const readCopied = () => (application as ElectronApplication).evaluate(({ clipboard }) => clipboard.readText());
+	await workbench.search.open();
+	await workbench.search.search('ash_copy_focus_token');
+	await expect(workbench.search.status).toHaveText('2 results');
+	const tree = workbench.search.element.getByRole('tree');
+	const first = tree.getByRole('treeitem', { name: 'Line 1, column 1: ash_copy_focus_token original', exact: true });
+	const other = tree.getByRole('treeitem', { name: 'Line 1, column 1: ash_copy_focus_token other', exact: true });
+	await first.click();
+	await tree.press('Enter');
+	const editor = workbench.editors.groupAt(0).editor;
+	await expect(editor.input).toBeVisible();
+	const openCopy = async () => {
+		await tree.focus();
+		await tree.press('Shift+F10');
+		await expect(page.getByRole('menuitem', { name: 'Copy', exact: true })).toBeVisible();
+	};
+	await openCopy();
+	await page.keyboard.press('Escape');
+	await expect(tree).toBeFocused();
+	await openCopy();
+	await workbench.search.query.focus();
+	await page.keyboard.press('Escape');
+	await expect(workbench.search.query).toBeFocused();
+	await openCopy();
+	await workbench.search.query.focus();
+	// Dispatch to the result's own content without moving the outside focus first.
+	await other.locator('.ash-search-result').dispatchEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 100, clientY: 100 });
+	await expect(page.getByRole('menu')).toHaveCount(1);
+	await page.keyboard.press('Escape');
+	await expect(workbench.search.query).toBeFocused();
+	await workbench.menus.select(application, () => other.click({ button: 'right' }), ['Copy']);
+	await expect.poll(readCopied).toBe('1,1: ash_copy_focus_token other');
+	await first.click();
+	const removedContent = await first.locator('.ash-search-result').elementHandle();
+	expect(removedContent).not.toBeNull();
+	await openCopy();
+	await editor.input.focus();
+	await writeFile(join(testWorkspace.directory, 'main.ts'), 'ash_copy_focus_token fresh\n');
+	await page.getByRole('button', { name: 'Refresh search', exact: true }).evaluate((button: HTMLButtonElement) => button.click());
+	await expect(workbench.search.status).toHaveText('2 results');
+	await expect(page.getByRole('menu')).toHaveCount(0);
+	await expect(editor.input).toBeFocused();
+	// A retained old DOM handle must not reopen a menu after its listeners are released.
+	await removedContent!.dispatchEvent('contextmenu', { bubbles: true, cancelable: true });
+	await expect(page.getByRole('menu')).toHaveCount(0);
+	expect(await readCopied()).toBe('1,1: ash_copy_focus_token other');
+	await removedContent!.dispose();
+	await tree.getByRole('treeitem', { name: 'Line 1, column 1: ash_copy_focus_token fresh', exact: true }).click();
+	await openCopy();
+	await editor.input.focus();
+	await workbench.openExplorer();
+	await expect(page.getByRole('menu')).toHaveCount(0);
+	await expect(workbench.search.element).toBeHidden();
+	await expect.poll(() => page.evaluate(() => Boolean(document.activeElement?.closest('.ash-search')))).toBe(false);
+	expect(await readFile(join(testWorkspace.directory, 'main.ts'), 'utf8')).toBe('ash_copy_focus_token fresh\n');
+});
