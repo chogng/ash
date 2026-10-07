@@ -120,9 +120,9 @@ Agent 浏览器操作复用同一组目标：Rust 管理工具、批准、超时
 
 ## iframe Webview
 
-`platform/webview/browser/webviewElement.ts` 提供用于 Markdown 预览和受控 HTML 的 `WebviewElement`，创建者负责释放。内容在 `srcdoc` sandbox iframe 中运行，不包含 `allow-same-origin`；固定 CSP 禁止网络子资源、嵌套 frame 和表单提交。
+`workbench/contrib/webview/browser/webview.ts` 提供统一的 `IWebviewService`，用于创建容器、登记存活实例和跟踪当前焦点；Markdown 预览、富文本编辑器和发布说明页共用该服务，创建者负责释放。内容在 `srcdoc` sandbox iframe 中运行，不包含 `allow-same-origin`；固定 CSP 禁止网络子资源、嵌套 frame 和表单提交。
 
-iframe 仅通过 `acquireAshWebviewApi().postMessage()` 通信，宿主校验来源窗口和实例频道；内容没有 Electron IPC 或 Node 能力。扩展宿主、资源 URI 映射和持久化 webview state 尚未提供，见 [iframe Webview](../docs/ash-desktop-architecture.md#62-iframe-webview)。
+iframe 通过 `acquireAshWebviewApi().postMessage()` 通信，宿主校验来源窗口和每次文档独立的频道；宿主消息等待页面就绪再发送，替换页面或释放容器会取消未发送的消息，相同 HTML 保留页面状态。内容没有 Electron IPC 或 Node 能力。资源 URI 映射和持久化 webview state 尚未提供，见 [iframe Webview](../docs/ash-desktop-architecture.md#62-iframe-webview)。
 
 ## Markdown
 

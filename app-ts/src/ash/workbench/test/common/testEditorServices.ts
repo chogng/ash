@@ -30,6 +30,8 @@ import { BrowserStorageService } from '../../services/storage/browser/storageSer
 import type { IFileService } from '../../../platform/files/common/files.js';
 import { FilesConfigurationService, IFilesConfigurationService } from '../../services/filesConfiguration/common/filesConfigurationService.js';
 import { TextFileService } from '../../services/textfile/common/textFileService.js';
+import { IWebviewService } from '../../contrib/webview/browser/webview.js';
+import { WebviewService } from '../../contrib/webview/browser/webviewService.js';
 
 /** Owns the real file-policy dependencies for file-service tests outside a Workbench. */
 export function createTestTextFileService(files: IFileService): TextFileService {
@@ -58,6 +60,9 @@ export function createTestComponentServices(storage?: IStorageService, parent?: 
 }
 
 export function registerTestComponentServices(services: InstantiationService, document: Document = globalThis.document): InstantiationService {
+	if (!services.has(IWebviewService)) {
+		services.registerSingleton(IWebviewService, () => services.createInstance(WebviewService));
+	}
 	if (!services.has(IThemeService)) {
 		services.registerSingleton(IThemeService, () => new TestThemeService(darkColorTheme));
 	}

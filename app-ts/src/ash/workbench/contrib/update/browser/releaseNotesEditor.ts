@@ -6,6 +6,7 @@ import { h, type IDimension } from '../../../../base/browser/dom.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { MarkdownDocumentView } from '../../markdown/browser/markdownDocumentRenderer.js';
 import { ILocaleService } from '../../../services/localization/common/locale.js';
@@ -27,6 +28,7 @@ export class ReleaseNotesEditor extends EditorPane implements IEditorPane {
 		@ILocaleService private readonly locale: ILocaleService,
 		@IOnboardingTryoutService private readonly tryouts: IOnboardingTryoutService,
 		@IOpenerService private readonly opener: IOpenerService,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
 	) { super(releaseNotesEditorId, themeService, storageService); }
@@ -37,9 +39,9 @@ export class ReleaseNotesEditor extends EditorPane implements IEditorPane {
 		parent.append(this.root);
 		super.create(this.root);
 		this._register(toDisposable(() => this.root.remove()));
-		this.documentView = this._register(new MarkdownDocumentView(this.root, {
+		this.documentView = this._register(this.instantiation.createInstance(MarkdownDocumentView, this.root, {
 			title: localize('releaseNotes.title', 'Release Notes'),
-			openLink: href => this.openLink(href),
+			openLink: (href: string) => this.openLink(href),
 		}));
 	}
 

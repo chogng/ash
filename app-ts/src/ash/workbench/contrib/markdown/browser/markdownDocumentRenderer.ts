@@ -4,7 +4,8 @@ import {
 	toDisposable,
 } from "../../../../base/common/lifecycle.js";
 import type { URI } from "../../../../base/common/uri.js";
-import { MarkdownPreview } from "../../../../platform/markdown/browser/markdownPreview.js";
+import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
+import { MarkdownPreview } from "./markdownPreview.js";
 
 export interface MarkdownDocumentViewOptions {
 	readonly markdown?: string;
@@ -16,8 +17,8 @@ export interface MarkdownDocumentViewOptions {
 /**
  * Workbench adapter for a sandboxed Markdown document preview.
  *
- * The platform component owns parsing, sanitization, and iframe isolation;
- * this view owns the product link-opening policy and editor-compatible shape.
+ * MarkdownPreview owns parsing and sanitization, the Webview service tracks its
+ * sandbox, and this view owns the product link-opening policy.
  */
 export class MarkdownDocumentView extends Disposable {
 	private readonly preview: MarkdownPreview;
@@ -26,10 +27,10 @@ export class MarkdownDocumentView extends Disposable {
 
 	readonly element: HTMLIFrameElement;
 
-	constructor(container: HTMLElement, options: MarkdownDocumentViewOptions) {
+	constructor(container: HTMLElement, options: MarkdownDocumentViewOptions, @IInstantiationService instantiation: IInstantiationService) {
 		super();
 		this.openLink = options.openLink;
-		this.preview = this._register(new MarkdownPreview(container, {
+		this.preview = this._register(instantiation.createInstance(MarkdownPreview, container, {
 			markdown: options.markdown,
 			title: options.title,
 			baseUri: options.baseUri,

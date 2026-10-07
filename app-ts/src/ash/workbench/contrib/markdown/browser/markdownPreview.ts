@@ -1,22 +1,21 @@
-import { DEFAULT_FONT_FAMILY } from "../../../base/browser/fonts.js";
+import { DEFAULT_FONT_FAMILY } from "../../../../base/browser/fonts.js";
+import { getWindow } from "../../../../base/browser/dom.js";
 import {
 	isSafeMarkdownLink,
 	renderWorkbenchMarkdown,
 	sanitizeMarkdownHtmlToString,
-} from "../../../base/browser/markdownRenderer.js";
+} from "../../../../base/browser/markdownRenderer.js";
 import {
 	Emitter,
 	type Event,
-} from "../../../base/common/event.js";
+} from "../../../../base/common/event.js";
 import {
 	Disposable,
 
 	toDisposable,
-} from "../../../base/common/lifecycle.js";
-import type { URI } from "../../../base/common/uri.js";
-import {
-	WebviewElement,
-} from "../../webview/browser/webviewElement.js";
+} from "../../../../base/common/lifecycle.js";
+import type { URI } from "../../../../base/common/uri.js";
+import { IWebviewService, type IWebviewElement } from "../../webview/browser/webview.js";
 
 export interface MarkdownPreviewOptions {
 	readonly markdown?: string;
@@ -114,22 +113,23 @@ const LINK_BRIDGE_SCRIPT = `
 export class MarkdownPreview extends Disposable {
 	private readonly ownerDocument: Document;
 	private readonly baseUri: URI | undefined;
-	private readonly webview: WebviewElement;
+	private readonly webview: IWebviewElement;
 	private readonly _onDidOpenLink = this._register(new Emitter<string>());
 	private active = true;
 
 	readonly element: HTMLIFrameElement;
 	readonly onDidOpenLink: Event<string> = this._onDidOpenLink.event;
 
-	constructor(container: HTMLElement, options: MarkdownPreviewOptions = {}) {
+	constructor(container: HTMLElement, options: MarkdownPreviewOptions, @IWebviewService webviews: IWebviewService) {
 		super();
 		this.ownerDocument = container.ownerDocument;
 		this.baseUri = options.baseUri;
-		this.webview = this._register(new WebviewElement(container, {
+		this.webview = this._register(webviews.createWebviewElement({
 			title: options.title ?? "Markdown preview",
+			options: {},
 		}));
 		this.element = this.webview.element;
-		this._register(this.webview.onDidMessage((message) => {
+		this._register(this.webview.onMessage(({ message }) => {
 			const openLink = validateOpenLinkMessage(message, this.baseUri);
 			if (openLink) this._onDidOpenLink.fire(openLink.href);
 		}));
@@ -137,6 +137,7 @@ export class MarkdownPreview extends Disposable {
 			this.active = false;
 		}));
 		this.setMarkdown(options.markdown ?? "");
+		this.webview.mountTo(container, getWindow(container));
 	}
 
 	setMarkdown(markdown: string): void {

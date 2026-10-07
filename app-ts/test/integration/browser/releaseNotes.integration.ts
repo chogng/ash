@@ -34,7 +34,7 @@ chineseServices.registerInstance(ILocaleService, chineseLocale);
 const chineseEditor = resources.add(chineseServices.createInstance(ReleaseNotesEditor));
 chineseEditor.create(document.querySelector('#chinese')!);
 void chineseEditor.setInput({ resource: URI.parse(releaseNotesResource) }, new AbortController().signal);
-resources.add(new MarkdownDocumentView(document.querySelector('#invalid')!, {
+resources.add(services.createInstance(MarkdownDocumentView, document.querySelector('#invalid')!, {
 	title: 'Invalid links',
 	markdown: prepareReleaseNotesMarkdown('[Unknown](ash://tryout/test.releaseNotes.missing) [Malformed](ash://tryout/workbench.commandCenter.open?command=other)'),
 	openLink: () => { throw new Error('Invalid Try This link was activated'); },

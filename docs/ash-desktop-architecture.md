@@ -501,8 +501,10 @@ Workbench editor 宿主当前拥有多组二维拆分、跨组与跨窗口移动
 
 ### 6.2 iframe Webview
 
-当前 `WebviewElement` 是 Renderer 内用于受控 HTML 的可释放组件，并暴露可由宿主挂载的
-iframe 元素。它适合 Markdown Preview、产品内 HTML 面板和后续自定义编辑器，不负责完整
+统一容器位于 `workbench/contrib/webview/browser`。`IWebviewService` 通过 Workbench
+公共入口注册，负责创建 `WebviewElement`、登记存活实例和发布当前 Webview 焦点变化。
+创建者负责挂载和释放容器；服务只持有登记及事件订阅，不接管调用方的生命周期。
+Markdown Preview、自定义编辑器和发布说明页都通过注入的服务创建容器。它不负责完整
 网页浏览、导航历史、Cookie、CDP 或 Agent Browser Target；后者属于第 7 节的
 `WebContentsView` 能力。
 
@@ -518,13 +520,18 @@ opaque origin + credentialless
 ```
 
 内容通过 `acquireAshWebviewApi().postMessage()` 发送 structured-clone 数据。宿主只接收
-`event.source === iframe.contentWindow` 且实例 channel 匹配的 envelope；宿主向 iframe
+`event.source === iframe.contentWindow` 且当前文档 channel 匹配的 envelope；宿主向 iframe
 发送消息时因为 opaque origin 必须使用 `targetOrigin: "*"`，iframe 内容因此有义务检查
 `event.source === parent`。
 
-当前实现只拥有 DOM sandbox、HTML replacement、focus、双向 message 与 deterministic
-disposal。扩展宿主、独立 origin endpoint、远程/本地资源映射、端口映射、find widget、
-state persistence 和权限扩展均尚未实现。引入这些能力时必须保留独立 origin，不能通过加入
+宿主 `postMessage()` 返回 `Promise<boolean>`，在页面完成加载并注册消息处理程序前排队，
+实际发送后返回 `true`；替换文档或释放时，未发送的消息返回 `false`。每次文档替换生成
+独立 channel，旧文档的就绪、焦点和内容消息不会作用于新文档。相同 HTML 不重新加载，
+保留输入等页面状态。容器只能挂载一次，因为移动 iframe 会重新加载内容。
+
+当前实现拥有 DOM sandbox、HTML replacement、focus、双向 message、实例登记与释放。
+跨位置保留内容的 overlay、独立 origin endpoint、远程/本地资源映射、端口映射、find widget、
+state persistence 和权限扩展尚未实现。引入这些能力时必须保留独立 origin，不能通过加入
 `allow-same-origin` 来绕过资源加载问题。当前也尚未接管 iframe 自身的页面跳转；在加入链接
 打开策略前，调用方只应提供产品控制的 HTML。
 
@@ -539,7 +546,7 @@ Workbench 短内容
   → MarkdownElement（普通 DOM）
 
 完整文档预览
-  → markdown-it
+  → marked
   → DOMPurify allowlist
   → MarkdownPreview
   → WebviewElement（opaque-origin sandbox iframe）
@@ -548,9 +555,10 @@ Workbench 短内容
 `base/browser/domSanitize.ts` 是 DOMPurify 的唯一直接适配器，为目标 document 创建隔离的
 sanitizer 实例，防止 hook 跨窗口或跨消费者泄漏。`base/browser/markdownRenderer.ts` 拥有
 普通 Markdown 组件、Markdown 标签/属性 allowlist 和 URL policy。
-`platform/markdown/browser/markdownPreview.ts` 负责完整文档解析、预览样式及 iframe 链接
-消息桥接。`workbench/contrib/markdown/browser/markdownDocumentRenderer.ts` 再将平台预览
-适配为 Editor Part 可持有的 `MarkdownDocumentView`，并拥有产品级链接打开回调。
+`workbench/contrib/markdown/browser/markdownPreview.ts` 负责完整文档解析、预览样式及 iframe
+链接消息桥接，通过 `IWebviewService` 创建并持有容器。
+`workbench/contrib/markdown/browser/markdownDocumentRenderer.ts` 将预览适配为 Editor Part
+可持有的 `MarkdownDocumentView`，并拥有产品级链接打开回调。
 
 `workbench/contrib/markdown/browser/markdown.contribution.ts` 是 Workbench 功能入口，由
 `workbench.contribution.ts` 静态加载；该层只接入产品视图和样式，不重复解析器或 sanitizer。

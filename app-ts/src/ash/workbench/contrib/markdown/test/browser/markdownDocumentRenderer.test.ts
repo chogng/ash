@@ -1,3 +1,4 @@
+import '../../../../../editor/test/browser/testEditorDom.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -12,7 +13,8 @@ import {
 } from "../../../../../base/browser/markdownRenderer.js";
 import {
 	MarkdownPreview,
-} from "../../../../../platform/markdown/browser/markdownPreview.js";
+} from "../../browser/markdownPreview.js";
+import { createTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import {
 	MarkdownDocumentView,
 } from "../../../../../workbench/contrib/markdown/browser/markdownDocumentRenderer.js";
@@ -464,7 +466,8 @@ test("Markdown task lists use the shared Checkbox presentation", () => {
 
 test("MarkdownPreview sanitizes content before creating iframe srcdoc", () => {
 	const dom = createDom();
-	const preview = new MarkdownPreview(dom.window.document.body, {
+	using services = createTestComponentServices(undefined, undefined, dom.window.document);
+	const preview = services.createInstance(MarkdownPreview, dom.window.document.body, {
 		markdown: [
 			"# Preview",
 			"",
@@ -501,7 +504,8 @@ test("MarkdownPreview sanitizes content before creating iframe srcdoc", () => {
 test("MarkdownPreview resolves and validates relative resources against the source URI", () => {
 	const dom = createDom();
 	const baseUri = URI.parse("file:///workspace/docs/readme.md");
-	const preview = new MarkdownPreview(dom.window.document.body, {
+	using services = createTestComponentServices(undefined, undefined, dom.window.document);
+	const preview = services.createInstance(MarkdownPreview, dom.window.document.body, {
 		markdown: "[source](../src/file.ts) ![image](../assets/pixel.png)",
 		baseUri,
 	});
@@ -526,7 +530,8 @@ test("MarkdownPreview resolves and validates relative resources against the sour
 
 test("MarkdownPreview validates iframe link messages before emitting", () => {
 	const dom = createDom();
-	const preview = new MarkdownPreview(dom.window.document.body, {
+	using services = createTestComponentServices(undefined, undefined, dom.window.document);
+	const preview = services.createInstance(MarkdownPreview, dom.window.document.body, {
 		markdown: "[safe](https://example.com/docs)",
 	});
 	const links: string[] = [];
@@ -578,10 +583,11 @@ test("MarkdownPreview validates iframe link messages before emitting", () => {
 test("workbench Markdown document view owns link policy and updates", () => {
 	const dom = createDom();
 	const links: string[] = [];
-	const view = new MarkdownDocumentView(dom.window.document.body, {
+	using services = createTestComponentServices(undefined, undefined, dom.window.document);
+	const view = services.createInstance(MarkdownDocumentView, dom.window.document.body, {
 		markdown: "# Initial\n\n[relative](./source.ts)",
 		baseUri: URI.parse("file:///workspace/readme.md"),
-		openLink: (href) => {
+		openLink: (href: string) => {
 			links.push(href);
 		},
 	});

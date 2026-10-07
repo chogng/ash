@@ -5,7 +5,7 @@ import { Range } from '../../../../editor/common/core/range.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
-import { h, type IDimension } from '../../../../base/browser/dom.js';
+import { getWindow, h, type IDimension } from '../../../../base/browser/dom.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -16,7 +16,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { colorCssVariable } from '../../../../platform/theme/common/colorUtils.js';
-import { WebviewElement } from '../../../../platform/webview/browser/webviewElement.js';
+import { IWebviewService, type IWebviewElement } from '../../webview/browser/webview.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { ITextModelResourceService } from '../../../services/textmodelResolver/common/textModelResourceService.js';
 import { CustomTextEditorModel } from '../../customEditor/common/customTextEditorModel.js';
@@ -47,7 +47,7 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 	private container: HTMLElement | undefined;
 	private readonly inputResources = this._register(new MutableDisposable<DisposableStore>());
 	private readonly renderRequest = this._register(new MutableDisposable());
-	private readonly webview = this._register(new MutableDisposable<WebviewElement>());
+	private readonly webview = this._register(new MutableDisposable<IWebviewElement>());
 	private model: CustomTextEditorModel | undefined;
 	private input: IResourceEditorInput | undefined;
 	private renderedHtml: string | undefined;
@@ -71,6 +71,7 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 		@IFileService private readonly files: IFileService,
 		@IFilesConfigurationService private readonly filesConfiguration: IFilesConfigurationService,
 		@INotificationService private readonly notifications: INotificationService,
+		@IWebviewService private readonly webviews: IWebviewService,
 		@IStorageService storageService: IStorageService,
 	) {
 		super(provider.viewType, themes, storageService);
@@ -167,8 +168,9 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 	}
 
 	private createWebview(input: IResourceEditorInput, html: string): void {
-		this.webview.value = new WebviewElement(this.container!, { title: this.provider.displayName, initialHtml: html, forwardKeyboardEvents: true });
+		this.webview.value = this.webviews.createWebviewElement({ title: this.provider.displayName, options: { forwardKeyboardEvents: true } });
 		const webview = this.webview.value;
+		webview.setHtml(html);
 		const resources = this.inputResources.value!;
 		// An opaque iframe cannot bubble its keyboard events into the owning editor group.
 		resources.add(webview.onDidKeyboardEvent(event => webview.element.dispatchEvent(event)));
@@ -184,7 +186,7 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 				updateHint();
 			}
 		}));
-		resources.add(this.webview.value.onDidMessage(message => {
+		resources.add(webview.onMessage(({ message }) => {
 			if (this.editable && typeof message === 'object' && message !== null && 'type' in message) {
 				this.handleEditMessage(message, webview);
 				return;
@@ -200,9 +202,10 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 				void this.opener.open(url.href);
 			}
 		}));
+		webview.mountTo(this.container!, getWindow(this.container!));
 	}
 
-	private handleEditMessage(message: object & { type: unknown; }, webview: WebviewElement): void {
+	private handleEditMessage(message: object & { type: unknown; }, webview: IWebviewElement): void {
 		const model = this.model?.reference.model;
 		if (!model) return;
 		if (message.type === 'ready') { this.refreshView?.(); return; }
@@ -253,7 +256,7 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 		this.inputResources.clear();
 		this.webview.clear();
 	}
-	public override getControl(): WebviewElement | undefined { return this.webview.value; }
+	public override getControl(): IWebviewElement | undefined { return this.webview.value; }
 
 	public override layout(dimension: IDimension): void {
 		if (this.container) {
