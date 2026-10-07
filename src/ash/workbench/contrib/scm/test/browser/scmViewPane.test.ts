@@ -189,6 +189,52 @@ test("Git contribution registers Repositories before Changes and hides it for a 
 	}
 });
 
+test('SCM panes follow repository and history availability through the window contribution', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>');
+	const installedGlobals = installDomGlobals(browser);
+	try {
+		const { ContextKeyService } = await import('../../../../../platform/contextkey/browser/contextKeyService.js');
+		const { IContextKeyService } = await import('../../../../../platform/contextkey/common/contextkey.js');
+		const { WorkbenchContributionsRegistry, WorkbenchPhase } = await import('../../../../common/contributions.js');
+		const { WorkbenchViewRegistry, WorkbenchViewContainerId } = await import('../../../../common/views.js');
+		const { ViewContainerModel } = await import('../../../../services/views/common/viewContainerModel.js');
+		const { GIT_AGENT_REVIEW_VIEW_ID, GIT_GRAPH_VIEW_ID, registerGitViews } = await import('../../browser/scm.contribution.js');
+		using context = new ContextKeyService();
+		using scm = new SCMService();
+		using services = new InstantiationService();
+		services.registerInstance(IContextKeyService, context);
+		services.registerInstance(ISCMService, scm);
+		const registry = new WorkbenchViewRegistry();
+		registerGitViews(registry);
+		using model = new ViewContainerModel(registry.getViewContainer(WorkbenchViewContainerId.Git)!, registry, context);
+		using host = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['workbench.contrib.scmRepositories']);
+		host.advance(WorkbenchPhase.BlockRestore);
+		const visiblePanes = (): readonly string[] => model.visibleViewDescriptors.map(view => view.id);
+		assert.deepEqual(visiblePanes(), [VIEW_PANE_ID]);
+
+		using repository = scm.registerSCMProvider(testSCMProvider('resources', 'Resources'));
+		assert.deepEqual(visiblePanes(), [VIEW_PANE_ID, GIT_AGENT_REVIEW_VIEW_ID]);
+		using history = new GitHistoryProvider({ onDidChangeRepositoryStatus: Event.None, onDidBecomeReady: Event.None } as unknown as IGitService, 'history');
+		using historyRepository = scm.registerSCMProvider(testSCMProvider('history', 'History', history));
+		assert.deepEqual(visiblePanes(), ['workbench.scm.repositories', VIEW_PANE_ID, GIT_AGENT_REVIEW_VIEW_ID, GIT_GRAPH_VIEW_ID]);
+
+		historyRepository.dispose();
+		assert.deepEqual(visiblePanes(), [VIEW_PANE_ID, GIT_AGENT_REVIEW_VIEW_ID]);
+		repository.dispose();
+		assert.deepEqual(visiblePanes(), [VIEW_PANE_ID]);
+
+		using restoredRepository = scm.registerSCMProvider(testSCMProvider('restored', 'Restored', history));
+		assert.deepEqual(visiblePanes(), [VIEW_PANE_ID, GIT_AGENT_REVIEW_VIEW_ID, GIT_GRAPH_VIEW_ID]);
+		host.dispose();
+		assert.deepEqual(visiblePanes(), [VIEW_PANE_ID]);
+		using afterDisposal = scm.registerSCMProvider(testSCMProvider('after-disposal', 'After disposal', history));
+		assert.deepEqual(visiblePanes(), [VIEW_PANE_ID]);
+	} finally {
+		browser.window.close();
+		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
+	}
+});
+
 test("SCMHistoryViewPane renders a repository history page", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);

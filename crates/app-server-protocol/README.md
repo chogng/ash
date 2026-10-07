@@ -24,7 +24,7 @@
 - `json-schema` feature 只启用真实 `JsonSchema` 派生，供需要组成自有 schema 的 Rust 消费方使用。
 - `export` feature 在 `json-schema` 之上启用 TypeScript 派生和完整导出 API；该模式直接计算 schema hash，不依赖已有 metadata；`generate_protocol` 二进制要求该 feature。`just generate-protocol` 显式启用并同步生成 schema、TypeScript 和协议元数据。
 - 导出内容未变化时保留文件时间戳，避免重复触发 Rust 构建；开发监听器先生成协议，再编译服务。
-- 前端构建、Rust Just 命令和开发或发布打包先检查共享输入与产物缓存，变化时调用导出器，然后读取 `.build/protocol/metadata.json`；首次准备需要 Rust 工具链。直接 Cargo 构建前运行 `just generate-protocol`。Bazel 启用 `export` 从 Rust 计算 hash，不读取 Cargo 本地输出。并发准备由进程锁串行化，失败保留上一次完整产物并在下次重试。
+- 前端构建、Rust Just 命令和开发或发布打包先检查共享输入与产物缓存，以及源码匹配的后端包；无匹配产物时调用 Rust 导出器，然后读取 `.build/protocol/metadata.json`。开发和发布包携带 `ash-resources/protocol/` 与源码指纹，前端可通过 `ASH_PROTOCOL_PACKAGE` 或生成器的 `--package-root` 指定包根目录，在没有 Rust 工具链时恢复匹配产物；当前开发包会被自动检查。包内文件摘要、协议 metadata 和当前源码必须同时匹配。直接 Cargo 构建前运行 `just generate-protocol`。Bazel 启用 `export` 从 Rust 计算 hash，不读取 Cargo 本地输出。并发准备由进程锁串行化，失败保留上一次完整产物并在下次重试。
 - 其他领域 crate 自己使用的 schema / TypeScript 依赖不受此开关控制。
 
 ## 运行基础设施

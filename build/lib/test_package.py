@@ -526,10 +526,7 @@ class PackageTests(unittest.TestCase):
                 build_code_package(runtime_output, output, cli_binary, "11" * 32)
 
     def test_host_provided_runtime_package_omits_standalone_node(self) -> None:
-        generated_protocol = {
-            "major": 7,
-            "schemaHash": "sha256:" + "a" * 64,
-        }
+        generated_protocol = load_protocol_metadata(REPOSITORY_ROOT)
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             spec = TARGETS["aarch64-apple-darwin"]
@@ -577,6 +574,17 @@ class PackageTests(unittest.TestCase):
                 {"kind": "hostProvidedNode"}, metadata["javascriptRuntime"]
             )
             self.assertEqual(generated_protocol, metadata["protocol"])
+            self.assertEqual(
+                generated_protocol,
+                json.loads(
+                    (output / "ash-resources/protocol/metadata.json").read_text()
+                ),
+            )
+            self.assertIn("ash-resources/protocol-sources.json", metadata["files"])
+            self.assertIn(
+                "ash-resources/protocol/typescript/AppServerProtocolDecoder.ts",
+                metadata["files"],
+            )
             self.assertEqual(
                 {
                     "url": "https://example.com/catalog.json",

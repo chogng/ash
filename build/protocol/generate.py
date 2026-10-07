@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -16,6 +17,17 @@ sys.path.insert(0, str(ROOT))
 
 from build.lib.cargo_cache import leased_cache  # noqa: E402
 from build.lib.file_lock import exclusive_lock  # noqa: E402
+from build.protocol.artifacts import (  # noqa: E402
+    REQUIRED_ARTIFACTS,
+    SOURCE_MANIFEST,
+    artifact_digests,
+    graph_source_files,
+    matching_package_contract,
+    owned_path,
+    portable_sources,
+    protocol_packages,
+    source_files,
+)
 
 
 def protocol_source_directories(
@@ -54,25 +66,6 @@ def protocol_source_directories(
     return sorted(directories)
 
 
-def source_files(directory: Path):
-    for parent, directories, files in os.walk(directory):
-        directories[:] = sorted(
-            name
-            for name in directories
-            if name
-            not in {
-                ".git",
-                ".build",
-                "target",
-                "node_modules",
-                "__pycache__",
-                ".pytest_cache",
-            }
-        )
-        for name in sorted(files):
-            yield Path(parent) / name
-
-
 def digest_files(files: list[Path], *, root: Path) -> str:
     digest = hashlib.sha256()
     for path in sorted(set(files)):
@@ -85,20 +78,7 @@ def digest_files(files: list[Path], *, root: Path) -> str:
 
 
 def graph_digest(root: Path, cargo: str, directories: list[str]) -> str:
-    files = [
-        path
-        for directory in (root / "crates", root / "cli")
-        for path in source_files(directory)
-        if path.name == "Cargo.toml"
-    ]
-    files += [
-        Path(directory) / "Cargo.toml"
-        for directory in directories
-        if (Path(directory) / "Cargo.toml").is_file()
-    ]
-    files += [root / "Cargo.toml", root / "Cargo.lock", Path(__file__)]
-    files += list((root / ".cargo").glob("*.toml"))
-    files += list(root.glob("rust-toolchain*"))
+    files = graph_source_files(root, directories)
     environment = {
         key: value
         for key, value in os.environ.items()
@@ -118,20 +98,16 @@ def protocol_inputs(directories: list[str], root: Path) -> str:
     )
 
 
-def artifact_digests(directory: Path) -> dict[str, str]:
-    return {
-        path.relative_to(directory).as_posix(): hashlib.sha256(
-            path.read_bytes()
-        ).hexdigest()
-        for path in source_files(directory)
-    }
-
-
-def generate_protocol(*, root: Path = ROOT, cargo: str = "cargo") -> None:
+def generate_protocol(
+    *, root: Path = ROOT, cargo: str = "cargo", package_root: Path | None = None
+) -> None:
     build = root / ".build"
     build.mkdir(exist_ok=True)
     output = build / "protocol"
     cache_path = build / "protocol-inputs.json"
+    sources_path = build / SOURCE_MANIFEST
+    if package_root is None and os.environ.get("ASH_PROTOCOL_PACKAGE"):
+        package_root = Path(os.environ["ASH_PROTOCOL_PACKAGE"])
     # Frontend preparation and backend preparation can run concurrently. OS locks
     # release on cancellation/crash, unlike a persistent lock-directory marker.
     with exclusive_lock(build / "protocol.lock", create=True):
@@ -147,44 +123,79 @@ def generate_protocol(*, root: Path = ROOT, cargo: str = "cargo") -> None:
         ):
             directories = []
         graph = graph_digest(root, cargo, directories)
-        if not directories or cache.get("graph") != graph:
-            directories = protocol_source_directories(root=root, cargo=cargo)
-            graph = graph_digest(root, cargo, directories)
         inputs = protocol_inputs(directories, root)
         artifacts = artifact_digests(output)
         if (
-            cache.get("graph") == graph
+            directories
+            and cache.get("graph") == graph
             and cache.get("inputs") == inputs
             and artifacts
             and cache.get("artifacts") == artifacts
         ):
+            sources = portable_sources(root, directories)
+            if (
+                graph_digest(root, cargo, directories) != graph
+                or protocol_inputs(directories, root) != inputs
+            ):
+                raise RuntimeError(
+                    "Protocol sources changed during preparation; retry preparation"
+                )
+            write_source_manifest(sources_path, sources, artifacts)
             return
+        package_contract = None
+        for package in protocol_packages(root, package_root):
+            package_contract = matching_package_contract(root, package)
+            if package_contract is not None:
+                break
+        if package_contract is not None:
+            directories = [
+                str(owned_path(root, name))
+                for name in package_contract[1]["directories"]
+            ]
+        elif not directories or cache.get("graph") != graph:
+            directories = protocol_source_directories(root=root, cargo=cargo)
+        graph = graph_digest(root, cargo, directories)
+        inputs = protocol_inputs(directories, root)
         with tempfile.TemporaryDirectory(
             prefix="protocol-export-", dir=build
         ) as temporary:
             staging = Path(temporary)
-            with leased_cache(root, profile="dev-small"):
-                subprocess.run(
-                    [
-                        cargo,
-                        "run",
-                        "--quiet",
-                        "--locked",
-                        "--profile",
-                        "dev-small",
-                        "-p",
-                        "ash-app-server-protocol",
-                        "--features",
-                        "export",
-                        "--bin",
-                        "generate_protocol",
-                        "--",
-                        "all",
-                        "--out",
-                        str(staging),
-                    ],
-                    cwd=root,
-                    check=True,
+            if package_contract is not None:
+                shutil.copytree(package_contract[0], staging, dirs_exist_ok=True)
+                if artifact_digests(staging) != package_contract[1]["artifacts"]:
+                    raise RuntimeError("Packaged protocol changed during preparation")
+            else:
+                with leased_cache(root, profile="dev-small"):
+                    subprocess.run(
+                        [
+                            cargo,
+                            "run",
+                            "--quiet",
+                            "--locked",
+                            "--profile",
+                            "dev-small",
+                            "-p",
+                            "ash-app-server-protocol",
+                            "--features",
+                            "export",
+                            "--bin",
+                            "generate_protocol",
+                            "--",
+                            "all",
+                            "--out",
+                            str(staging),
+                        ],
+                        cwd=root,
+                        check=True,
+                    )
+            sources = portable_sources(root, directories)
+            if package_contract is not None and sources != {
+                key: value
+                for key, value in package_contract[1].items()
+                if key != "artifacts"
+            }:
+                raise RuntimeError(
+                    "Protocol sources changed during package preparation; retry preparation"
                 )
             if (
                 graph_digest(root, cargo, directories) != graph
@@ -194,13 +205,7 @@ def generate_protocol(*, root: Path = ROOT, cargo: str = "cargo") -> None:
                     "Protocol sources changed during export; retry preparation"
                 )
             generated = artifact_digests(staging)
-            required = {
-                "metadata.json",
-                "json/schema.json",
-                "typescript/index.ts",
-                "typescript/protocol.ts",
-            }
-            if not required.issubset(generated):
+            if not REQUIRED_ARTIFACTS.issubset(generated):
                 raise RuntimeError(
                     "Protocol export did not produce the complete contract"
                 )
@@ -217,6 +222,7 @@ def generate_protocol(*, root: Path = ROOT, cargo: str = "cargo") -> None:
                 os.replace(staging / name, destination)
             for name in artifacts.keys() - generated.keys():
                 (output / name).unlink()
+            write_source_manifest(sources_path, sources, generated)
             cache_path.write_text(
                 json.dumps(
                     {
@@ -230,11 +236,25 @@ def generate_protocol(*, root: Path = ROOT, cargo: str = "cargo") -> None:
             )
 
 
+def write_source_manifest(path: Path, sources: dict, artifacts: dict[str, str]) -> None:
+    contents = json.dumps({**sources, "artifacts": artifacts}, sort_keys=True)
+    if path.is_file() and path.read_text() == contents:
+        return
+    temporary = path.with_suffix(".partial")
+    temporary.write_text(contents)
+    temporary.replace(path)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--source-directories", action="store_true")
+    parser.add_argument(
+        "--package-root",
+        type=Path,
+        help="Backend package with matching protocol artifacts",
+    )
     arguments = parser.parse_args()
+    generate_protocol(package_root=arguments.package_root)
     if arguments.source_directories:
-        print(json.dumps(protocol_source_directories()))
-    else:
-        generate_protocol()
+        cache = json.loads((ROOT / ".build/protocol-inputs.json").read_text())
+        print(json.dumps(cache["directories"]))

@@ -12,6 +12,8 @@ test('SCM hides the commit form when no repository is available', async ({ workb
 	const changes = workbench.page.locator('[data-view-id="ash.gitView"]');
 	await expect(changes.getByRole('region', { name: 'Welcome', exact: true })).toBeVisible();
 	await expect(changes.locator('.ash-scm-commit-form')).toBeHidden();
+	await expect(changes.locator('.ash-pane-view-header')).toBeHidden();
+	await expect(workbench.page.locator('.ash-scm-viewlet [data-view-id]')).toHaveAttribute('data-view-id', 'ash.gitView');
 });
 
 test.describe('SCM welcome', () => {
@@ -22,6 +24,8 @@ test.describe('SCM welcome', () => {
 		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
 		const welcome = page.locator('[data-view-id="ash.gitView"]').getByRole('region', { name: 'Welcome', exact: true });
 		await expect(welcome).toContainText('Open a folder containing a Git repository');
+		await expect(page.locator('.ash-scm-viewlet [data-view-id]')).toHaveAttribute('data-view-id', 'ash.gitView');
+		await expect(page.locator('[data-view-id="ash.gitView"] .ash-pane-view-header')).toBeHidden();
 		const open = welcome.getByRole('button', { name: 'Open Folder', exact: true });
 		await expect(open).toBeEnabled();
 		if (target.kind === 'electron') {
@@ -85,6 +89,8 @@ test('SCM welcome initializes a repository through the backend and returns to Ch
 	const page = workbench.page;
 	await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
 	const changes = page.locator('[data-view-id="ash.gitView"]');
+	await expect(page.locator('.ash-scm-viewlet [data-view-id]')).toHaveAttribute('data-view-id', 'ash.gitView');
+	await expect(changes.locator('.ash-pane-view-header')).toBeHidden();
 	await changes.getByRole('button', { name: 'Initialize Repository', exact: true }).click();
 	await page.locator('.ash-quick-pick').getByRole('option').first().click();
 	const branch = page.getByRole('dialog', { name: 'Quick Input', exact: true }).getByRole('textbox');
@@ -93,6 +99,9 @@ test('SCM welcome initializes a repository through the backend and returns to Ch
 	await expect.poll(() => run('git', ['symbolic-ref', '--short', 'HEAD'], { cwd: testWorkspace.directory }).then(result => result.stdout.trim(), () => undefined)).toBe('welcome-main');
 	await expect(changes.getByRole('region', { name: 'Welcome', exact: true })).toBeHidden();
 	await expect(changes.locator('.ash-scm-commit-form')).toBeVisible();
+	await expect(changes.locator('.ash-pane-view-header')).toBeVisible();
+	await expect(page.locator('[data-view-id="ash.gitAgentReview"] .ash-pane-view-header')).toBeVisible();
+	await expect(page.locator('[data-view-id="ash.gitGraph"] .ash-pane-view-header')).toBeVisible();
 });
 
 test.describe('SCM commit input', () => {

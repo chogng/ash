@@ -113,9 +113,20 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 registerWorkbenchContribution('workbench.contrib.scmRepositories', WorkbenchPhase.BlockRestore, accessor => {
 	const resources = new DisposableStore();
 	const scm = accessor.get(ISCMService);
-	const count = accessor.get(IContextKeyService).createKey<number>('scm.providerCount', 0);
-	const update = (): void => count.set([...scm.repositories].length);
-	resources.add(toDisposable(() => count.reset()));
+	const contextKeyService = accessor.get(IContextKeyService);
+	const count = contextKeyService.createKey<number>('scm.providerCount', 0);
+	const historyCount = contextKeyService.createKey<number>('scm.historyProviderCount', 0);
+	const update = (): void => {
+		const repositories = [...scm.repositories];
+		contextKeyService.bufferChangeEvents(() => {
+			count.set(repositories.length);
+			historyCount.set(repositories.filter(repository => repository.provider.historyProvider !== undefined).length);
+		});
+	};
+	resources.add(toDisposable(() => contextKeyService.bufferChangeEvents(() => {
+		count.reset();
+		historyCount.reset();
+	})));
 	resources.add(scm.onDidAddRepository(update));
 	resources.add(scm.onDidRemoveRepository(update));
 	update();
@@ -255,6 +266,7 @@ export function registerGitViews(
 			title: "Agent Review",
 			localizationKey: { bundle: "ash.views", key: "agentReview" },
 			order: 2,
+			when: ContextKeyExpr.greater('scm.providerCount', 0),
 			collapsed: true,
 			canToggleVisibility: false,
 			ctorDescriptor: new SyncDescriptor(ScmAgentReviewViewPane),
@@ -264,6 +276,7 @@ export function registerGitViews(
 			title: "Graph",
 			localizationKey: { bundle: "ash.views", key: "graph" },
 			order: 3,
+			when: ContextKeyExpr.greater('scm.historyProviderCount', 0),
 			collapsed: true,
 			canToggleVisibility: false,
 			ctorDescriptor: new SyncDescriptor(SCMHistoryViewPane),

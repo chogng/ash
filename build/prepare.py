@@ -227,6 +227,11 @@ def package_sources(root: Path) -> list[Path]:
     ]
     sources.append(root / "build/download/artifacts.py")
     sources.append(root / "build/source-layout.json")
+    sources += [
+        path
+        for path in (root / "build/protocol").glob("*.py")
+        if not path.name.startswith("test_")
+    ]
     return sources
 
 
@@ -410,7 +415,8 @@ def prepare_development_package(args: argparse.Namespace, *, root: Path = ROOT) 
     )
     # The second key checks the resolved binaries and locked runtime assets.
     package_paths = package_sources(root) + [
-        root / ".build/protocol/metadata.json",
+        root / ".build/protocol",
+        root / ".build/protocol-sources.json",
         root / "crates/skills/assets",
         root / "extensions",
         root / "resources/product-services",

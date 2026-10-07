@@ -4,7 +4,7 @@ Product entrypoints compose the shared package tools for development and release
 
 - `prepare.py` resolves development inputs and publishes packages; `build/desktop/runtimeStore.ts` reads published selections for Electron and Web.
 - `desktop/develop.py` combines prepared resources with incremental Desktop binaries and selects a development runtime through `lib/development_store.py`; Code uses the same leased generation storage for its executables.
-- `protocol/generate.py` runs the Rust protocol fixture generator; `build/protocol/` synchronizes TypeScript consumers.
+- `protocol/generate.py` prepares the shared Rust-owned contract; `protocol/artifacts.py` validates portable source fingerprints and packaged artifacts for preparation and assembly.
 - `app_server.py` resolves release binaries and resources.
 - `remote.py` reads [`remote/package.json`](../remote/package.json), restricts the
   Remote distribution to its declared POSIX targets, and requires bundled Node.
@@ -33,6 +33,8 @@ and Cargo retaining compilation. Gulp is not required for these tasks.
 ├── ash-path/
 │   └── rg[.exe]
 └── ash-resources/
+    ├── protocol/                    # TS types, decoders, JSON Schema, metadata
+    ├── protocol-sources.json        # portable source and artifact digests
     ├── tgrep/tgrep[.exe]              # Agent grep runtime
     ├── bwrap                         # Linux only
     ├── node/                           # packaged-node variant only
@@ -57,7 +59,7 @@ and Cargo retaining compilation. Gulp is not required for these tasks.
         └── vscode/LICENSE.txt        # built-in Editor Extension resources
 ```
 
-The release entry point is `build/app_server.py`. It reads the checked-in App Server protocol metadata and binds its major and generated schema hash into `ash-package.json`; it does not rewrite checked-in fixtures. `verify:protocol` remains an explicit fixture check, while `generate:protocol` refreshes repository fixtures when they are intentionally being reviewed. If `--server-bin` or
+The release entry point is `build/app_server.py`. It prepares `.build/protocol/` and binds its major and generated schema hash into `ash-package.json`. The shared assembler copies the complete contract and its portable source fingerprint into every development and release package; both are covered by the package file manifest and build identity. Preparation can restore matching artifacts from `ASH_PROTOCOL_PACKAGE` (an extracted package root), `--package-root` on `protocol/generate.py`, or a currently selected development package without invoking Cargo. It compares current source contents, dependency manifests, generator code and compiler flags, verifies all protocol artifact digests, and requires matching package protocol metadata. Source changes require a fresh Rust export; runtime major/hash checks remain strict. If `--server-bin` or
 `--app-server-daemon-bin` is omitted, `lib/package_binaries.py` builds the corresponding product-neutral
 `ash-app-server` or profile-scoped `ash-app-server-daemon` for the selected target.
 When `ASH_UPDATE_PUBLIC_KEY` or `--update-public-key` is supplied, the builder binds that trusted key into the App Server component of the immutable package metadata. The release backend uses it to verify independently published stable updates while running; development packages without a key do not check automatically.

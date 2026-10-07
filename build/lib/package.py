@@ -16,6 +16,13 @@ from .node import NodeResolution
 from .ripgrep import RipgrepResolution
 from .executable import ExecutableResolution
 from build.lib.targets import TargetSpec
+from build.lib.file_lock import exclusive_lock
+from build.protocol.artifacts import (
+    PACKAGE_PROTOCOL,
+    SOURCE_MANIFEST,
+    copy_prepared_contract,
+    read_contract,
+)
 
 
 LAYOUT = json.loads(
@@ -271,6 +278,12 @@ def assemble_package(staging: Path, inputs: dict) -> None:
     is_windows = inputs["platform"] == "win32"
     executables = inputs["executables"]
     resources = staging / LAYOUT["resourcesDir"]
+    # Freeze the prepared contract while copying it, before the package file
+    # manifest binds both the backend identity and all generated artifacts.
+    with exclusive_lock(source_root / ".build/protocol.lock", create=True):
+        copy_prepared_contract(
+            source_root, staging / PACKAGE_PROTOCOL, options["protocol"]
+        )
     binary_dir = staging / "bin"
     binary_dir.mkdir(parents=True)
     (staging / LAYOUT["pathDir"]).mkdir(parents=True)
@@ -449,6 +462,14 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
     if not metadata_path.is_file():
         raise RuntimeError("Missing package metadata: {}".format(metadata_path))
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    try:
+        _, protocol = read_contract(
+            package / PACKAGE_PROTOCOL, package / "ash-resources" / SOURCE_MANIFEST
+        )
+    except (OSError, ValueError, TypeError) as error:
+        raise RuntimeError("Packaged protocol is incomplete or invalid") from error
+    if protocol != metadata.get("protocol"):
+        raise RuntimeError("Packaged protocol does not match backend metadata")
     expected = {
         "layoutVersion": LAYOUT_VERSION,
         "target": spec.target,

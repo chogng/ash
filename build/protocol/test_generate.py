@@ -1,6 +1,8 @@
 """Protocol watch inputs follow Cargo's selected export dependency graph."""
 
 import subprocess
+import json
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -168,3 +170,184 @@ class ProtocolPreparationTests(unittest.TestCase):
             self.prepare()
         self.assertFalse((self.root / ".build/protocol-inputs.json").exists())
         self.assertFalse((self.root / ".build/protocol/metadata.json").exists())
+
+    def package_contract(self):
+        from build.protocol.artifacts import copy_prepared_contract, PACKAGE_PROTOCOL
+
+        self.prepare()
+        package = self.root / "backend-package"
+        metadata = json.loads((self.root / ".build/protocol/metadata.json").read_text())
+        copy_prepared_contract(self.root, package / PACKAGE_PROTOCOL, metadata)
+        from build.lib.package import package_files
+
+        (package / "ash-package.json").write_text(
+            json.dumps({"protocol": metadata, "files": package_files(package)})
+        )
+        self.discovery.reset_mock()
+        self.exporter.reset_mock()
+        return package
+
+    def clear_contract(self, root=None):
+        root = root or self.root
+        shutil.rmtree(root / ".build/protocol")
+        (root / ".build/protocol-inputs.json").unlink()
+        (root / ".build/protocol-sources.json").unlink()
+
+    def test_another_checkout_restores_a_complete_contract_without_cargo(self):
+        from build.protocol.generate import generate_protocol
+
+        package = self.package_contract()
+        with tempfile.TemporaryDirectory(prefix="ash second device ") as temporary:
+            other = Path(temporary)
+            shutil.copytree(self.root, other, dirs_exist_ok=True)
+            self.clear_contract(other)
+            generate_protocol(
+                root=other, package_root=package, cargo="no-cargo-installed"
+            )
+            self.discovery.assert_not_called()
+            self.exporter.assert_not_called()
+            expected = (
+                package / "ash-resources/protocol/typescript/index.ts"
+            ).read_bytes()
+            self.assertEqual(
+                expected, (other / ".build/protocol/typescript/index.ts").read_bytes()
+            )
+            modified = (other / ".build/protocol/metadata.json").stat().st_mtime_ns
+            generate_protocol(root=other, cargo="no-cargo-installed")
+            self.assertEqual(
+                modified, (other / ".build/protocol/metadata.json").stat().st_mtime_ns
+            )
+
+    def test_source_or_manifest_changes_require_a_fresh_export(self):
+        from build.protocol.generate import generate_protocol
+
+        for name in [
+            "crates/queue-contract/src/new.rs",
+            "Cargo.lock",
+            "crates/new/Cargo.toml",
+        ]:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
+                package = (
+                    self.package_contract()
+                    if not (self.root / "backend-package").exists()
+                    else self.root / "backend-package"
+                )
+                other = Path(temporary)
+                shutil.copytree(self.root, other, dirs_exist_ok=True)
+                self.clear_contract(other)
+                changed = other / name
+                changed.parent.mkdir(parents=True, exist_ok=True)
+                changed.write_text("new contract")
+                self.discovery.return_value = [
+                    str(other / "crates/app-server-protocol"),
+                    str(other / "crates/queue-contract"),
+                ]
+                self.exporter.reset_mock()
+                generate_protocol(root=other, package_root=package)
+                self.exporter.assert_called_once()
+
+    def test_tampered_incomplete_or_incompatible_packages_are_not_reused(self):
+        from build.protocol.generate import generate_protocol
+
+        package = self.package_contract()
+        for mode in ["tampered", "missing", "identity", "manifest", "path"]:
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as temporary:
+                bad = Path(temporary) / "package"
+                shutil.copytree(package, bad)
+                artifact = bad / "ash-resources/protocol/typescript/index.ts"
+                if mode == "tampered":
+                    artifact.write_text("tampered")
+                elif mode == "missing":
+                    artifact.unlink()
+                elif mode == "identity":
+                    metadata = json.loads((bad / "ash-package.json").read_text())
+                    metadata["protocol"]["major"] = 99
+                    (bad / "ash-package.json").write_text(json.dumps(metadata))
+                elif mode == "manifest":
+                    (bad / "ash-resources/protocol-sources.json").write_text("[]")
+                else:
+                    manifest = json.loads(
+                        (bad / "ash-resources/protocol-sources.json").read_text()
+                    )
+                    manifest["artifacts"]["../escape.ts"] = "a" * 64
+                    (bad / "ash-resources/protocol-sources.json").write_text(
+                        json.dumps(manifest)
+                    )
+                self.clear_contract()
+                self.discovery.reset_mock()
+                self.exporter.reset_mock()
+                generate_protocol(root=self.root, package_root=bad)
+                self.discovery.assert_called_once()
+                self.exporter.assert_called_once()
+
+    def test_only_current_development_publications_are_candidates(self):
+        from build.protocol.generate import generate_protocol
+
+        package = self.package_contract()
+        store = (
+            self.root / ".build/runtime/dev/store-v1/test/host-provided-node/dev-small"
+        )
+        selected = store / "packages/0.1.0" / ("a" * 64)
+        shutil.copytree(package, selected)
+        manifests = store / "manifests"
+        manifests.mkdir()
+        (manifests / "00000000000000000001.json").write_text(
+            json.dumps(
+                {
+                    "formatVersion": 1,
+                    "sequence": 1,
+                    "directory": "packages/0.1.0/" + "a" * 64,
+                }
+            )
+        )
+        self.clear_contract()
+        generate_protocol(root=self.root)
+        self.exporter.assert_not_called()
+        (manifests / "00000000000000000002.json").write_text(
+            json.dumps(
+                {
+                    "formatVersion": 1,
+                    "sequence": 2,
+                    "directory": "packages/0.1.0/" + "b" * 64,
+                }
+            )
+        )
+        self.clear_contract()
+        generate_protocol(root=self.root)
+        self.exporter.assert_called_once()
+
+    def test_packaging_rejects_sources_or_metadata_that_do_not_match_the_contract(self):
+        from build.protocol.artifacts import copy_prepared_contract
+
+        self.prepare()
+        metadata = json.loads((self.root / ".build/protocol/metadata.json").read_text())
+        with self.assertRaisesRegex(ValueError, "does not match"):
+            copy_prepared_contract(
+                self.root, self.root / "bad", {**metadata, "major": 99}
+            )
+        (self.contract / "src/new.rs").write_text("changed before packaging")
+        with self.assertRaisesRegex(ValueError, "does not match"):
+            copy_prepared_contract(self.root, self.root / "bad", metadata)
+
+    def test_source_saves_after_selecting_a_package_cannot_publish_old_artifacts(self):
+        from build.protocol.generate import generate_protocol
+        from build.protocol.artifacts import matching_package_contract
+
+        package = self.package_contract()
+        self.clear_contract()
+
+        def saved_after_selection(root, candidate):
+            contract = matching_package_contract(root, candidate)
+            (self.contract / "src/lib.rs").write_text("saved before export staging")
+            return contract
+
+        with patch(
+            "build.protocol.generate.matching_package_contract",
+            side_effect=saved_after_selection,
+        ):
+            with self.assertRaisesRegex(
+                RuntimeError, "changed during package preparation"
+            ):
+                generate_protocol(root=self.root, package_root=package)
+        self.assertFalse((self.root / ".build/protocol/metadata.json").exists())
+        self.assertFalse((self.root / ".build/protocol-inputs.json").exists())
