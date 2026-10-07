@@ -41,7 +41,6 @@ class ImageFixture extends Disposable {
 		this._register(installEditorTestDom(this.browser, ['Node', 'Element', 'HTMLElement', 'HTMLButtonElement'], { createImageBitmap: () => this.decode() }));
 		Object.defineProperty(this.browser.window, 'ResizeObserver', { value: class { observe(): void { } disconnect(): void { } } });
 		URL.revokeObjectURL = url => { this.revoked.push(url); originalRevoke(url); };
-		registerTestComponentServices(this.services, this.browser.window.document);
 		const unexpected = async (): Promise<never> => { throw new Error('Unexpected file operation'); };
 		this.services.registerInstance(IFileService, {
 			onDidChangeFiles: this.changes.event,
@@ -50,6 +49,7 @@ class ImageFixture extends Disposable {
 			readFile: unexpected, readDirectory: unexpected, writeFile: unexpected, writeFileBytes: unexpected,
 			createFile: unexpected, createDirectory: unexpected, copy: unexpected, rename: unexpected, delete: unexpected,
 		});
+		registerTestComponentServices(this.services, this.browser.window.document);
 		this.services.registerInstance(IContextKeyService, this._register(new ContextKeyService()));
 		this.services.registerInstance(IContextMenuService, { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { }, hideContextMenu: () => { } });
 		this.services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose: () => { }, [Symbol.dispose]: () => { } });

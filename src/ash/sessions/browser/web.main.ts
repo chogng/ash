@@ -1,4 +1,5 @@
 import { AppToolsHost } from '../contrib/appTools/browser/appToolsHost.js';
+import { AppServerAppToolsHost } from '../services/appTools/browser/appServerAppToolsHost.js';
 import { IndexedDBFileSystemProvider } from '../../platform/files/browser/indexedDBFileSystemProvider.js';
 import { Schemas } from '../../base/common/network.js';
 import { AppServerProtocolClient } from '../../platform/app-server/browser/appServerProtocolClient.js';
@@ -68,7 +69,7 @@ async function mountBrowserSessions(profile: SessionsProfile, connectedHost?: ID
 		const ownerWindow = container.ownerDocument.defaultView;
 		if (!ownerWindow) throw new Error('Sessions renderer requires an owner window');
 		const workbench = sessions.add(await createSessionsWorkbench({
-			createAppToolsHost: documentClient ? services => services.createInstance(AppToolsHost, documentClient!, document, undefined) : undefined,
+			createAppToolsHost: documentClient ? services => new AppServerAppToolsHost(documentClient!, services.createInstance(AppToolsHost, container.ownerDocument, undefined)) : undefined,
 			createTextDocumentHost: documentClient ? services => {
 				const editing = services.get(IChatEditingService);
 				return services.createInstance(AppServerTextDocumentHost, documentClient!, editing.applyEdits.bind(editing));

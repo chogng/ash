@@ -26,6 +26,7 @@ const { CodeEditorWidget } = await import("../../../browser/widget/codeEditor/co
 const { createTestCodeEditor } = await import('../testCodeEditor.js');
 const { TextAreaEditContextRegistry } = await import('../../../browser/controller/editContext/textArea/textAreaEditContextRegistry.js');
 const { ViewPart } = await import('../../../browser/view/viewPart.js');
+const { observableCodeEditor } = await import('../../../browser/observableCodeEditor.js');
 const { InstantiationService } = await import("../../../../platform/instantiation/common/instantiationService.js");
 const { ILogService, NullLoggerService } = await import('../../../../platform/log/common/log.js');
 const { PlaceholderTextContribution } = await import("../../../contrib/placeholderText/browser/placeholderTextContribution.js");
@@ -555,6 +556,29 @@ test('common editor reveal modes scroll without changing selection or borrowing 
 	control.setModel(null);
 	for (const [reveal] of cases) reveal();
 	assert.deepEqual([control.getModel(), control.getSelection(), model.isDisposed()], [null, null, false]);
+});
+
+test('widget focus queries follow DOM focus before deferred blur events', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main><aside></aside><button id="outside">outside</button></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using closeWindow = toDisposable(() => dom.window.close());
+	using model = new TextModel('text');
+	using first = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model });
+	using second = createTestCodeEditor({ container: requiredElement(dom.window.document, 'aside'), model });
+	const header = dom.window.document.createElement('button');
+	first.getDomNode().append(header);
+	const observed = observableCodeEditor(first);
+	first.focus();
+	header.focus();
+	const context = first.invokeWithinContext(accessor => accessor.get(IContextKeyService));
+	assert.deepEqual([observed.isTextFocused.get(), observed.isFocused.get(), context.getValue('editorTextFocus'), context.getValue('editorFocus')], [false, true, false, true]);
+
+	second.focus();
+	assert.deepEqual([first.hasWidgetFocus(), second.hasWidgetFocus()], [false, true]);
+	header.focus();
+	assert.deepEqual([first.hasWidgetFocus(), second.hasWidgetFocus(), second.hasTextFocus()], [true, false, false]);
+	requiredElement<HTMLButtonElement>(dom.window.document, '#outside').focus();
+	assert.deepEqual([first.hasWidgetFocus(), second.hasWidgetFocus()], [false, false]);
 });
 
 test('common editor visibility notifications settle focus before the next input', () => {

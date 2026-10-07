@@ -184,8 +184,8 @@ export class ObservableCodeEditor extends Disposable {
 		})));
 		this._register(editor.onDidCompositionStart(() => this.runInTransaction(transaction => this.compositionState.set(true, transaction))));
 		this._register(editor.onDidCompositionEnd(() => this.runInTransaction(transaction => this.compositionState.set(false, transaction))));
-		this._register(editor.onDidFocusEditorText(() => this.refreshFocusState()));
-		this._register(editor.onDidBlurEditorText(() => this.refreshFocusState()));
+		this._register(editor.onDidFocusEditorText(() => this.refreshTextFocusState()));
+		this._register(editor.onDidBlurEditorText(() => this.refreshTextFocusState()));
 		this._register(editor.onDidFocusEditorWidget(() => this.refreshFocusState()));
 		this._register(editor.onDidBlurEditorWidget(() => this.refreshFocusState()));
 		this._register(editor.onDidDispose(() => this.dispose()));
@@ -379,6 +379,11 @@ export class ObservableCodeEditor extends Disposable {
 		this.focusState.update(this.editor.hasWidgetFocus(), transaction, force);
 		this.textFocusState.update(this.editor.hasTextFocus(), transaction, force);
 		this.compositionState.update(this.editor.inComposition, transaction, force);
+	}
+
+	private refreshTextFocusState(): void {
+		// The widget tracker settles focus moves between the input and editor-owned controls.
+		this.runInTransaction(transaction => this.textFocusState.set(this.editor.hasTextFocus(), transaction));
 	}
 
 	private refreshFocusState(): void {

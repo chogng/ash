@@ -5890,8 +5890,9 @@ test('color picker overflow focus routes Enter to its owning editor after anothe
 });
 
 test('hover options control requests, delay and keyboard modifiers', async ({ page }) => {
-	await page.clock.install();
+	await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
 	await page.goto('/standalone.html');
+	await page.clock.pauseAt(new Date('2026-01-01T00:01:00Z'));
 	await page.evaluate(() => {
 		window.ashStandaloneIntegration.updateContributionOptions({ hover: { enabled: 'off', delay: 900 } });
 		window.ashStandaloneIntegration.prepareLanguageRequest('hover');
@@ -5917,6 +5918,7 @@ test('hover options control requests, delay and keyboard modifiers', async ({ pa
 	await page.clock.runFor(1);
 	expect(await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests())).toHaveLength(2);
 	await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(1));
+	await page.clock.runFor(16);
 	await expect(hover).toBeVisible();
 	await page.keyboard.up('Alt');
 	await expect(hover).toBeHidden();

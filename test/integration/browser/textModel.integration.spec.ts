@@ -1,7 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { getAxeResults, injectAxe } from "axe-playwright";
 import { ScrollType, type IEditor } from '../../../src/ash/editor/common/editorCommon.js';
-import { fileURLToPath } from 'node:url';
 
 const pageErrors = new WeakMap<object, string[]>();
 
@@ -268,10 +267,7 @@ for (const theme of ['light', 'dark', 'contrast', 'contrastLight'] as const) {
 
 test('modern minimap corners apply to main and auxiliary hosts and leave flat hosts square', async ({ page }) => {
 	await openEditor(page);
-	await page.addStyleTag({ path: fileURLToPath(new URL('../../../src/ash/workbench/contrib/modernUI/browser/media/roundedCorners.css', import.meta.url)) });
 	const host = page.locator('body');
-	// This editor fixture has no Workbench theme service; provide its size token.
-	await host.evaluate(element => element.style.setProperty('--ash-cornerRadius-small', '4px'));
 	const slider = page.locator('.stanza-editor-minimap-slider');
 	for (const root of ['ash-workbench', 'ash-auxiliary-window-container']) {
 		await host.evaluate((element, root) => element.setAttribute('class', `${root} modern-ui`), root);

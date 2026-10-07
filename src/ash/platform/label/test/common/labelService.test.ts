@@ -34,3 +34,22 @@ test('LabelService formats workspace paths and invalidates registered formatters
 	assert.equal(labels.getUriLabel(resource, { relative: true }), 'src/main.ts');
 	assert.deepEqual(changes, ['file', 'file']);
 });
+
+test('LabelService normalizes absolute Windows drive labels while retaining workspace-relative paths', () => {
+	const root = URI.from({ scheme: 'file', path: '/e:/workspace' });
+	const resource = root.with({ path: '/e:/workspace/src/main.ts' });
+	const folder = { id: 'root', uri: root, name: 'workspace', index: 0 };
+	const workspace: IWorkspaceContextService = {
+		onDidChangeWorkspace: Event.None,
+		getWorkspace: () => ({ id: 'workspace', folders: [folder] }),
+		getWorkbenchState: () => WorkbenchState.FOLDER,
+		getWorkspaceFolder: () => folder,
+	};
+	using labels = new LabelService(workspace, OperatingSystem.Windows);
+	assert.deepEqual([
+		labels.getUriLabel(resource),
+		labels.getUriLabel(resource, { separator: '/' }),
+		labels.getUriLabel(resource, { relative: true }),
+		resource.path,
+	], ['E:\\workspace\\src\\main.ts', 'E:/workspace/src/main.ts', 'src\\main.ts', '/e:/workspace/src/main.ts']);
+});

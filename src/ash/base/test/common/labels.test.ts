@@ -20,6 +20,18 @@ test('getPathLabel uses target separators, home shortening, and workspace-relati
 	}), '~/file.ts');
 });
 
+test('absolute path labels normalize Windows drive letters without changing URI or UNC identity', () => {
+	const resource = URI.from({ scheme: 'file', path: '/e:/workspace/a.ts' });
+	const networkResource = resource.with({ authority: 'build-host' });
+	assert.deepEqual([
+		getPathLabel(resource, { os: OperatingSystem.Windows }),
+		getPathLabel(resource, { os: OperatingSystem.Macintosh }),
+		getPathLabel(resource, { os: OperatingSystem.Linux }),
+		getPathLabel(networkResource, { os: OperatingSystem.Windows }),
+		resource.path,
+	], ['E:\\workspace\\a.ts', 'e:/workspace/a.ts', 'e:/workspace/a.ts', '\\\\build-host\\e:\\workspace\\a.ts', '/e:/workspace/a.ts']);
+});
+
 test('tildify is case-sensitive on Linux and case-insensitive on macOS', () => {
 	assert.equal(tildify('/Users/Ash/project', '/users/ash', OperatingSystem.Linux), '/Users/Ash/project');
 	assert.equal(tildify('/Users/Ash/project', '/users/ash', OperatingSystem.Macintosh), '~/project');

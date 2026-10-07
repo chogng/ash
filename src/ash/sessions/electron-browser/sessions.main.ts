@@ -1,4 +1,5 @@
 import { AppToolsHost } from '../contrib/appTools/browser/appToolsHost.js';
+import { AppServerAppToolsHost } from '../services/appTools/browser/appServerAppToolsHost.js';
 import { ElectronUpdateService } from '../../platform/update/electron-browser/updateService.js';
 import { FileUserDataProvider } from '../../platform/userData/common/fileUserDataProvider.js';
 import { AppServerProtocolClient } from '../../platform/app-server/browser/appServerProtocolClient.js';
@@ -124,7 +125,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 	sessions.add(toDisposable(() => workspaceSubscription.dispose()));
 	const hostColorScheme = await api.nativeHost.getOSColorScheme();
 	workbench = sessions.add(await createSessionsWorkbench({
-		createAppToolsHost: documentClient ? services => services.createInstance(AppToolsHost, documentClient!, container.ownerDocument, services.createInstance(ElectronUpdateService)) : undefined,
+		createAppToolsHost: documentClient ? services => new AppServerAppToolsHost(documentClient!, services.createInstance(AppToolsHost, container.ownerDocument, services.createInstance(ElectronUpdateService))) : undefined,
 		createTextDocumentHost: documentClient ? services => {
 			const editing = services.get(IChatEditingService);
 			return services.createInstance(AppServerTextDocumentHost, documentClient!, editing.applyEdits.bind(editing));

@@ -34,7 +34,7 @@ test('Built-in media declarations activate from the package catalog, localize, r
 	let fail = false;
 	let generation = 1;
 	const grammars = {
-		registerGrammars: () => ({ replace: () => {}, ...toDisposable(() => {}) }),
+		registerGrammars: () => ({ replace: () => { }, ...toDisposable(() => { }) }),
 		prepareGrammars: async () => ({ commit: () => ({}) }),
 		whenReady: async () => ({}),
 	};
@@ -96,7 +96,6 @@ class MediaFixture extends Disposable {
 		this._register(toDisposable(() => { this.browser.window.close(); URL.revokeObjectURL = originalRevoke; resetNlsResolver(); }));
 		this._register(installEditorTestDom(this.browser, ['Node', 'Element', 'HTMLElement']));
 		URL.revokeObjectURL = url => { this.revoked.push(url); originalRevoke(url); };
-		registerTestComponentServices(this.services, this.browser.window.document);
 		const unexpected = async (): Promise<never> => { throw new Error('Unexpected file operation'); };
 		this.services.registerInstance(IFileService, {
 			onDidChangeFiles: this.changes.event,
@@ -105,8 +104,9 @@ class MediaFixture extends Disposable {
 			readFile: unexpected, readDirectory: unexpected, writeFile: unexpected, writeFileBytes: unexpected,
 			createFile: unexpected, createDirectory: unexpected, copy: unexpected, rename: unexpected, delete: unexpected,
 		});
+		registerTestComponentServices(this.services, this.browser.window.document);
 		this.services.registerInstance(IContextKeyService, this._register(new ContextKeyService()));
-		this.services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => {}, showAccessibleViewHelp: () => {}, ...toDisposable(() => {}) });
+		this.services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, ...toDisposable(() => { }) });
 		const id = kind === 'audio' ? AUDIO_PREVIEW_ID : VIDEO_PREVIEW_ID;
 		this.preview = this._register(getBuiltinEditorPaneFactory('ash.media-preview', id)!({ instantiationService: this.services }, kind === 'audio' ? 'Audio preview' : 'Video preview') as MediaPreview);
 		this.preview.create(this.browser.window.document.body);
@@ -114,7 +114,7 @@ class MediaFixture extends Disposable {
 		Object.defineProperties(this.player, { paused: { get: () => !this.playing }, duration: { value: 2 } });
 		this.player.play = async () => { this.playing = true; };
 		this.player.pause = () => { this.pauseCount++; this.playing = false; };
-		this.player.load = () => {};
+		this.player.load = () => { };
 	}
 }
 

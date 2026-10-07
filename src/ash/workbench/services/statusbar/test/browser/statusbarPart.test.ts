@@ -18,7 +18,7 @@ test("status bar entries render an icon before their text", () => {
 	using service = new StatusbarService();
 	using entry = service.addEntry({ icon: Lxicon.gitBranch, text: "main", ariaLabel: "Git branch main" }, { id: "test.branch", alignment: StatusbarAlignment.Left });
 	using services = createStatusbarServices(document.body.ownerDocument);
-	using part = registerTestComponentServices(services).createInstance(StatusbarPart, document.body, service);
+	using part = services.createInstance(StatusbarPart, document.body, service);
 	const element = part.domNode.querySelector<HTMLElement>('[data-statusbar-item-id="test.branch"]');
 	const label = element?.querySelector<HTMLElement>(".ash-statusbar-item-label");
 
@@ -50,7 +50,7 @@ test("status bar entries support accessible icon-only presentation", () => {
 	using service = new StatusbarService();
 	using entry = service.addEntry({ icon: Lxicon.remote, text: "", ariaLabel: "App Server ready", tooltip: "Connected" }, { id: "test.remote", alignment: StatusbarAlignment.Left });
 	using services = createStatusbarServices(document.body.ownerDocument);
-	using part = registerTestComponentServices(services).createInstance(StatusbarPart, document.body, service);
+	using part = services.createInstance(StatusbarPart, document.body, service);
 	const element = part.domNode.querySelector<HTMLElement>('[data-statusbar-item-id="test.remote"]');
 	const label = element?.querySelector<HTMLElement>(".ash-statusbar-item-label");
 
@@ -75,7 +75,7 @@ test("status bar entries render grouped segments inside one action", () => {
 		ariaLabel: "Errors: 2, Warnings: 1",
 	}, { id: "test.problems", alignment: StatusbarAlignment.Left });
 	using services = createStatusbarServices(document.body.ownerDocument);
-	using part = registerTestComponentServices(services).createInstance(StatusbarPart, document.body, service);
+	using part = services.createInstance(StatusbarPart, document.body, service);
 	const element = part.domNode.querySelector<HTMLElement>('[data-statusbar-item-id="test.problems"]');
 	const label = element?.querySelector<HTMLElement>(".ash-statusbar-item-label");
 	const segments = label?.querySelectorAll<HTMLElement>(".ash-statusbar-item-segment");
@@ -100,7 +100,7 @@ test("status bar entries compact adjacent members of the same group", () => {
 	using sync = service.addEntry({ icon: Lxicon.sync, text: "2↓ 1↑", run() { } }, { id: "test.sync", alignment: StatusbarAlignment.Left, priority: 1, compactGroup: "git" });
 	using problems = service.addEntry({ text: "0" }, { id: "test.problems", alignment: StatusbarAlignment.Left, priority: 0 });
 	using services = createStatusbarServices(document.body.ownerDocument);
-	using part = registerTestComponentServices(services).createInstance(StatusbarPart, document.body, service);
+	using part = services.createInstance(StatusbarPart, document.body, service);
 	const branchElement = part.domNode.querySelector<HTMLElement>('[data-statusbar-item-id="test.branch"]');
 	const syncElement = part.domNode.querySelector<HTMLElement>('[data-statusbar-item-id="test.sync"]');
 	const problemsElement = part.domNode.querySelector<HTMLElement>('[data-statusbar-item-id="test.problems"]');
@@ -144,7 +144,7 @@ test("status bar entry updates retain the item shell and activate commands", () 
 	using service = new StatusbarService();
 	using entry = service.addEntry({ text: "main", run: () => activations += 1 }, { id: "test.branch", alignment: StatusbarAlignment.Left });
 	using services = createStatusbarServices(document.body.ownerDocument);
-	using part = registerTestComponentServices(services).createInstance(StatusbarPart, document.body, service);
+	using part = services.createInstance(StatusbarPart, document.body, service);
 	const element = part.domNode.querySelector<HTMLElement>('[data-statusbar-item-id="test.branch"]');
 	const label = element?.querySelector<HTMLElement>(".ash-statusbar-item-label");
 	const textNode = label?.firstChild;
@@ -171,7 +171,7 @@ test("status bar items are focused through the part and activate from the keyboa
 	using first = service.addEntry({ text: "first", run: () => activations += 1 }, { id: "test.first", alignment: StatusbarAlignment.Left, priority: 2 });
 	using second = service.addEntry({ text: "second", run: () => activations += 1 }, { id: "test.second", alignment: StatusbarAlignment.Left, priority: 1 });
 	using services = createStatusbarServices(document.body.ownerDocument);
-	using part = registerTestComponentServices(services).createInstance(StatusbarPart, document.body, service);
+	using part = services.createInstance(StatusbarPart, document.body, service);
 	document.body.append(part.domNode);
 	const content = part.domNode;
 	const labels = part.domNode.querySelectorAll<HTMLElement>(".ash-statusbar-item-label");
@@ -217,7 +217,7 @@ test("status bar item tooltips use the managed statusbar hover group", () => {
 	using service = new StatusbarService();
 	using entry = service.addEntry({ text: "main", tooltip: "Git branch main" }, { id: "test.branch", alignment: StatusbarAlignment.Left });
 	using services = createStatusbarServices(dom.window.document.body.ownerDocument);
-	using part = registerTestComponentServices(services).createInstance(StatusbarPart, dom.window.document.body, service);
+	using part = services.createInstance(StatusbarPart, dom.window.document.body, service);
 	const label = part.domNode.querySelector<HTMLElement>(".ash-statusbar-item-label");
 
 	assert.ok(label);
@@ -249,7 +249,7 @@ function createStatusbarServices(document: Document): InstantiationService {
 	const services = new InstantiationService();
 	services.registerSingleton(IThemeService, () => new TestThemeService(darkColorTheme));
 	services.registerSingleton(IStorageService, () => new BrowserStorageService({ ownerWindow: document.defaultView!, workspaceId: 'statusbar-test', backend: document.defaultView!.localStorage, flushInterval: 0 }));
-	return services;
+	return registerTestComponentServices(services, document);
 }
 
 test('Part saves live state before storage flush and releases theme and save listeners with its DOM', async () => {

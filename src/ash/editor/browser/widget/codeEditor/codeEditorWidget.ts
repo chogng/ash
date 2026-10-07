@@ -2,7 +2,7 @@ import type { IBulkEditOptions } from '../../services/bulkEditService.js';
 import { IMarkerDecorationsService } from '../../../common/services/markerDecorations.js';
 import { getClientArea, h, isHTMLElement, scheduleAtNextAnimationFrame } from "../../../../base/browser/dom.js";
 import { type IKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
-import { trackFocus, type IFocusTracker } from '../../../../base/browser/focus.js';
+import { isAncestorOfActiveElement, trackFocus, type IFocusTracker } from '../../../../base/browser/focus.js';
 import { type IMouseWheelEvent } from '../../../../base/browser/mouseEvent.js';
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { onUnexpectedError } from '../../../../base/common/errors.js';
@@ -813,10 +813,13 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 
 	hasWidgetFocus(): boolean {
 		if (!this.currentModel) { return false; }
-		if (this.widgetFocus.hasFocus) { return true; }
+		// Blur events are deferred; command routing needs the current DOM focus instead of that event cache.
+		if (isAncestorOfActiveElement(this.rootDomNode)) { return true; }
 		// Overflow content widgets belong to the editor even when their DOM is mounted outside its root.
-		const activeElement = this.rootDomNode.ownerDocument.activeElement;
-		return activeElement !== null && [...this.contentWidgets.values()].some(widget => widget.getDomNode().contains(activeElement));
+		for (const widget of this.contentWidgets.values()) {
+			if (isAncestorOfActiveElement(widget.getDomNode())) { return true; }
+		}
+		return false;
 	}
 
 	getModel(): TextModel | null {
@@ -1144,8 +1147,8 @@ class EditorContextKeysManager extends Disposable {
 		this.languageId = EditorContextKeys.languageId.bindTo(contextKeyService);
 		this._register(editor.onDidChangeConfiguration(() => this.updateConfiguration()));
 		this._register(editor.onDidChangeCursorSelection(() => this.updateSelection()));
-		this._register(editor.onDidFocusEditorText(() => this.updateFocus()));
-		this._register(editor.onDidBlurEditorText(() => this.updateFocus()));
+		this._register(editor.onDidFocusEditorText(() => this.updateTextFocus()));
+		this._register(editor.onDidBlurEditorText(() => this.updateTextFocus()));
 		this._register(editor.onDidFocusEditorWidget(() => this.updateFocus()));
 		this._register(editor.onDidBlurEditorWidget(() => this.updateFocus()));
 		this._register(editor.onDidCompositionStart(() => this.isComposing.set(true)));
@@ -1217,8 +1220,13 @@ class EditorContextKeysManager extends Disposable {
 	}
 
 	private updateFocus(): void {
-		const hasTextFocus = this.editor.hasTextFocus();
 		this.editorFocus.set(this.editor.hasWidgetFocus() && !this.editor.isSimpleWidget);
+		this.updateTextFocus();
+	}
+
+	private updateTextFocus(): void {
+		// Text blur can precede focus on another widget inside the same editor.
+		const hasTextFocus = this.editor.hasTextFocus();
 		this.editorTextFocus.set(hasTextFocus && !this.editor.isSimpleWidget);
 		this.textInputFocus.set(hasTextFocus);
 	}

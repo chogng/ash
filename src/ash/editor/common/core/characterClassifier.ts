@@ -26,7 +26,7 @@ export class CharacterClassifier<T extends number> {
 	}
 
 	get(charCode: number): T {
-		return (charCode >= 0 && charCode < 256 ? this._asciiMap[charCode] : this._map.get(charCode) || this._defaultValue) as T;
+		return (charCode >= 0 && charCode < 256 ? this._asciiMap[charCode] : this._map.get(charCode) ?? this._defaultValue) as T;
 	}
 
 	clear() {

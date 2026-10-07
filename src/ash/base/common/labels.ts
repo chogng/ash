@@ -33,7 +33,7 @@ export function getPathLabel(resource: URI, formatting: IPathLabelFormatting): s
 	if (formatting.os !== OperatingSystem.Windows && formatting.tildify) {
 		path = tildify(path, resourcePath(formatting.tildify.userHome, formatting.os), formatting.os);
 	}
-	return normalizePath(path, formatting.os);
+	return normalizeDriveLetter(normalizePath(path, formatting.os), formatting.os === OperatingSystem.Windows);
 }
 
 function getRelativePathLabel(resource: URI, provider: IRelativePathProvider, os: OperatingSystem): string | undefined {

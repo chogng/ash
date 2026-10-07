@@ -1,19 +1,21 @@
-import type { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
+import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
 import { AppServerProtocolClient } from '../../../src/ash/platform/app-server/browser/appServerProtocolClient.js';
 import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION, type AppServerTransport } from '../../../src/ash/platform/app-server/common/appServerTransport.js';
 import { createTestInitializeResult } from '../../../src/ash/platform/app-server/test/common/testAppServerProtocol.js';
 import type { AppHostOperation } from '../../../src/ash/platform/app-server/common/generated/index.js';
 import { AppToolsHost } from '../../../src/ash/sessions/contrib/appTools/browser/appToolsHost.js';
-import { SessionGroupsService } from '../../../src/ash/sessions/services/sessions/browser/sessionGroupsService.js';
+import { AppServerAppToolsHost } from '../../../src/ash/sessions/services/appTools/browser/appServerAppToolsHost.js';
+import { ISessionGroupsService, SessionGroupsService } from '../../../src/ash/sessions/services/sessions/browser/sessionGroupsService.js';
+import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { SessionsList } from '../../../src/ash/sessions/browser/parts/sidebar/sessionsList.js';
 import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
-import type { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
-import type { ITerminalService } from '../../../src/ash/workbench/contrib/terminal/browser/terminal.js';
-import type { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
-import type { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
-import type { IAccessibilityService } from '../../../src/ash/platform/accessibility/common/accessibility.js';
+import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
+import { ITerminalService } from '../../../src/ash/workbench/contrib/terminal/browser/terminal.js';
+import { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
+import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
+import { IAccessibilityService } from '../../../src/ash/platform/accessibility/common/accessibility.js';
 import type { ISessionsManagementService } from '../../../src/ash/sessions/services/sessions/common/sessionsManagement.js';
 import type { ISessionsService } from '../../../src/ash/sessions/services/sessions/browser/sessionsService.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
@@ -50,6 +52,7 @@ const storage = resources.add(new BrowserStorageService({ ownerWindow: window, w
 const groups = resources.add(new SessionGroupsService(storage, { sessions: [], onDidChange: Event.None } as unknown as ISessionsManagementService));
 const changes = resources.add(new Emitter<void>());
 const opened: unknown[] = [];
+const openedUrls: string[] = [];
 let releaseTerminal: (() => void) | undefined;
 const closedTerminals: string[] = [];
 const sessions = [1, 2].map(id => ({ sessionId: `session-${id}`, title: `Task ${id}`, status: 'active', chats: [{ threadId: `thread-${id}`, status: 'active', origin: { type: 'root' } }] }));
@@ -58,15 +61,15 @@ const view = { activeSelection: undefined, visibleSelections: [], onDidChange: c
 const container = document.createElement('main');
 document.body.append(container);
 resources.add(new SessionsList(container, management, view, 'Tasks', 'New task', { onDidChange: Event.None, getSessionPullRequests: () => [], initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { } }, groups));
-resources.add(new AppToolsHost(client, document, undefined,
-	{ openEditor: async (...args: unknown[]) => { opened.push(args); } } as unknown as IEditorService,
-	{ open: async () => true } as unknown as IOpenerService,
-	{ createTerminal: () => new Promise(resolve => { releaseTerminal = () => resolve({ id: 'terminal-1' }); }), setActiveInstance: () => { }, closeTerminal: async (terminal: { id: string; }) => { closedTerminals.push(terminal.id); } } as unknown as ITerminalService,
-	{ openView: async () => { } } as unknown as IViewsService,
-	{ openConversation: async (sessionId: string, threadId: string) => { opened.push({ sessionId, threadId }); } } as unknown as IChatSessionNavigationService,
-	groups,
-	{ onDidChangeReducedMotion: Event.None, isMotionReduced: () => window.matchMedia('(prefers-reduced-motion: reduce)').matches } as unknown as IAccessibilityService,
-));
+const services = resources.add(new InstantiationService());
+services.registerInstance(IEditorService, { openEditor: async (...args: unknown[]) => { opened.push(args); } } as unknown as IEditorService);
+services.registerInstance(IOpenerService, { open: async (resource: { toString(): string; }) => { openedUrls.push(resource.toString()); return true; } } as unknown as IOpenerService);
+services.registerInstance(ITerminalService, { createTerminal: () => new Promise(resolve => { releaseTerminal = () => resolve({ id: 'terminal-1' }); }), setActiveInstance: () => { }, closeTerminal: async (terminal: { id: string; }) => { closedTerminals.push(terminal.id); } } as unknown as ITerminalService);
+services.registerInstance(IViewsService, { openView: async () => { } } as unknown as IViewsService);
+services.registerInstance(IChatSessionNavigationService, { openConversation: async (sessionId: string, threadId: string) => { opened.push({ sessionId, threadId }); } } as unknown as IChatSessionNavigationService);
+services.registerInstance(ISessionGroupsService, groups);
+services.registerInstance(IAccessibilityService, { onDidChangeReducedMotion: Event.None, isMotionReduced: () => window.matchMedia('(prefers-reduced-motion: reduce)').matches } as unknown as IAccessibilityService);
+const appTools = resources.add(new AppServerAppToolsHost(client, services.createInstance(AppToolsHost, document, undefined)));
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
-declare global { interface Window { ashAppToolsIntegration: { call(operation: AppHostOperation): Promise<unknown>; readonly opened: unknown[]; cancelLast(): void; releaseTerminal(): void; readonly closedTerminals: string[]; readonly terminalPending: boolean; }; } }
-window.ashAppToolsIntegration = { call: operation => transport.call(operation), opened, cancelLast: () => transport.cancelLast(), releaseTerminal: () => releaseTerminal?.(), closedTerminals, get terminalPending() { return releaseTerminal !== undefined; } };
+declare global { interface Window { ashAppToolsIntegration: { call(operation: AppHostOperation): Promise<unknown>; readonly opened: unknown[]; readonly openedUrls: string[]; cancelLast(): void; releaseTerminal(): void; disposeHost(): void; readonly closedTerminals: string[]; readonly terminalPending: boolean; }; } }
+window.ashAppToolsIntegration = { call: operation => transport.call(operation), opened, openedUrls, cancelLast: () => transport.cancelLast(), releaseTerminal: () => releaseTerminal?.(), disposeHost: () => appTools.dispose(), closedTerminals, get terminalPending() { return releaseTerminal !== undefined; } };

@@ -1,4 +1,7 @@
 import { registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
+import '../../../src/ash/workbench/contrib/modernUI/browser/media/roundedCorners.css';
+import { asCssVariableName } from '../../../src/ash/platform/theme/common/sizeUtils.js';
+import { cornerRadiusSmall } from '../../../src/ash/platform/theme/common/sizes/baseSizes.js';
 import { ITextModelService } from '../../../src/ash/editor/common/services/resolverService.js';
 import { TextModelResolverService } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResolverService.js';
 import { BrowserTextMateService } from '../../../src/ash/workbench/services/textMate/browser/browserTextMateService.js';
@@ -114,6 +117,8 @@ declare global {
 }
 
 const root = requiredElement("#editor-root");
+// The page owns this size token and its bundled CSS so parallel source edits cannot mix their versions.
+document.body.style.setProperty(asCssVariableName(cornerRadiusSmall), '4px');
 setIconResolver(root.ownerDocument, icon => getIconDefinition(icon));
 const disposables = new DisposableStore();
 const resource = URI.parse("inmemory://editor/main.rs");
