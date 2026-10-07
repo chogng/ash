@@ -41,6 +41,7 @@ import { ContextKeyService } from "../../../../../platform/contextkey/browser/co
 import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
 import { NotificationService } from "../../../../../workbench/services/notification/common/notificationService.js";
 import { NotificationsToasts } from "../../../../browser/parts/notifications/notificationsToasts.js";
+import { NotificationActionRunner } from "../../../../browser/parts/notifications/notificationsCommands.js";
 import { INotificationService, NotificationSeverity } from "../../../../../platform/notification/common/notification.js";
 import {
 	KeybindingResolveKind,
@@ -347,10 +348,11 @@ test('failed keyboard command appears as a warning notification', async () => {
 		operatingSystem: OperatingSystem.Windows,
 	}));
 	const notifications = resources.add(new NotificationService());
-	resources.add(new NotificationsToasts(dom.window.document.body, notifications));
 	const files = resources.add(new KeybindingTestServices());
 	const services = files.services;
 	services.registerInstance(INotificationService, notifications);
+	const notificationActionRunner = resources.add(services.createInstance(NotificationActionRunner));
+	resources.add(new NotificationsToasts(dom.window.document.body, notifications, notificationActionRunner));
 	const keybindings = resources.add(services.createInstance(WorkbenchKeybindingService, {
 		ownerDocument: dom.window.document,
 		commandService: resources.add(new CommandService(services, commands)),

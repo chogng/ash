@@ -1,4 +1,5 @@
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
+import type { IAction, IActionRunner } from "../../../../base/common/actions.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { localize } from "../../../../nls.js";
 import { NotificationSeverity, type INotificationService, type NotificationItem } from "../../../../platform/notification/common/notification.js";
@@ -10,7 +11,7 @@ export class NotificationsToasts extends Disposable {
 	private hidden = false;
 	private previousFocus: HTMLElement | undefined;
 
-	constructor(container: HTMLElement, private readonly service: INotificationService) {
+	constructor(container: HTMLElement, private readonly service: INotificationService, private readonly actionRunner: IActionRunner) {
 		super();
 		const document = container.ownerDocument;
 		this.element = h(document, "div");
@@ -79,7 +80,11 @@ export class NotificationsToasts extends Disposable {
 			const actions = h(document, "div"); actions.className = "ash-notification-actions";
 			for (const action of item.actions) {
 				const button = h(document, "button"); button.type = "button"; button.className = "ash-notification-action"; button.textContent = action.label;
-				button.addEventListener("click", () => { void Promise.resolve().then(() => action.run()).catch(error => console.error(`Notification action '${action.id}' failed`, error)); });
+				const notificationAction: IAction = {
+					id: action.id, label: action.label, tooltip: "", enabled: true,
+					run: () => action.run(),
+				};
+				button.addEventListener("click", () => { void Promise.resolve().then(() => this.actionRunner.run(notificationAction)); });
 				actions.append(button);
 			}
 			content.append(actions);

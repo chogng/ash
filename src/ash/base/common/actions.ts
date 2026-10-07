@@ -40,12 +40,16 @@ export class ActionRunner extends Disposable implements IActionRunner {
 		this._onWillRun.fire({ action, context });
 		let error: unknown;
 		try {
-			await action.run(context);
+			await this.runAction(action, context);
 		} catch (cause) {
 			error = cause;
 		} finally {
 			this._onDidRun.fire({ action, context, error });
 		}
+	}
+
+	protected async runAction(action: IAction, context?: unknown): Promise<void> {
+		await action.run(context);
 	}
 }
 

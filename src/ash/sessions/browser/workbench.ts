@@ -53,7 +53,7 @@ import "./actions/sessionsChatActions.js";
 import "./actions/approvalEnvironmentActions.js";
 import './activityBarAccessibility.js';
 import '../../workbench/contrib/accessibility/browser/accessibilityConfiguration.js';
-import '../../workbench/browser/parts/notifications/notificationsCommands.js';
+import { NotificationActionRunner } from '../../workbench/browser/parts/notifications/notificationsCommands.js';
 import '../../workbench/contrib/accessibility/browser/accessibleViewActions.js';
 import { h, type IDimension } from "../../base/browser/dom.js";
 import type { Event } from '../../base/common/event.js';
@@ -443,7 +443,8 @@ export abstract class Workbench extends Disposable {
 			configurationService,
 		})));
 		services.registerInstance(IGitHubConnectionService, this._register(services.createInstance(GitHubConnectionService)));
-		const notificationsCenter = this._register(new NotificationsCenter(this.domNode, feedbackHost, notificationService, undefined, contextKeys, () => services.get(IAccessibleViewService).getOpenAriaHint(AccessibilityVerbositySettingId.Notifications)));
+		const notificationActionRunner = this._register(services.createInstance(NotificationActionRunner));
+		const notificationsCenter = this._register(new NotificationsCenter(this.domNode, feedbackHost, notificationService, notificationActionRunner, undefined, contextKeys, () => services.get(IAccessibleViewService).getOpenAriaHint(AccessibilityVerbositySettingId.Notifications)));
 		services.registerInstance(INotificationsCenter, notificationsCenter);
 		const keyboardLayoutService = this._register(new BrowserKeyboardLayoutService({
 			navigator: ownerWindow.navigator,

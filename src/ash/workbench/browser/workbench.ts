@@ -100,6 +100,7 @@ import { ServiceCollection } from '../../platform/instantiation/common/serviceCo
 import { NotificationService } from "../services/notification/common/notificationService.js";
 import { IAccessibleViewService, AccessibilityVerbositySettingId } from "../../platform/accessibility/browser/accessibleView.js";
 import { INotificationsCenter, NotificationsCenter } from "./parts/notifications/notificationsCenter.js";
+import { NotificationActionRunner } from "./parts/notifications/notificationsCommands.js";
 import { INotificationService } from "../../platform/notification/common/notification.js";
 import { BrowserProgressService } from "../../platform/progress/browser/progressService.js";
 import { IProgressService } from "../../platform/progress/common/progress.js";
@@ -846,7 +847,8 @@ export class Workbench extends Disposable {
 		services.registerSingleton(IURLService, () => createURLService(services));
 		const userKeyboardLayoutService = userKeyboardLayoutApi ?? UnavailableUserKeyboardLayoutService;
 		services.registerInstance(IUserKeyboardLayoutService, userKeyboardLayoutService);
-		const notificationsCenter = this._register(new NotificationsCenter(workbenchRoot, feedbackHost, notificationService, statusbarService, contextKeys, () => services.get(IAccessibleViewService).getOpenAriaHint(AccessibilityVerbositySettingId.Notifications)));
+		const notificationActionRunner = this._register(services.createInstance(NotificationActionRunner));
+		const notificationsCenter = this._register(new NotificationsCenter(workbenchRoot, feedbackHost, notificationService, notificationActionRunner, statusbarService, contextKeys, () => services.get(IAccessibleViewService).getOpenAriaHint(AccessibilityVerbositySettingId.Notifications)));
 		services.registerInstance(INotificationsCenter, notificationsCenter);
 		const keyboardLayoutService = this._register(new BrowserKeyboardLayoutService({
 			navigator: ownerWindow.navigator,

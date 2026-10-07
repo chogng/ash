@@ -1,5 +1,6 @@
 import "./media/notifications.css";
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
+import type { IAction, IActionRunner } from "../../../../base/common/actions.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
@@ -28,10 +29,10 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 	private open = false;
 	private previousFocus: Element | null = null;
 
-	constructor(root: HTMLElement, toastContainer: HTMLElement, private readonly service: INotificationService, statusbar?: IStatusbarService, contextKeys?: IContextKeyService, getHelpHint?: () => string | undefined) {
+	constructor(root: HTMLElement, toastContainer: HTMLElement, private readonly service: INotificationService, private readonly actionRunner: IActionRunner, statusbar?: IStatusbarService, contextKeys?: IContextKeyService, getHelpHint?: () => string | undefined) {
 		super();
 		const document = root.ownerDocument;
-		const toasts = this._register(new NotificationsToasts(toastContainer, service));
+		const toasts = this._register(new NotificationsToasts(toastContainer, service, actionRunner));
 		this.panel = h(document, "section"); this.panel.className = "ash-notifications-center";
 		this.panel.tabIndex = -1;
 		this.panel.style.setProperty("--ash-feedback-statusbar-height", `${statusbar ? StatusbarHeight : 0}px`);
@@ -168,7 +169,15 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 		if (item.source) { const source = h(document, "div"); source.className = "ash-notification-source"; source.textContent = item.source; row.append(source); }
 		if (item.actions?.length) {
 			const actions = h(document, "div"); actions.className = "ash-notification-actions";
-			for (const action of item.actions) { const button = h(document, "button"); button.type = "button"; button.textContent = action.label; button.className = "ash-notification-action"; button.addEventListener("click", () => { void Promise.resolve().then(() => action.run()).catch(error => console.error(`Notification action '${action.id}' failed`, error)); }); actions.append(button); }
+			for (const action of item.actions) {
+				const button = h(document, "button"); button.type = "button"; button.textContent = action.label; button.className = "ash-notification-action";
+				const notificationAction: IAction = {
+					id: action.id, label: action.label, tooltip: "", enabled: true,
+					run: () => action.run(),
+				};
+				button.addEventListener("click", () => { void Promise.resolve().then(() => this.actionRunner.run(notificationAction)); });
+				actions.append(button);
+			}
 			row.append(actions);
 		}
 		const remove = h(document, "button"); remove.type = "button"; remove.className = "ash-notifications-remove"; remove.dataset.notificationRemove = String(item.id);

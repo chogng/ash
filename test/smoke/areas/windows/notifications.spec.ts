@@ -1,3 +1,9 @@
+import assert from 'node:assert/strict';
+import { mkdir, readFile, realpath, rmdir } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { basename, join, relative } from 'node:path';
+import type { Page } from '@playwright/test';
+import type { PlaywrightApplication } from '../../../automation/playwrightDriver.js';
 import { expect, test } from '../../../automation/test.js';
 
 test('clearing one notification toast updates the center while hiding toasts retains other records', async ({ workbench }) => {
@@ -164,3 +170,120 @@ test('clearing the last toast tolerates its previous focus control being removed
 	await workbench.quickaccess.runCommand('notifications.showList');
 	await expect(page.getByRole('region', { name: 'Notification Center', exact: true }).getByText('No notifications', { exact: true })).toBeVisible();
 });
+
+for (const useCenter of [false, true]) {
+	test(`notification ${useCenter ? 'center' : 'toast'} action failure reports the real settings write error`, async ({ workbench, application, driver }, testInfo) => {
+		const page = workbench.page;
+		await workbench.quickaccess.runCommand('notifications.clearAll');
+		await workbench.quickaccess.runCommand('showEditorScreenReaderNotification');
+		if (useCenter) await workbench.quickaccess.runCommand('notifications.showList');
+		const surface = page.locator(useCenter ? '.ash-notifications-center' : '.ash-notification-host');
+		const original = surface.getByRole('button', { name: 'Always Enable', exact: true });
+		await expect(original).toBeVisible();
+		const failure = await blockConfigurationWrite(page, application);
+		try {
+			await original.click();
+			const errors = surface.locator('.ash-notification-message').filter({ hasText: failure.message });
+			// The old implementation logs the same real rejection. Wait for that boundary,
+			// then require the shared notification model to expose it to the user.
+			await expect.poll(async () => (await errors.allTextContents()).some(message => message.includes(failure.message))
+				|| driver.diagnostics.consoleErrors.some(message => message.includes(failure.message))).toBe(true);
+			await failure.assertUnchanged();
+			await testInfo.attach('notification-action-failure', {
+				body: JSON.stringify({
+					view: useCenter ? 'center' : 'toast', expectedError: failure.message,
+					errorMessages: await errors.allTextContents(), consoleErrors: driver.diagnostics.consoleErrors,
+				}), contentType: 'application/json'
+			});
+			await expect(errors).toHaveCount(1);
+			await expect(errors).toContainText(failure.message);
+			await expect(original).toBeVisible();
+			await workbench.quickaccess.runCommand('notifications.showList');
+			await expect(page.locator('.ash-notifications-center [data-notification-id]')).toHaveCount(2);
+			expect(driver.diagnostics.consoleErrors.filter(message => message.includes(failure.message))).toEqual([]);
+		} finally {
+			try { await failure.assertUnchanged(); } finally { await failure.dispose(); }
+		}
+	});
+}
+
+interface StoredConfiguration {
+	key: 'settings.json';
+	revision: number;
+	document: { version: 1; source: string; };
+}
+
+async function browserConfiguration(page: Page, operation: 'block' | 'read' | 'restore', original?: StoredConfiguration | null): Promise<StoredConfiguration | null> {
+	return page.evaluate(async ({ operation, original }) => {
+		const database = await new Promise<IDBDatabase>((resolve, reject) => {
+			const opening = indexedDB.open('ash-configuration', 1);
+			opening.onsuccess = () => resolve(opening.result);
+			opening.onerror = () => reject(opening.error);
+		});
+		try {
+			return await new Promise<StoredConfiguration | null>((resolve, reject) => {
+				const transaction = database.transaction('resources', operation === 'read' ? 'readonly' : 'readwrite');
+				const store = transaction.objectStore('resources');
+				const request = store.get('settings.json');
+				let stored: StoredConfiguration | null;
+				request.onsuccess = () => {
+					stored = request.result ?? null;
+					if (operation === 'block') {
+						// No broadcast: the real renderer retains its revision and the real
+						// IndexedDB compare-and-swap rejects its subsequent write.
+						store.put({
+							key: 'settings.json', revision: (stored?.revision ?? 0) + 1,
+							document: stored?.document ?? { version: 1, source: '{}\n' }
+						});
+					} else if (operation === 'restore') {
+						if (original) store.put(original);
+						else store.delete('settings.json');
+					}
+				};
+				transaction.oncomplete = () => resolve(stored);
+				transaction.onerror = () => reject(transaction.error);
+				transaction.onabort = () => reject(transaction.error);
+			});
+		} finally { database.close(); }
+	}, { operation, original });
+}
+
+async function blockConfigurationWrite(page: Page, application: PlaywrightApplication): Promise<{ message: string; assertUnchanged(): Promise<void>; dispose(): Promise<void>; }> {
+	if (!('windows' in application)) {
+		// Each browser fixture owns a fresh BrowserContext, including this database.
+		const original = await browserConfiguration(page, 'block');
+		const expected = {
+			key: 'settings.json', revision: (original?.revision ?? 0) + 1,
+			document: original?.document ?? { version: 1, source: '{}\n' }
+		};
+		return {
+			message: `Configuration revision conflict: expected ${expected.revision - 1}, actual ${expected.revision}`,
+			async assertUnchanged() { expect(await browserConfiguration(page, 'read')).toEqual(expected); },
+			async dispose() {
+				await browserConfiguration(page, 'restore', original);
+				expect(await browserConfiguration(page, 'read')).toEqual(original);
+			},
+		};
+	}
+	const processProfile = await application.evaluate(({ app }) => ({ pid: process.pid, profile: process.env.ASH_HOME, userData: app.getPath('userData') }));
+	assert.ok(processProfile.profile);
+	const [profile, userData, temporaryRoot] = await Promise.all([realpath(processProfile.profile), realpath(processProfile.userData), realpath(tmpdir())]);
+	assert.equal(relative(userData, profile), 'profile');
+	assert.equal(relative(temporaryRoot, userData), basename(userData));
+	assert.ok(basename(userData).startsWith('ash-'));
+	const settings = join(profile, 'settings.json');
+	const blocker = `${settings}.${processProfile.pid}.tmp`;
+	const original = await page.evaluate(() => globalThis.ashTestMainProcess.call('configuration', 'read'));
+	const source = await readFile(settings).catch(error => { if (error.code === 'ENOENT') return undefined; throw error; });
+	// Exclusive mkdir never replaces an existing file or directory. The owner writes
+	// this exact temporary path before rename; rmdir only removes our empty blocker.
+	await mkdir(blocker);
+	return {
+		message: 'EISDIR',
+		async assertUnchanged() {
+			expect(await page.evaluate(() => globalThis.ashTestMainProcess.call('configuration', 'read'))).toEqual(original);
+			assert.deepEqual(await readFile(settings).catch(error => { if (error.code === 'ENOENT') return undefined; throw error; }), source);
+		},
+		async dispose() { await rmdir(blocker); },
+	};
+}
