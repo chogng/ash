@@ -1,7 +1,8 @@
 import { parse, type ParseError } from '../../../../base/common/json.js';
 import { validateJsonValue } from '../../../../base/common/jsonValue.js';
 import { parseKeybinding } from '../../../../base/common/keybindingParser.js';
-import { parseContextKeyExpression } from '../../../../platform/contextkey/common/contextKeyExpressionParser.js';
+import { Parser } from '../../../../platform/contextkey/common/contextkey.js';
+import { localize } from '../../../../nls.js';
 import type { CommandId } from '../../../../platform/commands/common/commands.js';
 import type { IUserFriendlyKeybinding } from '../../../../platform/keybinding/common/keybinding.js';
 
@@ -62,7 +63,12 @@ function validateKeybindingEntry(
 	const command = validateCommand(source.command, `${path}.command`);
 	const when = optionalString(source.when, `${path}.when`, 1_024);
 	if (when !== undefined) {
-		parseContextKeyExpression(when);
+		const parser = new Parser();
+		if (!parser.parse(when)) {
+			const error = parser.lexingErrors[0] ?? parser.parsingErrors[0];
+			throw new SyntaxError(localize('contextkey.invalidWhen', 'Invalid when condition at offset {0}: {1}', error.offset,
+				parser.parsingErrors[0]?.message ?? parser.lexingErrors[0]?.additionalInfo));
+		}
 	}
 	const args = Object.hasOwn(source, 'args')
 		? validateJsonValue(source.args, {

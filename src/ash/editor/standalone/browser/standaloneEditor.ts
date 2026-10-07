@@ -14,7 +14,6 @@ import { StandaloneServices, type StandaloneServiceOverrides } from "./standalon
 import { Colorizer, type IColorizerElementOptions, type IColorizerOptions } from './colorizer.js';
 import { IMarkerService, type Marker, type MarkerInput } from '../../../platform/markers/common/markers.js';
 import { CommandsRegistry, type CommandHandler } from '../../../platform/commands/common/commands.js';
-import { parseContextKeyExpression } from '../../../platform/contextkey/common/contextKeyExpressionParser.js';
 import { KeybindingsRegistry } from '../../../platform/keybinding/common/keybindingsRegistry.js';
 import { EditorAction, EditorCommand, EditorExtensionsRegistry, type ServicesAccessor } from '../../browser/editorExtensions.js';
 import { ContextKeyExpr } from '../../../platform/contextkey/common/contextkey.js';
@@ -206,8 +205,8 @@ export function addEditorAction(descriptor: IActionDescriptor): IDisposable {
 		|| typeof descriptor.label !== 'string' || !descriptor.label.trim() || typeof descriptor.run !== 'function') {
 		throw new TypeError('Standalone editor action requires an id, label and run handler');
 	}
-	const precondition = descriptor.precondition === undefined ? undefined : parseContextKeyExpression(descriptor.precondition);
-	const keybindingContext = descriptor.keybindingContext === undefined ? undefined : parseContextKeyExpression(descriptor.keybindingContext);
+	const precondition = descriptor.precondition === undefined ? undefined : ContextKeyExpr.deserialize(descriptor.precondition);
+	const keybindingContext = descriptor.keybindingContext === undefined ? undefined : ContextKeyExpr.deserialize(descriptor.keybindingContext);
 	if (descriptor.keybindings !== undefined && (!Array.isArray(descriptor.keybindings)
 		|| descriptor.keybindings.some(keybinding => !Number.isSafeInteger(keybinding) || keybinding <= 0))) {
 		throw new TypeError('Editor action keybindings must be encoded keybindings');
@@ -265,7 +264,7 @@ export function addKeybindingRules(rules: readonly IKeybindingRule[]): IDisposab
 			keybinding: rule.keybinding,
 			command: rule.command,
 			args: rule.commandArgs === undefined ? undefined : [rule.commandArgs],
-			when: rule.when == null ? undefined : parseContextKeyExpression(rule.when),
+			when: rule.when == null ? undefined : ContextKeyExpr.deserialize(rule.when),
 		};
 	});
 	const resources = new DisposableStore();

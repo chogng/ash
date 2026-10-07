@@ -38,9 +38,6 @@ import {
 } from "../../../../../platform/commands/common/commands.js";
 import { ContextKeyExpr } from "../../../../../platform/contextkey/common/contextkey.js";
 import { ContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
-import {
-	parseContextKeyExpression,
-} from "../../../../../platform/contextkey/common/contextKeyExpressionParser.js";
 import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
 import { NotificationService } from "../../../../../workbench/services/notification/common/notificationService.js";
 import { NotificationsToasts } from "../../../../browser/parts/notifications/notificationsToasts.js";
@@ -141,10 +138,11 @@ test("pass-through keybinding leaves the browser shortcut available to the focus
 
 test("when expressions preserve boolean precedence and comparisons", () => {
 	using contexts = new ContextKeyService();
-	const expression = parseContextKeyExpression(
+	const expression = ContextKeyExpr.deserialize(
 		"editorFocus && (mode == edit || !readOnly)",
 	);
 
+	assert.ok(expression);
 	contexts.setContext("editorFocus", true);
 	contexts.setContext("mode", "preview");
 	contexts.setContext("readOnly", false);
@@ -154,10 +152,7 @@ test("when expressions preserve boolean precedence and comparisons", () => {
 	assert.equal(expression.evaluate(contexts), false);
 	contexts.setContext("mode", "edit");
 	assert.equal(expression.evaluate(contexts), true);
-	assert.throws(
-		() => parseContextKeyExpression("editorFocus &&"),
-		/Expected/,
-	);
+	assert.equal(ContextKeyExpr.deserialize("editorFocus &&"), undefined);
 });
 
 test("browser service executes chords and restores IME state", async () => {
@@ -877,14 +872,20 @@ test('user keybindings load conditions, arguments, OS overrides and blockers thr
 	const notifications = registrations.add(new NotificationService());
 	const service = registrations.add(new WorkbenchKeybindingService({ ownerDocument: dom.window.document, commandService: registrations.add(new CommandService(registrations.add(new InstantiationService()))), contextKeyService: contexts, keyboardLayoutService: layouts, registry }, notifications, fixture.files, fixture.profiles));
 	const resolver = new KeybindingResolver({ registry, resolveKeybinding: binding => resolveKeybinding(binding, OperatingSystem.Windows) });
-	await fixture.write([{ key: 'ctrl+q', mac: 'ctrl+p', linux: 'ctrl+p', win: 'ctrl+p', command: 'test.user', when: 'test.enabled && mode == edit', args: { source: 'user' } }]);
+	await fixture.write([{ key: 'ctrl+q', mac: 'ctrl+p', linux: 'ctrl+p', win: 'ctrl+p', command: 'test.user', when: String.raw`test.enabled && mode in modes && count >= 2 && path =~ /\.md$/ && true`, args: { source: 'user' } }]);
 	await service.initialize();
 	assert.equal(resolver.resolve(contexts, [keyEventData()]).kind, KeybindingResolveKind.Command);
 	contexts.setContext('test.enabled', true);
 	contexts.setContext('mode', 'edit');
+	contexts.setContext('modes', ['edit']);
+	contexts.setContext('count', '2');
+	contexts.setContext('path', 'readme.md');
 	const result = resolver.resolve(contexts, [keyEventData()]);
 	assert.equal(result.kind === KeybindingResolveKind.Command ? result.command : undefined, 'test.user');
 	assert.deepEqual(result.kind === KeybindingResolveKind.Command ? result.args : undefined, [{ source: 'user' }]);
+	contexts.setContext('modes', ['preview']);
+	const disabled = resolver.resolve(contexts, [keyEventData()]);
+	assert.equal(disabled.kind === KeybindingResolveKind.Command ? disabled.command : undefined, 'test.builtin');
 	await fixture.write([{ key: 'ctrl+p', command: null }]);
 	await service.initialize();
 	assert.equal(resolver.resolve(contexts, [keyEventData()]).kind, KeybindingResolveKind.Blocked);

@@ -26,7 +26,7 @@ import { parseWorkspace } from '../../platform/workspace/common/workspace.js';
 import { showStartupError } from '../browser/startupError.js';
 import { NativeHostColorSchemeService } from '../services/themes/electron-browser/nativeHostColorSchemeService.js';
 import { startWorkbench, type IStartWorkbenchOptions, type Workbench } from '../browser/workbench.js';
-import { createElectronWorkbenchContextMenuService } from '../services/contextmenu/electron-browser/contextMenuService.js';
+import { ElectronContextMenuService } from '../services/contextmenu/electron-browser/contextMenuService.js';
 import { loadUserThemes } from '../services/themes/browser/workbenchThemeService.js';
 import { ElectronLifecycleService } from '../services/lifecycle/electron-browser/lifecycleService.js';
 import { createElectronTitlebarPartFactory } from '../services/title/electron-browser/titleService.js';
@@ -130,7 +130,7 @@ export class DesktopMain extends Disposable {
 				clipboardService: new ElectronRendererClipboardService(),
 				dialogHandler: new NativeDialogHandler(api.nativeHost, container),
 				userThemeService: userThemes,
-				createContextMenuService: options => createElectronWorkbenchContextMenuService(options, api.nativeContextMenu),
+				createContextMenuService: services => services.createInstance(ElectronContextMenuService, api.nativeContextMenu),
 				createTitlebarPart: createElectronTitlebarPartFactory(api.nativeMenubar),
 			}));
 			performance.mark('ash.desktop.workbench-created');

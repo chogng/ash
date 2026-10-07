@@ -7,6 +7,7 @@ import { dirname, join, resolve } from 'node:path';
 import { build, createServer, type Connect } from "vite";
 
 import { workbenchEntryPlugin } from "./workbenchEntryPlugin.ts";
+import { CSSDevelopmentService } from '../../../src/ash/platform/cssDev/node/cssDevService.ts';
 
 test("Workbench entry redirects root requests to the shared Workbench", () => {
 	const middleware = configuredMiddleware();
@@ -82,6 +83,70 @@ test('Sessions HTML is served and built from its owning layer with working modul
 	} finally {
 		await server?.close();
 		assert.equal(dirname(resolve(directory)), resolve(tmpdir()));
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+test('Development pages receive CSS import maps while production keeps bundled styles', async () => {
+	const directory = await mkdtemp(join(tmpdir(), 'ash-css-development-'));
+	const root = join(directory, 'code');
+	const css = join(directory, 'shared/style.css');
+	const output = join(directory, 'output');
+	await mkdir(root);
+	await mkdir(dirname(css));
+	await writeFile(css, '.css-test { color: red; }');
+	await writeFile(join(root, 'index.html'), '<html><head></head><body><script type="module" src="./entry.ts"></script></body></html>');
+	await writeFile(join(root, 'entry.ts'), 'import "../shared/style.css";');
+	const service = new CSSDevelopmentService({ sourceRoot: directory, isBuilt: false });
+	const plugin = () => workbenchEntryPlugin(undefined, undefined, { service, sourceRoot: directory });
+	let server: Awaited<ReturnType<typeof createServer>> | undefined;
+	try {
+		server = await createServer({ configFile: false, root, plugins: [plugin()], server: { host: '127.0.0.1', port: 0 } });
+		await server.listen();
+		const address = server.httpServer!.address();
+		assert.ok(address && typeof address !== 'string');
+		const origin = `http://127.0.0.1:${address.port}`;
+		const html = await (await fetch(`${origin}/index.html`)).text();
+		assert.match(html, /ash-workbench-css-modules/u);
+		const data = /type="application\/json">\s*([^<]+)<\/script>/u.exec(html)?.[1];
+		assert.ok(data, html);
+		const modules = JSON.parse(data) as { specifiers: string[]; stylesheet: string; }[];
+		assert.equal(modules.length, 1);
+		const transformed = await (await fetch(`${origin}/entry.ts`)).text();
+		assert.ok(modules[0].specifiers.some(specifier => transformed.includes(specifier)), transformed);
+		assert.match(await (await fetch(new URL(modules[0].stylesheet, origin))).text(), /color: red/u);
+		await server.close();
+		server = undefined;
+		await build({ configFile: false, root, plugins: [plugin()], build: { outDir: output, emptyOutDir: true } });
+		const built = await readFile(join(output, 'index.html'), 'utf8');
+		assert.doesNotMatch(built, /ash-workbench-css-modules|_ASH_CSS_LOAD|importmap/u);
+		assert.match(built, /rel="stylesheet"/u);
+	} finally {
+		await server?.close();
+		assert.equal(dirname(directory), tmpdir());
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+test('CSS discovery caches relative sorted paths and skips filesystem access in builds', async () => {
+	const directory = await mkdtemp(join(tmpdir(), 'ash-css-modules-'));
+	try {
+		await mkdir(join(directory, 'nested'));
+		await writeFile(join(directory, 'z.css'), '');
+		await writeFile(join(directory, 'nested/a.css'), '');
+		await writeFile(join(directory, 'ignored.ts'), '');
+		const service = new CSSDevelopmentService({ sourceRoot: directory, isBuilt: false });
+		const first = service.getCssModules();
+		assert.equal(first, service.getCssModules());
+		assert.deepEqual(await first, ['nested/a.css', 'z.css']);
+		await writeFile(join(directory, 'new.css'), '');
+		assert.deepEqual(await service.getCssModules(), ['nested/a.css', 'z.css']);
+		const built = new CSSDevelopmentService({ sourceRoot: join(directory, 'missing'), isBuilt: true });
+		assert.equal(built.isEnabled, false);
+		assert.deepEqual(await built.getCssModules(), []);
+		await assert.rejects(new CSSDevelopmentService({ sourceRoot: join(directory, 'missing'), isBuilt: false }).getCssModules(), { code: 'ENOENT' });
+	} finally {
+		assert.equal(dirname(directory), tmpdir());
 		await rm(directory, { recursive: true, force: true });
 	}
 });

@@ -12,8 +12,9 @@ import { productIconsPlugin } from "./productIconsPlugin.ts";
 import { webAppServerVitePlugin } from "./webAppServerPlugin.ts";
 import { workbenchEntryPlugin } from "./workbenchEntryPlugin.ts";
 import { browserExtensionsPlugin } from './extensionsPlugin.ts';
+import { CSSDevelopmentService } from '../../../src/ash/platform/cssDev/node/cssDevService.ts';
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, command }) => {
 	const desktopRoot = resolve(import.meta.dirname, "../../..");
 	const repositoryRoot = desktopRoot;
 	const webAppServerEnabled = process.env.ASH_WEB_APP_SERVER === "1";
@@ -59,6 +60,9 @@ export default defineConfig(({ mode }) => {
 				url: '/sessions/electron-browser/sessions.html',
 				sourceFile: resolve(sourceRoot, '../sessions/electron-browser/sessions.html'),
 				inputFile: sessionsInputs['sessions/electron-browser/sessions'],
+			}, {
+				sourceRoot: resolve(repositoryRoot, 'src'),
+				service: new CSSDevelopmentService({ sourceRoot: resolve(repositoryRoot, 'src'), isBuilt: command === 'build' }),
 			}),
 			productIconsPlugin(),
 			browserExtensionsPlugin(),

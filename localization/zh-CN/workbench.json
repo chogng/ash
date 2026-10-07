@@ -1,5 +1,14 @@
 {
   "ash": {
+    "contextkey.unterminatedString": "字符串未结束。",
+    "contextkey.unterminatedRegex": "正则表达式未结束。",
+    "contextkey.unexpectedToken": "意外的标记“{0}”。",
+    "contextkey.emptyExpression": "上下文键表达式不能为空。",
+    "contextkey.invalidRegex": "正则表达式无效。",
+    "contextkey.expectedValue": "预期为比较值，收到“{0}”。",
+    "contextkey.expectedKey": "预期为上下文键，收到“{0}”。",
+    "contextkey.expectedToken": "预期为“{0}”，收到“{1}”。",
+    "contextkey.invalidWhen": "when 条件在偏移 {0} 处无效：{1}",
     "keybindings.commandType": "command 必须是字符串或 null。要运行多个命令，请使用 “runCommands” 并传入 “commands” 参数。",
     "runCommands": "运行多个命令",
     "runCommands.description": "依次运行多个命令",

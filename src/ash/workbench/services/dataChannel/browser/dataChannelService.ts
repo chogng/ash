@@ -4,7 +4,7 @@ import { type URI } from '../../../../base/common/uri.js';
 import { IDataChannelService, ILinkPresentationService, type CoreDataChannel, type IDataChannelEvent, type ILinkPresentationProvider, type ILinkPresentationProviderRegistration, type ILinkPresentationRule, type ILinkPresentationWatcher } from '../../../../platform/dataChannel/common/dataChannel.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import type { ContextKeyExpression } from '../../../../platform/contextkey/common/contextkey.js';
-import { parseContextKeyExpression } from '../../../../platform/contextkey/common/contextKeyExpressionParser.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { registerSingleton, InstantiationType } from '../../../../platform/instantiation/common/extensions.js';
 
 export class DataChannelService extends Disposable implements IDataChannelService {
@@ -62,7 +62,7 @@ export class LinkPresentationService extends Disposable implements ILinkPresenta
 		if (this.providers.has(registration.id)) {
 			throw new Error(`Link presentation provider '${registration.id}' is already registered`);
 		}
-		const enablement = registration.enablement ? parseContextKeyExpression(registration.enablement) : undefined;
+		const enablement = registration.enablement ? ContextKeyExpr.deserialize(registration.enablement) : undefined;
 		const watchers = this._register(new DisposableStore());
 		const entry = { registration, provider, watchers, enablement };
 		this.providers.set(registration.id, entry);

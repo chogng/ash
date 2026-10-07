@@ -20,7 +20,6 @@
     "src/ash/platform/configuration/electron-main/**/*.ts",
     "src/ash/platform/contextkey/common/**/*.ts",
     "src/ash/platform/contextview/browser/**/*.ts",
-    "src/ash/platform/contextview/electron-browser/**/*.ts",
     "src/ash/platform/hover/**/*.ts",
     "src/ash/platform/dialogs/common/**/*.ts",
     "src/ash/platform/dnd/**/*.ts",

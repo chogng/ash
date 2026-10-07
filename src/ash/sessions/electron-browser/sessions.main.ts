@@ -18,7 +18,7 @@ import { onUnexpectedError } from "../../base/common/errors.js";
 import { createElectronRendererApi } from "../../platform/native/electron-browser/rendererApi.js";
 import { registerLocalTranscriptionService } from '../../workbench/services/localTranscription/electron-browser/localTranscriptionService.js';
 import { DirectoryPermissionDialog } from '../../workbench/electron-browser/parts/dialogs/directoryPermissionDialog.js';
-import { createElectronWorkbenchContextMenuService } from "../../workbench/services/contextmenu/electron-browser/contextMenuService.js";
+import { ElectronContextMenuService } from "../../workbench/services/contextmenu/electron-browser/contextMenuService.js";
 import type { SessionsProfile } from "../common/sessionsProfile.js";
 import type { Workbench } from '../browser/workbench.js';
 import { createSessionsWorkbench } from '../browser/workbenchFactory.js';
@@ -153,7 +153,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		configurationApi: api.configuration,
 		initialConfigurationSnapshot,
 		createUserDataFileSystemProvider: async () => new FileUserDataProvider(api.localFiles, api.userDataHome),
-		createContextMenuService: options => createElectronWorkbenchContextMenuService(options, api.nativeContextMenu),
+		createContextMenuService: services => services.createInstance(ElectronContextMenuService, api.nativeContextMenu),
 		createHostColorSchemeService: services => {
 			const colors = services.createInstance(NativeHostColorSchemeService, hostColorScheme);
 			void colors.initialize().catch(onUnexpectedError);

@@ -23,7 +23,7 @@ import { operatingSystemFromNodePlatform } from "../../../base/common/environmen
 import { sandboxProcess } from "../../../base/parts/sandbox/electron-browser/globals.js";
 import { createBrowserViewService } from "../../browserView/electron-browser/browserViewService.js";
 import { createConfigurationApi } from "../../configuration/electron-browser/configurationApi.js";
-import { createNativeContextMenuApi } from "../../contextview/electron-browser/contextMenuApi.js";
+import { popup as popupContextMenu, close as closeContextMenu } from '../../../base/parts/contextmenu/electron-browser/contextmenu.js';
 import { createNativeKeyboardLayoutApi } from "../../keyboardLayout/electron-browser/nativeKeyboardLayoutApi.js";
 import { createUserKeyboardLayoutApi } from "../../keyboardLayout/electron-browser/userKeyboardLayoutApi.js";
 import { createNativeMenubarApi } from "../../menubar/electron-browser/nativeMenubarApi.js";
@@ -160,7 +160,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			configuration: createConfigurationApi(),
 			keyboardLayout: createNativeKeyboardLayoutApi(),
 			userKeyboardLayout: createUserKeyboardLayoutApi(),
-			nativeContextMenu: createNativeContextMenuApi(),
+			nativeContextMenu: { popup: popupContextMenu, close: closeContextMenu },
 			nativeHost: createNativeHostApi(mainProcessService),
 			nativeMenubar: createNativeMenubarApi(),
 			hooks: { ...backend.hooks, userConfigurationEditor: () => invoke<void>(EDIT_USER_HOOKS_CONFIGURATION_CHANNEL) },

@@ -285,7 +285,6 @@ import { BrowserEditorService } from "../services/editor/browser/browserEditorSe
 import { IEditorService } from "../services/editor/common/editorService.js";
 import { IEditorGroupsService } from '../services/editor/common/editorGroupsService.js';
 import { installWorkbenchServiceContributions } from "./workbenchServiceContributions.js";
-import type { ContextMenuServiceFactory } from "../../platform/contextview/browser/contextMenuService.js";
 import { setHoverDelegate } from "../../base/browser/ui/hover/hoverDelegate.js";
 import { IMenuService } from "../../platform/actions/common/actions.js";
 import { MenuService } from "../../platform/actions/common/menuService.js";
@@ -343,7 +342,7 @@ export interface IStartWorkbenchOptions {
 	readonly clipboardService?: IClipboardService;
 	readonly dialogHandler?: IDialogHandler;
 	readonly userThemeService?: IUserThemeServiceContract;
-	readonly createContextMenuService: ContextMenuServiceFactory;
+	readonly createContextMenuService: (services: IInstantiationService) => IContextMenuService & IDisposable;
 	readonly createTitlebarPart: TitlebarPartFactory;
 }
 
@@ -470,7 +469,7 @@ export class Workbench extends Disposable {
 		clipboardService: IClipboardService | undefined,
 		dialogHandler: IDialogHandler | undefined,
 		userThemeService: IUserThemeServiceContract | undefined,
-		createContextMenuService: ContextMenuServiceFactory,
+		createContextMenuService: (services: IInstantiationService) => IContextMenuService & IDisposable,
 		createTitlebarPart: TitlebarPartFactory,
 		browserViewService: IBrowserViewService | undefined,
 		browserFileSystemProvider: HTMLFileSystemProvider | undefined,
@@ -866,14 +865,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IQuickAccessController, this._register(services.createInstance(QuickAccessController)));
 		services.registerInstance(IChatContextPickService, new ChatContextPickService());
 		services.registerSingleton(IPreferencesService, () => services.createInstance(PreferencesService));
-		const contextMenus = this._register(createContextMenuService({
-			configurationService: configuration,
-			menuService: menus,
-			contextKeyService: contextKeys,
-			keybindingService: keybindings,
-			contextViewService: contextViews,
-			notificationService,
-		}));
+		const contextMenus = this._register(createContextMenuService(services));
 		services.registerInstance(IContextMenuService, contextMenus);
 		const hoverService = this._register(new HoverService(configuration, contextViews, contextMenus));
 		services.registerInstance(IHoverService, hoverService);

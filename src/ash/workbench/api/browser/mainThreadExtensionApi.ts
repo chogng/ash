@@ -12,7 +12,7 @@ import { createExtensionHostLanguageProviderBatch, extensionHostLanguageProvider
 import { createExtensionHostTaskProvider, createExtensionHostTestProfileProvider, extensionHostCanonicalTaskId, extensionHostWorkflowProviderId } from './extensionHostWorkflowBridge.js';
 import { MainThreadCustomEditors } from './mainThreadCustomEditors.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
-import { parseContextKeyExpression } from '../../../platform/contextkey/common/contextKeyExpressionParser.js';
+import { ContextKeyExpr } from '../../../platform/contextkey/common/contextkey.js';
 import { Icon } from '../../../base/common/icon.js';
 import { IEditorPart } from '../../browser/parts/editor/editorPart.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
@@ -285,7 +285,7 @@ export class MainThreadExtensionApi extends Disposable {
 							id, item: {
 								command: { id: registration.command, title: registration.title, icon: registration.icon ? Icon.fromId(registration.icon) : undefined },
 								alt: alternate?.kind === 'command' ? { id: alternate.command, title: alternate.title, icon: alternate.icon ? Icon.fromId(alternate.icon) : undefined } : undefined,
-								when: placement.when ? parseContextKeyExpression(placement.when) : undefined,
+								when: placement.when ? ContextKeyExpr.deserialize(placement.when) : undefined,
 								group,
 								order,
 							}

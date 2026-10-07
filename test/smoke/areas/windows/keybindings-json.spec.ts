@@ -16,15 +16,23 @@ test('runCommands executes a saved shortcut in order and stops on a failed comma
 	await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
 	let group = workbench.editors.groupAt(0);
 	await replaceJson(group.editor.input, JSON.stringify([
-		{ key: 'ctrl+alt+y', command: 'runCommands', args: { commands: [
-			'workbench.action.files.newUntitledFile',
-			{ command: 'workbench.action.files.newUntitledFile', args: [] },
-		] } },
-		{ key: 'ctrl+alt+z', command: 'runCommands', args: { commands: [
-			'workbench.action.files.newUntitledFile',
-			'ash.test.missingCommand',
-			'workbench.action.files.newUntitledFile',
-		] } },
+		{
+			key: 'ctrl+alt+y', command: 'runCommands', when: String.raw`true && !false && resourceFilename =~ /keybindings[.]json$/`, args: {
+				commands: [
+					'workbench.action.files.newUntitledFile',
+					{ command: 'workbench.action.files.newUntitledFile', args: [] },
+				]
+			}
+		},
+		{
+			key: 'ctrl+alt+z', command: 'runCommands', args: {
+				commands: [
+					'workbench.action.files.newUntitledFile',
+					'ash.test.missingCommand',
+					'workbench.action.files.newUntitledFile',
+				]
+			}
+		},
 	]));
 	await workbench.quickaccess.runCommand('workbench.action.files.save');
 	await expect(group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);

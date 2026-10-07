@@ -21,7 +21,7 @@ import { createDisconnectedRendererApi } from "../../platform/app-server/browser
 import { IndexedDbConfigurationApi } from '../../platform/configuration/browser/indexedDbConfigurationApi.js';
 import { BrowserLifecycleService } from '../../workbench/services/lifecycle/browser/lifecycleService.js';
 import { BrowserHostColorSchemeService } from '../../workbench/services/themes/browser/browserHostColorSchemeService.js';
-import { createBrowserContextMenuService } from "../../platform/contextview/browser/contextMenuService.js";
+import { BrowserContextMenuService } from "../../platform/contextview/browser/contextMenuService.js";
 import { BrowserClipboardService } from '../../platform/clipboard/browser/clipboardService.js';
 import { connectBrowserWorkbenchHost } from '../../workbench/browser/web.host.js';
 import { workspaceFromIdentifier } from '../../platform/workspace/common/workspace.js';
@@ -102,7 +102,7 @@ async function mountBrowserSessions(profile: SessionsProfile, connectedHost?: ID
 				const location = container.ownerDocument.location;
 				location.assign(new URL(profile.workbenchRelativePath, location.href).href);
 			},
-			createContextMenuService: createBrowserContextMenuService,
+			createContextMenuService: services => services.createInstance(BrowserContextMenuService),
 			createHostColorSchemeService: () => new BrowserHostColorSchemeService(ownerWindow),
 			createTitlebarPart: (titlebarContainer, services) => services.createInstance(TitlebarPart, titlebarContainer, 'application-menu'),
 			container,

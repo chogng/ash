@@ -1941,8 +1941,15 @@ window.ashStandaloneIntegration = {
 		}));
 	},
 	prepareDynamicKeybindings: () => {
+		callerEditor.invokeWithinContext(accessor => {
+			const context = accessor.get(IContextKeyService);
+			context.setContext('test.language', 'typescript');
+			context.setContext('test.languages', ['typescript', 'rust']);
+			context.setContext('test.count', '2');
+			context.setContext('test.path', 'readme.md');
+		});
 		standaloneCommands.add(stanza.editor.addKeybindingRules([
-			{ keybinding: stanza.KeyCode.F7, command: 'test.standalone.alias', commandArgs: 'batch', when: 'editorTextFocus && test.dynamicEnabled' },
+			{ keybinding: stanza.KeyCode.F7, command: 'test.standalone.alias', commandArgs: 'batch', when: String.raw`editorTextFocus && test.dynamicEnabled && test.language in test.languages && test.count >= 2 && test.path =~ /\.md$/ && true` },
 			{ keybinding: stanza.KeyCode.F8, command: null, when: 'editorTextFocus && test.dynamicEnabled' },
 		]));
 		standaloneCommands.add(stanza.editor.addKeybindingRule({ keybinding: stanza.KeyCode.F5, command: 'test.standalone.alias', commandArgs: 'single' }));

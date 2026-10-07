@@ -216,13 +216,19 @@ Context keys connect focus-local state to actions, menus, and keybindings.
 
 ## Context menu architecture
 
-- `platform/contextview` defines `IContextMenuService` and owns reusable HTML
-  and native rendering mechanisms.
-- `workbench/services/contextmenu` is the product boundary. It combines menu
-  actions with resolved keybindings, owns the selected implementation, and
-  applies browser or Electron host policy.
-- Browser hosts select the HTML implementation. Electron hosts use the native
-  implementation on macOS and the HTML implementation on Windows and Linux.
+- `platform/contextview` defines the context-view and context-menu services,
+  resolves menu contributions, and owns reusable HTML menu presentation.
+- `base/parts/contextmenu` owns serialized Electron menu requests, renderer
+  communication, and the window-local Electron menu. The desktop entry binds
+  its operations to the trusted IPC router and owns each window's registration.
+- `workbench/services/contextmenu` owns Electron menu action serialization and
+  execution, menu-style configuration, and selection of the HTML or system menu.
+- Web and Electron product entries select the implementation. Workbench and
+  Sessions create it through their service container; platform services do not
+  define product assembly factories or carry another implementation's services.
+- Browser hosts use HTML menus. Electron hosts use HTML menus on Windows and
+  Linux; macOS follows the menu-style setting and uses HTML for anchors that
+  require right-edge alignment.
 - Consumers depend only on `IContextMenuService`; they do not choose a
   renderer or access the Electron bridge.
 - The service identifier remains in `platform/contextview`. A workbench

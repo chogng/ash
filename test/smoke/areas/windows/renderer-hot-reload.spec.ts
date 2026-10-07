@@ -10,6 +10,7 @@ import { once } from 'node:events';
 import { resolveElectronConfiguration } from '../../../automation/electron.js';
 import type * as Stanza from '../../../../src/ash/editor/editor.main.js';
 import { createServer } from 'vite';
+import { createServer as createHttpServer } from 'node:http';
 
 declare global {
 	var stanza: typeof Stanza;
@@ -176,6 +177,9 @@ test('development Sessions applies successive CSS saves without reloading its pa
 		await expect(page.getByRole('heading', { name: 'Library', exact: true })).toBeVisible();
 		const icon = library.locator('svg');
 		await expect(icon).toHaveCSS('width', '24px');
+		await expect(page.locator('script[type="importmap"]')).toHaveCount(1);
+		await expect(page.locator('link[rel="stylesheet"][href*="activityBarPart.css"]')).toHaveCount(1);
+		await expect(page.locator('style[data-vite-dev-id$="activityBarPart.css"]')).toHaveCount(0);
 		await page.evaluate(() => { document.body.dataset.cssHotReloadRetained = 'true'; });
 		for (const size of ['18px', '20px']) {
 			written = `${original}\n.ash-sessions-activity-content { --ash-sessions-activity-bar-icon-size: ${size}; }\n`;
@@ -188,6 +192,7 @@ test('development Sessions applies successive CSS saves without reloading its pa
 				await writeFile(sourceFile, written);
 			}
 			await expect(icon).toHaveCSS('width', size);
+			await expect(page.locator('link[rel="stylesheet"][href*="activityBarPart.css"]')).toHaveCount(1);
 			await expect(page.locator('body')).toHaveAttribute('data-css-hot-reload-retained', 'true');
 			await expect(page.getByRole('heading', { name: 'Library', exact: true })).toBeVisible();
 		}
@@ -204,5 +209,75 @@ test('development Sessions applies successive CSS saves without reloading its pa
 		await server.close();
 		await rm(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 		if (current !== written && current !== original) throw new Error(`Concurrent edit detected; preserve ${sourceFile}`);
+	}
+});
+
+test('development CSS imports load and deduplicate in a plain ESM page', async ({ playwright }, testInfo) => {
+	test.skip(!['browser-ui', 'electron-ui'].includes(testInfo.project.name), 'CSS module loading runs in browser and Electron UI projects.');
+	const desktopDirectory = resolve(import.meta.dirname, '../../../..');
+	const template = await readFile(resolve(desktopDirectory, 'src/ash/code/browser/workbench/workbench-dev.html'), 'utf8');
+	const prelude = template.replace('{{WORKBENCH_DEV_CSS_MODULES}}', JSON.stringify([
+		{ specifiers: ['/loaded.css'], stylesheet: '/loaded.css' },
+		{ specifiers: ['/unused.css'], stylesheet: '/unused.css' },
+	]));
+	const requests: string[] = [];
+	const server = createHttpServer((request, response) => {
+		requests.push(request.url!);
+		if (request.url === '/loaded.css') {
+			response.setHeader('Content-Type', 'text/css');
+			response.end('.css-test { width: 37px; }');
+		} else if (request.url === '/entry.js' || request.url === '/second.js') {
+			response.setHeader('Content-Type', 'text/javascript');
+			response.end('import "./loaded.css"; document.body.dataset.loaded = "true";');
+		} else if (request.url === '/') {
+			response.setHeader('Content-Type', 'text/html');
+			response.end(`<html><head>${prelude}</head><body><div class="css-test"></div><script type="module" src="/entry.js"></script></body></html>`);
+		} else {
+			response.statusCode = 404;
+			response.end();
+		}
+	});
+	const profile = await mkdtemp(join(tmpdir(), 'ash-css-esm-'));
+	let electron: ElectronApplication | undefined;
+	let browser: Awaited<ReturnType<typeof playwright.chromium.launch>> | undefined;
+	try {
+		await new Promise<void>(resolveListening => server.listen(0, '127.0.0.1', resolveListening));
+		const address = server.address();
+		expect(address && typeof address !== 'string').toBeTruthy();
+		const origin = `http://127.0.0.1:${(address as { port: number; }).port}`;
+		let page: Page;
+		if (testInfo.project.name === 'electron-ui') {
+			const configuration = resolveElectronConfiguration({ desktopDirectory, appServerMode: 'disabled', userDataDirectory: profile });
+			electron = await _electron.launch({ args: [...configuration.args], cwd: configuration.cwd, executablePath: configuration.executablePath, env: configuration.env });
+			page = await electron.firstWindow();
+			await page.waitForLoadState('load');
+		} else {
+			browser = await playwright.chromium.launch();
+			page = await browser.newPage();
+		}
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto(origin);
+		await expect(page.locator('body')).toHaveAttribute('data-loaded', 'true');
+		await expect(page.locator('.css-test')).toHaveCSS('width', '37px');
+		await page.evaluate(async () => {
+			const module = '/second.js';
+			await import(module);
+		});
+		await expect(page.locator('link[rel="stylesheet"]')).toHaveCount(1);
+		expect(requests.filter(url => url === '/loaded.css')).toHaveLength(1);
+		expect(requests).not.toContain('/unused.css');
+		expect(errors).toEqual([]);
+	} finally {
+		if (electron) {
+			await electron.evaluate(({ BrowserWindow }) => {
+				for (const window of BrowserWindow.getAllWindows()) window.destroy();
+			});
+			await electron.close();
+		}
+		await browser?.close();
+		server.closeAllConnections();
+		await new Promise<void>((resolveClosed, reject) => server.close(error => error ? reject(error) : resolveClosed()));
+		await rm(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 	}
 });

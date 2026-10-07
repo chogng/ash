@@ -2,16 +2,19 @@ import { Disposable } from '../../../../../base/common/lifecycle.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { Event } from "../../../../../base/common/event.js";
+import { DisposableTracker, installDisposableTracker } from '../../../../../base/common/lifecycle.js';
 import { AnchorAlignment, AnchorAxisAlignment, ContextViewHideReason, type ContextViewOptions } from "../../../../../base/browser/ui/contextview/contextview.js";
 import type { INativeContextMenuApi, INativeContextMenuRequest, INativeContextMenuResult } from "../../../../../base/parts/contextmenu/common/contextmenu.js";
-import type { IMenuService } from "../../../../../platform/actions/common/actions.js";
-import { ContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
+import { IMenuService } from "../../../../../platform/actions/common/actions.js";
+import { ContextKeyService, IContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
 import { InMemoryConfigurationService } from "../../../../../platform/configuration/common/inMemoryConfigurationService.js";
 import { ConfigurationRegistry } from "../../../../../platform/configuration/common/configurationRegistry.js";
-import type { IContextViewService } from "../../../../../platform/contextview/browser/contextView.js";
-import type { IKeybindingService } from "../../../../../platform/keybinding/common/keybinding.js";
-import type { INotificationService } from "../../../../../platform/notification/common/notification.js";
+import { IContextViewService } from "../../../../../platform/contextview/browser/contextView.js";
+import { IKeybindingService } from "../../../../../platform/keybinding/common/keybinding.js";
+import { INotificationService } from "../../../../../platform/notification/common/notification.js";
 
 test("Electron context menus run the selected action with its delegate context", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
@@ -44,13 +47,12 @@ test("Electron context menus run the selected action with its delegate context",
 			throw new Error(`Unexpected notification: ${message}`);
 		},
 	} as unknown as INotificationService;
-	using service = new NativeContextMenuService(
-		api,
-		{} as IMenuService,
-		contextKeyService,
-		keybindingService,
-		notificationService,
-	);
+	using services = new InstantiationService();
+	services.registerInstance(IMenuService, {} as IMenuService);
+	services.registerInstance(IContextKeyService, contextKeyService);
+	services.registerInstance(IKeybindingService, keybindingService);
+	services.registerInstance(INotificationService, notificationService);
+	using service = services.createInstance(NativeContextMenuService, api);
 	const actionContext = { resource: "test.txt" };
 	let receivedContext: unknown;
 	let didCancel: boolean | undefined;
@@ -102,13 +104,12 @@ test("Electron context menus position element and point anchors in CSS pixels", 
 		lookupKeybindings() { return []; },
 		lookupKeybinding() { return undefined; },
 	} satisfies IKeybindingService;
-	using service = new NativeContextMenuService(
-		api,
-		{} as IMenuService,
-		contextKeyService,
-		keybindingService,
-		{ error: (error: unknown) => { throw error; } } as unknown as INotificationService,
-	);
+	using services = new InstantiationService();
+	services.registerInstance(IMenuService, {} as IMenuService);
+	services.registerInstance(IContextKeyService, contextKeyService);
+	services.registerInstance(IKeybindingService, keybindingService);
+	services.registerInstance(INotificationService, { error: (error: unknown) => { throw error; } } as unknown as INotificationService);
+	using service = services.createInstance(NativeContextMenuService, api);
 	const button = environment.window.document.querySelector("button")!;
 	button.getBoundingClientRect = () => ({ left: 100.25, top: 50.5, right: 140.25, bottom: 70.5, width: 40, height: 20, x: 100.25, y: 50.5, toJSON: () => ({}) });
 	const action = { id: "open", label: "Open", tooltip: "Open", enabled: true, run() { } };
@@ -143,7 +144,7 @@ test("macOS switches context menu implementation when the menu style changes", a
 	const environment = new JSDOM("<!doctype html><body><button></button></body>");
 	Object.defineProperty(globalThis, "window", { configurable: true, value: environment.window });
 	Object.defineProperty(globalThis, "Node", { configurable: true, value: environment.window.Node });
-	const { createElectronWorkbenchContextMenuService } = await import("../../electron-browser/contextMenuService.js");
+	const { ElectronContextMenuService } = await import("../../electron-browser/contextMenuService.js");
 	let finishPopup!: (result: INativeContextMenuResult) => void;
 	const api: INativeContextMenuApi = {
 		popup: () => new Promise(resolve => { finishPopup = resolve; }),
@@ -180,14 +181,14 @@ test("macOS switches context menu implementation when the menu style changes", a
 		lookupKeybindings() { return []; },
 		lookupKeybinding() { return undefined; },
 	} satisfies IKeybindingService;
-	using service = createElectronWorkbenchContextMenuService({
-		configurationService,
-		menuService: {} as IMenuService,
-		contextKeyService,
-		keybindingService,
-		contextViewService: contextView,
-		notificationService: { error: (error: unknown) => { throw error; } } as unknown as INotificationService,
-	}, api);
+	using services = new InstantiationService();
+	services.registerInstance(IConfigurationService, configurationService);
+	services.registerInstance(IMenuService, {} as IMenuService);
+	services.registerInstance(IContextKeyService, contextKeyService);
+	services.registerInstance(IKeybindingService, keybindingService);
+	services.registerInstance(IContextViewService, contextView);
+	services.registerInstance(INotificationService, { error: (error: unknown) => { throw error; } } as unknown as INotificationService);
+	using service = services.createInstance(ElectronContextMenuService, api);
 	const events: string[] = [];
 	using shown = service.onDidShowContextMenu(() => events.push("show"));
 	using hidden = service.onDidHideContextMenu(() => events.push("hide"));
@@ -211,4 +212,24 @@ test("macOS switches context menu implementation when the menu style changes", a
 	environment.window.close();
 	Reflect.deleteProperty(globalThis, "window");
 	Reflect.deleteProperty(globalThis, "Node");
+});
+
+test('Electron context menus reject missing window services without retaining resources', async () => {
+	const { ElectronContextMenuService } = await import('../../electron-browser/contextMenuService.js');
+	const api: INativeContextMenuApi = {
+		async popup() { return {}; },
+		async close() { },
+	};
+	using configuration = new InMemoryConfigurationService(new ConfigurationRegistry());
+	using contextKeys = new ContextKeyService();
+	using services = new InstantiationService();
+	const tracker = new DisposableTracker();
+	using tracking = installDisposableTracker(tracker);
+	assert.throws(() => services.createInstance(ElectronContextMenuService, api), /configurationService/);
+	services.registerInstance(IConfigurationService, configuration);
+	services.registerInstance(IMenuService, {} as IMenuService);
+	services.registerInstance(IContextKeyService, contextKeys);
+	services.registerInstance(IKeybindingService, {} as IKeybindingService);
+	assert.throws(() => services.createInstance(ElectronContextMenuService, api), /contextViewService/);
+	tracker.assertNoLeaks();
 });

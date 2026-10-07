@@ -1,12 +1,11 @@
 import { isMacintosh } from "../../../../base/common/platform.js";
 import { BrowserContextMenuService } from "../../../../platform/contextview/browser/contextMenuService.js";
-import type { ContextMenuServiceOptions } from "../../../../platform/contextview/browser/contextMenuService.js";
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { isNode } from "../../../../base/browser/dom.js";
 import { Emitter } from "../../../../base/common/event.js";
 import {
 	Disposable,
 	toDisposable,
-	type IDisposable,
 } from "../../../../base/common/lifecycle.js";
 import {
 	type IAction,
@@ -14,13 +13,13 @@ import {
 	SubmenuAction,
 } from "../../../../base/common/actions.js";
 import { toElectronAccelerator } from "../../../../platform/keybinding/common/electronAccelerator.js";
-import type { IMenuService } from "../../../../platform/actions/common/actions.js";
-import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
+import { IMenuService } from "../../../../platform/actions/common/actions.js";
+import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { hasSystemContextMenu, MenuSettings } from "../../../../platform/window/common/window.js";
-import type {
+import {
 	IKeybindingService,
 } from "../../../../platform/keybinding/common/keybinding.js";
-import type { INotificationService } from "../../../../platform/notification/common/notification.js";
+import { INotificationService } from "../../../../platform/notification/common/notification.js";
 import {
 	type INativeContextMenuApi,
 	type INativeContextMenuRequest,
@@ -32,6 +31,7 @@ import type {
 } from "../../../../base/browser/contextmenu.js";
 import { AnchorAlignment, AnchorAxisAlignment } from "../../../../base/browser/ui/contextview/contextview.js";
 import { transformContextMenuDelegate } from "../../../../platform/contextview/browser/contextMenuService.js";
+import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import type {
 	IContextMenuMenuDelegate,
 	IContextMenuService,
@@ -52,10 +52,10 @@ export class NativeContextMenuService extends Disposable
 
 	constructor(
 		api: INativeContextMenuApi,
-		menuService: IMenuService,
-		private readonly contextKeyService: IContextKeyService,
-		keybindingService: IKeybindingService,
-		private readonly notificationService: INotificationService,
+		@IMenuService menuService: IMenuService,
+		@IContextKeyService private readonly contextKeyService: IContextKeyService,
+		@IKeybindingService keybindingService: IKeybindingService,
+		@INotificationService private readonly notificationService: INotificationService,
 	) {
 		super();
 		this.api = api;
@@ -250,7 +250,7 @@ function toErrorMessage(error: unknown): string {
 }
 
 /** Uses the chosen menu style while keeping menus clear of right-hand triggers. */
-class ElectronContextMenuService extends Disposable implements IContextMenuService {
+export class ElectronContextMenuService extends Disposable implements IContextMenuService {
 	private readonly _onDidShowContextMenu = this._register(new Emitter<void>());
 	private readonly _onDidHideContextMenu = this._register(new Emitter<void>());
 	private readonly systemMenu: NativeContextMenuService;
@@ -262,19 +262,27 @@ class ElectronContextMenuService extends Disposable implements IContextMenuServi
 	readonly onDidShowContextMenu = this._onDidShowContextMenu.event;
 	readonly onDidHideContextMenu = this._onDidHideContextMenu.event;
 
-	constructor(options: ContextMenuServiceOptions, nativeApi: INativeContextMenuApi) {
+	constructor(
+		api: INativeContextMenuApi,
+		@IConfigurationService configurationService: IConfigurationService,
+		@IMenuService menuService: IMenuService,
+		@IContextKeyService contextKeyService: IContextKeyService,
+		@IKeybindingService keybindingService: IKeybindingService,
+		@IContextViewService contextViewService: IContextViewService,
+		@INotificationService notificationService: INotificationService,
+	) {
 		super();
-		this.usesSystemMenu = hasSystemContextMenu(options.configurationService);
-		this.systemMenu = this._register(new NativeContextMenuService(nativeApi, options.menuService, options.contextKeyService, options.keybindingService, options.notificationService));
-		this.browserMenu = this._register(new BrowserContextMenuService(options.menuService, options.contextKeyService, options.keybindingService, options.contextViewService, options.notificationService));
+		this.usesSystemMenu = hasSystemContextMenu(configurationService);
+		this.systemMenu = this._register(new NativeContextMenuService(api, menuService, contextKeyService, keybindingService, notificationService));
+		this.browserMenu = this._register(new BrowserContextMenuService(menuService, contextKeyService, keybindingService, contextViewService, notificationService));
 		this._register(this.systemMenu.onDidShowContextMenu(() => this.setVisible('system', true)));
 		this._register(this.systemMenu.onDidHideContextMenu(() => this.setVisible('system', false)));
 		this._register(this.browserMenu.onDidShowContextMenu(() => this.setVisible('browser', true)));
 		this._register(this.browserMenu.onDidHideContextMenu(() => this.setVisible('browser', false)));
 		if (isMacintosh) {
-			this._register(options.configurationService.onDidChangeConfiguration(event => {
+			this._register(configurationService.onDidChangeConfiguration(event => {
 				if (!event.affectsConfiguration(MenuSettings.MenuStyle)) return;
-				const useSystemMenu = hasSystemContextMenu(options.configurationService);
+				const useSystemMenu = hasSystemContextMenu(configurationService);
 				if (useSystemMenu === this.usesSystemMenu) return;
 				this.hideContextMenu();
 				this.usesSystemMenu = useSystemMenu;
@@ -305,12 +313,4 @@ class ElectronContextMenuService extends Disposable implements IContextMenuServi
 		this.systemMenu.hideContextMenu();
 		this.browserMenu.hideContextMenu();
 	}
-}
-
-/** Creates the Electron workbench context-menu service. */
-export function createElectronWorkbenchContextMenuService(
-	options: ContextMenuServiceOptions,
-	nativeApi: INativeContextMenuApi,
-): IContextMenuService & IDisposable {
-	return new ElectronContextMenuService(options, nativeApi);
 }

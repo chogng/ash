@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { dirname, relative, resolve } from 'node:path';
 import { normalizePath, type Connect, type Plugin } from "vite";
+import type { ICSSDevelopmentService } from '../../../src/ash/platform/cssDev/node/cssDevService.ts';
 
 interface WorkbenchEntryServer {
 	readonly middlewares: {
@@ -15,6 +16,11 @@ interface ProductPage {
 	readonly inputFile: string;
 }
 
+interface CSSDevelopmentHost {
+	readonly service: ICSSDevelopmentService;
+	readonly sourceRoot: string;
+}
+
 export type AshWorkbenchEntryPlugin = Omit<Plugin, "configureServer"> & {
 	readonly configureServer: (server: WorkbenchEntryServer) => void;
 };
@@ -22,8 +28,10 @@ export type AshWorkbenchEntryPlugin = Omit<Plugin, "configureServer"> & {
 /**
  * Hosts product entry URLs independently of the layer that owns their HTML source.
  */
-export function workbenchEntryPlugin(entryPath = '/browser/workbench/workbench.html', page?: ProductPage): AshWorkbenchEntryPlugin {
+export function workbenchEntryPlugin(entryPath = '/browser/workbench/workbench.html', page?: ProductPage, cssDevelopment?: CSSDevelopmentHost): AshWorkbenchEntryPlugin {
 	const inputFilter = page ? new RegExp(`^${normalizePath(page.inputFile).replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}$`, 'u') : undefined;
+	let root: string;
+	let development = false;
 	async function readPage(): Promise<string> {
 		const html = await readFile(page!.sourceFile, 'utf8');
 		// Vite's HTML input is rooted under Code, while the Sessions module stays at its owning source path.
@@ -34,6 +42,27 @@ export function workbenchEntryPlugin(entryPath = '/browser/workbench/workbench.h
 	}
 	return {
 		name: "ash-workbench-entry",
+		configResolved(config) {
+			root = config.root;
+			development = config.command === 'serve';
+		},
+		transformIndexHtml: {
+			order: 'pre',
+			async handler(html) {
+				if (!development || !cssDevelopment?.service.isEnabled) return html;
+				const modules = (await cssDevelopment.service.getCssModules()).map(module => {
+					const file = resolve(cssDevelopment.sourceRoot, module);
+					const path = normalizePath(relative(root, file));
+					const url = path.startsWith('../') ? `/@fs/${normalizePath(file).replace(/^\/+/, '')}` : `/${path}`;
+					const encoded = encodeURI(url).replaceAll('#', '%23').replaceAll('?', '%3F');
+					return { specifiers: [encoded, `${encoded}?import`], stylesheet: `${encoded}?direct` };
+				});
+				const template = await readFile(resolve(import.meta.dirname, '../../../src/ash/code/browser/workbench/workbench-dev.html'), 'utf8');
+				// Escape HTML delimiters before putting source paths in an executable page.
+				const prelude = template.replace('{{WORKBENCH_DEV_CSS_MODULES}}', JSON.stringify(modules).replaceAll('<', '\\u003c'));
+				return html.replace(/<head\b[^>]*>/iu, head => `${head}\n${prelude}`);
+			},
+		},
 		// Filter before invoking JavaScript so ordinary renderer modules bypass the HTML mount.
 		resolveId: page ? { filter: { id: inputFilter }, handler: id => id } : undefined,
 		load: page ? { filter: { id: inputFilter }, handler: () => readPage() } : undefined,

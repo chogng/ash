@@ -5,6 +5,7 @@ import { h } from "../../../../base/browser/dom.js";
 import type { IAction } from "../../../../base/common/actions.js";
 import { type IMenuActionOptions, type IMenuService, MenuId } from "../../../actions/common/actions.js";
 import { ContextKeyService, type IContextKeyService } from "../../../contextkey/browser/contextKeyService.js";
+import { InstantiationService } from '../../../instantiation/common/instantiationService.js';
 
 test("menu delegates prepend explicit actions and use their context-key scope", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
@@ -55,3 +56,9 @@ function action(id: string): IAction {
 		run() { },
 	};
 }
+
+test('browser context menus reject missing services during creation', async () => {
+	const { BrowserContextMenuService } = await import('../../browser/contextMenuService.js');
+	using services = new InstantiationService();
+	assert.throws(() => services.createInstance(BrowserContextMenuService), /menuService/);
+});

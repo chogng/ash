@@ -1,0 +1,44 @@
+<!-- Shared development prelude; the host supplies resolved module and stylesheet URLs. -->
+<script id="ash-workbench-css-modules" type="application/json">
+	{{WORKBENCH_DEV_CSS_MODULES}}
+</script>
+<script>
+	(() => {
+	  const modules = JSON.parse(
+	    document.getElementById("ash-workbench-css-modules").textContent,
+	  );
+	  const imports = {};
+	  const blobs = [];
+	  globalThis._ASH_CSS_LOAD = (url) =>
+	    new Promise((resolve, reject) => {
+	      const link = document.createElement("link");
+	      link.rel = "stylesheet";
+	      link.href = url;
+	      link.addEventListener("load", resolve, { once: true });
+	      link.addEventListener(
+	        "error",
+	        () => reject(new Error(`Failed to load development CSS: ${url}`)),
+	        { once: true },
+	      );
+	      document.head.appendChild(link);
+	    });
+	  for (const { specifiers, stylesheet } of modules) {
+	    const source = `await globalThis._ASH_CSS_LOAD(${JSON.stringify(stylesheet)});`;
+	    const blob = URL.createObjectURL(
+	      new Blob([source], { type: "text/javascript" }),
+	    );
+	    blobs.push(blob);
+	    for (const specifier of specifiers) imports[specifier] = blob;
+	  }
+	  const map = document.createElement("script");
+	  map.type = "importmap";
+	  map.textContent = JSON.stringify({ imports });
+	  document.head.appendChild(map);
+	  // A cached page retains its import map and can import more modules when restored.
+	  window.addEventListener("pagehide", (event) => {
+	    if (!event.persisted) {
+	      for (const blob of blobs) URL.revokeObjectURL(blob);
+	    }
+	  });
+	})();
+</script>

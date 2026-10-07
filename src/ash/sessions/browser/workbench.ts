@@ -137,7 +137,6 @@ import { ViewsService } from '../../workbench/services/views/browser/viewsServic
 import type { SessionWorkspaceSelection } from '../services/sessions/common/session.js';
 import { pickWorkspaceFolder } from './workspaceSelection.js';
 import type { Part } from "../../workbench/browser/part.js";
-import type { ContextMenuServiceFactory } from "../../platform/contextview/browser/contextMenuService.js";
 import { setHoverDelegate } from "../../base/browser/ui/hover/hoverDelegate.js";
 import { IMenuService } from "../../platform/actions/common/actions.js";
 import { MenuService } from "../../platform/actions/common/menuService.js";
@@ -234,7 +233,7 @@ export interface IWorkbenchOptions {
 	readonly configurationApi?: IConfigurationApi;
 	readonly initialConfigurationSnapshot?: IConfigurationSnapshot;
 	readonly createUserDataFileSystemProvider: () => Promise<IFileSystemProvider & IDisposable>;
-	readonly createContextMenuService: ContextMenuServiceFactory;
+	readonly createContextMenuService: (services: IInstantiationService) => IContextMenuService & IDisposable;
 	readonly createHostColorSchemeService: (services: IInstantiationService) => IHostColorSchemeService & IDisposable;
 	readonly createTitlebarPart: (container: HTMLElement, services: IInstantiationService) => TitlebarPart;
 	readonly container: HTMLElement;
@@ -466,14 +465,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IQuickInputService, quickInputService);
 		services.registerInstance(IQuickAccessController, this._register(services.createInstance(QuickAccessController)));
 		services.registerInstance(IChatContextPickService, new ChatContextPickService());
-		const contextMenus = this._register(options.createContextMenuService({
-			configurationService,
-			menuService: menus,
-			contextKeyService: contextKeys,
-			keybindingService: keybindings,
-			contextViewService: contextViews,
-			notificationService,
-		}));
+		const contextMenus = this._register(options.createContextMenuService(services));
 		services.registerInstance(IContextMenuService, contextMenus);
 		services.registerInstance(IFileDialogService, options.createFileDialogService(services));
 		const hoverService = this._register(new HoverService(configurationService, contextViews, contextMenus));

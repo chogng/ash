@@ -61,6 +61,8 @@ F5 配置见 [launch.json](../.vscode/launch.json)。完成 [环境初始化](bu
 
 Renderer 中，`Part`、`ViewPane`、`Widget` 的普通方法和 getter/setter 可修改现有实例；构造器、字段、静态状态、模块副作用或继承关系变化会重载页面。其他仅修改原型方法的 UI 类可用 `@ash-hot-reload patch-prototype` 加入。运行时实现见 `base/common/hotReload.ts`、`hotReloadHelpers.ts`，开发转换见 `build/desktop/vite/hotReloadPlugin.ts`。
 
+Workbench 与 Sessions 的 Web、Electron 开发页面通过 `platform/cssDev/node/cssDevService.ts` 获取源码相对路径的 CSS 清单；清单在开发宿主内扫描一次并缓存，新增 CSS 文件后需要重启宿主。现有 HTML 宿主只负责将路径解析为模块和样式 URL，`code/browser/workbench/workbench-dev.html` 在模块执行前安装 import map，按组件的 CSS import 创建 stylesheet link。发现服务和浏览器加载器均不依赖 Vite；当前 Vite 适配负责 URL 解析、源码转换和 stylesheet link 的热更新。发布构建不扫描或注入开发清单，继续打包 CSS。独立 Stanza 开发入口保持原有 Vite CSS 加载。
+
 需要重新执行初始化的可释放贡献，由注册入口通过 `platform/observable/common/wrapInReloadableClass.ts` 包装构造函数。开发模式下，模块替换会先释放旧贡献，再通过编辑器原有的服务容器创建新贡献；编辑器和模型由宿主继续持有。占位文本贡献已接入这条链路，修改其构造器、字段或方法可以更新现有编辑器。注册模块应与实现模块分开，避免重新执行注册副作用。注册处保存的是释放句柄，需要访问贡献实现时使用 `hotClassGetOriginalInstance`。这些热更新只用于开发 Ash 自身；发布构建不注入 Vite 热更新边界。
 
 Electron 启动前并行准备键盘模块、前端生成资源和后端资源；输入未变化时复用已有结果。运行期间 Rust 保存只增量编译并发布程序，复用准备好的资源文件，不走完整包验证和发布。Electron 与 Web 后端监听器按 Cargo 的协议生成器依赖图判断变更：普通业务源码保存跳过协议生成，协议及其共享契约源码保存先生成协议再构建后端；Cargo 清单变化时刷新依赖图并生成协议。生成失败会阻止后端构建，下一次保存仍会先重试生成。`ASH_DEV_RUNTIME_ROOT` 由启动器提供，统一定位搜索工具、语言服务、内置 Skills 和辅助程序。Workbench 与 Agents 共用一个重启协调者：先停连接，重启一次后端，再连接仍打开的窗口。新窗口在重启期间等待；关闭窗口会注销监听。Main/Preload 编译或校验失败会保留当前进程，Rust 构建失败不切换运行版本；启动失败会报告错误。监听器忽略 Cargo 输出，避免构建再次触发自己。

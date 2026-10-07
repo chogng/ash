@@ -22,7 +22,6 @@
     "src/ash/platform/configuration/common/**/*.ts",
     "src/ash/platform/contextkey/common/**/*.ts",
     "src/ash/platform/contextview/browser/**/*.ts",
-    "src/ash/platform/contextview/electron-browser/**/*.ts",
     "src/ash/platform/editor/**/*.ts",
     "src/ash/platform/instantiation/common/**/*.ts",
     "src/ash/platform/keybinding/**/*.ts",

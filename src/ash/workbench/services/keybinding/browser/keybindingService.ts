@@ -4,7 +4,7 @@ import { environment } from '../../../../base/common/platform.js';
 import { FileNotFoundError, IFileService } from '../../../../platform/files/common/files.js';
 import { IUserDataProfileService } from '../../userDataProfile/common/userDataProfile.js';
 import { parseUserKeybindings } from '../common/keybindingIO.js';
-import { parseContextKeyExpression } from '../../../../platform/contextkey/common/contextKeyExpressionParser.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { ResolvedKeybindingItem } from '../../../../platform/keybinding/common/resolvedKeybindingItem.js';
 import type { IUserFriendlyKeybinding } from '../../../../platform/keybinding/common/keybinding.js';
 import { localize } from '../../../../nls.js';
@@ -213,7 +213,7 @@ export class WorkbenchKeybindingService
 					continue;
 				}
 				const keybinding = parseKeybinding(key)!;
-				const when = binding.when ? parseContextKeyExpression(binding.when) : undefined;
+				const when = binding.when ? ContextKeyExpr.deserialize(binding.when) : undefined;
 				registrations.push(binding.command === null
 					? this.registry.registerKeybindingBlocker({ keybinding, when, source: KeybindingSource.User })
 					: this.registry.registerKeybindingRule({ command: binding.command, keybinding, when, args: binding.args === undefined ? undefined : [binding.args], source: KeybindingSource.User }));
@@ -233,7 +233,7 @@ export class WorkbenchKeybindingService
 		const users = this.userBindings.map((entry, index) => {
 			const key = this.userKey(entry);
 			return new ResolvedKeybindingItem(key === null ? undefined : this.resolveUserBinding(key), entry.command, entry.args,
-				entry.when ? parseContextKeyExpression(entry.when) : undefined, false, null, false,
+				entry.when ? ContextKeyExpr.deserialize(entry.when) : undefined, false, null, false,
 				{ index, entry });
 		});
 		return [...defaults, ...users];

@@ -44,7 +44,7 @@ import { WebContentsView, session as electronSession } from 'electron/main';
 import { configurationValues } from '../../platform/configuration/common/configurationIpc.js';
 import { formatNlsMessage } from '../../nls.js';
 import { ConfigurationMainService } from "../../platform/configuration/electron-main/configurationMainService.js";
-import { nativeContextMenuIpcRoutes } from "../../platform/contextview/electron-main/contextMenuIpc.js";
+import { NATIVE_CONTEXT_MENU_CLOSE_CHANNEL, NATIVE_CONTEXT_MENU_POPUP_CHANNEL, validateNativeContextMenuClose, validateNativeContextMenuRequest, type INativeContextMenuRequest } from '../../base/parts/contextmenu/common/contextmenu.js';
 import { developmentArtifactsPath } from "../../platform/environment/node/developmentArtifacts.js";
 import { normalizeExternalUrl } from '../../platform/opener/common/opener.js';
 import { NativeKeyboardLayoutMainService } from "../../platform/keyboardLayout/electron-main/nativeKeyboardLayoutMainService.js";
@@ -882,6 +882,22 @@ export class AshApplication extends Disposable {
 		}
 	}
 
+	private contextMenuIpcRoutes(contextMenu: ElectronContextMenu): readonly IpcRoute<unknown, unknown>[] {
+		// Sender trust and window-scoped registration belong to the desktop host.
+		return [
+			{
+				channel: NATIVE_CONTEXT_MENU_POPUP_CHANNEL,
+				validate: validateNativeContextMenuRequest,
+				invoke: request => contextMenu.popup(request as INativeContextMenuRequest),
+			},
+			{
+				channel: NATIVE_CONTEXT_MENU_CLOSE_CHANNEL,
+				validate: validateNativeContextMenuClose,
+				invoke: () => contextMenu.close(),
+			},
+		];
+	}
+
 	private mainProcessIpcRoutes(window: BrowserWindow): readonly IpcRoute<unknown, unknown>[] {
 		return [
 			{
@@ -1343,7 +1359,7 @@ export class AshApplication extends Disposable {
 		];
 		await watchProfileFiles(this.profileRoot, window, windowDisposables);
 		const systemContextMenu = windowDisposables.add(new ElectronContextMenu(window));
-		ipcRoutes.push(...nativeContextMenuIpcRoutes(systemContextMenu));
+		ipcRoutes.push(...this.contextMenuIpcRoutes(systemContextMenu));
 		if (this.nativeMenubar) {
 			windowDisposables.add(this.nativeMenubar.registerWindow(window));
 			ipcRoutes.push(...nativeMenubarIpcRoutes(this.nativeMenubar, window));
@@ -1621,7 +1637,7 @@ export class AshApplication extends Disposable {
 					];
 					await watchProfileFiles(this.profileRoot, window, windowDisposables);
 					const systemContextMenu = windowDisposables.add(new ElectronContextMenu(window));
-					ipcRoutes.push(...nativeContextMenuIpcRoutes(systemContextMenu));
+					ipcRoutes.push(...this.contextMenuIpcRoutes(systemContextMenu));
 					if (this.nativeMenubar) {
 						windowDisposables.add(this.nativeMenubar.registerWindow(window));
 						ipcRoutes.push(...nativeMenubarIpcRoutes(this.nativeMenubar, window));
