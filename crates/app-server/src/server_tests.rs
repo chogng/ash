@@ -7611,6 +7611,20 @@ fn instruction_list_and_explicit_attachment_use_current_authorized_files() {
     )));
     let mut connection = server.connection();
     initialize(&server, &mut connection);
+    let preview = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":12,"method":"instructions/list","params":{}}),
+    );
+    assert_eq!(
+        preview["result"]["instructions"][0]["path"],
+        path.display().to_string()
+    );
+    assert_eq!(
+        preview["result"]["instructions"].as_array().unwrap().len(),
+        1
+    );
+    assert!(server.threads.list_sessions().unwrap().is_empty());
     let session = create_session(&server, &mut connection, 2, "instruction-list-session");
     let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
     let listed = call(

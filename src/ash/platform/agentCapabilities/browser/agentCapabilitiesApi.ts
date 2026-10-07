@@ -6,6 +6,7 @@ import type { AgentCapabilitiesSnapshot, IAgentCapabilitiesService } from '../co
 
 export function createAppServerAgentCapabilitiesApi(connection: AppServerProtocolClient): IAgentCapabilitiesService {
 	return {
+		isAvailable: true,
 		read: async (): Promise<AgentCapabilitiesSnapshot> => {
 			const result = await appServerRequest(connection, 'agent/capabilities/read', {});
 			return {
@@ -31,7 +32,7 @@ export function createAppServerAgentCapabilitiesApi(connection: AppServerProtoco
 }
 
 export function createDisconnectedAgentCapabilitiesApi(unavailable: UnavailableOperation): IAgentCapabilitiesService {
-	return { read: () => unavailable('agentCapabilities.read') };
+	return { isAvailable: false, read: () => unavailable('agentCapabilities.read') };
 }
 
 function sourceDetail(source: ToolSourceProvenance): string {

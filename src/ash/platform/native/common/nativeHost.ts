@@ -148,7 +148,7 @@ export interface IOpenAgentsWindowOptions {
 	readonly draft?: {
 		readonly mode: SessionMode;
 		readonly text: string;
-		/** Optional resource is the original source URI; content stays the captured snapshot. */
+		/** Optional resource is the original source URI; content is a snapshot or an instruction catalog path. */
 		readonly contexts: readonly { readonly id: string; readonly kind: string; readonly name: string; readonly content: string; readonly resource?: string; }[];
 	};
 }

@@ -1,3 +1,7 @@
+import { IDirPermissionsService } from '../../platform/dirPermissions/common/dirPermissionsService.js';
+import { AppServerDirPermissionsService } from '../../workbench/services/dirPermissions/browser/appServerDirPermissionsService.js';
+import { IAgentCapabilitiesService } from '../../platform/agentCapabilities/common/agentCapabilitiesService.js';
+import { IInstructionService } from '../../platform/instructions/common/instructionService.js';
 import { ISessionGroupsService, SessionGroupsService } from '../services/sessions/browser/sessionGroupsService.js';
 import { IFileSearchService } from '../../platform/search/common/fileSearch.js';
 import { BrowserFileSearchService } from '../../platform/search/browser/browserFileSearchService.js';
@@ -375,6 +379,9 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(ILanguageModelsConfigurationService, this._register(services.createInstance(LanguageModelsConfigurationService, ChatModelPreferences)));
 		services.registerInstance(ILanguageModelsService, this._register(services.createInstance(LanguageModelsService)));
 		services.registerInstance(ISkillService, options.api.skills);
+		services.registerInstance(IInstructionService, options.api.instructions);
+		services.registerInstance(IAgentCapabilitiesService, options.api.agentCapabilities);
+		services.registerInstance(IDirPermissionsService, this._register(new AppServerDirPermissionsService(options.api.dirPermissions, options.api.events)));
 		services.registerInstance(IHooksService, options.api.hooks);
 		services.registerInstance(ITraceSettingsService, options.api.traceSettings);
 		const marketplaceService = this._register(new AppServerMarketplaceService(options.api.marketplace, options.api.events));

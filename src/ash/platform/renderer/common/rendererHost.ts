@@ -1,3 +1,4 @@
+import type { IInstructionService } from '../../instructions/common/instructionService.js';
 import type { IFileSearchService } from '../../search/common/fileSearch.js';
 import type { IAssetService } from '../../assets/common/assetService.js';
 import type { IIssueReporterService } from '../../issue/common/issue.js';
@@ -94,6 +95,7 @@ export interface IRendererHost extends RendererHostCapabilities {
 	readonly turn: ITurnApi;
 	readonly turnChanges: ITurnChangesApi;
 	readonly skills: ISkillService;
+	readonly instructions: IInstructionService;
 	readonly languageServers: ILanguageServerService;
 	readonly typst: ITypstApi;
 	readonly documentCollaboration: IDocumentCollaborationApi;

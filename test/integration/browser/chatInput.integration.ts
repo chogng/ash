@@ -1,3 +1,5 @@
+import { IAgentCapabilitiesService } from '../../../src/ash/platform/agentCapabilities/common/agentCapabilitiesService.js';
+import { IInstructionService } from '../../../src/ash/platform/instructions/common/instructionService.js';
 import { ILanguageFeaturesService } from '../../../src/ash/editor/common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../../src/ash/editor/common/services/languageFeaturesService.js';
 import { registerCodebaseSymbolsWorkspaceSymbolProvider } from '../../../src/ash/workbench/services/codebaseSymbols/browser/codebaseSymbolsWorkspaceSymbolProvider.js';
@@ -65,7 +67,7 @@ import { IGitHubService } from '../../../src/ash/platform/github/common/githubSe
 import { IGitService } from '../../../src/ash/workbench/contrib/git/common/gitService.js';
 
 declare global {
-	interface Window { ashChatInputIntegration: { refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; denyAcceleration(id: string): void; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; restoreCapturedDraft(): Promise<void>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseSymbolSearch(query: string): void; changeContextSources(): void; }; }
+	interface Window { ashChatInputIntegration: { refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; denyAcceleration(id: string): void; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; restoreCapturedDraft(): Promise<void>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; }; }
 }
 
 const locale = new URLSearchParams(location.search).get('locale');
@@ -97,6 +99,33 @@ services.registerInstance(IClipboardService, {
 	readText: async () => '', writeText: async () => { }, readResources: async () => ({ resources: [], operation: 'copy' }), writeResources: async () => { }, hasResources: async () => false,
 });
 services.registerInstance(IHostService, { hasFocus: true, onDidChangeFocus: Event.None, restart: async () => { }, openWindow: async () => { }, getScreenshot: async () => new URLSearchParams(location.search).has('cancelScreenshot') ? undefined : Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNg+M/QAAADggGA8sg/+gAAAABJRU5ErkJggg=='), character => character.charCodeAt(0)) });
+services.registerInstance(IAgentCapabilitiesService, {
+	isAvailable: !new URLSearchParams(location.search).has('noTools'),
+	read: async () => {
+		if (new URLSearchParams(location.search).has('toolFailure')) { throw new Error('Tool catalog failed'); }
+		return {
+			tools: [
+				{ name: 'read_file', description: 'Read a source document', source: 'local', sourceDetails: ['directory'], exposure: 'direct', authority: 'directoryRead' },
+				{ name: 'connector_search', description: 'Search external references', source: 'mcp', sourceDetails: ['docs-server'], exposure: 'deferred', authority: 'providerDefined' },
+				{ name: 'internal_broker', description: 'Hidden broker', source: 'host', sourceDetails: [], exposure: 'hidden', authority: 'productService' },
+			],
+			localProcessSandboxConfigured: false, sandboxBackends: [], sandboxDiagnostics: [], directoryGrantsReadable: false,
+		};
+	},
+});
+const instructionWaiters: (() => void)[] = [];
+services.registerInstance(IInstructionService, {
+	isAvailable: !new URLSearchParams(location.search).has('noInstructions'),
+	list: async sessionId => {
+		if (sessionId !== 'active-session') { throw new Error('Unexpected instruction session'); }
+		if (new URLSearchParams(location.search).has('instructionFailure')) { throw new Error('Instruction catalog failed'); }
+		if (new URLSearchParams(location.search).has('deferInstructions')) { await new Promise<void>(resolve => instructionWaiters.push(resolve)); }
+		return [
+			{ path: '/workspace/.ash/instructions/review.md', name: 'API review', description: 'Check public contracts', scope: 'directory' },
+			{ path: '/home/user/.ash/instructions/style.md', name: 'Writing style', description: 'Short paragraphs', scope: 'user' },
+		];
+	},
+});
 services.registerInstance(IChatSessionNavigationService, {
 	getActiveConversation: () => ({ sessionId: 'active-session', threadId: 'active-thread' }),
 	getConversations: () => [{ sessionId: 'active-session', threadId: 'active-thread', title: 'Current session' }, { sessionId: 'previous-session', threadId: 'previous-thread', title: 'Earlier design' }],
@@ -385,6 +414,7 @@ window.ashChatInputIntegration = {
 		part.render({ ...state, models, selectedModel: models[0].model, isAutomaticModel: false, interaction: undefined });
 		modelChanged.fire();
 	},
+	releaseInstructions: () => { for (const resolve of instructionWaiters.splice(0)) resolve(); },
 	showModels: renderModels,
 	openModels: () => part.openModelSelector(),
 	dispose: () => resources.dispose(),

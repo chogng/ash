@@ -1,3 +1,4 @@
+import { createDisconnectedInstructionService } from '../../instructions/browser/appServerInstructionService.js';
 import { createDisconnectedFileSearchApi } from '../../search/browser/fileSearchApi.js';
 import { createDisconnectedNetworkDiagnosticsApi } from '../../networkDiagnostics/browser/networkDiagnosticsApi.js';
 import { createDisconnectedIssueReporterService } from '../../issue/browser/appServerIssueReporterService.js';
@@ -50,6 +51,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
 		turn: createDisconnectedTurnApi(unavailableOperation),
 		turnChanges: createDisconnectedTurnChangesApi(unavailableOperation),
 		skills: createDisconnectedSkillApi(unavailableOperation),
+		instructions: createDisconnectedInstructionService(unavailableOperation),
 		typst: createDisconnectedTypstApi(unavailableOperation),
 		documentCollaboration: createDisconnectedDocumentCollaborationApi(unavailableOperation),
 		resource: createDisconnectedResourceApi(unavailableOperation),

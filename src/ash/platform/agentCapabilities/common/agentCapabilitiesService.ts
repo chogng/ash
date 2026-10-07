@@ -29,6 +29,7 @@ export interface SandboxDiagnostic {
 
 /** Read-only view of the current Agent tool and sandbox configuration. */
 export interface IAgentCapabilitiesService {
+	readonly isAvailable: boolean;
 	read(): Promise<AgentCapabilitiesSnapshot>;
 }
 

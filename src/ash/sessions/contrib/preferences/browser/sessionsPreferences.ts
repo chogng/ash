@@ -1,3 +1,8 @@
+import { AgentCapabilitiesSettings } from '../../../../workbench/contrib/preferences/browser/agentCapabilitiesSettings.js';
+import { IAgentCapabilitiesService } from '../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
+import { IDirPermissionsService } from '../../../../platform/dirPermissions/common/dirPermissionsService.js';
+import { IRemoteAgentService } from '../../../../workbench/services/remote/common/remoteAgentService.js';
+import { ILocalizationService } from '../../../../workbench/services/localization/common/localizationService.js';
 import { GitHubSettingsModel } from '../../../../workbench/contrib/github/browser/githubSettingsModel.js';
 import { TraceSettingsModel } from '../../../../workbench/contrib/trace/browser/traceSettingsModel.js';
 import { SettingsSectionRenderer } from '../../../../workbench/contrib/preferences/browser/settingsSectionRenderer.js';
@@ -57,6 +62,7 @@ function configuration<T>(key: string): IRegisteredConfiguration<T> {
 }
 
 interface SettingsCategory {
+	readonly id?: string;
 	readonly title: string;
 	readonly icon: Icon;
 	readonly settings: readonly ISetting[];
@@ -83,6 +89,10 @@ export class SessionsPreferences extends Disposable {
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
 		@IAccessibleViewService private readonly accessibleView: IAccessibleViewService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IAgentCapabilitiesService private readonly capabilities: IAgentCapabilitiesService,
+		@IDirPermissionsService private readonly permissions: IDirPermissionsService,
+		@IRemoteAgentService private readonly remote: IRemoteAgentService,
+		@ILocalizationService private readonly localization: ILocalizationService,
 	) {
 		super();
 		this._register(AccessibleViewRegistry.register({
@@ -95,7 +105,7 @@ export class SessionsPreferences extends Disposable {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsSettings,
 					{ type: AccessibleViewType.Help },
-					() => localize('sessions.settings.help', 'Sessions Settings has categories on the left and settings on the right. General contains dictation settings; Models contains chat models and API connections. Git & PRs contains Codex review account status, repository access checks, and official review management links. Agents contains the Advisor model and enable switch. Execution trace shows the running recorder, detailed recording switch and save directory. Save trace settings explicitly, then restart the owning App Server to apply them. Other changes are saved immediately. Design contains canvas cursor and accessibility settings. Customize has Settings, Plugins, Skills, and Hooks tabs. Use Left and Right to move between tabs, then Enter or Space to open one. Use search to filter settings. The local dictation table lists available and installed models. Use arrow keys to move between rows and cells, and Tab to reach Install, Use model, Cancel, or Uninstall. Preparation continues after Settings closes. Cloud dictation uses the API connections in Models. Press Escape to close Settings.'),
+					() => localize('sessions.settings.help', 'Sessions Settings has categories on the left and settings on the right. General contains dictation settings; Models contains chat models and API connections. Tools shows the current tool catalog and execution requirements. Git & PRs contains Codex review account status, repository access checks, and official review management links. Agents contains the Advisor model and enable switch. Execution trace shows the running recorder, detailed recording switch and save directory. Save trace settings explicitly, then restart the owning App Server to apply them. Other changes are saved immediately. Design contains canvas cursor and accessibility settings. Customize has Settings, Plugins, Skills, and Hooks tabs. Use Left and Right to move between tabs, then Enter or Space to open one. Use search to filter settings. The local dictation table lists available and installed models. Use arrow keys to move between rows and cells, and Tab to reach Install, Use model, Cancel, or Uninstall. Preparation continues after Settings closes. Cloud dictation uses the API connections in Models. Press Escape to close Settings.'),
 					() => focused.focus(),
 					AccessibilityVerbositySettingId.SessionsSettings,
 				);
@@ -187,6 +197,7 @@ export class SessionsPreferences extends Disposable {
 				status.hidden = !message;
 			},
 		};
+		const toolCatalog = resources.add(new AgentCapabilitiesSettings(pageContent, this.capabilities, this.remote, this.permissions, this.localization));
 		const renderer = resources.add(new SettingsRenderer(list, settingOptions));
 		const modelContent = resources.add(this.instantiationService.createInstance(ModelSettingsContent, list));
 		const dictationContent = resources.add(this.instantiationService.createInstance(DictationSettingsContent, list));
@@ -211,7 +222,8 @@ export class SessionsPreferences extends Disposable {
 				: categoryId === 'github' ? categories.findIndex(category => category.content === githubContent)
 					: categoryId === 'execution-trace' ? categories.findIndex(category => category.content === traceContent)
 					: categoryId === 'agents' ? categories.findIndex(category => category.content === advisorContent)
-						: categoryId === 'models' ? categories.findIndex(category => category.content === modelContent) : 0;
+						: categoryId === 'models' ? categories.findIndex(category => category.content === modelContent)
+							: categoryId === 'tools' ? categories.findIndex(category => category.id === 'tools') : 0;
 		const treeModel = resources.add(new SettingsTreeModel<ISetting | SettingsContentItem>());
 		const tree = resources.add(new SettingsTree(list, {
 			model: treeModel,
@@ -267,7 +279,9 @@ export class SessionsPreferences extends Disposable {
 				category.content?.setVisible(!query.isEmpty || index === activeCategory);
 			}
 			heading.textContent = query.isEmpty ? categories[activeCategory].title : localize('sessions.settings.results', 'Search results');
-			heading.hidden = treeModel.visibleItems.length === 0;
+			const showTools = query.isEmpty && categories[activeCategory].id === 'tools';
+			toolCatalog.setView(showTools ? 'tools' : undefined);
+			heading.hidden = treeModel.visibleItems.length === 0 && !showTools;
 			empty.hidden = treeModel.visibleItems.length !== 0 || query.isEmpty;
 			for (const [index, button] of buttons.entries()) {
 				const isCurrent = query.isEmpty && index === activeCategory;
@@ -285,7 +299,8 @@ export class SessionsPreferences extends Disposable {
 			activeCategory = categoryId === 'customize' || categoryId === 'skills' || categoryId === 'plugins' || categoryId === 'hooks' ? categories.findIndex(category => category.content === customizeContent)
 				: categoryId === 'github' ? categories.findIndex(category => category.content === githubContent)
 					: categoryId === 'agents' ? categories.findIndex(category => category.content === advisorContent)
-						: categoryId === 'models' ? categories.findIndex(category => category.content === modelContent) : categories.findIndex(category => category.content === dictationContent);
+						: categoryId === 'models' ? categories.findIndex(category => category.content === modelContent)
+							: categoryId === 'tools' ? categories.findIndex(category => category.id === 'tools') : categories.findIndex(category => category.content === dictationContent);
 			searchInput.value = '';
 			render();
 			if (marketplaceOptions) void customizeContent.openPlugins(marketplaceOptions);
@@ -392,6 +407,7 @@ export class SessionsPreferences extends Disposable {
 		}, {
 			title: localize('sessions.settings.section.development', 'Development'),
 			categories: [
+				{ id: 'tools', title: localize('sessions.settings.tools', 'Tools'), icon: Lxicon.settings, settings: [] },
 				{ title: localize('sessions.settings.agents', 'Agents'), icon: Lxicon.agent, settings: [], content: advisorContent },
 				{ title: localize('sessions.settings.executionTrace', 'Execution trace'), icon: Lxicon.history, settings: [], content: traceContent },
 				{ title: localize('library.title', 'Library'), icon: Lxicon.library, settings: librarySettings },

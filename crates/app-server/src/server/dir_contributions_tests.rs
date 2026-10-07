@@ -16,6 +16,53 @@ use std::sync::Arc;
 use tempfile::TempDir;
 
 #[test]
+fn draft_instruction_sources_exclude_other_sessions_and_revoked_environment_grants() {
+    let root = TempDir::new().unwrap();
+    let extra = TempDir::new().unwrap();
+    write_instruction(root.path(), "root", "on-demand", "Root rule");
+    write_instruction(extra.path(), "extra", "on-demand", "Private Session rule");
+    let grant = Grant::for_environment(
+        Dir::open_local(root.path()).unwrap(),
+        GrantSource::HostConfiguration,
+        ash_file_access::Permissions::new([ash_file_access::Permission::LoadInstructions]),
+    );
+    let authorization = grant
+        .authorize(ash_file_access::Permission::LoadInstructions)
+        .unwrap();
+    let contributions = DirContributions::discover(
+        root.path(),
+        Arc::new(crate::dir_grants::DirGrants::default()),
+        Some(authorization),
+        None,
+    )
+    .unwrap();
+    let session = SessionId::new("other-session").unwrap();
+    let session_grant = Grant::for_session_tree(
+        session.clone(),
+        Dir::open_local(extra.path()).unwrap(),
+        GrantSource::ExplicitUser,
+        ash_file_access::Permissions::new([ash_file_access::Permission::LoadInstructions]),
+    );
+    contributions.reconcile_session(
+        &session,
+        vec![
+            session_grant
+                .authorize(ash_file_access::Permission::LoadInstructions)
+                .unwrap(),
+        ],
+    );
+    assert_eq!(contributions.directory_instruction_sources(None).len(), 1);
+    assert_eq!(
+        contributions
+            .directory_instruction_sources(Some(&session))
+            .len(),
+        2
+    );
+    grant.revoke();
+    assert!(contributions.directory_instruction_sources(None).is_empty());
+}
+
+#[test]
 fn global_instructions_are_injected_but_other_load_policies_are_not() {
     let dir = TempDir::new().unwrap();
     write_instruction(

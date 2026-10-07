@@ -1,3 +1,9 @@
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { GitHubIssueState } from '../../../../src/ash/platform/github/common/githubService.js';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { createTestWorkspace, disposeTestWorkspace } from '../../../automation/testWorkspace.js';
 import type { ElectronApplication } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 
@@ -240,4 +246,128 @@ test('terminal, symbol and search context source buttons return to their product
 	await expect(workbench.terminal.tabs.nth(0)).toHaveAttribute('aria-selected', 'true');
 	await expect(workbench.terminal.activeInstance.locator('.xterm-helper-textarea')).toBeFocused();
 	await expect(workbench.terminal.activeInstance.locator('.xterm-rows')).toContainText('ash-context-ready');
+});
+
+const instructionTest = test.extend({
+	testWorkspace: async ({ }, use) => {
+		const workspace = await createTestWorkspace();
+		try {
+			await mkdir(join(workspace.directory, '.ash/instructions'), { recursive: true });
+			await writeFile(join(workspace.directory, '.ash/instructions/review.md'), '---\nname: review\ndescription: Check public contracts\nload: on-demand\n---\nCheck API compatibility before making changes.');
+			await use(workspace);
+		} finally {
+			await disposeTestWorkspace(workspace);
+		}
+	},
+});
+
+instructionTest('instruction context discovers the authorized directory and opens its source', async ({ target, workbench }) => {
+	instructionTest.skip(target.appServerMode !== 'required', 'Requires the backend instruction catalog.');
+	const page = workbench.page;
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	}
+	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
+	await chat.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+	await page.getByRole('dialog').getByRole('option', { name: 'Instructions…', exact: true }).click();
+	await page.getByRole('dialog').getByRole('combobox').fill('contracts');
+	await page.getByRole('dialog').getByRole('option', { name: /review/ }).click();
+	await expect(chat.locator('.stanza-editor-input')).toBeFocused();
+	await chat.getByRole('button', { name: 'Open review', exact: true }).press('Enter');
+	await expect(page.getByRole('tab', { name: 'review.md', exact: true })).toHaveAttribute('aria-selected', 'true');
+	await expect(workbench.editors.groupAt(0).content.locator('.stanza-editor-input:visible')).toBeFocused();
+});
+
+test('live GitHub account attaches a real issue and pull request through the context picker', async ({ target, workbench, webAppServer }) => {
+	test.skip(target.kind !== 'browser' || !webAppServer || process.env.ASH_TEST_GITHUB_LIVE !== '1', 'Opt-in account integration against an isolated Web test profile.');
+	const page = workbench.page;
+	let accountId: string | undefined;
+	try {
+		// Authentication uses the existing browser connection while tracing is stopped;
+		// the credential is confined to this disposable profile and never recorded in an artifact.
+		await page.context().tracing.stop();
+		try {
+			const { stdout } = await promisify(execFile)('gh', ['auth', 'token'], { encoding: 'utf8' });
+			accountId = await page.evaluate(async accessToken => {
+				const account = await globalThis.ashWebWorkbenchHost!.api.github.connectToken('github.com', accessToken);
+				return account.id;
+			}, stdout.trim());
+		} finally {
+			await page.context().tracing.start({ screenshots: true, snapshots: true, sources: true });
+		}
+		const { issue, pr } = await page.evaluate(async ({ accountId, state }) => {
+			const github = globalThis.ashWebWorkbenchHost!.api.github;
+			const repository = { accountId, host: 'github.com', owner: 'microsoft', name: 'vscode' };
+			return {
+				issue: (await github.listIssues(repository, state, '', 1)).items[0]!,
+				pr: (await github.listPullRequests(repository, state, 1)).items[0]!,
+			};
+		}, { accountId: accountId!, state: GitHubIssueState.Open });
+		expect(issue.number).toBeGreaterThan(0);
+		expect(pr.number).toBeGreaterThan(0);
+		if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+			await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+		}
+		const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
+		for (const item of [{ label: 'Issue…', url: issue.url, number: issue.number }, { label: 'Pull Request…', url: pr.url, number: pr.number }]) {
+			await chat.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+			await page.getByRole('dialog').getByRole('option', { name: item.label, exact: true }).click();
+			await page.getByRole('dialog').getByRole('combobox').fill(item.url);
+			await page.keyboard.press('Enter');
+			await expect(chat.getByRole('list', { name: 'Attached context' })).toContainText(`microsoft/vscode #${item.number}`);
+		}
+		await expect(chat.getByRole('list', { name: 'Attached context' }).getByRole('listitem')).toHaveCount(2);
+		await expect(chat.locator('.stanza-editor-input')).toBeFocused();
+	} finally {
+		if (accountId) {
+			await page.evaluate(accountId => globalThis.ashWebWorkbenchHost!.api.accounts.logout({ provider: 'github', accountId }), accountId);
+		}
+	}
+});
+
+test('tool context reads the current backend catalog and opens Tools settings', async ({ target, workbench }) => {
+	test.skip(target.appServerMode !== 'required', 'Requires the backend tool catalog.');
+	const page = workbench.page;
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
+	}
+	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
+	await chat.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+	await page.getByRole('dialog').getByRole('option', { name: 'Tools…', exact: true }).click();
+	await page.getByRole('dialog').getByRole('combobox').fill('read_file');
+	await page.getByRole('dialog').getByRole('option', { name: /^read_file(?:\s|$)/ }).click();
+	await chat.getByRole('button', { name: 'Open Tool: read_file', exact: true }).press('Enter');
+	await expect(page.locator('[data-active-settings-category="tools"]')).toBeVisible();
+	await expect(page.locator('.ash-agent-capabilities-list')).toContainText('read_file');
+});
+
+
+test('Sessions tool context opens the current Tools catalog in its settings dialog', async ({ target, workbench }) => {
+	test.skip(target.appServerMode !== 'required', 'Requires the backend tool catalog.');
+	const page = await workbench.openAgentsWindow(target.kind);
+	const chat = page.locator('.ash-sessions-chat-slot.active:visible');
+	await chat.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+	await page.getByRole('dialog').getByRole('option', { name: 'Tools…', exact: true }).click();
+	await page.getByRole('dialog').getByRole('combobox').fill('read_file');
+	await page.getByRole('dialog').getByRole('option', { name: /^read_file(?:\s|$)/ }).click();
+	await chat.getByRole('button', { name: 'Open Tool: read_file', exact: true }).press('Enter');
+	const settings = page.getByRole('dialog', { name: 'Sessions Settings', exact: true });
+	await expect(settings.getByRole('button', { name: 'Tools', exact: true })).toHaveAttribute('aria-current', 'page');
+	await expect(settings.locator('.ash-agent-capabilities-list')).toContainText('read_file');
+	await page.keyboard.press('Escape');
+	await expect(settings).toBeHidden();
+	await expect(chat.getByRole('button', { name: 'Open Tool: read_file', exact: true })).toBeFocused();
+});
+
+
+instructionTest('Sessions instruction context is available before its first turn', async ({ target, workbench }) => {
+	instructionTest.skip(target.appServerMode !== 'required', 'Requires the backend instruction catalog.');
+	const page = await workbench.openAgentsWindow(target.kind);
+	const chat = page.locator('.ash-sessions-chat-slot.active:visible');
+	await chat.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+	await page.getByRole('dialog').getByRole('option', { name: 'Instructions…', exact: true }).click();
+	await page.getByRole('dialog').getByRole('combobox').fill('contracts');
+	await page.getByRole('dialog').getByRole('option', { name: /review/ }).click();
+	await expect(chat.getByRole('list', { name: 'Attached context' })).toContainText('review');
+	await expect(chat.locator('.stanza-editor-input')).toBeFocused();
 });

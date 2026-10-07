@@ -253,9 +253,9 @@ export class ChatService extends Disposable implements IChatService {
 }
 
 function toContextInput(context: ResolvedChatContext): InputItem {
-	return context.kind === 'image'
-		? { type: 'image', url: context.content }
-		: { type: 'context', name: context.name, content: context.content };
+	if (context.kind === 'image') { return { type: 'image', url: context.content }; }
+	if (context.kind === 'instruction') { return { type: 'instruction', path: context.content }; }
+	return { type: 'context', name: context.name, content: context.content };
 }
 
 function toThread(thread: ThreadDto): Thread {

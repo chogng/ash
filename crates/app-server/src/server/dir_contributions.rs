@@ -225,7 +225,7 @@ impl DirContributions {
 
     pub(super) fn directory_instruction_sources(
         &self,
-        session_id: &SessionId,
+        session_id: Option<&SessionId>,
     ) -> Vec<(PathBuf, Arc<InstructionCatalogSnapshot>)> {
         let mut sources = BTreeMap::new();
         if let Some(catalog) = self
@@ -237,12 +237,11 @@ impl DirContributions {
         {
             sources.insert(self.dir_root.clone(), catalog.instructions.refresh());
         }
-        if let Some(catalogs) = self
+        let mut dirs = self
             .dirs
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get_mut(session_id)
-        {
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(catalogs) = session_id.and_then(|session_id| dirs.get_mut(session_id)) {
             for (root, catalog) in catalogs
                 .iter_mut()
                 .filter(|(_, catalog)| catalog.authorization.is_active())

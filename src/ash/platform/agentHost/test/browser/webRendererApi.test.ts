@@ -17,6 +17,17 @@ import type { BrowserCreateParams } from '../../../../../../.build/protocol/type
 const githubRepository = { host: 'github.com', owner: 'team', name: 'repo' };
 const githubIssue = { number: 7, title: 'Issue', url: 'https://github.com/team/repo/issues/7', updatedAt: '2026-10-04', state: 'open', labels: ['bug'], assignees: ['owner'] };
 
+test('instruction catalog uses the shared connection and exposes metadata without loading bodies', async () => {
+	const transport = new FakeTransport();
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	using cleanup = toDisposable(() => connected.dispose());
+	assert.equal(connected.api.instructions.isAvailable, true);
+	const catalog = connected.api.instructions.list('instruction-session');
+	assert.deepEqual({ method: transport.requests.at(-1)?.method, params: transport.requests.at(-1)?.params }, { method: 'instructions/list', params: { sessionId: 'instruction-session' } });
+	transport.respondAt(-1, { instructions: [{ path: '/workspace/.ash/instructions/review.md', name: 'Review', description: null, scope: 'directory', load: 'onDemand', patterns: [] }], diagnostics: [] });
+	assert.deepEqual(await catalog, [{ path: '/workspace/.ash/instructions/review.md', name: 'Review', description: undefined, scope: 'directory' }]);
+});
+
 test('Terminal host adapts raw bytes and command exit codes at the protocol boundary', async () => {
 	const transport = new FakeTransport();
 	const connected = await connectWebRendererApi(transport, connectorHostServices);

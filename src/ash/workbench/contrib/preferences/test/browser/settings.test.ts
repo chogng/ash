@@ -152,6 +152,7 @@ test('Sandbox diagnostics render Chinese readiness and preserve backend reasons 
 	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	const root = h(browserEnvironment.window.document, 'div');
 	using panel = new AgentCapabilitiesSettings(root, {
+		isAvailable: true,
 		read: async () => ({
 			tools: [], localProcessSandboxConfigured: true, sandboxBackends: ['mxc'], directoryGrantsReadable: false,
 			sandboxDiagnostics: [{ backend: 'mxc', network: 'managed', readiness: { type: 'unsupported', reason: '<script>diagnostic</script>' } }]
@@ -281,7 +282,7 @@ test('Chinese setting actions, search filters and pending saves expose translate
 	}, {
 		configurationService: configuration, contextViewProvider: contextView, contextMenuProvider,
 		clipboardService: {
-			readText: async () => '', writeText: async () => { },
+			readText: async () => '', writeText: async () => { }, readImage: async () => new Uint8Array(),
 			readResources: async () => ({ resources: [], operation: 'copy' }),
 			writeResources: async () => { }, hasResources: async () => false,
 		},
@@ -878,6 +879,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.throws(() => descriptor.create({ instantiationService: services }), /Unknown service: agentCapabilitiesService/);
 	let capabilityReads = 0;
 	services.registerInstance(IAgentCapabilitiesService, {
+		isAvailable: true,
 		read: async () => {
 			capabilityReads++;
 			return {

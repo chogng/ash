@@ -1,3 +1,4 @@
+import { IInstructionService } from '../../platform/instructions/common/instructionService.js';
 import { IFileSearchService } from '../../platform/search/common/fileSearch.js';
 import { BrowserFileSearchService } from '../../platform/search/browser/browserFileSearchService.js';
 import { AppServerAvailableContext } from '../common/contextkeys.js';
@@ -705,6 +706,7 @@ export class Workbench extends Disposable {
 		const marketplaceService = this._register(new AppServerMarketplaceService(api.marketplace, api.events));
 		services.registerInstance(IMarketplaceService, marketplaceService);
 		services.registerInstance(ISkillService, api.skills);
+		services.registerInstance(IInstructionService, api.instructions);
 		services.registerInstance(ILanguageServerService, api.languageServers);
 		services.registerInstance(IToolSearchService, new AppServerToolSearchService(api.toolSearch));
 		const workbenchState = workspaceContext.getWorkbenchState();

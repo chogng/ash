@@ -1,3 +1,4 @@
+import { createAppServerInstructionService } from '../../instructions/browser/appServerInstructionService.js';
 import { createAppServerFileSearchApi } from '../../search/browser/fileSearchApi.js';
 import { AppServerAssetService } from '../../assets/browser/appServerAssetService.js';
 import { AppServerIssueReporterService } from '../../issue/browser/appServerIssueReporterService.js';
@@ -108,6 +109,7 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 		turn: createAppServerTurnApi(connection),
 		turnChanges: createAppServerTurnChangesApi(connection),
 		skills: createAppServerSkillApi(connection),
+		instructions: createAppServerInstructionService(connection),
 		typst: createAppServerTypstApi(connection),
 		documentCollaboration: createAppServerDocumentCollaborationApi(connection),
 		resource,

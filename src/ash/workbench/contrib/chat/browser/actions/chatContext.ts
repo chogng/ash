@@ -1,3 +1,4 @@
+import { IAgentCapabilitiesService } from '../../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { ITerminalService, type ITerminalView } from '../../../terminal/browser/terminal.js';
 import { TERMINAL_VIEW_ID } from '../../../terminal/common/terminal.js';
@@ -32,6 +33,41 @@ export interface ChatContextSource {
 	readonly icon: Icon;
 	isEnabled?(): boolean;
 	asAttachment(signal: AbortSignal): Promise<ChatContextSelection | undefined>;
+}
+
+export class ToolsContextPickerPick implements ChatContextSource {
+	public readonly icon = Lxicon.settings;
+	public get label(): string { return localize('chat.context.tools', 'Tools…'); }
+
+	constructor(
+		@IAgentCapabilitiesService private readonly capabilities: IAgentCapabilitiesService,
+		@IQuickInputService private readonly quickInput: IQuickInputService,
+	) { }
+
+	public isEnabled(): boolean { return this.capabilities.isAvailable; }
+
+	public async asAttachment(signal: AbortSignal): Promise<ChatContextSelection | undefined> {
+		if (!this.isEnabled() || signal.aborted) { return undefined; }
+		let catalog: ReturnType<IAgentCapabilitiesService['read']> | undefined;
+		const selected = await pickChatContextItem(this.quickInput, localize('chat.context.selectTool', 'Search available tools by name, description or source'), async query => {
+			catalog ??= this.capabilities.read();
+			const tools = (await catalog).tools.filter(tool => tool.exposure !== 'hidden');
+			return filterQuickPickItems(tools.map(tool => ({ label: tool.name, description: tool.sourceDetails.join(' › '), detail: tool.description, tool })), query);
+		}, signal);
+		if (signal.aborted || !selected || selected.kind === 'back') { return undefined; }
+		const tool = selected.item.tool;
+		const name = localize('chat.context.toolName', 'Tool: {0}', tool.name);
+		// A tool reference guides the model; execution authority remains with the backend's current catalog and policy.
+		const content = JSON.stringify(tool, null, 2);
+		return {
+			acceptInBackground: selected.background,
+			attachment: {
+				id: `tool:${tool.name}`, kind: 'tool', name,
+				resource: URI.from({ scheme: Schemas.internal, authority: 'agent-tools', query: new URLSearchParams({ name: tool.name }).toString() }),
+				resolve: async () => ({ name, content }),
+			},
+		};
+	}
 }
 
 export class TerminalContext implements ChatContextSource {

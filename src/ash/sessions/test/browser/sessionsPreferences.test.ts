@@ -1,3 +1,5 @@
+import { IAgentCapabilitiesService } from '../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
+import { IDirPermissionsService } from '../../../platform/dirPermissions/common/dirPermissionsService.js';
 import { IOpenerService } from '../../../platform/opener/common/opener.js';
 import { ITraceSettingsService } from '../../../platform/trace/common/traceSettingsService.js';
 import { IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
@@ -132,9 +134,15 @@ test('Sessions Models switches control the model picker visibility preference', 
 	using githubReview = services.createInstance(GitHubReviewModel);
 	services.registerInstance(IGitHubReviewModel, githubReview);
 	services.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
+	services.registerInstance(IAgentCapabilitiesService, { isAvailable: true, read: async () => ({ tools: [{ name: 'read_file', description: 'Read authorized files', source: 'local', sourceDetails: ['Ash'], exposure: 'direct', authority: 'directoryRead' }], localProcessSandboxConfigured: false, sandboxBackends: [], directoryGrantsReadable: false, sandboxDiagnostics: [] }) });
+	services.registerInstance(IDirPermissionsService, { onDidChangePermissions: Event.None } as import('../../../platform/dirPermissions/common/dirPermissionsService.js').IDirPermissionsService);
 	using preferences = services.createInstance(SessionsPreferences, window.document.body, () => { });
 	const opened = preferences.open();
 	await Promise.race([opened, Promise.resolve()]);
+	void preferences.open('tools');
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.equal(window.document.querySelector('[aria-current="page"]')?.textContent, 'Tools');
+	assert.match(window.document.querySelector('.ash-agent-capabilities-list')?.textContent ?? '', /read_file/);
 	const designButton = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === 'Design');
 	assert.ok(designButton);
 	designButton.click();

@@ -1,3 +1,4 @@
+import { OpenSettingsCommandId } from '../../../preferences/common/preferences.js';
 import './chatAttachmentWidgets.css';
 import { h } from '../../../../../base/browser/dom.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
@@ -61,6 +62,8 @@ export class DefaultChatAttachmentWidget extends Disposable {
 				const sessionId = parameters.get('sessionId');
 				const threadId = parameters.get('threadId');
 				if (sessionId && threadId) await this.navigation.openConversation(sessionId, threadId);
+			} else if (resource.scheme === Schemas.internal && resource.authority === 'agent-tools') {
+				await this.commands.executeCommand(OpenSettingsCommandId, 'tools');
 			} else if (resource.scheme === Schemas.internal && resource.authority === 'terminal') {
 				const id = new URLSearchParams(resource.query).get('id');
 				if (id) await this.commands.executeCommand(FOCUS_TERMINAL_COMMAND_ID, id);

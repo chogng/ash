@@ -645,3 +645,104 @@ test('symbol search cancellation discards late provider results after composer d
 	await expect(page.getByLabel('Submission')).toHaveText('');
 	await expect(page.getByLabel('Context error')).toHaveText('');
 });
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`instructions retain their authorized reference through background acceptance and draft restore in ${locale}`, async ({ page }) => {
+		await page.goto(`/chatInput.html?locale=${locale}`);
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const chinese = locale === 'zh-CN';
+		const add = page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true });
+		const picker = page.getByRole('dialog');
+		await add.press('Enter');
+		await picker.getByRole('option', { name: chinese ? '指令…' : 'Instructions…', exact: true }).click();
+		await picker.getByRole('combobox').fill('contracts');
+		await expect(picker.getByRole('option', { name: /API review/ })).toContainText(chinese ? '目录' : 'Directory');
+		await page.keyboard.press('Control+Enter');
+		await expect(picker.getByRole('combobox')).toHaveAttribute('placeholder', chinese ? '搜索附件' : 'Search attachments');
+		await picker.getByRole('option', { name: chinese ? '指令…' : 'Instructions…', exact: true }).click();
+		await picker.getByRole('combobox').fill('review.md');
+		await page.keyboard.press('Enter');
+		const attachments = page.getByRole('list', { name: chinese ? '已添加的上下文' : 'Attached context' });
+		await expect(attachments.getByRole('listitem')).toHaveCount(1);
+		await page.evaluate(() => window.ashChatInputIntegration.restoreCapturedDraft());
+		await attachments.getByRole('button', { name: chinese ? '打开 API review' : 'Open API review', exact: true }).press('Enter');
+		await expect(page.getByLabel('Opened sources')).toContainText('file:///workspace/.ash/instructions/review.md');
+		await page.locator('[data-action-id="ash.chat.input.send"] button').press('Enter');
+		await expect(page.getByLabel('Submission')).toHaveText(JSON.stringify([{ name: 'API review', content: '/workspace/.ash/instructions/review.md', kind: 'instruction' }]));
+	});
+}
+
+test('instruction availability and catalog errors preserve the composer', async ({ page }) => {
+	await page.goto('/chatInput.html?noInstructions=1');
+	await page.evaluate(() => window.ashChatInputIntegration.showModels());
+	await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+	await expect(page.getByRole('option', { name: 'Instructions…', exact: true })).toHaveCount(0);
+	await page.keyboard.press('Escape');
+	await page.goto('/chatInput.html?instructionFailure=1');
+	await page.evaluate(() => window.ashChatInputIntegration.showModels());
+	await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+	await page.getByRole('option', { name: 'Instructions…', exact: true }).click();
+	await expect(page.getByLabel('Context error')).toContainText('Instruction catalog failed');
+	await expect(page.getByRole('dialog')).toHaveCount(0);
+	await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
+});
+
+test('cancelled instruction catalogs cannot recreate a picker or attachment', async ({ page }) => {
+	await page.goto('/chatInput.html?deferInstructions=1');
+	await page.evaluate(() => window.ashChatInputIntegration.showModels());
+	await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+	await page.getByRole('option', { name: 'Instructions…', exact: true }).click();
+	await page.keyboard.press('Escape');
+	await expect(page.getByRole('dialog').getByRole('combobox')).toHaveAttribute('placeholder', 'Search attachments');
+	await page.keyboard.press('Escape');
+	await page.evaluate(() => window.ashChatInputIntegration.releaseInstructions());
+	await expect(page.getByRole('dialog')).toHaveCount(0);
+	await expect(page.getByRole('list', { name: 'Attached context' })).toBeHidden();
+	await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
+});
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`tools attach catalog metadata, hide internal tools and preserve source navigation in ${locale}`, async ({ page }) => {
+		await page.goto(`/chatInput.html?locale=${locale}`);
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const chinese = locale === 'zh-CN';
+		const add = page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true });
+		const picker = page.getByRole('dialog');
+		await add.press('Enter');
+		await picker.getByRole('option', { name: chinese ? '工具…' : 'Tools…', exact: true }).click();
+		await expect(picker.getByRole('option', { name: /internal_broker/ })).toHaveCount(0);
+		await picker.getByRole('combobox').fill('docs-server');
+		await expect(picker.getByRole('option', { name: /connector_search/ })).toHaveCount(1);
+		await page.keyboard.press('Control+Enter');
+		await picker.getByRole('option', { name: chinese ? '工具…' : 'Tools…', exact: true }).click();
+		await picker.getByRole('combobox').fill('source document');
+		await picker.getByRole('option', { name: /read_file/ }).click();
+		await page.evaluate(() => window.ashChatInputIntegration.restoreCapturedDraft());
+		const attachments = page.getByRole('list', { name: chinese ? '已添加的上下文' : 'Attached context' });
+		await expect(attachments.getByRole('listitem')).toHaveCount(2);
+		await attachments.getByRole('button', { name: chinese ? '打开 工具：read_file' : 'Open Tool: read_file', exact: true }).press('Enter');
+		await expect(page.getByLabel('Opened sources')).toHaveText(JSON.stringify([{ command: 'workbench.action.openSettings', resource: 'tools' }]));
+		await page.locator('[data-action-id="ash.chat.input.send"] button').press('Enter');
+		const contexts = JSON.parse((await page.getByLabel('Submission').textContent())!);
+		expect(contexts.map((context: { content: string; }) => JSON.parse(context.content))).toEqual([
+			{ name: 'connector_search', description: 'Search external references', source: 'mcp', sourceDetails: ['docs-server'], exposure: 'deferred', authority: 'providerDefined' },
+			{ name: 'read_file', description: 'Read a source document', source: 'local', sourceDetails: ['directory'], exposure: 'direct', authority: 'directoryRead' },
+		]);
+	});
+}
+
+test('unavailable tools stay hidden and catalog failure returns focus without attachments', async ({ page }) => {
+	await page.goto('/chatInput.html?noTools=1');
+	await page.evaluate(() => window.ashChatInputIntegration.showModels());
+	await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+	await expect(page.getByRole('option', { name: 'Tools…', exact: true })).toHaveCount(0);
+	await page.keyboard.press('Escape');
+	await page.goto('/chatInput.html?toolFailure=1');
+	await page.evaluate(() => window.ashChatInputIntegration.showModels());
+	await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+	await page.getByRole('option', { name: 'Tools…', exact: true }).click();
+	await expect(page.getByLabel('Context error')).toContainText('Tool catalog failed');
+	await expect(page.getByRole('dialog')).toHaveCount(0);
+	await expect(page.getByRole('list', { name: 'Attached context' })).toBeHidden();
+	await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
+});

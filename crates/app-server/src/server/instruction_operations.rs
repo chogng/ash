@@ -28,7 +28,7 @@ struct InstructionSource {
 impl AppServer {
     fn instruction_sources(
         &self,
-        session_id: &SessionId,
+        session_id: Option<&SessionId>,
     ) -> Result<Vec<InstructionSource>, RpcError> {
         let mut sources = Vec::new();
         if let Some(home) = &self.home {
@@ -65,7 +65,7 @@ impl AppServer {
             instructions: Vec::new(),
             diagnostics: Vec::new(),
         };
-        for source in self.instruction_sources(&params.session_id)? {
+        for source in self.instruction_sources(params.session_id.as_ref())? {
             for (path, _) in source.snapshot.always_on_files() {
                 response.instructions.push(InstructionDto {
                     path: source.root.join(path).display().to_string(),
@@ -125,7 +125,7 @@ impl AppServer {
         path: &str,
     ) -> Result<UserInput, RpcError> {
         // Select only from current authorized catalogs; never read an arbitrary client path.
-        for source in self.instruction_sources(session_id)? {
+        for source in self.instruction_sources(Some(session_id))? {
             if let Some(body) =
                 source
                     .snapshot

@@ -1,3 +1,4 @@
+import { ChatInstructionsPickerPick } from '../promptSyntax/attachInstructionsAction.js';
 import { createImageAttachment } from '../chatImageUtils.js';
 import { pickFiles } from '../../../../../base/browser/fileAccess.js';
 import { createUuid } from '../../../../../base/common/uuid.js';
@@ -17,7 +18,7 @@ import { IInstantiationService } from '../../../../../platform/instantiation/com
 import { IQuickAccessController, type AnythingQuickAccessProviderRunOptions } from '../../../../../platform/quickinput/common/quickAccess.js';
 import { FilesAndFoldersPickerPick, SymbolsContextPickerPick, SearchViewResultChatContextPick } from '../../../search/browser/searchChatContext.js';
 import type { IAnythingQuickPickItem } from '../../../search/browser/anythingQuickAccess.js';
-import { ClipboardImageContextValuePick, GitHubContextValuePick, ScreenshotContextValuePick, SessionReferenceContextPickerPick, TerminalContext, type ChatContextSource } from './chatContext.js';
+import { ClipboardImageContextValuePick, GitHubContextValuePick, ScreenshotContextValuePick, SessionReferenceContextPickerPick, TerminalContext, ToolsContextPickerPick, type ChatContextSource } from './chatContext.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 
 interface AttachContextHost {
@@ -65,8 +66,10 @@ export class AttachContextAction extends Disposable {
 				this.instantiation.createInstance(GitHubContextValuePick, 'issue'),
 				this.instantiation.createInstance(GitHubContextValuePick, 'pullRequest'),
 				this.instantiation.createInstance(TerminalContext),
+				this.instantiation.createInstance(ToolsContextPickerPick),
 				this.instantiation.createInstance(SymbolsContextPickerPick),
 				this.instantiation.createInstance(SearchViewResultChatContextPick),
+				this.instantiation.createInstance(ChatInstructionsPickerPick, this.navigation.getActiveConversation()?.sessionId),
 			];
 			sources.push(...contexts.filter(context => context.isEnabled?.() !== false).map(context => ({ label: context.label, iconClass: ThemeIcon.asClassName(context.icon), source: 'context' as const, context })));
 			if (this.editors.groups.some(group => group.inputs.length)) sources.push({ label: localize('chat.context.editors', 'Open editors'), iconClass: ThemeIcon.asClassName(Lxicon.files), source: 'editors' });

@@ -76,7 +76,7 @@ import { URI } from "../../../base/common/uri.js";
 import { ICommandService } from "../../../platform/commands/common/commands.js";
 import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import type { IOpenerService, OpenOptions } from "../../../platform/opener/common/opener.js";
-import type { IEditorService } from "../../../workbench/services/editor/common/editorService.js";
+import { IEditorService } from "../../../workbench/services/editor/common/editorService.js";
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { ChatTipService, IChatTipService } from '../../../workbench/contrib/chat/browser/chatTipService.js';
 import { BrowserLifecycleService } from '../../../workbench/services/lifecycle/browser/lifecycleService.js';
@@ -747,6 +747,7 @@ test('sending from one session preserves a later draft during first-session crea
 	using editorResources = new DisposableStore();
 	const composerStorage = editorResources.add(createTestStorage());
 	const editorServices = editorResources.add(createTestEditorServices(undefined, createCodeEditorServices(editorResources), dom.window.document, composerStorage));
+	editorServices.registerInstance(IEditorService, { openEditor: async () => { throw new Error('Unexpected editor navigation'); } } as unknown as IEditorService);
 	editorServices.registerInstance(ISessionsGitHubService, {
 		onDidChange: Event.None,
 		getSessionPullRequests: () => [],
@@ -1990,6 +1991,20 @@ test("Chat service projects unique enabled Skills and submits the exact pinned r
 		{ type: "skill", skill: selectors[0]!.skill },
 		{ type: "text", text: "$commit staged changes" },
 	]);
+});
+
+test('instruction references reach Turn start, queue and steering without becoming document text', async () => {
+	const fake = fakeApi();
+	using chat = createChatService(fake.api);
+	const contexts = [{ name: 'Review', content: '/workspace/.ash/instructions/review.md', kind: 'instruction' as const }];
+	const options = { sessionId: 'session-1', threadId: 'thread-1', expectedSequence: 1, text: 'Review this API', mode: 'agent' as const, contexts };
+	await chat.startTurn(options);
+	await chat.queueTurn(options);
+	await chat.steerTurn({ ...options, turnId: 'turn-1' });
+	const input = [{ type: 'instruction', path: contexts[0]!.content }, { type: 'text', text: options.text }];
+	assert.deepEqual(fake.turnStartRequests[0]?.input, input);
+	assert.deepEqual(fake.queuedRequests[0]?.input, input);
+	assert.deepEqual(fake.turnSteerRequests[0]?.input, input);
 });
 
 test("Language models service applies product visibility defaults and persists manual changes", async () => {

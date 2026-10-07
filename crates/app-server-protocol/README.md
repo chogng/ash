@@ -113,6 +113,7 @@ owner 的版本迁移规则。无效会话、获准来源的读取失败或配�
 
 | Method                       | 参数与结果                                                                                          | 行为                                                                                                                        |
 | ---------------------------- | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `instructions/list` | 可选 `sessionId` → 指令元数据与 diagnostics | 草稿省略 Session 时，仅列出用户指令和当前已授权环境目录，不创建 Session，也不读取其他 Session 的目录。发送 instruction 引用时重新校验当前 catalog 与授权。 |
 | `instructions/importPreview` | `scope`、`source`、`directory: {sessionId, path}`、`sources: string[]` → digest、items、diagnostics | 预览选定生态和作用范围的指令，sources 为空时发现全部；非空时只接受准确的已发现相对路径。需要目录 ReadFiles 与 BrowseFiles。 |
 | `instructions/import`        | 同一 scope、source、directory、sources 与已审阅 digest → items                                      | 重读来源并检查摘要；需要 WriteFiles，逐文件有条件发布。                                                                     |
 

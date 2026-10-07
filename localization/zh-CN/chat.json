@@ -480,7 +480,14 @@
     "chat.context.symbolRangeUnavailable": "符号的源代码范围已不可用",
     "chat.context.symbolEmpty": "符号没有可添加的源代码文本",
     "chat.context.searchResults": "搜索结果",
-    "chat.context.searchResultsName": "搜索结果：{0}"
+    "chat.context.searchResultsName": "搜索结果：{0}",
+    "chat.context.instructions": "指令…",
+    "chat.context.selectInstruction": "按名称、描述或路径搜索指令",
+    "chat.context.userInstruction": "用户",
+    "chat.context.directoryInstruction": "目录",
+    "chat.context.tools": "工具…",
+    "chat.context.selectTool": "按名称、描述或来源搜索可用工具",
+    "chat.context.toolName": "工具：{0}"
   },
   "ash.workbench": {
     "command.OpenAutomations": "打开自动化",
