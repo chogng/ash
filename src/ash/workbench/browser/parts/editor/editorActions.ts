@@ -192,7 +192,7 @@ registerAction2(class ReopenClosedEditorAction extends Action2 {
 	}
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
-		await accessor.get(IEditorPart).reopenClosedEditor();
+		await accessor.get(IHistoryService).reopenLastClosedEditor();
 	}
 });
 

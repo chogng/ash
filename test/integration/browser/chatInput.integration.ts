@@ -246,7 +246,7 @@ services.registerInstance(INotificationService, notifications);
 const quickInput = resources.add(new QuickInputController(document.body));
 services.registerInstance(IQuickInputService, quickInput);
 services.registerInstance(IQuickAccessController, resources.add(services.createInstance(QuickAccessController)));
-services.registerInstance(IHistoryService, { getHistory: () => [{ resource: URI.file('/workspace/closed.ts') }], goBack: async () => { }, goForward: async () => { } } satisfies IHistoryService);
+services.registerInstance(IHistoryService, { getHistory: () => [{ resource: URI.file('/workspace/closed.ts') }], goBack: async () => { }, goForward: async () => { }, reopenLastClosedEditor: async () => { } } satisfies IHistoryService);
 const openedEditors = document.createElement('output');
 openedEditors.setAttribute('aria-label', 'Opened editor count');
 openedEditors.textContent = '0';

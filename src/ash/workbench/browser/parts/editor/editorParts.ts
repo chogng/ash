@@ -16,7 +16,7 @@ import type { EditorGroupId, EditorIdentifier, EditorPartChangeEvent, EditorPart
 import type { IAuxiliaryWindow, IAuxiliaryWindowService } from "../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js";
 
 import { editorInputKey } from "./editorTabsControl.js";
-import type { EditorCloseAllOptions, IEditorPart, RecentlyClosedEditor } from "./editorPart.js";
+import type { EditorCloseAllOptions, IEditorPart } from "./editorPart.js";
 import type { IEditorGroupView } from "./editor.js";
 import type { IEditorGroup, IFindGroupScope } from '../../../services/editor/common/editorGroupsService.js';
 import {
@@ -95,9 +95,6 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 	get isModalEditorVisible(): boolean { return this._activePart.isModalEditorVisible; }
 	get editorsMru(): readonly EditorIdentifier[] {
 		return uniqueEditors([this._activePart, ...this.parts.filter(part => part !== this._activePart)].flatMap(part => part.editorsMru));
-	}
-	get recentlyClosedEditors(): readonly RecentlyClosedEditor[] {
-		return [this._activePart, ...this.parts.filter(part => part !== this._activePart)].flatMap(part => part.recentlyClosedEditors);
 	}
 
 	getEditorState(): EditorPartState { return this._activePart.getEditorState(); }
@@ -279,7 +276,6 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 	}
 	getEditorPaneChoices(input?: IResourceEditorInput): readonly IEditorPaneDescriptor[] { return this._activePart.getEditorPaneChoices(input); }
 	reopenActiveEditorWith(preferredEditorId: string): Promise<IEditorPane | undefined> { return this._activePart.reopenActiveEditorWith(preferredEditorId); }
-	reopenClosedEditor(): Promise<boolean> { return this._activePart.reopenClosedEditor(); }
 	saveWorkingSet(id: string, excludedGroups?: readonly EditorGroupId[]): EditorWorkingSet { return this._activePart.saveWorkingSet(id, excludedGroups); }
 	applyWorkingSet(workingSet: EditorWorkingSetTarget, options?: ApplyEditorWorkingSetOptions): Promise<void> { return this._activePart.applyWorkingSet(workingSet, options); }
 	layout(dimension: IDimension): void { this.mainPart.layout(dimension); }

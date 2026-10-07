@@ -52,7 +52,7 @@ export type EditorPartChangeEvent =
 	| { readonly kind: 'groupRemoved'; readonly groupId: EditorGroupId; }
 	| { readonly kind: 'activeGroupChanged'; readonly groupId: EditorGroupId; }
 	| { readonly kind: 'groupVisibilityChanged'; readonly groupId: EditorGroupId; readonly visible: boolean; }
-	| { readonly kind: 'modalEditorChanged'; readonly visible: boolean; }
+	| { readonly kind: 'modalEditorChanged'; readonly visible: boolean; readonly closedEditor?: { readonly input: IResourceEditorInput; readonly paneId: string; }; }
 	| { readonly kind: 'groupChanged'; readonly groupId: EditorGroupId; readonly event: EditorGroupChangeEvent; };
 
 /** Read-only state surface shared by editor services and browser hosts. */

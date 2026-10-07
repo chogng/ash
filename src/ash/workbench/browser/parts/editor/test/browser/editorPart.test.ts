@@ -1268,7 +1268,7 @@ test("EditorPart publishes stable editor identities and working-copy state chang
 	dom.window.close();
 });
 
-test("EditorPart tracks MRU editors, reopens closed inputs, and reopens with another pane", async () => {
+test("EditorPart tracks MRU editors and reopens with another pane", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
 	registry.registerEditorPane(descriptor("test.editor.default", ".ts", () => new TestEditorPane("test.editor.default")));
@@ -1283,11 +1283,6 @@ test("EditorPart tracks MRU editors, reopens closed inputs, and reopens with ano
 	editor.activateEditorMru(1);
 	assert.equal(editor.activeInput, first);
 	assert.deepEqual(editor.editorsMru.map(candidate => candidate.input), [first, second]);
-	assert.equal(await editor.closeEditor(first), true);
-	assert.equal(editor.recentlyClosedEditors[0]?.input, first);
-	assert.equal(await editor.reopenClosedEditor(), true);
-	assert.equal(editor.activeInput?.resource.fsPath, first.resource.fsPath);
-	assert.equal(editor.recentlyClosedEditors.length, 0);
 	const instanceId = editor.getEditorState().activeEditor?.instanceId;
 
 	assert.deepEqual(editor.getEditorPaneChoices().map(candidate => candidate.id), ["test.editor.default", "test.editor.alternate"]);
@@ -1305,9 +1300,13 @@ test('EditorPart does not reopen discarded untitled template content', async () 
 	registry.registerEditorPane(descriptor('test.editor.default', '', () => new TestEditorPane('test.editor.default')));
 	const editor = createEditorPart(dom.window.document.body, { registry });
 	const template: IResourceEditorInput = { resource: URI.parse('untitled:/Untitled-1'), label: 'Untitled-1', initialText: 'template body' };
+	using historyServices = createTestEditorServices(undefined, undefined, dom.window.document);
+	historyServices.registerInstance(IEditorPart, editor);
+	using history = historyServices.createInstance(HistoryService);
 	await editor.openEditor(template);
 	assert.equal(await editor.closeEditor(template), true);
-	assert.deepEqual({ recentlyClosed: editor.recentlyClosedEditors.length, reopened: await editor.reopenClosedEditor() }, { recentlyClosed: 0, reopened: false });
+	await history.reopenLastClosedEditor();
+	assert.equal(editor.activeInput, undefined);
 	editor.dispose();
 	dom.window.close();
 });
@@ -2060,6 +2059,39 @@ test("EditorParts moves an editor to an auxiliary window without changing its in
 	main.dispose();
 	workingCopy.dispose();
 	dom.window.close();
+});
+
+test('HistoryService reopens across editor windows in close order into the active part', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost' });
+	try {
+		const registry = new EditorPaneRegistry();
+		using registration = registry.registerEditorPane(descriptor('ash.test.historyWindows', '.ts', () => new TestEditorPane('ash.test.historyWindows')));
+		using main = createEditorPart(dom.window.document.body, { registry });
+		using windows = new TestAuxiliaryWindowService();
+		using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'workspace', flushInterval: 0 });
+		using parts = createEditorParts(main, windows, container => createAuxiliaryPart(container, registry), {
+			onDidChangeScreenReaderOptimized: Event.None,
+			isScreenReaderOptimized: () => false,
+		} as unknown as IAccessibilityService, storage);
+		using services = createTestEditorServices(undefined, undefined, dom.window.document);
+		services.registerInstance(IEditorPart, parts);
+		using history = services.createInstance(HistoryService);
+		const auxiliary = await parts.createAuxiliaryEditorPart();
+		const older = input('/project/older.ts');
+		const newer = input('/project/newer.ts');
+		await auxiliary.openEditor(older);
+		await auxiliary.closeEditor(older);
+		await main.openEditor(newer);
+		await main.closeEditor(newer);
+		main.domNode.dispatchEvent(new dom.window.Event('focusin', { bubbles: true }));
+		await history.reopenLastClosedEditor();
+		assert.equal(main.activeInput, newer);
+		await history.reopenLastClosedEditor();
+		assert.equal(main.activeInput, older);
+		assert.equal(auxiliary.activeInput, undefined);
+	} finally {
+		dom.window.close();
+	}
 });
 
 test('tab split commands route to an inactive auxiliary window by source group', async () => {

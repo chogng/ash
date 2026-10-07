@@ -1,3 +1,6 @@
+import { TaskQueue } from '../../../../base/common/async.js';
+import { isCancellationError } from '../../../../base/common/errors.js';
+import { Schemas } from '../../../../base/common/network.js';
 import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import type { Range } from '../../../../editor/common/core/range.js';
 import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
@@ -31,6 +34,8 @@ interface HistoryTimeline {
 /** Owns editor and location history and its command availability. */
 export class HistoryService extends Disposable implements IHistoryService {
 	private readonly recentlyOpened = new Map<string, IResourceEditorInput>();
+	private readonly recentlyClosed: Array<{ readonly input: IResourceEditorInput; readonly preferredEditorId: string; readonly index: number; }> = [];
+	private readonly reopenQueue = new TaskQueue();
 	private readonly timelines = new Map<GoFilter, HistoryTimeline>([
 		[GoFilter.NONE, { entries: [], index: -1 }],
 		[GoFilter.EDITS, { entries: [], index: -1 }],
@@ -56,6 +61,10 @@ export class HistoryService extends Disposable implements IHistoryService {
 		super();
 		this.resourceExcludeMatcher = this._register(new ResourceGlobMatcher(() => ({ ...configuration.getValue<IExpression>('files.exclude'), ...configuration.getValue<IExpression>('search.exclude') }), event => event.affectsConfiguration('files.exclude') || event.affectsConfiguration('search.exclude'), workspace, configuration));
 		this.restoreHistory();
+		this._register(toDisposable(() => {
+			this.reopenQueue.clearPending();
+			this.recentlyClosed.length = 0;
+		}));
 		this.canNavigateBack = contextKeyService.createKey('canNavigateBack', false);
 		this.canNavigateForward = contextKeyService.createKey('canNavigateForward', false);
 		this.canNavigateBackInEdits = contextKeyService.createKey('canNavigateBackInEditLocations', false);
@@ -102,7 +111,57 @@ export class HistoryService extends Disposable implements IHistoryService {
 		this.navigate(filter, 1);
 	}
 
+	public async reopenLastClosedEditor(): Promise<void> {
+		await this.reopenQueue.scheduleSkipIfCleared(() => this.reopenClosedEntry());
+	}
+
+	private async reopenClosedEntry(): Promise<void> {
+		while (!this.isDisposed && this.recentlyClosed.length > 0) {
+			const closed = this.recentlyClosed.shift()!;
+			if (this.editorPart.activeGroup.inputs.some(input => input.editorId === closed.input.editorId && extUri.isEqual(input.resource, closed.input.resource))) {
+				continue;
+			}
+			const choices = this.editorPart.getEditorPaneChoices(closed.input);
+			const preferredEditorId = choices.find(choice => choice.id === closed.preferredEditorId)?.id;
+			try {
+				const pane = await this.editorPart.openEditor(closed.input, { preferredEditorId, pinned: true, index: closed.index, ignoreError: true });
+				if (!this.isDisposed) {
+					pane.focus();
+				}
+				return;
+			} catch (error) {
+				if (isCancellationError(error)) {
+					if (!this.isDisposed) {
+						this.recentlyClosed.unshift(closed);
+					}
+					return;
+				}
+				// Missing resources and unavailable providers cannot block older closed editors.
+			}
+		}
+	}
+
+	private recordClosedEditor(input: IResourceEditorInput, paneId: string, index: number): void {
+		if (input.resource.scheme === Schemas.untitled) {
+			return;
+		}
+		const duplicate = this.recentlyClosed.findIndex(closed => closed.preferredEditorId === paneId && closed.input.editorId === input.editorId && extUri.isEqual(closed.input.resource, input.resource));
+		if (duplicate >= 0) {
+			this.recentlyClosed.splice(duplicate, 1);
+		}
+		this.recentlyClosed.unshift({ input, preferredEditorId: paneId, index });
+		if (this.recentlyClosed.length > 20) {
+			this.recentlyClosed.length = 20;
+		}
+	}
+
 	private onEditorsChanged(event: EditorPartChangeEvent): void {
+		if (!this.isDisposed && event.kind === 'groupChanged' && event.event.kind === 'editorClosed' && event.event.reason === 'close') {
+			const editor = event.event.editor;
+			this.recordClosedEditor(editor.input, editor.paneId, editor.index);
+		} else if (!this.isDisposed && event.kind === 'modalEditorChanged' && event.closedEditor) {
+			this.recordClosedEditor(event.closedEditor.input, event.closedEditor.paneId, 0);
+		}
 		if (event.kind === 'groupRemoved' || event.kind === 'groupChanged' && event.event.kind === 'editorClosed') {
 			this.pruneClosedEditors();
 		}

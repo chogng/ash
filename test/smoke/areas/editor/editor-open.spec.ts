@@ -1,4 +1,4 @@
-import { mkdir, readFile, realpath, writeFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, unlink, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import type { ElectronApplication, Page } from "@playwright/test";
 import { expect, test } from "../../../automation/test.js";
@@ -744,6 +744,60 @@ test("Reopen Editor With switches the active file to Binary Editor", async ({ ta
 
 	await expect(picker).toHaveCount(0);
 	await expect(content.locator(".ash-binary-editor-content")).toContainText("63 6f 6e 73 74");
+});
+
+test('Reopen Closed Editor reads the real file again and preserves its tab position', async ({ target, testWorkspace, workbench }) => {
+	test.skip(target.appServerMode !== 'required', 'Requires the real App Server file provider.');
+	const page = workbench.page;
+	const group = workbench.editors.groupAt(0);
+	const explorer = page.locator('.ash-explorer');
+	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
+	await explorer.getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
+	await group.editor.waitForEditorContents(text => text === 'const value = 1;\n');
+	await explorer.getByRole('treeitem', { name: 'main.rs', exact: true }).dblclick();
+	await group.tabs.filter({ hasText: 'main.ts' }).click();
+	await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
+	await expect(group.tabs.filter({ hasText: 'main.ts' })).toHaveCount(0);
+	await writeFile(testWorkspace.file, 'const reopened = 2026;\n');
+	await workbench.quickaccess.runCommand('workbench.action.reopenClosedEditor');
+	await group.editor.waitForEditorContents(text => text === 'const reopened = 2026;\n');
+	await expect(group.tabs.filter({ hasText: 'main.ts' })).toHaveAttribute('aria-selected', 'true');
+	await expect(group.tabs).toHaveText([/main\.ts/u, /main\.rs/u]);
+	await expect(group.editor.input).toBeFocused();
+	await explorer.getByRole('treeitem', { name: 'Cargo.toml', exact: true }).click();
+	await expect(group.tabs.filter({ hasText: 'main.ts' })).toHaveCount(1);
+	await group.tabs.filter({ hasText: 'main.ts' }).click();
+	await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
+	await page.keyboard.press('ControlOrMeta+Shift+T');
+	await group.editor.waitForEditorContents(text => text === 'const reopened = 2026;\n');
+	await expect(group.editor.input).toBeFocused();
+});
+
+test('Reopen Closed Editor skips a deleted real file and does not restore replaced previews', async ({ target, testWorkspace, workbench }) => {
+	test.skip(target.appServerMode !== 'required', 'Requires the real App Server file provider.');
+	await writeFile(join(testWorkspace.directory, 'history-preview-a.ts'), 'const previewA = 1;\n');
+	await writeFile(join(testWorkspace.directory, 'history-preview-b.ts'), 'const previewB = 2;\n');
+	const group = workbench.editors.groupAt(0);
+	const explorer = workbench.page.locator('.ash-explorer');
+	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
+	await explorer.getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
+	await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
+	await explorer.getByRole('treeitem', { name: 'main.rs', exact: true }).dblclick();
+	await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
+	await unlink(join(testWorkspace.directory, 'main.rs'));
+	await workbench.quickaccess.runCommand('workbench.action.reopenClosedEditor');
+	await group.editor.waitForEditorContents(text => text === 'const value = 1;\n');
+	await expect(group.tabs).toHaveCount(1);
+	await expect(group.tabs.filter({ hasText: 'main.ts' })).toHaveAttribute('aria-selected', 'true');
+	await expect(workbench.page.locator('.ash-editor-open-error')).toHaveCount(0);
+	await explorer.getByRole('treeitem', { name: 'history-preview-a.ts', exact: true }).click();
+	await explorer.getByRole('treeitem', { name: 'history-preview-b.ts', exact: true }).click();
+	await expect(group.tabs.filter({ hasText: 'history-preview-a.ts' })).toHaveCount(0);
+	await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
+	await workbench.quickaccess.runCommand('workbench.action.reopenClosedEditor');
+	await expect(group.tabs.filter({ hasText: 'history-preview-b.ts' })).toHaveAttribute('aria-selected', 'true');
+	await workbench.quickaccess.runCommand('workbench.action.reopenClosedEditor');
+	await expect(group.tabs.filter({ hasText: 'history-preview-a.ts' })).toHaveCount(0);
 });
 
 test("Close Editor command closes the active tab", async ({ target, workbench }) => {

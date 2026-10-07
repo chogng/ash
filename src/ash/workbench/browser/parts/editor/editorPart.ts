@@ -87,7 +87,6 @@ export interface IEditorPart extends IEditorStateSource, IDisposable {
 	readonly activePane: IEditorPane | undefined;
 	readonly isModalEditorVisible: boolean;
 	readonly editorsMru: readonly EditorIdentifier[];
-	readonly recentlyClosedEditors: readonly RecentlyClosedEditor[];
 
 	openEditor(input: IResourceEditorInput, options?: EditorOpenOptions, target?: EditorOpenTarget): Promise<IEditorPane>;
 	activateEditor(input: IResourceEditorInput): IEditorPane;
@@ -107,16 +106,10 @@ export interface IEditorPart extends IEditorStateSource, IDisposable {
 	splitActiveGroupVertical(): Promise<void>;
 	getEditorPaneChoices(input?: IResourceEditorInput): readonly IEditorPaneDescriptor[];
 	reopenActiveEditorWith(preferredEditorId: string): Promise<IEditorPane | undefined>;
-	reopenClosedEditor(): Promise<boolean>;
 	saveWorkingSet(id: string, excludedGroups?: readonly EditorGroupId[]): EditorWorkingSet;
 	applyWorkingSet(workingSet: EditorWorkingSetTarget, options?: ApplyEditorWorkingSetOptions): Promise<void>;
 	layout(dimension: IDimension): void;
 	focus(): void;
-}
-
-export interface RecentlyClosedEditor {
-	readonly input: IResourceEditorInput;
-	readonly preferredEditorId: string;
 }
 
 export interface EditorCloseAllOptions {
@@ -192,7 +185,6 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	private readonly dialogService: IDialogService | undefined;
 	private readonly fileDialogService: IFileDialogService | undefined;
 	private readonly editorsObserver: EditorsObserver;
-	private readonly recentlyClosed: RecentlyClosedEditor[] = [];
 
 	override get minimumWidth(): number { return Math.max(120, this.editorGrid.minimumWidth); }
 	override get minimumHeight(): number { return 119; }
@@ -433,10 +425,6 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		return this.editorsObserver.editors;
 	}
 
-	get recentlyClosedEditors(): readonly RecentlyClosedEditor[] {
-		return Object.freeze([...this.recentlyClosed]);
-	}
-
 	getEditorState(): EditorPartState {
 		return Object.freeze({
 			groups: Object.freeze(this._groups.map(({ group }) => group.getEditorState())),
@@ -609,8 +597,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			const pane = this.modalEditor.activePane;
 			if (pane && !await this.confirmEditorClose(undefined, input, pane)) return false;
 			if (!this.modalEditor.closeEditor(input)) return false;
-			if (pane) this.addRecentlyClosed(input, pane.id);
-			this.editorChangeEmitter.fire(Object.freeze({ kind: "modalEditorChanged", visible: false }));
+			this.editorChangeEmitter.fire(Object.freeze({ kind: "modalEditorChanged", visible: false, closedEditor: pane ? { input, paneId: pane.id } : undefined }));
 			return true;
 		}
 		return await this._activeGroup.closeEditor(input);
@@ -629,8 +616,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		const inputsByGroup = this._groups.map(({ group }) => ({ group, inputs: [...group.inputs] }));
 		if (modalInput) {
 			this.modalEditor.closeEditor(modalInput);
-			if ((options.reason ?? "close") === "close" && modalPane) this.addRecentlyClosed(modalInput, modalPane.id);
-			this.editorChangeEmitter.fire(Object.freeze({ kind: "modalEditorChanged", visible: false }));
+			this.editorChangeEmitter.fire(Object.freeze({ kind: "modalEditorChanged", visible: false, closedEditor: (options.reason ?? "close") === "close" && modalPane ? { input: modalInput, paneId: modalPane.id } : undefined }));
 		}
 		for (const { group } of inputsByGroup) {
 			for (const input of [...group.inputs]) await group.closeEditor(input, { skipConfirmation: true, reason: options.reason ?? "close" });
@@ -707,22 +693,6 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		const input = this.activeInput;
 		if (!input) return undefined;
 		return await this.openEditor(input, { preferredEditorId, pinned: true }, this.modalEditor.isVisible ? "modalGroup" : "activeGroup");
-	}
-
-	async reopenClosedEditor(): Promise<boolean> {
-		const closed = this.recentlyClosed.shift();
-		if (!closed) return false;
-		try {
-			const choices = this.groupOptions.registry.getEditorPanesForInput(closed.input);
-			const preferredEditorId = choices.some(choice => choice.id === closed.preferredEditorId)
-				? closed.preferredEditorId
-				: undefined;
-			await this.openEditor(closed.input, { ...(preferredEditorId ? { preferredEditorId } : {}), pinned: true });
-			return true;
-		} catch (error) {
-			this.recentlyClosed.unshift(closed);
-			throw error;
-		}
 	}
 
 	protected getFloatingBorderWidth(): number {
@@ -1061,17 +1031,6 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			const autoLock = this.groupOptions.configurationService?.getValue<AutoLockGroups>(AutoLockGroupsConfiguration);
 			if (group?.inputs.length === 1 && autoLock?.[event.editor.paneId]) group.setLocked(true);
 		}
-		if (event.kind !== "editorClosed") return;
-		if (event.reason === "close") this.addRecentlyClosed(event.editor.input, event.editor.paneId);
-	}
-
-	private addRecentlyClosed(input: IResourceEditorInput, preferredEditorId: string): void {
-		if (input.resource.scheme === Schemas.untitled) return;
-		const closed = Object.freeze({ input, preferredEditorId });
-		const duplicate = this.recentlyClosed.findIndex(candidate => editorInputKey(candidate.input) === editorInputKey(closed.input) && candidate.preferredEditorId === closed.preferredEditorId);
-		if (duplicate >= 0) this.recentlyClosed.splice(duplicate, 1);
-		this.recentlyClosed.unshift(closed);
-		if (this.recentlyClosed.length > 20) this.recentlyClosed.length = 20;
 	}
 
 	private setActiveGroup(group: EditorGroupView): void {

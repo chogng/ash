@@ -12,6 +12,8 @@ export interface IHistoryService {
 	getHistory(): readonly IResourceEditorInput[];
 	goBack(filter?: GoFilter): Promise<void>;
 	goForward(filter?: GoFilter): Promise<void>;
+	/** Reopens the most recently closed available editor as a pinned tab. */
+	reopenLastClosedEditor(): Promise<void>;
 }
 
 export const IHistoryService = createServiceIdentifier<IHistoryService>('historyService');
