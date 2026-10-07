@@ -507,3 +507,87 @@ test('Settings JSON rejects invalid values and preserves dirty edits during a co
 	await expect(tab.locator('..')).toHaveAttribute('data-state', /dirty|conflict/u);
 	await group.editor.waitForEditorContents(content => content.includes('18'));
 });
+test('Electron backup shutdown failure resumes editing and a later close restores the new draft', async ({ target, application, workbench, reloadWorkbench, runningApplication }, testInfo) => {
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'disabled');
+	if (!('windows' in application)) throw new Error('Expected the isolated Electron application');
+	const page = workbench.page;
+	await page.keyboard.press('ControlOrMeta+N');
+	const group = workbench.editors.groupAt(0);
+	await group.editor.input.focus();
+	await group.editor.input.type('before failed close');
+	const backupContents = (): Promise<string[]> => page.evaluate(async () => {
+		const database = await new Promise<IDBDatabase>((resolve, reject) => {
+			const request = indexedDB.open('ash-working-copy-backups', 1);
+			request.onsuccess = () => resolve(request.result);
+			request.onerror = () => reject(request.error);
+		});
+		try {
+			return await new Promise<string[]>((resolve, reject) => {
+				const request = database.transaction('backups', 'readonly').objectStore('backups').getAll();
+				request.onsuccess = () => resolve(request.result.map((record: { content: string; }) => record.content));
+				request.onerror = () => reject(request.error);
+			});
+		} finally { database.close(); }
+	});
+	await expect.poll(backupContents).toContain('before failed close');
+	await application.evaluate(({ dialog }) => {
+		const state = globalThis as typeof globalThis & { backupCloseDialogs: string[]; restoreBackupCloseDialogs(): void; };
+		const original = dialog.showMessageBox;
+		state.backupCloseDialogs = [];
+		dialog.showMessageBox = (async (...args: unknown[]) => {
+			state.backupCloseDialogs.push((args.at(-1) as { message: string; }).message);
+			return { response: 0, checkboxChecked: false };
+		}) as typeof dialog.showMessageBox;
+		state.restoreBackupCloseDialogs = () => { dialog.showMessageBox = original; };
+	});
+	await page.evaluate(() => {
+		const original = IDBDatabase.prototype.transaction;
+		const state = globalThis as typeof globalThis & { backupCloseFault: { calls: number; failedAt: number; fired: boolean; restore(): void; }; };
+		state.backupCloseFault = { calls: 0, failedAt: 0, fired: false, restore: () => { IDBDatabase.prototype.transaction = original; } };
+		IDBDatabase.prototype.transaction = function (this: IDBDatabase, ...args: Parameters<typeof original>): ReturnType<typeof original> {
+			if (this.name === 'ash-working-copy-backups' && args[1] === 'readwrite') {
+				// The first store is the before-shutdown check; fail the final joined drain.
+				if (++state.backupCloseFault.calls === 2) {
+					state.backupCloseFault.failedAt = state.backupCloseFault.calls;
+					state.backupCloseFault.fired = true;
+					throw new DOMException('Injected final backup shutdown failure', 'InvalidStateError');
+				}
+			}
+			return original.apply(this, args);
+		};
+	});
+	let restored = false;
+	try {
+		const window = await application.browserWindow(page);
+		await window.evaluate(window => window.close());
+		await expect.poll(() => page.evaluate(() => (globalThis as typeof globalThis & { backupCloseFault: { calls: number; fired: boolean; }; }).backupCloseFault.fired)).toBe(true);
+		await expect.poll(() => application.evaluate(() => (globalThis as typeof globalThis & { backupCloseDialogs: string[]; }).backupCloseDialogs)).toEqual(['The window could not close because its state was not saved.']);
+		await expect.poll(() => page.evaluate(() => document.body.inert)).toBe(false);
+		expect(runningApplication.diagnostics.consoleErrors.filter(message => /Failed to save window state before closing/u.test(message))).toHaveLength(1);
+		expect(runningApplication.diagnostics.consoleErrors.some(message => /shutdown participants failed/u.test(message))).toBe(true);
+		const fault = await page.evaluate(() => {
+			const state = (globalThis as typeof globalThis & { backupCloseFault: { calls: number; failedAt: number; fired: boolean; restore(): void; }; }).backupCloseFault;
+			state.restore();
+			return { calls: state.calls, failedAt: state.failedAt, fired: state.fired, inert: document.body.inert };
+		});
+		// Recovery can already have retried pending writes; the injected failure stays at the final join.
+		expect(fault).toMatchObject({ failedAt: 2, fired: true, inert: false });
+		expect(fault.calls).toBeGreaterThanOrEqual(fault.failedAt);
+		await application.evaluate(() => (globalThis as typeof globalThis & { restoreBackupCloseDialogs(): void; }).restoreBackupCloseDialogs());
+		restored = true;
+		await group.editor.input.focus();
+		await group.editor.input.press('ControlOrMeta+A');
+		await group.editor.input.type('after failed close');
+		await expect.poll(backupContents).toContain('after failed close');
+		const errors = [...runningApplication.diagnostics.consoleErrors];
+		({ workbench } = await reloadWorkbench());
+		await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'Untitled-1' })).toHaveCount(1);
+		await expect(workbench.editors.groupAt(0).editor.lines).toHaveText(['after failed close']);
+		await testInfo.attach('backup-shutdown-failure-retry', { body: JSON.stringify({ fault, expectedFailure: errors, subsequentEditDurable: true, retryCloseAndRestore: true }), contentType: 'application/json' });
+	} finally {
+		if (!restored && !page.isClosed()) {
+			await page.evaluate(() => (globalThis as typeof globalThis & { backupCloseFault: { restore(): void; }; }).backupCloseFault.restore());
+			await application.evaluate(() => (globalThis as typeof globalThis & { restoreBackupCloseDialogs(): void; }).restoreBackupCloseDialogs());
+		}
+	}
+});
