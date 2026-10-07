@@ -1,5 +1,34 @@
 import { chromium, expect, test } from '@playwright/test';
 
+test('picked-folder file streams preserve the requested byte range', async ({ page }) => {
+	await page.goto('/files.html');
+	await page.evaluate(() => window.ashFilesIntegration.prepareBrowserWatch('unavailable'));
+	await page.evaluate(() => window.ashFilesIntegration.changeBrowserFile('range.txt', '0123456789'));
+	expect(await page.evaluate(() => window.ashFilesIntegration.readBrowserStream('range.txt', 2, 5))).toEqual([50, 51, 52, 53, 54]);
+});
+
+test('closing browser storage aborts pending writes and rejects new transactions', async ({ page }) => {
+	await page.goto('/files.html');
+	expect(await page.evaluate(() => window.ashFilesIntegration.abortDatabaseWrite())).toEqual({ pendingBefore: true, pendingAfter: false, rejected: true, persisted: false, closed: true });
+});
+
+test('browser files notify another window through storage events when BroadcastChannel is unavailable', async ({ page, context }) => {
+	await context.addInitScript(() => Object.defineProperty(window, 'BroadcastChannel', { configurable: true, value: undefined }));
+	await page.goto('/files.html');
+	const other = await context.newPage();
+	try {
+		await other.goto('/files.html');
+		await expect.poll(() => other.evaluate(() => Boolean(window.ashFilesIntegration))).toBe(true);
+		const baseline = await other.evaluate(() => window.ashFilesIntegration.changes);
+		await page.evaluate(() => window.ashFilesIntegration.write('first notification'));
+		await expect.poll(() => other.evaluate(() => window.ashFilesIntegration.changes)).toBeGreaterThan(baseline);
+		const first = await other.evaluate(() => window.ashFilesIntegration.changes);
+		await page.evaluate(() => window.ashFilesIntegration.write('second notification'));
+		await expect.poll(() => other.evaluate(() => window.ashFilesIntegration.changes)).toBeGreaterThan(first);
+		expect((await other.evaluate(() => window.ashFilesIntegration.read())).content).toBe('second notification');
+	} finally { await other.close(); }
+});
+
 test('picked-folder foreground fallback revalidates after external create, update and delete and stops with the watch', async ({ page }) => {
 	await page.goto('/files.html');
 	await page.evaluate(() => window.ashFilesIntegration.prepareBrowserWatch('unavailable'));

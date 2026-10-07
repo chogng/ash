@@ -1,3 +1,5 @@
+import { consumeStream, newWriteableStream, type ReadableStream, type ReadableStreamEvents } from './stream.js';
+
 let textEncoder: TextEncoder | undefined;
 let textDecoder: TextDecoder | undefined;
 
@@ -105,6 +107,34 @@ export function decodeBase64(encoded: string): VSBuffer {
 }
 
 const hexChars = '0123456789abcdef';
+
+export interface VSBufferReadableStream extends ReadableStream<VSBuffer> { }
+
+export function streamToBuffer(stream: ReadableStreamEvents<VSBuffer>): Promise<VSBuffer> {
+	return consumeStream(stream, chunks => VSBuffer.concat(chunks));
+}
+
+export function bufferToStream(buffer: VSBuffer): VSBufferReadableStream {
+	const stream = newWriteableStream<VSBuffer>(chunks => VSBuffer.concat(chunks));
+	stream.end(buffer);
+	return stream;
+}
+
+export function encodeBase64({ buffer }: VSBuffer, padded = true, urlSafe = false): string {
+	const alphabet = urlSafe ? 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_' : 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+	const parts: string[] = [];
+	let chunk = '';
+	for (let offset = 0; offset < buffer.byteLength; offset += 3) {
+		const remaining = buffer.byteLength - offset;
+		const value = (buffer[offset]! << 16) | ((buffer[offset + 1] ?? 0) << 8) | (buffer[offset + 2] ?? 0);
+		chunk += alphabet[(value >>> 18) & 63]! + alphabet[(value >>> 12) & 63]!;
+		if (remaining > 1) { chunk += alphabet[(value >>> 6) & 63]!; } else if (padded) { chunk += '='; }
+		if (remaining > 2) { chunk += alphabet[value & 63]!; } else if (padded) { chunk += '='; }
+		if (chunk.length >= 8192) { parts.push(chunk); chunk = ''; }
+	}
+	parts.push(chunk);
+	return parts.join('');
+}
 
 export function encodeHex({ buffer }: VSBuffer): string {
 	let result = '';

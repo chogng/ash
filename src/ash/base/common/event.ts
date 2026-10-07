@@ -8,6 +8,10 @@ export interface Event<T> {
 export namespace Event {
 	export const None: Event<any> = () => noneDisposable;
 
+	export function map<T, R>(event: Event<T>, transform: (value: T) => R): Event<R> {
+		return (listener, thisArgs, disposables) => event(value => listener.call(thisArgs, transform(value)), undefined, disposables);
+	}
+
 	export function any<T>(...events: Event<T>[]): Event<T>;
 	export function any(...events: Event<any>[]): Event<void>;
 	export function any<T>(...events: Event<T>[]): Event<T> {

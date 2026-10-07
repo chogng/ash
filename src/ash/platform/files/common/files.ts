@@ -1,6 +1,9 @@
 import type { Event } from "../../../base/common/event.js";
 import type { IDisposable } from "../../../base/common/lifecycle.js";
 import type { URI } from "../../../base/common/uri.js";
+import type { CancellationToken } from '../../../base/common/cancellation.js';
+import type { VSBufferReadableStream } from '../../../base/common/buffer.js';
+import type { ReadableStreamEvents } from '../../../base/common/stream.js';
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
 
 /** Stable file kind used by Workbench consumers independently of wire DTOs. */
@@ -55,7 +58,9 @@ export type FileDeleteMode = "fileOrEmptyDirectory" | "recursive";
 export enum FileSystemProviderCapabilities {
 	None = 0,
 	FileReadWrite = 1 << 1,
+	FileOpenReadWriteClose = 1 << 2,
 	FileFolderCopy = 1 << 3,
+	FileReadStream = 1 << 4,
 	Readonly = 1 << 11,
 }
 
@@ -69,6 +74,73 @@ export interface IFileWriteOptions {
 export interface IWatchOptions {
 	readonly recursive: boolean;
 	readonly excludes: readonly string[];
+}
+
+export enum FileSystemProviderErrorCode {
+	FileExists = 'EntryExists',
+	FileNotFound = 'EntryNotFound',
+	FileNotADirectory = 'EntryNotADirectory',
+	FileIsADirectory = 'EntryIsADirectory',
+	FileExceedsStorageQuota = 'EntryExceedsStorageQuota',
+	FileTooLarge = 'EntryTooLarge',
+	FileWriteLocked = 'EntryWriteLocked',
+	NoPermissions = 'NoPermissions',
+	Unavailable = 'Unavailable',
+	Unknown = 'Unknown',
+}
+
+export interface IFileSystemProviderError extends Error {
+	readonly code: FileSystemProviderErrorCode;
+}
+
+export class FileSystemProviderError extends Error implements IFileSystemProviderError {
+	constructor(message: string, public readonly code: FileSystemProviderErrorCode) {
+		super(message);
+		this.name = `${code} (FileSystemError)`;
+	}
+}
+
+export function createFileSystemProviderError(error: Error | string, code: FileSystemProviderErrorCode): FileSystemProviderError {
+	return new FileSystemProviderError(typeof error === 'string' ? error : error.message, code);
+}
+
+/** Revives the stable category retained by channel error serialization. */
+export function toFileSystemProviderErrorCode(error: Error | undefined | null): FileSystemProviderErrorCode {
+	if (error instanceof FileSystemProviderError) { return error.code; }
+	if (error?.name === 'FileNotFoundError') { return FileSystemProviderErrorCode.FileNotFound; }
+	if (error?.name === 'FileOperationNotSupportedError') { return FileSystemProviderErrorCode.Unavailable; }
+	return Object.values(FileSystemProviderErrorCode).find(code => error?.name === `${code} (FileSystemError)`) ?? FileSystemProviderErrorCode.Unknown;
+}
+
+export interface IFileReadLimits { readonly size?: number; }
+
+export interface IFileReadStreamOptions {
+	readonly position?: number;
+	readonly length?: number;
+	readonly limits?: IFileReadLimits;
+}
+
+export interface IReadFileStreamOptions extends IFileReadStreamOptions { }
+
+export interface IFileStreamContent extends IFileStat {
+	readonly value: VSBufferReadableStream;
+}
+
+export interface IFileOpenOptions { readonly create: boolean; }
+
+export interface IFileSystemProviderWithFileReadStreamCapability extends IFileSystemProvider {
+	readFileStream(resource: URI, options: IFileReadStreamOptions, token: CancellationToken): ReadableStreamEvents<Uint8Array>;
+}
+
+export interface IFileSystemProviderWithOpenReadWriteCloseCapability extends IFileSystemProvider {
+	open(resource: URI, options: IFileOpenOptions): Promise<number>;
+	read(fd: number, position: number, data: Uint8Array, offset: number, length: number): Promise<number>;
+	write(fd: number, position: number, data: Uint8Array, offset: number, length: number): Promise<number>;
+	close(fd: number): Promise<void>;
+}
+
+export function hasFileReadStreamCapability(provider: IFileSystemProvider): provider is IFileSystemProviderWithFileReadStreamCapability {
+	return (provider.capabilities & FileSystemProviderCapabilities.FileReadStream) !== 0;
 }
 
 /** The file changed after a caller read its revision, so its write was rejected. */
@@ -119,6 +191,7 @@ export interface IFileService {
 	readDirectory(resource: URI): Promise<readonly IFileEntry[]>;
 	readFile(resource: URI): Promise<IFileContent>;
 	readFileBytes(resource: URI): Promise<IFileBytes>;
+	readFileStream(resource: URI, options?: IReadFileStreamOptions, token?: CancellationToken): Promise<IFileStreamContent>;
 	writeFile(request: IFileWriteRequest): Promise<IFileWriteResult>;
 	/** Imports exact bytes and rejects any existing file, including an empty one. */
 	writeFileBytes(resource: URI, bytes: Uint8Array): Promise<IFileWriteResult>;
@@ -134,16 +207,16 @@ export interface IFileService {
 	hasCapability(resource: URI, capability: FileSystemProviderCapabilities): boolean;
 }
 
-export class FileNotFoundError extends Error {
+export class FileNotFoundError extends FileSystemProviderError {
 	constructor(readonly resource: URI) {
-		super(`File does not exist: ${resource.toString()}`);
+		super(`File does not exist: ${resource.toString()}`, FileSystemProviderErrorCode.FileNotFound);
 		this.name = "FileNotFoundError";
 	}
 }
 
-export class FileOperationNotSupportedError extends Error {
+export class FileOperationNotSupportedError extends FileSystemProviderError {
 	constructor(readonly resource: URI, readonly operation: string) {
-		super(`File operation '${operation}' is not supported for ${resource.toString()}`);
+		super(`File operation '${operation}' is not supported for ${resource.toString()}`, FileSystemProviderErrorCode.Unavailable);
 		this.name = "FileOperationNotSupportedError";
 	}
 }

@@ -1,6 +1,8 @@
 import { CancellationTokenSource, type CancellationToken } from './cancellation.js';
 import { canceled, CancellationError, isCancellationError } from './errors.js';
 import { AbstractDisposable, DisposableStore, toDisposable, type IDisposable } from './lifecycle.js';
+import { extUri, type IExtUri } from './resources.js';
+import type { URI } from './uri.js';
 
 export interface CancelablePromise<T> extends Promise<T> {
 	cancel(): void;
@@ -409,6 +411,33 @@ export class TaskQueue {
 		} finally {
 			this.running = false;
 		}
+	}
+}
+
+/** Serializes operations on the same resource and drops each queue when it becomes empty. */
+export class ResourceQueue extends AbstractDisposable {
+	private readonly queues = new Map<string, { queue: TaskQueue; size: number; }>();
+
+	public queueFor<T>(resource: URI, factory: () => Promise<T>, identity: IExtUri = extUri): Promise<T> {
+		if (this.isDisposed) { return Promise.reject(canceled()); }
+		const key = identity.getComparisonKey(resource);
+		let entry = this.queues.get(key);
+		if (!entry) {
+			entry = { queue: new TaskQueue(), size: 0 };
+			this.queues.set(key, entry);
+		}
+		entry.size++;
+		const current = entry;
+		return entry.queue.schedule(factory).finally(() => {
+			if (--current.size === 0 && this.queues.get(key) === current) {
+				this.queues.delete(key);
+			}
+		});
+	}
+
+	protected override disposeCore(): void {
+		for (const entry of this.queues.values()) { entry.queue.clearPending(); }
+		this.queues.clear();
 	}
 }
 

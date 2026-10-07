@@ -66,11 +66,11 @@ import { WorkspacesHistoryMainService, workspacesHistoryChannel } from '../../pl
 import { recentWorkspaceUri, type IRecent } from '../../platform/workspaces/common/workspaces.js';
 import { Schemas } from '../../base/common/network.js';
 import { resolveHome } from "../../platform/home/node/home.js";
-import { diskFileSystemProviderRoutes } from "../../platform/files/electron-main/diskFileSystemProviderServer.js";
+import { DiskFileSystemProviderChannel } from "../../platform/files/electron-main/diskFileSystemProviderServer.js";
 import { URI } from "../../base/common/uri.js";
 import { extUriBiasedIgnorePathCase } from '../../base/common/resources.js';
 import { DiskFileSystemProvider } from "../../platform/files/node/diskFileSystemProvider.js";
-import { LOCAL_FILE_SYSTEM_CHANGED_CHANNEL } from "../../platform/files/common/diskFileSystemProviderClient.js";
+import { LOCAL_FILE_SYSTEM_CHANNEL_NAME } from "../../platform/files/common/diskFileSystemProviderClient.js";
 import { IWindowsMainService, WindowControlsOverlay, type IOpenConfiguration } from "../../platform/windows/electron-main/windows.js";
 import { RESTORE_WINDOWS_SETTING, TitleBarSetting, parseTitleBarStyle, validateOpenEmptyWindowOptions, type IOpenEmptyWindowOptions, type TitleBarStyleConfiguration } from "../../platform/window/common/window.js";
 import { WindowsStateHandler, WindowSessionStateHandler, type IWindowSessionEntry, type IWindowSessionWindow } from "../../platform/windows/electron-main/windowsStateHandler.js";
@@ -177,13 +177,6 @@ type WindowSessionEntry =
 	| { readonly kind: 'sessions'; readonly workspace: IAnyWorkspaceIdentifier; };
 
 const AGENTS_WINDOW_KEY = 'agents';
-
-async function watchProfileFiles(profileRoot: string, provider: DiskFileSystemProvider, window: BrowserWindow, resources: DisposableStore): Promise<void> {
-	await mkdir(join(profileRoot, 'themes'), { recursive: true });
-	resources.add(provider.onDidChangeFiles(event => window.webContents.send(LOCAL_FILE_SYSTEM_CHANGED_CHANNEL, event.resources?.map(resource => resource.toString()))));
-	resources.add(provider.onDidWatchError(error => console.error('Failed to watch user profile files', error)));
-	resources.add(provider.watch(URI.file(profileRoot), { recursive: true, excludes: ['**/*.tmp'] }));
-}
 
 /** Owns the Electron application's persistent services, Workbench windows, IPC, and shutdown. */
 export class AshApplication extends Disposable {
@@ -398,6 +391,12 @@ export class AshApplication extends Disposable {
 		await this.createPersistentServices(token);
 		throwIfCancelled(token);
 		this.mainProcessIpcServer.registerChannel('configuration', configurationChannel(this.services.configuration));
+		await mkdir(join(this.profileRoot, 'themes'), { recursive: true });
+		throwIfCancelled(token);
+		const profileFiles = this._register(new DiskFileSystemProvider([URI.file(this.profileRoot)]));
+		this._register(profileFiles.onDidWatchError(error => this.logService.error('files', 'Failed to watch user profile files', error)));
+		this._register(profileFiles.watch(URI.file(this.profileRoot), { recursive: true, excludes: ['**/*.tmp'] }));
+		this.mainProcessIpcServer.registerChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME, this._register(new DiskFileSystemProviderChannel(profileFiles, URI.file(this.profileRoot))));
 		this.mainProcessIpcServer.registerChannel('keyboardLayout', keyboardLayoutChannel(this.nativeKeyboardLayout));
 		this.mainProcessIpcServer.registerChannel('userKeyboardLayout', userKeyboardLayoutChannel(this.services.userKeyboardLayout));
 		this.mainProcessIpcServer.registerChannel('update', new UpdateChannel(this.updateMainService));
@@ -1246,7 +1245,6 @@ export class AshApplication extends Disposable {
 		const windowControlsOverlay = new WindowControlsOverlay(colors => {
 			if (titleBarStyle === 'custom' && (process.platform === 'win32' || process.platform === 'linux')) window.setTitleBarOverlay(colors);
 		});
-		const profileFiles = windowDisposables.add(new DiskFileSystemProvider([URI.file(this.profileRoot)]));
 		const ipcRoutes = [
 			...this.mainProcessIpcRoutes(window),
 			...workspaceHost.routes(),
@@ -1300,11 +1298,9 @@ export class AshApplication extends Disposable {
 					bindings.filter(binding => binding.commandId === OPEN_AGENTS_WINDOW_COMMAND_ID),
 				),
 			}),
-			...diskFileSystemProviderRoutes(profileFiles, URI.file(this.profileRoot)),
 			...workspaceContextIpcRoutes(workspaceContext),
 			workspaceRecoveryIpcRoute(identifiers => this.windowsMainService.restoreWorkspaces(identifiers, async identifier => (await this.openWorkspace(identifier, workspaces))?.window)),
 		];
-		await watchProfileFiles(this.profileRoot, profileFiles, window, windowDisposables);
 		const systemContextMenu = windowDisposables.add(new ElectronContextMenu(window));
 		ipcRoutes.push(...this.contextMenuIpcRoutes(systemContextMenu));
 		if (this.nativeMenubar) {
@@ -1515,7 +1511,6 @@ export class AshApplication extends Disposable {
 						host: electronRemoteWindowMainHost(window, this.dialogs),
 						prepareForRuntimeReplacement: () => window.webContents.send("ash:terminal:prepareReplacement"),
 					}));
-					const profileFiles = windowDisposables.add(new DiskFileSystemProvider([URI.file(this.profileRoot)]));
 					const ipcRoutes = [
 						...this.mainProcessIpcRoutes(window),
 						...sessionsRelay.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })),
@@ -1553,7 +1548,6 @@ export class AshApplication extends Disposable {
 							validate: validateSystemWideKeybindings,
 							invoke: (bindings: unknown) => this.globalKeybindings.updateKeybindings(window.id, (bindings as readonly INativeSystemWideKeybinding[]).filter(binding => binding.commandId === OPEN_AGENTS_WINDOW_COMMAND_ID)),
 						},
-						...diskFileSystemProviderRoutes(profileFiles, URI.file(this.profileRoot)),
 						...workspaceContextIpcRoutes(session.workspaceContext),
 						{
 							channel: AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL,
@@ -1577,7 +1571,6 @@ export class AshApplication extends Disposable {
 						},
 						windowCloseResponseIpcRoute(this.lifecycleMainService, window),
 					];
-					await watchProfileFiles(this.profileRoot, profileFiles, window, windowDisposables);
 					const systemContextMenu = windowDisposables.add(new ElectronContextMenu(window));
 					ipcRoutes.push(...this.contextMenuIpcRoutes(systemContextMenu));
 					if (this.nativeMenubar) {

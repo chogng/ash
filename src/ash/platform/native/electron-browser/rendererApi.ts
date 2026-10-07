@@ -27,7 +27,7 @@ import { popup as popupContextMenu, close as closeContextMenu } from '../../../b
 import { createNativeKeyboardLayoutApi } from "../../keyboardLayout/electron-browser/nativeKeyboardLayoutApi.js";
 import { createUserKeyboardLayoutApi } from "../../keyboardLayout/electron-browser/userKeyboardLayoutApi.js";
 import { createNativeMenubarApi } from "../../menubar/electron-browser/nativeMenubarApi.js";
-import { DiskFileSystemProviderClient, LOCAL_FILE_SYSTEM_CHANGED_CHANNEL, LOCAL_FILE_SYSTEM_CHANNEL_NAME } from "../../files/common/diskFileSystemProviderClient.js";
+import { DiskFileSystemProviderClient, LOCAL_FILE_SYSTEM_CHANNEL_NAME } from "../../files/common/diskFileSystemProviderClient.js";
 import { URI } from "../../../base/common/uri.js";
 import { createWorkspaceContextApi } from "../../workspace/electron-browser/workspaceContextApi.js";
 import type { AshElectronRendererApi } from "../common/rendererApi.js";
@@ -164,8 +164,8 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			nativeHost: createNativeHostApi(mainProcessService),
 			nativeMenubar: createNativeMenubarApi(),
 			hooks: { ...backend.hooks, userConfigurationEditor: () => invoke<void>(EDIT_USER_HOOKS_CONFIGURATION_CHANNEL) },
-			localFiles: resources.add(new DiskFileSystemProviderClient(request => invoke(LOCAL_FILE_SYSTEM_CHANNEL_NAME, request), listener => subscribe(LOCAL_FILE_SYSTEM_CHANGED_CHANNEL, listener))),
-			userDataHome: URI.parse(await invoke<string>(`${LOCAL_FILE_SYSTEM_CHANNEL_NAME}:userDataHome`)),
+			localFiles: resources.add(new DiskFileSystemProviderClient(mainProcessService.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME))),
+			userDataHome: URI.parse(await mainProcessService.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME).call<string>('userDataHome')),
 			workspace: createWorkspaceContextApi(),
 		};
 	} catch (error) { resources.dispose(); throw error; }

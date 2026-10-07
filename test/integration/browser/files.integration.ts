@@ -1,4 +1,6 @@
 import { addDisposableListener } from '../../../src/ash/base/browser/dom.js';
+import { IndexedDB, DBClosedError } from '../../../src/ash/base/browser/indexedDB.js';
+import { streamToBuffer } from '../../../src/ash/base/common/buffer.js';
 import { DisposableStore, toDisposable, type IDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
@@ -96,6 +98,28 @@ function trackForegroundListeners(target: EventTarget, eventType: string): void 
 
 const textInput = { resource: URI.parse('review:/content.txt'), label: 'Provider text', languageId: 'plaintext' };
 const integration = {
+	async readBrowserStream(name: string, position: number, length: number): Promise<number[]> {
+		const content = await browserFiles.readFileStream(browserWatchRoot.joinPathSegment(name), { position, length });
+		try { return [...(await streamToBuffer(content.value)).buffer]; }
+		finally { content.value.destroy(); }
+	},
+	async abortDatabaseWrite(): Promise<{ pendingBefore: boolean; pendingAfter: boolean; rejected: boolean; persisted: boolean; closed: boolean; }> {
+		const name = `ash-files-close-${crypto.randomUUID()}`;
+		const database = await IndexedDB.create(name, 1, ['files']);
+		const write = database.runInTransaction('files', 'readwrite', store => store.put('uncommitted', 'key'));
+		const pendingBefore = database.hasPendingTransactions();
+		database.close();
+		const rejected = await write.then(() => false, () => true);
+		const closed = await database.runInTransaction('files', 'readonly', store => store.get('key')).then(() => false, error => error instanceof DBClosedError);
+		const reopened = await IndexedDB.create(name, 1, ['files']);
+		try {
+			const value = await reopened.runInTransaction('files', 'readonly', store => store.get('key'));
+			return { pendingBefore, pendingAfter: database.hasPendingTransactions(), rejected, persisted: value !== undefined, closed };
+		} finally {
+			reopened.close();
+			indexedDB.deleteDatabase(name);
+		}
+	},
 	get changes(): number { return changes; },
 	async prepareBrowserWatch(mode: 'unavailable' | 'available' | 'rejected' | 'pending' | 'real', recursive = true, excludes: string[] = []): Promise<string> {
 		browserWatchResources.clear();

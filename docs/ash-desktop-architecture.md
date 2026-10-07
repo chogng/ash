@@ -387,18 +387,44 @@ contribution 不得通过该服务直接访问文件系统。单根 Folder 启�
 不存在。App Server 的字节写入使用显式 mode，并由 Rust 在发布锁内完成版本校验。
 `FileService` 按 provider capability 阻止只读修改，能力变化使 metadata 失效。`TextFileService` 继续负责编辑器的
 文本格式、BOM 与保存策略。App Server 通过连接所属的 resource 分块传输文件字节，Renderer
-在读取成功或失败后释放该 resource。文件读取保持既有的 50 MiB 上限；其他 resource 默认
+在读取成功或失败后释放该 resource。`readFileStream()` 按 provider capability 选择分块读取，
+保留位置、长度和大小限制；其他 provider 使用现有字节读取路径。PDF 加载使用这一统一入口并传播本地取消。
+Node 描述符、浏览器 stream reader 和 IPC 订阅各由创建者释放。文件读取保持既有的 50 MiB 上限；其他 resource 默认
 16 MiB，所有 resource 仍共享每连接 64 MiB 和 128 个句柄的配额。
 
 `FileService.watch()` 对相同 URI 和规范化选项共享 provider 句柄，最后一个调用方释放、provider
 注销或服务销毁时关闭句柄；`WorkspaceWatcher` 随当前目录集合更新注册。Rust 继续拥有授权目录
 的 OS 监听和 `fs/changed`，Renderer 的 watch 不重复建立系统监听。Electron profile 目录的
-OS 监听由 Main 的 `DiskFileSystemProvider` 持有，随窗口关闭释放；用户数据 provider 映射其事件。
-IndexedDB 通过跨窗口消息提供变化通知。浏览器选取的文件夹由 `HTMLFileSystemProvider` 检测并接入
+OS 监听由 Main 中唯一的 `DiskFileSystemProvider` 持有，随应用关闭释放。各窗口通过标准
+`localFilesystem` channel 接收变化；窗口或读取订阅结束时只释放所属 IPC 资源。Node channel
+拥有操作校验、URI / 字节序列化和稳定文件错误分类，Electron channel 提供宿主授予的 profile 入口。
+同路径写入由 `ResourceQueue` 串行，文件发布与 rename 使用共享的 Windows 重试实现。
+IndexedDB 连接和事务由 `base/browser/indexedDB.ts` 管理，关闭时中止未完成事务；revision 校验与写入仍在同一事务。
+`BroadcastDataChannel` 提供跨窗口消息，在缺少 `BroadcastChannel` 时使用 storage event。
+浏览器选取的文件夹由 `HTMLFileSystemProvider` 通过 `webFileSystemAccess.ts` 的浏览器契约检测并接入
 `FileSystemObserver`，把变化和移动前后的路径转成 FileService 事件。观察失效或页面恢复焦点、重新可见时，
 通过失效通知重读打开且未修改的文件和已加载、展开的 Explorer 目录；不支持观察 API 时同样使用这条前台回退路径，
 后台不轮询，也不自动请求权限。最后一个 watch 释放时移除页面监听，取消或卸载 provider 时断开观察器；
 未保存内容继续由文本模型保护，保存时校验内容 revision。
+
+Files 的 import 对齐按当前调用职责核对。工作区系统监听、重扫和跨窗口存活的状态属于 Rust
+`file-watcher` / Workspace；profile 监听直接使用 Node 文件系统，浏览器监听使用其授权句柄。
+对应依赖的职责与落位如下：
+
+| VS Code 依赖职责 | Ash 的调用路径与 owner |
+| --- | --- |
+| 浏览器句柄与观察 API | `webFileSystemAccess.ts` 提供契约，浏览器 host 检测能力，HTML provider 管理授权句柄与观察器 |
+| IndexedDB 连接、事务与跨窗口通知 | `base/browser/indexedDB.ts` 负责提交与关闭；`BroadcastDataChannel` 负责通知和 storage event 回退 |
+| 流、缓冲区、取消与文件描述符 IO | `base/common/stream.ts`、`buffer.ts` 与 `files/common/io.ts`；PDF 和支持流 capability 的 provider 使用同一读取契约 |
+| IPC 操作分派与宿主入口 | `IChannel` 连接客户端与 Node channel；Electron channel 只补充 Main 授予的 profile 入口 |
+| 同资源写入队列与发布重试 | `ResourceQueue` 串行处理，`pfs.Promises.rename` 负责 Windows 重试，provider 保留 revision 校验 |
+| watcher 进程、重扫与持久工作区状态 | Rust `file-watcher` / Workspace；profile 和浏览器分别由各自 provider 管理，不另建 Parcel 或 TypeScript watcher 子进程 |
+| 路径、URI 传输、资源索引与环境注入 | URI、Node path、channel URI 序列化、现有 Map 和 Main 的 root 授权注入分别满足当前调用 |
+
+仅上游使用的内存文件系统、watcher 子进程入口、专用索引和统计接口没有 Ash 生产调用方，
+不通过新增空端口补齐 import。通用 `FileService` 和 provider 契约依赖 base，不依赖 RPC。
+`IFileApi` 是 App Server 文件适配边界的 typed RPC 端口，通用 provider 和 `FileService` 使用独立文件契约。
+文件级静态 import 图用于检查循环依赖，目录间的引用方向不能代替这项检查。
 
 Workspace 内容搜索通过独立的
 `grep/search/start|read|cancel` contract 接入；其 ownership 与限制见

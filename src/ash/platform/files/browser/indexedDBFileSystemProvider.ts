@@ -1,9 +1,27 @@
-import { addDisposableListener } from '../../../base/browser/dom.js';
+import { BroadcastDataChannel } from '../../../base/browser/broadcast.js';
+import { IndexedDB } from '../../../base/browser/indexedDB.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { URI } from '../../../base/common/uri.js';
-import type { IFileSystemProvider } from '../common/files.js';
-import { FileKind, FileNotFoundError, FileRevisionConflictError, FileSystemProviderCapabilities, type IFileStat, type IFileEntry, type IFileBytes, type IFileWriteOptions, type IFileWriteResult, type IFileChangeEvent, type IWatchOptions, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type FileDeleteMode } from '../common/files.js';
+import {
+	createFileSystemProviderError,
+	FileSystemProviderErrorCode,
+	FileKind,
+	FileNotFoundError,
+	FileRevisionConflictError,
+	FileSystemProviderCapabilities,
+	type IFileSystemProvider,
+	type IFileStat,
+	type IFileEntry,
+	type IFileBytes,
+	type IFileWriteOptions,
+	type IFileWriteResult,
+	type IFileChangeEvent,
+	type IWatchOptions,
+	type FileExistingTargetBehavior,
+	type FileMissingTargetBehavior,
+	type FileDeleteMode,
+} from '../common/files.js';
 
 interface Entry {
 	readonly kind: FileKind.File | FileKind.Directory;
@@ -18,22 +36,17 @@ export class IndexedDBFileSystemProvider extends Disposable implements IFileSyst
 	public readonly onDidChangeCapabilities = Event.None;
 	private readonly changes = this._register(new Emitter<IFileChangeEvent>());
 	public readonly onDidChangeFiles = this.changes.event;
-	private readonly channel: BroadcastChannel;
+	private readonly channel: BroadcastDataChannel<null>;
 
-	private constructor(private readonly database: IDBDatabase, private readonly scheme: string) {
+	private constructor(private readonly database: IndexedDB, private readonly scheme: string) {
 		super();
-		this.channel = new BroadcastChannel(database.name);
-		this._register(addDisposableListener(this.channel, 'message', () => this.changes.fire({ resources: undefined })));
-		this._register(toDisposable(() => { this.channel.close(); database.close(); }));
+		this._register(toDisposable(() => database.close()));
+		this.channel = this._register(new BroadcastDataChannel<null>('ash-user-data-files'));
+		this._register(this.channel.onDidReceiveData(() => this.changes.fire({ resources: undefined })));
 	}
 
 	public static async create(factory: IDBFactory, scheme: string): Promise<IndexedDBFileSystemProvider> {
-		const database = await new Promise<IDBDatabase>((resolve, reject) => {
-			const request = factory.open('ash-user-data-files', 1);
-			request.onupgradeneeded = () => request.result.createObjectStore('files');
-			request.onsuccess = () => resolve(request.result);
-			request.onerror = () => reject(request.error);
-		});
+		const database = await IndexedDB.create('ash-user-data-files', 1, ['files'], factory);
 		return new IndexedDBFileSystemProvider(database, scheme);
 	}
 
@@ -44,7 +57,7 @@ export class IndexedDBFileSystemProvider extends Disposable implements IFileSyst
 	public async readDirectory(resource: URI): Promise<readonly IFileEntry[]> {
 		return this.access(false, entries => {
 			if (this.entry(entries, resource).kind !== FileKind.Directory) {
-				throw new TypeError('Expected a directory');
+				throw createFileSystemProviderError('Expected a directory', FileSystemProviderErrorCode.FileNotADirectory);
 			}
 			const prefix = this.key(resource).replace(/\/$/u, '') + '/';
 			return [...entries].filter(([key]) => key.startsWith(prefix) && !key.slice(prefix.length).includes('/'))
@@ -56,7 +69,7 @@ export class IndexedDBFileSystemProvider extends Disposable implements IFileSyst
 		return this.access(false, entries => {
 			const entry = this.entry(entries, resource);
 			if (entry.kind !== FileKind.File) {
-				throw new TypeError('Expected a file');
+				throw createFileSystemProviderError('Expected a file', FileSystemProviderErrorCode.FileIsADirectory);
 			}
 			return { resource, bytes: entry.bytes, revision: entry.revision };
 		});
@@ -72,8 +85,11 @@ export class IndexedDBFileSystemProvider extends Disposable implements IFileSyst
 	public async createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat> {
 		return this.access(true, entries => {
 			const current = entries.get(this.key(resource));
+			if (current?.kind === FileKind.Directory) {
+				throw createFileSystemProviderError('Expected a file', FileSystemProviderErrorCode.FileIsADirectory);
+			}
 			if (current && existing === 'error') {
-				throw new Error('File already exists');
+				throw createFileSystemProviderError('File already exists', FileSystemProviderErrorCode.FileExists);
 			}
 			if (current && existing === 'ignore') {
 				return this.fileStat(resource, current);
@@ -90,7 +106,7 @@ export class IndexedDBFileSystemProvider extends Disposable implements IFileSyst
 			this.parents(entries, resource);
 			const entry = entries.get(this.key(resource)) ?? this.newEntry(FileKind.Directory, new Uint8Array());
 			if (entry.kind !== FileKind.Directory) {
-				throw new TypeError('A file occupies this directory');
+				throw createFileSystemProviderError('A file occupies this directory', FileSystemProviderErrorCode.FileExists);
 			}
 			entries.set(this.key(resource), entry);
 			return this.fileStat(resource, entry);
@@ -126,13 +142,13 @@ export class IndexedDBFileSystemProvider extends Disposable implements IFileSyst
 		return this.access(true, entries => {
 			const key = this.key(resource);
 			const current = entries.get(key);
-			if (current && !options.overwrite) throw new Error('File already exists');
+			if (current && !options.overwrite) throw createFileSystemProviderError('File already exists', FileSystemProviderErrorCode.FileExists);
 			if (!current && !options.create) throw new FileNotFoundError(resource);
 			if (options.expectedRevision !== undefined && current?.revision !== options.expectedRevision) {
 				throw new FileRevisionConflictError(resource);
 			}
 			if (current?.kind === FileKind.Directory) {
-				throw new TypeError('Expected a file');
+				throw createFileSystemProviderError('Expected a file', FileSystemProviderErrorCode.FileIsADirectory);
 			}
 			this.parents(entries, resource);
 			const entry = this.newEntry(FileKind.File, bytes);
@@ -154,7 +170,7 @@ export class IndexedDBFileSystemProvider extends Disposable implements IFileSyst
 					return;
 				}
 				if (existing === 'error') {
-					throw new Error('Target already exists');
+					throw createFileSystemProviderError('Target already exists', FileSystemProviderErrorCode.FileExists);
 				}
 				for (const key of entries.keys()) {
 					if (key === to || key.startsWith(to + '/')) {
@@ -175,40 +191,40 @@ export class IndexedDBFileSystemProvider extends Disposable implements IFileSyst
 		});
 	}
 
-	private access<T>(write: boolean, operation: (entries: Map<string, Entry>) => T): Promise<T> {
+	private async access<T>(write: boolean, operation: (entries: Map<string, Entry>) => T): Promise<T> {
 		this.assertNotDisposed();
-		return new Promise<T>((resolve, reject) => {
-			const transaction = this.database.transaction('files', write ? 'readwrite' : 'readonly');
-			const store = transaction.objectStore('files');
-			const keys = store.getAllKeys();
-			const values = store.getAll();
-			let result: T;
-			let failure: unknown;
-			values.onsuccess = () => {
-				try {
-					const before = new Map(keys.result.map((key, index) => [String(key), values.result[index] as Entry]));
-					const entries = new Map(before);
-					result = operation(entries);
-					if (write) {
-						for (const key of before.keys()) {
-							if (!entries.has(key)) {
-								store.delete(key);
+		let result!: T;
+		let failure: unknown;
+		try {
+			await this.database.runInTransaction('files', write ? 'readwrite' : 'readonly', store => {
+				const keys = store.getAllKeys();
+				const values = store.getAll();
+				values.onsuccess = () => {
+					try {
+						const before = new Map(keys.result.map((key, index) => [String(key), values.result[index] as Entry]));
+						const entries = new Map(before);
+						result = operation(entries);
+						if (write) {
+							for (const key of before.keys()) {
+								if (!entries.has(key)) {
+									store.delete(key);
+								}
+							}
+							for (const [key, entry] of entries) {
+								if (before.get(key) !== entry) {
+									store.put(entry, key);
+								}
 							}
 						}
-						for (const [key, entry] of entries) {
-							if (before.get(key) !== entry) {
-								store.put(entry, key);
-							}
-						}
-					}
-				} catch (error) { failure = error; transaction.abort(); }
-			};
-			transaction.oncomplete = () => {
-				if (write && !this.isDisposed) { this.channel.postMessage(null); this.changes.fire({ resources: undefined }); }
-				resolve(result);
-			};
-			transaction.onabort = transaction.onerror = () => reject(failure ?? transaction.error);
-		});
+					} catch (error) { failure = error; store.transaction.abort(); }
+				};
+				return values;
+			});
+		} catch (error) {
+			throw failure ?? error;
+		}
+		if (write && !this.isDisposed) { this.channel.postData(null); this.changes.fire({ resources: undefined }); }
+		return result;
 	}
 
 	private key(resource: URI): string {
@@ -232,7 +248,7 @@ export class IndexedDBFileSystemProvider extends Disposable implements IFileSyst
 			const key = this.key(resource.with({ path: '/' + segments.slice(0, index).join('/') }));
 			const parent = entries.get(key);
 			if (parent && parent.kind !== FileKind.Directory) {
-				throw new TypeError('Parent is not a directory');
+				throw createFileSystemProviderError('Parent is not a directory', FileSystemProviderErrorCode.FileNotADirectory);
 			}
 			if (!parent) {
 				entries.set(key, this.newEntry(FileKind.Directory, new Uint8Array()));

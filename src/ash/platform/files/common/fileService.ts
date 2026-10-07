@@ -1,7 +1,35 @@
 import { Emitter } from '../../../base/common/event.js';
+import { bufferToStream, VSBuffer, type VSBufferReadableStream } from '../../../base/common/buffer.js';
+import { raceCancellationError } from '../../../base/common/async.js';
+import { CancellationToken, CancellationTokenSource } from '../../../base/common/cancellation.js';
+import { canceled } from '../../../base/common/errors.js';
+import { transform } from '../../../base/common/stream.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
-import { FileKind, FileNotFoundError, FileOperationNotSupportedError, FileSystemProviderCapabilities, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileContent, type IFileEntry, type IFileService, type IFileSystemProvider, type IFileStat, type IFileWriteRequest, type IFileWriteResult, type IWatchOptions } from './files.js';
+import {
+	createFileSystemProviderError,
+	FileSystemProviderErrorCode,
+	FileKind,
+	FileNotFoundError,
+	FileOperationNotSupportedError,
+	FileSystemProviderCapabilities,
+	hasFileReadStreamCapability,
+	type FileDeleteMode,
+	type FileExistingTargetBehavior,
+	type FileMissingTargetBehavior,
+	type IFileBytes,
+	type IFileChangeEvent,
+	type IFileContent,
+	type IFileEntry,
+	type IFileService,
+	type IFileStreamContent,
+	type IReadFileStreamOptions,
+	type IFileSystemProvider,
+	type IFileStat,
+	type IFileWriteRequest,
+	type IFileWriteResult,
+	type IWatchOptions,
+} from './files.js';
 
 interface ProviderRegistration {
 	readonly provider: IFileSystemProvider;
@@ -18,6 +46,7 @@ export class FileService extends Disposable implements IFileService {
 	private readonly providers = new Map<string, ProviderRegistration>();
 	private readonly providerListeners = this._register(new DisposableMap<IFileSystemProvider>());
 	private readonly watches = this._register(new DisposableMap<string, WatchRegistration>());
+	private readonly reads = this._register(new DisposableMap<object, DisposableStore>());
 
 	public readonly onDidChangeFiles = this.changeEmitter.event;
 
@@ -109,6 +138,48 @@ export class FileService extends Disposable implements IFileService {
 		const provider = this.provider(resource);
 		if (!this.hasCapability(resource, FileSystemProviderCapabilities.FileReadWrite)) throw new FileOperationNotSupportedError(resource, 'readFile');
 		return provider.readFile(resource);
+	}
+
+	public async readFileStream(resource: URI, options: IReadFileStreamOptions = {}, token: CancellationToken = CancellationToken.None): Promise<IFileStreamContent> {
+		const provider = this.provider(resource);
+		for (const value of [options.position, options.length, options.limits?.size]) {
+			if (value !== undefined && (!Number.isSafeInteger(value) || value < 0)) { throw new RangeError('Invalid file read range or size'); }
+		}
+		if (token.isCancellationRequested) { throw canceled(); }
+		const lifetime = new DisposableStore();
+		this.reads.set(lifetime, lifetime);
+		const cancellation = new CancellationTokenSource(token);
+		lifetime.add(toDisposable(() => cancellation.dispose(true)));
+		try {
+			const stat = await raceCancellationError(this.stat(resource), cancellation.token);
+			if (stat.kind !== FileKind.File) {
+				throw createFileSystemProviderError('Expected a file', stat.kind === FileKind.Directory ? FileSystemProviderErrorCode.FileIsADirectory : FileSystemProviderErrorCode.Unavailable);
+			}
+			if (options.limits?.size !== undefined && stat.sizeBytes > options.limits.size) {
+				throw createFileSystemProviderError('File exceeds the read size limit', FileSystemProviderErrorCode.FileTooLarge);
+			}
+			let value: VSBufferReadableStream;
+			if (hasFileReadStreamCapability(provider)) {
+				value = transform(provider.readFileStream(resource, options, cancellation.token), { data: bytes => VSBuffer.wrap(Uint8Array.from(bytes)) }, chunks => VSBuffer.concat(chunks));
+			} else {
+				if (!(provider.capabilities & FileSystemProviderCapabilities.FileReadWrite)) { throw new FileOperationNotSupportedError(resource, 'readFileStream'); }
+				const content = await raceCancellationError(provider.readFile(resource), cancellation.token);
+				const start = options.position ?? 0;
+				const bytes = content.bytes.subarray(start, options.length === undefined ? undefined : start + options.length);
+				value = bufferToStream(VSBuffer.wrap(Uint8Array.from(bytes)));
+			}
+			const destroy = value.destroy;
+			value.destroy = (): void => { this.reads.deleteAndDispose(lifetime); destroy(); };
+			lifetime.add(toDisposable(destroy));
+			// Terminal delivery must reach every consumer before cleanup destroys the stream.
+			const release = (): void => { queueMicrotask(() => this.reads.deleteAndDispose(lifetime)); };
+			value.on('error', release);
+			value.on('end', release);
+			return { ...stat, value };
+		} catch (error) {
+			this.reads.deleteAndDispose(lifetime);
+			throw error;
+		}
 	}
 
 	public writeFile(request: IFileWriteRequest): Promise<IFileWriteResult> {

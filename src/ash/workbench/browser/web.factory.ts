@@ -32,6 +32,7 @@ import { BrowserStorageService } from '../services/storage/browser/storageServic
 import { LogService } from '../../platform/log/common/logServiceImpl.js';
 import { ConsoleLogSink } from '../../platform/log/common/consoleLogSink.js';
 import { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
+import { WebFileSystemAccess } from '../../platform/files/browser/webFileSystemAccess.js';
 import { BrowserLifecycleService } from '../services/lifecycle/browser/lifecycleService.js';
 import { onUnexpectedError } from '../../base/common/errors.js';
 import { EMPTY_WORKSPACE_ID_KEY } from '../services/host/browser/browserHostService.js';
@@ -121,8 +122,7 @@ export async function startWebWorkbench(
 			const extensions = createBrowserExtensionApi();
 			api = { ...createDisconnectedRendererApi(), extensions };
 		}
-		const picker = window as Window & { showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle>; };
-		const browserFileSystemProvider = !host && picker.showDirectoryPicker && globalThis.indexedDB
+		const browserFileSystemProvider = !host && WebFileSystemAccess.supported(window) && globalThis.indexedDB
 			? new HTMLFileSystemProvider(globalThis.indexedDB, window)
 			: undefined;
 		const instance = await createWebWorkbench({
