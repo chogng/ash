@@ -321,3 +321,26 @@ test('Output does not overwrite a newer saved schema published after the window 
 	filters.setText('restart');
 	assert.deepEqual({ text: filters.text, notice: filters.textFilterNotice, matches: filters.matches(entry), stored: storage.get('output.filterState', StorageScope.WORKSPACE) }, { text: 'restart', notice: 'unsupported', matches: true, stored: raw });
 });
+
+
+for (const action of ['empty-input', 'same-input', 'empty-reset']) {
+	test(`Output discovers a later future schema on unchanged text and an already-empty reset (${action})`, () => {
+		using resources = new DisposableStore();
+		const storage = filterStorage(resources);
+		const filters = workbenchInstantiationService(resources, storage).get(IOutputService).filters;
+		const query = action === 'same-input' ? 'server' : '';
+		filters.setText(query);
+		const raw = JSON.stringify({ syntaxVersion: 3, text: 'future', future: { untouched: true } });
+		storage.store('output.filterState', raw, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		let changes = 0;
+		using listener = filters.onDidChange(() => changes++);
+		const apply = (): void => action === 'empty-reset' ? filters.reset() : filters.setText(query);
+		apply();
+		assert.deepEqual({ text: filters.text, notice: filters.textFilterNotice, matches: filters.matches(entry), stored: storage.get('output.filterState', StorageScope.WORKSPACE), changes }, {
+			text: query, notice: 'unsupported', matches: true, stored: raw, changes: 1,
+		});
+		apply();
+		assert.equal(changes, 1);
+		assert.equal(storage.get('output.filterState', StorageScope.WORKSPACE), raw);
+	});
+}

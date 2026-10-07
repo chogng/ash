@@ -211,7 +211,10 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 	}
 
 	setText(text: string): void {
-		if (this._text === text && this.textSyntaxVersion === CurrentTextSyntaxVersion) { return; }
+		if (this._text === text && this.textSyntaxVersion === CurrentTextSyntaxVersion) {
+			if (this.preserveNewerStoredState()) { this.changeEmitter.fire(); }
+			return;
+		}
 		// Only restoration can enter the older grammar. Explicit input always leaves it,
 		// including resubmitting the same text, whose meaning may now be different.
 		this.textSyntaxVersion = CurrentTextSyntaxVersion;
@@ -249,7 +252,10 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 	}
 
 	reset(): void {
-		if (!this._text && this.hiddenSeverities.size === 0 && this.hiddenCategories.size === 0 && this.textSyntaxVersion === CurrentTextSyntaxVersion) { return; }
+		if (!this._text && this.hiddenSeverities.size === 0 && this.hiddenCategories.size === 0 && this.textSyntaxVersion === CurrentTextSyntaxVersion) {
+			if (this.preserveNewerStoredState()) { this.changeEmitter.fire(); }
+			return;
+		}
 		this.textSyntaxVersion = CurrentTextSyntaxVersion;
 		this._text = "";
 		this.hiddenSeverities.clear();
@@ -292,14 +298,18 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 		}
 	}
 
+	private preserveNewerStoredState(): boolean {
+		if (this.preserveStoredState) { return false; }
+		// Another window can publish a newer schema after this owner restored.
+		// Check before writes and no-op input so the protection notice stays accurate.
+		const raw = this.storageService.get(OutputFilterStorageKey, StorageScope.WORKSPACE);
+		try { this.preserveStoredState = raw !== undefined && hasUnknownTextSyntaxVersion(JSON.parse(raw)); }
+		catch { /* Malformed JSON has no usable schema; this owner can replace it. */ }
+		return this.preserveStoredState;
+	}
+
 	private persistAndFire(): void {
-		if (!this.preserveStoredState) {
-			// Another window can publish a newer schema after this owner restored.
-			// Recheck before writing so a local filter edit cannot overwrite that state.
-			const raw = this.storageService.get(OutputFilterStorageKey, StorageScope.WORKSPACE);
-			try { this.preserveStoredState = raw !== undefined && hasUnknownTextSyntaxVersion(JSON.parse(raw)); }
-			catch { /* Malformed JSON has no usable schema; this owner can replace it. */ }
-		}
+		this.preserveNewerStoredState();
 		if (!this.preserveStoredState) {
 			const stored: StoredOutputFilterState = { syntaxVersion: this.textSyntaxVersion, text: this._text, hiddenSeverities: [...this.hiddenSeverities], hiddenCategories: [...this.hiddenCategories] };
 			this.storageService.store(OutputFilterStorageKey, JSON.stringify(stored), StorageScope.WORKSPACE, StorageTarget.MACHINE);

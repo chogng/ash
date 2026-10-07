@@ -1,182 +1,177 @@
 import { execFile } from 'node:child_process';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { expect, test } from '../../../automation/test.js';
 
 const execute = promisify(execFile);
 
-test('ordinary Output filters complete backend lines while log records and raw editor text remain intact', async ({ target, testWorkspace, application, workbench }, testInfo) => {
-	test.skip(target.appServerMode !== 'required', 'Requires the real App Server and its isolated test profile.');
-	test.setTimeout(120_000);
-	const packageDirectory = join(testWorkspace.directory, 'output-fixture');
-	const executable = process.platform === 'win32' ? 'output-extension.exe' : 'output-extension';
-	await mkdir(join(packageDirectory, '.ash-plugin'), { recursive: true });
-	await mkdir(join(packageDirectory, 'bin'));
-	await execute('rustc', ['--edition=2024', '-Dwarnings', resolve(import.meta.dirname, '../../../fixtures/output_extension.rs'), '-o', join(packageDirectory, 'bin', executable)], { timeout: 30_000 });
-	// The shared fixture owns this temporary workspace and backend profile. The
-	// installed executable has only its exact process permission, and consumes stdin.
-	await writeFile(join(packageDirectory, '.ash-plugin', 'plugin.json'), JSON.stringify({
-		schemaVersion: 1, id: 'ash/output-filter-fixture', version: '1.0.0', displayName: 'Output Filter Test',
-		compatibility: { ash: '>=0.1.0' },
-		contributions: {
-			editorExtensions: [{
-				id: 'output', runtime: 'hostRpc', entrypoint: `bin/${executable}`, runtimeApiVersion: 1,
-				activationEvents: [{ type: 'startup' }], capabilities: ['command'],
-			}],
-		},
-		permissions: [{ type: 'process', executable: `bin/${executable}` }],
-	}));
-	const page = workbench.page;
-	await workbench.quickaccess.runCommand('ash.extensions.installLocal');
-	const installation = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
-	await installation.getByRole('textbox').fill('output-fixture');
-	const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
-	expect(installed.message).toContain('Installed ash/output-filter-fixture 1.0.0');
-	const manage = async (button: string): Promise<void> => {
-		const review = await workbench.dialogs.confirm(application, 'Output Filter Test', button, async () => {
-			await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
-			await workbench.quickaccess.select('Output Filter Test');
-		});
-		expect(review.detail).toContain(`bin/${executable}`);
-		expect(review.detail).toContain('Package digest: sha256:');
-	};
-	await manage('Enable');
-	await manage('Grant permissions');
-	const selectChannel = async (label: string): Promise<void> => {
-		await workbench.quickaccess.runCommand('workbench.action.output.showChannels');
-		await workbench.quickaccess.select(label);
-	};
-	await selectChannel('Output Filter Fixture');
-	const output = page.locator('[data-view-id="ash.output"]');
-	const filter = output.getByRole('searchbox', { name: 'Filter Output', exact: true });
-	const visibleLines = async (): Promise<string[]> => (await output.locator('.view-line').allTextContents()).map(line => line.replaceAll('\u00a0', ' ')).filter(Boolean);
-	await expect.poll(visibleLines).toEqual(['keep one', 'drop one', 'keep excluded', 'kee']);
-	if (target.kind === 'browser') {
-		// Read the production backend adapter; no events or Output state are injected.
-		const snapshot = await page.evaluate(() => globalThis.ashWebWorkbenchHost!.api.extensionHost.list());
-		const runtime = snapshot.extensions.find(extension => extension.outputEvents.some(event => event.operation.operation === 'create' && event.operation.label === 'Output Filter Fixture'));
-		expect(runtime?.lifecycle).toBe('ready');
-		expect(runtime?.incarnation).toBeGreaterThan(0);
-		const sequences = runtime!.outputEvents.map(event => event.sequence);
-		expect(sequences.every((sequence, index) => index === 0 || sequence > sequences[index - 1]!)).toBe(true);
-		expect(runtime!.outputEvents.every(event => event.incarnation === runtime!.incarnation && event.activationGeneration === runtime!.activationGeneration)).toBe(true);
-		const raw = runtime?.outputEvents.filter(event => event.operation.operation === 'append' && event.operation.channelId === 'plain').map(event => event.operation.operation === 'append' ? event.operation.text : '').join('');
-		expect(raw).toBe('keep one\ndrop one\nkeep excluded\nkee');
-		await testInfo.attach('backend-output-snapshot', { body: JSON.stringify(runtime), contentType: 'application/json' });
-	}
-	await filter.fill('keep,drop,!excluded');
-	await expect.poll(visibleLines).toEqual(['keep one', 'drop one']);
-	await filter.fill('keep !excluded');
-	await expect(output.locator('.view-lines')).toHaveCount(0);
-	await filter.fill('"keep one"');
-	await expect(output.locator('.view-lines')).toHaveCount(0);
-	await filter.fill('keep');
-	await expect.poll(visibleLines).toEqual(['keep one', 'keep excluded']);
-	expect(await filter.getAttribute('title')).toBeNull();
-	expect(await filter.getAttribute('aria-description')).toBeNull();
-	await filter.fill('keep,!excluded');
-	await expect.poll(visibleLines).toEqual(['keep one']);
-	await workbench.quickaccess.runCommand('ash.output.fixture.append');
-	await expect.poll(visibleLines).toEqual(['keep one', 'keep tail']);
-	await workbench.quickaccess.runCommand('ash.output.fixture.finish');
-	await expect.poll(visibleLines).toEqual(['keep one', 'keep tail', 'keep unfinished']);
-	await selectChannel('Output Other Fixture');
-	await expect.poll(visibleLines).toEqual(['keep other']);
-	await filter.fill('keep,drop');
-	await expect.poll(visibleLines).toEqual(['drop other', 'keep other']);
-	await filter.fill('keep');
-	await selectChannel('Output Log Fixture');
-	await expect.poll(visibleLines).toEqual(['keep log', 'log continuation']);
-	await filter.fill('!continuation');
-	await expect.poll(visibleLines).toEqual(['other log']);
-	await selectChannel('Output Filter Fixture');
-	await filter.fill('keep,!excluded');
-	await expect.poll(visibleLines).toEqual(['keep one', 'keep tail', 'keep unfinished']);
-	await workbench.quickaccess.runCommand('workbench.action.output.openInEditor');
-	const editor = workbench.editors.groupAt(0).content;
-	await expect(editor.locator('.view-lines')).toContainText('drop one');
-	await expect(editor.locator('.view-lines')).toContainText('keep excluded');
-	await expect(editor.locator('.view-lines')).toContainText('drop two');
-	await expect(editor.locator('.view-lines')).toContainText('keep unfinished');
-	await filter.fill('absent');
-	await expect(output.locator('.view-lines')).toHaveCount(0);
-	await expect(editor.locator('.view-lines')).toContainText('drop two');
-	await filter.fill('keep');
-	await workbench.quickaccess.runCommand('ash.output.fixture.clear');
-	await expect.poll(visibleLines).toEqual([]);
-	await expect(editor.locator('.view-lines')).toBeEmpty();
-	await workbench.quickaccess.runCommand('ash.output.fixture.append');
-	await workbench.quickaccess.runCommand('ash.output.fixture.finish');
-	await expect.poll(visibleLines).toEqual(['keep unfinished']);
-	await workbench.quickaccess.runCommand('workbench.action.output.clear');
-	await expect.poll(visibleLines).toEqual([]);
-	await expect(editor.locator('.view-lines')).toBeEmpty();
-	await workbench.quickaccess.runCommand('ash.output.fixture.dispose');
-	await workbench.quickaccess.runCommand('workbench.action.output.showChannels');
-	await expect(workbench.quickaccess.items.filter({ hasText: 'Output Filter Fixture' })).toHaveCount(0);
-	await workbench.quickaccess.close();
-	await manage('Revoke permissions');
-	await manage('Disable');
-	await manage('Uninstall');
+test.describe('Git-backed ordinary Output', () => {
+	test.use({ gitRepository: true });
+
+	test('Git Output filters real repository status and preserves raw editor text through clearing', async ({ target, testWorkspace, workbench }, testInfo) => {
+		test.skip(target.appServerMode !== 'required', 'Requires the real Git backend and its isolated test profile.');
+		const page = workbench.page;
+		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		const changes = page.locator('[data-view-id="ash.gitView"]');
+		await expect(changes).toBeVisible();
+		const refreshAndShow = async (): Promise<void> => {
+			await workbench.quickaccess.runCommand('git.refresh');
+			await workbench.quickaccess.runCommand('git.showOutput');
+		};
+		const output = page.locator('[data-view-id="ash.output"]');
+		const filter = output.getByRole('searchbox', { name: 'Filter Output', exact: true });
+		const visibleLines = async (): Promise<string[]> => (await output.locator('.view-line').allTextContents()).map(line => line.replaceAll('\u00a0', ' ')).filter(Boolean);
+
+		// Real workspace changes reach the existing Git status owner and channel;
+		// this producer emits complete lines, while chunk boundaries are tested in components.
+		await writeFile(testWorkspace.file, 'const value = 2;\n');
+		await expect(changes.locator('.ash-scm-change')).toHaveCount(1);
+		await refreshAndShow();
+		await expect(output).toBeVisible();
+		await expect(page.locator('.ash-output-title-actions')).toContainText('Git');
+		await expect.poll(visibleLines).toContain('1 changed file');
+		await writeFile(join(testWorkspace.directory, 'output-added.ts'), 'export const added = 1;\n');
+		await expect(changes.locator('.ash-scm-change')).toHaveCount(2);
+		await refreshAndShow();
+		await expect.poll(visibleLines).toContain('2 changed files');
+		const retainedLines = await visibleLines();
+		await filter.fill('1 changed file,2 changed files');
+		await expect.poll(visibleLines).toEqual(['1 changed file', '2 changed files']);
+		await filter.fill('changed,!2 changed files');
+		await expect.poll(visibleLines).toEqual(['1 changed file']);
+		await filter.fill('1 changed file !2 changed files');
+		await expect(output.locator('.view-lines')).toHaveCount(0);
+		await filter.fill('"1 changed file"');
+		await expect(output.locator('.view-lines')).toHaveCount(0);
+		await filter.fill('1 changed file,!2 changed files');
+		await expect.poll(visibleLines).toEqual(['1 changed file']);
+		expect(await filter.getAttribute('title')).toBeNull();
+		expect(await filter.getAttribute('aria-description')).toBeNull();
+		await workbench.quickaccess.runCommand('workbench.action.output.openInEditor');
+		const editor = workbench.editors.groupAt(0).content;
+		const rawLines = async (): Promise<string[]> => (await editor.locator('.view-line').allTextContents()).map(line => line.replaceAll('\u00a0', ' ')).filter(Boolean);
+		await expect.poll(rawLines).toEqual(retainedLines);
+		await filter.fill('absent');
+		await expect(output.locator('.view-lines')).toHaveCount(0);
+		await expect.poll(rawLines).toEqual(retainedLines);
+		await workbench.quickaccess.runCommand('workbench.action.output.clear');
+		await expect.poll(visibleLines).toEqual([]);
+		await expect.poll(rawLines).toEqual([]);
+		await writeFile(join(testWorkspace.directory, 'output-after-clear.ts'), 'export const afterClear = 1;\n');
+		await expect(changes.locator('.ash-scm-change')).toHaveCount(3);
+		await refreshAndShow();
+		await filter.fill('3 changed files');
+		await expect.poll(visibleLines).toEqual(['3 changed files']);
+		await expect.poll(rawLines).toEqual(['3 changed files']);
+		const status = await execute('git', ['status', '--porcelain=v2', '--untracked-files=all'], { cwd: testWorkspace.directory });
+		expect(status.stdout.trim().split('\n')).toHaveLength(3);
+		expect(status.stdout).toContain('main.ts');
+		expect(status.stdout).toContain('? output-added.ts');
+		expect(status.stdout).toContain('? output-after-clear.ts');
+		await testInfo.attach('git-output-status', { body: JSON.stringify({ producer: 'Git', kind: 'output', retainedLines, afterClear: await rawLines(), repositoryStatus: status.stdout, arbitraryChunks: 'component tests only' }), contentType: 'application/json' });
+	});
 });
 
-
-test('Output saved query restoration exits on explicit input and protects newer stored versions across reloads', async ({ target, workbench, reloadWorkbench }) => {
-	test.skip(target.kind !== 'browser' || target.appServerMode !== 'required', 'Covers the connected Web client workspace storage.');
-	const page = workbench.page;
-	const selectChannel = async (): Promise<void> => {
-		await workbench.quickaccess.runCommand('workbench.action.output.showChannels');
-		await workbench.quickaccess.select('App Server');
-	};
-	const output = page.locator('[data-view-id="ash.output"]');
-	const filter = output.getByRole('searchbox', { name: 'Filter Output', exact: true });
-	const persistedFilter = async (value?: string): Promise<string> => page.evaluate(value => {
-		// Only this fixture's isolated workspace document is edited to seed older
-		// or future client data; Output events and services are never injected.
-		const documents = Object.keys(localStorage).filter(key => key.startsWith('ash.storage.workspace.')).map(key => ({
-			key, document: JSON.parse(localStorage.getItem(key)!) as { entries: Record<string, { value: string; target: string; }>; },
-		})).filter(item => item.document.entries['output.filterState']);
-		if (documents.length !== 1) { throw new Error('Expected one isolated Output filter workspace document'); }
-		const { key, document } = documents[0]!;
-		const entry = document.entries['output.filterState']!;
-		if (value !== undefined) {
-			entry.value = value;
-			localStorage.setItem(key, JSON.stringify(document));
+for (const locale of ['en', 'zh-CN']) {
+	test(`Output saved query restoration exits on explicit input and protects newer stored versions across reloads (${locale})`, async ({ target, workbench, reloadWorkbench, restartWorkbench }, testInfo) => {
+		test.skip(target.kind !== 'browser' || target.appServerMode !== 'required', 'Covers the connected Web client workspace storage.');
+		if (locale === 'zh-CN') {
+			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+			const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
+			await language.fill('简体中文');
+			await language.press('Enter');
+			({ workbench } = await restartWorkbench());
 		}
-		return entry.value;
-	}, value);
-	await selectChannel();
-	await filter.fill('connection');
-	await expect(output.locator('.view-lines')).toContainText('connection');
-	const restored = JSON.stringify({ text: 'connection !crashed', hiddenSeverities: [], hiddenCategories: [] });
-	await persistedFilter(restored);
-	await reloadWorkbench();
-	await selectChannel();
-	await expect(filter).toHaveValue('connection !crashed');
-	await expect(filter).toHaveAttribute('title', /Saved filter restored/);
-	await expect(filter).toHaveAttribute('aria-description', /Saved filter restored/);
-	await expect(output.locator('.view-lines')).toContainText('connection');
-	expect(await persistedFilter()).toBe(restored);
-	await filter.fill('connection !crashed');
-	await expect(output.locator('.view-lines')).toHaveCount(0);
-	expect(await filter.getAttribute('title')).toBeNull();
-	expect(JSON.parse(await persistedFilter())).toEqual({ syntaxVersion: 2, text: 'connection !crashed', hiddenSeverities: [], hiddenCategories: [] });
-	await reloadWorkbench();
-	await selectChannel();
-	await expect(filter).toHaveValue('connection !crashed');
-	await expect(output.locator('.view-lines')).toHaveCount(0);
-	expect(await filter.getAttribute('aria-description')).toBeNull();
-	await filter.press('Escape');
-	await expect(filter).toHaveValue('');
-	await expect(output.locator('.view-lines')).toContainText('connection');
-	const future = JSON.stringify({ syntaxVersion: 3, text: 'future query', future: { untouched: true } });
-	await persistedFilter(future);
-	await reloadWorkbench();
-	await selectChannel();
-	await expect(filter).toHaveValue('');
-	await expect(filter).toHaveAttribute('title', /Changes in this window are not saved/);
-	await filter.fill('connection');
-	await expect(output.locator('.view-lines')).toContainText('connection');
-	expect(await persistedFilter()).toBe(future);
-});
+		const page = workbench.page;
+		const labels = locale === 'zh-CN' ? {
+			filter: '筛选输出', placeholder: '筛选输出（文本1,文本2,!排除文本）',
+			restored: '已恢复保存的筛选条件。编辑或清空后使用逗号分隔的筛选语法。',
+			unsupported: '已保留由较新版本保存的筛选条件。本窗口中的修改不会保存。',
+			controls: '使用逗号分隔任选匹配的文本，以 ! 开头可排除文本。空格和 - 按字面匹配。',
+		} : {
+			filter: 'Filter Output', placeholder: 'Filter Output (text1,text2,!exclude)',
+			restored: 'Saved filter restored. Edit or clear to use comma-separated filters.',
+			unsupported: 'A newer saved filter is preserved. Changes in this window are not saved.',
+			controls: 'Separate alternative text filters with commas and prefix exclusions with !. Spaces and - are literal.',
+		};
+		const selectChannel = async (): Promise<void> => {
+			await workbench.quickaccess.runCommand('workbench.action.output.showChannels');
+			await workbench.quickaccess.select('App Server');
+		};
+		const output = page.locator('[data-view-id="ash.output"]');
+		const filter = output.getByRole('searchbox', { name: labels.filter, exact: true });
+		await page.addInitScript(() => {
+			const seed = sessionStorage.getItem('ash.test.output.seed');
+			if (seed === null) { return; }
+			sessionStorage.removeItem('ash.test.output.seed');
+			const documents = Object.keys(localStorage).filter(key => key.startsWith('ash.storage.workspace.')).map(key => ({
+				key, document: JSON.parse(localStorage.getItem(key)!) as { entries: Record<string, { value: string; target: string; }>; },
+			})).filter(item => item.document.entries['output.filterState']);
+			if (documents.length !== 1) { throw new Error('Expected one isolated Output filter workspace document'); }
+			const { key, document } = documents[0]!;
+			document.entries['output.filterState']!.value = seed;
+			localStorage.setItem(key, JSON.stringify(document));
+		});
+		const persistedFilter = async (value?: string): Promise<string> => page.evaluate(value => {
+			// Seed after the current window's shutdown saves, before the next window
+			// loads storage. Only isolated saved data changes; Output is never injected.
+			const documents = Object.keys(localStorage).filter(key => key.startsWith('ash.storage.workspace.')).map(key => ({
+				key, document: JSON.parse(localStorage.getItem(key)!) as { entries: Record<string, { value: string; target: string; }>; },
+			})).filter(item => item.document.entries['output.filterState']);
+			if (documents.length !== 1) { throw new Error('Expected one isolated Output filter workspace document'); }
+			const { document } = documents[0]!;
+			const entry = document.entries['output.filterState']!;
+			if (value !== undefined) {
+				sessionStorage.setItem('ash.test.output.seed', value);
+			}
+			return entry.value;
+		}, value);
+		await selectChannel();
+		await expect(filter).toHaveAttribute('placeholder', labels.placeholder);
+		await filter.fill('connection');
+		await expect(output.locator('.view-lines')).toContainText('connection');
+		const restored = JSON.stringify({ text: 'connection !crashed', hiddenSeverities: [], hiddenCategories: [] });
+		await persistedFilter(restored);
+		await reloadWorkbench();
+		await selectChannel();
+		await expect(filter).toHaveValue('connection !crashed');
+		await expect(filter).toHaveAttribute('title', labels.restored);
+		await expect(filter).toHaveAttribute('aria-description', labels.restored);
+		await expect(output.locator('.view-lines')).toContainText('connection');
+		expect(await persistedFilter()).toBe(restored);
+		await output.locator('.stanza-editor-input').focus();
+		await page.keyboard.press('Alt+F1');
+		const help = page.locator('.ash-accessible-view-content');
+		await expect.poll(() => help.inputValue()).toContain(labels.controls);
+		await expect.poll(() => help.inputValue()).toContain(labels.restored);
+		await page.keyboard.press('Escape');
+		await expect(output.locator('.stanza-editor-input')).toBeFocused();
+		await filter.fill('connection !crashed');
+		await expect(output.locator('.view-lines')).toHaveCount(0);
+		expect(await filter.getAttribute('title')).toBeNull();
+		expect(JSON.parse(await persistedFilter())).toEqual({ syntaxVersion: 2, text: 'connection !crashed', hiddenSeverities: [], hiddenCategories: [] });
+		await reloadWorkbench();
+		await selectChannel();
+		await expect(filter).toHaveValue('connection !crashed');
+		await expect(output.locator('.view-lines')).toHaveCount(0);
+		expect(await filter.getAttribute('aria-description')).toBeNull();
+		await filter.press('Escape');
+		await expect(filter).toHaveValue('');
+		await expect(output.locator('.view-lines')).toContainText('connection');
+		const future = JSON.stringify({ syntaxVersion: 3, text: 'future query', future: { untouched: true } });
+		await persistedFilter(future);
+		await reloadWorkbench();
+		await selectChannel();
+		await expect(filter).toHaveValue('');
+		await expect(filter).toHaveAttribute('title', labels.unsupported);
+		await filter.fill('connection');
+		await expect(output.locator('.view-lines')).toContainText('connection');
+		expect(await persistedFilter()).toBe(future);
+		await output.locator('.stanza-editor-input').focus();
+		await page.keyboard.press('Alt+F1');
+		await expect.poll(() => help.inputValue()).toContain(labels.unsupported);
+		await page.keyboard.press('Escape');
+		await testInfo.attach('saved-query-compatibility', { body: JSON.stringify({ locale, restored, current: { syntaxVersion: 2, text: 'connection !crashed' }, preservedFuture: await persistedFilter() }), contentType: 'application/json' });
+	});
+}

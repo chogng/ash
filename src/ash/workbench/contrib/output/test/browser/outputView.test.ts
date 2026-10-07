@@ -215,3 +215,59 @@ test('Output explains unsupported saved queries without replacing their storage'
 	assert.equal(input.getAttribute('aria-description'), input.title);
 	assert.equal(storage.get('output.filterState', StorageScope.WORKSPACE), raw);
 });
+
+
+test('ordinary Output keeps hidden line numbers and raw text across CR, empty chunks and standalone LF', async () => {
+	for (const emptyChunks of [false, true]) {
+		using resources = new DisposableStore();
+		const view = await createOutputView(resources);
+		using reference = await view.services.get(ITextModelService).createModelReference(view.channel.uri);
+		view.filter('keep');
+		let raw = '';
+		const append = (text: string, visible: readonly string[], hidden: readonly number[], modelText: string): void => {
+			view.channel.append({ text });
+			raw += text;
+			const model = reference.object.textEditorModel;
+			const areas = view.editor._getViewModel()!.getHiddenAreas();
+			const hiddenLines = model.getLinesContent().flatMap((line, index) => line && areas.some(range => index + 1 >= range.startLineNumber && index + 1 <= range.endLineNumber) ? [index + 1] : []);
+			assert.deepEqual({ visible: view.visibleLines(), hidden: hiddenLines, retained: view.channel.getText(), shared: model.getValue().replaceAll('\r\n', '\n') }, {
+				visible, hidden, retained: raw, shared: modelText,
+			});
+		};
+		append('keep first\r', ['keep first'], [], 'keep first\n');
+		if (emptyChunks) { append('', ['keep first'], [], 'keep first\n'); }
+		append('\n', ['keep first'], [], 'keep first\n');
+		append('drop\r', ['keep first'], [2], 'keep first\ndrop\n');
+		if (emptyChunks) { append('', ['keep first'], [2], 'keep first\ndrop\n'); }
+		append('\n', ['keep first'], [2], 'keep first\ndrop\n');
+		append('kee', ['keep first'], [2, 3], 'keep first\ndrop\nkee');
+		if (emptyChunks) { append('', ['keep first'], [2, 3], 'keep first\ndrop\nkee'); }
+		append('p second', ['keep first', 'keep second'], [2], 'keep first\ndrop\nkeep second');
+		view.filter('keep,!first');
+		assert.deepEqual(view.visibleLines(), ['keep second']);
+		assert.equal(view.channel.getText(), 'keep first\r\ndrop\r\nkeep second');
+		assert.equal(reference.object.textEditorModel.getValue().replaceAll('\r\n', '\n'), 'keep first\ndrop\nkeep second');
+	}
+});
+
+for (const action of ['empty-input', 'same-input', 'empty-reset']) {
+	test(`Output updates the accessible future-schema notice after no-op input or reset (${action})`, async () => {
+		using resources = new DisposableStore();
+		const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+		const storage = resources.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'later-future-output', backend: browser.window.localStorage, flushInterval: 0 }));
+		resources.add(toDisposable(() => browser.window.close()));
+		const view = await createOutputView(resources, 'output', storage);
+		view.channel.append({ text: 'keep one\ndrop' });
+		const query = action === 'same-input' ? 'keep' : '';
+		view.filter(query);
+		const raw = JSON.stringify({ syntaxVersion: 3, text: 'future', future: { untouched: true } });
+		storage.store('output.filterState', raw, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		if (action === 'empty-reset') { view.output.filters.reset(); }
+		else { view.filter(query); }
+		const input = view.pane.element.querySelector<HTMLInputElement>('.ash-output-filter-input')!;
+		assert.match(input.title, /Changes in this window are not saved/);
+		assert.equal(input.getAttribute('aria-description'), input.title);
+		assert.deepEqual(view.visibleLines(), query ? ['keep one'] : ['keep one', 'drop']);
+		assert.equal(storage.get('output.filterState', StorageScope.WORKSPACE), raw);
+	});
+}
