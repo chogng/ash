@@ -1,8 +1,9 @@
+import { Event } from '../../../../../base/common/event.js';
 import { createTestFileService } from '../../../../test/common/testEditorServices.js';
-import type { IFileSystemProvider } from '../../../../../platform/files/common/files.js';
+import { type IFileSystemProvider, type IFileWriteOptions, type IFileWriteResult, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { toDisposable } from "../../../../../base/common/lifecycle.js";
+import { toDisposable, Disposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { FileKind, type IFileWriteRequest } from "../../../../../platform/files/common/files.js";
 import { WorkspacePdfAnnotationStore, pdfAnnotationSidecarResource } from "../../../../../workbench/contrib/pdf/browser/pdfAnnotationStore.js";
@@ -42,6 +43,10 @@ test("PDF annotation store reads and conditionally writes its sibling sidecar", 
 });
 
 class TestFileService implements IFileSystemProvider {
+	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy;
+	public readonly onDidChangeCapabilities = Event.None;
+	public watch(): IDisposable { return Disposable.None; }
+
 	readonly onDidChangeFiles = () => toDisposable(() => { });
 	entries: readonly { readonly resource: URI; readonly name: string; readonly kind: FileKind; }[] = [];
 	content = "";
@@ -62,14 +67,15 @@ class TestFileService implements IFileSystemProvider {
 		return { resource, bytes: new TextEncoder().encode(this.content), revision: this.revision };
 	}
 
-	async writeFile(request: IFileWriteRequest) {
+	public async writeFile(resource: URI, bytes: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {
+		if (!options.overwrite) { throw new Error('PDF annotation tests do not paste files'); }
+		const request = { resource, content: new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) };
 		this.writeRequests.push(request);
 		return {
 			stat: { resource: request.resource, kind: FileKind.File, sizeBytes: request.content.length, readonly: false, modifiedAtMillis: undefined },
 			revision: "after",
 		};
 	}
-	async writeFileBytes(): Promise<never> { throw new Error('PDF annotation tests do not paste files'); }
 
 	async createFile(): Promise<never> { throw new Error("PDF annotation tests do not create empty files"); }
 	async createDirectory(): Promise<never> { throw new Error("PDF annotation tests do not create directories"); }

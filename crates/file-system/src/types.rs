@@ -77,6 +77,19 @@ pub enum FileWriteCondition {
     ExpectedRevision(String),
     /// Publish only to a missing or empty file without replacing an intervening writer's bytes.
     MissingOrEmpty,
+    /// Combines publication policy and revision validation under the storage publication lock.
+    Options {
+        mode: FileWriteMode,
+        expected_revision: Option<String>,
+    },
+}
+
+/// Determines whether publication may create a path, replace it, or do either.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FileWriteMode {
+    Create,
+    Replace,
+    CreateOrReplace,
 }
 
 /// Behavior when a create or rename target already exists.

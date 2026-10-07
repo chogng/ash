@@ -1,4 +1,6 @@
-import type { IFileSystemProvider } from '../../../../../platform/files/common/files.js';
+import { Disposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
+import { Event } from '../../../../../base/common/event.js';
+import { type IFileSystemProvider, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import { createTestFileService, createTestComponentServices, registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import assert from "node:assert/strict";
@@ -110,12 +112,15 @@ test("PDF editor observes cancellation before rendering pages", async () => {
 test("workspace PDF loader reads only through the binary file contract", async () => {
 	const resource = URI.file("C:\\project\\paper.pdf");
 	using fileService = createTestFileService({
+		capabilities: FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy,
+		onDidChangeCapabilities: Event.None,
+		watch: (): IDisposable => Disposable.None,
+
 		onDidChangeFiles: () => ({ dispose() { }, [Symbol.dispose]() { } }),
 		stat: async () => ({ resource, kind: FileKind.File, sizeBytes: 4, readonly: true, modifiedAtMillis: undefined }),
 		readDirectory: async () => [],
 		readFile: async (requested) => ({ resource: requested, bytes: new Uint8Array([37, 80, 68, 70]), revision: "pdf-revision" }),
 		writeFile: async () => { throw new Error("PDF loader is read-only"); },
-		writeFileBytes: async () => { throw new Error("PDF loader is read-only"); },
 		createFile: async () => { throw new Error("PDF loader is read-only"); },
 		createDirectory: async () => { throw new Error("PDF loader is read-only"); },
 		copy: async () => { throw new Error("Copy is not used in this test"); },

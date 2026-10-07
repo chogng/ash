@@ -18,7 +18,7 @@ import { app, BrowserWindow, dialog, globalShortcut, ipcMain, screen, Menu, Tray
 import type { DirGrant } from "../../platform/dirPermissions/common/dirPermissionsService.js";
 import { basename, dirname, isAbsolute, join, parse } from "node:path";
 import { mkdir } from "node:fs/promises";
-import { readFileSync, watch } from "node:fs";
+import { readFileSync } from "node:fs";
 import { pathToFileURL, fileURLToPath } from "node:url";
 import { throwIfCancelled, type CancellationToken } from "../../base/common/cancellation.js";
 import { isCancellationError } from "../../base/common/errors.js";
@@ -178,14 +178,11 @@ type WindowSessionEntry =
 
 const AGENTS_WINDOW_KEY = 'agents';
 
-async function watchProfileFiles(profileRoot: string, window: BrowserWindow, resources: DisposableStore): Promise<void> {
+async function watchProfileFiles(profileRoot: string, provider: DiskFileSystemProvider, window: BrowserWindow, resources: DisposableStore): Promise<void> {
 	await mkdir(join(profileRoot, 'themes'), { recursive: true });
-	const watcher = watch(profileRoot, { persistent: false, recursive: true }, (_event, filename) => {
-		const resources = filename === null ? undefined : [URI.file(join(profileRoot, filename.toString())).toString()];
-		window.webContents.send(LOCAL_FILE_SYSTEM_CHANGED_CHANNEL, resources);
-	});
-	watcher.on('error', error => console.error('Failed to watch user profile files', error));
-	resources.add(toDisposable(() => watcher.close()));
+	resources.add(provider.onDidChangeFiles(event => window.webContents.send(LOCAL_FILE_SYSTEM_CHANGED_CHANNEL, event.resources?.map(resource => resource.toString()))));
+	resources.add(provider.onDidWatchError(error => console.error('Failed to watch user profile files', error)));
+	resources.add(provider.watch(URI.file(profileRoot), { recursive: true, excludes: ['**/*.tmp'] }));
 }
 
 /** Owns the Electron application's persistent services, Workbench windows, IPC, and shutdown. */
@@ -1249,6 +1246,7 @@ export class AshApplication extends Disposable {
 		const windowControlsOverlay = new WindowControlsOverlay(colors => {
 			if (titleBarStyle === 'custom' && (process.platform === 'win32' || process.platform === 'linux')) window.setTitleBarOverlay(colors);
 		});
+		const profileFiles = windowDisposables.add(new DiskFileSystemProvider([URI.file(this.profileRoot)]));
 		const ipcRoutes = [
 			...this.mainProcessIpcRoutes(window),
 			...workspaceHost.routes(),
@@ -1302,11 +1300,11 @@ export class AshApplication extends Disposable {
 					bindings.filter(binding => binding.commandId === OPEN_AGENTS_WINDOW_COMMAND_ID),
 				),
 			}),
-			...diskFileSystemProviderRoutes(windowDisposables.add(new DiskFileSystemProvider([URI.file(this.profileRoot)])), URI.file(this.profileRoot)),
+			...diskFileSystemProviderRoutes(profileFiles, URI.file(this.profileRoot)),
 			...workspaceContextIpcRoutes(workspaceContext),
 			workspaceRecoveryIpcRoute(identifiers => this.windowsMainService.restoreWorkspaces(identifiers, async identifier => (await this.openWorkspace(identifier, workspaces))?.window)),
 		];
-		await watchProfileFiles(this.profileRoot, window, windowDisposables);
+		await watchProfileFiles(this.profileRoot, profileFiles, window, windowDisposables);
 		const systemContextMenu = windowDisposables.add(new ElectronContextMenu(window));
 		ipcRoutes.push(...this.contextMenuIpcRoutes(systemContextMenu));
 		if (this.nativeMenubar) {
@@ -1517,6 +1515,7 @@ export class AshApplication extends Disposable {
 						host: electronRemoteWindowMainHost(window, this.dialogs),
 						prepareForRuntimeReplacement: () => window.webContents.send("ash:terminal:prepareReplacement"),
 					}));
+					const profileFiles = windowDisposables.add(new DiskFileSystemProvider([URI.file(this.profileRoot)]));
 					const ipcRoutes = [
 						...this.mainProcessIpcRoutes(window),
 						...sessionsRelay.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })),
@@ -1554,7 +1553,7 @@ export class AshApplication extends Disposable {
 							validate: validateSystemWideKeybindings,
 							invoke: (bindings: unknown) => this.globalKeybindings.updateKeybindings(window.id, (bindings as readonly INativeSystemWideKeybinding[]).filter(binding => binding.commandId === OPEN_AGENTS_WINDOW_COMMAND_ID)),
 						},
-						...diskFileSystemProviderRoutes(windowDisposables.add(new DiskFileSystemProvider([URI.file(this.profileRoot)])), URI.file(this.profileRoot)),
+						...diskFileSystemProviderRoutes(profileFiles, URI.file(this.profileRoot)),
 						...workspaceContextIpcRoutes(session.workspaceContext),
 						{
 							channel: AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL,
@@ -1578,7 +1577,7 @@ export class AshApplication extends Disposable {
 						},
 						windowCloseResponseIpcRoute(this.lifecycleMainService, window),
 					];
-					await watchProfileFiles(this.profileRoot, window, windowDisposables);
+					await watchProfileFiles(this.profileRoot, profileFiles, window, windowDisposables);
 					const systemContextMenu = windowDisposables.add(new ElectronContextMenu(window));
 					ipcRoutes.push(...this.contextMenuIpcRoutes(systemContextMenu));
 					if (this.nativeMenubar) {

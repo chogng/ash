@@ -322,6 +322,34 @@ fn filesystem_change_hints_are_relative_or_request_a_rescan() {
 }
 
 #[test]
+fn filesystem_byte_writes_accept_explicit_options_and_legacy_paste_requests() {
+    use crate::protocol::fs::FsFileWriteMode;
+    use crate::protocol::fs::FsWriteBinaryFileParams;
+
+    let legacy = serde_json::json!({"path":"bytes.bin","dataBase64":"AP8="});
+    let decoded: FsWriteBinaryFileParams = serde_json::from_value(legacy.clone()).unwrap();
+    assert_eq!(decoded.options, None);
+    assert_eq!(serde_json::to_value(decoded).unwrap(), legacy);
+
+    let conditional = serde_json::json!({
+        "path":"bytes.bin","dataBase64":"AP8=",
+        "options":{"mode":"replace","expectedRevision":"previous"}
+    });
+    let decoded: FsWriteBinaryFileParams = serde_json::from_value(conditional.clone()).unwrap();
+    assert_eq!(
+        decoded.options.as_ref().unwrap().mode,
+        FsFileWriteMode::Replace
+    );
+    assert_eq!(serde_json::to_value(decoded).unwrap(), conditional);
+    assert!(
+        serde_json::from_value::<FsWriteBinaryFileParams>(serde_json::json!({
+            "path":"bytes.bin","dataBase64":"AP8=","options":{"mode":"append"}
+        }))
+        .is_err()
+    );
+}
+
+#[test]
 fn slash_command_definition_preserves_discovery_and_argument_shape() {
     let definition = SlashCommandDefinition {
         name: "diagnose".into(),

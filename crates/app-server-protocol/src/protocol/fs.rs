@@ -131,7 +131,7 @@ pub struct FsWriteFileParams {
     pub expected_revision: Option<String>,
 }
 
-/// Create a workspace file from exact bytes supplied by a user file paste.
+/// Write exact bytes, with legacy paste semantics when no explicit options are supplied.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct FsWriteBinaryFileParams {
@@ -143,6 +143,28 @@ pub struct FsWriteBinaryFileParams {
     pub session_directory: Option<SessionDirSelector>,
     pub path: PathBuf,
     pub data_base64: String,
+    /// When absent, keeps legacy paste behavior: only missing or empty targets may be written.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub options: Option<FsFileWriteOptions>,
+}
+
+/// Explicit publication policy and optional exact-content revision for byte writes.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FsFileWriteOptions {
+    pub mode: FsFileWriteMode,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub expected_revision: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum FsFileWriteMode {
+    Create,
+    Replace,
+    CreateOrReplace,
 }
 
 /// Metadata returned after one successful `fs/writeFile`.

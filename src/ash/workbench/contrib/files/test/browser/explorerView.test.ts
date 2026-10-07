@@ -1,3 +1,4 @@
+import { Disposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { createTestFileService } from '../../../../test/common/testEditorServices.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import { noFileIconTheme } from '../../../../../platform/theme/common/themeService.js';
@@ -7,11 +8,11 @@ import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { URI } from "../../../../../base/common/uri.js";
 import { isWindows } from '../../../../../base/common/platform.js';
-import { Emitter } from "../../../../../base/common/event.js";
+import { Emitter, Event } from "../../../../../base/common/event.js";
 import { DecorationsService } from '../../../../services/decorations/browser/decorationsService.js';
 import { NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { InMemoryConfigurationService } from "../../../../../platform/configuration/common/inMemoryConfigurationService.js";
-import { FileKind, type IFileSystemProvider } from "../../../../../platform/files/common/files.js";
+import { FileKind, type IFileSystemProvider, type IFileWriteOptions, type IFileWriteResult, FileSystemProviderCapabilities } from "../../../../../platform/files/common/files.js";
 import { WorkspaceContextService } from "../../../../../workbench/services/workspaces/browser/workspaceContextService.js";
 import type { IResourceIconRenderer } from "../../../../browser/labels.js";
 import type { IHoverService, IManagedHover } from "../../../../../platform/hover/browser/hoverService.js";
@@ -47,6 +48,10 @@ test("ExplorerView opens workspace files on single click", async () => {
 	let hoverDisposals = 0;
 	let contextMenu: IContextMenuMenuDelegate | undefined;
 	const fileProvider: IFileSystemProvider = {
+		capabilities: FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy,
+		onDidChangeCapabilities: Event.None,
+		watch: (): IDisposable => Disposable.None,
+
 		onDidChangeFiles: fileChanges.event,
 		stat: async () => { throw new Error('Explorer must load the workspace root with one directory read'); },
 		readDirectory: async (resource) => {
@@ -106,10 +111,11 @@ test("ExplorerView opens workspace files on single click", async () => {
 		readFile: async (_resource) => {
 			throw new Error("Explorer must delegate file content resolution to the selected editor");
 		},
-		writeFile: async (_request) => {
+		writeFile: async (resource: URI, bytes: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> => {
+			if (!options.overwrite) { throw new Error('File paste is not used in this test'); }
+			const _request = { resource, content: new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) };
 			throw new Error("Explorer must delegate file writes to the selected editor");
 		},
-		writeFileBytes: async () => { throw new Error('File paste is not used in this test'); },
 		createFile: async () => { throw new Error("Explorer must not create files in this test"); },
 		createDirectory: async () => { throw new Error("Explorer must not create directories in this test"); },
 		copy: async () => { throw new Error("Copy is not used in this test"); },

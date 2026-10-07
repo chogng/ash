@@ -1,13 +1,15 @@
-import { Emitter } from '../../../base/common/event.js';
-import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { Emitter, Event } from '../../../base/common/event.js';
+import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
-import { FileNotFoundError, FileRevisionConflictError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileEntry, type IFileSystemProvider, type IFileStat, type IFileWriteRequest, type IFileWriteResult } from './files.js';
+import { FileNotFoundError, FileRevisionConflictError, FileSystemProviderCapabilities, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileEntry, type IFileSystemProvider, type IFileStat, type IFileWriteOptions, type IFileWriteResult, type IWatchOptions } from './files.js';
 
 export const LOCAL_FILE_SYSTEM_CHANNEL_NAME = 'ash:files';
 export const LOCAL_FILE_SYSTEM_CHANGED_CHANNEL = 'ash:files:changed';
 
 /** URI serialization and error transport for the desktop file provider. */
 export class DiskFileSystemProviderClient extends Disposable implements IFileSystemProvider {
+	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy;
+	public readonly onDidChangeCapabilities = Event.None;
 	private readonly changes = this._register(new Emitter<IFileChangeEvent>());
 	public readonly onDidChangeFiles = this.changes.event;
 
@@ -35,13 +37,14 @@ export class DiskFileSystemProviderClient extends Disposable implements IFileSys
 		const content = await this.call<IFileBytes>('readFile', resource);
 		return { ...content, resource };
 	}
-	public async writeFile(request: IFileWriteRequest): Promise<IFileWriteResult> {
-		const result = await this.call<IFileWriteResult>('writeFile', request.resource, { content: request.content, expectedRevision: request.expectedRevision });
-		this.changes.fire({ resources: [request.resource] });
-		return { ...result, stat: { ...result.stat, resource: request.resource } };
+	public watch(resource: URI, _options: IWatchOptions): IDisposable {
+		this.assertNotDisposed();
+		if (resource.scheme !== 'file' || resource.query || resource.fragment) throw new TypeError('Expected a local file resource');
+		// The window's host provider continuously watches its granted profile root.
+		return Disposable.None;
 	}
-	public async writeFileBytes(resource: URI, bytes: Uint8Array): Promise<IFileWriteResult> {
-		const result = await this.call<IFileWriteResult>('writeFileBytes', resource, { bytes });
+	public async writeFile(resource: URI, bytes: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {
+		const result = await this.call<IFileWriteResult>('writeFile', resource, { bytes, options });
 		this.changes.fire({ resources: [resource] });
 		return { ...result, stat: { ...result.stat, resource } };
 	}

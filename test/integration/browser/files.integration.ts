@@ -89,8 +89,8 @@ const integration = {
 		const before = URI.file('/binary/before.bin');
 		const after = URI.file('/binary/after.bin');
 		if (!restored) {
-			await files.writeFileBytes(before, new Uint8Array([0x48, 0x69]));
-			await files.writeFileBytes(after, new Uint8Array([0x48, 0x69, 0x00, 0xff]));
+			await files.writeFile(before, new Uint8Array([0x48, 0x69]), { create: true, overwrite: false });
+			await files.writeFile(after, new Uint8Array([0x48, 0x69, 0x00, 0xff]), { create: true, overwrite: false });
 			const input = createBinaryDiffEditorInput({ resource: before }, { resource: after }, 'Review bytes');
 			localStorage.setItem('binary-comparison', JSON.stringify(EditorInputSerializers.serialize(input)));
 		}
@@ -123,8 +123,8 @@ const integration = {
 			? binaryResources.add(EditorInputSerializers.deserialize(JSON.parse(localStorage.getItem('comparison-groups')!)) as ReturnType<typeof createBinaryDiffEditorInput>)
 			: binaryResources.add(createBinaryDiffEditorInput(original, { resource: modifiedResource, label: 'After' }));
 		if (!restored) {
-			await files.writeFileBytes(originalResource, new Uint8Array([0x48, 0x69]));
-			await files.writeFileBytes(modifiedResource, new Uint8Array([0x48, 0x69, 0xff]));
+			await files.writeFile(originalResource, new Uint8Array([0x48, 0x69]), { create: true, overwrite: false });
+			await files.writeFile(modifiedResource, new Uint8Array([0x48, 0x69, 0xff]), { create: true, overwrite: false });
 		}
 		const parent = binaryResources.add(new InstantiationService());
 		parent.registerSingleton(IFileService, () => createTestFileService(files));
@@ -208,6 +208,11 @@ const integration = {
 		await textGroups!.openEditor(textInput);
 	},
 	read: () => files.readFile(resource),
+	readBytes: async (name: string): Promise<number[]> => Array.from((await files.readFileBytes(URI.joinPath(resource, '..', name))).bytes),
+	async importBytes(name: string, bytes: number[]): Promise<string> {
+		try { await files.writeFileBytes(URI.joinPath(resource, '..', name), new Uint8Array(bytes)); return 'saved'; }
+		catch (error) { return error instanceof Error ? error.message : String(error); }
+	},
 	async write(content: string, expectedRevision?: string): Promise<string> {
 		try { await files.writeFile({ resource, content, expectedRevision }); return 'saved'; }
 		catch (error) { return error instanceof Error ? error.name : String(error); }

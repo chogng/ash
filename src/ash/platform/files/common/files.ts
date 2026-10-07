@@ -52,6 +52,25 @@ export type FileExistingTargetBehavior = "error" | "overwrite" | "ignore";
 export type FileMissingTargetBehavior = "error" | "ignore";
 export type FileDeleteMode = "fileOrEmptyDirectory" | "recursive";
 
+export enum FileSystemProviderCapabilities {
+	None = 0,
+	FileReadWrite = 1 << 1,
+	FileFolderCopy = 1 << 3,
+	Readonly = 1 << 11,
+}
+
+/** Selects creation or replacement and optionally checks the stored content revision. */
+export interface IFileWriteOptions {
+	readonly create: boolean;
+	readonly overwrite: boolean;
+	readonly expectedRevision?: string;
+}
+
+export interface IWatchOptions {
+	readonly recursive: boolean;
+	readonly excludes: readonly string[];
+}
+
 /** The file changed after a caller read its revision, so its write was rejected. */
 export class FileRevisionConflictError extends Error {
 	constructor(readonly resource: URI) {
@@ -74,14 +93,15 @@ export interface IFileChangeEvent {
 
 /** Storage operations implemented by a runtime or virtual resource provider. */
 export interface IFileSystemProvider {
+	readonly capabilities: FileSystemProviderCapabilities;
+	readonly onDidChangeCapabilities: Event<void>;
 	readonly onDidChangeFiles: Event<IFileChangeEvent>;
+	watch(resource: URI, options: IWatchOptions): IDisposable;
 	stat(resource: URI): Promise<IFileStat>;
 	readDirectory(resource: URI): Promise<readonly IFileEntry[]>;
 	/** Reads exact stored bytes; the revision continues to identify those bytes across text decoding. */
 	readFile(resource: URI): Promise<IFileBytes>;
-	writeFile(request: IFileWriteRequest): Promise<IFileWriteResult>;
-	/** Creates a file from exact bytes without replacing an existing nonempty file. */
-	writeFileBytes(resource: URI, bytes: Uint8Array): Promise<IFileWriteResult>;
+	writeFile(resource: URI, content: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult>;
 	createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat>;
 	createDirectory(resource: URI): Promise<IFileStat>;
 	/** Copies one file or directory, failing if the target exists. */
@@ -93,11 +113,14 @@ export interface IFileSystemProvider {
 /** Routes file operations through explicitly registered resource schemes. */
 export interface IFileService {
 	readonly onDidChangeFiles: Event<IFileChangeEvent>;
+	/** Releases this caller's watch; equivalent requests may share storage resources. */
+	watch(resource: URI, options?: IWatchOptions): IDisposable;
 	stat(resource: URI): Promise<IFileStat>;
 	readDirectory(resource: URI): Promise<readonly IFileEntry[]>;
 	readFile(resource: URI): Promise<IFileContent>;
 	readFileBytes(resource: URI): Promise<IFileBytes>;
 	writeFile(request: IFileWriteRequest): Promise<IFileWriteResult>;
+	/** Imports exact bytes and rejects any existing file, including an empty one. */
 	writeFileBytes(resource: URI, bytes: Uint8Array): Promise<IFileWriteResult>;
 	createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat>;
 	createDirectory(resource: URI): Promise<IFileStat>;
@@ -108,6 +131,7 @@ export interface IFileService {
 	registerProvider(scheme: string, provider: IFileSystemProvider): IDisposable;
 	/** Reports routing availability, which does not imply that the provider's storage is currently accessible. */
 	hasProvider(resource: URI): boolean;
+	hasCapability(resource: URI, capability: FileSystemProviderCapabilities): boolean;
 }
 
 export class FileNotFoundError extends Error {

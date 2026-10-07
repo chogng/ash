@@ -1,8 +1,8 @@
-import { Emitter } from '../../../base/common/event.js';
-import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { Emitter, Event } from '../../../base/common/event.js';
+import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
 import { localize } from '../../../nls.js';
-import { FileKind, FileNotFoundError, FileOperationNotSupportedError, FileRevisionConflictError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileEntry, type IFileSystemProvider, type IFileStat, type IFileWriteRequest, type IFileWriteResult } from '../common/files.js';
+import { FileKind, FileNotFoundError, FileOperationNotSupportedError, FileRevisionConflictError, FileSystemProviderCapabilities, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileEntry, type IFileSystemProvider, type IFileStat, type IFileWriteOptions, type IFileWriteResult, type IWatchOptions } from '../common/files.js';
 
 interface SavedDirectory {
 	readonly id: string;
@@ -25,6 +25,8 @@ const ROOT_PREFIX = '/@browser/';
 
 /** File access for folders explicitly selected through the browser picker. */
 export class HTMLFileSystemProvider extends Disposable implements IFileSystemProvider {
+	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy;
+	public readonly onDidChangeCapabilities = Event.None;
 	private readonly changes = this._register(new Emitter<IFileChangeEvent>());
 	private readonly database: Promise<IDBDatabase>;
 	private readonly directories = new Map<string, SavedDirectory>();
@@ -98,43 +100,37 @@ export class HTMLFileSystemProvider extends Disposable implements IFileSystemPro
 		return { resource, bytes, revision: await revision(bytes) };
 	}
 
-	public async writeFile(request: IFileWriteRequest): Promise<IFileWriteResult> {
-		const { parent, name } = await this.parent(request.resource);
-		let handle: FileSystemFileHandle;
-		try {
-			handle = await parent.getFileHandle(name);
-		} catch (error) {
-			if (!isMissing(error) || request.expectedRevision !== undefined) throw fileError(error, request.resource);
-			handle = await parent.getFileHandle(name, { create: true });
-		}
-		if (request.expectedRevision !== undefined) {
-			const current = new Uint8Array(await (await handle.getFile()).arrayBuffer());
-			if (await revision(current) !== request.expectedRevision) throw new FileRevisionConflictError(request.resource);
-		}
-		const writable = await handle.createWritable();
-		try {
-			await writable.write(request.content);
-			await writable.close();
-		} catch (error) {
-			await writable.abort();
-			throw error;
-		}
-		this.changes.fire({ resources: [request.resource] });
-		return { stat: await this.stat(request.resource), revision: await revision(new TextEncoder().encode(request.content)) };
+	public watch(resource: URI, _options: IWatchOptions): IDisposable {
+		this.assertNotDisposed();
+		partsOf(resource);
+		// Picked-folder APIs have no system watcher; editor focus still revalidates disk content.
+		return Disposable.None;
 	}
 
-	public async writeFileBytes(resource: URI, bytes: Uint8Array): Promise<IFileWriteResult> {
+	public async writeFile(resource: URI, bytes: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {
 		const { parent, name } = await this.parent(resource);
-		try { await parent.getFileHandle(name); throw new Error('Copy target already exists'); }
-		catch (error) { if (!isMissing(error)) throw error; }
-		const handle = await parent.getFileHandle(name, { create: true });
-		const writable = await handle.createWritable();
+		let handle: FileSystemFileHandle;
+		let created = false;
 		try {
+			handle = await parent.getFileHandle(name);
+			if (!options.overwrite) throw new Error(localize({ bundle: 'ash', key: 'workbench.browserFolderFileExists' }, 'File already exists'));
+		} catch (error) {
+			if (!isMissing(error) || !options.create || options.expectedRevision !== undefined) throw fileError(error, resource);
+			handle = await parent.getFileHandle(name, { create: true });
+			created = true;
+		}
+		if (options.expectedRevision !== undefined) {
+			const current = new Uint8Array(await (await handle.getFile()).arrayBuffer());
+			if (await revision(current) !== options.expectedRevision) throw new FileRevisionConflictError(resource);
+		}
+		let writable: FileSystemWritableFileStream | undefined;
+		try {
+			writable = await handle.createWritable();
 			await writable.write(Uint8Array.from(bytes));
 			await writable.close();
 		} catch (error) {
-			await writable.abort();
-			await parent.removeEntry(name);
+			await writable?.abort().catch(() => undefined);
+			if (created) await parent.removeEntry(name);
 			throw error;
 		}
 		this.changes.fire({ resources: [resource] });

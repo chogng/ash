@@ -1,9 +1,9 @@
 import { addDisposableListener } from '../../../base/browser/dom.js';
-import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
-import { Emitter } from '../../../base/common/event.js';
+import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { Emitter, Event } from '../../../base/common/event.js';
 import { URI } from '../../../base/common/uri.js';
 import type { IFileSystemProvider } from '../common/files.js';
-import { FileKind, FileNotFoundError, FileRevisionConflictError, type IFileStat, type IFileEntry, type IFileBytes, type IFileWriteRequest, type IFileWriteResult, type IFileChangeEvent, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type FileDeleteMode } from '../common/files.js';
+import { FileKind, FileNotFoundError, FileRevisionConflictError, FileSystemProviderCapabilities, type IFileStat, type IFileEntry, type IFileBytes, type IFileWriteOptions, type IFileWriteResult, type IFileChangeEvent, type IWatchOptions, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type FileDeleteMode } from '../common/files.js';
 
 interface Entry {
 	readonly kind: FileKind.File | FileKind.Directory;
@@ -14,6 +14,8 @@ interface Entry {
 
 /** Browser files with atomic revision checks shared by every window on the same origin. */
 export class IndexedDBFileSystemProvider extends Disposable implements IFileSystemProvider {
+	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy;
+	public readonly onDidChangeCapabilities = Event.None;
 	private readonly changes = this._register(new Emitter<IFileChangeEvent>());
 	public readonly onDidChangeFiles = this.changes.event;
 	private readonly channel: BroadcastChannel;
@@ -60,12 +62,11 @@ export class IndexedDBFileSystemProvider extends Disposable implements IFileSyst
 		});
 	}
 
-	public async writeFile(request: IFileWriteRequest): Promise<IFileWriteResult> {
-		return this.write(request.resource, new TextEncoder().encode(request.content), request.expectedRevision);
-	}
-
-	public async writeFileBytes(resource: URI, bytes: Uint8Array): Promise<IFileWriteResult> {
-		return this.write(resource, bytes, undefined, true);
+	public watch(resource: URI, _options: IWatchOptions): IDisposable {
+		this.assertNotDisposed();
+		this.key(resource);
+		// Cross-window invalidations are already delivered by the database-owned BroadcastChannel.
+		return Disposable.None;
 	}
 
 	public async createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat> {
@@ -121,15 +122,14 @@ export class IndexedDBFileSystemProvider extends Disposable implements IFileSyst
 		});
 	}
 
-	private async write(resource: URI, bytes: Uint8Array, expectedRevision?: string, exclusive = false): Promise<IFileWriteResult> {
+	public async writeFile(resource: URI, bytes: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {
 		return this.access(true, entries => {
 			const key = this.key(resource);
 			const current = entries.get(key);
-			if (expectedRevision !== undefined && current?.revision !== expectedRevision) {
+			if (current && !options.overwrite) throw new Error('File already exists');
+			if (!current && !options.create) throw new FileNotFoundError(resource);
+			if (options.expectedRevision !== undefined && current?.revision !== options.expectedRevision) {
 				throw new FileRevisionConflictError(resource);
-			}
-			if (exclusive && current) {
-				throw new Error('File already exists');
 			}
 			if (current?.kind === FileKind.Directory) {
 				throw new TypeError('Expected a file');

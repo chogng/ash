@@ -1,18 +1,20 @@
 ---
 name: smoke-tests
-description: Use when running Ash smoke tests or working on smoke-test CI steps. Covers pnpm run smoketest / smoketest-no-compile, grep filtering tests, and tracking down flaky smoke tests in CI.
+description: Use when running Ash smoke tests or working on smoke-test CI steps. Covers pnpm run smoketest / smoketest-no-compile, grep filtering tests, and a temporary repeat-loop technique for tracking down flaky smoke tests in CI.
 ---
 
 # Running Smoke Tests
 
-Smoke tests live in `test/smoke/` and drive a full Ash instance (Electron or web) through end-to-end user flows.
+Smoke tests live in `test/smoke/` and drive a full Ash instance (Electron or web, or remote) through end-to-end user flows.
 
 ## Scripts
 
 Run from the repository root:
 
-- `pnpm run smoketest` — prepares the application and tests, then runs Electron smoke tests with App Server.
-- `pnpm run smoketest-no-compile` — runs the same tests after preparation. CI uses this after an explicit preparation step.
+- `pnpm run smoketest` — compiles the smoke tests first (`test/smoke`), then runs them.
+- `pnpm run smoketest-no-compile` — runs the already-compiled smoke tests. CI uses this after an explicit compile step.
+
+Both forward extra arguments after `--` to the runner (`test/smoke/test/index.js`).
 
 For a specific target:
 

@@ -37,11 +37,16 @@ test('Session files preserve their original directory through selection, directo
 		const fileHost: IRendererHost = {
 			...host, fileSearch: { glob: async (directory, query, signal) => { calls.push({ target: directory.target, query, aborted: signal?.aborted }); return { matches: [], totalMatches: 0 }; } }, fs: {
 				...host.fs,
-				readFile: async params => { calls.push(params); return { content: 'original', revision: 'rev-1' }; },
-				writeFile: async params => { calls.push(params); return { revision: 'rev-2', metadata: { fileType: 'file', readonly: false, sizeBytes: 7, modifiedAtMillis: null } }; },
+				readBinaryFile: async params => { calls.push(params); return { resource: { resourceId: 'file', mimeType: 'text/plain', size: 8, sha256: 'sha256:file' }, revision: 'rev-1' }; },
+				writeBinaryFile: async params => { calls.push(params); return { revision: 'rev-2', metadata: { fileType: 'file', readonly: false, sizeBytes: 7, modifiedAtMillis: null } }; },
 				copy: async params => { calls.push(params); },
 				pasteSystemFiles: async params => { calls.push(params); return true; },
-			}
+			},
+			resource: {
+				...host.resource,
+				read: async () => ({ resourceId: 'file', offset: 0, dataBase64: 'b3JpZ2luYWw=', decodedLength: 8, eof: true }),
+				release: async () => { },
+			},
 		};
 		using files = services.createInstance(SessionFileService, fileHost);
 		const originalFolder = workspace.getWorkspace().folders[0]!;
@@ -49,7 +54,7 @@ test('Session files preserve their original directory through selection, directo
 		await files.readFile(first);
 		sessions.openSession('second', 'second-thread');
 		assert.equal(workspace.getWorkspace().folders[0]!.uri.toString(), URI.file('C:/sessions/second').toString());
-		await files.writeFile({ resource: first, content: 'updated', expectedRevision: 'rev-1' });
+		await files.writeFile(first, new TextEncoder().encode('updated'), { create: true, overwrite: true, expectedRevision: 'rev-1' });
 		provider.items = [session('first', 'C:/sessions/moved'), provider.items[1]!];
 		await sessions.openThread('first', 'first-thread');
 		await files.copy(first, first.with({ path: '/C:/sessions/first/copy.ts' }));
@@ -61,7 +66,7 @@ test('Session files preserve their original directory through selection, directo
 		const owner = { sessionId: 'first', path: 'C:/sessions/first' };
 		assert.deepEqual(calls, [
 			{ sessionDirectory: owner, path: 'main.ts' },
-			{ sessionDirectory: owner, path: 'main.ts', content: 'updated', expectedRevision: 'rev-1' },
+			{ sessionDirectory: owner, path: 'main.ts', dataBase64: 'dXBkYXRlZA==', options: { mode: 'createOrReplace', expectedRevision: 'rev-1' } },
 			{ sessionDirectory: owner, source: 'main.ts', target: 'copy.ts' },
 			{ sessionDirectory: owner, path: '.', moveRequested: false },
 			{ sessionDirectory: owner, path: 'main.ts' },

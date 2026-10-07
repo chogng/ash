@@ -1,8 +1,8 @@
 import { createTestFileService } from '../../../../test/common/testEditorServices.js';
-import type { IFileSystemProvider } from '../../../../../platform/files/common/files.js';
+import { type IFileSystemProvider, type IFileWriteOptions, type IFileWriteResult, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
-import { Disposable } from '../../../../../base/common/lifecycle.js';
+import { Disposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { BrowserTextModelService } from '../../../../services/textmodelResolver/browser/browserTextModelService.js';
 import { BrowserWorkingCopyService } from '../../../../services/workingCopy/browser/browserWorkingCopyService.js';
@@ -113,6 +113,10 @@ export class MemoryResourceStore implements ITextResourceStore {
 }
 
 export class MemoryFileService implements IFileSystemProvider {
+	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy;
+	public readonly onDidChangeCapabilities = Event.None;
+	public watch(): IDisposable { return Disposable.None; }
+
 	readonly onDidChangeFiles = Event.None;
 	private readonly resources = new Map<string, string>();
 	failRename = false;
@@ -126,8 +130,11 @@ export class MemoryFileService implements IFileSystemProvider {
 	async stat(resource: URI) { if (!this.has(resource)) throw new FileNotFoundError(resource); return { resource, kind: FileKind.File, sizeBytes: this.text(resource).length, readonly: false, modifiedAtMillis: undefined }; }
 	async readDirectory(): Promise<readonly never[]> { return []; }
 	async readFile(resource: URI) { return { resource, bytes: new TextEncoder().encode(this.text(resource)), revision: this.text(resource) }; }
-	async writeFile(request: { readonly resource: URI; readonly content: string; }) { this.resources.set(request.resource.toString(), request.content); return { stat: await this.stat(request.resource), revision: request.content }; }
-	async writeFileBytes(resource: URI, bytes: Uint8Array) { this.resources.set(resource.toString(), new TextDecoder().decode(bytes)); return { stat: await this.stat(resource), revision: 'bytes' }; }
+	public async writeFile(resource: URI, bytes: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {
+		if (!options.overwrite) { this.resources.set(resource.toString(), new TextDecoder().decode(bytes)); return { stat: await this.stat(resource), revision: 'bytes' }; }
+		const request = { resource, content: new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) };
+		this.resources.set(request.resource.toString(), request.content); return { stat: await this.stat(request.resource), revision: request.content };
+	}
 	async createFile(resource: URI, existing: FileExistingTargetBehavior) {
 		if (this.has(resource)) {
 			if (existing === "error") throw new Error("FileSystemOperationFailed");

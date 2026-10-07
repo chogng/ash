@@ -1,12 +1,12 @@
-import type { FsFileType, FsGetMetadataParams, FsGetMetadataResult, FsReadBinaryFileParams, FsReadBinaryFileResult, FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult, FsWriteBinaryFileParams, FsWriteFileParams, FsWriteFileResult, ResourceMetadataResult, ResourceReadResult } from "../../../../../.build/protocol/typescript/index.js";
+import type { FsFileType, FsFileWriteMode, FsGetMetadataParams, FsGetMetadataResult, FsReadBinaryFileParams, FsReadBinaryFileResult, FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult, FsWriteFileParams, FsWriteBinaryFileParams, FsWriteFileResult, ResourceMetadataResult, ResourceReadResult } from "../../../../../.build/protocol/typescript/index.js";
 import type { FsChanged } from "../../../../../.build/protocol/typescript/index.js";
 import type { IResourceApi } from "../../app-server/common/appServerApi.js";
 import { AppServerRemoteError } from "../../app-server/common/appServerError.js";
 import { decodeBase64 } from "../../../base/common/buffer.js";
-import { Emitter, type Event } from "../../../base/common/event.js";
-import { Disposable } from "../../../base/common/lifecycle.js";
+import { Emitter, Event } from "../../../base/common/event.js";
+import { Disposable, type IDisposable } from "../../../base/common/lifecycle.js";
 import { URI } from "../../../base/common/uri.js";
-import { FileKind, FileNotFoundError, FileRevisionConflictError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileEntry, type IFileSystemProvider, type IFileStat, type IFileWriteRequest, type IFileWriteResult } from "../common/files.js";
+import { FileKind, FileNotFoundError, FileRevisionConflictError, FileOperationNotSupportedError, FileSystemProviderCapabilities, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileEntry, type IFileSystemProvider, type IFileStat, type IFileWriteOptions, type IFileWriteResult, type IWatchOptions } from "../common/files.js";
 import { workspaceRelativePath, type IWorkspaceContextService } from "../../workspace/common/workspace.js";
 import { isRemoteResource } from "../../remote/common/remote.js";
 import type { ISystemFileTransferService } from '../common/systemFileTransferService.js';
@@ -38,6 +38,8 @@ export interface BrowserFileServiceOptions {
  * Maps workspace resource URIs to the App Server's root-relative filesystem protocol.
  */
 export class BrowserFileService extends Disposable implements IFileSystemProvider, ISystemFileTransferService {
+	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy;
+	public readonly onDidChangeCapabilities = Event.None;
 	private readonly api: IFileSystemApi;
 	private readonly resourceApi: IResourceApi;
 	private readonly workspaceContextService: IWorkspaceContextService;
@@ -51,6 +53,13 @@ export class BrowserFileService extends Disposable implements IFileSystemProvide
 		this.resourceApi = options.resourceApi;
 		this.workspaceContextService = options.workspaceContextService;
 		if (options.onDidChange) this._register(options.onDidChange(change => this.acceptFileChange(change)));
+	}
+
+	public watch(resource: URI, _options: IWatchOptions): IDisposable {
+		this.assertNotDisposed();
+		this.fileTarget(resource);
+		// Rust owns continuous watches for every authorized workspace root, including Agent consumers.
+		return Disposable.None;
 	}
 
 	async stat(resource: URI): Promise<IFileStat> {
@@ -89,16 +98,20 @@ export class BrowserFileService extends Disposable implements IFileSystemProvide
 		}
 	}
 
-	async writeFile(request: IFileWriteRequest): Promise<IFileWriteResult> {
+	async writeFile(resource: URI, content: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {
+		let mode: FsFileWriteMode;
+		if (options.create) mode = options.overwrite ? 'createOrReplace' : 'create';
+		else if (options.overwrite) mode = 'replace';
+		else throw new FileOperationNotSupportedError(resource, 'writeFile');
 		try {
-			const result = await this.api.writeFile({
-				...this.fileTarget(request.resource),
-				content: request.content,
-				...(request.expectedRevision === undefined ? {} : { expectedRevision: request.expectedRevision }),
+			const result = await this.api.writeBinaryFile({
+				...this.fileTarget(resource),
+				dataBase64: encodeBinaryFile(content),
+				options: { mode, ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) },
 			});
 			return Object.freeze({
 				stat: {
-					resource: request.resource,
+					resource,
 					kind: fileKind(result.metadata.fileType),
 					sizeBytes: result.metadata.sizeBytes,
 					readonly: result.metadata.readonly,
@@ -107,23 +120,10 @@ export class BrowserFileService extends Disposable implements IFileSystemProvide
 				revision: result.revision,
 			});
 		} catch (error) {
-			if (isRevisionConflict(error)) throw new FileRevisionConflictError(request.resource);
+			if (isRevisionConflict(error)) throw new FileRevisionConflictError(resource);
+			if (isFileNotFound(error)) throw new FileNotFoundError(resource);
 			throw error;
 		}
-	}
-
-	async writeFileBytes(resource: URI, bytes: Uint8Array): Promise<IFileWriteResult> {
-		const result = await this.api.writeBinaryFile({ ...this.fileTarget(resource), dataBase64: encodeBinaryFile(bytes) });
-		return Object.freeze({
-			stat: {
-				resource,
-				kind: fileKind(result.metadata.fileType),
-				sizeBytes: result.metadata.sizeBytes,
-				readonly: result.metadata.readonly,
-				modifiedAtMillis: result.metadata.modifiedAtMillis ?? undefined,
-			},
-			revision: result.revision,
-		});
 	}
 
 	async createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat> {

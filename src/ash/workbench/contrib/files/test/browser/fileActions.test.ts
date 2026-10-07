@@ -21,6 +21,7 @@ import { IFileDialogService } from '../../../../../platform/dialogs/common/dialo
 import { IDialogService, type IConfirmationDialogOptions } from '../../../../../platform/dialogs/common/dialogs.js';
 import { Event } from '../../../../../base/common/event.js';
 import { IFileService, FileKind, FileNotFoundError, type IFileService as FileServiceContract } from '../../../../../platform/files/common/files.js';
+import { FileService } from '../../../../../platform/files/common/fileService.js';
 import { ISystemFileTransferService } from '../../../../../platform/files/common/systemFileTransferService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IQuickInputService, type IQuickInputService as QuickInputServiceContract } from '../../../../../platform/quickinput/common/quickInput.js';
@@ -692,5 +693,5 @@ test('Reveal tab menu groups both destinations and targets the clicked inactive 
 });
 
 function createExplorerService(workspace: WorkspaceContextService): ExplorerService {
-	return new ExplorerService(workspace, { onDidChangeFiles: Event.None } as FileServiceContract, configurations.add(new InMemoryConfigurationService()));
+	return new ExplorerService(workspace, configurations.add(new FileService()), configurations.add(new InMemoryConfigurationService()));
 }

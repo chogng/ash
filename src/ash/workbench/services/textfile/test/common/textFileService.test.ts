@@ -1,4 +1,6 @@
-import type { IFileSystemProvider } from '../../../../../platform/files/common/files.js';
+import { Disposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
+import { Event } from '../../../../../base/common/event.js';
+import { type IFileSystemProvider, type IFileWriteOptions, type IFileWriteResult, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import { createTestTextFileService } from '../../../../test/common/testEditorServices.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
@@ -119,6 +121,10 @@ test("TextFileService maps conditional file-write conflicts to its editor-facing
 });
 
 class TestFileService implements IFileSystemProvider {
+	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy;
+	public readonly onDidChangeCapabilities = Event.None;
+	public watch(): IDisposable { return Disposable.None; }
+
 	readCount = 0;
 	reportedSizeBytes: number | undefined;
 	readonly writes: IFileWriteRequest[] = [];
@@ -150,7 +156,9 @@ class TestFileService implements IFileSystemProvider {
 		return { resource, bytes: typeof content === "string" ? new TextEncoder().encode(content) : content, revision: "revision-1" };
 	}
 
-	async writeFile(request: IFileWriteRequest) {
+	public async writeFile(resource: URI, bytes: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {
+		if (!options.overwrite) { throw new Error('Text file tests do not paste files'); }
+		const request = { resource, content: new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) };
 		if (this.rejectWritesWithRevisionConflict) throw new FileRevisionConflictError(request.resource);
 		this.writes.push(request);
 		return {
@@ -164,7 +172,6 @@ class TestFileService implements IFileSystemProvider {
 			revision: "revision-2",
 		};
 	}
-	async writeFileBytes(): Promise<never> { throw new Error('Text file tests do not paste files'); }
 
 	async createFile(): Promise<never> { throw new Error("Text file tests do not create empty files"); }
 	async createDirectory(): Promise<never> { throw new Error("Text file tests do not create directories"); }

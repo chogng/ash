@@ -21,6 +21,7 @@ pub use text_document::{
 pub use text_file::TextFileFormat;
 pub use types::FileMutation;
 pub use types::FileMutationError;
+pub use types::FileWriteMode;
 pub use types::file_revision;
 pub use types::{
     DirectoryEntry, ExistingTargetBehavior, FileContent, FileDeleteMode, FileMetadata, FileType,

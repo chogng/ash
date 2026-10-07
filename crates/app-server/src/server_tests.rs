@@ -6338,6 +6338,47 @@ fn filesystem_rpc_lists_and_describes_paths() {
         [0, 255, 42]
     );
     assert!(pasted_again.get("error").is_some());
+    let exclusive = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":17,"method":"fs/writeBinaryFile","params":{
+            "path":"src/new.rs","dataBase64":"AP8=","options":{"mode":"create"}
+        }}),
+    );
+    assert!(exclusive.get("error").is_some());
+    assert_eq!(std::fs::read(root.join("src/new.rs")).unwrap(), b"new");
+    let replaced = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":18,"method":"fs/writeBinaryFile","params":{
+            "path":"src/picture.bin","dataBase64":"AP8=","options":{"mode":"replace","expectedRevision":pasted["result"]["revision"]}
+        }}),
+    );
+    assert_eq!(replaced["result"]["metadata"]["sizeBytes"], 2);
+    let stale_bytes = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":19,"method":"fs/writeBinaryFile","params":{
+            "path":"src/picture.bin","dataBase64":"AQ==","options":{"mode":"createOrReplace","expectedRevision":pasted["result"]["revision"]}
+        }}),
+    );
+    assert_eq!(
+        stale_bytes["error"]["message"],
+        "FileSystemRevisionConflict"
+    );
+    assert_eq!(
+        std::fs::read(root.join("src/picture.bin")).unwrap(),
+        [0, 255]
+    );
+    let missing_replace = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":20,"method":"fs/writeBinaryFile","params":{
+            "path":"src/missing.bin","dataBase64":"AQ==","options":{"mode":"replace"}
+        }}),
+    );
+    assert_eq!(missing_replace["error"]["message"], "FileSystemNotFound");
+    assert!(!root.join("src/missing.bin").exists());
     let large_text = call(
         &server,
         &mut connection,

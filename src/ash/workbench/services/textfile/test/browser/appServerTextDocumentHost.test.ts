@@ -1,4 +1,4 @@
-import type { IFileSystemProvider } from '../../../../../platform/files/common/files.js';
+import { type IFileSystemProvider, type IFileWriteOptions, type IFileWriteResult, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import { createTestFileService, createTestTextFileService } from '../../../../test/common/testEditorServices.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
@@ -9,8 +9,8 @@ import assert from 'node:assert/strict';
 import { mock } from 'node:test';
 import { test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
-import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
-import { Emitter } from '../../../../../base/common/event.js';
+import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import { ITextModelService } from '../../../../../editor/common/services/resolverService.js';
@@ -96,6 +96,10 @@ class Transport implements AppServerTransport {
 }
 
 class Files extends Disposable implements IFileSystemProvider {
+	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy;
+	public readonly onDidChangeCapabilities = Event.None;
+	public watch(): IDisposable { return Disposable.None; }
+
 	private readonly changes = this._register(new Emitter<{ resources: readonly URI[]; }>());
 	public readonly onDidChangeFiles = this.changes.event;
 	public readonly contents = new Map<string, string>();
@@ -112,12 +116,13 @@ class Files extends Disposable implements IFileSystemProvider {
 		if (content === undefined) throw new FileNotFoundError(resource);
 		return { resource, bytes: new TextEncoder().encode(content), revision: content };
 	}
-	public async writeFile(request: IFileWriteRequest) {
+	public async writeFile(resource: URI, bytes: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {
+		if (!options.overwrite) { return this.writeFile(resource, new TextEncoder().encode(new TextDecoder('utf8', { ignoreBOM: true }).decode(bytes)), { create: true, overwrite: true }); }
+		const request = { resource, content: new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) };
 		if (request.expectedRevision !== undefined && request.expectedRevision !== this.contents.get(request.resource.toString())) { throw new FileRevisionConflictError(request.resource); }
 		this.contents.set(request.resource.toString(), request.content);
 		return { stat: await this.stat(request.resource), revision: request.content };
 	}
-	public async writeFileBytes(resource: URI, bytes: Uint8Array) { return this.writeFile({ resource, content: new TextDecoder('utf8', { ignoreBOM: true }).decode(bytes) }); }
 	public async createFile(resource: URI, existing: FileExistingTargetBehavior) {
 		if (this.contents.has(resource.toString())) {
 			if (existing === 'error') { throw new Error('File already exists'); }

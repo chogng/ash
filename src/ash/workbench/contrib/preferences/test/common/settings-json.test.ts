@@ -51,27 +51,15 @@ test('SettingsFileSystemProvider projects only the editable JSONC settings resou
 		bytes: new TextEncoder().encode('{}\n'),
 		revision: 'settings:0',
 	});
-	const saved = await provider.writeFile({
-		resource: UserSettingsResource,
-		expectedRevision: 'settings:0',
-		content: '{\n\t// Preserve this explanation.\n\t"editor.enabled": false,\n\t"extension.unregistered": 1,\n}\n',
-	});
+	const saved = await provider.writeFile(UserSettingsResource, new TextEncoder().encode('{\n\t// Preserve this explanation.\n\t"editor.enabled": false,\n\t"extension.unregistered": 1,\n}\n'), { create: true, overwrite: true, expectedRevision: 'settings:0' });
 	assert.equal(saved.revision, 'settings:1');
 	assert.equal(saved.stat.sizeBytes, (await provider.readFile(UserSettingsResource)).bytes.byteLength);
 	assert.deepEqual(changes, [UserSettingsResource.toString()]);
 	assert.match(new TextDecoder().decode((await provider.readFile(UserSettingsResource)).bytes), /Preserve this explanation/u);
 	assert.equal((await provider.stat(UserSettingsResource)).readonly, false);
 
-	await assert.rejects(() => provider.writeFile({
-		resource: UserSettingsResource,
-		expectedRevision: 'settings:0',
-		content: '{}',
-	}), FileRevisionConflictError);
-	await assert.rejects(() => provider.writeFile({
-		resource: UserSettingsResource,
-		expectedRevision: 'settings:1',
-		content: '{ "editor.enabled": "yes" }',
-	}), /editor\.enabled/);
+	await assert.rejects(() => provider.writeFile(UserSettingsResource, new TextEncoder().encode('{}'), { create: true, overwrite: true, expectedRevision: 'settings:0' }), FileRevisionConflictError);
+	await assert.rejects(() => provider.writeFile(UserSettingsResource, new TextEncoder().encode('{ "editor.enabled": "yes" }'), { create: true, overwrite: true, expectedRevision: 'settings:1' }), /editor\.enabled/);
 	await assert.rejects(() => provider.readFile(URI.parse('ash-settings:/missing.json')), /does not exist/);
 });
 

@@ -98,15 +98,15 @@ Rust primitive 与 model adapter 的实现细节分别见
 | 能力                                              | Owner                                        | 当前状态                                                                  |
 | ------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------- |
 | 文件树渲染、展开、加载态                          | Renderer                                     | ✅ 单目录 Explorer 与 Seti 文件图标                                       |
-| 选中、快捷键、文件打开与编辑                      | Renderer                                     | 部分具备：点击 UTF-8 文件进入编辑器；保存与键盘选择尚未完成               |
+| 选中、快捷键、文件打开与编辑                      | Renderer                                     | 已接入文件编辑和保存；选择与快捷键由 Explorer 和 Editor 维护               |
 | 系统目录选择器                                    | Electron Main / Preload                      | ✅ Empty Explorer 选择单目录并重启绑定 workspace                          |
 | 在原生文件管理器中显示                            | Electron Main / Preload                      | 尚未完成                                                                  |
-| 目录枚举、metadata、文件读写与 workspace 边界校验 | Rust / App Server                            | ✅ `fs/readDirectory`、`fs/getMetadata`、`fs/readFile`、`fs/writeFile`    |
+| 目录枚举、metadata、文件读写与 workspace 边界校验 | Rust / App Server                            | ✅ metadata、目录枚举、原始字节读写和条件发布                              |
 | 重命名、删除                                      | Rust / App Server                            | 尚未完成                                                                  |
 | workspace 内容搜索执行、取消与结果限额            | Rust / App Server                            | ✅ connection-owned pull job                                              |
 | 搜索表单、增量结果分组与高亮                      | Renderer                                     | ✅ Search contrib                                                         |
 | 搜索结果打开文件                                  | Files / Editor vertical                      | 尚未完成                                                                  |
-| Explorer watcher invalidation 与文件树自动刷新    | Rust authority + Renderer projection         | 部分具备：App Server 已发布 root-relative `fs/changed`；Renderer 尚未消费 |
+| Explorer watcher invalidation 与文件树自动刷新    | Rust / App Server + Renderer                  | ✅ Renderer 消费 `fs/changed`，当前 Workspace 拥有 watch 句柄              |
 | 文件位置 identity                                 | 共享 URI contract；Renderer 只维护其视图投影 | 部分具备：单根 URI 映射                                                   |
 | 跨重启的领域 `FileId` 或 `DocumentId`             | 拥有该生命周期的 Rust 领域模型               | 尚未完成                                                                  |
 | Tab、Pane 等纯 UI 实例 ID                         | Renderer                                     | 已有 Workbench 基础设施                                                   |
@@ -382,15 +382,24 @@ contribution 不得通过该服务直接访问文件系统。单根 Folder 启�
 配置给 App Server；Renderer 的 `BrowserFileService` 只把 workspace URI 映射成根相对路径，
 目录枚举、metadata、有界原子写入、filesystem invalidation 与最终边界授权由 Rust / App Server
 完成。文件 provider 的 `readFile()` 返回原始字节和不透明 revision；公共 `FileService` 按 scheme
-路由读取，并为文本调用执行保留 BOM 的严格 UTF-8 解码。`TextFileService` 继续负责编辑器的
+路由读写，并为文本调用执行保留 BOM 的严格 UTF-8 解码和编码。provider 的 `writeFile()` 接收
+原始字节及 create、overwrite、expectedRevision；文本保存允许创建或覆盖，二进制导入要求目标
+不存在。App Server 的字节写入使用显式 mode，并由 Rust 在发布锁内完成版本校验。
+`FileService` 按 provider capability 阻止只读修改，能力变化使 metadata 失效。`TextFileService` 继续负责编辑器的
 文本格式、BOM 与保存策略。App Server 通过连接所属的 resource 分块传输文件字节，Renderer
 在读取成功或失败后释放该 resource。文件读取保持既有的 50 MiB 上限；其他 resource 默认
 16 MiB，所有 resource 仍共享每连接 64 MiB 和 128 个句柄的配额。
 
+`FileService.watch()` 对相同 URI 和规范化选项共享 provider 句柄，最后一个调用方释放、provider
+注销或服务销毁时关闭句柄；`WorkspaceWatcher` 随当前目录集合更新注册。Rust 继续拥有授权目录
+的 OS 监听和 `fs/changed`，Renderer 的 watch 不重复建立系统监听。Electron profile 目录的
+OS 监听由 Main 的 `DiskFileSystemProvider` 持有，随窗口关闭释放；用户数据 provider 映射其事件。
+IndexedDB 通过跨窗口消息提供变化通知；浏览器选取的文件夹没有系统监听，仍在编辑器恢复焦点时校验内容。
+
 Workspace 内容搜索通过独立的
 `grep/search/start|read|cancel` contract 接入；其 ownership 与限制见
-[`search.md`](search.md)。Desktop 的保存命令、dirty state、watcher 消费、多根 Workspace 与
-搜索结果打开仍未实现。
+[`search.md`](search.md)。Desktop 已接入保存命令、dirty state 和 watcher 消费；
+多根 Workspace 内容访问按目录身份路由。
 
 首次进入未授权目录时，Electron Renderer 在窗口内显示目录权限选择，启动阶段也先完成选择再
 建立 Workbench。Electron Main 提供按当前语言翻译的文案并等待选择；App Server 保存目录能力。
@@ -411,9 +420,7 @@ App Server 连接并重新读取 Session/Thread；Renderer 不直接读写 SQLit
 - 运行时已支持单根 Folder authority 切换；关闭项目、多根 Workspace 内容切换和最近项目流程尚未实现；
 - `.ash-workspace` 当前只作为窗口身份，尚未定义或解析其内容；
 - 普通单文件参数仍属于空窗口，文件编辑器尚未实现；
-- Explorer 当前仅支持单根 Folder 的按需读取；后端已有 `fs/writeFile` 与 `fs/changed`，但
-  Renderer 尚未接入保存、自动刷新、选择模型或键盘导航。Search contrib 已能展示单根
-  workspace 内容结果，但尚不能打开文件；
+- Explorer 按需读取目录并消费 `fs/changed` 自动刷新；文件编辑器通过共享文本服务保存。
 - 最近项目和 workspace 配置管理尚未实现；
 - 空窗口的未保存内容已由共享 Rust 备份服务保存和恢复；恢复身份使用工作区 ID，
   不依赖磁盘 `backupPath`；

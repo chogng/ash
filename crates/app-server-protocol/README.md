@@ -16,6 +16,12 @@
 
 `model/list` 的 `ModelCatalogEntry.settings` 返回当前连接和目录生效后的模型请求配置，来源类型为共享 protocol 的 `ModelSettings`。列表不暴露基础提示词正文。新执行使用同一批目录资料绑定模型默认参数和预算，目录刷新只影响后续执行。
 
+`fs/writeBinaryFile` 接收原始字节的 base64，最多 50 MiB。可选 `options.mode` 明确选择
+`create`（已有文件包括空文件时拒绝）、`replace`（文件不存在时拒绝）或 `createOrReplace`。
+`options.expectedRevision` 对原始字节执行版本校验；校验和发布由文件系统在同一目录锁内完成，
+冲突返回 `FileSystemRevisionConflict`，不更改原文件。省略 `options` 的旧调用仍采用粘贴规则：
+只允许写入不存在或已有空文件的目标。返回 metadata 和原始字节的 revision，文本保存也可使用该契约。
+
 ## 编译与导出
 
 - 队列、通话、协作和任务交付使用各自的 `*-contract` crate；服务端启用执行 feature 时也不改变协议依赖。协议构建不编译这些领域的执行器、SQLite、工具执行、剪贴板或图片处理；默认与服务端 feature 合并后的依赖边界由 `tests/dependency_boundary.rs` 验证。

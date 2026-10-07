@@ -1,8 +1,8 @@
 import { createTestFileService } from '../../../../test/common/testEditorServices.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
-import { Disposable } from '../../../../../base/common/lifecycle.js';
+import { Disposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
-import { FileKind, FileNotFoundError, IFileService, type IFileStat } from '../../../../../platform/files/common/files.js';
+import { FileKind, FileNotFoundError, IFileService, type IFileStat, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import { IWorkspaceContextService, type IAnyWorkspaceIdentifier } from '../../../../../platform/workspace/common/workspace.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
@@ -173,18 +173,16 @@ export class DebugViewTestServices extends Disposable {
 		services.set(IWorkspaceContextService, this.workspace);
 		services.set(IWorkspaceOpenService, { canOpenFolder: true, canOpenWorkspace: true, openFolder: async () => { this.folderOpens++; }, openWorkspace: unexpected, pickFolder: unexpected });
 		services.set(IFileService, this._register(createTestFileService({
+			capabilities: FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy,
+			onDidChangeCapabilities: Event.None,
+			watch: (): IDisposable => Disposable.None,
+
 			onDidChangeFiles: Event.None,
 			stat: async resource => {
 				if (!this.documents.has(resource.toString())) throw new FileNotFoundError(resource);
 				return stat(resource);
 			},
-			createDirectory: async resource => ({ ...stat(resource), kind: FileKind.Directory }),
-			writeFileBytes: async (resource, bytes) => {
-				if (this.documents.has(resource.toString())) throw new Error('Existing launch configuration must not be replaced');
-				this.writes++;
-				this.documents.set(resource.toString(), new TextDecoder().decode(bytes));
-				return { stat: stat(resource), revision: 'created' };
-			}, readFile: unexpected, readDirectory: unexpected, writeFile: unexpected,
+			createDirectory: async resource => ({ ...stat(resource), kind: FileKind.Directory }), readFile: unexpected, readDirectory: unexpected, writeFile: unexpected,
 			createFile: unexpected, copy: unexpected, rename: unexpected, delete: unexpected,
 		})));
 		return services;

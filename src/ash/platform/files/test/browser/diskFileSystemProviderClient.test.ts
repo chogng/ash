@@ -19,11 +19,11 @@ test('desktop file transport preserves resources, revisions, and root boundaries
 		const resource = URI.file(join(directory, 'test.json'));
 		await client.createFile(resource, 'error');
 		const empty = await client.readFile(resource);
-		await client.writeFile({ resource, content: '{"test":true}', expectedRevision: empty.revision });
+		await client.writeFile(resource, new TextEncoder().encode('{"test":true}'), { create: true, overwrite: true, expectedRevision: empty.revision });
 		const loaded = await client.readFile(resource);
 		assert.equal(loaded.resource.toString(), resource.toString());
 		assert.equal(new TextDecoder().decode(loaded.bytes), '{"test":true}');
-		await assert.rejects(client.writeFile({ resource, content: 'stale', expectedRevision: empty.revision }), FileRevisionConflictError);
+		await assert.rejects(client.writeFile(resource, new TextEncoder().encode('stale'), { create: true, overwrite: true, expectedRevision: empty.revision }), FileRevisionConflictError);
 		await assert.rejects(client.readFile(URI.file(join(directory, '..', 'outside.json'))), /outside the granted roots/);
 		await assert.rejects(client.readFile(URI.file(join(directory, 'missing.json'))), FileNotFoundError);
 		assert.equal(extUriBiasedIgnorePathCase.isEqual((await client.readDirectory(URI.file(directory)))[0]?.resource, resource), true);

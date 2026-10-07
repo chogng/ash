@@ -1,7 +1,7 @@
 import { createTestFileService, registerTestComponentServices } from '../../../workbench/test/common/testEditorServices.js';
 import { IGitHubService as ISessionsGitHubService } from '../../contrib/github/browser/githubService.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
-import { IFileService } from '../../../platform/files/common/files.js';
+import { IFileService, FileSystemProviderCapabilities } from '../../../platform/files/common/files.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { WorkspaceContextService } from '../../../workbench/services/workspaces/browser/workspaceContextService.js';
 import { IDialogService, IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
@@ -16,7 +16,7 @@ import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { Emitter, Event } from "../../../base/common/event.js";
-import { DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
+import { DisposableStore, toDisposable, Disposable, type IDisposable } from "../../../base/common/lifecycle.js";
 import type { ICommandEvent, ICommandService } from "../../../platform/commands/common/commands.js";
 import { IContextMenuService, IContextViewService } from "../../../platform/contextview/browser/contextView.js";
 import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
@@ -227,7 +227,12 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	const dialogs = resources.add(new DialogService());
 	services.registerInstance(IDialogService, dialogs);
 	const unexpectedFileOperation = async (): Promise<never> => { throw new Error('Unexpected file operation'); };
-	services.registerSingleton(IFileService, () => createTestFileService({ onDidChangeFiles: Event.None, stat: unexpectedFileOperation, readDirectory: unexpectedFileOperation, readFile: unexpectedFileOperation, writeFile: unexpectedFileOperation, writeFileBytes: unexpectedFileOperation, createFile: unexpectedFileOperation, createDirectory: unexpectedFileOperation, copy: unexpectedFileOperation, rename: unexpectedFileOperation, delete: unexpectedFileOperation }));
+	services.registerSingleton(IFileService, () => createTestFileService({
+		capabilities: FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy,
+		onDidChangeCapabilities: Event.None,
+		watch: (): IDisposable => Disposable.None,
+		onDidChangeFiles: Event.None, stat: unexpectedFileOperation, readDirectory: unexpectedFileOperation, readFile: unexpectedFileOperation, writeFile: unexpectedFileOperation, createFile: unexpectedFileOperation, createDirectory: unexpectedFileOperation, copy: unexpectedFileOperation, rename: unexpectedFileOperation, delete: unexpectedFileOperation
+	}));
 	services.registerInstance(IWorkspaceContextService, resources.add(new WorkspaceContextService({ id: 'sessions-test', folders: [] })));
 
 	services.registerInstance(IFileDialogService, new FileDialogService({ kind: 'server', client: {} as IWebWorkspaceClient, quickInput: () => { throw new Error('Unexpected picker'); }, fileService: () => { throw new Error('Unexpected files'); }, workspaceRoot: () => undefined }, () => dialogs));

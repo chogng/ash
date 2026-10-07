@@ -9,6 +9,7 @@ use crate::FileSystem;
 use crate::FileSystemError;
 use crate::FileType;
 use crate::FileWriteCondition;
+use crate::FileWriteMode;
 use crate::MissingTargetBehavior;
 use crate::SystemFileTransferOperation;
 use crate::file_revision;
@@ -1189,6 +1190,28 @@ impl ScopedFiles {
                 WritePublication::Replace
             }
             FileWriteCondition::MissingOrEmpty => WritePublication::MissingOrEmpty,
+            FileWriteCondition::Options {
+                mode,
+                expected_revision,
+            } => {
+                if let Some(expected) = expected_revision {
+                    let current = self.read_file(path, maximum_bytes)?;
+                    if file_revision(&current) != *expected {
+                        return Err(FileSystemError::RevisionConflict(path.to_path_buf()));
+                    }
+                }
+                match mode {
+                    FileWriteMode::Create => WritePublication::Create,
+                    FileWriteMode::Replace => {
+                        let existing = self.get_metadata(path)?;
+                        if existing.file_type != FileType::File {
+                            return Err(FileSystemError::NotFile(path.to_path_buf()));
+                        }
+                        WritePublication::Replace
+                    }
+                    FileWriteMode::CreateOrReplace => WritePublication::Replace,
+                }
+            }
         };
         self.write_file_inner(path, content, maximum_bytes, publication)
     }

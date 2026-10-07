@@ -12,6 +12,7 @@ use ash_app_server_protocol::protocol::fs::FsDeleteMode;
 use ash_app_server_protocol::protocol::fs::FsDeleteParams;
 use ash_app_server_protocol::protocol::fs::FsExistingTargetBehavior;
 use ash_app_server_protocol::protocol::fs::FsFileType;
+use ash_app_server_protocol::protocol::fs::FsFileWriteMode;
 use ash_app_server_protocol::protocol::fs::FsGetMetadataParams;
 use ash_app_server_protocol::protocol::fs::FsGetMetadataResult;
 use ash_app_server_protocol::protocol::fs::FsMissingTargetBehavior;
@@ -35,6 +36,7 @@ use ash_file_system::FileMetadata;
 use ash_file_system::FileSystemError;
 use ash_file_system::FileType;
 use ash_file_system::FileWriteCondition;
+use ash_file_system::FileWriteMode;
 use ash_file_system::MissingTargetBehavior;
 use ash_file_system::SystemFileTransferOperation;
 use ash_file_system::file_revision;
@@ -167,18 +169,24 @@ impl AppServer {
         let bytes = base64::engine::general_purpose::STANDARD
             .decode(&params.data_base64)
             .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        let condition = match params.options {
+            Some(options) => FileWriteCondition::Options {
+                mode: match options.mode {
+                    FsFileWriteMode::Create => FileWriteMode::Create,
+                    FsFileWriteMode::Replace => FileWriteMode::Replace,
+                    FsFileWriteMode::CreateOrReplace => FileWriteMode::CreateOrReplace,
+                },
+                expected_revision: options.expected_revision,
+            },
+            None => FileWriteCondition::MissingOrEmpty,
+        };
         let metadata = self
             .file_system_for_request(
                 params.dir_id.as_deref(),
                 params.session_directory.as_ref(),
                 Permission::WriteFiles,
             )?
-            .write_file_with_condition(
-                &params.path,
-                &bytes,
-                MAX_EDITOR_FILE_BYTES,
-                &FileWriteCondition::MissingOrEmpty,
-            )
+            .write_file_with_condition(&params.path, &bytes, MAX_EDITOR_FILE_BYTES, &condition)
             .map_err(file_system_error)?;
         result(&FsWriteFileResult {
             metadata: metadata_result(metadata),

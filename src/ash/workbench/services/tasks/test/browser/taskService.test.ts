@@ -1,10 +1,10 @@
-import type { IFileSystemProvider } from '../../../../../platform/files/common/files.js';
+import { type IFileSystemProvider, type IFileWriteOptions, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import { createTestFileService } from '../../../../test/common/testEditorServices.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
-import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { DisposableStore, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { IOutputService } from '../../../output/common/output.js';
 import assert from "node:assert/strict";
 import { suite, test } from 'mocha';
@@ -121,13 +121,20 @@ test("TaskService retains the last good task set when a provider refresh fails",
 });
 
 class FakeFileService implements IFileSystemProvider {
+	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy;
+	public readonly onDidChangeCapabilities = Event.None;
+	public watch(): IDisposable { return Disposable.None; }
+
 	readonly onDidChangeFiles = Event.None;
 	constructor(private readonly root: URI, private readonly files: Readonly<Record<string, string>>) { }
 	async stat(resource: URI) { const path = this.relative(resource); if (!(path in this.files)) throw new FileNotFoundError(resource); return { resource, kind: FileKind.File, sizeBytes: this.files[path]!.length, readonly: false, modifiedAtMillis: undefined }; }
 	async readDirectory() { return []; }
 	async readFile(resource: URI): Promise<IFileBytes> { const path = this.relative(resource); if (!(path in this.files)) throw new FileNotFoundError(resource); return { resource, bytes: new TextEncoder().encode(this.files[path]!), revision: "1" }; }
-	async writeFile(): Promise<IFileWriteResult> { throw new Error("unused"); }
-	async writeFileBytes(): Promise<IFileWriteResult> { throw new Error("unused"); }
+	public async writeFile(resource: URI, bytes: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {
+		if (!options.overwrite) { throw new Error("unused"); }
+		const request = { resource, content: new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) };
+		throw new Error("unused");
+	}
 	async createFile(): Promise<IFileStat> { throw new Error("unused"); }
 	async createDirectory(): Promise<IFileStat> { throw new Error("unused"); }
 	async copy(): Promise<void> { throw new Error("Copy is not used in this test"); }

@@ -1,14 +1,14 @@
 import '../../../../../editor/test/browser/testEditorDom.js';
 import { createTestFileService } from '../../../../test/common/testEditorServices.js';
-import type { IFileSystemProvider } from '../../../../../platform/files/common/files.js';
+import { type IFileSystemProvider, type IFileWriteOptions, type IFileWriteResult, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import { IContextKeyService, ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { TestEditorService } from './bulkEditTestServices.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
-import { Emitter, Event as EventUtils } from "../../../../../base/common/event.js";
-import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
+import { Emitter, Event as EventUtils, Event } from "../../../../../base/common/event.js";
+import { Disposable, toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../editor/common/core/range.js";
@@ -243,6 +243,10 @@ class PreviewTextModelService extends Disposable implements IFileTextModelServic
 }
 
 class PreviewFileService extends Disposable implements IFileSystemProvider {
+	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy;
+	public readonly onDidChangeCapabilities = Event.None;
+	public watch(): IDisposable { return Disposable.None; }
+
 	private readonly changeEmitter = this._register(new Emitter<{ readonly resources: readonly URI[] | undefined; }>());
 	readonly onDidChangeFiles = this.changeEmitter.event;
 	private readonly resources = new Map<string, string>();
@@ -266,8 +270,11 @@ class PreviewFileService extends Disposable implements IFileSystemProvider {
 		const content = this.read(resource);
 		return { resource, bytes: new TextEncoder().encode(content), revision: '1' };
 	}
-	async writeFile(): Promise<never> { throw new Error("Preview must not write files"); }
-	async writeFileBytes(): Promise<never> { throw new Error("Preview must not write files"); }
+	public async writeFile(resource: URI, bytes: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {
+		if (!options.overwrite) { throw new Error("Preview must not write files"); }
+		const request = { resource, content: new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) };
+		throw new Error("Preview must not write files");
+	}
 	async createFile(): Promise<never> { throw new Error("Preview must not create files"); }
 	async createDirectory(): Promise<never> { throw new Error("Preview must not create directories"); }
 	async copy(): Promise<void> { throw new Error("Copy is not used in this test"); }

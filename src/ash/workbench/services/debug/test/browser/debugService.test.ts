@@ -1,6 +1,6 @@
-import type { IFileSystemProvider } from '../../../../../platform/files/common/files.js';
+import { type IFileSystemProvider, type IFileWriteOptions, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import { createTestFileService } from '../../../../test/common/testEditorServices.js';
-import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { DisposableStore, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
@@ -259,13 +259,20 @@ test('DebugService launches and restarts supplied test configurations without la
 });
 
 class FakeFileService implements IFileSystemProvider {
+	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy;
+	public readonly onDidChangeCapabilities = Event.None;
+	public watch(): IDisposable { return Disposable.None; }
+
 	readonly onDidChangeFiles = Event.None;
 	constructor(private readonly root: URI, private readonly document = launchJson) { }
 	async stat(resource: URI) { return { resource, kind: FileKind.File, sizeBytes: this.document.length, readonly: false, modifiedAtMillis: undefined }; }
 	async readDirectory() { return []; }
 	async readFile(resource: URI): Promise<IFileBytes> { if (!resource.path.endsWith("/.vscode/launch.json")) throw new FileNotFoundError(resource); return { resource, bytes: new TextEncoder().encode(this.document), revision: "1" }; }
-	async writeFile(): Promise<IFileWriteResult> { throw new Error("unused"); }
-	async writeFileBytes(): Promise<IFileWriteResult> { throw new Error("unused"); }
+	public async writeFile(resource: URI, bytes: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {
+		if (!options.overwrite) { throw new Error("unused"); }
+		const request = { resource, content: new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) };
+		throw new Error("unused");
+	}
 	async createFile(): Promise<IFileStat> { throw new Error("unused"); }
 	async createDirectory(): Promise<IFileStat> { throw new Error("unused"); }
 	async copy(): Promise<void> { throw new Error("Copy is not used in this test"); }

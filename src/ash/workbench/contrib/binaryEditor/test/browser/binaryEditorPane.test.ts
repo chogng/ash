@@ -1,4 +1,5 @@
-import type { IFileSystemProvider } from '../../../../../platform/files/common/files.js';
+import { Disposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
+import { type IFileSystemProvider, type IFileWriteOptions, type IFileWriteResult, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import { createTestFileService, registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import { createBinaryDiffEditorInput } from '../../../../common/editor/diffEditorInput.js';
@@ -140,13 +141,20 @@ test("Binary diff keeps both byte previews and metadata through working-set seri
 });
 
 class TestFileService implements IFileSystemProvider {
+	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy;
+	public readonly onDidChangeCapabilities = Event.None;
+	public watch(): IDisposable { return Disposable.None; }
+
 	readonly onDidChangeFiles = () => ({ dispose() { }, [Symbol.dispose]() { } });
 	constructor(private readonly bytes: Uint8Array) { }
 	async stat(resource: URI) { return { resource, kind: FileKind.File, sizeBytes: this.bytes.length, readonly: true, modifiedAtMillis: undefined }; }
 	async readFile(resource: URI) { return { resource, bytes: this.bytes, revision: "revision-1" }; }
 	async readDirectory() { return []; }
-	async writeFile(_request: IFileWriteRequest): Promise<never> { throw new Error("read only"); }
-	async writeFileBytes(): Promise<never> { throw new Error("read only"); }
+	public async writeFile(resource: URI, bytes: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {
+		if (!options.overwrite) { throw new Error("read only"); }
+		const _request = { resource, content: new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) };
+		throw new Error("read only");
+	}
 	async createFile(): Promise<never> { throw new Error("read only"); }
 	async createDirectory(): Promise<never> { throw new Error("read only"); }
 	async copy(): Promise<void> { throw new Error("Copy is not used in this test"); }

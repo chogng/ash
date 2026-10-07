@@ -1,16 +1,18 @@
 import { VSBuffer } from '../../../../base/common/buffer.js';
-import { Emitter } from '../../../../base/common/event.js';
-import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Emitter, Event } from '../../../../base/common/event.js';
+import { Disposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../base/common/uri.js';
 import type { IConfigurationResourceService } from '../../../../platform/configuration/common/configurationResourceService.js';
 import { ConfigurationResourceRevisionConflictError } from '../../../../platform/configuration/common/configurationResourceService.js';
 import type { IFileSystemProvider } from '../../../../platform/files/common/files.js';
-import { FileKind, FileNotFoundError, FileOperationNotSupportedError, FileRevisionConflictError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileEntry, type IFileStat, type IFileWriteRequest, type IFileWriteResult } from '../../../../platform/files/common/files.js';
+import { FileKind, FileNotFoundError, FileOperationNotSupportedError, FileRevisionConflictError, FileSystemProviderCapabilities, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileEntry, type IFileStat, type IFileWriteOptions, type IFileWriteResult, type IWatchOptions } from '../../../../platform/files/common/files.js';
 import { SettingsFileSystemScheme, UserSettingsResource } from '../../../services/preferences/common/settingsEditorInput.js';
 
 /** Exposes the editable current-profile settings source through one virtual scheme. */
 export class SettingsFileSystemProvider extends Disposable implements IFileSystemProvider {
 	public static readonly scheme = SettingsFileSystemScheme;
+	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite;
+	public readonly onDidChangeCapabilities = Event.None;
 
 	private readonly changeEmitter = this._register(new Emitter<IFileChangeEvent>());
 
@@ -40,29 +42,34 @@ export class SettingsFileSystemProvider extends Disposable implements IFileSyste
 		return Object.freeze({ resource, bytes: VSBuffer.fromString(snapshot.source).buffer, revision: userSettingsRevision(snapshot.revision) });
 	}
 
-	public async writeFile(request: IFileWriteRequest): Promise<IFileWriteResult> {
-		if (!isEqualResource(request.resource, UserSettingsResource)) {
-			throw new FileOperationNotSupportedError(request.resource, 'writeFile');
+	public watch(resource: URI, _options: IWatchOptions): IDisposable {
+		this.assertNotDisposed();
+		if (!isEqualResource(resource, UserSettingsResource)) throw new FileNotFoundError(resource);
+		// Configuration owns this virtual resource and publishes its changes independently of watches.
+		return Disposable.None;
+	}
+
+	public async writeFile(resource: URI, bytes: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {
+		if (!isEqualResource(resource, UserSettingsResource)) {
+			throw new FileOperationNotSupportedError(resource, 'writeFile');
 		}
+		if (!options.overwrite) throw new Error(`File already exists: ${resource.toString()}`);
+		const content = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
 		const current = await this.configurationResourceService.read();
-		const expectedRevision = request.expectedRevision === undefined
+		const expectedRevision = options.expectedRevision === undefined
 			? current.revision
-			: parseUserSettingsRevision(request.resource, request.expectedRevision);
+			: parseUserSettingsRevision(resource, options.expectedRevision);
 		let saved;
 		try {
-			saved = await this.configurationResourceService.write(request.content, expectedRevision);
+			saved = await this.configurationResourceService.write(content, expectedRevision);
 		} catch (error) {
-			if (error instanceof ConfigurationResourceRevisionConflictError) throw new FileRevisionConflictError(request.resource);
+			if (error instanceof ConfigurationResourceRevisionConflictError) throw new FileRevisionConflictError(resource);
 			throw error;
 		}
 		return Object.freeze({
-			stat: fileStat(request.resource, encodedSize(saved.source)),
+			stat: fileStat(resource, encodedSize(saved.source)),
 			revision: userSettingsRevision(saved.revision),
 		});
-	}
-
-	public writeFileBytes(resource: URI, _bytes: Uint8Array): Promise<IFileWriteResult> {
-		return Promise.reject(new FileOperationNotSupportedError(resource, 'writeFileBytes'));
 	}
 
 	public async createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat> {

@@ -2799,7 +2799,7 @@ window.ashStandaloneIntegration = {
 			onModelAdded: EventUtils.None,
 		});
 		services.registerInstance(IWorkingCopyService, actionPreviewResources.add(new BrowserWorkingCopyService()));
-		services.registerSingleton(IFileService, () => createTestFileService(new MemoryFileService([[callerModel.uri, 'value']])));
+		services.registerSingleton(IFileService, () => createTestFileService(new MemoryFileService([[callerModel.uri, 'value']]), [callerModel.uri.scheme]));
 		services.registerInstance(IDialogService, new TestDialogService());
 		services.registerInstance(IEditorService, {
 			onDidActiveEditorChange: EventUtils.None, onDidVisibleEditorsChange: EventUtils.None,

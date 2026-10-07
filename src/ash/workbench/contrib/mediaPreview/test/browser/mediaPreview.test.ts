@@ -6,13 +6,13 @@ import { setImmediate } from 'node:timers/promises';
 import { JSDOM } from 'jsdom';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
-import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { installEditorTestDom } from '../../../../../editor/test/browser/editorTestGlobals.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import { FileKind, IFileService, type IFileChangeEvent } from '../../../../../platform/files/common/files.js';
+import { FileKind, IFileService, type IFileChangeEvent, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { EditorPanes, getBuiltinEditorPaneFactory } from '../../../../browser/editor.js';
 import { EditorPaneMatch } from '../../../../browser/parts/editor/editorPane.js';
@@ -98,9 +98,13 @@ class MediaFixture extends Disposable {
 		URL.revokeObjectURL = url => { this.revoked.push(url); originalRevoke(url); };
 		const unexpected = async (): Promise<never> => { throw new Error('Unexpected file operation'); };
 		this.services.registerSingleton(IFileService, () => createTestFileService({
+			capabilities: FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy,
+			onDidChangeCapabilities: Event.None,
+			watch: (): IDisposable => Disposable.None,
+
 			onDidChangeFiles: this.changes.event,
 			readFile: async target => ({ resource: target, bytes: await this.read(), revision: 'media' }),
-			stat: async target => ({ resource: target, kind: FileKind.File, sizeBytes: 3, readonly: true, modifiedAtMillis: undefined }), readDirectory: unexpected, writeFile: unexpected, writeFileBytes: unexpected,
+			stat: async target => ({ resource: target, kind: FileKind.File, sizeBytes: 3, readonly: true, modifiedAtMillis: undefined }), readDirectory: unexpected, writeFile: unexpected,
 			createFile: unexpected, createDirectory: unexpected, copy: unexpected, rename: unexpected, delete: unexpected,
 		}));
 		registerTestComponentServices(this.services, this.browser.window.document);

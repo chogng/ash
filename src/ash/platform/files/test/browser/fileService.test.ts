@@ -1,8 +1,10 @@
+import { toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { type IFileWriteOptions, type IWatchOptions, FileSystemProviderCapabilities } from '../../common/files.js';
 import { FileService } from '../../../../platform/files/common/fileService.js';
-import { FileOperationNotSupportedError, type IFileSystemProvider, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileEntry, type IFileStat, type IFileWriteRequest, type IFileWriteResult } from '../../../../platform/files/common/files.js';
+import { FileOperationNotSupportedError, type IFileSystemProvider, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileEntry, type IFileStat, type IFileWriteResult } from '../../../../platform/files/common/files.js';
 import assert from "node:assert/strict";
-import { test } from "mocha";
-import { Emitter } from "../../../../base/common/event.js";
+import { suite, test } from "mocha";
+import { Emitter, Event } from "../../../../base/common/event.js";
 import { URI } from "../../../../base/common/uri.js";
 import { AppServerRemoteError } from "../../../../platform/app-server/common/appServerError.js";
 import { createDisconnectedFileApi } from "../../../../platform/files/browser/fileApi.js";
@@ -12,6 +14,8 @@ import type { FsChanged } from "../../../../../../.build/protocol/typescript/ind
 import { workspaceRelativePath, type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { WorkspaceContextService } from "../../../../workbench/services/workspaces/browser/workspaceContextService.js";
 import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/remote.js";
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
+import { WorkspaceWatcher } from '../../../../workbench/contrib/files/browser/workspaceWatcher.js';
 
 test("disconnected file API declines system file paste without requiring App Server", async () => {
 	const api = createDisconnectedFileApi(() => { throw new Error("App Server unavailable"); });
@@ -98,22 +102,15 @@ test("BrowserFileService maps wire entries back to resource URIs", async () => {
 					revision: "revision-binary",
 				};
 			},
-			writeFile: async ({ path, content, expectedRevision }) => {
-				assert.equal(path, "src/main.ts");
-				assert.equal(content, "export const saved = true;");
-				assert.equal(expectedRevision, "revision-read");
-				return {
-					metadata: {
-						fileType: "file",
-						sizeBytes: content.length,
-						readonly: false,
-						modifiedAtMillis: 123,
-					},
-					revision: "revision-write",
-				};
-			},
-			writeBinaryFile: async ({ path, dataBase64 }) => {
+			writeFile: async () => { throw new Error('Provider writes must use the binary endpoint'); },
+			writeBinaryFile: async ({ path, dataBase64, options }) => {
+				if (path === 'src/main.ts') {
+					assert.equal(Buffer.from(dataBase64, 'base64').toString('utf8'), 'export const saved = true;');
+					assert.deepEqual(options, { mode: 'createOrReplace', expectedRevision: 'revision-read' });
+					return { metadata: { fileType: 'file', sizeBytes: 26, readonly: false, modifiedAtMillis: 123 }, revision: 'revision-write' };
+				}
 				assert.deepEqual({ path, dataBase64 }, { path: 'payload.bin', dataBase64: 'AP8q' });
+				assert.deepEqual(options, { mode: 'create' });
 				return { metadata: { fileType: 'file', sizeBytes: 3, readonly: false, modifiedAtMillis: null }, revision: 'revision-bytes' };
 			},
 			createFile: async ({ path }) => ({ fileType: "file", sizeBytes: path.length - path.length, readonly: false, modifiedAtMillis: null }),
@@ -159,11 +156,7 @@ test("BrowserFileService maps wire entries back to resource URIs", async () => {
 	assert.deepEqual(releasedResources, ['resource-text', "resource-pdf"]);
 	assert.equal((await service.createDirectory(URI.parse('file:///C:/project/new-folder'))).kind, FileKind.Directory);
 	assert.deepEqual(
-		await service.writeFile({
-			resource: URI.parse("file:///C:/project/src/main.ts"),
-			content: "export const saved = true;",
-			expectedRevision: "revision-read",
-		}),
+		await service.writeFile(URI.parse("file:///C:/project/src/main.ts"), new TextEncoder().encode("export const saved = true;"), { create: true, overwrite: true, expectedRevision: "revision-read" }),
 		{
 			stat: {
 				resource: URI.parse("file:///C:/project/src/main.ts"),
@@ -175,7 +168,7 @@ test("BrowserFileService maps wire entries back to resource URIs", async () => {
 			revision: "revision-write",
 		},
 	);
-	assert.deepEqual(await service.writeFileBytes(URI.parse('file:///C:/project/payload.bin'), new Uint8Array([0, 255, 42])), {
+	assert.deepEqual(await service.writeFile(URI.parse('file:///C:/project/payload.bin'), new Uint8Array([0, 255, 42]), { create: true, overwrite: false }), {
 		stat: { resource: URI.parse('file:///C:/project/payload.bin'), kind: FileKind.File, sizeBytes: 3, readonly: false, modifiedAtMillis: undefined },
 		revision: 'revision-bytes',
 	});
@@ -192,8 +185,8 @@ test("BrowserFileService maps App Server revision conflicts to the file contract
 			readDirectory: async () => { throw new Error("unavailable"); },
 			readFile: async () => { throw new Error("unavailable"); },
 			readBinaryFile: async () => { throw new Error("unavailable"); },
-			writeFile: async () => { throw new AppServerRemoteError(-32000, "Revision conflict", { kind: "FileSystemRevisionConflict" }); },
-			writeBinaryFile: async () => { throw new Error('unavailable'); },
+			writeFile: async () => { throw new Error('unavailable'); },
+			writeBinaryFile: async () => { throw new AppServerRemoteError(-32000, "Revision conflict", { kind: "FileSystemRevisionConflict" }); },
 			createFile: async () => { throw new Error("unavailable"); },
 			createDirectory: async () => { throw new Error('unavailable'); },
 			copy: async () => { throw new Error('unavailable'); },
@@ -203,7 +196,7 @@ test("BrowserFileService maps App Server revision conflicts to the file contract
 		},
 	});
 
-	await assert.rejects(service.writeFile({ resource, content: "local", expectedRevision: "stale" }), FileRevisionConflictError);
+	await assert.rejects(service.writeFile(resource, new TextEncoder().encode("local"), { create: true, overwrite: true, expectedRevision: "stale" }), FileRevisionConflictError);
 });
 
 test('BrowserFileService reports missing entries through the file contract for every read operation', async () => {
@@ -490,7 +483,133 @@ test('FileService removes an incomplete cross-provider copy', async () => {
 	assert.equal((await virtual.stat(first)).kind, FileKind.File);
 });
 
+suite('FileService capability and watch ownership', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('text saves preserve BOM and revision while binary imports require an absent target', async () => {
+		using provider = new TestFileProvider('workspace');
+		using service = new FileService();
+		using registration = service.registerProvider('file', provider);
+		const text = URI.file('/workspace/text.txt');
+		const binary = URI.file('/workspace/empty.bin');
+		await service.writeFile({ resource: text, content: '\uFEFFsaved', expectedRevision: 'previous' });
+		provider.addFile(binary, new Uint8Array());
+		await assert.rejects(service.writeFileBytes(binary, new Uint8Array([255])), /already exists/);
+		assert.deepEqual((await provider.readFile(binary)).bytes, new Uint8Array());
+		await service.writeFileBytes(URI.file('/workspace/new.bin'), new Uint8Array([0, 255]));
+		assert.deepEqual(provider.writeRequests, [
+			{ resource: text, bytes: new TextEncoder().encode('\uFEFFsaved'), options: { create: true, overwrite: true, expectedRevision: 'previous' } },
+			{ resource: URI.file('/workspace/new.bin'), bytes: new Uint8Array([0, 255]), options: { create: true, overwrite: false } },
+		]);
+	});
+
+	test('live capability changes invalidate metadata and prevent readonly mutations', async () => {
+		using provider = new TestFileProvider('workspace');
+		using service = new FileService();
+		using registration = service.registerProvider('file', provider);
+		const resource = URI.file('/workspace/text.txt');
+		provider.addFile(resource, new Uint8Array([42]));
+		const changes: IFileChangeEvent[] = [];
+		using listener = service.onDidChangeFiles(event => changes.push(event));
+		provider.setCapabilities(FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.Readonly);
+		assert.equal(service.hasCapability(resource, FileSystemProviderCapabilities.Readonly), true);
+		assert.equal((await service.stat(resource)).readonly, true);
+		assert.throws(() => service.writeFile({ resource, content: 'blocked' }), FileOperationNotSupportedError);
+		assert.throws(() => service.delete(resource, 'error', 'recursive'), FileOperationNotSupportedError);
+		assert.deepEqual(provider.writeRequests, []);
+		provider.setCapabilities(FileSystemProviderCapabilities.FileReadWrite);
+		assert.equal((await service.stat(resource)).readonly, false);
+		assert.deepEqual(changes, [{ resources: undefined }, { resources: undefined }]);
+		registration.dispose();
+		assert.equal(service.hasCapability(resource, FileSystemProviderCapabilities.FileReadWrite), false);
+	});
+
+	test('equivalent watches share one provider handle until the last caller releases it', () => {
+		using provider = new TestFileProvider('workspace');
+		using service = new FileService();
+		using registration = service.registerProvider('file', provider);
+		const resource = URI.file('/workspace');
+		using first = service.watch(resource, { recursive: true, excludes: ['b', 'a', 'b'] });
+		using second = service.watch(resource, { recursive: true, excludes: ['a', 'b'] });
+		using shallow = service.watch(resource);
+		assert.deepEqual(provider.watchRequests.map(request => request.options), [{ recursive: true, excludes: ['a', 'b'] }, { recursive: false, excludes: [] }]);
+		first.dispose();
+		assert.equal(provider.watchRequests[0].disposed, false);
+		second.dispose();
+		assert.equal(provider.watchRequests[0].disposed, true);
+		assert.equal(provider.watchRequests[1].disposed, false);
+		shallow.dispose();
+		assert.equal(provider.watchRequests[1].disposed, true);
+	});
+
+	test('provider replacement and service disposal release watches without stale handle interference', () => {
+		using first = new TestFileProvider('first');
+		using second = new TestFileProvider('second');
+		using service = new FileService();
+		using original = service.registerProvider('file', first);
+		const resource = URI.file('/workspace');
+		using oldWatch = service.watch(resource);
+		original.dispose();
+		assert.equal(first.watchRequests[0].disposed, true);
+		using replacement = service.registerProvider('file', second);
+		using newWatch = service.watch(resource);
+		oldWatch.dispose();
+		assert.equal(second.watchRequests[0].disposed, false);
+		service.dispose();
+		assert.equal(second.watchRequests[0].disposed, true);
+	});
+
+	test('workspace replacement releases old roots and forwards only current workspace changes', () => {
+		using provider = new TestFileProvider('workspace');
+		using service = new FileService();
+		using registration = service.registerProvider('file', provider);
+		using workspace = new WorkspaceContextService({ id: 'first', uri: URI.file('/first') });
+		using watcher = new WorkspaceWatcher(service, workspace);
+		const observed: (readonly URI[] | undefined)[] = [];
+		using listener = watcher.onDidChange(event => observed.push(event));
+		workspace.updateWorkspace({ id: 'second', uri: URI.file('/second') });
+		provider.emit(URI.file('/first/old.txt'));
+		provider.emit(URI.file('/second/new.txt'));
+		assert.deepEqual(provider.watchRequests.map(request => ({ resource: request.resource, options: request.options, disposed: request.disposed })), [
+			{ resource: URI.file('/first'), options: { recursive: true, excludes: [] }, disposed: true },
+			{ resource: URI.file('/second'), options: { recursive: true, excludes: [] }, disposed: false },
+		]);
+		assert.deepEqual(observed, [[URI.file('/second/new.txt')]]);
+		watcher.dispose();
+		assert.equal(provider.watchRequests[1].disposed, true);
+	});
+
+	test('a failed exclusive copy preserves a file published by an intervening writer', async () => {
+		using source = new TestFileProvider('source');
+		using target = new TestFileProvider('target');
+		using service = new FileService();
+		using sourceRegistration = service.registerProvider('file', source);
+		using targetRegistration = service.registerProvider('ash-test', target);
+		const from = URI.file('/workspace/from.bin');
+		const to = URI.parse('ash-test:/to.bin');
+		source.addFile(from, new Uint8Array([42]));
+		const stat = target.stat.bind(target);
+		let published = false;
+		target.stat = async resource => {
+			if (!published) {
+				published = true;
+				target.addFile(resource, new Uint8Array([43]));
+				throw new FileNotFoundError(resource);
+			}
+			return stat(resource);
+		};
+		await assert.rejects(service.copy(from, to), /already exists/);
+		assert.deepEqual((await target.readFile(to)).bytes, new Uint8Array([43]));
+	});
+});
+
 class TestFileProvider implements IFileSystemProvider {
+	public capabilities: FileSystemProviderCapabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy;
+	private readonly capabilitiesChanged = new Emitter<void>();
+	public readonly onDidChangeCapabilities = this.capabilitiesChanged.event;
+	public readonly watchRequests: { resource: URI; options: IWatchOptions; disposed: boolean; }[] = [];
+	public readonly writeRequests: { resource: URI; bytes: Uint8Array; options: IFileWriteOptions; }[] = [];
+
 	private readonly changes = new Emitter<IFileChangeEvent>();
 	private readonly files = new Map<string, Uint8Array>();
 	private readonly directories = new Map<string, readonly IFileEntry[]>();
@@ -498,6 +617,17 @@ class TestFileProvider implements IFileSystemProvider {
 	public readonly onDidChangeFiles = this.changes.event;
 
 	constructor(private readonly label: string) { }
+
+	public watch(resource: URI, options: IWatchOptions): IDisposable {
+		const request = { resource, options, disposed: false };
+		this.watchRequests.push(request);
+		return toDisposable(() => { request.disposed = true; });
+	}
+
+	public setCapabilities(capabilities: FileSystemProviderCapabilities): void {
+		this.capabilities = capabilities;
+		this.capabilitiesChanged.fire();
+	}
 
 	public get hasListeners(): boolean {
 		return this.changes.hasListeners();
@@ -535,13 +665,12 @@ class TestFileProvider implements IFileSystemProvider {
 		return Promise.resolve({ resource, bytes: this.files.get(resource.toString()) ?? new TextEncoder().encode(`${this.label}:${resource.toString()}`), revision: this.label });
 	}
 
-	public writeFile(request: IFileWriteRequest): Promise<IFileWriteResult> {
-		return Promise.resolve({ stat: { resource: request.resource, kind: FileKind.File, sizeBytes: request.content.length, readonly: false, modifiedAtMillis: undefined }, revision: this.label });
-	}
-
-	public writeFileBytes(resource: URI, bytes: Uint8Array): Promise<IFileWriteResult> {
+	public async writeFile(resource: URI, bytes: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {
+		if (this.files.has(resource.toString()) && !options.overwrite) throw new Error('File already exists');
+		if (!this.files.has(resource.toString()) && !options.create) throw new FileNotFoundError(resource);
+		this.writeRequests.push({ resource, bytes, options });
 		this.files.set(resource.toString(), bytes);
-		return Promise.resolve({ stat: { resource, kind: FileKind.File, sizeBytes: bytes.length, readonly: false, modifiedAtMillis: undefined }, revision: this.label });
+		return { stat: await this.stat(resource), revision: this.label };
 	}
 
 	public createFile(resource: URI, _existing: FileExistingTargetBehavior): Promise<IFileStat> {
@@ -572,6 +701,7 @@ class TestFileProvider implements IFileSystemProvider {
 
 	public dispose(): void {
 		this.changes.dispose();
+		this.capabilitiesChanged.dispose();
 	}
 
 	public [Symbol.dispose](): void {

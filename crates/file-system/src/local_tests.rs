@@ -368,6 +368,95 @@ fn missing_or_empty_write_accepts_only_missing_or_empty_targets() {
 }
 
 #[test]
+fn byte_write_modes_preserve_existing_files_and_require_existing_replace_targets() {
+    for mode in [
+        FileWriteMode::Create,
+        FileWriteMode::Replace,
+        FileWriteMode::CreateOrReplace,
+    ] {
+        for initial in [None, Some(&b""[..]), Some(&b"saved"[..])] {
+            let dir = TestDir::new();
+            let path = Path::new("bytes.bin");
+            if let Some(content) = initial {
+                fs::write(dir.path.join(path), content).unwrap();
+            }
+            let file_system = dir.file_system();
+            let bytes = [0, 255, 128];
+            let written = file_system.write_file_with_condition(
+                path,
+                &bytes,
+                1024,
+                &FileWriteCondition::Options {
+                    mode,
+                    expected_revision: None,
+                },
+            );
+            match (mode, initial) {
+                (FileWriteMode::Create, Some(content)) => {
+                    assert_eq!(
+                        written,
+                        Err(FileSystemError::AlreadyExists(path.to_path_buf()))
+                    );
+                    assert_eq!(fs::read(dir.path.join(path)).unwrap(), content);
+                }
+                (FileWriteMode::Replace, None) => {
+                    assert_eq!(written, Err(FileSystemError::NotFound(path.to_path_buf())));
+                    assert!(!dir.path.join(path).exists());
+                }
+                (FileWriteMode::Create, None)
+                | (FileWriteMode::Replace, Some(_))
+                | (FileWriteMode::CreateOrReplace, None | Some(_)) => {
+                    assert_eq!(written.unwrap().size_bytes, bytes.len() as u64);
+                    assert_eq!(fs::read(dir.path.join(path)).unwrap(), bytes);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn conditional_byte_writes_share_the_directory_publication_lock() {
+    let dir = TestDir::new();
+    let path = Path::new("bytes.bin");
+    fs::write(dir.path.join(path), [0, 255]).unwrap();
+    let file_system = dir.file_system();
+    let revision = file_system
+        .read_file_with_revision(path, 1024)
+        .unwrap()
+        .revision;
+    let results = std::thread::scope(|scope| {
+        let handles = [42, 43].map(|byte| {
+            let revision = revision.clone();
+            let files = &file_system;
+            scope.spawn(move || {
+                files.write_file_with_condition(
+                    path,
+                    &[0, 255, byte],
+                    1024,
+                    &FileWriteCondition::Options {
+                        mode: FileWriteMode::Replace,
+                        expected_revision: Some(revision),
+                    },
+                )
+            })
+        });
+        handles.map(|handle| handle.join().unwrap())
+    });
+    assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+    assert_eq!(
+        results
+            .iter()
+            .filter(|result| matches!(result, Err(FileSystemError::RevisionConflict(_))))
+            .count(),
+        1
+    );
+    assert!(matches!(
+        fs::read(dir.path.join(path)).unwrap().as_slice(),
+        [0, 255, 42 | 43]
+    ));
+}
+
+#[test]
 fn missing_or_empty_publication_keeps_files_saved_after_preparation() {
     for initially_empty in [false, true] {
         let dir = TestDir::new();

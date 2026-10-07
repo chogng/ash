@@ -1,16 +1,22 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { copyFile, link, lstat, mkdir, readFile, readdir, rename, rm, rmdir, writeFile } from 'node:fs/promises';
-import { constants } from 'node:fs';
-import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
-import { Emitter } from '../../../base/common/event.js';
-import { Disposable } from '../../../base/common/lifecycle.js';
+import { constants, watch } from 'node:fs';
+import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
+import { Emitter, Event } from '../../../base/common/event.js';
+import { parse } from '../../../base/common/glob.js';
+import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
-import { FileKind, FileNotFoundError, FileRevisionConflictError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileEntry, type IFileSystemProvider, type IFileStat, type IFileWriteRequest, type IFileWriteResult } from '../common/files.js';
+import { FileKind, FileNotFoundError, FileRevisionConflictError, FileSystemProviderCapabilities, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileEntry, type IFileSystemProvider, type IFileStat, type IFileWriteOptions, type IFileWriteResult, type IWatchOptions } from '../common/files.js';
 
 /** Local file access restricted to the roots granted by the desktop host. */
 export class DiskFileSystemProvider extends Disposable implements IFileSystemProvider {
+	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy;
+	public readonly onDidChangeCapabilities = Event.None;
 	private readonly changes = this._register(new Emitter<IFileChangeEvent>());
 	public readonly onDidChangeFiles = this.changes.event;
+	private readonly watchErrors = this._register(new Emitter<string>());
+	public readonly onDidWatchError = this.watchErrors.event;
+	private readonly watchers = this._register(new DisposableMap<string, DisposableStore>());
 	private readonly roots: readonly string[];
 	// Windows have separate provider instances; compare-and-write must share one host queue.
 	private static readonly pendingWrites = new Map<string, Promise<unknown>>();
@@ -18,6 +24,43 @@ export class DiskFileSystemProvider extends Disposable implements IFileSystemPro
 	constructor(roots: readonly URI[]) {
 		super();
 		this.roots = roots.map(root => resolve(root.fsPath));
+	}
+
+	public watch(resource: URI, options: IWatchOptions): IDisposable {
+		this.assertNotDisposed();
+		const excludes = options.excludes.map(pattern => parse(pattern));
+		const id = randomUUID();
+		const resources = new DisposableStore();
+		this.watchers.set(id, resources);
+		void this.path(resource).then(async path => {
+			let isDirectory = false;
+			try { isDirectory = (await lstat(path)).isDirectory(); }
+			catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+			if (resources.isDisposed) return;
+			// Watch a file's parent so an atomic replacement does not leave us watching its old inode.
+			const directory = isDirectory ? path : dirname(path);
+			const watcher = watch(directory, { persistent: false, recursive: isDirectory && options.recursive }, (_event, filename) => {
+				if (resources.isDisposed) return;
+				if (filename === null) { this.changes.fire({ resources: undefined }); return; }
+				const name = filename.toString();
+				if (!isDirectory && (process.platform === 'win32' ? name.toLowerCase() !== basename(path).toLowerCase() : name !== basename(path))) return;
+				if (excludes.some(matches => matches(name) || matches(resolve(directory, name)))) return;
+				this.changes.fire({ resources: [URI.file(resolve(directory, name))] });
+			});
+			resources.add(toDisposable(() => watcher.close()));
+			const onError = (error: Error): void => {
+				this.watchErrors.fire(String(error));
+				this.watchers.deleteAndDispose(id);
+			};
+			watcher.on('error', onError);
+			resources.add(toDisposable(() => watcher.off('error', onError)));
+		}).catch(error => {
+			if (!resources.isDisposed) {
+				this.watchErrors.fire(String(error));
+				this.watchers.deleteAndDispose(id);
+			}
+		});
+		return toDisposable(() => this.watchers.deleteAndDispose(id));
 	}
 
 	public async stat(resource: URI): Promise<IFileStat> {
@@ -42,29 +85,27 @@ export class DiskFileSystemProvider extends Disposable implements IFileSystemPro
 		} catch (error) { throw fileError(error, resource); }
 	}
 
-	public async writeFile(request: IFileWriteRequest): Promise<IFileWriteResult> {
-		const path = await this.path(request.resource);
+	public async writeFile(resource: URI, content: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {
+		const path = await this.path(resource);
 		return this.withWrite(path, async () => {
+			let exists = true;
+			try { await lstat(path); }
+			catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; exists = false; }
+			if (exists && !options.overwrite) throw new Error(`File already exists: ${resource.toString()}`);
+			if (!exists && !options.create) throw new FileNotFoundError(resource);
 			await mkdir(dirname(path), { recursive: true });
 			const temporary = `${path}.${randomUUID()}.tmp`;
 			try {
-				await writeFile(temporary, request.content, { encoding: 'utf8', flag: 'wx' });
-				if (request.expectedRevision !== undefined && (await this.readFile(request.resource)).revision !== request.expectedRevision) {
-					throw new FileRevisionConflictError(request.resource);
+				await writeFile(temporary, content, { flag: 'wx' });
+				if (options.expectedRevision !== undefined && (await this.readFile(resource)).revision !== options.expectedRevision) {
+					throw new FileRevisionConflictError(resource);
 				}
-				await rename(temporary, path);
+				if (options.overwrite) await rename(temporary, path);
+				else await link(temporary, path);
 			} finally { await rm(temporary, { force: true }); }
-			this.changes.fire({ resources: [request.resource] });
-			return { stat: await this.stat(request.resource), revision: revision(Buffer.from(request.content)) };
+			this.changes.fire({ resources: [resource] });
+			return { stat: await this.stat(resource), revision: revision(content) };
 		});
-	}
-
-	public async writeFileBytes(resource: URI, bytes: Uint8Array): Promise<IFileWriteResult> {
-		const path = await this.path(resource);
-		await mkdir(dirname(path), { recursive: true });
-		await writeFile(path, bytes, { flag: 'wx' });
-		this.changes.fire({ resources: [resource] });
-		return { stat: await this.stat(resource), revision: revision(bytes) };
 	}
 
 	public async createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat> {

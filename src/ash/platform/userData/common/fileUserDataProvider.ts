@@ -1,12 +1,14 @@
 import { extUri } from '../../../base/common/resources.js';
-import { Disposable } from '../../../base/common/lifecycle.js';
-import { Emitter } from '../../../base/common/event.js';
+import { Disposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { Emitter, type Event } from '../../../base/common/event.js';
 import { URI } from '../../../base/common/uri.js';
 import { Schemas } from '../../../base/common/network.js';
-import type { IFileSystemProvider, IFileStat, IFileEntry, IFileBytes, IFileWriteRequest, IFileWriteResult, IFileChangeEvent, FileExistingTargetBehavior, FileMissingTargetBehavior, FileDeleteMode } from '../../files/common/files.js';
+import type { IFileSystemProvider, IFileStat, IFileEntry, IFileBytes, IFileWriteOptions, IFileWriteResult, IFileChangeEvent, IWatchOptions, FileSystemProviderCapabilities, FileExistingTargetBehavior, FileMissingTargetBehavior, FileDeleteMode } from '../../files/common/files.js';
 
 /** Maps the UI profile scheme to the host's granted user-data directory. */
 export class FileUserDataProvider extends Disposable implements IFileSystemProvider {
+	public get capabilities(): FileSystemProviderCapabilities { return this.files.capabilities; }
+	public get onDidChangeCapabilities(): Event<void> { return this.files.onDidChangeCapabilities; }
 	private readonly changes = this._register(new Emitter<IFileChangeEvent>());
 	public readonly onDidChangeFiles = this.changes.event;
 
@@ -34,13 +36,12 @@ export class FileUserDataProvider extends Disposable implements IFileSystemProvi
 		return { ...await this.files.readFile(this.toFile(resource)), resource };
 	}
 
-	public async writeFile(request: IFileWriteRequest): Promise<IFileWriteResult> {
-		const result = await this.files.writeFile({ ...request, resource: this.toFile(request.resource) });
-		return { ...result, stat: { ...result.stat, resource: request.resource } };
+	public watch(resource: URI, options: IWatchOptions): IDisposable {
+		return this.files.watch(this.toFile(resource), options);
 	}
 
-	public async writeFileBytes(resource: URI, bytes: Uint8Array): Promise<IFileWriteResult> {
-		const result = await this.files.writeFileBytes(this.toFile(resource), bytes);
+	public async writeFile(resource: URI, bytes: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {
+		const result = await this.files.writeFile(this.toFile(resource), bytes, options);
 		return { ...result, stat: { ...result.stat, resource } };
 	}
 

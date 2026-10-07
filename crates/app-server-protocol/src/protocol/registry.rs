@@ -821,6 +821,10 @@ use crate::protocol::fs::FsExistingTargetBehavior;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsFileType;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::fs::FsFileWriteMode;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::fs::FsFileWriteOptions;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsGetMetadataParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsGetMetadataResult;
@@ -6047,6 +6051,8 @@ typescript_bindings! {
     AttachmentImportRemoteParams,
     AttachmentMaterializeResult,
     FsFileType,
+    FsFileWriteMode,
+    FsFileWriteOptions,
     FsGetMetadataParams,
     FsGetMetadataResult,
     FsReadDirectoryParams,

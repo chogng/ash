@@ -31,6 +31,18 @@ test('browser files persist through reload and reject competing saves from two w
 });
 
 
+test('binary imports retain exact bytes after reload and never replace an existing empty file', async ({ page }) => {
+	await page.goto('/files.html');
+	await expect.poll(() => page.evaluate(() => Boolean(window.ashFilesIntegration))).toBe(true);
+	expect(await page.evaluate(() => window.ashFilesIntegration.importBytes('empty.bin', []))).toBe('saved');
+	expect(await page.evaluate(() => window.ashFilesIntegration.importBytes('empty.bin', [255]))).toBe('File already exists');
+	expect(await page.evaluate(() => window.ashFilesIntegration.readBytes('empty.bin'))).toEqual([]);
+	expect(await page.evaluate(() => window.ashFilesIntegration.importBytes('binary.bin', [0, 255, 239, 187, 191]))).toBe('saved');
+	await page.reload();
+	await expect.poll(() => page.evaluate(() => Boolean(window.ashFilesIntegration))).toBe(true);
+	expect(await page.evaluate(() => window.ashFilesIntegration.readBytes('binary.bin'))).toEqual([0, 255, 239, 187, 191]);
+});
+
 test('binary comparison reloads both byte previews and resolves their file paths', async ({ page }) => {
 	await page.goto('/files.html');
 	await expect.poll(() => page.evaluate(() => Boolean(window.ashFilesIntegration))).toBe(true);
