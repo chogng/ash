@@ -31,7 +31,7 @@
 }
 
 .ash-agent-trace-summary {
-	color: var(--ash-descriptionForeground);
+	color: var(--ash-description-foreground);
 }
 
 .ash-agent-trace-body {
@@ -89,12 +89,11 @@
 
 .ash-agent-trace-event.selected {
 	background: var(--ash-list-inactiveSelectionBackground);
-	color: var(--ash-list-inactiveSelectionForeground, inherit);
-	border-color: var(--ash-contrastActiveBorder, transparent);
+	border-color: var(--ash-contrastBorder, transparent);
 }
 
 .ash-agent-trace-event.failed {
-	color: var(--ash-errorForeground);
+	color: var(--ash-error-foreground);
 }
 
 .ash-agent-trace-event:focus-visible,
@@ -108,7 +107,7 @@
 	padding: 12px;
 	border: 1px solid var(--ash-widget-border, transparent);
 	border-radius: 4px;
-	font-family: var(--ash-editor-font-family, monospace);
+	font-family: var(--ash-font-family-monospace);
 	font-size: 12px;
 	line-height: 1.5;
 	white-space: pre-wrap;
@@ -152,7 +151,7 @@
 	border: 1px solid var(--ash-widget-border, transparent);
 	border-radius: 4px;
 	background: var(--ash-button-secondaryBackground);
-	color: var(--ash-button-secondaryForeground);
+	color: var(--ash-button-foreground);
 	font: inherit;
 	text-align: left;
 	overflow-wrap: anywhere;
