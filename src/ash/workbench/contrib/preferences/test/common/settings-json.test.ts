@@ -48,7 +48,7 @@ test('SettingsFileSystemProvider projects only the editable JSONC settings resou
 
 	assert.deepEqual(await provider.readFile(UserSettingsResource), {
 		resource: UserSettingsResource,
-		content: '{}\n',
+		bytes: new TextEncoder().encode('{}\n'),
 		revision: 'settings:0',
 	});
 	const saved = await provider.writeFile({
@@ -57,9 +57,9 @@ test('SettingsFileSystemProvider projects only the editable JSONC settings resou
 		content: '{\n\t// Preserve this explanation.\n\t"editor.enabled": false,\n\t"extension.unregistered": 1,\n}\n',
 	});
 	assert.equal(saved.revision, 'settings:1');
-	assert.equal(saved.stat.sizeBytes, new TextEncoder().encode((await provider.readFile(UserSettingsResource)).content).byteLength);
+	assert.equal(saved.stat.sizeBytes, (await provider.readFile(UserSettingsResource)).bytes.byteLength);
 	assert.deepEqual(changes, [UserSettingsResource.toString()]);
-	assert.match((await provider.readFile(UserSettingsResource)).content, /Preserve this explanation/u);
+	assert.match(new TextDecoder().decode((await provider.readFile(UserSettingsResource)).bytes), /Preserve this explanation/u);
 	assert.equal((await provider.stat(UserSettingsResource)).readonly, false);
 
 	await assert.rejects(() => provider.writeFile({

@@ -33,7 +33,6 @@ export const IWorkspacesService = createServiceIdentifier<IWorkspacesService>('w
 export const MAX_RECENT_WORKSPACES = 12;
 export const RECENTLY_OPENED_STORAGE_KEY = 'history.recentlyOpenedPathsList';
 export const LEGACY_RECENT_WORKSPACES_STORAGE_KEY = 'workbench.recentWorkspaces';
-export const RECENTLY_OPENED_CHANGED_CHANNEL = 'ash:workspaces:recent:changed';
 
 export function recentWorkspaceUri(recent: IRecent): URI {
 	return 'workspace' in recent ? recent.workspace.configPath : recent.folderUri;

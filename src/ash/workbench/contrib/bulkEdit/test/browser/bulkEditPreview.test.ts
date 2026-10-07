@@ -1,4 +1,6 @@
 import '../../../../../editor/test/browser/testEditorDom.js';
+import { createTestFileService } from '../../../../test/common/testEditorServices.js';
+import type { IFileSystemProvider } from '../../../../../platform/files/common/files.js';
 import { IContextKeyService, ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { TestEditorService } from './bulkEditTestServices.js';
@@ -94,7 +96,7 @@ test('conflict detection covers both rename resources, model mutations and dispo
 	using files = new PreviewFileService([[source, 'source'], [text, 'text']]);
 	using models = new PreviewTextModelService([[text, 'text']], [text]);
 	using services = new InstantiationService();
-	services.registerInstance(IFileService, files);
+	services.registerSingleton(IFileService, () => createTestFileService(files));
 	services.registerInstance(IFileTextModelService, models);
 	try {
 		using reference = await models.acquire({ resource: text });
@@ -122,7 +124,7 @@ for (const outcome of ['accept', 'conflict', 'dispose'] as const) {
 		using models = new PreviewTextModelService([[resource, 'ab']], [resource]);
 		using configuration = new InMemoryConfigurationService();
 		using services = new InstantiationService();
-		services.registerInstance(IFileService, files);
+		services.registerSingleton(IFileService, () => createTestFileService(files));
 		services.registerInstance(IFileTextModelService, models);
 		services.registerInstance(ITextModelResourceService, models);
 		services.registerInstance(IConfigurationService, configuration);
@@ -240,7 +242,7 @@ class PreviewTextModelService extends Disposable implements IFileTextModelServic
 	async refresh(): Promise<void> { }
 }
 
-class PreviewFileService extends Disposable implements IFileService {
+class PreviewFileService extends Disposable implements IFileSystemProvider {
 	private readonly changeEmitter = this._register(new Emitter<{ readonly resources: readonly URI[] | undefined; }>());
 	readonly onDidChangeFiles = this.changeEmitter.event;
 	private readonly resources = new Map<string, string>();
@@ -259,8 +261,11 @@ class PreviewFileService extends Disposable implements IFileService {
 		return { resource, kind: FileKind.File, sizeBytes: this.read(resource).length, readonly: false, modifiedAtMillis: undefined };
 	}
 	async readDirectory(): Promise<readonly never[]> { return []; }
-	async readFile(resource: URI) { if (!this.has(resource)) throw new FileNotFoundError(resource); return { resource, content: this.read(resource), revision: "1" }; }
-	async readFileBytes(resource: URI) { const content = await this.readFile(resource); return { resource, bytes: new TextEncoder().encode(content.content), revision: content.revision }; }
+	async readFile(resource: URI) {
+		if (!this.has(resource)) throw new FileNotFoundError(resource);
+		const content = this.read(resource);
+		return { resource, bytes: new TextEncoder().encode(content), revision: '1' };
+	}
 	async writeFile(): Promise<never> { throw new Error("Preview must not write files"); }
 	async writeFileBytes(): Promise<never> { throw new Error("Preview must not write files"); }
 	async createFile(): Promise<never> { throw new Error("Preview must not create files"); }
@@ -292,7 +297,7 @@ function installDomGlobals(browser: JSDOM) {
 
 async function previewEdits(edit: LanguageWorkspaceEdit, dependencies: { files: PreviewFileService; models: PreviewTextModelService; workingCopies: IWorkingCopyService; }, signal: AbortSignal): Promise<BulkFileOperations> {
 	using services = new InstantiationService();
-	services.registerInstance(IFileService, dependencies.files);
+	services.registerSingleton(IFileService, () => createTestFileService(dependencies.files));
 	services.registerInstance(ITextModelResourceService, dependencies.models);
 	services.registerInstance(IFileTextModelService, dependencies.models);
 	services.registerInstance(IWorkingCopyService, dependencies.workingCopies);

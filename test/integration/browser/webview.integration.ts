@@ -8,7 +8,7 @@ import { IWebviewService, type IWebviewElement } from '../../../src/ash/workbenc
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { MemoryFileService } from '../../../src/ash/workbench/contrib/bulkEdit/test/browser/bulkEditTestServices.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
-import { registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
+import { createTestFileService, registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { asWebviewUri } from '../../../src/ash/workbench/contrib/webview/common/webview.js';
 
 const resources = new DisposableStore();
@@ -98,13 +98,13 @@ window.ashWebviewIntegration = {
 			[URI.parse('file:///workspace/assets/value.mjs'), 'export const answer=42;'],
 			[URI.parse('file:///outside/secret.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="99" height="99"></svg>'],
 		]);
-		const read = files.readFileBytes.bind(files);
-		files.readFileBytes = async resource => {
+		const read = files.readFile.bind(files);
+		files.readFile = async resource => {
 			resourceReads.push(resource.toString());
 			if (resource.path === '/workspace/assets/font.ttf') return { resource, bytes: font, revision: 'font' };
 			return read(resource);
 		};
-		const resourceScope = resources.add(instantiation.createChild(new ServiceCollection([IFileService, files], registration)));
+		const resourceScope = resources.add(instantiation.createChild(new ServiceCollection([IFileService, resources.add(createTestFileService(files))], registration)));
 		const resourceViews = resourceScope.get(IWebviewService);
 		for (const [title, allowScripts] of [['Resource view', true], ['Scripts disabled', false]] as const) {
 			const view = resources.add(resourceViews.createWebviewElement({ title, options: {}, contentOptions: { allowScripts, localResourceRoots: [root] } }));

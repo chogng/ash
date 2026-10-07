@@ -124,7 +124,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 				const services = resources.add(new InstantiationService());
 				if (!backend.localTranscription) { throw new Error('Local transcription service was not contributed by the renderer entry'); }
 				services.registerInstance(ILocalTranscriptionService, backend.localTranscription);
-				backend = { ...backend, dictation: resources.add(services.createInstance(AppServerDictationService, client, createConfigurationApi())) };
+				backend = { ...backend, dictation: resources.add(services.createInstance(AppServerDictationService, client, createConfigurationApi(mainProcessService))) };
 			} else {
 				backend = { ...backend, localTranscription: undefined };
 			}
@@ -157,9 +157,9 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			remoteConnections: createRemoteConnectionApi(),
 			remoteTunnels: createRemoteTunnelApi(),
 			browserView: createBrowserViewService(client),
-			configuration: createConfigurationApi(),
-			keyboardLayout: createNativeKeyboardLayoutApi(),
-			userKeyboardLayout: createUserKeyboardLayoutApi(),
+			configuration: createConfigurationApi(mainProcessService),
+			keyboardLayout: createNativeKeyboardLayoutApi(mainProcessService),
+			userKeyboardLayout: createUserKeyboardLayoutApi(mainProcessService),
 			nativeContextMenu: { popup: popupContextMenu, close: closeContextMenu },
 			nativeHost: createNativeHostApi(mainProcessService),
 			nativeMenubar: createNativeMenubarApi(),

@@ -1,19 +1,18 @@
-import { invoke, subscribe } from '../../ipc/electron-browser/rendererIpc.js';
+import type { IMainProcessService } from '../../ipc/common/mainProcessService.js';
 import { toDisposable } from '../../../base/common/lifecycle.js';
 import {
-	NATIVE_KEYBOARD_LAYOUT_CHANGED_CHANNEL,
-	NATIVE_KEYBOARD_LAYOUT_READ_CHANNEL,
 	type INativeKeyboardLayoutApi,
 	validateNativeKeyboardLayout,
 } from '../common/nativeKeyboardLayout.js';
 
-export function createNativeKeyboardLayoutApi(): INativeKeyboardLayoutApi {
+export function createNativeKeyboardLayoutApi(mainProcessService: IMainProcessService): INativeKeyboardLayoutApi {
+	const channel = mainProcessService.getChannel('keyboardLayout');
 	return {
 		async readKeyboardLayout() {
-			return validateNativeKeyboardLayout(await invoke<unknown>(NATIVE_KEYBOARD_LAYOUT_READ_CHANNEL));
+			return validateNativeKeyboardLayout(await channel.call('readKeyboardLayout'));
 		},
 		onDidChangeKeyboardLayout(listener) {
-			const subscription = subscribe<unknown>(NATIVE_KEYBOARD_LAYOUT_CHANGED_CHANNEL, (value) => {
+			const subscription = channel.listen<unknown>('onDidChangeKeyboardLayout')((value) => {
 				validateNativeKeyboardLayout(value);
 				listener();
 			});

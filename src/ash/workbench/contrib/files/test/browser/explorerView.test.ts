@@ -1,3 +1,4 @@
+import { createTestFileService } from '../../../../test/common/testEditorServices.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import { noFileIconTheme } from '../../../../../platform/theme/common/themeService.js';
 import { EditorOpenSource } from '../../../../../platform/editor/common/editor.js';
@@ -10,7 +11,7 @@ import { Emitter } from "../../../../../base/common/event.js";
 import { DecorationsService } from '../../../../services/decorations/browser/decorationsService.js';
 import { NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { InMemoryConfigurationService } from "../../../../../platform/configuration/common/inMemoryConfigurationService.js";
-import { FileKind, type IFileService } from "../../../../../platform/files/common/files.js";
+import { FileKind, type IFileSystemProvider } from "../../../../../platform/files/common/files.js";
 import { WorkspaceContextService } from "../../../../../workbench/services/workspaces/browser/workspaceContextService.js";
 import type { IResourceIconRenderer } from "../../../../browser/labels.js";
 import type { IHoverService, IManagedHover } from "../../../../../platform/hover/browser/hoverService.js";
@@ -45,7 +46,7 @@ test("ExplorerView opens workspace files on single click", async () => {
 	let hoverCreations = 0;
 	let hoverDisposals = 0;
 	let contextMenu: IContextMenuMenuDelegate | undefined;
-	const fileService: IFileService = {
+	const fileProvider: IFileSystemProvider = {
 		onDidChangeFiles: fileChanges.event,
 		stat: async () => { throw new Error('Explorer must load the workspace root with one directory read'); },
 		readDirectory: async (resource) => {
@@ -105,9 +106,6 @@ test("ExplorerView opens workspace files on single click", async () => {
 		readFile: async (_resource) => {
 			throw new Error("Explorer must delegate file content resolution to the selected editor");
 		},
-		readFileBytes: async (_resource) => {
-			throw new Error("Explorer must delegate file content resolution to the selected editor");
-		},
 		writeFile: async (_request) => {
 			throw new Error("Explorer must delegate file writes to the selected editor");
 		},
@@ -118,6 +116,7 @@ test("ExplorerView opens workspace files on single click", async () => {
 		rename: async () => { throw new Error("Explorer must not rename files in this test"); },
 		delete: async () => { throw new Error("Explorer must not delete files in this test"); },
 	};
+	using fileService = createTestFileService(fileProvider);
 	using workspaceContextService = new WorkspaceContextService({
 		id: "workspace",
 		uri: root,
@@ -159,6 +158,7 @@ test("ExplorerView opens workspace files on single click", async () => {
 			"../../../../../workbench/contrib/files/browser/views/explorerView.js"
 		);
 		const { ExplorerService } = await import('../../browser/explorerService.js');
+		using fileService = createTestFileService(fileProvider);
 		using explorerService = new ExplorerService(workspaceContextService, fileService, configurationService);
 		using contextKeyService = new ContextKeyService();
 		const accessibleViewService: IAccessibleViewService = {

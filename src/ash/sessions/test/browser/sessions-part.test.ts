@@ -1,4 +1,4 @@
-import { registerTestComponentServices } from '../../../workbench/test/common/testEditorServices.js';
+import { createTestFileService, registerTestComponentServices } from '../../../workbench/test/common/testEditorServices.js';
 import { IGitHubService as ISessionsGitHubService } from '../../contrib/github/browser/githubService.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import { IFileService } from '../../../platform/files/common/files.js';
@@ -222,7 +222,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	const dialogs = resources.add(new DialogService());
 	services.registerInstance(IDialogService, dialogs);
 	const unexpectedFileOperation = async (): Promise<never> => { throw new Error('Unexpected file operation'); };
-	services.registerInstance(IFileService, { onDidChangeFiles: Event.None, stat: unexpectedFileOperation, readDirectory: unexpectedFileOperation, readFile: unexpectedFileOperation, readFileBytes: unexpectedFileOperation, writeFile: unexpectedFileOperation, writeFileBytes: unexpectedFileOperation, createFile: unexpectedFileOperation, createDirectory: unexpectedFileOperation, copy: unexpectedFileOperation, rename: unexpectedFileOperation, delete: unexpectedFileOperation });
+	services.registerSingleton(IFileService, () => createTestFileService({ onDidChangeFiles: Event.None, stat: unexpectedFileOperation, readDirectory: unexpectedFileOperation, readFile: unexpectedFileOperation, writeFile: unexpectedFileOperation, writeFileBytes: unexpectedFileOperation, createFile: unexpectedFileOperation, createDirectory: unexpectedFileOperation, copy: unexpectedFileOperation, rename: unexpectedFileOperation, delete: unexpectedFileOperation }));
 	services.registerInstance(IWorkspaceContextService, resources.add(new WorkspaceContextService({ id: 'sessions-test', folders: [] })));
 
 	services.registerInstance(IFileDialogService, new FileDialogService({ kind: 'server', client: {} as IWebWorkspaceClient, quickInput: () => { throw new Error('Unexpected picker'); }, fileService: () => { throw new Error('Unexpected files'); }, workspaceRoot: () => undefined }, () => dialogs));

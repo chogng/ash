@@ -10,7 +10,6 @@ import { inertSubscription } from "../../renderer/browser/disconnectedHost.js";
 import { Disposable, DisposableMap, combinedDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
 import { IFileService, FileKind, FileNotFoundError } from '../../files/common/files.js';
-import { IFileSystemProviderService } from '../../files/common/fileSystemProviderService.js';
 import { IAppServerApi } from '../../app-server/common/appServerApi.js';
 import { IWorkspaceContextService } from '../../workspace/common/workspace.js';
 import { IInstantiationService } from '../../instantiation/common/instantiation.js';
@@ -184,7 +183,6 @@ class BrowserExtensionWorker extends Disposable {
 		@ICommandService commandService: ICommandService,
 		@IFileService files: IFileService,
 		@IWorkspaceContextService workspace: IWorkspaceContextService,
-		@IFileSystemProviderService fileProviders: IFileSystemProviderService,
 		@IAppServerApi appServer: IAppServerApi) {
 		super();
 		const clients = new Map<number, AbortController>();
@@ -224,10 +222,15 @@ class BrowserExtensionWorker extends Disposable {
 					if (typeof value.operation !== 'string') throw new TypeError('Invalid browser extension client request');
 					if (value.operation === 'workspaceFolders') {
 						const connected = await appServer.getConnectionState() === 'ready';
-						// Browser-owned folders remain readable offline; backend roots require their connection.
-						return workspace.getWorkspace().folders
-							.filter(folder => connected || fileProviders.hasProvider(folder.uri.scheme))
-							.map(folder => folder.uri.toString());
+						const folders = workspace.getWorkspace().folders;
+						if (connected) return folders.map(folder => folder.uri.toString());
+						// Registration survives a backend disconnect, so test access before offering offline roots.
+						const accessible = await Promise.all(folders.map(async folder => {
+							if (!files.hasProvider(folder.uri)) return undefined;
+							try { await files.stat(folder.uri); return folder.uri.toString(); }
+							catch { return undefined; }
+						}));
+						return accessible.filter(uri => uri !== undefined);
 					}
 					if (value.operation === 'stat' || value.operation === 'readDirectory') {
 						if (typeof value.resource !== 'string') throw new TypeError('Expected a resource URI');

@@ -320,11 +320,10 @@ test('Workbench and Sessions Models share model visibility', async ({ applicatio
 	const page = workbench.page;
 	if (process.platform === 'darwin') {
 		await page.evaluate(async () => {
-			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
-			const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { version: 1; source: string; }; };
+			const snapshot = await globalThis.ashTestMainProcess.call('configuration', 'read') as { revision: number; document: { version: 1; source: string; }; };
 			const settings = JSON.parse(snapshot.document.source) as Record<string, unknown>;
 			settings['window.menuStyle'] = 'custom';
-			await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(settings) } });
+			await globalThis.ashTestMainProcess.call('configuration', 'update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(settings) } });
 		});
 	}
 	await workbench.settingsEditor.openUserSettingsUI();
@@ -441,6 +440,10 @@ test('Editor settings have separate pages with keyboard navigation and global se
 	await search.fill('@id:editor.fontSize');
 	await expect(settings.locator('[data-settings-item-id]')).toHaveCount(1);
 	await expect(settings.getByRole('spinbutton', { name: 'Font size', exact: true })).toBeVisible();
+	await search.fill('@id:editor.font*');
+	await expect(settings.locator('[data-configuration-key="editor.fontFamily"]')).toBeVisible();
+	await expect(settings.locator('[data-configuration-key="editor.fontSize"]')).toBeVisible();
+	await expect(settings.locator('[data-configuration-key="chat.editor.fontSize"]')).toHaveCount(0);
 	await search.fill('');
 	await expect(settings.locator('[data-configuration-key="files.autoSave"]')).toBeVisible();
 	await expect(settings.locator('[data-configuration-key="editor.fontSize"]')).toHaveCount(0);

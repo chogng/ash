@@ -2,7 +2,7 @@ import { Emitter } from '../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
 import { localize } from '../../../nls.js';
-import { FileKind, FileNotFoundError, FileOperationNotSupportedError, FileRevisionConflictError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileContent, type IFileEntry, type IFileService, type IFileStat, type IFileWriteRequest, type IFileWriteResult } from '../common/files.js';
+import { FileKind, FileNotFoundError, FileOperationNotSupportedError, FileRevisionConflictError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileEntry, type IFileSystemProvider, type IFileStat, type IFileWriteRequest, type IFileWriteResult } from '../common/files.js';
 
 interface SavedDirectory {
 	readonly id: string;
@@ -24,7 +24,7 @@ const STORE_NAME = 'directories';
 const ROOT_PREFIX = '/@browser/';
 
 /** File access for folders explicitly selected through the browser picker. */
-export class HTMLFileSystemProvider extends Disposable implements IFileService {
+export class HTMLFileSystemProvider extends Disposable implements IFileSystemProvider {
 	private readonly changes = this._register(new Emitter<IFileChangeEvent>());
 	private readonly database: Promise<IDBDatabase>;
 	private readonly directories = new Map<string, SavedDirectory>();
@@ -92,13 +92,7 @@ export class HTMLFileSystemProvider extends Disposable implements IFileService {
 		return entries;
 	}
 
-	public async readFile(resource: URI): Promise<IFileContent> {
-		const file = await this.file(resource);
-		const bytes = new Uint8Array(await file.arrayBuffer());
-		return { resource, content: new TextDecoder('utf-8', { fatal: true }).decode(bytes), revision: await revision(bytes) };
-	}
-
-	public async readFileBytes(resource: URI): Promise<IFileBytes> {
+	public async readFile(resource: URI): Promise<IFileBytes> {
 		const file = await this.file(resource);
 		const bytes = new Uint8Array(await file.arrayBuffer());
 		return { resource, bytes, revision: await revision(bytes) };

@@ -20,10 +20,6 @@ export interface IUpdateService {
 }
 
 export const IUpdateService = createServiceIdentifier<IUpdateService>('updateService');
-export const UPDATE_CHECK_CHANNEL = 'ash:update:check';
-export const UPDATE_AUTO_CHECK_CHANNEL = 'ash:update:auto-check';
-export const UPDATE_DOWNLOAD_CHANNEL = 'ash:update:download';
-export const UPDATE_INSTALL_CHANNEL = 'ash:update:install';
 
 export function validateUpdateRequest(value: unknown): 'latest' | 'stable' {
 	if (value !== 'latest' && value !== 'stable') throw new TypeError('Desktop update channel is invalid');

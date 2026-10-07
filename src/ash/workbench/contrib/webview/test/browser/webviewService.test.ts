@@ -8,7 +8,7 @@ import { getSingletonServiceDescriptors } from '../../../../../platform/instanti
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { IWebviewService, type IWebview } from '../../browser/webview.js';
-import { registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
+import { createTestFileService, registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import { MarkdownPreview } from '../../../markdown/browser/markdownPreview.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { MemoryFileService } from '../../../bulkEdit/test/browser/bulkEditTestServices.js';
@@ -21,7 +21,7 @@ suite('Webview service', () => {
 		using instantiation = new InstantiationService(new ServiceCollection(descriptor));
 		const service = instantiation.get(IWebviewService);
 		assert.throws(() => service.createWebviewElement({ title: 'Missing files', options: {} }), /Unknown service: fileService/);
-		instantiation.registerInstance(IFileService, new MemoryFileService([]));
+		instantiation.registerSingleton(IFileService, () => createTestFileService(new MemoryFileService([])));
 		assert.throws(() => service.createWebviewElement({ title: 'Missing environment', options: {} }), /Unknown service: workbenchEnvironmentService/);
 		assert.deepEqual([...service.webviews], []);
 	});

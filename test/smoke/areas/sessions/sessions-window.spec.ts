@@ -2368,17 +2368,15 @@ test('Electron Code Sessions Activity Bar follows its position and size settings
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 	const page = await workbench.openAgentsWindow(target.kind);
 	const original = await page.evaluate(async () => {
-		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer;
-		return (await ipc.invoke('ash:configuration:read') as { document: { source: string; }; }).document.source;
+		return (await globalThis.ashTestMainProcess.call('configuration', 'read') as { document: { source: string; }; }).document.source;
 	});
 	const updateSettings = async (location: string, compact: boolean): Promise<void> => {
 		await page.evaluate(async values => {
-			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
-			const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { version: 1; source: string; }; };
+			const snapshot = await globalThis.ashTestMainProcess.call('configuration', 'read') as { revision: number; document: { version: 1; source: string; }; };
 			const settings = JSON.parse(snapshot.document.source) as Record<string, unknown>;
 			settings['sessions.activityBar.location'] = values.location;
 			settings['sessions.activityBar.compact'] = values.compact;
-			await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(settings) } });
+			await globalThis.ashTestMainProcess.call('configuration', 'update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(settings) } });
 		}, { location, compact });
 	};
 	try {
@@ -2430,9 +2428,8 @@ test('Electron Code Sessions Activity Bar follows its position and size settings
 		await expectActivityIconSize(activityNavigation, 24);
 	} finally {
 		await page.evaluate(async source => {
-			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
-			const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; };
-			await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source } });
+			const snapshot = await globalThis.ashTestMainProcess.call('configuration', 'read') as { revision: number; };
+			await globalThis.ashTestMainProcess.call('configuration', 'update', { expectedRevision: snapshot.revision, document: { version: 1, source } });
 		}, original);
 	}
 });
@@ -2443,11 +2440,10 @@ test('Electron Sessions account menu opens the Sessions settings page', async ({
 	if (process.platform === 'darwin') {
 		// The system menu is outside Playwright's page DOM; use the product's custom menu for this UI flow.
 		await workbench.page.evaluate(async () => {
-			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
-			const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { version: 1; source: string; }; };
+			const snapshot = await globalThis.ashTestMainProcess.call('configuration', 'read') as { revision: number; document: { version: 1; source: string; }; };
 			const settings = JSON.parse(snapshot.document.source) as Record<string, unknown>;
 			settings['window.menuStyle'] = 'custom';
-			await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(settings) } });
+			await globalThis.ashTestMainProcess.call('configuration', 'update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(settings) } });
 		});
 	}
 	const page = await workbench.openAgentsWindow(target.kind);
@@ -2517,16 +2513,14 @@ test('Sessions and IDE layout styles switch independently', async ({ application
 	const sessionsWindow = sessionsPage.locator('.ash-sessions-window');
 	await expect(sessionsWindow).toBeVisible();
 	const original = await sessionsPage.evaluate(async () => {
-		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer;
-		return (await ipc.invoke('ash:configuration:read') as { document: { source: string; }; }).document.source;
+		return (await globalThis.ashTestMainProcess.call('configuration', 'read') as { document: { source: string; }; }).document.source;
 	});
 	const updateSettings = async (values: Record<string, string>): Promise<void> => {
 		await sessionsPage.evaluate(async changes => {
-			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
-			const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { version: 1; source: string; }; };
+			const snapshot = await globalThis.ashTestMainProcess.call('configuration', 'read') as { revision: number; document: { version: 1; source: string; }; };
 			const settings = JSON.parse(snapshot.document.source) as Record<string, unknown>;
 			for (const [key, value] of Object.entries(changes)) settings[key] = value;
-			await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(settings) } });
+			await globalThis.ashTestMainProcess.call('configuration', 'update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(settings) } });
 		}, values);
 	};
 	const gap = () => sessionsPage.evaluate(() => {
@@ -2559,9 +2553,8 @@ test('Sessions and IDE layout styles switch independently', async ({ application
 		await expect(sessionsPage.locator('.ash-sessions-content-card')).toHaveCSS('border-radius', '12px');
 	} finally {
 		await sessionsPage.evaluate(async source => {
-			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
-			const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; };
-			await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source } });
+			const snapshot = await globalThis.ashTestMainProcess.call('configuration', 'read') as { revision: number; };
+			await globalThis.ashTestMainProcess.call('configuration', 'update', { expectedRevision: snapshot.revision, document: { version: 1, source } });
 		}, original);
 	}
 });
@@ -2575,11 +2568,10 @@ test('Sessions applies an installed extension color theme', async ({ application
 	const sessionsPage = await sessionPagePromise;
 	await expect(sessionsPage.locator('.ash-code-sessions-window')).toBeVisible();
 	await sessionsPage.evaluate(async () => {
-		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
-		const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { source: string; }; };
+		const snapshot = await globalThis.ashTestMainProcess.call('configuration', 'read') as { revision: number; document: { source: string; }; };
 		const values = JSON.parse(snapshot.document.source);
 		values['workbench.colorTheme'] = 'extension-vscode-theme-defaults-visual-studio-dark';
-		await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(values) } });
+		await globalThis.ashTestMainProcess.call('configuration', 'update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(values) } });
 	});
 	await expect(sessionsPage.locator('#app')).toHaveAttribute('data-color-theme', 'extension-vscode-theme-defaults-visual-studio-dark');
 	await expect.poll(() => sessionsPage.locator('#app').evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background').trim())).toBe('#1e1e1e');
@@ -2739,7 +2731,7 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	await writeFile(new URL(keybindingsResource), '[]');
 	const resources = await sessionsPage.evaluate(async resource => {
 		const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
-		const configuration = await ipc.invoke('ash:configuration:read') as { readonly revision: number; };
+		const configuration = await globalThis.ashTestMainProcess.call('configuration', 'read') as { readonly revision: number; };
 		const keybindings = await ipc.invoke('ash:files', { operation: 'readFile', resource }) as { readonly ok: true; readonly value: { readonly revision: string; readonly content: string; }; } | { readonly ok: false; readonly message: string; };
 		if (!keybindings.ok) throw new Error(keybindings.message);
 		const connection = await ipc.invoke('ash:remote:connection') as { readonly kind: string; };
@@ -2747,17 +2739,9 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	}, keybindingsResource);
 	expect(resources).toEqual({ configurationRevision: expect.any(Number), keybindingsRevision: expect.any(String), bindings: [], connectionKind: 'local' });
 	const configurationChange = await sessionsPage.evaluate(async () => {
-		const ipc = (globalThis as unknown as {
-			readonly ash: {
-				readonly ipcRenderer: {
-					invoke(channel: string, params?: unknown): Promise<unknown>;
-					on(channel: string, listener: (value: unknown) => void): { dispose(): void; };
-				};
-			};
-		}).ash.ipcRenderer;
-		const before = await ipc.invoke('ash:configuration:read') as { readonly revision: number; readonly document: { readonly version: 1; readonly source: string; }; };
+		const before = await globalThis.ashTestMainProcess.call('configuration', 'read') as { readonly revision: number; readonly document: { readonly version: 1; readonly source: string; }; };
 		const changed = new Promise<number>((resolve, reject) => {
-			const subscription = ipc.on('ash:configuration:changed', value => {
+			const subscription = globalThis.ashTestMainProcess.listen('configuration', 'onDidChange', value => {
 				clearTimeout(timeout);
 				subscription.dispose();
 				resolve((value as { readonly revision: number; }).revision);
@@ -2767,12 +2751,12 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 				reject(new Error('Sessions configuration change was not delivered'));
 			}, 2_000);
 		});
-		const updated = await ipc.invoke('ash:configuration:update', {
+		const updated = await globalThis.ashTestMainProcess.call('configuration', 'update', {
 			expectedRevision: before.revision,
 			document: { ...before.document, source: `${before.document.source}\n` },
 		}) as { readonly revision: number; };
 		const notifiedRevision = await changed;
-		await ipc.invoke('ash:configuration:update', { expectedRevision: updated.revision, document: before.document });
+		await globalThis.ashTestMainProcess.call('configuration', 'update', { expectedRevision: updated.revision, document: before.document });
 		return { updatedRevision: updated.revision, notifiedRevision };
 	});
 	expect(configurationChange.updatedRevision).toBe(configurationChange.notifiedRevision);
@@ -2787,20 +2771,18 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	await expect(sessionsPage.locator("#app")).toHaveAttribute("data-color-theme", "ash-light");
 	await expect.poll(() => sessionsPage.locator("#app").evaluate(element => getComputedStyle(element).getPropertyValue("--ash-titleBar-background").trim())).toBe("#ffffff");
 	const originalThemeSettings = await sessionsPage.evaluate(async () => {
-		const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
-		const snapshot = await ipc.invoke('ash:configuration:read') as { readonly revision: number; readonly document: { readonly version: 1; readonly source: string; }; };
+		const snapshot = await globalThis.ashTestMainProcess.call('configuration', 'read') as { readonly revision: number; readonly document: { readonly version: 1; readonly source: string; }; };
 		const values = JSON.parse(snapshot.document.source);
 		values['workbench.colorTheme'] = 'ash-dark';
-		await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(values) } });
+		await globalThis.ashTestMainProcess.call('configuration', 'update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(values) } });
 		return snapshot.document;
 	});
 	await expect(sessionsPage.locator('#app')).toHaveAttribute('data-color-theme', 'ash-dark');
 	await expect(workbench.element).toHaveAttribute('data-color-theme', 'ash-dark');
 	await workbench.setAppearance(application, 'dark', sessionsPage);
 	await sessionsPage.evaluate(async document => {
-		const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
-		const snapshot = await ipc.invoke('ash:configuration:read') as { readonly revision: number; };
-		await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document });
+		const snapshot = await globalThis.ashTestMainProcess.call('configuration', 'read') as { readonly revision: number; };
+		await globalThis.ashTestMainProcess.call('configuration', 'update', { expectedRevision: snapshot.revision, document });
 	}, originalThemeSettings);
 	await expect(sessionsPage.locator('#app')).toHaveAttribute('data-color-theme', 'ash-dark');
 	const titlebar = sessionsPage.locator("[data-part='titlebar']");
@@ -2927,7 +2909,7 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	await expect.poll(() => application.windows().length).toBe(2);
 	const reloadedIpc = await sessionsPage.evaluate(async resource => {
 		const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
-		const configuration = await ipc.invoke('ash:configuration:read') as { readonly revision: number; };
+		const configuration = await globalThis.ashTestMainProcess.call('configuration', 'read') as { readonly revision: number; };
 		const keybindings = await ipc.invoke('ash:files', { operation: 'readFile', resource }) as { readonly ok: true; readonly value: { readonly revision: string; readonly content: string; }; } | { readonly ok: false; readonly message: string; };
 		if (!keybindings.ok) throw new Error(keybindings.message);
 		const connection = await ipc.invoke('ash:remote:connection') as { readonly kind: string; };
@@ -3486,7 +3468,7 @@ test('closing the Workbench keeps Sessions usable and Return to Workbench reopen
 			const windows = await child.evaluate(async () => {
 				const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
 				const list = await ipc.invoke('ash:window:operation', { kind: 'list' }) as readonly { readonly title: string; }[];
-				const configuration = await ipc.invoke('ash:configuration:read') as { readonly revision: number; };
+				const configuration = await globalThis.ashTestMainProcess.call('configuration', 'read') as { readonly revision: number; };
 				const connection = await ipc.invoke('ash:remote:connection') as { readonly kind: string; };
 				return { titles: list.map(window => window.title), configurationRevision: configuration.revision, connectionKind: connection.kind };
 			});

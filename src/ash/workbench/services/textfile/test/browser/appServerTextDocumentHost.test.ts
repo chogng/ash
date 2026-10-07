@@ -1,4 +1,5 @@
-import { createTestTextFileService } from '../../../../test/common/testEditorServices.js';
+import type { IFileSystemProvider } from '../../../../../platform/files/common/files.js';
+import { createTestFileService, createTestTextFileService } from '../../../../test/common/testEditorServices.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { TestDialogService } from '../../../../contrib/bulkEdit/test/browser/bulkEditTestServices.js';
@@ -94,7 +95,7 @@ class Transport implements AppServerTransport {
 	}
 }
 
-class Files extends Disposable implements IFileService {
+class Files extends Disposable implements IFileSystemProvider {
 	private readonly changes = this._register(new Emitter<{ resources: readonly URI[]; }>());
 	public readonly onDidChangeFiles = this.changes.event;
 	public readonly contents = new Map<string, string>();
@@ -106,8 +107,11 @@ class Files extends Disposable implements IFileService {
 		return { resource, kind: FileKind.File, sizeBytes: new TextEncoder().encode(content).length, readonly: false, modifiedAtMillis: undefined };
 	}
 	public async readDirectory(): Promise<readonly never[]> { return []; }
-	public async readFile(resource: URI) { await this.stat(resource); const content = this.contents.get(resource.toString())!; return { resource, content, revision: content }; }
-	public async readFileBytes(resource: URI) { const result = await this.readFile(resource); return { resource, bytes: new TextEncoder().encode(result.content), revision: result.revision }; }
+	public async readFile(resource: URI) {
+		const content = this.contents.get(resource.toString());
+		if (content === undefined) throw new FileNotFoundError(resource);
+		return { resource, bytes: new TextEncoder().encode(content), revision: content };
+	}
 	public async writeFile(request: IFileWriteRequest) {
 		if (request.expectedRevision !== undefined && request.expectedRevision !== this.contents.get(request.resource.toString())) { throw new FileRevisionConflictError(request.resource); }
 		this.contents.set(request.resource.toString(), request.content);
@@ -128,7 +132,7 @@ class Files extends Disposable implements IFileService {
 		if (this.failRename) { throw new Error('Injected rename failure'); }
 		const content = await this.readFile(source);
 		this.contents.delete(source.toString());
-		this.contents.set(target.toString(), content.content);
+		this.contents.set(target.toString(), new TextDecoder('utf8', { ignoreBOM: true }).decode(content.bytes));
 	}
 	public async delete(resource: URI): Promise<void> { this.contents.delete(resource.toString()); }
 }
@@ -140,7 +144,7 @@ async function fixture() {
 	const workingCopies = lifetime.add(new BrowserWorkingCopyService());
 	const configuration = lifetime.add(new InMemoryConfigurationService());
 	const dialogs = new TestDialogService();
-	const bulk = lifetime.add(new BulkEditService(models, workingCopies, files, configuration, dialogs));
+	const bulk = lifetime.add(new BulkEditService(models, workingCopies, lifetime.add(createTestFileService(files)), configuration, dialogs));
 	const services = lifetime.add(new InstantiationService());
 	services.registerInstance(ITextModelResourceService, models);
 	services.registerInstance(IBulkEditService, bulk);
@@ -465,8 +469,8 @@ test('closing during model resolution releases the late model reference', async 
 	let started!: () => void;
 	const reading = new Promise<void>(resolve => { started = resolve; });
 	const gate = new Promise<void>(resolve => { allowRead = resolve; });
-	const readBytes = host.files.readFileBytes.bind(host.files);
-	host.files.readFileBytes = async value => { started(); await gate; return readBytes(value); };
+	const readBytes = host.files.readFile.bind(host.files);
+	host.files.readFile = async value => { started(); await gate; return readBytes(value); };
 	let released!: () => void;
 	const removed = new Promise<void>(resolve => { released = resolve; });
 	using listener = host.models.onModelRemoved(released);

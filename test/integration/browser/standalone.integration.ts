@@ -1,4 +1,4 @@
-import { registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
+import { createTestFileService, registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { MultiDiffEditor } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditor.js';
 import '../../../src/ash/workbench/contrib/callHierarchy/browser/callHierarchy.contribution.js';
 import '../../../src/ash/workbench/contrib/typeHierarchy/browser/typeHierarchy.contribution.js';
@@ -2799,7 +2799,7 @@ window.ashStandaloneIntegration = {
 			onModelAdded: EventUtils.None,
 		});
 		services.registerInstance(IWorkingCopyService, actionPreviewResources.add(new BrowserWorkingCopyService()));
-		services.registerInstance(IFileService, new MemoryFileService([[callerModel.uri, 'value']]));
+		services.registerSingleton(IFileService, () => createTestFileService(new MemoryFileService([[callerModel.uri, 'value']])));
 		services.registerInstance(IDialogService, new TestDialogService());
 		services.registerInstance(IEditorService, {
 			onDidActiveEditorChange: EventUtils.None, onDidVisibleEditorsChange: EventUtils.None,

@@ -1,3 +1,4 @@
+import { createTestFileService } from '../../../../test/common/testEditorServices.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
@@ -171,7 +172,7 @@ export class DebugViewTestServices extends Disposable {
 		const unexpected = async (): Promise<never> => { throw new Error('Unexpected file operation'); };
 		services.set(IWorkspaceContextService, this.workspace);
 		services.set(IWorkspaceOpenService, { canOpenFolder: true, canOpenWorkspace: true, openFolder: async () => { this.folderOpens++; }, openWorkspace: unexpected, pickFolder: unexpected });
-		services.set(IFileService, {
+		services.set(IFileService, this._register(createTestFileService({
 			onDidChangeFiles: Event.None,
 			stat: async resource => {
 				if (!this.documents.has(resource.toString())) throw new FileNotFoundError(resource);
@@ -183,10 +184,9 @@ export class DebugViewTestServices extends Disposable {
 				this.writes++;
 				this.documents.set(resource.toString(), new TextDecoder().decode(bytes));
 				return { stat: stat(resource), revision: 'created' };
-			},
-			readFile: unexpected, readFileBytes: unexpected, readDirectory: unexpected, writeFile: unexpected,
+			}, readFile: unexpected, readDirectory: unexpected, writeFile: unexpected,
 			createFile: unexpected, copy: unexpected, rename: unexpected, delete: unexpected,
-		});
+		})));
 		return services;
 	}
 }

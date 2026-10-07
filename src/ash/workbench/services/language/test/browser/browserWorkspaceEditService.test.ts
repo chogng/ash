@@ -1,3 +1,4 @@
+import { createTestFileService } from '../../../../test/common/testEditorServices.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { TestDialogService } from '../../../../contrib/bulkEdit/test/browser/bulkEditTestServices.js';
 import { MemoryResourceStore, MemoryFileService } from '../../../../contrib/bulkEdit/test/browser/bulkEditTestServices.js';
@@ -28,7 +29,8 @@ test("workspace edits preflight every document before mutating and persist close
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
 	const files = new MemoryFileService([[first, "alpha"], [second, "bravo"]]);
-	using service = new BulkEditService(models, workingCopies, files, configuration, dialogs);
+	using fileService = createTestFileService(files);
+	using service = new BulkEditService(models, workingCopies, fileService, configuration, dialogs);
 
 	await service.apply({
 		entries: [
@@ -50,7 +52,8 @@ test("workspace edit undo restores multiple closed documents", async () => {
 	using workingCopies = new BrowserWorkingCopyService();
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
-	using service = new BulkEditService(models, workingCopies, new MemoryFileService([[first, 'alpha'], [second, 'bravo']]), configuration, dialogs);
+	using fileService = createTestFileService(new MemoryFileService([[first, 'alpha'], [second, 'bravo']]));
+	using service = new BulkEditService(models, workingCopies, fileService, configuration, dialogs);
 
 	const applied = await service.apply({
 		entries: [
@@ -72,7 +75,8 @@ test('approved bulk edits still reject a document that changed during preview', 
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
 
-	using bulkEdits = new BulkEditService(models, workingCopies, new MemoryFileService([[resource, 'original']]), configuration, dialogs);
+	using fileService = createTestFileService(new MemoryFileService([[resource, 'original']]));
+	using bulkEdits = new BulkEditService(models, workingCopies, fileService, configuration, dialogs);
 	using handler = bulkEdits.setPreviewHandler(async edits => {
 		reference.model.setValue('changed');
 		return edits;
@@ -90,7 +94,8 @@ test('bulk edit progress follows the committed operations and undo restores thei
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
 
-	using bulkEdits = new BulkEditService(models, workingCopies, new MemoryFileService([[first, 'a'], [second, 'b']]), configuration, dialogs);
+	using fileService = createTestFileService(new MemoryFileService([[first, 'a'], [second, 'b']]));
+	using bulkEdits = new BulkEditService(models, workingCopies, fileService, configuration, dialogs);
 	const progress: unknown[] = [];
 	const applied = await bulkEdits.apply({
 		entries: [
@@ -115,7 +120,8 @@ test('bulk edits with unchanged text and ignored file operations report no appli
 	const dialogs = new TestDialogService();
 	const files = new MemoryFileService([[resource, 'original']]);
 
-	using bulkEdits = new BulkEditService(models, workingCopies, files, configuration, dialogs);
+	using fileService = createTestFileService(files);
+	using bulkEdits = new BulkEditService(models, workingCopies, fileService, configuration, dialogs);
 	const progress: unknown[] = [];
 	const result = await bulkEdits.apply({
 		entries: [
@@ -137,7 +143,8 @@ test('bulk text edits against one resource use the original coordinate space', a
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
 
-	using bulkEdits = new BulkEditService(models, workingCopies, new MemoryFileService([[resource, 'abc def']]), configuration, dialogs);
+	using fileService = createTestFileService(new MemoryFileService([[resource, 'abc def']]));
+	using bulkEdits = new BulkEditService(models, workingCopies, fileService, configuration, dialogs);
 
 	const result = await bulkEdits.apply([
 		new ResourceTextEdit(resource, { range: new Range(1, 1, 1, 4), text: 'longword' }),
@@ -158,7 +165,8 @@ test('bulk language workspace edits preserve explicitly ordered document operati
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
 
-	using bulkEdits = new BulkEditService(models, workingCopies, new MemoryFileService([[resource, 'abc def']]), configuration, dialogs);
+	using fileService = createTestFileService(new MemoryFileService([[resource, 'abc def']]));
+	using bulkEdits = new BulkEditService(models, workingCopies, fileService, configuration, dialogs);
 
 	const result = await bulkEdits.apply({
 		entries: [
@@ -180,7 +188,8 @@ test("workspace edit undo reverses a created file and its inserted text", async 
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
 	const files = new MemoryFileService([]);
-	using service = new BulkEditService(models, workingCopies, files, configuration, dialogs);
+	using fileService = createTestFileService(files);
+	using service = new BulkEditService(models, workingCopies, fileService, configuration, dialogs);
 
 	const applied = await service.apply({
 		entries: [
@@ -204,7 +213,8 @@ test('workspace edit undo restores file creation, rename, and deletion together'
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
 	const files = new MemoryFileService([[source, 'source'], [deleted, 'deleted']]);
-	using service = new BulkEditService(models, workingCopies, files, configuration, dialogs);
+	using fileService = createTestFileService(files);
+	using service = new BulkEditService(models, workingCopies, fileService, configuration, dialogs);
 
 	const applied = await service.apply({
 		entries: [
@@ -231,7 +241,8 @@ test('workspace edit undo leaves all resources intact when another target change
 	using workingCopies = new BrowserWorkingCopyService();
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
-	using service = new BulkEditService(models, workingCopies, new MemoryFileService([[first, 'alpha'], [second, 'bravo']]), configuration, dialogs);
+	using fileService = createTestFileService(new MemoryFileService([[first, 'alpha'], [second, 'bravo']]));
+	using service = new BulkEditService(models, workingCopies, fileService, configuration, dialogs);
 	const secondReference = await models.acquire({ resource: second }, new AbortController().signal);
 
 	const applied = await service.apply({
@@ -254,7 +265,8 @@ test("workspace edits keep open working copies dirty instead of saving behind th
 	using workingCopies = new BrowserWorkingCopyService();
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
-	using service = new BulkEditService(models, workingCopies, new MemoryFileService([[resource, "alpha"]]), configuration, dialogs);
+	using fileService = createTestFileService(new MemoryFileService([[resource, "alpha"]]));
+	using service = new BulkEditService(models, workingCopies, fileService, configuration, dialogs);
 	const reference = await models.acquire({ resource }, new AbortController().signal);
 	const registration = workingCopies.register(workingCopy(reference));
 
@@ -275,7 +287,8 @@ test("workspace edit preflight rejects stale or invalid edits without changing a
 	using workingCopies = new BrowserWorkingCopyService();
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
-	using service = new BulkEditService(models, workingCopies, new MemoryFileService([[first, "alpha"], [second, "bravo"]]), configuration, dialogs);
+	using fileService = createTestFileService(new MemoryFileService([[first, "alpha"], [second, "bravo"]]));
+	using service = new BulkEditService(models, workingCopies, fileService, configuration, dialogs);
 	const reference = await models.acquire({ resource: first }, new AbortController().signal);
 
 	await assert.rejects(service.apply({
@@ -299,7 +312,8 @@ test("workspace edit preflight rejects a changed target content baseline atomica
 	using workingCopies = new BrowserWorkingCopyService();
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
-	using service = new BulkEditService(models, workingCopies, new MemoryFileService([[first, "first"], [second, "changed"]]), configuration, dialogs);
+	using fileService = createTestFileService(new MemoryFileService([[first, "first"], [second, "changed"]]));
+	using service = new BulkEditService(models, workingCopies, fileService, configuration, dialogs);
 
 	await assert.rejects(service.apply({
 		entries: [
@@ -319,7 +333,8 @@ test("workspace edit applies create then text edit in protocol order", async () 
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
 	const files = new MemoryFileService([]);
-	using service = new BulkEditService(models, workingCopies, files, configuration, dialogs);
+	using fileService = createTestFileService(files);
+	using service = new BulkEditService(models, workingCopies, fileService, configuration, dialogs);
 
 	await service.apply({
 		entries: [
@@ -342,7 +357,8 @@ test("workspace edit rolls back created resources when a later operation fails",
 	const dialogs = new TestDialogService();
 	const files = new MemoryFileService([[target, "occupied"]]);
 	files.failRename = true;
-	using service = new BulkEditService(models, workingCopies, files, configuration, dialogs);
+	using fileService = createTestFileService(files);
+	using service = new BulkEditService(models, workingCopies, fileService, configuration, dialogs);
 
 	await assert.rejects(service.apply({
 		entries: [
@@ -363,7 +379,8 @@ test("workspace edits classify caller cancellation before mutating resources", a
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
 	const files = new MemoryFileService([]);
-	using service = new BulkEditService(models, workingCopies, files, configuration, dialogs);
+	using fileService = createTestFileService(files);
+	using service = new BulkEditService(models, workingCopies, fileService, configuration, dialogs);
 	const controller = new AbortController();
 	controller.abort("superseded");
 
@@ -403,7 +420,8 @@ test("workspace edit content checks accept the current CRLF document and preserv
 	using workingCopies = new BrowserWorkingCopyService();
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
-	using service = new BulkEditService(models, workingCopies, new MemoryFileService([[resource, "alpha\r\nbravo"]]), configuration, dialogs);
+	using fileService = createTestFileService(new MemoryFileService([[resource, "alpha\r\nbravo"]]));
+	using service = new BulkEditService(models, workingCopies, fileService, configuration, dialogs);
 	const result = await service.apply({
 		entries: [{
 			kind: "textDocument", resource, expectedText: "alpha\r\nbravo",
@@ -434,7 +452,8 @@ test("workspace edits recheck model versions after asynchronous file operations"
 			return result;
 		}
 	}([[resource, "original"]]);
-	using service = new BulkEditService(models, workingCopies, files, configuration, dialogs);
+	using fileService = createTestFileService(files);
+	using service = new BulkEditService(models, workingCopies, fileService, configuration, dialogs);
 	await assert.rejects(service.apply({
 		entries: [
 			{ kind: "create", resource: created, existing: "error" },

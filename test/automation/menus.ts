@@ -56,8 +56,7 @@ export class Menus {
 	async isSystemMenu(application: PlaywrightApplication): Promise<boolean> {
 		if (!('windows' in application)) { return false; }
 		const settings = await this.page.evaluate(async () => {
-			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer;
-			const snapshot = await ipc.invoke('ash:configuration:read') as { document: { source: string; }; };
+			const snapshot = await globalThis.ashTestMainProcess.call('configuration', 'read') as { document: { source: string; }; };
 			return JSON.parse(snapshot.document.source) as Record<string, unknown>;
 		});
 		// Stored settings omit default values; the product registry owns them.

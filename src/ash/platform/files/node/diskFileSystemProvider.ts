@@ -5,10 +5,10 @@ import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
-import { FileKind, FileNotFoundError, FileRevisionConflictError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileContent, type IFileEntry, type IFileService, type IFileStat, type IFileWriteRequest, type IFileWriteResult } from '../common/files.js';
+import { FileKind, FileNotFoundError, FileRevisionConflictError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileEntry, type IFileSystemProvider, type IFileStat, type IFileWriteRequest, type IFileWriteResult } from '../common/files.js';
 
 /** Local file access restricted to the roots granted by the desktop host. */
-export class DiskFileSystemProvider extends Disposable implements IFileService {
+export class DiskFileSystemProvider extends Disposable implements IFileSystemProvider {
 	private readonly changes = this._register(new Emitter<IFileChangeEvent>());
 	public readonly onDidChangeFiles = this.changes.event;
 	private readonly roots: readonly string[];
@@ -35,12 +35,7 @@ export class DiskFileSystemProvider extends Disposable implements IFileService {
 		} catch (error) { throw fileError(error, resource); }
 	}
 
-	public async readFile(resource: URI): Promise<IFileContent> {
-		const value = await this.readFileBytes(resource);
-		return { resource, content: new TextDecoder('utf-8', { fatal: true }).decode(value.bytes), revision: value.revision };
-	}
-
-	public async readFileBytes(resource: URI): Promise<IFileBytes> {
+	public async readFile(resource: URI): Promise<IFileBytes> {
 		try {
 			const bytes = await readFile(await this.path(resource));
 			return { resource, bytes, revision: revision(bytes) };

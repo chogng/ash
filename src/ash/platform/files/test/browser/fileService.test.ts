@@ -1,3 +1,5 @@
+import { FileService } from '../../../../platform/files/common/fileService.js';
+import { FileOperationNotSupportedError, type IFileSystemProvider, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileEntry, type IFileStat, type IFileWriteRequest, type IFileWriteResult } from '../../../../platform/files/common/files.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { Emitter } from "../../../../base/common/event.js";
@@ -85,11 +87,11 @@ test("BrowserFileService maps wire entries back to resource URIs", async () => {
 					entries: [{ name: "main.ts", fileType: "file" }],
 				};
 			},
-			readFile: async ({ path }) => {
-				assert.equal(path, "src/main.ts");
-				return { content: "export {};", revision: "revision-read" };
-			},
+			readFile: async () => { throw new Error('Provider reads must use the binary endpoint'); },
 			readBinaryFile: async ({ path }) => {
+				if (path === 'src/main.ts') return {
+					resource: { resourceId: 'resource-text', mimeType: 'text/plain', size: 10, sha256: 'sha256:text' }, revision: 'revision-read',
+				};
 				assert.equal(path, "paper.pdf");
 				return {
 					resource: { resourceId: "resource-pdf", mimeType: "application/octet-stream", size: 9, sha256: "sha256:pdf" },
@@ -127,6 +129,7 @@ test("BrowserFileService maps wire entries back to resource URIs", async () => {
 		resourceApi: {
 			metadata: async () => { throw new Error("not used"); },
 			read: async ({ resourceId, offset, maxBytes }) => {
+				if (resourceId === 'resource-text') return { resourceId, offset, dataBase64: 'ZXhwb3J0IHt9Ow==', decodedLength: 10, eof: true };
 				assert.equal(resourceId, "resource-pdf");
 				assert.equal(offset, 0);
 				assert.equal(maxBytes, 9);
@@ -147,13 +150,13 @@ test("BrowserFileService maps wire entries back to resource URIs", async () => {
 	);
 	assert.deepEqual(
 		await service.readFile(URI.parse("file:///C:/project/src/main.ts")),
-		{ resource: URI.parse("file:///C:/project/src/main.ts"), content: "export {};", revision: "revision-read" },
+		{ resource: URI.parse("file:///C:/project/src/main.ts"), bytes: new TextEncoder().encode('export {};'), revision: "revision-read" },
 	);
 	assert.deepEqual(
-		await service.readFileBytes(URI.parse("file:///C:/project/paper.pdf")),
+		await service.readFile(URI.parse("file:///C:/project/paper.pdf")),
 		{ resource: URI.parse("file:///C:/project/paper.pdf"), bytes: new Uint8Array([37, 80, 68, 70, 45, 49, 46, 55, 10]), revision: "revision-binary" },
 	);
-	assert.deepEqual(releasedResources, ["resource-pdf"]);
+	assert.deepEqual(releasedResources, ['resource-text', "resource-pdf"]);
 	assert.equal((await service.createDirectory(URI.parse('file:///C:/project/new-folder'))).kind, FileKind.Directory);
 	assert.deepEqual(
 		await service.writeFile({
@@ -213,7 +216,7 @@ test('BrowserFileService reports missing entries through the file contract for e
 		resourceApi: unavailableResourceApi(),
 		api: { ...unavailableFileApi(), getMetadata: missing, readDirectory: missing, readFile: missing, readBinaryFile: missing },
 	});
-	const reads = [() => service.stat(resource), () => service.readDirectory(resource), () => service.readFile(resource), () => service.readFileBytes(resource)];
+	const reads = [() => service.stat(resource), () => service.readDirectory(resource), () => service.readFile(resource)];
 	for (const read of reads) {
 		await assert.rejects(read, value => value instanceof FileNotFoundError && value.resource.toString() === resource.toString());
 	}
@@ -224,9 +227,9 @@ test('BrowserFileService reports missing entries through the file contract for e
 test("BrowserFileService reads connection-owned binary resources in bounded chunks", async () => {
 	const root = URI.parse("file:///C:/project");
 	const resource = URI.parse("file:///C:/project/large.pdf");
-	const bytes = new Uint8Array(262_145);
+	const bytes = new Uint8Array(17 * 1024 * 1024 + 1);
 	bytes[0] = 37;
-	bytes[262_144] = 70;
+	bytes[bytes.length - 1] = 70;
 	const readOffsets: number[] = [];
 	const releasedResources: string[] = [];
 	using workspaceContextService: IWorkspaceContextService = new WorkspaceContextService({ id: "workspace", uri: root });
@@ -267,8 +270,8 @@ test("BrowserFileService reads connection-owned binary resources in bounded chun
 		},
 	});
 
-	assert.deepEqual((await service.readFileBytes(resource)).bytes, bytes);
-	assert.deepEqual(readOffsets, [0, 262_144]);
+	assert.deepEqual((await service.readFile(resource)).bytes, bytes);
+	assert.deepEqual(readOffsets, Array.from({ length: Math.ceil(bytes.length / 262_144) }, (_, index) => index * 262_144));
 	assert.deepEqual(releasedResources, ["resource-large"]);
 });
 
@@ -305,12 +308,12 @@ test("BrowserFileService routes nested multi-root resources by Workspace folder 
 	const pastes: unknown[] = [];
 	const service = new BrowserFileService({
 		workspaceContextService,
-		resourceApi: unavailableResourceApi(),
+		resourceApi: { ...unavailableResourceApi(), release: async () => { } },
 		api: {
 			...unavailableFileApi(),
-			readFile: async params => {
+			readBinaryFile: async params => {
 				requests.push(params);
-				return { content: params.path, revision: "revision" };
+				return { resource: { resourceId: params.path, mimeType: 'text/plain', size: 0, sha256: 'sha256:empty' }, revision: 'revision' };
 			},
 			copy: async params => { copies.push(params); },
 			pasteSystemFiles: async params => { pastes.push(params); return true; },
@@ -355,4 +358,223 @@ function unavailableResourceApi() {
 		read: async () => { throw new Error("unavailable"); },
 		release: async () => { throw new Error("unavailable"); },
 	};
+}
+
+test('FileService routes exact schemes and forwards provider invalidations', async () => {
+	using fallback = new TestFileProvider('fallback');
+	using virtual = new TestFileProvider('virtual');
+	using service = new FileService();
+	using workspaceRegistration = service.registerProvider('file', fallback);
+	using registration = service.registerProvider('ash-test', virtual);
+	const workspaceResource = URI.file('/workspace/file.txt');
+	const virtualResource = URI.parse('ash-test:/resource.txt');
+	const observed: string[] = [];
+	using listener = service.onDidChangeFiles(event => observed.push(event.resources?.[0]?.toString() ?? '*'));
+	assert.deepEqual([service.hasProvider(virtualResource), service.hasProvider(workspaceResource)], [true, true]);
+
+	assert.equal((await service.readFile(workspaceResource)).content, 'fallback:file:///workspace/file.txt');
+	assert.equal((await service.readFile(virtualResource)).content, 'virtual:ash-test:/resource.txt');
+	virtual.emit(virtualResource);
+	assert.deepEqual(observed, ['ash-test:/resource.txt']);
+	assert.throws(() => service.rename(virtualResource, workspaceResource, 'overwrite'), /across file system providers/);
+	assert.throws(() => service.registerProvider('ash-test', virtual), /already registered/);
+
+	registration.dispose();
+	assert.equal(service.hasProvider(virtualResource), false);
+	assert.throws(() => service.readFile(virtualResource), FileOperationNotSupportedError);
+	assert.throws(() => service.readFile(URI.parse('unknown:/resource.txt')), FileOperationNotSupportedError);
+	virtual.emit(virtualResource);
+	assert.deepEqual(observed, ['ash-test:/resource.txt']);
+});
+
+test('FileService decodes text from provider bytes without changing revisions or binary reads', async () => {
+	using provider = new TestFileProvider('exact-byte-revision');
+	using service = new FileService();
+	using registration = service.registerProvider('file', provider);
+	const resource = URI.file('/workspace/bom.txt');
+	const bytes = new TextEncoder().encode('\uFEFF你好\r\n');
+	provider.addFile(resource, bytes);
+	assert.deepEqual(await service.readFile(resource), { resource, content: '\uFEFF你好\r\n', revision: 'exact-byte-revision' });
+	assert.deepEqual(await service.readFileBytes(resource), { resource, bytes, revision: 'exact-byte-revision' });
+	const binary = URI.file('/workspace/binary.bin');
+	provider.addFile(binary, new Uint8Array([0xff, 0x00, 0x80]));
+	assert.deepEqual((await service.readFileBytes(binary)).bytes, new Uint8Array([0xff, 0x00, 0x80]));
+	await assert.rejects(service.readFile(binary), TypeError);
+});
+
+test('BrowserFileService releases a byte resource when reading its content fails', async () => {
+	using workspace = new WorkspaceContextService({ id: 'read-failure', uri: URI.file('/workspace') });
+	const failure = new Error('Resource read failed');
+	const released: string[] = [];
+	using provider = new BrowserFileService({
+		workspaceContextService: workspace,
+		api: { ...unavailableFileApi(), readBinaryFile: async () => ({ resource: { resourceId: 'failed-read', mimeType: 'application/octet-stream', size: 1, sha256: 'sha256:failed' }, revision: 'raw-revision' }) },
+		resourceApi: { ...unavailableResourceApi(), read: async () => { throw failure; }, release: async request => { released.push(request.resourceId); } },
+	});
+	await assert.rejects(provider.readFile(URI.file('/workspace/file.txt')), error => error === failure);
+	assert.deepEqual(released, ['failed-read']);
+});
+
+test('FileService shares a subscription across schemes and releases it after the last registration', () => {
+	using provider = new TestFileProvider('workspace');
+	using service = new FileService();
+	using local = service.registerProvider('file', provider);
+	using remote = service.registerProvider('ash-remote', provider);
+	const observed: IFileChangeEvent[] = [];
+	using listener = service.onDidChangeFiles(event => observed.push(event));
+	const localResource = URI.file('/workspace/file.txt');
+	const remoteResource = URI.parse('ash-remote://server/workspace/file.txt');
+	provider.emit(undefined);
+	provider.emit(remoteResource);
+	local.dispose();
+	provider.emit(localResource);
+	provider.emit(remoteResource);
+	assert.deepEqual(observed, [{ resources: undefined }, { resources: [remoteResource] }, { resources: [remoteResource] }]);
+	assert.equal(provider.hasListeners, true);
+	remote.dispose();
+	assert.equal(provider.hasListeners, false);
+});
+
+test('FileService disposal releases registrations without disposing caller-owned providers', async () => {
+	using provider = new TestFileProvider('workspace');
+	using service = new FileService();
+	using registration = service.registerProvider('file', provider);
+	const resource = URI.file('/workspace/file.txt');
+	service.dispose();
+	assert.deepEqual({ registered: service.hasProvider(resource), subscribed: provider.hasListeners }, { registered: false, subscribed: false });
+	assert.throws(() => service.readFile(resource), ReferenceError);
+	assert.throws(() => service.registerProvider('file', provider), ReferenceError);
+	assert.equal(new TextDecoder().decode((await provider.readFile(resource)).bytes), 'workspace:file:///workspace/file.txt');
+});
+
+test('FileService copies directory bytes across file system providers', async () => {
+	using workspace = new TestFileProvider('workspace');
+	using virtual = new TestFileProvider('virtual');
+	using service = new FileService();
+	using workspaceRegistration = service.registerProvider('file', workspace);
+	using registration = service.registerProvider('ash-test', virtual);
+	const source = URI.parse('ash-test:/source');
+	const file = URI.joinPath(source, '100% ready.bin');
+	const target = URI.file('/workspace/copied');
+	virtual.addDirectory(source, [{ resource: file, name: '100% ready.bin', kind: FileKind.File }]);
+	virtual.addFile(file, new Uint8Array([0, 255, 42]));
+
+	await service.copy(source, target);
+
+	assert.equal((await workspace.stat(target)).kind, FileKind.Directory);
+	assert.deepEqual((await workspace.readFile(URI.joinPath(target, '100% ready.bin'))).bytes, new Uint8Array([0, 255, 42]));
+	await assert.rejects(service.copy(source, target), /already exists/);
+});
+
+test('FileService removes an incomplete cross-provider copy', async () => {
+	using workspace = new TestFileProvider('workspace');
+	using virtual = new TestFileProvider('virtual');
+	using service = new FileService();
+	using workspaceRegistration = service.registerProvider('file', workspace);
+	using registration = service.registerProvider('ash-test', virtual);
+	const source = URI.parse('ash-test:/source');
+	const first = URI.joinPath(source, 'first.bin');
+	const second = URI.joinPath(source, 'second.bin');
+	const target = URI.file('/workspace/copied');
+	virtual.addDirectory(source, [
+		{ resource: first, name: 'first.bin', kind: FileKind.File },
+		{ resource: second, name: 'second.bin', kind: FileKind.File },
+	]);
+	virtual.addFile(first, new Uint8Array([42]));
+	virtual.addFile(second, new Uint8Array([43]));
+	virtual.failRead(second);
+
+	await assert.rejects(service.copy(source, target), /read failed/);
+	await assert.rejects(workspace.stat(target), FileNotFoundError);
+	await assert.rejects(workspace.stat(URI.joinPath(target, 'first.bin')), FileNotFoundError);
+	assert.equal((await virtual.stat(first)).kind, FileKind.File);
+});
+
+class TestFileProvider implements IFileSystemProvider {
+	private readonly changes = new Emitter<IFileChangeEvent>();
+	private readonly files = new Map<string, Uint8Array>();
+	private readonly directories = new Map<string, readonly IFileEntry[]>();
+	private failingRead: string | undefined;
+	public readonly onDidChangeFiles = this.changes.event;
+
+	constructor(private readonly label: string) { }
+
+	public get hasListeners(): boolean {
+		return this.changes.hasListeners();
+	}
+
+	public emit(resource: URI | undefined): void {
+		this.changes.fire({ resources: resource ? [resource] : undefined });
+	}
+
+	public addFile(resource: URI, bytes: Uint8Array): void {
+		this.files.set(resource.toString(), bytes);
+	}
+
+	public addDirectory(resource: URI, entries: readonly IFileEntry[]): void {
+		this.directories.set(resource.toString(), entries);
+	}
+
+	public failRead(resource: URI): void {
+		this.failingRead = resource.toString();
+	}
+
+	public async stat(resource: URI): Promise<IFileStat> {
+		const file = this.files.get(resource.toString());
+		const kind = file ? FileKind.File : this.directories.has(resource.toString()) ? FileKind.Directory : undefined;
+		if (!kind) throw new FileNotFoundError(resource);
+		return { resource, kind, sizeBytes: file?.length ?? 0, readonly: false, modifiedAtMillis: undefined };
+	}
+
+	public readDirectory(resource: URI): Promise<readonly IFileEntry[]> {
+		return Promise.resolve(this.directories.get(resource.toString()) ?? []);
+	}
+
+	public readFile(resource: URI): Promise<IFileBytes> {
+		if (resource.toString() === this.failingRead) throw new Error('read failed');
+		return Promise.resolve({ resource, bytes: this.files.get(resource.toString()) ?? new TextEncoder().encode(`${this.label}:${resource.toString()}`), revision: this.label });
+	}
+
+	public writeFile(request: IFileWriteRequest): Promise<IFileWriteResult> {
+		return Promise.resolve({ stat: { resource: request.resource, kind: FileKind.File, sizeBytes: request.content.length, readonly: false, modifiedAtMillis: undefined }, revision: this.label });
+	}
+
+	public writeFileBytes(resource: URI, bytes: Uint8Array): Promise<IFileWriteResult> {
+		this.files.set(resource.toString(), bytes);
+		return Promise.resolve({ stat: { resource, kind: FileKind.File, sizeBytes: bytes.length, readonly: false, modifiedAtMillis: undefined }, revision: this.label });
+	}
+
+	public createFile(resource: URI, _existing: FileExistingTargetBehavior): Promise<IFileStat> {
+		return this.stat(resource);
+	}
+
+	public createDirectory(resource: URI): Promise<IFileStat> {
+		this.directories.set(resource.toString(), []);
+		return this.stat(resource);
+	}
+
+	public copy(_source: URI, _target: URI): Promise<void> { return Promise.resolve(); }
+
+	public rename(_source: URI, _target: URI, _existing: FileExistingTargetBehavior): Promise<void> {
+		return Promise.resolve();
+	}
+
+	public delete(resource: URI, _missing: FileMissingTargetBehavior, mode: FileDeleteMode): Promise<void> {
+		const prefix = `${resource.toString()}/`;
+		for (const key of this.files.keys()) {
+			if (key === resource.toString() || mode === 'recursive' && key.startsWith(prefix)) this.files.delete(key);
+		}
+		for (const key of this.directories.keys()) {
+			if (key === resource.toString() || mode === 'recursive' && key.startsWith(prefix)) this.directories.delete(key);
+		}
+		return Promise.resolve();
+	}
+
+	public dispose(): void {
+		this.changes.dispose();
+	}
+
+	public [Symbol.dispose](): void {
+		this.dispose();
+	}
 }

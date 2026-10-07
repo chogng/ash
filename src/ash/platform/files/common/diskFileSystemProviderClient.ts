@@ -1,13 +1,13 @@
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
-import { FileNotFoundError, FileRevisionConflictError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileContent, type IFileEntry, type IFileService, type IFileStat, type IFileWriteRequest, type IFileWriteResult } from './files.js';
+import { FileNotFoundError, FileRevisionConflictError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileEntry, type IFileSystemProvider, type IFileStat, type IFileWriteRequest, type IFileWriteResult } from './files.js';
 
 export const LOCAL_FILE_SYSTEM_CHANNEL_NAME = 'ash:files';
 export const LOCAL_FILE_SYSTEM_CHANGED_CHANNEL = 'ash:files:changed';
 
 /** URI serialization and error transport for the desktop file provider. */
-export class DiskFileSystemProviderClient extends Disposable implements IFileService {
+export class DiskFileSystemProviderClient extends Disposable implements IFileSystemProvider {
 	private readonly changes = this._register(new Emitter<IFileChangeEvent>());
 	public readonly onDidChangeFiles = this.changes.event;
 
@@ -31,12 +31,8 @@ export class DiskFileSystemProviderClient extends Disposable implements IFileSer
 		const entries = await this.call<readonly { name: string; kind: IFileEntry['kind']; resource: string; }[]>('readDirectory', resource);
 		return entries.map(entry => ({ ...entry, resource: URI.parse(entry.resource) }));
 	}
-	public async readFile(resource: URI): Promise<IFileContent> {
-		const content = await this.call<IFileContent>('readFile', resource);
-		return { ...content, resource };
-	}
-	public async readFileBytes(resource: URI): Promise<IFileBytes> {
-		const content = await this.call<IFileBytes>('readFileBytes', resource);
+	public async readFile(resource: URI): Promise<IFileBytes> {
+		const content = await this.call<IFileBytes>('readFile', resource);
 		return { ...content, resource };
 	}
 	public async writeFile(request: IFileWriteRequest): Promise<IFileWriteResult> {

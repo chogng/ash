@@ -6,8 +6,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { app } from 'electron/main';
 import { AbstractDisposable } from '../../../base/common/lifecycle.js';
-import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
-import { UPDATE_AUTO_CHECK_CHANNEL, UPDATE_CHECK_CHANNEL, UPDATE_DOWNLOAD_CHANNEL, UPDATE_INSTALL_CHANNEL, validateInstallRequest, validateUpdateRequest, type UpdateCheckResult, type UpdateReadyResult } from '../common/updateService.js';
+import type { UpdateCheckResult, UpdateReadyResult } from '../common/updateService.js';
 
 const MAX_OUTPUT_BYTES = 4096;
 const MAX_PACKAGE_BYTES = 4 * 1024 * 1024 * 1024;
@@ -265,14 +264,4 @@ async function removeStage(directory: string, root: string): Promise<void> {
 
 function isMissing(error: unknown): boolean {
 	return !!error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT';
-}
-
-export function updateIpcRoutes(service: UpdateMainService): readonly IpcRoute<unknown, unknown>[] {
-	// The router validates each request before invoke; the route collection erases that parameter type.
-	return [
-		{ channel: UPDATE_CHECK_CHANNEL, validate: validateUpdateRequest, invoke: policy => service.checkForUpdates(policy as ReturnType<typeof validateUpdateRequest>) },
-		{ channel: UPDATE_AUTO_CHECK_CHANNEL, validate: validateUpdateRequest, invoke: policy => service.checkAutomatically(policy as ReturnType<typeof validateUpdateRequest>) },
-		{ channel: UPDATE_DOWNLOAD_CHANNEL, validate: validateUpdateRequest, invoke: policy => service.downloadUpdate(policy as ReturnType<typeof validateUpdateRequest>) },
-		{ channel: UPDATE_INSTALL_CHANNEL, validate: validateInstallRequest, invoke: () => service.installUpdate() },
-	];
 }

@@ -9,7 +9,6 @@ import { hooksConfigurationIpcRoute, openHooksTextFile } from '../../platform/ho
 import { ThemeMainService } from '../../platform/theme/electron-main/themeMainServiceImpl.js';
 import { Server as MainProcessIPCServer } from '../../base/parts/ipc/electron-main/ipc.electron.js';
 import { isRecord } from '../../base/common/types.js';
-import { isUuid } from '../../base/common/uuid.js';
 import { OAuthCallbackHost } from "../../platform/connectors/electron-main/oauthCallbackHost.js";
 import { RendererWorkspaceHost } from "../../platform/workspaces/electron-main/rendererWorkspaceHost.js";
 import { AppServerBrowserHost } from "../../platform/app-server/electron-main/appServerBrowserHost.js";
@@ -43,16 +42,17 @@ import { IPlaywrightService } from '../../platform/browserView/common/playwright
 import { WebContentsView, session as electronSession } from 'electron/main';
 import { configurationValues } from '../../platform/configuration/common/configurationIpc.js';
 import { formatNlsMessage } from '../../nls.js';
-import { ConfigurationMainService } from "../../platform/configuration/electron-main/configurationMainService.js";
+import { ConfigurationMainService, configurationChannel } from "../../platform/configuration/electron-main/configurationMainService.js";
 import { NATIVE_CONTEXT_MENU_CLOSE_CHANNEL, NATIVE_CONTEXT_MENU_POPUP_CHANNEL, validateNativeContextMenuClose, validateNativeContextMenuRequest, type INativeContextMenuRequest } from '../../base/parts/contextmenu/common/contextmenu.js';
 import { developmentArtifactsPath } from "../../platform/environment/node/developmentArtifacts.js";
 import { normalizeExternalUrl } from '../../platform/opener/common/opener.js';
-import { NativeKeyboardLayoutMainService } from "../../platform/keyboardLayout/electron-main/nativeKeyboardLayoutMainService.js";
-import { UserKeyboardLayoutMainService } from "../../platform/keyboardLayout/electron-main/userKeyboardLayoutMainService.js";
+import { NativeKeyboardLayoutMainService, keyboardLayoutChannel } from "../../platform/keyboardLayout/electron-main/nativeKeyboardLayoutMainService.js";
+import { UserKeyboardLayoutMainService, userKeyboardLayoutChannel } from "../../platform/keyboardLayout/electron-main/userKeyboardLayoutMainService.js";
 import { NativeMenubarMainService, nativeMenubarIpcRoutes } from "../../platform/menubar/electron-main/menubarMainService.js";
 import { clearElectronApplicationMenu, createElectronMenubarHost } from "../../platform/menubar/electron-main/menubar.js";
 import { colorSchemeChannel, fileDialogIpcRoutes, nativeHostIpcRoutes, windowAppearanceIpcRoutes, type INativeHostMainService } from "../../platform/native/electron-main/nativeHostIpc.js";
-import { UpdateMainService, updateIpcRoutes } from '../../platform/update/electron-main/updateMainService.js';
+import { UpdateMainService } from '../../platform/update/electron-main/updateMainService.js';
+import { UpdateChannel } from '../../platform/update/common/updateIpc.js';
 import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, NATIVE_HOST_OPEN_WINDOW_CHANNEL, NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL, NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL, validateOpenAgentsWindow, validateSystemWideKeybindings, type INativeSystemWideKeybinding, type IOpenAgentsWindowOptions } from "../../platform/native/common/nativeHost.js";
 import { DialogMainService } from '../../platform/dialogs/electron-main/dialogMainService.js';
 import type { DialogRequest } from '../../platform/dialogs/common/dialogs.js';
@@ -62,8 +62,8 @@ import { GlobalKeybindingsMainService } from '../../platform/globalKeybindings/e
 import { OPEN_AGENTS_WINDOW_COMMAND_ID } from '../../workbench/contrib/chat/common/constants.js';
 import { StateService } from "../../platform/state/node/stateService.js";
 import { IStateService } from '../../platform/state/node/state.js';
-import { WorkspacesHistoryMainService } from '../../platform/workspaces/electron-main/workspacesHistoryMainService.js';
-import { recentWorkspaceUri, restoreRecentlyOpened, toStoreData, RECENTLY_OPENED_CHANGED_CHANNEL, type IRecent } from '../../platform/workspaces/common/workspaces.js';
+import { WorkspacesHistoryMainService, workspacesHistoryChannel } from '../../platform/workspaces/electron-main/workspacesHistoryMainService.js';
+import { recentWorkspaceUri, type IRecent } from '../../platform/workspaces/common/workspaces.js';
 import { Schemas } from '../../base/common/network.js';
 import { resolveHome } from "../../platform/home/node/home.js";
 import { diskFileSystemProviderRoutes } from "../../platform/files/electron-main/diskFileSystemProviderServer.js";
@@ -74,7 +74,7 @@ import { LOCAL_FILE_SYSTEM_CHANGED_CHANNEL } from "../../platform/files/common/d
 import { IWindowsMainService, WindowControlsOverlay, type IOpenConfiguration } from "../../platform/windows/electron-main/windows.js";
 import { RESTORE_WINDOWS_SETTING, TitleBarSetting, parseTitleBarStyle, validateOpenEmptyWindowOptions, type IOpenEmptyWindowOptions, type TitleBarStyleConfiguration } from "../../platform/window/common/window.js";
 import { WindowsStateHandler, WindowSessionStateHandler, type IWindowSessionEntry, type IWindowSessionWindow } from "../../platform/windows/electron-main/windowsStateHandler.js";
-import { WindowsMainService, trackWindowResourceChanges, windowOperationIpcRoute, windowResourceIpcRoutes, workspaceContextIpcRoutes, workspaceRecoveryIpcRoute } from "../../platform/windows/electron-main/windowsMainService.js";
+import { WindowsMainService, windowOperationIpcRoute, workspaceContextIpcRoutes, workspaceRecoveryIpcRoute } from "../../platform/windows/electron-main/windowsMainService.js";
 import { LifecycleMainService, windowCloseResponseIpcRoute } from '../../platform/lifecycle/electron-main/lifecycleMainService.js';
 import { defaultWindowState, focusWindow, WorkspaceContextMainService, type IWindowState } from "../../platform/window/electron-main/window.js";
 import { type IAnyWorkspaceIdentifier, type IWorkspace, getWorkspaceRemoteAuthority, isRemoteWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, serializeWorkspace, UNKNOWN_EMPTY_WINDOW_WORKSPACE, WorkbenchState } from "../../platform/workspace/common/workspace.js";
@@ -400,6 +400,10 @@ export class AshApplication extends Disposable {
 		this.logService.info('lifecycle', 'Desktop startup', { appServer: this.appServerStartupMode });
 		await this.createPersistentServices(token);
 		throwIfCancelled(token);
+		this.mainProcessIpcServer.registerChannel('configuration', configurationChannel(this.services.configuration));
+		this.mainProcessIpcServer.registerChannel('keyboardLayout', keyboardLayoutChannel(this.nativeKeyboardLayout));
+		this.mainProcessIpcServer.registerChannel('userKeyboardLayout', userKeyboardLayoutChannel(this.services.userKeyboardLayout));
+		this.mainProcessIpcServer.registerChannel('update', new UpdateChannel(this.updateMainService));
 		const localeValue = configurationValues(this.services.configuration.read().document)[LocalizationConfiguration.locale];
 		const locale = typeof localeValue === 'string' ? normalizeLocale(localeValue) : 'en';
 		const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale.toLowerCase() === locale.toLowerCase()) ?? await new LanguagePackStore(this.profileRoot).read(locale);
@@ -413,11 +417,7 @@ export class AshApplication extends Disposable {
 		const launchServices = this._register(new InstantiationService());
 		launchServices.registerInstance(IStateService, this.services.state);
 		this.workspacesHistory = this._register(launchServices.createInstance(WorkspacesHistoryMainService));
-		this._register(this.workspacesHistory.onDidChangeRecentlyOpened(() => {
-			for (const window of BrowserWindow.getAllWindows()) {
-				window.webContents.send(RECENTLY_OPENED_CHANGED_CHANNEL);
-			}
-		}));
+		this.mainProcessIpcServer.registerChannel('workspaces', workspacesHistoryChannel(this.workspacesHistory));
 		if (process.platform === 'win32') {
 			this.configureWindowsTaskbar();
 		}
@@ -921,53 +921,9 @@ export class AshApplication extends Disposable {
 				invoke: () => { this.restartRequested = true; app.quit(); },
 			},
 			{
-				channel: 'ash:workspaces:recent:read',
-				validate: value => {
-					if (value !== undefined) {
-						throw new TypeError('Recent projects read takes no arguments');
-					}
-					return undefined;
-				},
-				invoke: async () => toStoreData(await this.workspacesHistory.getRecentlyOpened()),
-			},
-			{
-				channel: 'ash:workspaces:recent:add',
-				validate: value => restoreRecentlyOpened(value).workspaces,
-				invoke: value => this.workspacesHistory.addRecentlyOpened(value as readonly IRecent[]),
-			},
-			{
-				channel: 'ash:workspaces:recent:remove',
-				validate: value => {
-					if (!Array.isArray(value)) {
-						throw new TypeError('Recent project removal requires URI paths');
-					}
-					return restoreRecentlyOpened({ workspaces: value.map(folderUri => ({ folderUri })) }).workspaces.map(recentWorkspaceUri);
-				},
-				invoke: value => this.workspacesHistory.removeRecentlyOpened(value as readonly URI[]),
-			},
-			{
-				channel: 'ash:workspaces:recent:clear',
-				validate: value => {
-					if (value !== undefined) {
-						throw new TypeError('Recent projects clear takes no arguments');
-					}
-					return undefined;
-				},
-				invoke: () => this.workspacesHistory.clearRecentlyOpened(),
-			},
-			{
 				channel: 'ash:ipc:window-id',
 				validate: value => { if (value !== undefined) { throw new TypeError('Window ID read takes no arguments'); } return undefined; },
 				invoke: () => window.id,
-			},
-			{
-				channel: 'ash:ipc:connect',
-				validate: value => {
-					if (!isRecord(value) || Object.keys(value).length !== 1 || !isUuid(value.nonce)) { throw new TypeError('Invalid Main IPC acquisition'); }
-					return { nonce: value.nonce };
-				},
-				// The trusted route owns the window identity; the renderer supplies only a reply nonce.
-				invoke: value => this.mainProcessIpcServer.connect(window.webContents, `window:${window.id}`, (value as { nonce: string; }).nonce),
 			},
 		];
 	}
@@ -1195,11 +1151,6 @@ export class AshApplication extends Disposable {
 				window.webContents.send(WORKSPACE_CONTEXT_CHANGED_CHANNEL, serializeWorkspace(resolvedWorkspace));
 			}
 		}));
-		const windowResources = {
-			configuration: this.services.configuration,
-			nativeKeyboardLayout: this.nativeKeyboardLayout,
-			userKeyboardLayout: this.services.userKeyboardLayout,
-		};
 		const workspaceTransitions = windowDisposables.add(new WorkspaceTransitionMainService({
 			workspaces,
 			context: workspaceContext,
@@ -1308,7 +1259,6 @@ export class AshApplication extends Disposable {
 			hooksConfigurationIpcRoute(this.profileRoot, () => !getWorkspaceRemoteAuthority(workspaceContext.getWorkspace()), openHooksTextFile),
 			...remoteWindowContext.ipcRoutes,
 			...browserViewIpcRoutes(browserViewMainService),
-			...windowResourceIpcRoutes(windowResources),
 			windowOperationIpcRoute(this.windowsMainService, window),
 			windowCloseResponseIpcRoute(this.lifecycleMainService, window),
 			this.windowsMainService.fileOpenResponseIpcRoute(window),
@@ -1355,7 +1305,6 @@ export class AshApplication extends Disposable {
 			...diskFileSystemProviderRoutes(windowDisposables.add(new DiskFileSystemProvider([URI.file(this.profileRoot)])), URI.file(this.profileRoot)),
 			...workspaceContextIpcRoutes(workspaceContext),
 			workspaceRecoveryIpcRoute(identifiers => this.windowsMainService.restoreWorkspaces(identifiers, async identifier => (await this.openWorkspace(identifier, workspaces))?.window)),
-			...updateIpcRoutes(this.updateMainService),
 		];
 		await watchProfileFiles(this.profileRoot, window, windowDisposables);
 		const systemContextMenu = windowDisposables.add(new ElectronContextMenu(window));
@@ -1371,9 +1320,9 @@ export class AshApplication extends Disposable {
 			},
 			ipcRoutes,
 		));
+		windowDisposables.add(this.mainProcessIpcServer.registerClient(window.webContents, `window:${window.id}`, new Set([normalizeEntryUrl(this.resolveRendererEntry('workbench').url)])));
 		windowDisposables.add(this.windowsMainService.trackZoomLevel(window));
 		windowDisposables.add(this.lifecycleMainService.registerWindow(window));
-		windowDisposables.add(trackWindowResourceChanges(window, windowResources));
 		try {
 			await this.loadRendererEntry(window, rendererEntry);
 			return record;
@@ -1568,11 +1517,6 @@ export class AshApplication extends Disposable {
 						host: electronRemoteWindowMainHost(window, this.dialogs),
 						prepareForRuntimeReplacement: () => window.webContents.send("ash:terminal:prepareReplacement"),
 					}));
-					const windowResources = {
-						configuration: this.services.configuration,
-						nativeKeyboardLayout: this.nativeKeyboardLayout,
-						userKeyboardLayout: this.services.userKeyboardLayout,
-					};
 					const ipcRoutes = [
 						...this.mainProcessIpcRoutes(window),
 						...sessionsRelay.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })),
@@ -1580,7 +1524,6 @@ export class AshApplication extends Disposable {
 						hooksConfigurationIpcRoute(this.profileRoot, () => !getWorkspaceRemoteAuthority(session.workspaceContext.getWorkspace()), openHooksTextFile),
 						...browserViewIpcRoutes(browserServices.get(IBrowserViewMainService)),
 						...remoteWindowContext.ipcRoutes,
-						...windowResourceIpcRoutes(windowResources),
 						...fileDialogIpcRoutes(this.windowFileDialogs(window)),
 						...windowAppearanceIpcRoutes({
 							setWindowTheme: theme => {
@@ -1649,10 +1592,10 @@ export class AshApplication extends Disposable {
 						},
 						ipcRoutes,
 					));
+					windowDisposables.add(this.mainProcessIpcServer.registerClient(window.webContents, `window:${window.id}`, new Set([normalizeEntryUrl(this.resolveRendererEntry('sessions').url)])));
 					windowDisposables.add(this.windowsMainService.trackZoomLevel(window));
 					windowDisposables.add(this.windowsMainService.trackFullscreen(window));
 					windowDisposables.add(this.lifecycleMainService.registerWindow(window));
-					windowDisposables.add(trackWindowResourceChanges(window, windowResources));
 					windowDisposables.add(session.workspaceContext.onDidChangeWorkspace(({ resolvedWorkspace }) => {
 						if (!window.isDestroyed()) {
 							window.webContents.send(WORKSPACE_CONTEXT_CHANGED_CHANNEL, serializeWorkspace(resolvedWorkspace));

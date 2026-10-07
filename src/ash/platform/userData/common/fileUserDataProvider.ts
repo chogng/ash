@@ -3,15 +3,14 @@ import { Disposable } from '../../../base/common/lifecycle.js';
 import { Emitter } from '../../../base/common/event.js';
 import { URI } from '../../../base/common/uri.js';
 import { Schemas } from '../../../base/common/network.js';
-import type { IFileSystemProvider } from '../../files/common/fileSystemProviderService.js';
-import type { IFileService, IFileStat, IFileEntry, IFileContent, IFileBytes, IFileWriteRequest, IFileWriteResult, IFileChangeEvent, FileExistingTargetBehavior, FileMissingTargetBehavior, FileDeleteMode } from '../../files/common/files.js';
+import type { IFileSystemProvider, IFileStat, IFileEntry, IFileBytes, IFileWriteRequest, IFileWriteResult, IFileChangeEvent, FileExistingTargetBehavior, FileMissingTargetBehavior, FileDeleteMode } from '../../files/common/files.js';
 
 /** Maps the UI profile scheme to the host's granted user-data directory. */
 export class FileUserDataProvider extends Disposable implements IFileSystemProvider {
 	private readonly changes = this._register(new Emitter<IFileChangeEvent>());
 	public readonly onDidChangeFiles = this.changes.event;
 
-	constructor(private readonly files: IFileService, private readonly home: URI) {
+	constructor(private readonly files: IFileSystemProvider, private readonly home: URI) {
 		super();
 		this._register(files.onDidChangeFiles(event => {
 			if (!event.resources) { this.changes.fire(event); return; }
@@ -31,12 +30,8 @@ export class FileUserDataProvider extends Disposable implements IFileSystemProvi
 		return (await this.files.readDirectory(this.toFile(resource))).map(entry => ({ ...entry, resource: URI.joinPath(resource, entry.name) }));
 	}
 
-	public async readFile(resource: URI): Promise<IFileContent> {
+	public async readFile(resource: URI): Promise<IFileBytes> {
 		return { ...await this.files.readFile(this.toFile(resource)), resource };
-	}
-
-	public async readFileBytes(resource: URI): Promise<IFileBytes> {
-		return { ...await this.files.readFileBytes(this.toFile(resource)), resource };
 	}
 
 	public async writeFile(request: IFileWriteRequest): Promise<IFileWriteResult> {

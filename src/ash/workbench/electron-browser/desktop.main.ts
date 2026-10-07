@@ -15,6 +15,7 @@ import { Disposable, DisposableTracker, installDisposableTracker, toDisposable }
 import { onUnexpectedError } from '../../base/common/errors.js';
 import { URI } from '../../base/common/uri.js';
 import { IFileService } from '../../platform/files/common/files.js';
+import { FileService } from '../../platform/files/common/fileService.js';
 import { ElectronRendererClipboardService } from '../../platform/clipboard/electron-browser/electronRendererClipboardService.js';
 import { validateConfigurationSnapshot } from '../../platform/configuration/common/configurationIpc.js';
 import { invoke, subscribe } from '../../platform/ipc/electron-browser/rendererIpc.js';
@@ -65,7 +66,6 @@ export class DesktopMain extends Disposable {
 			if (!Number.isSafeInteger(windowId) || (windowId as number) <= 0) { throw new TypeError('Invalid Main IPC window ID'); }
 			const mainProcessService = this._register(profileServices.createInstance(ElectronIPCMainProcessService, windowId as number));
 			profileServices.registerInstance(IMainProcessService, mainProcessService);
-			await mainProcessService.connect();
 			const logger = profileServices.createInstance(LoggerChannelClient);
 			let documentClient: AppServerProtocolClient | undefined;
 			const api = this._register(await createElectronRendererApi([
@@ -74,7 +74,9 @@ export class DesktopMain extends Disposable {
 				client => registerLocalTranscriptionService(transcriptionServices, client),
 			], { browser: true, textDocuments: true }, permissionDialog, mainProcessService));
 			performance.mark('ash.desktop.api-ready');
-			profileServices.registerInstance(IFileService, api.localFiles);
+			const profileFiles = this._register(profileServices.createInstance(FileService));
+			this._register(profileFiles.registerProvider(api.userDataHome.scheme, api.localFiles));
+			profileServices.registerInstance(IFileService, profileFiles);
 			const userThemes = this._register(await loadUserThemes(profileServices, URI.parse(api.userDataHome.toString().replace(/\/$/u, '') + '/themes')));
 			performance.mark('ash.desktop.themes-ready');
 			const workspace = parseWorkspace(await api.workspace.getWorkspace());
@@ -87,9 +89,9 @@ export class DesktopMain extends Disposable {
 			performance.mark('ash.desktop.workbench-start');
 			const workbench = this._register(await startWorkbench({
 				...this.options,
+				serviceCollection: new ServiceCollection([IMainProcessService, mainProcessService]),
 				environmentService: new ElectronWorkbenchEnvironmentService(),
 				createURLService: services => {
-					services.registerInstance(IMainProcessService, mainProcessService);
 					return services.createInstance(RelayURLService, windowId as number);
 				},
 				createTextDocumentHost: documentClient ? services => {

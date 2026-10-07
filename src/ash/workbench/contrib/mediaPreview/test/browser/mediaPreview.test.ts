@@ -20,7 +20,7 @@ import { AppServerExtensionService } from '../../../../services/extensions/brows
 import type { ITextMateService } from '../../../../services/textMate/common/textMateService.js';
 import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { AUDIO_PREVIEW_ID, VIDEO_PREVIEW_ID, MediaPreview } from '../../browser/mediaPreview.js';
-import { registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
+import { createTestFileService, registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import '../../browser/mediaPreview.contribution.js';
 
 test('Built-in media declarations activate from the package catalog, localize, refresh and revoke', async () => {
@@ -97,13 +97,12 @@ class MediaFixture extends Disposable {
 		this._register(installEditorTestDom(this.browser, ['Node', 'Element', 'HTMLElement']));
 		URL.revokeObjectURL = url => { this.revoked.push(url); originalRevoke(url); };
 		const unexpected = async (): Promise<never> => { throw new Error('Unexpected file operation'); };
-		this.services.registerInstance(IFileService, {
+		this.services.registerSingleton(IFileService, () => createTestFileService({
 			onDidChangeFiles: this.changes.event,
-			readFileBytes: async target => ({ resource: target, bytes: await this.read(), revision: 'media' }),
-			stat: async target => ({ resource: target, kind: FileKind.File, sizeBytes: 3, readonly: true, modifiedAtMillis: undefined }),
-			readFile: unexpected, readDirectory: unexpected, writeFile: unexpected, writeFileBytes: unexpected,
+			readFile: async target => ({ resource: target, bytes: await this.read(), revision: 'media' }),
+			stat: async target => ({ resource: target, kind: FileKind.File, sizeBytes: 3, readonly: true, modifiedAtMillis: undefined }), readDirectory: unexpected, writeFile: unexpected, writeFileBytes: unexpected,
 			createFile: unexpected, createDirectory: unexpected, copy: unexpected, rename: unexpected, delete: unexpected,
-		});
+		}));
 		registerTestComponentServices(this.services, this.browser.window.document);
 		this.services.registerInstance(IContextKeyService, this._register(new ContextKeyService()));
 		this.services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, ...toDisposable(() => { }) });

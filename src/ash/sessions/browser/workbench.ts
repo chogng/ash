@@ -2,7 +2,7 @@ import { ISessionGroupsService, SessionGroupsService } from '../services/session
 import { IFileSearchService } from '../../platform/search/common/fileSearch.js';
 import { BrowserFileSearchService } from '../../platform/search/browser/browserFileSearchService.js';
 import { Schemas } from '../../base/common/network.js';
-import type { IFileSystemProvider } from '../../platform/files/common/fileSystemProviderService.js';
+import type { IFileSystemProvider } from '../../platform/files/common/files.js';
 import { IUserDataProfileService } from '../../workbench/services/userDataProfile/common/userDataProfile.js';
 import { UserDataProfileService } from '../../workbench/services/userDataProfile/browser/userDataProfileService.js';
 import { IKeybindingEditingService, KeybindingsEditingService } from '../../workbench/services/keybinding/common/keybindingEditing.js';
@@ -102,7 +102,7 @@ import { ISystemFileTransferService } from '../../platform/files/common/systemFi
 import { IClipboardService } from '../../platform/clipboard/common/clipboardService.js';
 import { IDialogService, IFileDialogService } from '../../platform/dialogs/common/dialogs.js';
 import type { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
-import { MultiplexFileService } from '../../platform/files/browser/multiplexFileService.js';
+import { FileService } from '../../platform/files/common/fileService.js';
 import type { DialogService } from '../../workbench/services/dialogs/common/dialogService.js';
 import { IDialogsModel } from '../../workbench/common/dialogs.js';
 import { BrowserDialogHandler } from '../../workbench/browser/parts/dialogs/dialog.js';
@@ -215,6 +215,8 @@ import { SidebarPart, registerSessionsNavigation } from "./parts/sidebar/sidebar
 import type { TitlebarPart } from "./parts/titlebar/titlebarPart.js";
 
 export interface IWorkbenchOptions {
+	/** Host-owned services are borrowed before this window creates its consumers. */
+	readonly serviceCollection?: ServiceCollection;
 	readonly createAppToolsHost?: (services: IInstantiationService) => IDisposable;
 	readonly createTextDocumentHost?: (services: IInstantiationService) => IDisposable;
 	readonly contributionIds: readonly string[];
@@ -263,10 +265,10 @@ export abstract class Workbench extends Disposable {
 		if (!ownerWindow) throw new Error("Sessions renderer requires an owner window");
 
 		const configurationService = this.configurationService = this._register(new ConfigurationService({ api: options.configurationApi, initialSnapshot: options.initialConfigurationSnapshot }));
-		const serviceCollection = new ServiceCollection();
+		const serviceCollection = options.serviceCollection ?? new ServiceCollection();
 		// Load service descriptions before consumers so shared dependencies resolve in this window's scope.
 		for (const [id, descriptor] of getSingletonServiceDescriptors()) {
-			serviceCollection.set(id, descriptor);
+			if (!serviceCollection.has(id)) { serviceCollection.set(id, descriptor); }
 		}
 		const services = this._register(new InstantiationService(serviceCollection));
 		const serviceContributionReady: Promise<void>[] = [];
@@ -327,13 +329,12 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IWorkspaceContextService, workspace);
 		services.registerInstance(IGitService, this._register(services.createInstance(GitService, { api: options.api.git, appServerApi: options.api.appServer, eventApi: options.api.events, workspaceContext: workspace, canCloneRepository: options.nativeHostApi !== undefined })));
 		const files = this._register(services.createInstance(SessionFileService, options.api));
-		const fileService = this._register(new MultiplexFileService(files));
+		const fileService = this._register(services.createInstance(FileService));
 		this._register(userDataFileSystemProvider);
 		this._register(fileService.registerProvider(Schemas.vscodeUserData, userDataFileSystemProvider));
 		services.registerInstance(IUserDataProfileService, new UserDataProfileService());
-		if (options.browserFileSystemProvider) {
-			this._register(fileService.registerProvider('file', options.browserFileSystemProvider));
-		}
+		this._register(fileService.registerProvider(Schemas.file, options.browserFileSystemProvider ?? files));
+		this._register(fileService.registerProvider(Schemas.ashRemote, files));
 		services.registerInstance(IFileService, fileService);
 		services.registerInstance(IFileSearchService, options.api.hasAppServer ? files : services.createInstance(BrowserFileSearchService));
 		services.registerInstance(ISystemFileTransferService, files);

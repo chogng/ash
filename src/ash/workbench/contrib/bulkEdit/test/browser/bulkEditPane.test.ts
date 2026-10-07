@@ -1,4 +1,5 @@
 import '../../../../../editor/test/browser/testEditorDom.js';
+import { createTestFileService } from '../../../../test/common/testEditorServices.js';
 import { ResourceEdit, ResourceTextEdit } from '../../../../../editor/browser/services/bulkEditService.js';
 import { ITextModelResourceService, IFileTextModelService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
@@ -64,7 +65,7 @@ test("bulk edit preview applies only the selected valid entries", async () => {
 		services.registerInstance(ITextModelResourceService, fixture.models);
 		services.registerInstance(IFileTextModelService, fixture.models);
 		services.registerInstance(IWorkingCopyService, fixture.workingCopies);
-		services.registerInstance(IFileService, fixture.files);
+		services.registerSingleton(IFileService, () => createTestFileService(fixture.files));
 		using contextKeys = new ContextKeyService();
 		services.registerInstance(IContextKeyService, contextKeys);
 		services.registerInstance(IEditorService, new TestEditorService());
@@ -114,7 +115,7 @@ test("disposing a bulk edit preview settles the pending approval", async () => {
 		services.registerInstance(ITextModelResourceService, fixture.models);
 		services.registerInstance(IFileTextModelService, fixture.models);
 		services.registerInstance(IWorkingCopyService, fixture.workingCopies);
-		services.registerInstance(IFileService, fixture.files);
+		services.registerSingleton(IFileService, () => createTestFileService(fixture.files));
 		using contextKeys = new ContextKeyService();
 		services.registerInstance(IContextKeyService, contextKeys);
 		services.registerInstance(IEditorService, new TestEditorService());
@@ -162,7 +163,7 @@ test("bulk edit preview keeps resource operations linked to dependent text edits
 		services.registerInstance(ITextModelResourceService, fixture.models);
 		services.registerInstance(IFileTextModelService, fixture.models);
 		services.registerInstance(IWorkingCopyService, fixture.workingCopies);
-		services.registerInstance(IFileService, fixture.files);
+		services.registerSingleton(IFileService, () => createTestFileService(fixture.files));
 		using contextKeys = new ContextKeyService();
 		services.registerInstance(IContextKeyService, contextKeys);
 		services.registerInstance(IEditorService, new TestEditorService());
@@ -295,7 +296,7 @@ async function withPane(run: (pane: BulkEditPane, browser: JSDOM, configuration:
 	services.registerInstance(ITextModelResourceService, fixture.models);
 	services.registerInstance(IFileTextModelService, fixture.models);
 	services.registerInstance(IWorkingCopyService, fixture.workingCopies);
-	services.registerInstance(IFileService, fixture.files);
+	services.registerSingleton(IFileService, () => createTestFileService(fixture.files));
 	using contextKeys = new ContextKeyService();
 	services.registerInstance(IContextKeyService, contextKeys);
 	services.registerInstance(IEditorService, new TestEditorService());

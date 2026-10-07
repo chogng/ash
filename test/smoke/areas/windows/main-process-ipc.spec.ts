@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { expect, test as baseTest } from '../../../automation/test.js';
 import { resolveElectronConfiguration } from '../../../automation/electron.js';
+import { Workbench } from '../../../automation/workbench.js';
 
 const desktop = resolve(import.meta.dirname, '../../../..');
 const mainOutput = resolve(desktop, '.build/desktop/main/src');
@@ -76,7 +77,7 @@ startElectronApplication();
 		try {
 			const page = await application.firstWindow();
 			page.on('pageerror', error => errors.push(error.message));
-			await expect(page.locator('.ash-workbench')).toBeVisible();
+			await new Workbench(page).waitForReady();
 			await use({ application, page, active: () => application.evaluate(() => [...(globalThis as unknown as { ipcScenario: IpcScenario; }).ipcScenario.active]) });
 			expect(errors).toEqual([]);
 		} finally {
@@ -129,9 +130,32 @@ test('reload cancels a pending Main call and an old reply cannot overwrite the n
 	await expect(page.locator('.ash-workbench')).toHaveAttribute('data-color-theme', 'ash-light');
 });
 
-test('Main acquisition rejects renderer-supplied identity and removed color channels', async ({ ipcHarness: { page } }) => {
+test('configuration changes reach other windows and survive document replacement', async ({ ipcHarness: { application, page } }) => {
+	const opened = application.waitForEvent('window');
+	await application.evaluate(({ app }) => { app.emit('second-instance', {}, [process.execPath, app.getAppPath(), '--new-window'], process.cwd(), {}); });
+	const second = await opened;
+	await new Workbench(second).waitForReady();
+	const first = new Workbench(page);
+	await first.settingsEditor.openUserSettingsUI();
+	await first.settingsEditor.selectGroup('workbench');
+	await first.settingsEditor.selectCategory('appearance');
+	const theme = first.settingsEditor.element.locator('[data-settings-item-id="workbench.colorTheme"]').getByRole('combobox');
+	await theme.click();
+	await page.getByRole('option', { name: 'Ash Dark', exact: true }).click();
+	for (const window of [page, second]) { await expect(window.locator('.ash-workbench')).toHaveAttribute('data-color-theme', 'ash-dark'); }
+	await second.reload();
+	await new Workbench(second).waitForReady();
+	await expect(second.locator('.ash-workbench')).toHaveAttribute('data-color-theme', 'ash-dark');
+	await theme.click();
+	await page.getByRole('option', { name: 'Ash Light', exact: true }).click();
+	for (const window of [page, second]) { await expect(window.locator('.ash-workbench')).toHaveAttribute('data-color-theme', 'ash-light'); }
+});
+
+test('Main IPC rejects removed acquisition routes and renderer-supplied window identity', async ({ ipcHarness: { application, page, active } }) => {
+	const initial = await active();
 	const errors = await page.evaluate(async () => {
-		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, arg?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
+		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, arg?: unknown): Promise<unknown>; send(channel: string, arg?: unknown): void; }; }; }).ash.ipcRenderer;
+		ipc.send('ash:hello', { context: 'window:other' });
 		const failures: string[] = [];
 		for (const [channel, arg] of [
 			['ash:ipc:connect', { nonce: crypto.randomUUID(), context: 'window:other' }],
@@ -142,7 +166,13 @@ test('Main acquisition rejects renderer-supplied identity and removed color chan
 		}
 		return failures;
 	});
-	expect(errors[0]).toContain('Invalid Main IPC acquisition');
+	expect(errors[0]).toContain('No handler registered');
 	expect(errors[1]).toContain('takes no arguments');
 	expect(errors[2]).toContain('No handler registered');
+	await application.evaluate(({ BrowserWindow, ipcMain }) => {
+		const sender = BrowserWindow.getAllWindows()[0]!.webContents;
+		ipcMain.emit('ash:disconnect', { sender, senderFrame: null });
+		ipcMain.emit('ash:disconnect', { sender, senderFrame: { url: sender.mainFrame.url } });
+	});
+	expect(await active()).toEqual(initial);
 });

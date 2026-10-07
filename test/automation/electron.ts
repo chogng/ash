@@ -1,5 +1,6 @@
 import { dirname, join, resolve } from "node:path";
 import { createRequire } from "node:module";
+import { mkdirSync } from 'node:fs';
 import { createTestEnvironment } from './testEnvironment.js';
 import type { AppServerTestMode } from "./testTarget.js";
 
@@ -39,6 +40,13 @@ export function resolveElectronConfiguration(options: ElectronLaunchOptions): El
 		? process.platform === 'darwin' ? join(bundle, 'Contents', 'MacOS', 'Ash') : join(bundle, 'Ash.exe')
 		: createRequire(resolve(desktopDirectory, "package.json"))("electron") as string;
 	const environment = createTestEnvironment(options.userDataDirectory, process.env);
+	if (process.platform === 'win32') {
+		// Windows cannot begin a Jump List transaction without its destination stores
+		// beneath the isolated USERPROFILE. Keep Shell data inside the test home too.
+		for (const store of ['AutomaticDestinations', 'CustomDestinations']) {
+			mkdirSync(join(options.userDataDirectory, 'AppData', 'Roaming', 'Microsoft', 'Windows', 'Recent', store), { recursive: true });
+		}
+	}
 	if (bundle) {
 		for (const key of Object.keys(environment)) if (key.startsWith('ASH_')) delete environment[key];
 		environment.ELECTRON_ENABLE_LOGGING = '1';

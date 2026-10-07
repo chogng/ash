@@ -4,8 +4,8 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../base/common/uri.js';
 import type { IConfigurationResourceService } from '../../../../platform/configuration/common/configurationResourceService.js';
 import { ConfigurationResourceRevisionConflictError } from '../../../../platform/configuration/common/configurationResourceService.js';
-import type { IFileSystemProvider } from '../../../../platform/files/common/fileSystemProviderService.js';
-import { FileKind, FileNotFoundError, FileOperationNotSupportedError, FileRevisionConflictError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileContent, type IFileEntry, type IFileStat, type IFileWriteRequest, type IFileWriteResult } from '../../../../platform/files/common/files.js';
+import type { IFileSystemProvider } from '../../../../platform/files/common/files.js';
+import { FileKind, FileNotFoundError, FileOperationNotSupportedError, FileRevisionConflictError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileEntry, type IFileStat, type IFileWriteRequest, type IFileWriteResult } from '../../../../platform/files/common/files.js';
 import { SettingsFileSystemScheme, UserSettingsResource } from '../../../services/preferences/common/settingsEditorInput.js';
 
 /** Exposes the editable current-profile settings source through one virtual scheme. */
@@ -27,24 +27,17 @@ export class SettingsFileSystemProvider extends Disposable implements IFileSyste
 
 	public async stat(resource: URI): Promise<IFileStat> {
 		const content = await this.readFile(resource);
-		return fileStat(resource, encodedSize(content.content));
+		return fileStat(resource, content.bytes.byteLength);
 	}
 
 	public readDirectory(resource: URI): Promise<readonly IFileEntry[]> {
 		return Promise.reject(new FileOperationNotSupportedError(resource, 'readDirectory'));
 	}
 
-	public async readFile(resource: URI): Promise<IFileContent> {
-		if (isEqualResource(resource, UserSettingsResource)) {
-			const snapshot = await this.configurationResourceService.read();
-			return Object.freeze({ resource, content: snapshot.source, revision: userSettingsRevision(snapshot.revision) });
-		}
-		throw new FileNotFoundError(resource);
-	}
-
-	public async readFileBytes(resource: URI): Promise<IFileBytes> {
-		const content = await this.readFile(resource);
-		return Object.freeze({ resource, bytes: VSBuffer.fromString(content.content).buffer, revision: content.revision });
+	public async readFile(resource: URI): Promise<IFileBytes> {
+		if (!isEqualResource(resource, UserSettingsResource)) throw new FileNotFoundError(resource);
+		const snapshot = await this.configurationResourceService.read();
+		return Object.freeze({ resource, bytes: VSBuffer.fromString(snapshot.source).buffer, revision: userSettingsRevision(snapshot.revision) });
 	}
 
 	public async writeFile(request: IFileWriteRequest): Promise<IFileWriteResult> {

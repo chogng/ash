@@ -381,7 +381,13 @@ Renderer 通过受信 IPC route 和 `workspace.getWorkspace()` 读取该身份�
 contribution 不得通过该服务直接访问文件系统。单根 Folder 启动时，Electron Main 将该根
 配置给 App Server；Renderer 的 `BrowserFileService` 只把 workspace URI 映射成根相对路径，
 目录枚举、metadata、有界原子写入、filesystem invalidation 与最终边界授权由 Rust / App Server
-完成。Workspace 内容搜索通过独立的
+完成。文件 provider 的 `readFile()` 返回原始字节和不透明 revision；公共 `FileService` 按 scheme
+路由读取，并为文本调用执行保留 BOM 的严格 UTF-8 解码。`TextFileService` 继续负责编辑器的
+文本格式、BOM 与保存策略。App Server 通过连接所属的 resource 分块传输文件字节，Renderer
+在读取成功或失败后释放该 resource。文件读取保持既有的 50 MiB 上限；其他 resource 默认
+16 MiB，所有 resource 仍共享每连接 64 MiB 和 128 个句柄的配额。
+
+Workspace 内容搜索通过独立的
 `grep/search/start|read|cancel` contract 接入；其 ownership 与限制见
 [`search.md`](search.md)。Desktop 的保存命令、dirty state、watcher 消费、多根 Workspace 与
 搜索结果打开仍未实现。
@@ -462,9 +468,9 @@ context bridge API 与 host validation 留在 `*Ipc.ts` 或具体运行时实现
 所属 service 注册，但实例创建与释放由窗口容器统一负责。`workbenchServiceContributions.ts` 只描述 service、依赖与安装函数，composition root
 负责提供原始 capability，并在缺失依赖或依赖环时启动失败。
 
-Electron 主进程连接由 `IMainProcessService` 提供 channel。Workbench 和 Sessions 在创建领域 API 前，先取得可信路由确认的窗口 ID，再连接当前文档的 MessagePort；构造函数不发起连接。Main 根据已校验的发送窗口赋予连接上下文，Renderer 只能提交回复 nonce。窗口重载或关闭会取消该连接的请求并释放订阅，其他窗口的连接继续使用。
+Electron 主进程连接由 `IMainProcessService` 提供 channel。Workbench 和 Sessions 在创建领域 API 前，先取得可信路由确认的窗口 ID，随后创建同步可用的 Electron IPC client。`base/parts/ipc` 使用 `ash:hello`、`ash:message` 和 `ash:disconnect` 建立每份 Renderer 文档的连接，不再为 Main 服务申请 MessagePort。Main 在加载窗口入口前注册允许的 webContents、入口 URL 和窗口上下文；每条消息都验证发送者、main frame identity 和确切入口 URL，连接上下文不接受 Renderer 输入。窗口重载或关闭会取消该连接的请求并释放订阅，其他窗口的连接继续使用。
 
-`base/parts/ipc` 拥有 JSON 消息帧、调用取消和事件订阅生命周期；`platform/ipc` 拥有服务契约与 Electron 适配。channel 的命令、事件和参数由领域适配器校验，当前系统颜色读取与变化通知使用 `colorScheme` channel。其余系统能力仍通过可信路由提供，App Server 业务调用继续由 `AppServerProtocolClient` 和 Rust 协议负责。
+`base/parts/ipc` 拥有 Electron 消息传输、JSON 消息帧、调用取消和事件订阅生命周期；`platform/ipc` 提供 Main 服务契约与薄适配。Main 在应用启动时为系统颜色、配置、系统与用户键盘布局、更新和最近项目历史各注册一次共享 channel；日志、存储、URI 分发等既有 channel 也复用该连接。领域适配器校验命令、事件和参数，服务事件直接成为 channel 订阅，应用不再逐窗口转发这些共享服务的变化。窗口启动与窗口专属操作仍通过有限可信路由提供，App Server 业务调用继续由 `AppServerProtocolClient` 和 Rust 协议负责，其 MessagePort transport 保留。
 
 Ash 当前没有 VS Code `externalServices` 中的 telemetry machine ID / Marketplace header 组合语义，
 也没有构建时替换的 Copilot license endpoint，因此不建立同名空目录。Marketplace 请求继续由

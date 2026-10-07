@@ -1,6 +1,7 @@
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
+import { FileService } from '../../../src/ash/platform/files/common/fileService.js';
 import { BinaryResourceDiffEditor } from '../../../src/ash/workbench/browser/parts/editor/binaryDiffEditor.js';
 import { EditorResourceAccessor, SideBySideEditor } from '../../../src/ash/workbench/common/editor.js';
 import { createBinaryDiffEditorInput } from '../../../src/ash/workbench/common/editor/diffEditorInput.js';
@@ -18,13 +19,21 @@ import type { ITextResourceStore } from '../../../src/ash/workbench/services/tex
 import { EditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
 import { EditorPaneRegistry } from '../../../src/ash/workbench/browser/editor.js';
 import { binaryDiffEditorDescriptor } from '../../../src/ash/workbench/browser/parts/editor/binaryDiffEditor.js';
-import { createTestEditorServices, registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
+import { createTestFileService, createTestEditorServices, registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
+import { BrowserExtensionHostApi, createDisconnectedExtensionHostApi } from '../../../src/ash/platform/extensionHost/browser/extensionHostApi.js';
+import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
+import { IAppServerApi } from '../../../src/ash/platform/app-server/common/appServerApi.js';
+import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
+import { WorkspaceContextService } from '../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js';
+import { MemoryFileService } from '../../../src/ash/workbench/contrib/bulkEdit/test/browser/bulkEditTestServices.js';
 
 const provider = await IndexedDBFileSystemProvider.create(indexedDB, Schemas.vscodeUserData);
+const files = new FileService();
+const registration = files.registerProvider(Schemas.vscodeUserData, provider);
 const resource = URI.from({ scheme: Schemas.vscodeUserData, path: '/user/test.jsonc' });
 let changes = 0;
-const listener = provider.onDidChangeFiles(() => changes++);
-window.addEventListener('pagehide', () => { listener.dispose(); provider.dispose(); }, { once: true });
+const listener = files.onDidChangeFiles(() => changes++);
+window.addEventListener('pagehide', () => { listener.dispose(); registration.dispose(); files.dispose(); provider.dispose(); }, { once: true });
 const binaryResources = new DisposableStore();
 window.addEventListener('pagehide', () => binaryResources.dispose(), { once: true });
 let comparisonGroups: EditorPart | undefined;
@@ -36,6 +45,44 @@ let textResolutions = 0;
 const textInput = { resource: URI.parse('review:/content.txt'), label: 'Provider text', languageId: 'plaintext' };
 const integration = {
 	get changes(): number { return changes; },
+	async offlineExtensionFolders(): Promise<unknown> {
+		using lifetime = new DisposableStore();
+		const browserRoot = resource.with({ path: '/offline-project' });
+		const backendRoot = URI.file('/disconnected-workspace');
+		const unknownRoot = URI.parse('unregistered:///workspace');
+		await files.createDirectory(browserRoot);
+		lifetime.add(files.registerProvider(Schemas.file, new MemoryFileService([])));
+		const services = lifetime.add(new InstantiationService());
+		services.registerInstance(IFileService, files);
+		services.registerInstance(ICommandService, {
+			onWillExecuteCommand: Event.None, onDidExecuteCommand: Event.None,
+			executeCommand: async () => { throw new Error('Unexpected extension command'); },
+		});
+		services.registerInstance(IAppServerApi, {
+			getConnectionState: async () => 'stopped', getSlashCommands: async () => [], onConnectionState: () => toDisposable(() => { }),
+		});
+		services.registerInstance(IWorkspaceContextService, lifetime.add(new WorkspaceContextService({
+			id: 'offline-folders', folders: [browserRoot, backendRoot, unknownRoot].map((uri, index) => ({ uri, index, id: String(index), name: `Root ${index}` })),
+		})));
+		const host = lifetime.add(new BrowserExtensionHostApi({
+			list: async () => ({
+				generation: 1, diagnostics: [], extensions: [{
+					id: 'offline-folders', name: 'folders', publisher: 'test', displayName: 'Folders', version: '1', sourceKind: 'builtIn',
+					manifestJson: JSON.stringify({ browser: 'main.js' }), manifestSha256: `sha256:${'a'.repeat(64)}`, packageSha256: `sha256:${'b'.repeat(64)}`,
+				}]
+			}),
+			readResource: async () => new TextEncoder().encode(`export function activate(api) {
+				api.register({ kind: 'command', registrationId: 'folders', command: 'folders', title: 'Folders' },
+					() => api.clientRequest({ operation: 'workspaceFolders' }));
+			}`),
+		}, createDisconnectedExtensionHostApi(operation => { throw new Error(`Unexpected remote operation ${operation}`); }), services));
+		const runtime = (await host.reconcile('refresh')).extensions[0]!;
+		if (runtime.lifecycle !== 'ready') throw new Error(`Extension activation failed: ${JSON.stringify(runtime.failure)}`);
+		return await host.invoke({
+			extensionId: runtime.id, activationGeneration: runtime.activationGeneration, incarnation: runtime.incarnation!,
+			registrationId: 'folders', operation: 'command', payload: null, deadlineUnixMillis: Date.now() + 5_000
+		}, new AbortController().signal);
+	},
 	async showBinaryComparison(restored: boolean): Promise<{ primary: string; secondary: string; }> {
 		binaryResources.clear();
 		const files = binaryResources.add(await IndexedDBFileSystemProvider.create(indexedDB, Schemas.file));
@@ -49,7 +96,7 @@ const integration = {
 		}
 		const input = EditorInputSerializers.deserialize(JSON.parse(localStorage.getItem('binary-comparison')!));
 		const services = binaryResources.add(new InstantiationService());
-		services.registerInstance(IFileService, files);
+		services.registerSingleton(IFileService, () => createTestFileService(files));
 		const pane = binaryResources.add(registerTestComponentServices(services).createInstance(BinaryResourceDiffEditor));
 		const container = document.createElement('div');
 		container.id = 'binary-comparison';
@@ -79,8 +126,9 @@ const integration = {
 			await files.writeFileBytes(originalResource, new Uint8Array([0x48, 0x69]));
 			await files.writeFileBytes(modifiedResource, new Uint8Array([0x48, 0x69, 0xff]));
 		}
-		const services = binaryResources.add(createTestEditorServices());
-		services.registerInstance(IFileService, files);
+		const parent = binaryResources.add(new InstantiationService());
+		parent.registerSingleton(IFileService, () => createTestFileService(files));
+		const services = binaryResources.add(createTestEditorServices(undefined, parent));
 		const registry = new EditorPaneRegistry();
 		registry.registerEditorPane(binaryDiffEditorDescriptor());
 		const container = document.createElement('div');
@@ -159,18 +207,18 @@ const integration = {
 	async reopenText(): Promise<void> {
 		await textGroups!.openEditor(textInput);
 	},
-	read: () => provider.readFile(resource),
+	read: () => files.readFile(resource),
 	async write(content: string, expectedRevision?: string): Promise<string> {
-		try { await provider.writeFile({ resource, content, expectedRevision }); return 'saved'; }
+		try { await files.writeFile({ resource, content, expectedRevision }); return 'saved'; }
 		catch (error) { return error instanceof Error ? error.name : String(error); }
 	},
 	async copyAndRename(): Promise<string[]> {
 		const copy = URI.joinPath(resource, '../copy.jsonc');
 		const moved = resource.with({ path: '/user/moved.jsonc' });
-		await provider.copy(resource, copy);
-		await provider.rename(copy, moved, 'error');
-		const contents = [(await provider.readFile(resource)).content, (await provider.readFile(moved)).content];
-		await provider.delete(moved, 'error', 'fileOrEmptyDirectory');
+		await files.copy(resource, copy);
+		await files.rename(copy, moved, 'error');
+		const contents = [(await files.readFile(resource)).content, (await files.readFile(moved)).content];
+		await files.delete(moved, 'error', 'fileOrEmptyDirectory');
 		return contents;
 	},
 };

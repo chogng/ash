@@ -13,9 +13,6 @@ import {
 	validateKeyboardMapping,
 } from './keyboardLayoutValidation.js';
 
-export const USER_KEYBOARD_LAYOUT_READ_CHANNEL = 'ash:user-keyboard-layout:read';
-export const USER_KEYBOARD_LAYOUT_OPEN_RESOURCE_CHANNEL = 'ash:user-keyboard-layout:open-resource';
-export const USER_KEYBOARD_LAYOUT_CHANGED_CHANNEL = 'ash:user-keyboard-layout:changed';
 
 export const USER_KEYBOARD_LAYOUT_DEFAULT_CONTENT = `// Defines a custom keyboard layout for Ash.
 // Run "Developer: Inspect Key Mappings (JSON)", then replace null with its output.

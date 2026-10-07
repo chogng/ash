@@ -6,7 +6,7 @@ import { decodeBase64 } from "../../../base/common/buffer.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable } from "../../../base/common/lifecycle.js";
 import { URI } from "../../../base/common/uri.js";
-import { FileKind, FileNotFoundError, FileRevisionConflictError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileContent, type IFileEntry, type IFileService, type IFileStat, type IFileWriteRequest, type IFileWriteResult } from "../common/files.js";
+import { FileKind, FileNotFoundError, FileRevisionConflictError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileEntry, type IFileSystemProvider, type IFileStat, type IFileWriteRequest, type IFileWriteResult } from "../common/files.js";
 import { workspaceRelativePath, type IWorkspaceContextService } from "../../workspace/common/workspace.js";
 import { isRemoteResource } from "../../remote/common/remote.js";
 import type { ISystemFileTransferService } from '../common/systemFileTransferService.js';
@@ -37,7 +37,7 @@ export interface BrowserFileServiceOptions {
 /**
  * Maps workspace resource URIs to the App Server's root-relative filesystem protocol.
  */
-export class BrowserFileService extends Disposable implements IFileService, ISystemFileTransferService {
+export class BrowserFileService extends Disposable implements IFileSystemProvider, ISystemFileTransferService {
 	private readonly api: IFileSystemApi;
 	private readonly resourceApi: IResourceApi;
 	private readonly workspaceContextService: IWorkspaceContextService;
@@ -77,14 +77,7 @@ export class BrowserFileService extends Disposable implements IFileService, ISys
 		}));
 	}
 
-	async readFile(resource: URI): Promise<IFileContent> {
-		let result: FsReadFileResult;
-		try { result = await this.api.readFile(this.fileTarget(resource)); }
-		catch (error) { if (isFileNotFound(error)) throw new FileNotFoundError(resource); throw error; }
-		return Object.freeze({ resource, content: result.content, revision: result.revision });
-	}
-
-	async readFileBytes(resource: URI): Promise<IFileBytes> {
+	async readFile(resource: URI): Promise<IFileBytes> {
 		let result: FsReadBinaryFileResult;
 		try { result = await this.api.readBinaryFile(this.fileTarget(resource)); }
 		catch (error) { if (isFileNotFound(error)) throw new FileNotFoundError(resource); throw error; }
@@ -178,7 +171,7 @@ export class BrowserFileService extends Disposable implements IFileService, ISys
 	}
 
 	private async readResourceBytes(resource: ResourceMetadataResult): Promise<Uint8Array> {
-		if (!Number.isSafeInteger(resource.size) || resource.size < 0 || resource.size > MAX_BINARY_FILE_BYTES) {
+		if (!Number.isSafeInteger(resource.size) || resource.size < 0 || resource.size > MAX_FILE_READ_BYTES) {
 			throw new Error("Workspace binary resource size is invalid");
 		}
 		const bytes = new Uint8Array(resource.size);
@@ -229,7 +222,8 @@ function isFileNotFound(error: unknown): boolean {
 }
 
 const MAX_RESOURCE_READ_BYTES = 262_144;
-const MAX_BINARY_FILE_BYTES = 16 * 1024 * 1024;
+// Both backend file-read endpoints accept this limit; preview panes apply their own smaller bounds.
+const MAX_FILE_READ_BYTES = 50 * 1024 * 1024;
 
 function encodeBinaryFile(bytes: Uint8Array): string {
 	let binary = '';

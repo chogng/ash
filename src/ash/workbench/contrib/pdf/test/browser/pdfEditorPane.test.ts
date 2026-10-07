@@ -1,11 +1,12 @@
-import { createTestComponentServices, registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
+import type { IFileSystemProvider } from '../../../../../platform/files/common/files.js';
+import { createTestFileService, createTestComponentServices, registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { CancellationError } from "../../../../../base/common/errors.js";
 import { URI } from "../../../../../base/common/uri.js";
-import { FileKind, type IFileService } from "../../../../../platform/files/common/files.js";
+import { FileKind } from "../../../../../platform/files/common/files.js";
 import { EditorPaneMatch } from '../../../../../workbench/browser/parts/editor/editorPane.js';
 import { PdfEditorPane } from "../../../../../workbench/contrib/pdf/browser/pdfEditorPane.js";
 import type { IPdfAnnotationStore, PdfAnnotationSnapshot } from "../../../../../workbench/contrib/pdf/browser/pdfAnnotationStore.js";
@@ -108,12 +109,11 @@ test("PDF editor observes cancellation before rendering pages", async () => {
 
 test("workspace PDF loader reads only through the binary file contract", async () => {
 	const resource = URI.file("C:\\project\\paper.pdf");
-	const loader = new WorkspacePdfDocumentLoader({
+	using fileService = createTestFileService({
 		onDidChangeFiles: () => ({ dispose() { }, [Symbol.dispose]() { } }),
 		stat: async () => ({ resource, kind: FileKind.File, sizeBytes: 4, readonly: true, modifiedAtMillis: undefined }),
 		readDirectory: async () => [],
-		readFile: async () => { throw new Error("PDF loader must not request text"); },
-		readFileBytes: async (requested) => ({ resource: requested, bytes: new Uint8Array([37, 80, 68, 70]), revision: "pdf-revision" }),
+		readFile: async (requested) => ({ resource: requested, bytes: new Uint8Array([37, 80, 68, 70]), revision: "pdf-revision" }),
 		writeFile: async () => { throw new Error("PDF loader is read-only"); },
 		writeFileBytes: async () => { throw new Error("PDF loader is read-only"); },
 		createFile: async () => { throw new Error("PDF loader is read-only"); },
@@ -121,7 +121,8 @@ test("workspace PDF loader reads only through the binary file contract", async (
 		copy: async () => { throw new Error("Copy is not used in this test"); },
 		rename: async () => { throw new Error("PDF loader is read-only"); },
 		delete: async () => { throw new Error("PDF loader is read-only"); },
-	} satisfies IFileService);
+	} satisfies IFileSystemProvider);
+	const loader = new WorkspacePdfDocumentLoader(fileService);
 
 	assert.deepEqual(await loader.load(input("paper.pdf"), new AbortController().signal), new Uint8Array([37, 80, 68, 70]));
 });

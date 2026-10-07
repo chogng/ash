@@ -1,9 +1,88 @@
 use super::ConnectionResourceUsage;
+use super::MAX_RESOURCE_BYTES;
 use super::MAX_RESOURCE_BYTES_PER_CONNECTION;
 use super::MAX_RESOURCES_PER_CONNECTION;
 use super::ResourceError;
 use super::ResourceStore;
 use std::time::Duration;
+
+#[test]
+fn domain_read_limit_preserves_general_resource_limit() {
+    let mut store = ResourceStore::default();
+    let size = MAX_RESOURCE_BYTES + 1;
+    assert!(matches!(
+        store.create(
+            1,
+            "application/octet-stream".into(),
+            vec![42; size],
+            Duration::from_secs(60)
+        ),
+        Err(ResourceError::TooLarge)
+    ));
+    let metadata = store
+        .create_with_limit(
+            1,
+            "application/octet-stream".into(),
+            vec![42; size],
+            Duration::from_secs(60),
+            size,
+        )
+        .expect("file within its domain limit");
+    assert_eq!(metadata.size, size);
+    assert!(matches!(
+        store.metadata(2, &metadata.resource_id),
+        Err(ResourceError::NotOwner)
+    ));
+    let chunk = store
+        .read(1, &metadata.resource_id, size - 1, 1)
+        .expect("read final byte");
+    assert_eq!(chunk.data, vec![42]);
+    assert!(chunk.eof);
+    store
+        .release(1, &metadata.resource_id)
+        .expect("release large file");
+    assert!(!store.usage_by_connection.contains_key(&1));
+}
+
+#[test]
+fn domain_read_limit_still_enforces_connection_byte_quota() {
+    let mut store = ResourceStore::default();
+    let max_bytes = 50 * 1024 * 1024;
+    let first = store
+        .create_with_limit(
+            1,
+            "application/octet-stream".into(),
+            vec![0; max_bytes],
+            Duration::from_secs(60),
+            max_bytes,
+        )
+        .expect("first file within connection quota");
+    let next_size = MAX_RESOURCE_BYTES + 1;
+    assert!(matches!(
+        store.create_with_limit(
+            1,
+            "application/octet-stream".into(),
+            vec![0; next_size],
+            Duration::from_secs(60),
+            max_bytes,
+        ),
+        Err(ResourceError::TooLarge)
+    ));
+    store
+        .release(1, &first.resource_id)
+        .expect("release first file");
+    assert!(
+        store
+            .create_with_limit(
+                1,
+                "application/octet-stream".into(),
+                vec![0; next_size],
+                Duration::from_secs(60),
+                max_bytes,
+            )
+            .is_ok()
+    );
+}
 
 #[test]
 fn enforces_resource_count_per_connection_and_releases_capacity() {

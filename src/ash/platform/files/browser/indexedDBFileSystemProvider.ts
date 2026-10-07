@@ -2,8 +2,8 @@ import { addDisposableListener } from '../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { Emitter } from '../../../base/common/event.js';
 import { URI } from '../../../base/common/uri.js';
-import type { IFileSystemProvider } from '../common/fileSystemProviderService.js';
-import { FileKind, FileNotFoundError, FileRevisionConflictError, type IFileStat, type IFileEntry, type IFileContent, type IFileBytes, type IFileWriteRequest, type IFileWriteResult, type IFileChangeEvent, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type FileDeleteMode } from '../common/files.js';
+import type { IFileSystemProvider } from '../common/files.js';
+import { FileKind, FileNotFoundError, FileRevisionConflictError, type IFileStat, type IFileEntry, type IFileBytes, type IFileWriteRequest, type IFileWriteResult, type IFileChangeEvent, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type FileDeleteMode } from '../common/files.js';
 
 interface Entry {
 	readonly kind: FileKind.File | FileKind.Directory;
@@ -50,12 +50,7 @@ export class IndexedDBFileSystemProvider extends Disposable implements IFileSyst
 		});
 	}
 
-	public async readFile(resource: URI): Promise<IFileContent> {
-		const result = await this.readFileBytes(resource);
-		return { resource, content: new TextDecoder('utf-8', { fatal: true }).decode(result.bytes), revision: result.revision };
-	}
-
-	public async readFileBytes(resource: URI): Promise<IFileBytes> {
+	public async readFile(resource: URI): Promise<IFileBytes> {
 		return this.access(false, entries => {
 			const entry = this.entry(entries, resource);
 			if (entry.kind !== FileKind.File) {

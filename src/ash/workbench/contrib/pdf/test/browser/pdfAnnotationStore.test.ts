@@ -1,15 +1,18 @@
+import { createTestFileService } from '../../../../test/common/testEditorServices.js';
+import type { IFileSystemProvider } from '../../../../../platform/files/common/files.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../base/common/uri.js";
-import { FileKind, type IFileService, type IFileWriteRequest } from "../../../../../platform/files/common/files.js";
+import { FileKind, type IFileWriteRequest } from "../../../../../platform/files/common/files.js";
 import { WorkspacePdfAnnotationStore, pdfAnnotationSidecarResource } from "../../../../../workbench/contrib/pdf/browser/pdfAnnotationStore.js";
 import { emptyPdfAnnotationDocument, parsePdfAnnotationDocument } from "../../../../../workbench/contrib/pdf/common/pdfAnnotations.js";
 
 test("PDF annotation store returns an empty document when no sidecar exists", async () => {
 	const resource = URI.file("/workspace/paper.pdf");
 	const files = new TestFileService();
-	const store = new WorkspacePdfAnnotationStore(files);
+	using fileService = createTestFileService(files);
+	const store = new WorkspacePdfAnnotationStore(fileService);
 
 	const snapshot = await store.load(resource, new AbortController().signal);
 
@@ -25,7 +28,8 @@ test("PDF annotation store reads and conditionally writes its sibling sidecar", 
 	files.entries = [{ resource: sidecar, name: "paper.pdf.ash-annotations.json", kind: FileKind.File }];
 	files.content = "{\n  \"version\": 1,\n  \"annotations\": []\n}\n";
 	files.revision = "before";
-	const store = new WorkspacePdfAnnotationStore(files);
+	using fileService = createTestFileService(files);
+	const store = new WorkspacePdfAnnotationStore(fileService);
 
 	const loaded = await store.load(resource, new AbortController().signal);
 	const saved = await store.save(resource, loaded.document, loaded.revision, new AbortController().signal);
@@ -37,7 +41,7 @@ test("PDF annotation store reads and conditionally writes its sibling sidecar", 
 	assert.equal(saved.revision, "after");
 });
 
-class TestFileService implements IFileService {
+class TestFileService implements IFileSystemProvider {
 	readonly onDidChangeFiles = () => toDisposable(() => { });
 	entries: readonly { readonly resource: URI; readonly name: string; readonly kind: FileKind; }[] = [];
 	content = "";
@@ -55,11 +59,7 @@ class TestFileService implements IFileService {
 
 	async readFile(resource: URI) {
 		this.readFileRequests.push(resource);
-		return { resource, content: this.content, revision: this.revision };
-	}
-
-	async readFileBytes(resource: URI) {
-		return { resource, bytes: new Uint8Array(), revision: this.revision };
+		return { resource, bytes: new TextEncoder().encode(this.content), revision: this.revision };
 	}
 
 	async writeFile(request: IFileWriteRequest) {

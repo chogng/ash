@@ -4,7 +4,6 @@ use super::RpcError;
 use super::decode;
 use super::operations::resource_rpc_error;
 use super::result;
-use crate::resource_store::MAX_RESOURCE_BYTES;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::fs::FsCopyParams;
 use ash_app_server_protocol::protocol::fs::FsCreateDirectoryParams;
@@ -110,17 +109,18 @@ impl AppServer {
                 params.session_directory.as_ref(),
                 Permission::ReadFiles,
             )?
-            .read_file_with_revision(&params.path, MAX_RESOURCE_BYTES)
+            .read_file_with_revision(&params.path, MAX_EDITOR_FILE_BYTES)
             .map_err(file_system_error)?;
         let metadata = self
             .resources
             .lock()
             .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?
-            .create(
+            .create_with_limit(
                 connection.connection_id,
                 "application/octet-stream".into(),
                 content.bytes,
                 BINARY_PREVIEW_RESOURCE_TTL,
+                MAX_EDITOR_FILE_BYTES,
             )
             .map_err(resource_rpc_error)?;
         result(&FsReadBinaryFileResult {

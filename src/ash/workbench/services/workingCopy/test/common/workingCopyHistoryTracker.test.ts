@@ -10,7 +10,7 @@ import { IConfigurationService } from '../../../../../platform/configuration/com
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { DiskFileSystemProvider } from '../../../../../platform/files/node/diskFileSystemProvider.js';
-import { MultiplexFileService } from '../../../../../platform/files/browser/multiplexFileService.js';
+import { FileService } from '../../../../../platform/files/common/fileService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { FileUserDataProvider } from '../../../../../platform/userData/common/fileUserDataProvider.js';
@@ -29,7 +29,8 @@ test('local history captures successful saves, honors exclusion and retention, a
 	const directory = await mkdtemp(join(tmpdir(), 'ash-local-history-'));
 	try {
 		using disk = new DiskFileSystemProvider([URI.file(directory)]);
-		using files = new MultiplexFileService(disk);
+		using files = new FileService();
+		using diskRegistration = files.registerProvider('file', disk);
 		using userData = new FileUserDataProvider(disk, URI.file(join(directory, 'profile')));
 		using registration = files.registerProvider('ash-userdata', userData);
 		using configuration = new InMemoryConfigurationService();

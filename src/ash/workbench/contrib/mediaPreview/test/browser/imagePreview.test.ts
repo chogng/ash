@@ -17,7 +17,7 @@ import { inspectImage } from '../../../../../platform/media/browser/image.js';
 import { getBuiltinEditorPaneFactory } from '../../../../browser/editor.js';
 import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { IMAGE_PREVIEW_ID, ImagePreview } from '../../browser/imagePreview.js';
-import { registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
+import { createTestFileService, registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import '../../browser/mediaPreview.contribution.js';
 
 const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
@@ -42,13 +42,12 @@ class ImageFixture extends Disposable {
 		Object.defineProperty(this.browser.window, 'ResizeObserver', { value: class { observe(): void { } disconnect(): void { } } });
 		URL.revokeObjectURL = url => { this.revoked.push(url); originalRevoke(url); };
 		const unexpected = async (): Promise<never> => { throw new Error('Unexpected file operation'); };
-		this.services.registerInstance(IFileService, {
+		this.services.registerSingleton(IFileService, () => createTestFileService({
 			onDidChangeFiles: this.changes.event,
-			readFileBytes: async target => ({ resource: target, bytes: await this.read(), revision: 'image' }),
-			stat: async target => ({ resource: target, kind: FileKind.File, sizeBytes: png.length, readonly: true, modifiedAtMillis: undefined }),
-			readFile: unexpected, readDirectory: unexpected, writeFile: unexpected, writeFileBytes: unexpected,
+			readFile: async target => ({ resource: target, bytes: await this.read(), revision: 'image' }),
+			stat: async target => ({ resource: target, kind: FileKind.File, sizeBytes: png.length, readonly: true, modifiedAtMillis: undefined }), readDirectory: unexpected, writeFile: unexpected, writeFileBytes: unexpected,
 			createFile: unexpected, createDirectory: unexpected, copy: unexpected, rename: unexpected, delete: unexpected,
-		});
+		}));
 		registerTestComponentServices(this.services, this.browser.window.document);
 		this.services.registerInstance(IContextKeyService, this._register(new ContextKeyService()));
 		this.services.registerInstance(IContextMenuService, { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { }, hideContextMenu: () => { } });

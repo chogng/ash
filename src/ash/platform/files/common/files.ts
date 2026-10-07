@@ -1,4 +1,5 @@
 import type { Event } from "../../../base/common/event.js";
+import type { IDisposable } from "../../../base/common/lifecycle.js";
 import type { URI } from "../../../base/common/uri.js";
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
 
@@ -26,7 +27,7 @@ export interface IFileContent {
 	readonly revision: string;
 }
 
-/** Binary content read from a workspace resource together with its opaque exact-content revision. */
+/** Exact stored bytes read from a resource together with their opaque content revision. */
 export interface IFileBytes {
 	readonly resource: URI;
 	readonly bytes: Uint8Array;
@@ -71,13 +72,13 @@ export interface IFileChangeEvent {
 	readonly resources: readonly URI[] | undefined;
 }
 
-/** Workspace-scoped file operations available to Workbench features. */
-export interface IFileService {
+/** Storage operations implemented by a runtime or virtual resource provider. */
+export interface IFileSystemProvider {
 	readonly onDidChangeFiles: Event<IFileChangeEvent>;
 	stat(resource: URI): Promise<IFileStat>;
 	readDirectory(resource: URI): Promise<readonly IFileEntry[]>;
-	readFile(resource: URI): Promise<IFileContent>;
-	readFileBytes(resource: URI): Promise<IFileBytes>;
+	/** Reads exact stored bytes; the revision continues to identify those bytes across text decoding. */
+	readFile(resource: URI): Promise<IFileBytes>;
 	writeFile(request: IFileWriteRequest): Promise<IFileWriteResult>;
 	/** Creates a file from exact bytes without replacing an existing nonempty file. */
 	writeFileBytes(resource: URI, bytes: Uint8Array): Promise<IFileWriteResult>;
@@ -87,6 +88,26 @@ export interface IFileService {
 	copy(source: URI, target: URI): Promise<void>;
 	rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void>;
 	delete(resource: URI, missing: FileMissingTargetBehavior, mode: FileDeleteMode): Promise<void>;
+}
+
+/** Routes file operations through explicitly registered resource schemes. */
+export interface IFileService {
+	readonly onDidChangeFiles: Event<IFileChangeEvent>;
+	stat(resource: URI): Promise<IFileStat>;
+	readDirectory(resource: URI): Promise<readonly IFileEntry[]>;
+	readFile(resource: URI): Promise<IFileContent>;
+	readFileBytes(resource: URI): Promise<IFileBytes>;
+	writeFile(request: IFileWriteRequest): Promise<IFileWriteResult>;
+	writeFileBytes(resource: URI, bytes: Uint8Array): Promise<IFileWriteResult>;
+	createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat>;
+	createDirectory(resource: URI): Promise<IFileStat>;
+	copy(source: URI, target: URI): Promise<void>;
+	rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void>;
+	delete(resource: URI, missing: FileMissingTargetBehavior, mode: FileDeleteMode): Promise<void>;
+	/** One registration per scheme; disposal unregisters it without disposing the caller-owned provider. */
+	registerProvider(scheme: string, provider: IFileSystemProvider): IDisposable;
+	/** Reports routing availability, which does not imply that the provider's storage is currently accessible. */
+	hasProvider(resource: URI): boolean;
 }
 
 export class FileNotFoundError extends Error {

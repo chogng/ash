@@ -1,3 +1,4 @@
+import { createTestFileService } from '../../../../test/common/testEditorServices.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { URI } from '../../../../../base/common/uri.js';
@@ -143,7 +144,7 @@ test('registered bulk edits reject missing model and dialog dependencies before 
 	assert.throws(() => services.get(IBulkEditService), /Unknown service: textModelResourceService/);
 	services.registerInstance(ITextModelResourceService, fixture.models);
 	services.registerInstance(IWorkingCopyService, fixture.workingCopies);
-	services.registerInstance(IFileService, fixture.files);
+	services.registerSingleton(IFileService, () => createTestFileService(fixture.files));
 	services.registerInstance(IConfigurationService, fixture.configuration);
 	assert.throws(() => services.get(IBulkEditService), /Unknown service: dialogService/);
 	services.registerInstance(IDialogService, fixture.dialogs);
@@ -158,7 +159,7 @@ test('registered bulk edits share the window dialog queue regardless of registra
 	using services = new InstantiationService(new ServiceCollection(...descriptors));
 	services.registerInstance(ITextModelResourceService, fixture.models);
 	services.registerInstance(IWorkingCopyService, fixture.workingCopies);
-	services.registerInstance(IFileService, fixture.files);
+	services.registerSingleton(IFileService, () => createTestFileService(fixture.files));
 	services.registerInstance(IConfigurationService, fixture.configuration);
 	const service = services.get(IBulkEditService);
 	const dialogs = services.get(IDialogService);

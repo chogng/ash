@@ -5,7 +5,7 @@ import { Emitter, type Event } from '../../base/common/event.js';
 import { toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
 import { BrowserLayoutService, type ILayoutOffsetInfo } from '../../platform/layout/browser/layoutService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
-import type { IFileSystemProvider } from '../../platform/files/common/fileSystemProviderService.js';
+import type { IFileSystemProvider } from '../../platform/files/common/files.js';
 import type { LogService } from '../../platform/log/common/logServiceImpl.js';
 import type { Part } from '../../workbench/browser/part.js';
 import { WorkbenchPartView } from '../../workbench/browser/workbenchPartView.js';

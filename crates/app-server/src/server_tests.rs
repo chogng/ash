@@ -2470,7 +2470,10 @@ fn agent_capabilities_read_reports_unconfigured_local_execution() {
     assert_eq!(response["result"]["tools"], serde_json::json!([]));
     assert_eq!(response["result"]["localProcessSandboxConfigured"], false);
     assert_eq!(response["result"]["sandboxBackends"], serde_json::json!([]));
-    assert_eq!(response["result"]["sandboxDiagnostics"], serde_json::json!([]));
+    assert_eq!(
+        response["result"]["sandboxDiagnostics"],
+        serde_json::json!([])
+    );
     assert_eq!(response["result"]["directoryGrantsReadable"], false);
 }
 
@@ -5886,6 +5889,8 @@ fn filesystem_rpc_lists_and_describes_paths() {
     std::fs::create_dir_all(root.join("src")).unwrap();
     std::fs::write(root.join("src/lib.rs"), "hello").unwrap();
     std::fs::write(root.join("paper.pdf"), b"%PDF-1.7\n").unwrap();
+    let large_size = 17 * 1024 * 1024;
+    std::fs::write(root.join("large.txt"), vec![b'x'; large_size]).unwrap();
     let server = server().with_file_system(Arc::new(LocalFileSystem::new(
         ash_file_access::Grant::for_environment(
             Dir::open_local(&root).unwrap(),
@@ -6029,6 +6034,42 @@ fn filesystem_rpc_lists_and_describes_paths() {
         [0, 255, 42]
     );
     assert!(pasted_again.get("error").is_some());
+    let large_text = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":13,"method":"fs/readFile","params":{"path":"large.txt"}}),
+    );
+    let large_bytes = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":14,"method":"fs/readBinaryFile","params":{"path":"large.txt"}}),
+    );
+    assert_eq!(
+        large_text["result"]["content"].as_str().unwrap().len(),
+        large_size
+    );
+    assert_eq!(large_bytes["result"]["resource"]["size"], large_size);
+    assert_eq!(
+        large_bytes["result"]["revision"],
+        large_text["result"]["revision"]
+    );
+    let final_byte = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":15,"method":"resource/read","params":{
+            "resourceId":large_bytes["result"]["resource"]["resourceId"],"offset":large_size - 1,"maxBytes":1
+        }}),
+    );
+    assert_eq!(final_byte["result"]["dataBase64"], "eA==");
+    assert_eq!(final_byte["result"]["eof"], true);
+    let released = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":16,"method":"resource/release","params":{
+            "resourceId":large_bytes["result"]["resource"]["resourceId"]
+        }}),
+    );
+    assert_eq!(released["result"], serde_json::Value::Null);
     assert!(root.join("src/generated").is_dir());
     assert_eq!(stale["error"]["code"], -32042);
     assert_eq!(stale["error"]["message"], "FileSystemRevisionConflict");

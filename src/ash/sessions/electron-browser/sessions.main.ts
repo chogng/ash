@@ -10,6 +10,7 @@ import { OpenAgentsWindowSystemWideKeybindingContribution } from '../contrib/ope
 import { installBaseUiStyles } from "../../base/browser/ui/styles.js";
 import { URI } from "../../base/common/uri.js";
 import { IFileService } from "../../platform/files/common/files.js";
+import { FileService } from '../../platform/files/common/fileService.js';
 import { validateConfigurationSnapshot } from '../../platform/configuration/common/configurationIpc.js';
 import { InstantiationService } from "../../platform/instantiation/common/instantiationService.js";
 import { addDisposableListener } from "../../base/browser/dom.js";
@@ -36,6 +37,7 @@ import { NativeHostColorSchemeService } from '../../workbench/services/themes/el
 import { showStartupError } from "../../workbench/browser/startupError.js";
 import { invoke, subscribe } from '../../platform/ipc/electron-browser/rendererIpc.js';
 import { IMainProcessService } from '../../platform/ipc/common/mainProcessService.js';
+import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
 import { ElectronIPCMainProcessService } from '../../platform/ipc/electron-browser/mainProcessService.js';
 import { WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL } from '../../platform/window/common/window.js';
 import { createWorkspaceContextApi } from '../../platform/workspace/electron-browser/workspaceContextApi.js';
@@ -83,6 +85,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 	const permissionDialog = sessions.add(new DirectoryPermissionDialog(container));
 	const transcriptionServices = sessions.add(new InstantiationService());
 	const profileServices = sessions.add(new InstantiationService());
+	const serviceCollection = new ServiceCollection();
 	let logger: LoggerChannelClient;
 	let api: Awaited<ReturnType<typeof createElectronRendererApi>>;
 	let documentClient: AppServerProtocolClient | undefined;
@@ -91,13 +94,15 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		if (!Number.isSafeInteger(windowId) || (windowId as number) <= 0) { throw new TypeError('Invalid Main IPC window ID'); }
 		const mainProcessService = sessions.add(profileServices.createInstance(ElectronIPCMainProcessService, windowId as number));
 		profileServices.registerInstance(IMainProcessService, mainProcessService);
-		await mainProcessService.connect();
+		serviceCollection.set(IMainProcessService, mainProcessService);
 		logger = profileServices.createInstance(LoggerChannelClient);
 		api = await createElectronRendererApi([client => { documentClient = client; return {}; }, client => registerLocalTranscriptionService(transcriptionServices, client)], { browser: false, textDocuments: true, appTools: true }, permissionDialog, mainProcessService);
 	}
 	catch (error) { sessions.dispose(); return showStartupError(error, text => invoke<void>('ash:host:writeClipboard', text)); }
 	sessions.add(api);
-	profileServices.registerInstance(IFileService, api.localFiles);
+	const profileFiles = sessions.add(profileServices.createInstance(FileService));
+	sessions.add(profileFiles.registerProvider(api.userDataHome.scheme, api.localFiles));
+	profileServices.registerInstance(IFileService, profileFiles);
 	const { loadUserThemes } = await import('../../workbench/services/themes/browser/workbenchThemeService.js');
 	sessions.add(await loadUserThemes(profileServices, URI.parse(api.userDataHome.toString().replace(/\/$/u, '') + '/themes')));
 	const setFullscreen = (fullscreen: boolean): void => { container.classList.toggle('ash-sessions-fullscreen', fullscreen); };
@@ -125,6 +130,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 	sessions.add(toDisposable(() => workspaceSubscription.dispose()));
 	const hostColorScheme = await api.nativeHost.getOSColorScheme();
 	workbench = sessions.add(await createSessionsWorkbench({
+		serviceCollection,
 		createAppToolsHost: documentClient ? services => new AppServerAppToolsHost(documentClient!, services.createInstance(AppToolsHost, container.ownerDocument, services.createInstance(ElectronUpdateService))) : undefined,
 		createTextDocumentHost: documentClient ? services => {
 			const editing = services.get(IChatEditingService);

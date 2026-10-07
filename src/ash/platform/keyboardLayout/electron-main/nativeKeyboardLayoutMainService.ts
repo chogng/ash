@@ -1,9 +1,9 @@
 import { Emitter } from '../../../base/common/event.js';
+import type { Event } from '../../../base/common/event.js';
+import type { IServerChannel } from '../../../base/parts/ipc/common/ipc.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { OperatingSystem } from '../../../base/common/platform.js';
-import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
 import type { IKeyboardLayoutDefinition, IKeyboardMappingEntry } from '../common/keyboardLayout.js';
-import { NATIVE_KEYBOARD_LAYOUT_READ_CHANNEL } from '../common/nativeKeyboardLayout.js';
 
 type NativeKeymapModule = typeof import('native-keymap');
 
@@ -39,19 +39,17 @@ export class NativeKeyboardLayoutMainService extends Disposable {
 	}
 }
 
-export function nativeKeyboardLayoutIpcRoutes(
-	service: NativeKeyboardLayoutMainService,
-): readonly IpcRoute<unknown, unknown>[] {
-	return [{
-		channel: NATIVE_KEYBOARD_LAYOUT_READ_CHANNEL,
-		validate(value: unknown): undefined {
-			if (value !== undefined) {
-				throw new TypeError('keyboard layout read does not accept parameters');
-			}
-			return undefined;
+export function keyboardLayoutChannel(service: NativeKeyboardLayoutMainService): IServerChannel {
+	return {
+		async call<T>(_context: string, command: string, arg?: unknown): Promise<T> {
+			if (command !== 'readKeyboardLayout' || arg !== undefined) { throw new TypeError('Invalid keyboard layout read'); }
+			return await service.readKeyboardLayout() as T;
 		},
-		invoke: () => service.readKeyboardLayout(),
-	}];
+		listen<T>(_context: string, event: string, arg?: unknown): Event<T> {
+			if (event !== 'onDidChangeKeyboardLayout' || arg !== undefined) { throw new TypeError('Invalid keyboard layout subscription'); }
+			return service.onDidChangeKeyboardLayout as Event<T>;
+		},
+	};
 }
 
 function readNativeKeyboardLayout(nativeKeymap: NativeKeymapModule): IKeyboardLayoutDefinition {

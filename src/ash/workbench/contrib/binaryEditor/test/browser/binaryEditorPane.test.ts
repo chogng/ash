@@ -1,4 +1,5 @@
-import { registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
+import type { IFileSystemProvider } from '../../../../../platform/files/common/files.js';
+import { createTestFileService, registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import { createBinaryDiffEditorInput } from '../../../../common/editor/diffEditorInput.js';
 import assert from "node:assert/strict";
@@ -22,7 +23,7 @@ test("BinaryEditorPane renders a bounded hexadecimal and ascii preview", async (
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const resource = URI.file("C:\\project\\sample.bin");
 	using services = new InstantiationService();
-	services.registerInstance(IFileService, new TestFileService(new Uint8Array([0x48, 0x69, 0x00, 0xff])));
+	services.registerSingleton(IFileService, () => createTestFileService(new TestFileService(new Uint8Array([0x48, 0x69, 0x00, 0xff]))));
 	registerTestComponentServices(services, dom.window.document);
 	const pane = binaryEditorDescriptor().create({ instantiationService: services });
 	pane.create(dom.window.document.body);
@@ -58,13 +59,13 @@ test('Binary editor rejects oversized files before reading their bytes', async (
 			override async stat(resource: URI) {
 				return { resource, kind: FileKind.File, sizeBytes: 129 * 1024 * 1024, readonly: true, modifiedAtMillis: undefined };
 			}
-			override async readFileBytes(resource: URI) {
+			override async readFile(resource: URI) {
 				reads++;
-				return super.readFileBytes(resource);
+				return super.readFile(resource);
 			}
 		}
 		using services = new InstantiationService();
-		services.registerInstance(IFileService, new OversizedFileService(new Uint8Array()));
+		services.registerSingleton(IFileService, () => createTestFileService(new OversizedFileService(new Uint8Array())));
 		registerTestComponentServices(services, dom.window.document);
 		using pane = binaryEditorDescriptor().create({ instantiationService: services });
 		pane.create(dom.window.document.body);
@@ -94,7 +95,7 @@ test('Binary file editor opens a bounded read-only text preview', async () => {
 		input: async () => { throw new Error('Unexpected input'); },
 	};
 	using services = new InstantiationService();
-	services.registerInstance(IFileService, new TestFileService(new Uint8Array([0x48, 0x69, 0x00, 0xff])));
+	services.registerSingleton(IFileService, () => createTestFileService(new TestFileService(new Uint8Array([0x48, 0x69, 0x00, 0xff]))));
 	registerTestComponentServices(services, dom.window.document);
 	services.registerInstance(IEditorService, {
 		...emptyEditorServiceState,
@@ -123,7 +124,7 @@ test("Binary diff keeps both byte previews and metadata through working-set seri
 	const restored = EditorInputSerializers.deserialize(EditorInputSerializers.serialize(input));
 	assert.equal(binaryDiffEditorDescriptor().canOpen(restored), EditorPaneMatch.Default);
 	using services = new InstantiationService();
-	services.registerInstance(IFileService, new TestFileService(new Uint8Array([0x48, 0x69, 0x00, 0xff])));
+	services.registerSingleton(IFileService, () => createTestFileService(new TestFileService(new Uint8Array([0x48, 0x69, 0x00, 0xff]))));
 	registerTestComponentServices(services, dom.window.document);
 	const pane = binaryDiffEditorDescriptor().create({ instantiationService: services });
 	assert.ok(pane instanceof BinaryResourceDiffEditor);
@@ -138,12 +139,11 @@ test("Binary diff keeps both byte previews and metadata through working-set seri
 	dom.window.close();
 });
 
-class TestFileService implements IFileService {
+class TestFileService implements IFileSystemProvider {
 	readonly onDidChangeFiles = () => ({ dispose() { }, [Symbol.dispose]() { } });
 	constructor(private readonly bytes: Uint8Array) { }
 	async stat(resource: URI) { return { resource, kind: FileKind.File, sizeBytes: this.bytes.length, readonly: true, modifiedAtMillis: undefined }; }
-	async readFileBytes(resource: URI) { return { resource, bytes: this.bytes, revision: "revision-1" }; }
-	async readFile(resource: URI) { return { resource, content: "", revision: "revision-1" }; }
+	async readFile(resource: URI) { return { resource, bytes: this.bytes, revision: "revision-1" }; }
 	async readDirectory() { return []; }
 	async writeFile(_request: IFileWriteRequest): Promise<never> { throw new Error("read only"); }
 	async writeFileBytes(): Promise<never> { throw new Error("read only"); }

@@ -8,7 +8,7 @@ import {
 	parseUserKeyboardLayoutResource,
 	USER_KEYBOARD_LAYOUT_DEFAULT_CONTENT,
 } from '../../../../platform/keyboardLayout/common/userKeyboardLayout.js';
-import { UserKeyboardLayoutMainService } from '../../../../platform/keyboardLayout/electron-main/userKeyboardLayoutMainService.js';
+import { UserKeyboardLayoutMainService, userKeyboardLayoutChannel } from '../../../../platform/keyboardLayout/electron-main/userKeyboardLayoutMainService.js';
 
 test('user keyboard layout parser accepts VS Code debug JSON and canonical Ash JSON', () => {
 	const windows = parseUserKeyboardLayoutResource({
@@ -56,10 +56,14 @@ test('profile keyboard-layout.json is created and hot-reloaded, including invali
 			},
 		});
 		try {
-			assert.equal(await service.readKeyboardLayout(), undefined);
+			const channel = userKeyboardLayoutChannel(service);
+			const snapshots: unknown[] = [];
+			using subscription = channel.listen('window:1', 'onDidChangeKeyboardLayout')(value => snapshots.push(value));
+			assert.equal(await channel.call('window:1', 'readKeyboardLayout'), undefined);
+			await assert.rejects(channel.call('window:1', 'readKeyboardLayout', { windowId: 2 }), /does not accept parameters/);
 			assert.equal(await service.ensureResource(), filePath);
 			assert.equal(await readFile(filePath, 'utf8'), USER_KEYBOARD_LAYOUT_DEFAULT_CONTENT);
-			await service.openResource();
+			await channel.call('window:1', 'openResource');
 			assert.equal(openedResource, filePath);
 
 			const loaded = nextChange(service);
@@ -75,6 +79,7 @@ test('profile keyboard-layout.json is created and hot-reloaded, including invali
 			await invalidated;
 			assert.equal(await service.readKeyboardLayout(), undefined);
 			assert.equal(errors.length, 1);
+			assert.deepEqual(snapshots.map(value => value === undefined ? undefined : (value as { layout: { id: string; }; }).layout.id), ['custom.test', undefined]);
 		} finally {
 			await service.close();
 		}

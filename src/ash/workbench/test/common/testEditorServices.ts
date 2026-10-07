@@ -1,3 +1,5 @@
+import { FileService } from '../../../platform/files/common/fileService.js';
+import { Schemas } from '../../../base/common/network.js';
 import { ITextModelService } from '../../../editor/common/services/resolverService.js';
 import { ITextModelResourceService } from '../../services/textmodelResolver/common/textModelResourceService.js';
 import { TextModelResolverService } from '../../services/textmodelResolver/common/textModelResolverService.js';
@@ -27,7 +29,7 @@ import { darkColorTheme } from '../../../platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../platform/theme/test/common/testThemeService.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../services/storage/browser/storageService.js';
-import { IFileService } from '../../../platform/files/common/files.js';
+import { IFileService, type IFileSystemProvider } from '../../../platform/files/common/files.js';
 import { MemoryFileService } from '../../contrib/bulkEdit/test/browser/bulkEditTestServices.js';
 import { IWorkbenchEnvironmentService } from '../../services/environment/common/environmentService.js';
 import { BrowserWorkbenchEnvironmentService } from '../../services/environment/browser/environmentService.js';
@@ -37,17 +39,36 @@ import { TextFileService } from '../../services/textfile/common/textFileService.
 import { IWebviewService } from '../../contrib/webview/browser/webview.js';
 import { WebviewService } from '../../contrib/webview/browser/webviewService.js';
 
+/** Assembles the same scheme router as the product around test-owned storage. */
+export function createTestFileService(provider: IFileSystemProvider, schemes: readonly string[] = [Schemas.file, Schemas.ashRemote, Schemas.vscodeUserData, 'ash-settings']): FileService {
+	return new TestFileService(provider, schemes);
+}
+
+class TestFileService extends FileService {
+	constructor(provider: IFileSystemProvider, schemes: readonly string[]) {
+		super();
+		for (const scheme of schemes) {
+			this._register(this.registerProvider(scheme, provider));
+		}
+	}
+}
+
 /** Owns the real file-policy dependencies for file-service tests outside a Workbench. */
-export function createTestTextFileService(files: IFileService): TextFileService {
+export function createTestTextFileService(files: IFileSystemProvider | IFileService): TextFileService {
 	return new TestTextFileService(files);
 }
 
 class TestTextFileService extends TextFileService {
-	constructor(files: IFileService) {
+	constructor(provider: IFileSystemProvider | IFileService) {
 		const configuration = new InMemoryConfigurationService();
 		const workspace = new WorkspaceContextService({ id: 'test-text-files', folders: [] });
 		const policy = new FilesConfigurationService(configuration, workspace);
+		let ownedFiles: FileService | undefined;
+		let files: IFileService;
+		if ('registerProvider' in provider) files = provider;
+		else files = ownedFiles = createTestFileService(provider);
 		super(files, policy);
+		if (ownedFiles) this._register(ownedFiles);
 		this._register(configuration);
 		this._register(workspace);
 		this._register(policy);
@@ -69,7 +90,7 @@ export function registerTestComponentServices(services: InstantiationService, do
 		services.registerInstance(IWorkbenchEnvironmentService, new BrowserWorkbenchEnvironmentService(location, `http://{{uuid}}.localhost${location.port ? `:${location.port}` : ''}`));
 	}
 	if (!services.has(IFileService)) {
-		services.registerInstance(IFileService, new MemoryFileService([]));
+		services.registerSingleton(IFileService, () => createTestFileService(new MemoryFileService([])));
 	}
 	if (!services.has(IWebviewService)) {
 		services.registerSingleton(IWebviewService, () => services.createInstance(WebviewService));

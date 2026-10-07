@@ -234,7 +234,7 @@ test('Desktop starts when its application entry loads after Electron is ready', 
 			const projectPath = testInfo.outputPath('tray project with spaces');
 			await mkdir(projectPath, { recursive: true });
 			await page.evaluate(async folderUri => {
-				await (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, value: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer.invoke('ash:workspaces:recent:add', { workspaces: [{ folderUri, label: 'Tray project' }] });
+				await globalThis.ashTestMainProcess.call('workspaces', 'addRecentlyOpened', { workspaces: [{ folderUri, label: 'Tray project' }] });
 			}, URI.file(projectPath).toString());
 			await expect.poll(() => application.evaluate(() => (globalThis as typeof globalThis & ShellProbe).__ashTrayMenu.items.find(item => item.submenu)!.submenu!.items[0]!.label)).toBe('Tray project');
 			for (const window of application.windows()) await expect(window.locator('.ash-getting-started-recent-name')).toHaveText(['Tray project']);

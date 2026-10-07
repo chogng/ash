@@ -8,7 +8,7 @@ import { InstantiationService } from '../../../instantiation/common/instantiatio
 import { IStateService } from '../../../state/node/state.js';
 import { StateService } from '../../../state/node/stateService.js';
 import { MAX_RECENT_WORKSPACES, recentWorkspaceUri, restoreRecentlyOpened, toStoreData } from '../../common/workspaces.js';
-import { WorkspacesHistoryMainService } from '../../electron-main/workspacesHistoryMainService.js';
+import { WorkspacesHistoryMainService, workspacesHistoryChannel } from '../../electron-main/workspacesHistoryMainService.js';
 
 test('Main history retains concurrent window additions, persists workspace kinds, and removes shared entries', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'ash-history-'));
@@ -18,19 +18,22 @@ test('Main history retains concurrent window additions, persists workspace kinds
 		using services = new InstantiationService();
 		services.registerInstance(IStateService, state);
 		using history = services.createInstance(WorkspacesHistoryMainService);
+		const channel = workspacesHistoryChannel(history);
 		let changes = 0;
-		using subscription = history.onDidChangeRecentlyOpened(() => changes++);
+		using subscription = channel.listen('window:1', 'onDidChangeRecentlyOpened')(() => changes++);
 		const alpha = URI.file(join(directory, 'alpha'));
 		const beta = URI.file(join(directory, 'beta'));
 		const team = { workspace: { id: 'team', configPath: URI.file(join(directory, 'Team.code-workspace')) }, label: 'Team' };
 		await Promise.all([
-			history.addRecentlyOpened([{ folderUri: alpha }]),
-			history.addRecentlyOpened([{ folderUri: beta }]),
-			history.addRecentlyOpened([team]),
+			channel.call('window:1', 'addRecentlyOpened', toStoreData({ workspaces: [{ folderUri: alpha }] })),
+			channel.call('window:2', 'addRecentlyOpened', toStoreData({ workspaces: [{ folderUri: beta }] })),
+			channel.call('window:2', 'addRecentlyOpened', toStoreData({ workspaces: [team] })),
 		]);
 		await history.addRecentlyOpened([{ folderUri: alpha }]);
-		const expected = { workspaces: [{ folderUri: alpha }, team, { folderUri: beta }] };
+		const expected = { workspaces: [{ folderUri: alpha }, team, { folderUri: beta, label: undefined }] };
 		assert.deepEqual(await history.getRecentlyOpened(), expected);
+		assert.deepEqual(await channel.call('window:2', 'getRecentlyOpened'), toStoreData(expected));
+		await assert.rejects(channel.call('window:1', 'clearRecentlyOpened', { windowId: 2 }), /takes no arguments/);
 		assert.deepEqual(toStoreData(restoreRecentlyOpened(toStoreData(expected))), toStoreData(expected));
 		assert.equal(changes, 4);
 		await state.close();

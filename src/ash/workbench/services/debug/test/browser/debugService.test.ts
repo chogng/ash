@@ -1,3 +1,5 @@
+import type { IFileSystemProvider } from '../../../../../platform/files/common/files.js';
+import { createTestFileService } from '../../../../test/common/testEditorServices.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
@@ -256,13 +258,12 @@ test('DebugService launches and restarts supplied test configurations without la
 	assert.equal(service.sessions.length, 0);
 });
 
-class FakeFileService implements IFileService {
+class FakeFileService implements IFileSystemProvider {
 	readonly onDidChangeFiles = Event.None;
 	constructor(private readonly root: URI, private readonly document = launchJson) { }
 	async stat(resource: URI) { return { resource, kind: FileKind.File, sizeBytes: this.document.length, readonly: false, modifiedAtMillis: undefined }; }
-	async readFile(resource: URI) { if (!resource.path.endsWith("/.vscode/launch.json")) throw new FileNotFoundError(resource); return { resource, content: this.document, revision: "1" }; }
 	async readDirectory() { return []; }
-	async readFileBytes(): Promise<IFileBytes> { throw new Error("unused"); }
+	async readFile(resource: URI): Promise<IFileBytes> { if (!resource.path.endsWith("/.vscode/launch.json")) throw new FileNotFoundError(resource); return { resource, bytes: new TextEncoder().encode(this.document), revision: "1" }; }
 	async writeFile(): Promise<IFileWriteResult> { throw new Error("unused"); }
 	async writeFileBytes(): Promise<IFileWriteResult> { throw new Error("unused"); }
 	async createFile(): Promise<IFileStat> { throw new Error("unused"); }
@@ -349,9 +350,9 @@ function workspaceService(root: URI): IWorkspaceContextService {
 }
 function task(label: string): IWorkspaceTask { return Object.freeze({ id: `vscode:${label}`, label, command: label, source: "vscode", group: "other" }); }
 
-function createDebugService(owner: DisposableStore, files: IFileService, workspace: IWorkspaceContextService, processes: IDebugAdapterProcessService | undefined, terminals: ITerminalService, storage: IStorageService, tasks: ITaskService, adapters: DebugAdapterFactoryRegistry, contextKeys = owner.add(new ContextKeyService())): DebugService {
+function createDebugService(owner: DisposableStore, files: IFileSystemProvider, workspace: IWorkspaceContextService, processes: IDebugAdapterProcessService | undefined, terminals: ITerminalService, storage: IStorageService, tasks: ITaskService, adapters: DebugAdapterFactoryRegistry, contextKeys = owner.add(new ContextKeyService())): DebugService {
 	const services = owner.add(new InstantiationService(new ServiceCollection(
-		[IFileService, files],
+		[IFileService, owner.add(createTestFileService(files))],
 		[IWorkspaceContextService, workspace],
 		[IDebugAdapterProcessService, processes],
 		[ITerminalService, terminals],
@@ -371,7 +372,7 @@ test('DebugService rejects missing process registration and reports an explicitl
 	const workspace = workspaceService(root);
 	using tasks = new FakeTaskService();
 	using adapters = new DebugAdapterFactoryRegistry();
-	using missing = new InstantiationService(new ServiceCollection([IFileService, files], [IWorkspaceContextService, workspace]));
+	using missing = new InstantiationService(new ServiceCollection([IFileService, resources.add(createTestFileService(files))], [IWorkspaceContextService, workspace]));
 	assert.throws(() => missing.createInstance(DebugService), /Unknown service: debugAdapterProcessService/);
 	using service = createDebugService(resources, files, workspace, undefined, {} as ITerminalService, new TestStorageService(), tasks, adapters);
 	await assert.rejects(service.startDebugging({ id: 'unavailable', name: 'Unavailable', type: 'example', request: 'launch', adapter: { program: 'adapter', arguments: [] }, arguments: {} }), /This host does not provide the Code debug adapter capability/);

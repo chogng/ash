@@ -71,7 +71,25 @@ impl ResourceStore {
         bytes: Vec<u8>,
         ttl: Duration,
     ) -> Result<ResourceMetadata, ResourceError> {
-        if bytes.len() > MAX_RESOURCE_BYTES {
+        self.create_with_limit(
+            owner_connection_id,
+            mime_type,
+            bytes,
+            ttl,
+            MAX_RESOURCE_BYTES,
+        )
+    }
+
+    /// Uses an owning domain's bounded read limit without bypassing connection quotas.
+    pub(crate) fn create_with_limit(
+        &mut self,
+        owner_connection_id: u64,
+        mime_type: String,
+        bytes: Vec<u8>,
+        ttl: Duration,
+        max_bytes: usize,
+    ) -> Result<ResourceMetadata, ResourceError> {
+        if bytes.len() > max_bytes {
             return Err(ResourceError::TooLarge);
         }
         self.cleanup();

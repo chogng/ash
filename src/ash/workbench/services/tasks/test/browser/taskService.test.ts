@@ -1,3 +1,5 @@
+import type { IFileSystemProvider } from '../../../../../platform/files/common/files.js';
+import { createTestFileService } from '../../../../test/common/testEditorServices.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
@@ -118,13 +120,12 @@ test("TaskService retains the last good task set when a provider refresh fails",
 	assert.deepEqual(service.tasks.map(task => task.id), ["extension:stable:test"]);
 });
 
-class FakeFileService implements IFileService {
+class FakeFileService implements IFileSystemProvider {
 	readonly onDidChangeFiles = Event.None;
 	constructor(private readonly root: URI, private readonly files: Readonly<Record<string, string>>) { }
 	async stat(resource: URI) { const path = this.relative(resource); if (!(path in this.files)) throw new FileNotFoundError(resource); return { resource, kind: FileKind.File, sizeBytes: this.files[path]!.length, readonly: false, modifiedAtMillis: undefined }; }
-	async readFile(resource: URI) { const path = this.relative(resource); if (!(path in this.files)) throw new FileNotFoundError(resource); return { resource, content: this.files[path]!, revision: "1" }; }
 	async readDirectory() { return []; }
-	async readFileBytes(): Promise<IFileBytes> { throw new Error("unused"); }
+	async readFile(resource: URI): Promise<IFileBytes> { const path = this.relative(resource); if (!(path in this.files)) throw new FileNotFoundError(resource); return { resource, bytes: new TextEncoder().encode(this.files[path]!), revision: "1" }; }
 	async writeFile(): Promise<IFileWriteResult> { throw new Error("unused"); }
 	async writeFileBytes(): Promise<IFileWriteResult> { throw new Error("unused"); }
 	async createFile(): Promise<IFileStat> { throw new Error("unused"); }
@@ -171,14 +172,14 @@ class FakeTerminalInstance extends Disposable implements ITerminalInstance {
 	command(event: ITerminalCommandStatusEvent): void { this.commandEmitter.fire(event); }
 }
 
-function taskServices(owner: DisposableStore, files: IFileService, workspace: IWorkspaceContextService, terminals: ITerminalService): InstantiationService {
-	return workbenchInstantiationService(owner).createChild(new ServiceCollection([IFileService, files], [IWorkspaceContextService, workspace], [ITerminalService, terminals], [ILogService, new NullLoggerService()]), owner);
+function taskServices(owner: DisposableStore, files: IFileSystemProvider, workspace: IWorkspaceContextService, terminals: ITerminalService): InstantiationService {
+	return workbenchInstantiationService(owner).createChild(new ServiceCollection([IFileService, owner.add(createTestFileService(files))], [IWorkspaceContextService, workspace], [ITerminalService, terminals], [ILogService, new NullLoggerService()]), owner);
 }
 
 test('TaskService rejects a missing terminal registration before opening its Output channel', () => {
 	using resources = new DisposableStore();
 	const parent = workbenchInstantiationService(resources);
-	const services = parent.createChild(new ServiceCollection([IFileService, new FakeFileService(URI.file('/workspace'), {})], [ILogService, new NullLoggerService()]), resources);
+	const services = parent.createChild(new ServiceCollection([IFileService, resources.add(createTestFileService(new FakeFileService(URI.file('/workspace'), {})))], [ILogService, new NullLoggerService()]), resources);
 	assert.throws(() => services.createInstance(TaskService), /Unknown service: terminalService/);
 	assert.equal(parent.get(IOutputService).getChannel('tasks'), undefined);
 });
@@ -211,7 +212,7 @@ suite('TaskService terminal availability', () => {
 			};
 			const output = { createChannel: () => ({ ...Disposable.None, appendLine: () => { } }) } as unknown as IOutputService;
 			const services = resources.add(new InstantiationService(new ServiceCollection(
-				[IFileService, new FakeFileService(root, {})],
+				[IFileService, resources.add(createTestFileService(new FakeFileService(root, {})))],
 				[IWorkspaceContextService, workspace],
 				[ITerminalProcessService, processes],
 				[IOutputService, output],

@@ -36,8 +36,7 @@ for (const entry of ['welcome', 'explorer', 'recent'] as const) {
 			const page = workbench.page;
 			if (entry === 'recent') {
 				await page.evaluate(async folder => {
-					const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, argument: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
-					await ipc.invoke('ash:workspaces:recent:add', { workspaces: [{ folderUri: folder }] });
+					await globalThis.ashTestMainProcess.call('workspaces', 'addRecentlyOpened', { workspaces: [{ folderUri: folder }] });
 				}, URI.file(testWorkspace.directory).toString());
 				await page.locator('.ash-getting-started-recent-item').click();
 			} else if (entry === 'explorer') {

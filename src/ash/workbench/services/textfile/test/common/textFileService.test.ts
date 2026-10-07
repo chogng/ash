@@ -1,3 +1,4 @@
+import type { IFileSystemProvider } from '../../../../../platform/files/common/files.js';
 import { createTestTextFileService } from '../../../../test/common/testEditorServices.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
@@ -6,7 +7,7 @@ import { BrowserTextModelService } from "../../../textmodelResolver/browser/brow
 import { BrowserTextResourceStore } from "../../../../contrib/codeEditor/browser/browserTextResourceStore.js";
 import { Range } from "../../../../../editor/common/core/range.js";
 import { URI } from "../../../../../base/common/uri.js";
-import { FileKind, FileRevisionConflictError, type IFileService, type IFileWriteRequest } from "../../../../../platform/files/common/files.js";
+import { FileKind, FileRevisionConflictError, type IFileWriteRequest } from "../../../../../platform/files/common/files.js";
 import {
 	TextFileBinaryError,
 	TextFileContentSource,
@@ -117,7 +118,7 @@ test("TextFileService maps conditional file-write conflicts to its editor-facing
 	await assert.rejects(service.save({ resource, text: "saved", expectedRevision: "stale" }, new AbortController().signal), TextFileSaveConflictError);
 });
 
-class TestFileService implements IFileService {
+class TestFileService implements IFileSystemProvider {
 	readCount = 0;
 	reportedSizeBytes: number | undefined;
 	readonly writes: IFileWriteRequest[] = [];
@@ -144,12 +145,6 @@ class TestFileService implements IFileService {
 	}
 
 	async readFile(resource: URI) {
-		this.readCount += 1;
-		const content = await this.content;
-		return { resource, content: typeof content === "string" ? content : new TextDecoder().decode(content), revision: "revision-1" };
-	}
-
-	async readFileBytes(resource: URI) {
 		this.readCount += 1;
 		const content = await this.content;
 		return { resource, bytes: typeof content === "string" ? new TextEncoder().encode(content) : content, revision: "revision-1" };

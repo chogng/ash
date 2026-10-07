@@ -1,16 +1,14 @@
 import { watch, type FSWatcher } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, dirname } from 'node:path';
-import { Emitter } from '../../../base/common/event.js';
+import { Emitter, type Event } from '../../../base/common/event.js';
+import type { IServerChannel } from '../../../base/parts/ipc/common/ipc.js';
 import { parseJsonc } from '../../../base/common/jsonc.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
-import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
 import { keyboardMappingsEqual, type IKeyboardLayoutDefinition } from '../common/keyboardLayout.js';
 import {
 	parseUserKeyboardLayoutResource,
 	USER_KEYBOARD_LAYOUT_DEFAULT_CONTENT,
-	USER_KEYBOARD_LAYOUT_OPEN_RESOURCE_CHANNEL,
-	USER_KEYBOARD_LAYOUT_READ_CHANNEL,
 	validateUserKeyboardLayoutOpenResource,
 	validateUserKeyboardLayoutRead,
 } from '../common/userKeyboardLayout.js';
@@ -133,21 +131,20 @@ export class UserKeyboardLayoutMainService extends Disposable {
 	}
 }
 
-export function userKeyboardLayoutIpcRoutes(
-	service: UserKeyboardLayoutMainService,
-): readonly IpcRoute<unknown, unknown>[] {
-	return [
-		{
-			channel: USER_KEYBOARD_LAYOUT_READ_CHANNEL,
-			validate: validateUserKeyboardLayoutRead,
-			invoke: () => service.readKeyboardLayout(),
+export function userKeyboardLayoutChannel(service: UserKeyboardLayoutMainService): IServerChannel {
+	return {
+		async call<T>(_context: string, command: string, arg?: unknown): Promise<T> {
+			switch (command) {
+				case 'readKeyboardLayout': validateUserKeyboardLayoutRead(arg); return await service.readKeyboardLayout() as T;
+				case 'openResource': validateUserKeyboardLayoutOpenResource(arg); return await service.openResource() as T;
+				default: throw new Error(`Unknown user keyboard layout command: ${command}`);
+			}
 		},
-		{
-			channel: USER_KEYBOARD_LAYOUT_OPEN_RESOURCE_CHANNEL,
-			validate: validateUserKeyboardLayoutOpenResource,
-			invoke: () => service.openResource(),
+		listen<T>(_context: string, event: string, arg?: unknown): Event<T> {
+			if (event !== 'onDidChangeKeyboardLayout' || arg !== undefined) { throw new TypeError('Invalid user keyboard layout subscription'); }
+			return (listener, thisArgs, disposables) => service.onDidChangeKeyboardLayout(() => listener.call(thisArgs, service.currentKeyboardLayout as T), undefined, disposables);
 		},
-	];
+	};
 }
 
 function keyboardLayoutDefinitionsEqual(

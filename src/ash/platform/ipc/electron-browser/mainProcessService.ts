@@ -11,7 +11,6 @@ export class ElectronIPCMainProcessService extends Disposable implements IMainPr
 		super();
 		this.connection = this._register(new Client(`window:${windowId}`));
 	}
-	public connect(): Promise<void> { return this.connection.connect(); }
 	public getChannel(name: string): IChannel { return this.connection.getChannel(name); }
 	public registerChannel(name: string, channel: IServerChannel<string>): void { this.connection.registerChannel(name, channel); }
 }

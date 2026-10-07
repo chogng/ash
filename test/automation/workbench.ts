@@ -7,6 +7,7 @@ import { Dialogs } from './dialogs.js';
 import { Search } from './search.js';
 import { Menus } from './menus.js';
 import type { PlaywrightTarget } from './testTarget.js';
+import { installMainChannelTestClient } from './mainProcessIpc.js';
 
 /** Product-level automation surface for one Ash Workbench window. */
 export class Workbench {
@@ -104,6 +105,7 @@ export class Workbench {
 
 async function waitForWindowLoad(page: Page): Promise<void> {
 	await page.waitForFunction(() => document.readyState === 'complete');
+	await installMainChannelTestClient(page);
 	// Host module evaluation awaits the owning Workbench's restoration promise.
 	// Re-importing uses that same evaluation without creating another window.
 	await page.evaluate(async () => {

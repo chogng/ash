@@ -1,4 +1,5 @@
-import { Emitter } from '../../../base/common/event.js';
+import { Emitter, type Event } from '../../../base/common/event.js';
+import type { IServerChannel } from '../../../base/parts/ipc/common/ipc.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { extUriBiasedIgnorePathCase } from '../../../base/common/resources.js';
 import type { URI } from '../../../base/common/uri.js';
@@ -7,6 +8,30 @@ import { mergeRecentlyOpened, recentWorkspaceUri, restoreRecentlyOpened, toStore
 import { basename } from 'node:path';
 import type { JumpListCategory } from 'electron';
 import { windowsCommandLine } from '../../environment/node/argvHelper.js';
+
+export function workspacesHistoryChannel(service: IWorkspacesService): IServerChannel {
+	return {
+		async call<T>(_context: string, command: string, arg?: unknown): Promise<T> {
+			switch (command) {
+				case 'getRecentlyOpened':
+					if (arg !== undefined) { throw new TypeError('Recent projects read takes no arguments'); }
+					return toStoreData(await service.getRecentlyOpened()) as T;
+				case 'addRecentlyOpened': return await service.addRecentlyOpened(restoreRecentlyOpened(arg).workspaces) as T;
+				case 'removeRecentlyOpened':
+					if (!Array.isArray(arg)) { throw new TypeError('Recent project removal requires URI paths'); }
+					return await service.removeRecentlyOpened(restoreRecentlyOpened({ workspaces: arg.map(folderUri => ({ folderUri })) }).workspaces.map(recentWorkspaceUri)) as T;
+				case 'clearRecentlyOpened':
+					if (arg !== undefined) { throw new TypeError('Recent projects clear takes no arguments'); }
+					return await service.clearRecentlyOpened() as T;
+				default: throw new Error(`Unknown workspaces command: ${command}`);
+			}
+		},
+		listen<T>(_context: string, event: string, arg?: unknown): Event<T> {
+			if (event !== 'onDidChangeRecentlyOpened' || arg !== undefined) { throw new TypeError('Invalid recent projects subscription'); }
+			return service.onDidChangeRecentlyOpened as Event<T>;
+		},
+	};
+}
 
 export interface IWindowsJumpListOptions {
 	readonly executable: string;

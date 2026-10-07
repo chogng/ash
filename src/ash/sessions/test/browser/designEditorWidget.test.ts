@@ -1,3 +1,4 @@
+import { createTestFileService } from '../../../workbench/test/common/testEditorServices.js';
 import { IAssetService } from '../../../platform/assets/common/assetService.js';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -20,7 +21,7 @@ import { IContextMenuService, IContextViewService } from '../../../platform/cont
 import { ContextView } from '../../../base/browser/ui/contextview/contextview.js';
 import type { DesignEditorContributionContext } from '../../contrib/creator/browser/designEditorBrowser.js';
 import { ConfirmResult, IDialogService, IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
-import { FileKind, FileRevisionConflictError, FileNotFoundError, IFileService, type IFileWriteRequest } from '../../../platform/files/common/files.js';
+import { FileKind, FileRevisionConflictError, FileNotFoundError, IFileService, type IFileWriteRequest, type IFileSystemProvider } from '../../../platform/files/common/files.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { WorkspaceContextService } from '../../../workbench/services/workspaces/browser/workspaceContextService.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
@@ -107,7 +108,7 @@ services.registerInstance(IFileDialogService, { pickFileToSave: unexpected, show
 services.registerInstance(IDialogService, { onWillShowDialog: AshEvent.None, onDidShowDialog: AshEvent.None, showMessage: unexpected, info: unexpected, warn: unexpected, error: async message => { errors.push(message); }, confirm: unexpected, prompt: unexpected, input: unexpected, about: unexpected });
 services.registerInstance(IAssetService, { getCatalog: unexpected, updateEntry: unexpected, createCollection: unexpected, deleteCollection: unexpected, importImage: unexpected, getVersion: unexpected, readVersion: unexpected });
 services.registerInstance(ISessionsLayoutService, { conversationVisible: false, onDidChangeConversationVisibility: AshEvent.None, setConversationVisible: unexpected, openEntry: unexpected, restore: unexpected });
-services.registerInstance(IFileService, {
+const fileProvider: IFileSystemProvider = {
 	onDidChangeFiles: AshEvent.None,
 	stat: async target => {
 		if (directories.has(target.toString())) { return { resource: target, kind: FileKind.Directory, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined }; }
@@ -115,10 +116,11 @@ services.registerInstance(IFileService, {
 		throw new FileNotFoundError(target);
 	},
 	readDirectory: unexpected,
-	readFileBytes: async target => {
+	readFile: async target => {
 		const bytes = binaryFiles.get(target.toString());
-		if (!bytes) { throw new FileNotFoundError(target); }
-		return { resource: target, bytes, revision: 'binary' };
+		if (bytes) return { resource: target, bytes, revision: 'binary' };
+		if (target.path.includes('/assets/') || !fileContent) throw new FileNotFoundError(target);
+		return { resource: target, bytes: new TextEncoder().encode(fileContent), revision };
 	},
 	writeFileBytes: async (target, bytes) => {
 		binaryFiles.set(target.toString(), bytes);
@@ -126,7 +128,6 @@ services.registerInstance(IFileService, {
 	},
 	createDirectory: async target => { directories.add(target.toString()); return { resource: target, kind: FileKind.Directory, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined }; },
 	createFile: unexpected, copy: unexpected, rename: unexpected, delete: unexpected,
-	readFile: async target => { if (!fileContent) { throw new FileNotFoundError(target); } return { resource: target, content: fileContent, revision }; },
 	writeFile: async request => {
 		writes.push(request);
 		if (request.expectedRevision !== undefined && request.expectedRevision !== revision) { throw new FileRevisionConflictError(resource); }
@@ -134,7 +135,8 @@ services.registerInstance(IFileService, {
 		revision = `${Number(revision) + 1}`;
 		return { revision, stat: { resource, kind: FileKind.File, sizeBytes: fileContent.length, readonly: false, modifiedAtMillis: undefined } };
 	},
-});
+};
+services.registerSingleton(IFileService, () => createTestFileService(fileProvider));
 services.registerInstance(ILifecycleService, { startupKind: StartupKind.NewWindow, phase: LifecyclePhase.Ready, willShutdown: false, onBeforeShutdown: AshEvent.None, onBeforeShutdownError: AshEvent.None, onShutdownVeto: AshEvent.None, onWillShutdown: AshEvent.None, onDidShutdown: AshEvent.None, when: async () => { }, shutdown: async () => { } });
 
 suiteTeardown(() => {
@@ -1062,8 +1064,8 @@ test('Saving captures a baseline while later edits and Save As retain dirty stat
 	let entered: (() => void) | undefined;
 	const writing = new Promise<void>(resolve => { entered = resolve; });
 	const pending = new Promise<void>(resolve => { release = resolve; });
-	const childServices = services.createChild();
-	childServices.registerInstance(IFileService, { ...files, writeFile: async request => { entered!(); await pending; return files.writeFile(request); } });
+	using childServices = services.createChild();
+	childServices.registerSingleton(IFileService, () => createTestFileService({ ...fileProvider, writeFile: async request => { entered!(); await pending; return files.writeFile(request); } }));
 	using controller = childServices.createInstance(DesignDocumentController, CreatorMode.Design);
 	const shape = { id: generateUuid(), kind: 'rectangle' as const, x: 0, y: 0, width: 50, height: 40, rotation: 0, fill: '#ffffff' };
 	controller.model.applyEdit([shape]);
@@ -1085,7 +1087,6 @@ test('Saving captures a baseline while later edits and Save As retain dirty stat
 	assert.equal(controller.model.value.documentId, copied.documentId);
 	assert.equal(controller.model.value.shapes[0].x, 0);
 	assert.equal(controller.isDirty, true);
-	childServices.dispose();
 });
 
 test('Chinese frame and image controls use translated labels and accessible descriptions', async () => {
@@ -1112,7 +1113,7 @@ test('Design import adopts backend version identities and metadata and packages 
 	const committed = new Uint8Array([4, 5, 6]);
 	const backend = { assetId: generateUuid(), versionId: generateUuid(), name: 'Library product', source, sha256: createHash('sha256').update(committed).digest('hex'), mediaType: 'image/png' as const, size: committed.length, width: 320, height: 200 };
 	child.registerInstance(IFileDialogService, { ...services.get(IFileDialogService), showOpenDialog: async () => [source] });
-	child.registerInstance(IFileService, { ...services.get(IFileService), readFileBytes: async () => ({ resource: source, bytes: original, revision: '1' }) });
+	child.registerSingleton(IFileService, () => createTestFileService({ ...fileProvider, readFile: async () => ({ resource: source, bytes: original, revision: '1' }) }));
 	let imports = 0;
 	child.registerInstance(IAssetService, {
 		getCatalog: unexpected, updateEntry: unexpected, createCollection: unexpected, deleteCollection: unexpected,

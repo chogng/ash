@@ -1,3 +1,4 @@
+import { createTestFileService } from '../../../../test/common/testEditorServices.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { CancellationToken, CancellationTokenSource } from '../../../../../base/common/cancellation.js';
@@ -11,16 +12,18 @@ suite('Webview resource loading', () => {
 		const root = URI.parse('file:///workspace/assets');
 		const file = URI.parse('file:///workspace/assets/icon.SVG');
 		const files = new MemoryFileService([[file, '<svg/>']]);
-		const read = files.readFileBytes.bind(files);
+		const read = files.readFile.bind(files);
 		const reads: string[] = [];
-		files.readFileBytes = resource => { reads.push(resource.toString()); return read(resource); };
-		const result = await loadLocalResource(file, { roots: [root] }, files, CancellationToken.None);
+		files.readFile = resource => { reads.push(resource.toString()); return read(resource); };
+		using fileService = createTestFileService(files);
+		const result = await loadLocalResource(file, { roots: [root] }, fileService, CancellationToken.None);
+		using fileService2 = createTestFileService(files);
 		const denied = await Promise.all([
 			root,
 			URI.parse('file:///workspace/assets-other/icon.svg'),
 			URI.parse('file:///workspace/assets/../secret.svg'),
 			URI.parse('ash-remote://other/workspace/assets/icon.svg'),
-		].map(resource => loadLocalResource(resource, { roots: [root] }, files, CancellationToken.None)));
+		].map(resource => loadLocalResource(resource, { roots: [root] }, fileService2, CancellationToken.None)));
 		assert.deepEqual({ result, denied: denied.map(response => response.status), reads }, {
 			result: { status: 200, mimeType: 'image/svg+xml', bytes: new TextEncoder().encode('<svg/>') },
 			denied: [403, 403, 403, 403],
@@ -32,11 +35,12 @@ suite('Webview resource loading', () => {
 		using cancellation = new CancellationTokenSource();
 		const file = URI.parse('file:///workspace/image.png');
 		const files = new MemoryFileService([[file, 'image']]);
-		const read = files.readFileBytes.bind(files);
+		const read = files.readFile.bind(files);
 		let finish!: () => void;
 		const pending = new Promise<void>(resolve => { finish = resolve; });
-		files.readFileBytes = async resource => { await pending; return read(resource); };
-		const result = loadLocalResource(file, { roots: [URI.parse('file:///workspace')] }, files, cancellation.token);
+		files.readFile = async resource => { await pending; return read(resource); };
+		using fileService = createTestFileService(files);
+		const result = loadLocalResource(file, { roots: [URI.parse('file:///workspace')] }, fileService, cancellation.token);
 		cancellation.cancel();
 		finish();
 		await assert.rejects(result, { name: 'CancellationError' });

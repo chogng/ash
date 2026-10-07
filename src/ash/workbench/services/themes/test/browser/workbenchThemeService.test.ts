@@ -1,3 +1,4 @@
+import { createTestFileService } from '../../../../test/common/testEditorServices.js';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
 import { IHostColorSchemeService } from '../../common/hostColorSchemeService.js';
 import { BrowserHostColorSchemeService } from '../../browser/browserHostColorSchemeService.js';
@@ -324,7 +325,8 @@ test('user theme reload applies included files from its theme directory', async 
 		await writeFile(join(directory, 'shared', 'base.json'), JSON.stringify({ colors: { 'statusBar.background': '#112233' } }));
 		await writeFile(join(directory, 'custom.json'), JSON.stringify({ name: 'Custom', type: 'dark', include: './shared/base.json', colors: { 'editor.background': '#445566' } }));
 		using files = new DiskFileSystemProvider([URI.file(directory)]);
-		using service = await loadThemes(files, directory);
+		using fileService = createTestFileService(files);
+		using service = await loadThemes(fileService, directory);
 		assert.equal(WorkbenchThemesRegistry.getColorTheme('custom')?.getColorCss('statusBar.background'), '#112233');
 		await writeFile(join(directory, 'shared', 'base.json'), JSON.stringify({ colors: { 'statusBar.background': '#667788' } }));
 		await service.reload();
@@ -340,7 +342,8 @@ test('user theme loads a package-relative TextMate syntax file', async () => {
 		await writeFile(join(directory, 'syntax', 'tokens.tmTheme'), '<?xml version="1.0"?><plist version="1.0"><dict><key>settings</key><array><dict><key>scope</key><string>string</string><key>settings</key><dict><key>foreground</key><string>#abcdef</string></dict></dict></array></dict></plist>');
 		await writeFile(join(directory, 'custom.json'), JSON.stringify({ name: 'Custom', type: 'dark', tokenColors: './syntax/tokens.tmTheme' }));
 		using files = new DiskFileSystemProvider([URI.file(directory)]);
-		using service = await loadThemes(files, directory);
+		using fileService = createTestFileService(files);
+		using service = await loadThemes(fileService, directory);
 		assert.deepEqual(projectColorThemeTokens(WorkbenchThemesRegistry.getColorTheme('custom')!, 1).rules, [
 			{ selector: 'string', foreground: '#abcdef' },
 		]);
@@ -354,7 +357,8 @@ test('invalid external edits retain the last valid selected theme', async () => 
 		const path = join(directory, 'custom.json');
 		await writeFile(path, JSON.stringify({ name: 'Custom', colors: { 'editor.background': '#112233' } }));
 		using files = new DiskFileSystemProvider([URI.file(directory)]);
-		using service = await loadThemes(files, directory);
+		using fileService = createTestFileService(files);
+		using service = await loadThemes(fileService, directory);
 		const previous = WorkbenchThemesRegistry.getColorTheme('custom');
 		await writeFile(path, '{');
 		await service.reload();
@@ -378,7 +382,8 @@ test('theme file owner migrates aliases and transforms once before registration'
 		await writeFile(join(directory, 'broken.json'), '{');
 		await writeFile(join(directory, 'ignored.txt'), 'keep');
 		using files = new DiskFileSystemProvider([URI.file(directory)]);
-		const service = await loadThemes(files, directory);
+		using fileService = createTestFileService(files);
+		const service = await loadThemes(fileService, directory);
 		const first = await files.readDirectory(URI.file(directory));
 		const migrated = await readFile(join(directory, 'resolver-test.json'), 'utf8');
 		const theme = parseUserColorTheme(migrated, 'resolver-test');
@@ -409,16 +414,17 @@ test('migration preserves conflicting targets and resumes after a durable equal 
 		await writeFile(source, legacy);
 		await writeFile(target, JSON.stringify(document));
 		using files = new DiskFileSystemProvider([URI.file(directory)]);
-		const service = await loadThemes(files, directory);
+		using fileService = createTestFileService(files);
+		const service = await loadThemes(fileService, directory);
 		assert.match(service.issues.find(issue => issue.file === 'source.json')!.message, /conflicts/);
 		service.dispose();
 		assert.equal(await readFile(source, 'utf8'), legacy);
 		assert.equal(await readFile(target, 'utf8'), JSON.stringify(document));
 		await rm(target);
-		(await loadThemes(files, directory)).dispose();
+		(await loadThemes(fileService, directory)).dispose();
 		const converted = await readFile(target, 'utf8');
 		await writeFile(source, legacy);
-		(await loadThemes(files, directory)).dispose();
+		(await loadThemes(fileService, directory)).dispose();
 		assert.equal((await files.readDirectory(URI.file(directory))).length, 1);
 		assert.equal(await readFile(target, 'utf8'), converted);
 	} finally { await rm(directory, { recursive: true, force: true }); }
@@ -427,7 +433,8 @@ test('migration preserves conflicting targets and resumes after a durable equal 
 test('theme save, rename, reload, and delete keep identity in the filename', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'ash-theme-save-'));
 	using files = new DiskFileSystemProvider([URI.file(directory)]);
-	const service = await loadThemes(files, directory);
+	using fileService = createTestFileService(files);
+	const service = await loadThemes(fileService, directory);
 	const browser = new JSDOM('<!doctype html><body></body>');
 	try {
 		Object.defineProperty(browser.window, 'matchMedia', {

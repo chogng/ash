@@ -2,15 +2,11 @@ import { type Event } from "../../../base/common/event.js";
 import {
 	Disposable,
 } from "../../../base/common/lifecycle.js";
-import type {
-	IpcRoute,
-} from "../../ipc/electron-main/trustedIpcRouter.js";
+import type { IServerChannel } from '../../../base/parts/ipc/common/ipc.js';
 import {
 	RevisionedJsonFile,
 } from "../../storage/node/revisionedJsonFile.js";
 import {
-	CONFIGURATION_READ_CHANNEL,
-	CONFIGURATION_UPDATE_CHANNEL,
 	emptyConfigurationDocument,
 	type IConfigurationDocument,
 	type IConfigurationSnapshot,
@@ -89,20 +85,18 @@ export class ConfigurationMainService extends Disposable {
 	}
 }
 
-export function configurationIpcRoutes(
-	service: Pick<ConfigurationMainService, "read" | "update">,
-): readonly IpcRoute<unknown, unknown>[] {
-	return [
-		{
-			channel: CONFIGURATION_READ_CHANNEL,
-			validate: validateConfigurationRead,
-			invoke: () => service.read(),
+export function configurationChannel(service: ConfigurationMainService): IServerChannel {
+	return {
+		async call<T>(_context: string, command: string, arg?: unknown): Promise<T> {
+			switch (command) {
+				case 'read': validateConfigurationRead(arg); return service.read() as T;
+				case 'update': return await service.update(validateConfigurationUpdateRequest(arg)) as T;
+				default: throw new Error(`Unknown configuration command: ${command}`);
+			}
 		},
-		{
-			channel: CONFIGURATION_UPDATE_CHANNEL,
-			validate: validateConfigurationUpdateRequest,
-			invoke: (request) =>
-				service.update(request as IConfigurationUpdateRequest),
+		listen<T>(_context: string, event: string, arg?: unknown): Event<T> {
+			if (event !== 'onDidChange' || arg !== undefined) { throw new TypeError('Invalid configuration subscription'); }
+			return service.onDidChange as Event<T>;
 		},
-	];
+	};
 }

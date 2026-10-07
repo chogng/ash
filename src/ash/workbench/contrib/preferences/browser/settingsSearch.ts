@@ -39,7 +39,13 @@ export class SettingsSearchQuery {
 	}
 
 	public matches(target: SettingsSearchTarget): boolean {
-		if (this.idFilter && !target.id?.toLocaleLowerCase().includes(this.idFilter)) return false;
+		if (this.idFilter) {
+			const id = target.id?.toLocaleLowerCase();
+			const matchesId = this.idFilter.endsWith('*')
+				? id?.startsWith(this.idFilter.slice(0, -1))
+				: id === this.idFilter;
+			if (!matchesId) return false;
+		}
 		if (this.terms.length === 0) return true;
 		const searchableText = [target.title, target.description, ...(target.keywords ?? []), ...(target.tags ?? [])]
 			.join(' ')

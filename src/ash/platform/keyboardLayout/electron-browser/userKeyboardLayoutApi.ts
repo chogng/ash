@@ -1,27 +1,25 @@
 import { toDisposable } from '../../../base/common/lifecycle.js';
-import { invoke, subscribe } from '../../ipc/electron-browser/rendererIpc.js';
+import type { IMainProcessService } from '../../ipc/common/mainProcessService.js';
 import {
 	type IUserKeyboardLayoutApi,
-	USER_KEYBOARD_LAYOUT_CHANGED_CHANNEL,
-	USER_KEYBOARD_LAYOUT_OPEN_RESOURCE_CHANNEL,
-	USER_KEYBOARD_LAYOUT_READ_CHANNEL,
 	validateUserKeyboardLayout,
 } from '../common/userKeyboardLayout.js';
 
-export function createUserKeyboardLayoutApi(): IUserKeyboardLayoutApi {
+export function createUserKeyboardLayoutApi(mainProcessService: IMainProcessService): IUserKeyboardLayoutApi {
+	const channel = mainProcessService.getChannel('userKeyboardLayout');
 	return {
 		available: true,
 		async readKeyboardLayout() {
-			return validateUserKeyboardLayout(await invoke<unknown>(USER_KEYBOARD_LAYOUT_READ_CHANNEL));
+			return validateUserKeyboardLayout(await channel.call('readKeyboardLayout'));
 		},
 		async openResource() {
-			const value = await invoke<unknown>(USER_KEYBOARD_LAYOUT_OPEN_RESOURCE_CHANNEL);
+			const value = await channel.call('openResource');
 			if (value !== undefined) {
 				throw new TypeError('user keyboard layout open must not return a value');
 			}
 		},
 		onDidChangeKeyboardLayout(listener) {
-			const subscription = subscribe<unknown>(USER_KEYBOARD_LAYOUT_CHANGED_CHANNEL, (value) => {
+			const subscription = channel.listen<unknown>('onDidChangeKeyboardLayout')((value) => {
 				validateUserKeyboardLayout(value);
 				listener();
 			});

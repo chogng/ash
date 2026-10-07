@@ -1,7 +1,7 @@
 import { ExtensionColorThemeService } from '../../workbench/services/extensions/browser/extensionColorThemeService.js';
 import type { IStorageService } from '../../platform/storage/common/storage.js';
 import type { IDisposable } from '../../base/common/lifecycle.js';
-import type { IFileSystemProvider } from '../../platform/files/common/fileSystemProviderService.js';
+import type { IFileSystemProvider } from '../../platform/files/common/files.js';
 import type { Workbench, IWorkbenchOptions } from './workbench.js';
 import { DesktopWorkbench } from './desktopWorkbench.js';
 

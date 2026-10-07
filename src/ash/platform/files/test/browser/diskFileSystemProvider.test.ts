@@ -24,7 +24,7 @@ test('disk file revisions serialize competing saves across window providers', as
 		assert.equal(results.filter(result => result.status === 'fulfilled').length, 1);
 		const rejected = results.find(result => result.status === 'rejected');
 		assert.ok(rejected?.status === 'rejected' && rejected.reason instanceof FileRevisionConflictError);
-		assert.match((await second.readFile(resource)).content, /first|second/u);
+		assert.match(new TextDecoder().decode((await second.readFile(resource)).bytes), /first|second/u);
 		assert.equal((await first.readDirectory(root)).length, 1);
 	} finally { await rm(directory, { recursive: true, force: true }); }
 });
@@ -45,7 +45,7 @@ test('profile files map root, content and exact changes while ignoring workspace
 		await disk.writeFile({ resource: URI.joinPath(root, 'workspace/test.json'), content: '{}' });
 		assert.deepEqual(changes, [[resource.toString()]]);
 		assert.deepEqual((await files.readDirectory(profileRoot)).map(entry => entry.resource.toString()), [resource.toString()]);
-		assert.equal((await files.readFile(resource)).content, '// shortcuts\n[]');
+		assert.equal(new TextDecoder().decode((await files.readFile(resource)).bytes), '// shortcuts\n[]');
 		await assert.rejects(files.readFile(resource.with({ path: '/user/../secret.json' })), /current-profile/u);
 	} finally { await rm(directory, { recursive: true, force: true }); }
 });

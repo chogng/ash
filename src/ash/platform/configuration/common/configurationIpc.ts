@@ -1,10 +1,6 @@
 import { type JsonValue, validateJsonValue } from "../../../base/common/jsonValue.js";
 import { parseJsonc } from '../../../base/common/jsonc.js';
 
-export const CONFIGURATION_READ_CHANNEL = "ash:configuration:read";
-export const CONFIGURATION_UPDATE_CHANNEL = "ash:configuration:update";
-export const CONFIGURATION_CHANGED_CHANNEL = "ash:configuration:changed";
-
 export type ConfigurationValue = JsonValue;
 
 export interface IConfigurationOverrideValues {
@@ -35,7 +31,7 @@ export interface IConfigurationSubscription {
 	dispose(): void;
 }
 
-/** Narrow context-bridge capability for Desktop configuration transport. */
+/** Narrow renderer capability for Desktop configuration transport. */
 export interface IConfigurationApi {
 	read(): Promise<unknown>;
 	update(request: IConfigurationUpdateRequest): Promise<unknown>;

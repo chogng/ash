@@ -16,7 +16,7 @@ import { ISkillService } from '../../../../../platform/skills/common/skillServic
 import { IMarketplaceService } from '../../../../../platform/marketplace/common/marketplaceService.js';
 import { ILanguageServerService } from '../../../../../platform/language/common/languageServerService.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
-import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
+import { createTestFileService, createTestEditorServices } from '../../../../test/common/testEditorServices.js';
 import assert from 'node:assert/strict';
 import { suiteTeardown, test } from 'mocha';
 import { installEditorTestDom } from '../../../../../editor/test/browser/editorTestGlobals.js';
@@ -144,10 +144,12 @@ test('Sandbox diagnostics render Chinese readiness and preserve backend reasons 
 	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	const root = h(browserEnvironment.window.document, 'div');
 	using panel = new AgentCapabilitiesSettings(root, {
-		read: async () => ({ tools: [], localProcessSandboxConfigured: true, sandboxBackends: ['mxc'], directoryGrantsReadable: false,
-			sandboxDiagnostics: [{ backend: 'mxc', network: 'managed', readiness: { type: 'unsupported', reason: '<script>diagnostic</script>' } }] }),
+		read: async () => ({
+			tools: [], localProcessSandboxConfigured: true, sandboxBackends: ['mxc'], directoryGrantsReadable: false,
+			sandboxDiagnostics: [{ backend: 'mxc', network: 'managed', readiness: { type: 'unsupported', reason: '<script>diagnostic</script>' } }]
+		}),
 	}, { onDidChangeConnectionState: Event.None } as IRemoteAgentService,
-	{ onDidChangePermissions: Event.None } as IDirPermissionsService, {
+		{ onDidChangePermissions: Event.None } as IDirPermissionsService, {
 		whenReady: Promise.resolve(), translate: (bundle, key, fallback) => chinese.bundles[bundle]?.[key] ?? fallback,
 	});
 	panel.setView('sandbox');
@@ -486,11 +488,21 @@ test('Settings search normalizes pasted setting syntax and matches complete meta
 });
 
 test('Settings search composes setting ID and text filters', () => {
-	const query = new SettingsSearchQuery('@id:font editor');
+	const query = new SettingsSearchQuery('@id:editor.font* editor');
 
 	assert.equal(query.matches({ id: 'editor.fontFamily', title: 'Font family', description: 'Editor typography.' }), true);
 	assert.equal(query.matches({ id: 'editor.fontSize', title: 'Font size', description: 'Editor typography.' }), true);
 	assert.equal(query.matches({ id: 'workbench.fontFamily', title: 'Font family', description: 'Workbench typography.' }), false);
+});
+
+test('Settings search matches complete setting IDs without selecting prefixed IDs', () => {
+	const query = new SettingsSearchQuery('@id:EDITOR.fontSize');
+	const metadata = { title: 'Font size', description: 'Editor typography.' };
+
+	assert.equal(query.matches({ ...metadata, id: 'editor.fontSize' }), true);
+	assert.equal(query.matches({ ...metadata, id: 'chat.editor.fontSize' }), false);
+	assert.equal(query.matches({ ...metadata, id: 'editor.fontSizeExtra' }), false);
+	assert.equal(query.matches(metadata), false);
 });
 
 test('Models Settings keeps loading API connections when the model catalog changes', async () => {
@@ -864,7 +876,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
 	const hooksFolder = await mkdtemp(join(tmpdir(), 'ash-settings-hooks-'));
 	await using hooksFolderCleanup = { [Symbol.asyncDispose]: async () => { await rm(hooksFolder, { recursive: true, force: true }); } };
-	services.registerInstance(IFileService, disposables.add(new DiskFileSystemProvider([URI.file(hooksFolder)])));
+	services.registerSingleton(IFileService, () => createTestFileService(disposables.add(new DiskFileSystemProvider([URI.file(hooksFolder)]))));
 	const editorPanes = new EditorPaneRegistry();
 	disposables.add(editorPanes.registerEditorPane(descriptor));
 	const editorServices = disposables.add(createTestEditorServices(undefined, services));
@@ -1245,7 +1257,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	await idFilter.run();
 	hideMenu?.(false);
 	assert.equal(search.value, '@id:');
-	search.value = '@id:fontFamily';
+	search.value = '@id:editor.fontFamily';
 	search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
 	assert.ok(root.querySelector(`[data-settings-item-id="${CodeEditorConfiguration.fontFamily}"]`));
 	assert.equal(root.querySelector(`[data-settings-item-id="${CodeEditorConfiguration.fontSize}"]`), null);

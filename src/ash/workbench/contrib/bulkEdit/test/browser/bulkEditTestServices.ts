@@ -1,3 +1,5 @@
+import { createTestFileService } from '../../../../test/common/testEditorServices.js';
+import type { IFileSystemProvider } from '../../../../../platform/files/common/files.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
@@ -5,7 +7,7 @@ import { URI } from '../../../../../base/common/uri.js';
 import { BrowserTextModelService } from '../../../../services/textmodelResolver/browser/browserTextModelService.js';
 import { BrowserWorkingCopyService } from '../../../../services/workingCopy/browser/browserWorkingCopyService.js';
 import type { TextResourceChangeEvent, TextResourceContent, TextResourceResolveRequest, TextResourceSaveRequest, ITextResourceStore } from '../../../../services/textmodelResolver/common/textResourceStore.js';
-import { FileKind, FileNotFoundError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileService } from '../../../../../platform/files/common/files.js';
+import { FileKind, FileNotFoundError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior } from '../../../../../platform/files/common/files.js';
 import { BulkEditService } from '../../browser/bulkEditService.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import type { IDialogService, IConfirmationDialogOptions } from '../../../../../platform/dialogs/common/dialogs.js';
@@ -52,7 +54,7 @@ export class BulkEditTestServices extends Disposable {
 		this.store = this._register(new MemoryResourceStore(resources));
 		this.models = this._register(new BrowserTextModelService(this.store));
 		this.files = new MemoryFileService(resources);
-		this.service = this._register(new BulkEditService(this.models, this.workingCopies, this.files, this.configuration, this.dialogs));
+		this.service = this._register(new BulkEditService(this.models, this.workingCopies, this._register(createTestFileService(this.files)), this.configuration, this.dialogs));
 	}
 }
 
@@ -110,7 +112,7 @@ export class MemoryResourceStore implements ITextResourceStore {
 	}
 }
 
-export class MemoryFileService implements IFileService {
+export class MemoryFileService implements IFileSystemProvider {
 	readonly onDidChangeFiles = Event.None;
 	private readonly resources = new Map<string, string>();
 	failRename = false;
@@ -123,8 +125,7 @@ export class MemoryFileService implements IFileService {
 	text(resource: URI): string { const text = this.resources.get(resource.toString()); if (text === undefined) throw new Error(`Unknown resource ${resource.toString()}`); return text; }
 	async stat(resource: URI) { if (!this.has(resource)) throw new FileNotFoundError(resource); return { resource, kind: FileKind.File, sizeBytes: this.text(resource).length, readonly: false, modifiedAtMillis: undefined }; }
 	async readDirectory(): Promise<readonly never[]> { return []; }
-	async readFile(resource: URI) { return { resource, content: this.text(resource), revision: this.text(resource) }; }
-	async readFileBytes(resource: URI) { return { resource, bytes: new TextEncoder().encode(this.text(resource)), revision: this.text(resource) }; }
+	async readFile(resource: URI) { return { resource, bytes: new TextEncoder().encode(this.text(resource)), revision: this.text(resource) }; }
 	async writeFile(request: { readonly resource: URI; readonly content: string; }) { this.resources.set(request.resource.toString(), request.content); return { stat: await this.stat(request.resource), revision: request.content }; }
 	async writeFileBytes(resource: URI, bytes: Uint8Array) { this.resources.set(resource.toString(), new TextDecoder().decode(bytes)); return { stat: await this.stat(resource), revision: 'bytes' }; }
 	async createFile(resource: URI, existing: FileExistingTargetBehavior) {

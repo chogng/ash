@@ -1,10 +1,11 @@
-import { CONFIGURATION_CHANGED_CHANNEL, CONFIGURATION_READ_CHANNEL, CONFIGURATION_UPDATE_CHANNEL, type IConfigurationApi } from "../common/configurationIpc.js";
-import { invoke, subscribe } from "../../ipc/electron-browser/rendererIpc.js";
+import type { IConfigurationApi } from '../common/configurationIpc.js';
+import type { IMainProcessService } from '../../ipc/common/mainProcessService.js';
 
-export function createConfigurationApi(): IConfigurationApi {
+export function createConfigurationApi(mainProcessService: IMainProcessService): IConfigurationApi {
+	const channel = mainProcessService.getChannel('configuration');
 	return {
-		read: () => invoke(CONFIGURATION_READ_CHANNEL),
-		update: (request) => invoke(CONFIGURATION_UPDATE_CHANNEL, request),
-		onDidChange: (listener) => subscribe(CONFIGURATION_CHANGED_CHANNEL, listener),
+		read: () => channel.call('read'),
+		update: request => channel.call('update', request),
+		onDidChange: listener => channel.listen('onDidChange')(listener),
 	};
 }

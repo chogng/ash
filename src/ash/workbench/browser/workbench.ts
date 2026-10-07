@@ -4,7 +4,7 @@ import { AppServerAvailableContext } from '../common/contextkeys.js';
 import { IWorkbenchEnvironmentService } from '../services/environment/common/environmentService.js';
 import { localize } from '../../nls.js';
 import { Schemas } from '../../base/common/network.js';
-import type { IFileSystemProvider } from '../../platform/files/common/fileSystemProviderService.js';
+import type { IFileSystemProvider } from '../../platform/files/common/files.js';
 import { IUserDataProfileService } from '../services/userDataProfile/common/userDataProfile.js';
 import { UserDataProfileService } from '../services/userDataProfile/browser/userDataProfileService.js';
 import { IKeybindingEditingService, KeybindingsEditingService } from '../services/keybinding/common/keybindingEditing.js';
@@ -112,10 +112,9 @@ import {
 import {
 	BrowserFileService,
 } from "../../platform/files/browser/fileService.js";
-import { MultiplexFileService } from "../../platform/files/browser/multiplexFileService.js";
+import { FileService } from "../../platform/files/common/fileService.js";
 import { IQuickInputService } from "../../platform/quickinput/common/quickInput.js";
 import type { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
-import { IFileSystemProviderService } from "../../platform/files/common/fileSystemProviderService.js";
 import { ISystemFileTransferService } from '../../platform/files/common/systemFileTransferService.js';
 import {
 	IFileService,
@@ -315,6 +314,8 @@ import { IClipboardService } from "../../platform/clipboard/common/clipboardServ
 
 /** Host-specific inputs required to construct a workbench. */
 export interface IStartWorkbenchOptions {
+	/** Host-owned services are borrowed by this window's container before consumers are created. */
+	readonly serviceCollection?: ServiceCollection;
 	readonly productName: string;
 	readonly environmentService: IWorkbenchEnvironmentService;
 	readonly defaultLayout?: WorkbenchDefaultLayout;
@@ -348,6 +349,7 @@ export interface IStartWorkbenchOptions {
 
 /** Starts the browser workbench and binds its commands to the initial UI. */
 export async function startWorkbench({
+	serviceCollection,
 	productName,
 	environmentService,
 	defaultLayout,
@@ -417,6 +419,7 @@ export async function startWorkbench({
 			createTextDocumentHost,
 			createURLService,
 			environmentService,
+			serviceCollection,
 		);
 	} catch (error) {
 		userDataFiles?.dispose();
@@ -482,14 +485,14 @@ export class Workbench extends Disposable {
 		createTextDocumentHost: ((services: IInstantiationService) => IDisposable) | undefined,
 		createURLService: IStartWorkbenchOptions['createURLService'],
 		environmentService: IWorkbenchEnvironmentService,
+		serviceCollection = new ServiceCollection(),
 	) {
 		super();
 		performance.mark('ash.workbench.constructor-start');
 		this._register(themes);
 		this._register(FormattingConflicts.setFormatterSelector(async formatters => formatters[0]));
-		const serviceCollection = new ServiceCollection();
 		for (const [id, descriptor] of getSingletonServiceDescriptors()) {
-			serviceCollection.set(id, descriptor);
+			if (!serviceCollection.has(id)) { serviceCollection.set(id, descriptor); }
 		}
 		const services = this._register(new InstantiationService(serviceCollection));
 		services.registerInstance(IWorkbenchEnvironmentService, environmentService);
@@ -609,14 +612,14 @@ export class Workbench extends Disposable {
 			},
 		});
 		this._register(workspaceFileService);
-		const fileService = this._register(new MultiplexFileService(workspaceFileService));
+		const fileService = this._register(services.createInstance(FileService));
 		this._register(userDataFileSystemProvider);
 		this._register(fileService.registerProvider(Schemas.vscodeUserData, userDataFileSystemProvider));
 		services.registerInstance(IUserDataProfileService, new UserDataProfileService());
-		if (browserFileSystemProvider) this._register(fileService.registerProvider('file', browserFileSystemProvider));
+		this._register(fileService.registerProvider(Schemas.file, browserFileSystemProvider ?? workspaceFileService));
+		this._register(fileService.registerProvider(Schemas.ashRemote, workspaceFileService));
 		services.registerInstance(IFileService, fileService);
 		services.registerInstance(ISystemFileTransferService, workspaceFileService);
-		services.registerInstance(IFileSystemProviderService, fileService);
 		const configuration = this._register(new WorkbenchConfigurationService({
 			api: configurationApi,
 			initialSnapshot: initialConfigurationSnapshot,

@@ -1,4 +1,6 @@
-import { createTestTextFileService } from '../../../../test/common/testEditorServices.js';
+import { FileService } from '../../../../../platform/files/common/fileService.js';
+import { Schemas } from '../../../../../base/common/network.js';
+import { createTestFileService, createTestTextFileService } from '../../../../test/common/testEditorServices.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -21,7 +23,7 @@ import { parseUserKeybindings } from '../../common/keybindingIO.js';
 export class KeybindingTestServices extends Disposable {
 	public readonly services = this._register(new InstantiationService());
 	public readonly profiles = new UserDataProfileService();
-	public readonly files: FileUserDataProvider;
+	public readonly files: FileService;
 	public readonly models: BrowserTextModelService;
 	public readonly directory = mkdtempSync(join(tmpdir(), 'ash-keybinding-test-'));
 
@@ -29,7 +31,8 @@ export class KeybindingTestServices extends Disposable {
 		super();
 		this._register(toDisposable(() => rmSync(this.directory, { recursive: true, force: true })));
 		const disk = this._register(new DiskFileSystemProvider([URI.file(this.directory)]));
-		this.files = this._register(new FileUserDataProvider(disk, URI.file(this.directory)));
+		const provider = this._register(new FileUserDataProvider(disk, URI.file(this.directory)));
+		this.files = this._register(createTestFileService(provider, [Schemas.vscodeUserData]));
 		this.models = this._register(new BrowserTextModelService(getBrowserTextResourceStore(this._register(createTestTextFileService(this.files)))));
 		this.services.registerInstance(IFileService, this.files);
 		this.services.registerInstance(IFileTextModelService, this.models);

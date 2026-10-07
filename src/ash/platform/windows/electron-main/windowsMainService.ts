@@ -4,14 +4,8 @@ import { WORKSPACE_RECOVERY_CHANNEL, validateWorkspaceRecovery, NEW_WINDOW_DIMEN
 import { DeferredPromise } from '../../../base/common/async.js';
 import { AbstractDisposable, Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
-import { CONFIGURATION_CHANGED_CHANNEL } from '../../configuration/common/configurationIpc.js';
-import { configurationIpcRoutes, type ConfigurationMainService } from '../../configuration/electron-main/configurationMainService.js';
 import { type IWorkspaceOpenTarget, WorkspaceOpenTargetKind } from '../../environment/common/argv.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
-import { NATIVE_KEYBOARD_LAYOUT_CHANGED_CHANNEL } from '../../keyboardLayout/common/nativeKeyboardLayout.js';
-import { USER_KEYBOARD_LAYOUT_CHANGED_CHANNEL } from '../../keyboardLayout/common/userKeyboardLayout.js';
-import { nativeKeyboardLayoutIpcRoutes, type NativeKeyboardLayoutMainService } from '../../keyboardLayout/electron-main/nativeKeyboardLayoutMainService.js';
-import { userKeyboardLayoutIpcRoutes, type UserKeyboardLayoutMainService } from '../../keyboardLayout/electron-main/userKeyboardLayoutMainService.js';
 import { createSshRemoteWorkspaceUri } from '../../remote/common/remote.js';
 import { type IAnyWorkspaceIdentifier, hasWorkspaceFileExtension, isSingleFolderWorkspaceIdentifier, isWorkspaceIdentifier, serializeWorkspace } from '../../workspace/common/workspace.js';
 import { WORKSPACE_CONTEXT_READ_CHANNEL, validateWorkspaceContextRead } from '../../workspace/common/workspaceIpc.js';
@@ -784,36 +778,4 @@ export function workspaceContextIpcRoutes(service: WorkspaceContextMainService):
 		validate: validateWorkspaceContextRead,
 		invoke: () => serializeWorkspace(service.getResolvedWorkspace()),
 	}];
-}
-
-export interface IWindowResourceIpcServices {
-	readonly configuration: ConfigurationMainService;
-	readonly nativeKeyboardLayout: NativeKeyboardLayoutMainService;
-	readonly userKeyboardLayout: UserKeyboardLayoutMainService;
-}
-
-/** Shared resource routes available to every Electron Workbench renderer window. */
-export function windowResourceIpcRoutes(services: IWindowResourceIpcServices): readonly IpcRoute<unknown, unknown>[] {
-	return [
-		...configurationIpcRoutes(services.configuration),
-		...nativeKeyboardLayoutIpcRoutes(services.nativeKeyboardLayout),
-		...userKeyboardLayoutIpcRoutes(services.userKeyboardLayout),
-	];
-}
-
-export function trackWindowResourceChanges(
-	window: { readonly webContents: { send(channel: string, value: unknown): void; }; isDestroyed(): boolean; },
-	services: IWindowResourceIpcServices,
-): IDisposable {
-	const resources = new DisposableStore();
-	resources.add(services.configuration.onDidChange(snapshot => {
-		if (!window.isDestroyed()) window.webContents.send(CONFIGURATION_CHANGED_CHANNEL, snapshot);
-	}));
-	resources.add(services.nativeKeyboardLayout.onDidChangeKeyboardLayout(layout => {
-		if (!window.isDestroyed()) window.webContents.send(NATIVE_KEYBOARD_LAYOUT_CHANGED_CHANNEL, layout);
-	}));
-	resources.add(services.userKeyboardLayout.onDidChangeKeyboardLayout(() => {
-		if (!window.isDestroyed()) window.webContents.send(USER_KEYBOARD_LAYOUT_CHANGED_CHANNEL, services.userKeyboardLayout.currentKeyboardLayout);
-	}));
-	return resources;
 }
