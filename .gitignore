@@ -1,11 +1,12 @@
 # Canonical local build products
 .build/
-/dist/
 
 # Legacy output paths remain ignored so older tools cannot re-add them.
 target/
 __pycache__/
 *.py[cod]
+.pytest_cache/
+.ruff_cache/
 
 # Bazel creates these workspace-root symlinks for its output tree.
 /bazel-*
@@ -26,7 +27,6 @@ output/
 # Frontend dependencies and generated files
 node_modules/
 dist/
-test/integration/browser/dist/
 debug.log
 .pnpm-store/
 src/ash/platform/app-server/common/generated/
