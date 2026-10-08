@@ -5,6 +5,9 @@ import { parseWorkspace } from "../../../../src/ash/platform/workspace/common/wo
 import { expect, test } from "../../../automation/test.js";
 import { createTestWorkspace, disposeTestWorkspace, type TestWorkspace } from "../../../automation/testWorkspace.js";
 import { Workbench } from "../../../automation/workbench.js";
+import { installMainChannelTestClient } from '../../../automation/mainProcessIpc.js';
+import { StorageScope, StorageTarget } from '../../../../src/ash/platform/storage/common/storage.js';
+import type { IStorageSnapshot } from '../../../../src/ash/platform/storage/common/storageIpc.js';
 
 import { waitForElectronWindowState } from "../../../automation/electronDriver.js";
 
@@ -33,15 +36,33 @@ test("a second instance opens an independent Workbench and reuses an existing Wo
 		await expect.poll(() => application.windows().length).toBe(2);
 		expect(await canonicalWorkspacePath(workbench.page)).toBe(await realpath(testWorkspace.directory));
 		expect(await canonicalWorkspacePath(secondPage)).toBe(await realpath(secondWorkspace.directory));
+		const firstSidebar = workbench.page.getByRole('region', { name: 'Primary sidebar', exact: true });
+		const firstSidebarWasVisible = await firstSidebar.isVisible();
+		await installMainChannelTestClient(workbench.page);
+		await installMainChannelTestClient(secondPage);
+		const identity = { scope: StorageScope.APPLICATION, id: 'application' };
+		const key = 'storage.lifecycle.shared';
+		await workbench.page.evaluate(({ identity, key, target }) => globalThis.ashTestMainProcess.call('storage', 'updateItems', { identity, key, entry: { value: 'first window', target } }), { identity, key, target: StorageTarget.MACHINE });
+		expect(await secondPage.evaluate(async ({ identity, key }) => (await globalThis.ashTestMainProcess.call<IStorageSnapshot>('storage', 'getItems', { identity })).entries[key], { identity, key })).toEqual({ value: 'first window', target: StorageTarget.MACHINE });
+		await secondPage.evaluate(({ identity, key, target }) => globalThis.ashTestMainProcess.call('storage', 'updateItems', { identity, key, entry: { value: 'second window', target } }), { identity, key, target: StorageTarget.MACHINE });
+		expect(await workbench.page.evaluate(async ({ identity, key }) => (await globalThis.ashTestMainProcess.call<IStorageSnapshot>('storage', 'getItems', { identity })).entries[key], { identity, key })).toEqual({ value: 'second window', target: StorageTarget.MACHINE });
 		await secondPage.bringToFront();
 		const sidebar = secondPage.getByRole('region', { name: 'Primary sidebar', exact: true });
 		const sidebarWasVisible = await sidebar.isVisible();
 		await secondWorkbench.quickaccess.runCommand('workbench.action.toggleSideBar');
 		await expect(sidebar).toBeVisible({ visible: !sidebarWasVisible });
+		await expect(firstSidebar).toBeVisible({ visible: firstSidebarWasVisible });
 		const workspaceId = await secondPage.evaluate(async () => {
 			const bridge = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<{ id: string; }>; }; }; }).ash;
 			return (await bridge.ipcRenderer.invoke('ash:workspace:context:read')).id;
 		});
+		const firstWorkspaceId = await workbench.page.evaluate(async () => {
+			const bridge = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<{ id: string; }>; }; }; }).ash;
+			return (await bridge.ipcRenderer.invoke('ash:workspace:context:read')).id;
+		});
+		const workspaceIdentity = { scope: StorageScope.WORKSPACE, id: workspaceId };
+		await secondPage.evaluate(({ identity, key, target }) => globalThis.ashTestMainProcess.call('storage', 'updateItems', { identity, key, entry: { value: 'second workspace', target } }), { identity: workspaceIdentity, key, target: StorageTarget.MACHINE });
+		expect(await workbench.page.evaluate(async ({ identity, key }) => (await globalThis.ashTestMainProcess.call<IStorageSnapshot>('storage', 'getItems', { identity })).entries[key], { identity: { scope: StorageScope.WORKSPACE, id: firstWorkspaceId }, key })).toBeUndefined();
 
 		await workbench.page.evaluate(() => { document.title = "multi-workbench:first"; });
 		await secondPage.evaluate(() => { document.title = "multi-workbench:second"; });
@@ -66,6 +87,8 @@ test("a second instance opens an independent Workbench and reuses an existing Wo
 		secondPage = await reopening;
 		await new Workbench(secondPage).waitForReady();
 		await expect(secondPage.getByRole('region', { name: 'Primary sidebar', exact: true })).toBeVisible({ visible: !sidebarWasVisible });
+		await expect(firstSidebar).toBeVisible({ visible: firstSidebarWasVisible });
+		expect(await secondPage.evaluate(async ({ identity, key }) => (await globalThis.ashTestMainProcess.call<IStorageSnapshot>('storage', 'getItems', { identity })).entries[key], { identity: workspaceIdentity, key })).toEqual({ value: 'second workspace', target: StorageTarget.MACHINE });
 	} finally {
 		if (secondPage && !secondPage.isClosed()) await secondPage.close().catch(() => undefined);
 	}

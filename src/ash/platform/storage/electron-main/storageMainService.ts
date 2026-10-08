@@ -14,35 +14,40 @@ export class StorageMainService extends Disposable {
 	private readonly storages = new Map<string, IStorageSnapshot>();
 	private readonly users = new Map<string, number>();
 	private queue: Promise<void> = Promise.resolve();
+	private initializing: Promise<void> | undefined;
 	private closing: Promise<void> | undefined;
 
 	constructor(private readonly filePath: string) { super(); }
 
 	public async initialize(): Promise<void> {
 		this.assertNotDisposed();
-		await mkdir(dirname(this.filePath), { recursive: true });
-		let source: string;
-		try { source = await readFile(this.filePath, 'utf8'); }
-		catch (error) {
-			if (isRecord(error) && error.code === 'ENOENT') { return; }
-			throw error;
-		}
-		const data: unknown = JSON.parse(source);
-		if (!isRecord(data) || (data.version !== 1 && data.version !== 2) || !Array.isArray(data.storages)) { throw new TypeError('Invalid Desktop storage file'); }
-		if (data.version === 1) {
-			const migrated = migrateStorage(data.storages);
-			// The original document is an archive, never a second runtime storage source.
-			await writeFile(`${this.filePath}.v1`, source, 'utf8');
-			await this.write(migrated);
-			for (const [key, snapshot] of migrated) { this.storages.set(key, snapshot); }
-			return;
-		}
-		for (const candidate of data.storages) {
-			const snapshot = validateStorageSnapshot(candidate);
-			const key = storageIdentityKey(snapshot.identity);
-			if (this.storages.has(key)) { throw new TypeError('Duplicate Desktop storage identity'); }
-			this.storages.set(key, { ...snapshot, isNew: false });
-		}
+		// Startup disk work belongs to the same barrier as mutations, flush and close.
+		this.initializing ??= this.run(async () => {
+			await mkdir(dirname(this.filePath), { recursive: true });
+			let source: string;
+			try { source = await readFile(this.filePath, 'utf8'); }
+			catch (error) {
+				if (isRecord(error) && error.code === 'ENOENT') { return; }
+				throw error;
+			}
+			const data: unknown = JSON.parse(source);
+			if (!isRecord(data) || (data.version !== 1 && data.version !== 2) || !Array.isArray(data.storages)) { throw new TypeError('Invalid Desktop storage file'); }
+			if (data.version === 1) {
+				const migrated = migrateStorage(data.storages);
+				// The original document is an archive, never a second runtime storage source.
+				await writeFile(`${this.filePath}.v1`, source, 'utf8');
+				await this.write(migrated);
+				for (const [key, snapshot] of migrated) { this.storages.set(key, snapshot); }
+				return;
+			}
+			for (const candidate of data.storages) {
+				const snapshot = validateStorageSnapshot(candidate);
+				const key = storageIdentityKey(snapshot.identity);
+				if (this.storages.has(key)) { throw new TypeError('Duplicate Desktop storage identity'); }
+				this.storages.set(key, { ...snapshot, isNew: false });
+			}
+		});
+		return this.initializing;
 	}
 
 	public getItems(identity: IStorageIdentity, legacy?: Readonly<Record<string, IStorageEntry>>): Promise<IStorageSnapshot> {

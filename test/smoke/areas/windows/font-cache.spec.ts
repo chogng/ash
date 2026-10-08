@@ -77,9 +77,9 @@ test('Browser migrates retired storage before restoring font metrics', async ({ 
 	expect((await readStorageEntries(application, page, identity)).editorFontInfo).toEqual({ value, target: 'machine' });
 });
 
-test('Desktop migrates retired storage and restores Workbench fonts and Sessions layout after restart', async ({ target }, testInfo) => {
+test('Desktop migrates retired storage and preserves Workbench fonts and Sessions layout through immediate exit and restart', async ({ target }, testInfo) => {
 	test.skip(target.kind !== 'electron', 'Desktop migration is owned by the Main process.');
-	test.setTimeout(90_000);
+	test.setTimeout(120_000);
 	const userDataDirectory = testInfo.outputPath('storage-profile');
 	await mkdir(userDataDirectory, { recursive: true });
 	const options = { userDataDirectory, appServerMode: target.appServerMode };
@@ -88,7 +88,15 @@ test('Desktop migrates retired storage and restores Workbench fonts and Sessions
 		const agents = await session.driver.workbench.openAgentsWindow('electron');
 		await agents.locator('.ash-sessions-titlebar-actions').getByRole('button', { name: 'Hide sidebar', exact: true }).click();
 		await expect(agents.locator('[data-part="sidebar"]')).toBeHidden();
+		// Persist the layout without restoring a second renderer during the migration launch.
+		const agentsWindow = await session.application.browserWindow(agents);
+		const agentsClosed = agents.waitForEvent('close');
+		try {
+			await agentsWindow.evaluate(window => window.close());
+			await agentsClosed;
+		} finally { await agentsWindow.dispose(); }
 		await session.quit();
+		expect(session.diagnostics.errors).toEqual([]);
 		const file = join(userDataDirectory, 'workbench-state.json');
 		const document = JSON.parse(await readFile(file, 'utf8')) as { version: number; storages: IStorageSnapshot[]; };
 		const application = document.storages.find(storage => storage.identity.scope === StorageScope.APPLICATION)!;
@@ -101,6 +109,15 @@ test('Desktop migrates retired storage and restores Workbench fonts and Sessions
 		storages.unshift({ ...application, identity: { ...application.identity, applicationId: 'academic' }, entries: { editorFontInfo: { value: 'academic-font-cache', target: StorageTarget.MACHINE }, academicSaved: { value: 'retained', target: StorageTarget.USER } } });
 		const source = JSON.stringify({ version: 1, storages });
 		await writeFile(file, source);
+		session = await launchElectron(options);
+		// Quit at the first ready boundary, before opening another window or requesting storage.
+		expect(session.application.windows()).toHaveLength(1);
+		await session.quit();
+		const closedDocument = JSON.parse(await readFile(file, 'utf8')) as { version: number; storages: IStorageSnapshot[]; };
+		expect(closedDocument.version).toBe(2);
+		expect(closedDocument.storages.find(snapshot => snapshot.identity.scope === StorageScope.APPLICATION)?.entries.academicSaved).toEqual({ value: 'retained', target: StorageTarget.USER });
+		expect(await readFile(`${file}.v1`, 'utf8')).toBe(source);
+		expect(session.diagnostics.errors).toEqual([]);
 		session = await launchElectron(options);
 		await expect.poll(async () => (await readStorageEntries(session.application, session.driver.workbench.page, { scope: StorageScope.APPLICATION, id: 'application' })).editorFontInfo).toEqual({ value, target: 'machine' });
 		const restoredAgents = await session.driver.workbench.openAgentsWindow('electron');
