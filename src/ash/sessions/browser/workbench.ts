@@ -78,6 +78,10 @@ import { StandaloneCodeEditorService } from '../../editor/standalone/browser/sta
 import { ILanguageConfigurationService } from '../../editor/common/languages/languageConfigurationRegistry.js';
 import { ILanguageFeaturesService } from '../../editor/common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../editor/common/services/languageFeaturesService.js';
+import { IModelService } from '../../editor/common/services/model.js';
+import { ModelService } from '../../editor/common/services/modelService.js';
+import { ITextResourcePropertiesService } from '../../editor/common/services/textResourceConfiguration.js';
+import { TextResourcePropertiesService } from '../../workbench/services/textresourceProperties/common/textResourcePropertiesService.js';
 import { NewChatInputWidget } from '../contrib/chat/browser/newChatInput.js';
 import { CoworkPaneFactory } from '../contrib/cowork/browser/cowork.contribution.js';
 import { ISessionsConversationService } from '../services/sessions/common/sessionsConversation.js';
@@ -295,6 +299,9 @@ export abstract class Workbench extends Disposable {
 		const languageService = this._register(new LanguageService());
 		services.registerInstance(ILanguageService, languageService);
 		services.registerInstance(ILanguageFeaturesService, this._register(new LanguageFeaturesService()));
+		services.registerSingleton(ITextResourcePropertiesService, () => services.createInstance(TextResourcePropertiesService));
+		// Shared inspectors create transient models; this window owns their registry and shutdown.
+		services.registerSingleton(IModelService, () => new ModelService(configurationService, services.get(ITextResourcePropertiesService), languageService, services.get(ILanguageFeaturesService), services.get(ILanguageConfigurationService)));
 		services.registerInstance(ICodeEditorService, this._register(new StandaloneCodeEditorService()));
 		this.logService = this._register(logger);
 		services.registerInstance(ILogService, this.logService);

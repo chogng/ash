@@ -49,8 +49,9 @@ test('Execution Trace shows loop actions, message phases and stop reasons', asyn
 	await viewer.getByRole('tree').focus();
 	await viewer.getByRole('tree').press('End');
 	await expect(selectedEvent(viewer)).toHaveAttribute('data-key', 'root:4');
-	await expect(viewer.getByRole('tabpanel')).toContainText('maxOutputTokens');
+	await expect(viewer.getByRole('tabpanel')).toContainText('Output token limit');
 	await viewer.getByRole('tab', { name: 'Raw record', exact: true }).click();
+	await expect(viewer.getByRole('tabpanel')).toContainText('maxOutputTokens');
 	await expect(viewer.getByRole('tabpanel')).toContainText('sourceThreadSequence');
 });
 
@@ -91,8 +92,8 @@ test('Execution Trace imports evaluation history, nests child Threads and export
 	};
 	await viewer.locator('input[type=file]').setInputFiles({ name: 'evaluation.trace.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(trace)) });
 	await expect(viewer.getByRole('status')).toContainText('Imported');
-	const rootRow = viewer.getByRole('treeitem').filter({ has: viewer.locator('.ash-agent-trace-thread[data-thread-id="root"]') });
-	const childRow = viewer.getByRole('treeitem').filter({ has: viewer.locator('.ash-agent-trace-thread[data-thread-id="child"]') });
+	const rootRow = viewer.getByRole('treeitem').filter({ has: page.locator('.ash-agent-trace-thread[data-thread-id="root"]') });
+	const childRow = viewer.getByRole('treeitem').filter({ has: page.locator('.ash-agent-trace-thread[data-thread-id="child"]') });
 	await expect(rootRow).toHaveAttribute('aria-level', '1');
 	await expect(childRow).toHaveAttribute('aria-level', '2');
 	await expect(viewer.locator('.ash-agent-trace-turn')).toHaveCount(2);
@@ -273,7 +274,7 @@ test('Execution Trace opens current saved history and follows real new Turns and
 		const child = await client.request(APP_SERVER_METHODS['session/request'], { commandId: 'trace-child', sessionId, request: { type: 'forkThread', parentThreadId: threadId, title: 'Trace child' } });
 		if (child.type !== 'thread') { throw new Error('Expected child Thread'); }
 		await viewer.getByRole('textbox', { name: 'Filter execution events' }).fill(child.value.threadId);
-		await expect(viewer.getByRole('treeitem').filter({ has: viewer.locator(`.ash-agent-trace-thread[data-thread-id="${child.value.threadId}"]`) })).toHaveAttribute('aria-level', '2');
+		await expect(viewer.getByRole('treeitem').filter({ has: page.locator(`.ash-agent-trace-thread[data-thread-id="${child.value.threadId}"]`) })).toHaveAttribute('aria-level', '2');
 		await page.getByRole('button', { name: 'Close Execution Trace', exact: true }).click();
 		await expect(viewer).toHaveCount(0);
 		const afterCloseTurn = await shell('trace-after-close', 'echo trace-after-close');
