@@ -7,6 +7,239 @@ use crate::test_support::TestBareRepository;
 use crate::test_support::TestRepository;
 use std::path::PathBuf;
 
+#[tokio::test]
+async fn commit_scopes_preserve_partial_staging_and_require_untracked_opt_in() {
+    for scope in ["staged", "tracked", "includeUntracked"] {
+        let repository = TestRepository::init();
+        for file in ["partial.txt", "unstaged.txt", "deleted.txt", "old.txt"] {
+            repository.write(file, "initial\n");
+        }
+        repository.write(".gitignore", "*.ignored\n");
+        repository.commit_all("initial");
+        repository.write("partial.txt", "staged\n");
+        repository.git(&["add", "partial.txt"]);
+        repository.write("partial.txt", "working\n");
+        repository.write("unstaged.txt", "changed\n");
+        std::fs::remove_file(repository.path("deleted.txt")).unwrap();
+        repository.git(&["mv", "old.txt", "renamed.txt"]);
+        repository.write("new.txt", "new\n");
+        repository.write("secret.ignored", "ignored\n");
+        let client = GitClient::system();
+        let opened = client.open_repository(repository.root()).await.unwrap();
+        let request = GitCommitRequest::new(format!("scope {scope}")).unwrap();
+        let request = match scope {
+            "staged" => request,
+            "tracked" => request.with_tracked_changes(),
+            "includeUntracked" => request.with_untracked_changes(),
+            _ => unreachable!(),
+        };
+        client.commit(&opened, &request).await.unwrap();
+        assert_eq!(
+            repository.git(&["show", "HEAD:partial.txt"]),
+            if scope == "staged" {
+                "staged"
+            } else {
+                "working"
+            }
+        );
+        assert_eq!(
+            repository.git(&["show", "HEAD:unstaged.txt"]),
+            if scope == "staged" {
+                "initial"
+            } else {
+                "changed"
+            }
+        );
+        let files = repository.git(&["ls-tree", "--name-only", "HEAD"]);
+        assert!(files.lines().any(|file| file == "renamed.txt"));
+        assert!(!files.lines().any(|file| file == "old.txt"));
+        assert_eq!(
+            files.lines().any(|file| file == "deleted.txt"),
+            scope == "staged"
+        );
+        assert_eq!(
+            files.lines().any(|file| file == "new.txt"),
+            scope == "includeUntracked"
+        );
+        assert!(!files.lines().any(|file| file == "secret.ignored"));
+        assert_eq!(repository.read("partial.txt"), "working\n");
+        assert_eq!(repository.read("new.txt"), "new\n");
+        assert!(
+            repository
+                .git(&["diff", "--cached", "--name-only"])
+                .is_empty()
+        );
+    }
+}
+
+#[tokio::test]
+async fn amend_and_signoff_share_commit_execution_and_preserve_the_parent() {
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "initial\n");
+    repository.commit_all("initial");
+    repository.write("tracked.txt", "second\n");
+    repository.commit_all("second");
+    let old_head = repository.git(&["rev-parse", "HEAD"]);
+    let parent = repository.git(&["rev-parse", "HEAD^"]);
+    repository.write("tracked.txt", "amended\n");
+    let client = GitClient::system();
+    let opened = client.open_repository(repository.root()).await.unwrap();
+    let result = client
+        .commit(
+            &opened,
+            &GitCommitRequest::new("--not-an-option\n\nComplete body.".into())
+                .unwrap()
+                .with_tracked_changes()
+                .amend()
+                .sign_off(),
+        )
+        .await
+        .unwrap();
+    assert_ne!(result.object_id(), old_head);
+    assert_eq!(repository.git(&["rev-parse", "HEAD^"]), parent);
+    assert_eq!(repository.git(&["show", "HEAD:tracked.txt"]), "amended");
+    assert_eq!(
+        repository.git(&["log", "-1", "--format=%B"]),
+        "--not-an-option\n\nComplete body.\n\nSigned-off-by: Ash Test <ash@example.invalid>"
+    );
+}
+
+#[tokio::test]
+async fn commit_failure_keeps_successfully_staged_changes_and_never_invents_identity() {
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "initial\n");
+    repository.commit_all("initial");
+    let head = repository.git(&["rev-parse", "HEAD"]);
+    repository.write("tracked.txt", "changed\n");
+    repository.write("new.txt", "new\n");
+    repository.git(&["config", "user.name", ""]);
+    repository.git(&["config", "user.email", ""]);
+    let client = GitClient::system();
+    let opened = client.open_repository(repository.root()).await.unwrap();
+    let error = client
+        .commit(
+            &opened,
+            &GitCommitRequest::new("Keep this message".into())
+                .unwrap()
+                .with_untracked_changes()
+                .sign_off(),
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(error, GitError::CommandFailed { .. }));
+    assert_eq!(repository.git(&["rev-parse", "HEAD"]), head);
+    assert_eq!(repository.git(&["show", ":tracked.txt"]), "changed");
+    assert_eq!(repository.git(&["show", ":new.txt"]), "new");
+    assert_eq!(repository.read("tracked.txt"), "changed\n");
+}
+
+#[tokio::test]
+async fn all_changes_commit_refuses_unresolved_conflicts_before_staging() {
+    let repository = TestRepository::init();
+    repository.write("conflict.txt", "initial\n");
+    repository.commit_all("initial");
+    repository.git(&["switch", "-c", "topic"]);
+    repository.write("conflict.txt", "topic\n");
+    repository.commit_all("topic");
+    repository.git(&["switch", "main"]);
+    repository.write("conflict.txt", "main\n");
+    repository.commit_all("main");
+    let merged = std::process::Command::new("git")
+        .current_dir(repository.root())
+        .args(["merge", "topic"])
+        .output()
+        .unwrap();
+    assert!(!merged.status.success());
+    repository.write("new.txt", "must stay untracked\n");
+    let unresolved = repository.git(&["ls-files", "--unmerged"]);
+    let worktree = repository.read("conflict.txt");
+    let head = repository.git(&["rev-parse", "HEAD"]);
+    let client = GitClient::system();
+    let opened = client.open_repository(repository.root()).await.unwrap();
+    let error = client
+        .commit(
+            &opened,
+            &GitCommitRequest::new("not resolved".into())
+                .unwrap()
+                .with_untracked_changes(),
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        GitError::InvalidConfiguration {
+            field: "commit",
+            ..
+        }
+    ));
+    assert_eq!(repository.git(&["ls-files", "--unmerged"]), unresolved);
+    assert_eq!(repository.git(&["ls-files", "new.txt"]), "");
+    assert_eq!(repository.git(&["rev-parse", "HEAD"]), head);
+    assert_eq!(repository.read("conflict.txt"), worktree);
+}
+
+#[tokio::test]
+async fn empty_creation_and_unborn_amend_do_not_create_commits() {
+    let repository = TestRepository::init();
+    let client = GitClient::system();
+    let opened = client.open_repository(repository.root()).await.unwrap();
+    let error = client
+        .commit(
+            &opened,
+            &GitCommitRequest::new("amend unborn".into())
+                .unwrap()
+                .amend(),
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(error, GitError::CommandFailed { .. }));
+    repository.write("tracked.txt", "initial\n");
+    repository.commit_all("initial");
+    let head = repository.git(&["rev-parse", "HEAD"]);
+    let error = client
+        .commit(&opened, &GitCommitRequest::new("empty".into()).unwrap())
+        .await
+        .unwrap_err();
+    assert!(matches!(error, GitError::CommandFailed { .. }));
+    assert_eq!(repository.git(&["rev-parse", "HEAD"]), head);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn scoped_and_amended_commits_keep_repository_hooks_disabled() {
+    use std::os::unix::fs::PermissionsExt;
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "initial\n");
+    repository.commit_all("initial");
+    let hook = repository.path(".git/hooks/pre-commit");
+    std::fs::write(&hook, "#!/bin/sh\nprintf hook > .git/hook-ran\nexit 1\n").unwrap();
+    std::fs::set_permissions(hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+    repository.write("tracked.txt", "changed\n");
+    let client = GitClient::system();
+    let opened = client.open_repository(repository.root()).await.unwrap();
+    client
+        .commit(
+            &opened,
+            &GitCommitRequest::new("scoped".into())
+                .unwrap()
+                .with_tracked_changes(),
+        )
+        .await
+        .unwrap();
+    client
+        .commit(
+            &opened,
+            &GitCommitRequest::new("amended".into())
+                .unwrap()
+                .amend()
+                .sign_off(),
+        )
+        .await
+        .unwrap();
+    assert!(!repository.path(".git/hook-ran").exists());
+    assert_eq!(repository.git(&["log", "-1", "--format=%s"]), "amended");
+}
+
 #[test]
 fn pathspec_and_commit_requests_reject_ambiguous_inputs() {
     assert!(GitPathspecSet::new(Vec::new()).is_err());
@@ -15,6 +248,9 @@ fn pathspec_and_commit_requests_reject_ambiguous_inputs() {
     assert!(GitPathspecSet::new(vec![PathBuf::from("path\0suffix")]).is_err());
     assert!(GitCommitRequest::new("   ".into()).is_err());
     assert!(GitCommitRequest::new("message\0suffix".into()).is_err());
+    assert!(GitCommitRequest::new("x".repeat(65_537)).is_err());
+    assert!(GitCommitRequest::new("字".repeat(21_846)).is_err());
+    assert!(GitCommitRequest::new("x".repeat(65_536)).is_ok());
 }
 
 #[tokio::test]

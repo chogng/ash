@@ -42,6 +42,12 @@ export interface GitStatus {
 	readonly changes: readonly GitRepositoryChange[];
 }
 
+export interface GitCommitOptions {
+	readonly scope?: 'staged' | 'tracked' | 'includeUntracked';
+	readonly mode?: 'create' | 'amend';
+	readonly signoff?: 'none' | 'add';
+}
+
 export interface GitCommitSummary {
 	readonly repositoryId: string;
 	readonly objectId: string;
@@ -277,7 +283,7 @@ export interface IGitService {
 	stage(paths: readonly string[], repositoryId?: string): Promise<GitStatus>;
 	unstage(paths: readonly string[], repositoryId?: string): Promise<GitStatus>;
 	discardWorktree(paths: readonly string[], repositoryId?: string): Promise<GitStatus>;
-	commit(message: string, repositoryId?: string): Promise<GitCommitResult>;
+	commit(message: string, repositoryId?: string, options?: GitCommitOptions): Promise<GitCommitResult>;
 	fetch(repositoryId?: string, target?: GitFetchTarget): Promise<GitStatus>;
 	pull(repositoryId?: string): Promise<GitStatus>;
 	push(repositoryId?: string): Promise<GitStatus>;

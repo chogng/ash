@@ -1,4 +1,4 @@
-import type { GitCommand, GitCommandResult, GitCatalog, GitIndexDiff, GitIndexSelection, GitCommitDetails, GitFetchTarget } from '../common/gitService.js';
+import type { GitCommand, GitCommandResult, GitCatalog, GitIndexDiff, GitIndexSelection, GitCommitDetails, GitFetchTarget, GitCommitOptions } from '../common/gitService.js';
 import type { ConfigReadResult, GitConfigDto, GitHeadDto, GitRepositoryChangeDto, GitRepositoryDto, GitStatusResult } from "../../../../../../.build/protocol/typescript/index.js";
 import { Emitter } from "../../../../base/common/event.js";
 import { CancellationToken } from '../../../../base/common/cancellation.js';
@@ -380,9 +380,9 @@ export class GitService extends Disposable implements IGitService {
 		return toGitStatus((await this.api.discardWorktree({ repositoryId: repository.id, paths: [...paths] })).status, repository);
 	}
 
-	async commit(message: string, repositoryId?: string): Promise<GitCommitResult> {
+	async commit(message: string, repositoryId?: string, options: GitCommitOptions = {}): Promise<GitCommitResult> {
 		const repository = await this.getRepository(repositoryId);
-		const result = await this.api.commit({ repositoryId: repository.id, message });
+		const result = await this.api.commit({ repositoryId: repository.id, message, ...options });
 		return { objectId: result.objectId, status: toGitStatus(result.status, repository) };
 	}
 

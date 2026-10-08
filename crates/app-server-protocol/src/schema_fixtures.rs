@@ -692,6 +692,25 @@ fn dto_driven_schema_contains_registered_rpc_envelopes() {
     assert!(definitions.contains_key("GitStatusResult"));
     assert!(definitions.contains_key("GitPathsParams"));
     assert!(definitions.contains_key("GitCommitParams"));
+    assert_eq!(
+        definitions["GitCommitParams"]["required"],
+        serde_json::json!(["message"])
+    );
+    assert!(definitions["GitCommitParams"]["properties"]["scope"].is_object());
+    assert!(definitions["GitCommitParams"]["properties"]["mode"].is_object());
+    assert!(definitions["GitCommitParams"]["properties"]["signoff"].is_object());
+    assert_eq!(
+        definitions["GitCommitScopeDto"]["enum"],
+        serde_json::json!(["staged", "tracked", "includeUntracked"])
+    );
+    assert_eq!(
+        definitions["GitCommitModeDto"]["enum"],
+        serde_json::json!(["create", "amend"])
+    );
+    assert_eq!(
+        definitions["GitCommitSignoffDto"]["enum"],
+        serde_json::json!(["none", "add"])
+    );
     assert!(definitions.contains_key("GitOperationResult"));
     assert!(definitions.contains_key("GitCommitResult"));
     assert_eq!(definitions["ThreadId"]["minLength"], 1);

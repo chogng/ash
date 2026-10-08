@@ -14,6 +14,7 @@ use ash_file_access::Grant;
 use ash_file_access::GrantSource;
 use ash_file_access::Permission;
 use ash_file_access::Permissions;
+use ash_git::GitCommitRequest;
 use ash_protocol::CommandId;
 use ash_protocol::Patch;
 use std::path::Path;
@@ -21,6 +22,169 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+
+#[test]
+fn scoped_commit_publishes_real_index_changes_to_all_connections_after_failure() {
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "initial\n");
+    repository.git(&["add", "tracked.txt"]);
+    repository.git(&["commit", "-m", "initial"]);
+    let head = repository.git_output(&["rev-parse", "HEAD"]);
+    repository.write("tracked.txt", "changed\n");
+    repository.write("new.txt", "new\n");
+    repository.git(&["config", "user.name", ""]);
+    repository.git(&["config", "user.email", ""]);
+    let broker = Arc::new(UpdateBroker::default());
+    let first = NotificationQueue::default();
+    let second = NotificationQueue::default();
+    broker.register(1, false, &first);
+    broker.register(2, false, &second);
+    let runtime = GitRuntime::new(mutation_authorization(repository.root()), broker).unwrap();
+    let initial = runtime.status().unwrap();
+    first.drain();
+    second.drain();
+    let failure = runtime.commit_for(
+        Some(&initial.repository_id),
+        GitCommitRequest::new("retry after fixing identity".into())
+            .unwrap()
+            .with_untracked_changes()
+            .sign_off(),
+    );
+    assert!(matches!(
+        failure,
+        Err(super::GitRuntimeError::Service(
+            crate::git_service::GitServiceError::Git(_)
+        ))
+    ));
+    assert_eq!(repository.git_output(&["rev-parse", "HEAD"]), head);
+    assert_eq!(repository.git_output(&["show", ":tracked.txt"]), "changed");
+    assert_eq!(repository.git_output(&["show", ":new.txt"]), "new");
+    let events = first.drain();
+    assert_eq!(events, second.drain());
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0]["method"], "git/statusChanged");
+    assert_eq!(
+        events[0]["params"]["status"]["repositoryId"],
+        initial.repository_id
+    );
+    assert_eq!(
+        events[0]["params"]["status"]["revision"],
+        initial.revision + 1
+    );
+    assert_eq!(
+        events[0]["params"]["status"]["changes"][0]["indexStatus"],
+        "added"
+    );
+    assert_eq!(
+        events[0]["params"]["status"]["changes"][1]["indexStatus"],
+        "modified"
+    );
+}
+
+#[test]
+fn commit_amend_and_undo_use_one_repository_owner_and_return_complete_messages() {
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "initial\n");
+    repository.git(&["add", "tracked.txt"]);
+    repository.git(&["commit", "-m", "initial"]);
+    let parent = repository.git_output(&["rev-parse", "HEAD"]);
+    repository.write("tracked.txt", "changed\n");
+    repository.write("new.txt", "untracked\n");
+    let runtime = GitRuntime::new(
+        mutation_authorization(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    let repository_id = runtime.status().unwrap().repository_id;
+    let committed = runtime
+        .commit_for(
+            Some(&repository_id),
+            GitCommitRequest::new("Second subject\n\nComplete body.".into())
+                .unwrap()
+                .with_tracked_changes(),
+        )
+        .unwrap();
+    assert_eq!(repository.git_output(&["ls-files", "new.txt"]), "");
+    let amended = runtime
+        .commit_for(
+            Some(&repository_id),
+            GitCommitRequest::new("Amended subject\n\nComplete body.".into())
+                .unwrap()
+                .amend()
+                .sign_off(),
+        )
+        .unwrap();
+    assert_ne!(committed.object_id, amended.object_id);
+    assert_eq!(repository.git_output(&["rev-parse", "HEAD^"]), parent);
+    assert_eq!(
+        runtime
+            .commit_message_for(Some(&repository_id), &amended.object_id)
+            .unwrap(),
+        "Amended subject\n\nComplete body.\n\nSigned-off-by: Ash Test <ash@example.invalid>"
+    );
+    let (undone, outcome, _) = runtime
+        .command_for(
+            Some(&repository_id),
+            &ash_git::GitCommand::UndoCommit {
+                expected_head: amended.object_id,
+            },
+            &ash_async_utils::CancellationSource::new().token(),
+        )
+        .unwrap();
+    assert_eq!(outcome, ash_git::GitCommandOutcome::Completed);
+    assert_eq!(undone.repository_id, repository_id);
+    assert_eq!(repository.git_output(&["rev-parse", "HEAD"]), parent);
+    assert_eq!(repository.git_output(&["show", ":tracked.txt"]), "changed");
+    assert_eq!(repository.git_output(&["ls-files", "new.txt"]), "");
+}
+
+#[test]
+fn cancelled_and_stale_undo_leave_the_head_and_index_unchanged() {
+    let repository = TestRepository::init();
+    for message in ["initial", "second"] {
+        repository.write("tracked.txt", message);
+        repository.git(&["add", "tracked.txt"]);
+        repository.git(&["commit", "-m", message]);
+    }
+    let head = repository.git_output(&["rev-parse", "HEAD"]);
+    let parent = repository.git_output(&["rev-parse", "HEAD^"]);
+    let index = repository.git_output(&["ls-files", "--stage"]);
+    let runtime = GitRuntime::new(
+        mutation_authorization(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    let cancellation = ash_async_utils::CancellationSource::new();
+    cancellation.cancel();
+    assert!(
+        runtime
+            .command_for(
+                None,
+                &ash_git::GitCommand::UndoCommit {
+                    expected_head: head.clone()
+                },
+                &cancellation.token()
+            )
+            .is_err()
+    );
+    assert!(
+        runtime
+            .command_for(
+                None,
+                &ash_git::GitCommand::UndoCommit {
+                    expected_head: parent
+                },
+                &ash_async_utils::CancellationSource::new().token()
+            )
+            .is_err()
+    );
+    assert_eq!(repository.git_output(&["rev-parse", "HEAD"]), head);
+    assert_eq!(repository.git_output(&["ls-files", "--stage"]), index);
+    assert_eq!(
+        std::fs::read_to_string(repository.root().join("tracked.txt")).unwrap(),
+        "second"
+    );
+}
 
 #[test]
 fn ignore_changes_keep_directory_scope_and_do_not_cross_authorized_connections() {

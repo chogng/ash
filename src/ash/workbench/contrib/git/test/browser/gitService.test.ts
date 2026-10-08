@@ -13,6 +13,31 @@ import { GitConfiguration } from '../../common/gitConfiguration.js';
 import { GitWorkspaceError } from '../../common/gitService.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../../../base/common/cancellation.js';
 
+test('GitService preserves legacy commit parameters and forwards explicit commit options to the captured repository', async () => {
+	const requests: unknown[] = [];
+	const api = {
+		repositories: async () => ({ repositories: [{ id: 'root', label: 'root', path: '' }, { id: 'nested', label: 'nested', path: 'nested' }] }),
+		commit: async (params: unknown) => {
+			requests.push(params);
+			return { objectId: 'committed', status: { repositoryId: 'nested', streamInstanceId: 'commit-stream', revision: 2, path: 'nested', head: { type: 'branch', name: 'main', objectId: 'committed', upstream: null }, changes: [] } };
+		},
+	} as unknown as IGitApi;
+	const appServerApi = { getConnectionState: async () => 'disconnected', onConnectionState: () => toDisposable(() => undefined) } as unknown as IAppServerApi;
+	const eventApi = { subscribe: () => toDisposable(() => undefined) } as unknown as IServerEventApi;
+	using workspaceContext = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using configuration = new WorkbenchConfigurationService();
+	using service = new GitService({ api, appServerApi, eventApi, workspaceContext, canCloneRepository: false }, configuration, new NullLoggerService());
+	await service.listRepositories();
+	await service.commit('Legacy staged message', 'nested');
+	const result = await service.commit('Signed amended message', 'nested', { scope: 'includeUntracked', mode: 'amend', signoff: 'add' });
+	assert.deepEqual(requests, [
+		{ repositoryId: 'nested', message: 'Legacy staged message' },
+		{ repositoryId: 'nested', message: 'Signed amended message', scope: 'includeUntracked', mode: 'amend', signoff: 'add' },
+	]);
+	assert.equal(result.status.workspacePath, '/workspace/nested');
+	assert.equal(service.activeRepository?.id, 'root');
+});
+
 test('GitService maps ignore notifications to their repository and forwards query cancellation', async () => {
 	let notify!: (event: ServerNotification) => void;
 	let queryToken: CancellationToken | undefined;

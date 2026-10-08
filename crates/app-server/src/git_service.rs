@@ -715,12 +715,22 @@ impl GitService {
         self.mutate_paths(GitPathMutation::DiscardWorktree, paths)
     }
 
-    pub(crate) fn commit(&self, message: String) -> Result<GitServiceCommit, GitServiceError> {
+    pub(crate) fn commit(
+        &self,
+        request: GitCommitRequest,
+    ) -> Result<GitServiceCommit, GitServiceError> {
         self.ensure_mutable()?;
-        let request = GitCommitRequest::new(message).map_err(GitServiceError::Git)?;
         let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
         runtime.block_on(async {
             let repository = self.open_repository().await?;
+            // Even an index-only commit publishes checkout-wide state, including staged paths
+            // outside a nested grant. Validate the whole checkout before any staging or commit.
+            if !repository
+                .worktree_root()
+                .starts_with(self.authorization.dir().canonical_path())
+            {
+                return Err(GitServiceError::Boundary);
+            }
             let committed = self
                 .client
                 .commit(&repository, &request)

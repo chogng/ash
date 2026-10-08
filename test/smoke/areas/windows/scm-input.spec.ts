@@ -154,6 +154,9 @@ test.describe('SCM commit input', () => {
 		await editor.press('Alt+F1');
 		const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
 		await expect(help.getByRole('textbox')).toHaveValue(/Enter inserts a new line/u);
+		await expect(help.getByRole('textbox')).toHaveValue(/Commit All asks whether to include untracked files/u);
+		await expect(help.getByRole('textbox')).toHaveValue(/Signed-off-by/u);
+		await expect(help.getByRole('textbox')).toHaveValue(/restores its complete message only to an unchanged empty draft/u);
 		await page.keyboard.press('Escape');
 		await expect(editor).toBeFocused();
 		await editor.press('Tab');

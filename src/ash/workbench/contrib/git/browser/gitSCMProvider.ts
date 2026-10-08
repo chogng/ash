@@ -22,7 +22,7 @@ import { createScmMergeEditorInput } from '../../scm/browser/scmMergeEditorInput
 import type { ISCMConflictProvider, ISCMInput, ISCMProvider, ISCMResource, ISCMResourceGroup, ISCMService, ISCMStatusBarCommand, ISCMViewService } from '../../scm/common/scm.js';
 import { GitSwitchBranchCommandId } from '../common/gitCommands.js';
 import { gitErrorMessage } from '../common/gitError.js';
-import type { GitChangeFileComparison, GitChangeStatus, GitHead, GitRepository, GitRepositoryChange, GitStatus, IGitService } from '../common/gitService.js';
+import type { GitChangeFileComparison, GitChangeStatus, GitCommitOptions, GitHead, GitRepository, GitRepositoryChange, GitStatus, IGitService } from '../common/gitService.js';
 import { GitHistoryProvider } from './gitHistoryProvider.js';
 
 type ChangeSide = 'index' | 'worktree';
@@ -61,6 +61,8 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 	private readonly retiredStreams = new Set<string>();
 	private requestRevision = 0;
 	private busy = false;
+	private inputValue = '';
+	private inputRevision = 0;
 	private message = 'Reading Git status…';
 
 	constructor(
@@ -75,7 +77,11 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 		this.rootUri = repository.root;
 		const provider = this;
 		this.input = {
-			value: '',
+			get value() { return provider.inputValue; },
+			set value(value: string) {
+				// Rendering writes the model text back; only a changed draft advances its version.
+				if (provider.inputValue !== value) { provider.inputValue = value; provider.inputRevision++; }
+			},
 			get placeholder() {
 				const shortcut = isMacintosh ? '⌘Enter' : 'Ctrl+Enter';
 				const branch = provider.status?.head;
@@ -271,7 +277,7 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 	}
 
 	private async runAction(run: () => Promise<void>): Promise<void> {
-		if (this.busy) return;
+		if (this.busy || this.isDisposed) return;
 		this.setBusy(true);
 		try { await run(); } catch (error) { this.showError(error); } finally { this.setBusy(false); }
 	}
@@ -299,22 +305,83 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 		});
 	}
 
-	private async commit(): Promise<string | undefined> {
-		const message = this.input.value.trim();
-		if (!message) {
-			this.setMessage('Enter a commit message.');
-			return undefined;
-		}
+	public async commit(options: GitCommitOptions = {}, chooseScope?: () => Promise<GitCommitOptions['scope']>): Promise<string | undefined> {
 		let resultId: string | undefined;
 		await this.runAction(async () => {
-			this.setMessage('Committing staged changes…');
-			const result = await this.gitService.commit(message, this.id);
-			resultId = result.objectId;
-			this.input.value = '';
-			this.acceptStatus(result.status);
-			this.setMessage(`Created commit ${result.objectId.slice(0, 7)}. ${this.message}`);
+			let revision = this.inputRevision;
+			let message = this.input.value.trim();
+			const commitOptions = { ...options };
+			if (chooseScope) {
+				const scope = await chooseScope();
+				if (!scope || this.isDisposed || this.inputRevision !== revision) return;
+				commitOptions.scope = scope;
+			}
+			if (commitOptions.mode === 'amend') {
+				const head = this.status?.head;
+				if (!head || head.type === 'unborn') {
+					this.setMessage(localize('git.noCommitToAmend', 'There is no commit to amend.'));
+					return;
+				}
+				if (!message) {
+					const previous = await this.gitService.commitMessage(head.objectId, this.id);
+					if (this.isDisposed || this.inputRevision !== revision) return;
+					this.input.value = previous;
+					revision = this.inputRevision;
+					message = previous.trim();
+					this.changeEmitter.fire();
+				}
+				const confirmed = await this.services.dialogService.confirm({
+					title: localize('git.confirmOperation', 'Confirm Git Operation'),
+					message: localize('git.amendConfirm', 'Replace the last commit with the selected changes and this message? This rewrites commit history.'),
+					primaryButton: localize('git.confirmOperationButton', 'Continue'),
+				});
+				if (!confirmed.confirmed || this.isDisposed || this.inputRevision !== revision) return;
+			}
+			if (!message) {
+				this.setMessage(localize('git.commitMessageRequired', 'Enter a commit message.'));
+				return;
+			}
+			try {
+				this.setMessage(localize('git.committing', 'Committing selected changes…'));
+				const result = await this.gitService.commit(message, this.id, commitOptions);
+				if (this.isDisposed) return;
+				resultId = result.objectId;
+				// A later edit, even one restoring the same text, belongs to the next commit.
+				if (this.inputRevision === revision) this.input.value = '';
+				this.acceptStatus(result.status);
+				this.setMessage(localize('git.commitCreated', 'Created commit {0}. {1}', result.objectId.slice(0, 7), this.message));
+			} catch (error) {
+				// An all-changes commit can stage successfully before commit creation fails.
+				await this.refresh();
+				throw error;
+			}
 		});
 		return resultId;
+	}
+
+	public async undoCommit(): Promise<void> {
+		await this.runAction(async () => {
+			const head = this.status?.head;
+			if (!head || head.type === 'unborn') return;
+			const revision = this.inputRevision;
+			const restoreMessage = !this.input.value.trim();
+			const message = await this.gitService.commitMessage(head.objectId, this.id);
+			if (this.isDisposed) return;
+			const decision = await this.services.dialogService.confirm({
+				title: localize('git.confirmOperation', 'Confirm Git Operation'),
+				message: localize('git.undoCommitConfirm', 'Undo commit {0} and keep its changes staged? This rewrites commit history.', head.objectId.slice(0, 8)),
+				primaryButton: localize('git.confirmOperationButton', 'Continue'),
+			});
+			if (!decision.confirmed || this.isDisposed) return;
+			const result = await this.gitService.executeCommand({ kind: 'undoCommit', expectedHead: head.objectId }, this.id);
+			if (this.isDisposed) return;
+			const messageRestored = restoreMessage && this.inputRevision === revision;
+			if (messageRestored) this.input.value = message;
+			this.acceptStatus(result.status);
+			this.setMessage(messageRestored
+				? localize('git.undoMessageRestored', 'Last commit undone. Its message is ready to edit in Source Control.')
+				: localize('git.undoDraftKept', 'Last commit undone. Your current Source Control draft was kept.'));
+		});
 	}
 
 	private async openChange(status: GitStatus, change: GitRepositoryChange, side: ChangeSide, options: IEditorOptions, sideBySide: boolean): Promise<void> {

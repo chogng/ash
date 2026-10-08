@@ -57,6 +57,28 @@ impl GitPathspecSet {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GitCommitRequest {
     message: String,
+    scope: CommitScope,
+    mode: CommitMode,
+    signoff: CommitSignoff,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CommitScope {
+    Staged,
+    Tracked,
+    IncludeUntracked,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CommitMode {
+    Create,
+    Amend,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CommitSignoff {
+    None,
+    Add,
 }
 
 impl GitCommitRequest {
@@ -73,11 +95,36 @@ impl GitCommitRequest {
                 requirement: "must be NUL-free and no larger than 64 KiB",
             });
         }
-        Ok(Self { message })
+        Ok(Self {
+            message,
+            scope: CommitScope::Staged,
+            mode: CommitMode::Create,
+            signoff: CommitSignoff::None,
+        })
     }
 
     pub fn message(&self) -> &str {
         &self.message
+    }
+
+    pub fn with_tracked_changes(mut self) -> Self {
+        self.scope = CommitScope::Tracked;
+        self
+    }
+
+    pub fn with_untracked_changes(mut self) -> Self {
+        self.scope = CommitScope::IncludeUntracked;
+        self
+    }
+
+    pub fn amend(mut self) -> Self {
+        self.mode = CommitMode::Amend;
+        self
+    }
+
+    pub fn sign_off(mut self) -> Self {
+        self.signoff = CommitSignoff::Add;
+        self
     }
 }
 
@@ -140,19 +187,15 @@ impl GitClient {
         Ok(())
     }
 
-    /// Creates one commit from the current index with hooks disabled by the mutation profile.
+    /// Commits the requested scope with hooks disabled by the mutation profile.
     pub async fn commit(
         &self,
         repository: &GitRepository,
         request: &GitCommitRequest,
     ) -> GitResult<GitCommitResult> {
-        self.run_mutation_with_stdin(
-            repository.worktree_root(),
-            ["commit", "--file=-"],
-            request.message.as_bytes().to_vec(),
-        )
-        .await?
-        .require_success()?;
+        self.commit_output(repository, request)
+            .await?
+            .require_success()?;
         let output = self
             .run_query(
                 repository.worktree_root(),
@@ -181,12 +224,52 @@ impl GitClient {
         repository: &GitRepository,
         message: &str,
     ) -> GitResult<crate::client::GitCommandOutput> {
-        let message = GitCommitRequest::new(message.to_string())?;
-        self.run_mutation_with_stdin(
-            repository.worktree_root(),
-            ["commit", "--amend", "--file=-"],
-            message.message().as_bytes().to_vec(),
-        )
-        .await
+        let request = GitCommitRequest::new(message.to_string())?.amend();
+        self.commit_output(repository, &request).await
+    }
+
+    async fn commit_output(
+        &self,
+        repository: &GitRepository,
+        request: &GitCommitRequest,
+    ) -> GitResult<crate::client::GitCommandOutput> {
+        // An all-changes intent must not stage unresolved conflict markers as a resolution.
+        if self
+            .snapshot(repository)
+            .await?
+            .changes()
+            .iter()
+            .any(|change| change.is_conflicted())
+        {
+            return Err(GitError::InvalidConfiguration {
+                field: "commit",
+                requirement: "must resolve all conflicts before committing",
+            });
+        }
+        let root = repository.worktree_root();
+        match request.scope {
+            CommitScope::Staged => {}
+            CommitScope::Tracked => {
+                self.run_mutation(root, ["add", "--update", "--", "."])
+                    .await?
+                    .require_success()?;
+            }
+            CommitScope::IncludeUntracked => {
+                self.run_mutation(root, ["add", "--all", "--", "."])
+                    .await?
+                    .require_success()?;
+            }
+        }
+        let mut arguments = vec!["commit", "--file=-"];
+        match request.mode {
+            CommitMode::Create => {}
+            CommitMode::Amend => arguments.push("--amend"),
+        }
+        match request.signoff {
+            CommitSignoff::None => {}
+            CommitSignoff::Add => arguments.push("--signoff"),
+        }
+        self.run_mutation_with_stdin(root, arguments, request.message().as_bytes().to_vec())
+            .await
     }
 }

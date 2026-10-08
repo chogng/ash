@@ -692,6 +692,29 @@ pub struct GitPathsParams {
     pub paths: Vec<String>,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum GitCommitScopeDto {
+    Staged,
+    Tracked,
+    IncludeUntracked,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum GitCommitModeDto {
+    Create,
+    Amend,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum GitCommitSignoffDto {
+    None,
+    Add,
+}
+
+/// Omitted options retain index-only creation without sign-off.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitCommitParams {
@@ -700,6 +723,15 @@ pub struct GitCommitParams {
     pub repository_id: Option<String>,
     #[schemars(length(min = 1, max = 65536))]
     pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub scope: Option<GitCommitScopeDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub mode: Option<GitCommitModeDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub signoff: Option<GitCommitSignoffDto>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

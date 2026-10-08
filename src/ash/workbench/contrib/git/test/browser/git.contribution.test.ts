@@ -5,6 +5,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { CancellationError } from '../../../../../base/common/errors.js';
+import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
@@ -83,6 +84,287 @@ function registerGraphServices(services: InstantiationService, git: Partial<IGit
 }
 
 ensureNoDisposablesAreLeakedInTestSuite();
+
+function commitFixture(overrides: Partial<IGitService> = {}, confirm: () => Promise<{ confirmed: boolean; }> = async () => ({ confirmed: true }), quickInput: IQuickInputService = inputSelecting(0)): { provider: GitSCMProvider; commands: CommandService; requests: unknown[][]; status: GitStatus; views: SCMViewService; scm: SCMService;[Symbol.dispose](): void; } {
+	const lifetime = new DisposableStore();
+	const dependencies = lifetime.add(new InstantiationService());
+	const services = lifetime.add(dependencies.createChild());
+	const scm = lifetime.add(new SCMService());
+	const views = lifetime.add(new SCMViewService(scm));
+	const repository = { id: 'commit-repo', label: 'Commit repository', path: '.', root: URI.file('/workspace') };
+	const status: GitStatus = {
+		repositoryId: repository.id, streamInstanceId: 'commit-stream', revision: 1, workspacePath: '/workspace',
+		head: { type: 'branch', name: 'main', objectId: selectedId, upstream: undefined },
+		changes: [{ path: 'tracked.ts', originalPath: undefined, indexStatus: 'modified', worktreeStatus: 'modified', conflicted: false, submodule: { isSubmodule: false, commitChanged: false, trackedChanges: false, untrackedChanges: false } }],
+	};
+	const requests: unknown[][] = [];
+	const git: Partial<IGitService> = {
+		onDidChangeRepositoryStatus: Event.None, onDidBecomeReady: Event.None,
+		getRepository: async () => repository,
+		status: async () => status,
+		commit: async (...args) => { requests.push(['commit', ...args]); return { objectId: baseId, status: { ...status, revision: 2, changes: [] } }; },
+		commitMessage: async (...args) => { requests.push(['message', ...args]); return 'Previous subject\n\nPrevious body.\n'; },
+		executeCommand: async (...args) => { requests.push(['command', ...args]); return { outcome: 'completed', operation: undefined, status: { ...status, revision: 2 } }; },
+		...overrides,
+	};
+	registerGraphServices(dependencies, git);
+	const dialogs = { confirm } as unknown as IDialogService;
+	services.registerInstance(IDialogService, dialogs);
+	services.registerInstance(IQuickInputService, quickInput);
+	services.registerInstance(ISCMService, scm);
+	services.registerInstance(ISCMViewService, views);
+	const history = lifetime.add(new GitHistoryProvider(git as IGitService, repository.id));
+	const provider = lifetime.add(new GitSCMProvider(git as IGitService, repository, history, { dialogService: dialogs } as GitSCMProviderServices));
+	lifetime.add(scm.registerSCMProvider(provider));
+	const commands = lifetime.add(new CommandService(services));
+	return { provider, commands, requests, status, views, scm, [Symbol.dispose]: () => lifetime.dispose() };
+}
+
+for (const edit of ['new text', 'edit and restore']) {
+	test(`SCM commit workflow keeps a newer draft after success: ${edit}`, async () => {
+		const started = new DeferredPromise<void>();
+		const completed = new DeferredPromise<{ objectId: string; status: GitStatus; }>();
+		using fixture = commitFixture({ commit: async () => { await started.complete(); return completed.p; } });
+		await fixture.provider.refresh();
+		fixture.provider.input.value = 'Original subject';
+		const operation = fixture.provider.input.accept();
+		await started.p;
+		fixture.provider.input.value = 'Next draft';
+		if (edit === 'edit and restore') fixture.provider.input.value = 'Original subject';
+		await completed.complete({ objectId: baseId, status: { ...fixture.status, revision: 2, changes: [] } });
+		await operation;
+		assert.deepEqual({ draft: fixture.provider.input.value, busy: fixture.provider.isBusy }, { draft: edit === 'new text' ? 'Next draft' : 'Original subject', busy: false });
+	});
+}
+
+test('SCM commit workflow does not clear a disposed repository draft', async () => {
+	const started = new DeferredPromise<void>();
+	const completed = new DeferredPromise<{ objectId: string; status: GitStatus; }>();
+	using fixture = commitFixture({ commit: async () => { await started.complete(); return completed.p; } });
+	await fixture.provider.refresh();
+	fixture.provider.input.value = 'Keep disposed draft';
+	const operation = fixture.provider.input.accept();
+	await started.p;
+	fixture.provider.dispose();
+	await completed.complete({ objectId: baseId, status: { ...fixture.status, revision: 2, changes: [] } });
+	await operation;
+	assert.equal(fixture.provider.input.value, 'Keep disposed draft');
+});
+
+test('SCM commit workflow refreshes the real index after failure and keeps its draft', async () => {
+	let failed = false;
+	using fixture = commitFixture({
+		commit: async () => { failed = true; throw new Error('Commit failed after staging'); },
+		status: async () => {
+			await Promise.resolve();
+			return { ...fixture.status, revision: failed ? 2 : 1, changes: failed ? [{ ...fixture.status.changes[0], path: 'actually-staged.ts' }] : fixture.status.changes };
+		},
+	});
+	await fixture.provider.refresh();
+	fixture.provider.input.value = 'Retry this message';
+	await fixture.provider.input.accept();
+	assert.deepEqual({ draft: fixture.provider.input.value, staged: fixture.provider.groups.find(group => group.id === 'staged')?.resources.map(resource => resource.path), message: fixture.provider.statusMessage, busy: fixture.provider.isBusy }, {
+		draft: 'Retry this message', staged: ['actually-staged.ts'], message: 'Commit failed after staging', busy: false,
+	});
+});
+
+for (const [id, options] of [
+	['git.commitStaged', { scope: 'staged' }],
+	['git.commitStagedSigned', { scope: 'staged', signoff: 'add' }],
+	['git.commitAll', { scope: 'tracked' }],
+	['git.commitAllSigned', { signoff: 'add', scope: 'tracked' }],
+	['git.commitStagedAmend', { scope: 'staged', mode: 'amend' }],
+	['git.commitAllAmend', { mode: 'amend', scope: 'tracked' }],
+] as const) {
+	test(`SCM commit workflow routes ${id} through the repository draft and explicit scope`, async () => {
+		using fixture = commitFixture();
+		await fixture.provider.refresh();
+		fixture.provider.input.value = 'One repository draft';
+		await fixture.commands.executeCommand(id, fixture.provider.id);
+		assert.deepEqual({ requests: fixture.requests, draft: fixture.provider.input.value, busy: fixture.provider.isBusy }, {
+			requests: [['commit', 'One repository draft', fixture.provider.id, options]], draft: '', busy: false,
+		});
+	});
+}
+
+test('SCM commit workflow undo restores the complete message to an unchanged empty draft', async () => {
+	using fixture = commitFixture();
+	await fixture.provider.refresh();
+	await fixture.commands.executeCommand('git.undoCommit', fixture.provider.id);
+	assert.deepEqual({ draft: fixture.provider.input.value, requests: fixture.requests }, {
+		draft: 'Previous subject\n\nPrevious body.\n',
+		requests: [['message', selectedId, fixture.provider.id], ['command', { kind: 'undoCommit', expectedHead: selectedId }, fixture.provider.id]],
+	});
+});
+
+test('SCM commit workflow requires an explicit choice before including untracked files', async () => {
+	const choices: string[][] = [];
+	using fixture = commitFixture({}, undefined, inputSelecting(1, undefined, undefined, items => choices.push(items.map(item => item.label ?? ''))));
+	await fixture.provider.refresh();
+	fixture.provider.input.value = 'Include the new file';
+	await fixture.commands.executeCommand('git.commitAll', fixture.provider.id);
+	assert.deepEqual(choices, [['Tracked changes only', 'Tracked and untracked changes']]);
+	assert.deepEqual(fixture.requests, [['commit', 'Include the new file', fixture.provider.id, { scope: 'includeUntracked' }]]);
+});
+
+test('SCM commit workflow cancels the scope picker without mutation or draft loss', async () => {
+	using fixture = commitFixture({}, undefined, inputSelecting(-1));
+	await fixture.provider.refresh();
+	fixture.provider.input.value = 'Keep cancelled draft';
+	await fixture.commands.executeCommand('git.commitAllSigned', fixture.provider.id);
+	assert.deepEqual({ requests: fixture.requests, draft: fixture.provider.input.value, busy: fixture.provider.isBusy }, {
+		requests: [], draft: 'Keep cancelled draft', busy: false,
+	});
+});
+
+test('SCM commit workflow owns busy state while selecting scope and cancels after a newer edit', async () => {
+	const selecting = new DeferredPromise<void>();
+	const scope = new DeferredPromise<'tracked'>();
+	using fixture = commitFixture();
+	await fixture.provider.refresh();
+	fixture.provider.input.value = 'Original';
+	const operation = fixture.provider.commit({}, async () => { await selecting.complete(); return scope.p; });
+	await selecting.p;
+	assert.equal(fixture.provider.isBusy, true);
+	await fixture.provider.input.accept();
+	fixture.provider.input.value = 'Newer';
+	await scope.complete('tracked');
+	await operation;
+	assert.deepEqual({ requests: fixture.requests, draft: fixture.provider.input.value, busy: fixture.provider.isBusy }, { requests: [], draft: 'Newer', busy: false });
+});
+
+for (const confirmed of [false, true]) {
+	test(`SCM commit workflow amend loads the complete previous message and ${confirmed ? 'commits' : 'keeps it after cancellation'}`, async () => {
+		using fixture = commitFixture({}, async () => ({ confirmed }));
+		await fixture.provider.refresh();
+		await fixture.commands.executeCommand('git.commitAmend', fixture.provider.id);
+		assert.deepEqual({ requests: fixture.requests, draft: fixture.provider.input.value, busy: fixture.provider.isBusy }, {
+			requests: [['message', selectedId, fixture.provider.id], ...(confirmed ? [['commit', 'Previous subject\n\nPrevious body.', fixture.provider.id, { mode: 'amend' }]] : [])],
+			draft: confirmed ? '' : 'Previous subject\n\nPrevious body.\n', busy: false,
+		});
+	});
+}
+
+test('SCM commit workflow amend cancels after an edit during confirmation', async () => {
+	const opened = new DeferredPromise<void>();
+	const decision = new DeferredPromise<{ confirmed: boolean; }>();
+	using fixture = commitFixture({}, async () => { await opened.complete(); return decision.p; });
+	await fixture.provider.refresh();
+	fixture.provider.input.value = 'Amended message';
+	const operation = fixture.commands.executeCommand('git.commitAmend', fixture.provider.id);
+	await opened.p;
+	assert.equal(fixture.provider.isBusy, true);
+	fixture.provider.input.value = 'Future message';
+	await decision.complete({ confirmed: true });
+	await operation;
+	assert.deepEqual({ requests: fixture.requests, draft: fixture.provider.input.value, busy: fixture.provider.isBusy }, { requests: [], draft: 'Future message', busy: false });
+});
+
+for (const initial of ['', 'Existing draft']) {
+	test(`SCM commit workflow undo preserves newer text while awaiting confirmation: ${initial || 'empty'}`, async () => {
+		const opened = new DeferredPromise<void>();
+		const decision = new DeferredPromise<{ confirmed: boolean; }>();
+		using fixture = commitFixture({}, async () => { await opened.complete(); return decision.p; });
+		await fixture.provider.refresh();
+		fixture.provider.input.value = initial;
+		const operation = fixture.commands.executeCommand('git.undoCommit', fixture.provider.id);
+		await opened.p;
+		fixture.provider.input.value = 'New message';
+		await decision.complete({ confirmed: true });
+		await operation;
+		assert.equal(fixture.provider.input.value, 'New message');
+		assert.equal(fixture.provider.statusMessage, 'Last commit undone. Your current Source Control draft was kept.');
+	});
+}
+
+test('SCM commit workflow undo preserves an existing unchanged draft', async () => {
+	using fixture = commitFixture();
+	await fixture.provider.refresh();
+	fixture.provider.input.value = 'Existing message';
+	await fixture.commands.executeCommand('git.undoCommit', fixture.provider.id);
+	assert.equal(fixture.provider.input.value, 'Existing message');
+});
+
+test('SCM commit workflow undo cancellation only reads the captured commit message', async () => {
+	using fixture = commitFixture({}, async () => ({ confirmed: false }));
+	await fixture.provider.refresh();
+	await fixture.commands.executeCommand('git.undoCommit', fixture.provider.id);
+	assert.deepEqual({ requests: fixture.requests, draft: fixture.provider.input.value, busy: fixture.provider.isBusy }, {
+		requests: [['message', selectedId, fixture.provider.id]], draft: '', busy: false,
+	});
+});
+
+test('SCM commit workflow releases busy state and leaves the draft empty after an undo failure', async () => {
+	using fixture = commitFixture({ executeCommand: async () => { throw new Error('GitHeadChanged'); } });
+	await fixture.provider.refresh();
+	await fixture.commands.executeCommand('git.undoCommit', fixture.provider.id);
+	assert.deepEqual({ draft: fixture.provider.input.value, message: fixture.provider.statusMessage, busy: fixture.provider.isBusy }, { draft: '', message: 'GitHeadChanged', busy: false });
+});
+
+test('SCM commit workflow rejects blank creation and amendment of an unborn repository', async () => {
+	using fixture = commitFixture();
+	await fixture.provider.refresh();
+	await fixture.provider.input.accept();
+	assert.equal(fixture.provider.statusMessage, 'Enter a commit message.');
+	using unborn = commitFixture({ status: async () => ({ ...fixture.status, head: { type: 'unborn', name: 'main' } }) });
+	await unborn.provider.refresh();
+	await unborn.commands.executeCommand('git.commitAmend', unborn.provider.id);
+	assert.deepEqual({ requests: fixture.requests.concat(unborn.requests), message: unborn.provider.statusMessage, busy: unborn.provider.isBusy }, { requests: [], message: 'There is no commit to amend.', busy: false });
+});
+
+test('SCM commit workflow keeps its repository across a switch during confirmation', async () => {
+	const opened = new DeferredPromise<void>();
+	const decision = new DeferredPromise<{ confirmed: boolean; }>();
+	using first = commitFixture({}, async () => { await opened.complete(); return decision.p; });
+	using history = new GitHistoryProvider({ onDidBecomeReady: Event.None, onDidChangeRepositoryStatus: Event.None } as IGitService, 'other-repo');
+	using other = new GitSCMProvider({ onDidChangeRepositoryStatus: Event.None, onDidBecomeReady: Event.None, status: async () => ({ ...first.status, repositoryId: 'other-repo' }) } as IGitService,
+		{ id: 'other-repo', label: 'Other', path: 'other', root: URI.file('/workspace/other') }, history, {} as GitSCMProviderServices);
+	using registration = first.scm.registerSCMProvider(other);
+	await first.provider.refresh();
+	await other.refresh();
+	first.provider.input.value = 'Captured message';
+	other.input.value = 'Other draft';
+	const operation = first.commands.executeCommand('git.commitAmend', first.provider.id);
+	await opened.p;
+	first.views.selectRepository(other.id);
+	assert.deepEqual([first.provider.isBusy, other.isBusy], [true, false]);
+	await decision.complete({ confirmed: true });
+	await operation;
+	assert.deepEqual({ requests: first.requests, first: first.provider.input.value, other: other.input.value }, {
+		requests: [['commit', 'Captured message', first.provider.id, { mode: 'amend' }]], first: '', other: 'Other draft',
+	});
+});
+
+test('SCM commit workflow undo does not restore after editing back to an empty draft', async () => {
+	const opened = new DeferredPromise<void>();
+	const decision = new DeferredPromise<{ confirmed: boolean; }>();
+	using fixture = commitFixture({}, async () => { await opened.complete(); return decision.p; });
+	await fixture.provider.refresh();
+	const operation = fixture.commands.executeCommand('git.undoCommit', fixture.provider.id);
+	await opened.p;
+	fixture.provider.input.value = 'An intentional edit';
+	fixture.provider.input.value = '';
+	await decision.complete({ confirmed: true });
+	await operation;
+	assert.deepEqual({ draft: fixture.provider.input.value, message: fixture.provider.statusMessage }, { draft: '', message: 'Last commit undone. Your current Source Control draft was kept.' });
+});
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`SCM commit workflow describes explicit untracked selection and draft preservation in ${locale}`, async () => {
+		const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === locale)!;
+		setNlsResolver((bundle, key, original, parameters) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? original, parameters));
+		try {
+			const choices: string[][] = [];
+			using fixture = commitFixture({}, undefined, inputSelecting(-1, undefined, undefined, items => choices.push(items.map(item => item.label ?? ''))));
+			await fixture.provider.refresh();
+			fixture.provider.input.value = 'Keep draft';
+			await fixture.commands.executeCommand('git.commitAll', fixture.provider.id);
+			assert.deepEqual(choices, [locale === 'zh-CN' ? ['仅已跟踪的更改', '已跟踪和未跟踪的更改'] : ['Tracked changes only', 'Tracked and untracked changes']]);
+			await fixture.commands.executeCommand('git.undoCommit', fixture.provider.id);
+			assert.equal(fixture.provider.statusMessage, locale === 'zh-CN' ? '已撤销上次提交，并保留当前源代码管理草稿。' : 'Last commit undone. Your current Source Control draft was kept.');
+		} finally { resetNlsResolver(); }
+	});
+}
 
 for (const menuId of [MenuId.SCMTitle, MenuId.for('git.pullpush')]) {
 	for (const cancelled of [false, true]) {

@@ -28,8 +28,11 @@ use ash_app_server_protocol::protocol::git::GitCommitChangesParams;
 use ash_app_server_protocol::protocol::git::GitCommitDetailsResult;
 use ash_app_server_protocol::protocol::git::GitCommitFileParams;
 use ash_app_server_protocol::protocol::git::GitCommitMessageResult;
+use ash_app_server_protocol::protocol::git::GitCommitModeDto;
 use ash_app_server_protocol::protocol::git::GitCommitParams;
 use ash_app_server_protocol::protocol::git::GitCommitResult as GitCommitResultDto;
+use ash_app_server_protocol::protocol::git::GitCommitScopeDto;
+use ash_app_server_protocol::protocol::git::GitCommitSignoffDto;
 use ash_app_server_protocol::protocol::git::GitCommitStatisticsDto;
 use ash_app_server_protocol::protocol::git::GitCompareChangesParams;
 use ash_app_server_protocol::protocol::git::GitComparisonModeDto;
@@ -711,15 +714,24 @@ impl AppServer {
 
     pub(super) fn git_commit(&self, params: &Value) -> Result<Value, RpcError> {
         let params: GitCommitParams = decode(params)?;
-        if params.message.trim().is_empty()
-            || params.message.len() > 65_536
-            || params.message.contains('\0')
-        {
-            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
-        }
+        let request = ash_git::GitCommitRequest::new(params.message)
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        let request = match params.scope.unwrap_or(GitCommitScopeDto::Staged) {
+            GitCommitScopeDto::Staged => request,
+            GitCommitScopeDto::Tracked => request.with_tracked_changes(),
+            GitCommitScopeDto::IncludeUntracked => request.with_untracked_changes(),
+        };
+        let request = match params.mode.unwrap_or(GitCommitModeDto::Create) {
+            GitCommitModeDto::Create => request,
+            GitCommitModeDto::Amend => request.amend(),
+        };
+        let request = match params.signoff.unwrap_or(GitCommitSignoffDto::None) {
+            GitCommitSignoffDto::None => request,
+            GitCommitSignoffDto::Add => request.sign_off(),
+        };
         let committed = self
             .git_runtime_service()?
-            .commit_for(params.repository_id.as_deref(), params.message)
+            .commit_for(params.repository_id.as_deref(), request)
             .map_err(git_error)?;
         result(&GitCommitResultDto {
             object_id: committed.object_id,

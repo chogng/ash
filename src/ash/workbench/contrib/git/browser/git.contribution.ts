@@ -218,9 +218,13 @@ const gitTitleCommands = [
 	{ id: GitCloneCommandId, title: localize2('git.menu.clone', 'Clone'), menu: MenuId.SCMTitle, group: '1_git', order: 3, precondition: IsNativeContext.isEqualTo(true) },
 	{ id: 'git.switchBranch', title: localize2('git.menu.checkout', 'Checkout to…'), menu: MenuId.SCMTitle, group: '1_git', order: 4 },
 	{ id: 'git.fetchAll', title: localize2('git.menu.fetch', 'Fetch'), menu: MenuId.SCMTitle, group: '1_git', order: 5 },
-	{ id: 'git.commit', title: localize2('git.menu.commitStaged', 'Commit Staged'), menu: gitCommitMenu, group: '1_commit', order: 1, precondition: SCMCanCommitContext.isEqualTo(true) },
+	{ id: 'git.commitStaged', title: localize2('git.menu.commitStaged', 'Commit Staged'), menu: gitCommitMenu, group: '1_commit', order: 1, precondition: SCMCanCommitContext.isEqualTo(true) },
+	{ id: 'git.commitStagedSigned', title: localize2('git.menu.commitStagedSigned', 'Commit Staged with Sign-off'), menu: gitCommitMenu, group: '1_commit', order: 2, precondition: SCMCanCommitContext.isEqualTo(true) },
+	{ id: 'git.commitAll', title: localize2('git.menu.commitAll', 'Commit All…'), menu: gitCommitMenu, group: '1_commit', order: 3 },
+	{ id: 'git.commitAllSigned', title: localize2('git.menu.commitAllSigned', 'Commit All with Sign-off…'), menu: gitCommitMenu, group: '1_commit', order: 4 },
 	{ id: 'git.commitAmend', title: localize2('git.menu.amend', 'Amend Last Commit…'), menu: gitCommitMenu, group: '2_commit', order: 1 },
-	{ id: 'git.undoCommit', title: localize2('git.menu.undoCommit', 'Undo Last Commit'), menu: gitCommitMenu, group: '2_commit', order: 2 },
+	{ id: 'git.commitAllAmend', title: localize2('git.menu.commitAllAmend', 'Amend Last Commit with All Changes…'), menu: gitCommitMenu, group: '2_commit', order: 2 },
+	{ id: 'git.undoCommit', title: localize2('git.menu.undoCommit', 'Undo Last Commit'), menu: gitCommitMenu, group: '2_commit', order: 3 },
 	{ id: 'git.stageAll', title: localize2('git.menu.stageAll', 'Stage All Changes'), menu: gitChangesMenu, group: '1_changes', order: 1 },
 	{ id: 'git.unstageAll', title: localize2('git.menu.unstageAll', 'Unstage All Changes'), menu: gitChangesMenu, group: '1_changes', order: 2 },
 	{ id: 'git.cleanAll', title: localize2('git.menu.discardAll', 'Discard All Changes…'), menu: gitChangesMenu, group: '2_changes', order: 1 },
@@ -260,7 +264,16 @@ for (const entry of gitTitleCommands) {
 }
 
 const providerActions = [
-	{ id: 'git.commit', title: localize2('git.commitCommand', 'Git: Commit Staged'), run: (provider: GitSCMProvider) => provider.input.accept() },
+	{ id: 'git.commit', title: localize2('git.commitCommand', 'Git: Commit'), run: (provider: GitSCMProvider) => provider.input.accept() },
+	{ id: 'git.commitStaged', title: localize2('git.commitStagedCommand', 'Git: Commit Staged'), run: (provider: GitSCMProvider) => provider.commit({ scope: 'staged' }) },
+	{ id: 'git.commitSigned', title: localize2('git.commitSignedCommand', 'Git: Commit with Sign-off'), run: (provider: GitSCMProvider) => provider.commit({ signoff: 'add' }) },
+	{ id: 'git.commitStagedSigned', title: localize2('git.commitStagedSignedCommand', 'Git: Commit Staged with Sign-off'), run: (provider: GitSCMProvider) => provider.commit({ scope: 'staged', signoff: 'add' }) },
+	{ id: 'git.commitAmend', title: localize2({ bundle: 'ash', key: 'git.amendTitle' }, 'Git: Amend Last Commit'), run: (provider: GitSCMProvider) => provider.commit({ mode: 'amend' }) },
+	{ id: 'git.commitStagedAmend', title: localize2('git.commitStagedAmendCommand', 'Git: Amend Last Commit with Staged Changes'), run: (provider: GitSCMProvider) => provider.commit({ scope: 'staged', mode: 'amend' }) },
+	{ id: 'git.commitAll', title: localize2('git.commitAllCommand', 'Git: Commit All'), run: (provider: GitSCMProvider, accessor: ServicesAccessor) => provider.commit({}, () => chooseCommitScope(accessor)) },
+	{ id: 'git.commitAllSigned', title: localize2('git.commitAllSignedCommand', 'Git: Commit All with Sign-off'), run: (provider: GitSCMProvider, accessor: ServicesAccessor) => provider.commit({ signoff: 'add' }, () => chooseCommitScope(accessor)) },
+	{ id: 'git.commitAllAmend', title: localize2('git.commitAllAmendCommand', 'Git: Amend Last Commit with All Changes'), run: (provider: GitSCMProvider, accessor: ServicesAccessor) => provider.commit({ mode: 'amend' }, () => chooseCommitScope(accessor)) },
+	{ id: 'git.undoCommit', title: localize2({ bundle: 'ash', key: 'git.undoCommitTitle' }, 'Git: Undo Last Commit'), run: (provider: GitSCMProvider) => provider.undoCommit() },
 	{ id: 'git.refresh', title: localize2('git.refreshCommand', 'Git: Refresh'), run: (provider: GitSCMProvider) => provider.refresh() },
 	{ id: 'git.stageAll', title: localize2('git.stageAllCommand', 'Git: Stage All Changes'), run: (provider: GitSCMProvider) => provider.stageAll() },
 	{ id: 'git.unstageAll', title: localize2('git.unstageAllCommand', 'Git: Unstage All Changes'), run: (provider: GitSCMProvider) => provider.unstageAll() },
@@ -271,9 +284,17 @@ for (const action of providerActions) {
 		constructor() { super({ id: action.id, title: action.title, f1: true }); }
 		public override async run(accessor: ServicesAccessor, repositoryId?: string): Promise<void> {
 			const repository = repositoryId === undefined ? accessor.get(ISCMViewService).activeRepository : accessor.get(ISCMService).getRepository(repositoryId);
-			if (repository?.provider instanceof GitSCMProvider && !repository.provider.isBusy) await action.run(repository.provider);
+			if (repository?.provider instanceof GitSCMProvider && !repository.provider.isBusy) await action.run(repository.provider, accessor);
 		}
 	});
+}
+
+async function chooseCommitScope(accessor: ServicesAccessor): Promise<'tracked' | 'includeUntracked' | undefined> {
+	const selected = await pickGitItem(accessor.get(IQuickInputService), [
+		{ label: localize('git.commitTracked', 'Tracked changes only'), description: localize('git.commitTrackedDescription', 'Keep untracked files out of the commit'), scope: 'tracked' as const },
+		{ label: localize('git.commitIncludingUntracked', 'Tracked and untracked changes'), description: localize('git.commitIncludingUntrackedDescription', 'Stage untracked files that are not ignored'), scope: 'includeUntracked' as const },
+	], localize('git.commitScope', 'Choose changes to commit'));
+	return selected?.scope;
 }
 
 // The channel records the same provider diagnostics visible in Changes, including operation failures.
@@ -430,7 +451,7 @@ function isGitHistoryActionTarget(value: unknown): value is GitHistoryActionTarg
 		typeof (value as GitHistoryActionTarget).runTitleOperation === 'function';
 }
 
-type RepositoryCommandKind = Exclude<GitCommand['kind'], 'createBranchAt' | 'checkoutDetached' | 'checkoutRemoteBranch' | 'fetchAndCheckout' | 'pushBranch'>;
+type RepositoryCommandKind = Exclude<GitCommand['kind'], 'createBranchAt' | 'checkoutDetached' | 'checkoutRemoteBranch' | 'fetchAndCheckout' | 'pushBranch' | 'amend' | 'undoCommit'>;
 
 const repositoryCommands: readonly { readonly kind: RepositoryCommandKind; readonly id: string; readonly key: string; readonly title: string; }[] = [
 	{ kind: 'renameBranch', id: 'git.renameBranch', key: 'git.renameBranchTitle', title: 'Git: Rename Branch' },
@@ -448,8 +469,6 @@ const repositoryCommands: readonly { readonly kind: RepositoryCommandKind; reado
 	{ kind: 'deleteTag', id: 'git.deleteTag', key: 'git.deleteTagTitle', title: 'Git: Delete Tag' },
 	{ kind: 'addRemote', id: 'git.addRemote', key: 'git.addRemoteTitle', title: 'Git: Add Remote' },
 	{ kind: 'removeRemote', id: 'git.removeRemote', key: 'git.removeRemoteTitle', title: 'Git: Remove Remote' },
-	{ kind: 'amend', id: 'git.commitAmend', key: 'git.amendTitle', title: 'Git: Amend Last Commit' },
-	{ kind: 'undoCommit', id: 'git.undoCommit', key: 'git.undoCommitTitle', title: 'Git: Undo Last Commit' },
 ];
 
 for (const definition of repositoryCommands) {
@@ -572,17 +591,6 @@ async function prepareGitCommand(accessor: ServicesAccessor, kind: RepositoryCom
 			const selected = await pickGitItem(input, catalog.remotes.map(name => ({ label: name })), localize('git.chooseRemote', 'Choose a remote'));
 			if (!selected || !await confirm(localize('git.removeRemoteConfirm', 'Remove remote {0}?', selected.label))) { return undefined; }
 			return { kind, name: selected.label };
-		}
-		case 'amend': {
-			const message = await prompt(localize('git.amendMessage', 'Replacement commit message'));
-			if (message === undefined || !await confirm(localize('git.amendConfirm', 'Replace the last commit with the current staged changes and this message? This rewrites commit history.'))) { return undefined; }
-			return { kind, message };
-		}
-		case 'undoCommit': {
-			const status = await git.status(repositoryId);
-			if (status.head.type === 'unborn') { return undefined; }
-			if (!await confirm(localize('git.undoCommitConfirm', 'Undo commit {0} and keep its changes staged? This rewrites commit history.', status.head.objectId.slice(0, 8)))) { return undefined; }
-			return { kind, expectedHead: status.head.objectId };
 		}
 	}
 }

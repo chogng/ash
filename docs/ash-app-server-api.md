@@ -669,6 +669,15 @@ Mutation contract 提供 `git/stage`、`git/unstage`、`git/discardWorktree`、`
 Rust service 负责最终边界校验和 repository-relative 映射。Commit message 必须非空、无 NUL，
 且不超过 64 KiB UTF-8。每个成功 mutation 都返回新的 status；commit 另外返回 object ID。
 
+`git/commit` 接受可选的 `scope: staged | tracked | includeUntracked`、`mode: create | amend`
+和 `signoff: none | add`。省略时保持 index-only 创建提交且不添加签名尾注。`tracked` 暂存已跟踪文件，
+`includeUntracked` 显式加入未跟踪且未被忽略的文件；当前 index 中已有的新文件始终属于提交范围。
+`amend` 替换最后一次提交，`add` 使用 Git 当前身份添加 `Signed-off-by`，不是 GPG 签名。
+服务端在暂存前检查整个 checkout 的 `MutateRepository` 授权及未解决冲突；仅有子目录授权时拒绝提交，
+包括 index-only 请求，因为 index 可能含目录外的更改。选项为闭合枚举，不接受任意 Git argv。
+旧 `git/command` 的 `amend` 仍兼容，并委托同一个 commit 执行入口。暂存后失败会发布真实 status，
+保留原始失败和已经暂存的文件；客户端不得自动重试提交或假设 index 回滚。
+
 Remote operation 禁用 terminal/credential prompt，pull 固定使用 fast-forward only。Discard 只恢复
 tracked working tree，不删除 untracked 文件。Git operation 按实际仓库公共目录在进程内排队，
 默认选择、显式 `repositoryId` 和 linked worktree 共享排队身份。相同仓库的读写按接收顺序串行，读取也更新状态缓存或游标并取得仓库操作锁；

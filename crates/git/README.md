@@ -131,7 +131,8 @@ GitClient::worktrees
 
 GitClient::commit / fetch / pull_fast_forward / push
 └─ GitClient::run_mutation[_with_stdin]
-   └─ git commit --file=- | fetch --all --prune | pull --ff-only | push
+   └─ optional add --update/--all → commit --file=- [--amend] [--signoff]
+      | fetch --all --prune | pull --ff-only | push
 
 GitClient::apply_patch
 ├─ extract_patch_paths
@@ -216,8 +217,14 @@ Git revision 或复制统计规则。
 `discard_worktree` 只接收该 validated type，避免调用方把未经建模的 host path 直接拼进 argv。
 
 `unstage` 在 unborn repository 使用 `git rm --cached`，其他情况使用 `git restore --staged`。
-`discard_worktree` 只恢复 tracked path，不删除 untracked 内容。`commit` 从 stdin 读取 message，
-成功后返回 HEAD object ID。Remote mutation non-interactive；`fetch_default` 获取默认远端并 prune，`fetch` 获取全部远端并 prune，
+`discard_worktree` 只恢复 tracked path，不删除 untracked 内容。`GitCommitRequest::new` 默认仅提交当前 index，
+不暂存工作文件。`with_tracked_changes` 先以 `add --update` 暂存已跟踪文件；`with_untracked_changes`
+先以 `add --all` 暂存已跟踪及未跟踪文件，继续遵循忽略规则。已有 index 中的新增和重命名属于所有范围；
+未暂存的新路径只有显式选择后才加入。未解决的 index 冲突在自动暂存之前拒绝。
+`amend` 替换最后一次提交并保留父提交；`sign_off` 让 Git 根据当前仓库身份添加 `Signed-off-by`，
+不创建身份，也不启用 GPG。所有组合和旧 `GitCommand::Amend` 共用同一个禁用 hooks 的执行入口。
+Message 从 stdin 读取，成功后返回 HEAD object ID。暂存成功而创建提交失败时保留真实 index，调用方应刷新状态，
+不能假设回滚。Remote mutation non-interactive；`fetch_default` 获取默认远端并 prune，`fetch` 获取全部远端并 prune，
 `pull_fast_forward` 明确使用 `--ff-only`，`push` 使用 repository 当前 upstream/default。
 
 ## 补丁契约

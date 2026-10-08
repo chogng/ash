@@ -1,5 +1,6 @@
 use crate::protocol::common::SchemaHash;
 use crate::protocol::common::ServerInfo;
+use crate::protocol::git::GitCommitParams;
 use crate::protocol::initialize::APP_SERVER_PROTOCOL_MAJOR;
 use crate::protocol::initialize::CapabilityContract;
 use crate::protocol::initialize::CapabilityRequirement;
@@ -9,6 +10,30 @@ use crate::protocol::initialize::ProtocolVersion;
 use crate::protocol::initialize::REQUIRED_SESSION_CAPABILITIES;
 use crate::protocol::initialize::ServerCapabilities;
 use crate::protocol::initialize::ensure_protocol_compatible;
+
+#[test]
+fn commit_options_preserve_legacy_requests_and_reject_unknown_intents() {
+    let legacy = serde_json::json!({ "repositoryId": "repository", "message": "staged commit" });
+    let decoded: GitCommitParams = serde_json::from_value(legacy.clone()).unwrap();
+    assert!(decoded.scope.is_none());
+    assert!(decoded.mode.is_none());
+    assert!(decoded.signoff.is_none());
+    assert_eq!(serde_json::to_value(decoded).unwrap(), legacy);
+    for scope in ["staged", "tracked", "includeUntracked"] {
+        for mode in ["create", "amend"] {
+            for signoff in ["none", "add"] {
+                let request = serde_json::json!({ "repositoryId": "repository", "message": "complete body", "scope": scope, "mode": mode, "signoff": signoff });
+                let decoded: GitCommitParams = serde_json::from_value(request.clone()).unwrap();
+                assert_eq!(serde_json::to_value(decoded).unwrap(), request);
+            }
+        }
+    }
+    for (field, value) in [("scope", "all"), ("mode", "reset"), ("signoff", "gpg")] {
+        let mut invalid = legacy.clone();
+        invalid[field] = serde_json::json!(value);
+        assert!(serde_json::from_value::<GitCommitParams>(invalid).is_err());
+    }
+}
 
 fn initialization() -> InitializeResult {
     InitializeResult {

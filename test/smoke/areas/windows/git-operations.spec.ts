@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import { execFile } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { expect, test } from '../../../automation/test.js';
 
@@ -52,13 +53,70 @@ test.describe('Git repository operations', () => {
 		await git('add', 'main.ts');
 		await git('commit', '-m', 'Commit to amend');
 		const parent = await git('rev-parse', 'HEAD^');
-		await workbench.git.selectTitleMenu(application, ['Commit', 'Amend Last Commit…']);
-		await workbench.dialogs.confirm(application, 'Confirm Git Operation', 'Continue', () => enter(page, 'UI amended commit'));
+		await workbench.git.open();
+		const input = page.locator('.ash-scm-input');
+		const editor = input.getByRole('textbox', { name: /^Commit message/u });
+		await editor.focus();
+		await page.keyboard.insertText('UI amended commit\n\nComplete amended body.');
+		await workbench.dialogs.confirm(application, 'Confirm Git Operation', 'Continue', () => workbench.git.selectTitleMenu(application, ['Commit', 'Amend Last Commit…']));
 		await expect.poll(() => git('log', '-1', '--format=%s')).toBe('UI amended commit');
+		await expect(input.locator('.stanza-editor-placeholder-text')).toBeVisible();
 		await workbench.dialogs.confirm(application, 'Confirm Git Operation', 'Continue', () => workbench.git.selectTitleMenu(application, ['Commit', 'Undo Last Commit']));
 		await expect.poll(() => git('rev-parse', 'HEAD')).toBe(parent);
+		await expect(input.locator('.view-lines')).toContainText('UI amended commit');
+		await expect(input.locator('.view-lines')).toContainText('Complete amended body.');
 		expect(await git('show', ':main.ts')).toBe('const value = 7;');
 		expect(await readFile(testWorkspace.file, 'utf8')).toBe('const value = 7;\n');
+	});
+
+	test('SCM commit scopes preserve partial staging, cancel without mutation and require untracked opt-in', async ({ application, testWorkspace, workbench }) => {
+		const cwd = testWorkspace.directory;
+		const page = workbench.page;
+		const git = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
+		const initialHead = await git('rev-parse', 'HEAD');
+		await writeFile(testWorkspace.file, 'const value = 2;\n');
+		await git('add', 'main.ts');
+		await writeFile(testWorkspace.file, 'const value = 3;\n');
+		await writeFile(join(cwd, 'new.ts'), 'new file\n');
+		await writeFile(join(cwd, '.git/info/exclude'), '*.ignored\n');
+		await writeFile(join(cwd, 'secret.ignored'), 'ignored file\n');
+		const initialIndex = await git('ls-files', '--stage');
+		await workbench.git.open();
+		const input = page.locator('.ash-scm-input');
+		const editor = input.getByRole('textbox', { name: /^Commit message/u });
+		const writeDraft = async (message: string) => {
+			await editor.focus();
+			await editor.press('ControlOrMeta+a');
+			await page.keyboard.insertText(message);
+		};
+		await writeDraft('Staged subject');
+		await workbench.git.selectTitleMenu(application, ['Commit', 'Commit All…']);
+		await expect(page.locator('.ash-quick-pick').getByRole('option', { name: /^Tracked changes only/u })).toBeVisible();
+		await expect(page.getByRole('toolbar', { name: 'Source control actions', exact: true }).getByRole('button', { name: 'Refresh', exact: true })).toBeDisabled();
+		await page.keyboard.press('Escape');
+		await expect(page.locator('.ash-quick-pick')).toBeHidden();
+		expect(await git('rev-parse', 'HEAD')).toBe(initialHead);
+		expect(await git('ls-files', '--stage')).toBe(initialIndex);
+		await expect(input.locator('.view-lines')).toContainText('Staged subject');
+		await workbench.git.selectTitleMenu(application, ['Commit', 'Commit Staged']);
+		await expect.poll(() => git('log', '-1', '--format=%s')).toBe('Staged subject');
+		expect(await git('show', 'HEAD:main.ts')).toBe('const value = 2;');
+		expect(await readFile(testWorkspace.file, 'utf8')).toBe('const value = 3;\n');
+		expect(await git('ls-files', 'new.ts')).toBe('');
+		await expect(input.locator('.stanza-editor-placeholder-text')).toBeVisible();
+		await writeDraft('Tracked signed subject');
+		await workbench.git.selectTitleMenu(application, ['Commit', 'Commit All with Sign-off…']);
+		await choose(page, 'Tracked changes only');
+		await expect.poll(() => git('log', '-1', '--format=%s')).toBe('Tracked signed subject');
+		expect(await git('show', 'HEAD:main.ts')).toBe('const value = 3;');
+		expect(await git('log', '-1', '--format=%B')).toContain(`Signed-off-by: ${await git('config', 'user.name')} <${await git('config', 'user.email')}>`);
+		expect(await git('ls-files', 'new.ts')).toBe('');
+		await writeDraft('Include untracked subject');
+		await workbench.git.selectTitleMenu(application, ['Commit', 'Commit All…']);
+		await choose(page, 'Tracked and untracked changes');
+		await expect.poll(() => git('log', '-1', '--format=%s')).toBe('Include untracked subject');
+		expect(await git('show', 'HEAD:new.ts')).toBe('new file');
+		expect(await git('ls-files', 'secret.ignored')).toBe('');
 	});
 
 	test('Git partial staging changes only the chosen block and selected editor line', async ({ testWorkspace, workbench }) => {

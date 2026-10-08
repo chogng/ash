@@ -655,13 +655,16 @@ impl GitRuntime {
     pub(super) fn commit_for(
         &self,
         repository_id: Option<&str>,
-        message: String,
+        request: ash_git::GitCommitRequest,
     ) -> Result<GitRuntimeCommit, GitRuntimeError> {
-        self.repository(repository_id)?.commit(message)
+        self.repository(repository_id)?.commit(request)
     }
 
-    pub(super) fn commit(&self, message: String) -> Result<GitRuntimeCommit, GitRuntimeError> {
-        self.commit_for(None, message)
+    pub(super) fn commit(
+        &self,
+        request: ash_git::GitCommitRequest,
+    ) -> Result<GitRuntimeCommit, GitRuntimeError> {
+        self.commit_for(None, request)
     }
 
     pub(super) fn fetch_for(
@@ -1250,20 +1253,31 @@ impl GitRepositoryRuntime {
         self.mutate_paths(|service| service.discard_worktree(paths))
     }
 
-    pub(super) fn commit(&self, message: String) -> Result<GitRuntimeCommit, GitRuntimeError> {
+    pub(super) fn commit(
+        &self,
+        request: ash_git::GitCommitRequest,
+    ) -> Result<GitRuntimeCommit, GitRuntimeError> {
         let _operation = self
             .operation
             .lock()
             .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        let committed = self.service.commit(request);
+        // Staging can succeed before commit creation fails. Publish that real status while
+        // keeping the original failure; neither the server nor the client invents a rollback.
+        self.invalidate_graphs()?;
         let GitServiceCommit {
             object_id,
             repository,
             snapshot,
-        } = self
-            .service
-            .commit(message)
-            .map_err(GitRuntimeError::Service)?;
-        self.invalidate_graphs()?;
+        } = match committed {
+            Ok(committed) => committed,
+            Err(error) => {
+                if let Ok((repository, snapshot)) = self.service.snapshot() {
+                    let _ = self.accept(repository, snapshot);
+                }
+                return Err(GitRuntimeError::Service(error));
+            }
+        };
         Ok(GitRuntimeCommit {
             object_id,
             status: self.accept(repository, snapshot)?,
