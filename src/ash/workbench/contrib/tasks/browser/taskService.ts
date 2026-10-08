@@ -130,7 +130,16 @@ export class TaskService extends Disposable implements ITaskService {
 	}
 
 	async run(task: IWorkspaceTask): Promise<ITaskRun> {
-		const currentTask = resolveKnownTask(task, this.currentTasks);
+		// Read the current configuration at dispatch, including changes a file watcher has not delivered yet.
+		const generation = this.refreshGeneration + 1;
+		const tasks = await this.refresh();
+		if (generation !== this.refreshGeneration || this.isDisposed) throw new Error(localize('tasks.configurationChanged', 'Task configuration changed while preparing the task. The task was not started. Run the task again.'));
+		const currentTask = resolveKnownTask(task, tasks);
+		if (currentTask.unsupportedFeatures?.length) {
+			const message = localize('tasks.unsupportedExecution', "Task '{0}' was not started because Ash does not yet support: {1}. Update .vscode/tasks.json and run the task again.", currentTask.label, currentTask.unsupportedFeatures.join(', '));
+			this.log('error', 'execution', message);
+			throw new Error(message);
+		}
 		const workspaceFolder = currentTask.dirId
 			? this.workspace.getWorkspace().folders.find(folder => folder.id === currentTask.dirId)
 			: this.workspace.getWorkspace().folders[0];

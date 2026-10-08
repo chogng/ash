@@ -1,4 +1,6 @@
 import { AppServerAvailableContext } from '../../../common/contextkeys.js';
+import { getErrorMessage } from '../../../../base/common/errors.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { localize2 } from '../../../../nls.js';
 import { DisposableStore } from "../../../../base/common/lifecycle.js";
 import { Keybinding, logicalKey } from "../../../../base/common/keybindings.js";
@@ -39,7 +41,10 @@ registerAction2(class RunTaskAction extends Action2 {
 		const tasks = accessor.get(ITaskService);
 		const quickInput = accessor.get(IQuickInputService);
 		const views = accessor.get(IViewsService);
-		void tasks.refresh().then(available => {
+		// Async continuations retain services because the command accessor ends with this invocation.
+		const notifications = accessor.get(INotificationService);
+		void tasks.refresh().then(() => {
+			const available = tasks.tasks;
 			if (available.length === 0) {
 				return views.focusView(TASKS_VIEW_ID);
 			}
@@ -47,14 +52,19 @@ registerAction2(class RunTaskAction extends Action2 {
 			const disposables = new DisposableStore();
 			disposables.add(picker);
 			picker.placeholder = "Select a task to run";
-			picker.items = available.map(task => ({ task, label: task.label, description: task.source, detail: task.detail ?? task.command }));
+			const updateItems = (catalog: readonly IWorkspaceTask[]) => {
+				picker.items = catalog.map(task => ({ task, label: task.label, description: task.source, detail: task.detail ?? task.command }));
+			};
+			// File watchers and providers can supersede refresh while this picker stays open.
+			disposables.add(tasks.onDidChangeTasks(updateItems));
+			updateItems(available);
 			disposables.add(picker.onDidAccept(item => {
 				picker.hide();
-				void tasks.run(item.task).then(() => views.focusView(TERMINAL_VIEW_ID)).catch(reportTaskError);
+				void tasks.run(item.task).then(() => views.focusView(TERMINAL_VIEW_ID)).catch(error => reportTaskError(notifications, error));
 			}));
 			disposables.add(picker.onDidHide(() => disposables.dispose()));
 			picker.show();
-		}).catch(reportTaskError);
+		}).catch(error => reportTaskError(notifications, error));
 	}
 });
 
@@ -65,14 +75,16 @@ registerAction2(class RerunLastTaskAction extends Action2 {
 
 	override run(accessor: ServicesAccessor): void {
 		const tasks = accessor.get(ITaskService);
+		const views = accessor.get(IViewsService);
+		const notifications = accessor.get(INotificationService);
 		const last = tasks.lastRun;
 		if (!last) return;
 		void tasks.refresh().then(current => {
 			const task = current.find(candidate => candidate.id === last.task.id);
 			if (task) return tasks.run(task);
 		}).then(run => {
-			if (run) return accessor.get(IViewsService).focusView(TERMINAL_VIEW_ID);
-		}).catch(reportTaskError);
+			if (run) return views.focusView(TERMINAL_VIEW_ID);
+		}).catch(error => reportTaskError(notifications, error));
 	}
 });
 
@@ -83,9 +95,10 @@ registerAction2(class TerminateTaskAction extends Action2 {
 
 	override run(accessor: ServicesAccessor): void {
 		const tasks = accessor.get(ITaskService);
+		const notifications = accessor.get(INotificationService);
 		if (tasks.activeRuns.length === 0) return;
 		if (tasks.activeRuns.length === 1) {
-			void tasks.terminate(tasks.activeRuns[0]!).catch(reportTaskError);
+			void tasks.terminate(tasks.activeRuns[0]!).catch(error => reportTaskError(notifications, error));
 			return;
 		}
 		const picker = accessor.get(IQuickInputService).createQuickPick<TaskRunQuickPickItem>();
@@ -93,12 +106,12 @@ registerAction2(class TerminateTaskAction extends Action2 {
 		disposables.add(picker);
 		picker.placeholder = "Select a running task to terminate";
 		picker.items = tasks.activeRuns.map(run => ({ run, label: run.task.label, description: run.task.source, detail: run.task.command }));
-		disposables.add(picker.onDidAccept(item => { picker.hide(); void tasks.terminate(item.run).catch(reportTaskError); }));
+		disposables.add(picker.onDidAccept(item => { picker.hide(); void tasks.terminate(item.run).catch(error => reportTaskError(notifications, error)); }));
 		disposables.add(picker.onDidHide(() => disposables.dispose()));
 		picker.show();
 	}
 });
 
-function reportTaskError(error: unknown): void {
-	console.error("Task command failed", error);
+function reportTaskError(notifications: INotificationService, error: unknown): void {
+	notifications.error(getErrorMessage(error));
 }

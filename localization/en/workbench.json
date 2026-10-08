@@ -1,5 +1,7 @@
 {
   "ash": {
+    "tasks.configurationChanged": "Task configuration changed while preparing the task. The task was not started. Run the task again.",
+    "tasks.unsupportedExecution": "Task '{0}' was not started because Ash does not yet support: {1}. Update .vscode/tasks.json and run the task again.",
     "files.saveBackupFailedTitle": "File saved; recovery backup incomplete",
     "files.saveBackupFailedMessage": "'{0}' was saved, but its recovery backup could not be completed: {1}. Save again to retry. Any changes made after that save remain in the editor.",
     "webview.verbosity.invalid": "Webview editor accessibility verbosity must be a boolean.",

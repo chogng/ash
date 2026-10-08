@@ -5,6 +5,13 @@ import { createServiceIdentifier } from "../../../../platform/instantiation/comm
 export type WorkspaceTaskSource = "vscode" | "npm" | "pnpm" | "yarn" | "cargo" | "extension";
 export type WorkspaceTaskGroup = "build" | "test" | "run" | "other";
 
+/** Original JSON configuration retained for extension metadata and future capability resolution. */
+export interface IWorkspaceTaskConfiguration {
+	readonly version: string;
+	readonly defaults: Readonly<Record<string, unknown>>;
+	readonly task: Readonly<Record<string, unknown>>;
+}
+
 /** One explicitly selectable workspace command. Tasks are never executed during discovery. */
 export interface IWorkspaceTask {
 	readonly id: string;
@@ -14,6 +21,9 @@ export interface IWorkspaceTask {
 	readonly source: WorkspaceTaskSource;
 	readonly group: WorkspaceTaskGroup;
 	readonly detail?: string;
+	readonly configuration?: IWorkspaceTaskConfiguration;
+	/** Known execution settings that cannot be honored by the current Tasks runtime. */
+	readonly unsupportedFeatures?: readonly string[];
 }
 
 /** One task returned by a dynamic provider before TaskService assigns its canonical identity. */

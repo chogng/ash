@@ -140,6 +140,8 @@
     "extensionHost.browser.invalidResponse": "浏览器扩展 Worker 返回了无效响应",
     "extensionHost.browser.cancelled": "浏览器扩展调用已取消",
     "extensionHost.browser.deadline": "浏览器扩展调用已超时",
+    "tasks.configurationChanged": "准备任务时任务配置已更改，任务尚未启动。请重新运行任务。",
+    "tasks.unsupportedExecution": "任务“{0}”尚未启动，因为 Ash 尚不支持：{1}。请修改 .vscode/tasks.json 后重新运行任务。",
     "tasks.terminalUnavailable": "终端不可用，任务尚未启动。请重新运行任务。",
     "tasks.terminalSendFailed": "无法发送任务“{0}”：{1}",
     "tasks.terminalCloseFailed": "无法关闭任务终端：{0}",

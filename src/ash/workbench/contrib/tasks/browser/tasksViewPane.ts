@@ -30,8 +30,15 @@ export class TasksViewPane extends ViewPane {
 		this.listElement.setAttribute("aria-label", "Workspace tasks");
 		this.contentElement.append(this.statusElement, this.listElement);
 		this._register(addDisposableListener(this.listElement, "click", event => this.activate(event)));
-		this._register(taskService.onDidChangeTasks(() => this.render()));
-		this._register(taskService.onDidStartTask(() => this.render()));
+		this._register(taskService.onDidChangeTasks(() => {
+			// A new catalog invalidates the error reported for the previous configuration.
+			this.error = undefined;
+			this.render();
+		}));
+		this._register(taskService.onDidStartTask(() => {
+			this.error = undefined;
+			this.render();
+		}));
 		this._register(taskService.onDidChangeTaskRun(() => this.render()));
 		this.render();
 		this.refresh();
@@ -59,6 +66,7 @@ export class TasksViewPane extends ViewPane {
 		if (!(target instanceof this.element.ownerDocument.defaultView!.Element)) return;
 		const taskIndex = Number(target.closest<HTMLButtonElement>(".ash-tasks-run")?.dataset.taskIndex);
 		if (Number.isSafeInteger(taskIndex) && this.renderedTasks[taskIndex]) {
+			this.error = undefined;
 			void this.taskService.run(this.renderedTasks[taskIndex]!).then(() => this.viewsService.focusView(TERMINAL_VIEW_ID)).catch(error => {
 				this.error = error instanceof Error ? error.message : "Could not run task.";
 				this.render();

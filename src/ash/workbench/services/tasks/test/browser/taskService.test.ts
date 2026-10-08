@@ -299,3 +299,76 @@ suite('TaskService terminal availability', () => {
 		});
 	}
 });
+
+
+suite('TaskService configuration capabilities', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	for (const configuration of [
+		{ type: 'process' },
+		{ options: { cwd: '/other', env: { SECRET_MARKER: 'must-not-appear-in-logs' } } },
+		{ dependsOn: ['Compile'], problemMatcher: '$tsc', isBackground: true },
+		{ args: ['$(touch should-not-exist)'] },
+	] as const) {
+		test(`rejects unsupported ${JSON.stringify(configuration)} before opening a terminal and retries corrected configuration`, async () => {
+			using localization = toDisposable(resetNlsResolver);
+			initializeTestLocalization('zh-CN');
+			using resources = new DisposableStore();
+			using terminals = new FakeTerminalService();
+			const root = URI.file('/workspace');
+			const contents: Record<string, string> = { '.vscode/tasks.json': JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Check', command: 'check', ...configuration }] }) };
+			const workspace: IWorkspaceContextService = { onDidChangeWorkspace: Event.None, getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'Workspace', index: 0 }] }), getWorkbenchState: () => 2, getWorkspaceFolder: () => null };
+			const services = taskServices(resources, new FakeFileService(root, contents), workspace, terminals);
+			using service = services.createInstance(TaskService);
+			await service.refresh();
+			let starts = 0;
+			resources.add(service.onDidStartTask(() => { starts++; }));
+			await assert.rejects(service.run(service.tasks[0]), /任务“Check”尚未启动，因为 Ash 尚不支持/);
+			assert.deepEqual({ terminals: terminals.instances, active: service.activeRuns, last: service.lastRun, starts }, { terminals: [], active: [], last: undefined, starts: 0 });
+			assert.doesNotMatch(services.get(IOutputService).getChannel('tasks')?.getText() ?? '', /must-not-appear-in-logs/);
+
+			contents['.vscode/tasks.json'] = JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Check', command: 'check', custom: { providerVersion: 3 } }] });
+			const run = await service.run((await service.refresh())[0]);
+			assert.deepEqual({ status: run.status, terminals: terminals.instances.length, writes: terminals.instances[0].writes, starts }, { status: 'running', terminals: 1, writes: ['check\r'], starts: 1 });
+		});
+	}
+
+	test('dispatch refreshes unseen changes instead of executing a previously valid task or retained invalid catalog', async () => {
+		using resources = new DisposableStore();
+		using terminals = new FakeTerminalService();
+		const root = URI.file('/workspace');
+		const contents: Record<string, string> = { '.vscode/tasks.json': '{"version":"2.0.0","tasks":[{"label":"Check","command":"check"}]}' };
+		const workspace: IWorkspaceContextService = { onDidChangeWorkspace: Event.None, getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'Workspace', index: 0 }] }), getWorkbenchState: () => 2, getWorkspaceFolder: () => null };
+		using service = taskServices(resources, new FakeFileService(root, contents), workspace, terminals).createInstance(TaskService);
+		const task = (await service.refresh())[0];
+		contents['.vscode/tasks.json'] = '{"version":"2.0.0","tasks":[{"label":"Check","command":"check","options":{"cwd":"/other"}}]}';
+		await assert.rejects(service.run(task), /options.cwd/);
+		contents['.vscode/tasks.json'] = '{ invalid json';
+		await assert.rejects(service.refresh());
+		await assert.rejects(service.run(task));
+		assert.equal(terminals.instances.length, 0);
+		contents['.vscode/tasks.json'] = '{"version":"2.0.0","tasks":[{"label":"Check","command":"check"}]}';
+		assert.equal((await service.run(task)).status, 'running');
+		assert.equal(terminals.instances.length, 1);
+	});
+
+	test('a superseded dispatch refresh cannot execute the retained catalog', async () => {
+		using localization = toDisposable(resetNlsResolver);
+		initializeTestLocalization('en');
+		using resources = new DisposableStore();
+		using terminals = new FakeTerminalService();
+		const root = URI.file('/workspace');
+		const workspace: IWorkspaceContextService = { onDidChangeWorkspace: Event.None, getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'Workspace', index: 0 }] }), getWorkbenchState: () => 2, getWorkspaceFolder: () => null };
+		using service = taskServices(resources, new FakeFileService(root, { '.vscode/tasks.json': '{"version":"2.0.0","tasks":[{"label":"Check","command":"check"}]}' }), workspace, terminals).createInstance(TaskService);
+		const delayed = new DeferredPromise<void>();
+		let calls = 0;
+		resources.add(service.registerTaskProvider({ id: 'delayed', provideTasks: async () => { calls++; if (calls === 2) await delayed.p; return []; } }));
+		const task = (await service.refresh())[0];
+		const dispatch = assert.rejects(service.run(task), /Task configuration changed.*not started/);
+		await service.refresh();
+		void delayed.complete(undefined);
+		await dispatch;
+		assert.deepEqual({ terminals: terminals.instances, active: service.activeRuns, last: service.lastRun }, { terminals: [], active: [], last: undefined });
+	});
+
+});
