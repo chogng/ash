@@ -108,6 +108,10 @@ jobs:
             libxkbcommon-dev \
             pkg-config
 
+      - name: Prepare locked metadata for offline build scripts
+        shell: bash
+        run: cargo metadata --locked --format-version=1 > /dev/null
+
       - name: Reject Rust workspace warnings, including tests
         shell: bash
         run: ${{ matrix.python }} -B scripts/cargo.py --deny-warnings check --workspace --all-targets --locked --keep-going
@@ -176,6 +180,9 @@ jobs:
         with:
           tool: just@1.46.0
 
+      - name: Prepare locked metadata for offline build scripts
+        run: cargo metadata --locked --format-version=1 > /dev/null
+
       - name: Test TUI interactions
         run: just test-tui-unit --features in-process-tests
 
@@ -230,6 +237,9 @@ jobs:
         uses: taiki-e/install-action@a6b2e2dcd845ddd7f509ce4f3ed3d922b80cc5d9
         with:
           tool: just@1.46.0
+
+      - name: Prepare locked metadata for offline build scripts
+        run: cargo metadata --locked --format-version=1 > /dev/null
 
       - name: Test TUI sandbox scenarios
         run: just test-tui actual_tui_sandbox_ -- --test-threads=1

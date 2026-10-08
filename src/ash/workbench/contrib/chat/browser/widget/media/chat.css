@@ -428,7 +428,6 @@
 	.ash-chat-input-toolbars.ash-toolbar
 		.ash-chat-input-mode-selector
 		.ash-chat-input-action.ash-chat-input-mode-action {
-		padding-inline: var(--ash-spacing-size60);
 		font-size: 12px;
 	}
 }

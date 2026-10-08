@@ -100,6 +100,9 @@ jobs:
           build: ${{ steps.plan.outputs.connected }}
           backend-cache: ${{ matrix.surface == 'electron' && steps.plan.outputs.connected == 'true' }}
           browser: ${{ matrix.surface == 'browser' }}
+      - name: Prepare locked metadata for offline build scripts
+        if: steps.plan.outputs.connected == 'true' && steps.setup.outputs.backend-cache-hit != 'true'
+        run: cargo metadata --locked --format-version=1 > /dev/null
       # Portable hygiene belongs to Linux; product builds still run on each OS.
       - name: Check portable frontend contracts
         if: matrix.surface == 'browser'

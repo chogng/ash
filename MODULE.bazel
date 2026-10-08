@@ -195,6 +195,27 @@ crate.annotation(
     repositories = ["crates"],
 )
 
+# Load Wayland at runtime so host library directories cannot override the
+# LLVM toolchain's pinned libc. The feature's optional dependency must also
+# be declared because annotations add flags after Cargo feature resolution.
+crate.annotation(
+    crate = "wayland-sys",
+    crate_features = ["dlopen"],
+    deps = ["@crates//:once_cell-1.21.4"],
+    repositories = ["crates"],
+)
+crate.annotation(
+    crate = "wayland-backend",
+    crate_features = ["dlopen"],
+    repositories = ["crates"],
+)
+
+crate.annotation(
+    crate = "sherpa-onnx-sys",
+    deps = ["//bazel:sherpa-cpp-runtime"],
+    repositories = ["crates"],
+)
+
 # The V8 crate build script consumes checksum-pinned sandbox-enabled archives and bindings.
 # They are build inputs only: the resulting executables link V8 statically.
 http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")

@@ -1,5 +1,9 @@
 import { expect, test } from '@playwright/test';
 
+// The default fixtures use POSIX paths and shortcuts; Windows cases below
+// explicitly select their own user agent and drive-letter fixtures.
+test.use({ userAgent: process.platform === 'win32' ? 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/143.0.0.0 Safari/537.36' : undefined });
+
 test('Search line numbers default off and change live without altering matches or submitting another query', async ({ page }) => {
 	await page.goto('/search.html');
 	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
@@ -201,9 +205,11 @@ test('Copy Path shortcut copies the first selected file and ignores input focus,
 	await other.click({ modifiers: ['ControlOrMeta'] });
 	await tree.press('ControlOrMeta+Alt+c');
 	await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['/workspace/src/main.ts']);
-	await tree.press('ControlOrMeta+Shift+Alt+c');
+	await tree.press('ControlOrMeta+Shift+Alt+C');
+	expect(await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['/workspace/src/main.ts']);
 	await query.focus();
 	await query.press('ControlOrMeta+Alt+c');
+	expect(await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['/workspace/src/main.ts']);
 	await tree.getByRole('treeitem', { name: 'Line 1, column 6: 中文😀 needle needle', exact: true }).click();
 	await tree.press('ControlOrMeta+Alt+c');
 	expect(await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['/workspace/src/main.ts']);

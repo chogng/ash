@@ -40,10 +40,10 @@ export function verifyFormatting(fileName: string, text: string): boolean {
 	return format(fileName, text) === text;
 }
 
-function sourceFiles(paths: readonly string[]): string[] {
+export function sourceFiles(paths: readonly string[]): string[] {
 	// Git owns the input inventory so ignored build outputs cannot become sources.
 	const inventory = execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], { cwd: repositoryRoot, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }).split('\0');
-	const files = [...new Set(inventory)].filter(name => sourceRoots.some(root => name.startsWith(root)) && !copiedSourceRoots.some(root => name.startsWith(root)) && !generatedSources.has(name) && sourceExtensions.test(name) && !/\.d\.[cm]?ts$/.test(name) && !excludedDirectories.test(name) && statSync(resolve(repositoryRoot, name), { throwIfNoEntry: false })?.isFile()).sort();
+	const files = sourceNames(inventory).filter(name => statSync(resolve(repositoryRoot, name), { throwIfNoEntry: false })?.isFile());
 	if (paths.length === 0) {
 		return files;
 	}
@@ -93,6 +93,11 @@ function main(args: readonly string[]): number {
 	}
 	console.log(`TypeScript/JavaScript: checked ${files.length} files; ${changes} ${mode === '--check' ? 'unformatted' : 'formatted'}.`);
 	return mode === '--check' && changes > 0 ? 1 : 0;
+}
+
+/** Selects owned sources without consulting a possibly different working tree. */
+export function sourceNames(inventory: readonly string[]): string[] {
+	return [...new Set(inventory)].filter(name => sourceRoots.some(root => name.startsWith(root)) && !copiedSourceRoots.some(root => name.startsWith(root)) && !generatedSources.has(name) && sourceExtensions.test(name) && !/\.d\.[cm]?ts$/.test(name) && !excludedDirectories.test(name)).sort();
 }
 
 if (import.meta.main) {

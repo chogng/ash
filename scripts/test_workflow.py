@@ -97,14 +97,15 @@ fn input_keeps_its_bottom_rule() {
     def test_context_reads_matching_rules_for_snapshot_and_source(self):
         self.assertEqual(self.execute(["context", self.baseline]), 0)
         output = self.output.getvalue()
+        # CLI paths use platform separators; snapshot metadata uses forward slashes.
         for expected in (
             "Cargo package: ash-tui",
-            self.source,
+            str(Path(self.source)),
             "AGENTS.md",
             "testing.md",
             "rust.md",
             "tui.md",
-            ".agents/skills/test-tui/SKILL.md",
+            str(Path(".agents/skills/test-tui/SKILL.md")),
         ):
             self.assertIn(expected, output)
         self.assertNotIn("frontend.md", output)
