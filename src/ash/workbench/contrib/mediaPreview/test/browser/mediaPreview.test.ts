@@ -81,21 +81,24 @@ test('Built-in media declarations activate from the package catalog, localize, r
 
 class MediaFixture extends Disposable {
 	public readonly browser = new JSDOM('<!doctype html><body></body>');
+	public readonly kind: 'audio' | 'video';
 	public readonly changes = this._register(new Emitter<IFileChangeEvent>());
 	public readonly services = this._register(new InstantiationService());
 	public readonly revoked: string[] = [];
+	public readonly operations: string[] = [];
 	public readonly preview: MediaPreview;
-	public readonly player: HTMLMediaElement;
 	public read = async (): Promise<Uint8Array> => new Uint8Array([1, 2, 3]);
 	public pauseCount = 0;
 	public playing = false;
+	public get player(): HTMLMediaElement { return this.browser.window.document.querySelector(this.kind)!; }
 
 	constructor(kind: 'audio' | 'video' = 'audio') {
 		super();
+		this.kind = kind;
 		const originalRevoke = URL.revokeObjectURL;
 		this._register(toDisposable(() => { this.browser.window.close(); URL.revokeObjectURL = originalRevoke; resetNlsResolver(); }));
 		this._register(installEditorTestDom(this.browser, ['Node', 'Element', 'HTMLElement']));
-		URL.revokeObjectURL = url => { this.revoked.push(url); originalRevoke(url); };
+		URL.revokeObjectURL = url => { this.operations.push('revoke'); this.revoked.push(url); originalRevoke(url); };
 		const unexpected = async (): Promise<never> => { throw new Error('Unexpected file operation'); };
 		this.services.registerSingleton(IFileService, () => createTestFileService({
 			capabilities: FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy,
@@ -113,11 +116,12 @@ class MediaFixture extends Disposable {
 		const id = kind === 'audio' ? AUDIO_PREVIEW_ID : VIDEO_PREVIEW_ID;
 		this.preview = this._register(getBuiltinEditorPaneFactory('ash.media-preview', id)!({ instantiationService: this.services }, kind === 'audio' ? 'Audio preview' : 'Video preview') as MediaPreview);
 		this.preview.create(this.browser.window.document.body);
-		this.player = this.browser.window.document.querySelector(kind)!;
-		Object.defineProperties(this.player, { paused: { get: () => !this.playing }, duration: { value: 2 } });
-		this.player.play = async () => { this.playing = true; };
-		this.player.pause = () => { this.pauseCount++; this.playing = false; };
-		this.player.load = () => { };
+		const mediaPrototype = this.browser.window.HTMLMediaElement.prototype;
+		const fixture = this;
+		Object.defineProperties(mediaPrototype, { paused: { get: () => !this.playing }, duration: { get: () => 2 } });
+		mediaPrototype.play = async () => { this.playing = true; };
+		mediaPrototype.pause = () => { this.operations.push('pause'); this.pauseCount++; this.playing = false; };
+		mediaPrototype.load = function (this: HTMLMediaElement): void { fixture.operations.push(this.hasAttribute('src') ? 'load-with-source' : 'load-cleared'); };
 	}
 }
 
@@ -134,8 +138,76 @@ test('Audio and video use the registered renderer, keyboard playback and stop be
 		assert.match(fixture.preview.getAccessibleContent(), /Sample[\s\S]*3 bytes[\s\S]*2 seconds[\s\S]*Playing/);
 		fixture.preview.setVisible(false);
 		assert.equal(fixture.playing, false);
+		fixture.operations.length = 0;
+		fixture.preview.clearInput();
+		assert.deepEqual([fixture.player.hasAttribute('src'), fixture.revoked, fixture.operations], [false, [url], ['pause', 'load-cleared', 'revoke']]);
+	}
+});
+
+test('Audio and video keep first-open read failures in the pane and retry them', async () => {
+	for (const kind of ['audio', 'video'] as const) {
+		using fixture = new MediaFixture(kind);
+		let reads = 0;
+		fixture.read = async () => {
+			if (++reads === 1) { throw new Error('Read denied'); }
+			if (reads === 2) { throw new Error('Still unavailable'); }
+			return new Uint8Array([1, 2, 3]);
+		};
+		await fixture.preview.setInput({ resource: URI.file('/media/retry'), label: 'Retry sample' }, new AbortController().signal);
+
+		const failure = fixture.browser.window.document.querySelector<HTMLElement>('[role="alert"]')!;
+		assert.match(failure.textContent!, /Could not load media: Error: Read denied/);
+		const retry = fixture.browser.window.document.querySelector('button');
+		assert.ok(retry, 'failed media load should expose a Retry button');
+		assert.equal(retry.textContent?.trim(), 'Retry');
+		assert.equal(fixture.player.hasAttribute('src'), false);
+
+		retry.click();
+		await setImmediate();
+		assert.deepEqual([failure.hidden, failure.textContent, retry.hidden, fixture.player.hasAttribute('src')], [false, 'Could not load media: Error: Still unavailable', false, false]);
+		retry.click();
+		await setImmediate();
+		const url = fixture.player.src;
+		assert.deepEqual([failure.hidden, fixture.player.hasAttribute('src'), fixture.revoked], [true, true, []]);
 		fixture.preview.clearInput();
 		assert.deepEqual([fixture.player.hasAttribute('src'), fixture.revoked], [false, [url]]);
+	}
+});
+
+test('A late media error from the previous player cannot replace a newer preview state', async () => {
+	using fixture = new MediaFixture();
+	await fixture.preview.setInput({ resource: URI.file('/media/old.mp3'), label: 'Old song' }, new AbortController().signal);
+	const oldPlayer = fixture.player;
+	const oldURL = oldPlayer.src;
+	await fixture.preview.setInput({ resource: URI.file('/media/new.mp3'), label: 'New song' }, new AbortController().signal);
+	const newPlayer = fixture.player;
+	const newURL = newPlayer.src;
+
+	oldPlayer.dispatchEvent(new fixture.browser.window.Event('error'));
+	assert.deepEqual([
+		oldPlayer === newPlayer,
+		fixture.browser.window.document.querySelector<HTMLElement>('[role="alert"]')!.hidden,
+		fixture.preview.getAccessibleContent().includes('New song'),
+		fixture.revoked,
+	], [false, true, true, [oldURL]]);
+	fixture.preview.clearInput();
+	assert.deepEqual(fixture.revoked, [oldURL, newURL]);
+});
+
+test('Closing while a media read is pending ignores its late failure and leaves no URL', async () => {
+	const fixture = new MediaFixture();
+	try {
+		const pending = new DeferredPromise<Uint8Array>();
+		fixture.read = () => pending.p;
+		const opening = fixture.preview.setInput({ resource: URI.file('/media/closing.mp3') }, new AbortController().signal);
+		const cancelled = assert.rejects(opening, /cancelled/);
+		const player = fixture.player;
+		fixture.preview.dispose();
+		await pending.error(new Error('Late read failure'));
+		await cancelled;
+		assert.deepEqual([fixture.revoked, player.hasAttribute('src')], [[], false]);
+	} finally {
+		fixture.dispose();
 	}
 });
 
@@ -147,10 +219,15 @@ test('Cancelling a media load cannot replace a newer resource or allocate a URL'
 	const cancelled = assert.rejects(opening, /cancelled/);
 	fixture.read = async () => new Uint8Array([1, 2, 3]);
 	await fixture.preview.setInput({ resource: URI.file('/new.mp3'), label: 'New song' }, new AbortController().signal);
-	await pending.complete(new Uint8Array([4]));
+	await pending.error(new Error('Old media read failed'));
 	await cancelled;
 	assert.match(fixture.preview.getAccessibleContent(), /New song/);
-	assert.equal(fixture.revoked.length, 0);
+	assert.deepEqual([
+		fixture.preview.getAccessibleContent().includes('Old media read failed'),
+		fixture.browser.window.document.querySelector<HTMLElement>('[role="alert"]')!.hidden,
+		fixture.browser.window.document.querySelector<HTMLButtonElement>('button')!.hidden,
+		fixture.revoked.length,
+	], [false, true, true, 0]);
 });
 
 test('Playback failure and accessible metadata are translated into Chinese', async () => {
@@ -161,6 +238,11 @@ test('Playback failure and accessible metadata are translated into Chinese', asy
 	assert.match(fixture.preview.getAccessibleContent(), /文件大小：3 字节[\s\S]*时长：2 秒[\s\S]*已暂停/);
 	fixture.player.dispatchEvent(new fixture.browser.window.Event('error'));
 	assert.match(fixture.browser.window.document.querySelector('[role="alert"]')!.textContent!, /无法播放此媒体文件/);
+	assert.equal(fixture.browser.window.document.querySelector('button')!.textContent, '重试');
+	fixture.read = async () => { throw new Error('Read denied'); };
+	await fixture.preview.setInput({ resource: URI.file('/song.wav') }, new AbortController().signal);
+	assert.match(fixture.preview.getAccessibleContent(), /无法加载媒体：Error: Read denied/);
+	assert.equal(fixture.browser.window.document.querySelector('button')!.textContent, '重试');
 });
 
 

@@ -1,6 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
+import { createMediaPreviewFixture, mediaPreviewEvidence } from './mediaPreviewFixture.js';
 
 declare global {
 	interface Window {
@@ -91,4 +92,84 @@ test('Image preview opens workspace images, zooms, exposes metadata and releases
 	await expect.poll(() => page.evaluate(url => window.imagePreviewRevokedURLs.has(url!), lastURL)).toBe(true);
 	await explorer.getByRole('treeitem', { name: 'broken.png', exact: true }).dblclick();
 	await expect(workbench.editors.groupAt(0).content.getByRole('alert')).toContainText('Choose a PNG, JPEG or WebP image.');
+});
+
+test('Image preview retries a first read failure, recovers corrupted content and ignores a late read', async ({ target, testWorkspace, workbench }, testInfo) => {
+	test.skip(target.kind === 'electron' && target.appServerMode !== 'required', 'Desktop workspace files require App Server.');
+	test.setTimeout(90_000);
+	const page = workbench.page;
+	const fixture = await createMediaPreviewFixture(page, target, testWorkspace.directory, workbench);
+	try {
+		const explorer = page.locator('.ash-explorer');
+		const preview = workbench.editors.groupAt(0).content.locator('.ash-image-preview:visible');
+		const image = preview.locator('img');
+		await page.evaluate(() => window.mediaRetryProbe.fail.add('retry.png'));
+		await explorer.getByRole('treeitem', { name: 'retry.png', exact: true }).dblclick();
+		await expect(preview.getByRole('alert')).toContainText('Could not load image:');
+		const firstFailure = await mediaPreviewEvidence(page);
+		expect(firstFailure.failedReads).toHaveLength(1);
+		expect(firstFailure.failedReads[0]!.name).toBe('retry.png');
+		if (target.appServerMode === 'disabled') { await expect(preview.getByRole('alert')).toContainText(firstFailure.failedReads[0]!.message); }
+		expect(firstFailure.created).toEqual([]);
+		await expect(image).not.toHaveAttribute('src');
+		await testInfo.attach('image-read-failure', { body: await preview.screenshot(), contentType: 'image/png' });
+		const retry = preview.getByRole('button', { name: 'Retry', exact: true });
+		await expect(retry).toBeEnabled();
+		await retry.focus(); await retry.press('Enter');
+		await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(800);
+		await expect(preview.getByRole('status')).toContainText('800 × 600 pixels');
+		await expect(preview.getByRole('alert')).toHaveCount(0);
+		await expect(retry).toHaveCount(0);
+		const url = (await image.getAttribute('src'))!;
+		const viewport = preview.getByLabel('Image viewport', { exact: true });
+		await viewport.focus(); await viewport.press('1'); await viewport.press('+');
+		await expect(image).toHaveCSS('width', '1000px');
+		await testInfo.attach('image-retry-zoom', { body: await preview.screenshot(), contentType: 'image/png' });
+		await viewport.press('0');
+		await expect.poll(() => viewport.evaluate(element => {
+			const bounds = element.querySelector('img')!.getBoundingClientRect();
+			return bounds.width <= element.clientWidth && bounds.height <= element.clientHeight;
+		})).toBe(true);
+		await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
+		await expect.poll(async () => (await mediaPreviewEvidence(page)).revoked).toContain(url);
+
+		await explorer.getByRole('treeitem', { name: 'broken.png', exact: true }).dblclick();
+		await expect(preview.getByRole('alert')).toContainText('The image data could not be decoded.');
+		expect((await mediaPreviewEvidence(page)).created).toEqual([url]);
+		await expect(preview.getByRole('button', { name: 'Retry', exact: true })).toBeEnabled();
+		await testInfo.attach('image-decode-failure', { body: await preview.screenshot(), contentType: 'image/png' });
+		await fixture.repair('broken.png');
+		// A filesystem observer may recover before the explicit action is reached.
+		if (await preview.getByRole('button', { name: 'Retry', exact: true }).isVisible()) {
+			await preview.getByRole('button', { name: 'Retry', exact: true }).click();
+		}
+		await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(800);
+		await expect(preview.getByRole('status')).toContainText('800 × 600 pixels');
+		await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
+
+		await page.evaluate(() => window.mediaRetryProbe.hold.add('pending.png'));
+		await explorer.getByRole('treeitem', { name: 'pending.png', exact: true }).dblclick();
+		await expect.poll(async () => (await mediaPreviewEvidence(page)).pending).toContain('pending.png');
+		await explorer.getByRole('treeitem', { name: 'product.png', exact: true }).dblclick();
+		await expect(image).toHaveAttribute('alt', 'product.png');
+		await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(800);
+		const currentURL = (await image.getAttribute('src'))!;
+		const beforeLateRead = await mediaPreviewEvidence(page);
+		await page.evaluate(() => window.mediaRetryProbe.pending.get('pending.png')!());
+		await expect.poll(async () => (await mediaPreviewEvidence(page)).pending).toEqual([]);
+		if (target.appServerMode === 'required') {
+			await expect.poll(async () => (await mediaPreviewEvidence(page)).releasedResources.length).toBeGreaterThan(beforeLateRead.releasedResources.length);
+		} else {
+			await expect.poll(async () => (await mediaPreviewEvidence(page)).completedReads).toContain('pending.png');
+		}
+		await expect(image).toHaveAttribute('src', currentURL);
+		await expect(preview.getByRole('alert')).toHaveCount(0);
+		expect((await mediaPreviewEvidence(page)).created).toEqual(beforeLateRead.created);
+		await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
+		await expect.poll(async () => {
+			const evidence = await mediaPreviewEvidence(page);
+			return evidence.created.every(url => evidence.revoked.includes(url)) && evidence.liveResources.length === 0;
+		}).toBe(true);
+		await testInfo.attach('image-lifecycle', { body: JSON.stringify(await mediaPreviewEvidence(page), null, 2), contentType: 'application/json' });
+	} finally { await fixture.dispose(); }
 });

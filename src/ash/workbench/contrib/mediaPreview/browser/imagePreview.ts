@@ -96,12 +96,8 @@ export class ImagePreview extends EditorPane implements IEditorPane {
 			const reload = this.load(input, new AbortController().signal, false);
 			const generation = this.generation;
 			void reload.catch(error => {
-				if (error instanceof CancellationError || this.isDisposed || generation !== this.generation) { return; }
-				this.clearInput();
-				// Keep the open resource subscribed so a later file change can restore the preview.
-				this.input = input;
-				this.loadFailure = error instanceof Error ? error.message : String(error);
-				this.updateLabels();
+				if (error instanceof CancellationError || this.isDisposed || generation !== this.generation || this.input !== input) { return; }
+				this.failLoad(input, error, generation);
 			});
 		}));
 		this.updateLabels();
@@ -109,7 +105,18 @@ export class ImagePreview extends EditorPane implements IEditorPane {
 
 	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		this.clearInput();
-		await this.load(input, signal, true);
+		this.input = input;
+		const generation = this.generation + 1;
+		try {
+			await this.load(input, signal, true);
+		} catch (error) {
+			if (error instanceof CancellationError) {
+				if (this.generation === generation && this.input === input) { this.clearInput(); }
+				throw error;
+			}
+			if (this.isDisposed || this.generation !== generation || this.input !== input) { return; }
+			this.failLoad(input, error, generation);
+		}
 	}
 
 	public override clearInput(): void {
@@ -161,18 +168,41 @@ export class ImagePreview extends EditorPane implements IEditorPane {
 		this.updateImageGeometry();
 	}
 
+	private failLoad(input: IResourceEditorInput, error: unknown, generation: number): void {
+		if (this.isDisposed || this.generation !== generation || this.input !== input) { return; }
+		this.clearInput();
+		// Retain the resource so the user can retry or see a later file-change recovery.
+		this.input = input;
+		this.loadFailure = error instanceof Error ? error.message : String(error);
+		this.updateLabels();
+	}
+
+	private retry(): void {
+		const input = this.input;
+		if (!input || this.loadFailure === undefined) { return; }
+		void this.setInput(input, new AbortController().signal).catch(error => {
+			if (error instanceof CancellationError || this.isDisposed || this.input !== input) { return; }
+			this.failLoad(input, error, this.generation);
+		});
+	}
+
 	private updateLabels(): void {
 		this.updateAriaLabel();
 		this.toolbar.element.setAttribute('aria-label', localize('media.image.actions', 'Image preview controls'));
 		this.viewportDomNode.setAttribute('aria-label', localize('media.image.viewport', 'Image viewport'));
 		this.imageDomNode.alt = this.input?.label ?? (this.input ? basename(this.input.resource) : '');
 		const action = (id: string, label: string, run: () => void): IAction => ({ id, label, tooltip: label, enabled: this.metadata !== undefined, run });
-		this.toolbar.setActions([
+		const actions = [
 			action('imagePreview.fit', localize('media.image.fit', 'Fit to window'), () => this.setScale('fit')),
 			action('imagePreview.actualSize', localize('media.image.actualSize', 'Actual size'), () => this.setScale(1)),
 			action('imagePreview.zoomOut', localize('media.image.zoomOut', 'Zoom out'), () => this.zoom(0.8)),
 			action('imagePreview.zoomIn', localize('media.image.zoomIn', 'Zoom in'), () => this.zoom(1.25)),
-		]);
+		];
+		if (this.loadFailure !== undefined) {
+			actions.push({ id: 'imagePreview.retry', label: localize('media.image.retry', 'Retry'), tooltip: localize('media.image.retry', 'Retry'), enabled: true, run: () => this.retry() });
+		}
+		this.toolbar.setActions(actions);
+		this.summaryDomNode.setAttribute('role', this.loadFailure === undefined ? 'status' : 'alert');
 		this.updateSummary();
 	}
 

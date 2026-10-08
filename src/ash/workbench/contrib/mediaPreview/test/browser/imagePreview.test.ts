@@ -86,6 +86,26 @@ test('Image preview opens through the registered pane, zooms and releases its UR
 	assert.deepEqual([image.hasAttribute('src'), fixture.revoked], [false, [url]]);
 });
 
+test('Image preview keeps a first-open read failure in the pane and retries it', async () => {
+	using fixture = new ImageFixture();
+	fixture.read = async () => { throw new Error('Read denied'); };
+	await fixture.preview.setInput({ resource, label: 'Product' }, new AbortController().signal);
+
+	assert.match(fixture.preview.getAccessibleContent(), /Could not load image: Read denied/);
+	const retry = Array.from(fixture.browser.window.document.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Retry');
+	assert.ok(retry, 'failed image should expose a Retry action');
+	assert.equal(fixture.browser.window.document.querySelector('img')!.hasAttribute('src'), false);
+
+	fixture.read = async () => png;
+	retry.click();
+	await setImmediate();
+	const image = fixture.browser.window.document.querySelector('img')!;
+	const url = image.src;
+	assert.deepEqual([fixture.preview.getAccessibleContent().includes('Image: Product'), image.hasAttribute('src')], [true, true]);
+	fixture.preview.clearInput();
+	assert.deepEqual(fixture.revoked, [url]);
+});
+
 test('Image preview cancellation cannot replace a newer image or retain a preview URL', async () => {
 	using fixture = new ImageFixture();
 	const first = new DeferredPromise<Uint8Array>();
@@ -94,9 +114,10 @@ test('Image preview cancellation cannot replace a newer image or retain a previe
 	const cancelled = assert.rejects(opening, /cancelled/);
 	fixture.read = async () => png;
 	await fixture.preview.setInput({ resource: URI.file('/images/new.png'), label: 'New' }, new AbortController().signal);
-	await first.complete(png);
+	await first.error(new Error('Old image read failed'));
 	await cancelled;
 	assert.match(fixture.preview.getAccessibleContent(), /Image: New/);
+	assert.doesNotMatch(fixture.preview.getAccessibleContent(), /Old image read failed/);
 	assert.equal(fixture.closedBitmaps, 1);
 });
 
@@ -127,6 +148,11 @@ test('Image preview initializes its visible and accessible text in Chinese', asy
 	assert.match(fixture.browser.window.document.querySelector('.ash-image-preview-summary')!.textContent!, /像素.*适应窗口/);
 	assert.match(fixture.preview.getAccessibleContent(), /图片：product.png[\s\S]*格式：image\/png/);
 	assert.equal(fixture.browser.window.document.querySelector('button')!.textContent, '适应窗口');
+	fixture.preview.clearInput();
+	fixture.read = async () => { throw new Error('Read denied'); };
+	await fixture.preview.setInput({ resource }, new AbortController().signal);
+	assert.match(fixture.preview.getAccessibleContent(), /无法加载图片：Read denied/);
+	assert.equal(Array.from(fixture.browser.window.document.querySelectorAll('button')).some(button => button.textContent?.trim() === '重试'), true);
 });
 
 test('Image preview refreshes a changed resource and revokes the previous URL', async () => {
@@ -144,12 +170,20 @@ test('Image preview refreshes a changed resource and revokes the previous URL', 
 	assert.notEqual(image.src, original);
 });
 
-test('Image inspection rejects unsupported signatures and failed decoding before creating a URL', async () => {
+test('Image inspection rejects unsupported signatures and preview decoding failures can be retried', async () => {
 	using fixture = new ImageFixture();
 	await assert.rejects(inspectImage(new Uint8Array([137, 80, 78, 71])), /PNG, JPEG or WebP/);
 	fixture.decode = async () => { throw new Error('Invalid encoded image'); };
-	await assert.rejects(fixture.preview.setInput({ resource }, new AbortController().signal), /could not be decoded/);
+	await fixture.preview.setInput({ resource }, new AbortController().signal);
+	assert.match(fixture.preview.getAccessibleContent(), /Could not load image: The image data could not be decoded/);
 	assert.deepEqual([fixture.revoked.length, fixture.browser.window.document.querySelector('img')!.hasAttribute('src')], [0, false]);
+	const retry = Array.from(fixture.browser.window.document.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Retry');
+	assert.ok(retry, 'failed image decode should expose a Retry action');
+	fixture.decode = async () => ({ width: 320, height: 200, close: () => { fixture.closedBitmaps++; } }) as ImageBitmap;
+	retry.click();
+	await setImmediate();
+	assert.match(fixture.preview.getAccessibleContent(), /320 × 200 pixels/);
+	assert.equal(fixture.browser.window.document.querySelector('img')!.hasAttribute('src'), true);
 });
 
 test('Image preview reports a failed refresh and loads the resource again on its next change', async () => {

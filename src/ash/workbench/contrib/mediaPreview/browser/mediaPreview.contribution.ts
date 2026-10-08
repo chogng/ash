@@ -52,7 +52,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 				AccessibleViewProviderId.MediaPreview,
 				{ type },
 				() => type === AccessibleViewType.Help
-					? localize('media.playback.help', 'Audio and video preview\nPress Space on the player to play or pause. Use Tab to reach playback controls for seeking, volume and fullscreen where available. <keybinding:editor.action.accessibleView> reads the filename, file size, duration and playback state; it does not transcribe audio or describe video. Playback stops when you switch away from the preview. File changes reload the preview. Closing the tab stops playback and releases its resources; the original file stays intact.')
+					? localize('media.playback.help', 'Audio and video preview\nPress Space on the player to play or pause. Use Tab to reach playback controls for seeking, volume and fullscreen where available. If loading fails, choose Retry to read the file again. <keybinding:editor.action.accessibleView> reads the filename, file size, duration and playback state; it does not transcribe audio or describe video. Playback stops when you switch away from the preview. File changes reload the preview. Closing the tab stops playback and releases its resources; the original file stays intact.')
 					: preview.getAccessibleContent(),
 				() => focused.focus(),
 				AccessibilityVerbositySettingId.MediaPreview,
@@ -89,7 +89,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 				AccessibleViewProviderId.ImagePreview,
 				{ type },
 				() => type === AccessibleViewType.Help
-					? localize('media.image.help', 'Image preview\nPress Plus or Minus to zoom, 0 to fit the image to the window, or 1 to show its actual size. Use Tab to reach the toolbar, then Left and Right to choose an action and Enter to activate it. Focus Image viewport and use arrow keys to scroll enlarged images. <keybinding:editor.action.accessibleView> reads the filename, dimensions, format and zoom; it does not describe the picture. File changes refresh this preview. Closing the tab releases its preview resources; the original file stays intact.')
+					? localize('media.image.help', 'Image preview\nPress Plus or Minus to zoom, 0 to fit the image to the window, or 1 to show its actual size. Use Tab to reach the toolbar, then Left and Right to choose an action and Enter to activate it. If loading fails, choose Retry in the toolbar. Focus Image viewport and use arrow keys to scroll enlarged images. <keybinding:editor.action.accessibleView> reads the filename, dimensions, format and zoom; it does not describe the picture. File changes refresh this preview. Closing the tab releases its preview resources; the original file stays intact.')
 					: preview.getAccessibleContent(),
 				() => focused.focus(),
 				AccessibilityVerbositySettingId.ImagePreview,

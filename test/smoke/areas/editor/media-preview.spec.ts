@@ -1,6 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
+import { createMediaPreviewFixture, mediaPreviewEvidence } from './mediaPreviewFixture.js';
 
 declare global {
 	interface Window { readonly mediaPreviewRevokedURLs: Set<string>; }
@@ -71,4 +72,112 @@ test('Built-in audio and video previews play, pause on switching and release res
 	await audioHandle!.dispose();
 	await explorer.getByRole('treeitem', { name: 'broken.mp4', exact: true }).dblclick();
 	await expect(group.content.getByRole('alert')).toContainText('This media file could not be played.');
+});
+
+test('Audio and video retry first reads and damaged video recovers with the current player', async ({ target, testWorkspace, workbench }, testInfo) => {
+	test.skip(target.kind === 'electron' && target.appServerMode !== 'required', 'Desktop workspace files require App Server.');
+	test.setTimeout(90_000);
+	const page = workbench.page;
+	const fixture = await createMediaPreviewFixture(page, target, testWorkspace.directory, workbench);
+	try {
+		const explorer = page.locator('.ash-explorer');
+		const preview = workbench.editors.groupAt(0).content.locator('.ash-media-preview:visible');
+		for (const [name, kind] of [['retry.wav', 'audio'], ['retry.webm', 'video']] as const) {
+			const before = await mediaPreviewEvidence(page);
+			await page.evaluate(name => window.mediaRetryProbe.fail.add(name), name);
+			await explorer.getByRole('treeitem', { name, exact: true }).dblclick();
+			await expect(preview.getByRole('alert')).toContainText('Could not load media:');
+			const failure = await mediaPreviewEvidence(page);
+			expect(failure.failedReads.at(-1)!.name).toBe(name);
+			if (target.appServerMode === 'disabled') { await expect(preview.getByRole('alert')).toContainText(failure.failedReads.at(-1)!.message); }
+			expect(failure.created).toEqual(before.created);
+			const player = preview.locator(kind);
+			await expect(player).not.toHaveAttribute('src');
+			await testInfo.attach(`${kind}-read-failure`, { body: await preview.screenshot(), contentType: 'image/png' });
+			const retry = preview.getByRole('button', { name: 'Retry', exact: true });
+			await retry.focus(); await retry.press('Enter');
+			await expect.poll(() => player.evaluate(element => Number.isFinite((element as HTMLMediaElement).duration))).toBe(true);
+			await expect(preview.getByRole('alert')).toBeHidden();
+			await expect(retry).toBeHidden();
+			const url = (await player.getAttribute('src'))!;
+			const handle = (await player.elementHandle())!;
+			try {
+				await player.focus(); await player.press('Space');
+				await expect.poll(() => player.evaluate(element => (element as HTMLMediaElement).paused)).toBe(false);
+				await player.press('Space');
+				await expect.poll(() => player.evaluate(element => (element as HTMLMediaElement).paused)).toBe(true);
+				await player.evaluate(element => { const media = element as HTMLMediaElement; media.currentTime = 0.5; media.volume = 0.4; });
+				await expect.poll(() => player.evaluate(element => (element as HTMLMediaElement).currentTime)).toBeCloseTo(0.5, 1);
+				await expect.poll(() => player.evaluate(element => (element as HTMLMediaElement).volume)).toBe(0.4);
+				await testInfo.attach(`${kind}-retry-success`, { body: await preview.screenshot(), contentType: 'image/png' });
+				await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
+				await expect.poll(async () => (await mediaPreviewEvidence(page)).revoked).toContain(url);
+				expect(await handle.evaluate(element => ({ paused: (element as HTMLMediaElement).paused, hasSource: element.hasAttribute('src') }))).toEqual({ paused: true, hasSource: false });
+			} finally { await handle.dispose(); }
+		}
+		await explorer.getByRole('treeitem', { name: 'broken.webm', exact: true }).dblclick();
+		await expect(preview.getByRole('alert')).toContainText('This media file could not be played.');
+		await expect(preview.getByRole('button', { name: 'Retry', exact: true })).toBeEnabled();
+		const oldPlayer = (await preview.locator('video').elementHandle())!;
+		const oldURL = (await preview.locator('video').getAttribute('src'))!;
+		try {
+			await testInfo.attach('video-decode-failure', { body: await preview.screenshot(), contentType: 'image/png' });
+			await fixture.repair('broken.webm');
+			if (await preview.getByRole('button', { name: 'Retry', exact: true }).isVisible()) {
+				await preview.getByRole('button', { name: 'Retry', exact: true }).click();
+			}
+			const video = preview.locator('video');
+			await expect.poll(() => video.evaluate(element => (element as HTMLVideoElement).videoWidth)).toBe(64);
+			await expect.poll(async () => (await mediaPreviewEvidence(page)).revoked).toContain(oldURL);
+			// A real file watcher can refresh between protocol calls; compare the stale event in one DOM turn.
+			const staleEvent = await oldPlayer.evaluate(element => {
+				const current = element.ownerDocument.querySelector<HTMLVideoElement>('.ash-media-preview video')!;
+				const source = current.src;
+				element.dispatchEvent(new Event('error'));
+				return {
+					detached: !element.isConnected, replaced: element !== current,
+					source, sourceAfter: current.src,
+					failureHidden: current.closest('.ash-media-preview')!.querySelector<HTMLElement>('[role="alert"]')!.hidden,
+				};
+			});
+			expect(staleEvent).toEqual({ detached: true, replaced: true, source: staleEvent.source, sourceAfter: staleEvent.source, failureHidden: true });
+			await expect.poll(() => video.evaluate(element => (element as HTMLVideoElement).videoWidth)).toBe(64);
+			await expect(preview.getByRole('alert')).toBeHidden();
+			await testInfo.attach('media-old-player-state', { body: JSON.stringify(staleEvent, null, 2), contentType: 'application/json' });
+			await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
+		} finally { await oldPlayer.dispose(); }
+		await expect.poll(async () => {
+			const evidence = await mediaPreviewEvidence(page);
+			return evidence.created.every(url => evidence.revoked.includes(url)) && evidence.liveResources.length === 0;
+		}).toBe(true);
+		await testInfo.attach('media-lifecycle', { body: JSON.stringify(await mediaPreviewEvidence(page), null, 2), contentType: 'application/json' });
+	} finally { await fixture.dispose(); }
+});
+
+test('Closing an audio preview during a refresh releases late data without a new URL', async ({ target, testWorkspace, workbench }, testInfo) => {
+	test.skip(target.kind === 'electron' && target.appServerMode !== 'required', 'Desktop workspace files require App Server.');
+	const page = workbench.page;
+	const fixture = await createMediaPreviewFixture(page, target, testWorkspace.directory, workbench);
+	try {
+		await page.locator('.ash-explorer').getByRole('treeitem', { name: 'retry.wav', exact: true }).dblclick();
+		const player = workbench.editors.groupAt(0).content.locator('.ash-media-preview:visible audio');
+		await expect.poll(() => player.evaluate(element => (element as HTMLMediaElement).duration)).toBe(2);
+		const url = (await player.getAttribute('src'))!;
+		const beforeRefresh = await mediaPreviewEvidence(page);
+		await page.evaluate(() => window.mediaRetryProbe.hold.add('retry.wav'));
+		await fixture.refresh();
+		await expect.poll(async () => (await mediaPreviewEvidence(page)).pending).toContain('retry.wav');
+		await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
+		await expect(workbench.editors.groupAt(0).content.locator('.ash-media-preview:visible')).toHaveCount(0);
+		await page.evaluate(() => window.mediaRetryProbe.pending.get('retry.wav')!());
+		await expect.poll(async () => (await mediaPreviewEvidence(page)).pending).toEqual([]);
+		if (target.appServerMode === 'required') {
+			await expect.poll(async () => (await mediaPreviewEvidence(page)).releasedResources.length).toBeGreaterThan(beforeRefresh.releasedResources.length);
+		} else {
+			await expect.poll(async () => (await mediaPreviewEvidence(page)).completedReads.length).toBeGreaterThan(beforeRefresh.completedReads.length);
+		}
+		const evidence = await mediaPreviewEvidence(page);
+		expect({ created: evidence.created, revoked: evidence.revoked, liveResources: evidence.liveResources }).toEqual({ created: [url], revoked: [url], liveResources: [] });
+		await testInfo.attach('pending-close-lifecycle', { body: JSON.stringify(evidence, null, 2), contentType: 'application/json' });
+	} finally { await fixture.dispose(); }
 });

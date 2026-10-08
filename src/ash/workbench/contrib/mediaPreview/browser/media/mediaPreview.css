@@ -48,3 +48,8 @@
 	padding: var(--ash-spacing-size120);
 	color: var(--ash-error-foreground);
 }
+
+.ash-media-preview > .ash-button {
+	align-self: flex-start;
+	margin: 0 var(--ash-spacing-size120) var(--ash-spacing-size120);
+}
