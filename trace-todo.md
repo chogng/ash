@@ -2,7 +2,7 @@
 
 Trace 已能读取和跟随 Agent 的持久执行历史。本路线在现有能力上，优先完成 **具体 Turn 定位 → 模型与工具关系 → 一致导出 → 离线复查**，让一次失败从会话入口一直查到原始证据。本文是根目录 `TODO.md` 的改名与扩充；原内容完整保留在后半部分。
 
-源码核对基线：2026-10-08，fresh fetch 后的 `main` 提交 `77fcedc89`。下文“现有”表示该基线源码已具备；已有能力与本轮改动分开列出，实际运行结果见验证摘要。
+源码核对基线：2026-10-08，fresh fetch 后的 `main` 提交 `c6d6db1ef`。下文“现有”表示该基线源码已具备；已有能力与本轮改动分开列出，实际运行结果见验证摘要。
 
 ## Trace 现有能力
 
@@ -72,9 +72,9 @@ Trace 已能读取和跟随 Agent 的持久执行历史。本路线在现有能�
 
 ## 验证摘要（2026-10-08）
 
-`TODO.md` 已沿原 `.md` 扩展名改为 `trace-todo.md`，历史全文保留。P1 定位、P3 导出边界及 P4 连续导入修复已实现；真实持久会话的完整验收仍受后端准备阻塞，因此阶段验收复选框保持未完成。Trace UI 已按 [界面路线](trace-ui-todo.md) 完成源码改造；虚拟执行树与搜索缓存已接入，长历史实测和新的双端 UI 验证尚未完成。分享脱敏仍未实现。
+`TODO.md` 已沿原 `.md` 扩展名改为 `trace-todo.md`，历史全文保留。P1 定位、P3 导出边界及 P4 连续导入修复已实现；真实 Web 持久会话已通过；新版 Electron 仍排队，因此阶段整体验收复选框保持未完成。Trace UI 已按 [界面路线](trace-ui-todo.md) 完成源码改造；虚拟执行树与搜索缓存已接入，四主题宽窄 headless 与 20,000 事件实测已通过；新版 Electron 和同机旧版相同数据集的时间基线尚未完成。分享脱敏仍未实现。
 
-以下表格是 UI 改造前 `cac4c2f8c` 范围的验证；新的界面改动尚未完成正常构建和双端验证，详见界面路线。
+以下表格保留 UI 改造前 `cac4c2f8c` 范围的验证；新版结果见下节及界面路线，旧图不能代替新版 Electron 验收。
 
 | 检查 | 实际结果 |
 | --- | --- |
@@ -85,7 +85,7 @@ Trace 已能读取和跟随 Agent 的持久执行历史。本路线在现有能�
 | 正常构建 | Renderer typecheck、正常 Desktop/Web 构建与 smoke/scenario 编译通过。 |
 | Web / Electron UI | 每端 5 项 UI 场景通过；包含 Sessions 入口、中文/无障碍、子 Thread、模型正文/关系跳转、筛选后的完整导出和离线重导入。使用隔离 profile 和合成证据 fixture。每端另 1 项真实持久历史场景跳过，不计入通过。 |
 | 真实界面证据 | Web 录制的 6 步离线回查全部通过；保存实际截图和约 14 秒原始短视频。截图不作为测试判定依据。 |
-| 后端完整验收阻塞 | 前次后端准备在 Sherpa ONNX SDK 校验处失败。本轮从官方源正常重试，大小与 SHA-256 已匹配锁定值；完整后端准备尚未完成，持久会话新增 Turn/子 Thread 的 Web/Electron 场景待补跑。 |
+| 旧后端准备记录 | 当时 Sherpa ONNX SDK 校验失败；后续官方重试、正常 Desktop/Web 后端准备和真实 Web 持久场景已通过，见下节。 |
 | 变更格式 | 仓库 TypeScript 格式检查与 `git diff --check` 通过。 |
 
 
@@ -94,7 +94,17 @@ Trace 已能读取和跟随 Agent 的持久执行历史。本路线在现有能�
 采用共享 ObjectTree / SplitView / TabList / ToolBar / List / InputBox / IconLabel / ScrollableElement / 只读 CodeEditorWidget。
 [界面路线](trace-ui-todo.md) 保留已核实的官方参考、数据边界、布局和分阶段验收。
 导航模型只派生身份、摘要和缓存搜索文本；原始捕获、正文和导出仍归编辑器。
-旧界面红测已复现 2,000 个事件全部挂载与缺少详情页签；当前六个 Trace 测试文件共 57 项通过，Renderer/集成/smoke 类型与修改文件格式检查通过。新增导出身份冲突回归先失败、修复后通过，图范围同时校验记录来源、Thread 与 Turn。更新到 main `77fcedc89` 后，修复共享控件宿主导致的详情零高度；正常 Desktop/Web 前端构建和独立 headless 两项通过，实际覆盖四主题宽窄、20,000 事件与关闭资源释放。Electron 与真实 App Server 仍待验收；当前界面状态以界面路线为准，不能引用改造前的截图当作通过。
+旧界面红测已复现 2,000 个事件全部挂载与缺少详情页签；当前六个 Trace 测试文件共 57 项通过，Renderer/集成/smoke 类型与修改文件格式检查通过。新增导出身份冲突回归先失败、修复后通过，图范围同时校验记录来源、Thread 与 Turn。更新到 main `77fcedc89` 后，修复共享控件宿主导致的详情零高度；正常 Desktop/Web 前端构建和独立 headless 两项通过，实际覆盖四主题宽窄、20,000 事件与关闭资源释放。真实 Web App Server 场景后续已通过；新版 Electron 仍排队，不能引用改造前的截图当作通过。
+
+### 后端与真实 Web 阶段检查点
+
+正常 `prepare:backend` / `prepare:backend:web` 两阶段均 exit 0，发布本树包；Sherpa 与 LiveKit 的官方锁定归档校验通过，未更换来源或跳过校验。更新到 `c6d6db1ef` 后，两种包的 sourceDigest、全部文件哈希和 protocol major 7 / schemaHash 只读复核均匹配；此次 main 更新未改变包输入。未复用其它树的 Cargo/runtime/protocol。
+
+真实 Web 首轮 2 项通过、4 项失败。修复 Sessions 缺少 IModelService 的窗口装配及概览/Raw 断言后先重跑失败场景；剩余两个 has 定位器错误包含祖先容器，修正相对作用域后通过。六个场景已分别通过；真实持久场景完成实际 initialize、历史 Turn 精确定位、真实 shell 新 Turn 实时增量、子 Thread 层级，以及关闭后重开定位最新 Turn。该 smoke 在本次 main rebase 前运行；最新基线的正常 Desktop/Web 前端构建、smoke 编译、57 项 / 6 文件单测、hygiene、8 文件格式检查全部通过。
+
+证据：[后端退出码](.build/trace-validation/backend-prepare-state.json)、[当前包契约](.build/trace-validation/package-contract-check.json)、[最后两项真实 Web 复跑](.build/trace-validation/ui-selector-retry-production-web.log)、[最新前端检查](.build/trace-validation/frontend-check-state.json)。首轮及第一次复跑的失败日志也保留在 `.build/trace-validation/production-web-first-failure-*` 和 `production-web-selector-failure-*`。
+
+阶段交接时无 Trace 自有 Cargo、监督器或 App Server；其它 Cargo 属于 `ash-external-conflict` 树，未干预。新版 Electron/前台仍排队；六项 Web 未在 rebase 后整批重跑，未宣称最新双端整体验收完成。Sessions skill 所列 `valid-layers-check` 在当前 package.json 不存在，新增装配导入按已有层级检查，未把缺失命令记为通过。
 
 ### 分享脱敏的下一步边界
 

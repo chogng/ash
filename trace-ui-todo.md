@@ -126,4 +126,14 @@ headless Chromium 复跑先暴露详情零高度：TabList 会填满宿主，直
 
 20,000 事件本次单样本：导入至 Imported 状态约 315 ms，搜索并选择目标约 65 ms，初次 mounted rows 为 29；正文打开时 1 个模型/编辑器，关闭后均为 0。计时包含 Playwright 文件传输/交互，服务初始化已完成，同时存在两个后端编译任务；没有同机旧版相同数据集的时间基线，不据此宣称整体性能提升。
 
-修复后的正常 Desktop/Web 前端构建与 smoke 编译已通过；最终 57 项 Trace 单测、hygiene、格式检查均已通过。后端正常准备先因默认 Python 无 tomllib 停止，再由 PYTHON 指向本机 Python 3.12；后一次 Cargo 因终端服务器断连退出，现通过独立进程重跑正常命令并记录退出码，CARGO_BUILD_JOBS=2。所有 Cargo/runtime/protocol/包使用本树，sourceDigest/包契约与真实 initialize 待构建完成核验；没有复用其它树产物。
+修复后的正常 Desktop/Web 前端构建与 smoke 编译已通过；最终 57 项 Trace 单测、hygiene、格式检查均已通过。后端正常准备先因默认 Python 无 tomllib 停止，再由 PYTHON 指向本机 Python 3.12；后一次 Cargo 因终端服务器断连退出，现通过独立进程重跑正常命令并记录退出码，CARGO_BUILD_JOBS=2。所有 Cargo/runtime/protocol/包使用本树，后续正常准备及真实 initialize 已通过，见以下阶段检查点；没有复用其它树产物。
+
+### 真实 Web 与最新 main 阶段检查点
+
+后端 Rust 编译完成后，LiveKit 官方归档 TLS EOF 重试通过锁定 SHA-256；Desktop/Web 两个正常准备均 exit 0 并发布本树包。真实 Web 首轮 2 项通过、4 项失败；Sessions 缺少已有 IModelService，现由窗口注册服务，容器负责关闭释放，不扩展共享 API。概览断言验证翻译语义，Raw 保留原枚举断言。修复后先重跑四项，中文及循环决策通过；剩余两个 has 定位器按 Playwright 相对作用域修正后通过，保留 Thread 层级和所有行为断言。
+
+真实持久场景完成实际 App Server initialize、历史 shell Turns、Session 入口精确定位、真实新 Turn 的实时增量、子 Thread 层级及关闭后重开定位最新 Turn。六项 Web 已分别通过，尚未在 latest main 上整批重跑；新版 Electron/前台仍按父任务队列，合成 fixture 与真实持久验收分开记录。
+
+本树无冲突 rebase 到 `c6d6db1ef`，保留 P1、导入导出、UI 与运行修复的独立提交。最新基线上正常 Desktop/Web 前端构建、smoke 编译、57 项 / 6 文件单测、hygiene、8 文件格式均 exit 0；两种后端包 sourceDigest、所有文件哈希与 protocol major 7/schemaHash 只读复验通过，未改变包输入或复用其它树产物。详细退出码和日志见 [Trace 路线检查点](trace-todo.md#后端与真实-web-阶段检查点)。
+
+阶段交接时 Trace 自有编译、监督器与服务均已退出；其它 Cargo 属于 ash-external-conflict 树，未干预。不 push。Sessions skill 所列 valid-layers-check 在当前脚本中不存在，新增导入按已有层级核对，未宣称该命令通过。
