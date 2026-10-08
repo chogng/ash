@@ -357,20 +357,25 @@ for (const locale of ['en', 'zh-CN']) {
 			await output().locator('.stanza-editor-input').focus();
 			await page.keyboard.press('ControlOrMeta+Home');
 		};
+		const openFilters = (): Promise<void> => page.locator('.ash-output-title-actions').getByRole('button', { name: labels.filter, exact: true }).click();
 		const category = async (name: string, checked: boolean, change: boolean): Promise<void> => {
-			await page.locator('.ash-output-title-actions').getByRole('button', { name: labels.filter, exact: true }).click();
-			const item = page.getByRole('menuitemcheckbox', { name, exact: true });
-			await expect(item).toHaveAttribute('aria-checked', String(checked));
-			if (change) {
-				await item.focus();
-				await item.press('Enter');
-			} else {
-				await page.keyboard.press('Escape');
-			}
+			// The existing menu driver observes and dispatches through Browser or Main
+			// according to the product's menu setting; Output and IPC remain real.
+			const items = await workbench.menus.inspect(application, openFilters);
+			expect(items.find(item => item.label === name)).toMatchObject({ label: name, enabled: true, checked });
+			if (change) { await workbench.menus.select(application, openFilters, [name]); }
 		};
-		const reset = async (): Promise<void> => {
-			await page.locator('.ash-output-title-actions').getByRole('button', { name: labels.filter, exact: true }).click();
-			await page.getByRole('menuitem', { name: labels.reset, exact: true }).press('Enter');
+		const reset = (): Promise<void> => workbench.menus.select(application, openFilters, [labels.reset]);
+		const reloadSeededOwner = async (): Promise<void> => {
+			// The Electron saved-data fixture belongs to Main's next storage read;
+			// reload the renderer owner without replacing Main before it consumes it.
+			if (target.kind === 'electron') {
+				await workbench.reloadWindow();
+				await workbench.waitForReady();
+			} else {
+				({ workbench, application } = await reloadWorkbench());
+			}
+			page = workbench.page;
 		};
 		const workspaceId = target.kind === 'browser' ? await page.evaluate(() => {
 			const host = (globalThis as unknown as { ashWebWorkbenchHost: { workspace: { id: string; }; }; }).ashWebWorkbenchHost;
@@ -417,8 +422,7 @@ for (const locale of ['en', 'zh-CN']) {
 		const legacy = JSON.stringify({ syntaxVersion: 2, text: '', hiddenSeverities: [], hiddenCategories: ['lifecycle', 'connection'] });
 		// Existing storage fixtures seed only saved data before the next owner loads.
 		await seedStorageOnNextLoad(application, page, identity, { 'output.filterState': { value: legacy, target: StorageTarget.MACHINE } });
-		({ workbench, application } = await reloadWorkbench());
-		page = workbench.page;
+		await reloadSeededOwner();
 		await select('Window');
 		await expect.poll(lines).not.toContain('Workbench restored');
 		await category('lifecycle', false, false);
@@ -452,8 +456,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect(output().locator('.view-lines')).toContainText('connection');
 		const future = JSON.stringify({ syntaxVersion: 3, text: 'future', hiddenCategories: ['lifecycle'], future: { retained: true } });
 		await seedStorageOnNextLoad(application, page, identity, { 'output.filterState': { value: future, target: StorageTarget.MACHINE } });
-		({ workbench, application } = await reloadWorkbench());
-		page = workbench.page;
+		await reloadSeededOwner();
 		await select('Window');
 		await expect(output().getByRole('searchbox', { name: labels.filter, exact: true })).toHaveAttribute('title', labels.unsupported);
 		await category('lifecycle', true, true);

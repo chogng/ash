@@ -4,6 +4,7 @@ import { Range } from '../../../../editor/common/core/range.js';
 import { CursorChangeReason, type ICursorPositionChangedEvent } from '../../../../editor/common/cursorEvents.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
+import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { ITextModelService, type IResolvedTextEditorModel } from '../../../../editor/common/services/resolverService.js';
 import type { IEditorDecorationsCollection, ICodeEditorViewState } from '../../../../editor/common/editorCommon.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
@@ -44,7 +45,7 @@ export class OutputViewPane extends ViewPane {
 	private loadedModel: TextModel | null = null;
 	private boundChannel: IOutputChannel | undefined;
 	private changingContent = false;
-	private renderPending = false;
+	private readonly renderScheduler = this._register(new RunOnceScheduler(() => this.render(), 0));
 	private focusRequested = false;
 	private readonly filters: IOutputViewFilters;
 	private readonly filterInput: HTMLInputElement;
@@ -139,7 +140,9 @@ export class OutputViewPane extends ViewPane {
 			this.editor.setModel(null);
 			this.loadedModel = null;
 			this.modelReference.clear();
-			this.activeChannelListener.value = channel?.onDidChange(() => this.render());
+			// Rendering can itself emit diagnostics. Coalesce channel events and yield
+			// between passes; disposing this pane cancels the owned pending refresh.
+			this.activeChannelListener.value = channel?.onDidChange(() => this.renderScheduler.schedule());
 		});
 		this.render();
 		if (!channel) {
@@ -175,21 +178,21 @@ export class OutputViewPane extends ViewPane {
 	}
 
 	private changeContent(change: () => void): void {
-		// Editor model changes can synchronously append Window diagnostics.
-		// Consume them after the current operation releases the editor's DOM.
+		// Nested channel changes must leave the outer editor operation guarded.
+		const changingContent = this.changingContent;
 		this.changingContent = true;
 		try { change(); }
-		finally {
-			this.changingContent = false;
-			if (this.renderPending) {
-				this.renderPending = false;
-				this.render();
-			}
-		}
+		finally { this.changingContent = changingContent; }
 	}
 
 	private render(): void {
-		if (this.changingContent) { this.renderPending = true; return; }
+		if (this.changingContent) { this.renderScheduler.schedule(); return; }
+		this.renderScheduler.cancel();
+		// Guard title updates as well as model operations: both can emit logs.
+		this.changeContent(() => this.renderContent());
+	}
+
+	private renderContent(): void {
 		const active = this.outputService.activeChannel;
 		const categories = active ? categoriesOf(active.entries) : [];
 		const titleStateKey = [this.outputService.channels.map(channel => channel.id).join("\0"), active?.id ?? "", (active?.entries.length ?? 0) > 0, this.autoScroll, this.filters.text, ...OutputSeverities.map(severity => this.filters.isSeverityVisible(severity)), ...categories.map(category => `${category}:${this.filters.isCategoryVisible(category, active!.id)}`)].join("\u0001");

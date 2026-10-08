@@ -26,7 +26,7 @@ interface OutputViewTestEnvironment {
 	readonly editor: CodeEditorWidget;
 	readonly services: InstantiationService;
 	filter(text: string): void;
-	visibleLines(): readonly string[];
+	visibleLines(): Promise<readonly string[]>;
 }
 
 async function createOutputView(resources: DisposableStore, kind: OutputChannelKind = 'output', storage?: IStorageService): Promise<OutputViewTestEnvironment> {
@@ -59,7 +59,9 @@ async function createOutputView(resources: DisposableStore, kind: OutputChannelK
 			input.value = text;
 			input.dispatchEvent(new browserEnvironment.window.Event('input'));
 		},
-		visibleLines(): readonly string[] {
+		async visibleLines(): Promise<readonly string[]> {
+			// Channel refreshes yield to the event loop; inspect the rendered result.
+			await new Promise<void>(resolve => setTimeout(resolve, 0));
 			const model = editor.getModel();
 			const viewModel = editor._getViewModel();
 			if (!model || !viewModel) {
@@ -79,6 +81,110 @@ async function waitForChannel(editor: CodeEditorWidget, channel: IOutputChannel)
 	}
 }
 
+test('Output keeps nested channel changes guarded until the outer editor operation returns', async () => {
+	using resources = new DisposableStore();
+	const view = await createOutputView(resources);
+	view.channel.appendLine({ text: 'keep first' });
+	await view.visibleLines();
+	const second = resources.add(view.output.createChannel({ id: 'nested', label: 'Nested' }));
+	second.appendLine({ text: 'keep second' });
+	const input = view.pane.element.querySelector<HTMLInputElement>('.ash-output-filter-input')!;
+	const setModel = view.editor.setModel.bind(view.editor);
+	const setHiddenAreas = view.editor.setHiddenAreas.bind(view.editor);
+	let insideOuterOperation = false;
+	let nestedModelChanges = 0;
+	let observedFilter: string | undefined;
+	view.editor.setModel = (...args) => {
+		if (insideOuterOperation) nestedModelChanges++;
+		return setModel(...args);
+	};
+	view.editor.setHiddenAreas = (...args) => {
+		const result = setHiddenAreas(...args);
+		if (observedFilter === undefined) {
+			insideOuterOperation = true;
+			try {
+				// Selecting a channel detaches the editor inside the current render.
+				view.output.selectChannel(second.id);
+				view.output.filters.setText('second');
+				// This independent service event must still observe the outer guard.
+				resources.add(view.output.createChannel({ id: 'during-render', label: 'During Render' }));
+				observedFilter = input.value;
+			} finally { insideOuterOperation = false; }
+		}
+		return result;
+	};
+	resources.add(toDisposable(() => {
+		view.editor.setModel = setModel;
+		view.editor.setHiddenAreas = setHiddenAreas;
+	}));
+	view.filter('keep');
+	assert.ok(nestedModelChanges > 0, 'The production channel switch nested an editor model operation');
+	assert.equal(observedFilter, 'keep', 'Nested filter input must wait for the outer editor operation');
+	await waitForChannel(view.editor, second);
+	assert.deepEqual({ visible: await view.visibleLines(), input: input.value, retained: second.getText() }, {
+		visible: ['keep second'], input: 'second', retained: 'keep second\n',
+	});
+});
+
+test('Output yields between continuous editor diagnostics and retains every write once', async () => {
+	using resources = new DisposableStore();
+	const view = await createOutputView(resources, 'log');
+	const count = 128;
+	let emitted = 0;
+	let firstRender!: () => void;
+	const rendered = new Promise<void>(resolve => { firstRender = resolve; });
+	const setHiddenAreas = view.editor.setHiddenAreas.bind(view.editor);
+	view.editor.setHiddenAreas = (...args) => {
+		const result = setHiddenAreas(...args);
+		if (emitted < count) {
+			view.channel.appendLine({ text: `diagnostic ${emitted++}`, category: 'lifecycle' });
+		}
+		firstRender();
+		return result;
+	};
+	resources.add(toDisposable(() => { view.editor.setHiddenAreas = setHiddenAreas; }));
+	view.channel.appendLine({ text: 'seed' });
+	await rendered;
+	assert.equal(emitted, 1, 'The next diagnostic render must not drain on the same stack');
+	await new Promise<void>(resolve => setTimeout(resolve, 0));
+	assert.ok(emitted < count, 'An unrelated event-loop task can run before continuous logging completes');
+	const deadline = Date.now() + 5_000;
+	while (emitted < count) {
+		assert.ok(Date.now() < deadline, 'Output did not consume the finite diagnostic stream');
+		await new Promise<void>(resolve => setTimeout(resolve, 0));
+	}
+	const expected = ['seed', ...Array.from({ length: count }, (_, index) => `diagnostic ${index}`)];
+	using reference = await view.services.get(ITextModelService).createModelReference(view.channel.uri);
+	assert.deepEqual({ visible: await view.visibleLines(), retained: view.channel.getText(), shared: reference.object.textEditorModel.getValue() }, {
+		visible: expected, retained: expected.join('\n') + '\n', shared: expected.join('\n') + '\n',
+	});
+});
+
+test('Output disposal cancels a queued diagnostic render and leaves its channel alive', async () => {
+	using resources = new DisposableStore();
+	const view = await createOutputView(resources);
+	let renders = 0;
+	let firstRender!: () => void;
+	const rendered = new Promise<void>(resolve => { firstRender = resolve; });
+	const setHiddenAreas = view.editor.setHiddenAreas.bind(view.editor);
+	view.editor.setHiddenAreas = (...args) => {
+		const result = setHiddenAreas(...args);
+		if (++renders === 1) view.channel.appendLine({ text: 'queued diagnostic' });
+		firstRender();
+		return result;
+	};
+	resources.add(toDisposable(() => { view.editor.setHiddenAreas = setHiddenAreas; }));
+	view.channel.appendLine({ text: 'seed' });
+	await rendered;
+	assert.equal(renders, 1);
+	view.pane.dispose();
+	view.channel.appendLine({ text: 'after view disposal' });
+	await new Promise<void>(resolve => setTimeout(resolve, 10));
+	assert.deepEqual({ renders, retained: view.channel.getText(), editors: view.services.get(ICodeEditorService).listCodeEditors().length }, {
+		renders: 1, retained: 'seed\nqueued diagnostic\nafter view disposal\n', editors: 0,
+	});
+});
+
 test('ordinary Output filters individual lines without changing the shared text model', async () => {
 	using resources = new DisposableStore();
 	const view = await createOutputView(resources);
@@ -86,16 +192,16 @@ test('ordinary Output filters individual lines without changing the shared text 
 	view.channel.append({ text });
 	using reference = await view.services.get(ITextModelService).createModelReference(view.channel.uri);
 	view.filter('keep,!banned');
-	assert.deepEqual({ visible: view.visibleLines(), retained: view.channel.getText(), shared: reference.object.textEditorModel.getValue() }, {
+	assert.deepEqual({ visible: await view.visibleLines(), retained: view.channel.getText(), shared: reference.object.textEditorModel.getValue() }, {
 		visible: ['keep first', 'last keep'], retained: text, shared: text,
 	});
 	view.filter('!banned');
-	assert.deepEqual(view.visibleLines(), ['keep first', 'drop', 'last keep']);
+	assert.deepEqual(await view.visibleLines(), ['keep first', 'drop', 'last keep']);
 	view.filter('absent');
-	assert.deepEqual(view.visibleLines(), []);
+	assert.deepEqual(await view.visibleLines(), []);
 	assert.equal(view.editor.getModel(), null);
 	view.filter('');
-	assert.deepEqual(view.visibleLines(), ['keep first', 'drop', 'keep banned', 'last keep']);
+	assert.deepEqual(await view.visibleLines(), ['keep first', 'drop', 'keep banned', 'last keep']);
 	assert.equal(view.editor.getModel(), reference.object.textEditorModel);
 });
 
@@ -104,16 +210,16 @@ test('ordinary Output matches split writes, split CRLF and an unfinished last li
 	const view = await createOutputView(resources);
 	view.filter('keep');
 	view.channel.append({ text: 'kee' });
-	assert.deepEqual(view.visibleLines(), []);
+	assert.deepEqual(await view.visibleLines(), []);
 	view.channel.append({ text: 'p first\r' });
-	assert.deepEqual(view.visibleLines(), ['keep first']);
+	assert.deepEqual(await view.visibleLines(), ['keep first']);
 	view.channel.append({ text: '\ndrop\r' });
 	view.channel.append({ text: '\nkee' });
-	assert.deepEqual(view.visibleLines(), ['keep first']);
+	assert.deepEqual(await view.visibleLines(), ['keep first']);
 	view.channel.append({ text: 'p second' });
-	assert.deepEqual(view.visibleLines(), ['keep first', 'keep second']);
+	assert.deepEqual(await view.visibleLines(), ['keep first', 'keep second']);
 	view.filter('keep,!second');
-	assert.deepEqual(view.visibleLines(), ['keep first']);
+	assert.deepEqual(await view.visibleLines(), ['keep first']);
 	assert.equal(view.channel.getText(), 'keep first\r\ndrop\r\nkeep second');
 });
 
@@ -123,15 +229,15 @@ test('Output keeps severity and category filters and preserves multiline log rec
 	view.channel.append({ text: 'keep first\ncontinuation\n', severity: 'warning', category: 'build' });
 	view.channel.append({ text: 'other record\n', severity: 'information', category: 'server' });
 	view.filter('keep');
-	assert.deepEqual(view.visibleLines(), ['keep first', 'continuation']);
+	assert.deepEqual(await view.visibleLines(), ['keep first', 'continuation']);
 	view.output.filters.setSeverityVisible('warning', false);
-	assert.deepEqual(view.visibleLines(), []);
+	assert.deepEqual(await view.visibleLines(), []);
 	view.output.filters.setSeverityVisible('warning', true);
 	view.output.filters.setCategoryVisible('build', false, view.channel.id);
-	assert.deepEqual(view.visibleLines(), []);
+	assert.deepEqual(await view.visibleLines(), []);
 	view.output.filters.reset();
 	view.filter('!continuation');
-	assert.deepEqual(view.visibleLines(), ['other record']);
+	assert.deepEqual(await view.visibleLines(), ['other record']);
 });
 
 function categoryMenuItem(view: OutputViewTestEnvironment, category: string): HTMLButtonElement {
@@ -159,27 +265,27 @@ for (const restored of [false, true]) {
 			channel.appendLine({ text: `${label} other` });
 		}
 		using reference = await view.services.get(ITextModelService).createModelReference(view.channel.uri);
-		assert.deepEqual(view.visibleLines(), restored ? ['first other'] : ['first lifecycle', 'first build', 'first other']);
+		assert.deepEqual(await view.visibleLines(), restored ? ['first other'] : ['first lifecycle', 'first build', 'first other']);
 		if (restored) assert.equal(storage.get('output.filterState', StorageScope.WORKSPACE), saved);
 		const firstChoice = categoryMenuItem(view, 'lifecycle');
 		assert.equal(firstChoice.getAttribute('aria-checked'), String(!restored));
 		firstChoice.click();
 		await new Promise<void>(resolve => setTimeout(resolve, 0));
-		assert.deepEqual(view.visibleLines(), restored ? ['first lifecycle', 'first other'] : ['first build', 'first other']);
+		assert.deepEqual(await view.visibleLines(), restored ? ['first lifecycle', 'first other'] : ['first build', 'first other']);
 		assert.equal(reference.object.textEditorModel.getValue(), 'first lifecycle\nfirst build\nfirst other\n');
 		view.output.selectChannel(second.id);
 		await waitForChannel(view.editor, second);
-		assert.deepEqual(view.visibleLines(), restored ? ['second lifecycle', 'second other'] : ['second lifecycle', 'second build', 'second other']);
+		assert.deepEqual(await view.visibleLines(), restored ? ['second lifecycle', 'second other'] : ['second lifecycle', 'second build', 'second other']);
 		const secondChoice = categoryMenuItem(view, 'lifecycle');
 		assert.equal(secondChoice.getAttribute('aria-checked'), 'true');
 		secondChoice.click();
 		await new Promise<void>(resolve => setTimeout(resolve, 0));
-		assert.deepEqual(view.visibleLines(), restored ? ['second other'] : ['second build', 'second other']);
+		assert.deepEqual(await view.visibleLines(), restored ? ['second other'] : ['second build', 'second other']);
 		view.output.selectChannel(view.channel.id);
 		await waitForChannel(view.editor, view.channel);
-		assert.deepEqual(view.visibleLines(), restored ? ['first lifecycle', 'first other'] : ['first build', 'first other']);
+		assert.deepEqual(await view.visibleLines(), restored ? ['first lifecycle', 'first other'] : ['first build', 'first other']);
 		view.output.filters.reset();
-		assert.deepEqual(view.visibleLines(), ['first lifecycle', 'first build', 'first other']);
+		assert.deepEqual(await view.visibleLines(), ['first lifecycle', 'first build', 'first other']);
 		assert.equal(second.getText(), 'second lifecycle\nsecond build\nsecond other\n');
 	});
 }
@@ -193,19 +299,19 @@ test('Output filters follow channel switching, inactive appends, clearing and di
 	view.filter('keep');
 	view.output.selectChannel(second.id);
 	await waitForChannel(view.editor, second);
-	assert.deepEqual(view.visibleLines(), ['keep second']);
+	assert.deepEqual(await view.visibleLines(), ['keep second']);
 	view.channel.append({ text: 'keep appended\n' });
-	assert.deepEqual(view.visibleLines(), ['keep second']);
+	assert.deepEqual(await view.visibleLines(), ['keep second']);
 	view.output.selectChannel(view.channel.id);
 	await waitForChannel(view.editor, view.channel);
-	assert.deepEqual(view.visibleLines(), ['keep first', 'keep appended']);
+	assert.deepEqual(await view.visibleLines(), ['keep first', 'keep appended']);
 	view.channel.clear();
-	assert.deepEqual(view.visibleLines(), []);
+	assert.deepEqual(await view.visibleLines(), []);
 	view.channel.append({ text: 'keep replacement' });
-	assert.deepEqual(view.visibleLines(), ['keep replacement']);
+	assert.deepEqual(await view.visibleLines(), ['keep replacement']);
 	view.channel.dispose();
 	await waitForChannel(view.editor, second);
-	assert.deepEqual(view.visibleLines(), ['keep second']);
+	assert.deepEqual(await view.visibleLines(), ['keep second']);
 	second.dispose();
 	assert.equal(view.editor.getModel(), null);
 	view.pane.dispose();
@@ -217,11 +323,11 @@ test('Output presents comma alternatives and literal quoted text from the actual
 	const view = await createOutputView(resources);
 	view.channel.append({ text: 'keep one\nother two\nkeep banned\n"a,b"\na,b', category: 'metadata' });
 	view.filter('keep,other,!banned');
-	assert.deepEqual(view.visibleLines(), ['keep one', 'other two']);
+	assert.deepEqual(await view.visibleLines(), ['keep one', 'other two']);
 	view.filter('"a,b"');
-	assert.deepEqual(view.visibleLines(), ['"a,b"']);
+	assert.deepEqual(await view.visibleLines(), ['"a,b"']);
 	view.filter('metadata');
-	assert.deepEqual(view.visibleLines(), []);
+	assert.deepEqual(await view.visibleLines(), []);
 	const input = view.pane.element.querySelector<HTMLInputElement>('.ash-output-filter-input')!;
 	assert.equal(input.hasAttribute('title'), false);
 	assert.equal(input.hasAttribute('aria-description'), false);
@@ -237,16 +343,16 @@ test('Output announces a restored saved query and leaves it on input, Escape or 
 		const view = await createOutputView(resources, 'output', storage);
 		view.channel.append({ text: 'keep one\ndrop\nkeep banned' });
 		const input = view.pane.element.querySelector<HTMLInputElement>('.ash-output-filter-input')!;
-		assert.deepEqual(view.visibleLines(), ['keep one']);
+		assert.deepEqual(await view.visibleLines(), ['keep one']);
 		assert.match(input.title, /Saved filter restored/);
 		assert.equal(input.getAttribute('aria-description'), input.title);
 		view.output.filters.setSeverityVisible('trace', false);
-		assert.deepEqual(view.visibleLines(), ['keep one']);
+		assert.deepEqual(await view.visibleLines(), ['keep one']);
 		assert.match(input.title, /Saved filter restored/);
 		if (action === 'input') { view.filter('keep !banned'); }
 		else if (action === 'escape') { input.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); }
 		else { view.output.filters.reset(); }
-		assert.deepEqual(view.visibleLines(), action === 'input' ? [] : ['keep one', 'drop', 'keep banned']);
+		assert.deepEqual(await view.visibleLines(), action === 'input' ? [] : ['keep one', 'drop', 'keep banned']);
 		assert.equal(input.hasAttribute('title'), false);
 		assert.equal(input.hasAttribute('aria-description'), false);
 		assert.equal(JSON.parse(storage.get('output.filterState', StorageScope.WORKSPACE)!).syntaxVersion, 2);
@@ -263,7 +369,7 @@ test('Output explains unsupported saved queries without replacing their storage'
 	const view = await createOutputView(resources, 'output', storage);
 	view.channel.append({ text: 'keep one\ndrop' });
 	view.filter('keep');
-	assert.deepEqual(view.visibleLines(), ['keep one']);
+	assert.deepEqual(await view.visibleLines(), ['keep one']);
 	const input = view.pane.element.querySelector<HTMLInputElement>('.ash-output-filter-input')!;
 	assert.match(input.title, /Changes in this window are not saved/);
 	assert.equal(input.getAttribute('aria-description'), input.title);
@@ -277,27 +383,28 @@ test('ordinary Output keeps hidden line numbers and raw text across CR, empty ch
 		using reference = await view.services.get(ITextModelService).createModelReference(view.channel.uri);
 		view.filter('keep');
 		let raw = '';
-		const append = (text: string, visible: readonly string[], hidden: readonly number[], modelText: string): void => {
+		const append = async (text: string, visible: readonly string[], hidden: readonly number[], modelText: string): Promise<void> => {
 			view.channel.append({ text });
 			raw += text;
+			const rendered = await view.visibleLines();
 			const model = reference.object.textEditorModel;
 			const areas = view.editor._getViewModel()!.getHiddenAreas();
 			const hiddenLines = model.getLinesContent().flatMap((line, index) => line && areas.some(range => index + 1 >= range.startLineNumber && index + 1 <= range.endLineNumber) ? [index + 1] : []);
-			assert.deepEqual({ visible: view.visibleLines(), hidden: hiddenLines, retained: view.channel.getText(), shared: model.getValue().replaceAll('\r\n', '\n') }, {
+			assert.deepEqual({ visible: rendered, hidden: hiddenLines, retained: view.channel.getText(), shared: model.getValue().replaceAll('\r\n', '\n') }, {
 				visible, hidden, retained: raw, shared: modelText,
 			});
 		};
-		append('keep first\r', ['keep first'], [], 'keep first\n');
-		if (emptyChunks) { append('', ['keep first'], [], 'keep first\n'); }
-		append('\n', ['keep first'], [], 'keep first\n');
-		append('drop\r', ['keep first'], [2], 'keep first\ndrop\n');
-		if (emptyChunks) { append('', ['keep first'], [2], 'keep first\ndrop\n'); }
-		append('\n', ['keep first'], [2], 'keep first\ndrop\n');
-		append('kee', ['keep first'], [2, 3], 'keep first\ndrop\nkee');
-		if (emptyChunks) { append('', ['keep first'], [2, 3], 'keep first\ndrop\nkee'); }
-		append('p second', ['keep first', 'keep second'], [2], 'keep first\ndrop\nkeep second');
+		await append('keep first\r', ['keep first'], [], 'keep first\n');
+		if (emptyChunks) { await append('', ['keep first'], [], 'keep first\n'); }
+		await append('\n', ['keep first'], [], 'keep first\n');
+		await append('drop\r', ['keep first'], [2], 'keep first\ndrop\n');
+		if (emptyChunks) { await append('', ['keep first'], [2], 'keep first\ndrop\n'); }
+		await append('\n', ['keep first'], [2], 'keep first\ndrop\n');
+		await append('kee', ['keep first'], [2, 3], 'keep first\ndrop\nkee');
+		if (emptyChunks) { await append('', ['keep first'], [2, 3], 'keep first\ndrop\nkee'); }
+		await append('p second', ['keep first', 'keep second'], [2], 'keep first\ndrop\nkeep second');
 		view.filter('keep,!first');
-		assert.deepEqual(view.visibleLines(), ['keep second']);
+		assert.deepEqual(await view.visibleLines(), ['keep second']);
 		assert.equal(view.channel.getText(), 'keep first\r\ndrop\r\nkeep second');
 		assert.equal(reference.object.textEditorModel.getValue().replaceAll('\r\n', '\n'), 'keep first\ndrop\nkeep second');
 	}
@@ -320,7 +427,7 @@ for (const action of ['empty-input', 'same-input', 'empty-reset']) {
 		const input = view.pane.element.querySelector<HTMLInputElement>('.ash-output-filter-input')!;
 		assert.match(input.title, /Changes in this window are not saved/);
 		assert.equal(input.getAttribute('aria-description'), input.title);
-		assert.deepEqual(view.visibleLines(), query ? ['keep one'] : ['keep one', 'drop']);
+		assert.deepEqual(await view.visibleLines(), query ? ['keep one'] : ['keep one', 'drop']);
 		assert.equal(storage.get('output.filterState', StorageScope.WORKSPACE), raw);
 	});
 }
@@ -430,6 +537,7 @@ test('Output retains manual scroll pausing and resuming when smart scrolling is 
 	view.editor.layout({ width: 640, height: 100 });
 	await view.services.get(IConfigurationService).updateValue('output.smartScroll.enabled', false, ConfigurationTarget.USER);
 	view.channel.append({ text: Array.from({ length: 30 }, (_, index) => `line ${index + 1}`).join('\n') });
+	await view.visibleLines();
 	assert.ok(view.editor.getScrollTop() > 0);
 	view.editor.setScrollTop(0);
 	assert.equal(followsOutput(view), false);
