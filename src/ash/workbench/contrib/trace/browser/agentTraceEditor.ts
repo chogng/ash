@@ -2,7 +2,7 @@ import './agentTraceEditor.css';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
 import { triggerDownload } from '../../../../base/browser/fileAccess.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
-import { MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -19,6 +19,29 @@ import { IChatService } from '../../../services/chat/common/chatService.js';
 import { readAgentTraceLocation, type AgentTraceLocation } from '../common/trace.js';
 import { diagnosticPayload, mergeAgentTrace, mergeAgentTraceDiagnostics, parseAgentTrace, type AgentTrace, type AgentTraceEvent, type AgentTraceGraph } from '../../../services/chat/common/agentTrace.js';
 
+import { ObjectTree } from '../../../../base/browser/ui/tree/objectTree.js';
+import { TreeVisibility } from '../../../../base/browser/ui/tree/tree.js';
+import { SplitView } from '../../../../base/browser/ui/splitview/splitview.js';
+import { TabList } from '../../../../base/browser/ui/tablist/tabList.js';
+import { IconLabel } from '../../../../base/browser/ui/iconlabel/iconlabel.js';
+import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
+import { List } from '../../../../base/browser/ui/list/listWidget.js';
+import { CountBadge } from '../../../../base/browser/ui/countBadge/countBadge.js';
+import { ProgressBar } from '../../../../base/browser/ui/progressbar/progressbar.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import type { IAction } from '../../../../base/common/actions.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
+import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
+import { IModelService } from '../../../../editor/common/services/model.js';
+import type { ITextModel } from '../../../../editor/common/model.js';
+import { CodeEditorWidget } from '../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
+import { AgentTraceViewModel, eventLabel, recordingLabel, evidenceLabel, relationLabel, type TraceEntry } from './agentTraceModel.js';
+
+type DetailTab = 'overview' | 'input' | 'output' | 'relations' | 'raw';
+interface TraceRelation { readonly id: string; readonly label: string; readonly target?: TraceEntry; }
+let detailSequence = 0;
+
 export const agentTraceEditorId = 'ash.agentTrace';
 
 /** Owns a read-only capture and reference-counted subscriptions only while its input is open. */
@@ -28,14 +51,45 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 	private statusDomNode!: HTMLParagraphElement;
 	private summaryDomNode!: HTMLParagraphElement;
 	private locationDomNode!: HTMLParagraphElement;
-	private listDomNode!: HTMLDivElement;
-	private detailsDomNode!: HTMLPreElement;
+	private bodyDomNode!: HTMLDivElement;
+	private navigationDomNode!: HTMLDivElement;
+	private inspectorDomNode!: HTMLDivElement;
+	private treeDomNode!: HTMLDivElement;
+	private detailsDomNode!: HTMLDivElement;
+	private panelDomNode!: HTMLDivElement;
+	private inspectorTitle!: HTMLHeadingElement;
+	private inspectorIdentity!: HTMLParagraphElement;
+	private bodyEditorHost!: HTMLDivElement;
 	private relationsDomNode!: HTMLDivElement;
-	private evidenceButton!: Button;
-	private relationsButton!: Button;
+	private relationWarning!: HTMLParagraphElement;
+	private emptyTree!: HTMLParagraphElement;
 	private filter!: InputBox;
-	private exportButton!: Button;
 	private errorsButton!: Button;
+	private toolbar!: WorkbenchToolBar;
+	private refreshAction!: IAction;
+	private secondaryActions!: readonly IAction[];
+	private tree!: ObjectTree<TraceEntry>;
+	private tabs!: TabList<DetailTab>;
+	private relationList!: List<TraceRelation>;
+	private detailScroll!: ScrollableElement;
+	private count!: CountBadge;
+	private progress!: ProgressBar;
+	private viewModel = new AgentTraceViewModel();
+	private tab: DetailTab = 'overview';
+	private readonly panelId = `ash-trace-detail-${++detailSequence}`;
+	private readonly split = this._register(new MutableDisposable<SplitView>());
+	private readonly inspectorResources = this._register(new DisposableStore());
+	private readonly bodyEditor = this._register(new MutableDisposable<CodeEditorWidget>());
+	private readonly bodyModel = this._register(new MutableDisposable<ITextModel>());
+	private readonly rowLabels = new Map<HTMLElement, IconLabel>();
+	private filteredCollapse: Map<string, boolean> | undefined;
+	private filterKey = '';
+	private dimension: IDimension = { width: 900, height: 600 };
+	private detailValue: unknown;
+	private detailIdentity: string | undefined;
+	private detailText = '';
+	private bodySectionIdentity: string | undefined;
+	private graphRequest: Promise<AgentTraceGraph> | undefined;
 	private trace: AgentTrace | undefined;
 	private sessionId: string | undefined;
 	private location: AgentTraceLocation | undefined;
@@ -55,9 +109,6 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 	private inputSignal: AbortSignal | undefined;
 	private errorsOnly = false;
 	private selected: string | undefined;
-	private readonly rows = new Map<string, HTMLButtonElement>();
-	private readonly threads = new Map<string, { domNode: HTMLElement; label: HTMLElement; children: HTMLElement; }>();
-	private readonly turns = new Map<string, { domNode: HTMLElement; label: HTMLElement; }>();
 	private readonly pendingInput = this._register(new MutableDisposable<IDisposable>());
 	private readonly refreshScheduler = this._register(new RunOnceScheduler(() => { void this.refresh(); }, 100));
 
@@ -66,6 +117,9 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
 		@IAccessibleViewService private readonly accessibleViews: IAccessibleViewService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
+		@IContextMenuService private readonly contextMenus: IContextMenuService,
+		@IModelService private readonly models: IModelService,
 		@IThemeService theme: IThemeService,
 		@IStorageService storage: IStorageService,
 	) {
@@ -98,77 +152,140 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 			if (event.affectsConfiguration(AccessibilityVerbositySettingId.AgentTrace)) { updateHint(); }
 		}));
 		updateHint();
-		const toolbar = h(document, 'div', { className: 'ash-agent-trace-toolbar' });
-		this._register(new Button(toolbar, { label: localize('agentTrace.refresh', 'Refresh'), onClick: () => this.requestRefresh() }));
-		this.errorsButton = this._register(new Button(toolbar, {
-			label: localize('agentTrace.errors', 'Errors only'), onClick: () => {
-				this.errorsOnly = !this.errorsOnly;
-				this.errorsButton.checked = this.errorsOnly;
-				this.render();
-			}
-		}));
-		this.errorsButton.checked = false;
-		this.exportButton = this._register(new Button(toolbar, { label: localize('agentTrace.export', 'Export trace'), onClick: () => { void this.exportTrace(); } }));
-		this.evidenceButton = this._register(new Button(toolbar, { label: localize('agentTrace.evidence', 'View request / response'), onClick: () => { void this.loadEvidence(); } }));
-		this.relationsButton = this._register(new Button(toolbar, { label: localize('agentTrace.relations', 'View relationships'), onClick: () => { void this.loadRelationships(); } }));
+		const header = h(document, 'div', { className: 'ash-agent-trace-header' });
+		const title = h(document, 'h1');
+		title.textContent = localize('agentTrace.title', 'Execution Trace');
+		this.statusDomNode = h(document, 'p', { className: 'ash-agent-trace-status' });
+		this.statusDomNode.setAttribute('role', 'status');
+		const actions = h(document, 'div', { className: 'ash-agent-trace-actions' });
+		this.toolbar = this._register(new WorkbenchToolBar(actions, this.contextMenus, { ariaLabel: localize('agentTrace.actions', 'Trace actions') }));
+		this.refreshAction = { id: 'trace.refresh', label: localize('agentTrace.refresh', 'Refresh'), tooltip: '', icon: Lxicon.refresh, enabled: true, run: () => this.requestRefresh() };
 		const file = h(document, 'input');
-		file.type = 'file';
-		file.accept = '.json';
-		file.hidden = true;
+		file.type = 'file'; file.accept = '.json'; file.hidden = true;
 		file.setAttribute('aria-label', localize('agentTrace.import', 'Import trace'));
-		this._register(new Button(toolbar, { label: localize('agentTrace.import', 'Import trace'), onClick: () => file.click() }));
-		this._register(new Button(toolbar, { label: localize('agentTrace.help', 'Help'), onClick: () => this.accessibleViews.show(AccessibleViewType.Help) }));
+		const editor = this;
+		this.secondaryActions = [
+			{ id: 'trace.import', label: localize('agentTrace.import', 'Import trace'), tooltip: '', enabled: true, run: () => file.click() },
+			{ id: 'trace.export', label: localize('agentTrace.export', 'Export trace'), tooltip: '', get enabled() { return !!editor.trace && !editor.exportOperation; }, run: () => { if (!editor.exportOperation) { void editor.exportTrace(); } } },
+			{ id: 'trace.help', label: localize('agentTrace.help', 'Help'), tooltip: '', enabled: true, run: () => this.accessibleViews.show(AccessibleViewType.Help) },
+		];
+		this.toolbar.setActions([this.refreshAction], this.secondaryActions);
 		this._register(addDisposableListener(file, 'change', () => {
 			const selected = file.files?.[0];
 			if (selected) { void this.importFile(selected); }
 			file.value = '';
 		}));
-		this.filter = this._register(new InputBox(toolbar, { ariaLabel: localize('agentTrace.filter', 'Filter execution events'), placeholder: localize('agentTrace.filter', 'Filter execution events') }));
-		this._register(this.filter.onDidChange(() => this.render()));
-		this.statusDomNode = h(document, 'p', { className: 'ash-agent-trace-status' });
-		this.statusDomNode.setAttribute('role', 'status');
-		this.locationDomNode = h(document, 'p', { className: 'ash-agent-trace-status ash-agent-trace-location' });
+		header.append(title, this.statusDomNode, actions);
+		this.locationDomNode = h(document, 'p', { className: 'ash-agent-trace-location' });
 		this.locationDomNode.setAttribute('aria-live', 'polite');
-		this.summaryDomNode = h(document, 'p', { className: 'ash-agent-trace-summary' });
-		const body = h(document, 'div', { className: 'ash-agent-trace-body' });
-		this.listDomNode = h(document, 'div', { className: 'ash-agent-trace-list' });
-		this.listDomNode.setAttribute('role', 'region');
-		this.listDomNode.setAttribute('aria-label', localize('agentTrace.timeline', 'Execution timeline'));
-		this.detailsDomNode = h(document, 'pre', { className: 'ash-agent-trace-details' });
-		this.detailsDomNode.tabIndex = 0;
-		this.detailsDomNode.setAttribute('role', 'region');
-		this.detailsDomNode.setAttribute('aria-label', localize('agentTrace.details', 'Execution event details'));
-		const detailColumn = h(document, 'div', { className: 'ash-agent-trace-detail-column' });
-		this.relationsDomNode = h(document, 'div', { className: 'ash-agent-trace-relations' });
-		this.relationsDomNode.setAttribute('aria-label', localize('agentTrace.relations', 'View relationships'));
-		this.relationsDomNode.setAttribute('role', 'region');
-		detailColumn.append(this.relationsDomNode, this.detailsDomNode);
-		body.append(this.listDomNode, detailColumn);
-		this.domNode.append(toolbar, file, this.statusDomNode, this.locationDomNode, this.summaryDomNode, body);
-		this._register(addDisposableListener(this.listDomNode, 'click', event => {
-			const row = (event.target as Element).closest<HTMLButtonElement>('.ash-agent-trace-event');
-			if (row?.dataset.key) { this.select(row.dataset.key); }
-		}));
-		this._register(addDisposableListener(this.relationsDomNode, 'click', event => {
-			const key = (event.target as Element).closest<HTMLButtonElement>('.ash-agent-trace-relation')?.dataset.key;
-			if (key) {
-				this.errorsOnly = false; this.errorsButton.checked = false; this.filter.value = ''; this.render();
-				this.select(key); this.rows.get(key)?.focus();
+		this.progress = this._register(new ProgressBar(this.domNode));
+		this.progress.element.hidden = true;
+		this.bodyDomNode = h(document, 'div', { className: 'ash-agent-trace-body' });
+		this.navigationDomNode = h(document, 'div', { className: 'ash-agent-trace-navigation' });
+		const structure = h(document, 'div', { className: 'ash-agent-trace-structure' });
+		const structureTitle = h(document, 'h2');
+		structureTitle.textContent = localize('agentTrace.structure', 'Execution structure');
+		this.count = this._register(new CountBadge(structure, { size: 'small', titleFormat: localize('agentTrace.count', '{0} matching events') }));
+		structure.prepend(structureTitle);
+		const search = h(document, 'div', { className: 'ash-agent-trace-search' });
+		this.filter = this._register(new InputBox(search, { presentation: 'compact', ariaLabel: localize('agentTrace.filter', 'Filter execution events'), placeholder: localize('agentTrace.filter', 'Filter execution events') }));
+		this.errorsButton = this._register(new Button(search, {
+			presentation: 'secondary', label: localize('agentTrace.errors', 'Errors only'), onClick: () => {
+				this.errorsOnly = !this.errorsOnly; this.errorsButton.checked = this.errorsOnly; this.render();
 			}
 		}));
-		this._register(addDisposableListener(this.listDomNode, 'keydown', event => {
-			const keys = ['ArrowDown', 'ArrowUp', 'Home', 'End'];
-			if (!keys.includes(event.key)) { return; }
-			event.preventDefault();
-			const rows = [...this.listDomNode.querySelectorAll<HTMLButtonElement>('.ash-agent-trace-event')].filter(row => !row.hidden);
-			const index = rows.findIndex(row => row.dataset.key === this.selected);
-			const next = event.key === 'Home' ? 0 : event.key === 'End' ? rows.length - 1 : Math.max(0, Math.min(rows.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)));
-			if (rows[next]?.dataset.key) { this.select(rows[next].dataset.key!); rows[next].focus(); }
+		this.errorsButton.checked = false;
+		this._register(this.filter.onDidChange(() => this.render()));
+		this.summaryDomNode = h(document, 'p', { className: 'ash-agent-trace-summary' });
+		this.treeDomNode = h(document, 'div', { className: 'ash-agent-trace-tree' });
+		this.tree = this._register(new ObjectTree<TraceEntry>(this.treeDomNode, {
+			ariaLabel: localize('agentTrace.timeline', 'Execution timeline'), scrolling: 'managed', getHeight: () => 24,
+			indent: 12, indentGuides: 'onHover', expandOnlyOnTwistieClick: true,
+			modelOptions: { identityProvider: { getId: entry => entry.id }, filter: { filter: entry => entry.kind === 'event' ? this.viewModel.matched.has(entry.id) : TreeVisibility.Recurse } },
+			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: entry => entry.label },
+			renderElement: entry => {
+				const root = h(document, 'span', { className: `ash-agent-trace-row ash-agent-trace-${entry.kind}` });
+				root.dataset.traceRow = entry.id;
+				root.dataset.threadId = entry.threadId;
+				if (entry.turnId) { root.dataset.turnId = entry.turnId; }
+				if (entry.key) { root.dataset.key = entry.key; }
+				if (entry.record) { root.dataset.eventId = entry.record.eventId; }
+				const type = entry.record?.event.type;
+				const label = new IconLabel(root, { label: entry.label, description: entry.description, icon: entry.kind === 'thread' ? Lxicon.chat1 : type?.startsWith('model') ? Lxicon.sparkle : isRecord(entry.record?.event.item) && String(entry.record.event.item.type).startsWith('tool') ? Lxicon.terminal : Lxicon.history, title: [entry.threadId, entry.turnId, entry.record?.eventId, entry.record && eventLabel(entry.record)].filter(Boolean).join(' · ') });
+				this.rowLabels.set(root, label);
+				if (entry.failed) {
+					const failure = h(document, 'span', { className: 'ash-agent-trace-failure' });
+					failure.textContent = localize('agentTrace.failedShort', 'Failed'); root.append(failure);
+				}
+				return root;
+			},
+			onDidRemoveRow: row => {
+				const root = row.querySelector<HTMLElement>('[data-trace-row]');
+				if (root) { this.rowLabels.get(root)?.dispose(); this.rowLabels.delete(root); }
+			},
 		}));
+		this._register(this.tree.onDidChangeSelection(({ elements, browserEvent }) => { if (browserEvent && elements[0]) { this.select(elements[0].id); } }));
+		this.emptyTree = h(document, 'p', { className: 'ash-agent-trace-empty' });
+		this.navigationDomNode.append(structure, search, this.treeDomNode, this.emptyTree, this.summaryDomNode);
+		this.inspectorDomNode = h(document, 'div', { className: 'ash-agent-trace-inspector' });
+		this.inspectorTitle = h(document, 'h2', { className: 'ash-agent-trace-inspector-title' });
+		this.inspectorIdentity = h(document, 'p', { className: 'ash-agent-trace-inspector-identity' });
+		this.tabs = this._register(new TabList<DetailTab>(this.inspectorDomNode, { ariaLabel: localize('agentTrace.detailTabs', 'Execution details'), presentation: 'flush', onActivate: tab => { this.tab = tab; this.renderInspector(); } }));
+		this.inspectorDomNode.prepend(this.inspectorTitle, this.inspectorIdentity);
+		const detailHost = h(document, 'div', { className: 'ash-agent-trace-detail-host' });
+		this.detailScroll = this._register(new ScrollableElement(detailHost, { direction: 'vertical', tabIndex: -1 }));
+		this.detailsDomNode = h(document, 'div', { className: 'ash-agent-trace-details' });
+		this.detailsDomNode.tabIndex = 0;
+		this.panelDomNode = h(document, 'div', { className: 'ash-agent-trace-panel' });
+		this.panelDomNode.id = this.panelId;
+		this.panelDomNode.setAttribute('role', 'tabpanel');
+		this.detailScroll.setContent(this.detailsDomNode);
+		this.bodyEditorHost = h(document, 'div', { className: 'ash-agent-trace-code' });
+		this.relationsDomNode = h(document, 'div', { className: 'ash-agent-trace-relations' });
+		this.relationList = this._register(new List<TraceRelation>(this.relationsDomNode, {
+			ariaLabel: localize('agentTrace.relations', 'View relationships'), scrolling: 'managed', keyboardNavigation: true, getHeight: () => 32,
+			getId: item => item.id, renderItem: item => {
+				const label = h(document, 'span', { className: 'ash-agent-trace-relation' });
+				label.textContent = item.label;
+				if (item.target) { label.dataset.key = item.target.key; }
+				else { label.setAttribute('aria-disabled', 'true'); }
+				return label;
+			},
+		}));
+		this._register(this.relationList.onDidAccept(({ item }) => {
+			if (!item.target) { return; }
+			this.errorsOnly = false; this.errorsButton.checked = false; this.filter.value = ''; this.render();
+			this.select(item.target.id, true); this.tree.domFocus();
+		}));
+		this.relationWarning = h(document, 'p', { className: 'ash-agent-trace-relation-warning' });
+		this.panelDomNode.append(detailHost, this.bodyEditorHost, this.relationsDomNode, this.relationWarning);
+		this.inspectorDomNode.append(this.panelDomNode);
+		this.domNode.append(header, file, this.locationDomNode, this.bodyDomNode);
 		parent.append(this.domNode);
 		super.create(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
+		this.configureSplit(false);
 		this.render();
+	}
+
+	private configureSplit(narrow: boolean): void {
+		if (this.split.value?.orientation === (narrow ? 'vertical' : 'horizontal')) { return; }
+		// Pane roots and widget owners survive orientation changes; only the Sash layout is replaced.
+		this.navigationDomNode.remove(); this.inspectorDomNode.remove();
+		this.split.value = new SplitView(this.bodyDomNode, narrow ? 'vertical' : 'horizontal', { styles: { separatorBorder: 'var(--ash-widget-border)' } });
+		this.split.value.addView({ element: this.navigationDomNode, minimumSize: narrow ? 120 : 200, maximumSize: Number.POSITIVE_INFINITY, layout: (size, _offset, other) => this.layoutNavigation(narrow ? other : size, narrow ? size : other) }, (narrow ? this.dimension.height : this.dimension.width) * 0.35);
+		this.split.value.addView({ element: this.inspectorDomNode, minimumSize: narrow ? 160 : 240, maximumSize: Number.POSITIVE_INFINITY, layout: (size, _offset, other) => this.layoutInspector(narrow ? other : size, narrow ? size : other) }, (narrow ? this.dimension.height : this.dimension.width) * 0.65);
+	}
+
+	private layoutNavigation(width: number, height: number): void {
+		this.navigationDomNode.style.width = `${width}px`; this.navigationDomNode.style.height = `${height}px`;
+		this.tree.domNode.style.height = `${Math.max(0, height - 112)}px`;
+	}
+	private layoutInspector(width: number, height: number): void {
+		this.inspectorDomNode.style.width = `${width}px`; this.inspectorDomNode.style.height = `${height}px`;
+		this.bodyEditor.value?.layout({ width: Math.max(0, width - 24), height: Math.max(0, height - 112) });
+		this.relationList.layout(Math.max(0, height - 120));
+		this.detailScroll.layout();
 	}
 
 	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
@@ -206,11 +323,17 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 		this.diagnosticCursor = 0;
 		this.selected = undefined;
 		this.loading = false;
+		if (this.progress) { this.progress.element.hidden = true; }
 		this.dirty = false;
-		this.rows.clear();
-		this.threads.clear();
-		this.turns.clear();
-		this.listDomNode?.replaceChildren();
+		this.viewModel = new AgentTraceViewModel();
+		this.filteredCollapse = undefined; this.filterKey = '';
+		this.detailIdentity = undefined; this.detailValue = undefined;
+		this.bodySectionIdentity = undefined; this.graphRequest = undefined;
+		this.bodyEditor.clear(); this.bodyModel.clear();
+		this.inspectorResources.clear();
+		this.tab = 'overview';
+		this.relationWarning && (this.relationWarning.textContent = '');
+		if (!this.isDisposed) { this.tree?.setChildren([]); if (this.relationList) { this.relationList.items = []; } }
 		this.render();
 	}
 
@@ -236,6 +359,8 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 		const revision = this.revision;
 		const owner = this.subscriptionOwner;
 		this.loading = true;
+		this.progress.element.hidden = false;
+		this.progress.value = undefined;
 		this.dirty = false;
 		this.statusDomNode.textContent = localize('agentTrace.loading', 'Loading execution history…');
 		try {
@@ -284,6 +409,7 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 		} finally {
 			if (revision === this.revision && !this.isDisposed) {
 				this.loading = false;
+				this.progress.element.hidden = true;
 				if (this.dirty) { this.refreshScheduler.schedule(); }
 				if (this.isShown && this.sessionId && ['recording', 'incomplete'].includes(this.trace?.diagnostics?.recordingStatus ?? '')) { this.diagnosticPoll.schedule(); }
 			}
@@ -309,209 +435,205 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 	}
 
 	private render(): void {
-		if (!this.domNode) { return; }
-		this.exportButton.enabled = !!this.trace && !this.exportOperation;
-		this.relationsButton.enabled = !!this.trace;
+		if (!this.domNode || this.isDisposed) { return; }
 		this.locationDomNode.hidden = !this.location?.threadId;
 		if (!this.location?.threadId) { this.locationDomNode.textContent = ''; }
-		if (!this.trace) {
-			this.statusDomNode.textContent = localize('agentTrace.empty', 'Open a saved conversation or import an evaluation trace.');
-			this.summaryDomNode.textContent = '';
-			this.detailsDomNode.textContent = '';
-			this.relationsDomNode.replaceChildren();
-			this.evidenceButton.enabled = false;
-			return;
-		}
-		const document = this.domNode.ownerDocument;
+		const changed = this.viewModel.update(this.trace);
 		const query = this.filter.value.toLowerCase();
-		let count = 0;
-		let shown = 0;
-		for (const thread of this.trace.threads) {
-			let group = this.threads.get(thread.threadId);
-			if (!group) {
-				const domNode = h(document, 'section', { className: 'ash-agent-trace-thread' });
-				const label = h(document, 'h2');
-				const children = h(document, 'div', { className: 'ash-agent-trace-children' });
-				domNode.dataset.threadId = thread.threadId;
-				domNode.append(label, children);
-				group = { domNode, label, children };
-				this.threads.set(thread.threadId, group);
-				this.listDomNode.append(domNode);
+		this.viewModel.filter(query, this.errorsOnly);
+		if (changed) { this.tree.setChildren(this.viewModel.roots); }
+		else { this.tree.model.refilter(); }
+		const filterKey = JSON.stringify([query, this.errorsOnly]);
+		const filtering = !!query || this.errorsOnly;
+		if (filtering) {
+			this.filteredCollapse ??= new Map([...this.viewModel.entries.values()].filter(entry => entry.kind !== 'event').map(entry => [entry.id, this.tree.isCollapsed(entry.id) ?? false]));
+			if (this.filterKey !== filterKey || changed) {
+				for (const id of this.viewModel.matched) { this.tree.expandTo(id); }
 			}
-			const created = thread.events.find(record => record.event.type === 'threadCreated')?.event;
-			group.label.textContent = localize('agentTrace.thread', 'Thread · {0}', typeof created?.title === 'string' ? created.title : thread.threadId);
-			group.label.title = thread.threadId;
-			const origin = isRecord(created?.origin) ? created.origin : undefined;
-			const parent = typeof origin?.parentThreadId === 'string' ? this.threads.get(origin.parentThreadId) : undefined;
-			if (parent && !group.domNode.contains(parent.domNode)) { parent.children.append(group.domNode); }
-			let threadShown = false;
-			const records = [
-				...thread.events.map(record => ({ key: `${thread.threadId}:${record.sequence}`, record })),
-				...(this.trace.diagnostics?.events ?? []).filter(record => record.threadId === thread.threadId).map(record => ({ key: `diagnostic:${record.sequence}`, record: { ...record, event: { ...record.event, threadId: record.threadId, turnId: record.turnId } } })),
-			];
-			for (const { key, record } of records) {
-				count++;
-				let row = this.rows.get(key);
-				if (!row) {
-					row = h(document, 'button', { className: 'ash-agent-trace-event' });
-					row.type = 'button';
-					row.dataset.key = key;
-					row.textContent = eventLabel(record);
-					row.title = thread.threadId;
-					this.rows.set(key, row);
-					const turnId = typeof record.event.turnId === 'string' ? record.event.turnId : undefined;
-					if (turnId) {
-						const turnKey = `${thread.threadId}:${turnId}`;
-						let turn = this.turns.get(turnKey);
-						if (!turn) {
-							const domNode = h(document, 'section', { className: 'ash-agent-trace-turn' });
-							const label = h(document, 'h3');
-							domNode.dataset.turnId = turnId;
-							label.textContent = localize('agentTrace.turn', 'Turn · {0}', turnId);
-							domNode.append(label);
-							turn = { domNode, label };
-							this.turns.set(turnKey, turn);
-							group.domNode.insertBefore(domNode, group.children);
-						}
-						turn.domNode.append(row);
-					} else { group.domNode.insertBefore(row, group.children); }
-				}
-				const isError = eventIsError(record);
-				row.classList.toggle('failed', isError);
-				row.hidden = (this.errorsOnly && !isError) || !`${thread.threadId} ${row.textContent} ${JSON.stringify(record.event)}`.toLowerCase().includes(query);
-				if (!row.hidden) { shown++; threadShown = true; }
+		} else if (this.filteredCollapse) {
+			for (const [id, collapsed] of this.filteredCollapse) {
+				if (this.tree.model.has(id)) { if (collapsed) { this.tree.collapse(id); } else { this.tree.expand(id); } }
 			}
-			group.domNode.hidden = !threadShown;
+			this.filteredCollapse = undefined;
 		}
-		for (const turn of this.turns.values()) { turn.domNode.hidden = ![...turn.domNode.querySelectorAll<HTMLButtonElement>('button')].some(row => !row.hidden); }
-		for (const thread of this.trace.threads) {
-			const origin = thread.events.find(record => record.event.type === 'threadCreated')?.event.origin;
-			if (!isRecord(origin) || typeof origin.parentThreadId !== 'string') { continue; }
-			const group = this.threads.get(thread.threadId)!;
-			const parent = this.threads.get(origin.parentThreadId);
-			if (parent && !group.domNode.contains(parent.domNode)) { parent.children.append(group.domNode); }
-		}
-		// Keep ancestors visible when a descendant matches the filter.
-		for (const group of this.threads.values()) {
-			if ([...group.children.querySelectorAll<HTMLButtonElement>('button')].some(row => !row.hidden)) { group.domNode.hidden = false; }
-		}
-		this.summaryDomNode.textContent = localize('agentTrace.summary', '{0} Threads · {1} shown / {2} events.', this.trace.threads.length, shown, count) + ' ' + recordingLabel(this.trace);
+		this.filterKey = filterKey;
+		this.count.setCount(this.viewModel.shownCount);
+		this.emptyTree.hidden = this.viewModel.shownCount !== 0;
+		this.emptyTree.textContent = this.trace ? localize('agentTrace.noMatches', 'No matching execution events.') : localize('agentTrace.empty', 'Open a saved conversation or import an evaluation trace.');
+		this.summaryDomNode.textContent = this.trace ? localize('agentTrace.summary', '{0} Threads · {1} shown / {2} events.', this.trace.threads.length, this.viewModel.shownCount, this.viewModel.eventCount) : '';
+		if (!this.trace) { this.statusDomNode.textContent = ''; }
 		let located = false;
 		if (this.location?.threadId && !this.locationKey) {
-			this.locationKey = this.findLocation();
+			this.locationKey = this.viewModel.findEvent(this.location.threadId, this.location.turnId, this.location.eventId)?.id;
 			if (this.locationKey) { this.selected = this.locationKey; located = true; }
 		}
-		// A requested event keeps its identity and details even when a display filter hides it.
-		// Until pagination finds it, no unrelated first row may stand in for the target.
-		if ((!this.location?.threadId || this.locationKey) && !(this.locationKey && this.selected === this.locationKey) && (!this.selected || this.rows.get(this.selected)?.hidden)) {
-			this.selected = [...this.rows].find(([, row]) => !row.hidden)?.[0];
+		if (!this.selected && !this.location?.threadId) {
+			this.selected = this.viewModel.matched.values().next().value;
+			located = !!this.selected;
 		}
 		if (this.location?.threadId) {
 			const identity = [this.location.threadId, this.location.turnId, this.location.eventId].filter(value => value !== undefined).join(' / ');
-			let message: string;
-			if (this.locationKey) {
-				message = this.rows.get(this.locationKey)?.hidden
-					? localize('agentTrace.locationHidden', 'Located {0} · hidden by the display filter.', identity)
-					: localize('agentTrace.locationFound', 'Located {0}.', identity);
-			} else {
-				message = this.locationReadComplete
-					? localize('agentTrace.locationMissing', 'No saved execution event matches {0}.', identity)
-					: localize('agentTrace.locationLoading', 'Finding saved execution event {0}…', identity);
-			}
-			// Repeated live reads must not reannounce an unchanged navigation result.
+			const message = this.locationKey
+				? this.viewModel.matched.has(this.locationKey) ? localize('agentTrace.locationFound', 'Located {0}.', identity) : localize('agentTrace.locationHidden', 'Located {0} · hidden by the display filter.', identity)
+				: this.locationReadComplete ? localize('agentTrace.locationMissing', 'No saved execution event matches {0}.', identity) : localize('agentTrace.locationLoading', 'Finding saved execution event {0}…', identity);
 			if (this.locationDomNode.textContent !== message) { this.locationDomNode.textContent = message; }
 		}
-		if (this.selected) { this.select(this.selected); }
-		else { this.detailsDomNode.textContent = this.location?.threadId ? this.locationDomNode.textContent : localize('agentTrace.noMatches', 'No matching execution events.'); }
-		if (located) { this.rows.get(this.locationKey!)?.scrollIntoView?.({ block: 'nearest' }); }
+		if (this.selected && located) { this.tree.expandTo(this.selected); this.tree.setFocus(this.selected); }
+		if (this.selected) { this.tree.setSelection([this.selected]); }
+		this.renderInspector();
 	}
 
-	private findLocation(): string | undefined {
-		const location = this.location!;
-		const thread = this.trace?.threads.find(thread => thread.threadId === location.threadId);
-		const event = thread?.events.find(record => (!location.turnId || record.event.turnId === location.turnId) && (!location.eventId || record.eventId === location.eventId));
-		if (event) { return `${thread!.threadId}:${event.sequence}`; }
-		const diagnostic = this.trace?.diagnostics?.events.find(record => record.threadId === location.threadId && (!location.turnId || record.turnId === location.turnId) && (!location.eventId || record.eventId === location.eventId));
-		return diagnostic && `diagnostic:${diagnostic.sequence}`;
+	private select(id: string, reveal = false): void {
+		if (!this.viewModel.entries.has(id)) { return; }
+		this.selected = id;
+		if (reveal) { this.tree.expandTo(id); this.tree.setFocus(id); }
+		this.tree.setSelection([id]);
+		this.renderInspector();
 	}
 
-	private select(key: string): void {
-		this.selected = key;
-		for (const [id, row] of this.rows) {
-			row.classList.toggle('selected', id === key);
-			row.setAttribute('aria-pressed', String(id === key));
-			row.tabIndex = id === key ? 0 : -1;
-		}
-		this.relationsDomNode.replaceChildren();
-		this.evidenceButton.enabled = false;
-		const diagnostic = this.trace?.diagnostics?.events.find(record => `diagnostic:${record.sequence}` === key);
-		if (diagnostic) {
-			const payload = diagnosticPayload(diagnostic);
-			this.evidenceButton.enabled = payload?.status === 'saved';
-			const evidence = payload && this.trace?.diagnostics?.payloads?.[payload.payloadId];
-			this.detailsDomNode.textContent = evidence === undefined ? JSON.stringify(diagnostic, null, 2) : `${evidenceLabel(payload!.kind)}\n${JSON.stringify({ ...diagnostic, evidence }, null, 2)}`;
-			if (this.trace?.graph) { this.renderRelationships(this.trace.graph); }
+	private renderInspector(): void {
+		const entry = this.selected && this.viewModel.entries.get(this.selected);
+		const labels: Record<DetailTab, string> = {
+			overview: localize('agentTrace.overview', 'Overview'), input: localize('agentTrace.inputTab', 'Input'), output: localize('agentTrace.outputTab', 'Output'), relations: localize('agentTrace.relationsTab', 'Relations'), raw: localize('agentTrace.rawTab', 'Raw record'),
+		};
+		this.tabs.setTabs((Object.keys(labels) as DetailTab[]).map(tab => ({ id: tab, value: tab, label: labels[tab], tabId: `${this.panelId}-${tab}`, panelId: this.panelId })), this.tab);
+		this.panelDomNode.setAttribute('aria-labelledby', `${this.panelId}-${this.tab}`);
+		this.inspectorTitle.textContent = entry ? entry.label : localize('agentTrace.details', 'Execution event details');
+		this.inspectorIdentity.textContent = entry ? [entry.kind, entry.threadId, entry.turnId].filter(Boolean).join(' · ') : '';
+		this.detailScroll.element.hidden = this.tab === 'relations' || this.tab === 'raw';
+		this.relationsDomNode.hidden = this.tab !== 'relations';
+		this.relationWarning.hidden = this.tab !== 'relations';
+		this.bodyEditorHost.hidden = this.tab !== 'raw' && this.bodySectionIdentity !== `${this.selected}:${this.tab}`;
+		if (this.tab === 'relations') { void this.loadRelationships(); return; }
+		if (!entry) {
+			this.detailsDomNode.textContent = this.location?.threadId ? this.locationDomNode.textContent : this.emptyTree.textContent;
+			this.detailText = this.detailsDomNode.textContent ?? '';
 			return;
 		}
-		for (const thread of this.trace?.threads ?? []) {
-			const record = thread.events.find(item => `${thread.threadId}:${item.sequence}` === key);
-			if (record) {
-				const detail = record.event.type === 'historyPrefixBound' ? { ...record, retainedHistoryPrefixes: this.trace?.historyPrefixes } : record;
-				this.detailsDomNode.textContent = JSON.stringify(detail, null, 2);
-				if (this.trace?.graph) { this.renderRelationships(this.trace.graph); }
-				return;
-			}
+		const payload = this.viewModel.payload(entry, this.tab === 'output').ref;
+		const body = payload && this.trace?.diagnostics?.payloads?.[payload.payloadId];
+		const identity = `${entry.id}:${this.tab}`;
+		const value = this.tab === 'input' || this.tab === 'output' ? body ?? payload ?? entry.record : entry.record ?? this.trace;
+		if (identity === this.detailIdentity && value === this.detailValue) { return; }
+		this.detailIdentity = identity; this.detailValue = value;
+		if (this.bodySectionIdentity !== identity) { this.bodySectionIdentity = undefined; }
+		this.inspectorResources.clear();
+		this.detailsDomNode.replaceChildren();
+		if (this.tab === 'raw') {
+			const record = entry.record;
+			const thread = this.trace?.threads.find(thread => thread.threadId === entry.threadId);
+			this.showCode(record?.event.type === 'historyPrefixBound' ? { ...record, retainedHistoryPrefixes: this.trace?.historyPrefixes } : record ?? (entry.kind === 'thread' ? thread : { threadId: entry.threadId, turnId: entry.turnId, events: thread?.events.filter(record => record.event.turnId === entry.turnId) }));
+			return;
+		}
+		if (this.tab === 'overview') {
+			const fields = h(this.domNode.ownerDocument, 'dl');
+			const field = (label: string, value: unknown): void => {
+				if (value === undefined || value === null) { return; }
+				const term = h(fields.ownerDocument, 'dt'); const definition = h(fields.ownerDocument, 'dd');
+				term.textContent = label; definition.textContent = typeof value === 'string' ? value.slice(0, 1000) : String(value); fields.append(term, definition);
+			};
+			field(localize('agentTrace.typeField', 'Type'), entry.record?.event.type ?? entry.kind);
+			field(localize('agentTrace.threadShort', 'Thread'), entry.threadId);
+			field(localize('agentTrace.turnShort', 'Turn'), entry.turnId);
+			if (entry.record) {
+				field(localize('agentTrace.eventIdField', 'Event ID'), entry.record.eventId);
+				field(localize('agentTrace.sequenceField', 'Sequence'), entry.record.sequence);
+				field(localize('agentTrace.recordedField', 'Recorded at'), new Date(entry.record.recordedAt).toISOString());
+				const event = entry.record.event;
+				const invocation = isRecord(event.record) ? event.record : undefined;
+				const error = event.error ?? (isRecord(event.item) && event.item.isError ? event.item.text : undefined);
+				field(localize('agentTrace.errorField', 'Error'), isRecord(error) ? error.message ?? error.type : error);
+				if (isRecord(event.decision)) {
+					field(localize('agentTrace.decisionField', 'Decision'), eventLabel(entry.record));
+				}
+				field(localize('agentTrace.modelField', 'Model'), invocation?.resolvedModel);
+				field(localize('agentTrace.outcomeField', 'Outcome'), invocation?.outcome);
+				if (typeof invocation?.startedAtUnixMs === 'number' && typeof invocation.completedAtUnixMs === 'number' && invocation.completedAtUnixMs >= invocation.startedAtUnixMs) { field(localize('agentTrace.durationField', 'Model duration (ms)'), invocation.completedAtUnixMs - invocation.startedAtUnixMs); }
+				if (isRecord(invocation?.usage)) {
+					for (const [key, value] of Object.entries(invocation.usage)) { if (typeof value === 'number') { field(key, value); } }
+				}
+			} else { field(localize('agentTrace.eventsField', 'Saved events'), [...this.viewModel.entries.values()].filter(candidate => candidate.record && candidate.threadId === entry.threadId && (!entry.turnId || candidate.turnId === entry.turnId)).length); }
+			this.detailsDomNode.append(fields);
+			const recording = h(fields.ownerDocument, 'p'); recording.textContent = this.trace && recordingLabel(this.trace) || ''; this.detailsDomNode.append(recording);
+		} else {
+			void this.renderBody(entry, payload, body);
+		}
+		this.detailText = this.detailsDomNode.textContent ?? '';
+		this.detailScroll.layout();
+	}
+
+	private async renderBody(entry: TraceEntry, payload: ReturnType<AgentTraceViewModel['payload']>['ref'], body: unknown): Promise<void> {
+		const document = this.domNode.ownerDocument;
+		const identity = this.detailIdentity;
+		if (payload) {
+			const label = h(document, 'p'); label.textContent = evidenceLabel(payload.kind); this.detailsDomNode.append(label);
+			if (payload.status === 'omitted') { this.detailsDomNode.append(h(document, 'p', localize('agentTrace.payloadOmitted', 'Payload omitted by the recording limit.'))); }
+			else if (body !== undefined) { this.renderBodySections(body); }
+			else if (!this.sessionId || !this.trace?.diagnostics?.captureId) { this.detailsDomNode.append(h(document, 'p', localize('agentTrace.missingEvidence', 'This capture does not include the selected payload.'))); }
+			else { await this.loadEvidence(entry, payload); }
+		} else {
+			const item = isRecord(entry.record?.event.item) ? entry.record.event.item : undefined;
+			const value = this.tab === 'output' ? item?.type === 'agentMessage' || item?.type === 'toolResult' ? item.text ?? item : undefined : item?.type === 'userMessage' || item?.type === 'toolCall' ? item.arguments ?? item.text ?? item : entry.record?.event.type === 'turnAccepted' ? entry.record.event : undefined;
+			if (value !== undefined) { this.renderBodySections(value); }
+			else { this.detailsDomNode.append(h(document, 'p', this.trace?.diagnostics && this.trace.diagnostics.recordingStatus !== 'disabled' ? localize('agentTrace.noBody', 'No body is recorded for this event and tab.') : this.trace && recordingLabel(this.trace) || '')); }
+		}
+		if (identity === this.detailIdentity && !this.isDisposed) { this.detailText = this.detailsDomNode.textContent ?? ''; this.detailScroll.layout(); }
+	}
+
+	private renderBodySections(body: unknown): void {
+		const messages = isRecord(body) && Array.isArray(body.messages) ? body.messages : undefined;
+		const sections = messages ?? [body];
+		for (let index = 0; index < sections.length; index++) {
+			const section = sections[index];
+			const role = isRecord(section) && typeof section.role === 'string' ? section.role : localize('agentTrace.bodySection', 'Saved body');
+			this.inspectorResources.add(new Button(this.detailsDomNode, { presentation: 'secondary', label: `${role}${messages ? ` ${index + 1}` : ''}`, onClick: () => { this.bodySectionIdentity = this.detailIdentity; this.bodyEditorHost.hidden = false; this.showCode(isRecord(section) && section.content !== undefined ? section.content : section); } }));
 		}
 	}
 
-	private async loadEvidence(): Promise<void> {
-		const key = this.selected;
-		const record = this.trace?.diagnostics?.events.find(record => `diagnostic:${record.sequence}` === key);
-		const payload = record && diagnosticPayload(record);
-		if (!payload || payload.status !== 'saved' || !this.trace?.diagnostics) { return; }
+	private showCode(value: unknown): void {
+		const text = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+		if (!this.bodyEditor.value) {
+			this.bodyEditor.value = this.instantiation.createInstance(CodeEditorWidget, { container: this.bodyEditorHost, model: null, readOnly: true, ariaLabel: localize('agentTrace.savedBody', 'Saved execution body'), lineNumbers: 'off', minimap: { enabled: false }, wordWrap: 'on', suggestions: { enabled: false }, inlineCompletions: { enabled: false } });
+			// Saved bodies are transient text, without a file's resource configuration authority.
+			this.bodyModel.value = this.models.createModel('', null, undefined, true);
+			this.bodyEditor.value.setModel(this.bodyModel.value);
+		}
+		this.models.updateModel(this.bodyModel.value!, text);
+		this.detailText = text;
+		this.bodyEditor.value.layout({ width: Math.max(0, this.inspectorDomNode.clientWidth - 24), height: Math.max(0, this.inspectorDomNode.clientHeight - 112) });
+	}
+
+	private async loadEvidence(entry: TraceEntry, payload: NonNullable<ReturnType<AgentTraceViewModel['payload']>['ref']>): Promise<void> {
 		const revision = this.revision;
+		const identity = this.detailIdentity;
 		try {
-			let evidence = this.trace.diagnostics.payloads?.[payload.payloadId];
-			if (evidence === undefined && this.sessionId && this.trace.diagnostics.captureId) {
-				evidence = await this.chat.readTracePayload(this.sessionId, this.trace.diagnostics.captureId, payload.payloadId);
-				if (revision !== this.revision || this.isDisposed || !this.trace?.diagnostics) { return; }
-				this.trace = { ...this.trace, diagnostics: { ...this.trace.diagnostics, payloads: { ...this.trace.diagnostics.payloads, [payload.payloadId]: evidence } } };
-			}
-			if (evidence === undefined) { throw new Error(localize('agentTrace.missingEvidence', 'This capture does not include the selected payload.')); }
-			if (key === this.selected) { this.select(key!); }
-		} catch (error) { if (revision === this.revision && key === this.selected && !this.isDisposed) { this.statusDomNode.textContent = localize('agentTrace.failed', 'Could not load trace: {0}', String(error)); } }
+			const evidence = await this.chat.readTracePayload(this.sessionId!, this.trace!.diagnostics!.captureId!, payload.payloadId);
+			if (revision !== this.revision || this.isDisposed || !this.trace?.diagnostics) { return; }
+			this.trace = { ...this.trace, diagnostics: { ...this.trace.diagnostics, payloads: { ...this.trace.diagnostics.payloads, [payload.payloadId]: evidence } } };
+			if (identity === this.detailIdentity && entry.id === this.selected) { this.renderInspector(); }
+		} catch (error) { if (revision === this.revision && identity === this.detailIdentity && !this.isDisposed) { this.statusDomNode.textContent = localize('agentTrace.failed', 'Could not load trace: {0}', String(error)); } }
 	}
 
 	private async loadRelationships(): Promise<void> {
-		if (!this.trace) { return; }
+		if (!this.trace) { this.relationList.items = []; return; }
 		const revision = this.revision;
 		try {
-			const graph = this.trace.graph ?? (this.sessionId ? await this.chat.readTraceGraph(this.sessionId) : undefined);
-			if (revision !== this.revision || this.isDisposed || !this.trace) { return; }
+			const graph = this.trace.graph ?? (this.sessionId ? await (this.graphRequest ??= this.chat.readTraceGraph(this.sessionId)) : undefined);
+			if (revision === this.revision) { this.graphRequest = undefined; }
+			if (revision !== this.revision || this.isDisposed || !this.trace || this.tab !== 'relations') { return; }
 			if (graph) { this.trace = { ...this.trace, graph }; this.renderRelationships(graph); }
-			else { this.relationsDomNode.textContent = localize('agentTrace.noRelationships', 'No saved relationships for this capture.'); }
-		} catch (error) { if (revision === this.revision && !this.isDisposed) { this.statusDomNode.textContent = localize('agentTrace.failed', 'Could not load trace: {0}', String(error)); } }
+			else { this.relationList.items = []; this.relationWarning.textContent = localize('agentTrace.noRelationships', 'No saved relationships for this capture.'); }
+		} catch (error) { if (revision === this.revision && !this.isDisposed) { this.graphRequest = undefined; this.statusDomNode.textContent = localize('agentTrace.failed', 'Could not load trace: {0}', String(error)); } }
 	}
 
 	private renderRelationships(graph: AgentTraceGraph): void {
-		this.relationsDomNode.replaceChildren();
-		const selected = new Set(Object.values(graph.nodes).filter(node => node.eventKey === this.selected).map(node => node.id));
-		const edges = graph.edges.filter(edge => selected.has(edge.from) || selected.has(edge.to));
-		if (!edges.length) { this.relationsDomNode.textContent = localize('agentTrace.noRelationships', 'No saved relationships for this capture.'); }
-		for (const edge of edges) {
-			const target = graph.nodes[selected.has(edge.from) ? edge.to : edge.from];
-			const button = h(this.domNode.ownerDocument, 'button', { className: 'ash-agent-trace-relation' });
-			button.type = 'button';
-			button.textContent = localize('agentTrace.relatedEvent', '{0} · {1}', relationLabel(edge.kind), target.label);
-			button.disabled = !target.eventKey || !this.rows.has(target.eventKey);
-			if (target.eventKey) { button.dataset.key = target.eventKey; }
-			this.relationsDomNode.append(button);
-		}
-		if (graph.warnings.length) {
-			const warning = h(this.domNode.ownerDocument, 'p');
-			warning.textContent = localize('agentTrace.graphIncomplete', '{0} relationships have missing evidence. See exported graph warnings.', graph.warnings.length);
-			this.relationsDomNode.append(warning);
-		}
+		const selected = new Set(Object.values(graph.nodes).filter(node => this.viewModel.graphTarget(node)?.id === this.selected).map(node => node.id));
+		this.relationList.items = graph.edges.filter(edge => selected.has(edge.from) || selected.has(edge.to)).map((edge, index) => {
+			const outgoing = selected.has(edge.from);
+			const target = graph.nodes[outgoing ? edge.to : edge.from];
+			return { id: `${index}:${edge.from}:${edge.to}:${edge.kind}`, label: `${outgoing ? localize('agentTrace.outgoing', 'Outgoing') : localize('agentTrace.incoming', 'Incoming')} · ${relationLabel(edge.kind)} · ${target.label}`, target: this.viewModel.graphTarget(target) };
+		});
+		this.relationWarning.textContent = graph.warnings.length ? graph.warnings.join('\n') : this.relationList.items.length ? '' : localize('agentTrace.noRelationships', 'No saved relationships for this capture.');
 	}
 
 	private async exportTrace(): Promise<void> {
@@ -520,7 +642,6 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 		const sessionId = this.sessionId;
 		const operation = {};
 		this.exportOperation = operation;
-		this.exportButton.enabled = false;
 		try {
 			const capture = this.trace;
 			const payloads: Record<string, unknown> = { ...capture.diagnostics?.payloads };
@@ -548,17 +669,22 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 			// An older export must not unlock a replacement input's operation.
 			if (this.exportOperation === operation) {
 				this.exportOperation = undefined;
-				if (!this.isDisposed) { this.exportButton.enabled = !!this.trace; }
 			}
 		}
 	}
 
 	public getAccessibleContent(): string {
-		const timeline = [...this.listDomNode.querySelectorAll<HTMLElement>('.ash-agent-trace-thread, .ash-agent-trace-turn, .ash-agent-trace-event')]
-			.filter(node => !node.closest('[hidden]'))
-			.map(node => node.classList.contains('ash-agent-trace-event') ? node.textContent : node.firstElementChild?.textContent)
-			.join('\n');
-		return `${this.statusDomNode.textContent}\n${this.locationDomNode.textContent}\n${this.summaryDomNode.textContent}\n${timeline}\n${this.relationsDomNode.textContent}\n${this.detailsDomNode.textContent}`;
+		const lines: string[] = [];
+		const visit = (nodes: readonly import('../../../../base/browser/ui/tree/objectTreeModel.js').ObjectTreeNode<TraceEntry>[]): void => {
+			for (const node of nodes) {
+				if (!node.visible) { continue; }
+				lines.push(node.element.record ? eventLabel(node.element.record) : node.element.label);
+				visit(node.children);
+			}
+		};
+		visit(this.tree.model.rootNodes);
+		const selected = this.selected && this.viewModel.entries.get(this.selected);
+		return `${this.emptyTree.hidden ? '' : this.emptyTree.textContent}\n${this.statusDomNode.textContent}\n${this.locationDomNode.textContent}\n${this.summaryDomNode.textContent}\n${lines.join('\n')}\n${this.relationList.items.map(item => item.label).join('\n')}\n${this.relationWarning.textContent}\n${this.detailText}\n${selected && selected.record ? JSON.stringify(selected.record, null, 2) : ''}`;
 	}
 	public override setVisible(visible: boolean): void {
 		super.setVisible(visible);
@@ -567,17 +693,23 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 		else {
 			this.revision++;
 			this.exportOperation = undefined;
-			this.exportButton.enabled = !!this.trace;
 			this.refreshScheduler.cancel();
 			this.diagnosticPoll.cancel();
 			this.releaseSubscriptions();
 			this.loading = false;
+			this.progress.element.hidden = true;
 			this.dirty = false;
 			if (this.trace && this.sessionId) { this.statusDomNode.textContent = localize('agentTrace.paused', 'Paused · show the editor to follow new events'); }
 		}
 	}
-	public override layout(dimension: IDimension): void { this.domNode.style.width = `${dimension.width}px`; this.domNode.style.height = `${dimension.height}px`; }
-	public override focus(): void { (this.selected && this.rows.get(this.selected) || this.filter.inputElement).focus(); }
+	public override layout(dimension: IDimension): void {
+		this.dimension = dimension;
+		this.domNode.style.width = `${dimension.width}px`; this.domNode.style.height = `${dimension.height}px`;
+		this.configureSplit(dimension.width < 640);
+		const height = Math.max(0, dimension.height - 64 - (this.locationDomNode.hidden ? 0 : 24));
+		this.split.value!.layout(dimension.width < 640 ? height : dimension.width, dimension.width < 640 ? dimension.width : height);
+	}
+	public override focus(): void { if (this.selected) { this.tree.domFocus(); } else { this.filter.focus(); } }
 	public override getControl(): IEditorControl | undefined { return undefined; }
 }
 
@@ -586,11 +718,16 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
  * Missing causal witnesses remain omissions rather than borrowing later diagnostic responses. */
 function graphForCapture(capture: AgentTrace, graph: AgentTraceGraph): AgentTraceGraph {
 	const threads = new Map(capture.threads.map(thread => [thread.threadId, thread]));
-	const eventKeys = new Set(capture.threads.flatMap(thread => thread.events.map(record => `${thread.threadId}:${record.sequence}`)));
+	const events = new Map<string, { readonly threadId: string; readonly turnId: unknown; }>(capture.threads.flatMap(thread => thread.events.map(record => [`${thread.threadId}:${record.sequence}`, { threadId: thread.threadId, turnId: record.event.turnId }] as const)));
 	const diagnostics = new Map((capture.diagnostics?.events ?? []).map(record => [`diagnostic:${record.sequence}`, record]));
-	for (const key of diagnostics.keys()) { eventKeys.add(key); }
 	const completed = new Set([...diagnostics.values()].filter(record => record.event.type === 'modelAttemptCompleted').map(record => JSON.stringify([record.threadId, record.turnId, record.event.attemptId])));
-	const nodes = Object.fromEntries(Object.entries(graph.nodes).filter(([, node]) => node.eventKey !== null ? eventKeys.has(node.eventKey) : node.kind === 'thread' && threads.has(node.threadId)));
+	const nodes = Object.fromEntries(Object.entries(graph.nodes).filter(([, node]) => {
+		if (node.eventKey === null) { return node.kind === 'thread' && threads.has(node.threadId); }
+		// Model attempts use diagnostic records; other graph nodes use durable events.
+		// The external key alone can collide with a Thread literally named diagnostic.
+		const record = node.kind === 'modelAttempt' ? diagnostics.get(node.eventKey) : events.get(node.eventKey);
+		return !!record && record.threadId === node.threadId && (node.turnId === null || record.turnId === node.turnId);
+	}));
 	// A Code Mode cell points at its parent call; its nested call supplies the cell's evidence.
 	const cells = new Set(graph.edges.filter(edge => edge.kind === 'nestedTool' && nodes[edge.to]).map(edge => edge.from));
 	for (const node of Object.values(nodes)) {
@@ -612,137 +749,4 @@ function graphForCapture(capture: AgentTrace, graph: AgentTraceGraph): AgentTrac
 	const omitted = Object.keys(graph.nodes).length - Object.keys(nodes).length + graph.edges.length - edges.length;
 	const warnings = omitted ? [...graph.warnings, localize('agentTrace.graphScope', '{0} relationship entries excluded: their saved events or causal evidence are outside this capture.', omitted)] : graph.warnings;
 	return { ...graph, nodes, edges, warnings };
-}
-
-function eventIsError(record: AgentTraceEvent): boolean {
-	const event = record.event;
-	return event.type === 'modelAttemptFailed' || event.type === 'modelAttemptAbandoned' || event.type === 'turnFailed' || (event.type === 'modelResponseEvaluated' && isRecord(event.decision) && event.decision.action === 'fail') || (event.type === 'turnInterrupted' && isRecord(event.error)) || (isRecord(event.item) && event.item.isError === true) || (isRecord(event.record) && event.record.outcome === 'failed');
-}
-
-function eventLabel(record: AgentTraceEvent): string {
-	const event = record.event;
-	const item = isRecord(event.item) ? event.item : undefined;
-	const invocation = isRecord(event.record) ? event.record : undefined;
-	let detail: string;
-	switch (item?.type ?? event.type) {
-		case 'modelAttemptStarted': detail = localize('agentTrace.attemptStarted', 'Model attempt started · {0}', String(event.attemptId)); break;
-		case 'modelRequestPrepared': detail = localize('agentTrace.requestPrepared', 'Model request prepared · {0}', String(event.attemptId)); break;
-		case 'modelAttemptCompleted': detail = localize('agentTrace.attemptCompleted', 'Model attempt completed · {0}', String(event.attemptId)); break;
-		case 'modelAttemptFailed': detail = localize('agentTrace.attemptFailed', 'Model attempt failed · {0}', String(event.error)); break;
-		case 'modelAttemptCancelled': detail = localize('agentTrace.attemptCancelled', 'Model attempt cancelled · {0}', String(event.reason)); break;
-		case 'modelAttemptAbandoned': detail = localize('agentTrace.attemptAbandoned', 'Model attempt abandoned'); break;
-		case 'threadCreated': detail = localize('agentTrace.created', 'Thread created'); break;
-		case 'turnAccepted': detail = localize('agentTrace.accepted', 'Turn accepted · instructions and model selection'); break;
-		case 'turnStarted': detail = localize('agentTrace.started', 'Turn started'); break;
-		case 'turnCompleted': detail = localize('agentTrace.completed', 'Turn completed'); break;
-		case 'turnFailed': detail = localize('agentTrace.turnFailed', 'Turn failed'); break;
-		case 'turnCancelling': detail = localize('agentTrace.cancelling', 'Cancelling Turn'); break;
-		case 'turnInterrupted': detail = localize('agentTrace.interrupted', 'Turn interrupted'); break;
-		case 'userMessage': detail = localize('agentTrace.input', 'User input · {0}', String(item?.text ?? '').slice(0, 100)); break;
-		case 'agentMessage': detail = localize('agentTrace.phasedOutput', 'Agent output · {0} · {1}', phaseLabel(item?.phase), String(item?.text ?? '').slice(0, 100)); break;
-		case 'modelResponseEvaluated': {
-			const decision = isRecord(event.decision) ? event.decision : undefined;
-			const phases = Array.isArray(decision?.messagePhases) ? decision.messagePhases.map(phaseLabel).join(', ') : phaseLabel(undefined);
-			detail = localize('agentTrace.loopDecision', 'Loop · {0} · {1} · stop: {2} · phases: {3}', loopActionLabel(decision?.action), loopReasonLabel(decision?.reason), stopReasonLabel(decision?.stopReason), phases);
-			break;
-		}
-		case 'toolCall': detail = localize('agentTrace.toolCall', 'Tool call · {0}', String(item?.name ?? '')); break;
-		case 'toolResult': detail = item?.isError ? localize('agentTrace.toolFailed', 'Tool failed · {0}', String(item?.toolCallId ?? '')) : localize('agentTrace.toolResult', 'Tool result · {0}', String(item?.toolCallId ?? '')); break;
-		case 'toolExecutionStarted': detail = localize('agentTrace.toolStarted', 'Tool execution started'); break;
-		case 'contextCheckpointCommitted': detail = localize('agentTrace.compacted', 'Context checkpoint committed'); break;
-		case 'contextOverflowRecoveryCommitted': detail = localize('agentTrace.recovery', 'Context overflow recovery'); break;
-		case 'modelInvocationRecorded': {
-			const model = isRecord(invocation?.requestedModel) ? invocation.requestedModel : undefined;
-			const usage = isRecord(invocation?.usage) ? invocation.usage : undefined;
-			detail = localize('agentTrace.modelCall', 'Model call · {0} · {1}', String(invocation?.resolvedModel ?? model?.model ?? ''), String(invocation?.outcome ?? ''));
-			if (typeof usage?.inputTokens === 'number' && typeof usage.outputTokens === 'number') {
-				detail += localize('agentTrace.tokens', ' · {0} input / {1} output tokens', usage.inputTokens, usage.outputTokens);
-			}
-			break;
-		}
-		default: detail = typeof item?.type === 'string' ? item.type : event.type;
-	}
-	const duration = invocation && typeof invocation.startedAtUnixMs === 'number' && typeof invocation.completedAtUnixMs === 'number' ? ` · ${invocation.completedAtUnixMs - invocation.startedAtUnixMs} ms` : '';
-	return `${record.sequence} · ${detail} · ${new Date(record.recordedAt).toISOString()}${duration}`;
-}
-
-function phaseLabel(phase: unknown): string {
-	switch (phase) {
-		case 'commentary': return localize('agentTrace.phaseCommentary', 'Commentary');
-		case 'partial_answer': return localize('agentTrace.phasePartialAnswer', 'Partial answer');
-		case 'final_answer': return localize('agentTrace.phaseFinalAnswer', 'Final answer');
-		case null: case undefined: return localize('agentTrace.phaseUnspecified', 'Unspecified');
-		default: return typeof phase === 'string' ? phase : isRecord(phase) && typeof phase.other === 'string' ? phase.other : localize('agentTrace.phaseUnspecified', 'Unspecified');
-	}
-}
-
-function loopActionLabel(action: unknown): string {
-	switch (action) {
-		case 'executeTools': return localize('agentTrace.loopExecuteTools', 'Execute tools');
-		case 'continue': return localize('agentTrace.loopContinue', 'Continue generation');
-		case 'complete': return localize('agentTrace.loopComplete', 'Complete Turn');
-		case 'fail': return localize('agentTrace.loopFail', 'Fail Turn');
-		case 'superseded': return localize('agentTrace.loopSuperseded', 'Superseded by new input');
-		default: return String(action ?? '');
-	}
-}
-
-function loopReasonLabel(reason: unknown): string {
-	switch (reason) {
-		case 'toolRequests': return localize('agentTrace.reasonToolRequests', 'Pending tool requests');
-		case 'finalAnswer': return localize('agentTrace.reasonFinalAnswer', 'Final answer received');
-		case 'compatibleCompletion': return localize('agentTrace.reasonCompatibleCompletion', 'Completed without a known phase');
-		case 'nonterminalMessage': return localize('agentTrace.reasonNonterminalMessage', 'Nonterminal message received');
-		case 'continuationLimit': return localize('agentTrace.reasonContinuationLimit', 'Continuation limit reached');
-		case 'truncatedOutput': return localize('agentTrace.reasonTruncatedOutput', 'Output was truncated');
-		case 'invalidToolRequest': return localize('agentTrace.reasonInvalidToolRequest', 'Invalid tool request');
-		case 'unknownStopReason': return localize('agentTrace.reasonUnknownStopReason', 'Unknown stop reason');
-		case 'refusal': return localize('agentTrace.reasonRefusal', 'Model refused the request');
-		case 'newInput': return localize('agentTrace.reasonNewInput', 'New input arrived during generation');
-		default: return String(reason ?? '');
-	}
-}
-
-function stopReasonLabel(reason: unknown): string {
-	const type = isRecord(reason) ? reason.type : reason;
-	switch (type) {
-		case 'completed': return localize('agentTrace.stopCompleted', 'Generation completed');
-		case 'toolUse': return localize('agentTrace.stopToolUse', 'Tool use');
-		case 'maxOutputTokens': return localize('agentTrace.stopMaxOutputTokens', 'Output token limit');
-		case 'refusal': return localize('agentTrace.reasonRefusal', 'Model refused the request');
-		case 'other': return isRecord(reason) ? String(reason.detail ?? type) : type;
-		default: return String(type ?? '');
-	}
-}
-
-function recordingLabel(trace: AgentTrace): string {
-	switch (trace.diagnostics?.recordingStatus) {
-		case 'recording': return localize('agentTrace.recording', 'Local diagnostic evidence enabled.');
-		case 'incomplete': return localize('agentTrace.incomplete', 'Diagnostic evidence incomplete · {0} records omitted.', trace.diagnostics.droppedRecords);
-		case 'unavailable': return localize('agentTrace.unavailable', 'Diagnostic storage unavailable; execution history remains readable.');
-		case 'disabled': case undefined: return localize('agentTrace.disabled', 'Request evidence was not enabled. Enable detailed recording in Execution trace settings, then restart the owning App Server.');
-	}
-}
-function evidenceLabel(kind: string): string {
-	switch (kind) {
-		case 'coreRequest': return localize('agentTrace.coreRequest', 'Core semantic request · before attachment materialization');
-		case 'materializedRequest': return localize('agentTrace.materializedRequest', 'Model service semantic request · after attachment materialization');
-		case 'modelResponse': return localize('agentTrace.response', 'Model service response');
-		case 'partialOutput': return localize('agentTrace.partialOutput', 'Partial output received before termination');
-		default: return kind;
-	}
-}
-function relationLabel(kind: string): string {
-	switch (kind) {
-		case 'childThread': return localize('agentTrace.childThread', 'Child Thread');
-		case 'owns': return localize('agentTrace.owns', 'Owner');
-		case 'executes': return localize('agentTrace.executes', 'Execution');
-		case 'nestedTool': return localize('agentTrace.nestedTool', 'Nested tool');
-		case 'result': return localize('agentTrace.result', 'Tool result');
-		case 'deliversMessage': return localize('agentTrace.deliversMessage', 'Message delivery');
-		case 'delegates': return localize('agentTrace.delegates', 'Delegation');
-		case 'invokes': return localize('agentTrace.invokes', 'Runtime call');
-		case 'requestsTool': return localize('agentTrace.requestsTool', 'Model requested tool');
-		default: return kind;
-	}
 }

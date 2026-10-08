@@ -1,3 +1,4 @@
+import '../../../src/ash/base/browser/ui/styles.css';
 import '../../../src/ash/workbench/browser/media/style.css';
 import '../../../src/ash/base/browser/ui/button/button.css';
 import '../../../src/ash/base/browser/ui/inputbox/inputbox.css';
@@ -13,7 +14,10 @@ import { IConfigurationService } from '../../../src/ash/platform/configuration/c
 import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
 import { ContextKeyService, IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { createBrowserExtensionApi } from '../../../src/ash/platform/extensions/browser/extensionApi.js';
-import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
+import { StandaloneServiceCollection } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
+import '../../../src/ash/editor/editor.all.js';
+import { setIconResolver } from '../../../src/ash/base/browser/ui/lxicons/lxicon.js';
+import { getIconDefinition } from '../../../src/ash/platform/theme/common/iconRegistry.js';
 import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { AgentTraceEditor } from '../../../src/ash/workbench/contrib/trace/browser/agentTraceEditor.js';
@@ -29,6 +33,8 @@ declare global {
 		agentTraceIntegration: {
 			setTheme(id: string): Promise<void>;
 			dispose(): void;
+			accessibleContent(): string;
+			layout(width: number, height: number): void;
 		};
 	}
 }
@@ -37,7 +43,9 @@ const resources = new DisposableStore();
 const extensionThemes = resources.add(new ExtensionColorThemeService(createBrowserExtensionApi(), { subscribe: () => ({ dispose() { } }) }));
 await extensionThemes.start();
 const root = document.querySelector<HTMLElement>('#root')!;
-const services = resources.add(new InstantiationService());
+setIconResolver(document, getIconDefinition);
+const editorServices = resources.add(new StandaloneServiceCollection({}));
+const services = resources.add(editorServices.createChild());
 services.registerInstance(IConfigurationService, resources.add(new InMemoryConfigurationService()));
 services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
 services.registerInstance(ILanguageService, resources.add(new LanguageService()));
@@ -61,6 +69,8 @@ resources.add(new Button(root, { label: 'Reference secondary button', presentati
 window.agentTraceIntegration = {
 	async setTheme(id: string): Promise<void> { await themes.setColorTheme(id); },
 	dispose(): void { resources.dispose(); },
+	accessibleContent: () => editor.getAccessibleContent(),
+	layout: (width, height) => editor.layout({ width, height }),
 };
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
 document.body.dataset.ready = 'true';

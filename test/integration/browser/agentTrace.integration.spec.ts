@@ -1,106 +1,114 @@
 import { expect, test } from '@playwright/test';
 
-test('Execution Trace preserves semantic colors, selection and keyboard focus across four themes', async ({ page }, testInfo) => {
+const capture = {
+	formatVersion: 3, sessionId: 'theme-fixture', historyPrefixes: [],
+	threads: [{
+		threadId: 'root', events: [
+			{ eventId: 'e-1', sequence: 1, recordedAt: 1, event: { type: 'threadCreated', threadId: 'root', title: 'Theme fixture' } },
+			{ eventId: 'e-2', sequence: 2, recordedAt: 2, event: { type: 'turnCompleted', threadId: 'root', turnId: 'turn' } },
+			{ eventId: 'e-3', sequence: 3, recordedAt: 3, event: { type: 'turnFailed', threadId: 'root', turnId: 'turn', error: { message: 'Fixture failure' } } },
+		]
+	}],
+	graph: {
+		nodes: {
+			root: { id: 'root', kind: 'thread', label: 'Theme fixture', threadId: 'root', turnId: null, eventKey: 'root:1' },
+			turn: { id: 'turn', kind: 'turn', label: 'Completed turn', threadId: 'root', turnId: 'turn', eventKey: 'root:2' },
+		}, edges: [{ from: 'root', to: 'turn', kind: 'owns' }], warnings: ['Missing causal witness fixture']
+	},
+};
+
+test('Execution Trace uses shared tree, tabs and resizable panes across themes and narrow layouts', async ({ page }, testInfo) => {
 	const errors: string[] = [];
-	const evidence: unknown[] = [];
 	page.on('pageerror', error => errors.push(error.message));
 	await page.goto('/agentTrace.html');
-	await expect.poll(async () => ({ ready: await page.locator('body').getAttribute('data-ready'), errors })).toEqual({ ready: 'true', errors: [] });
+	await expect.poll(() => page.locator('body').getAttribute('data-ready')).toBe('true');
 	const viewer = page.locator('.ash-agent-trace');
-	const trace = {
-		formatVersion: 3, sessionId: 'theme-fixture', historyPrefixes: [],
-		threads: [{
-			threadId: 'root', events: [
-				{ eventId: 'e-1', sequence: 1, recordedAt: 1, event: { type: 'threadCreated', threadId: 'root', title: 'Theme fixture' } },
-				{ eventId: 'e-2', sequence: 2, recordedAt: 2, event: { type: 'turnCompleted', threadId: 'root', turnId: 'turn' } },
-				{ eventId: 'e-3', sequence: 3, recordedAt: 3, event: { type: 'turnFailed', threadId: 'root', turnId: 'turn', error: { message: 'Fixture failure' } } },
-			]
-		}],
-		graph: {
-			nodes: {
-				root: { id: 'root', kind: 'thread', label: 'Theme fixture', threadId: 'root', turnId: null, eventKey: 'root:1' },
-				turn: { id: 'turn', kind: 'turn', label: 'Completed turn', threadId: 'root', turnId: 'turn', eventKey: 'root:2' },
-			},
-			edges: [{ from: 'root', to: 'turn', kind: 'owns' }], warnings: [],
-		},
-	};
-	await viewer.locator('input[type=file]').setInputFiles({ name: 'themes.trace.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(trace)) });
+	await viewer.locator('input[type=file]').setInputFiles({ name: 'themes.trace.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(capture)) });
 	await expect(viewer.getByRole('status')).toContainText('Imported');
-	await expect(viewer.locator('.ash-agent-trace-event')).toHaveCount(3);
-	const selected = viewer.locator('.ash-agent-trace-event[data-key="root:1"]');
-	const failure = viewer.locator('.ash-agent-trace-event.failed');
-	const details = viewer.getByRole('region', { name: 'Execution event details' });
-
+	await expect(viewer.getByRole('tab')).toHaveCount(5);
+	await expect(viewer.getByRole('tab', { name: 'Overview', exact: true })).toHaveAttribute('aria-selected', 'true');
+	await expect(viewer.locator('.ash-code-editor')).toHaveCount(0);
+	const tree = viewer.getByRole('tree');
+	const failure = viewer.locator('[role=treeitem]:has([data-key="root:3"])');
 	for (const id of ['ash-dark', 'ash-light', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 		await page.evaluate(id => window.agentTraceIntegration.setTheme(id), id);
 		await expect(page.locator('#root')).toHaveAttribute('data-color-theme', id);
-		await selected.click();
-		await page.mouse.move(0, 0);
-		await expect(selected).toHaveAttribute('aria-pressed', 'true');
-		const expected = await viewer.evaluate(element => {
-			const probe = document.createElement('span');
-			element.append(probe);
-			const color = (variable: string): string => {
-				probe.style.color = `var(${variable})`;
-				return getComputedStyle(probe).color;
-			};
-			try {
-				const style = getComputedStyle(element);
-				const variables = ['--ash-foreground', '--ash-description-foreground', '--ash-error-foreground', '--ash-list-inactiveSelectionBackground', '--ash-focusBorder', '--ash-font-family-monospace', '--ash-button-foreground'];
-				probe.style.fontFamily = 'var(--ash-font-family-monospace)';
-				return {
-					registered: variables.every(variable => style.getPropertyValue(variable).trim().length > 0),
-					foreground: color('--ash-foreground'),
-					description: color('--ash-description-foreground'),
-					error: color('--ash-error-foreground'),
-					selection: color('--ash-list-inactiveSelectionBackground'),
-					focus: color('--ash-focusBorder'),
-					border: style.getPropertyValue('--ash-contrastBorder').trim() ? color('--ash-contrastBorder') : 'rgba(0, 0, 0, 0)',
-					font: getComputedStyle(probe).fontFamily,
-				};
-			} finally { probe.remove(); }
+		await failure.click();
+		await expect(failure).toHaveAttribute('aria-selected', 'true');
+		await expect(viewer.getByRole('tabpanel')).toContainText('Fixture failure');
+		const colors = await failure.evaluate(row => {
+			const span = document.createElement('span'); row.append(span);
+			span.style.color = 'var(--ash-error-foreground)'; const error = getComputedStyle(span).color;
+			span.style.color = 'var(--ash-list-activeSelectionForeground)'; const selected = getComputedStyle(span).color;
+			span.remove();
+			return { error, selected };
 		});
-		expect(expected.registered).toBe(true);
-		await expect(viewer.locator('.ash-agent-trace-summary')).toHaveCSS('color', expected.description);
-		await expect(failure).toHaveCSS('color', expected.error);
-		await expect(selected).toHaveCSS('color', expected.foreground);
-		await expect(selected).toHaveCSS('background-color', expected.selection);
-		await expect(selected).toHaveCSS('border-top-color', expected.border);
-		await expect(details).toHaveCSS('font-family', expected.font);
-		expect(expected.selection).not.toBe(await viewer.evaluate(element => getComputedStyle(element).backgroundColor));
-		expect(expected.error).not.toBe(expected.foreground);
-		const reference = page.getByRole('button', { name: 'Reference secondary button', exact: true });
-		const buttonStyle = await reference.evaluate(element => ({ color: getComputedStyle(element).color, background: getComputedStyle(element).backgroundColor, border: getComputedStyle(element).borderTopColor }));
-		const relation = viewer.locator('.ash-agent-trace-relation');
-		await expect(relation).toBeEnabled();
-		await expect(relation).toHaveCSS('color', buttonStyle.color);
-		await expect(relation).toHaveCSS('background-color', buttonStyle.background);
-		await expect(relation).toHaveCSS('border-top-color', buttonStyle.border);
-		if (id.includes('high-contrast')) {
-			expect(expected.border).not.toBe('rgba(0, 0, 0, 0)');
-			expect(buttonStyle.color).not.toBe(buttonStyle.background);
-		}
-		await selected.focus();
-		await selected.press('End');
-		await expect(failure).toBeFocused();
-		await expect(failure).toHaveAttribute('aria-pressed', 'true');
-		await expect(failure).toHaveCSS('color', expected.error);
-		await expect(failure).toHaveCSS('background-color', expected.selection);
-		await expect(failure).toHaveCSS('border-top-color', expected.border);
-		await expect(failure).toHaveCSS('outline-style', 'solid');
-		await expect(failure).toHaveCSS('outline-color', expected.focus);
-		await expect(details).toContainText('Fixture failure');
-		const keyboardFocus = await failure.evaluate(element => {
-			const style = getComputedStyle(element);
-			return { color: style.color, background: style.backgroundColor, border: style.borderTopColor, outline: style.outlineColor, outlineStyle: style.outlineStyle };
-		});
-		await details.focus();
-		await expect(details).toHaveCSS('outline-color', expected.focus);
-		await expect(details).toHaveCSS('outline-style', 'solid');
-		evidence.push({ id, ...expected, button: buttonStyle, keyboardFocus });
+		await expect(failure.locator('.ash-agent-trace-failure')).toHaveCSS('color', colors.error);
+		await tree.focus();
+		await tree.press('Home');
+		await tree.press('End');
+		await expect(failure).toHaveAttribute('aria-selected', 'true');
+		await expect(tree).toBeFocused();
+		await expect(failure).toHaveCSS('color', colors.selected);
+		const overview = viewer.getByRole('tab', { name: 'Overview', exact: true });
+		await overview.focus();
+		await overview.press('ArrowRight');
+		await expect(viewer.getByRole('tab', { name: 'Input', exact: true })).toBeFocused();
+		await expect(overview).toHaveAttribute('aria-selected', 'true');
+		await page.keyboard.press('Enter');
+		await expect(viewer.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', /-input$/);
+		await viewer.getByRole('tab', { name: 'Relations', exact: true }).click();
+		await expect(viewer.locator('.ash-agent-trace-relation-warning')).toContainText('Missing causal witness');
+		await viewer.getByRole('tab', { name: 'Overview', exact: true }).click();
+		await viewer.getByRole('textbox', { name: 'Filter execution events' }).fill('no match here');
+		await expect(tree.getByRole('treeitem')).toHaveCount(0);
+		await expect(viewer.getByRole('tabpanel')).toContainText('Fixture failure');
+		await viewer.getByRole('textbox', { name: 'Filter execution events' }).fill('');
+		await page.evaluate(() => window.agentTraceIntegration.layout(900, 650));
+		const before = await viewer.locator('.ash-agent-trace-navigation').boundingBox();
+		const sash = viewer.getByRole('separator');
+		await sash.focus();
+		await sash.press('ArrowRight');
+		await expect.poll(async () => (await viewer.locator('.ash-agent-trace-navigation').boundingBox())!.width).toBeGreaterThan(before!.width);
+		await testInfo.attach(`${id}-wide`, { body: await viewer.screenshot(), contentType: 'image/png' });
+		await page.evaluate(() => window.agentTraceIntegration.layout(500, 650));
+		await expect(viewer.getByRole('separator')).toHaveAttribute('aria-orientation', 'horizontal');
+		await expect(viewer.getByRole('tabpanel')).toBeVisible();
+		await testInfo.attach(`${id}-narrow`, { body: await viewer.screenshot(), contentType: 'image/png' });
 	}
-	await testInfo.attach('theme-evidence', { body: Buffer.from(JSON.stringify(evidence, null, 2)), contentType: 'application/json' });
+	expect(errors).toEqual([]);
 	await page.evaluate(() => window.agentTraceIntegration.dispose());
 	await expect(viewer).toHaveCount(0);
-	expect(errors).toEqual([]);
+});
+
+test('Execution Trace keeps long history virtual and exposes offscreen events to Accessible View', async ({ page }, testInfo) => {
+	await page.goto('/agentTrace.html');
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	const viewer = page.locator('.ash-agent-trace');
+	const events = Array.from({ length: 20000 }, (_, i) => ({ eventId: `event-${i}`, sequence: i + 1, recordedAt: i, event: { type: 'itemCompleted', threadId: 'root', turnId: `turn-${Math.floor(i / 200)}`, item: { type: 'agentMessage', text: `message ${i}` } } }));
+	const started = Date.now();
+	await viewer.locator('input[type=file]').setInputFiles({ name: 'long.trace.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ formatVersion: 3, sessionId: 'long', historyPrefixes: [], threads: [{ threadId: 'root', events }] })) });
+	await expect(viewer.getByRole('status')).toContainText('Imported');
+	const firstMs = Date.now() - started;
+	const mounted = await viewer.locator('.ash-agent-trace-row').count();
+	expect(mounted).toBeLessThan(60);
+	const search = viewer.getByRole('textbox', { name: 'Filter execution events' });
+	const searching = Date.now();
+	await search.fill('event-19999');
+	await expect(viewer.locator('.ash-agent-trace-event')).toHaveCount(1);
+	await viewer.locator('.ash-agent-trace-event').click();
+	await expect(viewer.getByRole('tabpanel')).toContainText('event-19999');
+	const searchMs = Date.now() - searching;
+	await search.fill('');
+	const content = await page.evaluate(() => window.agentTraceIntegration.accessibleContent());
+	expect(content).toContain('message 0'); expect(content).toContain('message 19999');
+	await viewer.getByRole('tab', { name: 'Raw record', exact: true }).click();
+	await expect(viewer.locator('.ash-code-editor')).toHaveCount(1);
+	await expect(viewer.getByRole('tabpanel')).toBeVisible();
+	await viewer.getByRole('tab', { name: 'Overview', exact: true }).click();
+	await viewer.getByRole('tab', { name: 'Raw record', exact: true }).click();
+	await expect(viewer.locator('.ash-code-editor')).toHaveCount(1);
+	await testInfo.attach('long-history-measurements', { body: Buffer.from(JSON.stringify({ events: events.length, firstMs, searchMs, mounted })), contentType: 'application/json' });
+	await page.evaluate(() => window.agentTraceIntegration.dispose());
+	await expect(viewer).toHaveCount(0);
 });
