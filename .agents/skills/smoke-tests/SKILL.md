@@ -78,7 +78,7 @@ The first failure is enough to reproduce the problem. Stopping there preserves i
 Start with the failing test and error in the GitHub Actions job log. The workflow uploads `.build/desktop/playwright/` on failure as `frontend-electron-<runner>-<suite>-<shard>` or `frontend-browser-<runner>-1`; use the exact name in the failing job. The run ID appears in the Actions run URL. Download the artifact for the failing suite and shard:
 
 ```bash
-gh run download <run-id> -n frontend-electron-windows-latest-2 -D ./logs
+gh run download <run-id> -n frontend-electron-windows-latest-ui-2 -D ./logs
 ```
 
 The artifact contains `test-results/` and, when generated, `report/`. A failed test that reaches the Workbench fixture attaches `trace.zip` under its test result. Inspect the error and trace to find the failing action, then run that test locally with the same target and filter. If it fails only in CI, use the temporary loop above. `frontend-build-<runner>` is the separate one-day artifact consumed by Electron shards, not test diagnostics.
