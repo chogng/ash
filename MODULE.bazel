@@ -188,6 +188,13 @@ crate.annotation(
 
 inject_repo(crate, "aws-lc")
 
+# Build the locked crate's bundled sources instead of probing host liblzma.
+crate.annotation(
+    crate = "lzma-sys",
+    build_script_env = {"LZMA_API_STATIC": "1"},
+    repositories = ["crates"],
+)
+
 # The V8 crate build script consumes checksum-pinned sandbox-enabled archives and bindings.
 # They are build inputs only: the resulting executables link V8 statically.
 http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")

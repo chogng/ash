@@ -20,8 +20,8 @@ export interface SymphonyConversation {
 	readonly durationMs: number;
 	readonly error: string | undefined;
 }
-export interface SymphonyMessage { readonly id: string; readonly role: 'user' | 'assistant'; readonly text: string }
-export interface SymphonySnapshot { readonly workflows: readonly SymphonyWorkflow[]; readonly conversations: readonly SymphonyConversation[] }
+export interface SymphonyMessage { readonly id: string; readonly role: 'user' | 'assistant'; readonly text: string; }
+export interface SymphonySnapshot { readonly workflows: readonly SymphonyWorkflow[]; readonly conversations: readonly SymphonyConversation[]; }
 
 /** Profile-owned scheduling exposed through the window's existing App Server connection. */
 export interface ISymphonyBackend {
@@ -31,5 +31,5 @@ export interface ISymphonyBackend {
 	submit(workflowId: string, title: string, prompt: string): Promise<SymphonyConversation>;
 	control(id: string, control: SymphonyControl): Promise<void>;
 	enable(workflowId: string, enabled: boolean): Promise<void>;
-	messages(id: string): Promise<{ readonly conversation: SymphonyConversation; readonly messages: readonly SymphonyMessage[] }>;
+	messages(id: string): Promise<{ readonly conversation: SymphonyConversation; readonly messages: readonly SymphonyMessage[]; }>;
 }

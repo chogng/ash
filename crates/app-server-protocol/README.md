@@ -242,15 +242,15 @@ Open VSX JS 扩展在等待时以 `dormant` 返回，无 incarnation、输出或
 初始化契约 `symphony.version = 1` 表示当前 profile 提供内置调度域。
 所有窗口复用既有连接；不创建 Elixir 服务或第二个 Agent App Server。
 
-| 方法 | 行为 |
-| --- | --- |
-| `symphony/read` | 工作流与对话监控快照；累计用量和时长直接读取 Core |
-| `symphony/configure` | 导入绝对路径的 `WORKFLOW.md` 并启用派发 |
-| `symphony/submit` | 创建手动任务；返回对话身份 |
-| `symphony/control` | 保存运行、暂停或完成意图；控制执行使用 Core 的持久命令身份 |
-| `symphony/enable` | 启停工作流后续派发；不停止当前对话 |
-| `symphony/messages` | 当前对话最近的用户与助手消息 |
-| `symphony/changed` | 无载荷的失效通知；客户端先订阅，再重新读取快照 |
+| 方法                 | 行为                                                       |
+| -------------------- | ---------------------------------------------------------- |
+| `symphony/read`      | 工作流与对话监控快照；累计用量和时长直接读取 Core          |
+| `symphony/configure` | 导入绝对路径的 `WORKFLOW.md` 并启用派发                    |
+| `symphony/submit`    | 创建手动任务；返回对话身份                                 |
+| `symphony/control`   | 保存运行、暂停或完成意图；控制执行使用 Core 的持久命令身份 |
+| `symphony/enable`    | 启停工作流后续派发；不停止当前对话                         |
+| `symphony/messages`  | 当前对话最近的用户与助手消息                               |
+| `symphony/changed`   | 无载荷的失效通知；客户端先订阅，再重新读取快照             |
 
 变更方法携带 `commandId`，重复请求核对完整输入指纹。
 任务的 Thread 身份跨暂停、恢复与重试保留；调度域不另存 Token 或消息。
