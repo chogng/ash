@@ -143,28 +143,28 @@ test('token exchange keeps the client secret on the server and returns refresh e
 
 
 test('Enterprise authorization and token exchange stay on the configured host', async () => {
-    const enterprise = { ...environment, GITHUB_HOST: 'git.example.com', GITHUB_CLIENT_ID: 'enterpriseClient' };
-    const authorization = await worker.fetch(authorizationRequest({ client_id: enterprise.GITHUB_CLIENT_ID }), enterprise);
-    const github = new URL(authorization.headers.get('Location'));
-    assert.equal(github.origin, 'https://git.example.com');
-    assert.equal(github.searchParams.get('scope'), 'read:user repo notifications');
-    const callback = new URL(github.searchParams.get('redirect_uri'));
-    callback.searchParams.set('state', github.searchParams.get('state'));
-    callback.searchParams.set('code', 'enterprise-code');
-    assert.equal((await worker.fetch(new Request(callback), environment)).status, 400);
-    assert.equal((await worker.fetch(new Request(callback), enterprise)).status, 302);
-    const originalFetch = globalThis.fetch;
-    try {
-        globalThis.fetch = async (url, init) => {
-            assert.equal(url, 'https://git.example.com/login/oauth/access_token');
-            assert.equal(init.redirect, 'manual');
-            return new Response(JSON.stringify({ access_token: 'enterprise-token', token_type: 'bearer' }));
-        };
-        const form = new URLSearchParams({ client_id: enterprise.GITHUB_CLIENT_ID, grant_type: 'authorization_code', code: 'code', code_verifier: 'D'.repeat(43), redirect_uri: redirectUri });
-        const response = await worker.fetch(new Request(`${origin}/v1/oauth/github/token`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form }), enterprise);
-        assert.equal((await response.json()).access_token, 'enterprise-token');
-    } finally { globalThis.fetch = originalFetch; }
-    for (const host of ['bad.example/path', 'user@host', 'host:443', 'https://host']) {
-        assert.equal((await worker.fetch(authorizationRequest(), { ...enterprise, GITHUB_HOST: host })).status, 503);
-    }
+	const enterprise = { ...environment, GITHUB_HOST: 'git.example.com', GITHUB_CLIENT_ID: 'enterpriseClient' };
+	const authorization = await worker.fetch(authorizationRequest({ client_id: enterprise.GITHUB_CLIENT_ID }), enterprise);
+	const github = new URL(authorization.headers.get('Location'));
+	assert.equal(github.origin, 'https://git.example.com');
+	assert.equal(github.searchParams.get('scope'), 'read:user repo notifications');
+	const callback = new URL(github.searchParams.get('redirect_uri'));
+	callback.searchParams.set('state', github.searchParams.get('state'));
+	callback.searchParams.set('code', 'enterprise-code');
+	assert.equal((await worker.fetch(new Request(callback), environment)).status, 400);
+	assert.equal((await worker.fetch(new Request(callback), enterprise)).status, 302);
+	const originalFetch = globalThis.fetch;
+	try {
+		globalThis.fetch = async (url, init) => {
+			assert.equal(url, 'https://git.example.com/login/oauth/access_token');
+			assert.equal(init.redirect, 'manual');
+			return new Response(JSON.stringify({ access_token: 'enterprise-token', token_type: 'bearer' }));
+		};
+		const form = new URLSearchParams({ client_id: enterprise.GITHUB_CLIENT_ID, grant_type: 'authorization_code', code: 'code', code_verifier: 'D'.repeat(43), redirect_uri: redirectUri });
+		const response = await worker.fetch(new Request(`${origin}/v1/oauth/github/token`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form }), enterprise);
+		assert.equal((await response.json()).access_token, 'enterprise-token');
+	} finally { globalThis.fetch = originalFetch; }
+	for (const host of ['bad.example/path', 'user@host', 'host:443', 'https://host']) {
+		assert.equal((await worker.fetch(authorizationRequest(), { ...enterprise, GITHUB_HOST: host })).status, 503);
+	}
 });

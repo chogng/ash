@@ -63,9 +63,10 @@ fn ancestor_traversal_does_not_grant_listing_or_inherit_to_children() {
     let sid = "S-1-5-21-531-532-533-534";
     let before = sddl(temp.path());
     let child_before = sddl(&child);
-    let mut acl =
-        mxc_sdk::mxc_common::filesystem_dacl::DaclManager::in_directory(&temp.path().join("journal"))
-            .unwrap();
+    let mut acl = mxc_sdk::mxc_common::filesystem_dacl::DaclManager::in_directory(
+        &temp.path().join("journal"),
+    )
+    .unwrap();
     assert!(!mask_allowed(temp.path(), &[sid], FILE_READ_ATTRIBUTES).unwrap());
     acl.grant_directory_traversal(sid, temp.path()).unwrap();
     assert!(mask_allowed(temp.path(), &[sid], FILE_READ_ATTRIBUTES).unwrap());
@@ -132,9 +133,10 @@ fn object_acl_edits_preserve_legacy_inheritance_control() {
     );
     let before = sddl(&target);
     assert!(before.starts_with("D:("), "legacy fixture: {before}");
-    let mut acl =
-        mxc_sdk::mxc_common::filesystem_dacl::DaclManager::in_directory(&temp.path().join("journal"))
-            .unwrap();
+    let mut acl = mxc_sdk::mxc_common::filesystem_dacl::DaclManager::in_directory(
+        &temp.path().join("journal"),
+    )
+    .unwrap();
     acl.grant_directory_traversal("S-1-5-21-531-532-533-534", &target)
         .unwrap();
     acl.restore_strict().unwrap();
@@ -168,9 +170,10 @@ fn inheritable_acl_edits_restore_legacy_directory_and_file_control() {
         before.iter().all(|acl| acl.starts_with("D:(")),
         "{before:?}"
     );
-    let mut acl =
-        mxc_sdk::mxc_common::filesystem_dacl::DaclManager::in_directory(&temp.path().join("journal"))
-            .unwrap();
+    let mut acl = mxc_sdk::mxc_common::filesystem_dacl::DaclManager::in_directory(
+        &temp.path().join("journal"),
+    )
+    .unwrap();
     acl.grant_appcontainer_access(
         "S-1-5-21-531-532-533-534",
         std::slice::from_ref(&target),
@@ -193,7 +196,9 @@ fn audit_does_not_authorize_mutations_outside_the_approved_scope() {
     let request = Execution {
         runner_hash: String::new(),
         files: Default::default(),
-        host_acl_scope: Some(crate::windows::filesystem::HostAclScope::new([work.clone()]).unwrap()),
+        host_acl_scope: Some(
+            crate::windows::filesystem::HostAclScope::new([work.clone()]).unwrap(),
+        ),
         acl_changes: ash_sandboxing::HostAclChanges::Scoped,
         command: String::new(),
         working_directory: work.to_string_lossy().into_owned(),

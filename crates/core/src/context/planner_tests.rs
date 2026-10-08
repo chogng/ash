@@ -709,7 +709,7 @@ fn snapshot(current_turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
                 plan: None,
                 usage: ash_protocol::ModelUsageSummary::default(),
                 context_usage: None,
-            nonterminal_continuations: 0,
+                nonterminal_continuations: 0,
             })
             .collect(),
         items,

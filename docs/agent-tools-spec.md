@@ -557,14 +557,14 @@ delegation result。Desktop Agent Sidebar 只消费该 projection；`session/thr
 通过 Application ToolPort 将它们纳入共享工具目录，并将业务操作交给既有 Session、Project
 和 Automation owner。TypeScript 不重复维护模型工具定义。
 
-| 能力 | 工具 |
-| --- | --- |
-| 任务 | `list_threads`、`read_thread`、`create_thread`、`fork_thread`、`set_thread_archived` |
-| 项目 | `list_projects` |
-| 自动化 | `automation_update`，支持 list/view/save/delete/run/runs/stop |
-| 界面导航 | `open_in_ash`、`navigate_to_ash_page` |
-| 侧栏组织 | `list_sidebar_sections`、`create_sidebar_section`、`rename_sidebar_section`、`delete_sidebar_section`、`move_thread_to_sidebar_section`、`reorder_section` |
-| 桌面与庆祝 | `check_app_update`、`fire_confetti` |
+| 能力       | 工具                                                                                                                                                       |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 任务       | `list_threads`、`read_thread`、`create_thread`、`fork_thread`、`set_thread_archived`                                                                       |
+| 项目       | `list_projects`                                                                                                                                            |
+| 自动化     | `automation_update`，支持 list/view/save/delete/run/runs/stop                                                                                              |
+| 界面导航   | `open_in_ash`、`navigate_to_ash_page`                                                                                                                      |
+| 侧栏组织   | `list_sidebar_sections`、`create_sidebar_section`、`rename_sidebar_section`、`delete_sidebar_section`、`move_thread_to_sidebar_section`、`reorder_section` |
+| 桌面与庆祝 | `check_app_update`、`fire_confetti`                                                                                                                        |
 
 创建任务不会隐式发送提示词。创建、fork、归档和自动化应由用户明确请求；不得归档正在执行
 该工具的任务。自动化修改使用完整共享定义及 expected_revision，保留未请求修改的字段。

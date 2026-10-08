@@ -17,38 +17,145 @@
 	border-bottom: var(--ash-strokeThickness) solid var(--ash-widget-border);
 }
 
-.ash-github-editor .github-header .github-field { flex: 1 1 140px; }
-.ash-github-editor .github-status { margin: 0; padding: var(--ash-spacing-size80) var(--ash-spacing-size160); }
-.ash-github-editor .github-status.error { color: var(--ash-error-foreground); }
-.ash-github-editor .github-content { display: flex; flex: 1; min-width: 0; min-height: 0; }
-.ash-github-editor .github-sidebar { flex: 0 0 260px; min-width: 0; overflow: auto; padding: var(--ash-spacing-size80); border-right: var(--ash-strokeThickness) solid var(--ash-widget-border); }
-.ash-github-editor .github-list { display: flex; flex-direction: column; gap: var(--ash-spacing-size40); }
-.ash-github-editor .github-list-item .ash-button { width: 100%; justify-content: start; text-align: start; white-space: normal; height: auto; overflow-wrap: anywhere; }
+.ash-github-editor .github-header .github-field {
+	flex: 1 1 140px;
+}
+.ash-github-editor .github-status {
+	margin: 0;
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size160);
+}
+.ash-github-editor .github-status.error {
+	color: var(--ash-error-foreground);
+}
+.ash-github-editor .github-content {
+	display: flex;
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+}
+.ash-github-editor .github-sidebar {
+	flex: 0 0 260px;
+	min-width: 0;
+	overflow: auto;
+	padding: var(--ash-spacing-size80);
+	border-right: var(--ash-strokeThickness) solid var(--ash-widget-border);
+}
+.ash-github-editor .github-list {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size40);
+}
+.ash-github-editor .github-list-item .ash-button {
+	width: 100%;
+	justify-content: start;
+	text-align: start;
+	white-space: normal;
+	height: auto;
+	overflow-wrap: anywhere;
+}
 .ash-github-editor .github-list-item .ash-button-label,
-.ash-github-editor .github-list-item .ash-icon-label-segment { white-space: normal; text-overflow: clip; }
-.ash-github-editor .github-detail { flex: 1; min-width: 0; overflow: auto; padding: var(--ash-spacing-size240); }
+.ash-github-editor .github-list-item .ash-icon-label-segment {
+	white-space: normal;
+	text-overflow: clip;
+}
+.ash-github-editor .github-detail {
+	flex: 1;
+	min-width: 0;
+	overflow: auto;
+	padding: var(--ash-spacing-size240);
+}
 .ash-github-editor .github-review,
 .ash-github-editor .github-form,
-.ash-github-editor .github-issue { display: flex; flex-direction: column; gap: var(--ash-spacing-size120); }
-.ash-github-editor .github-field { display: flex; flex-direction: column; gap: var(--ash-spacing-size60); min-width: 0; }
-.ash-github-editor h2 { margin: 0 0 var(--ash-spacing-size120); font-size: var(--ash-fontSize-heading2); font-weight: var(--ash-fontWeight-semiBold); overflow-wrap: anywhere; }
-.ash-github-editor h3 { font-size: var(--ash-fontSize-body1); font-weight: var(--ash-fontWeight-semiBold); }
-.ash-github-editor p { margin: var(--ash-spacing-size60) 0; overflow-wrap: anywhere; }
-.ash-github-editor pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
-.ash-github-editor a { color: var(--ash-accent-foreground); display: block; overflow-wrap: anywhere; }
-.ash-github-editor .github-diff { height: 420px; min-width: 0; border: var(--ash-strokeThickness) solid var(--ash-widget-border); }
-.ash-github-editor textarea { box-sizing: border-box; width: 100%; min-width: 0; resize: vertical; padding: var(--ash-spacing-size80); font: inherit; color: var(--ash-input-foreground); background: var(--ash-input-background); border: var(--ash-strokeThickness) solid var(--ash-input-border); border-radius: var(--ash-cornerRadius-small); }
-.ash-github-editor textarea:disabled { opacity: 0.6; }
-.ash-github-editor .github-thread { padding: var(--ash-spacing-size120) 0; border-bottom: var(--ash-strokeThickness) solid var(--ash-widget-border); }
-.ash-github-editor .github-thread strong { overflow-wrap: anywhere; }
-.ash-github-editor .github-checkbox { display: flex; align-items: center; gap: var(--ash-spacing-size80); }
-.ash-github-editor .github-form { margin: var(--ash-spacing-size160) 0; padding: var(--ash-spacing-size160); border: var(--ash-strokeThickness) solid var(--ash-widget-border); border-radius: var(--ash-cornerRadius-medium); }
+.ash-github-editor .github-issue {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size120);
+}
+.ash-github-editor .github-field {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size60);
+	min-width: 0;
+}
+.ash-github-editor h2 {
+	margin: 0 0 var(--ash-spacing-size120);
+	font-size: var(--ash-fontSize-heading2);
+	font-weight: var(--ash-fontWeight-semiBold);
+	overflow-wrap: anywhere;
+}
+.ash-github-editor h3 {
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+.ash-github-editor p {
+	margin: var(--ash-spacing-size60) 0;
+	overflow-wrap: anywhere;
+}
+.ash-github-editor pre {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	font: inherit;
+}
+.ash-github-editor a {
+	color: var(--ash-accent-foreground);
+	display: block;
+	overflow-wrap: anywhere;
+}
+.ash-github-editor .github-diff {
+	height: 420px;
+	min-width: 0;
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+}
+.ash-github-editor textarea {
+	box-sizing: border-box;
+	width: 100%;
+	min-width: 0;
+	resize: vertical;
+	padding: var(--ash-spacing-size80);
+	font: inherit;
+	color: var(--ash-input-foreground);
+	background: var(--ash-input-background);
+	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border-radius: var(--ash-cornerRadius-small);
+}
+.ash-github-editor textarea:disabled {
+	opacity: 0.6;
+}
+.ash-github-editor .github-thread {
+	padding: var(--ash-spacing-size120) 0;
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-widget-border);
+}
+.ash-github-editor .github-thread strong {
+	overflow-wrap: anywhere;
+}
+.ash-github-editor .github-checkbox {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+}
+.ash-github-editor .github-form {
+	margin: var(--ash-spacing-size160) 0;
+	padding: var(--ash-spacing-size160);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-medium);
+}
 .ash-github-editor textarea:focus-visible,
-.ash-github-editor a:focus-visible { outline: var(--ash-strokeThickness) solid var(--ash-focusBorder); outline-offset: 2px; }
-.ash-github-editor.compact .github-content { flex-direction: column; }
-.ash-github-editor.compact .github-sidebar { flex-basis: 160px; border-right: 0; border-bottom: var(--ash-strokeThickness) solid var(--ash-widget-border); }
+.ash-github-editor a:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: 2px;
+}
+.ash-github-editor.compact .github-content {
+	flex-direction: column;
+}
+.ash-github-editor.compact .github-sidebar {
+	flex-basis: 160px;
+	border-right: 0;
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-widget-border);
+}
 
-.ash-github-editor [hidden] { display: none; }
+.ash-github-editor [hidden] {
+	display: none;
+}
 
 .github-pr-comment pre {
 	white-space: pre-wrap;

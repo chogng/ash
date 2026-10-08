@@ -115,7 +115,7 @@ Rust primitive 与 model adapter 的实现细节分别见
 
 | 能力                                                            | Owner                                          | 当前状态                                                                    |
 | --------------------------------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------- |
-| 每实例 xterm、Tab、输入、焦点和 panel actions                   | Renderer                                       | ✅ `TerminalViewPane` / `XtermTerminal` / `TerminalTabbedView`                            |
+| 每实例 xterm、Tab、输入、焦点和 panel actions                   | Renderer                                       | ✅ `TerminalViewPane` / `XtermTerminal` / `TerminalTabbedView`              |
 | 实例列表、active instance、输入 batching 与 resize coalescing   | Renderer `ITerminalService`                    | ✅                                                                          |
 | 前端进程契约与 App Server DTO adapter                           | Renderer `platform/terminal`                   | 已接通生成 decoder，适配器统一转换原始字节与退出码；Main 透明转发协议 frame |
 | SSH Terminal bearer lease 与 attach                             | Renderer `ReconnectableTerminalProcessService` | 同一后端内 30 秒有界恢复；Main 不保存 token                                 |
@@ -411,15 +411,15 @@ Files 的 import 对齐按当前调用职责核对。工作区系统监听、重
 `file-watcher` / Workspace；profile 监听直接使用 Node 文件系统，浏览器监听使用其授权句柄。
 对应依赖的职责与落位如下：
 
-| VS Code 依赖职责 | Ash 的调用路径与 owner |
-| --- | --- |
-| 浏览器句柄与观察 API | `webFileSystemAccess.ts` 提供契约，浏览器 host 检测能力，HTML provider 管理授权句柄与观察器 |
-| IndexedDB 连接、事务与跨窗口通知 | `base/browser/indexedDB.ts` 负责提交与关闭；`BroadcastDataChannel` 负责通知和 storage event 回退 |
-| 流、缓冲区、取消与文件描述符 IO | `base/common/stream.ts`、`buffer.ts` 与 `files/common/io.ts`；PDF 和支持流 capability 的 provider 使用同一读取契约 |
-| IPC 操作分派与宿主入口 | `IChannel` 连接客户端与 Node channel；Electron channel 只补充 Main 授予的 profile 入口 |
-| 同资源写入队列与发布重试 | `ResourceQueue` 串行处理，`pfs.Promises.rename` 负责 Windows 重试，provider 保留 revision 校验 |
+| VS Code 依赖职责                   | Ash 的调用路径与 owner                                                                                                |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| 浏览器句柄与观察 API               | `webFileSystemAccess.ts` 提供契约，浏览器 host 检测能力，HTML provider 管理授权句柄与观察器                           |
+| IndexedDB 连接、事务与跨窗口通知   | `base/browser/indexedDB.ts` 负责提交与关闭；`BroadcastDataChannel` 负责通知和 storage event 回退                      |
+| 流、缓冲区、取消与文件描述符 IO    | `base/common/stream.ts`、`buffer.ts` 与 `files/common/io.ts`；PDF 和支持流 capability 的 provider 使用同一读取契约    |
+| IPC 操作分派与宿主入口             | `IChannel` 连接客户端与 Node channel；Electron channel 只补充 Main 授予的 profile 入口                                |
+| 同资源写入队列与发布重试           | `ResourceQueue` 串行处理，`pfs.Promises.rename` 负责 Windows 重试，provider 保留 revision 校验                        |
 | watcher 进程、重扫与持久工作区状态 | Rust `file-watcher` / Workspace；profile 和浏览器分别由各自 provider 管理，不另建 Parcel 或 TypeScript watcher 子进程 |
-| 路径、URI 传输、资源索引与环境注入 | URI、Node path、channel URI 序列化、现有 Map 和 Main 的 root 授权注入分别满足当前调用 |
+| 路径、URI 传输、资源索引与环境注入 | URI、Node path、channel URI 序列化、现有 Map 和 Main 的 root 授权注入分别满足当前调用                                 |
 
 仅上游使用的内存文件系统、watcher 子进程入口、专用索引和统计接口没有 Ash 生产调用方，
 不通过新增空端口补齐 import。通用 `FileService` 和 provider 契约依赖 base，不依赖 RPC。

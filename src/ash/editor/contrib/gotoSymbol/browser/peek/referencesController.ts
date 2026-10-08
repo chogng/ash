@@ -54,7 +54,7 @@ export class ReferencesController extends Disposable {
 		}
 	}
 
-	public navigate(kind: SymbolNavigationKind, options: { readonly peek?: boolean; readonly includeDeclaration?: boolean; readonly openToSide?: boolean } = {}): Promise<void> {
+	public navigate(kind: SymbolNavigationKind, options: { readonly peek?: boolean; readonly includeDeclaration?: boolean; readonly openToSide?: boolean; } = {}): Promise<void> {
 		return this.requestLocations(kind, options);
 	}
 
@@ -76,7 +76,7 @@ export class ReferencesController extends Disposable {
 		void action.run().catch(this.onError);
 	}
 
-	private async requestLocations(kind: SymbolNavigationKind, options: { readonly peek?: boolean; readonly includeDeclaration?: boolean; readonly openToSide?: boolean } = {}): Promise<void> {
+	private async requestLocations(kind: SymbolNavigationKind, options: { readonly peek?: boolean; readonly includeDeclaration?: boolean; readonly openToSide?: boolean; } = {}): Promise<void> {
 		this.closePeek();
 		const request = this.request = new AbortController();
 		const position = this.editor.getSelections()![0]!.getPosition();

@@ -42,10 +42,12 @@ test('navigation queries every supported operation and passes the reference cont
 	using declarations = fixture.features.declarationProvider.register('typescript', { provideDeclaration: () => [location] });
 	using implementations = fixture.features.implementationProvider.register('typescript', { provideImplementation: () => [location] });
 	using types = fixture.features.typeDefinitionProvider.register('typescript', { provideTypeDefinition: () => [location] });
-	using references = fixture.features.referenceProvider.register('typescript', { provideReferences: request => {
-		includeDeclaration = request.includeDeclaration;
-		return [location];
-	} });
+	using references = fixture.features.referenceProvider.register('typescript', {
+		provideReferences: request => {
+			includeDeclaration = request.includeDeclaration;
+			return [location];
+		}
+	});
 	const controller = fixture.editor.getContribution<ReferencesController>('editor.contrib.referencesController')!;
 	for (const kind of ['declaration', 'implementation', 'typeDefinition', 'references'] as const) {
 		await controller.navigate(kind, { includeDeclaration: false });

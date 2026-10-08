@@ -19,12 +19,14 @@ suite('runCommands', () => {
 		const release = new DeferredPromise<void>();
 		const order: string[] = [];
 		using registration = CommandsRegistry.registerMany([
-			{ id: 'test.batch.first', handler: async () => {
-				order.push('first started');
-				await started.complete();
-				await release.p;
-				order.push('first finished');
-			} },
+			{
+				id: 'test.batch.first', handler: async () => {
+					order.push('first started');
+					await started.complete();
+					await release.p;
+					order.push('first finished');
+				}
+			},
 			{ id: 'test.batch.second', handler: () => order.push('second') },
 		]);
 		const execution = environment.commands.executeCommand('runCommands', { commands: ['test.batch.first', 'test.batch.second'] });

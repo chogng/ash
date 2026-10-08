@@ -45,7 +45,7 @@ manifest，同时 package 原始 bytes/digest 保持不变。通用 `asset` 不�
 | 可执行扩展崩溃                                          | 清除旧 incarnation 注册，按有界预算重新握手和激活；超限进入 crash loop                                                | 不无限重启，不把旧请求重绑定到新进程                           |
 | 调用超时或取消后没有 terminal response                  | 结果标为 unknown outcome，终止旧 incarnation 后恢复                                                                   | 不声称副作用没有发生                                           |
 | 需要 VS Code Extension API                              | 已支持命令、通知、单选 Quick Pick、只读文档和 Hover 的基础子集                                                        | 包可安装不代表全部 API 可用；不提供 Node 运行环境              |
-| 本地 SDK JS 包                                          | 工作区相对路径安装；分别启用、授权后，macOS 或 64 位 Windows 产品宿主执行                                                              | 不自动授权，也不放宽独立可执行扩展的限制                       |
+| 本地 SDK JS 包                                          | 工作区相对路径安装；分别启用、授权后，macOS 或 64 位 Windows 产品宿主执行                                             | 不自动授权，也不放宽独立可执行扩展的限制                       |
 | 生产平台不支持所需隔离                                  | 运行失败并报告 isolation unavailable                                                                                  | 不允许无 sandbox 的第三方执行                                  |
 
 当前声明式装载链已接入 App Server 与 Workbench。Legacy Plugin 与 Marketplace executable source 都会
@@ -220,7 +220,7 @@ GitHub 的独立 TS 扩展入口、TS SDK 的 GitHub API 和逐扩展权限接�
 | Rust GitHub 领域能力与 TS 产品服务调用              | 已有实现；尚未开放为逐扩展授权的 SDK API                                                                         |
 | 产品窗口禁用 Node、开启上下文隔离和沙箱             | 已有基础设置；preload 仍有按 `ash:` 前缀过滤的通用 IPC                                                           |
 | TS SDK v1 与独立 Rust V8 宿主                       | 已实现并通过独立进程测试；支持命令、悬停 Provider、文档快照、授权文件读取、通知、Quick Pick 和释放               |
-| 第三方 SDK v1 生产执行与系统隔离                    | macOS 与 64 位 Windows JS 扩展已接通；系统沙箱、V8 堆和 ArrayBuffer 预算在独立进程实施；其余平台尚未开放                          |
+| 第三方 SDK v1 生产执行与系统隔离                    | macOS 与 64 位 Windows JS 扩展已接通；系统沙箱、V8 堆和 ArrayBuffer 预算在独立进程实施；其余平台尚未开放         |
 | 完整 TS API                                         | 尚未完成；现有可信 Worker 仍接入通用命令，不属于第三方 SDK 权限边界                                              |
 | Open VSX 搜索、下载、安装、更新和卸载               | 已接入 Rust Manager 与 Marketplace 界面；支持 universal 正式版本、已有静态贡献及分别授权的基础 CommonJS API 子集 |
 | Rust 作者 SDK 与后端可执行扩展入口                  | 已停止作为产品扩展方向；源码仍在，此前服务反向调用补充未完成验证                                                 |
@@ -280,16 +280,16 @@ macOS 与 64 位 Windows Rust V8 宿主执行受支持的 CommonJS 包，可信 
 停用或撤销先使旧调用失去权限、取消在途操作并结束旧进程，再返回成功。运行中的安装包持有 Manager 租约，卸载前先停用。
 这些状态由 `core-plugins::EditorExtensionPolicy` 管理，与本地 Plugin 的授权来源分开。
 
-| 接口       | 当前支持范围                                                                                               |
-| ---------- | ---------------------------------------------------------------------------------------------------------- |
-| 包入口     | `browser` 优先，否则 `main`；单文件 CommonJS bundle，入口可省略 `.js`；`require` 只提供 `vscode`           |
-| 激活与释放 | `activate(context)`、可选 `deactivate()`、`context.subscriptions`；按命令、语言或启动完成事件激活                    |
-| 命令       | `commands.registerCommand`，命令须声明在 `contributes.commands`；标准参数和 `thisArg`                      |
-| 界面       | 三种消息通知（无按钮或选项）；字符串或 label 项的单选 `window.showQuickPick` 与 `placeHolder`；`window.createStatusBarItem` |
-| 文档       | `workspace.openTextDocument(Uri)`；打开、修改、关闭事件；UTF-16 `getText(range)`、`offsetAt`、`positionAt`、`lineAt`、单词范围 |
-| 诊断       | `languages.createDiagnosticCollection`、Diagnostic 四种严重度；set/delete/clear/dispose；资源版本与运行实例隔离 |
-| 语言       | 字符串语言 ID 的 Hover 和 CompletionItem Provider；触发字符、未完成列表、snippet、附加文本编辑                    |
-| 基础类型   | `Uri`、`Position`、`Range`、`Hover`、`MarkdownString`、`Diagnostic`、`CompletionItem`、`CompletionList`、`TextEdit`、`SnippetString`、`Disposable` 的上述用法，不提供完整类型成员         |
+| 接口       | 当前支持范围                                                                                                                                                                      |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 包入口     | `browser` 优先，否则 `main`；单文件 CommonJS bundle，入口可省略 `.js`；`require` 只提供 `vscode`                                                                                  |
+| 激活与释放 | `activate(context)`、可选 `deactivate()`、`context.subscriptions`；按命令、语言或启动完成事件激活                                                                                 |
+| 命令       | `commands.registerCommand`，命令须声明在 `contributes.commands`；标准参数和 `thisArg`                                                                                             |
+| 界面       | 三种消息通知（无按钮或选项）；字符串或 label 项的单选 `window.showQuickPick` 与 `placeHolder`；`window.createStatusBarItem`                                                       |
+| 文档       | `workspace.openTextDocument(Uri)`；打开、修改、关闭事件；UTF-16 `getText(range)`、`offsetAt`、`positionAt`、`lineAt`、单词范围                                                    |
+| 诊断       | `languages.createDiagnosticCollection`、Diagnostic 四种严重度；set/delete/clear/dispose；资源版本与运行实例隔离                                                                   |
+| 语言       | 字符串语言 ID 的 Hover 和 CompletionItem Provider；触发字符、未完成列表、snippet、附加文本编辑                                                                                    |
+| 基础类型   | `Uri`、`Position`、`Range`、`Hover`、`MarkdownString`、`Diagnostic`、`CompletionItem`、`CompletionList`、`TextEdit`、`SnippetString`、`Disposable` 的上述用法，不提供完整类型成员 |
 
 接口未实现时明确报错；不提供 Node 模块、相对 CommonJS 模块加载、文件或网络直连、任意后端 RPC、完整 ExtensionContext。
 补全不支持 resolve、命令、分别插入/替换的范围，以及 Color、EnumMember、Constant、Struct、Event、Operator kind；
@@ -574,28 +574,28 @@ Host exit、invalid protocol 或 unknown outcome 会清空旧 registration，终
 
 ## 7. 当前实现状态与明确限制
 
-| 子系统                                                           | 状态               | 实现证据或缺口                                                                                                    |
-| ---------------------------------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| 静态 package discovery、snapshot、digest、资源读取               | 已实现             | `ash-extension-catalog` + App Server extension operations                                                         |
-| Plugin 声明式 Extension 分发与 live activation                   | 已实现             | `declarativeExtensions[]`、dynamic source provider、Workbench Plugin generation refresh                           |
-| 声明式语言、grammar、snippet、theme、debugger 投影               | 已实现             | `AppServerExtensionService` 与领域 registry tests                                                                 |
-| Plugin executable declaration 与 exact process permission        | 已实现             | `ash-plugin` manifest/package tests                                                                               |
-| Plugin executable authority                                      | 已实现             | `ash-core-plugins` authority tests                                                                                |
-| Marketplace executable consumer adapter 与独立 admission         | 已实现             | exact sidecar/executable binding、双 lease 与 deferred uninstall tests                                            |
-| Host RPC v1、独立进程监管、取消、配额、restart                   | 已实现             | `ash-editor-extension-host` standalone tests                                                                      |
-| TS 作者 SDK 与 Rust V8 执行                                      | 已实现（v1）       | 独立进程测试覆盖 ESM、命令、前端文档、Rust 读取、服务错误、取消、超时与停用                                       |
-| Rust 作者 SDK 与共用 wire contract                               | 已停止该产品方向   | 基础命令、Hover、Output 曾通过独立进程测试；反向调用补充已暂停，未完成验证，源码尚未退场                          |
-| 扩展命名 Output event stream                                     | 已实现             | process-fenced create/append/replace/clear/show/dispose、bounded retention 与 Workbench sequence projection tests |
-| App Server Host fleet、目录 Grant gate、async invoke/cancel/read | 已实现             | exact operation broker、连接配额/TTL、退役取消与 changed notification                                             |
-| Workbench Commands/Language/Tasks/Testing bridge                 | 已实现（窄契约）   | 原子投影、取消、stale fence 与 last-good 测试；Testing 仅 task-backed profile                                     |
-| Workbench DataChannel/LinkPresentation bridge                    | 已实现             | 按扩展进程注册订阅、有序发送、取消与重连；Chat 链接语义和键盘行为由 Playwright 验证                               |
-| Workbench executable Debug bridge                                | 尚未完成           | registration 可见并产生诊断，但没有异步 Host-broker DAP session seam                                              |
-| 生产第三方 launcher                                              | 部分具备           | macOS 与 64 位 Windows JS 已实现系统隔离和独立内存预算；其余平台和独立可执行扩展缺少所需 launcher 时 capability=false              |
-| Open VSX 按事件启动                                              | 已实现（限定事件） | Rust 调度命令、语言、窗口恢复事件及 `*`；等待状态无进程，首次调用绑定实际注册                                     |
-| Open VSX 来源、VSIX 安装和声明式贡献                             | 已实现             | 复用 Manager；精确版本、校验和、来源和安全解压；接入共享声明式目录                                                |
-| Open VSX 基础 JS 扩展运行                                        | 已实现             | macOS 与 64 位 Windows 显式启用与授权，标准 CommonJS 入口与 `require('vscode')`；原包命令和重启、撤销已验证                        |
-| 完整 VS Code 扩展 API                                            | 尚未完成           | 只支持下述 API 子集；Node、完整 ExtensionContext 和扩展文档事件尚未提供                                           |
-| 扩展直接使用 Node / Electron 能力                                | 不开放             | 目标 JS 宿主维持第 0.3 节的权限限制                                                                               |
+| 子系统                                                           | 状态               | 实现证据或缺口                                                                                                        |
+| ---------------------------------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| 静态 package discovery、snapshot、digest、资源读取               | 已实现             | `ash-extension-catalog` + App Server extension operations                                                             |
+| Plugin 声明式 Extension 分发与 live activation                   | 已实现             | `declarativeExtensions[]`、dynamic source provider、Workbench Plugin generation refresh                               |
+| 声明式语言、grammar、snippet、theme、debugger 投影               | 已实现             | `AppServerExtensionService` 与领域 registry tests                                                                     |
+| Plugin executable declaration 与 exact process permission        | 已实现             | `ash-plugin` manifest/package tests                                                                                   |
+| Plugin executable authority                                      | 已实现             | `ash-core-plugins` authority tests                                                                                    |
+| Marketplace executable consumer adapter 与独立 admission         | 已实现             | exact sidecar/executable binding、双 lease 与 deferred uninstall tests                                                |
+| Host RPC v1、独立进程监管、取消、配额、restart                   | 已实现             | `ash-editor-extension-host` standalone tests                                                                          |
+| TS 作者 SDK 与 Rust V8 执行                                      | 已实现（v1）       | 独立进程测试覆盖 ESM、命令、前端文档、Rust 读取、服务错误、取消、超时与停用                                           |
+| Rust 作者 SDK 与共用 wire contract                               | 已停止该产品方向   | 基础命令、Hover、Output 曾通过独立进程测试；反向调用补充已暂停，未完成验证，源码尚未退场                              |
+| 扩展命名 Output event stream                                     | 已实现             | process-fenced create/append/replace/clear/show/dispose、bounded retention 与 Workbench sequence projection tests     |
+| App Server Host fleet、目录 Grant gate、async invoke/cancel/read | 已实现             | exact operation broker、连接配额/TTL、退役取消与 changed notification                                                 |
+| Workbench Commands/Language/Tasks/Testing bridge                 | 已实现（窄契约）   | 原子投影、取消、stale fence 与 last-good 测试；Testing 仅 task-backed profile                                         |
+| Workbench DataChannel/LinkPresentation bridge                    | 已实现             | 按扩展进程注册订阅、有序发送、取消与重连；Chat 链接语义和键盘行为由 Playwright 验证                                   |
+| Workbench executable Debug bridge                                | 尚未完成           | registration 可见并产生诊断，但没有异步 Host-broker DAP session seam                                                  |
+| 生产第三方 launcher                                              | 部分具备           | macOS 与 64 位 Windows JS 已实现系统隔离和独立内存预算；其余平台和独立可执行扩展缺少所需 launcher 时 capability=false |
+| Open VSX 按事件启动                                              | 已实现（限定事件） | Rust 调度命令、语言、窗口恢复事件及 `*`；等待状态无进程，首次调用绑定实际注册                                         |
+| Open VSX 来源、VSIX 安装和声明式贡献                             | 已实现             | 复用 Manager；精确版本、校验和、来源和安全解压；接入共享声明式目录                                                    |
+| Open VSX 基础 JS 扩展运行                                        | 已实现             | macOS 与 64 位 Windows 显式启用与授权，标准 CommonJS 入口与 `require('vscode')`；原包命令和重启、撤销已验证           |
+| 完整 VS Code 扩展 API                                            | 尚未完成           | 只支持下述 API 子集；Node、完整 ExtensionContext 和扩展文档事件尚未提供                                               |
+| 扩展直接使用 Node / Electron 能力                                | 不开放             | 目标 JS 宿主维持第 0.3 节的权限限制                                                                                   |
 
 当前不支持 generic Node/WASM loader、命名 Output 之外的扩展主动 event stream、publisher signature/revocation feed、
 per-platform artifact selector、跨重启 invocation 恢复或多个扩展共享一个 Host process。完整 test tree、

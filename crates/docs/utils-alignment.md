@@ -11,7 +11,7 @@ Ash 按能力及依赖边界安排实现，不按 Codex 的 crate 名称复制�
 | cargo-bin         | `utils/cargo-bin`、`test-binary-support`、`install-context`                          | Cargo/Bazel 测试程序、资源与脚本夹具由轻量测试库定位；helper 角色和产品安装发现保留各自职责 |
 | cli               | `utils/cli`、`ash-cli`、`config`                                                     | 通用解析退出码与命令格式化共享；Ash 产品继续负责参数定义、命令行为与配置                    |
 | elapsed           | `utils/elapsed`                                                                      | 已有时间累计能力                                                                            |
-| fuzzy-match       | `crates/tui/src/widgets/list_selection/matcher.rs`                                     | 当前列表搜索已有前缀、子串和模糊匹配；不新增空的公共封装                                    |
+| fuzzy-match       | `crates/tui/src/widgets/list_selection/matcher.rs`                                   | 当前列表搜索已有前缀、子串和模糊匹配；不新增空的公共封装                                    |
 | git-discovery     | `git/src/repository.rs`、`git/src/client.rs`                                         | 已有工作树/元数据发现和有超时、输出限制的 Git 子进程；与上游可选元数据探测的契约不同        |
 | home-dir          | `utils/home-dir`、`home`                                                             | 使用 Ash home 及显式路径规则                                                                |
 | image             | `utils/image`、`attachments`                                                         | 已有格式、大小、尺寸校验，持久引用及按模型限制缩放                                          |

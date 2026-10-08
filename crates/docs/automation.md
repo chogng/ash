@@ -46,18 +46,18 @@ flowchart TD
 
 以下为实现归属。crate 用于隔离能力和依赖，不按每个内部步骤拆分 crate。
 
-| 位置                                           | 职责                                                             | 边界                                                   |
-| ---------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------ |
-| `crates/automation`                            | 计划校验、下次执行时间计算、调度、运行记录和恢复；拥有持久化规则 | 日期、时区、调度依赖留在这里；不实现模型调用或工具执行 |
-| `crates/protocol`                              | automation 跨模块共享的稳定身份、时间戳和领域值对象              | 不引入日期时间库，不保存进程内计时器                   |
-| `crates/app-server-protocol`                   | automation 请求、响应、通知和生成类型                            | 协议不暴露日期库类型或内部调度器                       |
-| `crates/app-server`                            | 请求分派、订阅、协调 automation 与 Agent 执行                    | 不保存第二份计划状态，不自行计算日历规则               |
-| `crates/core`                                  | 执行 Thread、Turn、模型调用和工具操作                            | 不计算“下一次周一几点运行”                             |
-| `crates/app-server-daemon`                     | 每个 profile 的后台进程生命周期与保活                            | 不解释计划规则；不得因窗口连接清空而丢失调度能力       |
-| `crates/app-server`                            | 产品无关的后端命令入口和进程装配                                 | 不依赖 `ash-code` 的产品入口                           |
+| 位置                                    | 职责                                                             | 边界                                                   |
+| --------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------ |
+| `crates/automation`                     | 计划校验、下次执行时间计算、调度、运行记录和恢复；拥有持久化规则 | 日期、时区、调度依赖留在这里；不实现模型调用或工具执行 |
+| `crates/protocol`                       | automation 跨模块共享的稳定身份、时间戳和领域值对象              | 不引入日期时间库，不保存进程内计时器                   |
+| `crates/app-server-protocol`            | automation 请求、响应、通知和生成类型                            | 协议不暴露日期库类型或内部调度器                       |
+| `crates/app-server`                     | 请求分派、订阅、协调 automation 与 Agent 执行                    | 不保存第二份计划状态，不自行计算日历规则               |
+| `crates/core`                           | 执行 Thread、Turn、模型调用和工具操作                            | 不计算“下一次周一几点运行”                             |
+| `crates/app-server-daemon`              | 每个 profile 的后台进程生命周期与保活                            | 不解释计划规则；不得因窗口连接清空而丢失调度能力       |
+| `crates/app-server`                     | 产品无关的后端命令入口和进程装配                                 | 不依赖 `ash-code` 的产品入口                           |
 | `src/ash/workbench/contrib/automation/` | 创建、编辑、暂停、立即运行、运行历史和可访问交互                 | 不持久化权威计划，不持有执行计时器                     |
 | `src/ash/platform/automation/`          | 前端领域接口、订阅通知和 App Server adapter                      | 生成协议类型止于 adapter，不传入普通界面代码           |
-| `app`、`ash-code` 的对应产品界面               | 消费同一后端能力并呈现产品交互                                   | 不另建调度器或计划存储                                 |
+| `app`、`ash-code` 的对应产品界面        | 消费同一后端能力并呈现产品交互                                   | 不另建调度器或计划存储                                 |
 
 automation 通过窄的执行请求和结果契约与现有 Agent 能力协作，App Server 完成装配。core 不反向依赖 automation；automation 不导入 App Server 传输实现。没有独立消费者前，不另建通用 scheduler、calendar 或 clock crate。
 
@@ -133,13 +133,13 @@ automation 通过窄的执行请求和结果契约与现有 Agent 能力协作�
 
 ## 当前实现与接入入口
 
-| 入口                                                                                                | 当前职责                                                                             |
-| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| [automation crate](../automation/README.md)                                                         | SQLite 事务保存计划与运行；每秒检查到期规则；保留幂等命令结果                        |
-| [时间协议](../protocol/src/automation.rs)                                                           | 使用有界 Unix 毫秒整数；不依赖日期库                                                 |
-| [管理协议](../app-server-protocol/src/protocol/automation.rs)                                       | list、write、delete、run、runs、stop 六个方法；`automation/changed` 通知             |
-| [Agent 执行接入](../app-server/src/server/automation_execution.rs)                                  | 稳定命令身份查找原 Thread/Turn，使用已有执行和中断入口；结果未确认时不新建另一次执行 |
-| [后台宿主](../app-server/src/managed.rs)                                                            | 启用中且有下次运行的计划，以及未结束运行，均阻止空闲退出                             |
+| 入口                                                                                         | 当前职责                                                                             |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| [automation crate](../automation/README.md)                                                  | SQLite 事务保存计划与运行；每秒检查到期规则；保留幂等命令结果                        |
+| [时间协议](../protocol/src/automation.rs)                                                    | 使用有界 Unix 毫秒整数；不依赖日期库                                                 |
+| [管理协议](../app-server-protocol/src/protocol/automation.rs)                                | list、write、delete、run、runs、stop 六个方法；`automation/changed` 通知             |
+| [Agent 执行接入](../app-server/src/server/automation_execution.rs)                           | 稳定命令身份查找原 Thread/Turn，使用已有执行和中断入口；结果未确认时不新建另一次执行 |
+| [后台宿主](../app-server/src/managed.rs)                                                     | 启用中且有下次运行的计划，以及未结束运行，均阻止空闲退出                             |
 | [管理面板](../../src/ash/workbench/contrib/automation/browser/automationViewPane.ts)         | 创建、编辑、暂停、立即运行、停止、历史及打开关联 Chat                                |
 | [Renderer 协议客户端](../../src/ash/platform/app-server/browser/appServerProtocolClient.ts)  | 每个窗口独立连接，负责初始化、生成协议解码、请求表、通知和反向请求                   |
 | [Main 连接载体](../../src/ash/platform/app-server/electron-main/appServerConnectionRelay.ts) | 启动连接进程、传递 MessagePort、限制帧大小与队列；不分派后端方法                     |

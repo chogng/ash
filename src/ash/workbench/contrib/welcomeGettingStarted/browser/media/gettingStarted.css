@@ -74,8 +74,7 @@
 	min-width: 0;
 	min-height: 60px;
 	padding: 10px 16px;
-	border: var(--ash-strokeThickness) solid
-		var(--ash-editorWelcome-cardBorder);
+	border: var(--ash-strokeThickness) solid var(--ash-editorWelcome-cardBorder);
 	border-radius: var(--ash-cornerRadius-large);
 	flex-direction: row;
 	align-items: center;

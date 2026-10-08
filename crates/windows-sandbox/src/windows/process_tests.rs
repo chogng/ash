@@ -19,9 +19,10 @@ fn audited_world_writable_files_are_denied_by_the_execution_acl() {
         0
     );
     assert!(super::super::audit::world_writable(&path).unwrap());
-    let mut acl =
-        mxc_sdk::mxc_common::filesystem_dacl::DaclManager::in_directory(&temp.path().join("journal"))
-            .unwrap();
+    let mut acl = mxc_sdk::mxc_common::filesystem_dacl::DaclManager::in_directory(
+        &temp.path().join("journal"),
+    )
+    .unwrap();
     acl.deny_write_access("S-1-5-21-411-412-413-414", std::slice::from_ref(&path))
         .unwrap();
     let token = restricted_token(&owner, &owner, "S-1-5-21-411-412-413-414").unwrap();

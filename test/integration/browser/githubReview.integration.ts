@@ -172,7 +172,7 @@ function showSettings(): void {
 	if (item.kind === 'item' && 'domNode' in item.value) { root.append(item.value.domNode); }
 	section.setVisible(true);
 }
-services.registerInstance(IPreferencesService, { openSettings: async () => { showSettings(); }, openUserSettings: async () => {}, openGlobalKeybindingSettings: async () => {} });
+services.registerInstance(IPreferencesService, { openSettings: async () => { showSettings(); }, openUserSettings: async () => { }, openGlobalKeybindingSettings: async () => { } });
 const commands = resources.add(new CommandService(services));
 window.ashGitHubReview = {
 	external, settings: showSettings, requests: transport.requests, gitRequests, loggedOut, browserHosts, dirty: () => { dirty = true; }, open: () => commands.executeCommand('workbench.action.github.open'), close: () => { pane?.dispose(); pane = undefined; },

@@ -44,10 +44,10 @@ export interface CodeActionTrigger {
 export class CodeActionCommandArgs {
 	constructor(public readonly kind: HierarchicalKind, public readonly apply: CodeActionAutoApply, public readonly preferred: boolean) { }
 
-	public static fromUser(arg: unknown, defaults: { kind: HierarchicalKind; apply: CodeActionAutoApply }): CodeActionCommandArgs {
+	public static fromUser(arg: unknown, defaults: { kind: HierarchicalKind; apply: CodeActionAutoApply; }): CodeActionCommandArgs {
 		const values = arg === undefined ? {} : arg;
 		if (!values || typeof values !== 'object') { throw new TypeError(localize('codeAction.invalidArguments', 'Code action arguments must be an object.')); }
-		const options = values as { kind?: unknown; apply?: unknown; preferred?: unknown };
+		const options = values as { kind?: unknown; apply?: unknown; preferred?: unknown; };
 		if (options.kind !== undefined && typeof options.kind !== 'string') { throw new TypeError(localize('codeAction.invalidKind', 'Code action kind must be a string.')); }
 		if (options.preferred !== undefined && typeof options.preferred !== 'boolean') { throw new TypeError(localize('codeAction.invalidPreferred', 'Code action preferred must be a boolean.')); }
 		if (options.apply !== undefined && !Object.values(CodeActionAutoApply).includes(options.apply as CodeActionAutoApply)) {

@@ -121,8 +121,7 @@
 	max-height: 25%;
 	overflow: auto;
 	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
-	border-block: var(--ash-strokeThickness) solid
-		var(--ash-editorGroup-border);
+	border-block: var(--ash-strokeThickness) solid var(--ash-editorGroup-border);
 }
 
 .ash-merge-hunk {
@@ -179,8 +178,7 @@
 	overflow-x: auto;
 	white-space: nowrap;
 	background: var(--ash-editor-background);
-	border-block: var(--ash-strokeThickness) solid
-		var(--ash-editorGroup-border);
+	border-block: var(--ash-strokeThickness) solid var(--ash-editorGroup-border);
 }
 
 .ash-merge-inline-state {

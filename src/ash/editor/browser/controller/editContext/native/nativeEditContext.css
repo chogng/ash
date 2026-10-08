@@ -41,8 +41,7 @@
 [data-color-scheme="hcLight"]
 	.stanza-editor
 	.edit-context-composition-secondary {
-	border: var(--ash-strokeThickness) solid
-		var(--ash-editor-compositionBorder);
+	border: var(--ash-strokeThickness) solid var(--ash-editor-compositionBorder);
 }
 
 [data-color-scheme="hcDark"] .stanza-editor .edit-context-composition-primary,

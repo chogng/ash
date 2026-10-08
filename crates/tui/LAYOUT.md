@@ -234,21 +234,21 @@ inline 的 footer 第一行按配置顺序与可用宽度绘制模型、任务�
 
 `top_statusline`、`input` 属于 `Layout`；其余下表字段属于 `Layout.session`（`SessionAreas`）。
 
-| 中文叫法         | 代码名称                | 看到的内容 / 边界                                                                                  | 定位入口                                                                                                           |
-| ---------------- | ----------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| 顶部 statusline  | `top_statusline`        | 左边分支、当前 Project 工作目录；右边 Git 变更、上下文用量与 `[Dashboard]`；正常高度下其后留一空行 | [header.rs](src/app/fullscreen/header.rs)                                                                      |
+| 中文叫法         | 代码名称                | 看到的内容 / 边界                                                                                  | 定位入口                                                                                                   |
+| ---------------- | ----------------------- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| 顶部 statusline  | `top_statusline`        | 左边分支、当前 Project 工作目录；右边 Git 变更、上下文用量与 `[Dashboard]`；正常高度下其后留一空行 | [header.rs](src/app/fullscreen/header.rs)                                                                  |
 | 消息区           | `transcript`            | 会话内容与滚动视口，占据控制区上方剩余空间                                                         | [conversation.rs](src/app/fullscreen/conversation.rs)、[transcript/view.rs](src/thread/transcript/view.rs) |
-| 目标区           | `goal`                  | 当前目标信息                                                                                       | [goal.rs](src/thread/goal.rs)                                                                                  |
-| 计划区           | `plan`                  | 当前计划及步骤                                                                                     | [plan.rs](src/thread/plan.rs)                                                                                  |
-| 待发送队列       | `queue`                 | 排队等待发送的输入                                                                                 | [queue.rs](src/thread/queue.rs)                                                                                |
-| 提问区           | `request`               | Agent 向用户提出的问题和答案选项                                                                   | [interaction/query.rs](src/thread/interaction/query.rs)                                                        |
-| 底部 statusline  | `footer.statusline`     | 输入框下方、hintline 上方的一行；显示缓存命中率、费用、资源和运行摘要                              | [footer.rs](src/app/footer.rs)                                                                                 |
+| 目标区           | `goal`                  | 当前目标信息                                                                                       | [goal.rs](src/thread/goal.rs)                                                                              |
+| 计划区           | `plan`                  | 当前计划及步骤                                                                                     | [plan.rs](src/thread/plan.rs)                                                                              |
+| 待发送队列       | `queue`                 | 排队等待发送的输入                                                                                 | [queue.rs](src/thread/queue.rs)                                                                            |
+| 提问区           | `request`               | Agent 向用户提出的问题和答案选项                                                                   | [interaction/query.rs](src/thread/interaction/query.rs)                                                    |
+| 底部 statusline  | `footer.statusline`     | 输入框下方、hintline 上方的一行；显示缓存命中率、费用、资源和运行摘要                              | [footer.rs](src/app/footer.rs)                                                                             |
 | 本轮运行状态行   | `progress`              | 固定在 tipline 上方；显示阶段、耗时、中断键和可选技巧                                              | [chat_view.rs](src/app/chat_view.rs)、[progress.rs](src/thread/progress.rs)                                |
 | 输入框上方提示行 | `tipline`               | 听写、临时提示和首页引导；正常布局预留一行                                                         | [footer.rs](src/app/fullscreen/footer.rs) 的 `draw_tip()`、[top_tip.rs](src/app/top_tip.rs)                |
-| 输入区域         | `composer`              | 容纳输入框；需要审批时改为显示审批选项                                                             | [fullscreen/composer.rs](src/app/fullscreen/composer.rs)                                                       |
-| 实际输入框       | `input`                 | 普通情况下位于 `composer` 内；审批时高度为零                                                       | [composer/surface.rs](src/thread/composer/surface.rs)                                                          |
-| hintline         | `footer.hintline`       | 权限与适用的 Dashboard 提示，或当前操作提示；普通布局预留一行                                      | [footer.rs](src/app/footer.rs)                                                                                 |
-| Agent 切换栏     | `agent_thread_switcher` | Main / Subagent 会话切换，位于快捷键区下方                                                         | [thread.rs](src/thread.rs) 的 `draw_agent_thread_switcher` 入口                                                |
+| 输入区域         | `composer`              | 容纳输入框；需要审批时改为显示审批选项                                                             | [fullscreen/composer.rs](src/app/fullscreen/composer.rs)                                                   |
+| 实际输入框       | `input`                 | 普通情况下位于 `composer` 内；审批时高度为零                                                       | [composer/surface.rs](src/thread/composer/surface.rs)                                                      |
+| hintline         | `footer.hintline`       | 权限与适用的 Dashboard 提示，或当前操作提示；普通布局预留一行                                      | [footer.rs](src/app/footer.rs)                                                                             |
+| Agent 切换栏     | `agent_thread_switcher` | Main / Subagent 会话切换，位于快捷键区下方                                                         | [thread.rs](src/thread.rs) 的 `draw_agent_thread_switcher` 入口                                            |
 
 顶部右侧显示工作区/会话状态摘要；聊天进度与听写状态的位置见[聊天进度与听写状态](#聊天进度与听写状态)。`tipline` 优先显示听写，其余时间显示临时提示或首页引导；权限与适用的 Dashboard 入口提示共用底部 hintline，其他交互显示对应操作提示。输入区下分隔线上的模型与任务模式标签由 [fullscreen/composer.rs](src/app/fullscreen/composer.rs) 绘制。
 
@@ -325,11 +325,11 @@ inline 的 footer 第一行按配置顺序与可用宽度绘制模型、任务�
 
 inline 与 fullscreen 共用 `SessionAreas`、控制区位置计算和底部 footer，由 inline 的页面入口提供活动视口范围。相关入口如下：
 
-| 职责                                                                                                                                                                        | 实现入口                                                                                   |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| 职责                                                                                                                                                                        | 实现入口                                                                           |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | 定稿历史与活动尾部分开输出，记录已写出的单元身份                                                                                                                            | [output.rs](src/app/inline/output.rs)、[scrollback.rs](src/terminal/scrollback.rs) |
-| 欢迎信息在普通主屏输出时写入一次                                                                                                                                            | [header.rs](src/app/inline/header.rs)                                                  |
-| 底部第一行显示模型等配置信息，第二行组合权限与适用的 Dashboard 提示，其他操作提示覆盖该行；听写使用输入框上方的 tipline，本轮运行状态固定在 tipline 上方，由 chat_view 绘制 | [footer.rs](src/app/footer.rs)                                                         |
+| 欢迎信息在普通主屏输出时写入一次                                                                                                                                            | [header.rs](src/app/inline/header.rs)                                              |
+| 底部第一行显示模型等配置信息，第二行组合权限与适用的 Dashboard 提示，其他操作提示覆盖该行；听写使用输入框上方的 tipline，本轮运行状态固定在 tipline 上方，由 chat_view 绘制 | [footer.rs](src/app/footer.rs)                                                     |
 
 `Output` 在当前 Thread 内按稳定单元身份去重，普通重绘和重复快照不会再次写出已定稿块；旧分页内容留在正文浏览器中，避免插入较早消息打乱主屏输出顺序。切换 Thread 会重置输出记录，并绘制目标 Thread。
 
@@ -384,7 +384,7 @@ fullscreen 的 [pointer.rs](src/app/fullscreen/pointer.rs) 聚合各组件按绘
 | 工具状态、结果、分组、预览长度和失败原因；本地命令及消息详情内容  | 对应 `HistoryCell`：`ExecCell`、`LocalCommandCell` 和 `ContentCell`；记录决定是否提供完整详情动作                                                    |
 | 结果与详情的容器、ANSI / 普通文字样式、完整详情动作的文字行和区域 | `MessageResponse`；一次布局调用使用同一宽度和主题，返回最终屏幕行与组件内的相对动作区域；接受已着色的失败提示                                        |
 | 首行连接符、续行留白和可用正文宽度                                | 同一个文件内私有的 `PrefixedBlock`，按正文宽度调用共享换行，再添加前缀；不会重复连接符                                                               |
-| 文字换行、跨颜色片段的词与组合字符、来源列位置                    | [render/text.rs](src/render/text.rs)；按整行文字确定断行，带链接的文字共用算法，链接目标不参与测宽                                               |
+| 文字换行、跨颜色片段的词与组合字符、来源列位置                    | [render/text.rs](src/render/text.rs)；按整行文字确定断行，带链接的文字共用算法，链接目标不参与测宽                                                   |
 | 展开选择、正文滚动和动作执行                                      | 正文视图及各屏幕模式的浏览状态；视图用组件给出的动作区域处理命中及悬停，包括换行后的每一行                                                           |
 | 记录组合、行数、输入背景范围和动作位置                            | `CellLines`；全部使用最终屏幕行，追加组件时只偏移动作位置一次，不再按换行高度反复换算                                                                |
 | 排版结果与屏幕 buffer 缓存、视口裁剪                              | `ChatHistoryRenderCache`；测量得到的行在原有缓存预算内保存，可见时直接复用并生成 buffer；外层只裁剪和绘制，不再次换行，未显示的记录不提前生成 buffer |
@@ -398,12 +398,12 @@ fullscreen 的 [pointer.rs](src/app/fullscreen/pointer.rs) 聚合各组件按绘
 
 页面组合、功能内容、文字排版与终端写出各有自己的负责方。绘制、测量、滚动和鼠标命中使用同一份排版结果；排版读取显式输入，不写预览文件，也不判断文件是否存在。
 
-| 内容                               | 负责方与约定                                                                                                                                                                                                    |
-| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 整页、活动视口、焦点与浮层组合     | `app/fullscreen`、`app/inline`；共用 `app/chat_view.rs` 的聊天控制区，两种模式分别维护输出生命周期                                                                                                              |
+| 内容                               | 负责方与约定                                                                                                                                                                                                |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 整页、活动视口、焦点与浮层组合     | `app/fullscreen`、`app/inline`；共用 `app/chat_view.rs` 的聊天控制区，两种模式分别维护输出生命周期                                                                                                          |
 | 字形宽度、正文换行与前缀预算       | [render/text.rs](src/render/text.rs)；输入框共用完整 Unicode 字形及宽度，保留自己的字节范围、光标与选区；消息标识、Markdown 引用和列表的前缀共同占用宽度，窄窗口缩短前缀并留下正文空间                      |
-| 主题颜色与显示输入                 | [render/palette.rs](src/render/palette.rs) 保存调色板与终端颜色转换；[render/context.rs](src/render/context.rs) 提供主题版本、语言、已准备的预览地址及当前帧链接输出                                    |
-| 链接文字、来源列与当前帧范围       | [render/links.rs](src/render/links.rs)；链接范围跟随排版与裁剪，链接目标不进入文字或复制 buffer；[terminal/hyperlinks.rs](src/terminal/hyperlinks.rs) 只在写出时编码 OSC 8                              |
+| 主题颜色与显示输入                 | [render/palette.rs](src/render/palette.rs) 保存调色板与终端颜色转换；[render/context.rs](src/render/context.rs) 提供主题版本、语言、已准备的预览地址及当前帧链接输出                                        |
+| 链接文字、来源列与当前帧范围       | [render/links.rs](src/render/links.rs)；链接范围跟随排版与裁剪，链接目标不进入文字或复制 buffer；[terminal/hyperlinks.rs](src/terminal/hyperlinks.rs) 只在写出时编码 OSC 8                                  |
 | Mermaid 预览文件                   | [host/mermaid_preview.rs](src/host/mermaid_preview.rs) 在消息更新后准备文件，成功后发布地址；排版只查询内存中的地址，地址变化推进版本并使相关缓存失效                                                       |
 | 记录行、测量信息与屏幕 buffer 缓存 | [transcript/cache.rs](src/thread/transcript/cache.rs)；按记录身份、内容版本、流式可见边界、宽度、主题、语言、预览地址版本及展开/选中状态复用，测量行与 buffer 共用有界预算                                  |
 | Markdown 块复用与代码块高亮状态    | [transcript/markdown_cache.rs](src/thread/transcript/markdown_cache.rs)；文字或显示输入变化时重排受影响块，代码高亮状态单独判断语言、主题和完整源码前缀；具体记录只接收这类内容缓存，不接收屏幕 buffer 缓存 |
@@ -413,13 +413,13 @@ fullscreen 的 [pointer.rs](src/app/fullscreen/pointer.rs) 聚合各组件按绘
 
 ## 页面与状态归属
 
-| 内容                                                  | 保存与维护位置                                                                                                                                                                  |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 会话、消息、配置、草稿、队列与功能请求                | 共用功能模块；`SessionsState` 保存目录与 Session/Thread 身份，不保存页面焦点                                                                                                    |
+| 内容                                                  | 保存与维护位置                                                                                                                                                          |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 会话、消息、配置、草稿、队列与功能请求                | 共用功能模块；`SessionsState` 保存目录与 Session/Thread 身份，不保存页面焦点                                                                                            |
 | 页面、焦点、Issues 浏览、子任务选择、正文滚动与展开项 | fullscreen / inline 分别持有；[SessionNavigation](src/sessions/navigation.rs)、[Viewports](src/thread/transcript/viewport.rs) 和 `QueueNavigation` 保存各模式的浏览选择 |
-| 区域、容器与输入路由                                  | 共享 `chat_view.rs` 组合聊天区域；两种模式各自的 `layout.rs`、`navigation.rs`、`modal.rs` / `panel.rs`；[frame.rs](src/app/frame.rs) 只选择绘制入口和资源需求               |
-| 功能编辑与业务动作                                    | `CommandPanel` 共用功能编辑器，功能模块解释请求与结果；共享 `widgets` 提供外框、列表、页签和搜索                                                                                |
-| 终端输出与恢复                                        | `TerminalSession`；[terminal/text.rs](src/terminal/text.rs) 提取文字，不保存界面手势                                                                                        |
+| 区域、容器与输入路由                                  | 共享 `chat_view.rs` 组合聊天区域；两种模式各自的 `layout.rs`、`navigation.rs`、`modal.rs` / `panel.rs`；[frame.rs](src/app/frame.rs) 只选择绘制入口和资源需求           |
+| 功能编辑与业务动作                                    | `CommandPanel` 共用功能编辑器，功能模块解释请求与结果；共享 `widgets` 提供外框、列表、页签和搜索                                                                        |
+| 终端输出与恢复                                        | `TerminalSession`；[terminal/text.rs](src/terminal/text.rs) 提取文字，不保存界面手势                                                                                    |
 
 两种模式不调用对方的绘制或导航，App 不计算页面坐标。共享数据删除条目后，各模式清理自己的失效选择。面板焦点、搜索与退出规范见 [TUI 模态交互规范](../../.github/instructions/tui.instructions.md#命令面板与模态交互规范)。
 

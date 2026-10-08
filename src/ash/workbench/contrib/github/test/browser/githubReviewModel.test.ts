@@ -25,7 +25,7 @@ function setup() {
 		listPullRequestReviews: async () => ({ items: [], nextPage: null }),
 		reviewPullRequest: async () => { submissions++; if (failSubmission) { throw new GitHubError(GitHubErrorCode.SubmissionUncertain); } return { id: 1, commit: current.headCommit, body: 'Review', state: 'COMMENTED', url: `${pr.url}#review`, submittedAt: 'now' }; },
 	};
-	const accountService: IAccountService = { onDidChangeAccounts: accounts.event, onDidCompleteLogin: Event.None, read: async () => account, startLogin: async () => { throw new Error('Not used'); }, cancelLogin: async () => {}, logout: async () => {} };
+	const accountService: IAccountService = { onDidChangeAccounts: accounts.event, onDidCompleteLogin: Event.None, read: async () => account, startLogin: async () => { throw new Error('Not used'); }, cancelLogin: async () => { }, logout: async () => { } };
 	return { accounts, github, model: new GitHubReviewModel(github as IGitHubService, accountService), changeHead: () => { current = { ...pr, headCommit: 'c'.repeat(40) }; }, fail: () => { failSubmission = true; }, count: () => submissions };
 }
 
@@ -113,7 +113,7 @@ test('opening without a backend does not cache a failed account initialization',
 test('an account change cancels inbox reads and does not display a late private notification', async () => {
 	const fixture = setup(); using model = fixture.model; using accounts = fixture.accounts;
 	await model.initialize();
-	let release!: (value: { items: GitHubNotification[]; nextPage: number | null }) => void;
+	let release!: (value: { items: GitHubNotification[]; nextPage: number | null; }) => void;
 	fixture.github.listNotifications = () => new Promise(resolve => { release = resolve; });
 	const reading = model.loadNotifications(GitHubNotificationFilter.All);
 	await Promise.resolve();

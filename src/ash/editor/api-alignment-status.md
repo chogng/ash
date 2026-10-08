@@ -6,12 +6,12 @@
 
 26 个缺失生产文件与 3 个对应测试文件已创建，均接入 Ash 的实际调用链。用户确认的 4 个旧入口已删除，生产导入、注册及测试同步迁移。
 
-| 范围 | 新建生产文件 | 已接通行为 |
-| --- | --- | --- |
-| `gotoSymbol` | 10 | 五类位置查询、引用分组与去重、只读预览、F4／F6／F12 循环与焦点、正文修饰键点击及分栏打开 |
-| `codeAction` | 7 | 查询与取消模型、动作类别与首选筛选、菜单分组、真实快捷键解析、自动提示、通用命令／整理导入／全部修复 |
-| `rename` | 1 | 输入与完成／取消、重命名提交、经既有 Bulk Edit 预览后应用或取消 |
-| Workbench 调用／类型层级 | 8 | 各自的查询模型、按需展开树、方向切换、Peek 与样式；Editor 不再反向装载 Workbench 层级入口 |
+| 范围                     | 新建生产文件 | 已接通行为                                                                                           |
+| ------------------------ | ------------ | ---------------------------------------------------------------------------------------------------- |
+| `gotoSymbol`             | 10           | 五类位置查询、引用分组与去重、只读预览、F4／F6／F12 循环与焦点、正文修饰键点击及分栏打开             |
+| `codeAction`             | 7            | 查询与取消模型、动作类别与首选筛选、菜单分组、真实快捷键解析、自动提示、通用命令／整理导入／全部修复 |
+| `rename`                 | 1            | 输入与完成／取消、重命名提交、经既有 Bulk Edit 预览后应用或取消                                      |
+| Workbench 调用／类型层级 | 8            | 各自的查询模型、按需展开树、方向切换、Peek 与样式；Editor 不再反向装载 Workbench 层级入口            |
 
 路径与职责已经对应，完整上游 API 尚未全部具备。共享语言提供者仍使用 Ash 的 snapshot／AbortSignal 请求，引用查询的 compact 语义及控件公开签名也与上游有差异；当前动作数组没有可释放的 provider list 资源。因此这些文件不计为完整上游签名对齐，也不改变下文待处理声明的统计。
 
@@ -21,23 +21,23 @@
 
 第一切片：导航／速览菜单或 F12 → `goToCommands.ts` → `goToSymbol.ts` 查询与 `ReferencesController` 会话 → 当前模型、选区与 Peek → 跳转／取消／去重结果 → 既有导航单测和真实浏览器菜单、Peek 场景。View 继续拥有坐标、滚动和 Zone 挂载，引用控件拥有列表及预览 DOM；不改变文本模型 owner。
 
-| 准确路径（相对 `src/ash/`） | 修改前关系、调用方及本批动作 |
-| --- | --- |
-| `editor/contrib/gotoSymbol/browser/goToSymbol.ts` | 仅 VS Code；导航动作与定义预检消费，统一查询入口 |
-| `editor/contrib/gotoSymbol/browser/referencesModel.ts` | 仅 VS Code；引用控制器消费，持有去重、分组、定位与循环结果 |
-| `editor/contrib/gotoSymbol/browser/peek/referencesController.ts` | 仅 VS Code；导航动作消费，迁入旧导航会话与取消 owner |
-| `editor/contrib/gotoSymbol/browser/peek/referencesWidget.ts`、`peek/referencesTree.ts`、`peek/referencesWidget.css`（后三项均在同一 `gotoSymbol/browser/` 下） | 仅 VS Code；控制器消费，迁入列表、预览和其样式 |
-| `editor/contrib/gotoSymbol/browser/symbolNavigation.ts` | 仅 VS Code；结果循环命令消费，持有当前导航结果 |
-| `editor/contrib/gotoSymbol/browser/link/clickLinkGesture.ts`、`link/goToDefinitionAtPosition.ts`、`link/goToDefinitionAtPosition.css`（后两项在同一 `gotoSymbol/browser/` 下） | 仅 VS Code；正文修饰键点击／悬停消费，手势、定义预检及高亮 |
-| `editor/contrib/gotoSymbol/browser/goToCommands.ts` | 双方都有；菜单入口，迁到新查询／引用控制器 |
-| `editor/contrib/gotoSymbol/browser/languageNavigationController.ts`、`languageNavigation.contribution.ts`（后者在同目录） | 仅 Ash；用户已确认迁移后删除，旧调用与注册全部退出 |
-| `editor/editor.all.ts`、`editor/contrib/stickyScroll/browser/stickyScrollController.ts` | 双方都有；装载与固定行导航调用改用对应入口 |
-| `editor/contrib/peekView/browser/media/peekViewWidget.css` | 双方都有；移出引用／层级专属选择器，保留通用 Peek 样式 |
-| `editor/common/languages.ts` | 双方都有；补引用结果的标准 Location／LocationLink 契约，不移动共享 provider 到 contribution |
-| `editor/test/browser/languageNavigation.test.ts`、`editor/test/browser/editorExtensions.test.ts` | 双方已有；迁移实际注册和取消断言 |
-| `editor/contrib/gotoSymbol/test/browser/referencesModel.test.ts` | 仅 VS Code；独立编写分组、去重、范围变化、定位与循环回归 |
-| `test/integration/browser/standalone.integration.ts`、`standalone.integration.spec.ts`（相对 ``） | Ash 既有测试；增加新入口行为并保留菜单、选区、焦点与取消回归 |
-| `localization/zh-CN/editor.json`、`src/ash/workbench/services/localization/common/localizationCatalogs.ts`（相对 ``） | Ash 既有本地化 owner；新增文案同步生成并验证中文 |
+| 准确路径（相对 `src/ash/`）                                                                                                                                                    | 修改前关系、调用方及本批动作                                                                |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| `editor/contrib/gotoSymbol/browser/goToSymbol.ts`                                                                                                                              | 仅 VS Code；导航动作与定义预检消费，统一查询入口                                            |
+| `editor/contrib/gotoSymbol/browser/referencesModel.ts`                                                                                                                         | 仅 VS Code；引用控制器消费，持有去重、分组、定位与循环结果                                  |
+| `editor/contrib/gotoSymbol/browser/peek/referencesController.ts`                                                                                                               | 仅 VS Code；导航动作消费，迁入旧导航会话与取消 owner                                        |
+| `editor/contrib/gotoSymbol/browser/peek/referencesWidget.ts`、`peek/referencesTree.ts`、`peek/referencesWidget.css`（后三项均在同一 `gotoSymbol/browser/` 下）                 | 仅 VS Code；控制器消费，迁入列表、预览和其样式                                              |
+| `editor/contrib/gotoSymbol/browser/symbolNavigation.ts`                                                                                                                        | 仅 VS Code；结果循环命令消费，持有当前导航结果                                              |
+| `editor/contrib/gotoSymbol/browser/link/clickLinkGesture.ts`、`link/goToDefinitionAtPosition.ts`、`link/goToDefinitionAtPosition.css`（后两项在同一 `gotoSymbol/browser/` 下） | 仅 VS Code；正文修饰键点击／悬停消费，手势、定义预检及高亮                                  |
+| `editor/contrib/gotoSymbol/browser/goToCommands.ts`                                                                                                                            | 双方都有；菜单入口，迁到新查询／引用控制器                                                  |
+| `editor/contrib/gotoSymbol/browser/languageNavigationController.ts`、`languageNavigation.contribution.ts`（后者在同目录）                                                      | 仅 Ash；用户已确认迁移后删除，旧调用与注册全部退出                                          |
+| `editor/editor.all.ts`、`editor/contrib/stickyScroll/browser/stickyScrollController.ts`                                                                                        | 双方都有；装载与固定行导航调用改用对应入口                                                  |
+| `editor/contrib/peekView/browser/media/peekViewWidget.css`                                                                                                                     | 双方都有；移出引用／层级专属选择器，保留通用 Peek 样式                                      |
+| `editor/common/languages.ts`                                                                                                                                                   | 双方都有；补引用结果的标准 Location／LocationLink 契约，不移动共享 provider 到 contribution |
+| `editor/test/browser/languageNavigation.test.ts`、`editor/test/browser/editorExtensions.test.ts`                                                                               | 双方已有；迁移实际注册和取消断言                                                            |
+| `editor/contrib/gotoSymbol/test/browser/referencesModel.test.ts`                                                                                                               | 仅 VS Code；独立编写分组、去重、范围变化、定位与循环回归                                    |
+| `test/integration/browser/standalone.integration.ts`、`standalone.integration.spec.ts`（相对 ``）                                                                              | Ash 既有测试；增加新入口行为并保留菜单、选区、焦点与取消回归                                |
+| `localization/zh-CN/editor.json`、`src/ash/workbench/services/localization/common/localizationCatalogs.ts`（相对 ``）                                                          | Ash 既有本地化 owner；新增文案同步生成并验证中文                                            |
 
 本页末尾保留层级和 Code Action 切片的准入记录；以上验证只覆盖本批已接通行为。
 
@@ -53,7 +53,7 @@
 
 入口为 Editor Context Menu，经菜单注册表、当前编辑器的 ContextKey 与 EditorAction 进入既有功能控制器。请求、选区、编辑和 Peek 生命周期继续由原 owner 持有。本批范围与验证如下；未运行的验证不能记为通过。
 
-| 准确路径（相对 ``）                                                                                                                                       | 修改前文件关系与调用方                     | 本批动作与验证                                                                            |
+| 准确路径（相对 ``）                                                                                                                                              | 修改前文件关系与调用方                     | 本批动作与验证                                                                            |
 | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------- |
 | `src/ash/editor/contrib/gotoSymbol/browser/goToCommands.ts`                                                                                                      | 仅 VS Code；`editor.all.ts` 装配           | 创建导航与 Peek 动作注册；Playwright 验证跳转和键盘子菜单                                 |
 | `src/ash/editor/contrib/gotoSymbol/browser/languageNavigationController.ts`                                                                                      | 仅 Ash，沿用台账既有保留决定；导航动作调用 | 键盘改走同一 action，保留请求与 Peek owner                                                |
@@ -413,7 +413,7 @@ Quick Diff 时限续批：独立默认值由不限时改为标准的 1000 毫秒
 
 首批准入链：`editor.create / setTheme / defineNamedTheme` → StandaloneServices → 单窗口主题服务 → 原主题注册表与强制颜色监听 → 已有主题绑定更新 → 主题服务单测、公开入口单测与真实浏览器主题场景。主题数据仍由平台颜色注册表编译，编辑器根、菜单根、焦点、布局和模型状态的 owner 不变。
 
-| 准确路径（相对 `src/ash/editor/`）                                                        | 关系            | 首批动作                                     |
+| 准确路径（相对 `src/ash/editor/`）                                                               | 关系            | 首批动作                                     |
 | ------------------------------------------------------------------------------------------------ | --------------- | -------------------------------------------- |
 | `standalone/browser/namedEditorThemeService.ts` → `standalone/browser/standaloneThemeService.ts` | 仅 Ash → 仅上游 | 迁移原实现，统一类名，保留主题状态和监听释放 |
 | `standalone/common/namedEditorTheme.ts` → `standalone/common/standaloneTheme.ts`                 | 仅 Ash → 仅上游 | 迁移主题契约，保留已确认的 Ash 主题数据      |
@@ -460,7 +460,7 @@ Marker API 续批准入：宿主通过 `editor.setModelMarkers` 更新一个已�
 
 ### 用户已确认的 Ash 底层归属
 
-| 准确路径（相对 `src/ash/`）                                            | 现状与建议                                                                                                                                                                                                       |
+| 准确路径（相对 `src/ash/`）                                                   | 现状与建议                                                                                                                                                                                                       |
 | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `platform/quickinput/browser/quickPick.ts`                                    | 仅 Ash；用户已确认迁移并删除。现已迁入 `platform/quickinput/browser/quickInput.ts`，唯一生产消费者同步迁移，旧路径退出；Git 可恢复。平台 QuickInputController 已承接共享弹层，Standalone 和 Workbench 都使用它。 |
 | `editor/common/diff/diffModel.ts`、`diffComputationService.ts`、`lineDiff.ts` | 用户已确认保留共享差异计算与版本有效性。DiffEditorWidget 仍是只读行展示，两侧 CodeEditor、模型切换、编辑后差异和滚动对齐尚未实现；本批没有增加伪装成可编辑器的 createDiffEditor。                                |
@@ -476,7 +476,7 @@ Quick Input 首批准入：Workbench 命令面板 → WorkbenchQuickInputService
 
 Quick Input 宿主续批准入：F1 / 公开 quickCommand action → StandaloneQuickInputService → 当前 editor 容器的 QuickInputController → 原 QuickPick / InputBox / List → 筛选可用编辑器动作、执行与取消恢复焦点。Workbench 的同一行为也经过该 Controller，窗口布局和上下文仍由 Workbench 服务维护。这里不复制上游 provider 私有实现，也不提前增加没有本地消费者的 Quick Access registry API。
 
-| 准确路径（相对 `src/ash/`）                                                                | 关系与本批动作                                                                                                     |
+| 准确路径（相对 `src/ash/`）                                                                       | 关系与本批动作                                                                                                     |
 | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `platform/quickinput/browser/quickInputController.ts`                                             | 仅上游；承接现有 WorkbenchQuickInputService 的 DOM 宿主、唯一 active picker 和焦点恢复状态，两种运行环境均实际消费 |
 | `platform/quickinput/browser/quickInput.ts`、`quickInputList.ts`                                  | 已迁移 / 双方都有；本地化现有界面文案，程序设置 value 进入同一筛选事件链                                           |
@@ -495,7 +495,7 @@ F1 首条行为链及现有浏览器全量 611 项通过；Quick Input / 本地�
 
 Token 主题续批准入：宿主通过 standalone languages/editor API 注册 tokenizer 和主题 → TokenizationRegistry / StandaloneThemeService → 现有 SyntaxProviderWorker 与 TokenizationTextModelPart → 原 LanguageToken.presentation 与 ViewLine → 自定义 scope 着色、主题切换、富文本复制保持相同颜色。现有语法 provider、行索引、DOM 和 Worker 工厂仍是唯一实现；不复制上游 trie、适配器私有类图或 CSS。
 
-| 准确路径（相对 `src/ash/editor/`）                                                                  | 关系与本批职责                                                                                 |
+| 准确路径（相对 `src/ash/editor/`）                                                                         | 关系与本批职责                                                                                 |
 | ---------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | `common/languages/supports/tokenization.ts`                                                                | 双方都有；保留标准 token 分类，增加独立规则匹配与 encoded 颜色索引，供主题及 provider 适配消费 |
 | `standalone/common/standaloneTheme.ts`、`standalone/browser/standaloneThemeService.ts`                     | 已迁移；扩展标准主题数据、继承、tokenTheme 和颜色表，保留已确认的 Ash 命名主题                 |
@@ -546,7 +546,7 @@ Monarch 首批准入：宿主在语言激活回调注册声明式规则 → `set
 
 准入链：命令服务 / 直接 editor action → 命令注册或 InternalEditorAction 的参数边界 → base 类型约束校验 → 既有 FoldingController → 原折叠记录与隐藏行。约束声明由 Folding 动作拥有；平台层不依赖 Folding，控制器只接收已校验参数。注册批次的替换与释放仍由原 CommandRegistry 管理。
 
-| 准确路径（相对 `src/ash/`）                               | 文件关系            | 本批职责                                                                 |
+| 准确路径（相对 `src/ash/`）                                      | 文件关系            | 本批职责                                                                 |
 | ---------------------------------------------------------------- | ------------------- | ------------------------------------------------------------------------ |
 | `base/common/types.ts`                                           | 双方都有            | 以标准 validateConstraint / validateConstraints 契约提供唯一类型约束校验 |
 | `platform/commands/common/commands.ts`                           | 双方都有            | 原命令定义携带 metadata，注册时把参数约束接入 handler；保留原批次所有权  |
@@ -574,7 +574,7 @@ Fold / Unfold 的 metadata 现在包含本地化说明、参数约束及 `levels
 
 准入链：公开 editor action / 带参数快捷键 → 已有 EditorAction 参数传递 → FoldingController → EditorFoldingModel 的同一组折叠记录 → 隐藏行、装饰和选区。View、隐藏行、装饰、文本和释放 owner 沿用原实现，不增加 DOM、样式或状态载体。
 
-| 准确路径（相对 `src/ash/editor/`）           | 文件关系                          | 本批职责与验证                                               |
+| 准确路径（相对 `src/ash/editor/`）                  | 文件关系                          | 本批职责与验证                                               |
 | --------------------------------------------------- | --------------------------------- | ------------------------------------------------------------ |
 | `contrib/folding/browser/folding.ts`                | 双方都有；已有 Fold / Unfold 动作 | 在命令边界读取参数，使用显式行号或当前选区，转入原控制器操作 |
 | `contrib/folding/browser/foldingModel.ts`           | 双方都有；Controller 消费         | 原记录上按祖先 / 后代层数确定目标，合并多选区后一次修改状态  |
@@ -600,7 +600,7 @@ Fold / Unfold 的 metadata 现在包含本地化说明、参数约束及 `levels
 
 起始工作树干净，基线 `7b43fde26`。准入链：默认 / 自定义组合键或公开 action → 已有命令与快捷键服务 → FoldingController → EditorFoldingModel → 隐藏行、装饰、选区与焦点。此前这些动作绕过标准注册；多选区只处理主光标，层级命令会改动其他层级，手动范围创建后没有折叠。
 
-| 准确路径（相对 `src/ash/editor/`）                                         | 文件关系                  | 本批修改与唯一职责                                                                           |
+| 准确路径（相对 `src/ash/editor/`）                                                | 文件关系                  | 本批修改与唯一职责                                                                           |
 | --------------------------------------------------------------------------------- | ------------------------- | -------------------------------------------------------------------------------------------- |
 | `contrib/folding/browser/folding.ts`                                              | 双方都有；editor.all 装配 | 标准动作进入现有操作，移除独立按键解析器；当前编辑器维护 foldingEnabled 条件，操作覆盖各选区 |
 | `contrib/folding/browser/foldingModel.ts`                                         | 双方都有；Controller 消费 | 保留现有范围与折叠状态；修正指定层级、重复折叠上移与手动范围创建 / 删除语义                  |
@@ -859,15 +859,15 @@ Workbench 准入：`services/language/browser/appServerLanguageProviders.ts` 与
 
 准入链：快捷键 / `getAction().run()` / `trigger()` → 已有 EditorAction / EditorCommand 注册表 → 当前编辑器的签名提示控制器 → 查询、关闭或切换返回的签名 → 现有 DOM 与上下文状态。检查发现 `trigger()` 尚未分发已注册命令；先补该入口，再接功能命令，避免组件内保留另一套动作实现。
 
-| 准入路径（相对 editor，另有标注除外）                                                         | 存在关系    | 唯一 owner、本批动作与验证                                                                                                                                      |
-| --------------------------------------------------------------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `browser/widget/codeEditor/codeEditorWidget.ts`                                               | 双方都有    | `trigger` 分发本编辑器的动作 / 命令并报告异步错误；现有上下文管理器维护 signature provider 可用性，随注册、语言、模型及释放更新。验证编辑器作用域、条件和错误。 |
-| `common/editorContextKeys.ts`                                                                 | 双方都有    | 补实际被触发动作消费的 `hasSignatureHelpProvider`，不承载状态。                                                                                                 |
-| `contrib/parameterHints/browser/parameterHints.ts`                                            | 双方都有    | 注册触发、关闭、上一项和下一项；控制器持有结果和活动签名，维护可见 / 多签名上下文，尊重已有 cycle 配置。按键进入公开 trigger，不增加状态服务或 DOM owner。      |
-| `contrib/parameterHints/test/browser/parameterHints.test.ts`                                  | 仅 Ash 测试 | 真实 Widget 验证动作条件、命令取消、切换、不重复查询与释放。                                                                                                    |
-| `test/browser/widget/codeEditorWidget.test.ts`                                                | 双方都有    | 验证公开 trigger 的目标编辑器、payload、条件与错误报告。                                                                                                        |
+| 准入路径（相对 editor，另有标注除外）                                                  | 存在关系    | 唯一 owner、本批动作与验证                                                                                                                                      |
+| -------------------------------------------------------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `browser/widget/codeEditor/codeEditorWidget.ts`                                        | 双方都有    | `trigger` 分发本编辑器的动作 / 命令并报告异步错误；现有上下文管理器维护 signature provider 可用性，随注册、语言、模型及释放更新。验证编辑器作用域、条件和错误。 |
+| `common/editorContextKeys.ts`                                                          | 双方都有    | 补实际被触发动作消费的 `hasSignatureHelpProvider`，不承载状态。                                                                                                 |
+| `contrib/parameterHints/browser/parameterHints.ts`                                     | 双方都有    | 注册触发、关闭、上一项和下一项；控制器持有结果和活动签名，维护可见 / 多签名上下文，尊重已有 cycle 配置。按键进入公开 trigger，不增加状态服务或 DOM owner。      |
+| `contrib/parameterHints/test/browser/parameterHints.test.ts`                           | 仅 Ash 测试 | 真实 Widget 验证动作条件、命令取消、切换、不重复查询与释放。                                                                                                    |
+| `test/browser/widget/codeEditorWidget.test.ts`                                         | 双方都有    | 验证公开 trigger 的目标编辑器、payload、条件与错误报告。                                                                                                        |
 | `test/integration/browser/standalone.integration.ts`、`standalone.integration.spec.ts` | 仅 Ash 测试 | 实际键盘和公开命令验证切换、循环边界、焦点 / 选区 / DOM 稳定、无障碍状态和动态 provider。                                                                       |
-| `browser/README.md`、`api-alignment-status.md`                                                | 仅 Ash 文档 | 更新已接通的命令、状态职责、验证和剩余契约差异。                                                                                                                |
+| `browser/README.md`、`api-alignment-status.md`                                         | 仅 Ash 文档 | 更新已接通的命令、状态职责、验证和剩余契约差异。                                                                                                                |
 
 独立实现：保持提示 div/strong、现有主题 class、输入焦点、View 坐标及 CSS；切换只更新现有签名节点，不请求 provider、不改变正文和选区。结果和活动下标由现有控制器统一持有，上下文只反映该状态。沿现有构造注入取得编辑器作用域的上下文服务。上游仅核对命令 ID、快捷键、provider 条件及 cycle=false 到边界时关闭的行为，不搬入其 Model/Widget 私有结构。关闭命令可取消在途请求；可见上下文仍只描述实际显示。
 
@@ -886,19 +886,19 @@ Workbench 准入：`services/language/browser/appServerLanguageProviders.ts` 与
 
 准入链：Ctrl/Cmd+Shift+Space 或输入 `(`/`,` → 标准 bundle 的签名提示贡献 → 公共 signature-help registry → 当前快照与光标查询 → 现有提示 DOM 与 View 坐标 → Escape、配置变化或释放取消。现有 `ParameterHintsService` 只有控制器一个生产消费者；请求信号、排队任务、启用配置和提示显示必须由同一会话持有，不能让关闭后遗留的任务重新打开提示。
 
-| 准入路径（相对 editor，另有标注除外）                                                                                                                                                              | 存在关系    | 唯一 owner、本批动作与验证                                                                                                                                                    |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `contrib/parameterHints/browser/parameterHints.ts`                                                                                                                                                 | 仅 VS Code  | 承接现有贡献、DOM、请求与可取消排队任务；注入语言 registry，读取当前语言和配置，校验返回的签名，修复首次定位及默认活动签名。真实 Widget/Playwright 验证输入、关闭与生命周期。 |
-| `contrib/parameterHints/browser/parameterHintsController.ts`                                                                                                                                       | 仅 Ash      | bundle 唯一调用迁入准确路径后删除，不保留别名，Git 可恢复。                                                                                                                   |
-| `contrib/parameterHints/common/languageParameterHints.ts`                                                                                                                                          | 仅 Ash      | 请求选择及结果校验收回控制器后删除；公共 provider 类型保留在 `common/languages.ts`。Git 可恢复。                                                                              |
-| `editor.all.ts`                                                                                                                                                                                    | 双方都有    | 仅修改签名提示的副作用 import。                                                                                                                                               |
-| `contrib/parameterHints/test/browser/parameterHints.test.ts`                                                                                                                                       | 仅 Ash 测试 | 新增真实编辑器创建链测试，验证请求快照、提供者错误隔离、空结果、结果校验和取消。                                                                                              |
+| 准入路径（相对 editor，另有标注除外）                                                                                                                                                | 存在关系    | 唯一 owner、本批动作与验证                                                                                                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `contrib/parameterHints/browser/parameterHints.ts`                                                                                                                                   | 仅 VS Code  | 承接现有贡献、DOM、请求与可取消排队任务；注入语言 registry，读取当前语言和配置，校验返回的签名，修复首次定位及默认活动签名。真实 Widget/Playwright 验证输入、关闭与生命周期。 |
+| `contrib/parameterHints/browser/parameterHintsController.ts`                                                                                                                         | 仅 Ash      | bundle 唯一调用迁入准确路径后删除，不保留别名，Git 可恢复。                                                                                                                   |
+| `contrib/parameterHints/common/languageParameterHints.ts`                                                                                                                            | 仅 Ash      | 请求选择及结果校验收回控制器后删除；公共 provider 类型保留在 `common/languages.ts`。Git 可恢复。                                                                              |
+| `editor.all.ts`                                                                                                                                                                      | 双方都有    | 仅修改签名提示的副作用 import。                                                                                                                                               |
+| `contrib/parameterHints/test/browser/parameterHints.test.ts`                                                                                                                         | 仅 Ash 测试 | 新增真实编辑器创建链测试，验证请求快照、提供者错误隔离、空结果、结果校验和取消。                                                                                              |
 | `src/ash/workbench/services/language/test/browser/appServerLanguageProviders.test.ts`、`src/ash/workbench/services/extensionHost/test/browser/appServerExtensionHostService.test.ts` | 仅 Ash 测试 | 通过公共请求调用已注册的 provider，移除旧请求服务依赖，保留宿主协议断言。                                                                                                     |
-| `test/integration/browser/standalone.integration.ts`、`standalone.integration.spec.ts`                                                                                                      | 仅 Ash 测试 | 验证快捷键、输入触发合并、Escape 取消排队/在途请求、语言/配置/提供者/光标/焦点/模型变化、首次位置及背景编辑器不请求。迁移原卸载测试的贡献 ID。                                |
-| `test/architecture/editor-architecture.test.ts`                                                                                                                                             | 仅 Ash 测试 | 增加准确 bundle 路径断言。                                                                                                                                                    |
-| `common/cursor/cursor.ts`                                                                                                                                                                          | 双方都有    | 追加准入：输入回归发现 `setStates` 在文本提交后才记录旧文档版本；编辑事务记录提交前版本，事件直接携带准确的前后状态，不改变光标操作或事件入口。                               |
-| `test/browser/widget/codeEditorWidget.test.ts`                                                                                                                                                     | 双方都有    | 追加准入：通过真实输入/编辑/导航验证选区事件的旧选区、旧版本与新版本，覆盖签名提示所需的区分依据。                                                                            |
-| `browser/README.md`、`api-alignment-status.md`                                                                                                                                                     | 仅 Ash 文档 | 更新唯一请求 owner、验证与未完成的标准接口。                                                                                                                                  |
+| `test/integration/browser/standalone.integration.ts`、`standalone.integration.spec.ts`                                                                                               | 仅 Ash 测试 | 验证快捷键、输入触发合并、Escape 取消排队/在途请求、语言/配置/提供者/光标/焦点/模型变化、首次位置及背景编辑器不请求。迁移原卸载测试的贡献 ID。                                |
+| `test/architecture/editor-architecture.test.ts`                                                                                                                                      | 仅 Ash 测试 | 增加准确 bundle 路径断言。                                                                                                                                                    |
+| `common/cursor/cursor.ts`                                                                                                                                                            | 双方都有    | 追加准入：输入回归发现 `setStates` 在文本提交后才记录旧文档版本；编辑事务记录提交前版本，事件直接携带准确的前后状态，不改变光标操作或事件入口。                               |
+| `test/browser/widget/codeEditorWidget.test.ts`                                                                                                                                       | 双方都有    | 追加准入：通过真实输入/编辑/导航验证选区事件的旧选区、旧版本与新版本，覆盖签名提示所需的区分依据。                                                                            |
+| `browser/README.md`、`api-alignment-status.md`                                                                                                                                       | 仅 Ash 文档 | 更新唯一请求 owner、验证与未完成的标准接口。                                                                                                                                  |
 
 独立实现：保留 Ash 的 div/strong 提示 DOM、现有 CSS 和 View 布局来源，不复制上游 Model/Widget 私有结构。以可取消的一次调度替代不受关闭约束的微任务；模型内容变化立即中止旧查询，在编辑完成后读取最新光标。同一次编辑引起的选区事件不取消新触发，独立导航会取消。上游证据只用于定位 `parameterHints.ts`、查询的提供者错误隔离以及触发合并/关闭语义。完整标准命令、provider 触发字符声明、签名切换及独立 Model/Widget 公共契约仍单独记录。
 
@@ -918,18 +918,18 @@ Workbench 准入：`services/language/browser/appServerLanguageProviders.ts` 与
 
 准入链：F2 → 标准 bundle 的重命名贡献 → 公共 rename registry → 准备位置与原提供者 → 输入新名称 → 同一快照内提交 → 编辑器事务或宿主工作区编辑。原 `RenameService` 仅有一个生产消费者，准备与提交使用分离请求，提交时丢失提供者归属并重读光标，语言还停留在装配时的值；本批按已授权的职责收敛，将该请求和取消状态迁入重命名贡献。
 
-| 准入路径（相对 editor，另有标注除外）                                                         | 存在关系    | 唯一 owner、本批动作与验证                                                                                                             |
-| --------------------------------------------------------------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `contrib/rename/browser/rename.ts`                                                            | 仅 VS Code  | 承接现有贡献、输入 DOM 与准备/提交会话；注入语言服务，保留原提供者、快照、位置及信号，校验本地编辑版本。验证取消、一次提交和一次撤销。 |
-| `contrib/rename/browser/renameController.ts`                                                  | 仅 Ash      | 唯一 bundle 调用迁入准确 owner 后删除；不保留别名或测试专用导出，Git 可恢复。                                                          |
-| `contrib/rename/common/languageRename.ts`                                                     | 仅 Ash      | 唯一生产消费者的调度迁出后删除；公共契约继续由 `common/languages.ts` 拥有，Git 可恢复。                                                |
-| `editor.all.ts`                                                                               | 双方都有    | 仅迁移 rename 副作用 import。                                                                                                          |
-| `contrib/rename/test/browser/renameController.test.ts`                                        | 仅 Ash 测试 | 迁为真实 Widget 装配，覆盖原提供者、可选准备、命令通知、错误与宿主提交边界。                                                           |
+| 准入路径（相对 editor，另有标注除外）                                                  | 存在关系    | 唯一 owner、本批动作与验证                                                                                                             |
+| -------------------------------------------------------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `contrib/rename/browser/rename.ts`                                                     | 仅 VS Code  | 承接现有贡献、输入 DOM 与准备/提交会话；注入语言服务，保留原提供者、快照、位置及信号，校验本地编辑版本。验证取消、一次提交和一次撤销。 |
+| `contrib/rename/browser/renameController.ts`                                           | 仅 Ash      | 唯一 bundle 调用迁入准确 owner 后删除；不保留别名或测试专用导出，Git 可恢复。                                                          |
+| `contrib/rename/common/languageRename.ts`                                              | 仅 Ash      | 唯一生产消费者的调度迁出后删除；公共契约继续由 `common/languages.ts` 拥有，Git 可恢复。                                                |
+| `editor.all.ts`                                                                        | 双方都有    | 仅迁移 rename 副作用 import。                                                                                                          |
+| `contrib/rename/test/browser/renameController.test.ts`                                 | 仅 Ash 测试 | 迁为真实 Widget 装配，覆盖原提供者、可选准备、命令通知、错误与宿主提交边界。                                                           |
 | `src/ash/workbench/services/language/test/browser/appServerLanguageProviders.test.ts`  | 仅 Ash 测试 | 直接验证已注册的 rename provider 及公共请求，移除旧服务引用。                                                                          |
 | `test/architecture/editor-architecture.test.ts`                                        | 仅 Ash 测试 | 更新标准 bundle 的准确 rename 路径断言。                                                                                               |
-| `test/browser/editorExtensions.test.ts`                                                       | 仅 Ash 测试 | 追加准入：bundle 身份断言改为上游对应 `editor.contrib.renameController`，验证命令注册保持存在。                                        |
+| `test/browser/editorExtensions.test.ts`                                                | 仅 Ash 测试 | 追加准入：bundle 身份断言改为上游对应 `editor.contrib.renameController`，验证命令注册保持存在。                                        |
 | `test/integration/browser/standalone.integration.ts`、`standalone.integration.spec.ts` | 仅 Ash 测试 | 真实键盘/指针验证准备与编辑期间取消、重复 Enter、失效、焦点和撤销。                                                                    |
-| `browser/README.md`、`api-alignment-status.md`                                                | 仅 Ash 文档 | 更新会话 owner 与验证结果，保留未完成的标准命令/API 差异。                                                                             |
+| `browser/README.md`、`api-alignment-status.md`                                         | 仅 Ash 文档 | 更新会话 owner 与验证结果，保留未完成的标准命令/API 差异。                                                                             |
 
 独立实现：沿用现有 input/status DOM、View 坐标及 CSS，不复制上游 Widget 或私有类图。一个会话持有一次请求及成功准备的提供者；没有可选 prepare 方法时按公共契约使用当前词。内容、选区、语言、提供者、只读、焦点离开与释放使会话失效；输入自身的指针事件由输入组件消费，避免改变底层选区。编辑交给宿主以后保留其错误报告，旧回调不能关闭新的会话。上游只用于确认 `rename.ts` 的调度归属、F2 可写条件和位置/内容取消语义；完整 RenameAction、预览及名称建议不在本切片内。
 
@@ -949,15 +949,15 @@ Workbench 准入：`services/language/browser/appServerLanguageProviders.ts` 与
 
 准入链：Ctrl/Cmd+. → `codeActionContributions.ts` 装配 → `CodeActionController` 查询公共 registry → 菜单选择原提供者的动作 → 原快照内解析 → 编辑器事务或宿主工作区编辑 → 取消 / 释放拒绝迟到结果。现有独立 `CodeActionService` 只有该控制器一个生产消费者，且解析阶段脱离菜单取消信号；按用户已授权的职责收敛，本批将其逻辑收回已有控制器，原服务文件在调用清零后退出，Git 可恢复。
 
-| 准入路径（相对 editor，另有标注除外）                                                         | 存在关系          | 唯一 owner、本批动作与验证                                                                                                                                                                         |
-| --------------------------------------------------------------------------------------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `contrib/codeAction/browser/codeActionController.ts`                                          | 双方都有          | 统一持有当前查询快照、原动作 / 提供者、解析及菜单状态；注入共享 registry。关闭、模型/语言/选区/提供者/只读变化取消查询和解析，提交前核对版本，防止重复点击重复提交。沿真实菜单验证取消与一次撤销。 |
-| `contrib/codeAction/browser/codeActionContributions.ts`                                       | 双方都有          | 保留诊断装配与注册入口，通过容器创建控制器，停止创建旧服务。                                                                                                                                       |
-| `contrib/codeAction/common/languageCodeActions.ts`                                            | 既有 Ash 请求载体 | 查询、解析与校验迁出后删除；公共契约仍在 `common/languages.ts`，不新增服务别名。                                                                                                                   |
-| `contrib/codeAction/test/browser/codeAction.test.ts`                                          | 双方都有          | 通过真实 Widget 和 contribution 装配保留原提供者身份、禁止串用 resolver 的回归，增加事务和错误边界验证。                                                                                           |
+| 准入路径（相对 editor，另有标注除外）                                                  | 存在关系          | 唯一 owner、本批动作与验证                                                                                                                                                                         |
+| -------------------------------------------------------------------------------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `contrib/codeAction/browser/codeActionController.ts`                                   | 双方都有          | 统一持有当前查询快照、原动作 / 提供者、解析及菜单状态；注入共享 registry。关闭、模型/语言/选区/提供者/只读变化取消查询和解析，提交前核对版本，防止重复点击重复提交。沿真实菜单验证取消与一次撤销。 |
+| `contrib/codeAction/browser/codeActionContributions.ts`                                | 双方都有          | 保留诊断装配与注册入口，通过容器创建控制器，停止创建旧服务。                                                                                                                                       |
+| `contrib/codeAction/common/languageCodeActions.ts`                                     | 既有 Ash 请求载体 | 查询、解析与校验迁出后删除；公共契约仍在 `common/languages.ts`，不新增服务别名。                                                                                                                   |
+| `contrib/codeAction/test/browser/codeAction.test.ts`                                   | 双方都有          | 通过真实 Widget 和 contribution 装配保留原提供者身份、禁止串用 resolver 的回归，增加事务和错误边界验证。                                                                                           |
 | `src/ash/workbench/services/language/test/browser/appServerLanguageProviders.test.ts`  | 既有 Ash 测试     | App Server 契约断言直接消费已注册 provider 与公共快照请求，移除旧服务依赖。                                                                                                                        |
 | `test/integration/browser/standalone.integration.ts`、`standalone.integration.spec.ts` | 既有 Ash 测试     | 以可控异步 provider 验证真实快捷键、菜单点击、Escape、各类失效、解析期间重复点击与撤销。                                                                                                           |
-| `browser/README.md`、`api-alignment-status.md`                                                | 既有 Ash 文档     | 更新唯一请求 owner、验证结果与剩余标准接口差异。                                                                                                                                                   |
+| `browser/README.md`、`api-alignment-status.md`                                         | 既有 Ash 文档     | 更新唯一请求 owner、验证结果与剩余标准接口差异。                                                                                                                                                   |
 
 独立实现：沿用 Ash 的 menu/button DOM、View 坐标和既有焦点恢复规则。一个菜单会话只使用一个快照和 AbortSignal，动作条目保存原 provider 与原对象；不以弱映射跨会话保留解析归属。工作区编辑的宿主回调保持不变，取消校验到宿主调用之前为止，已交给宿主的编辑不宣称可撤回。上游只核对公共 provide/resolve 契约、原提供者归属、缺失 edit 时解析以及模型解绑释放场景；不移植内部模型、菜单、灯泡与命令结构，不把本批计为标准 code-action API 全量对齐。
 
@@ -978,15 +978,15 @@ Workbench 准入：`services/language/browser/appServerLanguageProviders.ts` 与
 
 准入链：Standalone / Workbench 注册行内提示 → `InlayHintsController` 消费公共 registry 与模型快照 → 显示提示 → 编辑、语言/配置变化、提供者退出或功能释放时取消请求并清理节点 → Playwright 从公开编辑器入口验证。当前 `InlayHintsService` 只有该控制器一个生产调用方；按用户已授权的职责收敛，本批把请求选择与校验移回同路径控制器，删除不再有调用方的原文件，Git 可恢复。
 
-| 准入路径（相对 editor，另有标注除外）                                                        | 存在关系          | 调用方、唯一 owner 与本批动作 / 验证                                                                                                                                                    |
-| -------------------------------------------------------------------------------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `contrib/inlayHints/browser/inlayHintsController.ts`                                         | 双方都有          | contribution 装配调用；控制器统一持有请求、提示结果与节点，直接注入公共 registry / 防抖服务；响应模型、配置与 registry 失效，释放自己创建的节点。浏览器验证取消、刷新、节点复用和卸载。 |
-| `contrib/inlayHints/common/languageInlayHints.ts`                                            | 既有 Ash 请求载体 | 唯一生产调用方迁移后退出；没有公共 provider 契约遗留，不新增别名或替代服务。                                                                                                            |
+| 准入路径（相对 editor，另有标注除外）                                                 | 存在关系          | 调用方、唯一 owner 与本批动作 / 验证                                                                                                                                                    |
+| ------------------------------------------------------------------------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `contrib/inlayHints/browser/inlayHintsController.ts`                                  | 双方都有          | contribution 装配调用；控制器统一持有请求、提示结果与节点，直接注入公共 registry / 防抖服务；响应模型、配置与 registry 失效，释放自己创建的节点。浏览器验证取消、刷新、节点复用和卸载。 |
+| `contrib/inlayHints/common/languageInlayHints.ts`                                     | 既有 Ash 请求载体 | 唯一生产调用方迁移后退出；没有公共 provider 契约遗留，不新增别名或替代服务。                                                                                                            |
 | `src/ash/workbench/services/language/test/browser/appServerLanguageProviders.test.ts` | 既有 Ash 测试     | 使用注册的 provider 与公共快照请求验证 App Server 适配，移除旧请求 service 依赖；保留原断言。                                                                                           |
 | `src/ash/workbench/contrib/codeEditor/test/browser/codeEditorPane.test.ts`            | 既有 Ash 测试     | 完整回归暴露旧 pane fixture 缺少防抖服务；补齐真实服务注册，断言实际窗格创建了行内提示 contribution，再运行该文件。                                                                     |
 | `test/integration/browser/standalone.integration.ts`                                  | 既有 Ash 测试     | 通过真实 Standalone 注册、编辑、配置、语言、模型切换与功能释放，提供可控异步 provider。                                                                                                 |
 | `test/integration/browser/standalone.integration.spec.ts`                             | 既有 Ash 测试     | 验证动态注册、连续编辑防抖、旧结果拒绝、提供者错误、开关、释放、节点几何和模型内容不变。                                                                                                |
-| `browser/README.md`、`api-alignment-status.md`                                               | 既有 Ash 文档     | 记录请求 / DOM owner、已验证行为与剩余能力差异。                                                                                                                                        |
+| `browser/README.md`、`api-alignment-status.md`                                        | 既有 Ash 文档     | 记录请求 / DOM owner、已验证行为与剩余能力差异。                                                                                                                                        |
 
 独立实现：保留 Ash 的 span 提示与 `View.getPositionContentCoordinates` / `viewportLayout` 坐标来源。控制器只持有当前结果和自己的节点；布局仅更新坐标，不重建节点。公共请求仍由 `common/languages.ts` 创建并检验快照，防抖复用公共服务。上游证据限于公共 inlay provider / controller 职责及 registry、语言、配置、dispose 的可观察触发；不引入上游 fragment、装饰器或缓存类图。本批不改变 CSS、焦点目标和提示契约。
 
@@ -1007,47 +1007,47 @@ Workbench 准入：`services/language/browser/appServerLanguageProviders.ts` 与
 
 上一批括号修复改动已暂存；本批保留索引内容，工作区迁移完整保留 `completeBracketPairs`。按用户“该抽抽、该收收、该留留”整理契约和真实调用方；只有全部声明迁出、调用方清零的 `contrib/inlineCompletions/common/inlineCompletions.ts` 退出，其余 contribution 实现文件保留。
 
-| 准入路径（相对 editor，带 src 的为仓库相对）                                    | 存在关系             | 本批动作                                                                                |
-| ---------------------------------------------------------------------------------- | -------------------- | --------------------------------------------------------------------------------------- |
-| `README.md`                                                                        | 既有 Ash 职责 / 测试 | 更新契约归属、剩余实现差异及实际验证。                                                  |
-| `api-alignment-status.md`                                                          | 既有 Ash 职责 / 测试 | 更新契约归属、剩余实现差异及实际验证。                                                  |
-| `browser/README.md`                                                                | 既有 Ash 职责 / 测试 | 更新契约归属、剩余实现差异及实际验证。                                                  |
-| `common/languages.ts`                                                              | 双方都有             | 收回 50 个已有 provider、请求及结果契约；保留现有快照与 AbortSignal 语义。              |
-| `common/services/languageFeatures.ts`                                              | 双方都有             | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
-| `common/services/languageFeaturesService.ts`                                       | 双方都有             | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
-| `contrib/callHierarchy/browser/languageHierarchyController.ts`                     | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
-| `contrib/callHierarchy/common/languageHierarchy.ts`                                | 既有 Ash 职责 / 测试 | 只移出公共类型，原请求调度、校验、状态及生命周期保持原处。                              |
-| `contrib/codeAction/browser/codeActionController.ts`                               | 双方都有             | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
-| `contrib/codeAction/common/languageCodeActions.ts`                                 | 既有 Ash 职责 / 测试 | 只移出公共类型，原请求调度、校验、状态及生命周期保持原处。                              |
-| `contrib/codeAction/test/browser/codeAction.test.ts`                               | 双方都有             | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
-| `contrib/colorPicker/common/languageColors.ts`                                     | 既有 Ash 职责 / 测试 | 只移出公共类型，原请求调度、校验、状态及生命周期保持原处。                              |
-| `contrib/colorPicker/test/browser/colorPickerController.test.ts`                   | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
-| `contrib/colorPicker/test/common/color.test.ts`                                    | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
-| `contrib/documentSymbols/common/languageDocumentSymbols.ts`                        | 既有 Ash 职责 / 测试 | 只移出公共类型，原请求调度、校验、状态及生命周期保持原处。                              |
-| `contrib/folding/common/languageFoldingRanges.ts`                                  | 既有 Ash 职责 / 测试 | 只移出公共类型，原请求调度、校验、状态及生命周期保持原处。                              |
-| `contrib/gotoSymbol/common/languageDocumentSymbolSearch.ts`                        | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
-| `contrib/gotoSymbol/common/languageNavigation.ts`                                  | 既有 Ash 职责 / 测试 | 只移出公共类型，原请求调度、校验、状态及生命周期保持原处。                              |
-| `contrib/hover/browser/hoverController.ts`                                         | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
-| `contrib/hover/common/hover.ts`                                                    | 既有 Ash 职责 / 测试 | 只移出公共类型，原请求调度、校验、状态及生命周期保持原处。                              |
-| `contrib/inlayHints/browser/inlayHintsController.ts`                               | 双方都有             | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
-| `contrib/inlayHints/common/languageInlayHints.ts`                                  | 既有 Ash 职责 / 测试 | 只移出公共类型，原请求调度、校验、状态及生命周期保持原处。                              |
-| `contrib/inlineCompletions/browser/controller/inlineCompletionsController.ts`      | 双方都有             | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
-| `contrib/inlineCompletions/browser/model/provideInlineCompletions.ts`              | 双方都有             | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
-| `contrib/inlineCompletions/common/inlineCompletions.ts`                            | 既有 Ash 职责 / 测试 | 全部类型迁入公共 owner 后移除空载体；上一批 completeBracketPairs 契约完整保留。         |
-| `contrib/inlineCompletions/test/browser/inlineCompletionsController.test.ts`       | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
-| `contrib/parameterHints/browser/parameterHintsController.ts`                       | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
-| `contrib/parameterHints/common/languageParameterHints.ts`                          | 既有 Ash 职责 / 测试 | 只移出公共类型，原请求调度、校验、状态及生命周期保持原处。                              |
-| `contrib/rename/common/languageRename.ts`                                          | 既有 Ash 职责 / 测试 | 只移出公共类型，原请求调度、校验、状态及生命周期保持原处。                              |
-| `contrib/rename/test/browser/renameController.test.ts`                             | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
-| `contrib/smartSelect/common/selectionRanges.ts`                                    | 既有 Ash 职责 / 测试 | 只移出公共类型，原请求调度、校验、状态及生命周期保持原处。                              |
-| `contrib/symbolIcons/browser/symbolIcons.ts`                                       | 已移除本地边栏实现   | 2026-10-01 按用户确认删除边栏控制器；上游同路径的符号主题职责尚未接入，不能视为已对齐。 |
-| `editor.api.ts`                                                                    | 双方都有             | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
-| `standalone/browser/standaloneLanguages.ts`                                        | 双方都有             | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
-| `src/ash/workbench/api/browser/extensionHostLanguageBridge.ts`              | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
-| `src/ash/workbench/services/language/browser/appServerLanguageProviders.ts` | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
-| `src/ash/workbench/services/language/browser/appServerSyntaxProviders.ts`   | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
-| `src/ash/workbench/services/language/common/jsonLanguageFeatures.ts`        | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
-| `test/architecture/editor-architecture.test.ts`                             | 既有 Ash 职责 / 测试 | 增加 common 不依赖 contribution 的导入边界回归。                                        |
+| 准入路径（相对 editor，带 src 的为仓库相对）                                  | 存在关系             | 本批动作                                                                                |
+| ----------------------------------------------------------------------------- | -------------------- | --------------------------------------------------------------------------------------- |
+| `README.md`                                                                   | 既有 Ash 职责 / 测试 | 更新契约归属、剩余实现差异及实际验证。                                                  |
+| `api-alignment-status.md`                                                     | 既有 Ash 职责 / 测试 | 更新契约归属、剩余实现差异及实际验证。                                                  |
+| `browser/README.md`                                                           | 既有 Ash 职责 / 测试 | 更新契约归属、剩余实现差异及实际验证。                                                  |
+| `common/languages.ts`                                                         | 双方都有             | 收回 50 个已有 provider、请求及结果契约；保留现有快照与 AbortSignal 语义。              |
+| `common/services/languageFeatures.ts`                                         | 双方都有             | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
+| `common/services/languageFeaturesService.ts`                                  | 双方都有             | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
+| `contrib/callHierarchy/browser/languageHierarchyController.ts`                | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
+| `contrib/callHierarchy/common/languageHierarchy.ts`                           | 既有 Ash 职责 / 测试 | 只移出公共类型，原请求调度、校验、状态及生命周期保持原处。                              |
+| `contrib/codeAction/browser/codeActionController.ts`                          | 双方都有             | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
+| `contrib/codeAction/common/languageCodeActions.ts`                            | 既有 Ash 职责 / 测试 | 只移出公共类型，原请求调度、校验、状态及生命周期保持原处。                              |
+| `contrib/codeAction/test/browser/codeAction.test.ts`                          | 双方都有             | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
+| `contrib/colorPicker/common/languageColors.ts`                                | 既有 Ash 职责 / 测试 | 只移出公共类型，原请求调度、校验、状态及生命周期保持原处。                              |
+| `contrib/colorPicker/test/browser/colorPickerController.test.ts`              | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
+| `contrib/colorPicker/test/common/color.test.ts`                               | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
+| `contrib/documentSymbols/common/languageDocumentSymbols.ts`                   | 既有 Ash 职责 / 测试 | 只移出公共类型，原请求调度、校验、状态及生命周期保持原处。                              |
+| `contrib/folding/common/languageFoldingRanges.ts`                             | 既有 Ash 职责 / 测试 | 只移出公共类型，原请求调度、校验、状态及生命周期保持原处。                              |
+| `contrib/gotoSymbol/common/languageDocumentSymbolSearch.ts`                   | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
+| `contrib/gotoSymbol/common/languageNavigation.ts`                             | 既有 Ash 职责 / 测试 | 只移出公共类型，原请求调度、校验、状态及生命周期保持原处。                              |
+| `contrib/hover/browser/hoverController.ts`                                    | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
+| `contrib/hover/common/hover.ts`                                               | 既有 Ash 职责 / 测试 | 只移出公共类型，原请求调度、校验、状态及生命周期保持原处。                              |
+| `contrib/inlayHints/browser/inlayHintsController.ts`                          | 双方都有             | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
+| `contrib/inlayHints/common/languageInlayHints.ts`                             | 既有 Ash 职责 / 测试 | 只移出公共类型，原请求调度、校验、状态及生命周期保持原处。                              |
+| `contrib/inlineCompletions/browser/controller/inlineCompletionsController.ts` | 双方都有             | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
+| `contrib/inlineCompletions/browser/model/provideInlineCompletions.ts`         | 双方都有             | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
+| `contrib/inlineCompletions/common/inlineCompletions.ts`                       | 既有 Ash 职责 / 测试 | 全部类型迁入公共 owner 后移除空载体；上一批 completeBracketPairs 契约完整保留。         |
+| `contrib/inlineCompletions/test/browser/inlineCompletionsController.test.ts`  | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
+| `contrib/parameterHints/browser/parameterHintsController.ts`                  | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
+| `contrib/parameterHints/common/languageParameterHints.ts`                     | 既有 Ash 职责 / 测试 | 只移出公共类型，原请求调度、校验、状态及生命周期保持原处。                              |
+| `contrib/rename/common/languageRename.ts`                                     | 既有 Ash 职责 / 测试 | 只移出公共类型，原请求调度、校验、状态及生命周期保持原处。                              |
+| `contrib/rename/test/browser/renameController.test.ts`                        | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
+| `contrib/smartSelect/common/selectionRanges.ts`                               | 既有 Ash 职责 / 测试 | 只移出公共类型，原请求调度、校验、状态及生命周期保持原处。                              |
+| `contrib/symbolIcons/browser/symbolIcons.ts`                                  | 已移除本地边栏实现   | 2026-10-01 按用户确认删除边栏控制器；上游同路径的符号主题职责尚未接入，不能视为已对齐。 |
+| `editor.api.ts`                                                               | 双方都有             | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
+| `standalone/browser/standaloneLanguages.ts`                                   | 双方都有             | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
+| `src/ash/workbench/api/browser/extensionHostLanguageBridge.ts`                | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
+| `src/ash/workbench/services/language/browser/appServerLanguageProviders.ts`   | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
+| `src/ash/workbench/services/language/browser/appServerSyntaxProviders.ts`     | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
+| `src/ash/workbench/services/language/common/jsonLanguageFeatures.ts`          | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。               |
+| `test/architecture/editor-architecture.test.ts`                               | 既有 Ash 职责 / 测试 | 增加 common 不依赖 contribution 的导入边界回归。                                        |
 
 独立实现与验证：从本地现有声明迁移，保持所有字段、可选性、返回类型、取消、选择顺序与状态副作用；各 contribution 的服务继续拥有请求编排，公共模块只增加契约。公共边界回归、现有 provider / 适配器单测、真实 Playwright 场景及两种生产构建用于确认迁移。
 
@@ -1065,20 +1065,20 @@ Workbench 准入：`services/language/browser/appServerLanguageProviders.ts` 与
 
 准入链：带 `completeBracketPairs` 的行内补全 → 控制器 / `provideInlineCompletions` → 模型分词试算 → 现有 Syntax Worker / TextMate 语法 → `fixBracketsInLine` → 既有接受与撤销命令。上一批防抖改动已由用户提交；本批继续当前工作区，不修改提交历史。
 
-| 准入路径（相对 editor，另有标注除外）                                                                                                                                                           | 存在关系                      | 唯一职责与本批动作                                                                                                     |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `common/model/bracketPairsTextModelPart/fixBrackets.ts`                                                                                                                                         | 仅上游 → 双方都有             | 读取 token 类型、语言和括号配置；独立实现缺失闭括号补齐及多余闭括号移除，不复制上游 AST 遍历。                         |
-| `common/languages.ts`、`common/services/editorWebWorker.ts`、`common/services/semanticTokensDto.ts`                                                                                             | 双方都有                      | 增加独立试算 lane 和可选 provider 能力；复用已选择的 tokenizer、传输和取消，不将试算冒充已提交文本。                   |
-| `common/tokenizationTextModelPart.ts`、`common/model/tokens/tokenizationTextModelPart.ts`                                                                                                       | 双方都有                      | 新增实际调用的异步 `tokenizeLinesAtAsync`；现有同步不可用语义保留。试算有自己的请求 lane，结果不进入模型 token store。 |
-| `contrib/inlineCompletions/common/inlineCompletions.ts`                                                                                                                                         | 已确认的 Ash 现有补全契约     | 添加 provider 可选修复标记，保持当前 range 与附加编辑语义。                                                            |
-| `contrib/inlineCompletions/browser/model/provideInlineCompletions.ts`、`browser/controller/inlineCompletionsController.ts`（同 contribution 下）                                                | 双方都有                      | 等待试算，检查取消和版本；控制器显式注入语言配置服务。修复后的文本仍经现有接受命令。                                   |
-| `../workbench/services/textMate/common/textMateTokenizationService.ts`、`textMateSyntaxProvider.ts`                                                                                             | Ash 既有 TextMate owner       | 借用当前行前的词法状态并复用 scanLine；不替换缓存版本、不发布试算 token。                                              |
-| `test/common/model/bracketPairsTextModelPart/fixBrackets.test.ts`                                                                                                                               | 模块行为测试                  | 新增括号、token 边界、嵌入语言、字符串及注释场景。                                                                     |
-| `test/common/syntaxProviderWorker.test.ts`、`contrib/tokenization/test/common/tokenizationTextModelPart.test.ts`、`test/common/syntaxWire.test.ts`、`test/common/syntaxWire.delta.test.ts`      | 现有测试                      | 验证试算、传输、取消和真实 token 缓存隔离。                                                                            |
-| `../workbench/services/textMate/test/common/textMateTokenizationService.test.ts`                                                                                                                | 现有测试                      | 验证跨行词法状态与试算前后缓存内容一致。                                                                               |
-| `contrib/inlineCompletions/test/browser/inlineCompletionsController.test.ts`、`test/integration/browser/standalone.integration.ts`、`standalone.integration.spec.ts`（后两项为仓库相对） | 现有测试设施                  | 同步装配并从真实输入、接受与撤销入口验证结果。                                                                         |
-| `test/integration/browser/themes.integration.ts`、`themes.integration.spec.ts`（仓库相对）                                                                                               | 既有真实 TextMate Worker 设施 | 验证试算跨 Worker 传输、跨行字符串状态及缓存不变。                                                                     |
-| `browser/README.md`、`api-alignment-status.md`                                                                                                                                                  | 现有文档                      | 记录异步边界、生产链和实际验证。                                                                                       |
+| 准入路径（相对 editor，另有标注除外）                                                                                                                                                      | 存在关系                      | 唯一职责与本批动作                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `common/model/bracketPairsTextModelPart/fixBrackets.ts`                                                                                                                                    | 仅上游 → 双方都有             | 读取 token 类型、语言和括号配置；独立实现缺失闭括号补齐及多余闭括号移除，不复制上游 AST 遍历。                         |
+| `common/languages.ts`、`common/services/editorWebWorker.ts`、`common/services/semanticTokensDto.ts`                                                                                        | 双方都有                      | 增加独立试算 lane 和可选 provider 能力；复用已选择的 tokenizer、传输和取消，不将试算冒充已提交文本。                   |
+| `common/tokenizationTextModelPart.ts`、`common/model/tokens/tokenizationTextModelPart.ts`                                                                                                  | 双方都有                      | 新增实际调用的异步 `tokenizeLinesAtAsync`；现有同步不可用语义保留。试算有自己的请求 lane，结果不进入模型 token store。 |
+| `contrib/inlineCompletions/common/inlineCompletions.ts`                                                                                                                                    | 已确认的 Ash 现有补全契约     | 添加 provider 可选修复标记，保持当前 range 与附加编辑语义。                                                            |
+| `contrib/inlineCompletions/browser/model/provideInlineCompletions.ts`、`browser/controller/inlineCompletionsController.ts`（同 contribution 下）                                           | 双方都有                      | 等待试算，检查取消和版本；控制器显式注入语言配置服务。修复后的文本仍经现有接受命令。                                   |
+| `../workbench/services/textMate/common/textMateTokenizationService.ts`、`textMateSyntaxProvider.ts`                                                                                        | Ash 既有 TextMate owner       | 借用当前行前的词法状态并复用 scanLine；不替换缓存版本、不发布试算 token。                                              |
+| `test/common/model/bracketPairsTextModelPart/fixBrackets.test.ts`                                                                                                                          | 模块行为测试                  | 新增括号、token 边界、嵌入语言、字符串及注释场景。                                                                     |
+| `test/common/syntaxProviderWorker.test.ts`、`contrib/tokenization/test/common/tokenizationTextModelPart.test.ts`、`test/common/syntaxWire.test.ts`、`test/common/syntaxWire.delta.test.ts` | 现有测试                      | 验证试算、传输、取消和真实 token 缓存隔离。                                                                            |
+| `../workbench/services/textMate/test/common/textMateTokenizationService.test.ts`                                                                                                           | 现有测试                      | 验证跨行词法状态与试算前后缓存内容一致。                                                                               |
+| `contrib/inlineCompletions/test/browser/inlineCompletionsController.test.ts`、`test/integration/browser/standalone.integration.ts`、`standalone.integration.spec.ts`（后两项为仓库相对）   | 现有测试设施                  | 同步装配并从真实输入、接受与撤销入口验证结果。                                                                         |
+| `test/integration/browser/themes.integration.ts`、`themes.integration.spec.ts`（仓库相对）                                                                                                 | 既有真实 TextMate Worker 设施 | 验证试算跨 Worker 传输、跨行字符串状态及缓存不变。                                                                     |
+| `browser/README.md`、`api-alignment-status.md`                                                                                                                                             | 现有文档                      | 记录异步边界、生产链和实际验证。                                                                                       |
 
 实现依据：当前 TextModel 和 View 的文本、DOM、坐标及滚动职责保持唯一。语法状态归现有 Worker / TextMate 缓存，试算使用独立 lane，结果只在原请求仍有效时用于补全；没有语法或 provider 未提供试算能力时保持其原始补全文本，不猜测词法类型。同步与异步接口表达两种能力，不添加同步 tokenizer 或新的资源模型服务。
 
@@ -1103,7 +1103,7 @@ common 当前 **211 个文件：180 个同路径、31 个 Ash 自有；46 个上
 | `standalone/browser/standaloneServices.ts`、`../workbench/browser/workbench.ts`                                | 双方都有                     | 各自现有宿主容器注册服务；不增加全局 feature registry。                                                                                                               |
 | `test/browser/testCodeEditor.ts`、`contrib/inlineCompletions/test/browser/inlineCompletionsController.test.ts` | 现有测试设施                 | 同步真实容器装配，验证命令调度、必需依赖、接受与撤销。                                                                                                                |
 | `test/common/services/languageFeatureDebounce.test.ts`                                                         | Ash 测试（所属生产模块同名） | 验证延迟上下限、独立作用域、模型与提供者变化、已释放模型。                                                                                                            |
-| `test/integration/browser/standalone.integration.ts`、`standalone.integration.spec.ts`（仓库相对）      | Ash 现有设施                 | Playwright 从真实输入/快捷键验证请求合并、手动触发、组合输入、提供者变化、取消、过期响应和释放。                                                                      |
+| `test/integration/browser/standalone.integration.ts`、`standalone.integration.spec.ts`（仓库相对）             | Ash 现有设施                 | Playwright 从真实输入/快捷键验证请求合并、手动触发、组合输入、提供者变化、取消、过期响应和释放。                                                                      |
 | `browser/README.md`、`api-alignment-status.md`                                                                 | 现有文档                     | 记录调度与采样的不同职责及实际验证。                                                                                                                                  |
 
 独立实现：控制器继续持有唯一提示 DOM、选择范围与请求；位置使用现有 View 坐标。公共服务弱引用模型和提供者，避免延迟记录保留已卸载的提供者；提供者集合或语言改变后重新估计；控制器只提交成功且仍有效的请求耗时。自动等待限定在 50–500 ms，冷启动为 50 ms，后续按观测耗时平滑调整。WordHighlighter 的用户延迟配置保持原语义。没有新 DOM、CSS、快捷键、文本副本或同步 tokenizer。
@@ -1133,14 +1133,14 @@ common 当前 **210 个文件：179 个同路径、31 个 Ash 自有；47 个上
 
 本批准入：复制选区 → `ViewModelImpl.getRichTextToCopy` → 行 token HTML 序列化 → 剪贴板 HTML；模型仍持有文本和 token，ViewModel 选择范围并组装多行内容。
 
-| 准入路径                                                                                                      | 存在关系                        | 本批动作与验证                                                                                                                         |
-| ------------------------------------------------------------------------------------------------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `common/languages/textToHtmlTokenizer.ts`                                                                     | 仅上游 → 双方都有               | `tokenizeLineToHTML` 接收现有行 token，负责范围裁剪、HTML 转义及 token 样式；Ash 的原始 tab 与 span 片段输出保持不变，不创建分词状态。 |
-| `common/viewModel/viewModelImpl.ts`                                                                           | 双方都有                        | 移出逐 token HTML 循环和转义函数，继续持有多选区、行范围、EOL 与外层复制容器。                                                         |
-| `common/encodedTokenAttributes.ts`                                                                            | 双方都有                        | 缺少颜色时仍生成字体样式，避免合法的字体 metadata 被丢弃。                                                                             |
-| `test/common/modes/textToHtmlTokenizer.test.ts`                                                               | 对应上游测试路径，新建 Ash 测试 | 独立验证跨 token 裁剪、UTF-16、HTML 转义、tab、空范围和缺色字体。                                                                      |
+| 准入路径                                                                                               | 存在关系                        | 本批动作与验证                                                                                                                         |
+| ------------------------------------------------------------------------------------------------------ | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `common/languages/textToHtmlTokenizer.ts`                                                              | 仅上游 → 双方都有               | `tokenizeLineToHTML` 接收现有行 token，负责范围裁剪、HTML 转义及 token 样式；Ash 的原始 tab 与 span 片段输出保持不变，不创建分词状态。 |
+| `common/viewModel/viewModelImpl.ts`                                                                    | 双方都有                        | 移出逐 token HTML 循环和转义函数，继续持有多选区、行范围、EOL 与外层复制容器。                                                         |
+| `common/encodedTokenAttributes.ts`                                                                     | 双方都有                        | 缺少颜色时仍生成字体样式，避免合法的字体 metadata 被丢弃。                                                                             |
+| `test/common/modes/textToHtmlTokenizer.test.ts`                                                        | 对应上游测试路径，新建 Ash 测试 | 独立验证跨 token 裁剪、UTF-16、HTML 转义、tab、空范围和缺色字体。                                                                      |
 | `test/integration/browser/standalone.integration.ts`、`standalone.integration.spec.ts`（仓库相对路径） | Ash 现有设施                    | 经过真实 copy 事件验证两种输入方式的选区文本、HTML 和缺色字体；复用既有复制、剪切、粘贴和撤销场景。                                    |
-| `api-alignment-status.md`、`browser/README.md`                                                                | 现有文档                        | 记录 27 项的实际归属、范围差异和验证。                                                                                                 |
+| `api-alignment-status.md`、`browser/README.md`                                                         | 现有文档                        | 记录 27 项的实际归属、范围差异和验证。                                                                                                 |
 
 独立实现：将 Ash 现有无 DOM 的序列化逻辑收回到对应 common 文件，读取现有 `IViewLineTokens`，不引入上游整文同步 tokenizer 或另一份 token store。文本内容和剪贴板的多行结构保持原行为；缺色时只省略 color 声明，字体语义仍由 token metadata 提供。本批不改变编辑器 DOM、CSS、焦点或输入 owner。
 
@@ -1191,7 +1191,7 @@ common 当前 **210 个文件：179 个同路径、31 个 Ash 自有；47 个上
 | `contrib/bracketMatching/browser/bracketColorizationPresentation.ts`                                                           | Ash 自有，既有适配职责保留 | 从同一模型颜色池策略确定辅助线层级；不缓存或计算第二份括号树。                                             |
 | `test/browser/widget/codeEditorWidget.test.ts`、`contrib/bracketMatching/test/browser/bracketColorizationPresentation.test.ts` | 现有测试设施               | 验证空白行、缩进单位与 tab 不同、活动位置、选项更新和颜色池。                                              |
 | `contrib/indentation/test/browser/indentationGuides.test.ts`                                                                   | 既有辅助线测试             | 随浏览器重复 helper 退出，改从真实模型公共入口验证混合空白和语言 off-side 规则。                           |
-| `test/integration/browser/standalone.integration.ts`、`standalone.integration.spec.ts`（仓库相对路径）                  | Ash 现有浏览器测试设施     | Playwright 验证实际颜色、笔画、首尾几何、换行、主题切换、开关及鼠标输入。                                  |
+| `test/integration/browser/standalone.integration.ts`、`standalone.integration.spec.ts`（仓库相对路径）                         | Ash 现有浏览器测试设施     | Playwright 验证实际颜色、笔画、首尾几何、换行、主题切换、开关及鼠标输入。                                  |
 | `common/core/README.md`、`browser/README.md`、`api-alignment-status.md`                                                        | 现有文档                   | 同步职责、验证和保留差异。                                                                                 |
 
 独立实现：查询复用 Ash 已有 ViewModel 与模型 guide part；移除 ViewPart 的缩进扫描，不复制上游算法。CSS 围绕既有 Ash 辅助线节点独立编写，使用公共颜色 token 和现有笔画尺寸 token；节点不参与焦点、鼠标命中或辅助阅读。软换行只在为缩进保留的空间内延续辅助线。括号源和文本测量继续保留现有 Ash 几何职责，上游运行时界面尚未验证。

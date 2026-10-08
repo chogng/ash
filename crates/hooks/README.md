@@ -131,14 +131,14 @@ Hook，也不授予权限。
 用户声明的程序化更新继续使用 `hook/upsert`、`hook/remove`、`hook/enablement/set`，携带
 `commandId` 与 `expectedRevision`。TUI 浏览页只读，编辑入口交给 TOML 或助手。
 
-| 责任                       | 实现入口                                                                                       |
-| -------------------------- | ---------------------------------------------------------------------------------------------- |
-| 事件名称及可匹配工具的事件 | [protocol](../protocol/src/hook.rs)                                                            |
-| TOML、ID、声明校验         | [config](../config/src/hooks.rs)                                                               |
-| 来源查询与配置命令         | [App Server](../app-server/src/server/extension_config_operations.rs)                          |
-| 事件列表、详情与配置入口   | [Ash Code](../tui/src/hooks.rs)                                                        |
+| 责任                       | 实现入口                                                                                |
+| -------------------------- | --------------------------------------------------------------------------------------- |
+| 事件名称及可匹配工具的事件 | [protocol](../protocol/src/hook.rs)                                                     |
+| TOML、ID、声明校验         | [config](../config/src/hooks.rs)                                                        |
+| 来源查询与配置命令         | [App Server](../app-server/src/server/extension_config_operations.rs)                   |
+| 事件列表、详情与配置入口   | [Ash Code](../tui/src/hooks.rs)                                                         |
 | 桌面 Settings 与配置入口   | [Hooks Settings](../../src/ash/workbench/contrib/hooks/browser/hooksSettingsContent.ts) |
-| 执行、进程协议与运行记录   | [运行时说明](docs/runtime.md)                                                                  |
+| 执行、进程协议与运行记录   | [运行时说明](docs/runtime.md)                                                           |
 
 定向验证：
 

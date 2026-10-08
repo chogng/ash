@@ -31,7 +31,8 @@
 	outline-offset: -1px;
 }
 
-.ash-chat-input-picker-focus-scope.pointer-focus .ash-chat-input-picker-button:focus-visible,
+.ash-chat-input-picker-focus-scope.pointer-focus
+	.ash-chat-input-picker-button:focus-visible,
 .ash-chat-input-picker-focus-scope.pointer-focus .ash-button:focus-visible {
 	outline: none;
 }
