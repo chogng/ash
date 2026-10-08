@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { copyFile, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -10,6 +10,13 @@ for (const profile of ['default', 'custom'] as const) {
 	test(`Electron starts once after valid compilation and restarts only after valid rebuilds (${profile} profile)`, { timeout: 20_000 }, async t => {
 		const root = await realpath(await mkdtemp(join(tmpdir(), 'ash-electron-')));
 		const desktop = join(root, '.');
+		let phaseRevision = 0;
+		async function setPhase(phase: string): Promise<void> {
+			const temporary = join(desktop, `phase-${phaseRevision++}.tmp`);
+			await writeFile(temporary, phase);
+			// Publish complete phases so the compiler cannot read a truncated file as a valid build.
+			await rename(temporary, join(desktop, 'phase'));
+		}
 		for (const directory of ['build/desktop/launch', 'node_modules/typescript/bin', 'node_modules/electron']) {
 			await mkdir(join(root, directory), { recursive: true });
 		}
@@ -42,7 +49,7 @@ for (const profile of ['default', 'custom'] as const) {
         fs.appendFileSync('phases.log', phase + '\\n');
       }, 25);
     `);
-		await writeFile(join(desktop, 'phase'), 'initial');
+		await setPhase('initial');
 		const home = join(root, profile === 'custom' ? 'custom-profile' : '.build/desktop/dev/profile');
 		const userData = join(root, profile === 'custom' ? 'custom-user-data' : '.build/desktop/dev/user-data');
 		const child = spawn(process.execPath, [join(root, 'build/desktop/launch/electron.ts'), '--watch', '--fixture', ...(profile === 'custom' ? [`--user-data-dir=${userData}`] : [])], {
@@ -53,7 +60,7 @@ for (const profile of ['default', 'custom'] as const) {
 		child.stderr.on('data', chunk => { output += chunk; });
 		const closed = new Promise(resolvePromise => child.once('close', resolvePromise));
 		t.after(async () => {
-			await writeFile(join(desktop, 'phase'), 'stop');
+			await setPhase('stop');
 			await closed;
 			await rm(root, { recursive: true, force: true });
 		});
@@ -74,7 +81,7 @@ for (const profile of ['default', 'custom'] as const) {
 		}
 		await until(() => output.includes('unsupported runtime imports: fs'));
 		assert.deepEqual(await lines('launches.log'), []);
-		await writeFile(join(desktop, 'phase'), 'valid');
+		await setPhase('valid');
 		await until(async () => (await lines('launches.log')).length === 1);
 		const compilers = (await lines('compilers.log')).map(line => JSON.parse(line));
 		assert.equal(compilers.length, 1);
@@ -85,13 +92,13 @@ for (const profile of ['default', 'custom'] as const) {
 		}
 		for (const phase of ['error', 'invalid']) {
 			output = '';
-			await writeFile(join(desktop, 'phase'), phase);
+			await setPhase(phase);
 			await until(async () => (await lines('phases.log')).includes(phase));
 			if (phase === 'invalid') await until(() => output.includes('unsupported runtime imports: fs'));
 			await delay(300);
 			assert.equal((await lines('launches.log')).length, 1);
 		}
-		await writeFile(join(desktop, 'phase'), 'recovered');
+		await setPhase('recovered');
 		await until(async () => (await lines('launches.log')).length === 2);
 		const launches = (await lines('launches.log')).map(line => JSON.parse(line));
 		assert.equal((await lines('compilers.log')).length, 1);
@@ -99,7 +106,7 @@ for (const profile of ['default', 'custom'] as const) {
 			assert.ok(pid > 0);
 			assert.deepEqual(launch, { cwd: desktop, args: ['--fixture', `--user-data-dir=${userData}`], home });
 		}
-		await writeFile(join(desktop, 'phase'), 'stop');
+		await setPhase('stop');
 		await closed;
 		assert.equal(child.exitCode, 1, 'An unexpectedly exited compiler fails the launch task');
 		for (const { pid } of [...launches, ...compilers]) assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
