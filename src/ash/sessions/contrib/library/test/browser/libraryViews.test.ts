@@ -5,6 +5,8 @@ import { JSDOM } from 'jsdom';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
+import { IMenuService } from '../../../../../platform/actions/common/actions.js';
+import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { IAssetService, type AssetCatalog } from '../../../../../platform/assets/common/assetService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
@@ -48,6 +50,7 @@ class LibraryFixture extends Disposable {
 		this.services.registerInstance(IHoverService, { setupDelayedHover: () => Disposable.None } as unknown as IHoverService);
 		this.services.registerInstance(IQuickInputService, { input: async () => undefined } as unknown as IQuickInputService);
 		this.services.registerInstance(ICommandService, { executeCommand: async () => undefined } as unknown as ICommandService);
+		this.services.registerInstance(IMenuService, new MenuService(this.services.get(ICommandService), this.contextKeys));
 		this.services.registerInstance(IAssetService, {
 			getCatalog: async () => { this.reads++; return this.pendingCatalog ? this.pendingCatalog.p : catalog; },
 			readVersion: async () => new Uint8Array(),

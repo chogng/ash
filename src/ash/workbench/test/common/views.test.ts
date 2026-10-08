@@ -5,6 +5,8 @@ import { InstantiationService } from '../../../platform/instantiation/common/ins
 import { CommandService } from '../../services/commands/common/commandService.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
+import { JSDOM } from 'jsdom';
+import { toDisposable } from '../../../base/common/lifecycle.js';
 import { ContextKeyExpr } from "../../../platform/contextkey/common/contextkey.js";
 import { ContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
 import { SyncDescriptor } from "../../../platform/instantiation/common/descriptors.js";
@@ -185,8 +187,12 @@ test('view welcome registrations sort content and release each contribution inde
 
 
 test('view visibility menus execute in the invoking window and expire with declarations', async () => {
+	const environment = new JSDOM('<!doctype html><body></body>');
+	using environmentOwner = toDisposable(() => environment.window.close());
 	using firstContext = new ContextKeyService();
 	using secondContext = new ContextKeyService();
+	using containerContext = firstContext.createScoped(environment.window.document.body);
+	containerContext.setContext('viewContainer', 'test.visibility');
 	using registry = new WorkbenchViewRegistry();
 	using container = registry.registerViewContainer({ id: 'test.visibility', title: 'Visibility', location: ViewContainerLocation.Sidebar });
 	using first = new ViewDescriptorService({ registry }, firstContext);
@@ -201,7 +207,7 @@ test('view visibility menus execute in the invoking window and expire with decla
 	using commands = new CommandService(services);
 	firstContext.setContext('activeViewlet', 'test.visibility');
 	const menus = new MenuService(commands, firstContext);
-	const items = () => menus.getMenuActions(MenuId.SidebarTitle).flatMap(([, actions]) => actions).filter(action => action.id.startsWith('test.visibility.'));
+	const items = () => menus.getMenuActions(MenuId.ViewContainerTitleContext, undefined, containerContext).flatMap(([, actions]) => actions).filter(action => action.id.startsWith('test.visibility.'));
 	assert.deepEqual(items().map(action => [action.label, action.checked, action.enabled]), [['First', true, true], ['Second', true, true]]);
 	await items().find(action => action.label === 'Second')!.run();
 	assert.equal(first.getViewContainerModel('test.visibility').isVisible('test.visibility.second'), false);
@@ -214,10 +220,14 @@ test('view visibility menus execute in the invoking window and expire with decla
 	firstContext.setContext('test.visibility.feature', true);
 	assert.deepEqual(items().map(action => action.label), ['Conditional', 'First', 'Second']);
 	firstContext.setContext('activeViewlet', 'another.container');
+	assert.deepEqual(items().map(action => action.label), ['Conditional', 'First', 'Second']);
+	containerContext.setContext('viewContainer', 'another.container');
 	assert.equal(items().length, 0);
+	containerContext.setContext('viewContainer', 'test.visibility');
+	assert.deepEqual(items().map(action => action.label), ['Conditional', 'First', 'Second']);
 	registrations.dispose();
 	assert.equal(CommandsRegistry.getCommand('test.visibility.first.toggleVisibility'), undefined);
-	assert.equal(menus.getMenuActions(MenuId.SidebarTitle).flatMap(([, actions]) => actions).some(action => action.id.startsWith('test.visibility.')), false);
+	assert.equal(items().length, 0);
 	registry.registerStaticViews('test.visibility', [testView('test.visibility.static', 'Static')]);
 	registry.dispose();
 	assert.equal(CommandsRegistry.getCommand('test.visibility.static.toggleVisibility'), undefined);
