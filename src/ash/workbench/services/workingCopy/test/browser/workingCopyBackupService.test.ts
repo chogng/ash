@@ -75,6 +75,21 @@ test('switching workspaces clears observed revisions and keeps each workspace\'s
 	assert.equal((await backups.list())[0]?.content, 'workspace one');
 });
 
+test('a saved checkpoint cannot discard a later recovery version from another writer', async () => {
+	using services = new InstantiationService();
+	using context = new WorkspaceContextService({ id: 'save-checkpoint' });
+	const backend = new VersionedBackups();
+	using saving = assemble(services, backend, context);
+	using other = services.createInstance(WorkingCopyBackupService);
+	const checkpoint: WorkingCopyBackup = { resource: URI.file('/save/checkpoint.txt'), kind: 'text', content: 'published checkpoint', updatedAt: 1 };
+	await saving.store(checkpoint);
+	await other.list();
+	await other.store({ ...checkpoint, content: 'newer writer recovery' });
+	await assert.rejects(saving.delete(checkpoint.resource), error => error instanceof BackupError && error.code === 'conflict');
+	await assert.rejects(saving.store({ ...checkpoint, content: 'retry without observing other writer' }), error => error instanceof BackupError && error.code === 'conflict');
+	assert.equal((await other.list())[0]?.content, 'newer writer recovery');
+});
+
 test('unreadable backup content stays durable while supported backups still restore', async () => {
 	using services = new InstantiationService();
 	using context = new WorkspaceContextService({ id: 'one' });

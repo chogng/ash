@@ -5,7 +5,7 @@ import { Disposable, toDisposable, type IDisposable } from "../../../../base/com
 import { type URI } from "../../../../base/common/uri.js";
 import { Schemas } from '../../../../base/common/network.js';
 import { runWhenWindowIdle } from "../../../../base/browser/dom.js";
-import { TextModelConflictError, type TextModelInput, type TextModelReference, type IFileTextModelService } from "../common/textModelResourceService.js";
+import { TextModelConflictError, TextModelSaveCompletionError, type TextModelInput, type TextModelReference, type IFileTextModelService, type ITextModelSaveCompletionParticipant, type TextModelSaveCompletion } from "../common/textModelResourceService.js";
 import { TextResourceConflictError, type TextResourceChangeEvent, type TextResourceContent, type ITextResourceStore } from "../common/textResourceStore.js";
 import { ModelService } from "../../../../editor/common/services/modelService.js";
 import { createPieceTreeTextBuffer } from "../../../../editor/common/model/pieceTreeTextBuffer/pieceTreeTextBufferBuilder.js";
@@ -53,6 +53,7 @@ export interface BrowserTextModelServiceOptions {
 export class BrowserTextModelService extends Disposable implements IFileTextModelService {
 	private readonly entries = new Map<string, TextModelEntry>();
 	private readonly saveParticipants = new Set<ITextModelSaveParticipant>();
+	private readonly saveCompletionParticipants = new Set<ITextModelSaveCompletionParticipant>();
 	private readonly undoRedoParticipant = this._register(new RetainedModelUndoRedoHistory());
 	private readonly modelAdded = this._register(new Emitter<TextModel>());
 	private readonly modelRemoved = this._register(new Emitter<TextModel>());
@@ -68,6 +69,12 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		this.assertNotDisposed();
 		this.saveParticipants.add(participant);
 		return toDisposable(() => this.saveParticipants.delete(participant));
+	}
+
+	public addSaveCompletionParticipant(participant: ITextModelSaveCompletionParticipant): IDisposable {
+		this.assertNotDisposed();
+		this.saveCompletionParticipants.add(participant);
+		return toDisposable(() => this.saveCompletionParticipants.delete(participant));
 	}
 
 	constructor(private readonly resourceStore: ITextResourceStore, private readonly options: BrowserTextModelServiceOptions = {}) {
@@ -152,6 +159,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 
 	protected override disposeCore(): void {
 		this.saveParticipants.clear();
+		this.saveCompletionParticipants.clear();
 		// Remove identities before notifying observers so they cannot resolve a closed model.
 		for (const [key, entry] of this.entries) {
 			this.entries.delete(key);
@@ -234,6 +242,14 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 				savedText = entry.model.getText();
 			}
 			throwIfCancelled(signal, 'Text model save was cancelled');
+			const completions: TextModelSaveCompletion[] = [];
+			for (const participant of this.saveCompletionParticipants) {
+				// Await checkpoint settlement even on cancellation: the queue still owns its model.
+				const complete = await participant.prepare(entry.model, signal);
+				if (complete) completions.push(complete);
+				this.ensureEntryAlive(entry);
+				throwIfCancelled(signal, 'Text model save was cancelled');
+			}
 			let saved;
 			try {
 				saved = await this.resourceStore.save({
@@ -254,6 +270,12 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 			entry.revision = saved.revision;
 			this.setExternalChange(entry, false);
 			this.refreshDirty(entry);
+			try {
+				// Cancellation after publication cannot leave recovery bookkeeping behind.
+				for (const complete of completions) await complete(savedText);
+			} catch (error) {
+				throw new TextModelSaveCompletionError(entry.resource, error);
+			}
 		});
 		entry.saveQueue = save.catch(() => undefined);
 		return save.finally(() => lifetime.dispose());

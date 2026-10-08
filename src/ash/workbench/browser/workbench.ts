@@ -743,6 +743,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IClipboardService, clipboardService ?? new BrowserClipboardService(ownerWindow.navigator.clipboard));
 		const workingCopyBackupTracker = this._register(new WorkingCopyBackupTracker(workingCopyService, workingCopyBackups, ownerWindow));
 		this.workingCopyBackupTracker = workingCopyBackupTracker;
+		this._register(textModelService.addSaveCompletionParticipant({ prepare: (model, signal) => workingCopyBackupTracker.prepareSave(model, signal) }));
 		const storage = this._register(storageService);
 		this.workbenchWindow = workbenchWindow;
 		this.storage = storage;

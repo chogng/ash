@@ -18,7 +18,7 @@ import { ConflictDetector } from '../../browser/conflicts.js';
 import { BulkEditPane } from '../../browser/preview/bulkEditPane.js';
 import { BulkEditPreviewContribution } from '../../browser/preview/bulkEdit.contribution.js';
 import { registerWindow } from '../../../../../base/browser/window.js';
-import { IFileTextModelService, ITextModelResourceService, type ITextModelSaveParticipant, type TextModelReference } from "../../../../services/textmodelResolver/common/textModelResourceService.js";
+import { IFileTextModelService, ITextModelResourceService, type ITextModelSaveParticipant, type ITextModelSaveCompletionParticipant, type TextModelReference } from "../../../../services/textmodelResolver/common/textModelResourceService.js";
 import { SaveReason } from '../../../../common/editor.js';
 import { type LanguageWorkspaceEdit } from "../../../../../editor/common/languages.js";
 import { FileKind, FileNotFoundError, IFileService } from "../../../../../platform/files/common/files.js";
@@ -182,6 +182,11 @@ for (const outcome of ['accept', 'conflict', 'dispose'] as const) {
 
 class PreviewTextModelService extends Disposable implements IFileTextModelService {
 	private readonly participants = new Set<ITextModelSaveParticipant>();
+	private readonly completions = new Set<ITextModelSaveCompletionParticipant>();
+	addSaveCompletionParticipant(participant: ITextModelSaveCompletionParticipant) {
+		this.completions.add(participant);
+		return toDisposable(() => this.completions.delete(participant));
+	}
 	addSaveParticipant(participant: ITextModelSaveParticipant) {
 		this.participants.add(participant);
 		return toDisposable(() => this.participants.delete(participant));
@@ -221,8 +226,13 @@ class PreviewTextModelService extends Disposable implements IFileTextModelServic
 			hasExternalChange: false,
 			onDidChangeExternalChange: emptyEvent,
 			save: async (signal, options) => {
-				if (options?.skipSaveParticipants) return;
-				for (const participant of this.participants) await participant.participate(model, options?.reason ?? SaveReason.EXPLICIT, signal);
+				if (!options?.skipSaveParticipants) {
+					for (const participant of this.participants) await participant.participate(model, options?.reason ?? SaveReason.EXPLICIT, signal);
+				}
+				for (const participant of this.completions) {
+					const complete = await participant.prepare(model, signal);
+					await complete?.(model.getText());
+				}
 			},
 			revert: async () => undefined,
 			saveAs: async () => { throw new Error('Preview must not save copies'); },

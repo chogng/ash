@@ -3,6 +3,11 @@ import { DisposableMap, Disposable, MutableDisposable, DisposableStore, type IDi
 import { type URI } from "../../../../base/common/uri.js";
 import { type IWorkingCopy, type IWorkingCopyService } from "../common/workingCopyService.js";
 import { type IWorkingCopyBackupService } from "../common/workingCopyBackupService.js";
+import { throwIfCancelled } from '../../../../base/common/cancellation.js';
+import { CancellationError } from '../../../../base/common/errors.js';
+import type { TextModel } from '../../../../editor/common/model/textModel.js';
+import type { TextModelSaveCompletion } from '../../textmodelResolver/common/textModelResourceService.js';
+import type { WorkingCopyBackup } from '../common/workingCopyBackupService.js';
 
 const BACKUP_DELAY_MS = 250;
 
@@ -40,6 +45,35 @@ export class WorkingCopyBackupTracker extends Disposable {
 		const captured = new Set(copies.map(copy => copy.resource.toString()));
 		const remaining = [...this.pendingResources.values()].filter(resource => !captured.has(resource.toString()));
 		return Promise.all([...copies.map(copy => this.persist(copy.resource, copy)), ...remaining.map(resource => this.persist(resource))]).then(() => Promise.all(this.queues.values())).then(() => undefined);
+	}
+
+	/** A failed post-save discard must leave current recovery content, never an older draft. */
+	public async prepareSave(model: TextModel, signal: AbortSignal): Promise<TextModelSaveCompletion | undefined> {
+		throwIfCancelled(signal);
+		if (this.paused || this.stopped || this.isDisposed) throw new CancellationError();
+		const copy = this.workingCopies.get(model.uri).find(candidate => candidate.backupKind === 'text' && (candidate.isDirty || this.edited.has(candidate)));
+		if (!copy) return undefined;
+		const metadata = { contentType: copy.backupContentType, label: copy.backupLabel };
+		let generation: number;
+		let content: string;
+		do {
+			generation = this.generation;
+			content = model.getText();
+			await this.persist(model.uri, undefined, () => textBackup(model, metadata));
+			throwIfCancelled(signal);
+			if (this.paused || this.stopped || this.isDisposed) throw new CancellationError();
+		} while (generation !== this.generation || content !== model.getText());
+		return async savedText => {
+			do {
+				generation = this.generation;
+				content = model.getText();
+				await this.persist(model.uri, undefined, () => {
+					if (model.getText() !== savedText) return textBackup(model, metadata);
+					const dirty = this.workingCopies.get(model.uri).find(candidate => candidate.isDirty);
+					return dirty ? { resource: dirty.resource, kind: dirty.backupKind, content: dirty.backup(), updatedAt: Date.now(), ...(dirty.backupLanguageId ? { languageId: dirty.backupLanguageId } : {}), ...(dirty.backupContentType ? { contentType: dirty.backupContentType } : {}), ...(dirty.backupLabel ? { label: dirty.backupLabel } : {}) } : undefined;
+				});
+			} while (generation !== this.generation || content !== model.getText());
+		};
 	}
 
 	/** Whether final content still matches the current registry and working-copy generation. */
@@ -154,14 +188,20 @@ export class WorkingCopyBackupTracker extends Disposable {
 		this.timers.get(copy)?.clear();
 	}
 
-	private persist(resource: IWorkingCopy['resource'], copy?: IWorkingCopy): Promise<void> {
+	private persist(resource: IWorkingCopy['resource'], copy?: IWorkingCopy, capture?: () => WorkingCopyBackup | undefined): Promise<void> {
 		for (const candidate of this.workingCopies.get(resource)) this.cancel(candidate);
 		const key = resource.toString();
 		this.pendingResources.delete(key);
 		const dirtyCopy = copy?.isDirty ? copy : this.workingCopies.get(resource).find(candidate => candidate.isDirty);
 		let operation: () => Promise<void>;
 		try {
-			if (dirtyCopy) {
+			if (capture) {
+				// Checkpoints sample only when their existing resource queue reaches this operation.
+				operation = () => {
+					const backup = capture();
+					return backup ? this.backups.store(backup) : this.backups.delete(resource);
+				};
+			} else if (dirtyCopy) {
 				const backup = { resource: dirtyCopy.resource, kind: dirtyCopy.backupKind, content: dirtyCopy.backup(), updatedAt: Date.now(), ...(dirtyCopy.backupLanguageId ? { languageId: dirtyCopy.backupLanguageId } : {}), ...(dirtyCopy.backupContentType ? { contentType: dirtyCopy.backupContentType } : {}), ...(dirtyCopy.backupLabel ? { label: dirtyCopy.backupLabel } : {}) };
 				operation = () => this.backups.store(backup);
 			} else {
@@ -175,4 +215,8 @@ export class WorkingCopyBackupTracker extends Disposable {
 		this.queues.set(key, queued);
 		return queued.catch(error => { this.pendingResources.set(key, resource); throw error; }).finally(() => { if (this.queues.get(key) === queued) this.queues.delete(key); });
 	}
+}
+
+function textBackup(model: TextModel, metadata: Pick<WorkingCopyBackup, 'contentType' | 'label'>): WorkingCopyBackup {
+	return { resource: model.uri, kind: 'text', content: model.getText(), updatedAt: Date.now(), languageId: model.getLanguageId(), ...(metadata.contentType ? { contentType: metadata.contentType } : {}), ...(metadata.label ? { label: metadata.label } : {}) };
 }

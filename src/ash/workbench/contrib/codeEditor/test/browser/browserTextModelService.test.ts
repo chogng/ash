@@ -8,7 +8,7 @@ import { BrowserTextModelService } from "../../../../services/textmodelResolver/
 import { Position } from "../../../../../editor/common/core/position.js";
 import { EndOfLineSequence } from "../../../../../editor/common/model.js";
 import { Range } from "../../../../../editor/common/core/range.js";
-import { TextModelConflictError } from "../../../../services/textmodelResolver/common/textModelResourceService.js";
+import { TextModelConflictError, TextModelSaveCompletionError } from "../../../../services/textmodelResolver/common/textModelResourceService.js";
 import { type IFileChangeEvent } from "../../../../../platform/files/common/files.js";
 import { TextFileContentSource, TextFileSaveConflictError, type ITextFileService, type TextFileSaveRequest } from "../../../../services/textfile/common/textFileService.js";
 import { BrowserTextResourceStore } from "../../browser/browserTextResourceStore.js";
@@ -424,6 +424,139 @@ test('workspace rescans do not read untitled documents or mark them conflicted',
 	textFiles.fireExternalChange();
 	await models.refresh(reference.resource);
 	assert.deepEqual([reference.isDirty, reference.hasExternalChange, textFiles.resolveCount], [true, false, 1]);
+});
+
+
+test('file publication waits for its checkpoint and save acknowledgement waits for recovery completion', async () => {
+	const files = new TestTextFileService('original');
+	using models = new BrowserTextModelService(new BrowserTextResourceStore(files));
+	using first = await models.acquire({ resource: URI.file('/save/main.ts') }, new AbortController().signal);
+	using second = await models.acquire({ resource: first.resource }, new AbortController().signal);
+	const preparing = new DeferredPromise<void>();
+	const checkpoint = new DeferredPromise<void>();
+	const completing = new DeferredPromise<void>();
+	const completion = new DeferredPromise<void>();
+	const snapshots: string[] = [];
+	using participant = models.addSaveCompletionParticipant({
+		prepare: async model => {
+			snapshots.push(model.getText());
+			await preparing.complete();
+			await checkpoint.p;
+			return async savedText => { snapshots.push(savedText); await completing.complete(); await completion.p; };
+		}
+	});
+	first.model.setValue('saved');
+	let acknowledged = false;
+	const saving = first.save(new AbortController().signal).then(() => { acknowledged = true; });
+	try {
+		await preparing.p;
+		assert.deepEqual([files.savedTexts, second.isDirty, acknowledged], [[], true, false]);
+		await checkpoint.complete();
+		await completing.p;
+		assert.deepEqual([files.savedTexts, second.isDirty, acknowledged, snapshots], [['saved'], false, false, ['saved', 'saved']]);
+	} finally {
+		await checkpoint.complete();
+		await completion.complete();
+		await saving;
+	}
+});
+
+test('a rejected checkpoint does not publish the file and retry saves current user text', async () => {
+	const files = new TestTextFileService('original');
+	using models = new BrowserTextModelService(new BrowserTextResourceStore(files));
+	using reference = await models.acquire({ resource: URI.file('/save/main.ts') }, new AbortController().signal);
+	const rejection = new Error('checkpoint failed');
+	let fail = true;
+	using participant = models.addSaveCompletionParticipant({
+		prepare: async () => {
+			if (fail) throw rejection;
+			return async () => { };
+		}
+	});
+	reference.model.setValue('first edit');
+	await assert.rejects(reference.save(new AbortController().signal), error => error === rejection);
+	assert.deepEqual([files.savedTexts, reference.isDirty], [[], true]);
+	reference.model.setValue('newer edit');
+	fail = false;
+	await reference.save(new AbortController().signal);
+	assert.deepEqual([files.savedTexts, reference.model.getText(), reference.isDirty], [['newer edit'], 'newer edit', false]);
+});
+
+for (const editedDuringCompletion of [false, true]) {
+	test(`post-publication failure keeps the real baseline and retry preserves later edits (${editedDuringCompletion})`, async () => {
+		const files = new TestTextFileService('original');
+		using models = new BrowserTextModelService(new BrowserTextResourceStore(files));
+		using reference = await models.acquire({ resource: URI.file('/save/main.ts') }, new AbortController().signal);
+		const started = new DeferredPromise<void>();
+		const release = new DeferredPromise<void>();
+		const failure = new Error('backup deletion failed');
+		let fail = true;
+		using participant = models.addSaveCompletionParticipant({
+			prepare: async () => async () => {
+				if (fail) { await started.complete(); await release.p; throw failure; }
+			}
+		});
+		reference.model.setValue('saved');
+		const saving = reference.save(new AbortController().signal);
+		const rejected = assert.rejects(saving, error => error instanceof TextModelSaveCompletionError && error.fileSaved && error.cause === failure);
+		await started.p;
+		if (editedDuringCompletion) reference.model.setValue('later edit');
+		await release.complete();
+		await rejected;
+		assert.deepEqual([files.savedTexts, reference.model.getText(), reference.isDirty], [['saved'], editedDuringCompletion ? 'later edit' : 'saved', editedDuringCompletion]);
+		fail = false;
+		await reference.save(new AbortController().signal);
+		assert.deepEqual([files.savedTexts, reference.isDirty], [['saved', editedDuringCompletion ? 'later edit' : 'saved'], false]);
+	});
+}
+
+test('cancellation during checkpoint settles recovery before releasing the queue without publishing', async () => {
+	const files = new TestTextFileService('original');
+	using models = new BrowserTextModelService(new BrowserTextResourceStore(files));
+	using reference = await models.acquire({ resource: URI.file('/save/main.ts') }, new AbortController().signal);
+	const started = new DeferredPromise<void>();
+	const release = new DeferredPromise<void>();
+	let completed = false;
+	using participant = models.addSaveCompletionParticipant({
+		prepare: async () => {
+			await started.complete();
+			await release.p;
+			return async () => { completed = true; };
+		}
+	});
+	reference.model.setValue('user edit');
+	const controller = new AbortController();
+	const saving = reference.save(controller.signal);
+	const rejected = assert.rejects(saving, isCancellationError);
+	await started.p;
+	controller.abort();
+	await release.complete();
+	await rejected;
+	assert.deepEqual([files.savedTexts, reference.isDirty, completed], [[], true, false]);
+});
+
+test('recovery completion still runs after publication even when cancellation arrives or editing participants are skipped', async () => {
+	const files = new TestTextFileService('original');
+	using models = new BrowserTextModelService(new BrowserTextResourceStore(files));
+	using reference = await models.acquire({ resource: URI.file('/save/main.ts') }, new AbortController().signal);
+	const started = new DeferredPromise<void>();
+	const release = new DeferredPromise<void>();
+	const calls: string[] = [];
+	using editing = models.addSaveParticipant({ participate: async () => { calls.push('editing'); } });
+	using recovery = models.addSaveCompletionParticipant({
+		prepare: async model => {
+			calls.push('checkpoint:' + model.getText());
+			return async text => { await started.complete(); await release.p; calls.push('completed:' + text); };
+		}
+	});
+	reference.model.setValue('saved');
+	const controller = new AbortController();
+	const saving = reference.save(controller.signal, { skipSaveParticipants: true });
+	await started.p;
+	controller.abort();
+	await release.complete();
+	await saving;
+	assert.deepEqual([files.savedTexts, calls, reference.isDirty], [['saved'], ['checkpoint:saved', 'completed:saved'], false]);
 });
 
 class TestTextFileService implements ITextFileService {

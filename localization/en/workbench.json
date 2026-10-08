@@ -1,5 +1,7 @@
 {
   "ash": {
+    "files.saveBackupFailedTitle": "File saved; recovery backup incomplete",
+    "files.saveBackupFailedMessage": "'{0}' was saved, but its recovery backup could not be completed: {1}. Save again to retry. Any changes made after that save remain in the editor.",
     "webview.verbosity.invalid": "Webview editor accessibility verbosity must be a boolean.",
     "webview.verbosity.title": "Webview editor accessibility help",
     "webview.verbosity.description": "Announce how to open accessibility help when a webview editor receives focus.",

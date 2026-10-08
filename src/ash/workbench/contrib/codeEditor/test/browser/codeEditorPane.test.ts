@@ -39,6 +39,9 @@ import { CodeEditorConfiguration } from '../../common/editorConfiguration.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { setIconResolver } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { getIconDefinition } from '../../../../../platform/theme/common/iconRegistry.js';
+import { BrowserWorkingCopyService } from '../../../../services/workingCopy/browser/browserWorkingCopyService.js';
+import { IndexedDbWorkingCopyBackupService } from '../../../../services/workingCopy/browser/indexedDbWorkingCopyBackupService.js';
+import { WorkingCopyBackupTracker } from '../../../../services/workingCopy/browser/workingCopyBackupTracker.js';
 
 function createTestDom(markup: string): JSDOM {
 	const dom = new JSDOM(markup);
@@ -479,6 +482,55 @@ test("Stanza editor pane saves and reverts its shared model reference", async ()
 	reference.dispose();
 	pane.dispose();
 	dom.window.close();
+});
+
+test('acknowledged text saves cannot replay an older crash backup before the clean timer', async () => {
+	const dom = createTestDom('<!doctype html><body><main></main></body>');
+	const resource = URI.parse('ash-userdata:/user/keybindings.json');
+	const textFiles = new ImmediateTextFiles('original');
+	const store = new BrowserTextResourceStore(textFiles);
+	using copies = new BrowserWorkingCopyService();
+	using backups = new IndexedDbWorkingCopyBackupService('save-acknowledgement', undefined);
+	const timers = new Map<number, () => void>();
+	let nextTimer = 0;
+	const clock = {
+		setTimeout(callback: () => void): number { const id = ++nextTimer; timers.set(id, callback); return id; },
+		clearTimeout(id: number): void { timers.delete(id); },
+	};
+	using tracker = new WorkingCopyBackupTracker(copies, backups, clock as unknown as Window);
+	using models = new BrowserTextModelService(store);
+	using completion = models.addSaveCompletionParticipant({ prepare: (model, signal) => tracker.prepareSave(model, signal) });
+	using services = paneServices(models);
+	using pane = createPane(services, store, { workingCopyService: copies, createPart: createInertEditorPart });
+	try {
+		pane.create(dom.window.document.querySelector<HTMLElement>('main')!);
+		await pane.setInput({ resource }, new AbortController().signal);
+		using reference = await models.acquire({ resource }, new AbortController().signal);
+		reference.model.setValue('older dirty content');
+		await tracker.flush();
+		assert.equal((await backups.list())[0]?.content, 'older dirty content');
+
+		reference.model.setValue('first saved content');
+		await pane.save();
+		reference.model.setValue('latest saved content');
+		await pane.save();
+		assert.deepEqual([textFiles.savedTexts.at(-1), pane.isDirty], ['latest saved content', false]);
+
+		// Reload can interrupt the debounce timer after the save has already acknowledged success.
+		tracker.completeShutdown();
+		using restoredModels = new BrowserTextModelService(store);
+		using restoredServices = paneServices(restoredModels);
+		using restoredPane = createPane(restoredServices, store, { createPart: createInertEditorPart });
+		restoredPane.create(dom.window.document.createElement('main'));
+		await restoredPane.setInput({ resource }, new AbortController().signal);
+		using restoredReference = await restoredModels.acquire({ resource }, new AbortController().signal);
+		for (const backup of await backups.list()) {
+			restoredPane.workingCopy!.restoreBackup(backup.content);
+		}
+		assert.deepEqual([restoredReference.model.getText(), restoredPane.isDirty], ['latest saved content', false]);
+	} finally {
+		dom.window.close();
+	}
 });
 
 test("Stanza editor pane trims trailing whitespace before saving", async () => {

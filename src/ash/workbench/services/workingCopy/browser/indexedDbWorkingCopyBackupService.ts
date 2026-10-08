@@ -1,6 +1,8 @@
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
 import { type IWorkingCopyBackupService, type WorkingCopyBackup } from "../common/workingCopyBackupService.js";
+import { generateUuid } from '../../../../base/common/uuid.js';
+import { BackupError } from '../../../../platform/backup/common/backup.js';
 
 interface StoredBackup {
 	readonly key: string;
@@ -9,6 +11,7 @@ interface StoredBackup {
 	readonly kind: WorkingCopyBackup["kind"];
 	readonly content: string;
 	readonly updatedAt: number;
+	readonly revision?: string;
 	readonly languageId?: string;
 	readonly contentType?: string;
 	readonly label?: string;
@@ -22,6 +25,8 @@ const STORE_NAME = "backups";
 export class IndexedDbWorkingCopyBackupService extends Disposable implements IWorkingCopyBackupService {
 	private readonly database: Promise<IDBDatabase | undefined>;
 	private readonly fallback = new Map<string, StoredBackup>();
+	private readonly observed = new Map<string, StoredBackup>();
+	private readonly snapshots = new WeakMap<WorkingCopyBackup, StoredBackup>();
 
 	constructor(private workspaceId: string, factory: IDBFactory | undefined = globalThis.indexedDB) {
 		super();
@@ -33,56 +38,94 @@ export class IndexedDbWorkingCopyBackupService extends Disposable implements IWo
 	async list(): Promise<readonly WorkingCopyBackup[]> {
 		const workspaceId = this.workspaceId;
 		const database = await this.database;
-		if (!database) return deserialize([...this.fallback.values()].filter(record => record.workspaceId === workspaceId));
-		const records = await request<StoredBackup[]>(database.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).index("workspaceId").getAll(workspaceId));
-		return deserialize(records);
+		const records = database
+			? await request<StoredBackup[]>(database.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).index("workspaceId").getAll(workspaceId))
+			: [...this.fallback.values()].filter(record => record.workspaceId === workspaceId);
+		const result = deserialize(records);
+		const byResource = new Map(records.map(record => [record.resource, record]));
+		for (const backup of result) {
+			const record = byResource.get(backup.resource.toString())!;
+			this.observed.set(record.key, record);
+			this.snapshots.set(backup, record);
+		}
+		return result;
 	}
 
 	async store(backup: WorkingCopyBackup): Promise<void> {
 		validateBackup(backup);
 		const workspaceId = this.workspaceId;
+		const key = backupKey(workspaceId, backup.resource);
+		const expected = this.observed.get(key);
 		const database = await this.database;
-		const record = { key: backupKey(workspaceId, backup.resource), workspaceId, resource: backup.resource.toString(), kind: backup.kind, content: backup.content, updatedAt: backup.updatedAt, ...(backup.languageId ? { languageId: backup.languageId } : {}), ...(backup.contentType ? { contentType: backup.contentType } : {}), ...(backup.label ? { label: backup.label } : {}) } satisfies StoredBackup;
-		if (!database) { this.fallback.set(record.key, record); return; }
-		const transaction = database.transaction(STORE_NAME, "readwrite");
-		transaction.objectStore(STORE_NAME).put(record);
-		await transactionDone(transaction);
+		const record = { key, workspaceId, resource: backup.resource.toString(), kind: backup.kind, content: backup.content, updatedAt: backup.updatedAt, revision: generateUuid(), ...(backup.languageId ? { languageId: backup.languageId } : {}), ...(backup.contentType ? { contentType: backup.contentType } : {}), ...(backup.label ? { label: backup.label } : {}) } satisfies StoredBackup;
+		if (!database) {
+			if (!sameVersion(this.fallback.get(key), expected)) throw new BackupError('conflict');
+			this.fallback.set(key, record);
+		} else {
+			const transaction = database.transaction(STORE_NAME, 'readwrite');
+			const store = transaction.objectStore(STORE_NAME);
+			const reading = store.get(key) as IDBRequest<StoredBackup | undefined>;
+			let conflict = false;
+			reading.onsuccess = () => {
+				if (!sameVersion(reading.result, expected)) {
+					conflict = true;
+					transaction.abort();
+					return;
+				}
+				store.put(record);
+			};
+			try { await transactionDone(transaction); }
+			catch (error) { if (conflict) throw new BackupError('conflict'); throw error; }
+		}
+		this.observed.set(key, record);
 	}
 
 	async delete(resource: URI): Promise<void> {
-		const workspaceId = this.workspaceId;
-		const database = await this.database;
-		if (!database) { this.fallback.delete(backupKey(workspaceId, resource)); return; }
-		const transaction = database.transaction(STORE_NAME, "readwrite");
-		transaction.objectStore(STORE_NAME).delete(backupKey(workspaceId, resource));
-		await transactionDone(transaction);
+		const expected = this.observed.get(backupKey(this.workspaceId, resource));
+		// An unopened recovery record is not evidence that this writer may discard it.
+		if (expected) await this.deleteRecordIfUnchanged(expected);
 	}
 
 	switchWorkspace(workspaceId: string): void {
 		if (!workspaceId.trim()) throw new TypeError("Working-copy backup service requires a workspace id");
 		this.workspaceId = workspaceId;
+		this.observed.clear();
 	}
 
 	/** Migration may remove only the source version acknowledged by the new storage owner. */
 	async deleteIfUnchanged(backup: WorkingCopyBackup): Promise<void> {
-		const key = backupKey(this.workspaceId, backup.resource);
+		const expected = this.snapshots.get(backup) ?? { ...backup, key: backupKey(this.workspaceId, backup.resource), workspaceId: this.workspaceId, resource: backup.resource.toString() };
+		await this.deleteRecordIfUnchanged(expected);
+	}
+
+	private async deleteRecordIfUnchanged(expected: StoredBackup): Promise<void> {
+		const key = expected.key;
 		const database = await this.database;
 		if (!database) {
 			const record = this.fallback.get(key);
-			if (record && matchesBackup(record, backup)) this.fallback.delete(key);
-			return;
+			if (record && !sameVersion(record, expected)) throw new BackupError('conflict');
+			this.fallback.delete(key);
+		} else {
+			const transaction = database.transaction(STORE_NAME, 'readwrite');
+			const store = transaction.objectStore(STORE_NAME);
+			const reading = store.get(key) as IDBRequest<StoredBackup | undefined>;
+			let conflict = false;
+			reading.onsuccess = () => {
+				if (!reading.result) return;
+				if (sameVersion(reading.result, expected)) store.delete(key);
+				else conflict = true;
+			};
+			await transactionDone(transaction);
+			if (conflict) throw new BackupError('conflict');
 		}
-		const transaction = database.transaction(STORE_NAME, 'readwrite');
-		const store = transaction.objectStore(STORE_NAME);
-		const reading = store.get(key) as IDBRequest<StoredBackup | undefined>;
-		reading.onsuccess = () => { if (reading.result && matchesBackup(reading.result, backup)) store.delete(key); };
-		await transactionDone(transaction);
+		if (sameVersion(this.observed.get(key), expected)) this.observed.delete(key);
 	}
 }
 
-function matchesBackup(record: StoredBackup, backup: WorkingCopyBackup): boolean {
-	return record.kind === backup.kind && record.content === backup.content && record.updatedAt === backup.updatedAt
-		&& record.languageId === backup.languageId && record.contentType === backup.contentType && record.label === backup.label;
+function sameVersion(record: StoredBackup | undefined, expected: StoredBackup | undefined): boolean {
+	if (!record || !expected) return record === expected;
+	return record.revision === expected.revision && record.kind === expected.kind && record.content === expected.content && record.updatedAt === expected.updatedAt
+		&& record.languageId === expected.languageId && record.contentType === expected.contentType && record.label === expected.label;
 }
 
 function backupKey(workspaceId: string, resource: URI): string {

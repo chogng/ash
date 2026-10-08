@@ -13,6 +13,14 @@ export interface ITextModelSaveParticipant {
 	participate(model: TextModel, reason: SaveReason, signal: AbortSignal): Promise<void>;
 }
 
+/** Completes recovery bookkeeping after the file has accepted this text. */
+export type TextModelSaveCompletion = (savedText: string) => Promise<void>;
+
+/** Prepares durable recovery content after editing participants and before file publication. */
+export interface ITextModelSaveCompletionParticipant {
+	prepare(model: TextModel, signal: AbortSignal): Promise<TextModelSaveCompletion | undefined>;
+}
+
 /** The minimum identity and bootstrap data needed to acquire a text model. */
 export interface TextModelInput {
 	readonly resource: URI;
@@ -59,6 +67,7 @@ export interface ITextModelResourceService<TInput extends TextModelInput = TextM
 /** Shared open file models and their resource and language lifecycle. */
 export interface IFileTextModelService extends ITextModelResourceService {
 	addSaveParticipant(participant: ITextModelSaveParticipant): IDisposable;
+	addSaveCompletionParticipant(participant: ITextModelSaveCompletionParticipant): IDisposable;
 	readonly onModelAdded: Event<TextModel>;
 	readonly onModelRemoved: Event<TextModel>;
 	readonly onModelLanguageChanged: Event<{ readonly model: TextModel; readonly oldLanguageId: string; }>;
@@ -80,5 +89,15 @@ export class TextModelConflictError extends Error {
 	constructor(readonly resource: URI) {
 		super(`Cannot save '${resource.toString()}' because it changed outside the editor`);
 		this.name = "TextModelConflictError";
+	}
+}
+
+/** The file and its revision were saved; only recovery bookkeeping needs retrying. */
+export class TextModelSaveCompletionError extends Error {
+	public readonly fileSaved = true;
+
+	constructor(public readonly resource: URI, cause: unknown) {
+		super(cause instanceof Error ? cause.message : String(cause), { cause });
+		this.name = 'TextModelSaveCompletionError';
 	}
 }
