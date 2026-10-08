@@ -33,6 +33,7 @@ import type { IContextMenuDelegate } from "../../../../../base/browser/contextme
 import { AnchorAxisAlignment, AnchorPosition } from "../../../../../base/common/layout.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { isMacintosh } from '../../../../../base/common/platform.js';
 import { IMenuService, MenuId, registerAction2 } from "../../../../../platform/actions/common/actions.js";
 import { ICommandService } from "../../../../../platform/commands/common/commands.js";
 import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
@@ -1241,7 +1242,7 @@ test('SCM group keyboard menu uses the focused group and Escape retains its expa
 	assert.equal(browser.window.document.activeElement, tree);
 	assert.equal(group('Staged Changes').getAttribute('aria-expanded'), 'true');
 	assert.equal(folder('src', 'Staged Changes').getAttribute('aria-expanded'), 'true');
-	key('ContextMenu');
+	key('F10', true);
 	await fixture.lastMenu().getActions().find(action => action.id === 'workbench.scm.action.collapseAll')!.run();
 	assert.equal(group('Staged Changes').getAttribute('aria-expanded'), 'true');
 	assert.equal(folder('src', 'Staged Changes').getAttribute('aria-expanded'), 'false');
@@ -1249,11 +1250,31 @@ test('SCM group keyboard menu uses the focused group and Escape retains its expa
 	assert.equal(browser.window.document.activeElement, tree);
 });
 
+test('SCM group ContextMenu preserves the macOS host path and opens the group on other platforms', async () => {
+	using fixture = await createResourceGroupMenuFixture();
+	const { browser, tree, key } = fixture;
+	tree.focus();
+	key('Home');
+	const focus = tree.getAttribute('aria-activedescendant');
+	let hostEvent: KeyboardEvent | undefined;
+	const hostListener = (event: KeyboardEvent): void => { hostEvent = event; };
+	browser.window.document.body.addEventListener('keydown', hostListener);
+	fixture.add(toDisposable(() => browser.window.document.body.removeEventListener('keydown', hostListener)));
+	const event = new browser.window.KeyboardEvent('keydown', { key: 'ContextMenu', bubbles: true, cancelable: true });
+	tree.dispatchEvent(event);
+	assert.equal(fixture.menuCount(), isMacintosh ? 0 : 1);
+	assert.equal(event.defaultPrevented, !isMacintosh);
+	assert.equal(hostEvent, isMacintosh ? event : undefined);
+	assert.equal(tree.getAttribute('aria-activedescendant'), focus);
+	assert.equal(fixture.folder('src', 'Staged Changes').getAttribute('aria-expanded'), 'true');
+	assert.equal(browser.window.document.activeElement, tree);
+});
+
 test('SCM group menus reject captured contexts after a repository switch, snapshot replacement or disposal', async () => {
 	using fixture = await createResourceGroupMenuFixture();
 	fixture.tree.focus();
 	fixture.key('Home');
-	fixture.key('ContextMenu');
+	fixture.key('F10', true);
 	const action = fixture.lastMenu().getActions().find(action => action.id === 'workbench.scm.action.collapseAll')!;
 	fixture.views.selectRepository('second');
 	const newFocus = fixture.tree.querySelector<HTMLButtonElement>('[aria-label="Open root.ts"]')!;
@@ -1271,13 +1292,13 @@ test('SCM group menus reject captured contexts after a repository switch, snapsh
 	replacedHeading.dispatchEvent(new fixture.browser.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
 	assert.equal(fixture.menuCount(), beforeRefreshMenuCount, 'Replaced rows must release their context-menu listeners');
 	fixture.key('Home');
-	fixture.key('ContextMenu');
+	fixture.key('F10', true);
 	const removedGroupAction = fixture.lastMenu().getActions().find(action => action.id === 'workbench.scm.action.collapseAll')!;
 	fixture.removeGroup('Staged Changes');
 	await removedGroupAction.run();
 	assert.equal(fixture.folder('src').getAttribute('aria-expanded'), 'true');
 	fixture.key('Home');
-	fixture.key('ContextMenu');
+	fixture.key('F10', true);
 	const disposedAction = fixture.lastMenu().getActions().find(action => action.id === 'workbench.scm.action.collapseAll')!;
 	const menuCount = fixture.menuCount();
 	const retainedHeading = fixture.group('Changes').querySelector('.ash-scm-section-label')!;
@@ -1301,7 +1322,7 @@ test('SCM group Collapse All is limited to tree group menus and excluded from th
 	fixture.pane.viewMode = 'tree';
 	fixture.key('Home');
 	fixture.key('ArrowDown');
-	fixture.key('ContextMenu');
+	fixture.key('F10', true);
 	assert.equal(fixture.menuCount(), 0, 'Directory focus is not a group context');
 	assert.equal(fixture.folder('src').getAttribute('aria-expanded'), 'true');
 });
@@ -1313,7 +1334,7 @@ test('SCM group menu closure preserves focus transferred outside the pane in the
 	browser.window.document.body.append(outside);
 	tree.focus();
 	key('Home');
-	key('ContextMenu');
+	key('F10', true);
 	assert.equal(browser.window.document.activeElement?.getAttribute('role'), 'menu');
 	outside.focus();
 	fixture.hideMenu();
@@ -1328,7 +1349,7 @@ test('SCM group menu closure does not focus a hidden pane', async () => {
 	browser.window.document.body.append(outside);
 	tree.focus();
 	key('Home');
-	key('ContextMenu');
+	key('F10', true);
 	pane.setVisible(false);
 	outside.focus();
 	fixture.hideMenu();
@@ -1343,7 +1364,7 @@ test('SCM group menu closure after a snapshot removes its anchor does not steal 
 	browser.window.document.body.append(outside);
 	tree.focus();
 	key('Home');
-	key('ContextMenu');
+	key('F10', true);
 	const anchor = browser.window.document.getElementById(tree.getAttribute('aria-activedescendant')!)!;
 	outside.focus();
 	fixture.removeGroup('Staged Changes');
@@ -1364,7 +1385,7 @@ test('SCM group real menu returns focus on Escape and on action activation', asy
 	menu.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
 	assert.equal(browser.window.document.activeElement, tree);
 	assert.equal(fixture.folder('src', 'Staged Changes').getAttribute('aria-expanded'), 'true');
-	key('ContextMenu');
+	key('F10', true);
 	browser.window.document.querySelector<HTMLElement>('[role="menuitem"]')!.click();
 	assert.equal(browser.window.document.activeElement, tree);
 	assert.equal(fixture.folder('src', 'Staged Changes').getAttribute('aria-expanded'), 'false');

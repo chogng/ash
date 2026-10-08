@@ -96,14 +96,24 @@ test.describe('SCM editor groups', () => {
 		await tree.press('Home');
 		const focus = await tree.getAttribute('aria-activedescendant');
 		const before = await groupRepositoryState(testWorkspace.directory);
+		if (process.platform === 'darwin') {
+			await tree.press('ContextMenu');
+			await expect(page.getByRole('menuitem', { name: 'Collapse All', exact: true })).toHaveCount(0);
+			await expect(tree.getByRole('button', { name: 'Open staged changes for src/nested/two.ts', exact: true })).toBeVisible();
+			await page.keyboard.press('Escape');
+			await expect(tree).toBeFocused();
+			await expect(tree).toHaveAttribute('aria-activedescendant', focus!);
+		}
+		for (const key of ['Shift+F10', 'Control+Shift+F10']) {
+			await tree.press(key);
+			await expect(page.getByRole('menuitem', { name: 'Collapse All', exact: true })).toBeVisible();
+			await page.keyboard.press('Escape');
+			await expect(page.getByRole('menuitem', { name: 'Collapse All', exact: true })).toHaveCount(0);
+			await expect(tree).toBeFocused();
+			await expect(tree).toHaveAttribute('aria-activedescendant', focus!);
+			await expect(tree.getByRole('button', { name: 'Open staged changes for src/nested/two.ts', exact: true })).toBeVisible();
+		}
 		await tree.press('Shift+F10');
-		await expect(page.getByRole('menuitem', { name: 'Collapse All', exact: true })).toBeVisible();
-		await page.keyboard.press('Escape');
-		await expect(page.getByRole('menuitem', { name: 'Collapse All', exact: true })).toHaveCount(0);
-		await expect(tree).toBeFocused();
-		await expect(tree).toHaveAttribute('aria-activedescendant', focus!);
-		await expect(tree.getByRole('button', { name: 'Open staged changes for src/nested/two.ts', exact: true })).toBeVisible();
-		await tree.press('ContextMenu');
 		await page.getByRole('menuitem', { name: 'Collapse All', exact: true }).click();
 		await expect(tree.getByRole('button', { name: 'Open staged changes for src/nested/two.ts', exact: true })).toHaveCount(0);
 		await expect(tree.getByRole('button', { name: 'Open changes for src/nested/two.ts', exact: true })).toBeVisible();
