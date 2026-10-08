@@ -152,7 +152,7 @@ jobs:
         run: pnpm run smoketest-no-compile
       - name: Test Academic workbench
         if: matrix.surface == 'electron'
-        run: pnpm exec playwright test --project=electron-academic-ui
+        run: pnpm exec playwright test test/smoke/areas/academic/academic-workbench.spec.ts --project=electron-ui
       - name: Test connected Academic document editing
         if: matrix.surface == 'electron'
         run: pnpm exec node test/smoke/run.ts electron-editor-app-server
