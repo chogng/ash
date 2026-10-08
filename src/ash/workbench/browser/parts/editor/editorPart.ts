@@ -372,6 +372,11 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	public async removeGroup(group: IEditorGroupView | EditorGroupId): Promise<boolean> {
 		const host = this.groupHosts.get(typeof group === 'string' ? group : group.id);
 		if (!host) return true;
+		// Layout-only owners can replace this group synchronously in the same turn.
+		if (!this.beforeCloseEditor && host.group.editors.every(editor => !editor.isDirty)) {
+			this.removeGroupHost(host);
+			return true;
+		}
 		for (const input of [...host.group.inputs]) {
 			if (!await host.group.confirmCloseEditor(input, [host.group.id])) return false;
 		}

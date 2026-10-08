@@ -865,6 +865,51 @@ test('closing one custom view keeps the dirty document, while closing all views 
 	} finally { dom.window.close(); }
 });
 
+test('EditorPart keeps unguarded clean group replacement synchronous for layout consumers', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		const registry = new EditorPaneRegistry();
+		using registration = registry.registerEditorPane(descriptor('test.layout', '.txt', () => new TestEditorPane('test.layout')));
+		using editor = createEditorPart(dom.window.document.body, { registry, editorLimit: 1 });
+		await editor.openEditor(input('C:/layout/first.txt'));
+		const oldPane = await editor.openEditor(input('C:/layout/second.txt'), {}, 'sideGroup') as TestEditorPane;
+		const oldGroup = editor.activeGroup;
+		const closing = editor.removeGroup(oldGroup);
+		const replacement = input('C:/layout/third.txt');
+		const newPane = await editor.openEditor(replacement, {}, 'sideGroup') as TestEditorPane;
+		assert.equal(await closing, true);
+		assert.equal(oldPane.disposed, true);
+		assert.equal(newPane.disposed, false);
+		assert.equal(editor.activeInput, replacement);
+		assert.equal(editor.groups.includes(oldGroup), false);
+	} finally { dom.window.close(); }
+});
+
+test('EditorPart confirms an inactive dirty editor before unguarded group removal', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		const registry = new EditorPaneRegistry();
+		const dirty = input('C:/layout/draft.txt');
+		using copy = new TestWorkingCopy(dirty.resource);
+		using dirtyRegistration = registry.registerEditorPane(descriptor('test.draft', '.txt', () => new TestEditorPane('test.draft', copy)));
+		using cleanRegistration = registry.registerEditorPane(descriptor('test.clean', '.md', () => new TestEditorPane('test.clean')));
+		const dialogs = new TestFileDialogService(ConfirmResult.CANCEL, ConfirmResult.DONT_SAVE);
+		using editor = createEditorPart(dom.window.document.body, { registry, fileDialogService: dialogs });
+		await editor.openEditor(dirty, {}, 'sideGroup');
+		copy.markDirty();
+		const clean = input('C:/layout/clean.md');
+		await editor.openEditor(clean);
+		const group = editor.activeGroup;
+		assert.equal(await editor.removeGroup(group), false);
+		assert.equal(editor.groups.includes(group), true);
+		assert.deepEqual(group.inputs, [dirty, clean]);
+		assert.equal(copy.isDirty, true);
+		assert.equal(await editor.removeGroup(group), true);
+		assert.equal(copy.revertCount, 1);
+		assert.equal(editor.groups.includes(group), false);
+	} finally { dom.window.close(); }
+});
+
 for (const target of ['tab', 'modal', 'all', 'group'] as const) {
 	test(`save recovery close gate waits before closing a clean ${target}`, async () => {
 		using fixture = await createSaveCloseFixture(target);
