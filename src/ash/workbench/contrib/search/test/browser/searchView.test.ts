@@ -41,6 +41,10 @@ import { BrowserClipboardService } from "../../../../../platform/clipboard/brows
 import { ILabelService, LabelService } from "../../../../../platform/label/common/labelService.js";
 import { isWindows, OperatingSystem } from "../../../../../base/common/platform.js";
 import type { IContextMenuDelegate } from "../../../../../base/browser/contextmenu.js";
+import { MenuId } from "../../../../../platform/actions/common/actions.js";
+import { MenuService } from "../../../../../platform/actions/common/menuService.js";
+import type { IAction } from "../../../../../base/common/actions.js";
+import '../../browser/searchActionsTopBar.js';
 
 const matches: readonly ContentSearchMatch[] = [
 	{
@@ -1017,6 +1021,123 @@ test('Copy Path preserves a running search and propagates clipboard failures wit
 		assert.deepEqual({ written, matches: file.matches.map(match => match.id), aborted, busy: view.getControl().element.getAttribute('aria-busy') }, { written: ['/workspace/src/main.ts'], matches: before, aborted: false, busy: 'true' });
 		finish!();
 		await waitFor(() => view.getSearchResultSnapshot()?.matchCount === 2);
+	} finally {
+		finish?.();
+		browser.window.close();
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
+	}
+});
+
+test('Expand All runs for empty, partially collapsed and multi-root results without changing selection or outside focus', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	const globals = installDomGlobals(browser);
+	let searched = 0;
+	try {
+		using store = new DisposableStore();
+		const workspace = store.add(new WorkspaceContextService({
+			id: 'multiple', folders: [
+				{ id: 'workspace', name: 'Workspace', index: 0, uri: URI.file('/workspace') },
+				{ id: 'other', name: 'Other', index: 1, uri: URI.file('/other') },
+			]
+		}));
+		const delivered = [...matches, { ...matches[0]!, dirId: 'other', path: 'deep/nested/other.ts' }];
+		const services = createServices(store, browser, {
+			search: async (_query, options) => {
+				searched++;
+				options?.onProgress?.(delivered);
+				return { resultCount: delivered.length, limitHit: false, error: undefined };
+			},
+		}, undefined, workspace);
+		const { SearchView } = await import('../../browser/searchView.js');
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
+		registerView(services, view);
+		const command = () => services.get(ICommandService).executeCommand('search.action.expandSearchResults');
+		await command();
+		assert.equal(view.searchResult.count, 0);
+		const queryInput = input(view.element, 'Search workspace');
+		queryInput.value = 'needle';
+		view.element.querySelector('form')!.dispatchEvent(new browser.window.Event('submit', { cancelable: true }));
+		await waitFor(() => view.getSearchResultSnapshot()?.matchCount === 3);
+		let actions: readonly IAction[] = [];
+		services.get(IContextMenuService).showContextMenu = delegate => { actions = delegate.getActions?.() ?? []; };
+		view.element.querySelector<HTMLButtonElement>('button[aria-label="More Actions"]')!.click();
+		await actions.find(action => action.id === 'search.treeView')!.run();
+		const tree = view.getControl();
+		const selected = tree.model.rootNodes[0]!.element;
+		tree.setFocus(selected.id);
+		tree.setSelection([selected.id]);
+		const before = view.getSearchResultSnapshot();
+		const otherRoot = tree.model.rootNodes[1]!;
+		tree.collapseRecursive(otherRoot.id);
+		queryInput.focus();
+		await command();
+		await command();
+		assert.deepEqual({
+			visibleMatches: tree.model.visibleNodes.filter(node => node.element.kind === 'match').length,
+			selection: tree.selection.map(element => element.id), focus: tree.focus?.id,
+			snapshot: view.getSearchResultSnapshot(), searched, inputFocused: browser.window.document.activeElement === queryInput,
+		}, { visibleMatches: 3, selection: [selected.id], focus: selected.id, snapshot: before, searched: 1, inputFocused: true });
+		for (const node of tree.model.rootNodes) { tree.collapseRecursive(node.id); }
+		view.setVisible(false);
+		await command();
+		assert.equal(tree.model.visibleNodes.filter(node => node.element.kind === 'match').length, 0);
+		view.setVisible(true);
+		await command();
+		assert.equal(tree.model.visibleNodes.filter(node => node.element.kind === 'match').length, 3);
+	} finally {
+		browser.window.close();
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
+	}
+});
+
+test('Expand All palette follows late batches, preserves hidden retained state and clears on owner disposal', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	const globals = installDomGlobals(browser);
+	let finish: (() => void) | undefined;
+	let aborted = false;
+	try {
+		using store = new DisposableStore();
+		const services = createServices(store, browser, {
+			search: async (_query, options) => {
+				options?.signal?.addEventListener('abort', () => { aborted = true; }, { once: true });
+				options?.onProgress?.(matches);
+				await new Promise<void>(resolve => { finish = () => { options?.onProgress?.([{ ...matches[0]!, path: 'late.ts' }]); resolve(); }; });
+				return { resultCount: 3, limitHit: false, error: undefined };
+			},
+		});
+		const { SearchView } = await import('../../browser/searchView.js');
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
+		registerView(services, view);
+		const menus = services.createInstance(MenuService);
+		const palette = () => menus.getMenuActions(MenuId.CommandPalette).flatMap(([, actions]) => actions).find(action => action.id === 'search.action.expandSearchResults');
+		assert.equal(palette(), undefined);
+		input(view.element, 'Search workspace').value = 'needle';
+		view.element.querySelector('form')!.dispatchEvent(new browser.window.Event('submit', { cancelable: true }));
+		await waitFor(() => finish !== undefined);
+		assert.equal(palette(), undefined);
+		const tree = view.getControl();
+		tree.collapseRecursive(tree.model.rootNodes[0]!.id);
+		assert.deepEqual({ label: palette()?.label, enabled: palette()?.enabled, busy: tree.element.getAttribute('aria-busy'), aborted }, {
+			label: 'Search: Expand All', enabled: true, busy: 'true', aborted: false,
+		});
+		await palette()!.run();
+		assert.equal(palette(), undefined);
+		finish!();
+		await waitFor(() => view.getSearchResultSnapshot()?.matchCount === 3);
+		assert.deepEqual({ expandedMatches: tree.model.visibleNodes.filter(node => node.element.kind === 'match').length, aborted }, { expandedMatches: 3, aborted: false });
+		for (const node of tree.model.rootNodes) { tree.collapseRecursive(node.id); }
+		assert.equal(palette()?.enabled, true);
+		view.setVisible(false);
+		assert.equal(palette()?.enabled, true);
+		await palette()!.run();
+		assert.deepEqual({ visibleMatches: tree.model.visibleNodes.filter(node => node.element.kind === 'match').length, visible: view.isVisible() }, { visibleMatches: 0, visible: false });
+		view.setVisible(true);
+		assert.equal(palette()?.enabled, true);
+		view.dispose();
+		await services.get(ICommandService).executeCommand('search.action.expandSearchResults');
+		assert.deepEqual({ palette: palette(), hasResults: services.get(IContextKeyService).getValue('hasSearchResult'), hasCollapsible: services.get(IContextKeyService).getValue('viewHasSomeCollapsibleResult') }, {
+			palette: undefined, hasResults: false, hasCollapsible: false,
+		});
 	} finally {
 		finish?.();
 		browser.window.close();

@@ -1,5 +1,70 @@
 import { expect, test } from '@playwright/test';
 
+test('Expand All replaces the collapsed toolbar slot, preserves keyboard focus and expands both roots', async ({ page }) => {
+	await page.goto('/search.html');
+	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
+	const collapse = page.getByRole('button', { name: 'Collapse all results', exact: true });
+	const expand = page.getByRole('button', { name: 'Expand All', exact: true });
+	await expect(collapse).toBeDisabled();
+	await expect(expand).toHaveCount(0);
+	await query.fill('中文');
+	await query.press('Enter');
+	await expect(page.getByRole('status')).toHaveText('3 results');
+	const tree = page.getByRole('tree', { name: 'Search results', exact: true });
+	await page.getByRole('toolbar', { name: 'Search result actions', exact: true }).getByRole('button', { name: 'More Actions', exact: true }).click();
+	await page.evaluate(() => window.ashSearchIntegration.selectTreeView());
+	const before = await page.evaluate(() => window.ashSearchIntegration.snapshot());
+	await collapse.focus();
+	await collapse.press('Enter');
+	await expect(expand).toBeFocused();
+	await expect(collapse).toHaveCount(0);
+	await expect(tree.locator('.ash-search-match')).toHaveCount(0);
+	await expand.press('Enter');
+	await expect(collapse).toBeFocused();
+	await expect(tree.locator('.ash-search-match')).toHaveCount(3);
+	await expect(tree.locator('[aria-expanded="false"]')).toHaveCount(0);
+	expect(await page.evaluate(() => window.ashSearchIntegration.snapshot())).toEqual(before);
+	expect(await page.evaluate(() => ({ queries: window.ashSearchIntegration.queries.length, opened: window.ashSearchIntegration.opened.length }))).toEqual({ queries: 1, opened: 0 });
+	await tree.getByRole('treeitem', { name: 'other', exact: true }).locator('.ash-tree-twistie').click();
+	await expect(tree).toBeFocused();
+	await expect(collapse).toBeVisible();
+	await expect(expand).toHaveCount(0);
+	await query.focus();
+	await collapse.evaluate((button: HTMLButtonElement) => button.click());
+	await expect(query).toBeFocused();
+	await expand.evaluate((button: HTMLButtonElement) => button.click());
+	await expect(query).toBeFocused();
+	await expect(tree.locator('.ash-search-match')).toHaveCount(3);
+});
+
+test('Expand All updates after a late batch and its Chinese action and help stay discoverable', async ({ page }) => {
+	await page.goto('/search.html?locale=zh-CN');
+	const query = page.getByRole('textbox', { name: '搜索工作区', exact: true });
+	await query.fill('slow');
+	await query.press('Enter');
+	const tree = page.getByRole('tree');
+	await expect(tree).toHaveAttribute('aria-busy', 'true');
+	await page.getByRole('button', { name: '收起所有结果', exact: true }).click();
+	await expect(page.getByRole('button', { name: '全部展开', exact: true })).toBeVisible();
+	const oldExpand = await page.getByRole('button', { name: '全部展开', exact: true }).elementHandle();
+	expect(oldExpand).not.toBeNull();
+	await page.evaluate(() => window.ashSearchIntegration.finishLateSearch());
+	await expect(tree).toHaveAttribute('aria-busy', 'false');
+	await expect(page.getByRole('button', { name: '收起所有结果', exact: true })).toBeVisible();
+	await expect(page.getByRole('button', { name: '全部展开', exact: true })).toHaveCount(0);
+	await oldExpand!.evaluate((button: HTMLButtonElement) => button.click());
+	await expect(tree.locator('.ash-search-match')).toHaveCount(1);
+	await oldExpand!.dispose();
+	await page.getByRole('button', { name: '收起所有结果', exact: true }).click();
+	await page.getByRole('button', { name: '全部展开', exact: true }).click();
+	await expect(tree.locator('.ash-search-match')).toHaveCount(2);
+	expect(await page.evaluate(() => window.ashSearchIntegration.help())).toContain('全部展开');
+	expect(await page.evaluate(() => window.ashSearchIntegration.cancelled())).toBe(0);
+	await page.evaluate(() => window.ashSearchIntegration.closeWorkspace());
+	await expect(page.getByRole('button', { name: '收起所有结果', exact: true })).toBeDisabled();
+	await expect(page.getByRole('button', { name: '全部展开', exact: true })).toHaveCount(0);
+});
+
 test('Copy Path shortcut copies the first selected file and ignores input focus, matches and extra modifiers', async ({ page }) => {
 	await page.goto('/search.html');
 	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });

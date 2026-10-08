@@ -8,9 +8,12 @@ export const enum SearchCommandIds {
 	CopyAllCommandId = 'search.action.copyAll',
 	CopyMatchCommandId = 'search.action.copyMatch',
 	CopyPathCommandId = 'search.action.copyPath',
+	ExpandSearchResultsActionId = 'search.action.expandSearchResults',
 }
 
 export const SearchContext = {
+	HasSearchResults: new RawContextKey<boolean>('hasSearchResult', false),
+	ViewHasSomeCollapsibleKey: new RawContextKey<boolean>('viewHasSomeCollapsibleResult', false),
 	SearchViewFocusedKey: new RawContextKey<boolean>('searchViewletFocus', false),
 	FileMatchOrMatchFocusKey: new RawContextKey<boolean>('fileMatchOrMatchFocus', false),
 	FileMatchOrFolderMatchWithResourceFocusKey: new RawContextKey<boolean>('fileMatchOrFolderMatchWithResourceFocus', false),

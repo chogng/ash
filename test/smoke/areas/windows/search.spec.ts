@@ -720,3 +720,53 @@ test('Search Copy Path copies file and folder paths through real search and the 
 	await expect(workbench.search.status).toHaveText('2 results');
 	for (const [path, content] of contents) { expect(await readFile(join(testWorkspace.directory, path), 'utf8')).toBe(content); }
 });
+
+test('Search Expand All exposes its command only for fully collapsed results and expands the actual backend tree', async ({ target, application, workbench, testWorkspace }) => {
+	test.skip(target.appServerMode !== 'required', 'Uses an actual workspace search backend.');
+	const contents = [['a/main.ts', 'ash_expand_all_token main\n'], ['b/nested/other.ts', 'ash_expand_all_token other\n']] as const;
+	for (const [path, content] of contents) {
+		await mkdir(dirname(join(testWorkspace.directory, path)), { recursive: true });
+		await writeFile(join(testWorkspace.directory, path), content);
+	}
+	const page = workbench.page;
+	await workbench.search.open();
+	await workbench.search.search('ash_expand_all_token');
+	await expect(workbench.search.status).toHaveText('2 results');
+	const tree = workbench.search.element.getByRole('tree');
+	const toolbar = page.getByRole('toolbar', { name: 'Search result actions', exact: true });
+	await workbench.menus.select(application, () => toolbar.getByRole('button', { name: 'More Actions', exact: true }).click(), ['View as tree']);
+	await workbench.quickaccess.open('>search.action.expandSearchResults');
+	await expect(workbench.quickaccess.items).toHaveCount(0);
+	await workbench.quickaccess.close();
+	const collapse = toolbar.getByRole('button', { name: 'Collapse all results', exact: true });
+	await collapse.focus();
+	await collapse.press('Enter');
+	await expect(toolbar.getByRole('button', { name: 'Expand All', exact: true })).toBeFocused();
+	await expect(tree.locator('.ash-search-match')).toHaveCount(0);
+	await workbench.quickaccess.runCommand('search.action.expandSearchResults');
+	await expect(tree.locator('.ash-search-match')).toHaveCount(2);
+	await expect(tree.locator('[aria-expanded="false"]')).toHaveCount(0);
+	await expect(collapse).toBeFocused();
+	await tree.getByRole('treeitem', { name: 'b', exact: true }).locator('.ash-tree-twistie').click();
+	await expect(tree).toBeFocused();
+	await expect(collapse).toBeVisible();
+	await expect(toolbar.getByRole('button', { name: 'Expand All', exact: true })).toHaveCount(0);
+	await workbench.search.query.focus();
+	await collapse.evaluate((button: HTMLButtonElement) => button.click());
+	await expect(workbench.search.query).toBeFocused();
+	await toolbar.getByRole('button', { name: 'Expand All', exact: true }).evaluate((button: HTMLButtonElement) => button.click());
+	await expect(workbench.search.query).toBeFocused();
+	await expect(tree.locator('.ash-search-match')).toHaveCount(2);
+	await expect(workbench.search.status).toHaveText('2 results');
+	await collapse.click();
+	await expect(tree.locator('.ash-search-match')).toHaveCount(0);
+	await workbench.openExplorer();
+	await expect(workbench.search.element).toBeHidden();
+	await workbench.quickaccess.runCommand('search.action.expandSearchResults');
+	await expect(workbench.search.element).toBeHidden();
+	await expect(workbench.search.element.locator('.ash-search-match')).toHaveCount(0);
+	await workbench.search.open();
+	await toolbar.getByRole('button', { name: 'Expand All', exact: true }).click();
+	await expect(tree.locator('.ash-search-match')).toHaveCount(2);
+	for (const [path, content] of contents) { expect(await readFile(join(testWorkspace.directory, path), 'utf8')).toBe(content); }
+});

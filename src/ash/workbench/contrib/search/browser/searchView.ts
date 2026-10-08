@@ -59,6 +59,8 @@ export class SearchView extends ViewPane {
 	private readonly tree: WorkbenchObjectTree<RenderableMatch>;
 	private readonly resultFocused: IContextKey<boolean>;
 	private readonly resourceResultFocused: IContextKey<boolean>;
+	private readonly hasSearchResultsKey: IContextKey<boolean>;
+	private readonly hasSomeCollapsibleKey: IContextKey<boolean>;
 	private readonly resultActions: WorkbenchToolBar;
 	private readonly rowResources = this._register(new DisposableMap<HTMLElement, DisposableStore>());
 	private readonly resultMenu = this._register(new MutableDisposable());
@@ -92,6 +94,10 @@ export class SearchView extends ViewPane {
 		this.result = new SearchResultImpl(workspaceContext.getWorkspace().folders);
 		this.contentElement.classList.add("ash-search");
 		const scopedContext = this._register(contextKeyService.createScoped(this.element));
+		// The command palette lives outside this pane; its derived flags belong to the window's Search owner.
+		this.hasSearchResultsKey = SearchContext.HasSearchResults.bindTo(contextKeyService);
+		this.hasSomeCollapsibleKey = SearchContext.ViewHasSomeCollapsibleKey.bindTo(contextKeyService);
+		this._register(toDisposable(() => { this.hasSearchResultsKey.reset(); this.hasSomeCollapsibleKey.reset(); }));
 		const focused = SearchContext.SearchViewFocusedKey.bindTo(scopedContext);
 		this._register(addDisposableListener(this.element, "focusin", () => focused.set(true)));
 		this._register(addDisposableListener(this.element, "focusout", event => {
@@ -240,6 +246,7 @@ export class SearchView extends ViewPane {
 		this.updateResultActions();
 		this._register(this.tree.onDidChangeFocus(() => this.updateResultActions()));
 		this._register(this.tree.onDidChangeSelection(() => this.updateResultActions()));
+		this._register(this.tree.onDidChangeCollapseState(() => this.updateResultActions()));
 		this._register(this.onDidChangeBodyVisibility(visible => { if (!visible) { this.resultMenu.clear(); } }));
 		this._register(addDisposableListener(this.tree.domNode, "keydown", event => {
 			if (event.defaultPrevented || event.isComposing || event.ctrlKey || event.altKey || event.metaKey || event.target !== this.tree.element) { return; }
@@ -526,6 +533,10 @@ export class SearchView extends ViewPane {
 		this.resultFocused.set(this.tree.focus !== undefined && !this.replaceController);
 		this.resourceResultFocused.set(this.tree.focus?.kind === "file" || this.tree.focus?.kind === "folder");
 		const hasResults = this.result.count > 0;
+		const hasSomeCollapsible = this.tree.model.visibleNodes.some(node => node.collapsible && !node.collapsed);
+		this.hasSearchResultsKey.set(hasResults);
+		this.hasSomeCollapsibleKey.set(hasSomeCollapsible);
+		const showExpandAll = hasResults && !hasSomeCollapsible;
 		const canReplace = hasResults && !this.searchController && !this.replaceController;
 		this.replaceActions.setActions([
 			{
@@ -571,12 +582,14 @@ export class SearchView extends ViewPane {
 				run: () => this.clearResults(),
 			},
 			{
+				// Keep the toolbar slot's identity so changing its operation preserves keyboard focus.
 				id: "search.collapse",
-				label: localize("search.collapse", "Collapse all results"),
-				tooltip: localize("search.collapse", "Collapse all results"),
-				icon: Lxicon.chevronUp,
+				label: showExpandAll ? localize("search.expandAll", "Expand All") : localize("search.collapse", "Collapse all results"),
+				tooltip: showExpandAll ? localize("search.expandAll", "Expand All") : localize("search.collapse", "Collapse all results"),
+				icon: showExpandAll ? Lxicon.chevronDown : Lxicon.chevronUp,
 				enabled: hasResults,
 				run: () => {
+					if (showExpandAll) { return this.commands.executeCommand(SearchCommandIds.ExpandSearchResultsActionId); }
 					for (const node of this.tree.model.rootNodes) { this.tree.collapseRecursive(node.id); }
 				},
 			},
