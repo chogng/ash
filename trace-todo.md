@@ -2,7 +2,7 @@
 
 Trace 已能读取和跟随 Agent 的持久执行历史。本路线在现有能力上，优先完成 **具体 Turn 定位 → 模型与工具关系 → 一致导出 → 离线复查**，让一次失败从会话入口一直查到原始证据。本文沿根目录 `TODO.md` 的 `.md` 扩展名使用 `trace-todo.md`，原内容完整保留在后半部分。接手时主树 `TODO.md` 含未提交内容，已只读保全；本任务未删除或覆盖。交付前只读核对，主树现文件与保全文字节一致。
 
-源码核对基线：2026-10-08，父任务确认的最新已发布 `main` 提交 `e05e17e93`。下文“现有”表示该基线源码已具备；已有能力与本轮改动分开列出，实际运行结果见验证摘要。
+初始源码核对基线：2026-10-08，父任务确认当时已发布的 `main` 提交 `e05e17e93`。交付分支随后跟进已先集成 SCM / Search 的 `main` `5db5dfcec`，Trace 的后端事实未在本批扩展。下文“现有”表示该基线源码已具备；已有能力与本轮改动分开列出，实际运行结果见验证摘要。
 
 ## Trace 现有能力
 
@@ -77,6 +77,24 @@ Trace 已能读取和跟随 Agent 的持久执行历史。本路线在现有能�
 ## 验证摘要（2026-10-08）
 
 独立 worktree 使用 `trace-todo.md`，原 `.md` 扩展名与 36,201 字节历史全文保留；本任务未改动接手时含未提交内容的主树 `TODO.md`；交付前现文件与保全文字节一致。本轮已经完成 P1 定位、P2 保存证据导航、P3 导出边界修复和 P4 可靠导入/离线复查的第一批闭环。正式 Web 与 Electron 各自一次通过 8 个场景，完整模型/工具/并行子任务调用链使用明确标注的本地 HTTP 模型 fixture。审批等待/超时、失败重试归组、带部分输出的流式取消、费用与分享脱敏继续保留验收项。
+
+### 审查修复与已发布 main 复验
+
+独立审查发现：Input 正文读取中隐藏 Trace，旧读取完成被 revision 丢弃；重新显示同一事件时，旧渲染身份却阻止重读。[编辑器](src/ash/workbench/contrib/trace/browser/agentTraceEditor.ts) 现只失效尚未完成读取的渲染状态，保留已加载正文与阅读位置；请求身份防止迟到旧读取清理新读取。[两个新回归](src/ash/workbench/contrib/trace/test/browser/agentTraceEditor.test.ts) 覆盖旧读取在恢复前/后完成，两种顺序都先红（只有一次 read）后绿（恰好第二次 read），再次隐藏/显示已加载正文不增加读取或重置位置。
+
+分支无冲突跟进已发布 `main` `5db5dfcec`，保留原 TODO 全文与既有共享 UI 迁移。当前基线的受影响检查已全部通过，实际执行源码检查点为 `f2a54bc57`；后续仅更新本节文档。最终退出记录为 [当前验证状态](.build/trace-validation/published-main-visibility-state.json)。前一次新增整窗截图驱动改变了 Sessions 分隔条几何，导致关闭按钮被拦截；已校正为保留窗口尺寸、对实际 Trace 区域截图，原行为断言与 45 秒超时不变。旧运行的失败和因新 main 发布而中断的记录继续保留。
+
+| 当前基线检查 | 实际结果 |
+| --- | --- |
+| 隐藏/恢复正文 | 两个新回归先红后绿；恢复恰好第二次 read，已加载正文不重读且位置保留。[红](.build/trace-validation/visibility-red.log)、[绿](.build/trace-validation/visibility-green.log)。 |
+| 定向单测与共享组件 | 68 项 / 8 文件通过；headless 2/2，包含四主题宽窄与长历史。[单测](.build/trace-validation/published-main-visibility-unit.log)、[组件](.build/trace-validation/published-main-visibility-headless.log)。 |
+| 真实 Web / Electron | 每端一次 8/8，正常 full Web 构建/后端准备和正常 Desktop 后端/完整前端/smoke 编译均通过。[Web](.build/trace-validation/published-main-visibility-web-eight.log)、[Electron](.build/trace-validation/published-main-visibility-electron-eight.log)。 |
+| 类型、规范与包 | renderer 类型检查和 hygiene 通过；两种本树新包的 sourceDigest、完整文件哈希和 protocol major 7 / schemaHash `2e9c381d…` 匹配。[包契约](.build/trace-validation/published-main-visibility-package-contract.json)。SCM 的共享协议来自已发布 main，本批未扩展协议。 |
+| 代表图与复审 delta | [深色完整窗口](.build/trace-validation/published-main-visibility-web-results/areas-sessions-trace-flow--6289c-turns-and-offline-reopening-browser-app-server/ash-dark-wide.png) 展示下一次模型输入与 shell / spawn 结果和后续 wait_agent；[浅色 Trace 区域](.build/trace-validation/published-main-visibility-web-results/areas-sessions-trace-flow--6289c-turns-and-offline-reopening-browser-app-server/ash-light-narrow.png) 展示请求与两份返回共同满足 join。已查看真实像素；明确 fixture 标签属于测试证据注释，不属于产品界面。两图更新既有 Library 身份；[7,862 字节最小复审 delta](.build/trace-handoff/reviewed/trace-visibility-review.delta.patch) 可应用到原 Library v4 和 rebased 源码。[保存回执](.build/trace-handoff/reviewed/trace-review-library.json)。完整补丁 v4 未重新上传。 |
+
+本批重开验收范围是 Trace 编辑器/窗口和离线导入。**App Server 停止重启后的磁盘恢复仍未验收**。重试归组、审批 deadline、带部分输出的流式取消、费用、分享脱敏和旧版同机时间基线继续列为后续验收项。
+
+以下受控执行检查点保存 Library v4 对应的原运行范围；上述审查修复的最新结果单独记录。
 
 ### 当前受控模型与真实执行闭环检查点
 

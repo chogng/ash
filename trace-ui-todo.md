@@ -167,3 +167,11 @@ Desktop 与 Web 最新 runtime 包源码摘要、完整文件哈希和协议均�
 最新 headless 2/2 覆盖四主题宽窄及 20,000 事件，挂载 29 行；本轮导入约 333 ms、筛选约 79 ms，关闭后 model/editor 为 0。已查看深色宽屏和浅色窄屏两张代表图。这些图片来自共享组件与离线 fixture；Electron 四主题截图、旧版同机时间基线、retry/审批 deadline、部分输出的流式取消、费用与分享脱敏仍保留验收项。当前两种包源码摘要、文件哈希和协议校验通过；未复用其它树产物，不 push。
 
 证据：[66 项单测](.build/trace-validation/flow-current-unit.log)、[Web 八场景](.build/trace-validation/flow-current-web-eight.log)、[Electron 八场景](.build/trace-validation/flow-desktop-electron-eight.log)、[退出记录](.build/trace-validation/flow-desktop-state.json)、[性能测量](.build/trace-validation/flow-current-headless-evidence/long-history-measurements.json)、[截图附件](.build/trace-validation/flow-current-headless-evidence/attachments.json)。完整能力边界见 [Trace roadmap](trace-todo.md#当前受控模型与真实执行闭环检查点)。
+
+### 独立审查后的正文恢复修复
+
+Input 正文在隐藏 Trace 时尚未完成的读取，现会在恢复同一选择后重读。只失效未完成读取的渲染状态；已加载正文及阅读位置保留，迟到旧读取不能清理新读取。两个新增回归分别覆盖旧结果在恢复前/后到达，先红后绿。分支无冲突跟进已发布 SCM / Search `main` `5db5dfcec`；当前基线正常 Web / Desktop 准备、68 项 / 8 文件单测、headless 2/2、renderer 类型、hygiene 与两种新协议包契约均通过；Web 与 Electron 各自一次 8/8。源码执行检查点 `f2a54bc57`；退出结果见 [验证状态](.build/trace-validation/published-main-visibility-state.json)。
+
+代表性截图来自本地 HTTP 模型 fixture 经真实 App Server 的执行场景，并带明确的 fixture 标签；标签属于证据产物的测试注释，不属于产品界面。截图不替代关系跳转、状态、导出和生命周期断言。重开范围为编辑器/窗口和离线导入，App Server 停止重启后的磁盘恢复仍未验收。重试、费用与分享脱敏继续保留。
+
+[深色代表图](.build/trace-validation/published-main-visibility-web-results/areas-sessions-trace-flow--6289c-turns-and-offline-reopening-browser-app-server/ash-dark-wide.png) 与 [浅色 Trace 区域图](.build/trace-validation/published-main-visibility-web-results/areas-sessions-trace-flow--6289c-turns-and-offline-reopening-browser-app-server/ash-light-narrow.png) 已查看并更新原 Library 图片身份；完整补丁 v4 保持不变，最小正文修复 delta 单独供复审，见 [交付回执](.build/trace-handoff/reviewed/trace-review-library.json)。这些是 Browser 实际模型 fixture 场景，未扩大为全 Electron 主题或整窗响应式验收。
