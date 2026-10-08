@@ -58,6 +58,7 @@
 .ash-agent-trace-empty { margin: 0; color: var(--ash-description-foreground); }
 .ash-agent-trace-inspector-title,
 .ash-agent-trace-inspector-identity { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ash-agent-trace-tabs { flex: 0 0 var(--ash-tab-height); height: var(--ash-tab-height); min-width: 0; }
 .ash-agent-trace-panel { display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; }
 .ash-agent-trace-detail-host,
 .ash-agent-trace-code,

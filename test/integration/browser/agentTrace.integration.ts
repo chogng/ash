@@ -16,6 +16,8 @@ import { ContextKeyService, IContextKeyService } from '../../../src/ash/platform
 import { createBrowserExtensionApi } from '../../../src/ash/platform/extensions/browser/extensionApi.js';
 import { StandaloneServiceCollection } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
 import '../../../src/ash/editor/editor.all.js';
+import { IModelService } from '../../../src/ash/editor/common/services/model.js';
+import { ICodeEditorService } from '../../../src/ash/editor/browser/services/codeEditorService.js';
 import { setIconResolver } from '../../../src/ash/base/browser/ui/lxicons/lxicon.js';
 import { getIconDefinition } from '../../../src/ash/platform/theme/common/iconRegistry.js';
 import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
@@ -34,6 +36,7 @@ declare global {
 			setTheme(id: string): Promise<void>;
 			dispose(): void;
 			accessibleContent(): string;
+			resources(): { models: number; editors: number; };
 			layout(width: number, height: number): void;
 		};
 	}
@@ -66,10 +69,13 @@ editor.create(root);
 editor.layout({ width: 900, height: 650 });
 await editor.setInput({ resource: URI.parse('ash-agent-trace:/import') }, new AbortController().signal);
 resources.add(new Button(root, { label: 'Reference secondary button', presentation: 'secondary' }));
+const models = services.get(IModelService);
+const codeEditors = services.get(ICodeEditorService);
 window.agentTraceIntegration = {
 	async setTheme(id: string): Promise<void> { await themes.setColorTheme(id); },
 	dispose(): void { resources.dispose(); },
 	accessibleContent: () => editor.getAccessibleContent(),
+	resources: () => ({ models: models.getModels().length, editors: codeEditors.listCodeEditors().length }),
 	layout: (width, height) => editor.layout({ width, height }),
 };
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });

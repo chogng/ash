@@ -27,7 +27,7 @@ test('Execution Trace uses shared tree, tabs and resizable panes across themes a
 	await expect(viewer.getByRole('status')).toContainText('Imported');
 	await expect(viewer.getByRole('tab')).toHaveCount(5);
 	await expect(viewer.getByRole('tab', { name: 'Overview', exact: true })).toHaveAttribute('aria-selected', 'true');
-	await expect(viewer.locator('.ash-code-editor')).toHaveCount(0);
+	await expect(viewer.getByRole('region', { name: 'Saved execution body', exact: true })).toHaveCount(0);
 	const tree = viewer.getByRole('tree');
 	const failure = viewer.locator('[role=treeitem]:has([data-key="root:3"])');
 	for (const id of ['ash-dark', 'ash-light', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
@@ -35,6 +35,7 @@ test('Execution Trace uses shared tree, tabs and resizable panes across themes a
 		await expect(page.locator('#root')).toHaveAttribute('data-color-theme', id);
 		await failure.click();
 		await expect(failure).toHaveAttribute('aria-selected', 'true');
+		await expect(viewer.getByRole('tabpanel')).toBeVisible();
 		await expect(viewer.getByRole('tabpanel')).toContainText('Fixture failure');
 		const colors = await failure.evaluate(row => {
 			const span = document.createElement('span'); row.append(span);
@@ -79,9 +80,12 @@ test('Execution Trace uses shared tree, tabs and resizable panes across themes a
 	expect(errors).toEqual([]);
 	await page.evaluate(() => window.agentTraceIntegration.dispose());
 	await expect(viewer).toHaveCount(0);
+	expect(await page.evaluate(() => window.agentTraceIntegration.resources())).toEqual({ models: 0, editors: 0 });
 });
 
 test('Execution Trace keeps long history virtual and exposes offscreen events to Accessible View', async ({ page }, testInfo) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
 	await page.goto('/agentTrace.html');
 	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 	const viewer = page.locator('.ash-agent-trace');
@@ -103,12 +107,16 @@ test('Execution Trace keeps long history virtual and exposes offscreen events to
 	const content = await page.evaluate(() => window.agentTraceIntegration.accessibleContent());
 	expect(content).toContain('message 0'); expect(content).toContain('message 19999');
 	await viewer.getByRole('tab', { name: 'Raw record', exact: true }).click();
-	await expect(viewer.locator('.ash-code-editor')).toHaveCount(1);
+	await expect(viewer.getByRole('region', { name: 'Saved execution body', exact: true })).toHaveCount(1);
 	await expect(viewer.getByRole('tabpanel')).toBeVisible();
 	await viewer.getByRole('tab', { name: 'Overview', exact: true }).click();
 	await viewer.getByRole('tab', { name: 'Raw record', exact: true }).click();
-	await expect(viewer.locator('.ash-code-editor')).toHaveCount(1);
-	await testInfo.attach('long-history-measurements', { body: Buffer.from(JSON.stringify({ events: events.length, firstMs, searchMs, mounted })), contentType: 'application/json' });
+	await expect(viewer.getByRole('region', { name: 'Saved execution body', exact: true })).toHaveCount(1);
+	const beforeClose = await page.evaluate(() => window.agentTraceIntegration.resources());
+	expect(beforeClose).toEqual({ models: 1, editors: 1 });
+	expect(errors).toEqual([]);
+	await testInfo.attach('long-history-measurements', { body: Buffer.from(JSON.stringify({ events: events.length, firstMs, searchMs, mounted, beforeClose })), contentType: 'application/json' });
 	await page.evaluate(() => window.agentTraceIntegration.dispose());
 	await expect(viewer).toHaveCount(0);
+	expect(await page.evaluate(() => window.agentTraceIntegration.resources())).toEqual({ models: 0, editors: 0 });
 });

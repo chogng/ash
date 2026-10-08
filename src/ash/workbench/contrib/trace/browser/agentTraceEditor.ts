@@ -230,15 +230,20 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 		this.inspectorDomNode = h(document, 'div', { className: 'ash-agent-trace-inspector' });
 		this.inspectorTitle = h(document, 'h2', { className: 'ash-agent-trace-inspector-title' });
 		this.inspectorIdentity = h(document, 'p', { className: 'ash-agent-trace-inspector-identity' });
-		this.tabs = this._register(new TabList<DetailTab>(this.inspectorDomNode, { ariaLabel: localize('agentTrace.detailTabs', 'Execution details'), presentation: 'flush', onActivate: tab => { this.tab = tab; this.renderInspector(); } }));
+		// TabList fills its host; reserve one row instead of the entire inspector.
+		const tabHost = h(document, 'div', { className: 'ash-agent-trace-tabs' });
+		this.inspectorDomNode.append(tabHost);
+		this.tabs = this._register(new TabList<DetailTab>(tabHost, { ariaLabel: localize('agentTrace.detailTabs', 'Execution details'), presentation: 'flush', onActivate: tab => { this.tab = tab; this.renderInspector(); } }));
 		this.inspectorDomNode.prepend(this.inspectorTitle, this.inspectorIdentity);
-		const detailHost = h(document, 'div', { className: 'ash-agent-trace-detail-host' });
-		this.detailScroll = this._register(new ScrollableElement(detailHost, { direction: 'vertical', tabIndex: -1 }));
-		this.detailsDomNode = h(document, 'div', { className: 'ash-agent-trace-details' });
-		this.detailsDomNode.tabIndex = 0;
 		this.panelDomNode = h(document, 'div', { className: 'ash-agent-trace-panel' });
 		this.panelDomNode.id = this.panelId;
 		this.panelDomNode.setAttribute('role', 'tabpanel');
+		this.detailScroll = this._register(new ScrollableElement(this.panelDomNode, { direction: 'vertical', tabIndex: -1 }));
+		// The scrollbar root owns the pane's flex allocation; an extra block wrapper
+		// would leave its absolute viewport without a height.
+		this.detailScroll.element.classList.add('ash-agent-trace-detail-host');
+		this.detailsDomNode = h(document, 'div', { className: 'ash-agent-trace-details' });
+		this.detailsDomNode.tabIndex = 0;
 		this.detailScroll.setContent(this.detailsDomNode);
 		this.bodyEditorHost = h(document, 'div', { className: 'ash-agent-trace-code' });
 		this.relationsDomNode = h(document, 'div', { className: 'ash-agent-trace-relations' });
@@ -258,7 +263,7 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 			this.select(item.target.id, true); this.tree.domFocus();
 		}));
 		this.relationWarning = h(document, 'p', { className: 'ash-agent-trace-relation-warning' });
-		this.panelDomNode.append(detailHost, this.bodyEditorHost, this.relationsDomNode, this.relationWarning);
+		this.panelDomNode.append(this.bodyEditorHost, this.relationsDomNode, this.relationWarning);
 		this.inspectorDomNode.append(this.panelDomNode);
 		this.domNode.append(header, file, this.locationDomNode, this.bodyDomNode);
 		parent.append(this.domNode);

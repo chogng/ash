@@ -562,7 +562,7 @@ suite('Execution Trace editor', () => {
 			measureTreeViewport(dom.window.document);
 			assert.equal(dom.window.document.querySelectorAll('[role=tab]').length, 5);
 			assert.equal(dom.window.document.querySelector('[role=tab][aria-selected=true]')?.textContent, 'Overview');
-			assert.equal(dom.window.document.querySelectorAll('.ash-code-editor').length, 0);
+			assert.equal(dom.window.document.querySelectorAll('.stanza-editor').length, 0);
 			assert.ok(dom.window.document.querySelector('[role=separator]'));
 		} finally { dom.window.close(); }
 	});
