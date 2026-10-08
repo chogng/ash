@@ -36,13 +36,14 @@ AgentHost、Output、平台存储等工作树提交已经进入 main。旧工作
 
 ## 清理与恢复
 
-已删除 45 个额外 Git 工作树及其本地目录、11 个关联分支和 1 个线性历史修复临时分支。另清理 1 个已备份的未注册验证目录。Git 当前仅保留 main 工作树。
+已删除 45 个额外 Git 工作树及其本地目录、11 个关联分支和 1 个线性历史修复临时分支。另清理 1 个已备份的未注册验证目录。Git 当前仅保留 main 工作树。另已归档并删除 `/Volumes/1t` 下 7 个 Ash 证据与 Bazel 缓存目录，逐文件校验归档内容后才删除原目录。卷根目录仅含空测试目录的 `.build` 也已清除。
 
 恢复资料位于 `/Volumes/1t/ash/.git/worktree-cleanup/20261008/`：
 
 - `recovery-full.bundle`：完整 Git 历史、原分支及未提交内容快照，可独立恢复。
 - `audit.json`、`integration-review.json`：逐树范围与旧变体保留原因。
 - `cleanup-summary.json`：实际删除的工作树与本地分支清单。
+- `external-directory-cleanup.json`、`external-directories/`：7 个外部临时目录的清理清单、压缩归档及逐文件 SHA256。
 - 各树的 patch、忽略的源文件和配置，以及 `validation-evidence/` 中的原始验证日志。
 
 这些资料用于恢复原始版本；继续开发使用 main 的现有所有者和较新修复。
