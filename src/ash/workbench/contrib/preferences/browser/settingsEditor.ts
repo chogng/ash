@@ -121,7 +121,11 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 	public override create(container: HTMLElement): void {
 		if (this.rootDomNode) throw new Error('Settings editor has already been created');
 		const settingsLayout = createSettingsLayout(this.settingsModel.settings);
-		this.treeModel = this._register(new SettingsTreeModel<ISetting | SettingsContentItem>());
+		const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+		this.treeModel = this._register(new SettingsTreeModel<ISetting | SettingsContentItem>(id =>
+			// Service-owned rows have no user configuration key; explicit defaults still count as configured.
+			configurationRegistry.getConfiguration(id) !== undefined && this.configurationService.inspect(id).userLocalValue !== undefined,
+		));
 		this.treeModel.setChildren(settingsRootNodes(settingsLayout));
 		const settingsRenderer = this._register(new SettingsRenderer(container, {
 			clipboardService: this.clipboardService,
@@ -244,6 +248,9 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		}));
 		this.agentCapabilitiesSettings = this._register(new AgentCapabilitiesSettings(settingsContent, this.agentCapabilitiesService, this.remoteAgentService, this.dirPermissionsService, this.localizationService));
 		this.renderCategory(initialCategory);
+		this._register(this.configurationService.onDidChangeConfiguration(() => {
+			if (new SettingsSearchQuery(this.searchWidget?.value ?? '').hasModifiedFilter) this.rebuildContent();
+		}));
 
 		const updateLanguageSetting = (): void => {
 			// Recompute descriptors while the keyed renderer retains controls and keyboard focus.
@@ -257,7 +264,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		}));
 		this._register(this.tocTree.onDidOpen(entry => this.openNavigationEntry(entry)));
 		this._register(this.tocTree.onDidChangeFind(({ pattern, matches }) => {
-			this.navigationEmpty.hidden = !pattern || matches.length !== 0;
+			this.navigationEmpty.hidden = this.treeModel.hasModifiedFilter ? this.treeModel.countVisibleItems() !== 0 : !pattern || matches.length !== 0;
 		}));
 		this._register(this.tocTree.onDidChangeCollapseState(({ element, collapsed }) => {
 			if (element.kind !== 'group') return;
@@ -346,6 +353,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		this.contentEmpty.hidden = query.isEmpty || this.treeModel.visibleItems.some(item => !('domNode' in item.value) || !item.value.domNode.hidden);
 		this.tocTree.refresh();
 		this.tocTree.setFindPattern(query.text);
+		if (query.hasModifiedFilter) this.navigationEmpty.hidden = this.treeModel.countVisibleItems() !== 0;
 	}
 
 	private updateContentVisibility(): void {

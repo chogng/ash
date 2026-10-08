@@ -43,6 +43,96 @@ async function captureCopiedSetting(application: PlaywrightApplication, page: Pa
 }
 
 for (const locale of ['en', 'zh-CN']) {
+	test(`Modified Settings composes filters and restores saved overrides (${locale})`, async ({ application, workbench, restartWorkbench, reloadWorkbench, runningApplication }, testInfo) => {
+		const chinese = locale === 'zh-CN';
+		if (chinese) {
+			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+			const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
+			await picker.getByRole('combobox').fill('简体中文');
+			await picker.getByRole('combobox').press('Enter');
+			({ application, workbench } = await restartWorkbench());
+		}
+		await workbench.settingsEditor.openUserSettingsUI();
+		let settings = workbench.settingsEditor.element;
+		await settings.getByRole('searchbox').fill('@id:editor.fontSize');
+		const fontDefault = Number(await settings.locator('[data-settings-item-id="editor.fontSize"]').getByRole('spinbutton').inputValue());
+		await settings.locator('.ash-modal-editor-close').click();
+		await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
+		const group = workbench.editors.groupAt(0);
+		const saved = {
+			'window.menuStyle': 'custom', 'workbench.locale': locale, 'editor.fontSize': fontDefault,
+			'workbench.activityBar.badges': false, 'editor.lineHeight': 0, 'window.zoomLevel': 0, 'window.title': '',
+			'[typescript]': { 'editor.fontFamily': 'Language-only font' },
+		};
+		await group.editor.input.press('ControlOrMeta+A');
+		await pasteJson(group.editor.input, JSON.stringify(saved, null, 2));
+		await group.editor.input.press('ControlOrMeta+S');
+		await expect(group.tabs.filter({ hasText: chinese ? '用户设置（JSON）' : 'User Settings (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
+		const readSaved = async (): Promise<unknown> => {
+			if ('windows' in application) {
+				const profile = await application.evaluate(() => process.env.ASH_HOME!);
+				return JSON.parse(await readFile(join(profile, 'settings.json'), 'utf8'));
+			}
+			return workbench.page.evaluate(async () => {
+				const database = await new Promise<IDBDatabase>((resolve, reject) => {
+					const request = indexedDB.open('ash-configuration');
+					request.onsuccess = () => resolve(request.result);
+					request.onerror = () => reject(request.error);
+				});
+				try {
+					return await new Promise<unknown>((resolve, reject) => {
+						const request = database.transaction('resources', 'readonly').objectStore('resources').get('settings.json');
+						request.onsuccess = () => resolve(JSON.parse(request.result.document.source));
+						request.onerror = () => reject(request.error);
+					});
+				} finally { database.close(); }
+			});
+		};
+		await expect.poll(readSaved).toEqual(saved);
+		const assertModified = async (): Promise<void> => {
+			await workbench.settingsEditor.openUserSettingsUI();
+			settings = workbench.settingsEditor.element;
+			await settings.getByRole('searchbox').fill('@modified');
+			for (const key of ['editor.fontSize', 'workbench.activityBar.badges', 'editor.lineHeight', 'window.title', ...('windows' in application ? ['window.zoomLevel'] : [])]) {
+				await expect(settings.locator(`[data-settings-item-id="${key}"]`)).toHaveCount(1);
+			}
+			// Zoom is contributed only by Desktop; zero still has to survive on a shared setting in both clients.
+			if (!('windows' in application)) await expect(settings.locator('[data-settings-item-id="window.zoomLevel"]')).toHaveCount(0);
+			await expect(settings.locator('[data-settings-item-id="editor.fontFamily"]')).toHaveCount(0);
+			await expect(settings.locator('[data-settings-item-id="grep.backend"]')).toHaveCount(0);
+			await settings.getByRole('searchbox').fill('@id:editor.fontSize');
+			await settings.getByRole('button', { name: chinese ? '筛选设置' : 'Filter Settings', exact: true }).press('Enter');
+			await workbench.page.getByRole('menuitem', { name: chinese ? '已修改' : 'Modified', exact: true }).press('Enter');
+			await expect(settings.getByRole('searchbox')).toHaveValue('@id:editor.fontSize @modified');
+			await expect(settings.getByRole('searchbox')).toBeFocused();
+			await expect(settings.locator('.ash-settings-content-tree [data-settings-item-id]')).toHaveCount(1);
+			await settings.getByRole('searchbox').fill('@modified font @id:editor.fontSize');
+			await workbench.settingsEditor.selectEditorCategory('editor-fonts');
+			await expect(settings.locator('.ash-settings-navigation-tree [data-settings-category-id]')).toHaveCount(1);
+		};
+		await assertModified();
+		await settings.locator('.ash-modal-editor-close').click();
+		({ application, workbench } = await reloadWorkbench());
+		await assertModified();
+		const row = settings.locator('[data-settings-item-id="editor.fontSize"]');
+		await row.getByRole('button', { name: chinese ? /的更多操作$/u : /^More actions for /u }).press('Enter');
+		await workbench.page.getByRole('menuitem', { name: chinese ? '重置设置' : 'Reset Setting', exact: true }).press('Enter');
+		await expect(row).toHaveCount(0);
+		await expect(settings.locator('.ash-settings-navigation-tree [data-settings-category-id], .ash-settings-navigation-tree [data-settings-group-id]')).toHaveCount(0);
+		await expect(settings.locator('.ash-settings-navigation-empty')).toBeVisible();
+		await expect(settings.getByRole('status').filter({ hasText: chinese ? '未找到设置。' : 'No settings found.' }).last()).toBeVisible();
+		const { 'editor.fontSize': _removed, ...remaining } = saved;
+		await expect.poll(readSaved).toEqual(remaining);
+		await settings.getByRole('searchbox').fill('@modified @id:window.title window');
+		await expect(settings.locator('[data-settings-item-id="window.title"]')).toHaveCount(1);
+		await settings.getByRole('button', { name: chinese ? '筛选设置' : 'Filter Settings', exact: true }).press('Enter');
+		await workbench.page.getByRole('menuitem', { name: chinese ? '清除筛选条件' : 'Clear Filters', exact: true }).press('Enter');
+		await expect(settings.getByRole('searchbox')).toHaveValue('window');
+		await settings.locator('.ash-modal-editor-close').click();
+		await testInfo.attach('modified-settings-diagnostics', { body: JSON.stringify(runningApplication.diagnostics), contentType: 'application/json' });
+		expect(runningApplication.diagnostics.errors).toEqual([]);
+	});
+
 	test(`Copy Setting as JSON preserves values and saves through the settings resource (${locale})`, async ({ application, workbench, restartWorkbench, reloadWorkbench }) => {
 		const chinese = locale === 'zh-CN';
 		if (chinese) {
@@ -363,7 +453,7 @@ for (const locale of ['en', 'zh-CN']) {
 	});
 }
 
-test('Configured markers update after external persisted writes and release their hovers', async ({ application, workbench }) => {
+test('Configured markers and modified filtering update after external persisted writes', async ({ application, workbench, runningApplication }, testInfo) => {
 	const page = workbench.page;
 	const workbenchUrl = page.url();
 	await workbench.settingsEditor.openUserSettingsUI();
@@ -398,7 +488,10 @@ test('Configured markers update after external persisted writes and release thei
 	};
 	try {
 		await expect(marker).toBeHidden();
+		await settings.getByRole('searchbox').fill('@modified @id:editor.fontSize');
+		await expect(row).toHaveCount(0);
 		await saveExternal(JSON.stringify({ 'editor.fontSize': fontDefault }));
+		await expect(row).toHaveCount(1);
 		await expect(font).toHaveValue(String(fontDefault));
 		await expect(row).toHaveClass(/is-configured/u);
 		await expect(row).toHaveAccessibleDescription('Configured in local user settings.');
@@ -414,12 +507,18 @@ test('Configured markers update after external persisted writes and release thei
 		await marker.hover();
 		await expect(page.getByRole('tooltip')).toHaveText('Configured in local user settings.');
 		await saveExternal(JSON.stringify({ '[typescript]': { 'editor.fontSize': fontDefault + 2 } }));
+		await expect(row).toHaveCount(0);
+		await expect(page.getByRole('tooltip')).toHaveCount(0);
+		await settings.getByRole('searchbox').fill('@id:editor.fontSize');
 		await expect(font).toHaveValue(String(fontDefault));
 		await expect(row).not.toHaveClass(/is-configured/u);
 		await expect(row).toHaveAccessibleDescription('');
 		await expect(marker).toBeHidden();
 		await expect(page.getByRole('tooltip')).toHaveCount(0);
+		await settings.getByRole('searchbox').fill('@modified @id:editor.fontSize');
+		await expect(row).toHaveCount(0);
 		await saveExternal(JSON.stringify({ 'editor.fontSize': fontDefault }));
+		await expect(row).toHaveCount(1);
 		await expect(marker).toBeVisible();
 		await marker.hover();
 		await expect(page.getByRole('tooltip')).toBeVisible();
@@ -433,6 +532,8 @@ test('Configured markers update after external persisted writes and release thei
 			await writer.page.close();
 		}
 	}
+	await testInfo.attach('external-modified-settings-diagnostics', { body: JSON.stringify(runningApplication.diagnostics), contentType: 'application/json' });
+	expect(runningApplication.diagnostics.errors).toEqual([]);
 });
 
 test('Saving JSON token customization refreshes Markdown and the canonical profile settings', async ({ application, target, testWorkspace, workbench }) => {
@@ -485,6 +586,10 @@ test('Settings JSON rejects invalid values and preserves dirty edits during a co
 	const invalid = await workbench.dialogs.expectMessage(application, 'Could not save file', () => group.editor.input.press('ControlOrMeta+S'));
 	expect(`${invalid.message} ${invalid.detail}`).toContain('editor.fontSize');
 	await expect(tab.locator('..')).toHaveAttribute('data-state', /dirty|conflict/u);
+	await workbench.settingsEditor.openUserSettingsUI();
+	await workbench.settingsEditor.element.getByRole('searchbox').fill('@modified @id:editor.fontSize');
+	await expect(workbench.settingsEditor.element.locator('[data-settings-item-id="editor.fontSize"]')).toHaveCount(0);
+	await workbench.settingsEditor.element.locator('.ash-modal-editor-close').click();
 	await group.editor.waitForEditorFocus();
 	await group.editor.input.press('ControlOrMeta+A');
 	await expect(group.content.locator('.stanza-editor-accessibility-status')).toContainText('characters selected');
@@ -500,6 +605,8 @@ test('Settings JSON rejects invalid values and preserves dirty edits during a co
 	await font.press('Tab');
 	await expect(settings.locator('[data-settings-item-id="editor.fontSize"] .ash-settings-indicators')).toBeHidden();
 	await expect(settings.locator('[data-settings-item-id="editor.fontSize"] .ash-settings-configured-marker')).toBeVisible();
+	await settings.getByRole('searchbox').fill('@modified @id:editor.fontSize');
+	await expect(settings.locator('[data-settings-item-id="editor.fontSize"]')).toHaveCount(1);
 	await settings.locator('.ash-modal-editor-close').click();
 	await group.editor.waitForEditorFocus();
 	const conflict = await workbench.dialogs.expectMessage(application, 'File changed on disk', () => group.editor.input.press('ControlOrMeta+S'));

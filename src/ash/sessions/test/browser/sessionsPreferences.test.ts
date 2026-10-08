@@ -36,6 +36,28 @@ import type { IClipboardService } from '../../../platform/clipboard/common/clipb
 import type { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
 import type { IChatService } from '../../../workbench/services/chat/common/chatService.js';
 
+test('Sessions modified filtering excludes window defaults, fixed values and language-only overrides', async () => {
+	const [{ ConfigurationService }, { ConfigurationRegistry, ConfigurationScope }, { SettingsTreeModel }] = await Promise.all([
+		import('../../services/configuration/browser/configurationService.js'),
+		import('../../../platform/configuration/common/configurationRegistry.js'),
+		import('../../../workbench/contrib/preferences/browser/settingsTreeModels.js'),
+	]);
+	const registry = new ConfigurationRegistry();
+	for (const [key, readOnly] of [['sessions.editable', false], ['sessions.fixed', true], ['sessions.language', false]] as const) {
+		registry.registerConfiguration({ key, defaultValue: true, agentsWindow: { default: false, readOnly }, scope: ConfigurationScope.LANGUAGE_OVERRIDABLE, parse: value => value as boolean });
+	}
+	using configuration = new ConfigurationService({ registry });
+	using tree = new SettingsTreeModel<string>(id => registry.getConfiguration(id) !== undefined && configuration.inspect(id).userLocalValue !== undefined);
+	tree.setChildren([...registry.getConfigurations()].map(id => ({ element: { kind: 'item', id, title: id, description: '', value: id } })));
+	tree.setQuery('@modified');
+	using listener = configuration.onDidChangeConfiguration(() => tree.refilter());
+	assert.deepEqual(tree.visibleItems.map(item => item.id), []);
+	await configuration.write('{ "sessions.editable": false, "sessions.fixed": true, "[typescript]": { "sessions.language": true } }', 0);
+	assert.deepEqual(tree.visibleItems.map(item => item.id), ['sessions.editable'], 'an explicit Sessions default counts, while fixed Workbench and language values do not');
+	await configuration.updateValue('sessions.editable', undefined);
+	assert.deepEqual(tree.visibleItems.map(item => item.id), []);
+});
+
 test('Sessions Models switches control the model picker visibility preference', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
 	const { window } = browser;
@@ -54,9 +76,9 @@ test('Sessions Models switches control the model picker visibility preference', 
 	};
 	await import('../../browser/activityBarAccessibility.js');
 	await import('../../contrib/creator/browser/creatorEditor.contribution.js');
-	const [{ SessionsPreferences }, { WorkbenchConfigurationService }, { ContextKeyService }] = await Promise.all([
+	const [{ SessionsPreferences }, { ConfigurationService }, { ContextKeyService }] = await Promise.all([
 		import('../../contrib/preferences/browser/sessionsPreferences.js'),
-		import('../../../workbench/services/configuration/browser/configurationService.js'),
+		import('../../services/configuration/browser/configurationService.js'),
 		import('../../../platform/contextkey/browser/contextKeyService.js'),
 	]);
 	const model = { provider: 'openai', model: 'gpt-test' };
@@ -91,7 +113,7 @@ test('Sessions Models switches control the model picker visibility preference', 
 		},
 	} as unknown as IChatService;
 	const accessibleView = { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService;
-	using configuration = new WorkbenchConfigurationService();
+	using configuration = new ConfigurationService();
 	using contextKeys = new ContextKeyService();
 	const { InstantiationService } = await import('../../../platform/instantiation/common/instantiationService.js');
 	const { IConfigurationService } = await import('../../../platform/configuration/common/configuration.js');
@@ -242,6 +264,31 @@ test('Sessions Models switches control the model picker visibility preference', 
 	assert.deepEqual(removedKeys, ['openai']);
 	const modelSearch = window.document.querySelector<HTMLInputElement>('.ash-sessions-settings-search input[type="search"]');
 	assert.ok(modelSearch);
+	modelSearch.value = '@id:sessions.activityBar.compact';
+	modelSearch.dispatchEvent(new window.Event('input', { bubbles: true }));
+	const filter = window.document.querySelector<HTMLButtonElement>('.ash-sessions-settings-search .ash-settings-search-filter');
+	assert.ok(filter);
+	assert.equal(filter.getAttribute('aria-label'), 'Filter Settings');
+	filter.click();
+	const filterMenu = window.document.querySelector<HTMLDialogElement>('dialog')!.querySelector<HTMLElement>('[role="menu"]');
+	assert.ok(filterMenu);
+	const modified = [...filterMenu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(button => button.textContent === 'Modified');
+	assert.ok(modified);
+	modified.click();
+	assert.equal(filterMenu.isConnected, false);
+	assert.equal(modelSearch.value, '@id:sessions.activityBar.compact @modified');
+	assert.equal(window.document.activeElement, modelSearch);
+	assert.ok(window.document.querySelector('[data-settings-item-id="sessions.activityBar.compact"]'));
+	assert.equal(window.document.querySelector('.ash-models-settings-model-row'), null);
+	modelSearch.focus();
+	await configuration.updateValue('sessions.activityBar.compact', undefined);
+	assert.equal(window.document.querySelector('[data-settings-item-id="sessions.activityBar.compact"]'), null);
+	assert.equal(window.document.querySelector<HTMLElement>('.ash-sessions-settings-empty')?.hidden, false);
+	assert.equal(window.document.activeElement, modelSearch);
+	await configuration.updateValue('sessions.activityBar.compact', true);
+	assert.ok(window.document.querySelector('[data-settings-item-id="sessions.activityBar.compact"]'));
+	modelSearch.value = '';
+	modelSearch.dispatchEvent(new window.Event('input', { bubbles: true }));
 	assert.equal(window.document.querySelectorAll('input[type="search"]').length, 2);
 	const rows = [...window.document.querySelectorAll<HTMLElement>('.ash-models-settings-model-row')];
 	assert.equal(rows.length, 2);
@@ -289,12 +336,16 @@ test('Sessions Models switches control the model picker visibility preference', 
 	await opened;
 	assert.equal(closingMenu.menu.isConnected, false);
 	assert.equal(window.document.querySelector('dialog'), null);
+	await configuration.updateValue('sessions.activityBar.compact', false);
+	assert.equal(window.document.querySelector('dialog'), null);
+	await configuration.updateValue('sessions.activityBar.compact', true);
 	const { builtinLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
 	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		const reopened = preferences.open();
+		assert.equal(window.document.querySelector('.ash-settings-search-filter')?.getAttribute('aria-label'), '筛选设置');
 		const reopenedMenu = openCopyMenu('外观', '复制设置为 JSON');
 		reopenedMenu.copy.click();
 		await Promise.resolve();

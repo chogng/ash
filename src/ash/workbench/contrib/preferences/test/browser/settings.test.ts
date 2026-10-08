@@ -12,7 +12,7 @@ import '../../../chat/browser/chat.shared.contribution.js';
 import { ILanguageModelsService } from '../../../../contrib/chat/common/languageModels.js';
 import type { SettingsContentItem } from '../../browser/settingsTreeModels.js';
 import { IFileTextModelService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
-import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
+import { IPreferencesService, type ISetting } from '../../../../services/preferences/common/preferences.js';
 import type { IRegisteredConfiguration } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { IDictationService } from '../../../../../platform/dictation/common/dictationService.js';
 import { ChatSpeechToTextService, IChatSpeechToTextService } from '../../../chat/browser/speechToText/chatSpeechToTextService.js';
@@ -120,7 +120,8 @@ const configurationRegistry = Registry.as<InstanceType<typeof ConfigurationRegis
 const { EditorPart } = await import('../../../../browser/parts/editor/editorPart.js');
 const { EditorPaneRegistry, EditorPanes } = await import('../../../../browser/editor.js');
 const { SettingsSearchQuery } = await import('../../browser/settingsSearch.js');
-const { createSettingsLayout, SettingsCategories, SettingsLayout } = await import('../../browser/settingsLayout.js');
+const { createSettingsLayout, settingsRootNodes, SettingsCategories, SettingsLayout } = await import('../../browser/settingsLayout.js');
+const { TOCTreeModel } = await import('../../browser/tocTree.js');
 const { SettingsEditorId } = await import('../../browser/settingsEditor.js');
 const { ILocalTranscriptionService, LocalTranscriptionModelState } = await import('../../../../../platform/localTranscription/common/localTranscription.js');
 const { NullLocalTranscriptionService } = await import('../../../../services/localTranscription/browser/localTranscriptionService.js');
@@ -473,9 +474,14 @@ test('Chinese setting actions, search filters and pending saves expose translate
 	assert.equal(filter.getAttribute('aria-label'), '筛选设置');
 	search.value = '@id:editor.fontSize';
 	filter.click();
-	assert.deepEqual(actions.filter(action => action.id !== Separator.ID).map(action => action.label), ['设置 ID…', '清除筛选条件']);
+	assert.deepEqual(actions.filter(action => action.id !== Separator.ID).map(action => action.label), ['已修改', '设置 ID…', '清除筛选条件']);
+	search.value = 'font @MODIFIED @id:editor.fontSize';
+	filter.click();
+	await actions.find(action => action.id === 'settings.search.modified')!.run();
+	assert.equal(search.value, 'font @id:editor.fontSize @modified');
+	assert.equal(browserEnvironment.window.document.activeElement, search.domNode.querySelector('input'));
 	await actions.find(action => action.id === 'settings.search.clearFilters')!.run();
-	assert.equal(search.value, '');
+	assert.equal(search.value, 'font');
 });
 
 test('Activity Bar badges expose a translated profile setting with strict boolean validation', () => {
@@ -736,6 +742,19 @@ test('Settings search composes setting ID and text filters', () => {
 	assert.equal(query.matches({ id: 'workbench.fontFamily', title: 'Font family', description: 'Workbench typography.' }), false);
 });
 
+test('Settings search recognizes modified filters without treating them as text', () => {
+	for (const value of ['@modified font', 'font @MODIFIED', 'font @modified @id:editor.font*']) {
+		const query = new SettingsSearchQuery(value);
+		assert.equal(query.text, 'font');
+		assert.equal(query.isEmpty, false);
+		assert.equal(query.matches({ id: 'editor.fontFamily', title: 'Font family', description: '' }), true);
+		assert.notEqual(query.key, new SettingsSearchQuery(value.replace(/@modified/giu, '')).key);
+	}
+	assert.equal(new SettingsSearchQuery('@modified').text, '');
+	assert.equal(new SettingsSearchQuery('@modified').isEmpty, false);
+	assert.equal(new SettingsSearchQuery('@modifiedExtra').text, '@modifiedextra');
+});
+
 test('Settings search matches complete setting IDs without selecting prefixed IDs', () => {
 	const query = new SettingsSearchQuery('@id:EDITOR.fontSize');
 	const metadata = { title: 'Font size', description: 'Editor typography.' };
@@ -744,6 +763,77 @@ test('Settings search matches complete setting IDs without selecting prefixed ID
 	assert.equal(query.matches({ ...metadata, id: 'chat.editor.fontSize' }), false);
 	assert.equal(query.matches({ ...metadata, id: 'editor.fontSizeExtra' }), false);
 	assert.equal(query.matches(metadata), false);
+});
+
+test('Modified Settings derives membership from accepted local overrides through reset, failure and reload', async () => {
+	using resources = new DisposableStore();
+	const registry = new ConfigurationRegistry();
+	for (const [key, defaultValue] of [['modified.boolean', true], ['modified.number', 1], ['modified.text', 'Default'], ['modified.default', true], ['modified.language', true]] as const) {
+		registry.registerConfiguration({ key, defaultValue, parse: value => value, scope: ConfigurationScope.LANGUAGE_OVERRIDABLE });
+	}
+	let snapshot = { revision: 0, document: { version: 1 as const, source: '{}\n' } };
+	const pending = new DeferredPromise<void>();
+	let blockWrites = false;
+	const api: import('../../../../../platform/configuration/common/configurationIpc.js').IConfigurationApi = {
+		read: async () => snapshot,
+		onDidChange: () => ({ dispose() { } }),
+		update: async request => {
+			if (blockWrites) await pending.p;
+			assert.equal(request.expectedRevision, snapshot.revision);
+			snapshot = { revision: snapshot.revision + 1, document: request.document };
+			return snapshot;
+		},
+	};
+	const configuration = resources.add(new WorkbenchConfigurationService({ registry, api, initialSnapshot: snapshot }));
+	const tree = resources.add(new SettingsTreeModel<string>(id => registry.getConfiguration(id) !== undefined && configuration.inspect(id).userLocalValue !== undefined));
+	tree.setChildren([...registry.getConfigurations(), 'service.status'].map(id => ({ element: { kind: 'item', id, title: 'Preference', description: '', value: id } })));
+	tree.setQuery('@modified');
+	resources.add(configuration.onDidChangeConfiguration(() => tree.refilter()));
+	const visible = () => tree.visibleItems.map(item => item.id);
+	assert.deepEqual(visible(), []);
+	await configuration.write('{ "modified.boolean": false, "modified.number": 0, "modified.text": "", "modified.default": true, "[typescript]": { "modified.language": false } }', 0);
+	const configured = ['modified.boolean', 'modified.number', 'modified.text', 'modified.default'];
+	assert.deepEqual(visible(), configured, 'presence includes explicit defaults and falsy values, without language-only or service state');
+	tree.setQuery('preference @modified @id:modified.text');
+	assert.deepEqual(visible(), ['modified.text']);
+	tree.setQuery('@modified');
+	blockWrites = true;
+	const failedReset = configuration.updateValue('modified.default', undefined);
+	const failure = assert.rejects(failedReset, /blocked save/);
+	await Promise.resolve();
+	assert.deepEqual(visible(), configured, 'pending writes do not change membership');
+	await pending.error(new Error('blocked save'));
+	await failure;
+	assert.deepEqual(visible(), configured, 'failed writes retain the accepted state');
+	blockWrites = false;
+	await configuration.updateValue('modified.default', undefined);
+	assert.deepEqual(visible(), configured.slice(0, -1));
+	using restored = new WorkbenchConfigurationService({ registry, api });
+	await restored.reloadConfiguration();
+	assert.deepEqual([...registry.getConfigurations()].filter(id => restored.inspect(id).userLocalValue !== undefined), configured.slice(0, -1));
+});
+
+test('Settings table of contents follows modified result counts through reset', async () => {
+	using configuration = new WorkbenchConfigurationService();
+	using tree = new SettingsTreeModel<ISetting | SettingsContentItem>(id => configurationRegistry.getConfiguration(id) !== undefined && configuration.inspect(id).userLocalValue !== undefined);
+	tree.setChildren(settingsRootNodes(createSettingsLayout(new DefaultSettings().all)));
+	using listener = configuration.onDidChangeConfiguration(() => tree.refilter());
+	const toc = new TOCTreeModel(tree);
+	const categories = () => toc.children.flatMap(node => node.children ?? [node]).map(node => node.element.id);
+	tree.setQuery('@modified');
+	assert.deepEqual(categories(), []);
+	assert.equal(tree.countVisibleItems(), 0);
+	const fontDefault = configuration.inspect(CodeEditorConfiguration.fontSize).defaultValue;
+	await configuration.write(JSON.stringify({ [CodeEditorConfiguration.fontSize]: fontDefault }), 0);
+	assert.deepEqual(categories(), ['editor-fonts']);
+	assert.equal(tree.countVisibleItems(), 1);
+	tree.setQuery('@modified font');
+	assert.deepEqual(categories(), ['editor-fonts']);
+	await configuration.updateValue(CodeEditorConfiguration.fontSize, undefined);
+	assert.deepEqual(categories(), []);
+	assert.equal(tree.countVisibleItems(), 0);
+	tree.setQuery('');
+	assert.ok(categories().includes('editor-fonts'), 'clearing the query restores the browsing directory');
 });
 
 test('Models Settings keeps loading API connections when the model catalog changes', async () => {
@@ -1524,8 +1614,22 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	fontFamily.dispatchEvent(new browserEnvironment.window.Event('change', { bubbles: true }));
 	await nextTurn();
 	assert.equal(configuration.getValue(CodeEditorConfiguration.fontFamily), 'Fira Code');
+	search.value = '@modified @id:editor.font*';
+	search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
+	assert.ok(root.querySelector(`[data-settings-item-id="${CodeEditorConfiguration.fontFamily}"]`));
+	assert.equal(root.querySelector(`[data-settings-item-id="${CodeEditorConfiguration.fontSize}"]`), null);
+	fontFamily.focus();
+	await configuration.updateValue(CodeEditorConfiguration.fontFamily, 'Iosevka');
+	assert.equal(ownerDocument.activeElement, fontFamily, 'accepted writes retain focus on rows that still match');
+	await configuration.updateValue(CodeEditorConfiguration.fontFamily, undefined);
+	assert.equal(root.querySelector(`[data-settings-item-id="${CodeEditorConfiguration.fontFamily}"]`), null);
+	assert.equal(root.querySelector<HTMLElement>('.ash-settings-page [role="status"]')?.hidden, false);
+	await configuration.updateValue(CodeEditorConfiguration.fontFamily, 'Fira Code');
+	assert.equal(root.querySelector(`[data-configuration-key="${CodeEditorConfiguration.fontFamily}"]`), fontFamily);
+	search.value = '';
+	search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
 	root.querySelector<HTMLButtonElement>('.ash-settings-search-filter')?.click();
-	assert.deepEqual(menuActions.filter(action => action.label).map(action => action.label), ['Setting ID…', 'Clear Filters']);
+	assert.deepEqual(menuActions.filter(action => action.label).map(action => action.label), ['Modified', 'Setting ID…', 'Clear Filters']);
 	const idFilter = menuActions.find(action => action.id === 'settings.search.id');
 	assert.ok(idFilter);
 	await idFilter.run();
@@ -1562,6 +1666,8 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	await nextTurn();
 	assert.equal(host.hidden, true);
 	assert.equal(ownerDocument.activeElement, trigger);
+	await configuration.updateValue(CodeEditorConfiguration.fontFamily, 'After close');
+	assert.equal(root.querySelector(`[data-settings-item-id="${CodeEditorConfiguration.fontFamily}"]`), null);
 });
 
 function findSettingCategory(layout: ReturnType<typeof createSettingsLayout>, settingId: string): string | undefined {

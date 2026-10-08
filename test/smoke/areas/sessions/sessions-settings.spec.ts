@@ -1,5 +1,124 @@
 import { expect, test } from '../../../automation/test.js';
 import { captureElectronMenu } from '../../../automation/menus.js';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { Workbench } from '../../../automation/workbench.js';
+
+test('Sessions Modified Settings refreshes after external writes, reset and window reload', async ({ application, target, workbench, runningApplication }, testInfo) => {
+	const workbenchUrl = workbench.page.url();
+	await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
+	const group = workbench.editors.groupAt(0);
+	await group.editor.input.press('ControlOrMeta+A');
+	await group.editor.input.evaluate((element, source) => {
+		const clipboardData = new DataTransfer();
+		clipboardData.setData('text/plain', source);
+		element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
+	}, '{ "window.menuStyle": "custom", "sessions.activityBar.compact": false, "workbench.activityBar.compact": true }');
+	await group.editor.input.press('ControlOrMeta+S');
+	await expect(group.tabs.filter({ hasText: 'User Settings (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
+	let sessionsPage = await workbench.openAgentsWindow(target.kind);
+	const openSettings = async (): Promise<void> => {
+		await sessionsPage.locator('[data-part="activitybar"] .ash-sessions-activity-bottom button').last().click();
+		await sessionsPage.getByRole('menuitem', { name: 'Settings', exact: true }).click();
+	};
+	await openSettings();
+	let settings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
+	await settings.getByRole('searchbox').fill('compact @id:sessions.activityBar.compact');
+	const filter = settings.getByRole('button', { name: 'Filter Settings', exact: true });
+	const inputBounds = await settings.getByRole('searchbox').boundingBox();
+	const filterBounds = await filter.boundingBox();
+	if (!inputBounds || !filterBounds) throw new Error('Settings search controls must be visible');
+	expect(inputBounds.x + inputBounds.width).toBeLessThanOrEqual(filterBounds.x);
+	expect(Math.abs(inputBounds.y - filterBounds.y)).toBeLessThanOrEqual(1);
+	await filter.press('Enter');
+	await settings.getByRole('menuitem', { name: 'Modified', exact: true }).press('Enter');
+	await expect(settings.getByRole('searchbox')).toHaveValue('compact @id:sessions.activityBar.compact @modified');
+	await expect(settings.getByRole('searchbox')).toBeFocused();
+	const row = settings.locator('[data-settings-item-id="sessions.activityBar.compact"]');
+	await expect(row.getByRole('switch')).not.toBeChecked();
+	await expect(settings.locator('[data-settings-item-id="workbench.activityBar.compact"]')).toHaveCount(0);
+	await expect(settings.locator('.ash-models-settings-model-row')).toHaveCount(0);
+	let writer: Workbench | undefined;
+	const saveExternal = async (compact: boolean | undefined): Promise<void> => {
+		const source = JSON.stringify({ 'window.menuStyle': 'custom', 'workbench.activityBar.compact': true, ...(compact === undefined ? {} : { 'sessions.activityBar.compact': compact }) });
+		if ('windows' in application) {
+			await sessionsPage.evaluate(async source => {
+				const current = await globalThis.ashTestMainProcess.call<{ revision: number; }>('configuration', 'read');
+				await globalThis.ashTestMainProcess.call('configuration', 'update', { expectedRevision: current.revision, document: { version: 1, source } });
+			}, source);
+		} else {
+			if (!writer) {
+				const writerPage = await sessionsPage.context().newPage();
+				writer = new Workbench(writerPage);
+				await writerPage.goto(workbenchUrl);
+				await writer.waitForReady();
+				await writer.quickaccess.runCommand('workbench.action.openSettingsJson');
+			}
+			const writerGroup = writer.editors.groupAt(0);
+			await writerGroup.editor.input.press('ControlOrMeta+A');
+			await writerGroup.editor.input.evaluate((element, source) => {
+				const clipboardData = new DataTransfer();
+				clipboardData.setData('text/plain', source);
+				element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
+			}, source);
+			await writerGroup.editor.input.press('ControlOrMeta+S');
+			await expect(writerGroup.tabs.filter({ hasText: 'User Settings (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
+		}
+	};
+	try {
+		await saveExternal(true);
+		await expect(row.getByRole('switch')).toBeChecked();
+		await saveExternal(undefined);
+		await expect(row).toHaveCount(0);
+		await saveExternal(false);
+		await expect(row.getByRole('switch')).not.toBeChecked();
+	} finally {
+		if (writer) {
+			await writer.quickaccess.runCommand('workbench.action.closeAllEditors');
+			await expect(writer.editors.groupAt(0).tabs).toHaveCount(0);
+			await writer.page.close();
+		}
+	}
+	await row.getByRole('button', { name: /^More actions/u }).press('Enter');
+	await settings.getByRole('menuitem', { name: 'Reset Setting', exact: true }).press('Enter');
+	await expect(row).toHaveCount(0);
+	await expect(settings.getByRole('status').filter({ hasText: 'No settings found.' })).toBeVisible();
+	await settings.evaluate(element => (element as HTMLDialogElement).requestClose());
+	await expect(settings).toHaveCount(0);
+	const remaining = { 'window.menuStyle': 'custom', 'workbench.activityBar.compact': true };
+	if ('windows' in application) {
+		const profile = await application.evaluate(() => process.env.ASH_HOME!);
+		await expect.poll(async () => JSON.parse(await readFile(join(profile, 'settings.json'), 'utf8'))).toEqual(remaining);
+	} else {
+		await expect.poll(() => sessionsPage.evaluate(async () => {
+			const database = await new Promise<IDBDatabase>((resolve, reject) => {
+				const request = indexedDB.open('ash-configuration');
+				request.onsuccess = () => resolve(request.result);
+				request.onerror = () => reject(request.error);
+			});
+			try {
+				return await new Promise<unknown>((resolve, reject) => {
+					const request = database.transaction('resources', 'readonly').objectStore('resources').get('settings.json');
+					request.onsuccess = () => resolve(JSON.parse(request.result.document.source));
+					request.onerror = () => reject(request.error);
+				});
+			} finally { database.close(); }
+		})).toEqual(remaining);
+	}
+	sessionsPage = await workbench.reopenAgentsWindow(application, sessionsPage);
+	await openSettings();
+	settings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
+	await settings.getByRole('searchbox').fill('@modified @id:sessions.activityBar.compact');
+	await expect(settings.locator('[data-settings-item-id="sessions.activityBar.compact"]')).toHaveCount(0);
+	await settings.getByRole('button', { name: 'Filter Settings', exact: true }).press('Enter');
+	await settings.getByRole('menuitem', { name: 'Clear Filters', exact: true }).press('Enter');
+	await expect(settings.getByRole('searchbox')).toHaveValue('');
+	await settings.getByRole('button', { name: 'Appearance', exact: true }).click();
+	await expect(settings.locator('[data-settings-item-id="sessions.activityBar.compact"]').getByRole('switch')).not.toBeChecked();
+	await settings.evaluate(element => (element as HTMLDialogElement).requestClose());
+	await testInfo.attach('sessions-modified-settings-diagnostics', { body: JSON.stringify(runningApplication.diagnostics), contentType: 'application/json' });
+	expect(runningApplication.diagnostics.errors).toEqual([]);
+});
 
 test('Sessions setting menus copy their current registered value as JSON', async ({ application, target, workbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');

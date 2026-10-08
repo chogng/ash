@@ -10,14 +10,20 @@ export interface SettingsSearchTarget {
 export class SettingsSearchQuery {
 	public readonly text: string;
 	public readonly key: string;
+	public readonly hasModifiedFilter: boolean;
 	private readonly idFilter: string | undefined;
 	private readonly terms: readonly string[];
 
 	constructor(value: string) {
 		const textTokens: string[] = [];
 		let idFilter: string | undefined;
+		let hasModifiedFilter = false;
 		for (const token of value.trim().split(/\s+/u).filter(Boolean)) {
 			const normalized = token.toLocaleLowerCase();
+			if (normalized === '@modified') {
+				hasModifiedFilter = true;
+				continue;
+			}
 			if (normalized.startsWith('@id:')) {
 				idFilter = normalized.slice('@id:'.length) || undefined;
 				continue;
@@ -31,11 +37,12 @@ export class SettingsSearchQuery {
 			.toLocaleLowerCase();
 		this.terms = this.text ? this.text.split(' ') : [];
 		this.idFilter = idFilter;
-		this.key = `${this.text}\0${idFilter ?? ''}`;
+		this.hasModifiedFilter = hasModifiedFilter;
+		this.key = `${this.text}\0${idFilter ?? ''}\0${hasModifiedFilter}`;
 	}
 
 	public get isEmpty(): boolean {
-		return this.terms.length === 0 && !this.idFilter;
+		return this.terms.length === 0 && !this.idFilter && !this.hasModifiedFilter;
 	}
 
 	public matches(target: SettingsSearchTarget): boolean {

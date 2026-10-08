@@ -40,6 +40,7 @@ import { DictationSettingsContent } from '../../../../workbench/contrib/chat/bro
 import { SettingsTree } from '../../../../workbench/contrib/preferences/browser/settingsTree.js';
 import { SettingsTreeModel, type SettingsContent, type SettingsContentItem, type SettingsTreeNode } from '../../../../workbench/contrib/preferences/browser/settingsTreeModels.js';
 import { SettingsSearchQuery } from '../../../../workbench/contrib/preferences/browser/settingsSearch.js';
+import { SettingsSearchMenu } from '../../../../workbench/contrib/preferences/browser/settingsSearchMenu.js';
 import type { SettingWidgetOptions } from '../../../../workbench/contrib/preferences/browser/settingsWidgets.js';
 import type { ISetting } from '../../../../workbench/services/preferences/common/preferences.js';
 import { SessionsConfiguration } from '../../../common/configuration.js';
@@ -105,7 +106,7 @@ export class SessionsPreferences extends Disposable {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsSettings,
 					{ type: AccessibleViewType.Help },
-					() => localize('sessions.settings.help', 'Sessions Settings has categories on the left and settings on the right. General contains dictation settings; Models contains chat models and API connections. Tools shows the current tool catalog and execution requirements. Git & PRs contains Codex review account status, repository access checks, and official review management links. Agents contains the Advisor model and enable switch. Execution trace shows the running recorder, detailed recording switch and save directory. Save trace settings explicitly, then restart the owning App Server to apply them. Other changes are saved immediately. Design contains canvas cursor and accessibility settings. Customize has Settings, Plugins, Skills, and Hooks tabs. Use Left and Right to move between tabs, then Enter or Space to open one. Use search to filter settings. Open More actions for a configuration setting and choose Copy Setting as JSON to copy its key and current value; copying does not save settings. The local dictation table lists available and installed models. Use arrow keys to move between rows and cells, and Tab to reach Install, Use model, Cancel, or Uninstall. Preparation continues after Settings closes. Cloud dictation uses the API connections in Models. Press Escape to close Settings.'),
+					() => localize('sessions.settings.help', 'Sessions Settings has categories on the left and settings on the right. General contains dictation settings; Models contains chat models and API connections. Tools shows the current tool catalog and execution requirements. Git & PRs contains Codex review account status, repository access checks, and official review management links. Agents contains the Advisor model and enable switch. Execution trace shows the running recorder, detailed recording switch and save directory. Save trace settings explicitly, then restart the owning App Server to apply them. Other changes are saved immediately. Design contains canvas cursor and accessibility settings. Customize has Settings, Plugins, Skills, and Hooks tabs. Use Left and Right to move between tabs, then Enter or Space to open one. Use search to filter settings. Open More actions for a configuration setting and choose Copy Setting as JSON to copy its key and current value; copying does not save settings. The local dictation table lists available and installed models. Use arrow keys to move between rows and cells, and Tab to reach Install, Use model, Cancel, or Uninstall. Preparation continues after Settings closes. Cloud dictation uses the API connections in Models. Press Escape to close Settings.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.modifiedHelp' }, 'Type @modified or choose Modified in Filter Settings to show settings saved in local user settings, including explicit default values. Combine it with text or @id: filters. Language-only overrides and service status are excluded. Reset removes a saved override; failed saves keep the previous results. Clear Filters keeps your search text.'),
 					() => focused.focus(),
 					AccessibilityVerbositySettingId.SessionsSettings,
 				);
@@ -193,6 +194,12 @@ export class SessionsPreferences extends Disposable {
 			layout: () => contextView.layout(),
 		}])));
 		const contextMenus = resources.add(contentServices.createInstance(BrowserContextMenuService));
+		resources.add(new SettingsSearchMenu(search, {
+			getValue: () => searchInput.value,
+			setValue: value => { searchInput.value = value; },
+			focus: () => searchInput.focus(),
+			contextMenuProvider: contextMenus,
+		}));
 		const settingOptions: SettingWidgetOptions = {
 			clipboardService: this.clipboardService,
 			configurationService: this.configurationService,
@@ -225,7 +232,11 @@ export class SessionsPreferences extends Disposable {
 						: categoryId === 'agents' ? categories.findIndex(category => category.content === advisorContent)
 							: categoryId === 'models' ? categories.findIndex(category => category.content === modelContent)
 								: categoryId === 'tools' ? categories.findIndex(category => category.id === 'tools') : 0;
-		const treeModel = resources.add(new SettingsTreeModel<ISetting | SettingsContentItem>());
+		const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+		const treeModel = resources.add(new SettingsTreeModel<ISetting | SettingsContentItem>(id =>
+			// Keep service-only sections out of the local-user filter without creating configuration copies.
+			configurationRegistry.getConfiguration(id) !== undefined && this.configurationService.inspect(id).userLocalValue !== undefined,
+		));
 		const tree = resources.add(new SettingsTree(list, {
 			model: treeModel,
 			rootClassName: 'ash-sessions-settings-content-tree',
@@ -295,6 +306,9 @@ export class SessionsPreferences extends Disposable {
 		for (const category of categories) {
 			if (category.content) resources.add(category.content.onDidChange(render));
 		}
+		resources.add(this.configurationService.onDidChangeConfiguration(() => {
+			if (new SettingsSearchQuery(searchInput.value).hasModifiedFilter) render();
+		}));
 		this.navigate = (categoryId, marketplaceOptions) => {
 			if (categoryId === 'skills' || categoryId === 'plugins' || categoryId === 'hooks') customizeContent.selectTab(categoryId);
 			activeCategory = categoryId === 'customize' || categoryId === 'skills' || categoryId === 'plugins' || categoryId === 'hooks' ? categories.findIndex(category => category.content === customizeContent)

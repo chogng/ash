@@ -26,15 +26,27 @@ export interface TOCTreeOptions {
 export class TOCTreeModel {
 	constructor(private readonly content: SettingsTreeModel<ISetting | SettingsContentItem>) { }
 
-	public get children(): readonly ObjectTreeElement<SettingsTOCEntry>[] {
-		return SettingsNavigation.map(entry => this.navigationElement(entry));
+	public get hasModifiedFilter(): boolean {
+		return this.content.hasModifiedFilter;
 	}
 
-	private navigationElement(entry: SettingsNavigationDescriptor): ObjectTreeElement<SettingsTOCEntry> {
+	public get children(): readonly ObjectTreeElement<SettingsTOCEntry>[] {
+		return SettingsNavigation.flatMap(entry => {
+			const node = this.navigationElement(entry);
+			return node ? [node] : [];
+		});
+	}
+
+	private navigationElement(entry: SettingsNavigationDescriptor): ObjectTreeElement<SettingsTOCEntry> | undefined {
 		if ('categories' in entry) {
+			const children = entry.categories.flatMap(category => {
+				const node = this.categoryElement(category);
+				return node ? [node] : [];
+			});
+			if (children.length === 0) return undefined;
 			return {
 				element: { kind: 'group', id: `group.${entry.id}`, group: entry },
-				children: entry.categories.map(category => this.categoryElement(category)),
+				children,
 				collapsible: true,
 				collapsed: entry.id !== 'general',
 			};
@@ -54,7 +66,8 @@ export class TOCTreeModel {
 		return keywords;
 	}
 
-	private categoryElement(category: SettingsCategoryDescriptor): ObjectTreeElement<SettingsTOCEntry> {
+	private categoryElement(category: SettingsCategoryDescriptor): ObjectTreeElement<SettingsTOCEntry> | undefined {
+		if (this.content.hasModifiedFilter && this.content.countVisibleItems(category.id) === 0) return undefined;
 		// Page sections stay in the content pane; the sidebar stops at categories.
 		return {
 			element: { kind: 'category', id: category.id, category, searchKeywords: this.contentSearchKeywords(category.id) },
@@ -130,6 +143,8 @@ export class TOCTree extends Disposable {
 	}
 
 	public setFindPattern(pattern: string): void {
+		// Modified results own visibility; ordinary searches still discover category-only keywords and empty pages.
+		this.tree.findMode = this.model.hasModifiedFilter ? TreeFindMode.Highlight : TreeFindMode.Filter;
 		this.tree.setFindPattern(pattern);
 	}
 

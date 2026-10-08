@@ -65,13 +65,17 @@ export class SettingsTreeModel<T> extends ObjectTreeModel<SettingsTreeElement<T>
 	private navigationTargetId: string | undefined;
 	private searchQuery = new SettingsSearchQuery("");
 
-	constructor() {
+	constructor(private readonly isConfigured: (id: string) => boolean = () => false) {
 		super({ identityProvider: { getId: (node) => node.id } });
 		this.setFilter({ filter: (node) => this.filterNode(node) });
 	}
 
 	get query(): string {
 		return this.searchQuery.text;
+	}
+
+	get hasModifiedFilter(): boolean {
+		return this.searchQuery.hasModifiedFilter;
 	}
 
 	get navigationTarget(): string | undefined {
@@ -140,6 +144,7 @@ export class SettingsTreeModel<T> extends ObjectTreeModel<SettingsTreeElement<T>
 		if (this.navigationScopeIds && !this.navigationScopeIds.has(node.id)) return false;
 		if (this.searchQuery.isEmpty) return TreeVisibility.Visible;
 		if (node.kind === "group") return TreeVisibility.Recurse;
+		if (this.searchQuery.hasModifiedFilter && !this.isConfigured(node.id)) return false;
 		return this.searchQuery.matches(node);
 	}
 }

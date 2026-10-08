@@ -38,6 +38,13 @@ export class SettingsSearchMenu extends Disposable {
 		const hasFilters = tokens.some(token => token.startsWith('@'));
 		const actions: readonly IAction[] = [
 			{
+				id: 'settings.search.modified',
+				label: localize({ bundle: 'ash.settings', key: 'search.modified' }, 'Modified'),
+				tooltip: localize({ bundle: 'ash.settings', key: 'search.modifiedTooltip' }, 'Show settings configured in local user settings'),
+				enabled: true,
+				run: () => this.updateTokens([...tokens.filter(token => token.toLocaleLowerCase() !== '@modified'), '@modified']),
+			},
+			{
 				id: 'settings.search.id',
 				label: localize({ bundle: 'ash.settings', key: 'search.id' }, 'Setting ID…'),
 				tooltip: localize({ bundle: 'ash.settings', key: 'search.idTooltip' }, 'Filter by setting identifier'),
