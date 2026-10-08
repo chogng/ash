@@ -634,8 +634,9 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	async confirmCloseEditor(input: IResourceEditorInput, closingGroups?: readonly EditorGroupId[]): Promise<boolean> {
 		const entry = this.entry(input);
 		if (!entry) return true;
-		if (!entry.paneInstance.pane.workingCopy?.isDirty) return true;
-		return await this.onWillCloseEditor?.(this, entry.input, entry.paneInstance.pane, closingGroups) ?? false;
+		// A clean file can still have unresolved save recovery; let the resource owner settle first.
+		if (this.onWillCloseEditor) return this.onWillCloseEditor(this, entry.input, entry.paneInstance.pane, closingGroups);
+		return !entry.paneInstance.pane.workingCopy?.isDirty;
 	}
 
 	async closeEditor(input: IResourceEditorInput, options: EditorCloseOptions = {}): Promise<boolean> {
@@ -644,7 +645,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		}
 		const entry = this.entry(input);
 		if (!entry) return false;
-		if (!options.skipConfirmation && entry.paneInstance.pane.workingCopy?.isDirty && !await this.confirmCloseEditor(input)) return false;
+		if (!options.skipConfirmation && !await this.confirmCloseEditor(input)) return false;
 		if (this.paneEntries.get(entry.instanceId) !== entry) return true;
 		this.doCloseEditor(entry, options.reason ?? "close");
 		return true;

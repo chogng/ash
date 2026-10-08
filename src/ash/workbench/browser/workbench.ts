@@ -49,6 +49,7 @@ import "./style.js";
 import { IAutomationService } from '../../platform/automation/common/automationService.js';
 import { disposableWindowTimeout } from "../../base/browser/scheduler.js";
 import { getWindow } from '../../base/browser/dom.js';
+import { TextFileSaveErrorHandler } from '../contrib/files/browser/editors/textFileSaveErrorHandler.js';
 import { mainWindow } from "../../base/browser/window.js";
 import { PixelRatio } from '../../base/browser/pixelRatio.js';
 import {
@@ -741,9 +742,18 @@ export class Workbench extends Disposable {
 		const progressService = this._register(new BrowserProgressService(feedbackHost));
 		services.registerInstance(IProgressService, progressService);
 		services.registerInstance(IClipboardService, clipboardService ?? new BrowserClipboardService(ownerWindow.navigator.clipboard));
-		const workingCopyBackupTracker = this._register(new WorkingCopyBackupTracker(workingCopyService, workingCopyBackups, ownerWindow));
+		const workingCopyBackupTracker = this._register(new WorkingCopyBackupTracker(workingCopyService, workingCopyBackups, ownerWindow, undefined, resource => textModelService.hasPendingSaveRecovery(resource)));
 		this.workingCopyBackupTracker = workingCopyBackupTracker;
-		this._register(textModelService.addSaveCompletionParticipant({ prepare: (model, signal) => workingCopyBackupTracker.prepareSave(model, signal) }));
+		this._register(textModelService.addSaveCompletionParticipant({ prepare: (model, signal, recovery) => workingCopyBackupTracker.prepareSave(model, signal, recovery) }));
+		if (!nativeHostApi) {
+			const onBeforeUnload = (event: BeforeUnloadEvent) => {
+				if (!textModelService.hasPendingSaveRecovery()) return;
+				event.preventDefault();
+				event.returnValue = '';
+			};
+			ownerWindow.addEventListener('beforeunload', onBeforeUnload);
+			this._register(toDisposable(() => ownerWindow.removeEventListener('beforeunload', onBeforeUnload)));
+		}
 		const storage = this._register(storageService);
 		this.workbenchWindow = workbenchWindow;
 		this.storage = storage;
@@ -800,6 +810,7 @@ export class Workbench extends Disposable {
 		this._register(lifecycleService.onBeforeShutdown(event => {
 			// Page teardown clears font caches before async shutdown joins complete.
 			saveFontInfo();
+			event.veto(textModelService.waitForSaveRecovery().then(() => false), 'text save recovery');
 			if (event.reason === 'load') event.veto(editorParts.confirmCloseAllEditors().then(confirmed => !confirmed), 'workspace editor changes');
 			event.veto(workingCopyBackupTracker.flush().then(() => false), 'working-copy backup flush');
 		}));
@@ -979,6 +990,13 @@ export class Workbench extends Disposable {
 		const breadcrumbsService = new BreadcrumbsService();
 		services.registerInstance(IBreadcrumbsService, breadcrumbsService);
 		const editorOptions: IEditorPartOptions = {
+			beforeCloseEditor: async resource => {
+				try { await textModelService.waitForSaveRecovery(resource); return true; }
+				catch (error) {
+					await new TextFileSaveErrorHandler(dialogService).onSaveError(error, resource);
+					return false;
+				}
+			},
 			breadcrumbsService,
 			languageFeaturesService,
 			showBreadcrumbSymbolPicker: (symbols, selected, reveal) => {

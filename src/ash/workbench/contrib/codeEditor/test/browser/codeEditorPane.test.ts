@@ -499,7 +499,7 @@ test('acknowledged text saves cannot replay an older crash backup before the cle
 	};
 	using tracker = new WorkingCopyBackupTracker(copies, backups, clock as unknown as Window);
 	using models = new BrowserTextModelService(store);
-	using completion = models.addSaveCompletionParticipant({ prepare: (model, signal) => tracker.prepareSave(model, signal) });
+	using completion = models.addSaveCompletionParticipant({ prepare: (model, signal, recovery) => tracker.prepareSave(model, signal, recovery) });
 	using services = paneServices(models);
 	using pane = createPane(services, store, { workingCopyService: copies, createPart: createInertEditorPart });
 	try {

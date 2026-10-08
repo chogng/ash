@@ -122,6 +122,8 @@ export const IEditorPart =
 
 /** Named collaborators used to construct the editor region. */
 export interface IEditorPartOptions {
+	/** Waits for resource-owned save recovery before reading dirty state or releasing a pane. */
+	readonly beforeCloseEditor?: (resource: URI) => Promise<boolean>;
 	/** Ash extension: reuse the editor host for single-content groups without changing ordinary multi-tab editors. */
 	readonly editorLimit?: 1;
 	readonly configurationService?: IConfigurationService;
@@ -184,6 +186,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	private readonly inputSerializers: EditorInputSerializerRegistry;
 	private readonly dialogService: IDialogService | undefined;
 	private readonly fileDialogService: IFileDialogService | undefined;
+	private readonly beforeCloseEditor: IEditorPartOptions['beforeCloseEditor'];
 	private readonly editorsObserver: EditorsObserver;
 
 	override get minimumWidth(): number { return Math.max(120, this.editorGrid.minimumWidth); }
@@ -200,6 +203,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			borderWidth: () => this.getFloatingBorderWidth() * 2,
 		});
 		const ownerDocument = container.ownerDocument;
+		this.beforeCloseEditor = options.beforeCloseEditor;
 		this.titleDomNode.remove();
 		this.domNode.setAttribute("aria-label", "Editor");
 		this.groupOptions = {
@@ -365,8 +369,15 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		return source.group;
 	}
 
-	public removeGroup(group: IEditorGroupView | EditorGroupId): void {
-		this.removeGroupHost(this.groupHosts.get(typeof group === 'string' ? group : group.id)!);
+	public async removeGroup(group: IEditorGroupView | EditorGroupId): Promise<boolean> {
+		const host = this.groupHosts.get(typeof group === 'string' ? group : group.id);
+		if (!host) return true;
+		for (const input of [...host.group.inputs]) {
+			if (!await host.group.confirmCloseEditor(input, [host.group.id])) return false;
+		}
+		if (this.groupHosts.get(host.group.id) !== host) return true;
+		this.removeGroupHost(host);
+		return true;
 	}
 
 	public findGroup(scope: IFindGroupScope, source: IEditorGroup = this._activeGroup): IEditorGroup | undefined {
@@ -760,6 +771,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	private async confirmEditorClose(group: IEditorGroupView | undefined, input: IResourceEditorInput, pane: IEditorPane, closingGroups: readonly EditorGroupId[] = []): Promise<boolean> {
+		if (this.beforeCloseEditor && !await this.beforeCloseEditor(pane.workingCopy?.resource ?? input.resource)) return false;
 		const workingCopy = pane.workingCopy;
 		if (!workingCopy?.isDirty) return true;
 		// Another open view still owns this dirty document, including a custom view in the same group.

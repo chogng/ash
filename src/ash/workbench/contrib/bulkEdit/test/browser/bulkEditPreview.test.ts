@@ -181,6 +181,8 @@ for (const outcome of ['accept', 'conflict', 'dispose'] as const) {
 }
 
 class PreviewTextModelService extends Disposable implements IFileTextModelService {
+	hasPendingSaveRecovery(): boolean { return false; }
+	async waitForSaveRecovery(): Promise<void> { }
 	private readonly participants = new Set<ITextModelSaveParticipant>();
 	private readonly completions = new Set<ITextModelSaveCompletionParticipant>();
 	addSaveCompletionParticipant(participant: ITextModelSaveCompletionParticipant) {
@@ -230,7 +232,7 @@ class PreviewTextModelService extends Disposable implements IFileTextModelServic
 					for (const participant of this.participants) await participant.participate(model, options?.reason ?? SaveReason.EXPLICIT, signal);
 				}
 				for (const participant of this.completions) {
-					const complete = await participant.prepare(model, signal);
+					const complete = await participant.prepare(model, signal, { retry: false, acknowledge: () => { } });
 					await complete?.(model.getText());
 				}
 			},

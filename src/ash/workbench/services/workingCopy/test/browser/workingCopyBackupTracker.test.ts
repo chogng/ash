@@ -33,6 +33,121 @@ test('save checkpoints resample edits made before file publication', async () =>
 	assert.deepEqual([fixture.files.text, copy.backup(), copy.isDirty, (await fixture.backups.list()).map(backup => backup.content)], ['requested save', 'newer edit', true, ['newer edit']]);
 });
 
+for (const failDiscard of [false, true]) {
+	test(`save A-B-A recovery matches the written file before clean publication with discard failure=${failDiscard}`, async () => {
+		using fixture = new SaveBackupFixture();
+		const copy = await fixture.open();
+		copy.restoreBackup('A');
+		const checkpoint = fixture.backups.holdNext('store');
+		const writing = fixture.files.holdNextSave();
+		const discard = fixture.backups.holdNext('delete');
+		const discardError = new Error('Injected A-B-A discard failure');
+		if (failDiscard) fixture.backups.failNextDelete = discardError;
+		let atClean: Promise<readonly WorkingCopyBackup[]> | undefined;
+		using listener = copy.onDidChangeDirty(() => { if (!copy.isDirty) atClean = fixture.backups.list(); });
+		const saving = copy.save(new AbortController().signal);
+		const settled = saving.then(() => undefined, error => error);
+		await checkpoint.entered.p;
+		copy.restoreBackup('B');
+		await checkpoint.release.complete(undefined);
+		await writing.entered.p;
+		assert.deepEqual((await fixture.backups.list()).map(backup => backup.content), ['B']);
+		copy.restoreBackup('A');
+		await writing.release.complete(undefined);
+		await discard.entered.p;
+		const beforeDiscard = await fixture.backups.list();
+		await discard.release.complete(undefined);
+		const error = await settled;
+		if (failDiscard) assert.ok(error instanceof TextModelSaveCompletionError && error.fileSaved && error.cause === discardError);
+		else assert.equal(error, undefined);
+		const recovery = failDiscard ? await fixture.backups.list() : atClean ? await atClean : beforeDiscard;
+		using reopened = new SaveBackupFixture();
+		reopened.files.text = fixture.files.text;
+		const restored = await reopened.open();
+		for (const backup of recovery) restored.restoreBackup(backup.content);
+		assert.deepEqual({ file: fixture.files.text, recovered: restored.backup(), dirty: restored.isDirty }, { file: 'A', recovered: 'A', dirty: false });
+	});
+}
+
+for (const boundary of ['checkpoint', 'completion'] as const) {
+	test(`save ${boundary} makes progress while only another URI keeps changing`, async () => {
+		using fixture = new SaveBackupFixture();
+		const copy = await fixture.open();
+		const other = await fixture.open(URI.file('/save-backup/stream.txt'));
+		copy.restoreBackup('A');
+		let changes = 0;
+		const stream = () => { if (changes < 3) other.restoreBackup(`stream-${++changes}`); };
+		if (boundary === 'checkpoint') fixture.backups.onStore = stream;
+		else fixture.backups.onDelete = stream;
+		await copy.save(new AbortController().signal);
+		assert.deepEqual(fixture.backups.calls, ['store:A', 'store:A', 'delete']);
+		assert.deepEqual([fixture.files.text, copy.backup(), copy.isDirty, other.isDirty], ['A', 'A', false, true]);
+	});
+}
+
+test('save A-B-A failed post-write checkpoint blocks ordinary leaving and retains fault data until retry', async () => {
+	using fixture = new SaveBackupFixture();
+	const copy = await fixture.open();
+	copy.restoreBackup('A');
+	const checkpoint = fixture.backups.holdNext('store');
+	const writing = fixture.files.holdNextSave();
+	const saving = copy.save(new AbortController().signal);
+	const settled = saving.then(() => undefined, error => error);
+	await checkpoint.entered.p;
+	copy.restoreBackup('B');
+	await checkpoint.release.complete(undefined);
+	await writing.entered.p;
+	copy.restoreBackup('A');
+	const error = new Error('Injected post-write checkpoint failure');
+	fixture.backups.failNextStore = error;
+	await writing.release.complete(undefined);
+	const result = await settled;
+	assert.ok(result instanceof TextModelSaveCompletionError && result.fileSaved && result.cause === error);
+	assert.deepEqual([fixture.files.text, copy.backup(), copy.isDirty], ['A', 'A', false]);
+	assert.equal(fixture.models.hasPendingSaveRecovery(copy.resource), true);
+	assert.equal(fixture.models.hasPendingSaveRecovery(), true);
+	await assert.rejects(fixture.models.waitForSaveRecovery(copy.resource), value => value === result);
+	await assert.rejects(fixture.models.waitForSaveRecovery(), value => value === result);
+	fixture.clock.runTimers();
+	await fixture.tracker.flush();
+	assert.deepEqual((await fixture.backups.list()).map(backup => backup.content), ['B']);
+	using reopened = new SaveBackupFixture();
+	reopened.files.text = fixture.files.text;
+	const restored = await reopened.open();
+	for (const backup of await fixture.backups.list()) restored.restoreBackup(backup.content);
+	// Forced realm loss bypasses the close gate. The last acknowledged B remains; do not claim crash atomicity.
+	assert.deepEqual([restored.backup(), restored.isDirty], ['B', true]);
+	await copy.save(new AbortController().signal);
+	await fixture.models.waitForSaveRecovery(copy.resource);
+	assert.equal(fixture.models.hasPendingSaveRecovery(), false);
+	assert.deepEqual([fixture.files.saved, copy.backup(), copy.isDirty, await fixture.backups.list()], [['A', 'A'], 'A', false, []]);
+});
+
+test('save recovery wait reports new dirty edits immediately and eventually publishes clean', async () => {
+	using fixture = new SaveBackupFixture();
+	const copy = await fixture.open();
+	copy.restoreBackup('A');
+	await copy.save(new AbortController().signal);
+	const states: boolean[] = [];
+	using listener = copy.onDidChangeDirty(() => states.push(copy.isDirty));
+	const preparation = fixture.backups.holdNext('store');
+	const reconciliation = fixture.backups.holdNext('store');
+	const saving = copy.save(new AbortController().signal);
+	await preparation.entered.p;
+	await preparation.release.complete(undefined);
+	await reconciliation.entered.p;
+	assert.equal(copy.isDirty, false);
+	copy.restoreBackup('B');
+	assert.deepEqual(states, [true]);
+	assert.equal(copy.isDirty, true);
+	copy.restoreBackup('A');
+	assert.deepEqual(states, [true]);
+	await reconciliation.release.complete(undefined);
+	await saving;
+	assert.deepEqual(states, [true, false]);
+	assert.deepEqual([fixture.files.text, copy.backup(), copy.isDirty], ['A', 'A', false]);
+});
+
 test('save completion retains edits made while the clean discard is pending', async () => {
 	using fixture = new SaveBackupFixture();
 	const copy = await fixture.open();
@@ -61,7 +176,7 @@ for (const editAfterPublication of [false, true]) {
 		if (editAfterPublication) copy.restoreBackup('later edit');
 		await deletion.release.complete(undefined);
 		await rejected;
-		assert.deepEqual([fixture.files.text, copy.isDirty, (await fixture.backups.list()).map(backup => backup.content)], ['published text', editAfterPublication, ['published text']]);
+		assert.deepEqual([fixture.files.text, copy.isDirty, (await fixture.backups.list()).map(backup => backup.content)], ['published text', editAfterPublication, [editAfterPublication ? 'later edit' : 'published text']]);
 		copy.restoreBackup('retry current content');
 		await copy.save(new AbortController().signal);
 		assert.deepEqual([fixture.files.saved, copy.backup(), copy.isDirty, await fixture.backups.list()], [['published text', 'retry current content'], 'retry current content', false, []]);
@@ -681,6 +796,9 @@ class MemoryBackups extends Disposable implements IWorkingCopyBackupService {
 class ControlledBackups extends MemoryBackups {
 	readonly calls: string[] = [];
 	failNextDelete: Error | undefined;
+	failNextStore: Error | undefined;
+	onStore: (() => void) | undefined;
+	onDelete: (() => void) | undefined;
 	private readonly held: Array<{ kind: 'store' | 'delete'; entered: DeferredPromise<void>; release: DeferredPromise<void>; }> = [];
 
 	holdNext(kind: 'store' | 'delete'): { entered: DeferredPromise<void>; release: DeferredPromise<void>; } {
@@ -692,12 +810,17 @@ class ControlledBackups extends MemoryBackups {
 	override async store(backup: WorkingCopyBackup): Promise<void> {
 		this.calls.push(`store:${backup.content}`);
 		await this.wait('store');
+		this.onStore?.();
+		const error = this.failNextStore;
+		this.failNextStore = undefined;
+		if (error) throw error;
 		await super.store(backup);
 	}
 
 	override async delete(resource: URI): Promise<void> {
 		this.calls.push('delete');
 		await this.wait('delete');
+		this.onDelete?.();
 		const error = this.failNextDelete;
 		this.failNextDelete = undefined;
 		if (error) throw error;
@@ -717,17 +840,18 @@ class ControlledBackups extends MemoryBackups {
 class SaveBackupFixture extends Disposable {
 	readonly files = new SaveTestFiles();
 	readonly backups = this._register(new ControlledBackups());
-	private readonly models = this._register(new BrowserTextModelService(this.files));
+	readonly models = this._register(new BrowserTextModelService(this.files));
 	private readonly copies = this._register(new BrowserWorkingCopyService());
-	private readonly tracker = this._register(new WorkingCopyBackupTracker(this.copies, this.backups, new TestWindow() as unknown as Window));
+	readonly clock = new TestWindow();
+	readonly tracker = this._register(new WorkingCopyBackupTracker(this.copies, this.backups, this.clock as unknown as Window, undefined, resource => this.models.hasPendingSaveRecovery(resource)));
 
 	constructor() {
 		super();
-		this._register(this.models.addSaveCompletionParticipant({ prepare: (model, signal) => this.tracker.prepareSave(model, signal) }));
+		this._register(this.models.addSaveCompletionParticipant({ prepare: (model, signal, recovery) => this.tracker.prepareSave(model, signal, recovery) }));
 	}
 
-	async open(): Promise<IWorkingCopy> {
-		const reference = await this.models.acquire({ resource: URI.file('/save-backup/file.txt') }, new AbortController().signal);
+	async open(resource = URI.file('/save-backup/file.txt')): Promise<IWorkingCopy> {
+		const reference = await this.models.acquire({ resource }, new AbortController().signal);
 		const copy = this._register(new FileWorkingCopy(reference));
 		this._register(this.copies.register(copy));
 		return copy;
@@ -766,9 +890,16 @@ class SaveTestFiles implements ITextResourceStore {
 	text = 'disk baseline';
 	failNextSave: Error | undefined;
 	private revision = 1;
+	private held: { entered: DeferredPromise<void>; release: DeferredPromise<void>; } | undefined;
+	holdNextSave(): { entered: DeferredPromise<void>; release: DeferredPromise<void>; } {
+		return this.held = { entered: new DeferredPromise<void>(), release: new DeferredPromise<void>() };
+	}
 	async resolve(request: TextResourceResolveRequest) { return { resource: request.resource, text: this.text, revision: String(this.revision) }; }
 	async save(request: TextResourceSaveRequest) {
 		if (request.expectedRevision !== String(this.revision)) throw new TextResourceConflictError(request.resource);
+		const held = this.held;
+		this.held = undefined;
+		if (held) { await held.entered.complete(undefined); await held.release.p; }
 		const error = this.failNextSave;
 		this.failNextSave = undefined;
 		if (error) throw error;

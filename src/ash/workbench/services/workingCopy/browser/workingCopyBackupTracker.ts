@@ -6,7 +6,7 @@ import { type IWorkingCopyBackupService } from "../common/workingCopyBackupServi
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import type { TextModel } from '../../../../editor/common/model/textModel.js';
-import type { TextModelSaveCompletion } from '../../textmodelResolver/common/textModelResourceService.js';
+import type { TextModelSaveCompletion, TextModelSaveRecoveryContext } from '../../textmodelResolver/common/textModelResourceService.js';
 import type { WorkingCopyBackup } from '../common/workingCopyBackupService.js';
 
 const BACKUP_DELAY_MS = 250;
@@ -19,6 +19,7 @@ export class WorkingCopyBackupTracker extends Disposable {
 	private readonly queues = new Map<string, Promise<void>>();
 	private readonly edited = new Set<IWorkingCopy>();
 	private readonly pendingResources = new Map<string, URI>();
+	private readonly resourceGenerations = new Map<string, number>();
 	private generation = 0;
 	private paused = false;
 	private stopped = false;
@@ -27,7 +28,7 @@ export class WorkingCopyBackupTracker extends Disposable {
 	private drainedGeneration = -1;
 	private shutdownPromise: Promise<void> | undefined;
 
-	constructor(private readonly workingCopies: IWorkingCopyService, private readonly backups: IWorkingCopyBackupService, private readonly ownerWindow: Window, private readonly onError: (error: unknown) => void = error => console.error("Failed to update working-copy backup", error)) {
+	constructor(private readonly workingCopies: IWorkingCopyService, private readonly backups: IWorkingCopyBackupService, private readonly ownerWindow: Window, private readonly onError: (error: unknown) => void = error => console.error("Failed to update working-copy backup", error), private readonly retainRecovery?: (resource: URI) => boolean) {
 		super();
 		this.registrations.add(workingCopies.onDidRegister(copy => this.track(copy)));
 		this.registrations.add(workingCopies.onDidUnregister(copy => this.untrack(copy)));
@@ -36,6 +37,7 @@ export class WorkingCopyBackupTracker extends Disposable {
 			this.timers.clear();
 			this.edited.clear();
 			this.pendingResources.clear();
+			this.resourceGenerations.clear();
 		}));
 	}
 
@@ -48,31 +50,48 @@ export class WorkingCopyBackupTracker extends Disposable {
 	}
 
 	/** A failed post-save discard must leave current recovery content, never an older draft. */
-	public async prepareSave(model: TextModel, signal: AbortSignal): Promise<TextModelSaveCompletion | undefined> {
+	public async prepareSave(model: TextModel, signal: AbortSignal, recovery?: TextModelSaveRecoveryContext): Promise<TextModelSaveCompletion | undefined> {
 		throwIfCancelled(signal);
 		if (this.paused || this.stopped || this.isDisposed) throw new CancellationError();
-		const copy = this.workingCopies.get(model.uri).find(candidate => candidate.backupKind === 'text' && (candidate.isDirty || this.edited.has(candidate)));
+		const copy = this.workingCopies.get(model.uri).find(candidate => candidate.backupKind === 'text' && (candidate.isDirty || this.edited.has(candidate) || recovery?.retry));
 		if (!copy) return undefined;
 		const metadata = { contentType: copy.backupContentType, label: copy.backupLabel };
+		const key = model.uri.toString();
 		let generation: number;
 		let content: string;
 		do {
-			generation = this.generation;
+			generation = this.resourceGenerations.get(key) ?? 0;
 			content = model.getText();
 			await this.persist(model.uri, undefined, () => textBackup(model, metadata));
+			if (generation === (this.resourceGenerations.get(key) ?? 0) && content === model.getText()) recovery?.acknowledge(model.version);
 			throwIfCancelled(signal);
 			if (this.paused || this.stopped || this.isDisposed) throw new CancellationError();
-		} while (generation !== this.generation || content !== model.getText());
+		} while (generation !== (this.resourceGenerations.get(key) ?? 0) || content !== model.getText());
 		return async savedText => {
+			const reconcile = async () => {
+				do {
+					generation = this.resourceGenerations.get(key) ?? 0;
+					content = model.getText();
+					// File writes are asynchronous: even an undo can invalidate the prepared checkpoint.
+					await this.persist(model.uri, undefined, () => textBackup(model, metadata));
+				} while (generation !== (this.resourceGenerations.get(key) ?? 0) || content !== model.getText());
+				recovery?.acknowledge(model.version);
+			};
 			do {
-				generation = this.generation;
-				content = model.getText();
-				await this.persist(model.uri, undefined, () => {
-					if (model.getText() !== savedText) return textBackup(model, metadata);
-					const dirty = this.workingCopies.get(model.uri).find(candidate => candidate.isDirty);
-					return dirty ? { resource: dirty.resource, kind: dirty.backupKind, content: dirty.backup(), updatedAt: Date.now(), ...(dirty.backupLanguageId ? { languageId: dirty.backupLanguageId } : {}), ...(dirty.backupContentType ? { contentType: dirty.backupContentType } : {}), ...(dirty.backupLabel ? { label: dirty.backupLabel } : {}) } : undefined;
-				});
-			} while (generation !== this.generation || content !== model.getText());
+				await reconcile();
+				try {
+					await this.persist(model.uri, undefined, () => {
+						if (model.getText() !== savedText) return textBackup(model, metadata);
+						const dirty = this.workingCopies.get(model.uri).find(candidate => candidate.isDirty && candidate.backup() !== savedText);
+						return dirty ? { resource: dirty.resource, kind: dirty.backupKind, content: dirty.backup(), updatedAt: Date.now(), ...(dirty.backupLanguageId ? { languageId: dirty.backupLanguageId } : {}), ...(dirty.backupContentType ? { contentType: dirty.backupContentType } : {}), ...(dirty.backupLabel ? { label: dirty.backupLabel } : {}) } : undefined;
+					});
+				} catch (error) {
+					// A failed discard can outlive new edits; retain their acknowledged content before reporting it.
+					try { await reconcile(); }
+					catch (checkpointError) { throw new AggregateError([error, checkpointError], 'Recovery discard and current checkpoint failed'); }
+					throw error;
+				}
+			} while (generation !== (this.resourceGenerations.get(key) ?? 0) || content !== model.getText());
 		};
 	}
 
@@ -118,6 +137,7 @@ export class WorkingCopyBackupTracker extends Disposable {
 		this.timers.clear();
 		this.edited.clear();
 		this.pendingResources.clear();
+		this.resourceGenerations.clear();
 	}
 
 	private async drain(): Promise<void> {
@@ -146,7 +166,7 @@ export class WorkingCopyBackupTracker extends Disposable {
 	private track(copy: IWorkingCopy): void {
 		if (this.stopped || this.isDisposed) return;
 		if (this.tracked.has(copy)) return;
-		this.generation++;
+		this.changed(copy.resource);
 		const listeners = new DisposableStore();
 		this.timers.set(copy, listeners.add(new MutableDisposable<IDisposable>()));
 		listeners.add(copy.onDidChangeContent(() => this.schedule(copy)));
@@ -161,7 +181,7 @@ export class WorkingCopyBackupTracker extends Disposable {
 		this.cancel(copy);
 		this.tracked.deleteAndDispose(copy);
 		this.timers.delete(copy);
-		this.generation++;
+		this.changed(copy.resource);
 		// A failed recovery can unregister a clean copy. Its durable content still needs recovery.
 		if (!this.edited.delete(copy)) return;
 		if (this.paused) { this.pendingResources.set(copy.resource.toString(), copy.resource); return; }
@@ -171,7 +191,7 @@ export class WorkingCopyBackupTracker extends Disposable {
 
 	private schedule(copy: IWorkingCopy): void {
 		if (this.stopped || this.isDisposed) return;
-		this.generation++;
+		this.changed(copy.resource);
 		this.pendingResources.set(copy.resource.toString(), copy.resource);
 		this.cancel(copy);
 		if (this.paused) return;
@@ -186,6 +206,12 @@ export class WorkingCopyBackupTracker extends Disposable {
 
 	private cancel(copy: IWorkingCopy): void {
 		this.timers.get(copy)?.clear();
+	}
+
+	private changed(resource: URI): void {
+		this.generation++;
+		const key = resource.toString();
+		this.resourceGenerations.set(key, (this.resourceGenerations.get(key) ?? 0) + 1);
 	}
 
 	private persist(resource: IWorkingCopy['resource'], copy?: IWorkingCopy, capture?: () => WorkingCopyBackup | undefined): Promise<void> {
@@ -205,7 +231,14 @@ export class WorkingCopyBackupTracker extends Disposable {
 				const backup = { resource: dirtyCopy.resource, kind: dirtyCopy.backupKind, content: dirtyCopy.backup(), updatedAt: Date.now(), ...(dirtyCopy.backupLanguageId ? { languageId: dirtyCopy.backupLanguageId } : {}), ...(dirtyCopy.backupContentType ? { contentType: dirtyCopy.backupContentType } : {}), ...(dirtyCopy.backupLabel ? { label: dirtyCopy.backupLabel } : {}) };
 				operation = () => this.backups.store(backup);
 			} else {
-				operation = () => this.backups.delete(resource);
+				operation = () => {
+					// Ordinary clean/unregister timers must not discard fault data owned by a pending save.
+					if (this.retainRecovery?.(resource)) {
+						this.pendingResources.set(key, resource);
+						return Promise.resolve();
+					}
+					return this.backups.delete(resource);
+				};
 			}
 		} catch (error) {
 			this.pendingResources.set(key, resource);

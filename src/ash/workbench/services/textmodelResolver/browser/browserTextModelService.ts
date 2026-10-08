@@ -32,11 +32,20 @@ interface TextModelEntry {
 	revision: string | undefined;
 	encoding: TextResourceContent["encoding"];
 	updatingFile: boolean;
+	completingSave: boolean;
 	dirty: boolean;
+	notifiedDirty: boolean;
 	hasExternalChange: boolean;
 	disposed: boolean;
 	saveQueue: Promise<void>;
 	references: number;
+}
+
+interface SaveRecoveryState {
+	pending: number;
+	latest: Promise<void> | undefined;
+	unresolved: boolean;
+	error: unknown;
 }
 
 export interface BrowserTextModelServiceOptions {
@@ -52,6 +61,8 @@ export interface BrowserTextModelServiceOptions {
 /** Shares text models by exact resource identity while references are open. */
 export class BrowserTextModelService extends Disposable implements IFileTextModelService {
 	private readonly entries = new Map<string, TextModelEntry>();
+	// Failed recovery outlives forced pane disposal; retrying the same URI owns its resolution.
+	private readonly saveRecovery = new Map<string, SaveRecoveryState>();
 	private readonly saveParticipants = new Set<ITextModelSaveParticipant>();
 	private readonly saveCompletionParticipants = new Set<ITextModelSaveCompletionParticipant>();
 	private readonly undoRedoParticipant = this._register(new RetainedModelUndoRedoHistory());
@@ -64,6 +75,28 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 
 	public getModel(resource: URI): TextModel | null { return this.entries.get(resource.toString())?.model ?? null; }
 	public getModels(): readonly TextModel[] { return [...this.entries.values()].map(entry => entry.model); }
+
+	public hasPendingSaveRecovery(resource?: URI): boolean {
+		const states = resource ? [this.saveRecovery.get(resource.toString())] : this.saveRecovery.values();
+		for (const state of states) if (state && (state.pending > 0 || state.unresolved)) return true;
+		return false;
+	}
+
+	public async waitForSaveRecovery(resource?: URI): Promise<void> {
+		if (resource) return this.waitForResourceSaveRecovery(resource.toString());
+		while (this.saveRecovery.size > 0) {
+			await Promise.all([...this.saveRecovery.keys()].map(key => this.waitForResourceSaveRecovery(key)));
+		}
+	}
+
+	private async waitForResourceSaveRecovery(key: string): Promise<void> {
+		let state: SaveRecoveryState | undefined;
+		while ((state = this.saveRecovery.get(key))?.pending) {
+			// Join the real result. The ordering queue deliberately consumes failures and is not evidence of recovery.
+			try { await state.latest; } catch { /* The retained acknowledgement/error below decides whether leaving is safe. */ }
+		}
+		if (state?.unresolved) throw state.error;
+	}
 
 	public addSaveParticipant(participant: ITextModelSaveParticipant): IDisposable {
 		this.assertNotDisposed();
@@ -146,7 +179,9 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 			revision: content.revision,
 			encoding: content.encoding,
 			updatingFile: false,
+			completingSave: false,
 			dirty: input.resource.scheme === Schemas.untitled && model.getText().length > 0,
+			notifiedDirty: input.resource.scheme === Schemas.untitled && model.getText().length > 0,
 			hasExternalChange: false,
 			disposed: false,
 			saveQueue: Promise.resolve(),
@@ -160,6 +195,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 	protected override disposeCore(): void {
 		this.saveParticipants.clear();
 		this.saveCompletionParticipants.clear();
+		this.saveRecovery.clear();
 		// Remove identities before notifying observers so they cannot resolve a closed model.
 		for (const [key, entry] of this.entries) {
 			this.entries.delete(key);
@@ -228,55 +264,89 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		throwIfCancelled(signal, "Text model save was cancelled");
 		// A queued save owns the model until its participants and write finish, even if the pane closes.
 		const lifetime = this.reference(entry.resource.toString(), entry);
+		const key = entry.resource.toString();
+		let recovery = this.saveRecovery.get(key);
+		if (!recovery) {
+			recovery = { pending: 0, latest: undefined, unresolved: false, error: undefined };
+			this.saveRecovery.set(key, recovery);
+		}
+		const state = recovery;
+		state.pending++;
 		let savedText = entry.model.getText();
 		const encoding = entry.encoding;
 		const save = entry.saveQueue.then(async () => {
-			if (!options.skipSaveParticipants && this.saveParticipants.size > 0) {
-				this.ensureEntryAlive(entry);
-				for (const participant of this.saveParticipants) {
-					throwIfCancelled(signal, 'Text model save was cancelled');
-					await raceCancellationError(participant.participate(entry.model, options.reason ?? SaveReason.EXPLICIT, signal), signal);
-				}
-				// Participant edits belong to this save, not a later dirty snapshot.
-				this.ensureEntryAlive(entry);
-				savedText = entry.model.getText();
-			}
-			throwIfCancelled(signal, 'Text model save was cancelled');
-			const completions: TextModelSaveCompletion[] = [];
-			for (const participant of this.saveCompletionParticipants) {
-				// Await checkpoint settlement even on cancellation: the queue still owns its model.
-				const complete = await participant.prepare(entry.model, signal);
-				if (complete) completions.push(complete);
-				this.ensureEntryAlive(entry);
-				throwIfCancelled(signal, 'Text model save was cancelled');
-			}
-			let saved;
+			const retry = state.unresolved;
+			const acknowledgements = new Map<ITextModelSaveCompletionParticipant, number | undefined>();
+			entry.completingSave = this.saveCompletionParticipants.size > 0;
 			try {
-				saved = await this.resourceStore.save({
-					resource: entry.resource,
-					text: savedText,
-					...(encoding === undefined ? {} : { encoding }),
-					...(entry.revision === undefined ? {} : { expectedRevision: entry.revision }),
-				}, signal);
+				if (!options.skipSaveParticipants && this.saveParticipants.size > 0) {
+					this.ensureEntryAlive(entry);
+					for (const participant of this.saveParticipants) {
+						throwIfCancelled(signal, 'Text model save was cancelled');
+						await raceCancellationError(participant.participate(entry.model, options.reason ?? SaveReason.EXPLICIT, signal), signal);
+					}
+					// Participant edits belong to this save, not a later dirty snapshot.
+					this.ensureEntryAlive(entry);
+					savedText = entry.model.getText();
+				}
+				throwIfCancelled(signal, 'Text model save was cancelled');
+				const completions: TextModelSaveCompletion[] = [];
+				for (const participant of this.saveCompletionParticipants) {
+					acknowledgements.set(participant, undefined);
+					// Await checkpoint settlement even on cancellation: the queue still owns its model.
+					const complete = await participant.prepare(entry.model, signal, {
+						retry,
+						acknowledge: version => acknowledgements.set(participant, version),
+					});
+					if (complete) completions.push(complete);
+					else acknowledgements.delete(participant);
+					this.ensureEntryAlive(entry);
+					throwIfCancelled(signal, 'Text model save was cancelled');
+				}
+				let saved;
+				try {
+					saved = await this.resourceStore.save({
+						resource: entry.resource,
+						text: savedText,
+						...(encoding === undefined ? {} : { encoding }),
+						...(entry.revision === undefined ? {} : { expectedRevision: entry.revision }),
+					}, signal);
+				} catch (error) {
+					if (error instanceof TextResourceConflictError) {
+						this.setExternalChange(entry, true);
+						throw new TextModelConflictError(entry.resource);
+					}
+					throw error;
+				}
+				if (entry.disposed) return;
+				entry.savedText = savedText;
+				entry.revision = saved.revision;
+				this.setExternalChange(entry, false);
+				this.refreshDirty(entry);
+				try {
+					// Cancellation after publication cannot leave recovery bookkeeping behind.
+					for (const complete of completions) await complete(savedText);
+					if (!retry || completions.length > 0) {
+						state.unresolved = false;
+						state.error = undefined;
+					}
+				} catch (error) {
+					throw new TextModelSaveCompletionError(entry.resource, error);
+				}
 			} catch (error) {
-				if (error instanceof TextResourceConflictError) {
-					this.setExternalChange(entry, true);
-					throw new TextModelConflictError(entry.resource);
+				if (acknowledgements.size > 0) {
+					state.unresolved = [...acknowledgements.values()].some(version => version !== entry.model.version);
+					state.error = state.unresolved ? error : undefined;
 				}
 				throw error;
-			}
-			if (entry.disposed) return;
-			entry.savedText = savedText;
-			entry.revision = saved.revision;
-			this.setExternalChange(entry, false);
-			this.refreshDirty(entry);
-			try {
-				// Cancellation after publication cannot leave recovery bookkeeping behind.
-				for (const complete of completions) await complete(savedText);
-			} catch (error) {
-				throw new TextModelSaveCompletionError(entry.resource, error);
+			} finally {
+				state.pending--;
+				if (state.pending === 0 && !state.unresolved) this.saveRecovery.delete(key);
+				entry.completingSave = false;
+				if (!entry.disposed) this.refreshDirty(entry);
 			}
 		});
+		state.latest = save;
 		entry.saveQueue = save.catch(() => undefined);
 		return save.finally(() => lifetime.dispose());
 	}
@@ -305,11 +375,15 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 
 	private refreshDirty(entry: TextModelEntry): void {
 		const dirty = entry.model.getText() !== entry.savedText;
-		if (entry.dirty === dirty) return;
+		const changed = entry.dirty !== dirty;
 		entry.dirty = dirty;
 		if (!dirty) {
 			this.setExternalChange(entry, false);
 		}
+		// Getters stay faithful to the file. Defer only the clean notification during recovery.
+		if (!dirty && entry.completingSave) return;
+		if (!changed && entry.notifiedDirty === dirty) return;
+		entry.notifiedDirty = dirty;
 		entry.dirtyEmitter.fire();
 	}
 

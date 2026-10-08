@@ -33,6 +33,10 @@ import {
 } from "../../../../../../base/common/keybindings.js";
 import { Disposable, DisposableStore, toDisposable, type IDisposable } from "../../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../../base/common/uri.js";
+import { DeferredPromise } from '../../../../../../base/common/async.js';
+import { BrowserTextModelService } from '../../../../../services/textmodelResolver/browser/browserTextModelService.js';
+import { TextModelSaveCompletionError, type TextModelReference } from '../../../../../services/textmodelResolver/common/textModelResourceService.js';
+import { TextResourceConflictError, type ITextResourceStore, type TextResourceResolveRequest, type TextResourceSaveRequest } from '../../../../../services/textmodelResolver/common/textResourceStore.js';
 import { Position } from "../../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../../editor/common/core/range.js";
 import { EditorOpenSource, TextEditorSelectionSource } from '../../../../../../platform/editor/common/editor.js';
@@ -703,9 +707,14 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
 			.map((tab) => tab.getAttribute("aria-selected")),
 		["true", "false"],
 	);
+	const closed = new DeferredPromise<void>();
+	using closeListener = editor.onDidChangeEditors(event => {
+		if (event.kind === 'groupChanged' && event.event.kind === 'editorClosed') void closed.complete(undefined);
+	});
 	editor.domNode.querySelector<HTMLButtonElement>(
 		".ash-editor-tabs-control .ash-tab-close-action button",
 	)?.click();
+	await closed.p;
 	assert.equal(panes[0]?.disposed, true);
 	assert.equal(editor.activeInput, markdown);
 	assert.equal(editor.activePane, codeBlockEditorWidgetPane);
@@ -855,6 +864,162 @@ test('closing one custom view keeps the dirty document, while closing all views 
 		});
 	} finally { dom.window.close(); }
 });
+
+for (const target of ['tab', 'modal', 'all', 'group'] as const) {
+	test(`save recovery close gate waits before closing a clean ${target}`, async () => {
+		using fixture = await createSaveCloseFixture(target);
+		fixture.copy.restoreBackup('A');
+		const saving = fixture.copy.save(new AbortController().signal);
+		await fixture.completing.p;
+		assert.deepEqual([fixture.files.text, fixture.copy.isDirty, fixture.models.hasPendingSaveRecovery()], ['A', false, true]);
+		let closed = false;
+		const closing = fixture.close().then(result => { closed = true; return result; });
+		await fixture.waiting.p;
+		assert.equal(closed, false);
+		assert.equal(fixture.pane.disposed, false);
+		await fixture.release.complete(undefined);
+		await saving;
+		assert.equal(await closing, true);
+		assert.equal(fixture.pane.disposed, true);
+		assert.equal(fixture.models.hasPendingSaveRecovery(), false);
+		assert.deepEqual(fixture.dialogs.prompts, []);
+	});
+
+	test(`save recovery close gate retains a clean ${target} after checkpoint failure until retry`, async () => {
+		using fixture = await createSaveCloseFixture(target, [], true);
+		fixture.copy.restoreBackup('A');
+		const saving = fixture.copy.save(new AbortController().signal);
+		const settled = saving.then(() => undefined, error => error);
+		await fixture.preparing.p;
+		fixture.copy.restoreBackup('B');
+		await fixture.prepareRelease.complete(undefined);
+		await fixture.completing.p;
+		fixture.copy.restoreBackup('A');
+		fixture.control.error = new Error('post-write checkpoint failed');
+		await fixture.release.complete(undefined);
+		const error = await settled;
+		assert.ok(error instanceof TextModelSaveCompletionError && error.fileSaved);
+		assert.deepEqual([fixture.files.text, fixture.copy.backup(), fixture.copy.isDirty], ['A', 'A', false]);
+		assert.equal(await fixture.close(), false);
+		assert.deepEqual(fixture.errors, [error]);
+		assert.equal(fixture.pane.disposed, false);
+		fixture.control.error = undefined;
+		await fixture.copy.save(new AbortController().signal);
+		assert.equal(fixture.models.hasPendingSaveRecovery(), false);
+		assert.equal(await fixture.close(), true);
+		assert.equal(fixture.pane.disposed, true);
+	});
+}
+
+for (const decision of [ConfirmResult.CANCEL, ConfirmResult.DONT_SAVE, ConfirmResult.SAVE]) {
+	test(`save recovery close gate rereads edits from another pane before close-all decision ${decision}`, async () => {
+		using fixture = await createSaveCloseFixture('all', [decision]);
+		await fixture.editor.openEditor(fixture.input, {}, 'sideGroup');
+		const otherPane = fixture.editor.activePane as TestEditorPane;
+		fixture.copy.restoreBackup('A');
+		const controller = new AbortController();
+		const saving = fixture.copy.save(controller.signal);
+		await fixture.completing.p;
+		const closing = fixture.close();
+		await fixture.waiting.p;
+		otherPane.workingCopy!.restoreBackup('B');
+		assert.equal(fixture.copy.isDirty, true);
+		await fixture.release.complete(undefined);
+		await saving;
+		assert.equal(await closing, decision !== ConfirmResult.CANCEL);
+		assert.equal(controller.signal.aborted, false);
+		assert.deepEqual(fixture.dialogs.prompts, [['file.txt']]);
+		if (decision === ConfirmResult.CANCEL) {
+			assert.equal(fixture.pane.disposed, false);
+			assert.equal(otherPane.disposed, false);
+			assert.deepEqual([fixture.files.text, fixture.copy.backup(), fixture.copy.isDirty], ['A', 'B', true]);
+			await fixture.copy.save(new AbortController().signal);
+			assert.equal(await fixture.close(), true);
+			assert.equal(fixture.files.text, 'B');
+		} else {
+			assert.equal(fixture.pane.disposed, true);
+			assert.equal(otherPane.disposed, true);
+			assert.equal(fixture.files.text, decision === ConfirmResult.SAVE ? 'B' : 'A');
+		}
+	});
+}
+
+/** Uses the production shared model and editor close path; gates only persistence acknowledgements. */
+async function createSaveCloseFixture(target: 'tab' | 'modal' | 'all' | 'group', decisions: ConfirmResult[] = [], holdPreparation = false) {
+	const owner = new DisposableStore();
+	try {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		owner.add(toDisposable(() => dom.window.close()));
+		dom.window.HTMLElement.prototype.scrollTo = () => undefined;
+		const files = new CloseGateFiles();
+		const models = owner.add(new BrowserTextModelService(files));
+		const preparing = new DeferredPromise<void>();
+		const prepareRelease = new DeferredPromise<void>();
+		const completing = new DeferredPromise<void>();
+		const release = new DeferredPromise<void>();
+		const waiting = new DeferredPromise<void>();
+		const control: { error?: Error; } = {};
+		owner.add(models.addSaveCompletionParticipant({
+			prepare: async (model, _signal, recovery) => {
+				if (holdPreparation) { await preparing.complete(undefined); await prepareRelease.p; }
+				recovery.acknowledge(model.version);
+				return async () => {
+					await completing.complete(undefined);
+					await release.p;
+					if (control.error) throw control.error;
+					recovery.acknowledge(model.version);
+				};
+			}
+		}));
+		const resource = URI.file('/close-gate/file.txt');
+		const copy = owner.add(new CloseGateWorkingCopy(await models.acquire({ resource }, new AbortController().signal)));
+		const registry = new EditorPaneRegistry();
+		owner.add(registry.registerEditorPane(descriptor('test.close-gate', '.txt', () => new TestEditorPane('test.close-gate', copy))));
+		const errors: unknown[] = [];
+		const dialogs = new TestFileDialogService(...decisions);
+		const editor = owner.add(createEditorPart(dom.window.document.body, {
+			registry, fileDialogService: dialogs,
+			beforeCloseEditor: async uri => {
+				await waiting.complete(undefined);
+				try { await models.waitForSaveRecovery(uri); return true; }
+				catch (error) { errors.push(error); return false; }
+			},
+		}));
+		const resourceInput = { resource };
+		const pane = await editor.openEditor(resourceInput, {}, target === 'modal' ? 'modalGroup' : target === 'group' ? 'sideGroup' : 'activeGroup') as TestEditorPane;
+		const group = editor.activeGroup;
+		const close = target === 'all' ? () => editor.closeAllEditors() : target === 'group' ? () => editor.removeGroup(group) : () => editor.closeEditor(resourceInput);
+		return Object.assign(owner, { files, models, copy, editor, pane, input: resourceInput, close, preparing, prepareRelease, completing, release, waiting, control, errors, dialogs });
+	} catch (error) { owner.dispose(); throw error; }
+}
+
+class CloseGateWorkingCopy extends Disposable implements IWorkingCopy {
+	readonly backupKind = 'text' as const;
+	constructor(private readonly reference: TextModelReference) { super(); this._register(reference); }
+	get resource() { return this.reference.resource; }
+	get isDirty() { return this.reference.isDirty; }
+	get hasExternalChange() { return this.reference.hasExternalChange; }
+	get onDidChangeDirty() { return this.reference.onDidChangeDirty; }
+	get onDidChangeExternalChange() { return this.reference.onDidChangeExternalChange; }
+	get onDidChangeContent() { return Event.map(this.reference.model.onDidChangeContent, () => undefined); }
+	backup(): string { return this.reference.model.getText(); }
+	restoreBackup(content: string): void { this.reference.model.reset(content); }
+	save(signal: AbortSignal): Promise<void> { return this.reference.save(signal); }
+	saveAs(resource: URI, signal: AbortSignal): Promise<void> { return this.reference.saveAs(resource, signal); }
+	revert(signal: AbortSignal): Promise<void> { return this.reference.revert(signal); }
+}
+
+class CloseGateFiles implements ITextResourceStore {
+	readonly onDidChange = Event.None;
+	text = 'baseline';
+	private revision = 1;
+	async resolve(request: TextResourceResolveRequest) { return { resource: request.resource, text: this.text, revision: String(this.revision) }; }
+	async save(request: TextResourceSaveRequest) {
+		if (request.expectedRevision !== String(this.revision)) throw new TextResourceConflictError(request.resource);
+		this.text = request.text;
+		return { revision: String(++this.revision) };
+	}
+}
 
 test('EditorPart pins an already dirty working copy before opening another preview', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');

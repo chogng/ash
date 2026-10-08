@@ -16,9 +16,15 @@ export interface ITextModelSaveParticipant {
 /** Completes recovery bookkeeping after the file has accepted this text. */
 export type TextModelSaveCompletion = (savedText: string) => Promise<void>;
 
+/** Reports an acknowledged snapshot, independently of file dirty state and discard success. */
+export interface TextModelSaveRecoveryContext {
+	readonly retry: boolean;
+	acknowledge(modelVersion: number): void;
+}
+
 /** Prepares durable recovery content after editing participants and before file publication. */
 export interface ITextModelSaveCompletionParticipant {
-	prepare(model: TextModel, signal: AbortSignal): Promise<TextModelSaveCompletion | undefined>;
+	prepare(model: TextModel, signal: AbortSignal, recovery: TextModelSaveRecoveryContext): Promise<TextModelSaveCompletion | undefined>;
 }
 
 /** The minimum identity and bootstrap data needed to acquire a text model. */
@@ -68,6 +74,10 @@ export interface ITextModelResourceService<TInput extends TextModelInput = TextM
 export interface IFileTextModelService extends ITextModelResourceService {
 	addSaveParticipant(participant: ITextModelSaveParticipant): IDisposable;
 	addSaveCompletionParticipant(participant: ITextModelSaveCompletionParticipant): IDisposable;
+	/** Includes queued saves and failed necessary checkpoints, without changing file dirty state. */
+	hasPendingSaveRecovery(resource?: URI): boolean;
+	/** Waits for this URI and rejects its unresolved recovery error until an explicit retry succeeds. */
+	waitForSaveRecovery(resource?: URI): Promise<void>;
 	readonly onModelAdded: Event<TextModel>;
 	readonly onModelRemoved: Event<TextModel>;
 	readonly onModelLanguageChanged: Event<{ readonly model: TextModel; readonly oldLanguageId: string; }>;
