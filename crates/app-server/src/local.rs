@@ -782,6 +782,7 @@ pub struct LocalProfileRuntime {
     analytics: Arc<analytics::Analytics>,
     queue: Arc<queue::QueueStore>,
     automation: Arc<ash_automation::AutomationStore>,
+    symphony: Arc<ash_symphony::Store>,
     profile_root: PathBuf,
     state: Arc<ash_state::StateRuntime>,
     threads: Arc<ThreadController>,
@@ -896,6 +897,7 @@ impl LocalProfileRuntime {
             automation: Arc::new(
                 ash_automation::AutomationStore::open(&database_path).map_err(open_error)?,
             ),
+            symphony: Arc::new(ash_symphony::Store::open(&database_path).map_err(open_error)?),
             queue: Arc::new(queue::QueueStore::open(&database_path).map_err(open_error)?),
             state,
             threads,
@@ -921,6 +923,14 @@ impl LocalProfileRuntime {
 
     pub fn queue_changed(&self) {
         self.updates.publish_queue_changed();
+    }
+
+    pub fn symphony_store(&self) -> Arc<ash_symphony::Store> {
+        Arc::clone(&self.symphony)
+    }
+
+    pub fn symphony_changed(&self) {
+        self.updates.publish_symphony_changed();
     }
 
     pub fn automation_store(&self) -> Arc<ash_automation::AutomationStore> {
@@ -1787,6 +1797,7 @@ pub fn open_app_server_with_codebase_providers(
         .map_err(OpenAppServerError)?;
     if let Some(profile) = &profile_runtime {
         server = server.with_automation_store(profile.automation_store());
+        server = server.with_symphony_store(profile.symphony_store(), application_http.clone());
     }
     if let Some(executable) = pty_helper {
         server = server.with_pty_helper(executable);

@@ -42,6 +42,9 @@ pub use dir_config::{
     DirConfigStore, DirMcpConfig, DirMcpServerConfig, DirSkillsConfig,
 };
 pub use dir_permissions::DirPermissionsConfig;
+pub use document::CommandFileAccess;
+pub use document::CommandNetworkAccess;
+pub use document::ExecutionConfig;
 pub use document::TraceConfig;
 pub use document::{
     AgentConfig, ApprovalReviewModelSelection, ConfigGeneration, ConfigRevision, GrepBackend,

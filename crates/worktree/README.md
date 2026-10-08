@@ -12,3 +12,13 @@
 本 crate 物化、恢复和删除目录，`git-turn-changes` 保存修改归属、不可变文件变化和精确提交进度，
 App Server 装配清理资格。部分提交仍有剩余文件，不等于整个 Thread 可以清理；历史读取使用保留的
 Git 对象库，独立于 checkout 生命周期。能力划分见 [方案](../../docs/git-capabilities.md)。
+
+## 工作流目录
+
+`prepare_directory` 在调用方提供的绝对根路径下创建或复用一个直接子目录，
+新建目录保持为空，让调用方先完成项目初始化。`adopt_directory` 随后保存同一套
+Thread 归属和服务绑定，不再复制工作区。绑定记录版本 7 的 `prepared_root` 保存
+实际根路径，恢复和删除重复检查目录包含关系、相对路径和归属；旧记录继续升级和恢复。
+工作流终态由 App Server 确认已停止 Turn 后提供 `WorkflowTerminal` 清理资格。
+`remove_prepared_directory` 负责尚未绑定的初始化失败目录及启动时终态目录清理，
+在脚本执行后再次拒绝符号链接和越界目录。

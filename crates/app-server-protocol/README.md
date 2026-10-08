@@ -236,3 +236,41 @@ Open VSX JS 扩展在等待时以 `dormant` 返回，无 incarnation、输出或
 标准 commands、languages 贡献生成隐式事件。语言来自 TypeScript 编辑器的当前模型，启动完成
 事件来自窗口恢复阶段；调度、进程启动和授权检查属于 Rust。其他事件类型、完整 VS Code API
 与 Node 模块尚未实现。本地 SDK 和独立可执行扩展维持现有启动方式。
+
+## 内置 Symphony
+
+初始化契约 `symphony.version = 1` 表示当前 profile 提供内置调度域。
+所有窗口复用既有连接；不创建 Elixir 服务或第二个 Agent App Server。
+
+| 方法 | 行为 |
+| --- | --- |
+| `symphony/read` | 工作流与对话监控快照；累计用量和时长直接读取 Core |
+| `symphony/configure` | 导入绝对路径的 `WORKFLOW.md` 并启用派发 |
+| `symphony/submit` | 创建手动任务；返回对话身份 |
+| `symphony/control` | 保存运行、暂停或完成意图；控制执行使用 Core 的持久命令身份 |
+| `symphony/enable` | 启停工作流后续派发；不停止当前对话 |
+| `symphony/messages` | 当前对话最近的用户与助手消息 |
+| `symphony/changed` | 无载荷的失效通知；客户端先订阅，再重新读取快照 |
+
+变更方法携带 `commandId`，重复请求核对完整输入指纹。
+任务的 Thread 身份跨暂停、恢复与重试保留；调度域不另存 Token 或消息。
+错误使用 `SymphonyUnavailable`、`SymphonyNotFound`、`SymphonyConflict`、
+`SymphonyInvalid` 和 `SymphonyOperationFailed`，客户端按枚举映射文案。
+配置适配、执行生命周期和限制见 [调度域说明](../symphony/README.md)。
+
+## Execution defaults
+
+`config/read.execution` returns the profile's resolved `approvalMode`,
+`commandFileAccess` and `commandNetworkAccess`. `config/update.execution` uses the
+existing command ID and expected revision contract: an object replaces the three
+defaults; `null` resets them; omission preserves them. File access accepts
+`readOnly` or `directoryWrite`, and command network access accepts `denied` or
+`allowed`. Invalid modes fail before mutation. Command defaults are reloaded for
+future prepared commands; existing processes continue. Managed network rules and
+host directory capabilities remain separate required authorities.
+
+`session/request` with `request.type = "startTurn"` may omit `approvalMode` to use
+the current profile default. An explicit mode overrides it and remains frozen on
+the resulting Turn. Queue entries and explicit client choices continue to carry
+an approval mode. Workflows without their own approval mode use the same default.
+Directory permissions remain editable only through a trusted host connection.

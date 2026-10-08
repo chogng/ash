@@ -202,6 +202,11 @@ pub(crate) fn apply_command(
 }
 
 fn apply_preferences(document: &mut UserConfigDocument, update: &PreferencesUpdate) {
+    match &update.execution {
+        Patch::Missing => {}
+        Patch::Null => document.agent.execution = crate::ExecutionConfig::default(),
+        Patch::Value(execution) => document.agent.execution = *execution,
+    }
     match &update.trace {
         Patch::Missing => {}
         // Reset stays disabled instead of falling back to a launch environment value.

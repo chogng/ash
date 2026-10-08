@@ -110,6 +110,9 @@ export class SettingsSectionRenderer extends Disposable implements SettingsConte
 					this._register(toggle.onDidChange(value => { const current = this.fields.get(field.id); if (current?.kind === 'boolean') { current.setValue(value); } }));
 					control = toggle;
 				} else if (field.kind === 'select') {
+					const label = h(this.domNode.ownerDocument, 'p');
+					label.textContent = field.label;
+					this.domNode.append(label);
 					const select = this._register(new SelectBox(this.domNode, { options: field.options, ariaLabel: field.label, contextViewProvider: this.contextView }));
 					this._register(select.onDidSelect(({ value }) => { const current = this.fields.get(field.id); if (current?.kind === 'select') { current.setValue(value); } })); control = select;
 				} else {

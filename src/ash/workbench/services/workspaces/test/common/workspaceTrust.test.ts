@@ -19,6 +19,7 @@ test('Workspace Trust reads current Rust permissions for each workspace folder',
 		list: async () => ({ revision: 0, entries: [] }),
 		read: async path => { reads.push(path); return allowed.get(path); },
 		set: async () => { throw new Error('Unexpected permission write'); },
+		resolve: async () => { throw new Error('Unexpected permission identity resolution'); },
 		forget: async () => { throw new Error('Unexpected permission deletion'); },
 	};
 	using services = new InstantiationService();

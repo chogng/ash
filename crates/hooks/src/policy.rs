@@ -28,7 +28,8 @@ pub(crate) fn execution_authority(
     policy: &dyn ActionPolicyService,
     cancellation: &CancellationToken,
 ) -> Result<CommandExecutionAuthority, CoreError> {
-    let review = review_request(hook, dir, policy.revision())?;
+    let provenance = ActionProvenance::new(ActionSource::User, hook.id.as_str());
+    let review = review_request(hook, dir, policy.revision_for(&provenance))?;
     let decision = policy.decide(&review, cancellation)?;
     match decision {
         ExecutionDecision::RunSandboxed(policy) => Ok(CommandExecutionAuthority::Sandboxed(policy)),

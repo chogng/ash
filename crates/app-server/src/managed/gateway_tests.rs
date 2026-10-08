@@ -136,13 +136,22 @@ fn imported_ssh_history_is_read_by_the_local_gateway_without_opening_a_remote_ag
     });
     client.initialize();
     client.send(4, "session/list", serde_json::json!({}));
-    let catalog = client.read();
-    assert_eq!(catalog["id"], 4);
+    // Provider discovery can publish notifications while a catalog read is pending.
+    let response_for = |client: &mut crate::server::request_dispatch::tests::Client, id: u64| {
+        loop {
+            let response = client.read();
+            if response.get("id").is_none() && response.get("method").is_some() {
+                continue;
+            }
+            assert_eq!(response["id"], id, "{response}");
+            break response;
+        }
+    };
+    let catalog = response_for(&mut client, 4);
     assert_eq!(catalog["result"]["sessions"].as_array().unwrap().len(), 2);
     for (id, session) in [(2, "known"), (3, "unknown")] {
         client.send(id, "session/read", serde_json::json!({"sessionId":session}));
-        let response = client.read();
-        assert_eq!(response["id"], id);
+        let response = response_for(&mut client, id);
         assert!(response.get("error").is_none(), "{response}");
         assert_eq!(response["result"]["session"]["sessionId"], session);
         if session == "known" {

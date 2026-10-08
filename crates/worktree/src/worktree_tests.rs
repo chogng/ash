@@ -34,6 +34,81 @@ struct RepositoryFixture {
     repository: PathBuf,
 }
 
+#[tokio::test]
+async fn prepared_workflow_directory_is_empty_reused_bound_and_cleaned_by_its_owner() {
+    let root = tempfile::tempdir().unwrap();
+    let manager = WorktreeManager::new(WorktreeSettings::defaults(&root.path().join("profile")));
+    let workspace_root = root.path().join("workflows");
+    let (directory, created) = manager.prepare_directory(&workspace_root, "LIN-1").unwrap();
+    assert!(created);
+    assert_eq!(fs::read_dir(&directory).unwrap().count(), 0);
+    fs::write(directory.join("workpad"), "kept across retries").unwrap();
+    assert_eq!(
+        manager.prepare_directory(&workspace_root, "LIN-1").unwrap(),
+        (directory.clone(), false)
+    );
+    let owner = ManagedDirOwner::Thread {
+        thread_id: "workflow-thread".into(),
+    };
+    let binding = manager
+        .adopt_directory(&workspace_root, &directory, root.path(), "source", &owner)
+        .await
+        .unwrap();
+    assert_eq!(binding.dir(), directory);
+    assert_eq!(manager.recover(&directory, &owner).await.unwrap(), binding);
+    let other = ManagedDirOwner::Thread {
+        thread_id: "another-thread".into(),
+    };
+    assert!(
+        manager
+            .adopt_directory(&workspace_root, &directory, root.path(), "source", &other)
+            .await
+            .is_err()
+    );
+    let original_record = crate::binding::read(&directory).unwrap();
+    let mut foreign_record = original_record.clone();
+    foreign_record.prepared_root = None;
+    crate::binding::replace(&directory, &foreign_record).unwrap();
+    assert!(
+        manager
+            .remove_prepared_directory(&workspace_root, &directory)
+            .is_err()
+    );
+    assert!(directory.exists());
+    crate::binding::replace(&directory, &original_record).unwrap();
+    manager
+        .cleanup(&binding, ManagedDirCleanupEligibility::WorkflowTerminal)
+        .await
+        .unwrap();
+    assert!(!directory.exists());
+}
+
+#[test]
+fn prepared_workflow_directory_rejects_escape_and_symbolic_links() {
+    let root = tempfile::tempdir().unwrap();
+    let manager = WorktreeManager::new(WorktreeSettings::defaults(root.path()));
+    assert!(
+        manager
+            .prepare_directory(root.path(), "../outside")
+            .is_err()
+    );
+    assert!(manager.prepare_directory(root.path(), "..").is_err());
+    #[cfg(unix)]
+    {
+        let outside = tempfile::tempdir().unwrap();
+        fs::write(outside.path().join("keep"), "untouched").unwrap();
+        let link = root.path().join("LIN-2");
+        std::os::unix::fs::symlink(outside.path(), &link).unwrap();
+        assert!(manager.prepare_directory(root.path(), "LIN-2").is_err());
+        assert!(
+            manager
+                .remove_prepared_directory(root.path(), &link)
+                .is_err()
+        );
+        assert!(outside.path().join("keep").exists());
+    }
+}
+
 impl RepositoryFixture {
     fn new() -> Self {
         let temp_dir = tempfile::tempdir().expect("create temporary test directory");
@@ -948,7 +1023,7 @@ async fn non_git_threads_use_isolated_managed_directory_copies() {
     assert_eq!(recovered, vec![("plain-thread".into(), binding.clone())]);
     let upgraded: serde_json::Value =
         serde_json::from_slice(&fs::read(&binding_path).unwrap()).unwrap();
-    assert_eq!(upgraded["version"], 6);
+    assert_eq!(upgraded["version"], 7);
     assert!(upgraded.get("snapshotStore").is_none());
     assert_eq!(upgraded["owner"]["thread_id"], "plain-thread");
     manager

@@ -105,6 +105,7 @@ pub(crate) struct LocalToolComposition {
 /// Durable configuration inputs used to compose the local Agent Tool suite.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(crate) struct LocalToolConfig {
+    execution: ash_config::ExecutionConfig,
     user: UserExecPolicyConfig,
     dir_config: Option<(DirId, DirExecPolicyConfig)>,
 }
@@ -112,6 +113,7 @@ pub(crate) struct LocalToolConfig {
 impl LocalToolConfig {
     pub(crate) fn from_resolved(config: &ResolvedConfig) -> Self {
         Self {
+            execution: config.execution,
             user: config.exec_policy.clone(),
             dir_config: config
                 .dir_config
@@ -160,11 +162,14 @@ pub(crate) fn compose_local_tools_with_config(
     let ripgrep = resolve_ripgrep(&install_context).map_err(LocalToolError::ripgrep)?;
     let environment_id = ash_tools::EnvId::local();
     let exec_policy = config.snapshot()?;
-    let shell_policy = configured_shell_policy(&exec_policy);
+    let shell_policy = configured_shell_policy(&exec_policy, config.execution);
     let action_policy_revision = ash_action_policy::derive_action_policy_revision(
         exec_policy.revision(),
         LOCAL_GRANT_SNAPSHOT_REVISION,
-        LOCAL_REVIEWER_POLICY_REVISION,
+        &format!(
+            "{LOCAL_REVIEWER_POLICY_REVISION}:{:?}:{:?}",
+            config.execution.command_file_access, config.execution.command_network_access
+        ),
     );
     let reviewer: Arc<dyn ToolExecutorReviewer> = Arc::new(LocalExecutorReviewer {
         shell_policy,
@@ -1408,7 +1413,11 @@ static LOCAL_ACTION_POLICY_REVISION: LazyLock<ActionPolicyRevision> = LazyLock::
     ash_action_policy::derive_action_policy_revision(
         exec_policy.revision(),
         LOCAL_GRANT_SNAPSHOT_REVISION,
-        LOCAL_REVIEWER_POLICY_REVISION,
+        &format!(
+            "{LOCAL_REVIEWER_POLICY_REVISION}:{:?}:{:?}",
+            ash_config::CommandFileAccess::default(),
+            ash_config::CommandNetworkAccess::default()
+        ),
     )
 });
 
@@ -1644,7 +1653,10 @@ fn shell_sandbox() -> SandboxPolicy {
         .with_file_system_isolation(local_isolation())
 }
 
-fn configured_shell_policy(policy: &ExecPolicySnapshot) -> SandboxPolicy {
+fn configured_shell_policy(
+    policy: &ExecPolicySnapshot,
+    config: ash_config::ExecutionConfig,
+) -> SandboxPolicy {
     let network = if policy
         .layers()
         .iter()
@@ -1653,9 +1665,16 @@ fn configured_shell_policy(policy: &ExecPolicySnapshot) -> SandboxPolicy {
     {
         NetworkAccess::Managed
     } else {
-        NetworkAccess::Denied
+        match config.command_network_access {
+            ash_config::CommandNetworkAccess::Denied => NetworkAccess::Denied,
+            ash_config::CommandNetworkAccess::Allowed => NetworkAccess::Allowed,
+        }
     };
-    SandboxPolicy::new(FileSystemAccess::DirectoryWrite, network)
+    let files = match config.command_file_access {
+        ash_config::CommandFileAccess::ReadOnly => FileSystemAccess::ReadOnly,
+        ash_config::CommandFileAccess::DirectoryWrite => FileSystemAccess::DirectoryWrite,
+    };
+    SandboxPolicy::new(files, network)
         .with_host_acl_changes(local_acl_changes())
         .with_file_system_isolation(local_isolation())
 }

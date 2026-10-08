@@ -2962,6 +2962,7 @@ fn select_model(
             command_id: CommandId::new(command_id).unwrap(),
             expected_revision: revision,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                execution: Patch::Missing,
                 advisor: Default::default(),
                 context: Patch::Missing,
                 time_context: ash_protocol::Patch::Missing,

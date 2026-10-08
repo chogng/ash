@@ -61,7 +61,7 @@ fn skill_enablement_preserves_optional_session_lookup_scope() {
 }
 
 #[test]
-fn start_turn_reasoning_effort_round_trips_and_legacy_requests_use_default() {
+fn start_turn_reasoning_effort_round_trips_and_omitted_approval_inherits_profile() {
     let request = serde_json::json!({
         "type": "startTurn",
         "threadId": "thread-1",
@@ -76,23 +76,23 @@ fn start_turn_reasoning_effort_round_trips_and_legacy_requests_use_default() {
         &parsed,
         SessionRequest::StartTurn {
             mode: ash_protocol::CollaborationMode::Plan,
+            approval_mode: None,
             reasoning_effort: Some(ReasoningEffort::High),
             ..
         }
     ));
-    assert_eq!(
-        serde_json::to_value(parsed).unwrap(),
-        serde_json::json!({
-            "type": "startTurn",
-            "threadId": "thread-1",
-            "expectedSequence": 1,
-            "mode": "plan",
-            "approvalMode": "manual",
-            "model": { "provider": "openai", "model": "gpt-6-astra" },
-            "reasoningEffort": "high",
-            "input": [{ "type": "text", "text": "hello" }]
-        })
-    );
+    assert_eq!(serde_json::to_value(parsed).unwrap(), request);
+    let mut explicit = request.clone();
+    explicit["approvalMode"] = serde_json::json!("auto");
+    let parsed: SessionRequest = serde_json::from_value(explicit.clone()).unwrap();
+    assert!(matches!(
+        &parsed,
+        SessionRequest::StartTurn {
+            approval_mode: Some(ash_protocol::ApprovalMode::Auto),
+            ..
+        }
+    ));
+    assert_eq!(serde_json::to_value(parsed).unwrap(), explicit);
     let mut legacy = request;
     legacy.as_object_mut().unwrap().remove("reasoningEffort");
     legacy.as_object_mut().unwrap().remove("mode");

@@ -1,3 +1,4 @@
+import type { ISymphonyBackend } from '../../symphony/common/symphonyService.js';
 import type { IInstructionService } from '../../instructions/common/instructionService.js';
 import type { IFileSearchService } from '../../search/common/fileSearch.js';
 import type { IAssetService } from '../../assets/common/assetService.js';
@@ -40,6 +41,7 @@ import type { IMarketplaceApi } from "../../marketplace/common/marketplaceApi.js
 import type { IDirPermissionsApi } from "../../dirPermissions/common/dirPermissionsApi.js";
 import type { IHooksService } from '../../hooks/common/hooksService.js';
 import type { IAgentCapabilitiesService } from '../../agentCapabilities/common/agentCapabilitiesService.js';
+import type { IExecutionSettingsService } from '../../execution/common/executionSettingsService.js';
 import type { ITraceSettingsService } from '../../trace/common/traceSettingsService.js';
 import type { IAccountApi } from "../../accounts/common/accountApi.js";
 import type { ITurnChangesApi } from "../../turnChanges/common/turnChangesApi.js";
@@ -78,6 +80,7 @@ export interface IRendererHost extends RendererHostCapabilities {
 	readonly calls?: ICallService;
 	readonly dictation?: IDictationService;
 	readonly automation?: IAutomationService;
+	readonly symphony?: ISymphonyBackend;
 	readonly memoryDiagnostics?: IMemoryDiagnosticsService;
 	readonly memories?: IMemoriesService;
 	readonly approvalEnvironment?: IApprovalEnvironmentService;
@@ -121,6 +124,7 @@ export interface IRendererHost extends RendererHostCapabilities {
 	readonly dirPermissions: IDirPermissionsApi;
 	readonly agentCapabilities: IAgentCapabilitiesService;
 	readonly traceSettings: ITraceSettingsService;
+	readonly executionSettings: IExecutionSettingsService;
 	readonly networkDiagnostics: INetworkDiagnosticsService;
 	readonly issueReporter: IIssueReporterService;
 	readonly github: IGitHubService;

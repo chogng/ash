@@ -150,7 +150,7 @@ where
             thread_id: scope.thread_id,
             expected_sequence: scope.expected_sequence,
             mode: submission.mode,
-            approval_mode,
+            approval_mode: Some(approval_mode),
             model: None,
             reasoning_effort: None,
             tool_mode: None,

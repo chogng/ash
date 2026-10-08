@@ -2,7 +2,7 @@ import './media/agentCapabilitiesSettings.css';
 import { h } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { AgentCapabilitiesSnapshot, AgentToolCapability, IAgentCapabilitiesService } from '../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
-import type { DirPermission, DirPermissionsEntry, IDirPermissionsService } from '../../../../platform/dirPermissions/common/dirPermissionsService.js';
+import { dirPermissionNames, type DirPermissionsEntry, type IDirPermissionsService } from '../../../../platform/dirPermissions/common/dirPermissionsService.js';
 import type { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import type { IRemoteAgentService } from '../../../services/remote/common/remoteAgentService.js';
 
@@ -148,7 +148,7 @@ export class AgentCapabilitiesSettings extends Disposable {
 			const path = h(this.content.ownerDocument, 'h5');
 			path.textContent = directory.path ?? directory.dir;
 			const permissions = h(this.content.ownerDocument, 'p');
-			permissions.textContent = directory.permissions.map(permission => this.permissionLabel(permission)).join(', ');
+			permissions.textContent = directory.permissions.map(permission => this.label(`capabilities.permission.${permission}`, dirPermissionNames[permission])).join(', ');
 			item.append(path, permissions);
 			list.append(item);
 		}
@@ -193,27 +193,6 @@ export class AgentCapabilitiesSettings extends Disposable {
 			hidden: this.label('capabilities.exposure.hidden', 'Internal'),
 		};
 		return labels[exposure];
-	}
-
-	private permissionLabel(permission: DirPermission): string {
-		const names: Record<DirPermission, string> = {
-			readFiles: 'Read files',
-			writeFiles: 'Write files',
-			executeCommands: 'Execute commands',
-			watchFiles: 'Watch files',
-			browseFiles: 'Browse files',
-			searchFiles: 'Search files',
-			loadInstructions: 'Load instructions',
-			loadConfig: 'Load configuration',
-			discoverSkills: 'Discover skills',
-			discoverMcp: 'Discover MCP',
-			useLanguageServices: 'Use language services',
-			discoverHooks: 'Discover hooks',
-			discoverPlugins: 'Discover plugins',
-			inspectRepository: 'Inspect repository',
-			mutateRepository: 'Modify repository',
-		};
-		return this.label(`capabilities.permission.${permission}`, names[permission]);
 	}
 
 	private label(key: string, fallback: string): string {

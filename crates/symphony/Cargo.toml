@@ -1,0 +1,27 @@
+[package]
+name = "ash-symphony"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+ash-protocol.workspace = true
+ash-async-utils.workspace = true
+liquid.workspace = true
+chrono.workspace = true
+shell-words.workspace = true
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

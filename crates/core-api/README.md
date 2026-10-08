@@ -21,3 +21,9 @@ Thread 状态、恢复、执行循环、工具授权构造和调用时机由 `as
 `ash-thread-store`。产品客户端继续使用 App Server。
 
 完整边界见 [Core 架构](../../docs/core.md#7-依赖边界)。
+
+`ActionPolicyService::revision_for` resolves the policy revision belonging to an
+already identified action source. A composed host uses it when preparing a user
+hook, so the local process policy verifies its own revision while ordinary Turn
+safe points continue to observe the complete composed revision. Reload between
+preparation and policy decision fails closed through the existing revision check.

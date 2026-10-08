@@ -81,6 +81,7 @@ members = [
     "crates/ext/guardian-reviewer",
     "crates/guardian-context",
     "crates/automation",
+    "crates/symphony",
     "crates/memory-diagnostics",
     "crates/bwrap",
     "crates/ansi-escape",
@@ -324,6 +325,7 @@ chrono-tz = "0.10.4"
 httpdate = "1.0.3"
 iana-time-zone = "0.1.64"
 ash-automation = { path = "crates/automation" }
+ash-symphony = { path = "crates/symphony" }
 cc = "1"
 clap = "4"
 core-graphics = "0.23.2"
@@ -373,6 +375,8 @@ semver = { version = "1", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"
+liquid = "=0.26.11"
+shell-words = "=1.1.1"
 signal-hook = "0.3"
 syntect = { version = "5.3.0", default-features = false, features = ["default-fancy"] }
 sysinfo = { version = "0.39.6", default-features = false, features = ["system"] }

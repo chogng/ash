@@ -1,3 +1,4 @@
+import { ExecutionSettingsModel } from './executionSettingsModel.js';
 import { AgentCapabilitiesSettings } from '../../../../workbench/contrib/preferences/browser/agentCapabilitiesSettings.js';
 import { IAgentCapabilitiesService } from '../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { IDirPermissionsService } from '../../../../platform/dirPermissions/common/dirPermissionsService.js';
@@ -55,6 +56,11 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 		if (typeof value !== 'boolean') throw new TypeError('Sessions Settings accessibility verbosity must be boolean');
 		return value;
 	},
+});
+
+Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.ExecutionSettings, defaultValue: true,
+	parse(value: unknown): boolean { if (typeof value !== 'boolean') throw new TypeError('Execution Settings accessibility verbosity must be boolean'); return value; },
 });
 
 function configuration<T>(key: string): IRegisteredConfiguration<T> {
@@ -227,11 +233,14 @@ export class SessionsPreferences extends Disposable {
 		const githubContent = resources.add(contentServices.createInstance(SettingsSectionRenderer, list, githubSettings, AccessibleViewProviderId.GitHubSettings, AccessibilityVerbositySettingId.GitHubSettings));
 		const traceSettings = resources.add(contentServices.createInstance(TraceSettingsModel));
 		const traceContent = resources.add(contentServices.createInstance(SettingsSectionRenderer, list, traceSettings, AccessibleViewProviderId.TraceSettings, AccessibilityVerbositySettingId.TraceSettings));
-		const sections = this.sections(modelContent, dictationContent, customizeContent, advisorContent, githubContent, traceContent);
+		const executionSettings = resources.add(contentServices.createInstance(ExecutionSettingsModel));
+		const executionContent = resources.add(contentServices.createInstance(SettingsSectionRenderer, list, executionSettings, AccessibleViewProviderId.ExecutionSettings, AccessibilityVerbositySettingId.ExecutionSettings));
+		const sections = this.sections(modelContent, dictationContent, customizeContent, advisorContent, githubContent, traceContent, executionContent);
 		const categories = sections.flatMap(section => section.categories);
 		if (categoryId === 'skills' || categoryId === 'plugins' || categoryId === 'hooks') customizeContent.selectTab(categoryId);
 		let activeCategory = categoryId === 'customize' || categoryId === 'skills' || categoryId === 'plugins' || categoryId === 'hooks' ? categories.findIndex(category => category.content === customizeContent)
 			: categoryId === 'dictation' ? categories.findIndex(category => category.content === dictationContent)
+				: categoryId === 'execution-permissions' ? categories.findIndex(category => category.content === executionContent)
 				: categoryId === 'github' ? categories.findIndex(category => category.content === githubContent)
 					: categoryId === 'execution-trace' ? categories.findIndex(category => category.content === traceContent)
 						: categoryId === 'agents' ? categories.findIndex(category => category.content === advisorContent)
@@ -317,6 +326,7 @@ export class SessionsPreferences extends Disposable {
 		this.navigate = (categoryId, marketplaceOptions) => {
 			if (categoryId === 'skills' || categoryId === 'plugins' || categoryId === 'hooks') customizeContent.selectTab(categoryId);
 			activeCategory = categoryId === 'customize' || categoryId === 'skills' || categoryId === 'plugins' || categoryId === 'hooks' ? categories.findIndex(category => category.content === customizeContent)
+				: categoryId === 'execution-permissions' ? categories.findIndex(category => category.content === executionContent)
 				: categoryId === 'github' ? categories.findIndex(category => category.content === githubContent)
 					: categoryId === 'agents' ? categories.findIndex(category => category.content === advisorContent)
 						: categoryId === 'models' ? categories.findIndex(category => category.content === modelContent)
@@ -364,7 +374,7 @@ export class SessionsPreferences extends Disposable {
 		}
 	}
 
-	private sections(modelContent: SettingsContent, dictationContent: SettingsContent, customizeContent: SettingsContent, advisorContent: SettingsContent, githubContent: SettingsContent, traceContent: SettingsContent): readonly SettingsSection[] {
+	private sections(modelContent: SettingsContent, dictationContent: SettingsContent, customizeContent: SettingsContent, advisorContent: SettingsContent, githubContent: SettingsContent, traceContent: SettingsContent, executionContent: SettingsContent): readonly SettingsSection[] {
 		const appearanceSettings: readonly ISetting[] = [{
 			id: SessionsConfiguration.layoutStyle,
 			valueType: 'select',
@@ -407,6 +417,10 @@ export class SessionsPreferences extends Disposable {
 			configuration: configuration<boolean>(AccessibilityVerbositySettingId.SessionsSettings),
 			title: localize('sessions.settings.verbosityTitle', 'Settings accessibility help'),
 			description: localize('sessions.settings.verbosityDescription', 'Announce how to open accessibility help when this page has focus.'),
+		}, {
+			id: AccessibilityVerbositySettingId.ExecutionSettings, valueType: 'boolean', configuration: configuration<boolean>(AccessibilityVerbositySettingId.ExecutionSettings),
+			title: localize({ bundle: 'ash.settings', key: 'execution.verbosityTitle' }, 'Execution and permissions accessibility help'),
+			description: localize({ bundle: 'ash.settings', key: 'execution.verbosityDescription' }, 'Announce how to open accessibility help for execution and permissions controls.'),
 		}];
 		const designSettings: readonly ISetting[] = [{
 			id: DesignConfiguration.usePointerCursor,
@@ -433,6 +447,7 @@ export class SessionsPreferences extends Disposable {
 		}, {
 			title: localize('sessions.settings.section.development', 'Development'),
 			categories: [
+				{ title: localize({ bundle: 'ash.settings', key: 'execution.title' }, 'Execution and permissions'), icon: Lxicon.settings, settings: [], content: executionContent },
 				{ id: 'tools', title: localize('sessions.settings.tools', 'Tools'), icon: Lxicon.settings, settings: [] },
 				{ title: localize('sessions.settings.agents', 'Agents'), icon: Lxicon.agent, settings: [], content: advisorContent },
 				{ title: localize('sessions.settings.executionTrace', 'Execution trace'), icon: Lxicon.history, settings: [], content: traceContent },

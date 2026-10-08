@@ -79,6 +79,13 @@ pub(crate) fn hook_catalog(
 
 pub(crate) fn empty_config_snapshot() -> ConfigReadResult {
     ConfigReadResult {
+        execution: ash_app_server_protocol::protocol::config::ExecutionConfigDto {
+            approval_mode: ash_protocol::ApprovalMode::Manual,
+            command_file_access:
+                ash_app_server_protocol::protocol::config::CommandFileAccessDto::DirectoryWrite,
+            command_network_access:
+                ash_app_server_protocol::protocol::config::CommandNetworkAccessDto::Denied,
+        },
         trace: None,
         trace_recording:
             ash_app_server_protocol::protocol::config::TraceRecordingStateDto::Disabled,

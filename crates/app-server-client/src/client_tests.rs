@@ -492,7 +492,7 @@ fn in_process_client_uses_session_first_contract_and_canonical_updates() {
                 thread_id: thread.thread_id.clone(),
                 expected_sequence: 1,
                 mode: ash_protocol::CollaborationMode::Agent,
-                approval_mode: ash_protocol::ApprovalMode::default(),
+                approval_mode: Some(ash_protocol::ApprovalMode::default()),
                 model: None,
                 reasoning_effort: None,
                 tool_mode: None,

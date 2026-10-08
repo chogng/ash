@@ -267,6 +267,7 @@ class FakeDirPermissionsService implements IDirPermissionsService {
 	readonly onDidChangePermissions = Event.None;
 	constructor(private readonly dir: string, public value: readonly PermissionDto[]) { }
 	async list() { return { revision: 1, entries: [{ dir: this.dir, path: "C:\\project", permissions: this.value }] }; }
+	async resolve(): ReturnType<IDirPermissionsService["resolve"]> { return { dir: this.dir, permissions: this.value }; }
 	async read(): ReturnType<IDirPermissionsService["read"]> { return this.value; }
 	async set(): ReturnType<IDirPermissionsService["set"]> { throw new Error("unused"); }
 	async forget(): ReturnType<IDirPermissionsService["forget"]> { throw new Error("unused"); }

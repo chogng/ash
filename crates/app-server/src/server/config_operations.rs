@@ -220,6 +220,7 @@ impl AppServer {
                 command_id: params.command_id,
                 expected_revision: ConfigRevision::new(params.expected_revision),
                 command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                    execution: params.execution.map(execution_config_from_dto),
                     trace: params.trace.map(|trace| ash_config::TraceConfig {
                         enabled: trace.enabled,
                         directory: trace.directory.map(std::path::PathBuf::from),
@@ -274,6 +275,7 @@ impl AppServer {
                 expected_revision: ConfigRevision::new(params.expected_revision),
                 command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
                     context: Patch::Missing,
+                    execution: Patch::Missing,
                     trace: Patch::Missing,
                     time_context: ash_protocol::Patch::Missing,
                     features: Default::default(),
@@ -678,6 +680,7 @@ fn config_read_result(
         embedding_status: tool_search_status_dto(tool_search_status),
     };
     ConfigReadResult {
+        execution: execution_config_dto(snapshot.values.execution),
         trace: snapshot.values.trace.map(|trace| TraceConfigDto {
             enabled: trace.enabled,
             directory: trace
@@ -1119,6 +1122,42 @@ fn model_ref_update_from_dto(update: Patch<ModelRefDto>) -> Result<Patch<ModelRe
         Patch::Missing => Ok(Patch::Missing),
         Patch::Null => Ok(Patch::Null),
         Patch::Value(model_ref) => model_ref_from_dto(model_ref).map(Patch::Value),
+    }
+}
+
+fn execution_config_dto(
+    config: ash_config::ExecutionConfig,
+) -> ash_app_server_protocol::protocol::config::ExecutionConfigDto {
+    use ash_app_server_protocol::protocol::config::CommandFileAccessDto;
+    use ash_app_server_protocol::protocol::config::CommandNetworkAccessDto;
+    ash_app_server_protocol::protocol::config::ExecutionConfigDto {
+        approval_mode: config.approval_mode,
+        command_file_access: match config.command_file_access {
+            ash_config::CommandFileAccess::ReadOnly => CommandFileAccessDto::ReadOnly,
+            ash_config::CommandFileAccess::DirectoryWrite => CommandFileAccessDto::DirectoryWrite,
+        },
+        command_network_access: match config.command_network_access {
+            ash_config::CommandNetworkAccess::Denied => CommandNetworkAccessDto::Denied,
+            ash_config::CommandNetworkAccess::Allowed => CommandNetworkAccessDto::Allowed,
+        },
+    }
+}
+
+fn execution_config_from_dto(
+    config: ash_app_server_protocol::protocol::config::ExecutionConfigDto,
+) -> ash_config::ExecutionConfig {
+    use ash_app_server_protocol::protocol::config::CommandFileAccessDto;
+    use ash_app_server_protocol::protocol::config::CommandNetworkAccessDto;
+    ash_config::ExecutionConfig {
+        approval_mode: config.approval_mode,
+        command_file_access: match config.command_file_access {
+            CommandFileAccessDto::ReadOnly => ash_config::CommandFileAccess::ReadOnly,
+            CommandFileAccessDto::DirectoryWrite => ash_config::CommandFileAccess::DirectoryWrite,
+        },
+        command_network_access: match config.command_network_access {
+            CommandNetworkAccessDto::Denied => ash_config::CommandNetworkAccess::Denied,
+            CommandNetworkAccessDto::Allowed => ash_config::CommandNetworkAccess::Allowed,
+        },
     }
 }
 

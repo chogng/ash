@@ -300,7 +300,7 @@ impl ExecConnection for ServerConnection {
                     thread_id,
                     expected_sequence,
                     mode: ash_protocol::CollaborationMode::Agent,
-                    approval_mode,
+                    approval_mode: Some(approval_mode),
                     model,
                     reasoning_effort: None,
                     tool_mode: None,

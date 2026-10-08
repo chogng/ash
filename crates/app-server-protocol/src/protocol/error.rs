@@ -5,6 +5,11 @@ use serde::Serialize;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 pub enum AppServerErrorName {
+    SymphonyUnavailable,
+    SymphonyNotFound,
+    SymphonyConflict,
+    SymphonyInvalid,
+    SymphonyOperationFailed,
     TaskDeliveryUnavailable,
     TaskDeliveryConflict,
     TaskDeliveryNotFound,

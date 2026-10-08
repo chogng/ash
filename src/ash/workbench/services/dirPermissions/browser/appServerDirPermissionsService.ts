@@ -33,6 +33,11 @@ export class AppServerDirPermissionsService extends Disposable implements IDirPe
 		return (await this.api.read({ path })).permissions ?? undefined;
 	}
 
+	async resolve(path: string): ReturnType<IDirPermissionsService["resolve"]> {
+		const result = await this.api.read({ path });
+		return { dir: result.dir, permissions: result.permissions ?? undefined };
+	}
+
 	async set(path: string, permissions: readonly DirPermission[], expectedRevision: number): Promise<DirPermissionsCommandResult> {
 		return projectCommandResult(await this.api.set({
 			commandId: commandId("set"),

@@ -23,5 +23,9 @@ ash-protocol = { workspace = true }
 ash-sandboxing = { workspace = true }
 ash-tool-executor = { workspace = true }
 ash-file-access = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
 [lints]
 workspace = true

@@ -1,3 +1,5 @@
+import { createAppServerExecutionSettingsApi } from '../../execution/browser/executionSettingsApi.js';
+import { AppServerSymphonyService } from '../../symphony/browser/appServerSymphonyService.js';
 import { createAppServerInstructionService } from '../../instructions/browser/appServerInstructionService.js';
 import { createAppServerFileSearchApi } from '../../search/browser/fileSearchApi.js';
 import { AppServerAssetService } from '../../assets/browser/appServerAssetService.js';
@@ -80,11 +82,12 @@ export async function connectWebRendererApi(transport: AppServerTransport, conne
 		const memoryDiagnostics = connection.capabilities?.contracts.memoryDiagnostics?.version === 1 ? new AppServerMemoryDiagnosticsService(connection, 'browser', async () => [{ instanceId, processId: null, role: 'renderer', phase: 'unknown', metrics: [{ kind: 'domNodes', value: document.getElementsByTagName('*').length, unavailable: null }, { kind: 'javaScriptHeapBytes', value: null, unavailable: 'unsupported' }, { kind: 'residentBytes', value: null, unavailable: 'unsupported' }] }]) : undefined;
 		const memories = connection.capabilities?.memories ? new AppServerMemoriesService(connection) : undefined;
 		const calls = connection.capabilities?.contracts.calls?.version === 1 ? new AppServerCallService(connection) : undefined;
+		const symphony = connection.capabilities?.contracts.symphony?.version === 1 ? new AppServerSymphonyService(connection) : undefined;
 		const automation = connection.capabilities?.contracts.automation?.version === 1 ? new AppServerAutomationService(connection) : undefined;
 		return {
-			api: { ...createRendererHost(connection, connectorHostServices, contributions), calls, automation, memoryDiagnostics, memories },
+			api: { ...createRendererHost(connection, connectorHostServices, contributions), calls, automation, symphony, memoryDiagnostics, memories },
 			metadata,
-			dispose: () => { disposed = true; reconnect.dispose(); clearTimeout(retryTimer); releaseWait?.(); memories?.dispose(); memoryDiagnostics?.dispose(); automation?.dispose(); calls?.dispose(); connection.dispose(); },
+			dispose: () => { disposed = true; reconnect.dispose(); clearTimeout(retryTimer); releaseWait?.(); memories?.dispose(); memoryDiagnostics?.dispose(); automation?.dispose(); symphony?.dispose(); calls?.dispose(); connection.dispose(); },
 		};
 	} catch (error) {
 		connection.dispose();
@@ -140,6 +143,7 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 		github: new AppServerGitHubService(connection),
 		agentCapabilities: createAppServerAgentCapabilitiesApi(connection),
 		traceSettings: createAppServerTraceSettingsApi(connection),
+		executionSettings: createAppServerExecutionSettingsApi(connection),
 		hooks: createAppServerHooksApi(connection),
 	};
 }

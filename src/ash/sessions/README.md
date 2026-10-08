@@ -114,7 +114,14 @@ Sessions file acquisition resolves UTF-8 text or supported image data before
 adding it. `ChatService` converts resolved images to image input items and omits
 empty text when sending attachments alone. Approval choice remains in the Chat
 model and is applied to a new Turn through the existing backend contract.
-Changing it does not change the approval mode of a running Turn.
+Changing it does not change the approval mode of a running Turn. New Code and
+Cowork composers inherit the connected profile's execution approval default until
+a conversation choice overrides it. Settings → Execution and permissions keeps
+only unsaved drafts in Sessions. App Server owns `[agent.execution]` persistence
+and command sandbox reload; the existing trusted host directory permission API
+owns grants and revocation. Ordinary chats and built-in Symphony share these
+defaults. Saving applies to future Turns and newly prepared commands after reload,
+without terminating running processes; managed network rules remain enforced.
 
 Unsent composer content is window/workspace UI state. Each untitled identity and
 Thread has its own `sessions.inputDraft` entry. All untitled identities and the

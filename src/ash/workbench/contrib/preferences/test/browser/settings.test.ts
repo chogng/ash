@@ -1,3 +1,4 @@
+import { IExecutionSettingsService } from '../../../../../platform/execution/common/executionSettingsService.js';
 import { IPromptsService } from '../../../chat/common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../../chat/common/promptSyntax/service/promptsServiceImpl.js';
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
@@ -871,6 +872,7 @@ test('Models Settings keeps loading API connections when the model catalog chang
 	services.registerInstance(ChatServiceId, chat);
 	services.registerInstance(INotificationService, disposables.add(new NotificationService()));
 	services.registerInstance(ILanguageModelsService, chat as unknown as ILanguageModelsService);
+	services.registerInstance(IExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IContextViewService, disposables.add(new BrowserContextViewService(root)));
 	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
 	const panel = disposables.add(services.createInstance(ModelSettingsContent, root));
@@ -933,6 +935,7 @@ test('Models Settings orders enabled models by catalog position and restores dis
 	const services = resources.add(new InstantiationService());
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(ILanguageModelsService, models);
+	services.registerInstance(IExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(ConfigurationServiceId, resources.add(new WorkbenchConfigurationService()));
 	services.registerInstance(INotificationService, resources.add(new NotificationService()));
 	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
@@ -1136,6 +1139,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(GitServiceId, gitService);
 	services.registerInstance(ChatServiceId, chatService);
 	services.registerInstance(ILanguageModelsService, chatService as unknown as ILanguageModelsService);
+	services.registerInstance(IExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(ILocalTranscriptionService, disposables.add(new NullLocalTranscriptionService()));
 	const descriptor = EditorPanes.getEditorPanes().find(candidate => candidate.id === SettingsEditorId);
 	assert.ok(descriptor);
@@ -1804,6 +1808,7 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 	services.registerInstance(ChatServiceId, chat);
 	services.registerInstance(INotificationService, disposables.add(new NotificationService()));
 	services.registerInstance(ILanguageModelsService, chat as unknown as ILanguageModelsService);
+	services.registerInstance(IExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IContextViewService, disposables.add(new BrowserContextViewService(root)));
 	services.registerInstance(ConfigurationServiceId, configuration);
 	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });

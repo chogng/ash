@@ -39,3 +39,25 @@ just test ash-config
 ## Agent 消息板部署
 
 `[messageBoard]` 默认 `type = "local"`。远端模式保存 `type = "remote"`、HTTP(S) `endpoint` 与 `credentialEnv`；配置只保存环境变量名，凭据由后端宿主提供。后端选择在 App Server 打开时生效，变更后重启所属后端。远端模式要求已有服务实现客户端协议；配置与接口约定见 [Agent 共享讨论板](../docs/extensions.md#远端客户端)。
+
+## Execution defaults
+
+The App Server profile owns `[agent.execution]`:
+
+```toml
+[agent.execution]
+approvalMode = "manual" # manual | auto | bypassPermissions
+commandFileAccess = "directoryWrite" # readOnly | directoryWrite
+commandNetworkAccess = "denied" # denied | allowed
+```
+
+These defaults apply to ordinary chats and built-in Symphony. An explicit Turn
+approval choice or workflow approval mode takes precedence. Existing Turns keep
+their frozen approval mode. Local runtime configuration reload replaces command
+reviewers for newly prepared commands; running commands continue. Changed command
+defaults invalidate prior action-policy revisions. Managed network execution rules
+remain enforced. Approval and execution rules may authorize broader command access.
+Directory grants are independent required capabilities, edited through the trusted
+host permission API. Revocation invalidates subsequent authorizations after reload
+without terminating processes already running. Agent API/model network access and
+workflow hook-specific execution rules retain their existing owners.

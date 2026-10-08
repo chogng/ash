@@ -13,6 +13,7 @@ fn page(number: u64) -> IssuePage {
             title: format!("Issue {number}"),
             body: Some("Private body is not cached".into()),
             html_url: format!("https://github.com/team/repo/issues/{number}"),
+            created_at: String::new(),
             updated_at: "now".into(),
             state: "open".into(),
             pull_request: None,

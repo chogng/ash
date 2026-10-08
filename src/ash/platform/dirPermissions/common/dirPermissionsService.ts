@@ -36,8 +36,29 @@ export interface IDirPermissionsService {
 	readonly onDidChangePermissions: Event<void>;
 	list(): Promise<DirPermissionsSnapshot>;
 	read(path: string): Promise<readonly DirPermission[] | undefined>;
+	/** Resolve host directory identity so aliases do not create competing permission drafts. */
+	resolve(path: string): Promise<{ readonly dir: string; readonly permissions: readonly DirPermission[] | undefined; }>;
 	set(path: string, permissions: readonly DirPermission[], expectedRevision: number): Promise<DirPermissionsCommandResult>;
 	forget(dir: string, expectedRevision: number): Promise<DirPermissionsCommandResult>;
 }
 
 export const IDirPermissionsService = createServiceIdentifier<IDirPermissionsService>("dirPermissionsService");
+
+/** Shared display fallbacks; identifiers and granted capabilities retain their backend semantics. */
+export const dirPermissionNames: Readonly<Record<DirPermission, string>> = {
+	readFiles: 'Read files',
+	writeFiles: 'Write files',
+	executeCommands: 'Execute commands',
+	watchFiles: 'Watch files',
+	browseFiles: 'Browse files',
+	searchFiles: 'Search files',
+	loadInstructions: 'Load instructions',
+	loadConfig: 'Load configuration',
+	discoverSkills: 'Discover skills',
+	discoverMcp: 'Discover MCP',
+	useLanguageServices: 'Use language services',
+	discoverHooks: 'Discover hooks',
+	discoverPlugins: 'Discover plugins',
+	inspectRepository: 'Inspect repository',
+	mutateRepository: 'Modify repository',
+};

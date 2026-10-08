@@ -86,7 +86,7 @@ fn embedded_session_delivers_idle_notifications_without_a_polling_request() {
                 thread_id: created_thread.thread_id,
                 expected_sequence: 1,
                 mode: ash_protocol::CollaborationMode::Agent,
-                approval_mode: ash_protocol::ApprovalMode::default(),
+                approval_mode: Some(ash_protocol::ApprovalMode::default()),
                 model: None,
                 reasoning_effort: None,
                 tool_mode: None,

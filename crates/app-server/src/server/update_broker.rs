@@ -1006,6 +1006,13 @@ impl UpdateBroker {
         });
     }
 
+    pub(crate) fn publish_symphony_changed(&self) {
+        self.broadcast_notification(
+            ServerNotificationMethod::SymphonyChanged,
+            &serde_json::json!({}),
+        );
+    }
+
     pub(crate) fn publish_automation_changed(&self) {
         self.broadcast_notification(
             ServerNotificationMethod::AutomationChanged,

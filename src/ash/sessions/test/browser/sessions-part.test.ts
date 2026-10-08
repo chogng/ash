@@ -1,3 +1,4 @@
+import { IExecutionSettingsService } from '../../../platform/execution/common/executionSettingsService.js';
 import { IPromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
 import { IAppServerSkillApi } from '../../../platform/agentHost/common/appServerApi.js';
@@ -223,6 +224,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 		detachPullRequest: async () => { throw new Error('Unexpected PR removal'); },
 	});
 	services.registerInstance(ILanguageModelsService, chatService);
+	services.registerInstance(IExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IChatService, chatService);
 	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { assert.fail('Unexpected editor navigation'); }, focusActiveEditor: () => { } });
 	services.registerInstance(IAppServerSkillApi, { onDidChangeSkills: ready.event, readInstructions: async () => { throw new Error("No Skill body in this test fixture"); }, list: async () => ({ generation: 0, skills: [] }), read: async () => ({ revision: 0, catalog: { generation: 0, skills: [] }, diagnostics: [] }), setEnabled: async () => { } });

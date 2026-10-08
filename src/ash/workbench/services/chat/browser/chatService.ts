@@ -149,7 +149,7 @@ export class ChatService extends Disposable implements IChatService {
 
 	async startTurn(options: StartTurnOptions): Promise<void> {
 		const input = turnInput(options);
-		await this.turnApi.start({ commandId: commandId("turn"), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, mode: options.mode, approvalMode: options.approvalMode ?? "manual", model: options.model, reasoningEffort: options.reasoningEffort, input });
+		await this.turnApi.start({ commandId: commandId("turn"), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, mode: options.mode, approvalMode: options.approvalMode, model: options.model, reasoningEffort: options.reasoningEffort, input });
 	}
 
 	async queueTurn(options: StartTurnOptions): Promise<void> {

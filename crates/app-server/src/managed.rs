@@ -52,6 +52,10 @@ pub(crate) fn run(profile_root: PathBuf, product_services: Option<PathBuf>) -> R
     // new generation cannot open the same profile while its old services stop.
     let registry = registry;
     let _automatic_updates = ash_app_server_daemon::start_automatic_updates(&profile_root)?;
+    let mut symphony = registry
+        .as_ref()
+        .map(|registry| registry.start_symphony())
+        .transpose()?;
     let mut automation = registry
         .as_ref()
         .map(|registry| registry.start_automation())
@@ -74,6 +78,7 @@ pub(crate) fn run(profile_root: PathBuf, product_services: Option<PathBuf>) -> R
             if stopping_since.is_none() {
                 execution.stop()?;
             }
+            drop(symphony.take());
             drop(automation.take());
             drop(queue.take());
             let stopping_since = stopping_since.get_or_insert_with(Instant::now);
@@ -184,7 +189,9 @@ pub(crate) fn run(profile_root: PathBuf, product_services: Option<PathBuf>) -> R
 
 fn profile_needs_host(registry: &Option<Arc<ProfileAppServerRegistry>>) -> Result<bool, String> {
     match registry {
-        Some(registry) => Ok(registry.automation_needs_host()? || registry.queue_needs_host()?),
+        Some(registry) => Ok(registry.automation_needs_host()?
+            || registry.queue_needs_host()?
+            || registry.symphony_needs_host()?),
         None => Ok(false),
     }
 }

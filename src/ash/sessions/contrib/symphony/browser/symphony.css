@@ -1,0 +1,119 @@
+.ash-symphony-tasks {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size120);
+	padding: var(--ash-spacing-size160);
+	font-size: var(--ash-fontSize-body1);
+	color: var(--ash-foreground);
+	min-width: 0;
+}
+
+.ash-symphony-tasks p,
+.ash-symphony-tasks h2,
+.ash-symphony-monitor h1,
+.ash-symphony-monitor p,
+.ash-symphony-message h2 {
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+.ash-symphony-tasks h2,
+.ash-symphony-message h2 {
+	font-size: var(--ash-fontSize-heading3);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-symphony-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-symphony-muted {
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+}
+
+.ash-symphony-error {
+	color: var(--ash-error-foreground);
+	white-space: pre-wrap;
+}
+
+.ash-symphony-list {
+	min-width: 0;
+}
+
+.ash-symphony-row {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	gap: var(--ash-spacing-size40);
+	min-height: 64px;
+	padding: var(--ash-spacing-size80);
+	box-sizing: border-box;
+	border-radius: var(--ash-cornerRadius-large);
+	cursor: pointer;
+}
+
+.ash-symphony-row-title {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.ash-symphony-row:hover {
+	background: var(--ash-list-hoverBackground);
+}
+
+.ash-symphony-row[aria-selected='true'] {
+	background: var(--ash-sessions-selectionBackground);
+	outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
+	outline-offset: -1px;
+}
+
+.ash-symphony-list:focus-visible,
+.ash-symphony-monitor:focus-visible,
+.ash-symphony-messages:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+
+.ash-symphony-monitor {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size160);
+	padding: var(--ash-spacing-size240);
+	box-sizing: border-box;
+	height: 100%;
+	min-width: 0;
+	color: var(--ash-foreground);
+	font-size: var(--ash-fontSize-body1);
+	line-height: 1.5;
+}
+
+.ash-symphony-monitor h1 {
+	font-size: var(--ash-fontSize-heading2);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-symphony-monitor > .ash-scrollable-element {
+	flex: 1;
+	min-height: 0;
+}
+
+.ash-symphony-messages {
+	max-width: 880px;
+	box-sizing: border-box;
+}
+
+.ash-symphony-message {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size160) 0;
+}
+
+.ash-symphony-message p {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}

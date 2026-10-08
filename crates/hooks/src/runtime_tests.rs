@@ -147,6 +147,75 @@ fn test_dir() -> Dir {
     Dir::open_local(std::env::current_dir().expect("test working directory")).expect("dir root")
 }
 
+#[test]
+fn workflow_process_keeps_raw_output_and_nonzero_exit_status() {
+    let output = ash_tool_executor::CommandOutput {
+        exit_code: Some(7),
+        stdout: "unstructured workflow output".into(),
+        stderr: "diagnostic".into(),
+        stdout_truncated: true,
+        stderr_truncated: false,
+    };
+    let observed = crate::process::process_output(Ok(
+        ash_tool_executor::CommandExecutionOutcome::Completed(output.clone()),
+    ))
+    .unwrap();
+    assert_eq!(observed, output);
+    let error = crate::process::process_output(Err(ash_tool_executor::ExecutionError::TimedOut))
+        .unwrap_err();
+    assert!(error.to_string().contains("timed out"));
+}
+
+#[test]
+fn workflow_process_never_runs_when_policy_blocks_it() {
+    struct BlockedPolicy;
+    impl core_api::ActionPolicyService for BlockedPolicy {
+        fn revision(&self) -> String {
+            "workflow-block-test".into()
+        }
+        fn decide(
+            &self,
+            _: &ActionReviewRequest,
+            _: &CancellationToken,
+        ) -> Result<ExecutionDecision, CoreError> {
+            Ok(ExecutionDecision::Block(
+                ash_action_policy::BlockReason::ReviewFailed {
+                    reason: "fixture rejection".into(),
+                },
+            ))
+        }
+    }
+    let runtime =
+        DeclarativeHookRuntime::new(ash_config::HooksConfig::default(), Arc::new(BlockedPolicy));
+    let process = hook(
+        "user:hook:workflow-block",
+        ConfigHookEvent::Setup,
+        &[],
+        HookEnablement::Enabled,
+    );
+    let error = runtime
+        .execute_process(
+            &process,
+            test_dir(),
+            std::time::Duration::from_secs(1),
+            &CancellationSource::new().token(),
+        )
+        .unwrap_err();
+    assert!(error.to_string().contains("blocked by policy"));
+    assert!(
+        runtime
+            .execute_process(
+                &process,
+                test_dir(),
+                std::time::Duration::ZERO,
+                &CancellationSource::new().token()
+            )
+            .unwrap_err()
+            .to_string()
+            .contains("timeout")
+    );
+}
+
 fn before_request(tool_name: &str) -> BeforeToolHookRequest {
     BeforeToolHookRequest {
         session_id: ash_protocol::SessionId::new("session").unwrap(),

@@ -167,6 +167,7 @@ pub struct ManagedDirBinding {
     baseline_ref: String,
     kind: ManagedDirKind,
     repositories: Vec<ManagedRepositoryBinding>,
+    prepared_root: Option<PathBuf>,
 }
 
 /// One repository mapped into a Thread dir.
@@ -312,6 +313,7 @@ impl ManagedRepositoryBinding {
 pub enum ManagedDirCleanupEligibility {
     AllChangeSetsSettled,
     SessionDeletedByUser,
+    WorkflowTerminal,
 }
 
 impl Worktree {
@@ -363,6 +365,94 @@ pub struct WorktreeManager {
 }
 
 impl WorktreeManager {
+    /// Prepares a repository-owned workflow directory before its population hook runs. The
+    /// directory stays empty until populated; binding metadata is written only when adopted.
+    pub fn prepare_directory(&self, root: &Path, key: &str) -> Result<(PathBuf, bool)> {
+        if !root.is_absolute()
+            || key.is_empty()
+            || key == "."
+            || key == ".."
+            || !key
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
+        {
+            bail!("workflow directory root or key is invalid");
+        }
+        std::fs::create_dir_all(root)?;
+        let root = dunce::canonicalize(root)?;
+        let directory = root.join(key);
+        let created = match std::fs::symlink_metadata(&directory) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                bail!("workflow directory cannot be a symlink")
+            }
+            Ok(metadata) if metadata.is_dir() => false,
+            Ok(_) => bail!("workflow directory is not a directory"),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                std::fs::create_dir(&directory)?;
+                true
+            }
+            Err(error) => return Err(error.into()),
+        };
+        validate_prepared_directory(&root, &directory)?;
+        Ok((directory, created))
+    }
+
+    /// Adopts a populated, isolated directory without creating a second copy. Worktree remains
+    /// the physical resource owner; Core receives the same durable binding as other Threads.
+    pub async fn adopt_directory(
+        &self,
+        root: &Path,
+        directory: &Path,
+        source: &Path,
+        source_dir_id: &str,
+        owner: &ManagedDirOwner,
+    ) -> Result<ManagedDirBinding> {
+        let directory = validate_prepared_directory(root, directory)?;
+        if let Some(record) = binding::try_read(&directory)? {
+            if record.prepared_root.as_deref() != Some(dunce::canonicalize(root)?.as_path())
+                || record.relative_dir != Path::new(".")
+            {
+                bail!("workflow directory binding does not match its root");
+            }
+            return self.recover(&directory, owner).await;
+        }
+        owner.validate(source_dir_id)?;
+        let baseline = hex_digest(directory.to_string_lossy().as_ref());
+        let mut record = binding::BindingRecord::new(
+            owner.managed_dir_id(),
+            owner.clone(),
+            source_dir_id.into(),
+            source.into(),
+            PathBuf::from("."),
+            None,
+            baseline.clone(),
+            false,
+            baseline,
+            String::new(),
+            binding::BindingKind::Directory,
+        );
+        record.prepared_root = Some(dunce::canonicalize(root)?);
+        binding::write(&directory, &record)?;
+        self.recover(&directory, owner).await
+    }
+
+    /// Removes a failed, not-yet-bound preparation or a terminal workflow directory. Containment
+    /// and symlink checks are repeated after hooks because scripts may replace filesystem entries.
+    pub fn remove_prepared_directory(&self, root: &Path, directory: &Path) -> Result<()> {
+        if !directory.exists() && std::fs::symlink_metadata(directory).is_err() {
+            return Ok(());
+        }
+        let directory = validate_prepared_directory(root, directory)?;
+        if let Some(record) = binding::try_read(&directory)?
+            && (record.prepared_root.as_deref() != Some(dunce::canonicalize(root)?.as_path())
+                || record.relative_dir != Path::new("."))
+        {
+            bail!("workflow cleanup cannot remove another directory binding");
+        }
+        std::fs::remove_dir_all(directory)?;
+        Ok(())
+    }
+
     pub fn new(mut settings: WorktreeSettings) -> Self {
         settings.root = dunce::simplified(&settings.root).to_path_buf();
         Self {
@@ -823,6 +913,7 @@ impl WorktreeManager {
             baseline_ref: baseline_ref.as_str().to_string(),
             kind: ManagedDirKind::Git,
             repositories,
+            prepared_root: None,
         })
     }
 
@@ -1111,6 +1202,7 @@ impl WorktreeManager {
             baseline_ref: String::new(),
             kind: ManagedDirKind::Directory,
             repositories: Vec::new(),
+            prepared_root: None,
         })
     }
 
@@ -1134,8 +1226,13 @@ impl WorktreeManager {
                 record = upgraded;
             }
             let checkout_root = dunce::canonicalize(checkout_root)?;
-            let managed_root = dunce::canonicalize(&self.settings.root)?;
-            if !has_managed_layout(&managed_root, &checkout_root) {
+            let valid = if let Some(root) = &record.prepared_root {
+                record.relative_dir == Path::new(".")
+                    && validate_prepared_directory(root, &checkout_root).is_ok()
+            } else {
+                has_managed_layout(&dunce::canonicalize(&self.settings.root)?, &checkout_root)
+            };
+            if !valid {
                 bail!(
                     "{} is not a managed Thread directory",
                     checkout_root.display()
@@ -1157,6 +1254,7 @@ impl WorktreeManager {
                 baseline_ref: record.baseline_ref,
                 kind: ManagedDirKind::Directory,
                 repositories,
+                prepared_root: record.prepared_root,
             });
         }
         let repository = self.managed_checkout(checkout_root).await?;
@@ -1189,6 +1287,7 @@ impl WorktreeManager {
                 binding::BindingKind::Directory => ManagedDirKind::Directory,
             },
             repositories,
+            prepared_root: record.prepared_root,
         })
     }
 
@@ -1420,9 +1519,14 @@ impl WorktreeManager {
         _eligibility: ManagedDirCleanupEligibility,
     ) -> Result<()> {
         if binding.kind == ManagedDirKind::Directory {
-            let managed_root = dunce::canonicalize(&self.settings.root)?;
             let checkout_root = dunce::canonicalize(&binding.checkout_root)?;
-            if !has_managed_layout(&managed_root, &checkout_root) {
+            let valid = if let Some(root) = &binding.prepared_root {
+                validate_prepared_directory(root, &checkout_root).is_ok()
+                    && binding::read(&checkout_root)?.matches_owner(&binding.owner)
+            } else {
+                has_managed_layout(&dunce::canonicalize(&self.settings.root)?, &checkout_root)
+            };
+            if !valid {
                 bail!(
                     "{} is not a managed Thread directory",
                     checkout_root.display()
@@ -1576,6 +1680,21 @@ fn copy_symlink(source: &Path, target: &Path, destination: &Path) -> Result<()> 
         std::os::windows::fs::symlink_file(target, destination)?;
     }
     Ok(())
+}
+
+fn validate_prepared_directory(root: &Path, directory: &Path) -> Result<PathBuf> {
+    let root = dunce::canonicalize(root)?;
+    if std::fs::symlink_metadata(directory)?
+        .file_type()
+        .is_symlink()
+    {
+        bail!("workflow directory cannot be a symlink");
+    }
+    let directory = dunce::canonicalize(directory)?;
+    if directory.parent() != Some(root.as_path()) || !directory.is_dir() {
+        bail!("workflow directory must be directly inside its configured root");
+    }
+    Ok(directory)
 }
 
 fn repository_record(repository: &ManagedRepositoryBinding) -> binding::RepositoryBindingRecord {

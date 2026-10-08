@@ -24,6 +24,7 @@ test('directory permission service normalizes missing paths and preserves revisi
 	assert.equal(changes, 1);
 	assert.deepEqual(await service.list(), { revision: 4, entries: [{ dir: 'dir-1', path: undefined, permissions: ['readFiles'] }] });
 	assert.equal(await service.read('/workspace'), undefined);
+	assert.deepEqual(await service.resolve('/workspace-alias'), { dir: 'dir-1', permissions: undefined });
 	const permissions: readonly DirPermission[] = Object.freeze(['readFiles', 'writeFiles']);
 	assert.deepEqual(await service.set('/workspace', permissions, 4), { revision: 5, generation: 2, disposition: 'updated' });
 	assert.ok(submitted);

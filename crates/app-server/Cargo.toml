@@ -73,6 +73,7 @@ features = { workspace = true }
 network-proxy = { workspace = true }
 ash-memory-diagnostics = { workspace = true }
 ash-automation = { workspace = true }
+ash-symphony.workspace = true
 base64 = { workspace = true }
 dunce = { workspace = true }
 getrandom = { workspace = true }

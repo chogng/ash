@@ -365,6 +365,7 @@ fn durable_user_and_dir_exec_rules_drive_local_authorization() {
         ExecPolicyEffect::AllowUnsandboxed,
     );
     let policy_config = LocalToolConfig {
+        execution: ash_config::ExecutionConfig::default(),
         user: UserExecPolicyConfig {
             rules: vec![user_rule],
         },
@@ -403,6 +404,7 @@ fn durable_user_and_dir_exec_rules_drive_local_authorization() {
     ));
 
     let restrictive_config = LocalToolConfig {
+        execution: policy_config.execution,
         user: policy_config.user,
         dir_config: Some((
             dir.root().id(),
@@ -1339,5 +1341,94 @@ fn agent_shell_git_changes_refresh_every_connected_git_client() {
                 .iter()
                 .any(|reference| reference["name"] == "agent-topic")
         );
+    }
+}
+
+struct ExecutionDefaultsBackend(SandboxPolicy, Arc<AtomicUsize>);
+impl SandboxBackend for ExecutionDefaultsBackend {
+    fn kind(&self) -> SandboxKind {
+        SandboxKind::Restricted
+    }
+    fn prepare(
+        &self,
+        command: &SandboxCommand,
+        policy: SandboxPolicy,
+        _: &Dir,
+    ) -> Result<PreparedCommand, SandboxError> {
+        assert_eq!(policy, self.0);
+        self.1.fetch_add(1, Ordering::SeqCst);
+        Ok(PreparedCommand::unrestricted(command))
+    }
+    fn prepare_scoped(
+        &self,
+        command: &SandboxCommand,
+        policy: SandboxPolicy,
+        scope: &ash_sandboxing::SandboxScope,
+    ) -> Result<PreparedCommand, SandboxError> {
+        self.prepare(command, policy, scope.command_dir())
+    }
+}
+
+#[test]
+fn execution_defaults_reach_shell_review_and_process_preparation() {
+    let dir = TestDir::new();
+    for (files, network, expected_files, expected_network) in [
+        (
+            ash_config::CommandFileAccess::ReadOnly,
+            ash_config::CommandNetworkAccess::Denied,
+            FileSystemAccess::ReadOnly,
+            NetworkAccess::Denied,
+        ),
+        (
+            ash_config::CommandFileAccess::ReadOnly,
+            ash_config::CommandNetworkAccess::Allowed,
+            FileSystemAccess::ReadOnly,
+            NetworkAccess::Allowed,
+        ),
+        (
+            ash_config::CommandFileAccess::DirectoryWrite,
+            ash_config::CommandNetworkAccess::Allowed,
+            FileSystemAccess::DirectoryWrite,
+            NetworkAccess::Allowed,
+        ),
+    ] {
+        let mut config = LocalToolConfig::default();
+        config.execution.command_file_access = files;
+        config.execution.command_network_access = network;
+        let snapshot = config.snapshot().unwrap();
+        let policy = configured_shell_policy(&snapshot, config.execution);
+        assert_eq!(policy.file_system(), expected_files);
+        assert_eq!(policy.network(), expected_network);
+        let prepared = Arc::new(AtomicUsize::new(0));
+        let service = LocalShellToolService::new_with_action_policy_revision(
+            dir.authorization(),
+            RipgrepExecutable::from_path(dir.ripgrep()).unwrap(),
+            ExecutionDefaultsBackend(policy, Arc::clone(&prepared)),
+            local_policy_revision(),
+            policy,
+        )
+        .unwrap();
+        let call = tool_call(
+            json!({"program":"/bin/sh","arguments":["-c","printf defaults"],"working_directory":"."}),
+        );
+        let review = service.prepare(&call).unwrap();
+        let decision = LocalShellPolicy {
+            exec_policy: snapshot,
+            action_policy_revision: local_policy_revision(),
+        }
+        .decide(&review, &CancellationSource::new().token())
+        .unwrap();
+        assert_eq!(decision, ExecutionDecision::RunSandboxed(policy));
+        let output = service
+            .execute(
+                &call,
+                &ToolAuthorization::Sandboxed(policy),
+                &CancellationSource::new().token(),
+            )
+            .unwrap();
+        assert!(
+            matches!(output, ToolExecutionOutput::Success(ref output) if output.contains("defaults"))
+        );
+        assert_eq!(prepared.load(Ordering::SeqCst), 1);
     }
 }
