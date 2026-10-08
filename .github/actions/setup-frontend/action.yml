@@ -1,0 +1,95 @@
+name: Set up frontend tests
+description: Install frontend tools and reuse downloads; only builders restore Cargo outputs.
+
+inputs:
+  build:
+    description: Whether this job builds the App Server.
+    default: "true"
+  backend-cache:
+    description: Restore an exactly matching prepared Electron backend before building.
+    default: "false"
+
+outputs:
+  backend-cache-hit:
+    description: Whether the prepared Electron backend matched all build inputs.
+    value: ${{ steps.backend.outputs.cache-hit }}
+  backend-cache-key:
+    description: Exact prepared backend cache key.
+    value: ${{ steps.backend-key.outputs.key }}
+
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3
+      with:
+        install: false
+    - name: Install Linux frontend and App Server build dependencies
+      if: runner.os == 'Linux'
+      shell: bash
+      run: sudo apt-get update && sudo apt-get install --yes libx11-dev libxkbfile-dev libcap-dev libssl-dev pkg-config
+    - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+      with:
+        python-version: "3.11"
+    - name: Identify prepared backend inputs
+      id: backend-key
+      if: inputs.backend-cache == 'true'
+      shell: bash
+      run: |
+        backend_key=$(python -B build/desktop/ci.py --cache-key)
+        echo "key=$backend_key" >> "$GITHUB_OUTPUT"
+    - name: Restore prepared backend
+      id: backend
+      if: inputs.backend-cache == 'true'
+      uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+      with:
+        path: .build/ci/backend.tar.gz
+        # A partial match could silently run old binaries against new sources.
+        key: ${{ steps.backend-key.outputs.key }}
+    - name: Extract prepared backend
+      if: steps.backend.outputs.cache-hit == 'true'
+      shell: bash
+      run: tar -xzf .build/ci/backend.tar.gz
+    - name: Set up the App Server media build toolchain
+      if: inputs.build == 'true' && steps.backend.outputs.cache-hit != 'true' && runner.os == 'macOS'
+      uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+      with:
+        go-version: "1.26"
+        cache: false
+    - name: Cache App Server builds
+      if: inputs.build == 'true' && steps.backend.outputs.cache-hit != 'true'
+      uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      with:
+        workspaces: ". -> .build/cargo"
+        # Retain the old check job's cache namespace.
+        shared-key: check
+        save-if: ${{ github.ref == 'refs/heads/main' }}
+        cache-on-failure: true
+    - name: Install pinned Python tools
+      shell: bash
+      run: python -B scripts/install_python_tools.py
+    - name: Configure frontend download paths
+      shell: bash
+      run: |
+        # These paths are shared by package install hooks and Playwright.
+        echo "electron_config_cache=$GITHUB_WORKSPACE/.build/downloads/electron" >> "$GITHUB_ENV"
+        echo "PLAYWRIGHT_BROWSERS_PATH=$GITHUB_WORKSPACE/.build/downloads/playwright" >> "$GITHUB_ENV"
+    - name: Restore frontend downloads
+      id: downloads
+      uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+      with:
+        path: .build/downloads
+        key: frontend-downloads-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml', '.nvmrc') }}
+        restore-keys: frontend-downloads-v1-${{ runner.os }}-${{ runner.arch }}-
+    - name: Install workspace dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile
+    # Electron lifecycle scenarios also attach with Chromium over CDP.
+    - name: Install Chromium
+      shell: bash
+      run: pnpm exec playwright install --with-deps chromium
+    - name: Save frontend downloads
+      if: inputs.build == 'true' && github.ref == 'refs/heads/main' && steps.downloads.outputs.cache-hit != 'true'
+      uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+      with:
+        path: .build/downloads
+        key: ${{ steps.downloads.outputs.cache-primary-key }}

@@ -11,10 +11,10 @@ Smoke tests live in `test/smoke/` and drive a full Ash instance (Electron or web
 
 Run from the repository root:
 
-- `pnpm run smoketest` — compiles the smoke tests first (`test/smoke`), then runs them.
-- `pnpm run smoketest-no-compile` — runs the already-compiled smoke tests. CI uses this after an explicit compile step.
+- `pnpm run smoketest` — prepares Desktop and the App Server, checks automation types, then runs the connected Electron suite.
+- `pnpm run smoketest-no-compile` — runs the connected Electron suite against the prepared build. CI uses this after preparing or restoring the build.
 
-Both forward extra arguments after `--` to the runner (`test/smoke/test/index.js`).
+Both forward extra arguments to `test/smoke/run.ts` and Playwright; no `--` separator is needed.
 
 For a specific target:
 
@@ -36,6 +36,7 @@ The regular commands run their matching `pretest:smoke:*` preparation first. The
 | `--list` | Show selected tests without running them. |
 | `--repeat-each=N` | Repeat every selected test N times in one run. |
 | `--max-failures=1` | Stop after the first failed test. |
+| `--shard=N/M` | Run one file-level partition of the suite. CI uses four independent runners per Electron OS with one worker each. |
 
 ```bash
 # Prepare and run the Browser UI suite
@@ -54,7 +55,7 @@ A grep pattern can select more than one test. Check the selected list when the t
 
 For an intermittent failure that appears only in CI, run the affected test repeatedly in the failing CI environment and stop on the first failure. This is a temporary diagnostic change, not a permanent CI step.
 
-1. Identify the failing surface and test title from the job log. Read the current matrix in `.github/workflows/frontend.yml`: Browser runs on Linux, and Electron runs on Windows and macOS; each also runs selected App Server-connected scenarios.
+1. Identify the failing surface, shard and test title from the job log. `.github/workflows/frontend.yml` calls `frontend-tests.yml` for Linux Browser and Windows/macOS Electron. Each Electron platform builds once and transfers the current build to four independent file shards for both UI and App Server-connected suites.
 2. On a temporary branch, keep the existing preparation step. Replace the matching smoke test step with a loop over its `no-compile` command. The example below replaces the Electron UI step; use `pnpm run test:smoke:browser:no-compile` for Browser UI.
 3. Increase the job's `timeout-minutes` if the selected test needs more time for all iterations. Keep the existing failure artifact upload step.
 4. Fix the failure, then remove the loop and restore the normal CI command and timeout before merging.
@@ -62,7 +63,6 @@ For an intermittent failure that appears only in CI, run the affected test repea
 ```yaml
 # TEMPORARY: replace the Electron UI test step while investigating a CI-only failure.
 - name: Test Electron UI
-  if: matrix.surface == 'electron'
   run: |
     for i in $(seq 1 20); do
       echo "::group::Smoke probe run $i/20"
@@ -75,13 +75,13 @@ The first failure is enough to reproduce the problem. Stopping there preserves i
 
 ## Debugging CI smoke failures
 
-Start with the failing test and error in the GitHub Actions job log. The workflow uploads `.build/desktop/playwright/` on failure as `frontend-<surface>-<runner>`; use the exact name in the failing job. The run ID appears in the Actions run URL. Download the artifact for the failing surface:
+Start with the failing test and error in the GitHub Actions job log. The workflow uploads `.build/desktop/playwright/` on failure as `frontend-<surface>-<runner>-<shard>`; use the exact name in the failing job. The run ID appears in the Actions run URL. Download the artifact for the failing surface and shard:
 
 ```bash
-gh run download <run-id> -n frontend-electron-windows-latest -D ./logs
+gh run download <run-id> -n frontend-electron-windows-latest-2 -D ./logs
 ```
 
-The artifact contains `test-results/` and, when generated, `report/`. A failed test that reaches the Workbench fixture attaches `trace.zip` under its test result. Inspect the error and trace to find the failing action, then run that test locally with the same target and filter. If it fails only in CI, use the temporary loop above.
+The artifact contains `test-results/` and, when generated, `report/`. A failed test that reaches the Workbench fixture attaches `trace.zip` under its test result. Inspect the error and trace to find the failing action, then run that test locally with the same target and filter. If it fails only in CI, use the temporary loop above. `frontend-build-<runner>` is the separate one-day artifact consumed by Electron shards, not test diagnostics.
 
 ## Distinction from other test types
 

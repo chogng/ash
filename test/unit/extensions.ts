@@ -1,6 +1,6 @@
 import { runUnitTests } from './mocha.ts';
 
-runUnitTests([
+await runUnitTests([
 	'src/ash/base/test/common/event.test.js',
 	'src/ash/editor/test/common/languagesRegistry.test.js',
 	'src/ash/platform/commands/test/common/commands.test.js',

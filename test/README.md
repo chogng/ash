@@ -43,7 +43,9 @@ pnpm test:desktop:smoke:ui
 
 应用场景复用 `test/automation/test.ts` 的 fixture：它负责工作区、配置、启动、重启、全窗口错误收集和退出清理。不同场景使用独立数据，同一场景重启保留数据。Explorer 导航复用 `workbench.openExplorer()`，设置导航复用 `workbench.settingsEditor`，终端输入复用 `workbench.terminal`，工作区搜索复用 `workbench.search`，系统和网页菜单复用 `workbench.menus`，消息与确认对话框复用 `workbench.dialogs`，常规 Sessions 入口复用 `workbench.openAgentsWindow(target.kind)`；专门验证快捷键、菜单或窗口入口的场景保留对应真实操作。工作台和 Sessions 的启动入口均等待自身状态恢复完成；导航辅助代码等待操作结果，功能断言留在用例中。
 
-Frontend CI 运行全部单元测试、Chromium 浏览器集成测试，以及 Browser、Electron UI 和连接真实 App Server 的完整 smoke suite；连接测试不再通过文件白名单或 grep 缩小范围。Academic Workbench 使用独立项目。需要联网下载出版社 PDF 的语料测试使用 `electron-pdf-corpus-app-server` 独立项目，不进入普通 smoke suite。
+Frontend CI 运行全部单元测试、Chromium 浏览器集成测试，以及 Browser、Electron UI 和连接真实 App Server 的完整 smoke suite；连接测试不通过文件白名单或 grep 缩小范围。Browser 单测使用 `--jobs 4`，每个文件仍在独立进程中运行，本地默认串行。Electron 在 macOS 和 Windows 各使用四个独立 runner，按 Playwright 的文件分片运行完整 UI 和连接测试，每台机器保留一个 worker，避免桌面焦点与固定端口竞争。Academic Workbench 随完整 `electron-ui` 项目执行；只有两个文件的 `electron-editor-app-server` 项目在第一份分片执行。需要联网下载出版社 PDF 的语料测试使用 `electron-pdf-corpus-app-server` 独立项目，不进入普通 smoke suite。
+
+`.github/workflows/frontend.yml` 负责触发、取消旧 PR 运行和三个原有检查名称；`frontend-tests.yml` 在每个 Electron 平台只构建一次 Desktop、协议和 App Server，将本次运行的 `frontend-build-<runner>` 产物交给四个分片。归档只包含当前开发包、前端输出和按 Electron ABI 构建的键盘模块，不传输 Cargo 中间产物、旧版本和构建机器的路径缓存；分片安装依赖后恢复产物，重新建立依赖链接和开发后端 generation，再运行测试。`.github/actions/setup-frontend` 复用工具安装和 Electron/Chromium 下载缓存。Electron 构建任务还按后端源码、资源、依赖锁、构建脚本、编译环境和 hosted runner 镜像版本缓存已组装的后端包；完全匹配时从包中恢复协议并选择后端，不下载 Cargo 构建缓存或重编后端，纯前端源码改动不会使该缓存失效。后端包没有前缀回退，未命中时正常构建；缓存只在 main 写回。每个检查只等待所属环境的构建与全部分片，任一必需任务失败、取消或跳过都会使该检查失败；分片之间不因测试失败相互取消。失败诊断产物名称包含 surface、runner 和分片序号。
 
 真实 App Server 场景运行文件保存、BOM/CRLF、外部修改后的撤销，以及手动保存、未保存、延迟自动保存、切换编辑器自动保存后的重启恢复；Browser 还验证未保存内容在页面重载后的恢复。终端覆盖输入、工作区目录、面板关闭再打开、多实例输出隔离和 shell 退出后的重新启动。Search 验证大小写、正则、包含与排除条件及清除结果；Tasks 验证发现、执行、重跑、取消和实际输出；Settings 验证即时生效、重启保存和恢复默认。CI 配置覆盖 Linux Browser、macOS Electron 和 Windows Electron；终端进程在窗口重启后的恢复尚未实现，不属于当前覆盖。
 

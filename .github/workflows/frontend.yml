@@ -26,6 +26,10 @@ on:
       - "rust-toolchain.toml"
       - ".cargo/**"
       - ".github/workflows/frontend.yml"
+      - ".github/workflows/frontend-tests.yml"
+      - ".github/actions/setup-frontend/**"
+      - "scripts/install_python_tools.py"
+      - "scripts/requirements.txt"
   pull_request:
     paths:
       - "src/**"
@@ -50,6 +54,10 @@ on:
       - "rust-toolchain.toml"
       - ".cargo/**"
       - ".github/workflows/frontend.yml"
+      - ".github/workflows/frontend-tests.yml"
+      - ".github/actions/setup-frontend/**"
+      - "scripts/install_python_tools.py"
+      - "scripts/requirements.txt"
   workflow_dispatch:
 
 permissions:
@@ -61,108 +69,60 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  check:
-    name: ${{ matrix.surface }} (${{ matrix.runner }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - surface: browser
-            runner: ubuntu-24.04
-          - surface: electron
-            runner: windows-latest
-          - surface: electron
-            runner: macos-26
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 90
-    env:
-      PLAYWRIGHT_LIST_PRINT_FAILURES_INLINE: "1"
-    defaults:
-      run:
-        shell: bash
+  browser:
+    uses: ./.github/workflows/frontend-tests.yml
+    with:
+      surface: browser
+      runner: ubuntu-24.04
+      shards: "[1]"
+      shard-total: 1
+  electron-windows:
+    uses: ./.github/workflows/frontend-tests.yml
+    with:
+      surface: electron
+      runner: windows-latest
+      shards: "[1,2,3,4]"
+      shard-total: 4
+  electron-macos:
+    uses: ./.github/workflows/frontend-tests.yml
+    with:
+      surface: electron
+      runner: macos-26
+      shards: "[1,2,3,4]"
+      shard-total: 4
+  browser-check:
+    # Preserve the required check name and reject failed, skipped or cancelled shards.
+    name: browser (ubuntu-24.04)
+    if: always()
+    needs: browser
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3
-        with:
-          install: false
-      - name: Install Linux frontend and App Server build dependencies
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install --yes libx11-dev libxkbfile-dev libcap-dev libssl-dev pkg-config
-      - name: Set up the App Server media build toolchain
-        if: runner.os == 'macOS'
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
-        with:
-          go-version: "1.26"
-          cache: false
-      - name: Cache App Server builds
-        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-        with:
-          workspaces: ". -> .build/cargo"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-          cache-on-failure: true
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
-        with:
-          python-version: "3.11"
-      # Protocol prehooks resolve the repository interpreter on Windows.
-      - name: Install pinned Python tools
-        run: python -B scripts/install_python_tools.py
-      - name: Install workspace dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Check localization sources
-        run: pnpm localization:check
-      - name: Check CSS variable names
-        run: pnpm stylelint
-      - name: Check generated protocol contracts
-        run: pnpm typecheck:protocol
-      - name: Check and test build tools
-        if: matrix.surface == 'browser'
-        run: |
-          pnpm typecheck:build
-          pnpm test:build
-          pnpm build:stanza
-      - name: Test frontend units
-        if: matrix.surface == 'browser'
-        run: pnpm test:unit
-      - name: Install Chromium
-        if: matrix.surface == 'browser'
-        run: pnpm exec playwright install --with-deps chromium
-      - name: Test browser integration
-        if: matrix.surface == 'browser'
-        run: pnpm run test:browser:integration --project=chromium
-      - name: Prepare production browser UI smoke tests
-        if: matrix.surface == 'browser'
-        run: pnpm run pretest:smoke:browser
-      - name: Test production browser UI
-        if: matrix.surface == 'browser'
-        run: pnpm run test:smoke:browser:no-compile
-      - name: Prepare Electron UI smoke tests
-        if: matrix.surface == 'electron'
-        run: pnpm run pretest:smoke:ui
-      - name: Test Electron UI
-        if: matrix.surface == 'electron'
-        run: pnpm run test:smoke:ui:no-compile
-      - name: Prepare connected Web smoke tests
-        if: matrix.surface == 'browser'
-        run: pnpm run pretest:smoke:browser:full
-      - name: Test connected Web
-        if: matrix.surface == 'browser'
-        run: pnpm run test:smoke:browser:full:no-compile
-      - name: Prepare connected Electron smoke tests
-        if: matrix.surface == 'electron'
-        run: pnpm run pretest:smoke:desktop
-      - name: Test connected Electron
-        if: matrix.surface == 'electron'
-        run: pnpm run smoketest-no-compile
-      - name: Test Academic workbench
-        if: matrix.surface == 'electron'
-        run: pnpm exec playwright test test/smoke/areas/academic/academic-workbench.spec.ts --project=electron-ui
-      - name: Test connected Academic document editing
-        if: matrix.surface == 'electron'
-        run: pnpm exec node test/smoke/run.ts electron-editor-app-server
-      - name: Upload test diagnostics
-        if: failure() || cancelled()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: frontend-${{ matrix.surface }}-${{ matrix.runner }}
-          path: .build/desktop/playwright/
-          if-no-files-found: warn
+      - name: Require all surface shards to pass
+        env:
+          RESULT: ${{ needs.browser.result }}
+        run: test "$RESULT" = success
+  electron-windows-check:
+    # Preserve the required check name and reject failed, skipped or cancelled shards.
+    name: electron (windows-latest)
+    if: always()
+    needs: electron-windows
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require all surface shards to pass
+        env:
+          RESULT: ${{ needs.electron-windows.result }}
+        run: test "$RESULT" = success
+  electron-macos-check:
+    # Preserve the required check name and reject failed, skipped or cancelled shards.
+    name: electron (macos-26)
+    if: always()
+    needs: electron-macos
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require all surface shards to pass
+        env:
+          RESULT: ${{ needs.electron-macos.result }}
+        run: test "$RESULT" = success
