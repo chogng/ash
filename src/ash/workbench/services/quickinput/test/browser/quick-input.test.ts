@@ -481,6 +481,61 @@ test('Quick Access switches search modes in one picker and restores focus on clo
 	dom.window.close();
 });
 
+test('Quick Input preserves viewport intent across repeated focus restoration and disposal', () => {
+	const dom = new JSDOM('<!doctype html><body><button>Editor</button><button>Other editor</button></body>');
+	installDomGlobals(dom);
+	try {
+		using contextKeys = new ContextKeyService();
+		using service = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
+		const [editor, otherEditor] = dom.window.document.querySelectorAll('button');
+		const originalFocus = editor.focus;
+		const focusCalls: (FocusOptions | undefined)[] = [];
+		editor.focus = function (options?: FocusOptions): void {
+			focusCalls.push(options);
+			originalFocus.call(this, options);
+		};
+		try {
+			using picker = service.createQuickPick();
+			picker.items = [{ label: 'Keep position' }];
+			for (const close of ['hide', 'hide', 'Escape']) {
+				editor.focus();
+				focusCalls.length = 0;
+				picker.show();
+				if (close === 'Escape') {
+					const input = dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick-input input');
+					assert.ok(input);
+					input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+				} else {
+					picker.hide();
+				}
+				picker.hide();
+				assert.deepEqual({ focus: dom.window.document.activeElement, calls: [...focusCalls], visible: contextKeys.getValue(InQuickInputContext.key) }, { focus: editor, calls: [{ preventScroll: true }], visible: false });
+			}
+			picker.show();
+			otherEditor.focus();
+			focusCalls.length = 0;
+			picker.hide();
+			assert.deepEqual({ focus: dom.window.document.activeElement, calls: [...focusCalls] }, { focus: otherEditor, calls: [] });
+			editor.focus();
+			focusCalls.length = 0;
+			picker.show();
+			picker.dispose();
+			picker.dispose();
+			assert.deepEqual({ focus: dom.window.document.activeElement, calls: [...focusCalls] }, { focus: editor, calls: [{ preventScroll: true }] });
+			editor.focus();
+			focusCalls.length = 0;
+			service.createQuickPick().show();
+			service.dispose();
+			service.dispose();
+			assert.deepEqual({ focus: dom.window.document.activeElement, calls: [...focusCalls], host: dom.window.document.querySelector('.ash-quick-input-host') }, { focus: editor, calls: [{ preventScroll: true }], host: null });
+		} finally {
+			delete (editor as Partial<HTMLButtonElement>).focus;
+		}
+	} finally {
+		dom.window.close();
+	}
+});
+
 test('Quick Input replaces a visible picker and releases it with its host', () => {
 	const dom = new JSDOM('<!doctype html><body><button>Editor</button></body>');
 	installDomGlobals(dom);

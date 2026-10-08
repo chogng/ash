@@ -2252,6 +2252,61 @@ test('bracket guides follow block indentation without crossing function text', a
 	expect(indent).not.toContain(columns[1]);
 });
 
+test.describe('scroll geometry separation', () => {
+	async function readAfterFrames(page: Page): Promise<ReturnType<typeof window.ashStandaloneIntegration.readScrollGeometry>> {
+		return page.evaluate(() => new Promise<ReturnType<typeof window.ashStandaloneIntegration.readScrollGeometry>>(resolve => {
+			requestAnimationFrame(() => requestAnimationFrame(() => resolve(window.ashStandaloneIntegration.readScrollGeometry())));
+		}));
+	}
+
+	for (const mode of ['scroll', 'reveal'] as const) {
+		test(`appending overflow reaches the tail through ${mode}`, async ({ page }, testInfo) => {
+			await page.goto('/standalone.html?contributionsOff');
+			try {
+				await page.evaluate(() => window.ashStandaloneIntegration.prepareScrollGeometry(3));
+				const before = await readAfterFrames(page);
+				const immediate = await page.evaluate(mode => window.ashStandaloneIntegration.appendAndReveal(mode), mode);
+				const settled = await readAfterFrames(page);
+				await testInfo.attach('scroll-geometry.json', { body: JSON.stringify({ before, immediate, settled, events: await page.evaluate(() => window.ashStandaloneIntegration.readScrollGeometryEvents()) }, null, 2), contentType: 'application/json' });
+				expect(settled).toEqual({ ...before, version: immediate.version, lineCount: 20, logicalTop: 234, domTop: 234, domHeight: 360, contentHeight: 360 });
+				expect(immediate.version).toBeGreaterThan(before.version);
+				await expect(page.locator('#caller .view-line').filter({ hasText: /^row-20$/ })).toBeVisible();
+			} finally {
+				await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+			}
+		});
+	}
+
+	for (const close of ['Escape', 'command'] as const) {
+		test(`Quick Pick ${close} preserves a stable editor viewport`, async ({ page }, testInfo) => {
+			await page.goto('/standalone.html?contributionsOff');
+			try {
+				await page.evaluate(() => window.ashStandaloneIntegration.prepareScrollGeometry(20));
+				await readAfterFrames(page);
+				await page.evaluate(() => window.ashStandaloneIntegration.scrollVisibleRows(234));
+				const before = await readAfterFrames(page);
+				expect(before).toMatchObject({ logicalTop: 234, domTop: 234, focus: 'editor', caretLine: 1, lineCount: 20 });
+				await page.evaluate(() => window.ashStandaloneIntegration.openScrollGeometryPicker());
+				const input = page.locator('.ash-quick-pick-input input');
+				await expect(input).toBeFocused();
+				const open = await page.evaluate(() => window.ashStandaloneIntegration.readScrollGeometry());
+				if (close === 'Escape') {
+					await input.press('Escape');
+				} else {
+					await page.getByRole('option').filter({ has: page.getByText('Keep editor position', { exact: true }) }).click();
+				}
+				await expect(page.locator('.ash-quick-pick')).toHaveCount(0);
+				const settled = await readAfterFrames(page);
+				await testInfo.attach('scroll-geometry.json', { body: JSON.stringify({ before, open, settled, events: await page.evaluate(() => window.ashStandaloneIntegration.readScrollGeometryEvents()) }, null, 2), contentType: 'application/json' });
+				expect(open).toEqual({ ...before, focus: 'picker' });
+				expect(settled).toEqual({ ...before, commandExecutions: close === 'command' ? 1 : 0 });
+			} finally {
+				await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+			}
+		});
+	}
+});
+
 test('guide rows track folding and scrolling without retaining hidden lines', async ({ page }) => {
 	await page.goto('/standalone.html');
 	await page.evaluate(() => {

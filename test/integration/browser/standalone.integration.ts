@@ -30,7 +30,7 @@ import { formatEditor, FormattingConflicts, FormattingKind, FormattingMode } fro
 import { FoldingController } from '../../../src/ash/editor/contrib/folding/browser/folding.js';
 import { type CancellationToken } from '../../../src/ash/base/common/cancellation.js';
 import { scheduleAtNextAnimationFrame } from '../../../src/ash/base/browser/scheduler.js';
-import { h } from '../../../src/ash/base/browser/dom.js';
+import { addDisposableListener, h } from '../../../src/ash/base/browser/dom.js';
 import { type Range } from '../../../src/ash/editor/common/core/range.js';
 import { type EditorLayoutInfo, type IEditorOptions } from '../../../src/ash/editor/common/config/editorOptions.js';
 import { EndOfLineSequence, type ITextModel } from '../../../src/ash/editor/common/model.js';
@@ -45,7 +45,7 @@ import * as stanza from '../../../src/ash/editor/editor.main.js';
 import { EditorOption } from '../../../src/ash/editor/common/config/editorOptions.js';
 import { ScrollType } from '../../../src/ash/editor/common/editorCommon.js';
 import { EditorExtensionsRegistry } from '../../../src/ash/editor/browser/editorExtensions.js';
-import { MenusRegistry, MenuId } from '../../../src/ash/platform/actions/common/actions.js';
+import { IMenuService, MenusRegistry, MenuId } from '../../../src/ash/platform/actions/common/actions.js';
 import { KeybindingsRegistry } from '../../../src/ash/platform/keybinding/common/keybindingsRegistry.js';
 import { Keybinding, logicalKey } from '../../../src/ash/base/common/keybindings.js';
 import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
@@ -66,6 +66,10 @@ import { Event as EventUtils } from '../../../src/ash/base/common/event.js';
 import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import '../../../src/ash/workbench/contrib/bulkEdit/browser/preview/bulkEdit.css';
+import type { IQuickPickItem } from '../../../src/ash/platform/quickinput/common/quickInput.js';
+import { CommandsQuickAccessProvider } from '../../../src/ash/workbench/contrib/quickaccess/browser/commandsQuickAccess.js';
+import { WorkbenchQuickInputService } from '../../../src/ash/workbench/services/quickinput/browser/quickInputService.js';
+import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
 
 interface EditorState {
 	readonly value: string | null;
@@ -127,6 +131,27 @@ interface WrappedLayoutState {
 	readonly version: number;
 	readonly modelLineCount: number;
 	readonly contentHeight: number;
+}
+
+interface ScrollGeometryState {
+	readonly version: number;
+	readonly lineCount: number;
+	readonly logicalTop: number;
+	readonly domTop: number;
+	readonly domHeight: number;
+	readonly viewportHeight: number;
+	readonly contentHeight: number;
+	readonly caretLine: number | null;
+	readonly focus: 'editor' | 'picker' | 'other';
+	readonly commandExecutions: number;
+}
+
+interface ScrollGeometryEvent {
+	readonly type: string;
+	readonly time: number;
+	readonly state: ScrollGeometryState;
+	readonly preventScroll?: boolean;
+	readonly stack?: string;
 }
 
 interface ViewZoneState {
@@ -404,6 +429,11 @@ interface StandaloneHarness {
 	prepareFoldedViewZone(showInHiddenAreas: boolean): number;
 	resizeViewZone(height: number, afterLineNumber: number): ViewZoneState;
 	removeViewZone(): ViewZoneState;
+	prepareScrollGeometry(lineCount: number): ScrollGeometryState;
+	appendAndReveal(mode: 'scroll' | 'reveal'): ScrollGeometryState;
+	readScrollGeometry(): ScrollGeometryState;
+	readScrollGeometryEvents(): readonly ScrollGeometryEvent[];
+	openScrollGeometryPicker(): void;
 	prepareVisibleRows(): { readonly lineCount: number; readonly version: number; };
 	scrollVisibleRows(top: number): number;
 	editVisibleRow(lineIndex: number): string;
@@ -633,6 +663,29 @@ let formattingProvider: { dispose(): void; } | undefined;
 let bracketTokenRegistration: { dispose(): void; } | undefined;
 let stickySyntaxRegistration: { dispose(): void; } | undefined;
 let stickyOutlineRegistration: { dispose(): void; } | undefined;
+const scrollGeometryResources = new DisposableStore();
+const scrollGeometryEvents: ScrollGeometryEvent[] = [];
+let scrollGeometryCommandExecutions = 0;
+function readScrollGeometry(): ScrollGeometryState {
+	const root = callerEditor.getDomNode()!;
+	const scroll = root.querySelector<HTMLElement>(':scope > .ash-smooth-scrollable')!;
+	const active = document.activeElement;
+	return {
+		version: callerModel.getVersionId(),
+		lineCount: callerModel.getLineCount(),
+		logicalTop: callerEditor.getScrollTop(),
+		domTop: scroll.scrollTop,
+		domHeight: scroll.scrollHeight,
+		viewportHeight: scroll.clientHeight,
+		contentHeight: callerEditor.getContentHeight(),
+		caretLine: callerEditor.getPosition()?.lineNumber ?? null,
+		focus: root.contains(active) ? 'editor' : active?.closest('.ash-quick-pick') ? 'picker' : 'other',
+		commandExecutions: scrollGeometryCommandExecutions,
+	};
+}
+function recordScrollGeometry(type: string): void {
+	scrollGeometryEvents.push({ type, time: performance.now(), state: readScrollGeometry() });
+}
 const emptyResources = new DisposableStore();
 let emptyEditor: stanza.IStandaloneCodeEditor;
 let savedFoldingViewState: ReturnType<typeof callerEditor.saveViewState> = null;
@@ -3026,6 +3079,58 @@ window.ashStandaloneIntegration = {
 		callerEditor.changeViewZones(accessor => accessor.removeZone(viewZoneId));
 		return readViewZone();
 	},
+	prepareScrollGeometry: lineCount => {
+		scrollGeometryResources.clear();
+		scrollGeometryEvents.length = 0;
+		scrollGeometryCommandExecutions = 0;
+		callerContainer.style.height = '126px';
+		callerEditor.updateOptions({ readOnly: true, lineHeight: 18, scrollBeyondLastLine: false, smoothScrolling: false, wordWrap: 'off', minimap: { enabled: false }, stickyScroll: { enabled: false } });
+		callerEditor.layout({ width: callerContainer.clientWidth, height: 126 });
+		callerEditor.setValue(Array.from({ length: lineCount }, (_, index) => `row-${index + 1}`).join('\n'));
+		callerEditor.setPosition(new stanza.Position(1, 1));
+		callerEditor.focus();
+		const root = callerEditor.getDomNode()!;
+		const scroll = root.querySelector<HTMLElement>(':scope > .ash-smooth-scrollable')!;
+		const input = root.querySelector<HTMLElement>('.stanza-editor-input')!;
+		scrollGeometryResources.add(callerEditor.onDidScrollChange(() => recordScrollGeometry('logical-scroll')));
+		scrollGeometryResources.add(addDisposableListener(scroll, 'scroll', () => recordScrollGeometry('dom-scroll')));
+		scrollGeometryResources.add(addDisposableListener(input, 'focus', () => recordScrollGeometry('focus')));
+		scrollGeometryResources.add(addDisposableListener(input, 'blur', () => recordScrollGeometry('blur')));
+		const originalFocus = input.focus;
+		// Record the real restore call without changing browser focus or scroll semantics.
+		input.focus = function (options?: FocusOptions): void {
+			scrollGeometryEvents.push({ type: 'focus-call-before', time: performance.now(), state: readScrollGeometry(), preventScroll: options?.preventScroll ?? false, stack: new Error('Focus restore call').stack });
+			originalFocus.call(this, options);
+			recordScrollGeometry('focus-call-after');
+		};
+		scrollGeometryResources.add(toDisposable(() => { delete (input as Partial<HTMLElement>).focus; }));
+		return readScrollGeometry();
+	},
+	appendAndReveal: mode => {
+		const lineNumber = callerModel.getLineCount();
+		const column = callerModel.getLineMaxColumn(lineNumber);
+		callerModel.applyEdits([{ range: new stanza.Range(lineNumber, column, lineNumber, column), text: Array.from({ length: 20 - lineNumber }, (_, index) => `\nrow-${lineNumber + index + 1}`).join('') }]);
+		if (mode === 'scroll') {
+			callerEditor.setScrollTop(callerEditor.getContentHeight());
+		} else {
+			callerEditor.revealPosition(new stanza.Position(20, callerModel.getLineMaxColumn(20)), ScrollType.Smooth);
+		}
+		return readScrollGeometry();
+	},
+	readScrollGeometry,
+	readScrollGeometryEvents: () => [...scrollGeometryEvents],
+	openScrollGeometryPicker: () => {
+		const commands = StandaloneServices.get(ICommandService);
+		const inputs = scrollGeometryResources.add(new WorkbenchQuickInputService({ container: document.body, contextKeyService: StandaloneServices.get(IContextKeyService) }));
+		scrollGeometryResources.add(CommandsRegistry.register('test.scrollGeometry.keepPosition', () => { scrollGeometryCommandExecutions += 1; recordScrollGeometry('command'); }));
+		scrollGeometryResources.add(MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command: { id: 'test.scrollGeometry.keepPosition', title: 'Keep editor position' } }));
+		const picker = scrollGeometryResources.add(inputs.createQuickPick<IQuickPickItem>());
+		const dialogs = scrollGeometryResources.add(new DialogService());
+		const provider = new CommandsQuickAccessProvider(commands, StandaloneServices.get(IMenuService), StandaloneServices.get(IKeybindingService), dialogs, StandaloneServices.get(ICodeEditorService));
+		scrollGeometryResources.add(provider.provide(picker));
+		picker.value = 'Keep editor position';
+		picker.show();
+	},
 	prepareVisibleRows: () => {
 		callerContainer.style.height = '80px';
 		callerEditor.layout({ width: callerContainer.clientWidth, height: 80 });
@@ -3117,6 +3222,7 @@ window.ashStandaloneIntegration = {
 		}
 	},
 	dispose: () => {
+		scrollGeometryResources.dispose();
 		actionPreviewResources.dispose();
 		emptyResources.dispose();
 		standaloneCommands.dispose();

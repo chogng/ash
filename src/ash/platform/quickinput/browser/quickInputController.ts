@@ -134,7 +134,7 @@ export class QuickInputController extends Disposable {
 		this.focusToRestore = undefined;
 		this.hidden.fire();
 		if (shouldRestoreFocus && focusToRestore?.isConnected) {
-			focusToRestore.focus();
+			focusToRestore.focus({ preventScroll: true });
 		}
 	}
 }
