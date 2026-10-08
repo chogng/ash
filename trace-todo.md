@@ -1,3 +1,85 @@
+# Trace roadmap
+
+Trace 已能读取和跟随 Agent 的持久执行历史。本路线在现有能力上，优先完成 **具体 Turn 定位 → 模型与工具关系 → 一致导出 → 离线复查**，让一次失败从会话入口一直查到原始证据。本文是根目录 `TODO.md` 的改名与扩充；原内容完整保留在后半部分。
+
+源码核对基线：2026-10-08，本地 `main` 的 `deb624dd6`（包含 `2cc6ab4`）。下文“现有”表示源码已具备；本轮尚未重跑历史验证，旧验证日志位于原工作区忽略目录，独立 worktree 不携带这些日志。
+
+## Trace 现有能力
+
+| 已有能力 | 当前行为与证据入口 |
+| --- | --- |
+| 共享入口和页面 | Workbench 的 `ash.agentTrace.open` 接收 Session ID，Sessions 的 `sessions.trace.open` 取当前 Session、切换布局后调用它；两端共用 [AgentTraceEditor](src/ash/workbench/contrib/trace/browser/agentTraceEditor.ts)、[共享命令](src/ash/workbench/contrib/trace/browser/trace.contribution.ts) 和 [Sessions 入口](src/ash/sessions/contrib/trace/browser/trace.contribution.ts)。 |
+| 唯一历史来源与分页 | [ThreadStore](crates/thread-store/src/store.rs) 拥有持久事实；[rollout v3 分页](crates/rollout-trace/src/page.rs) 按 Thread 独立游标读有界范围，带上引用的历史前缀。页面合并分页，不触发执行。 |
+| 正式只读 RPC | [Session operations](crates/app-server/src/server/session_operations.rs) 已提供 `session/trace/read`、`session/trace/diagnostics/read`、`session/trace/payload/read`、`session/trace/graph/read`；前端通过 [Chat 领域契约](src/ash/workbench/services/chat/common/agentTrace.ts) 消费。 |
+| 历史与实时查阅 | Thread / Turn 层级、子 Thread、全文筛选、仅错误、JSON 详情、键盘导航、中文和无障碍帮助已存在；订阅补齐 read/subscribe 间隙，隐藏或关闭停止后续读取并释放订阅，迟到响应不覆盖新输入。 |
+| 模型诊断与正文 | [记录器](crates/rollout-trace/src/recorder.rs) 和 [诊断契约](crates/rollout-trace/src/diagnostics.rs) 保存主循环、压缩与工具辅助模型的 attempt、语义请求/响应、失败、取消和部分输出；正文按需读取，未采集/省略/不可用有状态。请求属于 ModelService 边界，provider 传输字节与逐 chunk 采集尚未实现。 |
+| 工具与子 agent 关系 | [关系归纳器](crates/rollout-trace/src/reducer.rs) 已生成模型请求工具、工具结果、Code Mode、终端、运行时调用、消息交付、委派与父子 Thread 的边；页面可沿已有 `eventKey` 跳转，缺失证据有 warnings。 |
+| 导入、导出和评测 | rollout v3 JSON 导入/导出已保留未知字段、前缀、诊断与关系；显示筛选不裁剪导出。文件上限 64 MiB。CLI/评测沿产品执行路径保存任务结果，见 [评测说明](test/agent-eval/README.md)、[使用说明](docs/chat-session-inspector.md)、[真实 smoke 源码](test/smoke/areas/sessions/trace.spec.ts)。 |
+
+另一项 [TraceEditor](src/ash/workbench/contrib/trace/browser/traceEditor.ts) 负责 OTel/OTLP/WebSocket span viewer。它与此处的 Agent 执行 Trace 有不同数据来源和用途；本路线以 ThreadStore 与诊断捕获为依据。
+
+## 预计演进能力
+
+| 阶段 | 用户完成的事情 | 复用与边界 |
+| --- | --- | --- |
+| P1 具体 Turn 定位 | 从指定 Session / Thread / Turn / event 打开 Trace，确认选中的是哪次执行；分页晚到、目标缺失和切换输入都有明确结果。 | 扩展共享前端打开参数与 URI，复用现有读取和订阅；业务历史仍归 ThreadStore。第一批完成打开、定位、详情、重开及回归验证的闭环。 |
+| P2 模型与工具关系 | 从选中 Turn 找到实际模型请求、模型工具调用、工具结果与子 agent，区分并行、嵌套、消息交付和结果依赖。 | 先复用现有图与身份键；只把明确记录的因果关系连起来。补字段或关系语义前由父任务协调 Core/Rust/protocol 所有者。 |
+| P3 一致导出 | 运行仍在继续时导出一次有明确边界的捕获；历史、诊断、正文与关系属于同一范围，导出期间保持单次操作。 | 先复现边界问题；决定按已加载范围裁剪关系还是由后端提供一致捕获契约。正文读取失败标为不完整，不能伪装为完整导出。 |
+| P4 离线复查 | 无连接时导入、定位、查正文和关系，重新导出后证据仍可读；连续选择文件时最后一次选择生效。 | 保持 rollout v3 兼容与字段保留；限制大文件和不完整证据。长历史使用有界 DOM 和缓存搜索文本，避免每次渲染反复序列化大记录。 |
+
+### 逐项核实，不能先承诺的能力
+
+| 信息 | 当前证据与待核实项 | 演进验收条件 |
+| --- | --- | --- |
+| 上下文与参数 | 已记录 Core 请求、附件转换后的语义请求和历史前缀；具体每项参数、工具定义、压缩前后输入以已保存 payload 为准。 | 核对实际请求字段、来源、时间与模型选择；缺失正文明确提示；不从当前配置回填历史参数。 |
+| token 与费用 | 页面已显示 invocation 中存在的 input/output token；[usage 聚合](crates/core/src/model_usage.rs) 保留部分报告和未知 invocation。费用来源、历史价格和完整 cache/reasoning 用量尚未核实。 | 分开显示已报告、缺失和估算；只有有明确价格来源、版本和计费规则时才展示费用估算。 |
+| 权限等待 | [审批交互契约](crates/protocol/src/interaction/turn_interaction.rs) 存在；当前诊断事件集合主要覆盖模型 attempt，等待起止与决策是否持久关联到 Trace 尚未核实。 | 逐项核对请求、决策、等待时间与执行结果；未存储的间隔不根据界面停顿推断。 |
+| 重试、超时、取消 | attempt 失败/取消/部分输出已记录，[真实 loop 回归源码](crates/core/src/turn/diagnostic_trace_tests.rs) 覆盖失败重试与流式取消；超时来源、重试归组和等待预算的全链路覆盖待核实。 | 同一 Turn 内区分 attempt、取消源、超时预算、终止状态与部分证据；缺少因果键时标为未知。 |
+| 并行子 agent 与依赖 | 现有 graph 有父子 Thread、委派、消息交付、嵌套调用；依赖/等待关系与并行区间的完整持久证据尚未核实。 | 用真实多子 agent 场景验证身份、顺序、交付与结果依赖；不能把时间相近视为依赖。 |
+| 副作用与恢复位置 | 评测已支持单 Git 仓库、完整 UTF-8 普通文件结果封存，见 [执行说明](docs/exec.md)；外部副作用、幂等性与可恢复位置未建立通用契约。 | 只提供有证据的恢复位置和前置条件；复查、结果还原与重新执行分别标注。任意安全重放不在承诺范围。 |
+| 敏感信息 | 语义请求、路径、工具参数和结果可能包含秘密；现有记录上限不是分享脱敏机制。 | 先核实已有脱敏规则，再提供分享前预览、密钥/个人路径处理和遗漏说明；内部原始证据与分享产物的变换可追踪。 |
+
+## 可执行 TODO 与验收标准
+
+所有新工作先用相应单测或真实 Playwright 场景复现，再改所有者实现。Web 与 Electron 使用同一共享编辑器契约；源码检查和历史日志不能替代本轮运行验证。
+
+### P1：打开指定执行并确认定位（第一批）
+
+- [ ] 在共享 Trace 命令保留 Session ID 字符串兼容，增加结构化 Session / Thread / Turn / event 定位；URI 保存定位身份，重开得到同一目标。
+- [ ] 页面逐页寻找目标；命中后选中并展示详情，自动滚动到目标；晚到分页不将选择重置为第一行。
+- [ ] 目标缺失/参数无效有可翻译状态；错误/全文筛选不能悄悄把定位目标换成其他事件。
+- [ ] 覆盖重开同 Session 不同 Turn、子 Thread、诊断 event、目标缺失、切换输入和关闭后的迟到响应；更新中文与无障碍说明。
+- [ ] 验收：共享命令和现有 Sessions 入口仍可用；指定 Thread / Turn / event 的选中身份、详情和重开一致；定向单测、Renderer/smoke typecheck、正常 Renderer/Web 构建，以及 Web/Electron Playwright 行为断言通过。重型验证先排父任务队列。
+
+### P2：查一条模型—工具—子 agent 证据链
+
+- [ ] 从 P1 选中 Turn 查看模型 attempt → 请求/响应 → 工具 call/result → 子 Thread；保留现有 Code Mode、终端和消息交付关系。
+- [ ] 核实上表中的上下文、用量、权限、重试、取消与并行证据，逐项记录“有来源 / 缺失 / 尚未验证”；需要新记录的项交给其现有所有者。
+- [ ] 验收：真实成功、失败重试、流式取消、多子 agent 场景的跳转均指向已保存事件；正文按需读；缺少证据时出现明确说明；图 warnings 可查看，禁止编造因果关系。
+
+### P3：运行中的一致导出
+
+- [ ] 复现导出等待 payload 时 `render()` 重新启用按钮的竞态；导出进行中由页面单一状态拥有按钮生命周期，切换/隐藏/关闭使旧结果失效。
+- [ ] 复现旧 capture 与随后全量 `graph/read` 的范围不一致；明确导出边界并验证所有图引用位于该边界或有明确缺失说明。
+- [ ] 验收：导出中追加 Turn/诊断事件不会混入另一时刻的关系；快速点击只产生一个下载；正文读取失败、64 MiB 超限与输入切换均有确定结果；筛选仍只影响显示。
+
+### P4：可靠离线复查与长历史
+
+- [ ] 复现连续导入 A/B 的完成顺序竞态；最后选择的文件生效，即使 A 后完成或后失败。
+- [ ] 以大记录/长历史量化 DOM 数量、输入筛选耗时和详情序列化开销，再实现有界渲染与搜索缓存；证据全集与显示窗口分开由现有页面持有。
+- [ ] 分享脱敏先定义实际覆盖规则、预览和遗漏标记；原始证据保持可追溯。
+- [ ] 验收：断开连接后，导入 → P1 定位 → P2 正文/关系 → 重导出仍可复查；未知字段、前缀与不完整状态保留；A/B 导入乱序回归通过；大记录性能结果有同机前后数据。
+
+## 本轮交付与验证
+
+- 文档：`TODO.md` → `trace-todo.md`，保留 `.md` 扩展名和全部原文；主树原文件未改动。
+- 工作树：`/Volumes/1t/ash-trace-20261008`，分支 `codex/trace-roadmap-20261008`；后续 Trace 工作持续在这里完成，避免与 Search/SCM/Output/Preferences/Notifications 重叠。
+- 当前实现状态：P1 尚未实现；本轮验证结果在实现后补充。共享 Core/Rust/protocol 扩展先协调，Cargo/runtime/protocol 不跨树复用，push 由父任务串行放行。
+
+---
+
+以下为原 `TODO.md` 全文（包括当时的完成标记、验证记录与边界），用于保留历史依据；其中旧日志与结论不代表本轮已复验。
+
 # Agent Trace 与评测 TODO
 
 目标：在 Ash 中打开当前会话的执行 Trace，回看历史并跟随运行；使用同一条产品执行路径运行可复现任务，独立验收结果，并将评测产物与 Trace 关联。
