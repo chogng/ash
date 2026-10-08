@@ -41,7 +41,9 @@ fn commit_requires_write_permission_for_the_whole_checkout_before_staging() {
         )
         .authorize(permission)
         .unwrap();
-        let service = GitService::new(authorization, grant_root).unwrap();
+        let mut service = GitService::new(authorization, grant_root).unwrap();
+        let (client, commands) = recording_git(&root);
+        service.client = client;
         for request in [
             GitCommitRequest::new("staged".into()).unwrap(),
             GitCommitRequest::new("tracked".into())
@@ -53,6 +55,7 @@ fn commit_requires_write_permission_for_the_whole_checkout_before_staging() {
                 .amend()
                 .sign_off(),
         ] {
+            std::fs::write(&commands, "").unwrap();
             let error = service
                 .commit(request)
                 .err()
@@ -61,6 +64,10 @@ fn commit_requires_write_permission_for_the_whole_checkout_before_staging() {
                 assert!(matches!(error, super::GitServiceError::Permission));
             } else {
                 assert!(matches!(error, super::GitServiceError::Boundary));
+            }
+            assert_no_commit_mutations(&commands);
+            if permission == Permission::InspectRepository {
+                assert_eq!(std::fs::read_to_string(&commands).unwrap(), "");
             }
             assert_eq!(git(&root, &["rev-parse", "HEAD"]), head);
             assert_eq!(git(&root, &["ls-files", "--stage"]), index);
@@ -94,6 +101,61 @@ fn commit_requires_write_permission_for_the_whole_checkout_before_staging() {
 }
 
 #[test]
+fn revoked_write_grant_rejects_every_commit_scope_before_running_git() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path().canonicalize().unwrap();
+    git(&root, &["init", "--initial-branch=main"]);
+    git(&root, &["config", "user.name", "Ash Test"]);
+    git(&root, &["config", "user.email", "ash@example.invalid"]);
+    std::fs::write(root.join("tracked.txt"), "initial\n").unwrap();
+    git(&root, &["add", "tracked.txt"]);
+    git(&root, &["commit", "-m", "initial"]);
+    std::fs::write(root.join("tracked.txt"), "staged\n").unwrap();
+    git(&root, &["add", "tracked.txt"]);
+    std::fs::write(root.join("tracked.txt"), "unstaged\n").unwrap();
+    std::fs::write(root.join("new.txt"), "untracked\n").unwrap();
+    let head = git(&root, &["rev-parse", "HEAD"]);
+    let index = git(&root, &["ls-files", "--stage"]);
+    let grant = Grant::for_environment(
+        Dir::open_local(&root).unwrap(),
+        GrantSource::HostConfiguration,
+        Permissions::new([Permission::MutateRepository]),
+    );
+    let authorization = grant.authorize(Permission::MutateRepository).unwrap();
+    let mut service = GitService::new(authorization, root.clone()).unwrap();
+    let (client, commands) = recording_git(&root);
+    service.client = client;
+    // Revocation must apply to an already-created service, before it touches the shared index.
+    grant.revoke();
+    for request in [
+        GitCommitRequest::new("staged".into()).unwrap(),
+        GitCommitRequest::new("tracked".into())
+            .unwrap()
+            .with_tracked_changes(),
+        GitCommitRequest::new("all".into())
+            .unwrap()
+            .with_untracked_changes()
+            .amend()
+            .sign_off(),
+    ] {
+        std::fs::write(&commands, "").unwrap();
+        let error = service.commit(request).err().unwrap();
+        assert!(matches!(error, super::GitServiceError::Permission));
+        assert_eq!(std::fs::read_to_string(&commands).unwrap(), "");
+        assert_eq!(git(&root, &["rev-parse", "HEAD"]), head);
+        assert_eq!(git(&root, &["ls-files", "--stage"]), index);
+        assert_eq!(
+            std::fs::read_to_string(root.join("tracked.txt")).unwrap(),
+            "unstaged\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(root.join("new.txt")).unwrap(),
+            "untracked\n"
+        );
+    }
+}
+
+#[test]
 fn commit_rejects_parent_and_symlink_paths_that_leave_the_authorized_checkout() {
     let authorized = tempfile::tempdir().unwrap();
     let root = authorized.path().canonicalize().unwrap();
@@ -123,7 +185,10 @@ fn commit_rejects_parent_and_symlink_paths_that_leave_the_authorized_checkout() 
         )
         .authorize(Permission::MutateRepository)
         .unwrap();
-        let service = GitService::new(authorization, path).unwrap();
+        let mut service = GitService::new(authorization, path).unwrap();
+        let (client, commands) = recording_git(&external_root);
+        service.client = client;
+        std::fs::write(&commands, "").unwrap();
         let error = service
             .commit(
                 GitCommitRequest::new("escape".into())
@@ -133,6 +198,7 @@ fn commit_rejects_parent_and_symlink_paths_that_leave_the_authorized_checkout() 
             .err()
             .expect("escaped checkout must be rejected");
         assert!(matches!(error, super::GitServiceError::Boundary));
+        assert_no_commit_mutations(&commands);
         assert_eq!(git(&external_root, &["rev-parse", "HEAD"]), head);
         assert_eq!(git(&external_root, &["ls-files", "--stage"]), index);
         assert_eq!(
@@ -224,6 +290,37 @@ fn branch_listing_discovers_once_and_refreshes_worktree_occupancy() {
             .any(|branch| branch.name() == "later")
     );
     assert_eq!(std::fs::read_to_string(&log).unwrap().lines().count(), 3);
+}
+
+fn recording_git(root: &Path) -> (GitClient, std::path::PathBuf) {
+    // Keep the probe outside the working tree so all-change staging cannot include test artifacts.
+    let executable = root.join(".git/record-git");
+    let commands = root.join(".git/commands");
+    let git_path = GitClient::system().executable().unwrap();
+    std::fs::write(
+        &executable,
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> {}\nexec {} \"$@\"\n",
+            shell_path(&commands),
+            shell_path(&git_path)
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755)).unwrap();
+    (
+        GitClient::with_executable(executable, GitExecutionLimits::default()).unwrap(),
+        commands,
+    )
+}
+
+fn assert_no_commit_mutations(log: &Path) {
+    let commands = std::fs::read_to_string(log).unwrap();
+    assert!(
+        !commands
+            .split_whitespace()
+            .any(|argument| matches!(argument, "add" | "commit")),
+        "unauthorized request launched a mutating Git command: {commands}"
+    );
 }
 
 fn shell_path(path: &Path) -> String {

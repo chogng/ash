@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { execFile } from 'node:child_process';
-import { readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { expect, test } from '../../../automation/test.js';
@@ -119,6 +119,80 @@ test.describe('Git repository operations', () => {
 		expect(await git('ls-files', 'secret.ignored')).toBe('');
 	});
 
+	test('SCM failed creation preserves the draft and actual index until an explicit retry', async ({ application, testWorkspace, workbench }) => {
+		const cwd = testWorkspace.directory;
+		const git = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
+		const head = await git('rev-parse', 'HEAD');
+		await writeFile(testWorkspace.file, 'const value = 2;\n');
+		await writeFile(join(cwd, 'new.ts'), 'untracked file\n');
+		await git('config', 'user.name', '');
+		await git('config', 'user.email', '');
+		await workbench.git.open();
+		const page = workbench.page;
+		const input = page.locator('.ash-scm-input');
+		await input.getByRole('textbox', { name: /^Commit message/u }).focus();
+		await page.keyboard.insertText('Retry subject\n\nPreserve the complete body.');
+		await workbench.git.selectTitleMenu(application, ['Commit', 'Commit All with Sign-off…']);
+		await choose(page, 'Tracked and untracked changes');
+		await expect(page.locator('.ash-scm-status')).not.toHaveText('Committing selected changes…');
+		await expect(page.locator('.ash-scm-status')).toHaveText('GitOperationFailed');
+		expect(await git('rev-parse', 'HEAD')).toBe(head);
+		expect(await git('show', ':main.ts')).toBe('const value = 2;');
+		expect(await git('show', ':new.ts')).toBe('untracked file');
+		await expect(input.locator('.view-lines')).toContainText('Retry subject');
+		await expect(input.locator('.view-lines')).toContainText('Preserve the complete body.');
+		const staged = page.getByRole('treeitem', { name: /^Staged Changes/u }).first();
+		await expect(staged).toBeVisible();
+		await expect(page.locator('.ash-scm-changes')).toContainText('new.ts');
+		expect(await readFile(testWorkspace.file, 'utf8')).toBe('const value = 2;\n');
+		await git('config', 'user.name', 'Ash Test');
+		await git('config', 'user.email', 'ash-test@example.invalid');
+		expect(await git('rev-parse', 'HEAD')).toBe(head);
+		await workbench.git.selectTitleMenu(application, ['Commit', 'Commit Staged with Sign-off']);
+		await expect.poll(() => git('log', '-1', '--format=%B')).toBe('Retry subject\n\nPreserve the complete body.\n\nSigned-off-by: Ash Test <ash-test@example.invalid>');
+		await expect(input.locator('.stanza-editor-placeholder-text')).toBeVisible();
+		expect(await git('diff', '--cached', '--name-only')).toBe('');
+	});
+
+	test('SCM empty amendment loads the complete message and undo preserves an existing draft', async ({ application, testWorkspace, workbench }) => {
+		const cwd = testWorkspace.directory;
+		const git = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
+		await writeFile(testWorkspace.file, 'const value = 2;\n');
+		await git('add', 'main.ts');
+		await workbench.git.open();
+		const page = workbench.page;
+		const input = page.locator('.ash-scm-input');
+		await input.getByRole('textbox', { name: /^Commit message/u }).focus();
+		await page.keyboard.insertText('Previous subject\n\nPrevious complete body.');
+		await page.getByRole('toolbar', { name: 'Source control actions', exact: true }).getByRole('button', { name: 'Refresh', exact: true }).click();
+		await expect(page.locator('.ash-scm-commit')).toBeEnabled();
+		await workbench.git.selectTitleMenu(application, ['Commit', 'Commit Staged']);
+		await expect.poll(() => git('log', '-1', '--format=%B')).toBe('Previous subject\n\nPrevious complete body.');
+		await expect(input.locator('.stanza-editor-placeholder-text')).toBeVisible();
+		const head = await git('rev-parse', 'HEAD');
+		const parent = await git('rev-parse', 'HEAD^');
+		const index = await readFile(join(cwd, '.git/index'));
+		await workbench.dialogs.confirm(application, 'Confirm Git Operation', 'Cancel', () => workbench.git.selectTitleMenu(application, ['Commit', 'Amend Last Commit…']));
+		expect(await git('rev-parse', 'HEAD')).toBe(head);
+		expect(await readFile(join(cwd, '.git/index'))).toEqual(index);
+		await expect(input.locator('.view-lines')).toContainText('Previous subject');
+		await expect(input.locator('.view-lines')).toContainText('Previous complete body.');
+		await writeFile(testWorkspace.file, 'const value = 3;\n');
+		await git('add', 'main.ts');
+		await workbench.dialogs.confirm(application, 'Confirm Git Operation', 'Continue', () => workbench.git.selectTitleMenu(application, ['Commit', 'Amend Last Commit…']));
+		await expect.poll(() => git('rev-parse', 'HEAD')).not.toBe(head);
+		expect(await git('rev-parse', 'HEAD^')).toBe(parent);
+		expect(await git('log', '-1', '--format=%B')).toBe('Previous subject\n\nPrevious complete body.');
+		await expect(input.locator('.stanza-editor-placeholder-text')).toBeVisible();
+		await input.getByRole('textbox', { name: /^Commit message/u }).focus();
+		await page.keyboard.insertText('Next independent draft');
+		await workbench.dialogs.confirm(application, 'Confirm Git Operation', 'Continue', () => workbench.git.selectTitleMenu(application, ['Commit', 'Undo Last Commit']));
+		await expect.poll(() => git('rev-parse', 'HEAD')).toBe(parent);
+		expect(await git('show', ':main.ts')).toBe('const value = 3;');
+		await expect(input.locator('.view-lines')).toContainText('Next independent draft');
+		await expect(page.locator('.ash-scm-status')).toHaveText('Last commit undone. Your current Source Control draft was kept.');
+	});
+
 	test('Git partial staging changes only the chosen block and selected editor line', async ({ testWorkspace, workbench }) => {
 		const cwd = testWorkspace.directory;
 		const page = workbench.page;
@@ -184,6 +258,95 @@ test.describe('Git repository operations', () => {
 		await workbench.dialogs.confirm(application, 'Confirm Git Operation', 'Continue', () => workbench.git.selectTitleMenu(application, ['Branch', 'Abort Merge, Rebase or Cherry-Pick']));
 		await expect.poll(async () => (await run('git', ['ls-files', '--unmerged', 'main.ts'], { cwd })).stdout).toBe('');
 		expect(await readFile(testWorkspace.file, 'utf8')).toBe('const value = 6;\n');
+	});
+});
+
+test.describe('SCM commit authorization', () => {
+	test.use({ gitRepository: true, openWorkspace: false });
+
+	test('SCM child-folder authorization rejects every commit scope before changing the shared index', async ({ application, target, testWorkspace, workbench }) => {
+		test.skip(target.appServerMode !== 'required', 'Requires repository authorization in the Rust backend.');
+		const cwd = testWorkspace.directory;
+		const child = join(cwd, 'commit-child');
+		const inside = join(child, 'inside.ts');
+		await mkdir(child);
+		await writeFile(inside, 'initial inside\n');
+		const git = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
+		await git('add', 'commit-child/inside.ts');
+		await git('commit', '-m', 'Child fixture');
+		await writeFile(testWorkspace.file, 'staged outside\n');
+		await git('add', 'main.ts');
+		await writeFile(inside, 'unstaged inside\n');
+		await writeFile(join(child, 'new.ts'), 'untracked inside\n');
+		const head = await git('rev-parse', 'HEAD');
+		const index = await readFile(join(cwd, '.git/index'));
+		const page = workbench.page;
+		if ('windows' in application) {
+			await application.evaluate(({ dialog }, folder) => {
+				dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [folder] })) as typeof dialog.showOpenDialog;
+			}, child);
+		}
+		await workbench.quickaccess.runCommand('workbench.action.files.openFolder');
+		if (target.kind === 'electron') {
+			await page.getByRole('dialog', { name: 'Ash', exact: true }).getByRole('button', { name: 'Trust Folder & Enable Features', exact: true }).click();
+		} else {
+			const picker = page.getByRole('dialog', { name: 'Choose a server folder', exact: true });
+			await picker.getByText('commit-child', { exact: true }).click();
+			await picker.getByText('Select this folder', { exact: true }).click();
+			await page.getByRole('dialog', { name: 'Authorize Server Folder', exact: true }).getByRole('button', { name: 'Open Folder', exact: true }).click();
+		}
+		await workbench.waitForReady();
+		await expect(page.locator('.ash-explorer').getByRole('treeitem', { name: /^inside\.ts(?:,|$)/u })).toBeVisible();
+		await workbench.git.open();
+		const input = page.locator('.ash-scm-input');
+		await input.getByRole('textbox', { name: /^Commit message/u }).focus();
+		await page.keyboard.insertText('Keep unauthorized draft');
+		// Web folder switching uses durable permissions, absent for this child fixture;
+		// Desktop Trust grants child writes, then whole-checkout commit authorization rejects it.
+		const deniedMessage = target.kind === 'electron' ? 'GitOperationFailed' : 'Git is unavailable for this workspace. Check folder access and retry.';
+		for (const scope of ['staged', 'tracked', 'includeUntracked']) {
+			await workbench.quickaccess.runCommand(scope === 'staged' ? 'git.commitStaged' : 'git.commitAll');
+			if (scope !== 'staged') await choose(page, scope === 'tracked' ? 'Tracked changes only' : 'Tracked and untracked changes');
+			await expect(page.locator('.ash-scm-status')).toHaveText(deniedMessage);
+			await expect(page.getByRole('toolbar', { name: 'Source control actions', exact: true }).getByRole('button', { name: 'Refresh', exact: true })).toBeEnabled();
+			expect(await git('rev-parse', 'HEAD')).toBe(head);
+			expect(await readFile(join(cwd, '.git/index'))).toEqual(index);
+			expect(await readFile(testWorkspace.file, 'utf8')).toBe('staged outside\n');
+			expect(await readFile(inside, 'utf8')).toBe('unstaged inside\n');
+			expect(await readFile(join(child, 'new.ts'), 'utf8')).toBe('untracked inside\n');
+			await expect(input.locator('.view-lines')).toContainText('Keep unauthorized draft');
+		}
+	});
+
+	test('SCM read-only folder authorization rejects commit before staging', async ({ application, target, testWorkspace, workbench }) => {
+		test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'The Desktop permission dialog supports opening a folder read only.');
+		if (!('windows' in application)) return;
+		const cwd = testWorkspace.directory;
+		const git = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
+		await writeFile(testWorkspace.file, 'unstaged tracked\n');
+		await writeFile(join(cwd, 'new.ts'), 'untracked file\n');
+		const head = await git('rev-parse', 'HEAD');
+		const index = await readFile(join(cwd, '.git/index'));
+		await application.evaluate(({ dialog }, folder) => {
+			dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [folder] })) as typeof dialog.showOpenDialog;
+		}, cwd);
+		await workbench.quickaccess.runCommand('workbench.action.files.openFolder');
+		const page = workbench.page;
+		await page.getByRole('dialog', { name: 'Ash', exact: true }).getByRole('button', { name: 'Open Read Only', exact: true }).click();
+		await workbench.waitForReady();
+		await expect(page.locator('[data-statusbar-item-id="ash.status.workspacePermissions"]')).toContainText('Read-only');
+		await workbench.git.open();
+		const input = page.locator('.ash-scm-input');
+		await input.getByRole('textbox', { name: /^Commit message/u }).focus();
+		await page.keyboard.insertText('Keep read-only draft');
+		await workbench.quickaccess.runCommand('git.commitAll');
+		await choose(page, 'Tracked and untracked changes');
+		await expect(page.locator('.ash-scm-status')).toHaveText('Git is unavailable for this workspace. Check folder access and retry.');
+		expect(await git('rev-parse', 'HEAD')).toBe(head);
+		expect(await readFile(join(cwd, '.git/index'))).toEqual(index);
+		expect(await readFile(testWorkspace.file, 'utf8')).toBe('unstaged tracked\n');
+		expect(await git('ls-files', 'new.ts')).toBe('');
+		await expect(input.locator('.view-lines')).toContainText('Keep read-only draft');
 	});
 });
 

@@ -925,9 +925,15 @@ use crate::protocol::git::GitCommitFileResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCommitMessageResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitCommitModeDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCommitParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCommitResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitCommitScopeDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitCommitSignoffDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCommitStatisticsDto;
 #[cfg(any(test, feature = "export"))]
@@ -6233,6 +6239,9 @@ typescript_bindings! {
     FsDeleteParams,
     FsChanged,
     GitIntegrationDto,
+    GitCommitScopeDto,
+    GitCommitModeDto,
+    GitCommitSignoffDto,
     GitStashModeDto,
     GitCommandDto,
     GitCommandParams,

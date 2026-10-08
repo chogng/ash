@@ -6665,7 +6665,18 @@ fn git_status_rpc_returns_dir_repository_state() {
             "params":{"repositoryId":repository_id,"paths":["new.txt"]}
         }),
     );
-    let committed = call(
+    let read_git = |args: &[&str]| {
+        let output = std::process::Command::new("git")
+            .current_dir(&root)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        output.stdout
+    };
+    let head_before = read_git(&["rev-parse", "HEAD"]);
+    let index_before = std::fs::read(root.join(".git/index")).unwrap();
+    let denied = call(
         &server,
         &mut connection,
         serde_json::json!({
@@ -6675,7 +6686,48 @@ fn git_status_rpc_returns_dir_repository_state() {
             "params":{"repositoryId":repository_id,"message":"add dir file"}
         }),
     );
-    assert!(!committed["result"]["objectId"].as_str().unwrap().is_empty());
+    assert_eq!(denied["error"]["code"], -32061, "{denied}");
+    assert_eq!(denied["error"]["data"]["kind"], "GitOperationFailed");
+    assert_eq!(read_git(&["rev-parse", "HEAD"]), head_before);
+    assert_eq!(
+        std::fs::read(root.join(".git/index")).unwrap(),
+        index_before
+    );
+    assert_eq!(
+        std::fs::read_to_string(dir.join("tracked.txt")).unwrap(),
+        "changed\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(root.join("outside.txt")).unwrap(),
+        "outside changed\n"
+    );
+
+    // A commit publishes the entire index; the legacy request needs a whole-checkout Grant too.
+    let authorized_server = self::server()
+        .with_git_root(dir_authorization(&root, DirPermission::MutateRepository))
+        .unwrap();
+    let mut authorized_connection = authorized_server.connection();
+    initialize(&authorized_server, &mut authorized_connection);
+    let committed = call(
+        &authorized_server,
+        &mut authorized_connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":2,
+            "method":"git/commit",
+            "params":{"message":"add dir file"}
+        }),
+    );
+    assert!(
+        !committed["result"]["objectId"].as_str().unwrap().is_empty(),
+        "{committed}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(root.join("outside.txt")).unwrap(),
+        "outside changed\n"
+    );
+    drop(authorized_connection);
+    drop(authorized_server);
     let discarded = call(
         &server,
         &mut connection,

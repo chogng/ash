@@ -7,6 +7,7 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import { CancellationError } from '../../../../../base/common/errors.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
+import { AppServerRemoteError } from '../../../../../platform/agentHost/common/appServerError.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
@@ -166,6 +167,88 @@ test('SCM commit workflow refreshes the real index after failure and keeps its d
 	assert.deepEqual({ draft: fixture.provider.input.value, staged: fixture.provider.groups.find(group => group.id === 'staged')?.resources.map(resource => resource.path), message: fixture.provider.statusMessage, busy: fixture.provider.isBusy }, {
 		draft: 'Retry this message', staged: ['actually-staged.ts'], message: 'Commit failed after staging', busy: false,
 	});
+});
+
+for (const command of ['git.commitStaged', 'git.commitAllSigned', 'git.commitAllAmend']) {
+	for (const errorName of ['GitUnavailable', 'GitOperationFailed'] as const) {
+		test(`SCM commit workflow keeps its draft and never retries ${command} after ${errorName}`, async () => {
+			let attempts = 0;
+			using fixture = commitFixture({
+				commit: async () => { attempts++; throw new AppServerRemoteError(errorName === 'GitUnavailable' ? -32060 : -32061, errorName, { kind: errorName }); },
+				stage: async () => { assert.fail('The commit request owns staging; the frontend must not stage separately.'); },
+				unstage: async () => { assert.fail('A failed commit must not restore an invented index.'); },
+			});
+			await fixture.provider.refresh();
+			fixture.provider.input.value = 'Keep subject\n\nKeep complete body.';
+			await fixture.commands.executeCommand(command, fixture.provider.id);
+			assert.deepEqual({ attempts, draft: fixture.provider.input.value, busy: fixture.provider.isBusy, message: fixture.provider.statusMessage }, {
+				attempts: 1, draft: 'Keep subject\n\nKeep complete body.', busy: false,
+				message: errorName === 'GitUnavailable' ? 'Git is unavailable for this workspace. Check folder access and retry.' : 'GitOperationFailed',
+			});
+		});
+	}
+}
+
+for (const errorName of ['GitUnavailable', 'GitOperationFailed'] as const) {
+	test(`SCM commit workflow keeps an empty undo draft after ${errorName}`, async () => {
+		let attempts = 0;
+		using fixture = commitFixture({ executeCommand: async () => { attempts++; throw new AppServerRemoteError(errorName === 'GitUnavailable' ? -32060 : -32061, errorName, { kind: errorName }); } });
+		await fixture.provider.refresh();
+		await fixture.commands.executeCommand('git.undoCommit', fixture.provider.id);
+		assert.deepEqual({ attempts, draft: fixture.provider.input.value, busy: fixture.provider.isBusy, requests: fixture.requests }, {
+			attempts: 1, draft: '', busy: false, requests: [['message', selectedId, fixture.provider.id]],
+		});
+	});
+}
+
+test('SCM commit workflow keeps the loaded full amend message when commit creation fails', async () => {
+	using fixture = commitFixture({ commit: async () => { throw new Error('GitOperationFailed'); } });
+	await fixture.provider.refresh();
+	await fixture.commands.executeCommand('git.commitAmend', fixture.provider.id);
+	assert.deepEqual({ draft: fixture.provider.input.value, busy: fixture.provider.isBusy, message: fixture.provider.statusMessage, requests: fixture.requests }, {
+		draft: 'Previous subject\n\nPrevious body.\n', busy: false, message: 'GitOperationFailed', requests: [['message', selectedId, fixture.provider.id]],
+	});
+});
+
+test('SCM commit workflow does not amend when reading the previous message is denied', async () => {
+	let confirmations = 0;
+	let commits = 0;
+	using fixture = commitFixture({
+		commitMessage: async () => { throw new AppServerRemoteError(-32060, 'GitUnavailable', { kind: 'GitUnavailable' }); },
+		commit: async () => { commits++; assert.fail('Denied message reads must stop before mutation.'); },
+	}, async () => { confirmations++; return { confirmed: true }; });
+	await fixture.provider.refresh();
+	await fixture.commands.executeCommand('git.commitAmend', fixture.provider.id);
+	assert.deepEqual({ confirmations, commits, draft: fixture.provider.input.value, busy: fixture.provider.isBusy }, { confirmations: 0, commits: 0, draft: '', busy: false });
+});
+
+test('SCM commit workflow retains the original failure when its status refresh also fails', async () => {
+	let failed = false;
+	using fixture = commitFixture({
+		commit: async () => { failed = true; throw new Error('CommitCreationFailed'); },
+		status: async () => {
+			await Promise.resolve();
+			if (failed) throw new Error('StatusReadFailed');
+			return fixture.status;
+		},
+	});
+	await fixture.provider.refresh();
+	fixture.provider.input.value = 'Keep retry message';
+	await fixture.provider.input.accept();
+	assert.deepEqual({ draft: fixture.provider.input.value, busy: fixture.provider.isBusy, message: fixture.provider.statusMessage }, { draft: 'Keep retry message', busy: false, message: 'CommitCreationFailed' });
+});
+
+test('SCM commit workflow does not restore an undo message after its repository is disposed', async () => {
+	const started = new DeferredPromise<void>();
+	const completed = new DeferredPromise<{ outcome: 'completed'; operation: undefined; status: GitStatus; }>();
+	using fixture = commitFixture({ executeCommand: async () => { await started.complete(); return completed.p; } });
+	await fixture.provider.refresh();
+	const operation = fixture.commands.executeCommand('git.undoCommit', fixture.provider.id);
+	await started.p;
+	fixture.provider.dispose();
+	await completed.complete({ outcome: 'completed', operation: undefined, status: { ...fixture.status, revision: 2 } });
+	await operation;
+	assert.equal(fixture.provider.input.value, '');
 });
 
 for (const [id, options] of [

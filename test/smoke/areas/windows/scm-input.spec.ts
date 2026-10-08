@@ -165,6 +165,48 @@ test.describe('SCM commit input', () => {
 		await expect(editor).toBeFocused();
 	});
 
+	test('SCM commit input localizes scope and draft help after restarting in Chinese', async ({ testWorkspace, workbench, restartWorkbench }) => {
+		const cwd = testWorkspace.directory;
+		const git = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
+		await writeFile(testWorkspace.file, 'const value = 2;\n');
+		await writeFile(join(cwd, 'new.ts'), 'untracked file\n');
+		const head = await git('rev-parse', 'HEAD');
+		const index = await git('ls-files', '--stage');
+		await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+		const languages = workbench.page.locator('.ash-quick-pick');
+		await languages.getByRole('combobox').fill('简体中文');
+		await languages.getByRole('combobox').press('Enter');
+		({ workbench } = await restartWorkbench());
+		await workbench.git.open();
+		const page = workbench.page;
+		const input = page.locator('.ash-scm-input');
+		const editor = input.getByRole('textbox', { name: /^提交信息/u });
+		await editor.focus();
+		await page.keyboard.insertText('中文提交草稿');
+		await editor.press('Alt+F1');
+		const help = page.getByRole('dialog').getByRole('textbox');
+		await expect(help).toHaveValue(/询问是否包含未跟踪的文件/u);
+		await expect(help).toHaveValue(/Git 身份添加 Signed-off-by 尾注/u);
+		await expect(help).toHaveValue(/未编辑过的空草稿恢复完整提交信息/u);
+		await page.keyboard.press('Escape');
+		await expect(editor).toBeFocused();
+		await workbench.quickaccess.runCommand('git.commitAllSigned');
+		const scope = page.locator('.ash-quick-pick');
+		await expect(scope.getByRole('option', { name: /^仅已跟踪的更改/u })).toBeVisible();
+		await expect(scope.getByRole('option', { name: /^已跟踪和未跟踪的更改/u })).toBeVisible();
+		await page.keyboard.press('Escape');
+		expect(await git('rev-parse', 'HEAD')).toBe(head);
+		expect(await git('ls-files', '--stage')).toBe(index);
+		await expect(input.locator('.view-lines')).toContainText('中文提交草稿');
+		await workbench.quickaccess.runCommand('git.commitAllSigned');
+		await scope.getByRole('option', { name: /^仅已跟踪的更改/u }).click();
+		await expect.poll(() => git('log', '-1', '--format=%s')).toBe('中文提交草稿');
+		expect(await git('show', 'HEAD:main.ts')).toBe('const value = 2;');
+		expect(await git('log', '-1', '--format=%B')).toContain('Signed-off-by:');
+		expect(await git('ls-files', 'new.ts')).toBe('');
+		await expect(input.locator('.stanza-editor-placeholder-text')).toBeVisible();
+	});
+
 	test('SCM commit input uses input colors and visible focus in all four themes', async ({ workbench }) => {
 		const page = workbench.page;
 		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
