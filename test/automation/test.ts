@@ -67,7 +67,10 @@ export const test = base.extend<PlaywrightFixtures>({
 	},
 	// Startup (30s), process exit (10s), and daemon stop (30s) have independent
 	// owned budgets. Keep them inside the fixture budget; test actions retain 45s.
-	runningApplication: [async ({ target, testWorkspace, openWorkspace, webAppServer, baseURL, backendConfiguration }, use, testInfo) => {
+	runningApplication: [async ({ target, testWorkspace, openWorkspace, webAppServer, baseURL, backendConfiguration, video }, use, testInfo) => {
+		// Evidence scenarios opt into full recording; the launchers own every page until cleanup.
+		const videoOptions = typeof video === 'string' ? { mode: video, size: undefined } : video;
+		const recordVideo = videoOptions.mode === 'on' ? { directory: testInfo.outputPath('recordings'), size: videoOptions.size ?? { width: 1440, height: 900 } } : undefined;
 		// Restart replaces the driver; retain errors from each application generation.
 		const generations: WorkbenchDiagnostics[] = [];
 		const diagnostics = {
@@ -104,7 +107,7 @@ export const test = base.extend<PlaywrightFixtures>({
 		if (target.kind === 'browser') {
 			const url = target.appServerMode === 'required' ? webAppServer!.connection.endpoint : baseURL;
 			if (url === undefined) throw new Error(`Browser project '${testInfo.project.name}' requires a baseURL`);
-			const { application, driver } = await launchBrowser({ ...target, baseURL: url, webSession: webAppServer?.connection });
+			const { application, driver } = await launchBrowser({ ...target, baseURL: url, webSession: webAppServer?.connection, recordVideo });
 			generations.push(driver.diagnostics);
 			const running: RunningApplication = {
 				driver, diagnostics,
@@ -132,7 +135,7 @@ export const test = base.extend<PlaywrightFixtures>({
 		}
 		const userDataDirectory = await mkdtemp(join(tmpdir(), 'ash-'));
 		const options = {
-			appServerMode: target.appServerMode, userDataDirectory,
+			appServerMode: target.appServerMode, userDataDirectory, recordVideo,
 			workspaceDirectory: openWorkspace ? testWorkspace.directory : undefined,
 			workspacePermissions: openWorkspace ? 'development' as const : undefined,
 		};

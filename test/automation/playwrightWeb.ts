@@ -9,6 +9,7 @@ import { decodeWebSessionInfo } from '../../.build/protocol/typescript/WebProtoc
 import { createTestEnvironment } from './testEnvironment.js';
 
 export interface WebLaunchResult {
+	readonly profileDirectory: string;
 	readonly connection: { readonly endpoint: string; readonly token: string; };
 	close(): Promise<void>;
 }
@@ -50,7 +51,7 @@ export async function launchWeb(workspaceDirectory: string, options: { readonly 
 		const response = await fetch(new URL('/ash/session', endpoint), { method: 'POST', headers: { Origin: new URL(endpoint).origin }, body: ticket, signal: AbortSignal.timeout(10_000) });
 		if (!response.ok) { throw new Error(`Web test authentication failed: ${response.status}`); }
 		const session = decodeWebSessionInfo(await response.json());
-		return { connection: { endpoint, token: session.token }, close };
+		return { connection: { endpoint, token: session.token }, profileDirectory, close };
 	} catch (error) {
 		await close();
 		throw error;
