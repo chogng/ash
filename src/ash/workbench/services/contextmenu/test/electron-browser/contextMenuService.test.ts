@@ -1,4 +1,13 @@
-import { Disposable } from '../../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { promiseWithResolvers } from '../../../../../base/common/async.js';
+import { CancellationToken, CancellationTokenSource } from '../../../../../base/common/cancellation.js';
+import type { IAction } from '../../../../../base/common/actions.js';
+import { MenuService } from '../../../../../platform/actions/common/menuService.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { BrowserContextViewService } from '../../../../../platform/contextview/browser/contextViewService.js';
+import { CommandService } from '../../../commands/common/commandService.js';
+import { NotificationService } from '../../../notification/common/notificationService.js';
+import { ElectronContextMenuService } from '../../electron-browser/contextMenuService.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -232,4 +241,249 @@ test('Electron context menus reject missing window services without retaining re
 	services.registerInstance(IKeybindingService, {} as IKeybindingService);
 	assert.throws(() => services.createInstance(ElectronContextMenuService, api), /contextViewService/);
 	tracker.assertNoLeaks();
+});
+
+class SystemMenuFixture extends Disposable {
+	readonly document: Document;
+	readonly menus: ElectronContextMenuService;
+	readonly notifications: NotificationService;
+	readonly popups: { request: INativeContextMenuRequest; finish(result: INativeContextMenuResult): void; }[] = [];
+	readonly hidden: { label: string; cancelled: boolean; }[] = [];
+	readonly events: string[] = [];
+	readonly closeAcknowledged = promiseWithResolvers<void>();
+	closeRequests = 0;
+
+	constructor(options: { delayClose?: boolean; close?: () => Promise<void>; } = {}) {
+		super();
+		const browser = new JSDOM('<!doctype html><body><button id="origin">Origin</button></body>');
+		this._register(toDisposable(() => browser.window.close()));
+		this.document = browser.window.document;
+		const services = this._register(new InstantiationService());
+		this.notifications = this._register(new NotificationService());
+		services.registerInstance(INotificationService, this.notifications);
+		const contextKeys = this._register(new ContextKeyService());
+		services.registerInstance(IContextKeyService, contextKeys);
+		const contextViews = this._register(new BrowserContextViewService(this.document.body));
+		services.registerInstance(IContextViewService, contextViews);
+		const registry = new ConfigurationRegistry();
+		registry.registerConfiguration({ key: 'window.menuStyle', defaultValue: 'system', parse: value => value });
+		registry.registerConfiguration({ key: 'window.titleBarStyle', defaultValue: 'system', parse: value => value });
+		const configuration = this._register(new InMemoryConfigurationService(registry));
+		services.registerInstance(IConfigurationService, configuration);
+		const commands = this._register(new CommandService(services));
+		services.registerInstance(ICommandService, commands);
+		services.registerInstance(IMenuService, services.createInstance(MenuService));
+		services.registerInstance(IKeybindingService, {
+			inChordMode: false, onDidUpdateKeybindings: Event.None,
+			getKeybindings: () => [], registerSchemaContribution: () => Disposable.None,
+			resolveKeybinding() { throw new Error('No binding in this fixture'); },
+			resolveUserBinding: () => undefined, lookupKeybindings: () => [], lookupKeybinding: () => undefined,
+		});
+		const popupApi: INativeContextMenuApi = {
+			popup: request => {
+				const pending = promiseWithResolvers<INativeContextMenuResult>();
+				this.popups.push({ request, finish: pending.resolve });
+				return pending.promise;
+			},
+			close: () => { this.closeRequests++; return options.close?.() ?? (options.delayClose ? this.closeAcknowledged.promise : Promise.resolve()); },
+		};
+		this.menus = this._register(services.createInstance(ElectronContextMenuService, popupApi));
+		this._register(this.menus.onDidShowContextMenu(() => this.events.push('show')));
+		this._register(this.menus.onDidHideContextMenu(() => this.events.push('hide')));
+	}
+
+	show(label: string, token?: CancellationToken, selected: IAction = menuAction(label), onHide?: () => void): Promise<boolean> {
+		const ended = promiseWithResolvers<boolean>();
+		this.menus.showContextMenu({
+			getAnchor: () => ({ x: 10, y: 20, targetWindow: this.document.defaultView! }),
+			getActions: () => [selected], cancellationToken: token,
+			onHide: cancelled => { this.hidden.push({ label, cancelled }); ended.resolve(cancelled); onHide?.(); },
+		});
+		return ended.promise;
+	}
+
+	showBrowser(label: string): void {
+		this.menus.showContextMenu({
+			getAnchor: () => this.document.querySelector<HTMLButtonElement>('#origin')!,
+			getActions: () => [menuAction(label)],
+			anchorAlignment: AnchorAlignment.Left, anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
+			onHide: cancelled => this.hidden.push({ label, cancelled }),
+		});
+	}
+}
+
+function menuAction(label: string): IAction {
+	return { id: label, label, tooltip: '', enabled: true, run() { } };
+}
+
+test('already canceled system requests do not display or disturb the current popup', async () => {
+	using fixture = new SystemMenuFixture();
+	const existing = fixture.show('Existing');
+	assert.equal(await fixture.show('Canceled', CancellationToken.Cancelled), true);
+	assert.deepEqual({ popups: fixture.popups.length, closes: fixture.closeRequests, hidden: fixture.hidden }, { popups: 1, closes: 0, hidden: [{ label: 'Canceled', cancelled: true }] });
+	fixture.popups[0].finish({});
+	await existing;
+});
+
+test('canceling a system request frees its slot after actual close and ignores the old selected result', async () => {
+	using fixture = new SystemMenuFixture({ delayClose: true });
+	using source = new CancellationTokenSource();
+	let runs = 0;
+	const selected = { ...menuAction('Selected'), run: () => { runs++; } };
+	const old = fixture.show('Old', source.token, selected);
+	source.cancel();
+	assert.equal(await fixture.show('Still closing'), true);
+	assert.deepEqual({ closes: fixture.closeRequests, popups: fixture.popups.length }, { closes: 1, popups: 1 });
+	fixture.closeAcknowledged.resolve();
+	assert.equal(await old, true);
+	const next = fixture.show('Next', undefined, selected);
+	assert.equal(fixture.popups.length, 2);
+	fixture.popups[0].finish({ selectedId: 'action-1' });
+	fixture.popups[1].finish({ selectedId: 'action-1' });
+	assert.equal(await next, false);
+	assert.deepEqual({ runs, hidden: fixture.hidden, events: fixture.events }, {
+		runs: 1, hidden: [{ label: 'Still closing', cancelled: true }, { label: 'Old', cancelled: true }, { label: 'Next', cancelled: false }], events: ['show', 'hide', 'show', 'hide'],
+	});
+});
+
+test('canceling a system menu preserves its replacement before the popup result returns', async () => {
+	using fixture = new SystemMenuFixture({ delayClose: true });
+	using source = new CancellationTokenSource();
+	let runs = 0;
+	const old = fixture.show('Old', source.token, { ...menuAction('Old'), run: () => { runs++; } });
+	fixture.showBrowser('Replacement');
+	source.cancel();
+	fixture.closeAcknowledged.resolve();
+	await old;
+	fixture.popups[0].finish({ selectedId: 'action-1' });
+	const view = fixture.document.querySelector<HTMLElement>('.ash-context-view')!;
+	assert.deepEqual({ visible: !view.hidden, label: fixture.document.querySelector('[role="menuitem"]')?.textContent, hidden: fixture.hidden, events: fixture.events, runs }, {
+		visible: true, label: 'Replacement', hidden: [{ label: 'Old', cancelled: true }], events: ['show'], runs: 0,
+	});
+	fixture.menus.hideContextMenu();
+	assert.equal(view.hidden, true);
+});
+
+test('a system request canceled by the show event never executes a late selection', async () => {
+	using fixture = new SystemMenuFixture();
+	using source = new CancellationTokenSource();
+	let runs = 0;
+	using shown = fixture.menus.onDidShowContextMenu(() => source.cancel());
+	const ended = fixture.show('Old', source.token, { ...menuAction('Old'), run: () => { runs++; } });
+	await ended;
+	fixture.popups[0].finish({ selectedId: 'action-1' });
+	assert.deepEqual({ runs, closes: fixture.closeRequests, hidden: fixture.hidden }, { runs: 0, closes: 1, hidden: [{ label: 'Old', cancelled: true }] });
+});
+
+test('a failed system close keeps the real slot occupied but allows a later close to retry', async () => {
+	const failure = new Error('Host close fixture failure');
+	const logged = promiseWithResolvers<void>();
+	const errors: unknown[][] = [];
+	const previousError = console.error;
+	console.error = (...args: unknown[]) => { errors.push(args); logged.resolve(); };
+	using restore = toDisposable(() => { console.error = previousError; });
+	let attempts = 0;
+	using fixture = new SystemMenuFixture({ close: () => ++attempts === 1 ? Promise.reject(failure) : Promise.resolve() });
+	using source = new CancellationTokenSource();
+	const old = fixture.show('Old', source.token);
+	source.cancel();
+	await logged.promise;
+	assert.equal(await fixture.show('Still occupied'), true);
+	fixture.menus.hideContextMenu();
+	await old;
+	const next = fixture.show('Next');
+	assert.deepEqual({ closes: fixture.closeRequests, popups: fixture.popups.length, errors: errors.map(args => args[1]) }, { closes: 2, popups: 2, errors: [failure] });
+	fixture.popups[1].finish({});
+	await next;
+});
+
+test('a system hide callback can open a successor without losing visibility or its popup slot', async () => {
+	using fixture = new SystemMenuFixture();
+	using source = new CancellationTokenSource();
+	let next!: Promise<boolean>;
+	const old = fixture.show('Old', source.token, menuAction('Old'), () => { next = fixture.show('Reentrant'); });
+	fixture.popups[0].finish({});
+	await old;
+	source.cancel();
+	assert.deepEqual({ popups: fixture.popups.length, closes: fixture.closeRequests, events: fixture.events }, { popups: 2, closes: 0, events: ['show'] });
+	fixture.popups[1].finish({});
+	await next;
+	assert.deepEqual(fixture.events, ['show', 'hide']);
+});
+
+test('a browser hide callback keeps its reentrant successor visible in the Electron service', () => {
+	using fixture = new SystemMenuFixture();
+	using source = new CancellationTokenSource();
+	fixture.menus.showContextMenu({
+		getAnchor: () => fixture.document.querySelector<HTMLButtonElement>('#origin')!,
+		getActions: () => [menuAction('Old')], cancellationToken: source.token,
+		anchorAlignment: AnchorAlignment.Left, anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
+		onHide: () => fixture.showBrowser('Reentrant'),
+	});
+	source.cancel();
+	assert.deepEqual({ label: fixture.document.querySelector('[role="menuitem"]')?.textContent, events: fixture.events }, { label: 'Reentrant', events: ['show'] });
+	fixture.menus.hideContextMenu();
+	assert.deepEqual(fixture.events, ['show', 'hide']);
+});
+
+for (const disposed of [false, true]) {
+	test(`a started system action ${disposed ? 'suppresses its failure after window disposal' : 'reports a failure once despite later presentation cancellation'}`, async () => {
+		using fixture = new SystemMenuFixture();
+		using source = new CancellationTokenSource();
+		const pending = promiseWithResolvers<void>();
+		const started = promiseWithResolvers<void>();
+		const reported = promiseWithResolvers<void>();
+		using listener = fixture.notifications.onDidAdd(() => reported.resolve());
+		const selected = { ...menuAction('Selected'), run: () => { started.resolve(); return pending.promise; } };
+		fixture.show('Old', source.token, selected);
+		fixture.popups[0].finish({ selectedId: 'action-1' });
+		await started.promise;
+		source.cancel();
+		if (disposed) fixture.menus.dispose();
+		pending.reject(new Error('Clipboard fixture failure'));
+		if (!disposed) await reported.promise;
+		else await pending.promise.catch(() => { });
+		assert.deepEqual(fixture.notifications.getNotifications().map(item => item.message), disposed ? [] : ['Clipboard fixture failure']);
+	});
+}
+
+test('a synchronous system action failure is reported exactly once', async () => {
+	using fixture = new SystemMenuFixture();
+	const ended = fixture.show('Failure', undefined, { ...menuAction('Failure'), run() { throw new Error('Synchronous fixture failure'); } });
+	fixture.popups[0].finish({ selectedId: 'action-1' });
+	await ended;
+	assert.deepEqual(fixture.notifications.getNotifications().map(item => item.message), ['Synchronous fixture failure']);
+});
+
+for (const ending of ['cancel', 'selected', 'dispose'] as const) {
+	test(`system ${ending} releases the request token listener`, async () => {
+		using fixture = new SystemMenuFixture();
+		using source = new CancellationTokenSource();
+		let released = 0;
+		const token: CancellationToken = {
+			get isCancellationRequested() { return source.token.isCancellationRequested; },
+			onCancellationRequested(listener) {
+				const subscription = source.token.onCancellationRequested(listener);
+				return toDisposable(() => { subscription.dispose(); released++; });
+			},
+		};
+		const ended = fixture.show('Old', token);
+		if (ending === 'cancel') source.cancel();
+		else if (ending === 'selected') fixture.popups[0].finish({ selectedId: 'action-1' });
+		else fixture.menus.dispose();
+		await ended;
+		assert.equal(released, 1);
+	});
+}
+
+test('system cancellation does not close a different window menu or steal its focus', async () => {
+	using first = new SystemMenuFixture();
+	using second = new SystemMenuFixture();
+	using source = new CancellationTokenSource();
+	const old = first.show('First', source.token);
+	second.showBrowser('Second');
+	const focus = second.document.activeElement;
+	source.cancel();
+	await old;
+	assert.deepEqual({ label: second.document.querySelector('[role="menuitem"]')?.textContent, focus: second.document.activeElement, closes: second.closeRequests }, { label: 'Second', focus, closes: 0 });
 });

@@ -5,6 +5,8 @@ import { isNode } from "../../../../base/browser/dom.js";
 import { Emitter } from "../../../../base/common/event.js";
 import {
 	Disposable,
+	DisposableMap,
+	DisposableStore,
 	toDisposable,
 } from "../../../../base/common/lifecycle.js";
 import {
@@ -37,6 +39,14 @@ import type {
 	IContextMenuService,
 } from "../../../../platform/contextview/browser/contextView.js";
 
+interface ISystemMenuPopup {
+	readonly delegate: IContextMenuDelegate;
+	readonly actions: ReadonlyMap<string, IAction>;
+	closed: boolean;
+	wasShown: boolean;
+	closeOperation?: Promise<boolean>;
+}
+
 /** Desktop implementation backed by Electron's system Menu. */
 export class NativeContextMenuService extends Disposable
 	implements IContextMenuService {
@@ -45,7 +55,8 @@ export class NativeContextMenuService extends Disposable
 	private readonly api: INativeContextMenuApi;
 	private readonly menuService: IMenuService;
 	private readonly keybindingService: IKeybindingService;
-	private open = false;
+	private activePopup: ISystemMenuPopup | undefined;
+	private readonly popupLifetimes = this._register(new DisposableMap<ISystemMenuPopup, DisposableStore>());
 
 	readonly onDidShowContextMenu = this._onDidShowContextMenu.event;
 	readonly onDidHideContextMenu = this._onDidHideContextMenu.event;
@@ -67,7 +78,7 @@ export class NativeContextMenuService extends Disposable
 	showContextMenu(
 		delegate: IContextMenuDelegate | IContextMenuMenuDelegate,
 	): void {
-		if (this.open) {
+		if (this.isDisposed || delegate.cancellationToken?.isCancellationRequested || this.activePopup) {
 			delegate.onHide?.(true);
 			return;
 		}
@@ -78,7 +89,7 @@ export class NativeContextMenuService extends Disposable
 		);
 		const actions = resolved.getActions();
 		const serialized = serializeActions(actions, this.keybindingService);
-		if (serialized.items.length === 0) {
+		if (serialized.items.length === 0 || this.activePopup || this.isDisposed || resolved.cancellationToken?.isCancellationRequested) {
 			resolved.onHide?.(true);
 			return;
 		}
@@ -89,37 +100,75 @@ export class NativeContextMenuService extends Disposable
 			...point,
 			...(resolved.autoSelectFirstItem ? { positioningItem: 0 } : {}),
 		};
-		this.open = true;
-		this._onDidShowContextMenu.fire();
-		void this.popup(request, serialized.actions, resolved);
+		if (this.activePopup || this.isDisposed || resolved.cancellationToken?.isCancellationRequested) {
+			resolved.onHide?.(true);
+			return;
+		}
+		const popup: ISystemMenuPopup = { delegate: resolved, actions: serialized.actions, closed: false, wasShown: false };
+		this.activePopup = popup;
+		const lifetime = new DisposableStore();
+		this.popupLifetimes.set(popup, lifetime);
+		if (resolved.cancellationToken) { lifetime.add(resolved.cancellationToken.onCancellationRequested(() => this.requestClose(popup))); }
+		void this.popup(request, popup);
+		if (!popup.closed) {
+			popup.wasShown = true;
+			this._onDidShowContextMenu.fire();
+		}
 	}
 
 	hideContextMenu(): void {
-		if (!this.open) return;
-		void this.api.close().catch((error: unknown) => {
-			console.error("Failed to close native context menu", error);
+		if (this.activePopup) { this.requestClose(this.activePopup); }
+	}
+
+	private requestClose(popup: ISystemMenuPopup): void {
+		if (this.activePopup !== popup || popup.closed) { return; }
+		const operation = popup.closeOperation ??= this.closePopup();
+		void operation.then(closed => {
+			if (!closed && popup.closeOperation === operation) { popup.closeOperation = undefined; }
+			// The host acknowledges actual close before a delayed popup result arrives.
+			// A canceled request releases only its own slot; that old result cannot select an action.
+			if (closed && (this.isDisposed || popup.delegate.cancellationToken?.isCancellationRequested)) { this.finishPopup(popup, true); }
 		});
+	}
+
+	private async closePopup(): Promise<boolean> {
+		try {
+			await this.api.close();
+			return true;
+		} catch (error) {
+			console.error("Failed to close native context menu", error);
+			return false;
+		}
 	}
 
 	private async popup(
 		request: INativeContextMenuRequest,
-		actions: ReadonlyMap<string, IAction>,
-		delegate: IContextMenuDelegate,
+		popup: ISystemMenuPopup,
 	): Promise<void> {
 		let selected: IAction | undefined;
 		try {
 			const result = await this.api.popup(request);
-			selected = result.selectedId
-				? actions.get(result.selectedId)
-				: undefined;
+			if (!popup.closed && !this.isDisposed && !popup.delegate.cancellationToken?.isCancellationRequested) {
+				selected = result.selectedId ? popup.actions.get(result.selectedId) : undefined;
+			}
 		} catch (error) {
 			console.error("Failed to show native context menu", error);
 		} finally {
-			this.open = false;
-			delegate.onHide?.(!selected);
-			this._onDidHideContextMenu.fire();
+			this.finishPopup(popup, !selected);
 		}
-		if (selected) this.runAction(selected, delegate);
+		if (selected && !this.isDisposed && !popup.delegate.cancellationToken?.isCancellationRequested) { this.runAction(selected, popup.delegate); }
+	}
+
+	private finishPopup(popup: ISystemMenuPopup, didCancel: boolean): void {
+		if (popup.closed) { return; }
+		popup.closed = true;
+		if (this.activePopup === popup) { this.activePopup = undefined; }
+		this.popupLifetimes.deleteAndDispose(popup);
+		try {
+			popup.delegate.onHide?.(didCancel);
+		} finally {
+			if (popup.wasShown) { this._onDidHideContextMenu.fire(); }
+		}
 	}
 
 	private runAction(action: IAction, delegate: IContextMenuDelegate): void {
@@ -129,11 +178,11 @@ export class NativeContextMenuService extends Disposable
 				? delegate.actionRunner.run(action, delegate.getActionsContext?.())
 				: action.run(delegate.getActionsContext?.());
 		} catch (error) {
-			this.notificationService.error(toErrorMessage(error));
+			if (!this.isDisposed) { this.notificationService.error(toErrorMessage(error)); }
 			return;
 		}
 		Promise.resolve(operation).catch((error: unknown) => {
-			this.notificationService.error(toErrorMessage(error));
+			if (!this.isDisposed) { this.notificationService.error(toErrorMessage(error)); }
 		});
 	}
 }
@@ -255,8 +304,8 @@ export class ElectronContextMenuService extends Disposable implements IContextMe
 	private readonly _onDidHideContextMenu = this._register(new Emitter<void>());
 	private readonly systemMenu: NativeContextMenuService;
 	private readonly browserMenu: BrowserContextMenuService;
-	private systemVisible = false;
-	private browserVisible = false;
+	private systemVisible = 0;
+	private browserVisible = 0;
 	private usesSystemMenu: boolean;
 
 	readonly onDidShowContextMenu = this._onDidShowContextMenu.event;
@@ -291,16 +340,19 @@ export class ElectronContextMenuService extends Disposable implements IContextMe
 	}
 
 	private setVisible(menu: 'system' | 'browser', visible: boolean): void {
-		const wasVisible = this.systemVisible || this.browserVisible;
-		if (menu === 'system') this.systemVisible = visible;
-		else this.browserVisible = visible;
-		const isVisible = this.systemVisible || this.browserVisible;
+		// Hide callbacks can open a successor before the previous hide event arrives.
+		const wasVisible = this.systemVisible + this.browserVisible > 0;
+		if (menu === 'system') { this.systemVisible += visible ? 1 : -1; }
+		else { this.browserVisible += visible ? 1 : -1; }
+		const isVisible = this.systemVisible + this.browserVisible > 0;
 		if (!wasVisible && isVisible) this._onDidShowContextMenu.fire();
 		else if (wasVisible && !isVisible) this._onDidHideContextMenu.fire();
 	}
 
 	showContextMenu(delegate: IContextMenuDelegate | IContextMenuMenuDelegate): void {
+		if (this.isDisposed || delegate.cancellationToken?.isCancellationRequested) { delegate.onHide?.(true); return; }
 		const anchor = delegate.getAnchor();
+		if (this.isDisposed || delegate.cancellationToken?.isCancellationRequested) { delegate.onHide?.(true); return; }
 		// Electron Menu.popup cannot align its right edge with an element on the right side of the window.
 		const rightHandTrigger = isNode(anchor) && delegate.anchorAxisAlignment === AnchorAxisAlignment.Horizontal && delegate.anchorAlignment === AnchorAlignment.Left;
 		const menu = this.usesSystemMenu && !rightHandTrigger ? this.systemMenu : this.browserMenu;

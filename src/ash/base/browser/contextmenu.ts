@@ -1,4 +1,5 @@
 import type { IAction, IActionRunner } from "../common/actions.js";
+import type { CancellationToken } from "../common/cancellation.js";
 import type { ResolvedKeybinding } from "../common/keybindings.js";
 import type {
 	AnchorAlignment,
@@ -37,6 +38,8 @@ export interface IContextMenuDelegate {
 	getKeyBinding?(action: IAction): ResolvedKeybinding | undefined;
 	getMenuClassName?(): string;
 	readonly onHide?: (didCancel: boolean) => void;
+	/** Cancels only this presentation; an action that has already started still completes. */
+	readonly cancellationToken?: CancellationToken;
 	readonly actionRunner?: IActionRunner;
 	/** Selects the first enabled action on opening; otherwise only the menu receives focus. */
 	readonly autoSelectFirstItem?: boolean;
