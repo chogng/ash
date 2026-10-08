@@ -9,7 +9,7 @@
 | 偏好入口      | [`IPreferencesService`](../src/ash/workbench/services/preferences/common/preferences.ts) / [`PreferencesService`](../src/ash/workbench/services/preferences/browser/preferencesService.ts) 根据调用的方法打开对应资源                 | 绘制设置项或保存配置值         |
 | 图形设置页    | [`SettingsEditor`](../src/ash/workbench/contrib/preferences/browser/settingsEditor.ts) 显示搜索、分类和设置控件；[`settingsLayout.ts`](../src/ash/workbench/contrib/preferences/browser/settingsLayout.ts) 决定已注册设置放在哪个分类 | 保存配置源或管理普通文本模型   |
 | 用户设置 JSON | 普通文本编辑器打开 `ash-settings:/user/settings.json`；[`SettingsFileSystemProvider`](../src/ash/workbench/contrib/preferences/common/settingsFilesystemProvider.ts) 读写当前用户设置源                                               | 在图形设置页内部维护另一份配置 |
-| 键盘快捷键    | [`KeyboardShortcutsEditor`](../src/ash/workbench/contrib/preferences/browser/keyboardShortcutsEditor.ts) 使用自己的输入和模型；快捷键资源独立于普通配置键值                                                                           | 充当设置页的子页面             |
+| 键盘快捷键    | [`KeybindingsEditor`](../src/ash/workbench/contrib/preferences/browser/keybindingsEditor.ts) 通过输入取得模型；快捷键资源独立于普通配置键值                                                                                           | 充当设置页的子页面             |
 
 ## 设置内容与渲染
 
@@ -25,7 +25,7 @@ GitHub 设置页显示复用 Codex 登录和 Ash 的 GitHub 账号，检查指�
 | ------------------------------------- | ----------------------------------------------------------- | ------------ |
 | `openSettings()`                      | `SettingsEditor`，由 `preferences.contribution.ts` 直接注册 | 模态编辑器组 |
 | `openUserSettings()`                  | 当前用户设置的 JSONC 资源，由普通文本编辑器处理             | 普通编辑器组 |
-| `openGlobalKeybindingSettings(false)` | `KeyboardShortcutsEditor`，独立注册                         | 普通编辑器组 |
+| `openGlobalKeybindingSettings(false)` | `KeybindingsEditor`，由 `preferences.contribution.ts` 注册  | 普通编辑器组 |
 | `openGlobalKeybindingSettings(true)`  | 当前 profile 的 `keybindings.json` JSONC 资源               | 普通编辑器组 |
 
 图形设置页从 Configuration Registry 取得可编辑设置，经 `SettingsEditorModel` 和 `settingsLayout.ts` 组成页面，再由设置控件读写配置服务。JSON 路径经 `SettingsFileSystemProvider` 读写同一份用户设置源。两种设置入口共享配置数据，不共享页面容器。
@@ -46,7 +46,7 @@ Sessions 设置项菜单使用对话框内的 ContextView，以便在模态设�
 
 快捷键图形编辑器的录制框按输入顺序收集最多四段组合键，复用现有 parser 和 resolver 的四段上限。打开已有绑定时先显示已保存值，首个录制组合键替换它；录满四段后，第五段开始新序列，并显示和朗读提示。在录制框中，裸 Enter 保存，裸 Escape 清空，再按一次取消；Tab 和 Shift+Tab 移动焦点。带修饰键的 Enter/Escape 可以录制；裸 Enter、Escape、Tab 及 Shift+Tab 绑定需在 JSON 编辑器中编辑。重复 keydown、IME 组合输入和纯修饰键不计为一段。保存期间禁用录制、条件、行操作和取消按钮，失败保留草稿并允许重试；取消后返回原行操作，原行已被替换时返回搜索框；保存完成后在焦点仍属于当前页面时聚焦搜索框，避免文件监听替换原行时丢失焦点。清空 input 或销毁 pane 后，保存结束不再向已退休的草稿反馈状态；隐藏页面或焦点已移到其他编辑器时不恢复焦点，也不阻止用户关闭编辑器。
 
-录制草稿仅由 `KeyboardShortcutsEditor` 持有，保存继续通过 `KeyboardShortcutsEditorModel → IKeybindingEditingService →` 当前 profile 的共享 JSONC 文件模型，保留注释、参数与其他绑定。文件系统 owner 负责持久化：Web 使用 `IndexedDBFileSystemProvider` 保存 `ash-userdata:/user/keybindings.json`；Electron 使用 `FileUserDataProvider`，经既有主进程文件通道写入当前 profile 的 `keybindings.json`。快捷键不经过 Settings 的配置键值 API，也不新增 AppServer 接口。
+录制草稿仅由 `KeybindingsEditor` 持有，保存和移除通过既有 `IKeybindingEditingService →` 当前 profile 的共享 JSONC 文件模型，保留注释、参数与其他绑定。`KeybindingsEditorInput` 创建并持有唯一 `KeybindingsEditorModel`，模型只管理行与服务监听；搜索值由各 pane 的搜索框持有，分屏共享模型时分别筛选。打开请求和每个 pane 分别保留输入引用，最后一个引用释放时，输入释放模型；重复打开、打开失败和取消不会遗留模型监听。恢复的普通资源输入在编辑器入口重建为相同输入类型。Ash 的 Editor Part 当前释放 pane，不自动释放传入的输入，因此引用规则位于 Preferences 内，不修改公共编辑器契约。文件系统 owner 负责持久化：Web 使用 `IndexedDBFileSystemProvider` 保存 `ash-userdata:/user/keybindings.json`；Electron 使用 `FileUserDataProvider`，经既有主进程文件通道写入当前 profile 的 `keybindings.json`。快捷键不经过 Settings 的配置键值 API，也不新增 AppServer 接口。
 
 在保存一致性修复已进入 main 的基线 `2cc6ab4e` 上，recorder 13 项单元测试、严格 Web 7 项与 Electron 6 项通过；正常 Web/Desktop 构建、Automation 类型、格式与样式检查通过。真实 AppServer 验收读回当前 profile，覆盖两段与四段保存、JSONC 和参数保留、立即重载后的文本一致性与完整组合恰好执行一次、脏 JSON 失败重试，以及中文控制说明、Tab 焦点和第五段提示。pending-close 在真实 IndexedDB 事务或 Main 原子文件发布处暂停，关闭快捷键页后，完成或拒绝写入均不修改已销毁的 pane、不抢焦点；失败后重试写入实际文件。单元测试还覆盖保存等待期间 clearInput、隐藏、销毁和焦点转移各自的成功与失败路径。
 
@@ -101,13 +101,14 @@ API key 输入框失焦即保存，清空即移除；成功保存不弹通知，
 
 ### 文件职责的对应关系
 
-| 当前 Ash 文件                                                                                        | VS Code 对应职责                                                                    | 审查结论                                                               |
-| ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `services/preferences/common/settingsEditorInput.ts`、`settingsModels.ts`                            | `preferencesEditorInput.ts`、`preferencesModels.ts`                                 | 路径与公开契约存在差异；不能把所有差异都解释成内容命名选择             |
-| `contrib/preferences/browser/settingsEditor.ts`                                                      | `settingsEditor2.ts`；另有 `preferencesEditor.ts` 与 `preferencesEditorRegistry.ts` | 图形设置和偏好容器分别核对实际调用链，不能只补同名外壳                 |
-| `settingsRenderers.ts`、`settingsSearch.ts`                                                          | `preferencesRenderers.ts`、`preferencesSearch.ts`                                   | 渲染与搜索能力尚未完全对齐                                             |
-| `keyboardShortcutsEditor.ts`、`keyboardShortcutsEditor.contribution.ts` 及 CSS                       | `keybindingsEditor.ts`、`keybindingsEditorContribution.ts` 及 CSS                   | 当前快捷键编辑器已有独立生产入口；名称和契约迁移须连同调用方、测试处理 |
-| `settingsSectionRenderer.ts`、`networkSettingsContent.ts`、`agentCapabilitiesSettings.ts` 及自有样式 | 无同路径文件                                                                        | Ash 特有的数据呈现与管理内容；本次仅记录，不改名、移动或删除           |
+| 当前 Ash 文件                                                                                        | VS Code 对应职责                                                                    | 审查结论                                                                                           |
+| ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `services/preferences/common/settingsEditorInput.ts`、`settingsModels.ts`                            | `preferencesEditorInput.ts`、`preferencesModels.ts`                                 | 路径与公开契约存在差异；不能把所有差异都解释成内容命名选择                                         |
+| `contrib/preferences/browser/settingsEditor.ts`                                                      | `settingsEditor2.ts`；另有 `preferencesEditor.ts` 与 `preferencesEditorRegistry.ts` | 图形设置和偏好容器分别核对实际调用链，不能只补同名外壳                                             |
+| `settingsRenderers.ts`、`settingsSearch.ts`                                                          | `preferencesRenderers.ts`、`preferencesSearch.ts`                                   | 渲染与搜索能力尚未完全对齐                                                                         |
+| `keybindingsEditor.ts`、`media/keybindingsEditor.css`、`preferences.contribution.ts` 的快捷键注册    | 同路径 GUI 编辑器、样式和 `preferences.contribution.ts` 注册                        | GUI 注册已合并；上游 `keybindingsEditorContribution.ts` 属于 JSON 编辑器扩展，不是此注册的对应文件 |
+| `services/preferences/browser/keybindingsEditorInput.ts`、`keybindingsEditorModel.ts`                | 同路径 `KeybindingsEditorInput`、`KeybindingsEditorModel`                           | 输入持有模型；pane 借用模型，持久化仍由既有快捷键编辑服务负责                                      |
+| `settingsSectionRenderer.ts`、`networkSettingsContent.ts`、`agentCapabilitiesSettings.ts` 及自有样式 | 无同路径文件                                                                        | Ash 特有的数据呈现与管理内容；本次仅记录，不改名、移动或删除                                       |
 
 配置源仍由配置 owner 管理。对齐页面与 API 时，不应将密钥、账号授权、模型发现、Hook 执行或临时 UI 状态改存为普通设置，也不应建立另一套持久化服务。
 

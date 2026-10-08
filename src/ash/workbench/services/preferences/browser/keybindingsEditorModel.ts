@@ -1,11 +1,12 @@
 import { Emitter } from '../../../../base/common/event.js';
 import { getKeybindingLabel } from '../../../../base/common/keybindingLabels.js';
 import { serializeKeybinding } from '../../../../base/common/keybindingParser.js';
-import { Disposable } from '../../../../base/common/lifecycle.js';
+import { commandActionLabel } from '../../../../platform/action/common/action.js';
+import { isMenuItem, MenuId, MenusRegistry } from '../../../../platform/actions/common/actions.js';
 import { CommandsRegistry, type CommandId, type CommandRegistry } from '../../../../platform/commands/common/commands.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { KeybindingRuleKind, KeybindingsRegistry, KeybindingSource, type KeybindingRegistry } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
-import { IKeybindingEditingService } from '../../keybinding/common/keybindingEditing.js';
+import { EditorModel } from '../../../common/editor/editorModel.js';
 import type { IUserFriendlyKeybinding } from '../../../../platform/keybinding/common/keybinding.js';
 import { ResolvedKeybindingItem } from '../../../../platform/keybinding/common/resolvedKeybindingItem.js';
 
@@ -23,55 +24,26 @@ export interface KeyboardShortcutItem {
 	readonly sourceLabel: string;
 }
 
-export interface KeyboardShortcutsEditorModelOptions {
-	readonly commandLabel: (command: CommandId) => string;
-	readonly commandRegistry?: CommandRegistry;
-	readonly keybindingRegistry?: KeybindingRegistry;
-}
-
-/** Builds stable, searchable rows and owns mutations of the user keybindings resource. */
-export class KeyboardShortcutsEditorModel extends Disposable {
-	private readonly commandRegistry: CommandRegistry;
-	private readonly keybindingRegistry: KeybindingRegistry;
+/** Owns searchable rows and service listeners; the editor input owns its lifetime. */
+export class KeybindingsEditorModel extends EditorModel {
+	private readonly commandRegistry: CommandRegistry = CommandsRegistry;
+	private readonly keybindingRegistry: KeybindingRegistry = KeybindingsRegistry;
 	private readonly _onDidChange = this._register(new Emitter<readonly KeyboardShortcutItem[]>());
-	private query = '';
 	private allItems: readonly KeyboardShortcutItem[] = [];
 
 	public readonly onDidChange = this._onDidChange.event;
 
 	constructor(
-		private readonly options: KeyboardShortcutsEditorModelOptions,
 		@IKeybindingService private readonly keybindings: IKeybindingService,
-		@IKeybindingEditingService private readonly editing: IKeybindingEditingService,
 	) {
 		super();
-		this.commandRegistry = options.commandRegistry ?? CommandsRegistry;
-		this.keybindingRegistry = options.keybindingRegistry ?? KeybindingsRegistry;
 		this.refresh();
 		this._register(this.keybindingRegistry.onDidChangeKeybindings(() => this.refresh()));
 		this._register(this.keybindings.onDidUpdateKeybindings(() => this.refresh()));
 	}
 
 	public get items(): readonly KeyboardShortcutItem[] {
-		return filterItems(this.allItems, this.query);
-	}
-
-	public setQuery(query: string): void {
-		const normalized = query.trim().toLocaleLowerCase();
-		if (normalized === this.query) return;
-		this.query = normalized;
-		this._onDidChange.fire(this.items);
-	}
-
-	public async save(item: KeyboardShortcutItem, key: string, when: string): Promise<void> {
-		const normalizedKey = key.trim();
-		if (!this.keybindings.resolveUserBinding(normalizedKey)) throw new TypeError(`Invalid keybinding: ${normalizedKey || '(empty)'}`);
-		await this.editing.editKeybinding(item.keybindingItem, normalizedKey, when.trim() || undefined);
-	}
-
-	public async remove(item: KeyboardShortcutItem): Promise<void> {
-		if (item.source !== 'user') throw new TypeError('Only user shortcuts can be removed.');
-		await this.editing.removeKeybinding(item.keybindingItem);
+		return this.allItems;
 	}
 
 	private refresh(): void {
@@ -86,7 +58,7 @@ export class KeyboardShortcutsEditorModel extends Disposable {
 				id: `registered:${rule.order}`,
 				keybindingItem: new ResolvedKeybindingItem(this.keybindings.resolveKeybinding(rule.keybinding), command, rule.kind === KeybindingRuleKind.Command ? rule.args?.[0] : undefined, rule.when, true, null, true),
 				command,
-				commandLabel: command ? this.options.commandLabel(command) : 'Blocked shortcut',
+				commandLabel: command ? commandLabel(command) : 'Blocked shortcut',
 				key: serializeKeybinding(rule.keybinding),
 				keyLabel: getKeybindingLabel(this.keybindings.resolveKeybinding(rule.keybinding)),
 				when: rule.when ? [...rule.when.keys()].sort().join(' && ') : '',
@@ -108,7 +80,7 @@ export class KeyboardShortcutsEditorModel extends Disposable {
 				id: userItemId(entry, occurrence),
 				keybindingItem,
 				command: entry.command,
-				commandLabel: entry.command ? this.options.commandLabel(entry.command) : 'Blocked shortcut',
+				commandLabel: entry.command ? commandLabel(entry.command) : 'Blocked shortcut',
 				key: entry.key,
 				keyLabel: resolved ? getKeybindingLabel(resolved) : entry.key,
 				when: entry.when ?? '',
@@ -123,7 +95,7 @@ export class KeyboardShortcutsEditorModel extends Disposable {
 				id: `unassigned:${command}`,
 				keybindingItem: new ResolvedKeybindingItem(undefined, command, undefined, undefined, true, null, false),
 				command,
-				commandLabel: this.options.commandLabel(command),
+				commandLabel: commandLabel(command),
 				key: '',
 				keyLabel: '',
 				when: '',
@@ -137,17 +109,18 @@ export class KeyboardShortcutsEditorModel extends Disposable {
 	}
 }
 
-function compareItems(left: KeyboardShortcutItem, right: KeyboardShortcutItem): number {
-	return left.commandLabel.localeCompare(right.commandLabel) || left.keyLabel.localeCompare(right.keyLabel) || left.id.localeCompare(right.id);
+function commandLabel(command: CommandId): string {
+	for (const item of MenusRegistry.getMenuItems(MenuId.CommandPalette)) {
+		if (!isMenuItem(item) || item.command.id !== command) continue;
+		return commandActionLabel(item.command.title);
+	}
+	const segment = command.split('.').at(-1) ?? command;
+	const words = segment.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[-_]+/g, ' ').trim();
+	return words ? words[0].toLocaleUpperCase() + words.slice(1) : command;
 }
 
-function filterItems(items: readonly KeyboardShortcutItem[], query: string): readonly KeyboardShortcutItem[] {
-	if (!query) return items;
-	const terms = query.split(/\s+/).filter(Boolean);
-	return items.filter(item => {
-		const searchable = `${item.commandLabel} ${item.command ?? ''} ${item.key} ${item.keyLabel} ${item.when} ${item.sourceLabel}`.toLocaleLowerCase();
-		return terms.every(term => searchable.includes(term));
-	});
+function compareItems(left: KeyboardShortcutItem, right: KeyboardShortcutItem): number {
+	return left.commandLabel.localeCompare(right.commandLabel) || left.keyLabel.localeCompare(right.keyLabel) || left.id.localeCompare(right.id);
 }
 
 function userItemId(entry: IUserFriendlyKeybinding, occurrence: number): string {

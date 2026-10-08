@@ -30,6 +30,7 @@ const { Keybinding, logicalKey } = await import('../../../../../base/common/keyb
 const { h } = await import('../../../../../base/browser/dom.js');
 const { DisposableStore, toDisposable } = await import('../../../../../base/common/lifecycle.js');
 const { DeferredPromise } = await import('../../../../../base/common/async.js');
+const { CancellationError } = await import('../../../../../base/common/errors.js');
 const { resetNlsResolver, setNlsMessages } = await import('../../../../../nls.js');
 const { builtinLanguagePackCatalogs } = await import('../../../../services/localization/common/localizationCatalogs.js');
 const { OperatingSystem } = await import('../../../../../base/common/platform.js');
@@ -44,14 +45,17 @@ const { KeybindingsRegistry } = await import('../../../../../platform/keybinding
 const { EditorPart } = await import('../../../../../workbench/browser/parts/editor/editorPart.js');
 const { EditorPaneMatch, EditorPane } = await import('../../../../../workbench/browser/parts/editor/editorPane.js');
 const { EditorPaneRegistry } = await import('../../../../browser/editor.js');
-const { KeyboardShortcutsEditor, KeyboardShortcutsEditorId } = await import('../../../../../workbench/contrib/preferences/browser/keyboardShortcutsEditor.js');
+const { EditorInput } = await import('../../../../common/editor/editorInput.js');
+const { emptyEditorServiceState } = await import('../../../../test/common/testEditorService.js');
+const { KeybindingsEditor } = await import('../../../../../workbench/contrib/preferences/browser/keybindingsEditor.js');
 const { CommandService } = await import('../../../../../workbench/services/commands/common/commandService.js');
 const { BrowserEditorService } = await import('../../../../../workbench/services/editor/browser/browserEditorService.js');
 const { BrowserKeyboardLayoutService } = await import('../../../../../workbench/services/keybinding/browser/keyboardLayoutService.js');
 const { WorkbenchKeybindingService } = await import('../../../../../workbench/services/keybinding/browser/keybindingService.js');
 const { IKeybindingEditingService } = await import('../../../../services/keybinding/common/keybindingEditing.js');
-const { createKeyboardShortcutsEditorInput, isKeyboardShortcutsEditorInput } = await import('../../../../../workbench/services/preferences/browser/keybindingsEditorInput.js');
+const { KeybindingsEditorInput, isKeybindingsEditorInput } = await import('../../../../../workbench/services/preferences/browser/keybindingsEditorInput.js');
 const { PreferencesService } = await import('../../../../../workbench/services/preferences/browser/preferencesService.js');
+const { EditorInputSerializers } = await import('../../../../services/editor/common/editorInputSerializer.js');
 const { isSettingsEditorInput } = await import('../../../../../workbench/services/preferences/common/settingsEditorInput.js');
 
 suiteTeardown(() => browserEnvironment.window.close());
@@ -101,10 +105,10 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 		create: () => registerTestComponentServices(services).createInstance(TestSettingsEditor),
 	});
 	registry.registerEditorPane({
-		id: KeyboardShortcutsEditorId,
+		id: KeybindingsEditor.ID,
 		name: 'Keyboard Shortcuts',
-		canOpen: input => isKeyboardShortcutsEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
-		create: () => registerTestComponentServices(services).createInstance(KeyboardShortcutsEditor),
+		canOpen: input => isKeybindingsEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
+		create: () => registerTestComponentServices(services).createInstance(KeybindingsEditor),
 	});
 	const editorServices = disposables.add(createTestEditorServices(undefined, services));
 	const editor = disposables.add(editorServices.createInstance(EditorPart, ownerDocument.body, {
@@ -114,17 +118,26 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 		keyboardLayoutService: keyboardLayout,
 	}));
 	const editorService = new BrowserEditorService(editor);
-	const preferences = disposables.add(new PreferencesService(editorService, editorServices.get(IFileTextModelService), resources.files, resources.profiles));
+	const preferences = disposables.add(new PreferencesService(editorService, editorServices.get(IFileTextModelService), resources.files, resources.profiles, editorServices));
 	await preferences.openSettings();
 	const modalHost = ownerDocument.querySelector<HTMLElement>('.ash-modal-editor-host');
 	assert.ok(modalHost);
 	assert.equal(modalHost.hidden, false);
 
 	await preferences.openGlobalKeybindingSettings(false);
+	assert.ok(editor.activeInput instanceof KeybindingsEditorInput);
+	const openedInput = editor.activeInput;
+	const openedModel = await openedInput.resolve();
+	const openedPane = editor.activePane;
 	await preferences.openGlobalKeybindingSettings(false);
+	assert.ok(editor.activeInput instanceof EditorInput, 'The shortcut input owns the resolved model lifetime');
+	assert.ok(editor.activeInput === openedInput, 'Duplicate opens retain the live input identity');
+	assert.ok(await openedInput.resolve() === openedModel, 'Duplicate opens retain the resolved model');
+	assert.ok(editor.activePane === openedPane, 'The repeated tab open reuses its pane without rebinding');
+	assert.equal(openedInput.isDisposed, false, 'Releasing the duplicate open request retains the pane-owned input');
 	assert.equal(modalHost.hidden, true);
 	assert.equal(editor.activeGroup.inputs.length, 1);
-	assert.equal(editor.activeInput?.resource.toString(), createKeyboardShortcutsEditorInput().resource.toString());
+	assert.equal(editor.activeInput?.resource.toString(), 'ash-preferences:/keyboard-shortcuts');
 	assert.equal(ownerDocument.querySelector('.ash-tab-label')?.textContent, 'Keyboard Shortcuts');
 
 	const search = ownerDocument.querySelector<HTMLInputElement>('.ash-keybindings-search input');
@@ -176,6 +189,198 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 	findButton(beta, 'Remove').click();
 	await waitForStatus(ownerDocument, 'Keybinding removed.');
 	assert.deepEqual((await resources.read()).map(binding => binding.command), ['test.shortcuts.alpha']);
+	let modelDisposals = 0;
+	disposables.add(openedModel.onWillDispose(() => { modelDisposals += 1; }));
+	const sourceGroup = editor.activeGroup;
+	await editor.splitActiveGroupHorizontal();
+	const splitGroup = editor.activeGroup;
+	assert.ok(splitGroup !== sourceGroup);
+	assert.ok(sourceGroup.inputs[0] === openedInput && splitGroup.inputs[0] === openedInput, 'Both real group records retain the live input passed to the split');
+	assert.ok(await (splitGroup.inputs[0] as InstanceType<typeof KeybindingsEditorInput>).resolve() === openedModel);
+	assert.equal(await sourceGroup.closeEditor(sourceGroup.inputs[0]!), true);
+	assert.deepEqual([openedInput.isDisposed, openedModel.isDisposed(), modelDisposals], [false, false, 0]);
+	await preferences.openGlobalKeybindingSettings(false);
+	assert.ok(splitGroup.inputs[0] === openedInput, 'A duplicate open in the remaining group keeps its live metadata');
+	const remainingRoot = ownerDocument.querySelector<HTMLElement>('.ash-keybindings-editor');
+	assert.ok(remainingRoot);
+	findButton(shortcutRow(ownerDocument, 'test.shortcuts.alpha')!, 'Edit').click();
+	press(remainingRoot.querySelector<HTMLInputElement>('.ash-keybindings-record-input input')!, 'KeyJ', 'j', { ctrlKey: true });
+	findButton(remainingRoot, 'Save').click();
+	await waitForStatus(ownerDocument, 'Keybinding saved.');
+	assert.equal((await resources.read())[0]?.key, 'ctrl+[KeyJ]');
+	await splitGroup.moveEditorTo(splitGroup.inputs[0]!, sourceGroup, 0);
+	editor.activateGroup(sourceGroup.id);
+	assert.equal(splitGroup.inputs.length, 0);
+	assert.ok(sourceGroup.inputs[0] === openedInput, 'Moving the recorded tab input opens the target before the source releases it');
+	assert.ok(await (sourceGroup.inputs[0] as InstanceType<typeof KeybindingsEditorInput>).resolve() === openedModel);
+	assert.deepEqual([openedInput.isDisposed, openedModel.isDisposed(), modelDisposals], [false, false, 0]);
+	const serializedInput = EditorInputSerializers.serialize(openedInput);
+	assert.equal(await editor.closeEditor(openedInput), true);
+	assert.deepEqual([openedInput.isDisposed, openedModel.isDisposed(), modelDisposals], [true, true, 1]);
+
+	const restoredResource = EditorInputSerializers.deserialize(serializedInput);
+	await editorService.openEditor(restoredResource, { pinned: true });
+	const restoredInput = KeybindingsEditorInput.getOrCreate(restoredResource, editorServices);
+	const restoredModel = await restoredInput.resolve();
+	await preferences.openGlobalKeybindingSettings(false);
+	assert.ok(editor.activeInput === restoredInput, 'Opening restored shortcuts retains the pane input');
+	assert.ok(await restoredInput.resolve() === restoredModel, 'Restored shortcuts retain one model');
+	assert.equal(editor.activeGroup.inputs.length, 1);
+	assert.equal(await editor.closeEditor(restoredInput), true);
+	assert.deepEqual([restoredInput.isDisposed, restoredModel.isDisposed()], [true, true]);
+});
+
+test('shared shortcut input keeps one model until the last pane releases it', async () => {
+	using disposables = new DisposableStore();
+	const { document, root, resources, keybindings, editor, editorInput } = await createRecorderFixture(disposables);
+	const model = await editorInput.resolve();
+	const search = root.querySelector<HTMLInputElement>('.ash-keybindings-search input')!;
+	search.value = 'test.shortcuts.alpha';
+	search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
+	const secondPane = disposables.add(registerTestComponentServices(resources.services).createInstance(KeybindingsEditor));
+	const secondHost = h(document, 'div');
+	document.body.append(secondHost);
+	secondPane.create(secondHost);
+	await secondPane.setInput(editorInput, new AbortController().signal);
+	await editor.setInput(editorInput, new AbortController().signal);
+	assert.ok(await editorInput.resolve() === model, 'Shared panes resolve the same model');
+	assert.equal(root.querySelectorAll('.ash-keybindings-row').length, 1);
+	assert.ok(secondHost.querySelectorAll('.ash-keybindings-row').length > 1, 'Split panes keep independent search fields');
+	let disposed = 0;
+	let updates = 0;
+	disposables.add(model.onWillDispose(() => { disposed += 1; }));
+	disposables.add(model.onDidChange(() => { updates += 1; }));
+	await resources.write([{ key: 'ctrl+9', command: 'test.shortcuts.alpha' }, { key: 'ctrl+2', command: 'test.shortcuts.beta' }]);
+	await keybindings.initialize();
+	assert.equal(root.querySelectorAll('.ash-keybindings-row').length, 1);
+	assert.ok(secondHost.querySelectorAll('.ash-keybindings-row').length > 1);
+	editor.clearInput();
+	assert.equal(model.isDisposed(), false);
+	await resources.write([{ key: 'ctrl+8', command: 'test.shortcuts.alpha' }, { key: 'ctrl+2', command: 'test.shortcuts.beta' }]);
+	await keybindings.initialize();
+	assert.ok(updates > 0);
+	secondPane.dispose();
+	assert.deepEqual([editorInput.isDisposed, model.isDisposed(), disposed], [true, true, 1]);
+	const previousUpdates = updates;
+	await resources.write([{ key: 'ctrl+7', command: 'test.shortcuts.alpha' }, { key: 'ctrl+2', command: 'test.shortcuts.beta' }]);
+	await keybindings.initialize();
+	assert.equal(updates, previousUpdates, 'A closed input releases model service listeners');
+});
+
+test('restored shortcut resource inputs rehydrate and release the input-owned model', async () => {
+	using disposables = new DisposableStore();
+	const { document, resources, keybindings, editor, editorInput } = await createRecorderFixture(disposables);
+	const previousModel = await editorInput.resolve();
+	await editor.setInput({ resource: editorInput.resource, contentType: editorInput.contentType }, new AbortController().signal);
+	assert.equal(previousModel.isDisposed(), true);
+	await resources.write([{ key: 'ctrl+9', command: 'test.shortcuts.alpha' }]);
+	await keybindings.initialize();
+	assert.match(shortcutRow(document, 'test.shortcuts.alpha')?.textContent ?? '', /Ctrl\+9/);
+	editor.clearInput();
+	assert.equal(document.querySelectorAll('.ash-keybindings-row').length, 0);
+});
+
+test('disposed shortcut inputs and frozen restored resources replace retired cached inputs', async () => {
+	using disposables = new DisposableStore();
+	const { resources, editor, editorInput } = await createRecorderFixture(disposables);
+	const restoredResource = EditorInputSerializers.deserialize(EditorInputSerializers.serialize(editorInput));
+	assert.equal(Object.isFrozen(restoredResource), true);
+	editor.clearInput();
+	assert.equal(editorInput.isDisposed, true);
+	assert.throws(() => editorInput.acquire(), ReferenceError);
+	await assert.rejects(editorInput.resolve(), ReferenceError);
+	for (const resource of [editorInput, restoredResource]) {
+		const first = KeybindingsEditorInput.getOrCreate(resource, resources.services);
+		using firstReference = first.acquire();
+		const model = await first.resolve();
+		assert.ok(first !== resource, 'A retired or plain input rehydrates a new class instance');
+		assert.ok(KeybindingsEditorInput.getOrCreate(resource, resources.services) === first, 'The weak cache reuses the live rehydrated input');
+		firstReference.dispose();
+		firstReference.dispose();
+		assert.deepEqual([first.isDisposed, model.isDisposed()], [true, true]);
+		const replacement = KeybindingsEditorInput.getOrCreate(resource, resources.services);
+		using replacementReference = replacement.acquire();
+		const replacementModel = await replacement.resolve();
+		assert.ok(replacement !== first && replacementModel !== model, 'A disposed weak-cache value is replaced together with its model');
+		assert.ok(KeybindingsEditorInput.getOrCreate(resource, resources.services) === replacement);
+		replacementReference.dispose();
+		assert.deepEqual([replacement.isDisposed, replacementModel.isDisposed()], [true, true]);
+	}
+});
+
+test('cancelled shortcut resolution releases the acquired model and leaves no rows', async () => {
+	using disposables = new DisposableStore();
+	const { document, resources, editor } = await createRecorderFixture(disposables);
+	const input = resources.services.createInstance(KeybindingsEditorInput);
+	const model = await input.resolve();
+	const gate = new DeferredPromise<void>();
+	input.resolve = async () => { await gate.p; return model; };
+	const controller = new AbortController();
+	const opening = editor.setInput(input, controller.signal);
+	controller.abort();
+	await gate.complete();
+	await assert.rejects(opening, /cancelled/);
+	assert.deepEqual([input.isDisposed, model.isDisposed(), document.querySelectorAll('.ash-keybindings-row').length], [true, true, 0]);
+});
+
+for (const cancelled of [false, true]) {
+	test(`${cancelled ? 'cancelled' : 'failed'} shortcut open requests release resolved models and replace the retired service cache on retry`, async () => {
+		using disposables = new DisposableStore();
+		const { resources } = await createRecorderFixture(disposables);
+		const openedInputs: InstanceType<typeof KeybindingsEditorInput>[] = [];
+		let disposed = 0;
+		const failure = cancelled ? new CancellationError('Test editor open cancelled') : new Error('Test editor open failed');
+		const preferences = disposables.add(new PreferencesService({
+			...emptyEditorServiceState,
+			openEditor: async input => {
+				assert.ok(input instanceof KeybindingsEditorInput);
+				openedInputs.push(input);
+				const model = await input.resolve();
+				disposables.add(model.onWillDispose(() => { disposed += 1; }));
+				throw failure;
+			},
+			focusActiveEditor() { },
+		}, resources.models, resources.files, resources.profiles, resources.services));
+		await assert.rejects(preferences.openGlobalKeybindingSettings(false), error => error === failure);
+		assert.deepEqual([openedInputs[0]?.isDisposed, disposed], [true, 1]);
+		await assert.rejects(preferences.openGlobalKeybindingSettings(false), error => error === failure);
+		assert.ok(openedInputs[1] !== openedInputs[0], 'A retry does not reuse the disposed service cache value');
+		assert.deepEqual([openedInputs.length, openedInputs[1]?.isDisposed, disposed], [2, true, 2]);
+	});
+}
+
+test('failed shortcut pane resolution releases its input lease and resolved model', async () => {
+	using disposables = new DisposableStore();
+	const { document, resources, editor } = await createRecorderFixture(disposables);
+	const input = resources.services.createInstance(KeybindingsEditorInput);
+	const model = await input.resolve();
+	const failure = new Error('Test shortcut resolve failed');
+	input.resolve = async () => { throw failure; };
+	await assert.rejects(editor.setInput(input, new AbortController().signal), error => error === failure);
+	assert.deepEqual([input.isDisposed, model.isDisposed(), document.querySelectorAll('.ash-keybindings-row').length], [true, true, 0]);
+});
+
+test('retired shortcut resolution cannot clear a replacement using the same input', async () => {
+	using disposables = new DisposableStore();
+	const { root, resources, editor } = await createRecorderFixture(disposables);
+	const input = resources.services.createInstance(KeybindingsEditorInput);
+	const model = await input.resolve();
+	const gate = new DeferredPromise<void>();
+	let resolutions = 0;
+	input.resolve = async () => {
+		if (resolutions++ === 0) await gate.p;
+		return model;
+	};
+	const previous = new AbortController();
+	const opening = editor.setInput(input, previous.signal);
+	await editor.setInput(input, new AbortController().signal);
+	previous.abort();
+	await gate.complete();
+	await assert.rejects(opening, /cancelled/);
+	assert.equal(model.isDisposed(), false, 'The replacement pane reference still owns the model');
+	assert.ok(root.querySelector('.ash-keybindings-row'));
+	editor.clearInput();
+	assert.deepEqual([input.isDisposed, model.isDisposed()], [true, true]);
 });
 
 test('recorder replaces the preview, ignores incomplete input and explicitly restarts after four chords', async () => {
@@ -343,6 +548,7 @@ for (const retirement of ['clear', 'hide', 'dispose', 'focus another editor'] as
 			if (retirement === 'clear') {
 				assert.equal(root.querySelector('[role="status"]')?.textContent, status, 'A retired draft must not receive late status');
 				await keybindings.initialize();
+				await editor.setInput(resources.services.createInstance(KeybindingsEditorInput), new AbortController().signal);
 				open();
 				assert.equal(input.disabled, false, 'A live pane can record again after the retired save completes');
 			}
@@ -382,13 +588,15 @@ async function createRecorderFixture(disposables: InstanceType<typeof Disposable
 	resources.services.registerInstance(IContextKeyService, contextKeys);
 	resources.services.registerInstance(IKeyboardLayoutService, layout);
 	await keybindings.initialize();
-	const editor = disposables.add(registerTestComponentServices(resources.services).createInstance(KeyboardShortcutsEditor));
+	const editor = disposables.add(registerTestComponentServices(resources.services).createInstance(KeybindingsEditor));
 	editor.create(document.body);
+	const editorInput = resources.services.createInstance(KeybindingsEditorInput);
+	await editor.setInput(editorInput, new AbortController().signal);
 	const root = document.querySelector<HTMLElement>('.ash-keybindings-editor')!;
 	const input = root.querySelector<HTMLInputElement>('.ash-keybindings-record-input input')!;
 	const when = root.querySelector<HTMLInputElement>('[aria-label="Keybinding when condition"]')!;
 	return {
-		document, input, when, root, resources, keybindings, editor, open: () => {
+		document, input, when, root, resources, keybindings, editor, editorInput, open: () => {
 			const button = findButton(shortcutRow(document, 'test.shortcuts.alpha')!, 'Edit');
 			button.focus();
 			button.click();

@@ -11,17 +11,20 @@ import { IEditorService } from '../../editor/common/editorService.js';
 import { IFileTextModelService } from '../../textmodelResolver/common/textModelResourceService.js';
 import type { IOpenSettingsOptions, IPreferencesService } from '../common/preferences.js';
 import { createSettingsEditorInput, createUserSettingsEditorInput } from '../common/settingsEditorInput.js';
-import { createKeybindingsJsonEditorInput, createKeyboardShortcutsEditorInput } from './keybindingsEditorInput.js';
+import { createKeybindingsJsonEditorInput, isKeybindingsEditorInput, KeybindingsEditorInput } from './keybindingsEditorInput.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 
 /** Routes Preferences through the editor and its shared, revision-aware file models. */
 export class PreferencesService extends Disposable implements IPreferencesService {
 	private readonly lifetime = new AbortController();
+	private keybindingsEditorInput: WeakRef<KeybindingsEditorInput> | undefined;
 
 	constructor(
 		@IEditorService private readonly editorService: IEditorService,
 		@IFileTextModelService private readonly models: IFileTextModelService,
 		@IFileService private readonly files: IFileService,
 		@IUserDataProfileService private readonly profiles: IUserDataProfileService,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
 		super();
 		this._register(toDisposable(() => this.lifetime.abort()));
@@ -70,7 +73,16 @@ export class PreferencesService extends Disposable implements IPreferencesServic
 
 	public async openGlobalKeybindingSettings(textual: boolean): Promise<void> {
 		if (!textual) {
-			await this.editorService.openEditor(createKeyboardShortcutsEditorInput(), { pinned: true });
+			const activeEditor = this.editorService.activeEditor;
+			let input = activeEditor && isKeybindingsEditorInput(activeEditor)
+				? KeybindingsEditorInput.getOrCreate(activeEditor, this.instantiationService)
+				: this.keybindingsEditorInput?.deref();
+			if (!input || input.isDisposed) input = this.instantiationService.createInstance(KeybindingsEditorInput);
+			// Ash updates a reused tab's input metadata. Reuse its live input too, so
+			// the tab cannot retain a disposed duplicate while its pane uses another.
+			this.keybindingsEditorInput = new WeakRef(input);
+			using reference = input.acquire();
+			await this.editorService.openEditor(input, { pinned: true });
 			return;
 		}
 		const resource = this.profiles.currentProfile.keybindingsResource;

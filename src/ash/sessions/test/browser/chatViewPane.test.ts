@@ -328,7 +328,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		...emptyEditorServiceState,
 		openEditor: async (_input, _options, target) => { preferencesEditorTarget = target; },
 		focusActiveEditor() { },
-	}, editorServices.get(IFileTextModelService), keybindingFiles.files, keybindingFiles.profiles);
+	}, editorServices.get(IFileTextModelService), keybindingFiles.files, keybindingFiles.profiles, editorServices);
 	services.registerInstance(IPreferencesService, preferences);
 	services.registerInstance(IChatService, chat);
 	services.registerInstance(ILanguageModelsService, modelsFor(chat));
@@ -3243,7 +3243,7 @@ test("Chat Settings toggles Advisor while keeping its selected model", async () 
 		...emptyEditorServiceState,
 		openEditor: async () => undefined,
 		focusActiveEditor() { },
-	}, editorServices.get(IFileTextModelService), keybindingFiles.files, keybindingFiles.profiles);
+	}, editorServices.get(IFileTextModelService), keybindingFiles.files, keybindingFiles.profiles, editorServices);
 	services.registerInstance(IPreferencesService, preferences);
 	using commands = new CommandService(services);
 	for (const enabled of [false, true]) {
@@ -3287,7 +3287,7 @@ test('Chat Settings saves a masked provider key through the model API and refres
 		...emptyEditorServiceState,
 		openEditor: async () => undefined,
 		focusActiveEditor() { },
-	}, editorServices.get(IFileTextModelService), keybindingFiles.files, keybindingFiles.profiles);
+	}, editorServices.get(IFileTextModelService), keybindingFiles.files, keybindingFiles.profiles, editorServices);
 	services.registerInstance(IPreferencesService, preferences);
 	using commands = new CommandService(services);
 

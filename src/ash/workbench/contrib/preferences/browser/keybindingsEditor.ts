@@ -1,7 +1,7 @@
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
-import './media/keyboardShortcutsEditor.css';
+import './media/keybindingsEditor.css';
 import { h, isHTMLElement, stopEvent } from '../../../../base/browser/dom.js';
 import type { IDimension } from '../../../../base/browser/dom.js';
 import { isModifierKey, StandardKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
@@ -11,27 +11,28 @@ import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrolla
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { getKeybindingLabel, KeybindingLabelStyle } from '../../../../base/common/keybindingLabels.js';
 import { MAX_KEYBINDING_CHORDS } from '../../../../base/common/keybindings.js';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
-import { commandActionLabel } from '../../../../platform/action/common/action.js';
-import { isMenuItem, MenuId, MenusRegistry } from '../../../../platform/actions/common/actions.js';
-import type { CommandId } from '../../../../platform/commands/common/commands.js';
 import type { IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
 import { IContextKeyService, type IScopedContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { KeybindingContextKeys, IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IKeyboardLayoutService } from '../../../../platform/keyboardLayout/common/keyboardLayout.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
-import { isKeyboardShortcutsEditorInput } from '../../../services/preferences/browser/keybindingsEditorInput.js';
-import { KeyboardShortcutsEditorModel, type KeyboardShortcutItem } from '../../../services/preferences/browser/keybindingsEditorModel.js';
+import { IKeybindingEditingService } from '../../../services/keybinding/common/keybindingEditing.js';
+import { isKeybindingsEditorInput, KeybindingsEditorInput } from '../../../services/preferences/browser/keybindingsEditorInput.js';
+import { type KeybindingsEditorModel, type KeyboardShortcutItem } from '../../../services/preferences/browser/keybindingsEditorModel.js';
 
-export const KeyboardShortcutsEditorId = 'workbench.editor.keyboardShortcuts';
 let nextRecorderHelpId = 1;
 
 /** A tab-hosted editor for searching and updating the active keybindings resource. */
-export class KeyboardShortcutsEditor extends EditorPane implements IEditorPane {
-	public readonly id = KeyboardShortcutsEditorId;
-	private readonly model: KeyboardShortcutsEditorModel;
+export class KeybindingsEditor extends EditorPane implements IEditorPane {
+	public static readonly ID = 'workbench.editor.keybindings';
+	public readonly id = KeybindingsEditor.ID;
+	private input: KeybindingsEditorInput | undefined;
+	private model: KeybindingsEditorModel | undefined;
+	private readonly inputReference = this._register(new MutableDisposable<IDisposable>());
+	private readonly modelListener = this._register(new MutableDisposable<IDisposable>());
 	private readonly rows = new Map<string, KeyboardShortcutRow>();
 	private container: HTMLDivElement | undefined;
 	private searchInput: InputBox | undefined;
@@ -57,15 +58,13 @@ export class KeyboardShortcutsEditor extends EditorPane implements IEditorPane {
 		@IContextKeyService private readonly contextKeyService: IContextKeyService,
 		@IKeybindingService private readonly keybindingService: IKeybindingService,
 		@IKeyboardLayoutService private readonly keyboardLayoutService: IKeyboardLayoutService,
-		@IInstantiationService instantiationService: IInstantiationService,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IKeybindingEditingService private readonly keybindingEditingService: IKeybindingEditingService,
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
 	) {
-		super(KeyboardShortcutsEditorId, themeService, storageService);
-		this.model = this._register(instantiationService.createInstance(KeyboardShortcutsEditorModel, {
-			commandLabel: commandLabel,
-		}));
-		this._register(this.model.onDidChange(items => this.renderRows(items)));
+		super(KeybindingsEditor.ID, themeService, storageService);
+		this._register(toDisposable(() => this.clearInput()));
 		this._register(toDisposable(() => {
 			for (const row of this.rows.values()) row.dispose();
 			this.rows.clear();
@@ -105,7 +104,7 @@ export class KeyboardShortcutsEditor extends EditorPane implements IEditorPane {
 		this.count = h(ownerDocument, 'span');
 		this.count.className = 'ash-keybindings-count';
 		toolbar.append(this.searchInput.element, this.count);
-		this._register(this.searchInput.onDidChange(value => this.model.setQuery(value)));
+		this._register(this.searchInput.onDidChange(() => this.renderRows(this.model?.items ?? [])));
 
 		this.recorder = this.createRecorder(ownerDocument);
 		this.status = h(ownerDocument, 'p');
@@ -134,16 +133,40 @@ export class KeyboardShortcutsEditor extends EditorPane implements IEditorPane {
 		this.scrollable.append(this.list, this.empty);
 		scrollHost.append(this.scrollable.element);
 		container.append(header, toolbar, this.recorder, this.status, scrollHost);
-		this.renderRows(this.model.items);
+		this.renderRows([]);
 	}
 
 	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
-		if (!isKeyboardShortcutsEditorInput(input)) throw new RangeError(`Keyboard Shortcuts editor cannot open ${input.resource}`);
+		if (!isKeybindingsEditorInput(input)) throw new RangeError(`Keyboard Shortcuts editor cannot open ${input.resource}`);
 		throwIfCancelled(signal, 'Keyboard Shortcuts loading was cancelled');
+		// Working-set restoration produces plain resource inputs. Rehydrate at this
+		// entrance so restored panes use the same input-owned model and release rule.
+		const editorInput = KeybindingsEditorInput.getOrCreate(input, this.instantiationService);
+		const reference = editorInput.acquire();
+		this.clearInput();
+		this.inputReference.value = reference;
+		this.input = editorInput;
+		try {
+			const model = await editorInput.resolve();
+			throwIfCancelled(signal, 'Keyboard Shortcuts loading was cancelled');
+			// Cancellation belongs to this request, even if a replacement reuses the input.
+			if (this.isDisposed || this.inputReference.value !== reference) return;
+			this.model = model;
+			this.modelListener.value = model.onDidChange(items => this.renderRows(items));
+			this.renderRows(model.items);
+		} catch (error) {
+			if (this.inputReference.value === reference) this.clearInput();
+			throw error;
+		}
 	}
 
 	public override clearInput(): void {
 		this.closeRecorder(false);
+		this.modelListener.clear();
+		this.model = undefined;
+		this.input = undefined;
+		this.inputReference.clear();
+		this.renderRows([]);
 	}
 
 	public override layout(_dimension: IDimension): void {
@@ -212,7 +235,7 @@ export class KeyboardShortcutsEditor extends EditorPane implements IEditorPane {
 	}
 
 	private openRecorder(item: KeyboardShortcutItem): void {
-		if (this.saving || !this.recorder || !this.recorderTitle || !this.keyInput || !this.whenInput) return;
+		if (this.isDisposed || !this.input || this.saving || !this.recorder || !this.recorderTitle || !this.keyInput || !this.whenInput) return;
 		if (!this.editingItem) {
 			const activeElement = this.container?.ownerDocument.activeElement;
 			this.recorderReturnFocus = isHTMLElement(activeElement) ? activeElement : undefined;
@@ -289,7 +312,9 @@ export class KeyboardShortcutsEditor extends EditorPane implements IEditorPane {
 		this.setSaving(true);
 		this.setStatus(localize('keybindings.recordingSaving', 'Saving keybinding…'), false);
 		try {
-			await this.model.save(item, this.keyInput.value, this.whenInput.value);
+			const key = this.keyInput.value.trim();
+			if (!this.keybindingService.resolveUserBinding(key)) throw new TypeError(`Invalid keybinding: ${key || '(empty)'}`);
+			await this.keybindingEditingService.editKeybinding(item.keybindingItem, key, this.whenInput.value.trim() || undefined);
 			if (this.isDisposed || this.editingItem !== item) return;
 			// The saved row can be replaced by the asynchronous file watcher.
 			this.closeRecorder(false);
@@ -325,18 +350,24 @@ export class KeyboardShortcutsEditor extends EditorPane implements IEditorPane {
 	}
 
 	private async removeItem(item: KeyboardShortcutItem): Promise<void> {
-		if (this.saving) return;
+		if (this.saving || !this.input) return;
+		const reference = this.inputReference.value;
 		try {
-			await this.model.remove(item);
+			if (item.source !== 'user') throw new TypeError('Only user shortcuts can be removed.');
+			await this.keybindingEditingService.removeKeybinding(item.keybindingItem);
+			if (this.isDisposed || this.inputReference.value !== reference) return;
 			if (this.editingItem?.id === item.id) this.closeRecorder();
 			this.setStatus('Keybinding removed.', false);
 		} catch (error) {
+			if (this.isDisposed || this.inputReference.value !== reference) return;
 			this.setStatus(error instanceof Error ? error.message : 'Unable to remove the keybinding.', true);
 		}
 	}
 
-	private renderRows(items: readonly KeyboardShortcutItem[]): void {
+	private renderRows(allItems: readonly KeyboardShortcutItem[]): void {
 		if (!this.list) return;
+		// A split editor shares the input/model, but each pane owns its search field.
+		const items = filterItems(allItems, this.searchInput?.value ?? '');
 		const retained = new Set<string>();
 		for (const item of items) {
 			retained.add(item.id);
@@ -464,12 +495,12 @@ function cell(ownerDocument: Document, className: string): HTMLSpanElement {
 	return element;
 }
 
-function commandLabel(command: CommandId): string {
-	for (const item of MenusRegistry.getMenuItems(MenuId.CommandPalette)) {
-		if (!isMenuItem(item) || item.command.id !== command) continue;
-		return commandActionLabel(item.command.title);
-	}
-	const segment = command.split('.').at(-1) ?? command;
-	const words = segment.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[-_]+/g, ' ').trim();
-	return words ? words[0].toLocaleUpperCase() + words.slice(1) : command;
+function filterItems(items: readonly KeyboardShortcutItem[], query: string): readonly KeyboardShortcutItem[] {
+	const normalized = query.trim().toLocaleLowerCase();
+	if (!normalized) return items;
+	const terms = normalized.split(/\s+/).filter(Boolean);
+	return items.filter(item => {
+		const searchable = `${item.commandLabel} ${item.command ?? ''} ${item.key} ${item.keyLabel} ${item.when} ${item.sourceLabel}`.toLocaleLowerCase();
+		return terms.every(term => searchable.includes(term));
+	});
 }

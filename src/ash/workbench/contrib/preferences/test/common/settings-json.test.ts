@@ -223,7 +223,7 @@ test('PreferencesService opens User Settings JSON as a pinned JSON editor input'
 		focusActiveEditor() { },
 	};
 	using models = new BrowserTextModelService({ onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: '{}', revision: undefined }), save: async () => ({ revision: undefined }) });
-	using preferences = new PreferencesService(editorService, models, keybindingProfile.files, keybindingProfile.profiles);
+	using preferences = new PreferencesService(editorService, models, keybindingProfile.files, keybindingProfile.profiles, keybindingProfile.services);
 
 	await preferences.openUserSettings();
 	assert.equal(opened?.input.resource.toString(), UserSettingsResource.toString());
@@ -315,7 +315,7 @@ test('revealing existing settings preserves edits and real external conflicts re
 		...emptyEditorServiceState,
 		openEditor: async (_input, options) => { selection = options?.selection; },
 		focusActiveEditor() { },
-	}, models, keybindingProfile.files, keybindingProfile.profiles);
+	}, models, keybindingProfile.files, keybindingProfile.profiles, keybindingProfile.services);
 	await preferences.openUserSettings({ revealSetting: { key: 'editor.fontSize', edit: true } });
 	assert.equal(reference.model.getText(), source);
 	assert.equal(reference.model.getValueInRange(selection!), '18');

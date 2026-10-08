@@ -350,6 +350,64 @@ for (const waitForRemoval of [false, true]) {
 	});
 }
 
+test('Keyboard Shortcuts shares one input across split panes and restores it after the final close', async ({ target, workbench, reloadWorkbench }) => {
+	test.skip(target.appServerMode !== 'required', 'Requires the real profile file and editor restoration');
+	await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
+	const firstGroup = workbench.editors.groupAt(0);
+	const source = '// keep shared input comment\n[{"key":"ctrl+alt+y","command":"workbench.action.openSettings"},{"key":"ctrl+alt+z","command":"workbench.action.openKeyboardShortcuts"},]\n';
+	await replaceJson(firstGroup.editor.input, source);
+	await workbench.quickaccess.runCommand('workbench.action.files.save');
+	await expect(firstGroup.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
+	await workbench.quickaccess.runCommand('workbench.action.openKeyboardShortcuts');
+	await workbench.quickaccess.runCommand('workbench.action.openKeyboardShortcuts');
+	await expect(firstGroup.tabs.filter({ hasText: 'Keyboard Shortcuts', hasNotText: '(JSON)' })).toHaveCount(1);
+	const firstPane = firstGroup.content.locator('.ash-keybindings-editor');
+	await firstPane.getByRole('searchbox').fill('workbench.action.openSettings');
+	await workbench.quickaccess.runCommand('workbench.action.splitEditorHorizontal');
+	await expect(workbench.editors.groups).toHaveCount(2);
+	const secondPane = workbench.editors.groupAt(1).content.locator('.ash-keybindings-editor');
+	await expect(secondPane.getByRole('searchbox')).toHaveValue('');
+	await secondPane.getByRole('searchbox').fill('workbench.action.openKeyboardShortcuts');
+	await expect(firstPane.getByRole('searchbox')).toHaveValue('workbench.action.openSettings');
+	await expect(firstPane.locator('.ash-keybindings-row.is-user .ash-keybindings-command-id')).toHaveText('workbench.action.openSettings');
+	await expect(secondPane.locator('.ash-keybindings-row.is-user .ash-keybindings-command-id')).toHaveText('workbench.action.openKeyboardShortcuts');
+
+	await secondPane.locator('.ash-keybindings-row.is-user').getByRole('button', { name: 'Edit', exact: true }).click();
+	const recording = secondPane.getByRole('textbox', { name: 'Record keybinding', exact: true });
+	await recording.press('Control+Alt+P');
+	await recording.press('Enter');
+	await expect(secondPane.getByRole('status')).toHaveText('Keybinding saved.');
+	await expect(firstPane.locator('.ash-keybindings-row.is-user .ash-keybindings-command-id')).toHaveText('workbench.action.openSettings');
+	await firstGroup.tabs.filter({ hasText: 'Keyboard Shortcuts', hasNotText: '(JSON)' }).locator('..').getByRole('button', { name: 'Close Keyboard Shortcuts', exact: true }).click();
+	let remainingPane = workbench.page.locator('.ash-keybindings-editor');
+	await expect(remainingPane).toHaveCount(1);
+	await expect(remainingPane.getByRole('searchbox')).toHaveValue('workbench.action.openKeyboardShortcuts');
+	await remainingPane.getByRole('searchbox').focus();
+
+	await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
+	const json = workbench.editors.groups.filter({ has: remainingPane });
+	await replaceJson(json.locator('.stanza-editor-input'), source.replace('ctrl+alt+y', 'ctrl+alt+x').replace('ctrl+alt+z', 'ctrl+alt+[KeyP]'));
+	await workbench.quickaccess.runCommand('workbench.action.files.save');
+	await expect(json.getByRole('tab', { name: 'Keyboard Shortcuts (JSON)', exact: true }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
+	await workbench.quickaccess.runCommand('workbench.action.openKeyboardShortcuts');
+	await remainingPane.getByRole('searchbox').fill('workbench.action.openSettings');
+	await expect(remainingPane.locator('.ash-keybindings-row.is-user .ash-keybindings-key')).toContainText('X');
+	await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
+	await expect(remainingPane).toHaveCount(0);
+	await workbench.quickaccess.runCommand('workbench.action.openKeyboardShortcuts');
+	await expect(remainingPane).toHaveCount(1);
+	await remainingPane.getByRole('searchbox').fill('workbench.action.openSettings');
+	await expect(remainingPane.locator('.ash-keybindings-row.is-user .ash-keybindings-key')).toContainText('X');
+
+	({ workbench } = await reloadWorkbench());
+	remainingPane = workbench.page.locator('.ash-keybindings-editor');
+	await expect(remainingPane).toHaveCount(1);
+	await workbench.quickaccess.runCommand('workbench.action.openKeyboardShortcuts');
+	await expect(remainingPane).toHaveCount(1);
+	await remainingPane.getByRole('searchbox').fill('workbench.action.openSettings');
+	await expect(remainingPane.locator('.ash-keybindings-row.is-user .ash-keybindings-key')).toContainText('X');
+});
+
 test('Keyboard Shortcuts recorder persists and executes an ordered four-chord binding after reload', async ({ target, application, workbench, reloadWorkbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
 	let group = workbench.editors.groupAt(0);
@@ -662,8 +720,8 @@ test('Keybindings external changes reload clean models and preserve dirty text o
 	await group.editor.waitForEditorContents(content => content === source);
 	await replaceJson(group.editor.input, '// unsaved\n' + source);
 	await writeFile(join(profile, 'keybindings.json'), '[]');
-	await expect(group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..')).toHaveAttribute('data-state', /conflict/u);
 	await workbench.dialogs.expectMessage(application, 'File changed on disk', () => workbench.quickaccess.runCommand('workbench.action.files.save'));
-	await group.editor.waitForEditorContents(content => content.startsWith('// unsaved'));
+	await expect(group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..')).toHaveAttribute('data-state', /conflict/u);
+	await group.editor.waitForEditorContents(content => content === '// unsaved\n' + source);
 	expect(await readFile(join(profile, 'keybindings.json'), 'utf8')).toBe('[]');
 });

@@ -1139,7 +1139,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	editorServices.registerInstance(IEditorPart, editor);
 	editorServices.registerInstance(ICommandService, disposables.add(new CommandService(editorServices)));
 	editorServices.registerInstance(IEditorService, disposables.add(new BrowserEditorService(editor)));
-	const preferences = disposables.add(new PreferencesService(editorServices.get(IEditorService), editorServices.get(IFileTextModelService), keybindingProfile.files, keybindingProfile.profiles));
+	const preferences = disposables.add(new PreferencesService(editorServices.get(IEditorService), editorServices.get(IFileTextModelService), keybindingProfile.files, keybindingProfile.profiles, editorServices));
 	services.registerInstance(IPreferencesService, preferences);
 	services.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
 	services.registerInstance(IAccountService, { onDidChangeAccounts: Event.None, onDidCompleteLogin: Event.None, read: async () => ({ revision: 1n, accounts: [] }), startLogin: async () => { throw new Error('Not used'); }, cancelLogin: async () => { }, logout: async () => { } });
