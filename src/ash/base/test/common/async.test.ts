@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { getEventListeners } from 'node:events';
-import { createCancelablePromise, DeferredPromise, Delayer, disposableTimeout, first, promiseWithResolvers, raceCancellationError, RunOnceScheduler, TaskQueue, TimeoutTimer, timeout } from '../../common/async.js';
+import { spawnSync } from 'node:child_process';
+import { createCancelablePromise, DeferredPromise, Delayer, disposableTimeout, first, promiseWithResolvers, raceCancellation, raceCancellationError, RunOnceScheduler, TaskQueue, TimeoutTimer, timeout } from '../../common/async.js';
 import { isCancellationError } from '../../common/errors.js';
-import { CancellationTokenSource } from '../../common/cancellation.js';
+import { CancellationToken, CancellationTokenSource } from '../../common/cancellation.js';
+import { Emitter } from '../../common/event.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from './utils.js';
 
 suite('Cancellation races', () => {
@@ -36,6 +38,212 @@ suite('Cancellation races', () => {
 		const failure = new Error('work failed');
 		await assert.rejects(raceCancellationError(Promise.reject(failure), cancellation.signal), error => error === failure);
 		assert.equal(getEventListeners(cancellation.signal, 'abort').length, 0);
+	});
+
+	test('a resolved cancellation race releases its token subscription before returning', async () => {
+		using cancellation = new Emitter<void>();
+		const token = { isCancellationRequested: false, onCancellationRequested: cancellation.event };
+		assert.equal(await raceCancellation(Promise.resolve(42), token), 42);
+		assert.equal(cancellation.hasListeners(), false);
+		cancellation.fire();
+	});
+
+	test('a rejected cancellation race preserves the work error and releases its subscription', async () => {
+		using cancellation = new Emitter<void>();
+		const token = { isCancellationRequested: false, onCancellationRequested: cancellation.event };
+		const failure = new Error('clipboard read failed');
+		await assert.rejects(raceCancellation(Promise.reject(failure), token), error => error === failure);
+		assert.equal(cancellation.hasListeners(), false);
+		cancellation.fire();
+	});
+
+	for (const outcome of ['resolve', 'reject'] as const) {
+		test(`cancellation keeps its default and releases the listener before a late ${outcome}`, async () => {
+			using cancellation = new Emitter<void>();
+			const token = { isCancellationRequested: false, onCancellationRequested: cancellation.event };
+			const work = promiseWithResolvers<string>();
+			const pending = raceCancellation(work.promise, token, 'cancelled');
+			assert.equal(cancellation.hasListeners(), true);
+			try {
+				token.isCancellationRequested = true;
+				cancellation.fire();
+				assert.equal(cancellation.hasListeners(), false);
+				assert.equal(await pending, 'cancelled');
+				cancellation.fire();
+				if (outcome === 'resolve') {
+					work.resolve('late clipboard text');
+				} else {
+					work.reject(new Error('late clipboard failure'));
+				}
+				assert.equal(await pending, 'cancelled');
+			} finally {
+				work.resolve('cleanup');
+				await work.promise.catch(() => undefined);
+				await Promise.resolve();
+			}
+		});
+	}
+
+	test('a pre-cancelled race observes late rejection without an unhandled rejection', () => {
+		const asyncModule = new URL('../../common/async.js', import.meta.url).href;
+		const cancellationModule = new URL('../../common/cancellation.js', import.meta.url).href;
+		const result = spawnSync(process.execPath, ['--unhandled-rejections=strict', '--input-type=module', '--eval', `
+			import assert from 'node:assert/strict';
+			import { raceCancellation, promiseWithResolvers } from ${JSON.stringify(asyncModule)};
+			import { CancellationToken } from ${JSON.stringify(cancellationModule)};
+			const work = promiseWithResolvers();
+			assert.equal(await raceCancellation(work.promise, CancellationToken.Cancelled, 'cancelled'), 'cancelled');
+			work.reject(new Error('late clipboard failure'));
+			await new Promise(resolve => setImmediate(resolve));
+		`], { encoding: 'utf8' });
+		assert.equal(result.status, 0, result.stderr);
+	});
+
+	test('a pre-cancelled race keeps its default when work has already resolved', async () => {
+		assert.equal(await raceCancellation(Promise.resolve('clipboard text'), CancellationToken.Cancelled, 'cancelled'), 'cancelled');
+	});
+
+	test('cancellation during listener registration releases the returned subscription', async () => {
+		using cancellation = new Emitter<void>();
+		const token: CancellationToken & { isCancellationRequested: boolean; } = {
+			isCancellationRequested: false,
+			onCancellationRequested: listener => {
+				const subscription = cancellation.event(listener);
+				token.isCancellationRequested = true;
+				cancellation.fire();
+				return subscription;
+			},
+		};
+		assert.equal(await raceCancellation(Promise.resolve('late clipboard text'), token, 'cancelled'), 'cancelled');
+		assert.equal(cancellation.hasListeners(), false);
+	});
+
+	for (const outcome of ['resolve', 'reject', 'cancel'] as const) {
+		test(`cleanup reentry cannot replace the ${outcome} that won the cancellation race`, async () => {
+			let removals = 0;
+			using cancellation = new Emitter<void>({
+				onWillRemoveListener: () => {
+					removals++;
+					token.isCancellationRequested = true;
+					cancellation.fire();
+				},
+			});
+			const token = { isCancellationRequested: false, onCancellationRequested: cancellation.event };
+			const work = promiseWithResolvers<string>();
+			const failure = new Error('work failed');
+			const pending = raceCancellation(work.promise, token, 'cancelled');
+			if (outcome === 'resolve') {
+				work.resolve('work result');
+				assert.equal(await pending, 'work result');
+			} else if (outcome === 'reject') {
+				work.reject(failure);
+				await assert.rejects(pending, error => error === failure);
+			} else {
+				token.isCancellationRequested = true;
+				cancellation.fire();
+				assert.equal(await pending, 'cancelled');
+				work.resolve('late result');
+				assert.equal(await pending, 'cancelled');
+			}
+			assert.deepEqual({ removals, hasListeners: cancellation.hasListeners() }, { removals: 1, hasListeners: false });
+		});
+	}
+
+	for (const outcome of ['resolve', 'reject', 'cancel', 'registration', 'reporter'] as const) {
+		test(`throwing cleanup preserves the ${outcome} outcome and reports its failure without an unhandled rejection`, () => {
+			const asyncModule = new URL('../../common/async.js', import.meta.url).href;
+			const eventModule = new URL('../../common/event.js', import.meta.url).href;
+			const errorsModule = new URL('../../common/errors.js', import.meta.url).href;
+			const result = spawnSync(process.execPath, ['--unhandled-rejections=strict', '--input-type=module', '--eval', `
+				import assert from 'node:assert/strict';
+				import { raceCancellation, promiseWithResolvers } from ${JSON.stringify(asyncModule)};
+				import { Emitter } from ${JSON.stringify(eventModule)};
+				import { errorHandler, setUnexpectedErrorHandler } from ${JSON.stringify(errorsModule)};
+				const outcome = ${JSON.stringify(outcome)};
+				const cleanupError = new Error('subscription cleanup failed');
+				const workError = new Error('work failed');
+				const reportingError = new Error('reporting failed');
+				const reported = [];
+				const consoleReports = [];
+				const originalHandler = errorHandler.getUnexpectedErrorHandler();
+				const originalConsoleError = console.error;
+				setUnexpectedErrorHandler(error => {
+					reported.push(error);
+					if (outcome === 'reporter') throw reportingError;
+				});
+				console.error = (...args) => consoleReports.push(args);
+				let removals = 0;
+				using cancellation = new Emitter({
+					onDidRemoveLastListener() {
+						removals++;
+						throw cleanupError;
+					},
+				});
+				const token = {
+					isCancellationRequested: false,
+					onCancellationRequested: listener => {
+						const subscription = cancellation.event(listener);
+						if (outcome === 'registration') {
+							token.isCancellationRequested = true;
+							cancellation.fire();
+						}
+						return subscription;
+					},
+				};
+				try {
+					const work = promiseWithResolvers();
+					const results = [];
+					const pending = raceCancellation(work.promise, token, 'cancelled');
+					pending.then(value => results.push(value), error => results.push(error));
+					if (outcome === 'cancel') {
+						token.isCancellationRequested = true;
+						cancellation.fire();
+					} else if (outcome === 'reject') {
+						work.reject(workError);
+					} else if (outcome !== 'registration') {
+						work.resolve('work result');
+					}
+					await new Promise(resolve => setImmediate(resolve));
+					let expected = 'work result';
+					if (outcome === 'reject') {
+						expected = workError;
+					} else if (outcome === 'cancel' || outcome === 'registration') {
+						expected = 'cancelled';
+					}
+					assert.deepEqual({
+						results,
+						reported,
+						consoleErrors: consoleReports.map(args => args.slice(1)),
+						removals,
+						hasListeners: cancellation.hasListeners(),
+					}, {
+						results: [expected],
+						reported: [cleanupError],
+						consoleErrors: outcome === 'reporter' ? [[cleanupError, reportingError]] : [],
+						removals: 1,
+						hasListeners: false,
+					});
+					work.resolve('late result');
+					cancellation.fire();
+					await new Promise(resolve => setImmediate(resolve));
+					assert.deepEqual({ results, removals, reported }, { results: [expected], removals: 1, reported: [cleanupError] });
+				} finally {
+					setUnexpectedErrorHandler(originalHandler);
+					console.error = originalConsoleError;
+				}
+			`], { encoding: 'utf8', timeout: 10_000 });
+			assert.equal(result.status, 0, result.stderr);
+		});
+	}
+
+	test('cancellation releases its subscription while the underlying promise never ends', async () => {
+		using source = new CancellationTokenSource();
+		const work = promiseWithResolvers<string>();
+		const pending = raceCancellation(work.promise, source.token);
+		source.cancel();
+		assert.equal(await pending, undefined);
+		source.cancel();
+		source.dispose();
 	});
 });
 

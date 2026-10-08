@@ -1,5 +1,5 @@
 import { CancellationTokenSource, type CancellationToken } from './cancellation.js';
-import { canceled, CancellationError, isCancellationError } from './errors.js';
+import { canceled, CancellationError, isCancellationError, onUnexpectedError } from './errors.js';
 import { AbstractDisposable, DisposableStore, toDisposable, type IDisposable } from './lifecycle.js';
 import { extUri, type IExtUri } from './resources.js';
 import type { URI } from './uri.js';
@@ -43,10 +43,43 @@ export function createCancelablePromise<T>(callback: (token: CancellationToken) 
 export function raceCancellation<T>(promise: Promise<T>, token: CancellationToken): Promise<T | undefined>;
 export function raceCancellation<T>(promise: Promise<T>, token: CancellationToken, defaultValue: T): Promise<T>;
 export function raceCancellation<T>(promise: Promise<T>, token: CancellationToken, defaultValue?: T): Promise<T | undefined> {
-	if (token.isCancellationRequested) return Promise.resolve(defaultValue);
 	return new Promise<T | undefined>((resolve, reject) => {
-		const cancellation = token.onCancellationRequested(() => resolve(defaultValue));
-		promise.then(resolve, reject).finally(() => cancellation.dispose());
+		let cancellation: IDisposable | undefined;
+		const release = (): void => {
+			const subscription = cancellation;
+			cancellation = undefined;
+			try {
+				subscription?.dispose();
+			} catch (error) {
+				try {
+					onUnexpectedError(error);
+				} catch (reportingError) {
+					console.error('Unexpected error while reporting a cancellation race cleanup error', error, reportingError);
+				}
+			}
+		};
+		// Keep observing the work after cancellation, including when the token was already cancelled.
+		promise.then(value => {
+			// Fix the winner before cleanup can reenter; awaiting callers resume after release returns.
+			resolve(value);
+			release();
+		}, error => {
+			reject(error);
+			release();
+		});
+		if (token.isCancellationRequested) {
+			resolve(defaultValue);
+			return;
+		}
+		cancellation = token.onCancellationRequested(() => {
+			resolve(defaultValue);
+			release();
+		});
+		// A token may cancel synchronously while its listener is being registered.
+		if (token.isCancellationRequested) {
+			resolve(defaultValue);
+			release();
+		}
 	});
 }
 

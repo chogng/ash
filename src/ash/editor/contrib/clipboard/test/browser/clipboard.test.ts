@@ -11,6 +11,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { ICodeEditorService } from '../../../../browser/services/codeEditorService.js';
 import { installEditorTestDom } from '../../../../test/browser/editorTestGlobals.js';
+import { DisposableTracker, installDisposableTracker } from '../../../../../base/common/lifecycle.js';
 
 const environment = new JSDOM('<!doctype html><body></body>');
 const installedGlobals = installEditorTestDom(environment, [
@@ -152,6 +153,54 @@ test('paste command drops a delayed clipboard read after focus, selection, or mo
 	await afterModelSwitch;
 	assert.deepEqual([firstModel.getText(), replacement.getText()], ['changed!', 'replacement']);
 	dom.window.close();
+});
+
+test('paste command releases cancelled work before the clipboard read settles and accepts a new paste', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const getContext = environment.window.HTMLCanvasElement.prototype.getContext;
+	environment.window.HTMLCanvasElement.prototype.getContext = () => null;
+	try {
+		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+		using model = new TextModel('alpha');
+		using services = new InstantiationService();
+		using contextKeys = new ContextKeyService();
+		using codeEditorService = new StandaloneCodeEditorService();
+		const clipboard = new DeferredClipboardService();
+		services.registerInstance(IContextKeyService, contextKeys);
+		services.registerInstance(ILogService, new NullLoggerService());
+		services.registerInstance(IClipboardService, clipboard);
+		services.registerInstance(ICodeEditorService, codeEditorService);
+		using editor = createTestCodeEditor({
+			container: dom.window.document.querySelector<HTMLElement>('main')!,
+			model,
+			lineHeight: 20,
+			instantiationService: services,
+		});
+		editor.focus();
+		editor.setSelection(new Selection(1, 6, 1, 6));
+		const tracker = new DisposableTracker();
+		using tracking = installDisposableTracker(tracker);
+		const pending = PasteAction.runCommand(services, undefined);
+		// The request owns its editor listeners; the race alone owns this separate subscription.
+		const subscriptions = tracker.leaks().filter(leak => leak.label === 'toDisposable' && leak.ownerLabel === undefined);
+		assert.equal(subscriptions.length, 1);
+		const subscription = subscriptions[0]!.disposable;
+		editor.setSelection(new Selection(1, 1, 1, 1));
+		await pending;
+		assert.equal(tracker.leaks().some(leak => leak.disposable === subscription), false);
+		assert.equal(model.getText(), 'alpha');
+
+		editor.setSelection(new Selection(1, 6, 1, 6));
+		const nextPaste = PasteAction.runCommand(services, undefined);
+		clipboard.resolveRead(1, '!');
+		await nextPaste;
+		clipboard.resolveRead(0, 'stale');
+		await Promise.resolve();
+		assert.equal(model.getText(), 'alpha!');
+	} finally {
+		environment.window.HTMLCanvasElement.prototype.getContext = getContext;
+		dom.window.close();
+	}
 });
 
 test('cut command keeps text when clipboard writing completes after selection or focus changes', async () => {
