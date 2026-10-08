@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { test } from 'node:test';
 import { getFileInfo, resolveConfig } from 'prettier';
 import { format, verifyFormatting } from './format.ts';
@@ -69,4 +69,26 @@ test('Prettier owns configuration and prose but excludes code, generated contrac
 		assert.equal((await getFileInfo(resolve(repositoryRoot, file), { ignorePath: join(repositoryRoot, '.prettierignore') })).ignored, false, file);
 	}
 	assert.equal((await resolveConfig(join(repositoryRoot, 'docs/build.md')))?.embeddedLanguageFormatting, 'off');
+});
+
+test('Prettier leaves generated JSON to its owning serializers and checks neighboring handwritten files', async t => {
+	const generated = new Map<string, string>();
+	const handwritten: string[] = [];
+	const input = '{"manual":true}\n';
+	for (const file of ['build/lib/stylelint/ash-known-variables.json', 'crates/config/schema.json', 'crates/model-provider-info/models.schema.json']) {
+		const path = resolve(repositoryRoot, file);
+		generated.set(file, readFileSync(path, 'utf8'));
+		assert.equal((await getFileInfo(path, { ignorePath: join(repositoryRoot, '.prettierignore') })).ignored, true, file);
+		const directory = mkdtempSync(join(dirname(path), '.formatter-test-'));
+		t.after(() => rmSync(directory, { recursive: true, force: true }));
+		const neighbor = join(directory, 'handwritten.json');
+		writeFileSync(neighbor, input);
+		assert.equal((await getFileInfo(neighbor, { ignorePath: join(repositoryRoot, '.prettierignore') })).ignored, false, neighbor);
+		handwritten.push(relative(repositoryRoot, neighbor).replaceAll('\\', '/'));
+	}
+	const checked = spawnSync(process.execPath, [join(repositoryRoot, 'node_modules/prettier/bin/prettier.cjs'), '--list-different', ...generated.keys(), ...handwritten], { cwd: repositoryRoot, encoding: 'utf8', windowsHide: true });
+	assert.equal(checked.status, 1, checked.stdout + checked.stderr);
+	assert.deepEqual(checked.stdout.trim().split(/\r?\n/).sort(), [...handwritten].sort());
+	for (const [file, contents] of generated) assert.equal(readFileSync(resolve(repositoryRoot, file), 'utf8'), contents);
+	for (const file of handwritten) assert.equal(readFileSync(resolve(repositoryRoot, file), 'utf8'), input);
 });
