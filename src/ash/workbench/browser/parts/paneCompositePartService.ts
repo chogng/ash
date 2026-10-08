@@ -48,6 +48,7 @@ export class PaneCompositePartService extends Disposable implements IPaneComposi
 				localizationService: this.localization,
 				onDidFailCreateView: (error: unknown) => { throw error; },
 				...part.getPaneCompositeOptions(),
+				...(container.mergeViewWithContainerWhenSingleView === undefined ? {} : { mergeViewWithContainerWhenSingleView: container.mergeViewWithContainerWhenSingleView }),
 			};
 			const created = container.ctorDescriptor
 				? this.instantiation.createInstance(container.ctorDescriptor, part.domNode, options)

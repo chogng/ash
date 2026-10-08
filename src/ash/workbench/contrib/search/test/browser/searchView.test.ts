@@ -66,6 +66,147 @@ const matches: readonly ContentSearchMatch[] = [
 	},
 ];
 
+test('Search exposes query and replacement as multiline inputs and folding replacement preserves its value', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	const globals = installDomGlobals(browser);
+	try {
+		using store = new DisposableStore();
+		const services = createServices(store, browser, { search: async () => ({ resultCount: 0, limitHit: false, error: undefined }) });
+		const { SearchView } = await import('../../browser/searchView.js');
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
+		registerView(services, view);
+		const query = input(view.element, 'Search workspace');
+		const replacement = input(view.element, 'Replace');
+		const row = view.element.querySelector<HTMLElement>('.ash-search-replace-row')!;
+		assert.equal(row.hidden, false, 'Search and Replace are visible when Search first opens');
+		assert.deepEqual([query.tagName, replacement.tagName], ['TEXTAREA', 'TEXTAREA']);
+		replacement.value = 'first\nsecond';
+		replacement.dispatchEvent(new browser.window.Event('input', { bubbles: true }));
+		replacement.focus();
+		view.element.querySelector<HTMLButtonElement>('button[aria-label="Toggle Replace"]')!.click();
+		assert.equal(row.hidden, true);
+		assert.equal(browser.window.document.activeElement, query);
+		view.element.querySelector<HTMLButtonElement>('button[aria-label="Toggle Replace"]')!.click();
+		assert.equal(row.hidden, false);
+		assert.equal(replacement.value, 'first\nsecond');
+	} finally {
+		browser.window.close();
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
+	}
+});
+
+test('Search presents a bounded preview around a late match without changing complete result data', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	const globals = installDomGlobals(browser);
+	const preview = '😀' + 'prefix '.repeat(40) + 'needle' + ' suffix'.repeat(80);
+	const start = preview.indexOf('needle');
+	try {
+		using store = new DisposableStore();
+		const services = createServices(store, browser, {
+			search: async (_query, options) => {
+				options?.onProgress?.([{ ...matches[0]!, preview, ranges: [{ start, end: start + 6 }] }]);
+				return { resultCount: 1, limitHit: false, error: undefined };
+			},
+		});
+		const { SearchView } = await import('../../browser/searchView.js');
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
+		registerView(services, view);
+		input(view.element, 'Search workspace').value = 'needle';
+		view.triggerQueryChange();
+		await waitFor(() => view.getControl().element.getAttribute('aria-busy') === 'false');
+		const visible = view.element.querySelector<HTMLElement>('.ash-search-preview')!;
+		assert.equal(visible.querySelector('mark')?.textContent, 'needle');
+		assert.ok(visible.textContent!.length <= 250, 'Only the displayed preview is bounded');
+		assert.match(visible.textContent!, /^…/u);
+		assert.equal(view.searchResult.files[0]!.matches[0]!.preview, preview);
+		assert.equal(view.searchResult.files[0]!.matches[0]!.range.startColumn, start + 1);
+		assert.ok(view.getSearchResultSnapshot()!.content.includes(`4:${start + 1}-4:${start + 7}: needle`));
+	} finally {
+		browser.window.close();
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
+	}
+});
+
+test('Search bounds expanded multiline preview context without splitting emoji or changing editor coordinates', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	const globals = installDomGlobals(browser);
+	const preview = '😀\t中文\n'.repeat(30) + 'needle\r\n😀中文' + '\r\n😀'.repeat(100);
+	const start = preview.indexOf('needle');
+	const hit = 'needle\r\n😀中文';
+	try {
+		using store = new DisposableStore();
+		const services = createServices(store, browser, {
+			search: async (_query, options) => {
+				options?.onProgress?.([{ ...matches[0]!, preview, ranges: [{ start, end: start + hit.length }] }]);
+				return { resultCount: 1, limitHit: false, error: undefined };
+			},
+		});
+		const { SearchView } = await import('../../browser/searchView.js');
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
+		registerView(services, view);
+		input(view.element, 'Search workspace').value = hit;
+		view.triggerQueryChange();
+		await waitFor(() => view.getControl().element.getAttribute('aria-busy') === 'false');
+		const visible = view.element.querySelector<HTMLElement>('.ash-search-preview')!;
+		assert.ok(visible.textContent!.length <= 250);
+		assert.doesNotMatch(visible.textContent!, /[\uD800-\uDFFF]/u);
+		assert.equal(visible.querySelector('mark')?.textContent, 'needle ↵ 😀中文');
+		const match = view.searchResult.files[0]!.matches[0]!;
+		assert.equal(match.preview, preview);
+		assert.deepEqual({ ...match.range }, { startLineNumber: 34, startColumn: 1, endLineNumber: 35, endColumn: 5 });
+	} finally {
+		browser.window.close();
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
+	}
+});
+
+test('Search compresses directory chains while retaining match identity, copy paths and dismiss behavior', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	const globals = installDomGlobals(browser);
+	const written: string[] = [];
+	try {
+		using store = new DisposableStore();
+		const services = createServices(store, browser, {
+			search: async (_query, options) => {
+				options?.onProgress?.([{ ...matches[0]!, path: 'deep/nested/folder/main.ts' }]);
+				return { resultCount: 1, limitHit: false, error: undefined };
+			},
+		});
+		services.registerInstance(IClipboardService, new BrowserClipboardService({ writeText: async value => { written.push(value); } } as Clipboard));
+		const { SearchView } = await import('../../browser/searchView.js');
+		await import('../../browser/searchActionsCopy.js');
+		await import('../../browser/searchActionsRemoveReplace.js');
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
+		registerView(services, view);
+		input(view.element, 'Search workspace').value = 'needle';
+		view.triggerQueryChange();
+		await waitFor(() => view.getControl().element.getAttribute('aria-busy') === 'false');
+		const before = view.getSearchResultSnapshot();
+		const match = view.searchResult.files[0]!.matches[0]!;
+		let actions: readonly IAction[] = [];
+		services.get(IContextMenuService).showContextMenu = delegate => { actions = delegate.getActions?.() ?? []; };
+		view.element.querySelector<HTMLButtonElement>('button[aria-label="More Actions"]')!.click();
+		await actions.find(action => action.id === 'search.treeView')!.run();
+		const tree = view.getControl();
+		assert.equal(view.element.querySelector('.ash-search-folder-path .ash-icon-label-text')?.textContent, 'deep/nested/folder');
+		assert.equal(view.element.querySelector('.ash-search-folder-path .ash-icon-label')?.getAttribute('aria-label'), 'deep/nested/folder');
+		assert.equal(tree.model.rootNodes.length, 1);
+		const folder = tree.model.rootNodes[0]!.element;
+		assert.equal(folder.kind, 'folder');
+		assert.equal(tree.model.getElement(match.id), match);
+		assert.deepEqual(view.getSearchResultSnapshot(), before);
+		await services.get(ICommandService).executeCommand(SearchCommandIds.CopyPathCommandId, folder);
+		assert.deepEqual(written, ['/workspace/deep/nested/folder']);
+		tree.setFocus(match.id); tree.setSelection([match.id]);
+		await services.get(ICommandService).executeCommand(SearchCommandIds.RemoveActionId);
+		assert.equal(view.searchResult.count, 0);
+		assert.equal(tree.model.rootNodes.length, 0);
+	} finally {
+		browser.window.close();
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
+	}
+});
+
 test('Search lifecycle commands cancel retained results, replace running queries and clear inputs in two stages', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	const globals = installDomGlobals(browser);
@@ -418,9 +559,10 @@ test("SearchView submits typed filters and groups highlighted matches", async ()
 			maxResults: 2_000,
 		});
 		assert.equal(
-			pane.element.querySelector(".ash-search-file-path")?.textContent,
-			"workspace • src/main.ts",
+			pane.element.querySelector(".ash-search-file-path .ash-icon-label-text")?.textContent,
+			"main.ts",
 		);
+		assert.equal(pane.element.querySelector(".ash-search-file-path .ash-icon-label-description")?.textContent, "src");
 		assert.equal(
 			pane.element.querySelector(".ash-search-file-count")?.textContent,
 			"2",

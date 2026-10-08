@@ -20,6 +20,40 @@ for (const [name, value] of Object.entries({
 
 const { Pane, PaneView } = await import("../../browser/ui/splitview/paneview.js");
 
+test('Pane retains one focus owner and releases its actions when their host moves outside the pane', async () => {
+	const document = browserEnvironment.window.document;
+	class HostedPane extends Pane {
+		readonly actions = this.headerActionsElement;
+	}
+	using pane = new HostedPane(document.body, { id: 'hosted', title: 'Hosted' });
+	const action = document.createElement('button');
+	action.textContent = 'Run';
+	pane.actions.append(action);
+	const host = document.createElement('div');
+	const outside = document.createElement('input');
+	document.body.append(host, outside);
+	const events: string[] = [];
+	pane.onDidFocus(() => events.push('focus'));
+	pane.onDidBlur(() => events.push('blur'));
+	action.focus();
+	pane.setHeaderActionsHost(host);
+	assert.deepEqual({ focused: document.activeElement === action, paneFocus: pane.hasFocus(), count: host.querySelectorAll('button').length }, { focused: true, paneFocus: true, count: 1 });
+	pane.setHeaderActionsHost();
+	await new Promise<void>(resolve => browserEnvironment.window.setTimeout(resolve, 0));
+	assert.deepEqual(events, ['focus']);
+	pane.setHeaderVisible(false);
+	assert.equal(document.activeElement, action);
+	pane.setHeaderActionsHost(host);
+	assert.equal(document.activeElement, action);
+	outside.focus();
+	await new Promise<void>(resolve => browserEnvironment.window.setTimeout(resolve, 0));
+	assert.deepEqual(events, ['focus', 'blur']);
+	assert.equal(pane.hasFocus(), false);
+	pane.dispose();
+	assert.equal(host.childElementCount, 0);
+	host.remove(); outside.remove();
+});
+
 test("Pane owns titled collapse semantics and its stable visual state", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const pane = new Pane(dom.window.document.body, {

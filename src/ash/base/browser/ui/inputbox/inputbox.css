@@ -1,4 +1,5 @@
-.ash-input-box input {
+.ash-input-box input,
+.ash-input-box textarea {
 	width: 100%;
 	box-sizing: border-box;
 	font: inherit;
@@ -13,7 +14,8 @@
 	background: var(--ash-input-background);
 }
 
-.ash-input-box-field input {
+.ash-input-box-field input,
+.ash-input-box-field textarea {
 	min-height: 28px;
 	padding: 4px 8px;
 	border: 0;
@@ -26,12 +28,14 @@
 	min-height: 24px;
 }
 
-.ash-input-box-field.ash-input-box-compact input {
+.ash-input-box-field.ash-input-box-compact input,
+.ash-input-box-field.ash-input-box-compact textarea {
 	min-height: 22px;
 	padding: 0 8px;
 }
 
-.ash-input-box-field input::placeholder {
+.ash-input-box-field input::placeholder,
+.ash-input-box-field textarea::placeholder {
 	color: var(--ash-input-placeholderForeground);
 }
 
@@ -56,4 +60,38 @@
 
 .ash-input-box-message {
 	margin-top: 4px;
+}
+
+.ash-input-box-flexible {
+	position: relative;
+	min-width: 0;
+}
+
+.ash-input-box-flexible textarea {
+	display: block;
+	margin: 0;
+	resize: none;
+	line-height: 24px;
+	overflow-x: hidden;
+	overflow-y: auto;
+	scrollbar-width: none;
+}
+
+.ash-input-box-flexible textarea::-webkit-scrollbar {
+	display: none;
+}
+
+.ash-input-box-flexible .ash-input-box-measure {
+	position: absolute;
+	top: 0;
+	left: 0;
+	height: 0;
+	min-height: 0;
+	visibility: hidden;
+	pointer-events: none;
+}
+
+.ash-input-box-scrollable {
+	position: relative;
+	inset: auto;
 }

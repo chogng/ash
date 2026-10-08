@@ -31,6 +31,8 @@ export interface IViewContainerDescriptor {
 	readonly location: ViewContainerLocation;
 	/** Browser host constructed for this container when it opens. */
 	readonly ctorDescriptor?: SyncDescriptor<IViewPaneContainer>;
+	/** Merge the one visible pane into its hosting Part title, restoring headers when further panes appear. */
+	readonly mergeViewWithContainerWhenSingleView?: boolean;
 	readonly icon?: Icon;
 	readonly order?: number;
 	readonly isDefault?: boolean;

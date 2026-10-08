@@ -41,6 +41,7 @@ export function registerSearchViews(
 		title: "Search",
 		localizationKey: { bundle: "ash.views", key: "search" },
 		location: ViewContainerLocation.Sidebar,
+		mergeViewWithContainerWhenSingleView: true,
 		icon: Lxicon.search,
 		order: 2,
 	});

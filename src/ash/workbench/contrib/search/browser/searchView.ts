@@ -1,20 +1,22 @@
-import { DisposableMap, DisposableStore, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { addDisposableListener, h, text as createText } from "../../../../base/browser/dom.js";
-import { ActionBar } from "../../../../base/browser/ui/actionbar/actionbar.js";
-import { LabelActionViewItem } from "../../../../base/browser/ui/actionbar/actionViewItems.js";
 import { Button } from "../../../../base/browser/ui/button/button.js";
-import { InputBox } from "../../../../base/browser/ui/inputbox/inputbox.js";
+import type { HistoryInputBox } from "../../../../base/browser/ui/inputbox/inputbox.js";
+import { ContextScopedHistoryInputBox } from "../../../../platform/history/browser/contextScopedHistoryWidget.js";
+import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
+import { SearchResultsRenderer } from "./searchResultsView.js";
+import { SearchWidget } from "./searchWidget.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
 import { localize } from "../../../../nls.js";
-import { type IContentSearchQuery, type IContentSearchComplete, IContentSearchService, type ContentSearchMatchRange } from "../../../../platform/search/common/search.js";
+import { type IContentSearchQuery, type IContentSearchComplete, IContentSearchService } from "../../../../platform/search/common/search.js";
 import { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import { WorkbenchObjectTree, type ResourceOpenEvent } from "../../../../platform/list/browser/listService.js";
 import { WorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
 import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
-import { IHoverService } from "../../../../platform/hover/browser/hoverService.js";
 import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { IEditorService } from "../../../services/editor/common/editorService.js";
 import { EditorOpenSource, TextEditorSelectionSource } from "../../../../platform/editor/common/editor.js";
+import { compressTreeElement, type CompressedTreeNode, type CompressibleTreeElement } from "../../../../base/browser/ui/tree/compressedObjectTreeModel.js";
 import type { ObjectTreeElement, ObjectTreeNode } from "../../../../base/browser/ui/tree/objectTreeModel.js";
 import { SearchResultImpl, type RenderableMatch, type SearchMatch } from "./searchTreeModel/searchResult.js";
 import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
@@ -24,7 +26,6 @@ import { SearchCommandIds, SearchContext } from "../common/constants.js";
 import { ICommandService } from "../../../../platform/commands/common/commands.js";
 import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
 import { ContentSearchConfiguration } from "../common/searchConfiguration.js";
-import { HistoryNavigator } from "../../../../base/common/history.js";
 import { ISearchHistoryService, type ISearchHistoryValues } from "../common/searchHistoryService.js";
 import { IReplaceService } from "./replace.js";
 import { IDialogService } from "../../../../platform/dialogs/common/dialogs.js";
@@ -37,20 +38,13 @@ import { SearchStateKey, SearchUIState } from "../common/search.js";
 /** Workspace content-search form and incrementally populated result tree. */
 export class SearchView extends ViewPane {
 	private readonly searchService: IContentSearchService;
-	private readonly queryInput: HTMLTextAreaElement;
-	private caseSensitive = false;
-	private wholeWord = false;
-	private useRegex = false;
-	private preserveCase = false;
-	private readonly replaceInput: HTMLInputElement;
-	private readonly replaceRow: HTMLDivElement;
-	private readonly replaceToggle: Button;
-	private readonly replaceActions: ActionBar;
-	private readonly histories = new Map<keyof ISearchHistoryValues, HistoryNavigator<string>>();
+	private readonly searchWidget: SearchWidget;
+	private readonly historyInputs = new Map<keyof ISearchHistoryValues, HistoryInputBox<boolean>>();
+	private get queryInput(): HTMLTextAreaElement { return this.searchWidget.searchInput.inputBox.inputElement; }
+	private get replaceInput(): HTMLTextAreaElement { return this.searchWidget.replaceInput.inputBox.inputElement; }
 	private resultQuery: IContentSearchQuery | undefined;
 	private replaceController: AbortController | undefined;
 	private undoReplacement: (() => Promise<void>) | undefined;
-	private readonly queryOptions: ActionBar;
 	private readonly includeInput: HTMLInputElement;
 	private readonly excludeInput: HTMLInputElement;
 	private readonly filtersElement: HTMLDivElement;
@@ -68,11 +62,12 @@ export class SearchView extends ViewPane {
 	private readonly searchStateKey: IContextKey<SearchUIState>;
 	private readonly slowSearchTimer = this._register(new MutableDisposable());
 	private readonly resultActions: WorkbenchToolBar;
-	private readonly rowResources = this._register(new DisposableMap<HTMLElement, DisposableStore>());
+	private readonly resultRenderer: SearchResultsRenderer;
 	private readonly resultMenu = this._register(new MutableDisposable());
 	private menuElement: RenderableMatch | undefined;
 	private result: SearchResultImpl;
 	private treeView = false;
+	private readonly folderNames = new Map<string, readonly string[]>();
 	private sortByCount = false;
 	private lastOpenedMatchId: string | undefined;
 	private searchController: AbortController | undefined;
@@ -89,12 +84,12 @@ export class SearchView extends ViewPane {
 		@IWorkspaceContextService private readonly workspaceContext: IWorkspaceContextService,
 		@IEditorService private readonly editorService: IEditorService,
 		@IContextMenuService private readonly contextMenuService: IContextMenuService,
-		@IHoverService private readonly hoverService: IHoverService,
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@ISearchHistoryService private readonly historyService: ISearchHistoryService,
 		@IReplaceService private readonly replaceService: IReplaceService,
 		@IDialogService private readonly dialogs: IDialogService,
 		@ICommandService private readonly commands: ICommandService,
+		@IInstantiationService instantiation: IInstantiationService,
 	) {
 		super(container, options);
 		this.searchService = searchService;
@@ -112,69 +107,23 @@ export class SearchView extends ViewPane {
 			this.hasSearchResultsKey.reset(); this.hasSomeCollapsibleKey.reset();
 			this.hasSearchPatternKey.reset(); this.hasReplacePatternKey.reset(); this.hasFilePatternKey.reset(); this.searchStateKey.reset();
 		}));
-		const focused = SearchContext.SearchViewFocusedKey.bindTo(scopedContext);
-		this._register(addDisposableListener(this.element, "focusin", () => focused.set(true)));
-		this._register(addDisposableListener(this.element, "focusout", event => {
-			if (!(event.relatedTarget instanceof Node) || !this.element.contains(event.relatedTarget)) { focused.set(false); }
-		}));
+		const actionsContext = this._register(contextKeyService.createScoped(this.headerActionsElement));
+		const focusKeys = [scopedContext, actionsContext].map(scope => SearchContext.SearchViewFocusedKey.bindTo(scope));
+		this._register(this.onDidFocus(() => { for (const key of focusKeys) { key.set(true); } }));
+		this._register(this.onDidBlur(() => { for (const key of focusKeys) { key.reset(); } }));
 		const document = container.ownerDocument;
 		const form = h(document, "form");
 		form.className = "ash-search-form";
-		const queryField = h(document, "div");
-		queryField.className = "ash-search-query-field";
-		this.queryInput = h(document, "textarea");
-		this.queryInput.className = "ash-search-query";
-		this.queryInput.rows = 1;
-		this.queryInput.placeholder = localize("search.query", "Search");
-		this.queryInput.setAttribute("aria-label", localize("search.queryLabel", "Search workspace"));
-		this.queryInput.spellcheck = false;
-		queryField.append(this.queryInput);
-		this.queryOptions = this._register(new ActionBar(queryField, {
-			ariaLabel: localize("search.options", "Search options"),
-			highlightToggledItems: true,
-			actionViewItemProvider: action => new LabelActionViewItem(action, {
-				label: action.id === "search.matchCase" ? "Aa" : action.id === "search.wholeWord" ? "ab" : ".*",
-				ariaLabel: action.label,
-			}),
-		}));
-		this.queryOptions.element.classList.add("ash-search-query-options");
-		const queryRow = h(document, "div");
-		queryRow.className = "ash-search-query-row";
-		this.replaceToggle = this._register(new Button(queryRow, {
-			label: localize("search.toggleReplace", "Toggle Replace"),
-			icon: Lxicon.chevronRight,
-			iconOnly: true,
-			size: "small",
-			onClick: () => this.setReplaceExpanded(this.replaceRow.hidden),
-		}));
-		queryRow.append(queryField);
-		this.replaceRow = h(document, "div");
-		this.replaceRow.className = "ash-search-replace-row";
-		this.replaceRow.id = `ash-search-replace-${options.id}`;
-		this.replaceToggle.domNode.setAttribute("aria-controls", this.replaceRow.id);
-		const replaceField = h(document, "div");
-		replaceField.className = "ash-search-replace-field";
-		const replaceBox = this._register(new InputBox(replaceField, {
-			presentation: "compact",
-			placeholder: localize("search.replace", "Replace"),
-			ariaLabel: localize("search.replace", "Replace"),
-		}));
-		this.replaceInput = replaceBox.inputElement;
-		this.replaceActions = this._register(new ActionBar(replaceField, {
-			ariaLabel: localize("search.replaceActions", "Replacement actions"),
-			highlightToggledItems: true,
-			actionViewItemProvider: action => action.id === "search.preserveCase" ? new LabelActionViewItem(action, { label: "AB", ariaLabel: action.label }) : undefined,
-		}));
-		this.replaceRow.append(replaceField);
-		form.append(queryRow, this.replaceRow);
-		this.setReplaceExpanded(false);
+		this.searchWidget = this._register(instantiation.createInstance(SearchWidget, form));
+		this.historyInputs.set('search', this.searchWidget.searchInput.inputBox);
+		this.historyInputs.set('replace', this.searchWidget.replaceInput.inputBox);
 		const detailsRow = h(document, "div");
 		detailsRow.className = "ash-search-details-row";
 		this.detailsButton = this._register(new Button(detailsRow, {
-			label: localize("search.details", "Toggle Search Details"),
+			label: localize("search.detailsLabel", "Search Details"),
+			ariaLabel: localize("search.details", "Toggle Search Details"),
 			title: localize("search.details", "Toggle Search Details"),
-			icon: Lxicon.ellipsis,
-			iconOnly: true,
+			icon: Lxicon.chevronRight,
 			size: "small",
 			onClick: () => this.setDetailsExpanded(this.filtersElement.hidden),
 		}));
@@ -186,27 +135,30 @@ export class SearchView extends ViewPane {
 		const includes = h(document, "label");
 		includes.className = "ash-search-filter-field";
 		includes.append(createText(document, localize("search.includes", "files to include")));
-		const includeBox = this._register(new InputBox(includes, {
+		const includeBox = this._register(instantiation.createInstance(ContextScopedHistoryInputBox<false>, includes, {
 			presentation: "compact",
 			placeholder: localize("search.includesPlaceholder", "e.g. *.ts, src/**/include"),
 			ariaLabel: localize("search.includesLabel", "Files to include"),
+			history: new Set(historyService.load().include),
 		}));
 		this.includeInput = includeBox.inputElement;
 		const excludes = h(document, "label");
 		excludes.className = "ash-search-filter-field";
 		excludes.append(createText(document, localize("search.excludes", "files to exclude")));
-		const excludeBox = this._register(new InputBox(excludes, {
+		const excludeBox = this._register(instantiation.createInstance(ContextScopedHistoryInputBox<false>, excludes, {
 			presentation: "compact",
 			placeholder: localize("search.excludesPlaceholder", "e.g. *.ts, src/**/exclude"),
 			ariaLabel: localize("search.excludesLabel", "Files to exclude"),
+			history: new Set(historyService.load().exclude),
 		}));
 		this.excludeInput = excludeBox.inputElement;
-		this.bindHistory(this.queryInput, "search");
-		this.bindHistory(this.replaceInput, "replace");
-		this.bindHistory(this.includeInput, "include");
-		this.bindHistory(this.excludeInput, "exclude");
-		this._register(historyService.onDidClearHistory(() => { for (const history of this.histories.values()) { history.clear(); } }));
-		filters.append(includes, excludes);
+		this.historyInputs.set('include', includeBox);
+		this.historyInputs.set('exclude', excludeBox);
+		this._register(historyService.onDidClearHistory(() => { includeBox.clearHistory(); excludeBox.clearHistory(); }));
+		const filterHelp = h(document, 'div');
+		filterHelp.className = 'ash-search-filter-help';
+		filterHelp.textContent = localize('search.filterHelp', 'Separate glob patterns with commas. Include narrows the search; Exclude omits matching files.');
+		filters.append(includes, excludes, filterHelp);
 		this.applyConfiguration();
 		this.setDetailsExpanded(Boolean(this.includeInput.value || this.excludeInput.value));
 		form.append(detailsRow, filters);
@@ -221,6 +173,12 @@ export class SearchView extends ViewPane {
 			this.statusElement,
 			this.resultsElement,
 		);
+		this.resultRenderer = this._register(instantiation.createInstance(SearchResultsRenderer, document,
+			(element: RenderableMatch, anchor: ContextMenuAnchor) => this.showResultContextMenu(element, anchor),
+			(element: RenderableMatch) => {
+				if (this.menuElement === element) { this.resultMenu.clear(); }
+			},
+		));
 		this.tree = this._register(new WorkbenchObjectTree(this.resultsElement, {
 			ariaLabel: localize("search.resultsLabel", "Search results"),
 			configurationService,
@@ -229,13 +187,15 @@ export class SearchView extends ViewPane {
 			openOnSingleClick: true,
 			multipleSelectionSupport: true,
 			expandOnlyOnTwistieClick: true,
+			twistieAdditionalCssClass: element => element.kind === "match" ? "ash-tree-twistie-hidden" : undefined,
 			modelOptions: { identityProvider: { getId: element => element.id }, defaultCollapseState: "expanded" },
-			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: element => element.kind === "match" ? element.preview : element.name },
-			renderElement: element => this.renderResult(element),
-			onDidRemoveRow: row => {
-				const content = row.querySelector<HTMLElement>(".ash-search-result");
-				if (content) { this.rowResources.deleteAndDispose(content); }
-			},
+			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: element => element.kind === "match" ? element.preview : this.folderNames.get(element.id)?.join("/") ?? element.name },
+			renderElement: element => this.resultRenderer.render(element, {
+				treeView: this.treeView,
+				folderNames: this.folderNames.get(element.id),
+				showWorkspace: this.workspaceContext.getWorkspace().folders.length > 1,
+			}),
+			onDidRemoveRow: row => this.resultRenderer.releaseRow(row),
 		}));
 		this.tree.element.setAttribute("aria-busy", "false");
 		this.tree.domNode.classList.add("ash-search-results-tree");
@@ -272,9 +232,12 @@ export class SearchView extends ViewPane {
 				this.showResultContextMenu(this.tree.focus, this.tree.domNode);
 			}
 		}));
-		this._register(addDisposableListener(this.queryInput, "input", () => { this.queryInput.rows = Math.min(5, this.queryInput.value.split("\n").length); this.updateResultActions(); }));
-		for (const field of [this.replaceInput, this.includeInput, this.excludeInput]) {
-			this._register(addDisposableListener(field, "input", () => this.updateResultActions()));
+		this._register(this.searchWidget.onDidChange(() => this.updateResultActions()));
+		this._register(this.searchWidget.onSearchSubmit(() => this.triggerQueryChange()));
+		this._register(this.searchWidget.onReplaceAll(() => { void this.replaceResults('all', false); }));
+		this.searchWidget.layout();
+		for (const field of [includeBox, excludeBox]) {
+			this._register(field.onDidChange(() => { this.updateFilterSummary(); this.updateResultActions(); }));
 		}
 		this._register(addDisposableListener(form, "submit", (event) => {
 			event.preventDefault();
@@ -282,7 +245,7 @@ export class SearchView extends ViewPane {
 		}));
 		// Multiple text fields prevent implicit submission; IME confirmation must stay in the input.
 		this._register(addDisposableListener(form, "keydown", event => {
-			if (event.key === "Enter" && !event.isComposing && !(event.target === this.queryInput && (event.shiftKey || event.altKey)) && (event.target === this.queryInput || event.target === this.includeInput || event.target === this.excludeInput)) {
+			if (event.key === "Enter" && !event.isComposing && (event.target === this.includeInput || event.target === this.excludeInput)) {
 				event.preventDefault();
 				this.triggerQueryChange();
 			}
@@ -326,86 +289,29 @@ export class SearchView extends ViewPane {
 		this.filtersElement.hidden = !expanded;
 		this.filtersElement.classList.toggle("expanded", expanded);
 		this.detailsButton.domNode.setAttribute("aria-expanded", String(expanded));
+		this.detailsButton.icon = expanded ? Lxicon.chevronDown : Lxicon.chevronRight;
+		this.updateFilterSummary();
 	}
 
-	private setReplaceExpanded(expanded: boolean): void {
-		if (!expanded && this.replaceRow.contains(this.element.ownerDocument.activeElement)) { this.queryInput.focus(); }
-		this.replaceRow.hidden = !expanded;
-		this.replaceRow.classList.toggle("expanded", expanded);
-		this.replaceToggle.domNode.setAttribute("aria-expanded", String(expanded));
-		this.replaceToggle.domNode.classList.toggle("expanded", expanded);
-	}
-
-	private bindHistory(field: HTMLInputElement | HTMLTextAreaElement, key: keyof ISearchHistoryValues): void {
-		const history = this._register(new HistoryNavigator(new Set(this.historyService.load()[key]), 100));
-		this.histories.set(key, history);
-		let draft = "";
-		let navigating = false;
-		this._register(addDisposableListener(field, "input", () => { navigating = false; history.reset(); }));
-		this._register(addDisposableListener(field, "keydown", event => {
-			if (event.isComposing || event.ctrlKey || event.metaKey || event.shiftKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) { return; }
-			if (field === this.queryInput && field.value.includes("\n") && !event.altKey) { return; }
-			if (event.key === "ArrowDown" && !navigating) { return; }
-			event.preventDefault();
-			if (!navigating) { draft = field.value; history.reset(); }
-			const value = event.key === "ArrowUp" ? history.previous() : history.next();
-			if (value === null && event.key === "ArrowUp") { return; }
-			field.value = value ?? draft;
-			navigating = value !== null;
-			field.setSelectionRange(field.value.length, field.value.length);
-			this.queryInput.rows = Math.min(5, this.queryInput.value.split("\n").length);
-			this.updateResultActions();
-		}));
+	private updateFilterSummary(): void {
+		const active = Boolean(this.includeInput.value || this.excludeInput.value);
+		this.detailsButton.label = active && this.filtersElement.hidden
+			? localize('search.detailsActive', 'Search Details · filters active')
+			: localize('search.detailsLabel', 'Search Details');
 	}
 
 	private saveHistory(): void {
 		const values: ISearchHistoryValues = {};
-		for (const [key, field] of [["search", this.queryInput], ["replace", this.replaceInput], ["include", this.includeInput], ["exclude", this.excludeInput]] as const) {
-			const history = this.histories.get(key)!;
-			if (field.value) { history.add(field.value); }
-			values[key] = history.getHistory();
+		for (const [key, input] of this.historyInputs) {
+			input.addToHistory();
+			values[key] = input.getHistory();
 		}
 		this.historyService.save(values);
 	}
 
-	private updateQueryOptions(): void {
-		this.queryOptions.setActions([
-			{
-				id: "search.matchCase",
-				label: localize("search.matchCase", "Match Case"),
-				tooltip: localize("search.matchCase", "Match Case"),
-				enabled: true,
-				checked: this.caseSensitive,
-				run: () => {
-					this.caseSensitive = !this.caseSensitive;
-					this.updateQueryOptions();
-				},
-			},
-			{
-				id: "search.wholeWord",
-				label: localize("search.wholeWord", "Match Whole Word"),
-				tooltip: localize("search.wholeWord", "Match Whole Word"),
-				enabled: true,
-				checked: this.wholeWord,
-				run: () => { this.wholeWord = !this.wholeWord; this.updateQueryOptions(); },
-			},
-			{
-				id: "search.useRegex",
-				label: localize("search.useRegex", "Use Regular Expression"),
-				tooltip: localize("search.useRegex", "Use Regular Expression"),
-				enabled: true,
-				checked: this.useRegex,
-				run: () => {
-					this.useRegex = !this.useRegex;
-					this.updateQueryOptions();
-				},
-			},
-		]);
-	}
-
 	public triggerQueryChange(options?: { preserveFocus?: boolean; }): void {
 		if (this.isDisposed) { return; }
-		const text = this.queryInput.value;
+		const text = this.searchWidget.searchInput.inputBox.value;
 		if (!text) {
 			this.clearSearchResults(false);
 			return;
@@ -490,9 +396,9 @@ export class SearchView extends ViewPane {
 	private query(text: string): IContentSearchQuery {
 		return {
 			text,
-			wholeWord: this.wholeWord,
-			patternKind: this.useRegex ? "regex" : "literal",
-			caseSensitivity: this.caseSensitive
+			wholeWord: this.searchWidget.wholeWord,
+			patternKind: this.searchWidget.useRegex ? "regex" : "literal",
+			caseSensitivity: this.searchWidget.matchCase
 				? "sensitive"
 				: this.configurationValue(ContentSearchConfiguration.smartCase) ? "smart" : "insensitive",
 			includePatterns: patterns(this.includeInput.value),
@@ -502,11 +408,13 @@ export class SearchView extends ViewPane {
 	}
 
 	private applyConfiguration(): void {
-		this.caseSensitive = this.configurationValue(ContentSearchConfiguration.matchCase);
-		this.useRegex = this.configurationValue(ContentSearchConfiguration.regularExpression);
 		this.includeInput.value = this.configurationValue(ContentSearchConfiguration.includePatterns);
 		this.excludeInput.value = this.configurationValue(ContentSearchConfiguration.excludePatterns);
-		this.updateQueryOptions();
+		this.searchWidget.setQueryOptions(
+			this.configurationValue(ContentSearchConfiguration.matchCase),
+			this.configurationValue(ContentSearchConfiguration.regularExpression),
+		);
+		this.updateFilterSummary();
 	}
 
 	private configurationValue<T>(key: string): T {
@@ -551,13 +459,13 @@ export class SearchView extends ViewPane {
 		this.statusElement.textContent = "";
 		if (clearInput) {
 			// Repeated clear removes filters only after the query and replacement are already empty.
-			const fields = this.queryInput.value || this.replaceInput.value
-				? [this.queryInput, this.replaceInput]
-				: [this.queryInput, this.replaceInput, this.includeInput, this.excludeInput];
+			const fields = this.searchWidget.searchInput.inputBox.value || this.searchWidget.replaceInput.inputBox.value
+				? [this.searchWidget.searchInput.inputBox, this.searchWidget.replaceInput.inputBox]
+				: [...this.historyInputs.values()];
 			for (const field of fields) {
 				field.value = "";
 				// Reset input-history navigation, retaining its persisted entries and the selected search options.
-				field.dispatchEvent(new this.element.ownerDocument.defaultView!.Event("input", { bubbles: true }));
+				field.resetNavigation();
 			}
 			this.queryInput.focus();
 		}
@@ -604,30 +512,13 @@ export class SearchView extends ViewPane {
 		const hasSomeCollapsible = this.tree.model.visibleNodes.some(node => node.collapsible && !node.collapsed);
 		this.hasSearchResultsKey.set(hasResults);
 		this.hasSomeCollapsibleKey.set(hasSomeCollapsible);
-		this.hasSearchPatternKey.set(this.queryInput.value.length > 0);
-		this.hasReplacePatternKey.set(this.replaceInput.value.length > 0);
+		this.hasSearchPatternKey.set(this.searchWidget.searchInput.inputBox.value.length > 0);
+		this.hasReplacePatternKey.set(this.searchWidget.replaceInput.inputBox.value.length > 0);
 		this.hasFilePatternKey.set(this.includeInput.value.length > 0 || this.excludeInput.value.length > 0);
 		const slowSearch = this.searchStateKey.get() === SearchUIState.SlowSearch;
 		const showExpandAll = hasResults && !hasSomeCollapsible;
 		const canReplace = hasResults && !this.searchController && !this.replaceController;
-		this.replaceActions.setActions([
-			{
-				id: "search.preserveCase",
-				label: localize("search.preserveCase", "Preserve Case"),
-				tooltip: localize("search.preserveCase", "Preserve Case"),
-				enabled: true,
-				checked: this.preserveCase,
-				run: () => { this.preserveCase = !this.preserveCase; this.updateResultActions(); },
-			},
-			{
-				id: "search.replaceAll",
-				label: localize("search.replaceAll", "Replace All"),
-				tooltip: localize("search.replaceAll", "Replace All"),
-				icon: Lxicon.edit,
-				enabled: canReplace,
-				run: () => this.replaceResults("all", false),
-			},
-		]);
+		this.searchWidget.setReplaceEnabled(canReplace);
 		this.resultActions.setActions([
 			{
 				// Refresh and slow-search cancellation share a slot so keyboard focus survives the transition.
@@ -635,7 +526,7 @@ export class SearchView extends ViewPane {
 				label: slowSearch ? localize("search.cancel", "Cancel Search") : localize("search.refresh", "Refresh search"),
 				tooltip: slowSearch ? localize("search.cancel", "Cancel Search") : localize("search.refresh", "Refresh search"),
 				icon: slowSearch ? Lxicon.close : Lxicon.refresh,
-				enabled: slowSearch || this.queryInput.value.length > 0,
+				enabled: slowSearch || this.searchWidget.searchInput.inputBox.value.length > 0,
 				run: () => this.commands.executeCommand(slowSearch ? SearchCommandIds.CancelSearchActionId : SearchCommandIds.RefreshSearchResultsActionId),
 			},
 			{
@@ -779,7 +670,7 @@ export class SearchView extends ViewPane {
 		else if (focused?.kind === "file") { matches = focused.matches; }
 		if (!matches.length) { return; }
 		const query = this.resultQuery;
-		const replacement = this.replaceInput.value;
+		const replacement = this.searchWidget.replaceInput.inputBox.value;
 		const controller = new AbortController();
 		this.replaceController = controller;
 		this.updateResultActions();
@@ -792,7 +683,7 @@ export class SearchView extends ViewPane {
 				if (!confirmation.confirmed || controller.signal.aborted || this.isDisposed) { return; }
 			}
 			this.saveHistory();
-			const result = await this.replaceService.replace(matches, query, replacement, { preview, preserveCase: this.preserveCase, signal: controller.signal });
+			const result = await this.replaceService.replace(matches, query, replacement, { preview, preserveCase: this.searchWidget.preserveCase, signal: controller.signal });
 			if (!result.isApplied || this.isDisposed || controller.signal.aborted) { return; }
 			this.undoReplacement = result.undo;
 			this.triggerQueryChange();
@@ -826,7 +717,27 @@ export class SearchView extends ViewPane {
 		if (this.treeView) {
 			roots = this.result.children.length === 1 ? [...this.result.children[0]!.children.values()] : this.result.children;
 		}
-		this.tree.setChildren(entries(roots));
+		this.resultRenderer.setLineNumberBudget(Math.max(1, ...this.result.files.flatMap(file => file.matches.map(match => match.range.startLineNumber))));
+		this.folderNames.clear();
+		const treeEntries = entries(roots);
+		if (this.treeView) {
+			const compressionInput = (entry: ObjectTreeElement<RenderableMatch>): CompressibleTreeElement<RenderableMatch> => ({
+				...entry, incompressible: entry.element.kind !== 'folder', children: entry.children?.map(compressionInput),
+			});
+			const displayNode = (entry: ObjectTreeElement<CompressedTreeNode<RenderableMatch>>): ObjectTreeElement<RenderableMatch> => {
+				const elements = entry.element.elements;
+				const element = elements.at(-1)!;
+				if (elements.length > 1) { this.folderNames.set(element.id, elements.map(folder => folder.kind === 'match' ? '' : folder.name)); }
+				return { ...entry, element, children: entry.children?.map(displayNode) };
+			};
+			const compress = (entry: ObjectTreeElement<RenderableMatch>): ObjectTreeElement<RenderableMatch> => displayNode(compressTreeElement(compressionInput(entry)));
+			// Workspace roots keep their separate identities; only directory chains beneath them compress.
+			this.tree.setChildren(treeEntries.map(entry => this.result.children.length > 1
+				? { ...entry, children: entry.children?.map(compress) }
+				: compress(entry)));
+		} else {
+			this.tree.setChildren(treeEntries);
+		}
 		this.updateResultActions();
 	}
 
@@ -862,46 +773,6 @@ export class SearchView extends ViewPane {
 		} catch (error) {
 			if (!this.isDisposed) { this.statusElement.textContent = localize("search.openFailed", "Could not open {0}: {1}", file.path, error instanceof Error ? error.message : String(error)); }
 		}
-	}
-
-	private renderResult(element: RenderableMatch): HTMLElement {
-		const document = this.element.ownerDocument;
-		const content = h(document, "span");
-		content.className = "ash-search-result";
-		if (element.kind === "match") {
-			content.classList.add("ash-search-match");
-			const line = h(document, "span");
-			line.className = "ash-search-line-number";
-			line.textContent = String(element.range.startLineNumber);
-			const preview = h(document, "code");
-			preview.className = "ash-search-preview";
-			appendHighlightedPreview(document, preview, element.preview, [element.previewRange]);
-			content.append(line, preview);
-			content.setAttribute("aria-label", localize("search.matchLabel", "Line {0}, column {1}: {2}", element.range.startLineNumber, element.range.startColumn, element.preview));
-		} else {
-			content.classList.add("ash-search-file-heading");
-			const label = h(document, "span");
-			label.className = element.kind === "file" ? "ash-search-file-path" : "ash-search-folder-path";
-			label.textContent = element.kind === "file" && !this.treeView ? `${element.folder.name} • ${element.path}` : element.name;
-			content.append(label);
-			if (element.kind === "file") {
-				const count = h(document, "span");
-				count.className = "ash-search-file-count";
-				count.textContent = String(element.matches.length);
-				content.append(count);
-			}
-		}
-		const resources = new DisposableStore();
-		this.rowResources.set(content, resources);
-		resources.add(this.hoverService.setupHover({ target: content, content: element.kind === "match" ? element.preview : element.resource.toString() }));
-		resources.add(addDisposableListener(content, "contextmenu", event => {
-			event.preventDefault();
-			event.stopPropagation();
-			this.showResultContextMenu(element, { x: event.clientX, y: event.clientY, targetWindow: document.defaultView ?? undefined });
-		}));
-		// A result menu must not retain an actionable row after refresh, virtualization or disposal removes it.
-		resources.add(toDisposable(() => { if (this.menuElement === element) { this.resultMenu.clear(); } }));
-		return content;
 	}
 
 	private showResultContextMenu(element: RenderableMatch, anchor: ContextMenuAnchor): void {
@@ -944,70 +815,11 @@ export class SearchView extends ViewPane {
 	}
 }
 
-function input(
-	document: Document,
-	options: {
-		readonly className: string;
-		readonly placeholder: string;
-		readonly ariaLabel: string;
-	},
-): HTMLInputElement {
-	const element = h(document, "input");
-	element.type = "text";
-	element.className = options.className;
-	element.placeholder = options.placeholder;
-	element.setAttribute("aria-label", options.ariaLabel);
-	element.autocomplete = "off";
-	element.spellcheck = false;
-	return element;
-}
-
 function patterns(value: string): readonly string[] {
 	return value
 		.split(",")
 		.map((pattern) => pattern.trim())
 		.filter((pattern) => pattern.length > 0);
-}
-
-function appendHighlightedPreview(
-	document: Document,
-	container: HTMLElement,
-	text: string,
-	ranges: readonly ContentSearchMatchRange[],
-): void {
-	let offset = 0;
-	for (const range of normalizedRanges(ranges, text.length)) {
-		if (range.start > offset) {
-			container.append(createText(document, text.slice(offset, range.start).replace(/\r\n|\r|\n/g, " ↵ ")));
-		}
-		const mark = h(document, "mark");
-		mark.textContent = text.slice(range.start, range.end).replace(/\r\n|\r|\n/g, " ↵ ");
-		container.append(mark);
-		offset = range.end;
-	}
-	if (offset < text.length) {
-		container.append(createText(document, text.slice(offset).replace(/\r\n|\r|\n/g, " ↵ ")));
-	}
-}
-
-function normalizedRanges(
-	ranges: readonly ContentSearchMatchRange[],
-	length: number,
-): readonly ContentSearchMatchRange[] {
-	const normalized: ContentSearchMatchRange[] = [];
-	for (const range of [...ranges].sort((left, right) =>
-		left.start - right.start || left.end - right.end
-	)) {
-		const start = Math.max(0, Math.min(length, range.start));
-		const end = Math.max(start, Math.min(length, range.end));
-		const previous = normalized.at(-1);
-		if (previous && start <= previous.end) {
-			previous.end = Math.max(previous.end, end);
-		} else if (start !== end) {
-			normalized.push({ start, end });
-		}
-	}
-	return normalized;
 }
 
 function isAbortError(error: unknown): boolean {

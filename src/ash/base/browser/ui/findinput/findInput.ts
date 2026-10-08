@@ -1,19 +1,15 @@
 import { Disposable } from '../../../common/lifecycle.js';
-import type { IHistory } from '../../../common/history.js';
-import { HistoryInputBox } from '../inputbox/inputbox.js';
+import { HistoryInputBox, type IHistoryInputOptions } from '../inputbox/inputbox.js';
 
-export interface IFindInputOptions {
+export interface IFindInputOptions<Flexible extends boolean = false> extends IHistoryInputOptions<Flexible> {
 	readonly label: string;
-	readonly placeholder?: string;
-	readonly history?: IHistory<string>;
-	readonly showHistoryHint?: () => boolean;
 }
 
-export class FindInput extends Disposable {
+export class FindInput<Flexible extends boolean = false> extends Disposable {
 	public readonly domNode: HTMLElement;
-	public readonly inputBox: HistoryInputBox;
+	public readonly inputBox: HistoryInputBox<Flexible>;
 
-	constructor(inputBox: HistoryInputBox) {
+	constructor(inputBox: HistoryInputBox<Flexible>) {
 		super();
 		this.inputBox = this._register(inputBox);
 		this.domNode = this.inputBox.element;

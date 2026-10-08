@@ -165,7 +165,7 @@ export class FindWidget extends Disposable implements IOverlayWidget {
 		);
 		this.replaceToggle.domNode.classList.add('stanza-editor-find-replace-toggle');
 		const findLabel = localize('label.find', 'Find');
-		this.findControl = this._register(instantiationService.createInstance(ContextScopedFindInput, findRow, {
+		this.findControl = this._register(instantiationService.createInstance(ContextScopedFindInput<false>, findRow, {
 			label: findLabel,
 			history: searchHistory,
 			showHistoryHint: () => showHistoryKeybindingHint(keybindingService, contextKeys.getContext(this.findInput)),
@@ -195,7 +195,7 @@ export class FindWidget extends Disposable implements IOverlayWidget {
 		const spacer = h(ownerDocument, 'span');
 		spacer.className = 'stanza-editor-replace-spacer';
 		const replaceLabel = localize('label.replace', 'Replace');
-		this.replaceControl = this._register(instantiationService.createInstance(ContextScopedReplaceInput, this.replaceRow, {
+		this.replaceControl = this._register(instantiationService.createInstance(ContextScopedReplaceInput<false>, this.replaceRow, {
 			label: replaceLabel,
 			history: replaceHistory,
 			showHistoryHint: () => showHistoryKeybindingHint(keybindingService, contextKeys.getContext(this.replaceInput)),

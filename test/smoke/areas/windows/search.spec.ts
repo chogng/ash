@@ -1,5 +1,5 @@
 import { expect, test } from '../../../automation/test.js';
-import { basename, dirname, join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import type { ElectronApplication } from '@playwright/test';
 
@@ -257,7 +257,7 @@ test('Search submits case, regex and file filters to workspace search', async ({
 	test.skip(target.appServerMode !== 'required', 'Uses the real workspace search service.');
 	await workbench.search.open();
 	const search = workbench.search.element;
-	const mainFileLabel = `${basename(testWorkspace.directory)} • main.ts`;
+	const mainFileLabel = 'main.ts';
 	await search.getByRole('button', { name: 'Toggle Search Details', exact: true }).click();
 	await search.getByRole('textbox', { name: 'Files to include', exact: true }).fill('**/*.ts');
 	await search.getByRole('button', { name: 'Match Case', exact: true }).click();
@@ -326,12 +326,12 @@ test('Search offers tree view, sorting and accessible help through actual workbe
 	await writeFile(join(testWorkspace.directory, 'src', 'z.ts'), 'value value value\n');
 	await workbench.search.search('value');
 	const toolbar = workbench.page.getByRole('toolbar', { name: 'Search result actions', exact: true });
-	const files = workbench.search.element.locator('.ash-search-file-path');
-	const workspaceName = basename(testWorkspace.directory);
-	await expect(files).toHaveText([`${workspaceName} • a.ts`, `${workspaceName} • main.ts`, `${workspaceName} • src/z.ts`]);
+	const files = workbench.search.element.locator('.ash-search-file-path .ash-icon-label-text');
+	await expect(files).toHaveText(['a.ts', 'main.ts', 'z.ts']);
+	await expect(workbench.search.element.locator('.ash-search-file-path .ash-icon-label-description').last()).toContainText('src');
 	const openMoreActions = () => toolbar.getByRole('button', { name: 'More Actions', exact: true }).click();
 	await workbench.menus.select(application, openMoreActions, ['Sort by match count']);
-	await expect(files).toHaveText([`${workspaceName} • src/z.ts`, `${workspaceName} • a.ts`, `${workspaceName} • main.ts`]);
+	await expect(files).toHaveText(['z.ts', 'a.ts', 'main.ts']);
 	await workbench.menus.select(application, openMoreActions, ['View as tree']);
 	await expect(files).toHaveText(['z.ts', 'a.ts', 'main.ts']);
 	const folder = workbench.search.element.getByRole('treeitem', { name: 'src', exact: true });
@@ -342,7 +342,75 @@ test('Search offers tree view, sorting and accessible help through actual workbe
 	await expect(workbench.search.element.locator('.ash-search-match')).toHaveCount(5);
 });
 
-test('Search keeps options inside the query and preserves collapsed file filters', async ({ workbench }) => {
+test('Search title and input geometry remain usable while resizing the actual Sidebar', async ({ target, workbench }) => {
+	test.skip(target.appServerMode !== 'required', 'Uses the actual Workbench search service.');
+	await workbench.search.open();
+	const page = workbench.page;
+	const sidebar = page.locator('[data-part="sidebar"]');
+	const title = sidebar.locator('.ash-pane-composite-title');
+	const toolbar = page.getByRole('toolbar', { name: 'Search result actions', exact: true });
+	const query = workbench.search.query;
+	const replacement = workbench.search.element.getByRole('textbox', { name: 'Replace', exact: true });
+	await expect(sidebar.locator('.ash-sidebar-title-label')).toHaveText('Search');
+	await expect(workbench.search.element.locator('..').locator('.ash-pane-view-header')).toBeHidden();
+	await expect(title.getByRole('toolbar', { name: 'Search result actions', exact: true })).toHaveCount(1);
+	await expect(replacement).toBeVisible();
+	await workbench.search.search('value');
+	await expect(workbench.search.status).toHaveText('1 results');
+	const originalToolbar = await toolbar.elementHandle();
+	expect(originalToolbar).not.toBeNull();
+	await workbench.openExplorer();
+	await expect(toolbar).toBeHidden();
+	await workbench.search.open();
+	await expect(query).toHaveValue('value');
+	expect(await originalToolbar!.evaluate(node => node === document.querySelector('.ash-pane-composite-title [aria-label="Search result actions"]'))).toBe(true);
+	for (const width of [180, 220, 280, 400, 600]) {
+		const frame = await sidebar.locator('..').boundingBox();
+		expect(frame).not.toBeNull();
+		const sashes = page.locator('.ash-sash-vertical');
+		const index = await sashes.evaluateAll((nodes, right) => nodes.findIndex(node => {
+			const bounds = node.getBoundingClientRect();
+			return bounds.height > 300 && Math.abs(bounds.left + bounds.width / 2 - right) < 12;
+		}), frame!.x + frame!.width);
+		expect(index, 'The production Sidebar resize boundary is visible').toBeGreaterThanOrEqual(0);
+		const sash = await sashes.nth(index).boundingBox();
+		expect(sash).not.toBeNull();
+		await page.mouse.move(sash!.x + sash!.width / 2, sash!.y + sash!.height / 2);
+		await page.mouse.down();
+		await page.mouse.move(sash!.x + sash!.width / 2 + width - frame!.width, sash!.y + sash!.height / 2, { steps: 5 });
+		await page.mouse.up();
+		await expect.poll(async () => (await sidebar.locator('..').boundingBox())!.width).toBeCloseTo(width, 0);
+		await workbench.waitForUiIdle();
+		const geometry = await sidebar.evaluate(element => {
+			const heading = element.querySelector('.ash-pane-composite-title')!;
+			const title = heading.querySelector('.ash-sidebar-title-label')!.getBoundingClientRect();
+			const actions = heading.querySelector('[aria-label="Search result actions"]')!.getBoundingClientRect();
+			const bounds = heading.getBoundingClientRect();
+			const widget = element.querySelector('.ash-search-widget')!;
+			const query = widget.querySelector('.ash-search-query-field textarea')!.getBoundingClientRect();
+			const replacement = widget.querySelector('.ash-search-replace-field textarea')!.getBoundingClientRect();
+			return {
+				inputWidth: query.width, aligned: Math.abs(query.left - replacement.left) < 0.01 && Math.abs(query.right - replacement.right) < 0.01,
+				titleFits: title.right <= actions.left + 0.01 && actions.right <= bounds.right + 0.01,
+				toolbarAtTop: actions.bottom <= query.top, fits: widget.scrollWidth <= widget.clientWidth
+			};
+		});
+		expect(geometry.inputWidth).toBeGreaterThanOrEqual(100);
+		expect(geometry.aligned).toBe(true);
+		expect(geometry.titleFits).toBe(true);
+		expect(geometry.toolbarAtTop).toBe(true);
+		expect(geometry.fits).toBe(true);
+		await test.info().attach(`search-sidebar-${width}px`, { body: await sidebar.screenshot(), contentType: 'image/png' });
+	}
+	await query.fill('中文😀 long query '.repeat(60));
+	await expect.poll(async () => (await query.boundingBox())!.height).toBe(134);
+	await query.press('ControlOrMeta+End');
+	await expect.poll(() => query.evaluate((input: HTMLTextAreaElement) => input.scrollTop)).toBeGreaterThan(0);
+	await expect(query).toHaveCSS('scrollbar-width', 'none');
+	await originalToolbar!.dispose();
+});
+
+test('Search keeps query options and preserves collapsed file filters', async ({ workbench }) => {
 	await workbench.search.open();
 	const page = workbench.page;
 	const search = workbench.search.element;
@@ -369,26 +437,27 @@ test('Search keeps options inside the query and preserves collapsed file filters
 		const geometry = await search.evaluate(element => {
 			const field = element.querySelector('.ash-search-query-field')!;
 			const bounds = field.getBoundingClientRect();
-			const input = element.querySelector('.ash-search-query')!.getBoundingClientRect();
+			const inputBox = field.querySelector('.ash-input-box')!;
+			const input = inputBox.querySelector('textarea')!.getBoundingClientRect();
 			const options = element.querySelector('.ash-search-query-options')!.getBoundingClientRect();
-			const style = getComputedStyle(field);
+			const style = getComputedStyle(inputBox);
 			const probe = document.createElement('span');
 			probe.style.color = 'var(--ash-focusBorder)';
 			element.append(probe);
 			const focusBorder = getComputedStyle(probe).color;
 			probe.remove();
 			return {
-				height: bounds.height,
+				height: inputBox.getBoundingClientRect().height,
 				inputWidth: input.width,
 				// Chromium rects use floats; adjacent edges can differ by a few millionths at 125% scale.
-				optionsInside: options.left >= input.right - 0.01 && options.right <= bounds.right && options.top >= bounds.top && options.bottom <= bounds.bottom,
+				optionsInside: options.left >= bounds.left && options.right <= bounds.right + 0.01 && options.top >= bounds.top && options.bottom <= bounds.bottom + 0.01,
 				border: style.borderColor,
 				focusBorder,
 				fits: element.scrollWidth <= element.clientWidth,
 			};
 		});
 		expect(geometry.height).toBe(26);
-		expect(geometry.inputWidth).toBeGreaterThan(80);
+		expect(geometry.inputWidth).toBeGreaterThanOrEqual(100);
 		expect(geometry.optionsInside).toBe(true);
 		expect(geometry.fits).toBe(true);
 		expect(geometry.border).toBe(geometry.focusBorder);
@@ -407,6 +476,10 @@ test('Search keeps options inside the query and preserves collapsed file filters
 	await expect(regex).toBeFocused();
 	await expect(regex).toHaveAttribute('aria-pressed', 'true');
 	await regex.press('Tab');
+	await expect(search.getByRole('textbox', { name: 'Replace', exact: true })).toBeFocused();
+	await page.keyboard.press('Tab');
+	await expect(search.getByRole('button', { name: 'Preserve Case', exact: true })).toBeFocused();
+	await page.keyboard.press('Tab');
 	await expect(details).toBeFocused();
 	await details.press('Enter');
 	await expect(details).toHaveAttribute('aria-expanded', 'true');
@@ -456,7 +529,7 @@ test('Search replaces across lines on disk and undo restores the searched conten
 	await expect(workbench.search.status).toHaveText('1 results');
 	await workbench.search.element.locator('.ash-search-match').dblclick();
 	await expect(workbench.page.locator('[data-statusbar-item-id="ash.status.editor.cursor"]')).toContainText('Ln 2, Col 7');
-	await workbench.search.element.getByRole('button', { name: 'Toggle Replace', exact: true }).click();
+	await expect(workbench.search.element.getByRole('textbox', { name: 'Replace', exact: true })).toBeVisible();
 	await workbench.search.element.getByRole('textbox', { name: 'Replace', exact: true }).fill('updated');
 	await workbench.search.element.getByRole('button', { name: 'Replace All', exact: true }).click();
 	if (target.kind === 'electron') {
@@ -503,7 +576,7 @@ test.describe('Search with a granted browser folder', () => {
 		await workbench.search.open();
 		await workbench.search.search('needle');
 		await expect(workbench.search.status).toHaveText('2 results');
-		await workbench.search.element.getByRole('button', { name: 'Toggle Replace', exact: true }).click();
+		await expect(workbench.search.element.getByRole('textbox', { name: 'Replace', exact: true })).toBeVisible();
 		await workbench.search.element.getByRole('textbox', { name: 'Replace', exact: true }).fill('value');
 		const toolbar = page.getByRole('toolbar', { name: 'Search result actions', exact: true });
 		await toolbar.getByRole('button', { name: 'More Actions', exact: true }).click();
@@ -697,7 +770,7 @@ test('Search Copy All copies current retained results through the host clipboard
 	await copyAll();
 	await expect.poll(readCopied).toBe(blocks.join(delimiter + delimiter));
 	const tree = workbench.search.element.getByRole('tree');
-	await tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path', { hasText: 'src/file10.ts' }) }).click();
+	await tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path', { hasText: 'file10.ts' }) }).click();
 	await workbench.menus.select(application, openMoreActions, ['Dismiss']);
 	await expect(workbench.search.status).toHaveText('3 results');
 	await copyAll();
@@ -744,7 +817,7 @@ test('Search Copy uses result selection, explicit context rows and collapsed fol
 	const pathLabel = (path: string) => join(testWorkspace.directory, path).replace(/^([a-z]):/i, (_prefix, drive: string) => drive.toUpperCase() + ':');
 	const file2 = [pathLabel('src/file2.ts'), '  1,6: 中文😀 ash_copy_selected_token one', '  2,1: ash_copy_selected_token two'].join(delimiter);
 	const file10 = [pathLabel('src/file10.ts'), '  1,1: ash_copy_selected_token ten'].join(delimiter);
-	const header = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path', { hasText: 'src/file2.ts' }) });
+	const header = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path', { hasText: 'file2.ts' }) });
 	await header.locator('.ash-tree-twistie').click();
 	await workbench.menus.select(application, () => header.click({ button: 'right' }), ['Copy']);
 	await expect.poll(readCopied).toBe(file2);
@@ -848,8 +921,8 @@ test('Search Copy Path copies file and folder paths through real search and the 
 	await workbench.search.search('ash_copy_path_token');
 	await expect(workbench.search.status).toHaveText('2 results');
 	const tree = workbench.search.element.getByRole('tree');
-	const main = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path', { hasText: 'src/main.ts' }) });
-	const other = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path', { hasText: 'src/other.ts' }) });
+	const main = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path', { hasText: 'main.ts' }) });
+	const other = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path', { hasText: 'other.ts' }) });
 	await main.click();
 	await other.click({ modifiers: ['ControlOrMeta'] });
 	const shortcut = process.platform === 'win32' ? 'Shift+Alt+c' : 'ControlOrMeta+Alt+c';

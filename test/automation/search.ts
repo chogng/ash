@@ -11,7 +11,7 @@ export class Search {
 		this.element = page.locator('.ash-search');
 		this.query = this.element.getByRole('textbox', { name: 'Search workspace', exact: true });
 		this.status = this.element.getByRole('status');
-		this.files = this.element.locator('.ash-search-file-path');
+		this.files = this.element.locator('.ash-search-file-path .ash-icon-label-text');
 	}
 
 	async open(): Promise<void> {

@@ -1,5 +1,87 @@
 import { expect, test } from '@playwright/test';
 
+test('Search registration merges one title and moves the same toolbar through view switching and multiple views', async ({ page }) => {
+	await page.goto('/search.html');
+	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
+	const toolbar = page.getByRole('toolbar', { name: 'Search result actions', exact: true });
+	const title = page.locator('.ash-sidebar-title-label');
+	const paneHeader = page.locator('.ash-search').locator('..').locator('.ash-pane-view-header');
+	await expect(title).toHaveText('Search');
+	await expect(paneHeader).toBeHidden();
+	await expect(page.locator('.ash-pane-composite-title-view-actions').getByRole('toolbar', { name: 'Search result actions', exact: true })).toHaveCount(1);
+	await query.fill('needle');
+	await query.press('Enter');
+	await expect(page.getByRole('status')).toHaveText('1 results');
+	const before = await page.evaluate(() => window.ashSearchIntegration.snapshot());
+	const original = await toolbar.elementHandle();
+	expect(original).not.toBeNull();
+	const refresh = toolbar.getByRole('button', { name: 'Refresh search', exact: true });
+	await refresh.focus();
+	await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.focusedView())).toBe('ash.searchView');
+	await page.evaluate(() => window.ashSearchIntegration.setSecondView(true));
+	await expect(paneHeader).toBeVisible();
+	await expect(paneHeader.getByRole('toolbar', { name: 'Search result actions', exact: true })).toHaveCount(1);
+	await expect(refresh).toBeFocused();
+	expect(await original!.evaluate(node => node === document.querySelector('[aria-label="Search result actions"]'))).toBe(true);
+	await page.evaluate(() => window.ashSearchIntegration.setSecondView(false));
+	await expect(paneHeader).toBeHidden();
+	await expect(refresh).toBeFocused();
+	await page.evaluate(() => window.ashSearchIntegration.switchSidebar('explorer'));
+	await expect(title).toHaveText('Explorer');
+	await expect(toolbar).toBeHidden();
+	await page.evaluate(() => window.ashSearchIntegration.switchSidebar('search'));
+	await expect(title).toHaveText('Search');
+	await expect(toolbar).toBeVisible();
+	await expect(query).toHaveValue('needle');
+	expect(await original!.evaluate(node => node === document.querySelector('.ash-pane-composite-title-view-actions [aria-label="Search result actions"]'))).toBe(true);
+	expect(await page.evaluate(() => window.ashSearchIntegration.snapshot())).toEqual(before);
+	await page.evaluate(() => window.ashSearchIntegration.setSecondView(true));
+	await paneHeader.getByRole('button', { name: 'Search', exact: true }).click();
+	await expect(query).toBeHidden();
+	await page.evaluate(() => window.ashSearchIntegration.setSecondView(false));
+	await expect(query).toBeVisible();
+	await page.evaluate(() => window.ashSearchIntegration.setSecondView(true));
+	await expect(query).toBeHidden();
+	await paneHeader.getByRole('button', { name: 'Search', exact: true }).click();
+	await expect(query).toBeVisible();
+	await original!.dispose();
+});
+
+test('Search inputs wrap within shared height limits, preserve caret and use managed scrolling', async ({ page }) => {
+	await page.goto('/search.html');
+	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
+	const replace = page.getByRole('textbox', { name: 'Replace', exact: true });
+	await expect(replace).toBeVisible();
+	await query.fill('one');
+	const single = await query.boundingBox();
+	expect(single!.height).toBe(24);
+	const long = '中文😀 long search text '.repeat(40);
+	await query.fill(long);
+	await expect.poll(async () => (await query.boundingBox())!.height).toBe(134);
+	await query.press('ControlOrMeta+End');
+	const scrolling = await query.evaluate((input: HTMLTextAreaElement) => ({
+		value: input.value, caret: input.selectionEnd, scroll: input.scrollTop, overflowing: input.scrollHeight > input.clientHeight,
+		browserBar: getComputedStyle(input).scrollbarWidth, managed: input.parentElement!.querySelectorAll('.ash-scrollbar-track-vertical').length,
+	}));
+	expect(scrolling).toMatchObject({ value: long, caret: long.length, overflowing: true, browserBar: 'none', managed: 1 });
+	expect(scrolling.scroll).toBeGreaterThan(0);
+	await query.fill('first\nsecond');
+	await query.press('ControlOrMeta+Home');
+	await query.press('ArrowDown');
+	await expect(query).toHaveValue('first\nsecond');
+	expect(await query.evaluate((input: HTMLTextAreaElement) => input.selectionStart)).toBeGreaterThan(5);
+	await replace.fill('replacement\nsecond');
+	await replace.focus();
+	const toggle = page.getByRole('button', { name: 'Toggle Replace', exact: true });
+	await toggle.evaluate((button: HTMLButtonElement) => button.click());
+	await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+	await expect(query).toBeFocused();
+	await toggle.click();
+	await expect(replace).toHaveValue('replacement\nsecond');
+	await query.fill('one');
+	await expect.poll(async () => (await query.boundingBox())!.height).toBe(24);
+});
+
 test('Expand All replaces the collapsed toolbar slot, preserves keyboard focus and expands both roots', async ({ page }) => {
 	await page.goto('/search.html');
 	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
@@ -72,8 +154,8 @@ test('Copy Path shortcut copies the first selected file and ignores input focus,
 	await query.press('Enter');
 	await expect(page.getByRole('status')).toHaveText('3 results');
 	const tree = page.getByRole('tree', { name: 'Search results', exact: true });
-	const first = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path', { hasText: 'workspace • src/main.ts' }) });
-	const other = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path', { hasText: 'other • src/main.ts' }) });
+	const first = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path').filter({ has: page.locator('.ash-icon-label-description', { hasText: 'workspace • src' }) }) });
+	const other = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path').filter({ has: page.locator('.ash-icon-label-description', { hasText: 'other • src' }) }) });
 	await first.click();
 	await other.click({ modifiers: ['ControlOrMeta'] });
 	await tree.press('ControlOrMeta+Alt+c');
@@ -94,8 +176,8 @@ test('Copy Path menus copy explicit file and folder URIs and release callbacks o
 	await query.press('Enter');
 	await expect(page.getByRole('status')).toHaveText('3 results');
 	const tree = page.getByRole('tree', { name: 'Search results', exact: true });
-	const first = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path', { hasText: 'workspace • src/main.ts' }) });
-	const other = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path', { hasText: 'other • src/main.ts' }) });
+	const first = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path').filter({ has: page.locator('.ash-icon-label-description', { hasText: 'workspace • src' }) }) });
+	const other = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path').filter({ has: page.locator('.ash-icon-label-description', { hasText: 'other • src' }) }) });
 	await first.click();
 	await other.click({ button: 'right' });
 	await page.getByRole('menuitem', { name: 'Copy Path', exact: true }).click();
@@ -281,9 +363,9 @@ test('Dismiss updates retained results and focus while refresh restores the sear
 	const activeId = await tree.getAttribute('aria-activedescendant');
 	await expect(page.locator(`[id="${activeId}"]`)).toHaveAccessibleName('Line 1, column 13: 中文😀 needle needle');
 	expect(await page.evaluate(() => window.ashSearchIntegration.snapshot()?.matchCount)).toBe(2);
-	await tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path', { hasText: 'workspace • src/main.ts' }) }).click();
+	await tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path').filter({ has: page.locator('.ash-icon-label-description', { hasText: 'workspace • src' }) }) }).click();
 	await page.evaluate(() => window.ashSearchIntegration.dismiss());
-	await expect(page.locator('.ash-search-file-path')).toHaveText(['other • src/main.ts']);
+	await expect(page.locator('.ash-search-file-path .ash-icon-label-text')).toHaveText(['main.ts']);
 	await page.getByRole('button', { name: 'Refresh search', exact: true }).click();
 	await expect(page.getByRole('status')).toHaveText('3 results');
 });
@@ -364,7 +446,7 @@ test('Dismiss leaves a running search active and incorporates later result batch
 	expect(await page.evaluate(() => window.ashSearchIntegration.cancelled())).toBe(0);
 	await page.evaluate(() => window.ashSearchIntegration.finishLateSearch());
 	await expect(tree).toHaveAttribute('aria-busy', 'false');
-	await expect(page.locator('.ash-search-file-path')).toHaveText(['workspace • late.ts']);
+	await expect(page.locator('.ash-search-file-path .ash-icon-label-text')).toHaveText(['late.ts']);
 	await expect(page.getByRole('status')).toHaveText('1 results');
 });
 
@@ -374,13 +456,13 @@ test('Dismiss handles a file and its selected child together through multiple se
 	await query.fill('中文');
 	await query.press('Enter');
 	const tree = page.getByRole('tree', { name: 'Search results', exact: true });
-	const file = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path', { hasText: 'workspace • src/main.ts' }) });
+	const file = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path').filter({ has: page.locator('.ash-icon-label-description', { hasText: 'workspace • src' }) }) });
 	await file.click();
 	await tree.locator('.ash-search-match').first().click({ modifiers: ['ControlOrMeta'] });
 	await expect(tree.locator('[role="treeitem"][aria-selected="true"]')).toHaveCount(2);
 	await page.evaluate(() => window.ashSearchIntegration.dismiss());
 	await expect(page.getByRole('status')).toHaveText('1 results');
-	await expect(page.locator('.ash-search-file-path')).toHaveText(['other • src/main.ts']);
+	await expect(page.locator('.ash-search-file-path .ash-icon-label-text')).toHaveText(['main.ts']);
 	await expect(tree).toBeFocused();
 });
 
@@ -419,6 +501,10 @@ test('registered Search keeps query controls and labeled filters usable at the m
 	await expect(regex).toHaveAttribute('aria-pressed', 'true');
 	await expect(regex).toBeFocused();
 	await regex.press('Tab');
+	await expect(page.getByRole('textbox', { name: 'Replace', exact: true })).toBeFocused();
+	await page.keyboard.press('Tab');
+	await expect(page.getByRole('button', { name: 'Preserve Case', exact: true })).toBeFocused();
+	await page.keyboard.press('Tab');
 	await expect(details).toBeFocused();
 	await details.press('Enter');
 	await expect(details).toHaveAttribute('aria-expanded', 'true');
@@ -442,18 +528,28 @@ test('registered Search keeps query controls and labeled filters usable at the m
 	await expect(include).toHaveValue('src/**, docs/**');
 	for (const theme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
 		await page.evaluate(theme => window.ashSearchIntegration.setTheme(theme), theme);
-		for (const width of [280, 180]) {
+		for (const width of [180, 220, 280, 400, 600]) {
 			await page.evaluate(width => window.ashSearchIntegration.setWidth(width), width);
 			await query.focus();
-			const geometry = await page.locator('.ash-search-query-field').evaluate(field => {
+			await expect.poll(() => page.locator('.ash-search-widget').evaluate(widget => widget.classList.contains('ash-search-widget-narrow'))).toBe(width < 284);
+			const geometry = await page.locator('.ash-search-widget').evaluate(widget => {
+				const field = widget.querySelector('.ash-search-query-field')!;
 				const bounds = field.getBoundingClientRect();
 				const input = field.querySelector('textarea')!.getBoundingClientRect();
+				const replacement = widget.querySelector('.ash-search-replace-field textarea')!.getBoundingClientRect();
 				const controls = field.querySelector('[role="toolbar"]')!.getBoundingClientRect();
-				return { height: bounds.height, inputWidth: input.width, inside: controls.left >= input.right && controls.right <= bounds.right && controls.top >= bounds.top && controls.bottom <= bounds.bottom };
+				const narrow = widget.classList.contains('ash-search-widget-narrow');
+				return {
+					inputWidth: input.width, aligned: Math.abs(input.left - replacement.left) < 0.01 && Math.abs(input.right - replacement.right) < 0.01,
+					inside: controls.left >= bounds.left && controls.right <= bounds.right + 0.01 && controls.top >= bounds.top && controls.bottom <= bounds.bottom + 0.01,
+					narrowOptions: !narrow || controls.top >= input.bottom, fits: widget.scrollWidth <= widget.clientWidth
+				};
 			});
-			expect(geometry.height).toBe(26);
-			expect(geometry.inputWidth).toBeGreaterThan(40);
+			expect(geometry.inputWidth).toBeGreaterThanOrEqual(100);
+			expect(geometry.aligned).toBe(true);
 			expect(geometry.inside).toBe(true);
+			expect(geometry.narrowOptions).toBe(true);
+			expect(geometry.fits).toBe(true);
 			await expect(include).toHaveCSS('min-height', '22px');
 		}
 	}
@@ -479,11 +575,11 @@ test('Search opens each occurrence at UTF-16 columns and keeps same-path roots s
 	await query.fill('中文');
 	await query.press('Enter');
 	await expect(page.getByRole('status')).toHaveText('3 results');
-	await expect(page.locator('.ash-search-file-path')).toHaveText(['workspace • src/main.ts', 'other • src/main.ts']);
+	await expect(page.locator('.ash-search-file-path .ash-icon-label-text')).toHaveText(['main.ts', 'main.ts']);
 	await expect(page.locator('.ash-search-file-count')).toHaveText(['2', '1']);
 	const tree = page.getByRole('tree', { name: 'Search results', exact: true });
 	const rows = tree.getByRole('treeitem');
-	const workspaceFile = rows.filter({ has: page.locator('.ash-search-file-path', { hasText: 'workspace • src/main.ts' }) });
+	const workspaceFile = rows.filter({ has: page.locator('.ash-search-file-path').filter({ has: page.locator('.ash-icon-label-description', { hasText: 'workspace • src' }) }) });
 	await workspaceFile.locator('.ash-tree-twistie').click();
 	await expect(workspaceFile).toHaveAttribute('aria-expanded', 'false');
 	await expect(tree.locator('.ash-search-match')).toHaveCount(1);
@@ -540,9 +636,9 @@ test('Search lifecycle refreshes running tasks, cancels retained results, clears
 	await expect(query).toBeFocused();
 	await expect(page.getByRole('status')).toHaveText('1 results');
 	await page.evaluate(() => window.ashSearchIntegration.finishLateSearch());
-	await expect(page.locator('.ash-search-file-path')).toHaveText(['workspace • src/main.ts']);
+	await expect(page.locator('.ash-search-file-path .ash-icon-label-text')).toHaveText(['main.ts']);
 	expect(await page.evaluate(() => window.ashSearchIntegration.cancelled())).toBe(2);
-	await page.getByRole('button', { name: 'Toggle Replace', exact: true }).click();
+	await expect(page.getByRole('textbox', { name: 'Replace', exact: true })).toBeVisible();
 	await page.getByRole('textbox', { name: 'Replace', exact: true }).fill('replacement');
 	await page.getByRole('button', { name: 'Toggle Search Details', exact: true }).click();
 	const includes = page.getByRole('textbox', { name: 'Files to include', exact: true });
@@ -751,7 +847,7 @@ test.describe('Windows search clipboard formatting', () => {
 		await query.fill('windows');
 		await query.press('Enter');
 		await expect(page.getByRole('status')).toHaveText('2 results');
-		await page.locator('.ash-search-file-path').filter({ hasText: 'src/main.ts' }).click();
+		await page.locator('.ash-search-file-path').filter({ hasText: 'main.ts' }).click();
 		const tree = page.getByRole('tree', { name: 'Search results', exact: true });
 		await tree.press('Control+Alt+c');
 		expect(await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual([]);
@@ -770,7 +866,7 @@ test.describe('Windows search clipboard formatting', () => {
 		await expect(page.getByRole('status')).toHaveText('2 results');
 		await page.locator('.ash-search-match').filter({ hasText: 'next' }).click({ button: 'right' });
 		await page.getByRole('menuitem', { name: 'Copy', exact: true }).click();
-		await page.locator('.ash-search-file-path').filter({ hasText: 'src/main.ts' }).click({ button: 'right' });
+		await page.locator('.ash-search-file-path').filter({ hasText: 'main.ts' }).click({ button: 'right' });
 		await page.getByRole('menuitem', { name: 'Copy', exact: true }).click();
 		await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['9,1: needle\n10:  next', 'C:\\workspace\\src\\main.ts\r\n  9,1: needle\n  10:  next']);
 	});

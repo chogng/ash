@@ -119,6 +119,26 @@ Search UI
 | Agent 的 `grep` 工具                             | Tool 授权、100 行预算和模型文本格式；调用公共 grep API      |
 | Codebase 文字候选                                | 调用公共 grep API，将命中映射为自己的 chunk，再复核当前内容 |
 
+## 工作区搜索界面
+
+Search 通过实际 Sidebar 注册链打开。单视图时，容器顶部保留一个 Search 标题，
+并承接同一个结果操作条；切换视图保留查询、结果和动作实例，多视图时恢复各 pane 标题。
+Pane 同时跟踪内容与搬出的动作节点的焦点，销毁时释放搬出的节点和监听器。
+
+`SearchWidget` 拥有查询、替换、选项与输入焦点，`SearchView` 拥有执行、结果和替换服务调用。
+Search/Replace 默认同时显示，折叠 Replace 保留其值并将其中的焦点移回 Search。
+输入复用共享 `ContextScopedFindInput` / `ContextScopedReplaceInput` 与 `HistoryInputBox`；
+可变高度由通用 InputBox 按当前字体和宽度测量，上限为 134px，超出部分使用共享受控滚动条。
+窄栏把选项放到独立一行，给文字编辑保留空间；查询与替换使用相同列预算。
+Enter 提交查询，Shift/Alt+Enter 插入换行，IME 确认不提交。多行中的普通上下箭头移动光标，
+Alt+上下箭头导航输入历史。Include/Exclude 接受逗号分隔的 glob；折叠后仍启用的过滤有文字提示。
+
+`SearchResultsRenderer` 只拥有结果行呈现与行资源；模型保留完整 preview、身份与 UTF-16 range。
+扁平模式以文件名为主、父目录为次，多根时附工作区名称，计数保留独立空间。
+匹配行按实际最大行号分配槽位，显示命中前的有限上下文与完整高亮；极长命中优先保留命中。
+完整 preview 通过 hover 和 Copy 取得；快照保留完整命中和位置。Tree 模式复用共享目录压缩和 Tree 的缩进、叶子 twistie
+与虚拟化契约；压缩不合并工作区根，也不更换文件和匹配身份。
+
 ## 协议
 
 Workbench 的搜索结果由 `SearchResultImpl` 保留。Dismiss 通过

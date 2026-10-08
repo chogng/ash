@@ -1,5 +1,7 @@
 import './inputbox.css';
-import { addDisposableListener, h } from "../../dom.js";
+import { addDisposableListener, h, scheduleAtNextAnimationFrame } from "../../dom.js";
+import { SmoothScrollableElement } from '../scrollbar/scrollableElement.js';
+import { Scrollable, ScrollbarVisibility } from '../../../common/scrollable.js';
 import type { IHistoryNavigationWidget } from '../../history.js';
 import { DomEmitter, type DOMEventMap } from "../../event.js";
 import {
@@ -14,7 +16,9 @@ import { HistoryNavigator, type IHistory } from '../../../common/history.js';
 import { IME } from "../../../common/ime.js";
 import { Disposable, toDisposable } from "../../../common/lifecycle.js";
 
-export interface InputBoxOptions {
+export interface InputBoxOptions<Flexible extends boolean = false> {
+	readonly flexibleHeight?: Flexible;
+	readonly flexibleMaxHeight?: number;
 	readonly placeholder?: string;
 	readonly type?: "text" | "number" | "password" | "search";
 	readonly presentation?: "default" | "field" | "compact";
@@ -32,10 +36,16 @@ export interface InputSelection {
 	readonly end: number;
 }
 
+type InputElement<Flexible extends boolean> = Flexible extends true ? HTMLTextAreaElement : HTMLInputElement;
+
 /** A text input foundation with events, focus control, and validation state. */
-export class InputBox extends Disposable {
+export class InputBox<Flexible extends boolean = false> extends Disposable {
 	readonly element: HTMLDivElement;
-	readonly inputElement: HTMLInputElement;
+	readonly inputElement: InputElement<Flexible>;
+	private readonly measureInput: HTMLTextAreaElement | undefined;
+	private readonly scrollable: Scrollable | undefined;
+	private readonly maxHeight: number;
+	private height = 0;
 	private readonly message: HTMLDivElement;
 	private readonly _onDidChange = this._register(new Emitter<string>());
 	private readonly _onDidFocus = this._register(new Emitter<void>());
@@ -47,7 +57,7 @@ export class InputBox extends Disposable {
 	readonly onDidBlur: Event<void> = this._onDidBlur.event;
 	readonly onKeyDown: Event<DOMEventMap["keydown"]>;
 
-	constructor(container: HTMLElement, options: InputBoxOptions = {}) {
+	constructor(container: HTMLElement, options: InputBoxOptions<Flexible> = {}) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		this.element = h(ownerDocument, "div");
@@ -56,8 +66,10 @@ export class InputBox extends Disposable {
 		if (options.presentation === "compact") this.element.classList.add("ash-input-box-compact");
 		this._register(toDisposable(() => this.element.remove()));
 
-		this.inputElement = h(ownerDocument, "input");
-		this.inputElement.type = options.type ?? "text";
+		this.maxHeight = Math.max(24, options.flexibleMaxHeight ?? 134);
+		// The element type follows the same generic option used to choose its DOM tag; default consumers remain inputs.
+		this.inputElement = (options.flexibleHeight ? h(ownerDocument, "textarea") : h(ownerDocument, "input")) as InputElement<Flexible>;
+		if ("step" in this.inputElement) { this.inputElement.type = options.type ?? "text"; }
 		this.inputElement.placeholder = options.placeholder ?? "";
 		this.inputElement.disabled = options.enabled === false;
 		this.element.classList.toggle("is-disabled", this.inputElement.disabled);
@@ -96,7 +108,34 @@ export class InputBox extends Disposable {
 		this.message.className = "ash-input-box-message";
 		setRole(this.message, "alert");
 		this.message.hidden = true;
-		this.element.append(this.inputElement, this.message);
+		if (options.flexibleHeight) {
+			this.element.classList.add('ash-input-box-flexible');
+			const measure = h(ownerDocument, 'textarea');
+			measure.className = 'ash-input-box-measure';
+			measure.tabIndex = -1;
+			measure.setAttribute('aria-hidden', 'true');
+			this.measureInput = measure;
+			const targetWindow = ownerDocument.defaultView!;
+			const scrollable = this.scrollable = this._register(new Scrollable({
+				forceIntegerValues: false, smoothScrollDuration: 0,
+				scheduleAtNextAnimationFrame: callback => scheduleAtNextAnimationFrame(targetWindow, callback),
+			}));
+			const scrollbar = this._register(new SmoothScrollableElement(this.inputElement, {
+				vertical: ScrollbarVisibility.Auto, horizontal: ScrollbarVisibility.Hidden,
+				verticalScrollbarSize: 8, className: "ash-input-box-scrollable",
+			}, scrollable));
+			this.element.append(scrollbar.getDomNode(), measure, this.message);
+			this._register(scrollable.onScroll(event => { this.inputElement.scrollTop = event.scrollTop; }));
+			// Browser selection and caret reveal remain authoritative and are mirrored by the managed scrollbar.
+			this._register(addDisposableListener(this.inputElement, 'scroll', () => scrollable.setScrollPositionNow({ scrollTop: this.inputElement.scrollTop })));
+			if (targetWindow.ResizeObserver) {
+				const observer = new targetWindow.ResizeObserver(() => this.layout());
+				observer.observe(this.element);
+				this._register(toDisposable(() => observer.disconnect()));
+			}
+		} else {
+			this.element.append(this.inputElement, this.message);
+		}
 		container.append(this.element);
 		this.onKeyDown = this._register(new DomEmitter(this.inputElement, "keydown")).event;
 		this.syncReadOnly();
@@ -104,7 +143,7 @@ export class InputBox extends Disposable {
 		this._register(addDisposableListener(
 			this.inputElement,
 			"input",
-			() => this._onDidChange.fire(this.value),
+			() => { this.layout(); this._onDidChange.fire(this.value); },
 		));
 		this._register(addDisposableListener(
 			this.inputElement,
@@ -122,6 +161,19 @@ export class InputBox extends Disposable {
 				this._onDidBlur.fire();
 			},
 		));
+		this.layout();
+	}
+
+	layout(): void {
+		if (!this.measureInput || !this.scrollable || this.isDisposed) { return; }
+		this.measureInput.value = this.value || " ";
+		const contentHeight = Math.max(24, this.measureInput.scrollHeight);
+		const height = Math.min(this.maxHeight, contentHeight);
+		if (height !== this.height) {
+			this.height = height;
+			this.inputElement.style.height = `${height}px`;
+		}
+		this.scrollable.setScrollDimensions({ width: this.inputElement.clientWidth, scrollWidth: this.inputElement.clientWidth, height: this.inputElement.clientHeight, scrollHeight: this.inputElement.scrollHeight }, false);
 	}
 
 	get value(): string {
@@ -131,6 +183,7 @@ export class InputBox extends Disposable {
 	set value(value: string) {
 		if (this.inputElement.value === value) return;
 		this.inputElement.value = value;
+		this.layout();
 		this._onDidChange.fire(value);
 	}
 
@@ -143,11 +196,11 @@ export class InputBox extends Disposable {
 	}
 
 	get step(): string {
-		return this.inputElement.step;
+		return "step" in this.inputElement ? this.inputElement.step : "";
 	}
 
 	set step(value: string) {
-		this.inputElement.step = value;
+		if ("step" in this.inputElement) { this.inputElement.step = value; }
 	}
 
 	get readOnly(): boolean {
@@ -222,18 +275,18 @@ export class InputBox extends Disposable {
 	}
 }
 
-export interface IHistoryInputOptions extends InputBoxOptions {
+export interface IHistoryInputOptions<Flexible extends boolean = false> extends InputBoxOptions<Flexible> {
 	readonly history?: IHistory<string>;
 	readonly showHistoryHint?: () => boolean;
 }
 
-export class HistoryInputBox extends InputBox implements IHistoryNavigationWidget {
+export class HistoryInputBox<Flexible extends boolean = false> extends InputBox<Flexible> implements IHistoryNavigationWidget {
 	private readonly navigator: HistoryNavigator<string>;
 	private draft = '';
 	private navigating = false;
 	private applyingHistory = false;
 
-	constructor(container: HTMLElement, private readonly historyOptions: IHistoryInputOptions = {}) {
+	constructor(container: HTMLElement, private readonly historyOptions: IHistoryInputOptions<Flexible> = {}) {
 		super(container, historyOptions);
 		this.navigator = this._register(new HistoryNavigator(historyOptions.history, 100));
 		this._register(this.onDidChange(() => {

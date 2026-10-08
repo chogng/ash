@@ -1,3 +1,4 @@
+import { addDisposableListener } from '../../../base/browser/dom.js';
 import type { IHistoryNavigationWidget } from '../../../base/browser/history.js';
 import { FindInput, type IFindInputOptions } from '../../../base/browser/ui/findinput/findInput.js';
 import { ReplaceInput, type IReplaceInputOptions } from '../../../base/browser/ui/findinput/replaceInput.js';
@@ -62,19 +63,37 @@ export function registerAndCreateHistoryNavigationContext(
 	});
 }
 
-export class ContextScopedHistoryInputBox extends HistoryInputBox {
-	constructor(container: HTMLElement, options: IHistoryInputOptions, @IContextKeyService contextKeyService: IContextKeyService) {
+export class ContextScopedHistoryInputBox<Flexible extends boolean = false> extends HistoryInputBox<Flexible> {
+	constructor(container: HTMLElement, options: IHistoryInputOptions<Flexible>, @IContextKeyService contextKeyService: IContextKeyService) {
 		super(container, options);
 		const scope = this._register(contextKeyService.createScoped(this.element));
-		this._register(registerAndCreateHistoryNavigationContext(scope, this));
+		const navigation = this._register(registerAndCreateHistoryNavigationContext(scope, this));
+		const updateNavigation = (): void => {
+			// Multiline arrows belong to caret movement; Alt+arrows are handled explicitly below.
+			const multiline = this.value.includes('\n');
+			navigation.historyNavigationBackwardsEnablement.set(!multiline);
+			navigation.historyNavigationForwardsEnablement.set(!multiline);
+		};
+		this._register(this.onDidChange(updateNavigation));
+		updateNavigation();
+		this._register(addDisposableListener(this.inputElement, 'keydown', event => {
+			if (event.isComposing || event.ctrlKey || event.metaKey || event.shiftKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) { return; }
+			if (!event.altKey && this.value.includes('\n')) { return; }
+			if (event.key === 'ArrowDown' && this.isNowhereInHistory()) { return; }
+			event.preventDefault();
+			event.stopPropagation();
+			if (event.key === 'ArrowUp') { this.showPreviousValue(); } else { this.showNextValue(); }
+			this.inputElement.setSelectionRange(this.value.length, this.value.length);
+		}));
 		// The scope must record focus before resolving the active keybinding hint.
 		this._register(this.onDidFocus(() => this.updateHistoryHint()));
 	}
 }
 
-export class ContextScopedFindInput extends FindInput {
-	constructor(container: HTMLElement, options: IFindInputOptions, @IInstantiationService instantiationService: IInstantiationService) {
-		super(instantiationService.createInstance(ContextScopedHistoryInputBox, container, {
+export class ContextScopedFindInput<Flexible extends boolean = false> extends FindInput<Flexible> {
+	constructor(container: HTMLElement, options: IFindInputOptions<Flexible>, @IInstantiationService instantiationService: IInstantiationService) {
+		super(instantiationService.createInstance(ContextScopedHistoryInputBox<Flexible>, container, {
+			...options,
 			ariaLabel: options.label,
 			placeholder: options.placeholder ?? options.label,
 			history: options.history,
@@ -83,9 +102,10 @@ export class ContextScopedFindInput extends FindInput {
 	}
 }
 
-export class ContextScopedReplaceInput extends ReplaceInput {
-	constructor(container: HTMLElement, options: IReplaceInputOptions, @IInstantiationService instantiationService: IInstantiationService) {
-		super(instantiationService.createInstance(ContextScopedHistoryInputBox, container, {
+export class ContextScopedReplaceInput<Flexible extends boolean = false> extends ReplaceInput<Flexible> {
+	constructor(container: HTMLElement, options: IReplaceInputOptions<Flexible>, @IInstantiationService instantiationService: IInstantiationService) {
+		super(instantiationService.createInstance(ContextScopedHistoryInputBox<Flexible>, container, {
+			...options,
 			ariaLabel: options.label,
 			placeholder: options.placeholder ?? options.label,
 			history: options.history,

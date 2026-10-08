@@ -16,15 +16,16 @@ test('workspace search applies include and exclude filters and clears previous r
 	await search.search('ash_search_token');
 	await expect(search.status).toHaveText('5 results');
 	await expect(search.files).toHaveCount(3);
+	await search.element.getByRole('button', { name: 'Toggle Search Details', exact: true }).click();
 	await search.element.getByRole('textbox', { name: 'Files to include', exact: true }).fill('**/*.ts');
 	await search.search('ash_search_token');
 	await expect(search.status).toHaveText('3 results');
-	await expect(search.files).toHaveText([/ • src\/alpha\.ts$/u]);
+	await expect(search.files).toHaveText(['alpha.ts']);
 	await search.element.getByRole('textbox', { name: 'Files to include', exact: true }).fill('');
 	await search.element.getByRole('textbox', { name: 'Files to exclude', exact: true }).fill('**/alpha.ts');
 	await search.search('ash_search_token');
 	await expect(search.status).toHaveText('2 results');
-	await expect.poll(async () => (await search.files.allTextContents()).map(path => path.split(' • ')[1]).sort()).toEqual(['notes.md', 'src/beta.js']);
+	await expect.poll(async () => (await search.files.allTextContents()).sort()).toEqual(['beta.js', 'notes.md']);
 	await search.search('no_such_workspace_token');
 	await expect(search.status).toHaveText('No results found.');
 	await expect(search.files).toHaveCount(0);
@@ -33,12 +34,12 @@ test('workspace search applies include and exclude filters and clears previous r
 test('workspace search applies case and regular expression options to real files', async ({ workbench }) => {
 	const search = workbench.search;
 	await search.open();
-	await search.element.getByRole('checkbox', { name: 'Match Case', exact: true }).check();
+	await search.element.getByRole('button', { name: 'Match Case', exact: true }).click();
 	await search.search('ash_search_token');
 	await expect(search.status).toHaveText('4 results');
-	await search.element.getByRole('checkbox', { name: 'Use Regex', exact: true }).check();
+	await search.element.getByRole('button', { name: 'Use Regular Expression', exact: true }).click();
 	await search.search('ash_search_token:[0-9]+');
 	await expect(search.status).toHaveText('1 results');
-	await expect(search.files).toHaveText([/ • src\/alpha\.ts$/u]);
+	await expect(search.files).toHaveText(['alpha.ts']);
 	await expect(search.element.locator('.ash-search-match')).toContainText('ash_search_token:42');
 });

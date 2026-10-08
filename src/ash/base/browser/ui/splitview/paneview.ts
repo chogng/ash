@@ -1,5 +1,5 @@
 import { addDisposableListener, h } from "../../dom.js";
-import { trackFocus } from "../../focus.js";
+import { isAncestorOfActiveElement, trackFocus } from "../../focus.js";
 import { appendIcon } from "../lxicons/lxicon.js";
 import { Emitter, type Event } from "../../../common/event.js";
 import { Disposable, toDisposable } from "../../../common/lifecycle.js";
@@ -40,7 +40,9 @@ export class Pane extends Disposable implements ISplitViewView {
 	protected readonly contentElement: HTMLDivElement;
 	private readonly headerButton: HTMLButtonElement;
 	private readonly titleElement: HTMLHeadingElement;
-	private readonly focusTracker;
+	private focused = false;
+	private readonly focusedEmitter = this._register(new Emitter<void>());
+	private readonly blurredEmitter = this._register(new Emitter<void>());
 	private readonly headerActionsVisibility: PaneViewHeaderActionsVisibility;
 	private collapsed: boolean;
 	private isClosing = false;
@@ -95,6 +97,7 @@ export class Pane extends Disposable implements ISplitViewView {
 		this.headerButton.append(twistyContainer, this.titleElement);
 		this.headerActionsElement = h(ownerDocument, "div");
 		this.headerActionsElement.className = "ash-pane-view-header-actions";
+		this._register(toDisposable(() => this.headerActionsElement.remove()));
 		this.headerElement.append(this.headerButton, this.headerActionsElement);
 
 		this.contentElement = h(ownerDocument, "div");
@@ -113,9 +116,24 @@ export class Pane extends Disposable implements ISplitViewView {
 			event.preventDefault();
 			this.setCollapsed(event.key === "ArrowLeft");
 		}));
-		this.focusTracker = this._register(trackFocus(element));
-		this.onDidFocus = this.focusTracker.onDidFocus;
-		this.onDidBlur = this.focusTracker.onDidBlur;
+		this.onDidFocus = this.focusedEmitter.event;
+		this.onDidBlur = this.blurredEmitter.event;
+		// Actions retain their Pane owner when a Part hosts them outside the pane's DOM subtree.
+		const updateFocus = (): void => {
+			const focused = this.hasFocus();
+			if (focused === this.focused) { return; }
+			this.focused = focused;
+			if (focused) { this.focusedEmitter.fire(); } else { this.blurredEmitter.fire(); }
+		};
+		for (const root of [element, this.headerActionsElement]) {
+			const tracker = this._register(trackFocus(root));
+			this._register(tracker.onDidFocus(updateFocus));
+			this._register(tracker.onDidBlur(updateFocus));
+		}
+	}
+
+	hasFocus(): boolean {
+		return isAncestorOfActiveElement(this.element) || isAncestorOfActiveElement(this.headerActionsElement);
 	}
 
 	setTitle(title: string): void {
@@ -129,7 +147,8 @@ export class Pane extends Disposable implements ISplitViewView {
 
 	setHeaderVisible(visible: boolean): void {
 		if (visible === this.isHeaderVisible()) return;
-		if (!visible && this.headerElement.contains(this.element.ownerDocument.activeElement)) {
+		// A title host can move these actions during the same visibility update; their focus follows the node.
+		if (!visible && this.headerElement.contains(this.element.ownerDocument.activeElement) && !this.headerActionsElement.contains(this.element.ownerDocument.activeElement)) {
 			this.focus();
 		}
 		this.headerElement.hidden = !visible;

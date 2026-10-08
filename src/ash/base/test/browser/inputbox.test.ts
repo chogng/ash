@@ -3,6 +3,40 @@ import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { HistoryInputBox, InputBox } from "../../browser/ui/inputbox/inputbox.js";
 
+test('Flexible InputBox preserves multiline editing, selection and validation without changing default numeric inputs', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using input = new InputBox(dom.window.document.body, { flexibleHeight: true, flexibleMaxHeight: 134, presentation: 'compact' });
+	using numeric = new InputBox(dom.window.document.body, { type: 'number' });
+	const changed: string[] = [];
+	input.onDidChange(value => changed.push(value));
+	input.value = '中文😀\nsecond';
+	input.focus();
+	input.select({ start: 2, end: 4 });
+	input.showValidation('Invalid pattern');
+	assert.deepEqual({ tag: input.inputElement.tagName, value: input.value, selection: [input.inputElement.selectionStart, input.inputElement.selectionEnd], changed, invalid: input.inputElement.getAttribute('aria-invalid') }, {
+		tag: 'TEXTAREA', value: '中文😀\nsecond', selection: [2, 4], changed: ['中文😀\nsecond'], invalid: 'true',
+	});
+	numeric.inputElement.valueAsNumber = 3;
+	numeric.step = '2';
+	assert.deepEqual([numeric.inputElement.tagName, numeric.inputElement.type, numeric.inputElement.valueAsNumber, numeric.step], ['INPUT', 'number', 3, '2']);
+	input.dispose(); numeric.dispose();
+	dom.window.close();
+});
+
+test('Flexible history input retains multiline entries and restores the multiline draft', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using input = new HistoryInputBox(dom.window.document.body, { flexibleHeight: true, history: new Set(['saved\nquery']) });
+	input.value = 'current\ndraft';
+	input.showPreviousValue();
+	assert.equal(input.value, 'saved\nquery');
+	input.showNextValue();
+	assert.equal(input.value, 'current\ndraft');
+	input.addToHistory();
+	assert.deepEqual(input.getHistory(), ['saved\nquery', 'current\ndraft']);
+	input.dispose();
+	dom.window.close();
+});
+
 test("InputBox exposes value, keyboard, focus, and selection behavior", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const inputBox = new InputBox(dom.window.document.body, {

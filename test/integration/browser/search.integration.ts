@@ -6,13 +6,13 @@ import { IContentSearchService, type IContentSearchQuery } from '../../../src/as
 import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
 import { lightColorTheme, darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
-import { WorkbenchViewRegistry } from '../../../src/ash/workbench/common/views.js';
+import { ViewContainerLocation, WorkbenchViewContainerId, IViewDescriptorService, WorkbenchViewRegistry } from '../../../src/ash/workbench/common/views.js';
 import { WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/browser/configurationService.js';
 import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { registerSearchViews } from '../../../src/ash/workbench/contrib/search/browser/search.contribution.js';
 import { SEARCH_VIEW_ID } from '../../../src/ash/workbench/contrib/search/common/constants.js';
 import { SearchView } from '../../../src/ash/workbench/contrib/search/browser/searchView.js';
-import { setNlsMessages } from '../../../src/ash/nls.js';
+import { localize, setNlsMessages } from '../../../src/ash/nls.js';
 import { Event } from '../../../src/ash/base/common/event.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
@@ -37,7 +37,21 @@ import { IWorkingCopyService } from '../../../src/ash/workbench/services/working
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
-import type { IView } from '../../../src/ash/workbench/common/views.js';
+import { ViewDescriptorService } from '../../../src/ash/workbench/services/views/browser/viewDescriptorService.js';
+import { ViewsService } from '../../../src/ash/workbench/services/views/browser/viewsService.js';
+import { PaneCompositePartService } from '../../../src/ash/workbench/browser/parts/paneCompositePartService.js';
+import { IPaneCompositePartService } from '../../../src/ash/workbench/services/panecomposite/browser/panecomposite.js';
+import { SidebarPart } from '../../../src/ash/workbench/browser/parts/sidebar/SidebarPart.js';
+import { ILocalizationService } from '../../../src/ash/workbench/services/localization/common/localizationService.js';
+import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
+import { WorkbenchLayout } from '../../../src/ash/workbench/browser/layout.js';
+import { IWorkbenchLayoutService, workbenchPartIds, type WorkbenchPartId } from '../../../src/ash/workbench/services/layout/browser/layoutService.js';
+import { WorkbenchState } from '../../../src/ash/platform/workspace/common/workspace.js';
+import { Part } from '../../../src/ash/workbench/browser/part.js';
+import { ViewPane, type IViewPaneOptions } from '../../../src/ash/workbench/browser/parts/views/viewPane.js';
+import { SyncDescriptor } from '../../../src/ash/platform/instantiation/common/descriptors.js';
+import { Dimension } from '../../../src/ash/base/browser/dom.js';
+import '../../../src/ash/workbench/browser/media/style.css';
 import { SearchCommandIds } from '../../../src/ash/workbench/contrib/search/common/constants.js';
 import { SearchAccessibilityHelp } from '../../../src/ash/workbench/contrib/search/browser/searchAccessibilityHelp.js';
 import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
@@ -168,40 +182,53 @@ instantiation.registerInstance(IContentSearchService, {
 		return { resultCount: 1, limitHit: false, error: undefined };
 	},
 });
-const registry = new WorkbenchViewRegistry();
+const registry = store.add(new WorkbenchViewRegistry());
 registerSearchViews(registry);
+class FixtureView extends ViewPane {
+	constructor(container: HTMLElement, options: IViewPaneOptions) { super(container, options); this.contentElement.textContent = options.title; }
+}
+registry.registerStaticViewContainer({ id: 'fixture.explorer', title: 'Explorer', location: ViewContainerLocation.Sidebar });
+registry.registerStaticViews('fixture.explorer', [{ id: 'fixture.explorer.view', title: 'Files', ctorDescriptor: new SyncDescriptor(FixtureView) }]);
 const host = document.querySelector<HTMLElement>('#search')!;
-const pane = instantiation.createInstance(registry.getView(SEARCH_VIEW_ID)!.ctorDescriptor, host, { id: SEARCH_VIEW_ID, title: 'Search' });
+instantiation.registerInstance(IThemeService, theme);
+instantiation.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (bundle, key, fallback) => localize({ bundle, key }, fallback) });
+const descriptors = store.add(instantiation.createInstance(ViewDescriptorService, { registry }));
+instantiation.registerInstance(IViewDescriptorService, descriptors);
+const layout = store.add(instantiation.createInstance(WorkbenchLayout, host, {
+	initialDimension: new Dimension(1024, 600), workbenchState: WorkbenchState.WORKSPACE,
+	defaultLayout: { force: true, parts: { sidebar: true, auxiliarybar: false, agentSidebar: false, panel: false } },
+}));
+instantiation.registerInstance(IWorkbenchLayoutService, layout);
+const sidebar = store.add(instantiation.createInstance(SidebarPart, layout.domNode, {
+	viewDescriptorService: descriptors, contextKeyService: instantiation.get(IContextKeyService),
+	localizationService: instantiation.get(ILocalizationService),
+	openComposite: (id: string, focus?: boolean) => panes.openPaneComposite(id, ViewContainerLocation.Sidebar, focus).then(composite => composite ?? null),
+}));
+// Unrelated regions use empty Parts; Search, its Sidebar, construction, visibility, title and geometry use their production owners.
+class FixturePart extends Part {
+	constructor(id: WorkbenchPartId) { super(layout.domNode, id, theme, instantiation.get(IStorageService)); }
+}
+const parts = new Map<WorkbenchPartId, Part>(workbenchPartIds.map(id => [id, id === 'sidebar' ? sidebar : store.add(new FixturePart(id))]));
+layout.createParts(parts);
+layout.layout(new Dimension(1024, 600));
+layout.resizePart('sidebar', new Dimension(280, 600));
+const panes = store.add(instantiation.createInstance(PaneCompositePartService, new Map([[ViewContainerLocation.Sidebar, sidebar]])));
+instantiation.registerInstance(IPaneCompositePartService, panes);
+const views = store.add(instantiation.createInstance(ViewsService));
+instantiation.registerInstance(IViewsService, views);
+const pane = await views.openView<SearchView>(SEARCH_VIEW_ID);
 if (!(pane instanceof SearchView)) { throw new Error('Search registration did not create SearchView'); }
-store.add(pane);
-pane.setVisible(true);
-pane.layout(600, 0, 280);
-instantiation.registerInstance(IViewsService, {
-	onDidChangeViewContainerVisibility: Event.None,
-	onDidChangeViewVisibility: Event.None,
-	onDidChangeFocusedView: Event.None,
-	isViewContainerVisible: () => true,
-	isViewContainerActive: () => true,
-	openViewContainer: async () => null,
-	closeViewContainer() { },
-	getVisibleViewContainer: () => null,
-	getActiveViewPaneContainerWithId: () => null,
-	getFocusedView: () => null,
-	getFocusedViewName: () => 'Search',
-	isViewVisible: id => id === SEARCH_VIEW_ID,
-	openView: async <T extends IView>(): Promise<T | null> => pane as unknown as T,
-	closeView() { },
-	getActiveViewWithId: <T extends IView>(id: string) => id === SEARCH_VIEW_ID && pane.isVisible() ? pane as unknown as T : null,
-	getViewWithId: <T extends IView>(id: string) => id === SEARCH_VIEW_ID ? pane as unknown as T : null,
-	focusView: async () => { pane.focus(); return true; },
-});
 window.addEventListener('pagehide', () => store.dispose(), { once: true });
+let secondView: import('../../../src/ash/base/common/lifecycle.js').IDisposable | undefined;
 window.ashSearchIntegration = {
 	selectTreeView: async () => {
 		if (!treeViewAction) { throw new Error('Search toolbar did not provide View as tree'); }
 		await treeViewAction.run();
 	},
-	setSearchVisible: value => pane.setVisible(value),
+	setSearchVisible: async value => { if (value) { await views.openView(SEARCH_VIEW_ID); } else { views.closeViewContainer(WorkbenchViewContainerId.Search); } },
+	focusedView: () => views.getFocusedView()?.id,
+	switchSidebar: id => views.openViewContainer(id === 'search' ? WorkbenchViewContainerId.Search : 'fixture.explorer').then(() => undefined),
+	setSecondView: enabled => { if (enabled) { secondView = registry.registerViews(WorkbenchViewContainerId.Search, [{ id: 'fixture.second', title: 'Second', ctorDescriptor: new SyncDescriptor(FixtureView) }]); } else { secondView?.dispose(); secondView = undefined; } },
 	closeResultMenu: () => resultMenus.hideContextMenu(),
 	replaceResultMenu: () => resultMenus.showContextMenu({ getAnchor: () => host, getActions: () => [{ id: 'fixture.otherMenu', label: 'Other menu action', tooltip: '', enabled: true, run() { } }] }),
 	copyAll: () => commands.executeCommand<void>(SearchCommandIds.CopyAllCommandId),
@@ -219,14 +246,17 @@ window.ashSearchIntegration = {
 	cancelled: () => cancelled,
 	closeWorkspace: () => workspace.updateWorkspace({ id: 'empty', folders: [] }),
 	setTheme: name => theme.setColorTheme(themes[name]),
-	setWidth: width => { host.style.width = `${width}px`; pane.layout(600, 0, width); },
+	setWidth: width => layout.resizePart('sidebar', new Dimension(width, 600)),
 };
 
 declare global {
 	interface Window {
 		ashSearchIntegration: {
 			selectTreeView(): Promise<void>;
-			setSearchVisible(value: boolean): void;
+			setSearchVisible(value: boolean): Promise<void>;
+			focusedView(): string | undefined;
+			switchSidebar(id: 'search' | 'explorer'): Promise<void>;
+			setSecondView(enabled: boolean): void;
 			closeResultMenu(): void;
 			replaceResultMenu(): void;
 			copyAll(): Promise<void>;
