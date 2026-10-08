@@ -49,6 +49,7 @@ pub(super) struct GitTurnChangesRuntime {
     pub(super) threads: Arc<ThreadController>,
     pub(super) model: Arc<dyn ModelService>,
     pub(super) updates: Arc<UpdateBroker>,
+    pub(super) workflows: Arc<workflows::Store>,
     pub(super) capture_failures: RwLock<BTreeMap<TurnId, String>>,
     pub(super) tool_write_capabilities: RwLock<BTreeMap<(TurnId, ToolCallId), bool>>,
     pub(super) write_lifecycles: WriteLifecycleTracker,
@@ -63,6 +64,7 @@ impl GitTurnChangesRuntime {
         model: Arc<dyn ModelService>,
         dirs: Arc<ThreadDirs>,
         updates: Arc<UpdateBroker>,
+        workflows: Arc<workflows::Store>,
     ) -> Result<Arc<Self>, String> {
         let store = Arc::new(
             SqliteTurnChangeStore::open(database_path)
@@ -79,6 +81,7 @@ impl GitTurnChangesRuntime {
             threads,
             model,
             updates,
+            workflows,
             capture_failures: RwLock::new(BTreeMap::new()),
             tool_write_capabilities: RwLock::new(BTreeMap::new()),
             write_lifecycles: WriteLifecycleTracker::default(),

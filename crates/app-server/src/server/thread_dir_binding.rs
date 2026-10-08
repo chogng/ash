@@ -18,6 +18,10 @@ use worktree::ManagedDirSource;
 use worktree::ManagedDirTarget;
 use worktree::ManagedRepositoryBinding;
 
+#[cfg(test)]
+#[path = "thread_dir_binding_tests.rs"]
+mod tests;
+
 impl GitTurnChangesRuntime {
     /// Cleans a binding after its Session history has been deleted by an explicit user action.
     pub(super) fn cleanup_deleted_thread(
@@ -217,8 +221,61 @@ impl GitTurnChangesRuntime {
 
     fn source_for(
         &self,
-        origin: &ThreadOrigin,
+        request: &ThreadWorktreeBindingRequest,
     ) -> Result<(ManagedDirSource, ManagedDirTarget), CoreError> {
+        if let ThreadOrigin::AgentSpawn {
+            parent_thread_id,
+            delegation_id,
+            ..
+        } = &request.origin
+        {
+            let intent = self.workflows.read_parallel_binding_intent(
+                &request.session_id,
+                parent_thread_id,
+                delegation_id,
+            )?;
+            if let Some(intent) = intent {
+                // Store validates the candidate against the coordinator's run; its source may be a worker.
+                let source = self.binding(&intent.source_thread).ok_or_else(|| {
+                    CoreError::Journal(format!(
+                        "parallel source Thread {} has no managed directory",
+                        intent.source_thread
+                    ))
+                })?;
+                if source.kind() != ManagedDirKind::Git {
+                    return Err(CoreError::InvalidInput(
+                        "parallel development requires a Git-backed source Thread".into(),
+                    ));
+                }
+                let source_snapshot = self.threads.read_thread(&intent.source_thread)?;
+                if source_snapshot.session_id != request.session_id {
+                    return Err(CoreError::Policy(
+                        "parallel binding belongs to another Session".into(),
+                    ));
+                }
+                let repository_trees = intent
+                    .repository_trees
+                    .into_iter()
+                    .map(|(path, tree)| (PathBuf::from(path), tree))
+                    .collect::<BTreeMap<_, _>>();
+                return Ok((
+                    ManagedDirSource::ImmutableTree {
+                        source_directory: source.dir().to_path_buf(),
+                        tree_id: primary_tree(&repository_trees)?,
+                        repository_trees,
+                    },
+                    ManagedDirTarget::Detached {
+                        object_id: intent.target_oid,
+                    },
+                ));
+            }
+            if delegation_id.as_str().starts_with("parallel-") {
+                return Err(CoreError::Policy(
+                    "parallel AgentSpawn has no durable immutable binding intent".into(),
+                ));
+            }
+        }
+        let origin = &request.origin;
         if let ThreadOrigin::Message { workspace, .. } = origin {
             let ash_protocol::WorkspaceCheckpoint::Git {
                 source_dir_id,
@@ -482,7 +539,7 @@ impl ThreadWorktreeBinder for GitTurnChangesRuntime {
             self.bind_thread_services(&request.thread_id, &binding)?;
             return Ok(());
         }
-        let (source, mut target) = self.source_for(&request.origin)?;
+        let (source, mut target) = self.source_for(request)?;
         if let Some(name) = &request.branch_name {
             target = ManagedDirTarget::NewBranch { name: name.clone() };
         }

@@ -1,8 +1,29 @@
 //! User-owned Team and Develop commands, immutable candidates, and dedicated Agent launches.
 mod model;
+mod parallel;
 mod store;
 pub use model::Command;
 pub use model::Mode;
+pub use parallel::AcceptanceRecord;
+pub use parallel::CheckEvidence;
+pub use parallel::CheckOutcome;
+pub use parallel::CheckPlan;
+pub use parallel::FindingSeverity;
+pub use parallel::ParallelBindingIntent;
+pub use parallel::ParallelCommandReceipt;
+pub use parallel::ParallelDevelopment;
+pub use parallel::ParallelMutation;
+pub use parallel::ParallelMutationOutcome;
+pub use parallel::ParallelStatus;
+pub use parallel::ParallelTarget;
+pub use parallel::ParallelTask;
+pub use parallel::ParallelTaskDefinition;
+pub use parallel::ReviewDecision;
+pub use parallel::ReviewFinding;
+pub use parallel::ReviewSnapshot;
+pub use parallel::ReviewVerdict;
+pub use parallel::WorkerAttempt;
+pub use parallel::WorkerStatus;
 pub use store::Store;
 
 use ash_core::MultiAgentCoordinator;
@@ -105,6 +126,11 @@ impl Runtime<'_> {
         request: StartTurnRequest,
         mut previous: Option<Work>,
     ) -> Result<Plan, CoreError> {
+        if command.mode == Mode::ParallelDevelop {
+            return Err(invalid(
+                "Parallel development is not connected to its dedicated runtime yet",
+            ));
+        }
         if let core_api::SequenceExpectation::Exact(expected) = request.expected_sequence
             && expected != parent.sequence
         {

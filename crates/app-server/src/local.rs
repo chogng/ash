@@ -1903,6 +1903,13 @@ pub fn open_app_server_with_codebase_providers(
         mcp_updates.bind_hooks(hooks);
     }
     let local_dir_root = options.dir_root.clone();
+    let workflow_store = Arc::new(
+        match options.session_state_mode {
+            SessionStateMode::Durable => workflows::Store::open(&database_path),
+            SessionStateMode::Ephemeral => workflows::Store::in_memory(),
+        }
+        .map_err(open_error)?,
+    );
     if let Some(dir_root) = options.dir_root {
         match options.initial_dir_permissions {
             InitialDirPermissions::HostConfiguration => server
@@ -1915,16 +1922,15 @@ pub fn open_app_server_with_codebase_providers(
     }
     if let Some(dir_root) = local_dir_root {
         server = server
-            .with_local_dir_services(&database_path, &options.profile_root, &dir_root)
+            .with_local_dir_services(
+                &database_path,
+                &options.profile_root,
+                &dir_root,
+                Arc::clone(&workflow_store),
+            )
             .map_err(OpenAppServerError)?;
     }
-    server = server.with_workflow_store(Arc::new(
-        match options.session_state_mode {
-            SessionStateMode::Durable => workflows::Store::open(&database_path),
-            SessionStateMode::Ephemeral => workflows::Store::in_memory(),
-        }
-        .map_err(open_error)?,
-    ));
+    server = server.with_workflow_store(workflow_store);
     server.bind_session_extensions().map_err(open_error)?;
     server
         .resume_recovered_agent_coordinations()

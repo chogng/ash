@@ -455,6 +455,31 @@ fn command_parser_rejects_malformed_controls_and_leaves_ordinary_text_alone() {
 }
 
 #[test]
+fn parallel_develop_command_is_not_reinterpreted_as_generic_team_work() {
+    assert!(Command::parse("/team develop").is_err());
+    let command = Command::parse("/team develop implement two independent changes")
+        .unwrap()
+        .unwrap();
+    assert_eq!(command.mode, Mode::ParallelDevelop);
+
+    let fixture = Fixture::new(Store::in_memory().unwrap());
+    let sequence_before = fixture.threads.read_thread(&fixture.root).unwrap().sequence;
+    let result = fixture.runtime().execute(
+        &fixture.root,
+        command,
+        fixture.request(
+            "parallel-start",
+            "/team develop implement two independent changes",
+        ),
+    );
+    assert!(matches!(result, Err(CoreError::InvalidInput(_))));
+    assert_eq!(
+        fixture.threads.read_thread(&fixture.root).unwrap().sequence,
+        sequence_before
+    );
+}
+
+#[test]
 fn workflow_delegation_preserves_debug_and_replaces_multitask_with_agent() {
     for mode in [
         protocol::CollaborationMode::Agent,

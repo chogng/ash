@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 #[serde(rename_all = "snake_case")]
 pub enum Mode {
     Team,
+    ParallelDevelop,
     Develop,
 }
 
@@ -35,7 +36,7 @@ impl Command {
             .trim()
             .split_once(char::is_whitespace)
             .unwrap_or((text.trim(), ""));
-        let mode = match name {
+        let mut mode = match name {
             "/team" => Mode::Team,
             "/develop" => Mode::Develop,
             _ => return Ok(None),
@@ -43,6 +44,16 @@ impl Command {
         let tail = tail.trim();
         let (verb, argument) = tail.split_once(char::is_whitespace).unwrap_or((tail, ""));
         let argument = argument.trim();
+        if mode == Mode::Team && verb == "develop" {
+            if argument.is_empty() {
+                return Err(invalid("Use /team develop <task>"));
+            }
+            mode = Mode::ParallelDevelop;
+            return Ok(Some(Self {
+                mode,
+                action: Action::Start(argument.into()),
+            }));
+        }
         let action = match verb {
             "" => Action::Resume(String::new()),
             "status" if argument.is_empty() => Action::Status,

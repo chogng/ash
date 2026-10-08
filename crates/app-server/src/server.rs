@@ -745,6 +745,7 @@ impl AppServer {
         database_path: &std::path::Path,
         profile_root: &std::path::Path,
         dir_root: &std::path::Path,
+        workflows: Arc<workflows::Store>,
     ) -> Result<Self, String> {
         let config = self
             .config
@@ -777,6 +778,7 @@ impl AppServer {
             Arc::clone(&self.model),
             Arc::clone(&dirs),
             Arc::clone(&self.updates),
+            workflows,
         )?;
         let mut server = self.with_git_turn_changes_runtime(runtime)?;
         server.dir_services = Some(dirs);
