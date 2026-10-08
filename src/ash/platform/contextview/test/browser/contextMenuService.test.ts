@@ -18,6 +18,8 @@ import { BrowserContextMenuService } from '../../browser/contextMenuService.js';
 import { IKeybindingService } from '../../../keybinding/common/keybinding.js';
 import { INotificationService } from '../../../notification/common/notification.js';
 import { promiseWithResolvers } from '../../../../base/common/async.js';
+import { ButtonActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
+import { errorHandler } from '../../../../base/common/errors.js';
 
 test("menu delegates prepend explicit actions and use their context-key scope", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
@@ -252,6 +254,42 @@ test('layout cancellation finishes mounting before its hide callback mounts a su
 	fixture.menus.hideContextMenu();
 	assert.equal(view.hidden, true);
 });
+
+for (const mounting of [false, true]) {
+	test(`a browser menu whose view item disposal fails ${mounting ? 'during mount cancellation' : 'during hide'} notifies once and permits a successor`, () => {
+		using fixture = new BrowserMenuFixture();
+		using source = new CancellationTokenSource();
+		const failure = new Error('Menu view item disposal fixture failure');
+		const reported: unknown[] = [];
+		const previousHandler = errorHandler.getUnexpectedErrorHandler();
+		errorHandler.setUnexpectedErrorHandler(error => reported.push(error));
+		using restoreHandler = toDisposable(() => errorHandler.setUnexpectedErrorHandler(previousHandler));
+		let disposed = 0;
+		const hidden: boolean[] = [];
+		if (mounting) {
+			Object.defineProperty(fixture.origin, 'getBoundingClientRect', {
+				value: () => {
+					source.cancel();
+					return new fixture.document.defaultView!.DOMRect(0, 0, 100, 20);
+				}
+			});
+		}
+		fixture.menus.showContextMenu({
+			getAnchor: () => fixture.origin, getActions: () => [action('Fault')], cancellationToken: source.token,
+			getActionViewItem: selected => new class extends ButtonActionViewItem {
+				protected override disposeCore(): void { super.disposeCore(); disposed++; throw failure; }
+			}(selected),
+			onHide: cancelled => {
+				hidden.push(cancelled);
+				fixture.menus.showContextMenu({ getAnchor: () => ({ x: 120, y: 200, targetWindow: fixture.document.defaultView! }), getActions: () => [action('Successor')] });
+			},
+		});
+		if (!mounting) { assert.throws(() => fixture.menus.hideContextMenu(), error => error === failure); }
+		assert.deepEqual({ disposed, hidden, reported, label: fixture.visibleLabel }, { disposed: 1, hidden: [true], reported: mounting ? [failure] : [], label: 'Successor' });
+		fixture.menus.hideContextMenu();
+		assert.deepEqual({ disposed, hidden, label: fixture.visibleLabel }, { disposed: 1, hidden: [true], label: undefined });
+	});
+}
 
 test('browser requests in different documents keep independent cancellation and focus', () => {
 	using first = new BrowserMenuFixture();

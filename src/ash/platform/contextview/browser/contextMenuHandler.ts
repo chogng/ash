@@ -65,11 +65,15 @@ export class ContextMenuHandler extends Disposable {
 		const finish = (): void => {
 			if (didHide) { return; }
 			didHide = true;
-			if (!executingAction) { this.executions.deleteAndDispose(executionDisposables); }
-			this.menus.deleteAndDispose(request);
-			// A successor must mount after the current host's synchronous show frame returns.
-			if (mounting) { pendingHideCallback = true; }
-			else { notifyHide(); }
+			try {
+				if (!executingAction) { this.executions.deleteAndDispose(executionDisposables); }
+				this.menus.deleteAndDispose(request);
+			} finally {
+				// A successor must mount after the current host's synchronous show frame returns,
+				// even when a custom view item's resource disposal fails.
+				if (mounting) { pendingHideCallback = true; }
+				else { notifyHide(); }
+			}
 		};
 		const request = {
 			hide: (): void => {
