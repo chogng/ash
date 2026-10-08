@@ -1,196 +1,146 @@
 ---
 name: validate-ui-scenario
-description: Use when reproducing a UI bug or verifying a fix by driving a real Ash window end to end and capturing evidence. Writes a scenario file, runs it against a dev build or installed Insiders, and produces a captioned video, per-step screenshots, a Playwright trace, and an HTML report to attach to an issue or pull request.
+description: Use for one-off Ash UI bug reproduction, fix verification, or an explicitly requested recorded test-plan scenario in a real Desktop window. Reuses the scenario runner to capture per-step screenshots, raw video, a Playwright trace, and a report; captioned video requires supported ffmpeg tooling. Routine regression tests, screenshot baseline updates, and backend or documentation-only changes do not require this skill.
 ---
 
 # Validate UI Scenario
 
-Drives a real Ash instance through a scenario and records reproducible evidence.
+Drive a real Ash window through an observable claim and deliver evidence from the existing runner. Assert behavior independently of the actions; screenshots and video help people review the result, but are not pixel regression baselines.
 
-Use this to reproduce a reported bug, to show that a fix works, or to attach a recording to a test-plan item. For deterministic regression coverage that runs on every build, write a smoke test instead (see the `smoke-tests` skill) — this skill is for one-off, issue-derived validation.
+## When to use it
 
-A scenario is a small JavaScript file run by `test/scenario/out/runScenario.js`. Nothing else has to be configured: the runner launches Ash, records video and a trace, captures a screenshot at every step boundary, writes the report, and captions the recording with each step and its result.
+The upstream [VS Code scenario skill](https://github.com/microsoft/vscode/blob/e7bc1cca4bc2df92b5f21cfdb574e3b34315b042/.github/skills/validate-ui-scenario/SKILL.md) explicitly covers UI bug reproduction, fix verification, and recordings for test-plan items. Its opening text calls this one-off, issue-derived validation and directs deterministic coverage on every build to smoke tests. It does not require a recording for every change or commit.
 
-## Prepare
+Upstream [component-fixtures](https://github.com/microsoft/vscode/blob/e7bc1cca4bc2df92b5f21cfdb574e3b34315b042/.github/skills/component-fixtures/SKILL.md) covers isolated component screenshot testing, including themed variants and readiness assertions. Upstream [update-screenshots](https://github.com/microsoft/vscode/blob/e7bc1cca4bc2df92b5f21cfdb574e3b34315b042/.github/skills/update-screenshots/SKILL.md) applies when asked to investigate a CI screenshot diff or update committed component screenshot hashes. Those are separate workflows. Do not turn scenario captures into their baselines or import their external screenshot service into Ash.
 
-```bash
-npm install                             # once
-npm --prefix test/scenario run compile  # after any change under test/scenario
-```
+The following selection is Ash guidance adapted from those scopes, not an upstream mandatory recording policy. Honor the user's specific evidence request and coordinate shared Desktop/build resources before launching.
 
-**Check `ffmpeg` and `ffprobe` are available before running.** The runner looks on `PATH` and in the usual install locations, so an ffmpeg installed after the editor started is still found. Without them the scenario still runs and keeps the raw recording, but the video is not captioned with step titles. The runner warns at startup; if they are missing, tell the user how to install them rather than silently returning an unannotated video:
+| Change or request                                                      | Validation and evidence selection                                                                                                         |
+| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Explicit UI reproduction, fix verification, or recorded test-plan item | Use this skill when real-window steps and reviewable evidence are needed.                                                                 |
+| Layout, theme, spacing, or another visual change                       | Assert relevant geometry/state and provide key screenshots for visual review. A static change alone does not require a recorded scenario. |
+| Complex interaction, timing, or a changed user-visible flow            | Consider a short recorded scenario to show transitions, with assertions at meaningful states.                                             |
+| Routine deterministic regression coverage                              | Use existing Playwright/smoke tests; see [smoke-tests](../smoke-tests/SKILL.md). Do not record every commit.                              |
+| Existing screenshot baseline or CI diff                                | Follow that test's actual baseline workflow; scenario PNGs are supporting evidence.                                                       |
+| Pure backend or documentation change with no UI claim                  | Run the owner's tests/documentation checks. No automatic screenshot/video requirement.                                                    |
 
-| Platform | Install |
-|----------|---------|
-| Windows | `winget install Gyan.FFmpeg` |
-| macOS | `brew install ffmpeg` |
-| Linux | `sudo apt install ffmpeg` |
+## Prepare and choose the target
 
-A new terminal may be needed for `PATH` to pick them up, or set `FFMPEG_PATH` and `FFPROBE_PATH`. An existing run can be annotated afterwards with `node test/scenario/out/renderEvidenceChapters.js <run-dir>`.
+Read the repository and matching scoped instructions first. Use a disposable fixture workspace containing only synthetic data. Never open personal source files, chats, credentials, or the user's real profile for evidence. Do not copy another checkout's Cargo artifacts, runtime packages, or generated protocols to make a run appear current.
 
-| Target | Flags | Also required | Use for |
-|--------|-------|---------------|---------|
-| Installed Insiders, else Stable | *(none — the default)* | nothing | Reproducing a report against shipped behavior |
-| Dev build from this checkout | `--dev` | `npm run electron`, `npm run transpile-client` | Verifying an unmerged change |
-| A specific install | `--build <app-root>` | nothing | Pinning an exact build |
-| Web | `--web --headless` | `npm run transpile-client` | Browser-only behavior |
-
-With no target flag the runner finds an installed Ash Insiders (falling back to Stable) and logs which one it chose. `--build` takes the application root — the install directory on Windows and Linux, or the `.app` bundle on macOS:
+Install the repository's declared pnpm dependencies, then use its existing entrypoints:
 
 ```bash
-# Windows
---build "C:/Users/<you>/AppData/Local/Programs/Microsoft Ash Insiders"
-# macOS
---build "/Applications/Ash - Insiders.app"
+pnpm install --frozen-lockfile
+pnpm scenario .build/ash-playwright-mcp/desktop-search.cjs
 ```
 
-Every target runs with its own profile and extensions directory, so your extensions and settings never leak into the recording, and the window is sized to the recording canvas so the capture has no empty margins. The evidence records the quality of the build that actually ran (`Insiders`, `Stable`, `Dev`), so a report always names the product it validated. An installed build only reproduces **shipped** behavior — to validate an unmerged change, use `--dev` in a checkout that contains it.
+The root `scenario` script runs `prepare:backend`, `build`, `scenario:compile`, then `test/scenario/out/runScenario.js`. Backend preparation may invoke Cargo. Coordinate a build/window slot before this command in a shared environment.
+
+When this checkout's backend and Desktop build are already prepared and current, compile and run without repeating those builds:
+
+```bash
+pnpm scenario:compile
+node test/scenario/out/runScenario.js .build/ash-playwright-mcp/desktop-search.cjs
+```
+
+| Target or option   | Current runner behavior                                                                                                                                                                    |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| No target flag     | Desktop from this checkout, with App Server required. Does not discover installed products.                                                                                                |
+| `--dev`            | Accepted by the parser, but currently does not participate in target selection. It does not select a different build.                                                                      |
+| `--web --headless` | Current renderer served locally, with App Server explicitly disabled. Covers browser UI only, not full backend Web acceptance. Does not support seeded user settings or Desktop arguments. |
+| `--verbose`        | Accepted; do not assume extra diagnostics are implemented.                                                                                                                                 |
+| `--build`          | Unsupported; do not use it. Installed-product selection is not implemented by this runner.                                                                                                 |
+
+Desktop uses a temporary user-data directory, an isolated test home/profile, and a 1440×900 recording canvas. The runner stops its owned application/daemon and removes the temporary profile; retain the separate fixture workspace and evidence for review. It must not stop unrelated processes.
+
+Check caption tooling before running. `renderEvidenceChapters.ts` needs `ffmpeg` with the `drawtext` filter, `ffprobe`, and a supported font. It searches `PATH` and known install locations. Overrides are `FFMPEG_PATH`, `FFPROBE_PATH`, and `CHAPTER_FONT`.
+
+| Platform | Tooling installation suggestion |
+| -------- | ------------------------------- |
+| Windows  | `winget install Gyan.FFmpeg`    |
+| macOS    | `brew install ffmpeg-full`      |
+| Linux    | `sudo apt install ffmpeg`       |
+
+Without caption tooling, retain the actual raw WebM, screenshots, trace, and report and explicitly report the missing captions. Do not call it an annotated video. Caption rendering is also skipped for multiple window recordings or missing alignment metadata. An existing run can be annotated with `node test/scenario/out/renderEvidenceChapters.js <run-dir>` once supported tooling is available; preserve its actual step timestamps and outcomes.
 
 ## Write the scenario
 
-Save the file next to the run it produces, for example `.build/ash-playwright-mcp/<issue>.cjs`. The **`.cjs`** extension matters: this is a CommonJS package, so a CommonJS scenario named `.js` fails to load. An ES module scenario with a default export works too.
+Save a small CommonJS scenario as `.cjs` under `.build/ash-playwright-mcp/`. The repository is an ES module package, so `.js` with `require`/`module.exports` will not work. An ES module with a default export works too. Reuse helpers in `test/automation`; the scenario owns result assertions.
 
 ```js
-const os = require('os');
-const path = require('path');
-const fs = require('fs');
+const { mkdtempSync, writeFileSync } = require('node:fs');
+const { tmpdir } = require('node:os');
+const { join } = require('node:path');
+const { expect } = require('@playwright/test');
 
-const workspacePath = path.join(os.tmpdir(), 'issue-250159-workspace');
-fs.mkdirSync(workspacePath, { recursive: true });
-
-// The settings tree is virtualized, so only the rows near the viewport exist in
-// the DOM. Scroll the whole list, otherwise "the setting is absent" cannot be
-// told apart from "the setting is below the fold".
-const COLLECT_TITLES = `(async () => {
-	const editor = document.querySelector('.settings-editor');
-	const scrollable = editor.querySelector('.settings-tree-container .monaco-scrollable-element');
-	const titles = new Set();
-	const collect = () => editor.querySelectorAll('.setting-item-label')
-		.forEach(node => titles.add(node.textContent.trim()));
-	collect();
-	for (let previous = -1; scrollable && scrollable.scrollTop !== previous;) {
-		previous = scrollable.scrollTop;
-		scrollable.scrollTop = previous + scrollable.clientHeight;
-		await new Promise(resolve => setTimeout(resolve, 180));
-		collect();
-	}
-	return [...titles];
-})()`;
+const workspacePath = mkdtempSync(join(tmpdir(), 'ash-scenario-fixture-'));
+writeFileSync(join(workspacePath, 'sample.txt'), 'ash_scenario_token synthetic fixture\n');
 
 module.exports = {
-	id: 'ash-250159-settings-search',
-	title: 'Settings search matches across title and description',
-	source: 'https://github.com/chogng/ash/issues/250159',
-	workspacePath,
-	steps: [
-		{
-			id: 'SS-01',
-			title: 'Open the Settings editor',
-			async run(context) {
-				await context.workbench.quickaccess.runCommand('workbench.action.openSettings2');
-				await context.page.waitForSelector('.settings-editor', { state: 'visible', timeout: 20000 });
-				return 'The Settings editor is visible.';
-			}
-		},
-		{
-			id: 'SS-02',
-			title: 'Search across title and description',
-			async run(context) {
-				await context.workbench.settingsEditor.searchSettingsUI('chat confirm');
-				const titles = await context.page.evaluate(COLLECT_TITLES);
-				if (!titles.some(title => /max\s*requests/iu.test(title))) {
-					throw new Error(`Max Requests is absent. Found: ${titles.join(', ')}`);
-				}
-				return 'Max Requests is present in the results.';
-			}
-		}
-	]
+    id: 'desktop-search',
+    title: 'Desktop searches an isolated fixture through App Server',
+    workspacePath,
+    steps: [
+        {
+            id: 'SEARCH-01',
+            title: 'Search synthetic workspace content',
+            async run({ workbench }) {
+                await workbench.search.open();
+                await workbench.search.search('ash_scenario_token');
+                await expect(workbench.search.status).toHaveText('1 results');
+                await expect(workbench.search.element.locator('.ash-search-preview mark'))
+                    .toHaveText('ash_scenario_token');
+                return 'The result count and highlighted fixture token match independently of the search action.';
+            }
+        }
+    ]
 };
 ```
 
-| Field | Meaning |
-|-------|---------|
-| `id`, `title` | Identify the run; `id` names the evidence directory |
-| `source` | Issue or test-plan item the scenario came from |
-| `workspacePath` | Disposable folder to open |
-| `userSettings` | Settings seeded into the profile before launch |
-| `extraArgs` | Extra VS Code command-line arguments |
-| `stepPauseMs` | How long to hold each finished step so its caption is readable. Defaults to `1000`; set `0` when the scenario is timing-sensitive |
+| Field           | Meaning                                                                                |
+| --------------- | -------------------------------------------------------------------------------------- |
+| `id`, `title`   | Identify the scenario; `id` prefixes the evidence directory.                           |
+| `source`        | Optional actual HTTP(S) issue/test-plan link. Do not invent an issue.                  |
+| `scenarioPath`  | Optional source path for provenance; the runner does not fill it automatically.        |
+| `workspacePath` | Disposable synthetic folder to open.                                                   |
+| `userSettings`  | Settings seeded into the isolated Desktop profile before launch.                       |
+| `extraArgs`     | Desktop arguments; cannot override `--user-data-dir` or `--folder`.                    |
+| `stepPauseMs`   | Hold after each finished step, default `1000`; use `0` for timing-sensitive scenarios. |
 
-Each step receives a `context` with `app`, `workbench`, `code`, `page`, and `skip(reason, options)`. `workbench` exposes the feature helpers (`settingsEditor`, `quickaccess`, `editors`, `terminal`, `chat`, …); `page` is the Playwright page for anything they do not cover.
+Each step receives `app`, `driver`, `code` (an alias for `driver`), `workbench`, `page`, and `skip(reason, options)`. Current Workbench helpers include `settingsEditor`, `quickaccess`, `editors`, `terminal`, `dialogs`, `search`, `menus`, and `git`; do not assume upstream helpers exist in Ash.
 
-- **Return a string** describing how the step was validated. It appears in the report.
-- **Throw** to fail the step. The message is recorded, and the run stops.
-- **Call `skip(reason, { needs })`** when the step cannot be validated automatically. The run stops and is reported as `aborted`, never as passed.
+- Return a string explaining the independent assertion for the report.
+- Throw on a failed assertion. The runner records the failure and stops.
+- Use `skip(reason, { needs: 'human' })` for subjective judgment, physical hardware, or required human sign-in.
+- Use `skip(reason, { needs: 'infrastructure' })` for an automatable step the harness cannot drive. Name the missing capability in the report.
 
-## Steps that cannot be automated
+Skipped steps stop the run with outcome `aborted`, never `passed`. Do not weaken assertions or silently remove blocked steps. Long or virtualized lists require checking the actual rendering contract before declaring an item absent. Use bounded state waits; make race timing explicit. Capture pre-fix behavior when feasible and relevant to the claim.
 
-Decide this while planning, before writing the scenario, and classify each one — the two kinds have different consequences:
+## Run and inspect evidence
 
-| `needs` | Meaning | What to do |
-|---------|---------|------------|
-| `human` | A person is required: physical hardware, a subjective judgement, a sign-in that cannot be scripted | Report the step so someone can check it by hand |
-| `infrastructure` | Automatable in principle, but the harness cannot do it yet | Report it as an **enhancement to this skill**, naming the missing capability |
+For a local run, set `GITHUB_SHA` to `git rev-parse HEAD` when invoking the runner so its existing manifest commit field is populated. Also record `git diff`/working-tree state: a commit alone does not identify uncommitted changes or prove build freshness.
 
-```js
-ctx.skip('Comparing physical print output requires a person with a printer.', { needs: 'human' });
-ctx.skip('The harness cannot drive native OS file dialogs.', { needs: 'infrastructure' });
-```
+Missing scenario input exits `2`; failed/aborted runs and load failures exit `1`; a completed passed run exits `0`. Unknown options are rejected. Inspect the manifest as well as the exit code: caption generation is best effort, and a passed UI scenario does not prove video annotation succeeded.
 
-Blocked steps are recorded in `manifest.json`, highlighted in a **Needs attention** section of `report.html`, marked on the video caption (`SKIPPED - NEEDS HUMAN`), and printed at the end of the run. Surface them in your summary — never quietly drop a step you could not perform, and never weaken an assertion so that it passes.
+Evidence is written to `.build/ash-playwright-mcp/evidence/<scenario-id>-<timestamp>/`:
 
-## Run it
+| Artifact                                                            | Contents                                                                                                                                                                           |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `report.html`                                                       | Step outcomes, validation details, videos and trace/log links.                                                                                                                     |
+| `manifest.json`                                                     | Step timestamps, screenshots, outcomes, artifact paths; platform, architecture, Node/Ash versions, `desktop`/`web` target and optional commit. No installed-product quality field. |
+| `videos/recording-N.webm`                                           | Actual Playwright recordings saved when the application closes.                                                                                                                    |
+| `videos/annotated.mp4`                                              | Only if caption rendering succeeds; H.264 video with a caption band above the original frame.                                                                                      |
+| `NN-<step>-started.png`, `NN-<step>-passed.png` (or failed/skipped) | Images at step boundaries; also initial/final captures.                                                                                                                            |
+| `logs/trace.zip`                                                    | Playwright trace.                                                                                                                                                                  |
+| `logs/workbench.log`                                                | Renderer warnings/errors if observed; do not assume backend/window logs are automatically present.                                                                                 |
 
-```bash
-node test/scenario/out/runScenario.js <scenario.cjs>
-```
+Confirm expected step outcomes, finalized non-empty video, and artifact existence. Probe actual video duration/codec/dimensions when tooling permits. Review key PNGs and video for privacy and visual mistakes; runtime/DOM/accessibility/focus/text/geometry assertions remain the behavioral oracle. Do not re-create a video from still images or claim an unperformed UI run passed.
 
-Exit code `0` means every step passed, `1` means the run failed or was aborted, `2` a usage error.
+## Deliver the result
 
-Evidence is written to `.build/ash-playwright-mcp/evidence/<run-id>/`:
+Lead with the outcome and independent assertions, then give the actual source, OS, Ash/Node/Electron/browser/backend versions available, commit and build provenance. List failed/skipped steps, human review still needed, harness limitations, and degraded evidence separately from pass/fail.
 
-| File | Contents |
-|------|----------|
-| `report.html` | Step table, outcome, embedded video |
-| `manifest.json` | Step timestamps, statuses, artifact paths, environment |
-| `videos/annotated.mp4` | Recording with a caption band showing each step and its validation result |
-| `videos/*.webm` | The raw recording |
-| `*.png` | Per-step screenshots |
-| `logs/` | Playwright trace, window and server logs |
+Provide key PNGs, actual WebM and annotated MP4 if produced, plus report/manifest and exact local paths, byte sizes, and SHA-256 hashes. Use the user's requested delivery channel when authorized; local paths alone do not deliver media to Slack or another remote recipient. Report upload confirmation or the concrete transfer blocker and never invent an attachment URL.
 
-The caption band is added **above** the recorded frame rather than drawn over it, so no recorded pixel is hidden and the recording keeps its original length. Each caption carries the step number and id, its status, the step title, and the validation detail the step reported. Re-render after editing a manifest with `node test/scenario/out/renderEvidenceChapters.js <run-dir>`.
-
-## What makes evidence trustworthy
-
-- Assert on DOM state, accessibility, focus, or text — screenshots support a claim, they do not establish one.
-- Validate through a signal separate from the action. An automation call returning successfully is not a result.
-- Beware virtualized lists. The settings tree and long lists render only the rows near the viewport, so scroll the whole list before concluding that something is absent.
-- If the bug is a race, make the timing explicit — a forced delay or a repeated loop — so the recording shows the window in which it occurs rather than relying on luck.
-- Record the failing behavior before the fix when you can. A passing run alone does not show that the scenario would have caught the bug.
-
-## Report back
-
-Summarize the outcome, list failed or skipped steps, link `report.html`, and state the OS, the VS Code version and quality (both are in `manifest.json`), and the source issue. Attach the video to the issue or pull request by dragging it into the comment box.
-
-Always call out, separately from the pass/fail result:
-
-- **steps that need a person**, so someone knows what is still unverified;
-- **steps blocked on a missing harness capability**, named as a concrete enhancement to this skill;
-- **anything that degraded the evidence**, such as a missing ffmpeg leaving the video uncaptioned.
-
-## Related
-
-- **Interactive exploration.** `test/mcp` also serves these tools over MCP (`ash_automation_*`), which helps when you need to inspect the UI before knowing what to assert. Configure it as an MCP server with `cwd` `test/mcp` and command `npm run start-stdio`.
-- **Automated validation on a pull request.** `microsoft/ash-engineering` runs the same harness in CI: labelling a pull request `~requires-ui-validation` researches the change, runs a scenario against the exact merge candidate, and posts the per-step result with captioned video. Use this skill when a scenario is not yet covered there, or to iterate locally before proposing one.
-
-<example>
-User: "/validate-ui-scenario reproduce https://github.com/chogng/ash/issues/250159"
-
-1. Confirm `ffmpeg`/`ffprobe` are available; if not, say so and give the install command before running, so the user is not surprised by a video without step titles.
-2. Read the issue and identify the observable claim: searching `chat confirm` in the Settings editor should match **Max Requests**, whose description mentions confirmation.
-3. Add a baseline step (`max requests` finds the setting) so a failure cannot be explained by the setting being missing from the build.
-4. Write `.build/ash-playwright-mcp/issue-250159.cjs` and run it with no target flag, which uses the installed Insiders; read the printed report path.
-5. Report the outcome per step, link `report.html`, and attach `videos/annotated.mp4`.
-
-The run fails at the search step, and that is the answer: the issue reproduces. Report it as a successful reproduction, not as a broken scenario.
-</example>
+Ash currently has no `test/mcp` entrypoint for this workflow. Its CI does not currently invoke `pnpm scenario` or upload these evidence directories. CI integration and common automation interfaces are separate coordinated work; do not promise upstream engineering-repository labels or build a replacement recording system here.
