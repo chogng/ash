@@ -658,6 +658,8 @@ class NotificationsPresentation extends Disposable {
 		if (systemMenu) {
 			const registry = new ConfigurationRegistry();
 			registry.registerConfiguration({ key: 'window.menuStyle', defaultValue: 'system', parse: value => value });
+			// Linux and Windows require a system title bar to use the Electron popup API.
+			registry.registerConfiguration({ key: 'window.titleBarStyle', defaultValue: 'system', parse: value => value });
 			this.services.registerInstance(IConfigurationService, this._register(new InMemoryConfigurationService(registry)));
 		}
 		this.menus = this._register(systemMenu ? this.services.createInstance(ElectronContextMenuService, systemMenu) : this.services.createInstance(BrowserContextMenuService));
