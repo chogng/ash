@@ -1562,3 +1562,37 @@ fn large_mcp_catalog_preserves_selectable_members_and_rejects_ambiguous_names() 
         .is_err()
     );
 }
+
+#[test]
+fn configured_hooks_route_to_the_local_policy_revision_and_other_user_actions_are_rejected() {
+    let combined = combine_tool_ports(vec![ToolPort::local(
+        Arc::new(FakeTools::new(
+            "local_tool",
+            ActionSource::BuiltInTool,
+            "local",
+        )),
+        Arc::new(AskPolicy),
+    )])
+    .unwrap()
+    .unwrap();
+    let provenance = ActionProvenance::new(ActionSource::User, "user:hook:symphony-before-run");
+    assert_eq!(combined.policy.revision_for(&provenance), "test-policy-v1");
+    let review = fake_review(ActionSource::User, "user:hook:symphony-before-run").unwrap();
+    assert!(matches!(
+        combined
+            .policy
+            .decide(&review, &ash_async_utils::CancellationSource::new().token())
+            .unwrap(),
+        ExecutionDecision::AskUser(_)
+    ));
+    let unknown = fake_review(ActionSource::User, "unknown-user-action").unwrap();
+    assert!(
+        combined
+            .policy
+            .decide(
+                &unknown,
+                &ash_async_utils::CancellationSource::new().token()
+            )
+            .is_err()
+    );
+}

@@ -23,6 +23,8 @@ mod backup_tests;
 mod infrastructure_tests;
 #[path = "memory_tests.rs"]
 mod memory_tests;
+#[path = "symphony_tests.rs"]
+mod symphony_tests;
 #[path = "task_delivery_host_tests.rs"]
 mod task_delivery_tests;
 use ash_action_policy::ActionReviewRequest;
@@ -8925,4 +8927,66 @@ fn typed_tool_selection_freezes_the_model_surface_and_replays_through_rpc() {
             .sequence,
         snapshot.sequence
     );
+}
+
+#[test]
+fn execution_defaults_are_shared_and_turn_overrides_are_frozen() {
+    let root = tempfile::tempdir().unwrap();
+    let store = Arc::new(ConfigStore::open(&root.path().join("config.db")).unwrap());
+    let server = server().with_config_store(store);
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let updated = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"config/update","params":{"commandId":"execution","expectedRevision":0,"execution":{"approvalMode":"auto","commandFileAccess":"readOnly","commandNetworkAccess":"allowed"}}}),
+    );
+    assert_eq!(updated["result"]["revision"], 1, "{updated}");
+    let read = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"config/read","params":{}}),
+    );
+    assert_eq!(read["result"]["execution"]["approvalMode"], "auto");
+    let session = create_session(&server, &mut connection, 4, "defaults-session");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    for (index, expected) in [
+        (0, ash_protocol::ApprovalMode::Auto),
+        (1, ash_protocol::ApprovalMode::Manual),
+    ] {
+        let thread = call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc":"2.0","id":5+index*2,"method":"session/request","params":{"commandId":format!("defaults-thread-{index}"),"sessionId":session_id,"request":{"type":"createThread","title":"thread"}}}),
+        );
+        let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
+        let mut request = serde_json::json!({"type":"startTurn","threadId":thread_id,"expectedSequence":1,"input":[{"type":"text","text":"hello"}]});
+        if index == 1 {
+            request["approvalMode"] = serde_json::json!("manual");
+        }
+        let started = call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc":"2.0","id":6+index*2,"method":"session/request","params":{"commandId":format!("defaults-turn-{index}"),"sessionId":session_id,"request":request}}),
+        );
+        assert_eq!(started["result"]["type"], "turn", "{started}");
+        wait_for_latest_turn(&server, thread_id, TurnStatus::Completed);
+        let snapshot = server
+            .threads()
+            .read_thread(&ash_protocol::ThreadId::new(thread_id).unwrap())
+            .unwrap();
+        assert_eq!(snapshot.turns.last().unwrap().approval_mode, expected);
+    }
+    let reset = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":10,"method":"config/update","params":{"commandId":"reset-execution","expectedRevision":1,"execution":null}}),
+    );
+    assert_eq!(reset["result"]["revision"], 2);
+    let read = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":11,"method":"config/read","params":{}}),
+    );
+    assert_eq!(read["result"]["execution"]["approvalMode"], "manual");
 }

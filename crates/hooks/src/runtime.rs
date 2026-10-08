@@ -58,6 +58,24 @@ pub struct DeclarativeHookRuntime {
 }
 
 impl DeclarativeHookRuntime {
+    /// Runs a host-configured process Hook under the same action policy and directory sandbox.
+    /// Output stays bounded; cancellation and timeout terminate the owned process tree.
+    pub fn execute_process(
+        &self,
+        hook: &ash_config::HookConfig,
+        dir: Dir,
+        timeout: std::time::Duration,
+        cancellation: &CancellationToken,
+    ) -> Result<ash_tool_executor::CommandOutput, CoreError> {
+        if timeout.is_zero() {
+            return Err(CoreError::InvalidInput(
+                "Workflow Hook timeout must be positive".into(),
+            ));
+        }
+        let authority = execution_authority(hook, &dir, self.policy.as_ref(), cancellation)?;
+        LocalHookProcessExecutor::execute_process(dir, hook, authority, timeout, cancellation)
+    }
+
     /// Creates an unbound runtime from an initial declaration snapshot and host policy.
     pub fn new(config: HooksConfig, policy: Arc<dyn ActionPolicyService>) -> Self {
         Self {

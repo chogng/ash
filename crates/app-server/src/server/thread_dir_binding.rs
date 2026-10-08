@@ -23,6 +23,45 @@ use worktree::ManagedRepositoryBinding;
 mod tests;
 
 impl GitTurnChangesRuntime {
+    pub(super) fn bind_prepared_directory(
+        &self,
+        thread: &ash_protocol::ThreadId,
+        binding: ManagedDirBinding,
+    ) -> Result<(), CoreError> {
+        self.dirs
+            .bindings
+            .write()
+            .map_err(|_| CoreError::Journal("Thread directory lock poisoned".into()))?
+            .insert(thread.clone(), binding.clone());
+        self.bind_thread_services(thread, &binding)
+    }
+
+    pub(super) fn cleanup_workflow_thread(
+        &self,
+        thread: &ash_protocol::ThreadId,
+    ) -> Result<(), String> {
+        let Some(binding) = self.binding(thread) else {
+            return Ok(());
+        };
+        self.dirs.release_search(binding.checkout_root())?;
+        self.dirs
+            .runtime
+            .block_on(self.dirs.worktrees.cleanup(
+                &binding,
+                worktree::ManagedDirCleanupEligibility::WorkflowTerminal,
+            ))
+            .map_err(|error| error.to_string())?;
+        self.dirs
+            .bindings
+            .write()
+            .map_err(|_| "Thread directory lock poisoned")?
+            .remove(thread);
+        self.dirs.file_access.unbind_thread_dir(thread);
+        self.dirs.hooks.unbind_thread_dir(thread);
+        self.stop_watcher(thread);
+        Ok(())
+    }
+
     /// Cleans a binding after its Session history has been deleted by an explicit user action.
     pub(super) fn cleanup_deleted_thread(
         &self,

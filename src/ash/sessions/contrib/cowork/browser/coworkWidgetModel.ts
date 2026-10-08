@@ -1,3 +1,4 @@
+import { IExecutionSettingsService } from '../../../../platform/execution/common/executionSettingsService.js';
 import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { IPromptsService } from '../../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { toSkillSelectors } from '../../../../workbench/contrib/chat/common/skillSelectors.js';
@@ -58,6 +59,8 @@ export class CoworkWidgetModel extends Disposable {
 	private queueGeneration = 0;
 	private readonly selectedModels = new Map<string, ModelRef>();
 	private readonly hasManualUntitledModel = observableValue(this, false);
+	private readonly defaultApprovalMode = observableValue<ApprovalMode>(this, 'manual');
+	private approvalGeneration = 0;
 	private readonly selectedApprovalModes = observableValue<ReadonlyMap<string, ApprovalMode>>(this, new Map());
 	private readonly automaticModels = new Set<ThreadId>();
 	// A New Chat's key is replaced with its Thread ID when the first message materializes it.
@@ -71,7 +74,7 @@ export class CoworkWidgetModel extends Disposable {
 
 	readonly onDidChange: Event<void> = this._onDidChange.event;
 
-	constructor(chatService: IChatService, selection: ChatWidgetSelection, sessionService: ISessionsManagementService, @IPromptsService private readonly skills: IPromptsService, @ILanguageModelsService private readonly languageModels: ILanguageModelsService, @ILanguageModelsConfigurationService private readonly modelPreferences: ILanguageModelsConfigurationService) {
+	constructor(chatService: IChatService, selection: ChatWidgetSelection, sessionService: ISessionsManagementService, @IPromptsService private readonly skills: IPromptsService, @ILanguageModelsService private readonly languageModels: ILanguageModelsService, @ILanguageModelsConfigurationService private readonly modelPreferences: ILanguageModelsConfigurationService, @IExecutionSettingsService private readonly execution: IExecutionSettingsService) {
 		super();
 		this.chatService = chatService;
 		this.sessionService = sessionService;
@@ -84,6 +87,7 @@ export class CoworkWidgetModel extends Disposable {
 			this._onDidChange.fire();
 		}));
 		this._register(chatService.onDidBecomeReady(() => void this.reconnect()));
+		this._register(execution.onDidChange(() => void this.loadDefaultApprovalMode()));
 		this._register(this.languageModels.onDidChangeModels(() => void this.loadModels()));
 		this._register(this.modelPreferences.onDidChangeModels(() => void this.loadModels()));
 		this._register(chatService.onDidChangeQueue(() => void this.loadQueue()));
@@ -114,7 +118,7 @@ export class CoworkWidgetModel extends Disposable {
 			phase: this._state,
 			error: this._error,
 			canInterrupt: this.canInterrupt,
-			approvalMode: this.selectedApprovalModes.get().get(this.composerIdentity) ?? this._thread?.turns.at(-1)?.approvalMode ?? 'manual',
+			approvalMode: this.selectedApprovalModes.get().get(this.composerIdentity) ?? this._thread?.turns.at(-1)?.approvalMode ?? this.defaultApprovalMode.get(),
 			models: this._models,
 			modelsError: this.modelsError,
 			slashCommands: this._slashCommands,
@@ -519,8 +523,18 @@ export class CoworkWidgetModel extends Disposable {
 		await Promise.all([this.subscribe(this.selection.active), this.loadCatalogs()]);
 	}
 
+	private async loadDefaultApprovalMode(): Promise<void> {
+		const generation = ++this.approvalGeneration;
+		try {
+			const snapshot = await this.execution.read();
+			if (this.isDisposed || generation !== this.approvalGeneration) return;
+			this.defaultApprovalMode.set(snapshot.settings.approvalMode);
+			this._onDidChange.fire();
+		} catch { /* A disconnected composer retains its last known default until reconnect. */ }
+	}
+
 	private async loadCatalogs(): Promise<void> {
-		const [models, slashCommands] = await Promise.allSettled([this.modelEntries(), this.chatService.listSlashCommands(), this.loadSkillSelectors()]);
+		const [models, slashCommands] = await Promise.allSettled([this.modelEntries(), this.chatService.listSlashCommands(), this.loadSkillSelectors(), this.loadDefaultApprovalMode()]);
 		if (this.isDisposed) return;
 		if (models.status === "fulfilled") {
 			this._models = models.value;

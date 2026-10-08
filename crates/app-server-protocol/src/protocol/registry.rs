@@ -137,6 +137,16 @@ use crate::protocol::common::TextDocumentsCapability;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_host::ExtensionClientRequestParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::symphony::SymphonyConfigureParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::symphony::SymphonyControlParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::symphony::SymphonyEnableParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::symphony::SymphonyMessagesParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::symphony::SymphonySubmitParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::text_document::TextDocumentApplyParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::text_document::TextDocumentApplyResult;
@@ -157,6 +167,22 @@ use crate::protocol::text_document::TextDocumentReleaseParams;
 use crate::protocol::text_document::TextDocumentTurnFinished;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::text_document::TextDocumentTurnOutcome;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::SymphonyControl;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::SymphonyConversation;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::SymphonyMessage;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::SymphonyMessageRole;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::SymphonyMessages;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::SymphonySnapshot;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::SymphonyTaskStatus;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::SymphonyWorkflow;
 #[cfg(any(test, feature = "export"))]
 use extension_protocol::ExtensionClientOperation;
 #[cfg(any(test, feature = "export"))]
@@ -415,6 +441,10 @@ use crate::protocol::config::CodebaseConfigureParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::config::CodebaseModelsDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::config::CommandFileAccessDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::config::CommandNetworkAccessDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::config::CommitMessageAuthorizeParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::config::CommitMessageRevokeParams;
@@ -449,6 +479,8 @@ use crate::protocol::config::ExecPolicyScopeMatcherDto;
 use crate::protocol::config::ExecPolicySelectorDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::config::ExecPolicyTokenDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::config::ExecutionConfigDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::config::FrontendConfigDto;
 #[cfg(any(test, feature = "export"))]
@@ -3055,6 +3087,12 @@ client_methods! {
         params: MemoryDeleteParams, response: memories::MemoryDeleteResult, serialization: GlobalExclusive,
     },
 
+    SymphonyRead => "symphony/read" { params: EmptyParams, response: SymphonySnapshot, serialization: None, },
+    SymphonyConfigure => "symphony/configure" { params: SymphonyConfigureParams, response: SymphonySnapshot, serialization: None, },
+    SymphonySubmit => "symphony/submit" { params: SymphonySubmitParams, response: SymphonyConversation, serialization: None, },
+    SymphonyControl => "symphony/control" { params: SymphonyControlParams, response: (), serialization: None, },
+    SymphonyEnable => "symphony/enable" { params: SymphonyEnableParams, response: (), serialization: None, },
+    SymphonyMessages => "symphony/messages" { params: SymphonyMessagesParams, response: SymphonyMessages, serialization: None, },
     AutomationList => "automation/list" {
         params: EmptyParams, response: AutomationListResult, serialization: None,
     },
@@ -5043,6 +5081,7 @@ server_notifications! {
         params: MemoryChanged,
     },
     QueueChanged => "queue/changed" { params: EmptyParams, },
+    SymphonyChanged => "symphony/changed" { params: EmptyParams, },
     AutomationChanged => "automation/changed" {
         params: EmptyParams,
     },
@@ -5453,6 +5492,9 @@ typescript_bindings! {
     LanguageServerConfigDto,
     FrontendConfigDto,
     ConfigReadResult,
+    ExecutionConfigDto,
+    CommandFileAccessDto,
+    CommandNetworkAccessDto,
     TraceConfigDto,
     TraceRecordingStateDto,
     TimeContextConfigDto,
@@ -5902,6 +5944,19 @@ typescript_bindings! {
     TurnChangesChanged,
     ProjectStatusDto,
     UnixMillis,
+    SymphonyConfigureParams,
+    SymphonySubmitParams,
+    SymphonyControlParams,
+    SymphonyEnableParams,
+    SymphonyMessagesParams,
+    SymphonySnapshot,
+    SymphonyWorkflow,
+    SymphonyConversation,
+    SymphonyTaskStatus,
+    SymphonyControl,
+    SymphonyMessage,
+    SymphonyMessageRole,
+    SymphonyMessages,
     Automation,
     AutomationDefinition,
     AutomationSchedule,

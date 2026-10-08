@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use tempfile::NamedTempFile;
 
 const BINDING_FILENAME: &str = "ash-thread-dir.json";
-const BINDING_VERSION: u8 = 6;
+const BINDING_VERSION: u8 = 7;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -52,6 +52,8 @@ pub(crate) struct BindingRecord {
     pub kind: BindingKind,
     #[serde(default)]
     pub repositories: Vec<RepositoryBindingRecord>,
+    #[serde(default)]
+    pub prepared_root: Option<PathBuf>,
 }
 
 impl BindingRecord {
@@ -83,6 +85,7 @@ impl BindingRecord {
             baseline_ref,
             kind,
             repositories: Vec::new(),
+            prepared_root: None,
         }
     }
 

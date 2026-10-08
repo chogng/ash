@@ -143,6 +143,8 @@ pub struct Issue {
     pub title: String,
     pub body: Option<String>,
     pub html_url: String,
+    #[serde(default)]
+    pub created_at: String,
     pub updated_at: String,
     pub state: String,
     #[serde(default)]

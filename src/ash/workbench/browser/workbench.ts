@@ -1,3 +1,4 @@
+import { IExecutionSettingsService } from '../../platform/execution/common/executionSettingsService.js';
 import { IPromptsService } from '../contrib/chat/common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
 import { IInstructionService } from '../../platform/instructions/common/instructionService.js';
@@ -525,6 +526,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(ILocalTranscriptionService, api.localTranscription ?? this._register(new NullLocalTranscriptionService()));
 		services.registerInstance(IAgentCapabilitiesService, api.agentCapabilities);
 		services.registerInstance(ITraceSettingsService, api.traceSettings);
+		services.registerInstance(IExecutionSettingsService, api.executionSettings);
 		services.registerInstance(INetworkDiagnosticsService, api.networkDiagnostics);
 		services.registerInstance(IContentSearchConfigurationService, api.contentSearchConfiguration);
 		services.registerInstance(IHooksService, api.hooks);

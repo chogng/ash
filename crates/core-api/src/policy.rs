@@ -29,6 +29,12 @@ pub trait ActionPolicyService: Send + Sync {
     /// Returns the current immutable policy-environment revision at a Turn safe point.
     fn revision(&self) -> String;
 
+    /// Resolves the revision of the policy that owns this provenance. Hosts that compose
+    /// independent policies must freeze the owner's revision before preparing an action.
+    fn revision_for(&self, _: &ash_protocol::ActionProvenance) -> String {
+        self.revision()
+    }
+
     fn decide(
         &self,
         request: &ActionReviewRequest,

@@ -61,6 +61,47 @@ impl LocalHookProcessExecutor {
             ),
         }
     }
+
+    pub(crate) fn execute_process(
+        dir: Dir,
+        hook: &HookConfig,
+        authority: CommandExecutionAuthority,
+        timeout: Duration,
+        cancellation: &CancellationToken,
+    ) -> Result<ash_tool_executor::CommandOutput, CoreError> {
+        let HookAction::Process { program, args } = &hook.action;
+        let executor = CommandExecutor::new(
+            dir.clone(),
+            exec_server::LocalSandbox::new(ash_install_context::InstallContext::current()).build(),
+            AlwaysAuthorized,
+            ExecutionLimits {
+                timeout,
+                max_output_bytes: HOOK_OUTPUT_BYTES,
+            },
+        );
+        process_output(executor.execute(
+            CommandRequest {
+                program: program.clone(),
+                arguments: args.clone(),
+                working_directory: ".".into(),
+                input: CommandInput::Closed,
+            },
+            authority,
+            cancellation,
+        ))
+    }
+}
+
+pub(crate) fn process_output(
+    outcome: Result<CommandExecutionOutcome, ash_tool_executor::ExecutionError>,
+) -> Result<ash_tool_executor::CommandOutput, CoreError> {
+    match outcome {
+        Ok(CommandExecutionOutcome::Completed(output)) => Ok(output),
+        Ok(CommandExecutionOutcome::SandboxDenied(_)) => Err(CoreError::Policy(
+            "Workflow Hook was denied by the directory sandbox".into(),
+        )),
+        Err(error) => Err(CoreError::Execution(hook_execution_error(error))),
+    }
 }
 
 impl HookProcessExecutor for LocalHookProcessExecutor {
@@ -80,7 +121,7 @@ impl HookProcessExecutor for LocalHookProcessExecutor {
             CommandRequest {
                 program: program.clone(),
                 arguments: args.clone(),
-                working_directory: self.dir.canonical_path().to_path_buf(),
+                working_directory: ".".into(),
                 input: CommandInput::Bytes(input),
             },
             authority,
@@ -98,3 +139,7 @@ impl HookProcessExecutor for LocalHookProcessExecutor {
         }
     }
 }
+
+#[cfg(all(test, unix))]
+#[path = "process_tests.rs"]
+mod tests;

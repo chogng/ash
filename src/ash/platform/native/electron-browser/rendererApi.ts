@@ -1,3 +1,4 @@
+import { AppServerSymphonyService } from '../../symphony/browser/appServerSymphonyService.js';
 import { EDIT_USER_HOOKS_CONFIGURATION_CHANNEL } from '../../hooks/common/hooksIpc.js';
 import { AppServerBackupService } from '../../backup/browser/appServerBackupService.js';
 import { AppServerCallService } from '../../call/browser/appServerCallService.js';
@@ -128,6 +129,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			} else {
 				backend = { ...backend, localTranscription: undefined };
 			}
+			if (client.capabilities?.contracts.symphony?.version === 1) { backend = { ...backend, symphony: resources.add(new AppServerSymphonyService(client)) }; }
 			if (client.capabilities?.contracts.automation?.version === 1) { backend = { ...backend, automation: resources.add(new AppServerAutomationService(client)) }; }
 			if (remoteConnection.kind === 'ssh') {
 				const terminals = resources.add(new ReconnectableTerminalProcessService(client));

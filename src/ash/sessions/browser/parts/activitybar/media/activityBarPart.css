@@ -84,7 +84,7 @@
 	height: var(--ash-sessions-activity-bar-icon-size);
 }
 
-.ash-workbench[data-color-scheme^="high-contrast-"]
+.ash-workbench:is([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
 	.ash-sessions-activity-item:is(.selected, :hover):not(:disabled):not(
 		:focus-visible
 	) {

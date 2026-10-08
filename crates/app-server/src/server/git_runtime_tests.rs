@@ -429,6 +429,7 @@ fn automatic_fetch_runs_from_shared_config_without_a_frontend() {
             command_id: CommandId::new("enable-autofetch").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                execution: Patch::Missing,
                 context: Patch::Missing,
                 time_context: Patch::Missing,
                 features: Patch::Missing,

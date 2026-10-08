@@ -105,6 +105,7 @@ fn issue_rpc_reads_only_the_current_accounts_cache_and_rejects_revoked_credentia
                         title: format!("Private issue {number}"),
                         body: None,
                         html_url: format!("https://github.com/team/repo/issues/{number}"),
+                        created_at: String::new(),
                         updated_at: "now".into(),
                         state: "open".into(),
                         pull_request: None,

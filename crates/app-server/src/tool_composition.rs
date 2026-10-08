@@ -933,6 +933,10 @@ struct ReloadableActionPolicyService {
 }
 
 impl ActionPolicyService for ReloadableActionPolicyService {
+    fn revision_for(&self, provenance: &ActionProvenance) -> String {
+        self.ports.generation().policy.revision_for(provenance)
+    }
+
     fn revision(&self) -> String {
         self.ports.generation().policy.revision()
     }
@@ -1726,6 +1730,16 @@ struct CompositeActionPolicyService {
 }
 
 impl ActionPolicyService for CompositeActionPolicyService {
+    fn revision_for(&self, provenance: &ActionProvenance) -> String {
+        if provenance.source() == &ActionSource::User
+            && ash_config::HookId::new(provenance.source_id()).is_ok()
+            && let Some(policy) = &self.local
+        {
+            return policy.revision_for(provenance);
+        }
+        self.revision()
+    }
+
     fn revision(&self) -> String {
         format!(
             "composite-policy-v1:application={}:environment={}:dynamic={}:extension={}:host={}:local={}:mcp={}:tool-search={}",
@@ -1787,6 +1801,12 @@ impl ActionPolicyService for CompositeActionPolicyService {
             }
             ActionSource::BuiltInTool => self.local.as_ref(),
             ActionSource::McpServer => self.mcp.as_ref(),
+            // Configured hook commands retain user provenance and use the local process policy.
+            ActionSource::User
+                if ash_config::HookId::new(request.provenance().source_id()).is_ok() =>
+            {
+                self.local.as_ref()
+            }
             _ => None,
         }
         .ok_or_else(|| {

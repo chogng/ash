@@ -171,6 +171,9 @@ mod subscription_adapter;
 pub(crate) mod switch_mode_tool;
 mod symbol_index_operations;
 mod symbol_index_runtime;
+mod symphony_execution;
+mod symphony_operations;
+mod symphony_tracker;
 mod syntax_operations;
 mod team_operations;
 #[cfg(test)]
@@ -312,6 +315,8 @@ pub struct AppServer {
     teams: Option<Arc<ash_teams::TeamCoordinator>>,
     team_memberships: Arc<OnceLock<Arc<ash_teams::TeamCoordinator>>>,
     automation: Option<Arc<ash_automation::AutomationStore>>,
+    symphony: Option<Arc<ash_symphony::Store>>,
+    symphony_http: Option<Arc<dyn ash_http_client::HttpClient>>,
     pub(crate) updates: Arc<UpdateBroker>,
 }
 
@@ -682,6 +687,8 @@ impl AppServer {
             teams: None,
             team_memberships: Arc::new(OnceLock::new()),
             automation: None,
+            symphony: None,
+            symphony_http: None,
             updates,
         }
     }
@@ -2446,6 +2453,12 @@ impl AppServer {
             Some(ClientMethod::MemoryRead) => self.memory_read(connection, &request.params),
             Some(ClientMethod::MemorySearch) => self.memory_search(connection, &request.params),
             Some(ClientMethod::MemoryDelete) => self.memory_delete(connection, &request.params),
+            Some(ClientMethod::SymphonyRead) => self.symphony_read(),
+            Some(ClientMethod::SymphonyConfigure) => self.symphony_configure(&request.params),
+            Some(ClientMethod::SymphonySubmit) => self.symphony_submit(&request.params),
+            Some(ClientMethod::SymphonyControl) => self.symphony_control(&request.params),
+            Some(ClientMethod::SymphonyEnable) => self.symphony_enable(&request.params),
+            Some(ClientMethod::SymphonyMessages) => self.symphony_messages(&request.params),
             Some(ClientMethod::AutomationList) => self.automation_list(),
             Some(ClientMethod::AutomationWrite) => self.automation_write(&request.params),
             Some(ClientMethod::AutomationDelete) => self.automation_delete(&request.params),

@@ -1,3 +1,4 @@
+import { createDisconnectedExecutionSettingsApi } from '../../execution/browser/executionSettingsApi.js';
 import { createDisconnectedInstructionService } from '../../instructions/browser/appServerInstructionService.js';
 import { createDisconnectedFileSearchApi } from '../../search/browser/fileSearchApi.js';
 import { createDisconnectedNetworkDiagnosticsApi } from '../../networkDiagnostics/browser/networkDiagnosticsApi.js';
@@ -89,6 +90,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
 		github: createDisconnectedGitHubService(),
 		agentCapabilities: createDisconnectedAgentCapabilitiesApi(unavailableOperation),
 		traceSettings: createDisconnectedTraceSettingsApi(unavailableOperation),
+		executionSettings: createDisconnectedExecutionSettingsApi(unavailableOperation),
 		hooks: createDisconnectedHooksApi(unavailableOperation),
 	};
 }

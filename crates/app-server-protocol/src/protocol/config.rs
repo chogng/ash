@@ -604,10 +604,34 @@ pub enum TraceRecordingStateDto {
     Unavailable { directory: String, error: String },
 }
 
+/// Backend profile defaults for future Turns and local command preparation.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExecutionConfigDto {
+    pub approval_mode: ash_protocol::ApprovalMode,
+    pub command_file_access: CommandFileAccessDto,
+    pub command_network_access: CommandNetworkAccessDto,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum CommandFileAccessDto {
+    ReadOnly,
+    DirectoryWrite,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum CommandNetworkAccessDto {
+    Denied,
+    Allowed,
+}
+
 /// Current user configuration snapshot returned by `config/read`.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigReadResult {
+    pub execution: ExecutionConfigDto,
     pub trace: Option<TraceConfigDto>,
     pub trace_recording: TraceRecordingStateDto,
     pub context: ash_protocol::ContextCompactionPolicy,
@@ -753,6 +777,10 @@ pub enum ConfigCommandDispositionDto {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ConfigUpdateParams {
+    #[serde(default, skip_serializing_if = "Patch::is_missing")]
+    #[schemars(with = "Option<ExecutionConfigDto>")]
+    #[ts(as = "Option<ExecutionConfigDto>", optional = nullable)]
+    pub execution: Patch<ExecutionConfigDto>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     #[schemars(with = "Option<TraceConfigDto>")]
     #[ts(as = "Option<TraceConfigDto>", optional = nullable)]

@@ -555,6 +555,7 @@ fn update_preferences(
         expected_revision: ConfigRevision::new(revision),
         command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
             trace: Patch::Missing,
+            execution: Patch::Missing,
             context: Patch::Missing,
             advisor: Default::default(),
             time_context: ash_protocol::Patch::Missing,
@@ -900,6 +901,7 @@ fn tool_mode_defaults_to_direct_and_updates_durably() {
             command_id: CommandId::new("select-code-mode-only").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                execution: Patch::Missing,
                 trace: Patch::Missing,
                 context: Patch::Missing,
                 advisor: Default::default(),
@@ -1442,6 +1444,7 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
             command_id: CommandId::new("select-review-model").unwrap(),
             expected_revision: configured.revision,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                execution: Patch::Missing,
                 trace: Patch::Missing,
                 context: Patch::Missing,
                 advisor: Default::default(),
@@ -3101,6 +3104,7 @@ fn trace_preferences_are_validated_persisted_and_reset_to_disabled() {
             command_id: CommandId::new("trace-reset").unwrap(),
             expected_revision: ConfigRevision::new(1),
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                execution: Patch::Missing,
                 trace: Patch::Null,
                 ..Default::default()
             }),
@@ -3111,5 +3115,60 @@ fn trace_preferences_are_validated_persisted_and_reset_to_disabled() {
         Some(TraceConfig::default())
     );
     drop(store);
+    remove_config_files(&path);
+}
+
+#[test]
+fn execution_defaults_persist_reset_and_reject_unknown_modes() {
+    let path = config_path("execution-defaults");
+    let store = ConfigStore::open(&path).unwrap();
+    assert_eq!(
+        store.read_snapshot().unwrap().values.execution,
+        ExecutionConfig::default()
+    );
+    let execution = ExecutionConfig {
+        approval_mode: ash_protocol::ApprovalMode::Auto,
+        command_file_access: CommandFileAccess::ReadOnly,
+        command_network_access: CommandNetworkAccess::Allowed,
+    };
+    store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("execution-defaults").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                execution: Patch::Value(execution),
+                ..Default::default()
+            }),
+        })
+        .unwrap();
+    drop(store);
+    let reopened = ConfigStore::open(&path).unwrap();
+    let snapshot = reopened.read_snapshot().unwrap();
+    assert_eq!(snapshot.values.execution, execution);
+    reopened
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("reset-execution-defaults").unwrap(),
+            expected_revision: snapshot.revision,
+            command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                execution: Patch::Null,
+                ..Default::default()
+            }),
+        })
+        .unwrap();
+    assert_eq!(
+        reopened.read_snapshot().unwrap().values.execution,
+        ExecutionConfig::default()
+    );
+    assert!(
+        toml::from_str::<UserConfigDocument>(
+            "[agent.execution]\ncommandFileAccess = 'fullAccess'\n"
+        )
+        .is_err()
+    );
+    assert!(
+        toml::from_str::<UserConfigDocument>("[agent.execution]\napprovalMode = 'unknown'\n")
+            .is_err()
+    );
+    drop(reopened);
     remove_config_files(&path);
 }

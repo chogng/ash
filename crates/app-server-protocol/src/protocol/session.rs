@@ -216,8 +216,9 @@ pub enum SessionRequest {
         expected_sequence: u64,
         #[serde(default)]
         mode: CollaborationMode,
-        #[serde(default)]
-        approval_mode: ash_protocol::ApprovalMode,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        approval_mode: Option<ash_protocol::ApprovalMode>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         model: Option<ash_protocol::ModelRef>,

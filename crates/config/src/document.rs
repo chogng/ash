@@ -192,6 +192,8 @@ impl NetworkConfig {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AgentConfig {
+    #[serde(default)]
+    pub execution: ExecutionConfig,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub trace: Option<TraceConfig>,
     #[serde(default)]
@@ -210,6 +212,38 @@ pub struct AgentConfig {
     pub advisor: Option<ash_protocol::AdvisorConfig>,
     #[serde(default)]
     pub tool_mode: ash_protocol::ToolMode,
+}
+
+/// Profile defaults for future Turns and local command preparation. Directory grants remain
+/// the separate authority over which files and tools a Session may access.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExecutionConfig {
+    #[serde(default)]
+    pub approval_mode: ash_protocol::ApprovalMode,
+    #[serde(default)]
+    pub command_file_access: CommandFileAccess,
+    #[serde(default)]
+    pub command_network_access: CommandNetworkAccess,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub enum CommandFileAccess {
+    ReadOnly,
+    #[default]
+    DirectoryWrite,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub enum CommandNetworkAccess {
+    #[default]
+    Denied,
+    Allowed,
 }
 
 /// Local diagnostic recording selected at App Server startup, independently of durable history.
@@ -442,6 +476,7 @@ impl UserConfigDocument {
 /// type without exposing file or authority implementation details to runtime consumers.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ResolvedConfig {
+    pub execution: ExecutionConfig,
     pub trace: Option<TraceConfig>,
     pub context: ash_protocol::ContextCompactionPolicy,
     pub time_context: crate::TimeContextConfig,
@@ -638,6 +673,7 @@ impl From<&UserConfigDocument> for ResolvedConfig {
             .collect();
         Self {
             time_context: document.agent.time_context.clone(),
+            execution: document.agent.execution,
             trace: document.agent.trace.clone(),
             context: document.agent.context.clone(),
             features: document.features.clone(),

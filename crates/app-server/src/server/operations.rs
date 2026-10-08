@@ -155,6 +155,18 @@ impl RewritePhase {
 }
 
 impl AppServer {
+    pub(super) fn default_approval_mode(&self) -> Result<ash_protocol::ApprovalMode, RpcError> {
+        self.config
+            .as_ref()
+            .map(|config| config.read_snapshot())
+            .transpose()
+            .map_err(|_| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))
+            .map(|snapshot| {
+                snapshot
+                    .map(|snapshot| snapshot.values.execution.approval_mode)
+                    .unwrap_or_default()
+            })
+    }
     pub(super) fn context_read(&self, params: &Value) -> Result<Value, RpcError> {
         use ash_app_server_protocol::protocol::model::ContextReadParams;
         use ash_app_server_protocol::protocol::model::ContextReadResult;
@@ -442,6 +454,12 @@ impl AppServer {
         if self.home.is_some() {
             capabilities.contracts.insert(
                 "calls".into(),
+                ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },
+            );
+        }
+        if self.symphony.is_some() {
+            capabilities.contracts.insert(
+                "symphony".into(),
                 ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },
             );
         }
@@ -748,7 +766,10 @@ impl AppServer {
             } => result(&SessionRequestResult::Turn(self.start_turn_request(
                 thread_mutation(mutation, expected_sequence, connection.connection_id),
                 thread_id,
-                approval_mode,
+                match approval_mode {
+                    Some(mode) => mode,
+                    None => self.default_approval_mode()?,
+                },
                 mode,
                 model.map_or(TurnModelSelection::Current, TurnModelSelection::Explicit),
                 reasoning_effort,

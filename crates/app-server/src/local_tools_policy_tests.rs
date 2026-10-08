@@ -3,9 +3,10 @@ use super::*;
 #[test]
 fn network_rules_select_managed_execution_without_broadening_the_default_policy() {
     let mut config = LocalToolConfig::default();
-    let initial = configured_shell_policy(&config.snapshot().unwrap());
+    config.execution.command_network_access = ash_config::CommandNetworkAccess::Allowed;
+    let initial = configured_shell_policy(&config.snapshot().unwrap(), config.execution);
     assert_eq!(initial.file_system(), FileSystemAccess::DirectoryWrite);
-    assert_eq!(initial.network(), NetworkAccess::Denied);
+    assert_eq!(initial.network(), NetworkAccess::Allowed);
     #[cfg(windows)]
     {
         assert_eq!(
@@ -36,7 +37,7 @@ fn network_rules_select_managed_execution_without_broadening_the_default_policy(
     ));
     let snapshot = config.snapshot().unwrap();
     assert_eq!(
-        configured_shell_policy(&snapshot),
+        configured_shell_policy(&snapshot, config.execution),
         SandboxPolicy::new(FileSystemAccess::DirectoryWrite, NetworkAccess::Managed)
             .with_host_acl_changes(local_acl_changes())
             .with_file_system_isolation(local_isolation())

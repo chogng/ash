@@ -79,6 +79,14 @@
             "summaryTokens": 8192
           }
         },
+        "execution": {
+          "$ref": "#/$defs/ExecutionConfig",
+          "default": {
+            "approvalMode": "manual",
+            "commandFileAccess": "directoryWrite",
+            "commandNetworkAccess": "denied"
+          }
+        },
         "model": {
           "anyOf": [
             {
@@ -121,6 +129,14 @@
         }
       },
       "type": "object"
+    },
+    "ApprovalMode": {
+      "enum": [
+        "manual",
+        "auto",
+        "bypassPermissions"
+      ],
+      "type": "string"
     },
     "ApprovalReviewModelSelection": {
       "description": "User-selected model source for automatic approval review.\n\n`Automatic` follows the active Agent model's provider and delegates the exact model choice to\nthat provider's definition. `Explicit` binds review to one configured provider/model without\nchanging the main Agent model.",
@@ -228,6 +244,20 @@
         "embeddingModel"
       ],
       "type": "object"
+    },
+    "CommandFileAccess": {
+      "enum": [
+        "readOnly",
+        "directoryWrite"
+      ],
+      "type": "string"
+    },
+    "CommandNetworkAccess": {
+      "enum": [
+        "denied",
+        "allowed"
+      ],
+      "type": "string"
     },
     "CommitMessageConfig": {
       "additionalProperties": false,
@@ -708,6 +738,25 @@
           "type": "object"
         }
       ]
+    },
+    "ExecutionConfig": {
+      "additionalProperties": false,
+      "description": "Profile defaults for future Turns and local command preparation. Directory grants remain\nthe separate authority over which files and tools a Session may access.",
+      "properties": {
+        "approvalMode": {
+          "$ref": "#/$defs/ApprovalMode",
+          "default": "manual"
+        },
+        "commandFileAccess": {
+          "$ref": "#/$defs/CommandFileAccess",
+          "default": "directoryWrite"
+        },
+        "commandNetworkAccess": {
+          "$ref": "#/$defs/CommandNetworkAccess",
+          "default": "denied"
+        }
+      },
+      "type": "object"
     },
     "GitAutoFetchMode": {
       "description": "Which remotes the shared Git runtime fetches automatically.",
@@ -1626,6 +1675,11 @@
           "mode": "summary",
           "recentTokens": 16384,
           "summaryTokens": 8192
+        },
+        "execution": {
+          "approvalMode": "manual",
+          "commandFileAccess": "directoryWrite",
+          "commandNetworkAccess": "denied"
         },
         "timeContext": {
           "mode": "date"

@@ -259,6 +259,18 @@ impl ProfileAppServerRegistry {
             .collect())
     }
 
+    pub(crate) fn start_symphony(self: &Arc<Self>) -> Result<ash_symphony::Runtime, String> {
+        ash_symphony::Runtime::start(self.profile_runtime.symphony_store(), self.clone())
+            .map_err(|error| error.to_string())
+    }
+
+    pub(crate) fn symphony_needs_host(&self) -> Result<bool, String> {
+        self.profile_runtime
+            .symphony_store()
+            .needs_host()
+            .map_err(|error| error.to_string())
+    }
+
     pub(crate) fn start_automation(
         self: &Arc<Self>,
     ) -> Result<ash_automation::AutomationRuntime, String> {
@@ -490,6 +502,54 @@ fn open_queued_directory(
             open_server_with_profile_runtime(&options, Arc::clone(profile_runtime))
                 .map(AppServer::into_shared),
         );
+    }
+}
+
+impl ash_symphony::Executor for ProfileAppServerRegistry {
+    fn poll(
+        &self,
+        workflow: &ash_symphony::Workflow,
+        cancellation: &ash_async_utils::CancellationToken,
+    ) -> Result<Vec<ash_symphony::Issue>, String> {
+        let server = self.server_for(self.local_options(Path::new(&workflow.directory)))?;
+        let issues = server.poll_symphony(workflow, cancellation)?;
+        server.cleanup_terminal_symphony(workflow, &issues, cancellation)?;
+        Ok(issues)
+    }
+
+    fn advance(
+        &self,
+        job: &ash_symphony::Job,
+        cancellation: &ash_async_utils::CancellationToken,
+    ) -> Result<ash_symphony::Observation, String> {
+        let workflow = &job
+            .invocation
+            .as_ref()
+            .ok_or("Symphony invocation is missing")?
+            .workflow;
+        self.server_for(self.local_options(Path::new(&workflow.directory)))?
+            .advance_symphony(job, cancellation)
+    }
+
+    fn changed(&self) {
+        self.profile_runtime.symphony_changed();
+    }
+
+    fn cleanup(
+        &self,
+        job: &ash_symphony::Job,
+        cancellation: &ash_async_utils::CancellationToken,
+    ) -> Result<(), String> {
+        let workflow = self
+            .profile_runtime
+            .symphony_store()
+            .workflow(&job.workflow_id)
+            .map_err(|error| error.to_string())?;
+        self.server_for(self.local_options(Path::new(&workflow.directory)))?
+            .cleanup_symphony(job, cancellation)
+    }
+    fn report_error(&self, message: &str) {
+        eprintln!("symphony: {message}");
     }
 }
 
