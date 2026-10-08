@@ -2,7 +2,7 @@
 
 Trace 已能读取和跟随 Agent 的持久执行历史。本路线在现有能力上，优先完成 **具体 Turn 定位 → 模型与工具关系 → 一致导出 → 离线复查**，让一次失败从会话入口一直查到原始证据。本文是根目录 `TODO.md` 的改名与扩充；原内容完整保留在后半部分。
 
-源码核对基线：2026-10-08，本地 `main` 的 `deb624dd6`（包含 `2cc6ab4`）。下文“现有”表示源码已具备；本轮尚未重跑历史验证，旧验证日志位于原工作区忽略目录，独立 worktree 不携带这些日志。
+源码核对基线：2026-10-08，fresh fetch 后的 `main` 提交 `dd086508b`。下文“现有”表示该基线源码已具备；历史验证尚未在本轮重新运行，P1 的实际检查结果单列在验证摘要中。
 
 ## Trace 现有能力
 
@@ -23,7 +23,7 @@ Trace 已能读取和跟随 Agent 的持久执行历史。本路线在现有能�
 | 阶段 | 用户完成的事情 | 复用与边界 |
 | --- | --- | --- |
 | P1 具体 Turn 定位 | 从指定 Session / Thread / Turn / event 打开 Trace，确认选中的是哪次执行；分页晚到、目标缺失和切换输入都有明确结果。 | 扩展共享前端打开参数与 URI，复用现有读取和订阅；业务历史仍归 ThreadStore。第一批完成打开、定位、详情、重开及回归验证的闭环。 |
-| P2 模型与工具关系 | 从选中 Turn 找到实际模型请求、模型工具调用、工具结果与子 agent，区分并行、嵌套、消息交付和结果依赖。 | 先复用现有图与身份键；只把明确记录的因果关系连起来。补字段或关系语义前由父任务协调 Core/Rust/protocol 所有者。 |
+| P2 模型与工具关系 | 从选中 Turn 找到实际模型请求、模型工具调用、工具结果与子 agent，区分并行、嵌套、消息交付和结果依赖。 | 先复用现有图与身份键；只把明确记录的因果关系连起来。新增字段或关系语义由既有 Core/Rust/protocol 所有者维护。 |
 | P3 一致导出 | 运行仍在继续时导出一次有明确边界的捕获；历史、诊断、正文与关系属于同一范围，导出期间保持单次操作。 | 先复现边界问题；决定按已加载范围裁剪关系还是由后端提供一致捕获契约。正文读取失败标为不完整，不能伪装为完整导出。 |
 | P4 离线复查 | 无连接时导入、定位、查正文和关系，重新导出后证据仍可读；连续选择文件时最后一次选择生效。 | 保持 rollout v3 兼容与字段保留；限制大文件和不完整证据。长历史使用有界 DOM 和缓存搜索文本，避免每次渲染反复序列化大记录。 |
 
@@ -49,7 +49,7 @@ Trace 已能读取和跟随 Agent 的持久执行历史。本路线在现有能�
 - [ ] 页面逐页寻找目标；命中后选中并展示详情，自动滚动到目标；晚到分页不将选择重置为第一行。
 - [ ] 目标缺失/参数无效有可翻译状态；错误/全文筛选不能悄悄把定位目标换成其他事件。
 - [ ] 覆盖重开同 Session 不同 Turn、子 Thread、诊断 event、目标缺失、切换输入和关闭后的迟到响应；更新中文与无障碍说明。
-- [ ] 验收：共享命令和现有 Sessions 入口仍可用；指定 Thread / Turn / event 的选中身份、详情和重开一致；定向单测、Renderer/smoke typecheck、正常 Renderer/Web 构建，以及 Web/Electron Playwright 行为断言通过。重型验证先排父任务队列。
+- [ ] 验收：共享命令和现有 Sessions 入口仍可用；指定 Thread / Turn / event 的选中身份、详情和重开一致；定向单测、Renderer/smoke typecheck、正常 Renderer/Web 构建，以及 Web/Electron Playwright 行为断言通过。
 
 ### P2：查一条模型—工具—子 agent 证据链
 
@@ -70,25 +70,20 @@ Trace 已能读取和跟随 Agent 的持久执行历史。本路线在现有能�
 - [ ] 分享脱敏先定义实际覆盖规则、预览和遗漏标记；原始证据保持可追溯。
 - [ ] 验收：断开连接后，导入 → P1 定位 → P2 正文/关系 → 重导出仍可复查；未知字段、前缀与不完整状态保留；A/B 导入乱序回归通过；大记录性能结果有同机前后数据。
 
-## 本轮交付与验证
+## 验证摘要（2026-10-08）
 
-- 文档：`TODO.md` → `trace-todo.md`，保留 `.md` 扩展名和全部原文；主树原文件未改动。
-- 工作树：`/Volumes/1t/ash-trace-20261008`，分支 `codex/trace-roadmap-20261008`；后续 Trace 工作持续在这里完成，避免与 Search/SCM/Output/Preferences/Notifications 重叠。
-- 文档预览提交：`b475f982a`，仅包含改名与路线图，未 push。
-- 当前实现状态：P1 的前端实现和回归用例已写入本树，完整运行验收尚未完成；P1 验收复选框保持未完成。共享 Core/Rust/protocol 扩展先协调，Cargo/runtime/protocol 不跨树复用，push 由父任务串行放行。
-
-### P1 本轮检查（2026-10-08）
+`TODO.md` 已沿原 `.md` 扩展名改为 `trace-todo.md`，历史全文保留。P1 的前端实现与回归用例已准备，完整运行验收尚未完成，因此 P1 验收复选框保持未完成。实现检查结果供进度判断，不能替代产品运行验收。
 
 | 检查 | 实际结果 |
 | --- | --- |
-| 文档链接与原文保全 | 18 个新增本地链接存在；原 `TODO.md` 的 36,201 字节完整保留。文档改名已单独提交，原主树未改动。 |
-| JavaScript 依赖与前端清单 | `pnpm install --frozen-lockfile --offline` 与 `pnpm run prepare:extensions` 完成；使用本树生成的清单，没有跨树复用协议或运行包。 |
-| 定向 common 层编译 | `pnpm exec tsc -p .build/trace-validation/tsconfig.location.json` 通过，配置继承仓库 `tsconfig.common.json`；不代表完整 Renderer 编译通过。 |
-| 定位契约单测 | 已编译的 `trace.test.js` 通过 18 项；覆盖旧 Session 参数、URI 编码和身份保存、无效定位与仓库中文词条。 |
-| Sessions 注册命令 | 现有 unit runner 实际执行的 3 项通过；覆盖子 Thread 最近 Turn、缺少 Turn 与无当前 Session。该次命令整体失败，另两个文件未能启动。 |
-| 完整单测编译与页面/Workbench 命令单测 | 完整编译因独立树缺少 `.build/protocol` 及其他生成物失败；受影响 Trace 文件没有报出新增类型错误。清单补齐后，页面与 Workbench 命令测试仍因缺少生成协议模块而未执行。见本树 [.build/trace-validation/](.build/trace-validation/)。 |
-| 变更格式 | 仓库 `format:ts` 检查全部 11 个相关 TypeScript 文件通过；`git diff --check` 通过。 |
-| 正常构建与双端 Playwright | Renderer/Web 构建、Web/Electron Trace smoke 尚未运行；需要先由父任务排队准备本树协议和运行包。本轮没有重新引用历史通过结果。 |
+| 文档链接与原文保全 | 新增源码和说明链接均存在；原 `TODO.md` 的 36,201 字节完整保留。 |
+| 依赖与前端清单 | 锁定依赖安装和前端扩展清单准备完成。 |
+| 定向 common 层编译 | 使用继承仓库 `tsconfig.common.json` 的定向配置通过；不代表完整 Renderer 编译通过。 |
+| 定位契约单测 | 18 项通过，覆盖旧 Session 参数、URI 编码和身份保存、无效定位与仓库中文词条。 |
+| Sessions 注册命令 | 3 项通过，覆盖子 Thread 最近 Turn、缺少 Turn 与无当前 Session；该次测试命令整体失败，另两个文件未能启动。 |
+| 完整单测编译与页面/Workbench 命令单测 | 完整编译因缺少生成协议等产物失败；页面与 Workbench 命令测试仍因缺少生成协议模块而未执行。 |
+| 变更格式 | 仓库 TypeScript 格式检查与 `git diff --check` 通过。 |
+| 正常构建与双端 Playwright | Renderer/Web 构建与 Web/Electron Trace smoke 尚未运行；本轮没有引用历史通过结果作为本轮结论。 |
 
 
 ---
