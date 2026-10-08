@@ -1262,16 +1262,19 @@ impl GitRepositoryRuntime {
             .lock()
             .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
         let committed = self.service.commit(request);
-        // Staging can succeed before commit creation fails. Publish that real status while
-        // keeping the original failure; neither the server nor the client invents a rollback.
-        self.invalidate_graphs()?;
         let GitServiceCommit {
             object_id,
             repository,
             snapshot,
         } = match committed {
-            Ok(committed) => committed,
+            Ok(committed) => {
+                self.invalidate_graphs()?;
+                committed
+            }
             Err(error) => {
+                // Staging can succeed before commit creation fails. Cache invalidation and
+                // actual status publication must not replace that original failure.
+                let _ = self.invalidate_graphs();
                 if let Ok((repository, snapshot)) = self.service.snapshot() {
                     let _ = self.accept(repository, snapshot);
                 }

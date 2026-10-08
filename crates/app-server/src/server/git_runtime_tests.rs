@@ -82,6 +82,108 @@ fn scoped_commit_publishes_real_index_changes_to_all_connections_after_failure()
 }
 
 #[test]
+fn failed_commit_preserves_original_error_with_poisoned_graph_cache() {
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "initial\n");
+    repository.git(&["add", "tracked.txt"]);
+    repository.git(&["commit", "-m", "initial"]);
+    let head = repository.git_output(&["rev-parse", "HEAD"]);
+    repository.write("tracked.txt", "changed\n");
+    repository.write("new.txt", "new\n");
+    repository.git(&["config", "user.name", ""]);
+    repository.git(&["config", "user.email", ""]);
+    let broker = Arc::new(UpdateBroker::default());
+    let queue = NotificationQueue::default();
+    broker.register(1, false, &queue);
+    let runtime = GitRuntime::new(mutation_authorization(repository.root()), broker).unwrap();
+    let initial = runtime.status().unwrap();
+    queue.drain();
+    let owner = runtime.repository(Some(&initial.repository_id)).unwrap();
+    poison_graph_cache(&owner);
+
+    let failure = runtime.commit_for(
+        Some(&initial.repository_id),
+        GitCommitRequest::new("retain original commit failure".into())
+            .unwrap()
+            .with_untracked_changes()
+            .sign_off(),
+    );
+    let error = failure
+        .err()
+        .expect("commit must fail without Git identity");
+    assert!(
+        matches!(
+            error,
+            super::GitRuntimeError::Service(crate::git_service::GitServiceError::Git(_))
+        ),
+        "graph invalidation must not replace the commit error: {error:?}"
+    );
+    assert_eq!(repository.git_output(&["rev-parse", "HEAD"]), head);
+    assert_eq!(repository.git_output(&["show", ":tracked.txt"]), "changed");
+    assert_eq!(repository.git_output(&["show", ":new.txt"]), "new");
+    assert_eq!(
+        std::fs::read_to_string(repository.root().join("tracked.txt")).unwrap(),
+        "changed\n"
+    );
+    // The owner accepts the snapshot before cache invalidation can prevent its notification.
+    let accepted =
+        serde_json::to_value(owner.state.lock().unwrap().status.as_ref().unwrap()).unwrap();
+    assert_eq!(accepted["revision"], initial.revision + 1);
+    assert_eq!(accepted["changes"][0]["indexStatus"], "added");
+    assert_eq!(accepted["changes"][1]["indexStatus"], "modified");
+    assert!(queue.drain().is_empty());
+    assert!(owner.graph_sessions.is_poisoned());
+}
+
+#[test]
+fn successful_commit_reports_poisoned_graph_cache_invalidation() {
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "initial\n");
+    repository.git(&["add", "tracked.txt"]);
+    repository.git(&["commit", "-m", "initial"]);
+    let head = repository.git_output(&["rev-parse", "HEAD"]);
+    repository.write("tracked.txt", "changed\n");
+    repository.git(&["add", "tracked.txt"]);
+    let runtime = GitRuntime::new(
+        mutation_authorization(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    let owner = runtime.repository(None).unwrap();
+    poison_graph_cache(&owner);
+
+    let failure = runtime.commit_for(
+        None,
+        GitCommitRequest::new("commit succeeded before invalidation".into()).unwrap(),
+    );
+    assert!(matches!(
+        failure,
+        Err(super::GitRuntimeError::Service(
+            crate::git_service::GitServiceError::Runtime
+        ))
+    ));
+    assert_ne!(repository.git_output(&["rev-parse", "HEAD"]), head);
+    assert_eq!(
+        repository.git_output(&["log", "-1", "--format=%s"]),
+        "commit succeeded before invalidation"
+    );
+    assert_eq!(
+        repository.git_output(&["diff", "--cached", "--name-only"]),
+        ""
+    );
+}
+
+fn poison_graph_cache(owner: &super::GitRepositoryRuntime) {
+    // Unwind while holding the actual owner lock, rather than mocking its error result.
+    let poisoned = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _cache = owner.graph_sessions.lock().unwrap();
+        panic!("poison graph cache for commit error preservation");
+    }));
+    assert!(poisoned.is_err());
+    assert!(owner.graph_sessions.is_poisoned());
+}
+
+#[test]
 fn commit_amend_and_undo_use_one_repository_owner_and_return_complete_messages() {
     let repository = TestRepository::init();
     repository.write("tracked.txt", "initial\n");
