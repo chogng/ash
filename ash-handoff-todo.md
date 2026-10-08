@@ -36,7 +36,7 @@ AgentHost、Output、平台存储等工作树提交已经进入 main。旧工作
 
 ## 清理与恢复
 
-已删除 45 个额外 Git 工作树及其本地目录、11 个关联分支和 1 个线性历史修复临时分支。另清理 1 个已备份的未注册验证目录。Git 当前仅保留 main 工作树。另已归档并删除 `/Volumes/1t` 下 7 个 Ash 证据与 Bazel 缓存目录，逐文件校验归档内容后才删除原目录。卷根目录仅含空测试目录的 `.build` 也已清除。
+已删除 45 个额外 Git 工作树及其本地目录、11 个关联分支和 1 个线性历史修复临时分支。另清理 1 个已备份的未注册验证目录。已进一步删除 60 个历史本地分支，各分支原 tip 均已核对并保存在独立恢复 bundle；本地分支与工作树当前均仅保留 main。另已归档并删除 `/Volumes/1t` 下 7 个 Ash 证据与 Bazel 缓存目录，逐文件校验归档内容后才删除原目录。卷根目录仅含空测试目录的 `.build` 也已清除。系统临时目录另清理 375 项遗留（95 个目录、280 个文件，原占约 13.5 GiB）；日志、测试源码、配置和状态已校验归档，四个可重建的 Cargo/package-manager 缓存目录直接清除。
 
 恢复资料位于 `/Volumes/1t/ash/.git/worktree-cleanup/20261008/`：
 
@@ -44,6 +44,8 @@ AgentHost、Output、平台存储等工作树提交已经进入 main。旧工作
 - `audit.json`、`integration-review.json`：逐树范围与旧变体保留原因。
 - `cleanup-summary.json`：实际删除的工作树与本地分支清单。
 - `external-directory-cleanup.json`、`external-directories/`：7 个外部临时目录的清理清单、压缩归档及逐文件 SHA256。
+- `remaining-branches-review.json`、`remaining-branches-deleted.json`：60 个历史分支的核对与删除记录；旧变体取舍见 `remaining-branch-review-reasons.json`。
+- `machine-temp-cleanup.json`、`temp-archives/`：系统临时遗留的清理记录、压缩归档与文件 SHA256；已退出进程的 socket 仅保留元数据。
 - 各树的 patch、忽略的源文件和配置，以及 `validation-evidence/` 中的原始验证日志。
 
 这些资料用于恢复原始版本；继续开发使用 main 的现有所有者和较新修复。
