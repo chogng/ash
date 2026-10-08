@@ -13,6 +13,11 @@ import { IAccessibleViewService } from '../../../../../platform/accessibility/br
 import { IOutputService, type IOutputChannel, type OutputChannelKind } from '../../../../services/output/common/output.js';
 import { workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
 import { OutputViewPane } from '../../browser/outputView.js';
+import { IConfigurationService, ConfigurationTarget } from '../../../../../platform/configuration/common/configuration.js';
+import { Selection } from '../../../../../editor/common/core/selection.js';
+import '../../browser/output.contribution.js';
+import { DefaultSettings } from '../../../../services/preferences/common/settingsModels.js';
+import { createSettingsLayout } from '../../../preferences/browser/settingsLayout.js';
 
 interface OutputViewTestEnvironment {
 	readonly channel: IOutputChannel;
@@ -157,7 +162,6 @@ test('Output filters follow channel switching, inactive appends, clearing and di
 	assert.equal(view.services.get(ICodeEditorService).listCodeEditors().length, 0);
 });
 
-
 test('Output presents comma alternatives and literal quoted text from the actual filter input', async () => {
 	using resources = new DisposableStore();
 	const view = await createOutputView(resources);
@@ -216,7 +220,6 @@ test('Output explains unsupported saved queries without replacing their storage'
 	assert.equal(storage.get('output.filterState', StorageScope.WORKSPACE), raw);
 });
 
-
 test('ordinary Output keeps hidden line numbers and raw text across CR, empty chunks and standalone LF', async () => {
 	for (const emptyChunks of [false, true]) {
 		using resources = new DisposableStore();
@@ -271,3 +274,124 @@ for (const action of ['empty-input', 'same-input', 'empty-reset']) {
 		assert.equal(storage.get('output.filterState', StorageScope.WORKSPACE), raw);
 	});
 }
+
+test('Output pauses on an explicit cursor move to a visible older line without scrolling and resumes on the last line', async () => {
+	using resources = new DisposableStore();
+	const view = await createOutputView(resources);
+	view.editor.layout({ width: 640, height: 200 });
+	view.channel.append({ text: 'first\nsecond\nlast' });
+	view.editor.setPosition({ lineNumber: 3, column: 1 });
+	const before = view.editor.getScrollTop();
+	pressOutputKey(view, 'ArrowUp');
+	assert.deepEqual({ line: view.editor.getPosition()!.lineNumber, scroll: view.editor.getScrollTop(), following: followsOutput(view) }, { line: 2, scroll: before, following: false });
+	pressOutputKey(view, 'ArrowDown');
+	assert.deepEqual({ line: view.editor.getPosition()!.lineNumber, scroll: view.editor.getScrollTop(), following: followsOutput(view) }, { line: 3, scroll: before, following: true });
+});
+
+function autoScrollButton(view: OutputViewTestEnvironment): HTMLButtonElement {
+	const button = view.pane.partTitleProjection!.actions!.querySelector<HTMLButtonElement>('[data-action-id="ash.output.autoScroll"] button');
+	assert.ok(button);
+	return button;
+}
+
+function followsOutput(view: OutputViewTestEnvironment): boolean {
+	return autoScrollButton(view).getAttribute('aria-pressed') === 'true';
+}
+
+function pressOutputKey(view: OutputViewTestEnvironment, key: string, options: KeyboardEventInit = {}): void {
+	const input = view.editor.controller.editContext.domNode.domNode;
+	input.focus();
+	input.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...options }));
+}
+
+test('Output smart scrolling uses the primary selection end and includes the final empty line', async () => {
+	using resources = new DisposableStore();
+	const view = await createOutputView(resources);
+	view.editor.layout({ width: 640, height: 200 });
+	view.channel.append({ text: 'first\nsecond\n' });
+	view.editor.setSelection(new Selection(3, 1, 1, 1));
+	pressOutputKey(view, 'ArrowDown', { shiftKey: true });
+	assert.deepEqual({ anchor: view.editor.getSelection()!.selectionStartLineNumber, caret: view.editor.getPosition()!.lineNumber, following: followsOutput(view) }, { anchor: 3, caret: 2, following: false });
+	view.editor.setSelection(new Selection(1, 1, 2, 1));
+	pressOutputKey(view, 'ArrowDown', { shiftKey: true });
+	assert.deepEqual({ anchor: view.editor.getSelection()!.selectionStartLineNumber, caret: view.editor.getPosition()!.lineNumber, following: followsOutput(view) }, { anchor: 1, caret: 3, following: true });
+	assert.equal(view.editor.getModel()!.getLineContent(3), '');
+});
+
+test('Output smart scrolling follows the primary cursor independently of secondary cursors', async () => {
+	using resources = new DisposableStore();
+	const view = await createOutputView(resources);
+	view.editor.layout({ width: 640, height: 200 });
+	view.channel.append({ text: 'first\nsecond\nlast' });
+	view.editor.setSelections([new Selection(2, 1, 2, 1), new Selection(3, 1, 3, 1)]);
+	pressOutputKey(view, 'ArrowUp');
+	assert.deepEqual({ lines: view.editor.getSelections()!.map(selection => selection.positionLineNumber), following: followsOutput(view) }, { lines: [1, 2], following: false });
+	view.editor.setSelections([new Selection(3, 1, 3, 1), new Selection(1, 1, 1, 1)]);
+	pressOutputKey(view, 'End');
+	assert.deepEqual({ lines: view.editor.getSelections()!.map(selection => selection.positionLineNumber), following: followsOutput(view) }, { lines: [3, 1], following: true });
+});
+
+test('Output programmatic cursor restoration and model updates preserve the current scrolling choice', async () => {
+	using resources = new DisposableStore();
+	const view = await createOutputView(resources);
+	view.editor.layout({ width: 640, height: 200 });
+	view.channel.append({ text: 'first\nsecond\nlast' });
+	view.editor.setPosition({ lineNumber: 2, column: 1 }, 'keyboard');
+	assert.equal(followsOutput(view), true);
+	view.editor.setPosition({ lineNumber: 3, column: 1 });
+	const saved = view.editor.saveViewState();
+	pressOutputKey(view, 'ArrowUp');
+	assert.equal(followsOutput(view), false);
+	view.editor.restoreViewState(saved);
+	assert.deepEqual({ line: view.editor.getPosition()!.lineNumber, following: followsOutput(view) }, { line: 3, following: false });
+	view.channel.replace({ text: 'replacement\nlast' });
+	view.channel.append({ text: '\nnext' });
+	assert.deepEqual({ following: followsOutput(view), text: view.editor.getModel()!.getValue(), retained: view.channel.getText() }, { following: false, text: 'replacement\nlast\nnext', retained: 'replacement\nlast\nnext' });
+});
+
+test('Output reads live smart scrolling configuration on the next explicit cursor gesture', async () => {
+	using resources = new DisposableStore();
+	const view = await createOutputView(resources);
+	view.editor.layout({ width: 640, height: 200 });
+	view.channel.append({ text: 'first\nsecond\nlast' });
+	const configuration = view.services.get(IConfigurationService);
+	assert.equal(configuration.getValue('output.smartScroll.enabled'), true);
+	await assert.rejects(configuration.updateValue('output.smartScroll.enabled', 'false', ConfigurationTarget.USER), /must be a boolean/);
+	view.editor.setPosition({ lineNumber: 3, column: 1 });
+	pressOutputKey(view, 'ArrowUp');
+	assert.equal(followsOutput(view), false);
+	await configuration.updateValue('output.smartScroll.enabled', false, ConfigurationTarget.USER);
+	assert.equal(followsOutput(view), false);
+	pressOutputKey(view, 'ArrowDown');
+	assert.deepEqual({ line: view.editor.getPosition()!.lineNumber, following: followsOutput(view) }, { line: 3, following: false });
+	await configuration.updateValue('output.smartScroll.enabled', true, ConfigurationTarget.USER);
+	assert.equal(followsOutput(view), false);
+	pressOutputKey(view, 'ArrowUp');
+	pressOutputKey(view, 'ArrowDown');
+	assert.equal(followsOutput(view), true);
+	await configuration.updateValue('output.smartScroll.enabled', false, ConfigurationTarget.USER);
+	pressOutputKey(view, 'ArrowUp');
+	assert.deepEqual({ line: view.editor.getPosition()!.lineNumber, following: followsOutput(view) }, { line: 2, following: true });
+});
+
+test('Output retains manual scroll pausing and resuming when smart scrolling is disabled', async () => {
+	using resources = new DisposableStore();
+	const view = await createOutputView(resources);
+	view.editor.layout({ width: 640, height: 100 });
+	await view.services.get(IConfigurationService).updateValue('output.smartScroll.enabled', false, ConfigurationTarget.USER);
+	view.channel.append({ text: Array.from({ length: 30 }, (_, index) => `line ${index + 1}`).join('\n') });
+	assert.ok(view.editor.getScrollTop() > 0);
+	view.editor.setScrollTop(0);
+	assert.equal(followsOutput(view), false);
+	view.editor.setScrollTop(view.editor.getContentHeight());
+	assert.equal(followsOutput(view), true);
+});
+
+
+test('Output smart scrolling is editable in the existing Settings interaction group', () => {
+	const defaults = new DefaultSettings();
+	const layout = createSettingsLayout(defaults.all);
+	const setting = layout.find(category => category.id === 'general')?.groups.find(group => group.id === 'interaction')?.settings.find(setting => setting.id === 'output.smartScroll.enabled');
+	assert.ok(setting);
+	assert.deepEqual({ type: setting.valueType, defaultValue: setting.configuration.defaultValue, title: setting.title }, { type: 'boolean', defaultValue: true, title: 'Output smart scrolling' });
+});

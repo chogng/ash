@@ -84,7 +84,7 @@ export const SettingsNavigation = [
 						id: 'interaction',
 						label: 'Interaction',
 						description: 'Tune hover feedback and resize handles.',
-						settings: ['workbench.hover.*', 'workbench.sash.*', 'onboarding.enabled'],
+						settings: ['workbench.hover.*', 'workbench.sash.*', 'onboarding.enabled', 'output.smartScroll.enabled'],
 					},
 					{
 						id: 'dictation',

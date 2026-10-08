@@ -3,6 +3,7 @@ import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { expect, test } from '../../../automation/test.js';
+import type { ElectronApplication } from '@playwright/test';
 
 const execute = promisify(execFile);
 
@@ -175,3 +176,154 @@ for (const locale of ['en', 'zh-CN']) {
 		await testInfo.attach('saved-query-compatibility', { body: JSON.stringify({ locale, restored, current: { syntaxVersion: 2, text: 'connection !crashed' }, preservedFuture: await persistedFilter() }), contentType: 'application/json' });
 	});
 }
+
+test.describe('Git-backed Output smart scrolling', () => {
+	test.use({ gitRepository: true });
+
+	for (const locale of ['en', 'zh-CN']) {
+		test(`Output smart scrolling preserves reading position and live configuration (${locale})`, async ({ target, application, testWorkspace, workbench, restartWorkbench }, testInfo) => {
+			test.skip(target.appServerMode !== 'required', 'Requires the real Git backend and its isolated test profile.');
+			test.setTimeout(90_000);
+			if (locale === 'zh-CN') {
+				await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+				const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
+				await language.fill('简体中文');
+				await language.press('Enter');
+				({ workbench, application } = await restartWorkbench());
+			}
+			const page = workbench.page;
+			const labels = locale === 'zh-CN' ? {
+				scroll: '自动滚动', title: '输出智能滚动',
+				description: '主光标移到较早的行时暂停自动滚动，移到最后一行时恢复。设置变更从下一次光标移动起生效。',
+				help: '启用 output.smartScroll.enabled 时，主光标移到较早的行会暂停自动滚动，移到最后一行会恢复。设置变更从下一次光标移动起生效。',
+			} : {
+				scroll: 'Auto Scroll', title: 'Output smart scrolling',
+				description: 'Pause Auto Scroll when the primary cursor moves to an earlier line, and resume at the last line. Changes apply to the next cursor movement.',
+				help: 'With output.smartScroll.enabled, moving the primary cursor to an earlier line pauses Auto Scroll; moving it to the last line resumes it. Changing the setting affects the next cursor movement.',
+			};
+			const output = page.locator('[data-view-id="ash.output"]');
+			const input = output.locator('.stanza-editor-input');
+			const scroll = output.locator('.stanza-editor > .ash-smooth-scrollable');
+			const autoScroll = page.locator('.ash-output-title-actions').getByRole('button', { name: labels.scroll, exact: true });
+			if (target.kind === 'browser') await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+			const readClipboard = (): Promise<string> => target.kind === 'electron'
+				? (application as ElectronApplication).evaluate(({ clipboard }) => clipboard.readText())
+				: page.evaluate(() => navigator.clipboard.readText());
+			const previousClipboard = await readClipboard();
+			const rawText = async (expected: string): Promise<string> => {
+				// Copy through the separate resource editor so observing raw text does not move the Output caret.
+				await workbench.quickaccess.runCommand('workbench.action.output.openInEditor');
+				const editor = workbench.editors.groupAt(0).editor;
+				await editor.waitForEditorFocus();
+				await editor.input.press('ControlOrMeta+a');
+				await editor.input.press('ControlOrMeta+c');
+				await expect.poll(readClipboard).toContain(expected);
+				return readClipboard();
+			};
+			const appendStatus = async (count: number): Promise<void> => {
+				await writeFile(join(testWorkspace.directory, `output-scroll-${count}.ts`), `export const value = ${count};\n`);
+				await workbench.quickaccess.runCommand('git.refresh');
+				await expect(page.locator('[data-view-id="ash.gitView"] .ash-scm-change')).toHaveCount(count);
+			};
+			const changeSmartScrolling = async (enabled: boolean): Promise<void> => {
+				await workbench.settingsEditor.openUserSettingsUI();
+				const settings = workbench.settingsEditor.element;
+				await settings.getByRole('searchbox').fill('@id:output.smartScroll.enabled');
+				const row = settings.locator('[data-settings-item-id="output.smartScroll.enabled"]');
+				await expect(row).toContainText(labels.description);
+				const control = row.getByRole('switch', { name: labels.title, exact: true });
+				await expect(control).toBeChecked({ checked: !enabled });
+				// The switch input is visually clipped; use its normal keyboard interaction.
+				await control.press('Space');
+				await expect(control).toBeEnabled();
+				await expect(control).toBeChecked({ checked: enabled });
+				await settings.locator('.ash-modal-editor-close').click();
+				await workbench.quickaccess.runCommand('git.showOutput');
+			};
+			try {
+				await workbench.quickaccess.runCommand('workbench.action.output.showChannels');
+				await workbench.quickaccess.select('App Server');
+				const otherBefore = await rawText('App Server connection');
+				await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+				await workbench.quickaccess.runCommand('git.showOutput');
+				await workbench.quickaccess.runCommand('workbench.action.output.clear');
+				for (let count = 1; count <= 3; count++) await appendStatus(count);
+				await expect(output.locator('.view-lines')).toContainText('3 changed files');
+				const beforeRaw = await rawText('3 changed files');
+				await workbench.quickaccess.runCommand('git.showOutput');
+				await input.press('ControlOrMeta+End');
+				await expect(autoScroll).toHaveAttribute('aria-pressed', 'true');
+				const beforeScroll = await scroll.evaluate(element => element.scrollTop);
+				await input.press('ArrowUp');
+				await expect(autoScroll).toHaveAttribute('aria-pressed', 'false');
+				expect(await scroll.evaluate(element => element.scrollTop)).toBe(beforeScroll);
+				await input.press('ControlOrMeta+c');
+				await expect.poll(readClipboard).toBe('3 changed files\n');
+				await appendStatus(4);
+				await expect(autoScroll).toHaveAttribute('aria-pressed', 'false');
+				expect(await scroll.evaluate(element => element.scrollTop)).toBe(beforeScroll);
+				const afterRaw = await rawText('4 changed files');
+				expect(afterRaw).toBe(`${beforeRaw}4 changed files\n`);
+				await workbench.quickaccess.runCommand('git.showOutput');
+				await input.press('ControlOrMeta+End');
+				await expect(autoScroll).toHaveAttribute('aria-pressed', 'true');
+				await input.press('Alt+F1');
+				await expect.poll(() => page.locator('.ash-accessible-view-content').inputValue()).toContain(labels.help);
+				await page.keyboard.press('Escape');
+				for (let count = 5; count <= 20; count++) await appendStatus(count);
+				await expect(output.locator('.view-lines')).toContainText('20 changed files');
+				await expect.poll(() => scroll.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+				const readViewport = () => scroll.evaluate(element => ({ top: element.scrollTop, height: element.scrollHeight, viewport: element.clientHeight, focused: element.querySelector('.stanza-editor-input') === element.ownerDocument.activeElement }));
+				const quickInputBefore = await readViewport();
+				await expect(input).toBeFocused();
+				await workbench.quickaccess.open();
+				await workbench.quickaccess.close();
+				await expect(input).toBeFocused();
+				const quickInputEscape = await readViewport();
+				expect(quickInputEscape).toEqual(quickInputBefore);
+				await expect(autoScroll).toHaveAttribute('aria-pressed', 'true');
+				// Showing the already visible Output pane focuses it without appending or revealing a line.
+				await workbench.quickaccess.runCommand('workbench.action.output.show');
+				await expect(input).toBeFocused();
+				const quickInputAccept = await readViewport();
+				expect(quickInputAccept).toEqual(quickInputBefore);
+				await expect(autoScroll).toHaveAttribute('aria-pressed', 'true');
+				await changeSmartScrolling(false);
+				await input.press('ControlOrMeta+End');
+				await input.press('ArrowUp');
+				await expect(autoScroll).toHaveAttribute('aria-pressed', 'true');
+				await output.locator('.stanza-editor').hover();
+				await page.mouse.wheel(0, -160);
+				await expect(autoScroll).toHaveAttribute('aria-pressed', 'false');
+				const readingScroll = await scroll.evaluate(element => element.scrollTop);
+				await appendStatus(21);
+				await expect(autoScroll).toHaveAttribute('aria-pressed', 'false');
+				expect(await scroll.evaluate(element => element.scrollTop)).toBe(readingScroll);
+				const finalRaw = await rawText('21 changed files');
+				expect(finalRaw.startsWith(afterRaw)).toBe(true);
+				await workbench.quickaccess.runCommand('git.showOutput');
+				await output.locator('.stanza-editor').hover();
+				await page.mouse.wheel(0, 10_000);
+				await expect(autoScroll).toHaveAttribute('aria-pressed', 'true');
+				await changeSmartScrolling(true);
+				await expect(autoScroll).toHaveAttribute('aria-pressed', 'true');
+				await input.press('ControlOrMeta+End');
+				await input.press('ArrowUp');
+				await expect(autoScroll).toHaveAttribute('aria-pressed', 'false');
+				await workbench.quickaccess.runCommand('workbench.action.output.showChannels');
+				await workbench.quickaccess.select('App Server');
+				const otherAfter = await rawText('App Server connection');
+				expect(otherAfter).toBe(otherBefore);
+				const status = await execute('git', ['status', '--porcelain=v2', '--untracked-files=all'], { cwd: testWorkspace.directory });
+				expect(status.stdout.trim().split('\n')).toHaveLength(21);
+				await testInfo.attach('output-smart-scroll', { body: JSON.stringify({ locale, beforeScroll, readingScroll, beforeRaw, afterRaw, finalRaw, otherBefore, otherAfter, quickInput: { before: quickInputBefore, escape: quickInputEscape, accept: quickInputAccept }, repositoryStatus: status.stdout }), contentType: 'application/json' });
+			} finally {
+				if (target.kind === 'electron') {
+					await (application as ElectronApplication).evaluate(({ clipboard }, text) => clipboard.writeText(text), previousClipboard);
+				} else {
+					await page.evaluate(text => navigator.clipboard.writeText(text), previousClipboard);
+				}
+			}
+		});
+	}
+});

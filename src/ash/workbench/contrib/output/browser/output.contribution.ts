@@ -1,6 +1,6 @@
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
@@ -102,5 +102,22 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 		valueType: 'boolean',
 		title: localize('output.verbosityTitle', 'Output accessibility help'),
 		description: localize('output.verbosityDescription', 'Announce how to open accessibility help when Output receives focus.'),
+	},
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: 'output.smartScroll.enabled',
+	defaultValue: true,
+	scope: ConfigurationScope.WINDOW,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') {
+			throw new TypeError(localize('output.smartScrollInvalid', 'Output smart scrolling must be a boolean.'));
+		}
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		title: localize('output.smartScrollTitle', 'Output smart scrolling'),
+		description: localize('output.smartScrollDescription', 'Pause Auto Scroll when the primary cursor moves to an earlier line, and resume at the last line. Changes apply to the next cursor movement.'),
 	},
 });

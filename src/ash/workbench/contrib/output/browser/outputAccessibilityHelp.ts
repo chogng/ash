@@ -35,6 +35,7 @@ export class OutputAccessibilityHelp implements IAccessibleViewImplementation {
 				}
 				content.push(
 					localize('output.help.links', 'Place the cursor on a file location and run <keybinding:editor.action.openLink>, or click it while holding Ctrl or Command. Workspace file locations open at their reported line and column.'),
+					localize('output.help.smartScroll', 'With output.smartScroll.enabled, moving the primary cursor to an earlier line pauses Auto Scroll; moving it to the last line resumes it. Changing the setting affects the next cursor movement.'),
 					localize('output.help.scroll', 'Scrolling away from the end pauses Auto Scroll. Enable it to follow new output. More Output Actions opens the live channel in an editor or exports its retained text.'),
 				);
 				return content.join('\n\n');

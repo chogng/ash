@@ -1,6 +1,8 @@
 import { CodeEditorWidget } from '../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
 import { TextModel } from '../../../../editor/common/model/textModel.js';
 import { Range } from '../../../../editor/common/core/range.js';
+import { CursorChangeReason, type ICursorPositionChangedEvent } from '../../../../editor/common/cursorEvents.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { ITextModelService, type IResolvedTextEditorModel } from '../../../../editor/common/services/resolverService.js';
 import type { IEditorDecorationsCollection, ICodeEditorViewState } from '../../../../editor/common/editorCommon.js';
@@ -61,6 +63,7 @@ export class OutputViewPane extends ViewPane {
 		@ICommandService private readonly commands: ICommandService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IAccessibleViewService accessibleView: IAccessibleViewService,
+		@IConfigurationService private readonly configurationService: IConfigurationService,
 	) {
 		super(container, options);
 		this.contentElement.classList.add("ash-output");
@@ -101,6 +104,7 @@ export class OutputViewPane extends ViewPane {
 			this.filterInput.value = "";
 			this.filters.setText("");
 		}));
+		this._register(this.editor.onDidChangeCursorPosition(event => this.handleCursorPosition(event)));
 		this._register(this.editor.onDidScrollChange(event => { if (event.scrollTopChanged && !this.changingContent) this.acceptScrollPosition(); }));
 		this._register(outputService.onDidChangeChannels(() => {
 			for (const id of this.viewStates.keys()) {
@@ -258,17 +262,32 @@ export class OutputViewPane extends ViewPane {
 	}
 
 	private toggleAutoScroll(): void {
-		this.autoScroll = !this.autoScroll;
-		this.persistAutoScroll();
-		this.titleStateKey = "";
+		this.setAutoScroll(!this.autoScroll);
 		if (this.autoScroll) this.scrollToEnd();
 		this.render();
 	}
 
 	private acceptScrollPosition(): void {
 		const atEnd = this.editor.getContentHeight() - this.editor.getScrollTop() - this.editor.getLayoutInfo().height <= 2;
-		if (this.autoScroll === atEnd) return;
-		this.autoScroll = atEnd;
+		this.setAutoScroll(atEnd);
+	}
+
+	private handleCursorPosition(event: ICursorPositionChangedEvent): void {
+		// Restoration and content updates also move cursors; only user gestures change reading intent.
+		if (event.reason !== CursorChangeReason.Explicit || this.changingContent || !this.configurationService.getValue<boolean>('output.smartScroll.enabled')) {
+			return;
+		}
+		const model = this.editor.getModel();
+		if (model) {
+			this.setAutoScroll(event.position.lineNumber === model.getLineCount());
+		}
+	}
+
+	private setAutoScroll(autoScroll: boolean): void {
+		if (this.autoScroll === autoScroll) {
+			return;
+		}
+		this.autoScroll = autoScroll;
 		this.persistAutoScroll();
 		this.titleStateKey = "";
 		this.titleActions.updateActions(this.createTitleActions(this.outputService.activeChannel));
