@@ -56,14 +56,14 @@ flowchart TD
 
 当前实现按上面的职责关系组装；各入口保留自己的权限、结果预算和展示方式。
 
-| 项目             | 实现                                                                                                    | 边界                                                               |
-| ---------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| 公共内容搜索     | Agent、编辑器和 Codebase 检索使用公共 grep 服务                                                         | 共享目录索引，分别管理请求                                         |
-| 配置与组装       | 宿主持有 `EnvRuntimeConfig`、grep 与 file-search；分别注入使用者                                        | `LocalToolConfig` 只保留工具执行策略，工具组合不向宿主提供公共服务 |
-| Codebase 职责    | `CodebaseRetrievalService` 组合 FTS、grep、符号和语义候选                                               | `Codebase` 的源码、chunk 与版本管理不引用 grep                     |
+| 项目             | 实现                                                                                                                        | 边界                                                               |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| 公共内容搜索     | Agent、编辑器和 Codebase 检索使用公共 grep 服务                                                                             | 共享目录索引，分别管理请求                                         |
+| 配置与组装       | 宿主持有 `EnvRuntimeConfig`、grep 与 file-search；分别注入使用者                                                            | `LocalToolConfig` 只保留工具执行策略，工具组合不向宿主提供公共服务 |
+| Codebase 职责    | `CodebaseRetrievalService` 组合 FTS、grep、符号和语义候选                                                                   | `Codebase` 的源码、chunk 与版本管理不引用 grep                     |
 | 文件路径搜索     | `file-search::Service` 提供 glob / 枚举与模糊搜索入口；Agent、CLI、TUI、Rust 桌面文件面板及 TS 工作区文件选择器调用公共能力 | glob 读当前路径并按修改时间排序；模糊搜索复用请求内的路径索引      |
-| 查询新鲜度       | Rust API 与 RPC 均支持 `Indexed` / `Current`，RPC 成功结果返回实际模式                                  | 编辑器默认保持当前磁盘搜索；Agent 和 Codebase 使用索引候选         |
-| 索引 glob 与诊断 | tgrep 的正向 glob 保持索引查询；Rust 结果和 RPC 分页提供查询计划及候选统计                              | 统计包含已确认的 Ash 写入，描述内容匹配前的文件筛选                |
+| 查询新鲜度       | Rust API 与 RPC 均支持 `Indexed` / `Current`，RPC 成功结果返回实际模式                                                      | 编辑器默认保持当前磁盘搜索；Agent 和 Codebase 使用索引候选         |
+| 索引 glob 与诊断 | tgrep 的正向 glob 保持索引查询；Rust 结果和 RPC 分页提供查询计划及候选统计                                                  | 统计包含已确认的 Ash 写入，描述内容匹配前的文件筛选                |
 
 实现入口：[宿主组装](../crates/app-server/src/server/environment_runtime.rs)、
 [检索组合](../crates/codebase/src/retrieval/service.rs)、
@@ -112,7 +112,7 @@ Search UI
 | 内容                                             | 所有者                                                      |
 | ------------------------------------------------ | ----------------------------------------------------------- |
 | 查询表单、结果分组、高亮和取消时机               | Renderer                                                    |
-| 类型协议与参数校验                               | Renderer 协议客户端与 App Server；Main 只转发传输             |
+| 类型协议与参数校验                               | Renderer 协议客户端与 App Server；Main 只转发传输           |
 | 目录选择、`SearchFiles` 检查和连接级任务路由     | App Server                                                  |
 | 引擎选择、执行、结构化结果、目录索引、分页和取消 | `ash-grep`                                                  |
 | 文件名模糊查找                                   | `ash-file-search`                                           |

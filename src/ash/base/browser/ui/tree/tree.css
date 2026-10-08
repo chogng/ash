@@ -171,5 +171,10 @@
 	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
 }
 
-.ash-tree-find-widget[hidden] { display: none; }
-.ash-tree-find-widget > .ash-input-box { flex: 1; min-width: 0; }
+.ash-tree-find-widget[hidden] {
+	display: none;
+}
+.ash-tree-find-widget > .ash-input-box {
+	flex: 1;
+	min-width: 0;
+}

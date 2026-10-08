@@ -9,8 +9,8 @@
 }
 
 .ash-settings-card > :first-child {
-	border-radius: var(--ash-cornerRadius-large) var(--ash-cornerRadius-large)
-		0 0;
+	border-radius: var(--ash-cornerRadius-large) var(--ash-cornerRadius-large) 0
+		0;
 }
 
 .ash-settings-card > :last-child {

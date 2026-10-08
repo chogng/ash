@@ -87,7 +87,7 @@ test('Memento rejects invalid identifiers and malformed persisted objects', () =
 
 test('Memento rejects non-JSON component state before storing it', () => {
 	using storage = new TestStorageService();
-	const memento = new Memento<{ size: number }>('test.view', storage);
+	const memento = new Memento<{ size: number; }>('test.view', storage);
 	memento.getMemento(StorageScope.WORKSPACE, StorageTarget.MACHINE).size = Number.NaN;
 	assert.throws(() => memento.saveMemento(), /finite number/);
 	assert.equal(storage.get('memento/test.view', StorageScope.WORKSPACE), undefined);

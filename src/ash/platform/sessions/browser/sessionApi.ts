@@ -125,7 +125,7 @@ export function createAppServerModelApi(connection: AppServerProtocolClient): IM
 				baseUrl: config.baseUrl ?? '',
 				apiFormat: config.custom!.protocol,
 				order: config.custom!.order,
-				models: Object.entries(config.modelContext ?? {}).filter((entry): entry is [string, typeof entry[1] & { contextWindow: number }] => entry[1].contextWindow != null).map(([id, context]) => ({ id, contextWindow: context.contextWindow, ...(config.custom?.modelAliases?.[id] ? { upstreamModel: config.custom.modelAliases[id] } : {}) })),
+				models: Object.entries(config.modelContext ?? {}).filter((entry): entry is [string, typeof entry[1] & { contextWindow: number; }] => entry[1].contextWindow != null).map(([id, context]) => ({ id, contextWindow: context.contextWindow, ...(config.custom?.modelAliases?.[id] ? { upstreamModel: config.custom.modelAliases[id] } : {}) })),
 			}));
 		},
 		saveCustomProvider: async provider => {
@@ -137,7 +137,7 @@ export function createAppServerModelApi(connection: AppServerProtocolClient): IM
 				config: {
 					...snapshot.connections[provider.id],
 					...config,
-					modelContext: Object.fromEntries(Object.entries(config.modelContext ?? {}).filter((entry): entry is [string, typeof entry[1] & { contextWindow: number }] => entry[1].contextWindow != null).map(([id, context]) => [id, {
+					modelContext: Object.fromEntries(Object.entries(config.modelContext ?? {}).filter((entry): entry is [string, typeof entry[1] & { contextWindow: number; }] => entry[1].contextWindow != null).map(([id, context]) => [id, {
 						...snapshot.connections[provider.id]?.modelContext?.[id],
 						...context,
 					}])),

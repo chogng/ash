@@ -1066,9 +1066,13 @@ test('registered command metadata drives nested batch validation, completion and
 	).map(issue => issue.message);
 	const target = registry.registerMany([{
 		id: 'test.argument', handler: () => undefined,
-		metadata: { description: 'Choose a kind', args: [{ name: 'options', isOptional: false, schema: {
-			type: 'object', required: ['kind'], properties: { kind: { enum: ['text', 'html'] } },
-		} }] },
+		metadata: {
+			description: 'Choose a kind', args: [{
+				name: 'options', isOptional: false, schema: {
+					type: 'object', required: ['kind'], properties: { kind: { enum: ['text', 'html'] } },
+				}
+			}]
+		},
 	}]);
 	try {
 		const value = { key: 'ctrl+p', command: 'runCommands', args: { commands: [{ command: 'test.argument', args: { kind: 'text' } }] } };

@@ -31,7 +31,7 @@ export class BrowserSession {
 
 	/** Requests are authorized by the backend; Chromium never receives its policy or credentials. */
 	public attachNetwork(id: string, contents: WebContents, owner: IBrowserViewOwner, token: () => string | null, emit: (event: BrowserViewEvent) => void): IDisposable {
-		if (owner.type !== 'agent') { return toDisposable(() => {}); }
+		if (owner.type !== 'agent') { return toDisposable(() => { }); }
 		if (this.storageScope !== BrowserViewStorageScope.Agent) { throw new Error('BrowserNetworkIsolationRequired'); }
 		this.networkPages.set(contents.id, { id, token, emit });
 		if (!this.hasNetworkFilter) {
@@ -77,7 +77,7 @@ export class BrowserSession {
 	/** Connection retirement affects the whole partition, so its authorized operations cannot overlap. */
 	public runNetworkOperation<T>(execute: () => Promise<T>): Promise<T> {
 		const operation = this.networkTurn.then(execute);
-		this.networkTurn = operation.then(() => {}, () => {});
+		this.networkTurn = operation.then(() => { }, () => { });
 		return operation;
 	}
 

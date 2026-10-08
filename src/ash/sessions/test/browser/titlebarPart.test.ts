@@ -29,9 +29,11 @@ class TestPart extends Part {
 	public getTabsHeight(): number { return 35; }
 	public setContentRightInset(_inset: number): void { }
 	public setEditorContentVisible(_visible: boolean): void { }
-	constructor(container: HTMLElement, id: SessionsPartId) { const services = createTestComponentServices(undefined, undefined, container.ownerDocument);
+	constructor(container: HTMLElement, id: SessionsPartId) {
+		const services = createTestComponentServices(undefined, undefined, container.ownerDocument);
 		super(container, id, services.get(IThemeService), services.get(IStorageService));
-		this._register(services); }
+		this._register(services);
+	}
 }
 
 test('Sessions titlebar initializes localized actions and closes the application menu before refreshing or disposal', () => {

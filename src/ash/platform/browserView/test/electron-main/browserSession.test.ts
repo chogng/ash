@@ -13,11 +13,11 @@ ensureNoDisposablesAreLeakedInTestSuite();
 test('agent requests require current authority for every resource and cannot be approved by another page', () => {
 	let intercept!: NonNullable<Parameters<Session['webRequest']['onBeforeRequest']>[0]>;
 	const electronSession = Object.assign(new EventEmitter(), {
-		setPermissionCheckHandler: () => {}, setPermissionRequestHandler: () => {}, setDevicePermissionHandler: () => {},
+		setPermissionCheckHandler: () => { }, setPermissionRequestHandler: () => { }, setDevicePermissionHandler: () => { },
 		webRequest: { onBeforeRequest: (handler: typeof intercept) => { intercept = handler; } },
 	}) as unknown as Session;
 	const session = BrowserSession.getOrCreate('agent-network', BrowserViewStorageScope.Agent, electronSession);
-	const events: Extract<BrowserViewEvent, { type: 'networkRequested' }>[] = [];
+	const events: Extract<BrowserViewEvent, { type: 'networkRequested'; }>[] = [];
 	let token: string | null = 'tool-one';
 	const attachment = session.attachNetwork('page', { id: 7 } as WebContents, { type: 'agent', sessionId: 'thread' }, () => token, event => {
 		if (event.type === 'networkRequested') { events.push(event); }

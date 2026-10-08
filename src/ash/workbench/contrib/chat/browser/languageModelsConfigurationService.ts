@@ -14,7 +14,7 @@ export class LanguageModelsConfigurationService extends Disposable implements IL
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChangeModels = this.changed.event;
 	private readonly modelVisibility = new Map<string, ModelVisibilityPreference>();
-	constructor(private readonly preferences: { readonly defaultModelSetting: string; readonly selectedModelStorageKey: string }, @IConfigurationService private readonly configuration: IConfigurationService, @IStorageService private readonly storage: IStorageService) {
+	constructor(private readonly preferences: { readonly defaultModelSetting: string; readonly selectedModelStorageKey: string; }, @IConfigurationService private readonly configuration: IConfigurationService, @IStorageService private readonly storage: IStorageService) {
 		super();
 		this.acceptHiddenModels(configuration.getValue(ModelCatalogConfiguration.hiddenModels));
 		this._register(storage.onDidChangeValue(event => {

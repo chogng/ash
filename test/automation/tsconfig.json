@@ -5,5 +5,10 @@
     "allowImportingTsExtensions": true,
     "types": ["node"]
   },
-  "include": ["../../src/typings/css.d.ts", "../../playwright.config.ts", "./**/*.ts", "../smoke/**/*.ts"]
+  "include": [
+    "../../src/typings/css.d.ts",
+    "../../playwright.config.ts",
+    "./**/*.ts",
+    "../smoke/**/*.ts"
+  ]
 }

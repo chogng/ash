@@ -16,14 +16,18 @@ import { IWorkingCopyHistoryService } from './workingCopyHistory.js';
 import '../../filesConfiguration/common/filesConfigurationService.js';
 
 const registry = Registry.as<IConfigurationRegistry>(Extensions.Configuration);
-registry.registerConfiguration({ key: 'workbench.localHistory.enabled', defaultValue: true, scope: ConfigurationScope.RESOURCE, parse(value: unknown): boolean {
-	if (typeof value !== 'boolean') throw new TypeError(localize('localHistory.invalidEnabled', 'Local history enabled must be a boolean.'));
-	return value;
-}, setting: { valueType: 'boolean', title: localize('localHistory.enabledTitle', 'Local history'), description: localize('localHistory.enabledDescription', 'Keep saved file versions in the current UI profile.') } });
-registry.registerConfiguration({ key: 'workbench.localHistory.maxFileSize', defaultValue: 256, scope: ConfigurationScope.RESOURCE, parse(value: unknown): number {
-	if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 32768) throw new TypeError(localize('localHistory.invalidSize', 'Local history file size must be between 0 and 32768 KB.'));
-	return value;
-}, setting: { valueType: 'number', minimum: 0, maximum: 32768, title: localize('localHistory.sizeTitle', 'Local history file size limit'), description: localize('localHistory.sizeDescription', 'Maximum saved file size in KB to include in local history.') } });
+registry.registerConfiguration({
+	key: 'workbench.localHistory.enabled', defaultValue: true, scope: ConfigurationScope.RESOURCE, parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') throw new TypeError(localize('localHistory.invalidEnabled', 'Local history enabled must be a boolean.'));
+		return value;
+	}, setting: { valueType: 'boolean', title: localize('localHistory.enabledTitle', 'Local history'), description: localize('localHistory.enabledDescription', 'Keep saved file versions in the current UI profile.') }
+});
+registry.registerConfiguration({
+	key: 'workbench.localHistory.maxFileSize', defaultValue: 256, scope: ConfigurationScope.RESOURCE, parse(value: unknown): number {
+		if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 32768) throw new TypeError(localize('localHistory.invalidSize', 'Local history file size must be between 0 and 32768 KB.'));
+		return value;
+	}, setting: { valueType: 'number', minimum: 0, maximum: 32768, title: localize('localHistory.sizeTitle', 'Local history file size limit'), description: localize('localHistory.sizeDescription', 'Maximum saved file size in KB to include in local history.') }
+});
 
 /** Records successful saves; dirty buffers and crash recovery retain their existing owners. */
 export class WorkingCopyHistoryTracker extends Disposable {

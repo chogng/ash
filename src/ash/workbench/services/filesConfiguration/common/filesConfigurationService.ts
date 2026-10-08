@@ -52,15 +52,17 @@ for (const [key, title] of expressionSettings) {
 		},
 	});
 }
-registry.registerConfiguration({ key: 'explorer.autoReveal', defaultValue: true, parse(value: unknown): boolean {
-	if (typeof value !== 'boolean') {
-		throw new TypeError(localize('files.invalidAutoReveal', 'Auto reveal must be a boolean.'));
+registry.registerConfiguration({
+	key: 'explorer.autoReveal', defaultValue: true, parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') {
+			throw new TypeError(localize('files.invalidAutoReveal', 'Auto reveal must be a boolean.'));
+		}
+		return value;
+	}, scope: ConfigurationScope.WINDOW, setting: {
+		valueType: 'boolean', title: localize('files.autoRevealTitle', 'Auto reveal'),
+		description: localize('files.autoRevealDescription', 'Select the active editor file in Explorer without moving keyboard focus.'),
 	}
-	return value;
-}, scope: ConfigurationScope.WINDOW, setting: {
-	valueType: 'boolean', title: localize('files.autoRevealTitle', 'Auto reveal'),
-	description: localize('files.autoRevealDescription', 'Select the active editor file in Explorer without moving keyboard focus.'),
-} });
+});
 
 export interface IFilesConfigurationService {
 	readonly onDidChangeReadonly: Event<void>;

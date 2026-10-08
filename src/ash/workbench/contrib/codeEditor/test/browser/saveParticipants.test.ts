@@ -45,8 +45,14 @@ class SaveTestServices extends Disposable {
 }
 
 function action(request: LanguageCodeActionRequest, text: string, kind = request.only![0]): LanguageCodeAction {
-	return { title: kind, kind, edit: { entries: [{ kind: 'textDocument', resource: request.resource,
-		version: request.snapshot.version, expectedText: request.snapshot.getText(), edits: [{ range: request.range, text }] }] } };
+	return {
+		title: kind, kind, edit: {
+			entries: [{
+				kind: 'textDocument', resource: request.resource,
+				version: request.snapshot.version, expectedText: request.snapshot.getText(), edits: [{ range: request.range, text }]
+			}]
+		}
+	};
 }
 
 test('save contribution runs fixes before imports on the shared model, persists their result and retains undo', async () => {
@@ -57,10 +63,12 @@ test('save contribution runs fixes before imports on the shared model, persists 
 	reference.model.setValue('edited');
 	fixture.markers.changeOne('test', resource, [{ range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 6 } }, severity: MarkerSeverity.Warning, message: 'unused', source: 'test', code: 42 }]);
 	const requests: LanguageCodeActionRequest[] = [];
-	using provider = fixture.features.codeActionProvider.register('*', { provideCodeActions: request => {
-		requests.push(request);
-		return [action(request, request.snapshot.getText() + (request.only![0] === 'source.fixAll' ? '-fixed' : '-sorted'))];
-	} });
+	using provider = fixture.features.codeActionProvider.register('*', {
+		provideCodeActions: request => {
+			requests.push(request);
+			return [action(request, request.snapshot.getText() + (request.only![0] === 'source.fixAll' ? '-fixed' : '-sorted'))];
+		}
+	});
 	await reference.save(signal());
 	assert.deepEqual(requests.map(request => [request.only![0], request.snapshot.getText()]), [['source.fixAll', 'edited'], ['source.organizeImports', 'edited-fixed']]);
 	assert.equal(requests[0].diagnostics[0].severity, LanguageDiagnosticSeverity.Warning);
@@ -82,10 +90,12 @@ for (const reason of [SaveReason.EXPLICIT, SaveReason.AUTO, SaveReason.FOCUS_CHA
 		using reference = await fixture.bulk.models.acquire({ resource }, signal());
 		reference.model.setValue('edited');
 		const kinds: string[] = [];
-		using provider = fixture.features.codeActionProvider.register('*', { provideCodeActions: request => {
-			kinds.push(request.only![0]);
-			return [action(request, request.snapshot.getText() + '-action')];
-		} });
+		using provider = fixture.features.codeActionProvider.register('*', {
+			provideCodeActions: request => {
+				kinds.push(request.only![0]);
+				return [action(request, request.snapshot.getText() + '-action')];
+			}
+		});
 		await reference.save(signal(), { reason });
 		assert.deepEqual(kinds, reason === SaveReason.AUTO ? [] : reason === SaveReason.EXPLICIT ? ['source.fixAll', 'source.organizeImports'] : ['source.organizeImports']);
 		assert.equal(fixture.bulk.store.text(resource), reason === SaveReason.AUTO ? 'edited' : reason === SaveReason.EXPLICIT ? 'edited-action-action' : 'edited-action');
@@ -98,10 +108,12 @@ test('parent save kinds query once and never exclusions reject disabled descenda
 	using reference = await fixture.bulk.models.acquire({ resource }, signal());
 	reference.model.setValue('edited');
 	const kinds: string[] = [];
-	using provider = fixture.features.codeActionProvider.register('*', { provideCodeActions: request => {
-		kinds.push(request.only![0]);
-		return [action(request, 'forbidden', 'source.fixAll.tool'), { title: 'disabled', kind: 'source.organizeImports', disabledReason: 'unavailable' }, { title: 'resolved imports', kind: 'source.organizeImports' }];
-	}, resolveCodeAction: (_original, request) => action(request, 'sorted', 'source.organizeImports') });
+	using provider = fixture.features.codeActionProvider.register('*', {
+		provideCodeActions: request => {
+			kinds.push(request.only![0]);
+			return [action(request, 'forbidden', 'source.fixAll.tool'), { title: 'disabled', kind: 'source.organizeImports', disabledReason: 'unavailable' }, { title: 'resolved imports', kind: 'source.organizeImports' }];
+		}, resolveCodeAction: (_original, request) => action(request, 'sorted', 'source.organizeImports')
+	});
 	await reference.save(signal());
 	assert.deepEqual(kinds, ['source']);
 	assert.equal(fixture.bulk.store.text(resource), 'sorted');
@@ -169,11 +181,13 @@ test('workspace edits persist unopened files without recursively running save ac
 	using reference = await fixture.bulk.models.acquire({ resource }, signal());
 	reference.model.setValue('edited');
 	let requests = 0;
-	using provider = fixture.features.codeActionProvider.register('*', { provideCodeActions: request => {
-		requests++;
-		const current = action(request, 'fixed');
-		return [{ ...current, edit: { entries: [...current.edit!.entries, { kind: 'textDocument', resource: URI.file('/workspace/other.ts'), expectedText: 'other', edits: [{ range: new Range(1, 1, 1, 6), text: 'other-fixed' }] }] } }];
-	} });
+	using provider = fixture.features.codeActionProvider.register('*', {
+		provideCodeActions: request => {
+			requests++;
+			const current = action(request, 'fixed');
+			return [{ ...current, edit: { entries: [...current.edit!.entries, { kind: 'textDocument', resource: URI.file('/workspace/other.ts'), expectedText: 'other', edits: [{ range: new Range(1, 1, 1, 6), text: 'other-fixed' }] }] } }];
+		}
+	});
 	await reference.save(signal());
 	assert.equal(requests, 1);
 	assert.equal(fixture.bulk.store.text(resource), 'fixed');
@@ -215,10 +229,12 @@ test('a failed workspace write rolls back save edits without reentering the save
 	using reference = await fixture.bulk.models.acquire({ resource }, signal());
 	reference.model.setValue('edited');
 	fixture.bulk.store.failNextSave = new Error('write failed');
-	using provider = fixture.features.codeActionProvider.register('*', { provideCodeActions: request => {
-		const current = action(request, 'fixed');
-		return [{ ...current, edit: { entries: [...current.edit!.entries, { kind: 'textDocument', resource: URI.file('/workspace/other.ts'), expectedText: 'other', edits: [{ range: new Range(1, 1, 1, 6), text: 'other-fixed' }] }] } }];
-	} });
+	using provider = fixture.features.codeActionProvider.register('*', {
+		provideCodeActions: request => {
+			const current = action(request, 'fixed');
+			return [{ ...current, edit: { entries: [...current.edit!.entries, { kind: 'textDocument', resource: URI.file('/workspace/other.ts'), expectedText: 'other', edits: [{ range: new Range(1, 1, 1, 6), text: 'other-fixed' }] }] } }];
+		}
+	});
 	await assert.rejects(reference.save(signal()), /write failed/);
 	assert.equal(reference.model.getText(), 'edited');
 	assert.equal(reference.isDirty, true);

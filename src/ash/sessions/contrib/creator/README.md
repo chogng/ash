@@ -4,15 +4,15 @@ Creator 是 Sessions 的创作功能聚合入口，首页提供 Design、Whitebo
 
 当前画布工作空间各自拥有文档、保存基准和撤销历史，选区、视口及编辑工具由各自的编辑器实例持有。首页和 Make 使用 Creator 导航侧栏并隐藏画布属性面板；其他画布模式通过现有 Sessions 视图使用当前编辑器的图层和属性。
 
-| 模式 | 当前操作 |
-| --- | --- |
-| Design | 画板、图片和图形编辑；按需展开共享 Agent 对话，附上文档与选区快照 |
-| Whiteboard | 便签、自由绘图和固定连接线 |
-| Slides | 16:9 页面、排序和演示 |
-| Brand | 常用素材尺寸、整批尺寸变体 |
-| Sites | 网页画板、页面预览和包含导航的 HTML 导出 |
-| Make | 生成代码与场景 JSON 查看、HTML 运行预览、附带代码的 Agent 对话草稿 |
-| Prototype | 手机屏幕、顺序预览和对象动画 |
+| 模式       | 当前操作                                                           |
+| ---------- | ------------------------------------------------------------------ |
+| Design     | 画板、图片和图形编辑；按需展开共享 Agent 对话，附上文档与选区快照  |
+| Whiteboard | 便签、自由绘图和固定连接线                                         |
+| Slides     | 16:9 页面、排序和演示                                              |
+| Brand      | 常用素材尺寸、整批尺寸变体                                         |
+| Sites      | 网页画板、页面预览和包含导航的 HTML 导出                           |
+| Make       | 生成代码与场景 JSON 查看、HTML 运行预览、附带代码的 Agent 对话草稿 |
+| Prototype  | 手机屏幕、顺序预览和对象动画                                       |
 
 Sites 尚未提供网站布局重排、路由文档和发布，完整领域约定见 [Creator Sites](../../CREATOR_SITES.md)。Prototype 尚未提供点击热点及分支流程。Make 的 Agent 操作准备未发送的 Code 草稿，由用户在对话里检查并发送。
 
@@ -34,31 +34,31 @@ Sites 尚未提供网站布局重排、路由文档和发布，完整领域约�
 
 核心 Widget、View 和输入控制器只消费 [designEditorBrowser.ts](browser/designEditorBrowser.ts) 的公共能力契约。产品入口 [design.main.ts](design.main.ts) 创建各个能力，由设计页面组件传给 Widget；核心组件不导入能力实现或装配入口。贡献更新文档或提供显示数据，画布统一呈现这些数据。文档与历史仍由公共模型统一持有。
 
-| 文件 | 拥有的职责 |
-| --- | --- |
-| [common/core/geometry.ts](common/core/geometry.ts) | 点、对象框、坐标变换、贝塞尔计算和包围框；仅处理空间数学 |
-| [common/model/document.ts](common/model/document.ts) | 设计文档与对象类型、不可变快照、文件解析和序列化 |
-| [common/model/designModel.ts](common/model/designModel.ts) | `DesignModel`，已提交文档和撤销重做历史的唯一持有者 |
-| [common/model/hitTest.ts](common/model/hitTest.ts) | 根据对象种类、绘制顺序和几何判断命中 |
-| [common/commands/documentCommands.ts](common/commands/documentCommands.ts) | `DocumentCommands`，创建、修改、删除、分组和解组操作 |
-| [common/config/editorConfiguration.ts](common/config/editorConfiguration.ts) | Design 的配置键、默认值、作用域和校验 |
-| [common/selection.ts](common/selection.ts) | 每个编辑器实例的对象选区和路径节点选择 |
-| [browser/widget/designEditorWidget.ts](browser/widget/designEditorWidget.ts) | `DesignEditorWidget`，编辑器根 DOM、组件组合、实例状态、公共快捷键和贡献生命周期 |
-| [browser/widget/designToolsWidget.ts](browser/widget/designToolsWidget.ts) | 底部单行悬浮工具栏、工具与模式选择、键盘导航 |
-| [browser/view.ts](browser/view.ts)、[view.css](browser/view.css) | `DesignView`，挂载公共 Canvas，显示对象、绘制预览和路径控制点；只显示输入数据，不提交文档编辑 |
-| [browser/controller/designInputController.ts](browser/controller/designInputController.ts) | 参与公共画布输入，拥有对象选择、移动和路径控制点编辑；通过输入契约调用绘制贡献 |
-| [browser/designEditorBrowser.ts](browser/designEditorBrowser.ts)、[design.main.ts](design.main.ts) | 前者定义核心与贡献之间的契约，后者装配产品所需的能力实例 |
-| [contrib/drawing/browser/designDrawingController.ts](contrib/drawing/browser/designDrawingController.ts) | 矩形、椭圆、文字放置、钢笔锚点及自由线条的绘制预览和提交 |
-| [contrib/properties/browser/designPropertiesWidget.ts](contrib/properties/browser/designPropertiesWidget.ts) | 几何、填色、文字和路径属性控件与节点操作 |
-| [contrib/motion/browser/designMotionWidget.ts](contrib/motion/browser/designMotionWidget.ts) | 关键帧编辑、时间线、播放时钟和动画采样数据；插值位于同贡献的 `common/motion.ts`，画布呈现由共享 View 负责 |
-| [contrib/code/browser/designCodeWidget.ts](contrib/code/browser/designCodeWidget.ts)、[designCodeGenerator.ts](contrib/code/browser/designCodeGenerator.ts) | 从已提交文档生成、显示和导出可运行代码 |
-| [browser/svgRenderer.ts](browser/svgRenderer.ts) | 画布与 SVG 导出共用的对象渲染 |
-| [browser/designMedia.ts](browser/designMedia.ts) | 媒体备份与导出编码、内容摘要；按设计引用管理每个实例的共享图片资源 |
-| [browser/designDocumentController.ts](browser/designDocumentController.ts) | `DesignDocumentController`，文件身份、读取版本、保存基准、异步文件操作和共享 `IWorkingCopy` 契约 |
-| [browser/designEditorPage.ts](browser/designEditorPage.ts) | `DesignEditorPage`，借用窗口文档，拥有编辑器装配、布局、焦点和浏览器关闭检查 |
-| [browser/designEditorService.ts](browser/designEditorService.ts)、[designViews.ts](browser/designViews.ts) | 按模式持有的窗口文档、工作副本注册与当前编辑器的可观察引用，以及借用该实例文档、选区和属性组件的 Layers 与 Shape properties 视图 |
-| [browser/creatorPage.ts](browser/creatorPage.ts)、[creatorWorkspace.ts](browser/creatorWorkspace.ts) | CreatorEditorPane、模式导航、工作空间保留与模式注册契约 |
-| [browser/creator.contribution.ts](browser/creator.contribution.ts)、[creatorEditor.contribution.ts](browser/creatorEditor.contribution.ts) | 前者注册 Creator 导航及帮助，后者注册共享画布面板、快捷键和帮助 |
+| 文件                                                                                                                                                        | 拥有的职责                                                                                                                       |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| [common/core/geometry.ts](common/core/geometry.ts)                                                                                                          | 点、对象框、坐标变换、贝塞尔计算和包围框；仅处理空间数学                                                                         |
+| [common/model/document.ts](common/model/document.ts)                                                                                                        | 设计文档与对象类型、不可变快照、文件解析和序列化                                                                                 |
+| [common/model/designModel.ts](common/model/designModel.ts)                                                                                                  | `DesignModel`，已提交文档和撤销重做历史的唯一持有者                                                                              |
+| [common/model/hitTest.ts](common/model/hitTest.ts)                                                                                                          | 根据对象种类、绘制顺序和几何判断命中                                                                                             |
+| [common/commands/documentCommands.ts](common/commands/documentCommands.ts)                                                                                  | `DocumentCommands`，创建、修改、删除、分组和解组操作                                                                             |
+| [common/config/editorConfiguration.ts](common/config/editorConfiguration.ts)                                                                                | Design 的配置键、默认值、作用域和校验                                                                                            |
+| [common/selection.ts](common/selection.ts)                                                                                                                  | 每个编辑器实例的对象选区和路径节点选择                                                                                           |
+| [browser/widget/designEditorWidget.ts](browser/widget/designEditorWidget.ts)                                                                                | `DesignEditorWidget`，编辑器根 DOM、组件组合、实例状态、公共快捷键和贡献生命周期                                                 |
+| [browser/widget/designToolsWidget.ts](browser/widget/designToolsWidget.ts)                                                                                  | 底部单行悬浮工具栏、工具与模式选择、键盘导航                                                                                     |
+| [browser/view.ts](browser/view.ts)、[view.css](browser/view.css)                                                                                            | `DesignView`，挂载公共 Canvas，显示对象、绘制预览和路径控制点；只显示输入数据，不提交文档编辑                                    |
+| [browser/controller/designInputController.ts](browser/controller/designInputController.ts)                                                                  | 参与公共画布输入，拥有对象选择、移动和路径控制点编辑；通过输入契约调用绘制贡献                                                   |
+| [browser/designEditorBrowser.ts](browser/designEditorBrowser.ts)、[design.main.ts](design.main.ts)                                                          | 前者定义核心与贡献之间的契约，后者装配产品所需的能力实例                                                                         |
+| [contrib/drawing/browser/designDrawingController.ts](contrib/drawing/browser/designDrawingController.ts)                                                    | 矩形、椭圆、文字放置、钢笔锚点及自由线条的绘制预览和提交                                                                         |
+| [contrib/properties/browser/designPropertiesWidget.ts](contrib/properties/browser/designPropertiesWidget.ts)                                                | 几何、填色、文字和路径属性控件与节点操作                                                                                         |
+| [contrib/motion/browser/designMotionWidget.ts](contrib/motion/browser/designMotionWidget.ts)                                                                | 关键帧编辑、时间线、播放时钟和动画采样数据；插值位于同贡献的 `common/motion.ts`，画布呈现由共享 View 负责                        |
+| [contrib/code/browser/designCodeWidget.ts](contrib/code/browser/designCodeWidget.ts)、[designCodeGenerator.ts](contrib/code/browser/designCodeGenerator.ts) | 从已提交文档生成、显示和导出可运行代码                                                                                           |
+| [browser/svgRenderer.ts](browser/svgRenderer.ts)                                                                                                            | 画布与 SVG 导出共用的对象渲染                                                                                                    |
+| [browser/designMedia.ts](browser/designMedia.ts)                                                                                                            | 媒体备份与导出编码、内容摘要；按设计引用管理每个实例的共享图片资源                                                               |
+| [browser/designDocumentController.ts](browser/designDocumentController.ts)                                                                                  | `DesignDocumentController`，文件身份、读取版本、保存基准、异步文件操作和共享 `IWorkingCopy` 契约                                 |
+| [browser/designEditorPage.ts](browser/designEditorPage.ts)                                                                                                  | `DesignEditorPage`，借用窗口文档，拥有编辑器装配、布局、焦点和浏览器关闭检查                                                     |
+| [browser/designEditorService.ts](browser/designEditorService.ts)、[designViews.ts](browser/designViews.ts)                                                  | 按模式持有的窗口文档、工作副本注册与当前编辑器的可观察引用，以及借用该实例文档、选区和属性组件的 Layers 与 Shape properties 视图 |
+| [browser/creatorPage.ts](browser/creatorPage.ts)、[creatorWorkspace.ts](browser/creatorWorkspace.ts)                                                        | CreatorEditorPane、模式导航、工作空间保留与模式注册契约                                                                          |
+| [browser/creator.contribution.ts](browser/creator.contribution.ts)、[creatorEditor.contribution.ts](browser/creatorEditor.contribution.ts)                  | 前者注册 Creator 导航及帮助，后者注册共享画布面板、快捷键和帮助                                                                  |
 
 一个文件可以承接紧密相关的完整职责。几何和文档序列化目前各自保持在小模块中；新增能力时按实际职责拆分。
 
@@ -74,21 +74,21 @@ Design 与 Editor 共用 Base、Platform 提供的生命周期、控件、配置
 
 编辑器组件使用本目录的公共模型、命令和文件控制器，通过公共契约调用贡献。窗口编辑器服务按 Creator 模式创建并注册文档控制器；`CreatorPage` 的每个工作空间通过设计页面组件借用自己的文档，把能力装配函数传给 Widget，并转交编辑器布局与焦点。左右面板读取当前画布的同一份文档和选区；属性 View 只挂载 Widget 拥有的属性组件，视图切换不会创建第二份文档、选区或属性状态。Widget 创建 View、共享工具栏、输入控制器和一组贡献实例；各组件持有自己的 DOM、样式和订阅。宿主只定位直接挂载的组件根节点。
 
-| 状态 | 持有者 | 保存进文件 |
-| --- | --- | --- |
-| 对象内容、几何、层级和绘制顺序 | `DesignModel` 的文档快照 | 是 |
-| 素材身份、不可变版本、图片引用和裁切 | `DesignModel` 的文档快照 | 是 |
-| 原始图片字节 | `DesignDocumentController` | 素材文件；恢复备份同时保留字节 |
-| 图片预览 URL | 每个 Widget 的 `DesignMediaPreview` | 否；不作为永久引用 |
-| 撤销重做历史 | `DesignModel` | 否 |
-| 选中对象、当前路径节点 | 每个 Widget 的 `DesignSelection` | 否 |
-| 缩放和平移 | 每个 Widget 的 `CanvasViewport` | 否 |
-| 指针捕获、视口手势 | `CanvasInputController` | 否 |
-| 对象拖拽预览 | `DesignInputController` | 否 |
-| 未提交绘制预览 | 绘制 contribution | 否 |
-| 动画播放时间 | Motion contribution | 否 |
-| 当前工具与模式 | 每个 Widget | 否 |
-| 文件 URI、读取版本、已保存内容和操作状态 | `DesignDocumentController` | 否 |
+| 状态                                     | 持有者                              | 保存进文件                     |
+| ---------------------------------------- | ----------------------------------- | ------------------------------ |
+| 对象内容、几何、层级和绘制顺序           | `DesignModel` 的文档快照            | 是                             |
+| 素材身份、不可变版本、图片引用和裁切     | `DesignModel` 的文档快照            | 是                             |
+| 原始图片字节                             | `DesignDocumentController`          | 素材文件；恢复备份同时保留字节 |
+| 图片预览 URL                             | 每个 Widget 的 `DesignMediaPreview` | 否；不作为永久引用             |
+| 撤销重做历史                             | `DesignModel`                       | 否                             |
+| 选中对象、当前路径节点                   | 每个 Widget 的 `DesignSelection`    | 否                             |
+| 缩放和平移                               | 每个 Widget 的 `CanvasViewport`     | 否                             |
+| 指针捕获、视口手势                       | `CanvasInputController`             | 否                             |
+| 对象拖拽预览                             | `DesignInputController`             | 否                             |
+| 未提交绘制预览                           | 绘制 contribution                   | 否                             |
+| 动画播放时间                             | Motion contribution                 | 否                             |
+| 当前工具与模式                           | 每个 Widget                         | 否                             |
+| 文件 URI、读取版本、已保存内容和操作状态 | `DesignDocumentController`          | 否                             |
 
 多个 Widget 可以使用同一个文档控制器，共享已提交内容与历史，同时保留各自的选区和视口。Widget 借用控制器的模型；单独释放 Widget 会取消手势，释放 View、输入控制器、共享工具栏及该实例的全部贡献，并清理订阅和命令查找记录。View 释放画布的主题与配置订阅，Motion 释放播放时钟；文档仍由控制器持有。活动页切换隐藏对应编辑组或 EditorPane，`CreatorPage` 保留页面组件与 Widget；隐藏画布会取消手势并停止动画播放，回到设计页时恢复原选区和视口。Creator 页面使用 EditorPart 中保留的产品编辑组，不进入会话 Code 工作集，页面切换不会触发关闭确认。窗口编辑器服务通过关闭生命周期逐一确认保存、放弃或取消，即使当前正在查看其他模式，也会检查全部未保存文档；窗口关闭后释放文档。
 

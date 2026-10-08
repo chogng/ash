@@ -20,7 +20,7 @@ export class CodeActionKeybindingResolver {
 		const bindings = this.keybindings.getKeybindings().flatMap(binding => {
 			const defaultKind = binding.command ? commandKinds.get(binding.command) : undefined;
 			if (!defaultKind || !binding.resolvedKeybinding) { return []; }
-			const args = binding.commandArgs as { kind?: unknown; preferred?: unknown } | undefined;
+			const args = binding.commandArgs as { kind?: unknown; preferred?: unknown; } | undefined;
 			return [{
 				kind: typeof args?.kind === 'string' ? new HierarchicalKind(args.kind) : defaultKind,
 				preferred: args?.preferred === true,

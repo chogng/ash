@@ -117,11 +117,13 @@ export class SearchSettingsContent extends Disposable implements SettingsContent
 	public getNodes(): readonly SettingsTreeNode<ISetting | SettingsContentItem>[] {
 		return [{
 			element: { kind: 'group', id: 'general.content-search', title: localize({ bundle: 'ash.settings', key: 'search.group' }, 'Content search'), description: '' },
-			children: [{ element: {
-				kind: 'item', id: 'grep.backend', title: localize({ bundle: 'ash.settings', key: 'search.engine' }, 'Search engine'),
-				description: localize({ bundle: 'ash.settings', key: 'search.description' }, 'Choose the content search engine shared by Agent, editor and Codebase. tgrep is the default; select ripgrep to use rg.'),
-				keywords: ['tgrep', 'ripgrep', 'rg', 'grep', 'backend', 'content search'], value: { domNode: this.rowDomNode },
-			} }],
+			children: [{
+				element: {
+					kind: 'item', id: 'grep.backend', title: localize({ bundle: 'ash.settings', key: 'search.engine' }, 'Search engine'),
+					description: localize({ bundle: 'ash.settings', key: 'search.description' }, 'Choose the content search engine shared by Agent, editor and Codebase. tgrep is the default; select ripgrep to use rg.'),
+					keywords: ['tgrep', 'ripgrep', 'rg', 'grep', 'backend', 'content search'], value: { domNode: this.rowDomNode },
+				}
+			}],
 		}];
 	}
 

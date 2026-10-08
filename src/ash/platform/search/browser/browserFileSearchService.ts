@@ -9,7 +9,7 @@ export class BrowserFileSearchService implements IFileSearchService {
 	constructor(@IFileService private readonly files: Pick<IFileService, 'readDirectory'>) { }
 
 	public async glob(directory: FileSearchDirectory, query: FileSearchQuery, signal?: AbortSignal): Promise<FileSearchResult> {
-		const matches: { path: string; resource: URI }[] = [];
+		const matches: { path: string; resource: URI; }[] = [];
 		let totalMatches = 0;
 		const checkCancellation = (): void => { if (signal?.aborted) { throw new CancellationError(); } };
 		const matchesPattern = (pattern: string, path: string): boolean => match(pattern, path) || (pattern.startsWith('**/') && match(pattern.slice(3), path));

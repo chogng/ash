@@ -90,8 +90,8 @@
 	width: 18px;
 	min-width: 18px;
 	padding: 4px 2px;
-	border-radius: 0 var(--ash-cornerRadius-small)
-		var(--ash-cornerRadius-small) 0;
+	border-radius: 0 var(--ash-cornerRadius-small) var(--ash-cornerRadius-small)
+		0;
 }
 
 .ash-dropdown-with-primary-dropdown .ash-button-content {

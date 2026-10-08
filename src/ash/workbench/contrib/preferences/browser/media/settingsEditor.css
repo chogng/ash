@@ -108,8 +108,7 @@
 
 	.ash-settings-sidebar {
 		border-right: 0;
-		border-bottom: var(--ash-strokeThickness) solid
-			var(--ash-widget-border);
+		border-bottom: var(--ash-strokeThickness) solid var(--ash-widget-border);
 	}
 
 	.ash-settings-navigation-tree {

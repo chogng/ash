@@ -105,7 +105,7 @@ export class BrowserView extends Disposable {
 			return this.session.runNetworkOperation(async () => {
 				throwIfAborted(signal);
 				await this.setNetworkAuthority(networkToken);
-				using cancellation = addAbortListener(signal, () => { void this.setNetworkAuthority(null).catch(() => {}); });
+				using cancellation = addAbortListener(signal, () => { void this.setNetworkAuthority(null).catch(() => { }); });
 				try { throwIfAborted(signal); return await execute(signal); }
 				finally {
 					await this.debuggerOwner?.whenIdle();

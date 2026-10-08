@@ -171,7 +171,7 @@ test("Browser storage saves and reloads Mementos across workspace changes", asyn
 		flushInterval: 0,
 	});
 	using listeners = new DisposableStore();
-	const memento = new Memento<{ value: string }>("test.workspace", storage);
+	const memento = new Memento<{ value: string; }>("test.workspace", storage);
 	const state = memento.getMemento(StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	listeners.add(storage.onWillSaveState(() => memento.saveMemento()));
 	memento.onDidChangeValue(StorageScope.WORKSPACE, listeners)(event => {

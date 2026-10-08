@@ -155,8 +155,7 @@
 		grid-row: 1;
 		max-height: 180px;
 		border-right: 0;
-		border-bottom: var(--ash-strokeThickness) solid
-			var(--ash-widget-border);
+		border-bottom: var(--ash-strokeThickness) solid var(--ash-widget-border);
 	}
 
 	.ash-sessions-settings-page {

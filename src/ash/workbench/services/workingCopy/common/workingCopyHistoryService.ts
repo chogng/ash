@@ -14,10 +14,12 @@ import { InstantiationType, registerSingleton } from '../../../../platform/insta
 import { IUserDataProfileService } from '../../userDataProfile/common/userDataProfile.js';
 import { IWorkingCopyHistoryService, type IWorkingCopyHistoryEntry, type IWorkingCopyHistoryEntryDescriptor } from './workingCopyHistory.js';
 
-Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({ key: 'workbench.localHistory.maxFileEntries', defaultValue: 50, scope: ConfigurationScope.RESOURCE, parse(value: unknown): number {
-	if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1 || value > 1000) throw new TypeError(localize('localHistory.invalidEntries', 'Local history entries must be an integer between 1 and 1000.'));
-	return value;
-}, setting: { valueType: 'number', minimum: 1, maximum: 1000, title: localize('localHistory.entriesTitle', 'Local history entry limit'), description: localize('localHistory.entriesDescription', 'Maximum saved versions retained for each file.') } });
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: 'workbench.localHistory.maxFileEntries', defaultValue: 50, scope: ConfigurationScope.RESOURCE, parse(value: unknown): number {
+		if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1 || value > 1000) throw new TypeError(localize('localHistory.invalidEntries', 'Local history entries must be an integer between 1 and 1000.'));
+		return value;
+	}, setting: { valueType: 'number', minimum: 1, maximum: 1000, title: localize('localHistory.entriesTitle', 'Local history entry limit'), description: localize('localHistory.entriesDescription', 'Maximum saved versions retained for each file.') }
+});
 
 /** Stores immutable snapshots through the profile's existing file provider. */
 export class WorkingCopyHistoryService extends Disposable implements IWorkingCopyHistoryService {

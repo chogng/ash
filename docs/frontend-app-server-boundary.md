@@ -23,9 +23,9 @@ Workbench / 编辑器调用方
 | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------ |
 | `platform/<领域>/common/`、`workbench/services/<领域>/common/` 或 `workbench/contrib/<功能>/common/`    | 前端领域接口和类型                                                   | 传输消息、生成协议类型                                 |
 | `platform/<领域>/browser/`、`workbench/services/<领域>/browser/` 或 `workbench/contrib/<功能>/browser/` | 领域 API 适配层、Service 实现                                        | 进程启动、通用连接状态                                 |
-| `platform/agentHost/browser/`                                                                          | 协议客户端、请求配对、初始化和通知                                   | 具体领域的业务状态                                     |
-| `platform/agentHost/electron-browser/`                                                                 | Renderer 的 MessagePort 传输                                         | Rust 进程管理                                          |
-| `platform/agentHost/electron-main/`                                                                    | 窗口连接、端口取得和透明转发，以及本地与远程启动器共用的连接载体契约 | daemon 包选择、业务方法路由、领域 Service              |
+| `platform/agentHost/browser/`                                                                           | 协议客户端、请求配对、初始化和通知                                   | 具体领域的业务状态                                     |
+| `platform/agentHost/electron-browser/`                                                                  | Renderer 的 MessagePort 传输                                         | Rust 进程管理                                          |
+| `platform/agentHost/electron-main/`                                                                     | 窗口连接、端口取得和透明转发，以及本地与远程启动器共用的连接载体契约 | daemon 包选择、业务方法路由、领域 Service              |
 | `platform/app-server-daemon/`                                                                           | 本地 daemon 连接程序、包路径与摘要校验、环境变量和开发构建重启       | JSON-RPC 请求配对、领域状态、Rust 进程管理的第二份实现 |
 | `code/electron-main/`                                                                                   | Electron 应用、窗口与上述组件的装配                                  | 领域协议解析                                           |
 | `crates/`                                                                                               | 协议入口及各 Rust 领域的执行与持久状态                               | 前端编辑器对象和窗口 UI                                |
