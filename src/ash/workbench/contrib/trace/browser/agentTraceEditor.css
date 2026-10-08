@@ -20,7 +20,9 @@
 	font-size: var(--ash-fontSize-body1);
 	font-weight: var(--ash-fontWeight-semiBold);
 }
-.ash-agent-trace-actions { margin-left: auto; }
+.ash-agent-trace-actions {
+	margin-left: auto;
+}
 .ash-agent-trace-status,
 .ash-agent-trace-location,
 .ash-agent-trace-summary,
@@ -36,8 +38,14 @@
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
-.ash-agent-trace-location { padding: 0 var(--ash-spacing-size120) var(--ash-spacing-size40); }
-.ash-agent-trace-body { flex: 1; min-width: 0; min-height: 0; }
+.ash-agent-trace-location {
+	padding: 0 var(--ash-spacing-size120) var(--ash-spacing-size40);
+}
+.ash-agent-trace-body {
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+}
 .ash-agent-trace-navigation,
 .ash-agent-trace-inspector {
 	display: flex;
@@ -49,26 +57,95 @@
 	padding: var(--ash-spacing-size120);
 }
 .ash-agent-trace-structure,
-.ash-agent-trace-search { display: flex; align-items: center; gap: var(--ash-spacing-size80); }
-.ash-agent-trace-search > .ash-input-box { flex: 1; min-width: 0; }
-.ash-agent-trace-tree { flex: 1; min-height: 0; }
-.ash-agent-trace-row { display: flex; align-items: center; min-width: 0; width: 100%; gap: var(--ash-spacing-size80); }
-.ash-agent-trace-row > .ash-icon-label { flex: 1; min-width: 0; }
-.ash-agent-trace-failure { color: var(--ash-error-foreground); font-size: var(--ash-fontSize-body2); }
-.ash-agent-trace-empty { margin: 0; color: var(--ash-description-foreground); }
+.ash-agent-trace-search {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+}
+.ash-agent-trace-search > .ash-input-box {
+	flex: 1;
+	min-width: 0;
+}
+.ash-agent-trace-tree {
+	flex: 1;
+	min-height: 0;
+}
+.ash-agent-trace-row {
+	display: flex;
+	align-items: center;
+	min-width: 0;
+	width: 100%;
+	gap: var(--ash-spacing-size80);
+}
+.ash-agent-trace-row > .ash-icon-label {
+	flex: 1;
+	min-width: 0;
+}
+.ash-agent-trace-failure {
+	color: var(--ash-error-foreground);
+	font-size: var(--ash-fontSize-body2);
+}
+.ash-agent-trace-empty {
+	margin: 0;
+	color: var(--ash-description-foreground);
+}
 .ash-agent-trace-inspector-title,
-.ash-agent-trace-inspector-identity { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ash-agent-trace-tabs { flex: 0 0 var(--ash-tab-height); height: var(--ash-tab-height); min-width: 0; }
-.ash-agent-trace-panel { display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; }
+.ash-agent-trace-inspector-identity {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.ash-agent-trace-tabs {
+	flex: 0 0 var(--ash-tab-height);
+	height: var(--ash-tab-height);
+	min-width: 0;
+}
+.ash-agent-trace-panel {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-height: 0;
+	min-width: 0;
+}
 .ash-agent-trace-detail-host,
 .ash-agent-trace-code,
-.ash-agent-trace-relations { flex: 1; min-width: 0; min-height: 0; }
-.ash-agent-trace-details { user-select: text; overflow-wrap: anywhere; }
-.ash-agent-trace-details dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--ash-spacing-size80) var(--ash-spacing-size120); margin: 0; }
-.ash-agent-trace-details dt { color: var(--ash-description-foreground); }
-.ash-agent-trace-details dd { margin: 0; }
-.ash-agent-trace-details p { margin: var(--ash-spacing-size120) 0; }
-.ash-agent-trace-details:focus-visible { outline: var(--ash-strokeThickness) solid var(--ash-focusBorder); outline-offset: calc(-1 * var(--ash-strokeThickness)); }
-.ash-agent-trace-relation { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ash-agent-trace-relation-warning { white-space: pre-wrap; overflow-wrap: anywhere; }
-.ash-agent-trace [hidden] { display: none; }
+.ash-agent-trace-relations {
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+}
+.ash-agent-trace-details {
+	user-select: text;
+	overflow-wrap: anywhere;
+}
+.ash-agent-trace-details dl {
+	display: grid;
+	grid-template-columns: max-content minmax(0, 1fr);
+	gap: var(--ash-spacing-size80) var(--ash-spacing-size120);
+	margin: 0;
+}
+.ash-agent-trace-details dt {
+	color: var(--ash-description-foreground);
+}
+.ash-agent-trace-details dd {
+	margin: 0;
+}
+.ash-agent-trace-details p {
+	margin: var(--ash-spacing-size120) 0;
+}
+.ash-agent-trace-details:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}
+.ash-agent-trace-relation {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.ash-agent-trace-relation-warning {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+.ash-agent-trace [hidden] {
+	display: none;
+}

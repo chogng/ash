@@ -40,22 +40,22 @@
 
 ## 基座与 owner 映射
 
-| UI 职责 | 现有实现 / API | Owner 与约束 |
-| --- | --- | --- |
-| 编辑器生命周期 | workbench/contrib/trace/browser/agentTraceEditor.ts，EditorPane | Trace 保留输入 revision、abort、隐藏/显示、订阅释放 |
-| 两列尺寸与拖动 | base/browser/ui/splitview/splitview.ts，new SplitView(host, 'horizontal', options)，ISplitViewView | SplitView / Sash 拥有分隔与交互；Trace 提供 pane root、约束和 layout |
-| 执行树 | base/browser/ui/tree/objectTree.ts，ObjectTree | modelOptions.identityProvider.getId 用稳定身份；scrolling: 'managed' + 固定 getHeight 启用现有虚拟化；Tree 自绘选中、focus、twistie、indent guides |
-| 精确定位与关系跳转 | Tree.expandTo / setSelection / setFocus / domFocus | setFocus 经 List.syncRows 触发 reveal；不能查询虚拟化 DOM 定位，P1 locator 面向模型身份 |
-| 过滤 | ObjectTreeModel.filter / refilter，Tree find API | 保留祖先；预计算标签/搜索文本，避免每次输入对全历史 JSON.stringify |
-| 事件短名称 | base/browser/ui/iconlabel/iconlabel.ts，IconLabel | IconLabel 拥有图标、截断与 hover；Trace 提供 icon、label、description、title |
-| 操作 | base/browser/ui/toolbar/toolbar.ts，ToolBar.setActions(primary, secondary, trailing)；现有 WorkbenchToolBar | Toolbar 拥有 More 与 roving focus；Button / ActionBar 拥有状态，不在 Trace CSS 穿透重写 hover / checked |
-| 搜索 | base/browser/ui/inputbox/inputbox.ts，InputBox，presentation: 'compact' | InputBox 拥有焦点/disabled/皮肤；Trace 只设 root 外部尺寸 |
-| 检查器 tabs | base/browser/ui/tablist/tabList.ts，TabList.setTabs(items, selectedId)，presentation: 'flush' | TabList 拥有键盘/选中；Trace 拥有 tabpanel 生命周期与 aria-controls / labelledby |
-| 关系列表 | base/browser/ui/list/listWidget.ts，List，稳定 getId | List 拥有选择/键盘/滚动；Trace 提供方向、关系名称、目标、是否可跳转 |
-| 正文滚动 | base/browser/ui/scrollbar/scrollableElement.ts，ScrollableElement | 复用主题滚动条 / wheel / focus reveal，不造另一套 |
-| JSON / 长正文 | editor/browser/widget/codeEditor/codeEditorWidget.ts，IModelService | 参考 contrib/output/browser/outputView.ts 的只读嵌入：readOnly，关闭 minimap / suggestions / inline completions；按需创建并释放 model / editor |
-| Loading | base/browser/ui/progressbar/progressbar.ts + role=status | 没有总量就用 indeterminate，不伪造百分比 |
-| 数量 | base/browser/ui/countBadge/countBadge.ts | 只显示真实计数，不用数量徽标装饰类型或伪装状态 |
+| UI 职责            | 现有实现 / API                                                                                              | Owner 与约束                                                                                                                                       |
+| ------------------ | ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 编辑器生命周期     | workbench/contrib/trace/browser/agentTraceEditor.ts，EditorPane                                             | Trace 保留输入 revision、abort、隐藏/显示、订阅释放                                                                                                |
+| 两列尺寸与拖动     | base/browser/ui/splitview/splitview.ts，new SplitView(host, 'horizontal', options)，ISplitViewView          | SplitView / Sash 拥有分隔与交互；Trace 提供 pane root、约束和 layout                                                                               |
+| 执行树             | base/browser/ui/tree/objectTree.ts，ObjectTree                                                              | modelOptions.identityProvider.getId 用稳定身份；scrolling: 'managed' + 固定 getHeight 启用现有虚拟化；Tree 自绘选中、focus、twistie、indent guides |
+| 精确定位与关系跳转 | Tree.expandTo / setSelection / setFocus / domFocus                                                          | setFocus 经 List.syncRows 触发 reveal；不能查询虚拟化 DOM 定位，P1 locator 面向模型身份                                                            |
+| 过滤               | ObjectTreeModel.filter / refilter，Tree find API                                                            | 保留祖先；预计算标签/搜索文本，避免每次输入对全历史 JSON.stringify                                                                                 |
+| 事件短名称         | base/browser/ui/iconlabel/iconlabel.ts，IconLabel                                                           | IconLabel 拥有图标、截断与 hover；Trace 提供 icon、label、description、title                                                                       |
+| 操作               | base/browser/ui/toolbar/toolbar.ts，ToolBar.setActions(primary, secondary, trailing)；现有 WorkbenchToolBar | Toolbar 拥有 More 与 roving focus；Button / ActionBar 拥有状态，不在 Trace CSS 穿透重写 hover / checked                                            |
+| 搜索               | base/browser/ui/inputbox/inputbox.ts，InputBox，presentation: 'compact'                                     | InputBox 拥有焦点/disabled/皮肤；Trace 只设 root 外部尺寸                                                                                          |
+| 检查器 tabs        | base/browser/ui/tablist/tabList.ts，TabList.setTabs(items, selectedId)，presentation: 'flush'               | TabList 拥有键盘/选中；Trace 拥有 tabpanel 生命周期与 aria-controls / labelledby                                                                   |
+| 关系列表           | base/browser/ui/list/listWidget.ts，List，稳定 getId                                                        | List 拥有选择/键盘/滚动；Trace 提供方向、关系名称、目标、是否可跳转                                                                                |
+| 正文滚动           | base/browser/ui/scrollbar/scrollableElement.ts，ScrollableElement                                           | 复用主题滚动条 / wheel / focus reveal，不造另一套                                                                                                  |
+| JSON / 长正文      | editor/browser/widget/codeEditor/codeEditorWidget.ts，IModelService                                         | 参考 contrib/output/browser/outputView.ts 的只读嵌入：readOnly，关闭 minimap / suggestions / inline completions；按需创建并释放 model / editor     |
+| Loading            | base/browser/ui/progressbar/progressbar.ts + role=status                                                    | 没有总量就用 indeterminate，不伪造百分比                                                                                                           |
+| 数量               | base/browser/ui/countBadge/countBadge.ts                                                                    | 只显示真实计数，不用数量徽标装饰类型或伪装状态                                                                                                     |
 
 注意：旧 skills 中的 SplitView 构造示例已经过时；本次核实当前签名为 new SplitView(container, 'horizontal', options)。按实际源代码实现。
 

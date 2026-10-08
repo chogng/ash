@@ -6,38 +6,38 @@ Trace 已能读取和跟随 Agent 的持久执行历史。本路线在现有能�
 
 ## Trace 现有能力
 
-| 已有能力 | 当前行为与证据入口 |
-| --- | --- |
-| 共享入口和页面 | Workbench 的 `ash.agentTrace.open` 接收 Session ID，Sessions 的 `sessions.trace.open` 取当前 Session、切换布局后调用它；两端共用 [AgentTraceEditor](src/ash/workbench/contrib/trace/browser/agentTraceEditor.ts)、[共享命令](src/ash/workbench/contrib/trace/browser/trace.contribution.ts) 和 [Sessions 入口](src/ash/sessions/contrib/trace/browser/trace.contribution.ts)。 |
-| 唯一历史来源与分页 | [ThreadStore](crates/thread-store/src/store.rs) 拥有持久事实；[rollout v3 分页](crates/rollout-trace/src/page.rs) 按 Thread 独立游标读有界范围，带上引用的历史前缀。页面合并分页，不触发执行。 |
-| 正式只读 RPC | [Session operations](crates/app-server/src/server/session_operations.rs) 已提供 `session/trace/read`、`session/trace/diagnostics/read`、`session/trace/payload/read`、`session/trace/graph/read`；前端通过 [Chat 领域契约](src/ash/workbench/services/chat/common/agentTrace.ts) 消费。 |
-| 历史与实时查阅 | Thread / Turn 层级、子 Thread、全文筛选、仅错误、JSON 详情、键盘导航、中文和无障碍帮助已存在；订阅补齐 read/subscribe 间隙，隐藏或关闭停止后续读取并释放订阅，迟到响应不覆盖新输入。 |
-| 模型诊断与正文 | [记录器](crates/rollout-trace/src/recorder.rs) 和 [诊断契约](crates/rollout-trace/src/diagnostics.rs) 保存主循环、压缩与工具辅助模型的 attempt、语义请求/响应、失败、取消和部分输出；正文按需读取，未采集/省略/不可用有状态。请求属于 ModelService 边界，provider 传输字节与逐 chunk 采集尚未实现。 |
-| 工具与子 agent 关系 | [关系归纳器](crates/rollout-trace/src/reducer.rs) 已生成模型请求工具、工具结果、Code Mode、终端、运行时调用、消息交付、委派与父子 Thread 的边；页面可沿已有 `eventKey` 跳转，缺失证据有 warnings。 |
-| 导入、导出和评测 | rollout v3 JSON 导入/导出已保留未知字段、前缀、诊断与关系；显示筛选不裁剪导出。文件上限 64 MiB。CLI/评测沿产品执行路径保存任务结果，见 [评测说明](test/agent-eval/README.md)、[使用说明](docs/chat-session-inspector.md)、[真实 smoke 源码](test/smoke/areas/sessions/trace.spec.ts)。 |
+| 已有能力            | 当前行为与证据入口                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 共享入口和页面      | Workbench 的 `ash.agentTrace.open` 接收 Session ID，Sessions 的 `sessions.trace.open` 取当前 Session、切换布局后调用它；两端共用 [AgentTraceEditor](src/ash/workbench/contrib/trace/browser/agentTraceEditor.ts)、[共享命令](src/ash/workbench/contrib/trace/browser/trace.contribution.ts) 和 [Sessions 入口](src/ash/sessions/contrib/trace/browser/trace.contribution.ts)。 |
+| 唯一历史来源与分页  | [ThreadStore](crates/thread-store/src/store.rs) 拥有持久事实；[rollout v3 分页](crates/rollout-trace/src/page.rs) 按 Thread 独立游标读有界范围，带上引用的历史前缀。页面合并分页，不触发执行。                                                                                                                                                                                 |
+| 正式只读 RPC        | [Session operations](crates/app-server/src/server/session_operations.rs) 已提供 `session/trace/read`、`session/trace/diagnostics/read`、`session/trace/payload/read`、`session/trace/graph/read`；前端通过 [Chat 领域契约](src/ash/workbench/services/chat/common/agentTrace.ts) 消费。                                                                                        |
+| 历史与实时查阅      | Thread / Turn 层级、子 Thread、全文筛选、仅错误、JSON 详情、键盘导航、中文和无障碍帮助已存在；订阅补齐 read/subscribe 间隙，隐藏或关闭停止后续读取并释放订阅，迟到响应不覆盖新输入。                                                                                                                                                                                           |
+| 模型诊断与正文      | [记录器](crates/rollout-trace/src/recorder.rs) 和 [诊断契约](crates/rollout-trace/src/diagnostics.rs) 保存主循环、压缩与工具辅助模型的 attempt、语义请求/响应、失败、取消和部分输出；正文按需读取，未采集/省略/不可用有状态。请求属于 ModelService 边界，provider 传输字节与逐 chunk 采集尚未实现。                                                                            |
+| 工具与子 agent 关系 | [关系归纳器](crates/rollout-trace/src/reducer.rs) 已生成模型请求工具、工具结果、Code Mode、终端、运行时调用、消息交付、委派与父子 Thread 的边；页面可沿已有 `eventKey` 跳转，缺失证据有 warnings。                                                                                                                                                                             |
+| 导入、导出和评测    | rollout v3 JSON 导入/导出已保留未知字段、前缀、诊断与关系；显示筛选不裁剪导出。文件上限 64 MiB。CLI/评测沿产品执行路径保存任务结果，见 [评测说明](test/agent-eval/README.md)、[使用说明](docs/chat-session-inspector.md)、[真实 smoke 源码](test/smoke/areas/sessions/trace.spec.ts)。                                                                                         |
 
 另一项 [TraceEditor](src/ash/workbench/contrib/trace/browser/traceEditor.ts) 负责 OTel/OTLP/WebSocket span viewer。它与此处的 Agent 执行 Trace 有不同数据来源和用途；本路线以 ThreadStore 与诊断捕获为依据。
 
 ## 预计演进能力
 
-| 阶段 | 用户完成的事情 | 复用与边界 |
-| --- | --- | --- |
+| 阶段              | 用户完成的事情                                                                                                      | 复用与边界                                                                                                                   |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | P1 具体 Turn 定位 | 从指定 Session / Thread / Turn / event 打开 Trace，确认选中的是哪次执行；分页晚到、目标缺失和切换输入都有明确结果。 | 扩展共享前端打开参数与 URI，复用现有读取和订阅；业务历史仍归 ThreadStore。第一批完成打开、定位、详情、重开及回归验证的闭环。 |
-| P2 模型与工具关系 | 从选中 Turn 找到实际模型请求、模型工具调用、工具结果与子 agent，区分并行、嵌套、消息交付和结果依赖。 | 先复用现有图与身份键；只把明确记录的因果关系连起来。新增字段或关系语义由既有 Core/Rust/protocol 所有者维护。 |
-| P3 一致导出 | 运行仍在继续时导出一次有明确边界的捕获；历史、诊断、正文与关系属于同一范围，导出期间保持单次操作。 | 固定点击时已加载范围，按捕获内事件身份与因果证据限制关系并记录遗漏；这不代表后端跨存储事务快照。正文读取失败标为不完整。 |
-| P4 离线复查 | 无连接时导入、定位、查正文和关系，重新导出后证据仍可读；连续选择文件时最后一次选择生效。 | 保持 rollout v3 兼容与字段保留；限制大文件和不完整证据。长历史使用有界 DOM 和缓存搜索文本，避免每次渲染反复序列化大记录。 |
+| P2 模型与工具关系 | 从选中 Turn 找到实际模型请求、模型工具调用、工具结果与子 agent，区分并行、嵌套、消息交付和结果依赖。                | 先复用现有图与身份键；只把明确记录的因果关系连起来。新增字段或关系语义由既有 Core/Rust/protocol 所有者维护。                 |
+| P3 一致导出       | 运行仍在继续时导出一次有明确边界的捕获；历史、诊断、正文与关系属于同一范围，导出期间保持单次操作。                  | 固定点击时已加载范围，按捕获内事件身份与因果证据限制关系并记录遗漏；这不代表后端跨存储事务快照。正文读取失败标为不完整。     |
+| P4 离线复查       | 无连接时导入、定位、查正文和关系，重新导出后证据仍可读；连续选择文件时最后一次选择生效。                            | 保持 rollout v3 兼容与字段保留；限制大文件和不完整证据。长历史使用有界 DOM 和缓存搜索文本，避免每次渲染反复序列化大记录。    |
 
 ### 逐项核实，不能先承诺的能力
 
-| 信息 | 当前证据与待核实项 | 演进验收条件 |
-| --- | --- | --- |
-| 上下文与参数 | 已记录 Core 请求、附件转换后的语义请求和历史前缀；具体每项参数、工具定义、压缩前后输入以已保存 payload 为准。 | 核对实际请求字段、来源、时间与模型选择；缺失正文明确提示；不从当前配置回填历史参数。 |
-| token 与费用 | 页面显示 invocation 中存在的 usage 与耗时；[计费契约](crates/protocol/src/model/accounting.rs) 已保存费率版本和 complete/partial/unpriced 参考费用，[实际记录入口](crates/core/src/thread_controller/execution.rs) 在主循环成功响应后写入。失败 attempt 不保证有计费记录；provider 用量缺失和真实计费场景仍待验收。 | 分开显示已报告、缺失和估算；只有有明确价格来源、版本和计费规则时才展示费用估算。 |
-| 权限等待 | [审批交互契约](crates/protocol/src/interaction/turn_interaction.rs) 已通过 requestId/itemId 保存请求、答复、取消及可选 deadline；[工具授权记录](crates/protocol/src/thread/event.rs) 的 ApprovedOnce 关联 requestId。当前 UI 尚未展示等待区间；一般工具交互不设置 deadline，真实等待/超时场景仍待验收。 | 逐项核对请求、决策、等待时间与执行结果；未存储的间隔不根据界面停顿推断。 |
-| 重试、超时、取消 | attempt 失败/取消/部分输出已记录，[真实 loop 回归源码](crates/core/src/turn/diagnostic_trace_tests.rs) 覆盖失败重试与流式取消；超时来源、重试归组和等待预算的全链路覆盖待核实。 | 同一 Turn 内区分 attempt、取消源、超时预算、终止状态与部分证据；缺少因果键时标为未知。 |
-| 并行子 agent 与依赖 | 现有 graph 有父子 Thread、委派、消息交付、嵌套调用；[子任务 coordinator](crates/core/src/multi_agent/coordinator.rs) 实际保存结果 produced/received 与 join 的冻结目标、satisfiedBy。后端 graph 尚无返回/join 边；本轮页面已按 origin、委派标识、结果 digest 与冻结 join 成员派生返回/汇合导航。下一次模型的消费关系要求已加载 Core input 中出现同一 call ID。跨 Thread 没有统一时间顺序，完整并行区间仍缺证据。 | 用真实多子 agent 场景验证身份、顺序、交付与结果依赖；不能把时间相近视为依赖。 |
-| 副作用与恢复位置 | 评测已支持单 Git 仓库、完整 UTF-8 普通文件结果封存，见 [执行说明](docs/exec.md)；外部副作用、幂等性与可恢复位置未建立通用契约。 | 只提供有证据的恢复位置和前置条件；复查、结果还原与重新执行分别标注。任意安全重放不在承诺范围。 |
-| 敏感信息 | 语义请求、路径、工具参数和结果可能包含秘密；现有记录上限不是分享脱敏机制。 | 先核实已有脱敏规则，再提供分享前预览、密钥/个人路径处理和遗漏说明；内部原始证据与分享产物的变换可追踪。 |
+| 信息                | 当前证据与待核实项                                                                                                                                                                                                                                                                                                                                                                                               | 演进验收条件                                                                                            |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| 上下文与参数        | 已记录 Core 请求、附件转换后的语义请求和历史前缀；具体每项参数、工具定义、压缩前后输入以已保存 payload 为准。                                                                                                                                                                                                                                                                                                    | 核对实际请求字段、来源、时间与模型选择；缺失正文明确提示；不从当前配置回填历史参数。                    |
+| token 与费用        | 页面显示 invocation 中存在的 usage 与耗时；[计费契约](crates/protocol/src/model/accounting.rs) 已保存费率版本和 complete/partial/unpriced 参考费用，[实际记录入口](crates/core/src/thread_controller/execution.rs) 在主循环成功响应后写入。失败 attempt 不保证有计费记录；provider 用量缺失和真实计费场景仍待验收。                                                                                              | 分开显示已报告、缺失和估算；只有有明确价格来源、版本和计费规则时才展示费用估算。                        |
+| 权限等待            | [审批交互契约](crates/protocol/src/interaction/turn_interaction.rs) 已通过 requestId/itemId 保存请求、答复、取消及可选 deadline；[工具授权记录](crates/protocol/src/thread/event.rs) 的 ApprovedOnce 关联 requestId。当前 UI 尚未展示等待区间；一般工具交互不设置 deadline，真实等待/超时场景仍待验收。                                                                                                          | 逐项核对请求、决策、等待时间与执行结果；未存储的间隔不根据界面停顿推断。                                |
+| 重试、超时、取消    | attempt 失败/取消/部分输出已记录，[真实 loop 回归源码](crates/core/src/turn/diagnostic_trace_tests.rs) 覆盖失败重试与流式取消；超时来源、重试归组和等待预算的全链路覆盖待核实。                                                                                                                                                                                                                                  | 同一 Turn 内区分 attempt、取消源、超时预算、终止状态与部分证据；缺少因果键时标为未知。                  |
+| 并行子 agent 与依赖 | 现有 graph 有父子 Thread、委派、消息交付、嵌套调用；[子任务 coordinator](crates/core/src/multi_agent/coordinator.rs) 实际保存结果 produced/received 与 join 的冻结目标、satisfiedBy。后端 graph 尚无返回/join 边；本轮页面已按 origin、委派标识、结果 digest 与冻结 join 成员派生返回/汇合导航。下一次模型的消费关系要求已加载 Core input 中出现同一 call ID。跨 Thread 没有统一时间顺序，完整并行区间仍缺证据。 | 用真实多子 agent 场景验证身份、顺序、交付与结果依赖；不能把时间相近视为依赖。                           |
+| 副作用与恢复位置    | 评测已支持单 Git 仓库、完整 UTF-8 普通文件结果封存，见 [执行说明](docs/exec.md)；外部副作用、幂等性与可恢复位置未建立通用契约。                                                                                                                                                                                                                                                                                  | 只提供有证据的恢复位置和前置条件；复查、结果还原与重新执行分别标注。任意安全重放不在承诺范围。          |
+| 敏感信息            | 语义请求、路径、工具参数和结果可能包含秘密；现有记录上限不是分享脱敏机制。                                                                                                                                                                                                                                                                                                                                       | 先核实已有脱敏规则，再提供分享前预览、密钥/个人路径处理和遗漏说明；内部原始证据与分享产物的变换可追踪。 |
 
 ## 可执行 TODO 与验收标准
 
@@ -90,13 +90,13 @@ Trace 已能读取和跟随 Agent 的持久执行历史。本路线在现有能�
 
 分支无冲突跟进已发布 `main` `5db5dfcec`，保留原 TODO 全文与既有共享 UI 迁移。当前基线的受影响检查已全部通过，实际执行源码检查点为 `f2a54bc57`；后续仅更新本节文档。最终退出记录为 [当前验证状态](.build/trace-validation/published-main-visibility-state.json)。前一次新增整窗截图驱动改变了 Sessions 分隔条几何，导致关闭按钮被拦截；已校正为保留窗口尺寸、对实际 Trace 区域截图，原行为断言与 45 秒超时不变。旧运行的失败和因新 main 发布而中断的记录继续保留。
 
-| 当前基线检查 | 实际结果 |
-| --- | --- |
-| 隐藏/恢复正文 | 两个新回归先红后绿；恢复恰好第二次 read，已加载正文不重读且位置保留。[红](.build/trace-validation/visibility-red.log)、[绿](.build/trace-validation/visibility-green.log)。 |
-| 定向单测与共享组件 | 68 项 / 8 文件通过；headless 2/2，包含四主题宽窄与长历史。[单测](.build/trace-validation/published-main-visibility-unit.log)、[组件](.build/trace-validation/published-main-visibility-headless.log)。 |
-| 真实 Web / Electron | 每端一次 8/8，正常 full Web 构建/后端准备和正常 Desktop 后端/完整前端/smoke 编译均通过。[Web](.build/trace-validation/published-main-visibility-web-eight.log)、[Electron](.build/trace-validation/published-main-visibility-electron-eight.log)。 |
-| 类型、规范与包 | renderer 类型检查和 hygiene 通过；两种本树新包的 sourceDigest、完整文件哈希和 protocol major 7 / schemaHash `2e9c381d…` 匹配。[包契约](.build/trace-validation/published-main-visibility-package-contract.json)。SCM 的共享协议来自已发布 main，本批未扩展协议。 |
-| 代表图与复审 delta | [深色完整窗口](.build/trace-validation/published-main-visibility-web-results/areas-sessions-trace-flow--6289c-turns-and-offline-reopening-browser-app-server/ash-dark-wide.png) 展示下一次模型输入与 shell / spawn 结果和后续 wait_agent；[浅色 Trace 区域](.build/trace-validation/published-main-visibility-web-results/areas-sessions-trace-flow--6289c-turns-and-offline-reopening-browser-app-server/ash-light-narrow.png) 展示请求与两份返回共同满足 join。已查看真实像素；明确 fixture 标签属于测试证据注释，不属于产品界面。两图更新既有 Library 身份；[7,862 字节最小复审 delta](.build/trace-handoff/reviewed/trace-visibility-review.delta.patch) 可应用到原 Library v4 和 rebased 源码。[保存回执](.build/trace-handoff/reviewed/trace-review-library.json)。完整补丁 v4 未重新上传。 |
+| 当前基线检查        | 实际结果                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 隐藏/恢复正文       | 两个新回归先红后绿；恢复恰好第二次 read，已加载正文不重读且位置保留。[红](.build/trace-validation/visibility-red.log)、[绿](.build/trace-validation/visibility-green.log)。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| 定向单测与共享组件  | 68 项 / 8 文件通过；headless 2/2，包含四主题宽窄与长历史。[单测](.build/trace-validation/published-main-visibility-unit.log)、[组件](.build/trace-validation/published-main-visibility-headless.log)。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| 真实 Web / Electron | 每端一次 8/8，正常 full Web 构建/后端准备和正常 Desktop 后端/完整前端/smoke 编译均通过。[Web](.build/trace-validation/published-main-visibility-web-eight.log)、[Electron](.build/trace-validation/published-main-visibility-electron-eight.log)。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| 类型、规范与包      | renderer 类型检查和 hygiene 通过；两种本树新包的 sourceDigest、完整文件哈希和 protocol major 7 / schemaHash `2e9c381d…` 匹配。[包契约](.build/trace-validation/published-main-visibility-package-contract.json)。SCM 的共享协议来自已发布 main，本批未扩展协议。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| 代表图与复审 delta  | [深色完整窗口](.build/trace-validation/published-main-visibility-web-results/areas-sessions-trace-flow--6289c-turns-and-offline-reopening-browser-app-server/ash-dark-wide.png) 展示下一次模型输入与 shell / spawn 结果和后续 wait_agent；[浅色 Trace 区域](.build/trace-validation/published-main-visibility-web-results/areas-sessions-trace-flow--6289c-turns-and-offline-reopening-browser-app-server/ash-light-narrow.png) 展示请求与两份返回共同满足 join。已查看真实像素；明确 fixture 标签属于测试证据注释，不属于产品界面。两图更新既有 Library 身份；[7,862 字节最小复审 delta](.build/trace-handoff/reviewed/trace-visibility-review.delta.patch) 可应用到原 Library v4 和 rebased 源码。[保存回执](.build/trace-handoff/reviewed/trace-review-library.json)。完整补丁 v4 未重新上传。 |
 
 本批重开验收范围是 Trace 编辑器/窗口和离线导入。**App Server 停止重启后的磁盘恢复仍未验收**。重试归组、审批 deadline、带部分输出的流式取消、费用、分享脱敏和旧版同机时间基线继续列为后续验收项。
 
@@ -108,15 +108,15 @@ Trace 已能读取和跟随 Agent 的持久执行历史。本路线在现有能�
 
 长正文复用只读编辑器的 Find；切换正文关闭旧搜索并回到开头。迟到正文可以更新派生关系，不能覆盖当前选中的正文；该竞态已先红后绿复现。[关系单测](src/ash/workbench/contrib/trace/test/browser/agentTraceModel.test.ts) 覆盖跨父 Thread、不同 digest、重复调用标识、另一 Turn 和结果晚于请求等拒绝条件。
 
-| 检查 | 当前实际结果与边界 |
-| --- | --- |
-| 正常 Web 与 Desktop 入口 | 正常 full Web 构建、smoke 编译和本树 Web 后端准备通过；正常 Desktop 后端准备、完整前端构建和 smoke 编译通过。Desktop 第一次准备因 exec-server 连接中断退出，保留中断状态；确认原进程结束后正常重跑 exit 0。CARGO_BUILD_JOBS=1，未复用其它树产物。 |
-| Trace 单测 | 8 个文件共 66 项通过，包含定位、导入导出、生命周期、保存关系与迟到正文。[退出记录](.build/trace-validation/flow-current-state.json)、[日志](.build/trace-validation/flow-current-unit.log)。 |
-| 真实双端八场景 | Web 8/8 一次通过，Electron 8/8 一次通过；每端包含六项既有 Trace 回归与两项受控模型的真实 App Server 调用链。[Web](.build/trace-validation/flow-current-web-eight.log)、[Electron](.build/trace-validation/flow-desktop-electron-eight.log)、[Desktop 退出记录](.build/trace-validation/flow-desktop-state.json)。 |
-| 完整执行链 | [真实流程源码](test/smoke/areas/sessions/trace-flow.spec.ts) 经过正常 initialize 和正式 Session operations。父任务三次模型调用、真实 shell 结果、两个实际并行子任务各一次调用、两份返回与汇合、下一次模型输入包含工具结果、关系跳转、关闭重开、15 份正文导出与离线复查均有断言。每份捕获包含 3 个 Thread、56 个持久事件、15 个诊断事件和 15 份正文。 |
-| 错误与取消 | 真实本地模型请求失败与另一 Thread 的取消并行，保存 modelAttemptFailed / modelAttemptCancelled 与终止状态，错误筛选和重开通过。失败详情按公开契约显示“model request was invalid”。该场景没有覆盖 retry、审批 deadline 或取消前的流式部分正文。 |
-| 组件、主题与长历史 | headless 2/2，通过四主题宽窄、键盘、布局、只读正文和关闭释放；20,000 事件仅挂载 29 行，本轮导入约 333 ms、筛选约 79 ms，关闭后 model/editor 均为 0。[测量](.build/trace-validation/flow-current-headless-evidence/long-history-measurements.json)、[截图附件](.build/trace-validation/flow-current-headless-evidence/attachments.json)。已查看深色宽屏和浅色窄屏截图。来源是共享组件与离线 fixture，不属于 Electron 主题截图；没有旧版同机时间基线。 |
-| 包与协议 | 两种 runtime 包的当前 sourceDigest、完整文件哈希、protocol major 7/schemaHash 均匹配。[包契约](.build/trace-validation/flow-current-package-contract.json)。 |
+| 检查                     | 当前实际结果与边界                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 正常 Web 与 Desktop 入口 | 正常 full Web 构建、smoke 编译和本树 Web 后端准备通过；正常 Desktop 后端准备、完整前端构建和 smoke 编译通过。Desktop 第一次准备因 exec-server 连接中断退出，保留中断状态；确认原进程结束后正常重跑 exit 0。CARGO_BUILD_JOBS=1，未复用其它树产物。                                                                                                                                                                                                    |
+| Trace 单测               | 8 个文件共 66 项通过，包含定位、导入导出、生命周期、保存关系与迟到正文。[退出记录](.build/trace-validation/flow-current-state.json)、[日志](.build/trace-validation/flow-current-unit.log)。                                                                                                                                                                                                                                                         |
+| 真实双端八场景           | Web 8/8 一次通过，Electron 8/8 一次通过；每端包含六项既有 Trace 回归与两项受控模型的真实 App Server 调用链。[Web](.build/trace-validation/flow-current-web-eight.log)、[Electron](.build/trace-validation/flow-desktop-electron-eight.log)、[Desktop 退出记录](.build/trace-validation/flow-desktop-state.json)。                                                                                                                                    |
+| 完整执行链               | [真实流程源码](test/smoke/areas/sessions/trace-flow.spec.ts) 经过正常 initialize 和正式 Session operations。父任务三次模型调用、真实 shell 结果、两个实际并行子任务各一次调用、两份返回与汇合、下一次模型输入包含工具结果、关系跳转、关闭重开、15 份正文导出与离线复查均有断言。每份捕获包含 3 个 Thread、56 个持久事件、15 个诊断事件和 15 份正文。                                                                                                 |
+| 错误与取消               | 真实本地模型请求失败与另一 Thread 的取消并行，保存 modelAttemptFailed / modelAttemptCancelled 与终止状态，错误筛选和重开通过。失败详情按公开契约显示“model request was invalid”。该场景没有覆盖 retry、审批 deadline 或取消前的流式部分正文。                                                                                                                                                                                                        |
+| 组件、主题与长历史       | headless 2/2，通过四主题宽窄、键盘、布局、只读正文和关闭释放；20,000 事件仅挂载 29 行，本轮导入约 333 ms、筛选约 79 ms，关闭后 model/editor 均为 0。[测量](.build/trace-validation/flow-current-headless-evidence/long-history-measurements.json)、[截图附件](.build/trace-validation/flow-current-headless-evidence/attachments.json)。已查看深色宽屏和浅色窄屏截图。来源是共享组件与离线 fixture，不属于 Electron 主题截图；没有旧版同机时间基线。 |
+| 包与协议                 | 两种 runtime 包的当前 sourceDigest、完整文件哈希、protocol major 7/schemaHash 均匹配。[包契约](.build/trace-validation/flow-current-package-contract.json)。                                                                                                                                                                                                                                                                                         |
 
 模型 fixture 只提供本地 HTTP Responses 响应；Core、工具、子任务执行、持久化、诊断记录和 renderer RPC 使用产品路径，未接入付费账户或私密会话。旧的导入 fixture 继续作为 UI 回归，不能替代真实调用链。Electron 的菜单 popup、下载路径和重启使用既有进程内驱动 hook；本轮没有验收系统菜单或全局剪贴板。构建和单测未出现新增 warning；Playwright 仅有既有 NO_COLOR/FORCE_COLOR 提示。
 
@@ -124,18 +124,17 @@ Trace 已能读取和跟随 Agent 的持久执行历史。本路线在现有能�
 
 以下表格保留 UI 改造前 `cac4c2f8c` 范围的验证；新版结果见下节及界面路线，旧图不能代替新版 Electron 验收。
 
-| 检查 | 实际结果 |
-| --- | --- |
-| 文档链接与原文保全 | 新增源码和说明链接均存在；原 `TODO.md` 的 36,201 字节完整保留。 |
-| 协议与构建输入 | 当前源码的协议、扩展、语言与其他编译资源生成通过。 |
-| 定位、命令与页面单测 | 最终定向 Trace 六个文件共 51 项通过；包含 Session 参数兼容、URI 身份、分页定位、切换/关闭、注册命令和真实中文词条。 |
-| 导入与导出回归 | 页面 21 项通过；A/B 乱序完成及失败、导出中刷新/隐藏/关闭/切换、单次下载、正文失败和捕获内模型/嵌套工具关系保留均有断言。 |
-| 正常构建 | Renderer typecheck、正常 Desktop/Web 构建与 smoke/scenario 编译通过。 |
-| Web / Electron UI | 每端 5 项 UI 场景通过；包含 Sessions 入口、中文/无障碍、子 Thread、模型正文/关系跳转、筛选后的完整导出和离线重导入。使用隔离 profile 和合成证据 fixture。每端另 1 项真实持久历史场景跳过，不计入通过。 |
-| 真实界面证据 | Web 录制的 6 步离线回查全部通过；保存实际截图和约 14 秒原始短视频。截图不作为测试判定依据。 |
-| 旧后端准备记录 | 当时 Sherpa ONNX SDK 校验失败；后续官方重试、正常 Desktop/Web 后端准备和真实 Web 持久场景已通过，见下节。 |
-| 变更格式 | 仓库 TypeScript 格式检查与 `git diff --check` 通过。 |
-
+| 检查                 | 实际结果                                                                                                                                                                                               |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 文档链接与原文保全   | 新增源码和说明链接均存在；原 `TODO.md` 的 36,201 字节完整保留。                                                                                                                                        |
+| 协议与构建输入       | 当前源码的协议、扩展、语言与其他编译资源生成通过。                                                                                                                                                     |
+| 定位、命令与页面单测 | 最终定向 Trace 六个文件共 51 项通过；包含 Session 参数兼容、URI 身份、分页定位、切换/关闭、注册命令和真实中文词条。                                                                                    |
+| 导入与导出回归       | 页面 21 项通过；A/B 乱序完成及失败、导出中刷新/隐藏/关闭/切换、单次下载、正文失败和捕获内模型/嵌套工具关系保留均有断言。                                                                               |
+| 正常构建             | Renderer typecheck、正常 Desktop/Web 构建与 smoke/scenario 编译通过。                                                                                                                                  |
+| Web / Electron UI    | 每端 5 项 UI 场景通过；包含 Sessions 入口、中文/无障碍、子 Thread、模型正文/关系跳转、筛选后的完整导出和离线重导入。使用隔离 profile 和合成证据 fixture。每端另 1 项真实持久历史场景跳过，不计入通过。 |
+| 真实界面证据         | Web 录制的 6 步离线回查全部通过；保存实际截图和约 14 秒原始短视频。截图不作为测试判定依据。                                                                                                            |
+| 旧后端准备记录       | 当时 Sherpa ONNX SDK 校验失败；后续官方重试、正常 Desktop/Web 后端准备和真实 Web 持久场景已通过，见下节。                                                                                              |
+| 变更格式             | 仓库 TypeScript 格式检查与 `git diff --check` 通过。                                                                                                                                                   |
 
 ### 界面与长历史落实
 
@@ -173,7 +172,6 @@ Trace 已能读取和跟随 Agent 的持久执行历史。本路线在现有能�
 - [ ] 删除或替换 payload 时同步处理引用、digest、byteLength 与不完整状态，记录变换规则版本和遗漏；不将已变换证据标为原始捕获。
 - [ ] 验收使用测试密钥、个人路径和嵌套工具内容；预览与下载一致，重新导入仍可查缺失状态和合法关系。
 - [ ] 在明确验证脱敏覆盖前不宣称产物可安全分享；不提供任意执行的安全重放承诺。
-
 
 ### Desktop 与真实 Electron 复验（e05e17e93）
 
