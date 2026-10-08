@@ -2,7 +2,7 @@
 
 Trace 已能读取和跟随 Agent 的持久执行历史。本路线在现有能力上，优先完成 **具体 Turn 定位 → 模型与工具关系 → 一致导出 → 离线复查**，让一次失败从会话入口一直查到原始证据。本文是根目录 `TODO.md` 的改名与扩充；原内容完整保留在后半部分。
 
-源码核对基线：2026-10-08，fresh fetch 后的 `main` 提交 `c6d6db1ef`。下文“现有”表示该基线源码已具备；已有能力与本轮改动分开列出，实际运行结果见验证摘要。
+源码核对基线：2026-10-08，fresh fetch 后的 `main` 提交 `bf5bcdfc6`。下文“现有”表示该基线源码已具备；已有能力与本轮改动分开列出，实际运行结果见验证摘要。
 
 ## Trace 现有能力
 
@@ -96,15 +96,27 @@ Trace 已能读取和跟随 Agent 的持久执行历史。本路线在现有能�
 导航模型只派生身份、摘要和缓存搜索文本；原始捕获、正文和导出仍归编辑器。
 旧界面红测已复现 2,000 个事件全部挂载与缺少详情页签；当前六个 Trace 测试文件共 57 项通过，Renderer/集成/smoke 类型与修改文件格式检查通过。新增导出身份冲突回归先失败、修复后通过，图范围同时校验记录来源、Thread 与 Turn。更新到 main `77fcedc89` 后，修复共享控件宿主导致的详情零高度；正常 Desktop/Web 前端构建和独立 headless 两项通过，实际覆盖四主题宽窄、20,000 事件与关闭资源释放。真实 Web App Server 场景后续已通过；新版 Electron 仍排队，不能引用改造前的截图当作通过。
 
-### 后端与真实 Web 阶段检查点
+### 后端与真实 Web 阶段检查点（c6d6db1ef）
 
 正常 `prepare:backend` / `prepare:backend:web` 两阶段均 exit 0，发布本树包；Sherpa 与 LiveKit 的官方锁定归档校验通过，未更换来源或跳过校验。更新到 `c6d6db1ef` 后，两种包的 sourceDigest、全部文件哈希和 protocol major 7 / schemaHash 只读复核均匹配；此次 main 更新未改变包输入。未复用其它树的 Cargo/runtime/protocol。
 
 真实 Web 首轮 2 项通过、4 项失败。修复 Sessions 缺少 IModelService 的窗口装配及概览/Raw 断言后先重跑失败场景；剩余两个 has 定位器错误包含祖先容器，修正相对作用域后通过。六个场景已分别通过；真实持久场景完成实际 initialize、历史 Turn 精确定位、真实 shell 新 Turn 实时增量、子 Thread 层级，以及关闭后重开定位最新 Turn。该 smoke 在本次 main rebase 前运行；最新基线的正常 Desktop/Web 前端构建、smoke 编译、57 项 / 6 文件单测、hygiene、8 文件格式检查全部通过。
 
-证据：[后端退出码](.build/trace-validation/backend-prepare-state.json)、[当前包契约](.build/trace-validation/package-contract-check.json)、[最后两项真实 Web 复跑](.build/trace-validation/ui-selector-retry-production-web.log)、[最新前端检查](.build/trace-validation/frontend-check-state.json)。首轮及第一次复跑的失败日志也保留在 `.build/trace-validation/production-web-first-failure-*` 和 `production-web-selector-failure-*`。
+证据：[后端退出码](.build/trace-validation/backend-prepare-state.json)、[当时包契约](.build/trace-validation/c6d6db1ef-package-contract-check.json)、[最后两项真实 Web 复跑](.build/trace-validation/ui-selector-retry-production-web.log)、[最新前端检查](.build/trace-validation/frontend-check-state.json)。首轮及第一次复跑的失败日志也保留在 `.build/trace-validation/production-web-first-failure-*` 和 `production-web-selector-failure-*`。
 
-阶段交接时无 Trace 自有 Cargo、监督器或 App Server；其它 Cargo 属于 `ash-external-conflict` 树，未干预。新版 Electron/前台仍排队；六项 Web 未在 rebase 后整批重跑，未宣称最新双端整体验收完成。Sessions skill 所列 `valid-layers-check` 在当前 package.json 不存在，新增装配导入按已有层级检查，未把缺失命令记为通过。
+阶段交接时无 Trace 自有 Cargo、监督器或 App Server；其它 Cargo 属于 `ash-external-conflict` 树，未干预。新版 Electron/前台仍排队；当时六项 Web 尚未在 rebase 后整批重跑；后续整组结果见下节，新版双端整体验收仍未完成。Sessions skill 所列 `valid-layers-check` 在当前 package.json 不存在，新增装配导入按已有层级检查，未把缺失命令记为通过。
+
+### 最新 main 的整组 Web 复验（bf5bcdfc6）
+
+无冲突 rebase 到 `bf5bcdfc6` 后，正常 `test:smoke:browser:full test/smoke/areas/sessions/trace.spec.ts` 一次完成 6 项 / 0 failed；其中 5 项验证导入/离线证据与真实 Workbench/Sessions 组件，1 项使用正式 App Server 的持久历史和真实 shell Turns。覆盖 initialize、历史定位、实时增量、子 Thread 与重开。入口同时完成正常 full Web 构建、smoke 类型编译与本树 Web 后端准备，CARGO_BUILD_JOBS=2；六文件 57 项单测随后通过。此次 main 格式变更改变包输入，Web 包已重新发布并通过最新 sourceDigest、全部文件哈希和协议校验。
+
+证据：[整组退出记录](.build/trace-validation/web-six-current-main-state.json)、[六项 Web 日志](.build/trace-validation/current-main-web-six.log)、[57 项单测](.build/trace-validation/current-main-unit.log)、[当前 Web 包契约](.build/trace-validation/package-contract-check.json)。Web buildId 为 `sha256:671956060da4dcf28bfb4656fa60d58b8f8d0eb67b0c713f5c572d80660dd2f4`。前阶段两种包的核验保存在 [旧基线包记录](.build/trace-validation/c6d6db1ef-package-contract-check.json)，不能当作本次 Desktop 包已刷新。
+
+代表截图已逐张查看并保存 Library：深色宽屏 `libfile_97f4600bf6e081919e47a6ccb37f868d`，浅色窄屏 `libfile_a93c0e82ab4881918944e25a8abf8c14`。它们来自 headless Chromium 的真实共享 Trace 组件与离线 fixture，展示前阶段的四主题宽窄验证，不属于 Electron 或完整产品会话截图。
+
+新版前台/Electron 仍按 Browser → AgentHost → Trace 队列；本次 Desktop 包准备及 Electron 验收尚未运行。分享脱敏、真实模型失败重试/取消/多子 agent 链路和同机旧版相同数据集的性能基线仍在路线内，不因 Web 六项通过而标为完成。
+
+轻量复验：hygiene 通过（263 CSS、0 errors / 0 design suggestions；设计 token 2 项），8 文件格式通过；当前无 Cargo 或 Trace 自有服务，见 [记录](.build/trace-validation/current-main-light-checks.json)。
 
 ### 分享脱敏的下一步边界
 

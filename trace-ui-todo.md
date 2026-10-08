@@ -132,8 +132,18 @@ headless Chromium 复跑先暴露详情零高度：TabList 会填满宿主，直
 
 后端 Rust 编译完成后，LiveKit 官方归档 TLS EOF 重试通过锁定 SHA-256；Desktop/Web 两个正常准备均 exit 0 并发布本树包。真实 Web 首轮 2 项通过、4 项失败；Sessions 缺少已有 IModelService，现由窗口注册服务，容器负责关闭释放，不扩展共享 API。概览断言验证翻译语义，Raw 保留原枚举断言。修复后先重跑四项，中文及循环决策通过；剩余两个 has 定位器按 Playwright 相对作用域修正后通过，保留 Thread 层级和所有行为断言。
 
-真实持久场景完成实际 App Server initialize、历史 shell Turns、Session 入口精确定位、真实新 Turn 的实时增量、子 Thread 层级及关闭后重开定位最新 Turn。六项 Web 已分别通过，尚未在 latest main 上整批重跑；新版 Electron/前台仍按父任务队列，合成 fixture 与真实持久验收分开记录。
+真实持久场景完成实际 App Server initialize、历史 shell Turns、Session 入口精确定位、真实新 Turn 的实时增量、子 Thread 层级及关闭后重开定位最新 Turn。该阶段六项 Web 分别通过；随后 latest main 的整组复跑结果见下节。新版 Electron/前台仍按父任务队列，合成 fixture 与真实持久验收分开记录。
 
-本树无冲突 rebase 到 `c6d6db1ef`，保留 P1、导入导出、UI 与运行修复的独立提交。最新基线上正常 Desktop/Web 前端构建、smoke 编译、57 项 / 6 文件单测、hygiene、8 文件格式均 exit 0；两种后端包 sourceDigest、所有文件哈希与 protocol major 7/schemaHash 只读复验通过，未改变包输入或复用其它树产物。详细退出码和日志见 [Trace 路线检查点](trace-todo.md#后端与真实-web-阶段检查点)。
+本树无冲突 rebase 到 `c6d6db1ef`，保留 P1、导入导出、UI 与运行修复的独立提交。最新基线上正常 Desktop/Web 前端构建、smoke 编译、57 项 / 6 文件单测、hygiene、8 文件格式均 exit 0；两种后端包 sourceDigest、所有文件哈希与 protocol major 7/schemaHash 只读复验通过，未改变包输入或复用其它树产物。详细退出码和日志见 [Trace 路线检查点](trace-todo.md#后端与真实-web-阶段检查点c6d6db1ef)。
 
 阶段交接时 Trace 自有编译、监督器与服务均已退出；其它 Cargo 属于 ash-external-conflict 树，未干预。不 push。Sessions skill 所列 valid-layers-check 在当前脚本中不存在，新增导入按已有层级核对，未宣称该命令通过。
+
+### 最新 main 整组 Web 与截图审阅
+
+已无冲突更新到 `bf5bcdfc6`，通过正常 full Web 入口一次运行 6 项 smoke / 0 failed；5 项为导入/离线证据 UI 验证，1 项为真实持久 App Server 场景，包含 initialize、历史 Turn 定位、真实新 Turn 增量、子 Thread 和关闭重开。随后六文件 57 项单测通过。正常 Web 构建、smoke 编译、最新 Web 后端准备与 sourceDigest/完整包哈希/协议核验均通过，未复用其它树产物；前次 c6d6db1ef 的 Desktop 构建/包证明保留为历史，最新 Desktop 包刷新与前台/Electron仍等队列。
+
+代表截图已实际查看并保存 Library：`libfile_97f4600bf6e081919e47a6ccb37f868d`（深色宽屏），`libfile_a93c0e82ab4881918944e25a8abf8c14`（浅色窄屏）。来源是 headless Chromium 的共享 Trace 组件及离线 fixture，不作为完整产品或 Electron 截图。8 张四主题宽窄和 20,000 事件的前阶段测量边界保持不变。
+
+本轮记录见 [整组退出码](.build/trace-validation/web-six-current-main-state.json)、[Web 六场景](.build/trace-validation/current-main-web-six.log)、[57 项单测](.build/trace-validation/current-main-unit.log)、[Library 截图身份](.build/trace-validation/ui-headless-library-images.json)。不 push 未完成双端验收的状态。
+
+本次轻量复验：hygiene 通过（263 CSS 文件，0 errors / 0 design suggestions；设计 token 2 项），8 个修改 TypeScript 文件格式通过。当前无 Cargo、Trace 监督器或 App Server 进程；见 [轻量记录](.build/trace-validation/current-main-light-checks.json) 与 [进程检查](.build/trace-validation/current-main-processes.json)。
