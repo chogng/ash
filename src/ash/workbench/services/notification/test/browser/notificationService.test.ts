@@ -853,6 +853,28 @@ test('system selection copies through the same action and reports a clipboard de
 	assert.deepEqual({ writes: fixture.presentation.writes, messages: fixture.service.getNotifications().map(item => item.message) }, { writes: ['System message\n第二行'], messages: ['System message\n第二行', 'System clipboard denied'] });
 });
 
+test('system Copy Text releases its presentation before starting the selected write without canceling it', async () => {
+	const popup = promiseWithResolvers<INativeContextMenuResult>();
+	let request: INativeContextMenuRequest | undefined;
+	let closeRequests = 0;
+	using fixture = new NotificationsFixture(undefined, { popup: value => { request = value; return popup.promise; }, async close() { closeRequests++; } });
+	const handle = fixture.service.info('Selected system message\n第二行');
+	const order: string[] = [];
+	const write = promiseWithResolvers<void>();
+	using hidden = fixture.presentation.menus.onDidHideContextMenu(() => order.push('hide'));
+	fixture.presentation.writeText = async value => { order.push('write'); fixture.presentation.writes.push(value); await write.promise; };
+	openCopyMenu(fixture, handle.item.id);
+	const selected = request!.items[0];
+	assert.ok(selected.type === 'action');
+	popup.resolve({ selectedId: selected.id });
+	try {
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.deepEqual({ order, writes: fixture.presentation.writes, closeRequests }, { order: ['hide', 'write'], writes: ['Selected system message\n第二行'], closeRequests: 0 });
+		fixture.center.hide();
+		assert.deepEqual({ writes: fixture.presentation.writes, closeRequests, messages: fixture.service.getNotifications().map(item => item.message) }, { writes: ['Selected system message\n第二行'], closeRequests: 0, messages: ['Selected system message\n第二行'] });
+	} finally { write.resolve(); }
+});
+
 test('notification center creation retains startup history and the three-toast limit', () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
 	try {
