@@ -205,6 +205,54 @@ test('browser cancellation by a show listener closes before any focus is transfe
 	assert.deepEqual({ label: fixture.visibleLabel, focus: fixture.document.activeElement }, { label: undefined, focus: fixture.outside });
 });
 
+for (const successor of [false, true]) {
+	test(`browser cancellation during show layout ${successor ? 'preserves its reentrant successor without an extra show event' : 'leaves no mounted host or show event'}`, () => {
+		using fixture = new BrowserMenuFixture();
+		using source = new CancellationTokenSource();
+		const events: string[] = [];
+		using shown = fixture.menus.onDidShowContextMenu(() => events.push('show'));
+		using hidden = fixture.menus.onDidHideContextMenu(() => events.push('hide'));
+		let measured = false;
+		Object.defineProperty(fixture.origin, 'getBoundingClientRect', {
+			value: () => {
+				if (!measured) { measured = true; source.cancel(); }
+				return new fixture.document.defaultView!.DOMRect(0, 0, 100, 20);
+			}
+		});
+		fixture.show('Canceled', source.token, cancelled => {
+			events.push(`cancel:${cancelled}`);
+			if (successor) { fixture.show('Successor'); }
+		});
+		const view = fixture.document.querySelector<HTMLElement>('.ash-context-view')!;
+		assert.deepEqual({ events, label: fixture.visibleLabel, hostHidden: view.hidden }, {
+			events: successor ? ['cancel:true', 'show'] : ['cancel:true'], label: successor ? 'Successor' : undefined, hostHidden: !successor,
+		});
+		fixture.menus.hideContextMenu();
+		assert.deepEqual(events, successor ? ['cancel:true', 'show', 'hide'] : ['cancel:true']);
+	});
+}
+
+test('layout cancellation finishes mounting before its hide callback mounts a successor', () => {
+	using fixture = new BrowserMenuFixture();
+	using source = new CancellationTokenSource();
+	const order: string[] = [];
+	Object.defineProperty(fixture.origin, 'getBoundingClientRect', {
+		value: () => {
+			source.cancel();
+			order.push('layout returned');
+			return new fixture.document.defaultView!.DOMRect(0, 0, 100, 20);
+		}
+	});
+	fixture.show('Canceled', source.token, () => {
+		order.push('hide');
+		fixture.menus.showContextMenu({ getAnchor: () => ({ x: 120, y: 200, targetWindow: fixture.document.defaultView! }), getActions: () => [action('Successor')] });
+	});
+	const view = fixture.document.querySelector<HTMLElement>('.ash-context-view')!;
+	assert.deepEqual({ order, label: fixture.visibleLabel, left: view.style.left, top: view.style.top }, { order: ['layout returned', 'hide'], label: 'Successor', left: '120px', top: '200px' });
+	fixture.menus.hideContextMenu();
+	assert.equal(view.hidden, true);
+});
+
 test('browser requests in different documents keep independent cancellation and focus', () => {
 	using first = new BrowserMenuFixture();
 	using second = new BrowserMenuFixture();

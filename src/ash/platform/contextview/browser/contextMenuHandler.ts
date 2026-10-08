@@ -56,13 +56,20 @@ export class ContextMenuHandler extends Disposable {
 		let executingAction: IAction | undefined;
 		let didHide = false;
 		let shown = false;
+		let mounting = false;
+		let pendingHideCallback = false;
+		const notifyHide = (): void => {
+			if (this.activeMenu === request) { this.activeMenu = undefined; }
+			delegate.onHide?.(!executingAction);
+		};
 		const finish = (): void => {
 			if (didHide) { return; }
 			didHide = true;
-			if (this.activeMenu === request) { this.activeMenu = undefined; }
 			if (!executingAction) { this.executions.deleteAndDispose(executionDisposables); }
 			this.menus.deleteAndDispose(request);
-			delegate.onHide?.(!executingAction);
+			// A successor must mount after the current host's synchronous show frame returns.
+			if (mounting) { pendingHideCallback = true; }
+			else { notifyHide(); }
 		};
 		const request = {
 			hide: (): void => {
@@ -110,22 +117,34 @@ export class ContextMenuHandler extends Disposable {
 		// Replacement callbacks can cancel this request or open a successor before it mounts.
 		this.contextViewService.hide();
 		if (didHide) { return false; }
-		shown = this.contextViewService.show({
-			anchor,
-			content: menu.element,
-			anchorAxisAlignment: delegate.anchorAxisAlignment,
-			anchorAlignment: delegate.anchorAlignment,
-			anchorPosition: delegate.anchorPosition ?? AnchorPosition.Below,
-			presentation: "menu",
-			focusRestore: ContextViewFocusRestore.Previous,
-			layer: delegate.layer ?? 10,
-			isTargetWithin: (target) => menu.contains(target),
-			onHide: finish,
-		});
+		// Mounting owns the host before synchronous layout callbacks can cancel this request.
+		shown = true;
+		mounting = true;
+		try {
+			shown = this.contextViewService.show({
+				anchor,
+				content: menu.element,
+				anchorAxisAlignment: delegate.anchorAxisAlignment,
+				anchorAlignment: delegate.anchorAlignment,
+				anchorPosition: delegate.anchorPosition ?? AnchorPosition.Below,
+				presentation: "menu",
+				focusRestore: ContextViewFocusRestore.Previous,
+				layer: delegate.layer ?? 10,
+				isTargetWithin: (target) => menu.contains(target),
+				onHide: finish,
+			});
+		} catch (error) {
+			request.hide();
+			throw error;
+		} finally {
+			mounting = false;
+			if (pendingHideCallback) { notifyHide(); }
+		}
 		if (!shown) {
 			finish();
 			return false;
 		}
+		if (didHide || this.activeMenu !== request) { return false; }
 
 		onDidShow?.();
 		if (didHide || this.activeMenu !== request) { return false; }

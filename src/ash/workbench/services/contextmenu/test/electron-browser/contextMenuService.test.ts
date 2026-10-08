@@ -285,7 +285,13 @@ class SystemMenuFixture extends Disposable {
 				this.popups.push({ request, finish: pending.resolve });
 				return pending.promise;
 			},
-			close: () => { this.closeRequests++; return options.close?.() ?? (options.delayClose ? this.closeAcknowledged.promise : Promise.resolve()); },
+			close: () => {
+				this.closeRequests++;
+				if (options.close) { return options.close(); }
+				if (options.delayClose) { return this.closeAcknowledged.promise; }
+				this.popups.at(-1)?.finish({});
+				return Promise.resolve();
+			},
 		};
 		this.menus = this._register(services.createInstance(ElectronContextMenuService, popupApi));
 		this._register(this.menus.onDidShowContextMenu(() => this.events.push('show')));
@@ -325,7 +331,7 @@ test('already canceled system requests do not display or disturb the current pop
 	await existing;
 });
 
-test('canceling a system request frees its slot after actual close and ignores the old selected result', async () => {
+test('canceling a system request waits for its popup callback and ignores the canceled selection', async () => {
 	using fixture = new SystemMenuFixture({ delayClose: true });
 	using source = new CancellationTokenSource();
 	let runs = 0;
@@ -335,6 +341,9 @@ test('canceling a system request frees its slot after actual close and ignores t
 	assert.equal(await fixture.show('Still closing'), true);
 	assert.deepEqual({ closes: fixture.closeRequests, popups: fixture.popups.length }, { closes: 1, popups: 1 });
 	fixture.closeAcknowledged.resolve();
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.deepEqual(fixture.hidden, [{ label: 'Still closing', cancelled: true }]);
+	fixture.popups[0].finish({ selectedId: 'action-1' });
 	assert.equal(await old, true);
 	const next = fixture.show('Next', undefined, selected);
 	assert.equal(fixture.popups.length, 2);
@@ -346,6 +355,24 @@ test('canceling a system request frees its slot after actual close and ignores t
 	});
 });
 
+test('an IPC close acknowledgment cannot free a system slot before the popup callback', async () => {
+	using fixture = new SystemMenuFixture({ delayClose: true });
+	using source = new CancellationTokenSource();
+	const old = fixture.show('Old', source.token);
+	try {
+		source.cancel();
+		fixture.closeAcknowledged.resolve();
+		await new Promise<void>(resolve => setImmediate(resolve));
+		fixture.show('Still closing');
+		assert.deepEqual({ popups: fixture.popups.length, hidden: [...fixture.hidden], events: [...fixture.events] }, {
+			popups: 1, hidden: [{ label: 'Still closing', cancelled: true }], events: ['show'],
+		});
+	} finally {
+		for (const popup of fixture.popups) { popup.finish({}); }
+		await old;
+	}
+});
+
 test('canceling a system menu preserves its replacement before the popup result returns', async () => {
 	using fixture = new SystemMenuFixture({ delayClose: true });
 	using source = new CancellationTokenSource();
@@ -354,8 +381,10 @@ test('canceling a system menu preserves its replacement before the popup result 
 	fixture.showBrowser('Replacement');
 	source.cancel();
 	fixture.closeAcknowledged.resolve();
-	await old;
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.deepEqual(fixture.hidden, []);
 	fixture.popups[0].finish({ selectedId: 'action-1' });
+	await old;
 	const view = fixture.document.querySelector<HTMLElement>('.ash-context-view')!;
 	assert.deepEqual({ visible: !view.hidden, label: fixture.document.querySelector('[role="menuitem"]')?.textContent, hidden: fixture.hidden, events: fixture.events, runs }, {
 		visible: true, label: 'Replacement', hidden: [{ label: 'Old', cancelled: true }], events: ['show'], runs: 0,
@@ -390,6 +419,9 @@ test('a failed system close keeps the real slot occupied but allows a later clos
 	await logged.promise;
 	assert.equal(await fixture.show('Still occupied'), true);
 	fixture.menus.hideContextMenu();
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.deepEqual({ closes: fixture.closeRequests, popups: fixture.popups.length, hidden: fixture.hidden }, { closes: 2, popups: 1, hidden: [{ label: 'Still occupied', cancelled: true }] });
+	fixture.popups[0].finish({});
 	await old;
 	const next = fixture.show('Next');
 	assert.deepEqual({ closes: fixture.closeRequests, popups: fixture.popups.length, errors: errors.map(args => args[1]) }, { closes: 2, popups: 2, errors: [failure] });

@@ -125,9 +125,7 @@ export class NativeContextMenuService extends Disposable
 		const operation = popup.closeOperation ??= this.closePopup();
 		void operation.then(closed => {
 			if (!closed && popup.closeOperation === operation) { popup.closeOperation = undefined; }
-			// The host acknowledges actual close before a delayed popup result arrives.
-			// A canceled request releases only its own slot; that old result cannot select an action.
-			if (closed && (this.isDisposed || popup.delegate.cancellationToken?.isCancellationRequested)) { this.finishPopup(popup, true); }
+			// The IPC acknowledgment confirms only the request; the popup result releases its slot.
 		});
 	}
 
