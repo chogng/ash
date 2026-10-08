@@ -1,7 +1,7 @@
 import { isHTMLElement } from '../../../../base/browser/dom.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { AgentTraceEditor, agentTraceEditorId } from './agentTraceEditor.js';
-import { OpenAgentTraceCommandId } from '../common/trace.js';
+import { OpenAgentTraceCommandId, createAgentTraceResource, type AgentTraceLocation } from '../common/trace.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
@@ -73,9 +73,9 @@ registerAction2(class OpenAgentTrace extends Action2 {
 		});
 	}
 
-	public override async run(accessor: ServicesAccessor, sessionId?: string): Promise<void> {
+	public override async run(accessor: ServicesAccessor, target?: string | AgentTraceLocation): Promise<void> {
 		await accessor.get(IEditorService).openEditor({
-			resource: URI.from({ scheme: 'ash-agent-trace', path: `/${sessionId ?? 'import'}` }),
+			resource: createAgentTraceResource(target),
 			label: localize('agentTrace.title', 'Execution Trace'),
 			readOnly: true,
 			showBreadcrumbs: false,
@@ -112,7 +112,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			if (!(pane instanceof AgentTraceEditor)) { return undefined; }
 			const focused = accessor.get(ILayoutService).mainContainer.ownerDocument.activeElement;
 			return new AccessibleContentProvider(AccessibleViewProviderId.AgentTrace, { type },
-				() => type === AccessibleViewType.View ? pane.getAccessibleContent() : localize('agentTrace.helpText', 'Execution Trace\nRead the selected conversation’s saved execution history. Threads contain Turns and execution events; child Threads are nested beneath their parent. Events preserve each Thread’s sequence. Tab moves between controls, the selected event and selectable JSON details. Arrow keys, Home and End select visible events. Errors only shows failed Turns, model calls and tool results. Filtering searches identifiers and event contents. Refresh reads newer durable events. Enable request evidence in Execution trace settings, then restart the owning App Server. Model attempts include failures, cancellations and partial output. View request / response loads the selected payload. Requests are semantic ModelService input, not HTTP bytes. View relationships follows model, tool, Code Mode, terminal and child-agent links. Diagnostic order is independent from Thread sequences. Hiding or closing the editor stops polling and releases subscriptions. Export saves all loaded events, including events hidden by the filter. Import opens a version 3 rollout trace from an evaluation or another saved capture. Closing the editor releases its live subscriptions. <keybinding:editor.action.accessibleView> reads the trace; Escape closes this help.'),
+				() => type === AccessibleViewType.View ? pane.getAccessibleContent() : localize('agentTrace.helpText', 'Execution Trace\nRead the selected conversation’s saved execution history. Threads contain Turns and execution events; child Threads are nested beneath their parent. Events preserve each Thread’s sequence. A targeted opening selects the requested Thread, Turn or event after its history loads; a missing target is reported. Display filters keep the located event’s details and report when it is hidden. Tab moves between controls, the selected event and selectable JSON details. Arrow keys, Home and End select visible events. Errors only shows failed Turns, model calls and tool results. Filtering searches identifiers and event contents. Refresh reads newer durable events. Enable request evidence in Execution trace settings, then restart the owning App Server. Model attempts include failures, cancellations and partial output. View request / response loads the selected payload. Requests are semantic ModelService input, not HTTP bytes. View relationships follows model, tool, Code Mode, terminal and child-agent links. Diagnostic order is independent from Thread sequences. Hiding or closing the editor stops polling and releases subscriptions. Export saves all loaded events, including events hidden by the filter. Import opens a version 3 rollout trace from an evaluation or another saved capture. Closing the editor releases its live subscriptions. <keybinding:editor.action.accessibleView> reads the trace; Escape closes this help.'),
 				() => { if (isHTMLElement(focused) && focused.isConnected) { focused.focus(); } else { pane.focus(); } }, AccessibilityVerbositySettingId.AgentTrace);
 		},
 	});

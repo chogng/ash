@@ -161,7 +161,7 @@ test('Execution Trace command and help use Chinese in the real Sessions window',
 	await expect(viewer.locator('.ash-agent-trace-event:visible')).toHaveCount(1);
 	await viewer.getByRole('textbox', { name: '筛选执行事件' }).fill('');
 	await viewer.getByRole('button', { name: '帮助', exact: true }).click();
-	await expect(page.getByRole('dialog', { name: '无障碍帮助' }).getByRole('textbox')).toHaveValue(/各 Thread 自己的顺序[\s\S]*ModelService 的语义输入/u);
+	await expect(page.getByRole('dialog', { name: '无障碍帮助' }).getByRole('textbox')).toHaveValue(/各 Thread 自己的顺序[\s\S]*指定定位[\s\S]*显示筛选[\s\S]*ModelService 的语义输入/u);
 	await page.keyboard.press('Escape');
 	if (process.env.ASH_AGENT_TRACE_EVAL_FIXTURE) {
 		await viewer.locator('input[type=file]').setInputFiles(process.env.ASH_AGENT_TRACE_EVAL_FIXTURE);
@@ -222,21 +222,29 @@ test('Execution Trace opens current saved history and follows real new Turns and
 		const created = await client.request(APP_SERVER_METHODS['session/request'], { commandId: 'trace-thread', sessionId, request: { type: 'createThread', title: 'Trace root' } });
 		if (created.type !== 'thread') { throw new Error('Expected trace Thread'); }
 		const threadId = created.value.threadId;
-		const shell = async (commandId: string, command: string): Promise<void> => {
+		const shell = async (commandId: string, command: string): Promise<string> => {
 			const thread = await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId });
 			await client.request(APP_SERVER_METHODS['session/request'], { commandId, sessionId, request: { type: 'startShellTurn', threadId, expectedSequence: thread.thread.sequence, command, workingDirectory: '.', approvalMode: 'bypassPermissions' } });
 			await expect.poll(async () => (await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })).thread.turns.at(-1)?.status).toBe('completed');
+			return (await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })).thread.turns.at(-1)!.turnId;
 		};
-		await shell('trace-history-turn', 'echo trace-history');
+		await shell('trace-earlier-turn', 'echo trace-earlier');
+		const historyTurn = await shell('trace-history-turn', 'echo trace-history');
 		await page.locator('.ash-sessions-list-item').filter({ hasText: 'Trace live session' }).click();
 		await openTrace(page);
 		const viewer = page.locator('.ash-agent-trace');
 		await expect(viewer.getByRole('status')).toContainText('Live');
+		await expect(viewer.locator('.ash-agent-trace-location')).toHaveText(`Located ${threadId} / ${historyTurn}.`);
+		await expect(viewer.locator(`.ash-agent-trace-turn[data-turn-id="${historyTurn}"] .ash-agent-trace-event[aria-pressed="true"]`)).toHaveCount(1);
+		await expect(viewer.getByRole('region', { name: 'Execution event details' })).toContainText(historyTurn);
 		await expect(viewer.locator('.ash-agent-trace-list')).toContainText('Turn completed');
 		const before = await viewer.locator('.ash-agent-trace-event').count();
 		await shell('trace-new-turn', 'echo trace-live');
 		await expect.poll(() => viewer.locator('.ash-agent-trace-event').count()).toBeGreaterThan(before);
 		await viewer.getByRole('textbox', { name: 'Filter execution events' }).fill('trace-live');
+		await expect(viewer.locator('.ash-agent-trace-location')).toContainText('hidden by the display filter');
+		await expect(viewer.getByRole('region', { name: 'Execution event details' })).toContainText(historyTurn);
+		await viewer.locator('.ash-agent-trace-event:visible').first().click();
 		await expect(viewer.getByRole('region', { name: 'Execution event details' })).toContainText('trace-live');
 		await viewer.getByRole('textbox', { name: 'Filter execution events' }).fill('');
 		const child = await client.request(APP_SERVER_METHODS['session/request'], { commandId: 'trace-child', sessionId, request: { type: 'forkThread', parentThreadId: threadId, title: 'Trace child' } });
@@ -244,10 +252,13 @@ test('Execution Trace opens current saved history and follows real new Turns and
 		await expect(viewer.locator(`.ash-agent-trace-thread[data-thread-id="${threadId}"] > .ash-agent-trace-children > .ash-agent-trace-thread[data-thread-id="${child.value.threadId}"]`)).toBeVisible();
 		await page.getByRole('button', { name: 'Close Execution Trace', exact: true }).click();
 		await expect(viewer).toHaveCount(0);
-		await shell('trace-after-close', 'echo trace-after-close');
+		const afterCloseTurn = await shell('trace-after-close', 'echo trace-after-close');
 		await openTrace(page);
 		await expect(viewer.getByRole('status')).toContainText('Live');
+		await expect(viewer.locator('.ash-agent-trace-location')).toHaveText(`Located ${threadId} / ${afterCloseTurn}.`);
+		await expect(viewer.getByRole('region', { name: 'Execution event details' })).toContainText(afterCloseTurn);
 		await viewer.getByRole('textbox', { name: 'Filter execution events' }).fill('trace-after-close');
+		await viewer.locator('.ash-agent-trace-event:visible').first().click();
 		await expect(viewer.getByRole('region', { name: 'Execution event details' })).toContainText('trace-after-close');
 	} finally {
 		client.dispose(); frameSubscription?.dispose(); closeSubscription?.dispose();

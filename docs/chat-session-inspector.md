@@ -23,8 +23,13 @@ Workbench 通用 Agent Sidebar 不受影响。
 
 执行 Trace 编辑器、命令和无障碍支持由 `workbench/contrib/trace` 共享提供。普通 Workbench 的
 “开发人员：打开执行 Trace”（`ash.agentTrace.open`）打开可导入的页面；命令传入 Session ID 时读取
-该会话。Sessions 的“查看执行 Trace”（`sessions.trace.open`）取得当前 Session ID，切换 Code 布局，
-再调用同一个 Workbench 命令；没有当前会话时仍可导入 Trace。
+该会话。也可传入 `{ sessionId, threadId, turnId?, eventId? }`，定位所属 Thread 的 Turn 或持久事件
+（包括诊断事件）；Turn 或 event 定位必须带 Thread ID。定位参数随编辑器 URI 保存，重开恢复同一目标。
+Sessions 的“查看执行 Trace”（`sessions.trace.open`）取得当前 Session 与 Thread，并用已有 agent tree
+中的最近 Turn 身份定位，切换 Code 布局后调用同一个 Workbench 命令；没有当前会话时仍可导入 Trace。
+
+页面逐页查找目标，命中后选中并滚动到事件；读取完成仍没有对应事实时明确显示未找到，不自动用第一条
+事件替代。定位事件被全文或错误筛选隐藏时，保留它的详情并显示隐藏原因；方向键或点击仍可选择其他事件。
 
 编辑器打开 Session 的持久历史，按 Thread、Turn 展示事件；子 Thread 嵌套在父 Thread 下。每个 Thread 保留
 自己的 sequence，不建立全局 Session 顺序。模型调用、用量、工具参数及结果、压缩、失败和取消

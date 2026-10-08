@@ -14,6 +14,7 @@ import { IChatService, type ThreadSubscription, type ThreadUpdateEnvelope } from
 import type { AgentTracePage } from '../../../../services/chat/common/agentTrace.js';
 import { registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import { AgentTraceEditor } from '../../browser/agentTraceEditor.js';
+import { createAgentTraceResource } from '../../common/trace.js';
 
 suite('Execution Trace editor', () => {
 
@@ -233,4 +234,93 @@ suite('Execution Trace editor', () => {
 			assert.match(pane.getAccessibleContent(), /Open a saved conversation/);
 		} finally { dom.window.close(); }
 	});
+	for (const scenario of [
+		{ name: 'Thread', target: { sessionId: 's', threadId: 'child' }, key: 'child:1', eventId: 'child-created' },
+		{ name: 'Turn', target: { sessionId: 's', threadId: 'child', turnId: 'later' }, key: 'child:2', eventId: 'child-accepted' },
+		{ name: 'durable event', target: { sessionId: 's', threadId: 'child', turnId: 'later', eventId: 'child-event' }, key: 'child:3', eventId: 'child-event' },
+		{ name: 'diagnostic event', target: { sessionId: 's', threadId: 'child', turnId: 'later', eventId: 'diagnostic-event' }, key: 'diagnostic:1', eventId: 'diagnostic-event' },
+		{ name: 'missing event', target: { sessionId: 's', threadId: 'child', eventId: 'missing' }, key: undefined, eventId: undefined },
+		{ name: 'closed input', target: { sessionId: 's', threadId: 'child', turnId: 'later' }, key: undefined, eventId: undefined },
+	]) {
+		test(`locates the requested ${scenario.name} after pagination without selecting an unrelated event`, async () => {
+			const dom = new JSDOM('<!doctype html><body></body>');
+			try {
+				using services = new InstantiationService();
+				using configuration = new InMemoryConfigurationService();
+				using context = new ContextKeyService();
+				const reading = new DeferredPromise<void>();
+				const page = new DeferredPromise<AgentTracePage>();
+				const released: string[] = [];
+				services.registerInstance(IConfigurationService, configuration);
+				services.registerInstance(IContextKeyService, context);
+				services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
+				services.registerInstance(IChatService, {
+					onDidChangeSession: Event.None, onDidUpdateThread: Event.None, onDidBecomeReady: Event.None,
+					readTrace: async (_session: string, after: Readonly<Record<string, number>>): Promise<AgentTracePage> => {
+						if (after.root) { void reading.complete(); return page.p; }
+						return {
+							trace: {
+								formatVersion: 3, sessionId: 's', historyPrefixes: [], threads: [
+									{ threadId: 'root', events: [{ eventId: 'before', sequence: 1, recordedAt: 1, event: { type: 'turnAccepted', threadId: 'root', turnId: 'before' } }] },
+									{ threadId: 'child', events: [] },
+								]
+							}, cursors: { root: 1, child: 0 }, hasMore: true
+						};
+					},
+					readTraceDiagnostics: async () => ({
+						diagnostics: {
+							formatVersion: 1, captureId: 'capture', recordingStatus: 'disabled', droppedRecords: 0, events: [
+								{ eventId: 'diagnostic-event', sequence: 1, recordedAt: 1, threadId: 'child', turnId: 'later', event: { type: 'modelAttemptFailed', attemptId: 'attempt', error: 'saved model error' } },
+							]
+						}, cursor: 1, hasMore: false
+					}),
+					subscribeThread: async (_session: string, _thread: string, after: number) => ({ thread: { sequence: after } }),
+					unsubscribeThread: async (_session: string, thread: string) => { released.push(thread); },
+				} as unknown as IChatService);
+				using pane = registerTestComponentServices(services).createInstance(AgentTraceEditor);
+				pane.create(dom.window.document.body);
+				const resource = URI.parse(createAgentTraceResource(scenario.target).toString());
+				const pending = pane.setInput({ resource }, new AbortController().signal);
+				await reading.p;
+				assert.equal(dom.window.document.querySelector('.ash-agent-trace-event[aria-pressed="true"]'), null);
+				assert.match(dom.window.document.querySelector('.ash-agent-trace-details')!.textContent!, /Finding saved execution event/);
+				if (scenario.name === 'closed input') { pane.clearInput(); }
+				await page.complete({
+					trace: {
+						formatVersion: 3, sessionId: 's', historyPrefixes: [], threads: [
+							{ threadId: 'root', events: [] },
+							{
+								threadId: 'child', events: [
+									{ eventId: 'child-created', sequence: 1, recordedAt: 1, event: { type: 'threadCreated', threadId: 'child', origin: { parentThreadId: 'root' } } },
+									{ eventId: 'child-accepted', sequence: 2, recordedAt: 1, event: { type: 'turnAccepted', threadId: 'child', turnId: 'later' } },
+									{ eventId: 'child-event', sequence: 3, recordedAt: 1, event: { type: 'itemCompleted', threadId: 'child', turnId: 'later', item: { type: 'toolResult', toolCallId: 'tool', text: 'saved result' } } },
+								]
+							},
+						]
+					}, cursors: { root: 1, child: 3 }, hasMore: false
+				});
+				await pending;
+				const selected = dom.window.document.querySelector<HTMLButtonElement>('.ash-agent-trace-event[aria-pressed="true"]');
+				assert.equal(selected?.dataset.key, scenario.key);
+				if (scenario.eventId) {
+					assert.match(pane.getAccessibleContent(), new RegExp(`"eventId": "${scenario.eventId}"`));
+					const filter = dom.window.document.querySelector<HTMLInputElement>('.ash-inputbox input')!;
+					filter.value = 'no-such-filter-match';
+					filter.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+					assert.equal(selected!.hidden, true);
+					assert.equal(selected!.getAttribute('aria-pressed'), 'true');
+					assert.match(pane.getAccessibleContent(), /hidden by the display filter/);
+					await pane.setInput({ resource: createAgentTraceResource({ sessionId: 's', threadId: 'root', turnId: 'before' }) }, new AbortController().signal);
+					assert.equal(dom.window.document.querySelector<HTMLButtonElement>('.ash-agent-trace-event[aria-pressed="true"]')?.dataset.key, 'root:1');
+					assert.deepEqual(released, ['root', 'child']);
+				} else if (scenario.name === 'missing event') {
+					assert.match(pane.getAccessibleContent(), /No saved execution event matches child \/ missing/);
+				} else {
+					assert.equal(dom.window.document.querySelectorAll('.ash-agent-trace-event').length, 0);
+					assert.doesNotMatch(pane.getAccessibleContent(), /Finding saved execution event|Located child/);
+				}
+			} finally { dom.window.close(); }
+		});
+	}
+
 });

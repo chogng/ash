@@ -1,5 +1,10 @@
 {
   "ash": {
+    "agentTrace.invalidLocation": "无效的执行 Trace 定位。定位 Turn 或事件时必须提供所属 Thread ID。",
+    "agentTrace.locationFound": "已定位 {0}。",
+    "agentTrace.locationHidden": "已定位 {0} · 当前显示筛选隐藏了该事件。",
+    "agentTrace.locationMissing": "已保存的执行事件中未找到 {0}。",
+    "agentTrace.locationLoading": "正在查找已保存的执行事件 {0}…",
     "chat.approval.targets": "请求的操作与目标",
     "chat.approval.fileRead": "读取文件",
     "chat.approval.fileWrite": "写入文件",
@@ -367,7 +372,7 @@
     "agentTrace.filter": "筛选执行事件",
     "agentTrace.graphIncomplete": "{0} 条关系缺少证据。详情见导出的 graph warnings。",
     "agentTrace.help": "帮助",
-    "agentTrace.helpText": "执行 Trace\n读取所选对话已保存的执行历史。Thread 包含 Turn 和执行事件；子 Thread 嵌套在父 Thread 下。事件保留各 Thread 自己的顺序。Tab 在控件、所选事件和可选择的 JSON 详情之间移动。方向键、Home 和 End 选择可见事件。“仅显示错误”显示失败的 Turn、模型调用和工具结果。筛选会搜索标识和事件内容。“刷新”读取更新的持久事件。请求证据需在执行轨迹设置中启用详细记录，然后重启所属 App Server。模型 attempt 包含失败、取消和部分输出。“查看请求／响应”按需读取所选正文。请求记录的是 ModelService 的语义输入，并非 HTTP 字节。“查看执行关系”关联模型、工具、Code Mode、终端和子 agent。诊断顺序独立于 Thread 序号。隐藏或关闭编辑器会停止轮询并释放订阅。“导出”保存全部已加载事件，包括被筛选隐藏的事件。“导入”可打开评测或其他捕获保存的版本 3 rollout Trace。关闭编辑器会释放实时订阅。<keybinding:editor.action.accessibleView> 读取 Trace；Escape 关闭帮助。",
+    "agentTrace.helpText": "执行 Trace\n读取所选对话已保存的执行历史。Thread 包含 Turn 和执行事件；子 Thread 嵌套在父 Thread 下。事件保留各 Thread 自己的顺序。指定定位时，历史加载后会选中所请求的 Thread、Turn 或事件；目标不存在时明确提示。显示筛选保留已定位事件的详情，并提示该事件被隐藏。Tab 在控件、所选事件和可选择的 JSON 详情之间移动。方向键、Home 和 End 选择可见事件。“仅显示错误”显示失败的 Turn、模型调用和工具结果。筛选会搜索标识和事件内容。“刷新”读取更新的持久事件。请求证据需在执行轨迹设置中启用详细记录，然后重启所属 App Server。模型 attempt 包含失败、取消和部分输出。“查看请求／响应”按需读取所选正文。请求记录的是 ModelService 的语义输入，并非 HTTP 字节。“查看执行关系”关联模型、工具、Code Mode、终端和子 agent。诊断顺序独立于 Thread 序号。隐藏或关闭编辑器会停止轮询并释放订阅。“导出”保存全部已加载事件，包括被筛选隐藏的事件。“导入”可打开评测或其他捕获保存的版本 3 rollout Trace。关闭编辑器会释放实时订阅。<keybinding:editor.action.accessibleView> 读取 Trace；Escape 关闭帮助。",
     "agentTrace.import": "导入 Trace",
     "agentTrace.imported": "已导入 · {0}",
     "agentTrace.incomplete": "诊断证据不完整 · 已省略 {0} 条记录。",

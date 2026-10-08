@@ -16,6 +16,7 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import type { IResourceEditorInput, IEditorPane, IEditorControl } from '../../../common/editor.js';
 import { IChatService } from '../../../services/chat/common/chatService.js';
+import { readAgentTraceLocation, type AgentTraceLocation } from '../common/trace.js';
 import { diagnosticPayload, mergeAgentTrace, mergeAgentTraceDiagnostics, parseAgentTrace, type AgentTrace, type AgentTraceEvent, type AgentTraceGraph } from '../../../services/chat/common/agentTrace.js';
 
 export const agentTraceEditorId = 'ash.agentTrace';
@@ -26,6 +27,7 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 	private domNode!: HTMLDivElement;
 	private statusDomNode!: HTMLParagraphElement;
 	private summaryDomNode!: HTMLParagraphElement;
+	private locationDomNode!: HTMLParagraphElement;
 	private listDomNode!: HTMLDivElement;
 	private detailsDomNode!: HTMLPreElement;
 	private relationsDomNode!: HTMLDivElement;
@@ -36,6 +38,9 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 	private errorsButton!: Button;
 	private trace: AgentTrace | undefined;
 	private sessionId: string | undefined;
+	private location: AgentTraceLocation | undefined;
+	private locationKey: string | undefined;
+	private locationReadComplete = false;
 	private cursors: Readonly<Record<string, number>> = {};
 	private diagnosticCursor = 0;
 	private readonly diagnosticPoll = this._register(new RunOnceScheduler(() => this.requestRefresh(), 1000));
@@ -120,6 +125,8 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 		this._register(this.filter.onDidChange(() => this.render()));
 		this.statusDomNode = h(document, 'p', { className: 'ash-agent-trace-status' });
 		this.statusDomNode.setAttribute('role', 'status');
+		this.locationDomNode = h(document, 'p', { className: 'ash-agent-trace-status ash-agent-trace-location' });
+		this.locationDomNode.setAttribute('aria-live', 'polite');
 		this.summaryDomNode = h(document, 'p', { className: 'ash-agent-trace-summary' });
 		const body = h(document, 'div', { className: 'ash-agent-trace-body' });
 		this.listDomNode = h(document, 'div', { className: 'ash-agent-trace-list' });
@@ -135,7 +142,7 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 		this.relationsDomNode.setAttribute('role', 'region');
 		detailColumn.append(this.relationsDomNode, this.detailsDomNode);
 		body.append(this.listDomNode, detailColumn);
-		this.domNode.append(toolbar, file, this.statusDomNode, this.summaryDomNode, body);
+		this.domNode.append(toolbar, file, this.statusDomNode, this.locationDomNode, this.summaryDomNode, body);
 		this._register(addDisposableListener(this.listDomNode, 'click', event => {
 			const row = (event.target as Element).closest<HTMLButtonElement>('.ash-agent-trace-event');
 			if (row?.dataset.key) { this.select(row.dataset.key); }
@@ -164,7 +171,12 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 
 	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		this.clearInput();
-		if (input.resource.path !== '/import') { this.sessionId = input.resource.path.slice(1); }
+		try { this.location = readAgentTraceLocation(input.resource); }
+		catch (error) { this.statusDomNode.textContent = String(error); throw error; }
+		this.sessionId = this.location?.sessionId;
+		if (this.location?.threadId) {
+			this.errorsOnly = false; this.errorsButton.checked = false; this.filter.value = '';
+		}
 		this.inputSignal = signal;
 		const abort = (): void => { if (this.inputSignal === signal) { this.clearInput(); } };
 		signal.addEventListener('abort', abort, { once: true });
@@ -182,6 +194,9 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 		this.diagnosticPoll.cancel();
 		this.releaseSubscriptions();
 		this.sessionId = undefined;
+		this.location = undefined;
+		this.locationKey = undefined;
+		this.locationReadComplete = false;
 		this.trace = undefined;
 		this.cursors = {};
 		this.diagnosticCursor = 0;
@@ -255,6 +270,7 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 				this.diagnosticCursor = page.cursor;
 				diagnosticMore = page.hasMore;
 			}
+			this.locationReadComplete = true;
 			this.render();
 			this.statusDomNode.textContent = localize('agentTrace.live', 'Live · durable execution history');
 		} catch (error) {
@@ -289,6 +305,8 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 		if (!this.domNode) { return; }
 		this.exportButton.enabled = !!this.trace;
 		this.relationsButton.enabled = !!this.trace;
+		this.locationDomNode.hidden = !this.location?.threadId;
+		if (!this.location?.threadId) { this.locationDomNode.textContent = ''; }
 		if (!this.trace) {
 			this.statusDomNode.textContent = localize('agentTrace.empty', 'Open a saved conversation or import an evaluation trace.');
 			this.summaryDomNode.textContent = '';
@@ -371,11 +389,43 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 			if ([...group.children.querySelectorAll<HTMLButtonElement>('button')].some(row => !row.hidden)) { group.domNode.hidden = false; }
 		}
 		this.summaryDomNode.textContent = localize('agentTrace.summary', '{0} Threads · {1} shown / {2} events.', this.trace.threads.length, shown, count) + ' ' + recordingLabel(this.trace);
-		if (!this.selected || this.rows.get(this.selected)?.hidden) {
+		let located = false;
+		if (this.location?.threadId && !this.locationKey) {
+			this.locationKey = this.findLocation();
+			if (this.locationKey) { this.selected = this.locationKey; located = true; }
+		}
+		// A requested event keeps its identity and details even when a display filter hides it.
+		// Until pagination finds it, no unrelated first row may stand in for the target.
+		if ((!this.location?.threadId || this.locationKey) && !(this.locationKey && this.selected === this.locationKey) && (!this.selected || this.rows.get(this.selected)?.hidden)) {
 			this.selected = [...this.rows].find(([, row]) => !row.hidden)?.[0];
 		}
+		if (this.location?.threadId) {
+			const identity = [this.location.threadId, this.location.turnId, this.location.eventId].filter(value => value !== undefined).join(' / ');
+			let message: string;
+			if (this.locationKey) {
+				message = this.rows.get(this.locationKey)?.hidden
+					? localize('agentTrace.locationHidden', 'Located {0} · hidden by the display filter.', identity)
+					: localize('agentTrace.locationFound', 'Located {0}.', identity);
+			} else {
+				message = this.locationReadComplete
+					? localize('agentTrace.locationMissing', 'No saved execution event matches {0}.', identity)
+					: localize('agentTrace.locationLoading', 'Finding saved execution event {0}…', identity);
+			}
+			// Repeated live reads must not reannounce an unchanged navigation result.
+			if (this.locationDomNode.textContent !== message) { this.locationDomNode.textContent = message; }
+		}
 		if (this.selected) { this.select(this.selected); }
-		else { this.detailsDomNode.textContent = localize('agentTrace.noMatches', 'No matching execution events.'); }
+		else { this.detailsDomNode.textContent = this.location?.threadId ? this.locationDomNode.textContent : localize('agentTrace.noMatches', 'No matching execution events.'); }
+		if (located) { this.rows.get(this.locationKey!)?.scrollIntoView?.({ block: 'nearest' }); }
+	}
+
+	private findLocation(): string | undefined {
+		const location = this.location!;
+		const thread = this.trace?.threads.find(thread => thread.threadId === location.threadId);
+		const event = thread?.events.find(record => (!location.turnId || record.event.turnId === location.turnId) && (!location.eventId || record.eventId === location.eventId));
+		if (event) { return `${thread!.threadId}:${event.sequence}`; }
+		const diagnostic = this.trace?.diagnostics?.events.find(record => record.threadId === location.threadId && (!location.turnId || record.turnId === location.turnId) && (!location.eventId || record.eventId === location.eventId));
+		return diagnostic && `diagnostic:${diagnostic.sequence}`;
 	}
 
 	private select(key: string): void {
@@ -489,7 +539,7 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 			.filter(node => !node.closest('[hidden]'))
 			.map(node => node.classList.contains('ash-agent-trace-event') ? node.textContent : node.firstElementChild?.textContent)
 			.join('\n');
-		return `${this.statusDomNode.textContent}\n${this.summaryDomNode.textContent}\n${timeline}\n${this.relationsDomNode.textContent}\n${this.detailsDomNode.textContent}`;
+		return `${this.statusDomNode.textContent}\n${this.locationDomNode.textContent}\n${this.summaryDomNode.textContent}\n${timeline}\n${this.relationsDomNode.textContent}\n${this.detailsDomNode.textContent}`;
 	}
 	public override setVisible(visible: boolean): void {
 		super.setVisible(visible);

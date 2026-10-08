@@ -1,5 +1,10 @@
 {
   "ash": {
+    "agentTrace.invalidLocation": "Invalid execution trace location. A Turn or event requires its Thread ID.",
+    "agentTrace.locationFound": "Located {0}.",
+    "agentTrace.locationHidden": "Located {0} · hidden by the display filter.",
+    "agentTrace.locationMissing": "No saved execution event matches {0}.",
+    "agentTrace.locationLoading": "Finding saved execution event {0}…",
     "chatEditing.toolbar": "Review Agent changes",
     "chatEditing.review": "Review Agent changes",
     "chatEditing.previous": "Previous change",
@@ -92,7 +97,7 @@
     "agentTrace.filter": "Filter execution events",
     "agentTrace.graphIncomplete": "{0} relationships have missing evidence. See exported graph warnings.",
     "agentTrace.help": "Help",
-    "agentTrace.helpText": "Execution Trace\nRead the selected conversation’s saved execution history. Threads contain Turns and execution events; child Threads are nested beneath their parent. Events preserve each Thread’s sequence. Tab moves between controls, the selected event and selectable JSON details. Arrow keys, Home and End select visible events. Errors only shows failed Turns, model calls and tool results. Filtering searches identifiers and event contents. Refresh reads newer durable events. Enable request evidence in Execution trace settings, then restart the owning App Server. Model attempts include failures, cancellations and partial output. View request / response loads the selected payload. Requests are semantic ModelService input, not HTTP bytes. View relationships follows model, tool, Code Mode, terminal and child-agent links. Diagnostic order is independent from Thread sequences. Hiding or closing the editor stops polling and releases subscriptions. Export saves all loaded events, including events hidden by the filter. Import opens a version 3 rollout trace from an evaluation or another saved capture. Closing the editor releases its live subscriptions. <keybinding:editor.action.accessibleView> reads the trace; Escape closes this help.",
+    "agentTrace.helpText": "Execution Trace\nRead the selected conversation’s saved execution history. Threads contain Turns and execution events; child Threads are nested beneath their parent. Events preserve each Thread’s sequence. A targeted opening selects the requested Thread, Turn or event after its history loads; a missing target is reported. Display filters keep the located event’s details and report when it is hidden. Tab moves between controls, the selected event and selectable JSON details. Arrow keys, Home and End select visible events. Errors only shows failed Turns, model calls and tool results. Filtering searches identifiers and event contents. Refresh reads newer durable events. Enable request evidence in Execution trace settings, then restart the owning App Server. Model attempts include failures, cancellations and partial output. View request / response loads the selected payload. Requests are semantic ModelService input, not HTTP bytes. View relationships follows model, tool, Code Mode, terminal and child-agent links. Diagnostic order is independent from Thread sequences. Hiding or closing the editor stops polling and releases subscriptions. Export saves all loaded events, including events hidden by the filter. Import opens a version 3 rollout trace from an evaluation or another saved capture. Closing the editor releases its live subscriptions. <keybinding:editor.action.accessibleView> reads the trace; Escape closes this help.",
     "agentTrace.import": "Import trace",
     "agentTrace.imported": "Imported · {0}",
     "agentTrace.incomplete": "Diagnostic evidence incomplete · {0} records omitted.",

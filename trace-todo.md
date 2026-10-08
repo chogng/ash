@@ -74,7 +74,22 @@ Trace 已能读取和跟随 Agent 的持久执行历史。本路线在现有能�
 
 - 文档：`TODO.md` → `trace-todo.md`，保留 `.md` 扩展名和全部原文；主树原文件未改动。
 - 工作树：`/Volumes/1t/ash-trace-20261008`，分支 `codex/trace-roadmap-20261008`；后续 Trace 工作持续在这里完成，避免与 Search/SCM/Output/Preferences/Notifications 重叠。
-- 当前实现状态：P1 尚未实现；本轮验证结果在实现后补充。共享 Core/Rust/protocol 扩展先协调，Cargo/runtime/protocol 不跨树复用，push 由父任务串行放行。
+- 文档预览提交：`b475f982a`，仅包含改名与路线图，未 push。
+- 当前实现状态：P1 的前端实现和回归用例已写入本树，完整运行验收尚未完成；P1 验收复选框保持未完成。共享 Core/Rust/protocol 扩展先协调，Cargo/runtime/protocol 不跨树复用，push 由父任务串行放行。
+
+### P1 本轮检查（2026-10-08）
+
+| 检查 | 实际结果 |
+| --- | --- |
+| 文档链接与原文保全 | 18 个新增本地链接存在；原 `TODO.md` 的 36,201 字节完整保留。文档改名已单独提交，原主树未改动。 |
+| JavaScript 依赖与前端清单 | `pnpm install --frozen-lockfile --offline` 与 `pnpm run prepare:extensions` 完成；使用本树生成的清单，没有跨树复用协议或运行包。 |
+| 定向 common 层编译 | `pnpm exec tsc -p .build/trace-validation/tsconfig.location.json` 通过，配置继承仓库 `tsconfig.common.json`；不代表完整 Renderer 编译通过。 |
+| 定位契约单测 | 已编译的 `trace.test.js` 通过 18 项；覆盖旧 Session 参数、URI 编码和身份保存、无效定位与仓库中文词条。 |
+| Sessions 注册命令 | 现有 unit runner 实际执行的 3 项通过；覆盖子 Thread 最近 Turn、缺少 Turn 与无当前 Session。该次命令整体失败，另两个文件未能启动。 |
+| 完整单测编译与页面/Workbench 命令单测 | 完整编译因独立树缺少 `.build/protocol` 及其他生成物失败；受影响 Trace 文件没有报出新增类型错误。清单补齐后，页面与 Workbench 命令测试仍因缺少生成协议模块而未执行。见本树 [.build/trace-validation/](.build/trace-validation/)。 |
+| 变更格式 | 仓库 `format:ts` 检查全部 11 个相关 TypeScript 文件通过；`git diff --check` 通过。 |
+| 正常构建与双端 Playwright | Renderer/Web 构建、Web/Electron Trace smoke 尚未运行；需要先由父任务排队准备本树协议和运行包。本轮没有重新引用历史通过结果。 |
+
 
 ---
 

@@ -5,6 +5,7 @@ import { ICommandService } from '../../../../platform/commands/common/commands.j
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { OpenAgentTraceCommandId } from '../../../../workbench/contrib/trace/common/trace.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
+import type { AgentTreeNode } from '../../../services/sessions/common/session.js';
 
 registerAction2(class OpenAgentTrace extends Action2 {
 	constructor() {
@@ -19,9 +20,22 @@ registerAction2(class OpenAgentTrace extends Action2 {
 
 	public override async run(accessor: ServicesAccessor): Promise<void> {
 		const active = accessor.get(ISessionsService).activeSelection;
-		const sessionId = active?.kind === 'session' ? active.active.session.sessionId : undefined;
+		const location = active?.kind === 'session' ? {
+			sessionId: active.active.session.sessionId,
+			threadId: active.active.threadId,
+			turnId: findTurn(active.active.session.agentTree ?? [], active.active.threadId),
+		} : undefined;
 		const commands = accessor.get(ICommandService);
 		await commands.executeCommand('sessions.open.code');
-		await commands.executeCommand(OpenAgentTraceCommandId, sessionId);
+		await commands.executeCommand(OpenAgentTraceCommandId, location);
 	}
 });
+
+function findTurn(nodes: readonly AgentTreeNode[], threadId: string): string | undefined {
+	for (const node of nodes) {
+		if (node.threadId === threadId) { return node.currentTurnId; }
+		const turnId = findTurn(node.children, threadId);
+		if (turnId) { return turnId; }
+	}
+	return undefined;
+}
