@@ -25,7 +25,7 @@ If the outcome, repository, or publication target is unclear, ask the smallest n
 
 ## Write and verify the commit
 
-Use [the shared change template](../../../.github/pull_request_template.md) as the single source for commit subjects, bodies, and PR descriptions. Read its current guidance and fill it with the reason, resulting behavior, and validation actually performed. Do not copy its comments or leave placeholders. Keep one logical change per commit; do not split merely by file type.
+Use [the shared change template](../../../.github/pull_request_template.md) as the single source for commit subjects, bodies, and PR descriptions. Keep the commit subject on one line, then a blank line and the template's three required headings in order, with blank lines after headings and between sections. Keep the sections separate in both commit bodies and PR descriptions; never put body text in the subject. Read the template's current guidance and fill it with the reason, resulting behavior, and validation actually performed. Do not copy its comments or leave placeholders. Keep one logical change per commit; do not split merely by file type.
 
 Create the requested commit, then inspect its actual diff and SHA with `git show` and recheck `git status`. A failed hook is a failure to resolve or report, not permission to bypass hooks. Verify that the commit excludes unrelated work and that unrelated working-tree changes remain intact. For commit-only requests, report the local result here.
 

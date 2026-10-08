@@ -1,11 +1,14 @@
 <!--
 Use this structure for PR descriptions and commit bodies. Keep commit subjects
 short and imperative (target <= 72 characters); use type(scope): summary when
-appropriate. Leave a blank line before the body and omit these comments.
+appropriate. Keep the subject on one line, leave a blank line before the body,
+and omit these comments.
 
-Cover Why, What changed, and Testing. Small changes may combine Why and What
-changed in a short paragraph; headings are optional in commit bodies. Add only
-relevant detail, and omit unrelated sections rather than filling them with N/A.
+Both commit bodies and PR descriptions must use the separate headings
+"## Why", "## What changed", and "## Testing", in that order. Leave a blank line
+after each heading and between sections. Do not combine these sections or put
+body text in the commit subject. Add only relevant detail; omit optional sections
+rather than filling them with N/A.
 -->
 
 ## Why
