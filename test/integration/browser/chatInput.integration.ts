@@ -67,7 +67,7 @@ import { IGitHubService } from '../../../src/ash/platform/github/common/githubSe
 import { IGitService } from '../../../src/ash/workbench/contrib/git/common/gitService.js';
 
 declare global {
-	interface Window { ashChatInputIntegration: { refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; denyAcceleration(id: string): void; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; restoreCapturedDraft(): Promise<void>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; }; }
+	interface Window { ashChatInputIntegration: { refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setModelsAvailable(available: boolean): void; modelState(): unknown; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; restoreCapturedDraft(): Promise<void>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; }; }
 }
 
 const locale = new URLSearchParams(location.search).get('locale');
@@ -184,6 +184,7 @@ services.registerInstance(IContextViewService, resources.add(new BrowserContextV
 const accessibleView = { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService;
 services.registerInstance(IAccessibleViewService, accessibleView);
 const modelChanged = resources.add(new Emitter<void>());
+const preferenceWrites: unknown[] = [];
 let selectedReasoningEffort: ModelReasoningEffort | undefined;
 const modelOptions = new URLSearchParams(location.search).get('modelOptions');
 const multipleAcceleration = new URLSearchParams(location.search).get('acceleration') === 'multiple';
@@ -205,6 +206,7 @@ if (modelOptions === 'context' || modelOptions === 'none') {
 if (new URLSearchParams(location.search).get('modelSet') === 'multiple') {
 	models = [...models, { ...models[0], model: { provider: 'openai', model: 'extended-model' }, displayName: 'Extended model with a longer display name for coding' }];
 }
+let hiddenModels: readonly ModelCatalogEntry[] | undefined;
 let selectedModel: ModelRef = models[0].model;
 let automatic = false;
 services.registerInstance(ILanguageModelsService, {
@@ -212,6 +214,7 @@ services.registerInstance(ILanguageModelsService, {
 	setApprovalReviewModel: async () => { },
 	onDidChangeModels: modelChanged.event,
 	setModelPreferences: async (model, update) => {
+		preferenceWrites.push({ model, update });
 		models = models.map(entry => entry.model.provider === model.provider && entry.model.model === model.model ? {
 			...entry,
 			selectedAcceleration: update.acceleration !== undefined ? update.acceleration : entry.selectedAcceleration,
@@ -390,6 +393,9 @@ function renderModels(): void {
 }
 part.render(state);
 window.ashChatInputIntegration = {
+	modelState: () => ({ selectedModel, automatic, preferences: models.map(({ model, selectedAcceleration, accelerationOptions, longContext }) => ({ model, selectedAcceleration, accelerationOptions, longContext })), preferenceWrites }),
+	setModelsAvailable: available => { if (available) { models = hiddenModels ?? models; hiddenModels = undefined; } else { hiddenModels = models; models = []; } renderModels(); modelChanged.fire(); },
+	setDescription: description => { models = models.map(entry => ({ ...entry, description })); renderModels(); modelChanged.fire(); },
 	changeContextSources: () => {
 		symbolSource = 'changed source';
 		terminalSource = 'new terminal output';
@@ -409,11 +415,6 @@ window.ashChatInputIntegration = {
 	setRetirement: retirement => {
 		models = models.map(entry => ({ ...entry, retirement }));
 		renderModels();
-		modelChanged.fire();
-	},
-	denyAcceleration: id => {
-		models = models.map(entry => ({ ...entry, accelerationOptions: entry.accelerationOptions!.filter(option => option.id !== id) }));
-		part.render({ ...state, models, selectedModel: models[0].model, isAutomaticModel: false, interaction: undefined });
 		modelChanged.fire();
 	},
 	releaseInstructions: () => { for (const resolve of instructionWaiters.splice(0)) resolve(); },

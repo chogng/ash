@@ -195,7 +195,10 @@ export class ModelPickerWidget extends Disposable {
 		const showDetails = (): void => {
 			if (active && hasNavigated) {
 				const { entry, row } = active;
+				const hadDetailsFocus = detailsMenu.domNode.contains(detailsMenu.domNode.ownerDocument.activeElement);
 				detailsMenu.show(entry, row);
+				// A catalog update can remove the description while a keyboard user reads it.
+				if (hadDetailsFocus && detailsMenu.domNode.hidden) this.actionWidgetService.focusFilter();
 			}
 		};
 		const isAutomatic = this.delegate.isAutomaticModel();
@@ -289,6 +292,13 @@ export class ModelPickerWidget extends Disposable {
 				active = undefined;
 				detailsMenu.hide();
 			}
+			if (active && !models.some(entry => entry.model.provider === active!.entry.model.provider && entry.model.model === active!.entry.model.model)) {
+				const hadDetailsFocus = detailsMenu.domNode.contains(ownerDocument.activeElement);
+				active = undefined;
+				detailsMenu.hide();
+				if (hadDetailsFocus && !automatic) this.actionWidgetService.focusFilter();
+			}
+
 			if (modeChanged || modelsChanged || selectionChanged) {
 				this.actionWidgetService.updateItems(automatic ? [] : buildModelPickerItems(models, selected), { filterVisible: !automatic, itemsVisible: !automatic });
 			}

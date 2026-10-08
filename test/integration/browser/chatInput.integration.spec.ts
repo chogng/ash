@@ -117,7 +117,7 @@ test('question controls resolve the editor background variable for each palette'
 });
 
 for (const { locale, surface } of ['en', 'zh-CN'].flatMap(locale => ['chat', 'cowork'].map(surface => ({ locale, surface })))) {
-	test(`model picker describes acceleration and retains keyboard state in ${surface} ${locale}`, async ({ page }) => {
+	test(`model picker shows the catalog description and retains keyboard state in ${surface} ${locale}`, async ({ page }) => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
 		await page.goto(`/chatInput.html?locale=${locale}&surface=${surface}`);
@@ -134,20 +134,15 @@ for (const { locale, surface } of ['en', 'zh-CN'].flatMap(locale => ['chat', 'co
 		await expect(picker).not.toContainText('A model for everyday tasks');
 		await search.press('ArrowRight');
 		const card = picker.locator('.ash-chat-model-card');
-		const fast = card.getByRole('switch', { name: locale === 'zh-CN' ? '快速' : 'Fast', exact: true });
-		const description = locale === 'zh-CN' ? '响应更快，用量增加' : 'Faster responses, increased usage';
+		const description = 'A model for everyday tasks';
 		await expect(card.locator('.ash-chat-model-card-description')).toHaveText(description);
-		await expect(fast).toHaveAttribute('aria-description', description);
-		await expect(fast).toBeFocused();
-		await fast.press('Space');
-		await expect(fast).toBeChecked();
-		await expect(fast).toBeFocused();
-		await fast.press('Space');
-		await expect(fast).not.toBeChecked();
+		await expect(card).toHaveAttribute('aria-description', description);
+		await expect(card).toBeFocused();
+		await expect(card.locator('input, button')).toHaveCount(0);
 		await page.setViewportSize({ width: 320, height: 600 });
 		const explanation = card.locator('.ash-chat-model-card-description');
 		expect(await explanation.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
-		await fast.press('Escape');
+		await card.press('Escape');
 		await expect(picker).toHaveCount(0);
 		await expect(trigger).toBeFocused();
 	});
@@ -333,13 +328,12 @@ for (const surface of ['chat', 'cowork']) {
 		await expect(picker.getByRole('menuitemradio')).toHaveText('Test Model');
 		expect(await picker.evaluate(element => element.getBoundingClientRect().width)).toBe(width);
 		await search.press('ArrowRight');
-		const fast = picker.getByRole('region', { name: 'Test Model', exact: true }).getByRole('switch', { name: 'Fast', exact: true });
-		await fast.press('Space');
-		await expect(fast).toBeChecked();
-		await expect(fast).toBeFocused();
+		const card = picker.getByRole('region', { name: 'Test Model', exact: true });
+		await expect(card).toBeFocused();
+		await expect(card).toHaveAttribute('aria-description', 'A model for everyday tasks');
 		await expect(search).toHaveValue('test-model');
 		expect(await picker.evaluate(element => element.getBoundingClientRect().width)).toBe(width);
-		await fast.press('Alt+ArrowLeft');
+		await card.press('Alt+ArrowLeft');
 		await expect(search).toBeFocused();
 		await search.fill('extended-model');
 		await search.press('Enter');
@@ -373,31 +367,52 @@ for (const surface of ['chat', 'cowork']) {
 }
 
 for (const locale of ['en', 'zh-CN']) {
-	test(`model picker selects Fast and Ultra Fast independently in ${locale}`, async ({ page }) => {
+	test(`model card refreshes provider descriptions without writing preferences in ${locale}`, async ({ page }) => {
 		await page.goto(`/chatInput.html?locale=${locale}&acceleration=multiple`);
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const initial = await page.evaluate(() => window.ashChatInputIntegration.modelState());
 		await page.locator('.ash-chat-input-model-action').press('ArrowDown');
-		await page.getByRole('combobox').press('ArrowRight');
+		const search = page.getByRole('combobox');
+		await search.press('ArrowRight');
 		const card = page.locator('.ash-chat-model-card');
-		const fast = card.getByRole('switch', { name: locale === 'zh-CN' ? '快速' : 'Fast', exact: true });
-		const ultra = card.getByRole('switch', { name: locale === 'zh-CN' ? '超快速' : 'Ultra Fast', exact: true });
-		await expect(fast).toBeFocused();
-		await fast.press('Space');
-		await expect(fast).toBeChecked();
-		await fast.press('Tab');
-		await expect(ultra).toBeFocused();
-		await ultra.press('Space');
-		await expect(ultra).toBeChecked();
-		await expect(fast).not.toBeChecked();
-		await expect(ultra).toBeFocused();
-		await page.evaluate(() => window.ashChatInputIntegration.denyAcceleration('priority'));
-		await expect(fast).toHaveCount(0);
-		await expect(ultra).toBeChecked();
-		await expect(ultra).toBeFocused();
-		await ultra.press('Space');
-		await expect(ultra).not.toBeChecked();
-		await ultra.press('Escape');
+		await expect(card).toBeFocused();
+		await page.evaluate(() => window.ashChatInputIntegration.setDescription('Updated provider description'));
+		await expect(card).toHaveText('Updated provider description');
+		await expect(card).toHaveAttribute('aria-description', 'Updated provider description');
+		await expect(card).toBeFocused();
+		expect(await page.evaluate(() => window.ashChatInputIntegration.modelState())).toEqual(initial);
+		await page.evaluate(() => window.ashChatInputIntegration.setDescription(null));
+		await expect(page.locator('.ash-chat-model-picker-details-menu')).toBeHidden();
+		await expect(search).toBeFocused();
+		await page.evaluate(() => window.ashChatInputIntegration.setDescription('Restored provider description'));
+		await search.press('ArrowRight');
+		await expect(card).toHaveText('Restored provider description');
+		await expect(card).toBeFocused();
+		expect(await page.evaluate(() => window.ashChatInputIntegration.modelState())).toEqual(initial);
+		await card.press('Escape');
 		await expect(page.locator('.ash-chat-model-picker')).toHaveCount(0);
+	});
+}
+
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`model card removes retired catalog entries without changing selection in ${locale}`, async ({ page }) => {
+		await page.goto(`/chatInput.html?locale=${locale}`);
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const initial = await page.evaluate(() => window.ashChatInputIntegration.modelState());
+		await page.locator('.ash-chat-input-model-action').press('ArrowDown');
+		const search = page.getByRole('combobox');
+		await search.press('ArrowRight');
+		await expect(page.locator('.ash-chat-model-card')).toBeFocused();
+		await page.evaluate(() => window.ashChatInputIntegration.setModelsAvailable(false));
+		await expect(page.locator('.ash-chat-model-picker-details-menu')).toBeHidden();
+		await expect(page.getByRole('menuitemradio')).toHaveCount(0);
+		await expect(search).toBeFocused();
+		expect(await page.evaluate(() => window.ashChatInputIntegration.modelState())).toMatchObject({ selectedModel: { provider: 'openai', model: 'test-model' }, automatic: false, preferenceWrites: [] });
+		await page.evaluate(() => window.ashChatInputIntegration.setModelsAvailable(true));
+		await search.press('ArrowRight');
+		await expect(page.locator('.ash-chat-model-card')).toBeFocused();
+		expect(await page.evaluate(() => window.ashChatInputIntegration.modelState())).toEqual(initial);
 	});
 }
 
