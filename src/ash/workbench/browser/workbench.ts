@@ -870,8 +870,6 @@ export class Workbench extends Disposable {
 		const userKeyboardLayoutService = userKeyboardLayoutApi ?? UnavailableUserKeyboardLayoutService;
 		services.registerInstance(IUserKeyboardLayoutService, userKeyboardLayoutService);
 		const notificationActionRunner = this._register(services.createInstance(NotificationActionRunner));
-		const notificationsCenter = this._register(new NotificationsCenter(workbenchRoot, feedbackHost, notificationService, notificationActionRunner, statusbarService, contextKeys, () => services.get(IAccessibleViewService).getOpenAriaHint(AccessibilityVerbositySettingId.Notifications)));
-		services.registerInstance(INotificationsCenter, notificationsCenter);
 		const keyboardLayoutService = this._register(new BrowserKeyboardLayoutService({
 			navigator: ownerWindow.navigator,
 			configurationService: configuration,
@@ -906,6 +904,8 @@ export class Workbench extends Disposable {
 		services.registerSingleton(IPreferencesService, () => services.createInstance(PreferencesService));
 		const contextMenus = this._register(createContextMenuService(services));
 		services.registerInstance(IContextMenuService, contextMenus);
+		const notificationsCenter = this._register(services.createInstance(NotificationsCenter, workbenchRoot, feedbackHost, notificationActionRunner, statusbarService, () => services.get(IAccessibleViewService).getOpenAriaHint(AccessibilityVerbositySettingId.Notifications)));
+		services.registerInstance(INotificationsCenter, notificationsCenter);
 		const hoverService = this._register(new HoverService(configuration, contextViews, contextMenus));
 		services.registerInstance(IHoverService, hoverService);
 		this._register(setHoverDelegate(hoverService));

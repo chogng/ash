@@ -21,6 +21,24 @@ import { NotificationActionRunner } from "../../../../browser/parts/notification
 import { CommandService } from "../../../commands/common/commandService.js";
 import { StatusbarAlignment, StatusbarService } from "../../../statusbar/browser/statusbar.js";
 import { NotificationService } from "../../common/notificationService.js";
+import { Event } from '../../../../../base/common/event.js';
+import { promiseWithResolvers } from '../../../../../base/common/async.js';
+import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
+import { BrowserClipboardService } from '../../../../../platform/clipboard/browser/clipboardService.js';
+import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { IContextMenuService, IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
+import { BrowserContextViewService } from '../../../../../platform/contextview/browser/contextViewService.js';
+import { BrowserContextMenuService } from '../../../../../platform/contextview/browser/contextMenuService.js';
+import { IMenuService } from '../../../../../platform/actions/common/actions.js';
+import { MenuService } from '../../../../../platform/actions/common/menuService.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
+import { CopyNotificationMessageAction } from '../../../../browser/parts/notifications/notificationsActions.js';
+import type { INativeContextMenuApi, INativeContextMenuRequest, INativeContextMenuResult } from '../../../../../base/parts/contextmenu/common/contextmenu.js';
+import { ElectronContextMenuService } from '../../../contextmenu/electron-browser/contextMenuService.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { ConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 
 test("clearing a toast removes only its shared record from the notification center", async () => {
 	const browser = new JSDOM("<!doctype html><body><main></main></body>");
@@ -28,7 +46,8 @@ test("clearing a toast removes only its shared record from the notification cent
 		using service = new NotificationService();
 		using runner = createNotificationActionRunner(service);
 		const root = browser.window.document.querySelector<HTMLElement>("main")!;
-		using center = new NotificationsCenter(root, root, service, runner);
+		using presentation = new NotificationsPresentation(root, root, service, runner);
+		const center = presentation.center;
 		const toggle = root.querySelector<HTMLButtonElement>(".ash-notifications-toggle")!;
 		assert.equal(toggle.textContent, "Notifications");
 		assert.equal(toggle.hidden, true);
@@ -73,7 +92,8 @@ test("clearing focused toasts moves to adjacent actions and returns to the previ
 		using service = new NotificationService();
 		using runner = createNotificationActionRunner(service);
 		const document = browser.window.document;
-		using center = new NotificationsCenter(document.body, document.body, service, runner);
+		using presentation = new NotificationsPresentation(document.body, document.body, service, runner);
+		const center = presentation.center;
 		const handles = [service.info("First"), service.info("Second"), service.info("Third")];
 		const close = (index: number) => document.querySelector<HTMLButtonElement>(`[data-notification-close="${handles[index].item.id}"]`)!;
 		const origin = document.querySelector<HTMLButtonElement>("#origin")!;
@@ -94,7 +114,8 @@ test("toasts cap at three while history retains every notification", () => {
 	try {
 		using service = new NotificationService();
 		using runner = createNotificationActionRunner(service);
-		using center = new NotificationsCenter(browser.window.document.body, browser.window.document.body, service, runner);
+		using presentation = new NotificationsPresentation(browser.window.document.body, browser.window.document.body, service, runner);
+		const center = presentation.center;
 		for (let index = 0; index < 4; index++) service.info(`Message ${index}`);
 		assert.equal(browser.window.document.querySelectorAll(".ash-notification").length, 3);
 		assert.equal(service.getNotifications().length, 4);
@@ -354,6 +375,8 @@ test("notification accessibility help explains toast Escape and retained history
 	const implementation = AccessibleViewRegistry.getImplementations().find(item => item.name === "notificationsHelp")!;
 	using provider = implementation.getProvider(services)!;
 	assert.match(provider.provideContent(), /When the Remove notification button in a toast has focus, press Escape to hide the toasts without removing them from history\./);
+	assert.match(provider.provideContent(), /Context Menu key or Shift\+F10, and choose Copy Text to copy its message/);
+	assert.match(provider.provideContent(), /Press Escape to close the menu and return to the notification/);
 });
 
 test("notification handle removes its record once", () => {
@@ -372,7 +395,8 @@ test("status bell reflects retained notification history", () => {
 		using service = new NotificationService();
 		using runner = createNotificationActionRunner(service);
 		using statusbar = new StatusbarService();
-		using center = new NotificationsCenter(browser.window.document.body, browser.window.document.body, service, runner, statusbar);
+		using presentation = new NotificationsPresentation(browser.window.document.body, browser.window.document.body, service, runner, statusbar);
+		const center = presentation.center;
 		const bell = () => statusbar.getEntries(StatusbarAlignment.Right).find(item => item.id === "ash.status.notifications")?.entry.icon;
 		assert.equal(bell(), Lxicon.bell);
 		const handle = service.info("Saved");
@@ -585,8 +609,9 @@ class NotificationsFixture extends Disposable {
 	readonly panel: HTMLElement;
 	readonly origin: HTMLButtonElement;
 	readonly outside: HTMLButtonElement;
+	readonly presentation: NotificationsPresentation;
 
-	constructor(statusbar?: StatusbarService) {
+	constructor(statusbar?: StatusbarService, systemMenu?: INativeContextMenuApi) {
 		super();
 		const browser = new JSDOM("<!doctype html><body><button id='origin'>Origin</button><button id='outside'>Outside</button></body>", { url: "https://ash.test" });
 		this._register(toDisposable(() => browser.window.close()));
@@ -595,8 +620,49 @@ class NotificationsFixture extends Disposable {
 		this.outside = this.document.querySelector<HTMLButtonElement>("#outside")!;
 		this.service = this._register(new NotificationService());
 		this.runner = this._register(createNotificationActionRunner(this.service));
-		this.center = this._register(new NotificationsCenter(this.document.body, this.document.body, this.service, this.runner, statusbar));
+		this.presentation = this._register(new NotificationsPresentation(this.document.body, this.document.body, this.service, this.runner, statusbar, systemMenu));
+		this.center = this.presentation.center;
 		this.panel = this.document.querySelector<HTMLElement>(".ash-notifications-center")!;
+	}
+}
+
+/** Real window services with only the external clipboard and optional host popup controlled. */
+class NotificationsPresentation extends Disposable {
+	readonly services: InstantiationService;
+	readonly views: BrowserContextViewService;
+	readonly menus: IContextMenuService;
+	readonly center: NotificationsCenter;
+	readonly writes: string[] = [];
+	writeText = async (text: string): Promise<void> => { this.writes.push(text); };
+
+	constructor(root: HTMLElement, toastContainer: HTMLElement, service: NotificationService, runner: NotificationActionRunner, statusbar?: StatusbarService, systemMenu?: INativeContextMenuApi) {
+		super();
+		const window = root.ownerDocument.defaultView!;
+		// jsdom lacks layout and scrolling; context-view focus restoration requires a painted anchor.
+		Object.defineProperty(window.Element.prototype, 'scrollTo', { configurable: true, value: () => { } });
+		Object.defineProperty(window.Element.prototype, 'getClientRects', { configurable: true, value: () => [new window.DOMRect(0, 0, 100, 20)] });
+		this.services = this._register(new InstantiationService());
+		this.services.registerInstance(INotificationService, service);
+		this.services.registerInstance(IContextKeyService, this._register(new ContextKeyService()));
+		this.services.registerInstance(IClipboardService, new BrowserClipboardService({ writeText: text => this.writeText(text) } as Clipboard));
+		this.services.registerInstance(ICommandService, this._register(new CommandService(this.services)));
+		this.services.registerInstance(IMenuService, this.services.createInstance(MenuService));
+		this.views = this._register(new BrowserContextViewService(root));
+		this.services.registerInstance(IContextViewService, this.views);
+		this.services.registerInstance(IKeybindingService, {
+			inChordMode: false, onDidUpdateKeybindings: Event.None,
+			getKeybindings: () => [], registerSchemaContribution: () => Disposable.None,
+			resolveKeybinding() { throw new Error('No binding in this fixture'); },
+			resolveUserBinding: () => undefined, lookupKeybindings: () => [], lookupKeybinding: () => undefined,
+		});
+		if (systemMenu) {
+			const registry = new ConfigurationRegistry();
+			registry.registerConfiguration({ key: 'window.menuStyle', defaultValue: 'system', parse: value => value });
+			this.services.registerInstance(IConfigurationService, this._register(new InMemoryConfigurationService(registry)));
+		}
+		this.menus = this._register(systemMenu ? this.services.createInstance(ElectronContextMenuService, systemMenu) : this.services.createInstance(BrowserContextMenuService));
+		this.services.registerInstance(IContextMenuService, this.menus);
+		this.center = this._register(this.services.createInstance(NotificationsCenter, root, toastContainer, runner, statusbar, undefined));
 	}
 }
 
@@ -605,6 +671,200 @@ function createNotificationActionRunner(service: NotificationService): Notificat
 	services.registerInstance(INotificationService, service);
 	return services.createInstance(NotificationActionRunner);
 }
+
+function openCopyMenu(fixture: NotificationsFixture, id: number, input: 'mouse' | 'ContextMenu' | 'Shift+F10' = 'ContextMenu'): HTMLElement {
+	const { document, center, panel } = fixture;
+	center.show();
+	const row = panel.querySelector<HTMLElement>(`[data-notification-id="${id}"]`)!;
+	row.focus();
+	const event = input === 'mouse'
+		? new document.defaultView!.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 25, clientY: 40 })
+		: new document.defaultView!.KeyboardEvent('keydown', { key: input === 'ContextMenu' ? 'ContextMenu' : 'F10', shiftKey: input === 'Shift+F10', bubbles: true, cancelable: true });
+	row.dispatchEvent(event);
+	assert.equal(event.defaultPrevented, true);
+	return row;
+}
+
+test('notification copying requires the clipboard registration and the center requires its window services', () => {
+	using services = new InstantiationService();
+	assert.throws(() => services.createInstance(CopyNotificationMessageAction, CopyNotificationMessageAction.ID, CopyNotificationMessageAction.LABEL), /Unknown service: clipboardService/);
+	using fixture = new NotificationsFixture();
+	assert.throws(() => services.createInstance(NotificationsCenter, fixture.document.body, fixture.document.body, fixture.runner, undefined, undefined), /Unknown service: notificationService/);
+	using incomplete = new InstantiationService();
+	incomplete.registerInstance(INotificationService, fixture.service);
+	incomplete.registerInstance(IContextKeyService, fixture.presentation.services.get(IContextKeyService));
+	assert.throws(() => incomplete.createInstance(NotificationsCenter, fixture.document.body, fixture.document.body, fixture.runner, undefined, undefined), /Unknown service: contextMenuService/);
+});
+
+for (const input of ['mouse', 'ContextMenu', 'Shift+F10'] as const) {
+	test(`notification ${input} copies the raw message without source, actions, or presentation text`, async () => {
+		using fixture = new NotificationsFixture();
+		const message = 'First line\n[链接](https://example.test) <b>literal</b>\n第二行\t🙂';
+		const handle = fixture.service.notify({ severity: NotificationSeverity.Warning, message, source: 'Excluded source', actions: [{ id: 'primary', label: 'Excluded action', run() { } }] });
+		const copied = promiseWithResolvers<void>();
+		fixture.presentation.writeText = async value => { fixture.presentation.writes.push(value); copied.resolve(); };
+		const row = openCopyMenu(fixture, handle.item.id, input);
+		const menuItem = fixture.document.querySelector<HTMLElement>('[role="menuitem"]')!;
+		assert.equal(menuItem.textContent, 'Copy Text');
+		menuItem.click();
+		await copied.promise;
+		assert.deepEqual({ writes: fixture.presentation.writes, history: fixture.service.getNotifications(), centerHidden: fixture.panel.hidden, focused: fixture.document.activeElement }, {
+			writes: [message], history: [handle.item], centerHidden: false, focused: row,
+		});
+	});
+}
+
+test('Escape dismisses only the copy menu, returns to its row, and then closes the center', () => {
+	using fixture = new NotificationsFixture();
+	const handle = fixture.service.info('Retained after cancel');
+	fixture.origin.focus();
+	const row = openCopyMenu(fixture, handle.item.id);
+	fixture.document.activeElement!.dispatchEvent(new fixture.document.defaultView!.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+	assert.deepEqual({ menu: fixture.document.querySelector('[role="menu"]'), centerHidden: fixture.panel.hidden, focused: fixture.document.activeElement, writes: fixture.presentation.writes, history: fixture.service.getNotifications() }, {
+		menu: null, centerHidden: false, focused: row, writes: [], history: [handle.item],
+	});
+	row.dispatchEvent(new fixture.document.defaultView!.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+	assert.equal(fixture.panel.hidden, true);
+	assert.equal(fixture.document.activeElement, fixture.origin);
+});
+
+for (const change of ['add', 'remove', 'hide', 'clear', 'dispose'] as const) {
+	test(`center ${change} invalidates its browser copy menu and prevents an old menu item from writing`, async () => {
+		using fixture = new NotificationsFixture();
+		const handle = fixture.service.info('Original');
+		openCopyMenu(fixture, handle.item.id);
+		const menuItem = fixture.document.querySelector<HTMLElement>('[role="menuitem"]')!;
+		if (change === 'add') fixture.service.info('Next');
+		else if (change === 'remove') handle.close();
+		else if (change === 'hide') fixture.center.hide();
+		else if (change === 'clear') fixture.center.clearAll();
+		else fixture.center.dispose();
+		menuItem.click();
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.deepEqual({ menu: fixture.document.querySelector('[role="menu"]'), writes: fixture.presentation.writes }, { menu: null, writes: [] });
+	});
+}
+
+test('a replaced notification menu cannot close another owner menu when the center renders or hides', () => {
+	using fixture = new NotificationsFixture();
+	const handle = fixture.service.info('Original');
+	openCopyMenu(fixture, handle.item.id);
+	fixture.presentation.menus.showContextMenu({ getAnchor: () => fixture.outside, getActions: () => [{ id: 'other', label: 'Other menu', tooltip: '', enabled: true, run() { } }] });
+	fixture.service.info('Rerender');
+	fixture.center.hide();
+	assert.deepEqual({ label: fixture.document.querySelector('[role="menuitem"]')?.textContent, writes: fixture.presentation.writes }, { label: 'Other menu', writes: [] });
+});
+
+test('copy menu cancellation preserves focus owned by a different dialog', () => {
+	using fixture = new NotificationsFixture();
+	const handle = fixture.service.info('Original');
+	openCopyMenu(fixture, handle.item.id);
+	const dialog = fixture.document.createElement('section');
+	dialog.setAttribute('role', 'dialog');
+	dialog.tabIndex = 0;
+	fixture.document.body.append(dialog);
+	dialog.focus();
+	fixture.service.info('Rerender');
+	assert.equal(fixture.document.activeElement, dialog);
+	assert.equal(fixture.document.querySelector('[role="menu"]'), null);
+});
+
+test('window-scoped notification menus and clipboard targets remain independent', async () => {
+	using first = new NotificationsFixture();
+	using second = new NotificationsFixture();
+	const firstItem = first.service.info('First window');
+	const secondItem = second.service.info('Second window');
+	openCopyMenu(first, firstItem.item.id);
+	openCopyMenu(second, secondItem.item.id);
+	first.center.clearAll();
+	second.document.querySelector<HTMLElement>('[role="menuitem"]')!.click();
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.deepEqual({ first: first.presentation.writes, second: second.presentation.writes, history: second.service.getNotifications() }, { first: [], second: ['Second window'], history: [secondItem.item] });
+});
+
+test('menu selection keeps an in-flight clipboard failure observable once after the center hides', async () => {
+	using fixture = new NotificationsFixture();
+	const handle = fixture.service.info('Original');
+	const started = promiseWithResolvers<void>();
+	const write = promiseWithResolvers<void>();
+	const reported = promiseWithResolvers<void>();
+	fixture.presentation.writeText = async value => { fixture.presentation.writes.push(value); started.resolve(); await write.promise; };
+	fixture.service.onDidAdd(item => { if (item.severity === NotificationSeverity.Error) reported.resolve(); });
+	openCopyMenu(fixture, handle.item.id);
+	fixture.document.querySelector<HTMLElement>('[role="menuitem"]')!.click();
+	await started.promise;
+	fixture.center.hide();
+	handle.close();
+	write.reject(new Error('Clipboard permission denied'));
+	await reported.promise;
+	assert.deepEqual({ writes: fixture.presentation.writes, messages: fixture.service.getNotifications().map(item => item.message) }, { writes: ['Original'], messages: ['Clipboard permission denied'] });
+});
+
+test('window menu disposal suppresses late clipboard failure feedback without canceling the write', async () => {
+	using fixture = new NotificationsFixture();
+	const handle = fixture.service.info('Original');
+	const started = promiseWithResolvers<void>();
+	const write = promiseWithResolvers<void>();
+	fixture.presentation.writeText = async value => { fixture.presentation.writes.push(value); started.resolve(); await write.promise; };
+	openCopyMenu(fixture, handle.item.id);
+	fixture.document.querySelector<HTMLElement>('[role="menuitem"]')!.click();
+	await started.promise;
+	fixture.presentation.dispose();
+	write.reject(new Error('Late clipboard failure'));
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.deepEqual({ writes: fixture.presentation.writes, history: fixture.service.getNotifications() }, { writes: ['Original'], history: [handle.item] });
+});
+
+for (const change of ['add', 'remove', 'hide', 'clear', 'dispose'] as const) {
+	test(`center ${change} cancels its system popup and ignores its delayed selection`, async () => {
+		const popup = promiseWithResolvers<INativeContextMenuResult>();
+		const requests: INativeContextMenuRequest[] = [];
+		let closed = 0;
+		using fixture = new NotificationsFixture(undefined, { popup: request => { requests.push(request); return popup.promise; }, async close() { closed++; } });
+		const handle = fixture.service.info('Original');
+		openCopyMenu(fixture, handle.item.id);
+		if (change === 'add') fixture.service.info('Next');
+		else if (change === 'remove') handle.close();
+		else if (change === 'hide') fixture.center.hide();
+		else if (change === 'clear') fixture.center.clearAll();
+		else fixture.center.dispose();
+		await new Promise<void>(resolve => setImmediate(resolve));
+		const action = requests[0].items[0];
+		assert.ok(action.type === 'action');
+		popup.resolve({ selectedId: action.id });
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.deepEqual({ closed, label: action.label, writes: fixture.presentation.writes }, { closed: 1, label: 'Copy Text', writes: [] });
+	});
+}
+
+test('system selection copies through the same action and reports a clipboard denial once', async () => {
+	const popup = promiseWithResolvers<INativeContextMenuResult>();
+	const request = promiseWithResolvers<INativeContextMenuRequest>();
+	using fixture = new NotificationsFixture(undefined, { popup: value => { request.resolve(value); return popup.promise; }, async close() { } });
+	const handle = fixture.service.info('System message\n第二行');
+	const reported = promiseWithResolvers<void>();
+	fixture.presentation.writeText = async value => { fixture.presentation.writes.push(value); throw new Error('System clipboard denied'); };
+	fixture.service.onDidAdd(item => { if (item.severity === NotificationSeverity.Error) reported.resolve(); });
+	openCopyMenu(fixture, handle.item.id);
+	const action = (await request.promise).items[0];
+	assert.ok(action.type === 'action');
+	popup.resolve({ selectedId: action.id });
+	await reported.promise;
+	assert.deepEqual({ writes: fixture.presentation.writes, messages: fixture.service.getNotifications().map(item => item.message) }, { writes: ['System message\n第二行'], messages: ['System message\n第二行', 'System clipboard denied'] });
+});
+
+test('notification center creation retains startup history and the three-toast limit', () => {
+	const browser = new JSDOM('<!doctype html><body></body>');
+	try {
+		using service = new NotificationService();
+		for (const message of ['First', 'Second', 'Third', 'Fourth']) service.info(message);
+		using runner = createNotificationActionRunner(service);
+		using presentation = new NotificationsPresentation(browser.window.document.body, browser.window.document.body, service, runner);
+		assert.equal(browser.window.document.querySelectorAll('.ash-notification').length, 3);
+		presentation.center.show();
+		assert.equal(browser.window.document.querySelectorAll('.ash-notifications-row').length, 4);
+	} finally { browser.window.close(); }
+});
 
 test("notification actions require the window notification service", () => {
 	using services = new InstantiationService();

@@ -451,8 +451,6 @@ export abstract class Workbench extends Disposable {
 		})));
 		services.registerInstance(IGitHubConnectionService, this._register(services.createInstance(GitHubConnectionService)));
 		const notificationActionRunner = this._register(services.createInstance(NotificationActionRunner));
-		const notificationsCenter = this._register(new NotificationsCenter(this.domNode, feedbackHost, notificationService, notificationActionRunner, undefined, contextKeys, () => services.get(IAccessibleViewService).getOpenAriaHint(AccessibilityVerbositySettingId.Notifications)));
-		services.registerInstance(INotificationsCenter, notificationsCenter);
 		const keyboardLayoutService = this._register(new BrowserKeyboardLayoutService({
 			navigator: ownerWindow.navigator,
 			configurationService,
@@ -482,6 +480,8 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IChatContextPickService, new ChatContextPickService());
 		const contextMenus = this._register(options.createContextMenuService(services));
 		services.registerInstance(IContextMenuService, contextMenus);
+		const notificationsCenter = this._register(services.createInstance(NotificationsCenter, this.domNode, feedbackHost, notificationActionRunner, undefined, () => services.get(IAccessibleViewService).getOpenAriaHint(AccessibilityVerbositySettingId.Notifications)));
+		services.registerInstance(INotificationsCenter, notificationsCenter);
 		services.registerInstance(IFileDialogService, options.createFileDialogService(services));
 		const hoverService = this._register(new HoverService(configurationService, contextViews, contextMenus));
 		services.registerInstance(IHoverService, hoverService);

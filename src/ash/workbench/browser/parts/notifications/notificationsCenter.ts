@@ -1,15 +1,18 @@
 import "./media/notifications.css";
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import type { IAction, IActionRunner } from "../../../../base/common/actions.js";
+import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
-import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
-import { type IContextKeyService, RawContextKey } from "../../../../platform/contextkey/common/contextkey.js";
+import { createServiceIdentifier, IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
+import { IContextKeyService, RawContextKey } from "../../../../platform/contextkey/common/contextkey.js";
+import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { localize } from "../../../../nls.js";
-import type { INotificationService, NotificationItem } from "../../../../platform/notification/common/notification.js";
+import { INotificationService, type NotificationItem } from "../../../../platform/notification/common/notification.js";
 import { StatusbarAlignment, type IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
 import { NotificationsToasts } from "./notificationsToasts.js";
 import { StatusbarHeight } from "../workbenchPartDimensions.js";
+import { CopyNotificationMessageAction } from './notificationsActions.js';
 
 export interface INotificationsCenter {
 	show(): void;
@@ -28,9 +31,22 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 	private readonly toggleButton?: HTMLButtonElement;
 	private open = false;
 	private previousFocus: Element | null = null;
+	private readonly copyAction: CopyNotificationMessageAction;
+	private copyMenu: CancellationTokenSource | undefined;
 
-	constructor(root: HTMLElement, toastContainer: HTMLElement, private readonly service: INotificationService, private readonly actionRunner: IActionRunner, statusbar?: IStatusbarService, contextKeys?: IContextKeyService, getHelpHint?: () => string | undefined) {
+	constructor(
+		root: HTMLElement,
+		toastContainer: HTMLElement,
+		private readonly actionRunner: IActionRunner,
+		statusbar: IStatusbarService | undefined,
+		getHelpHint: (() => string | undefined) | undefined,
+		@INotificationService private readonly service: INotificationService,
+		@IContextKeyService contextKeys: IContextKeyService,
+		@IContextMenuService private readonly contextMenuService: IContextMenuService,
+		@IInstantiationService instantiationService: IInstantiationService,
+	) {
 		super();
+		this.copyAction = instantiationService.createInstance(CopyNotificationMessageAction, CopyNotificationMessageAction.ID, CopyNotificationMessageAction.LABEL);
 		const document = root.ownerDocument;
 		const toasts = this._register(new NotificationsToasts(toastContainer, service, actionRunner));
 		this.panel = h(document, "section"); this.panel.className = "ash-notifications-center";
@@ -48,19 +64,17 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 		this.list = h(document, "div"); this.list.className = "ash-notifications-list"; this.list.setAttribute("role", "list");
 		this.panel.append(header, this.list); root.append(this.panel);
 		this._register(toDisposable(() => this.panel.remove()));
-		if (contextKeys) {
-			const focused = NotificationsFocusedContext.bindTo(contextKeys);
-			this._register(addDisposableListener(this.panel, "focusin", () => {
-				focused.set(true);
-				const hint = getHelpHint?.();
-				if (hint) this.panel.setAttribute("aria-description", hint);
-				else this.panel.removeAttribute("aria-description");
-			}));
-			this._register(addDisposableListener(this.panel, "focusout", event => {
-				if (!this.panel.contains(event.relatedTarget as Node | null)) focused.reset();
-			}));
-			this._register(toDisposable(() => focused.reset()));
-		}
+		const focused = NotificationsFocusedContext.bindTo(contextKeys);
+		this._register(addDisposableListener(this.panel, "focusin", () => {
+			focused.set(true);
+			const hint = getHelpHint?.();
+			if (hint) this.panel.setAttribute("aria-description", hint);
+			else this.panel.removeAttribute("aria-description");
+		}));
+		this._register(addDisposableListener(this.panel, "focusout", event => {
+			if (!this.panel.contains(event.relatedTarget as Node | null)) focused.reset();
+		}));
+		this._register(toDisposable(() => focused.reset()));
 		this._register(addDisposableListener(this.clearButton, "click", () => this.clearAll()));
 		this._register(addDisposableListener(hide, "click", () => this.hide()));
 		this._register(addDisposableListener(this.list, "click", event => {
@@ -77,16 +91,18 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 			this.render();
 		}));
 		this._register(addDisposableListener(this.panel, "keydown", event => {
+			if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) this.showCopyMenu(event);
 			if (event.key === "Delete") {
 				const target = event.target as HTMLElement;
 				const row = target.closest<HTMLElement>("[data-notification-id]");
 				if (row) { event.preventDefault(); service.remove(Number(row.dataset.notificationId)); }
 			}
 		}));
+		this._register(addDisposableListener(this.list, 'contextmenu', event => this.showCopyMenu(event)));
 		const onEscape = (event: KeyboardEvent): void => {
 			const dialogHasFocus = Boolean(document.activeElement?.closest('[role="dialog"]'));
 			const accessibleDialogOpen = Boolean(document.querySelector('.ash-accessible-view-dialog'));
-			if (this.open && event.key === "Escape" && !dialogHasFocus && !accessibleDialogOpen) {
+			if (this.open && event.key === "Escape" && !this.copyMenu && !dialogHasFocus && !accessibleDialogOpen) {
 				event.preventDefault();
 				event.stopPropagation();
 				this.hide();
@@ -123,6 +139,7 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 
 	hide(): void {
 		if (this.isDisposed || !this.open) return;
+		this.cancelCopyMenu();
 		const document = this.panel.ownerDocument;
 		const restoreFocus = this.panel.contains(document.activeElement);
 		const previousFocus = this.previousFocus;
@@ -142,12 +159,15 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 	}
 
 	protected override disposeCore(): void {
+		this.cancelCopyMenu();
 		this.open = false;
 		this.previousFocus = null;
 		super.disposeCore();
 	}
 
 	private render(): void {
+		// Every render replaces the anchor rows, so only this center's presentation expires.
+		this.cancelCopyMenu();
 		const document = this.panel.ownerDocument;
 		const focusedRow = document.activeElement?.closest<HTMLElement>("[data-notification-id]");
 		const focusedId = this.list.contains(focusedRow ?? null) ? focusedRow?.dataset.notificationId : undefined;
@@ -159,6 +179,45 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 		if (focusedId && this.open) {
 			(this.list.querySelector<HTMLElement>(`[data-notification-id="${focusedId}"]`) ?? this.list.querySelector<HTMLElement>("[data-notification-id]") ?? this.panel).focus();
 		}
+	}
+
+	private showCopyMenu(event: MouseEvent | KeyboardEvent): void {
+		if (this.isDisposed || !this.open) return;
+		const document = this.panel.ownerDocument;
+		const Element = document.defaultView?.Element;
+		if (!Element || !(event.target instanceof Element)) return;
+		const row = event.target.closest<HTMLElement>('[data-notification-id]');
+		if (!row || !this.list.contains(row)) return;
+		const item = this.service.getNotifications().find(item => item.id === Number(row.dataset.notificationId));
+		if (!item) return;
+		event.preventDefault();
+		event.stopPropagation();
+		this.cancelCopyMenu();
+		row.focus();
+		const source = this.copyMenu = new CancellationTokenSource();
+		try {
+			this.contextMenuService.showContextMenu({
+				getAnchor: () => event.type === 'contextmenu' ? { x: (event as MouseEvent).clientX, y: (event as MouseEvent).clientY, targetWindow: document.defaultView ?? undefined } : row,
+				getActions: () => [this.copyAction],
+				getActionsContext: () => item,
+				cancellationToken: source.token,
+				autoSelectFirstItem: true,
+				onHide: () => {
+					if (this.copyMenu === source) this.copyMenu = undefined;
+					// Selection releases the presentation without canceling the started clipboard write.
+					source.dispose();
+				},
+			});
+		} catch (error) {
+			if (this.copyMenu === source) this.cancelCopyMenu();
+			throw error;
+		}
+	}
+
+	private cancelCopyMenu(): void {
+		const source = this.copyMenu;
+		this.copyMenu = undefined;
+		source?.dispose(true);
 	}
 
 	private renderItem(document: Document, item: NotificationItem): HTMLElement {
