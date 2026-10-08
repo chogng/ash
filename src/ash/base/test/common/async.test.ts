@@ -247,6 +247,179 @@ suite('Cancellation races', () => {
 	});
 });
 
+suite('Rejecting cancellation races', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('live AbortSignals preserve the work result and original error while releasing their listener', async () => {
+		const controller = new AbortController();
+		assert.equal(await raceCancellationError(Promise.resolve(42), controller.signal), 42);
+		assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
+		const failure = new Error('work failed');
+		await assert.rejects(raceCancellationError(Promise.reject(failure), controller.signal), error => error === failure);
+		assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
+	});
+
+	test('AbortSignal cancellation preserves its error classification, message, reason, and cause', async () => {
+		const controller = new AbortController();
+		const reason = new Error('catalog stopped');
+		const work = promiseWithResolvers<string>();
+		const pending = raceCancellationError(work.promise, controller.signal, 'Catalog wait cancelled');
+		controller.abort(reason);
+		await assert.rejects(pending, error => isCancellationError(error) && error.message === 'Catalog wait cancelled' && error.reason === reason && error.cause === reason);
+		assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
+		work.resolve('late result');
+	});
+
+	test('PromiseLike normalization supports synchronous fulfillment and preserves getter and invocation errors', async () => {
+		const immediate = { then: (resolve: (value: number) => void): void => resolve(7) } as unknown as PromiseLike<number>;
+		assert.equal(await raceCancellationError(immediate, CancellationToken.None), 7);
+		const getterError = new Error('then getter failed');
+		await assert.rejects(raceCancellationError<number>({ get then(): never { throw getterError; } }, CancellationToken.None), error => error === getterError);
+		const invocationError = new Error('then invocation failed');
+		await assert.rejects(raceCancellationError<number>({ then(): never { throw invocationError; } }, CancellationToken.None), error => error === invocationError);
+	});
+
+	test('cancellation during PromiseLike assimilation keeps the native cancellation reason', async () => {
+		const controller = new AbortController();
+		const reason = new Error('thenable cancelled its wait');
+		const thenable = { then: (resolve: (value: number) => void): void => { controller.abort(reason); resolve(7); } } as unknown as PromiseLike<number>;
+		await assert.rejects(raceCancellationError(thenable, controller.signal), error => isCancellationError(error) && error.reason === reason && error.cause === reason);
+		assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
+	});
+
+	for (const kind of ['token', 'signal'] as const) {
+		test(`a pre-cancelled ${kind} observes late rejection and keeps cancellation ahead of already-resolved work`, () => {
+			const asyncModule = new URL('../../common/async.js', import.meta.url).href;
+			const cancellationModule = new URL('../../common/cancellation.js', import.meta.url).href;
+			const errorsModule = new URL('../../common/errors.js', import.meta.url).href;
+			const result = spawnSync(process.execPath, ['--unhandled-rejections=strict', '--input-type=module', '--eval', `
+				import assert from 'node:assert/strict';
+				import { raceCancellationError, promiseWithResolvers } from ${JSON.stringify(asyncModule)};
+				import { CancellationToken } from ${JSON.stringify(cancellationModule)};
+				import { isCancellationError } from ${JSON.stringify(errorsModule)};
+				const controller = new AbortController();
+				const reason = new Error('already stopped');
+				controller.abort(reason);
+				const cancellation = ${JSON.stringify(kind)} === 'token' ? CancellationToken.Cancelled : controller.signal;
+				const expectedReason = ${JSON.stringify(kind)} === 'token' ? undefined : reason;
+				const matches = error => isCancellationError(error) && error.reason === expectedReason && error.cause === expectedReason;
+				const work = promiseWithResolvers();
+				await assert.rejects(raceCancellationError(work.promise, cancellation), matches);
+				await assert.rejects(raceCancellationError(Promise.resolve('already complete'), cancellation), matches);
+				work.reject(new Error('late work failure'));
+				await new Promise(resolve => setImmediate(resolve));
+			`], { encoding: 'utf8', timeout: 10_000 });
+			assert.equal(result.status, 0, result.stderr);
+		});
+	}
+
+	test('failed subscription registration preserves its error while observing late work rejection', () => {
+		const asyncModule = new URL('../../common/async.js', import.meta.url).href;
+		const result = spawnSync(process.execPath, ['--unhandled-rejections=strict', '--input-type=module', '--eval', `
+			import assert from 'node:assert/strict';
+			import { raceCancellationError, promiseWithResolvers } from ${JSON.stringify(asyncModule)};
+			const registrationError = new Error('listener registration failed');
+			const token = { isCancellationRequested: false, onCancellationRequested() { throw registrationError; } };
+			const work = promiseWithResolvers();
+			await assert.rejects(raceCancellationError(work.promise, token), error => error === registrationError);
+			work.reject(new Error('late work failure'));
+			await new Promise(resolve => setImmediate(resolve));
+		`], { encoding: 'utf8', timeout: 10_000 });
+		assert.equal(result.status, 0, result.stderr);
+	});
+
+	for (const scenario of ['resolve_throw', 'reject_throw', 'cancel_throw', 'resolve_reenter', 'reject_reenter', 'cancel_reenter', 'registration_callback', 'registration_silent', 'reporter_throw'] as const) {
+		test(`a rejecting race preserves its winner and reports cleanup for ${scenario}`, () => {
+			const asyncModule = new URL('../../common/async.js', import.meta.url).href;
+			const eventModule = new URL('../../common/event.js', import.meta.url).href;
+			const errorsModule = new URL('../../common/errors.js', import.meta.url).href;
+			const result = spawnSync(process.execPath, ['--unhandled-rejections=strict', '--input-type=module', '--eval', `
+				import assert from 'node:assert/strict';
+				import { raceCancellationError, promiseWithResolvers } from ${JSON.stringify(asyncModule)};
+				import { Emitter } from ${JSON.stringify(eventModule)};
+				import { errorHandler, setUnexpectedErrorHandler, isCancellationError } from ${JSON.stringify(errorsModule)};
+				const scenario = ${JSON.stringify(scenario)};
+				const cleanupError = new Error('cleanup failed');
+				const workError = new Error('work failed');
+				const reportingError = new Error('reporting failed');
+				const reported = [];
+				const logs = [];
+				const originalHandler = errorHandler.getUnexpectedErrorHandler();
+				const originalConsoleError = console.error;
+				setUnexpectedErrorHandler(error => {
+					reported.push(error);
+					if (scenario === 'reporter_throw') throw reportingError;
+				});
+				console.error = (...args) => logs.push(args.slice(1));
+				let removals = 0;
+				using events = new Emitter({
+					onWillRemoveListener() {
+						if (scenario.endsWith('_reenter')) {
+							token.isCancellationRequested = true;
+							events.fire();
+						}
+					},
+					onDidRemoveLastListener() {
+						removals++;
+						if (scenario.endsWith('_throw')) throw cleanupError;
+					},
+				});
+				const token = {
+					isCancellationRequested: false,
+					onCancellationRequested: listener => {
+						const subscription = events.event(listener);
+						if (scenario.startsWith('registration_')) {
+							token.isCancellationRequested = true;
+							if (scenario === 'registration_callback') events.fire();
+						}
+						return subscription;
+					},
+				};
+				try {
+					const work = promiseWithResolvers();
+					const results = [];
+					const pending = raceCancellationError(work.promise, token, 'Stopped waiting');
+					pending.then(value => results.push(value), error => results.push(error));
+					if (scenario.startsWith('cancel_')) {
+						token.isCancellationRequested = true;
+						events.fire();
+					} else if (scenario.startsWith('reject_')) {
+						work.reject(workError);
+					} else if (!scenario.startsWith('registration_')) {
+						work.resolve('work result');
+					}
+					await new Promise(resolve => setImmediate(resolve));
+					assert.equal(results.length, 1);
+					const winner = results[0];
+					if (scenario.startsWith('cancel_') || scenario.startsWith('registration_')) {
+						assert.ok(isCancellationError(winner));
+						assert.deepEqual({ message: winner.message, reason: winner.reason, cause: winner.cause }, { message: 'Stopped waiting', reason: undefined, cause: undefined });
+					} else if (scenario.startsWith('reject_')) {
+						assert.equal(winner, workError);
+					} else {
+						assert.equal(winner, 'work result');
+					}
+					assert.deepEqual({ removals, listening: events.hasListeners(), reported, logs }, {
+						removals: 1,
+						listening: false,
+						reported: scenario.endsWith('_throw') ? [cleanupError] : [],
+						logs: scenario === 'reporter_throw' ? [[cleanupError, reportingError]] : [],
+					});
+					work.resolve('late result');
+					events.fire();
+					await new Promise(resolve => setImmediate(resolve));
+					assert.equal(results[0], winner);
+					assert.deepEqual({ count: results.length, removals }, { count: 1, removals: 1 });
+				} finally {
+					setUnexpectedErrorHandler(originalHandler);
+					console.error = originalConsoleError;
+				}
+			`], { encoding: 'utf8', timeout: 10_000 });
+			assert.equal(result.status, 0, result.stderr);
+		});
+	}
+});
+
 test('timeout settles asynchronously', async () => {
 	let settled = false;
 	const pending = timeout(0).then(() => {

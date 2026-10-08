@@ -84,20 +84,47 @@ export function raceCancellation<T>(promise: Promise<T>, token: CancellationToke
 }
 
 export function raceCancellationError<T>(promise: PromiseLike<T>, cancellation: AbortSignal | CancellationToken, message = 'Operation cancelled'): Promise<T> {
-	if (isCancellationRequested(cancellation)) return Promise.reject(new CancellationError(message, cancellationReason(cancellation)));
+	const initialCancellation = isCancellationRequested(cancellation) ? new CancellationError(message, cancellationReason(cancellation)) : undefined;
 	return new Promise<T>((resolve, reject) => {
-		const cancel = (): void => {
-			disposable.dispose();
-			reject(new CancellationError(message, cancellationReason(cancellation)));
+		let subscription: IDisposable | undefined;
+		const release = (): void => {
+			const current = subscription;
+			subscription = undefined;
+			try {
+				current?.dispose();
+			} catch (error) {
+				try {
+					onUnexpectedError(error);
+				} catch (reportingError) {
+					console.error('Unexpected error while reporting rejecting cancellation cleanup error', error, reportingError);
+				}
+			}
 		};
-		const disposable = subscribeCancellation(cancellation, cancel);
-		Promise.resolve(promise).then(value => {
-			disposable.dispose();
-			resolve(value);
-		}, error => {
-			disposable.dispose();
-			reject(error);
-		});
+		const cancel = (): void => {
+			// Capture the cancellation cause and fix the winner before cleanup can reenter.
+			reject(new CancellationError(message, cancellationReason(cancellation)));
+			release();
+		};
+		try {
+			if (initialCancellation) {
+				reject(initialCancellation);
+			} else {
+				subscription = subscribeCancellation(cancellation, cancel);
+				// A synchronous registration can cancel before returning its cleanup handle.
+				if (isCancellationRequested(cancellation)) {
+					cancel();
+				}
+			}
+		} finally {
+			// Even a cancelled or failed subscription must keep observing the already-started work.
+			Promise.resolve(promise).then(value => {
+				resolve(value);
+				release();
+			}, error => {
+				reject(error);
+				release();
+			});
+		}
 	});
 }
 

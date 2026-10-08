@@ -1,6 +1,6 @@
 # Base 异步取消与生命周期对齐
 
-本批只修复 `raceCancellation` 的取消订阅收尾、预取消后的晚拒绝处理，以及清理失败/重入时的完成语义。剪贴板 Paste/Cut 已有真实调用链；不增加异步 API、平行 owner 或 UI 公共接口。
+两个独立切片分别沿剪贴板 Paste/Cut 与 TextMate catalog 的真实调用链，修复 value/rejecting cancellation race 的预取消晚拒绝与订阅收尾。各自保留原结果、原错误与取消契约；不增加异步 API、平行 owner 或 UI 公共接口。
 
 ## 基线与准入
 
@@ -25,7 +25,7 @@
 - 本轮已修复：取消分支等底层 Promise 结束才释放订阅；预取消分支没有观察原 Promise 晚拒绝；成功返回后的额外 microtask 才释放订阅。
 - 实现说明：race 自己拥有唯一订阅；原 Promise 成功、失败或 token 取消时，先同步固定外层 Promise 的胜者，再同步尝试清理，await 调用方的下一 microtask 仍发生在清理之后。这样清理重入无法改变原成功、原错误或取消默认值。原 Promise 的两个处理器始终建立，预取消仍先返回默认值；注册期间同步取消也收尾返回的订阅，重复释放不会重复操作资源。
 - 清理失败语义：按现有 base `CancellationTokenSource`/`Emitter` 边界报告给 `onUnexpectedError`，不替换已固定的 race 结果，也不让忽略的 `.then` 派生 Promise 产生拒绝。报告器同步抛错时用现有 `console.error` 兜底保留原清理错误与报告错误。默认 unexpected-error handler 的报告行为不被修改或静默关闭。
-- 不在本批：AbortSignal 专用 `raceCancellationError`、其他 async helper、Search 基础输入、Notifications、Editor 保存模型。
+- 第一切片不包括 `raceCancellationError`；它在下方单独记录。其他 async helper、Search 基础输入、Notifications、Editor 保存模型均不在两个切片内。
 
 ## 验收步骤
 
@@ -52,7 +52,26 @@
 - `pnpm exec prettier --check base-async-todo.md`：通过。
 - Warning：原有 Clipboard 测试继续输出 jsdom canvas 未实现日志；新增测试用自己拥有且恢复的 mock，没有新增该 warning。
 - 未运行 Web/Electron 产品 Playwright、其他平台或全套所有 unit suites；这份 E3 验收不提升为 E4。
+- 第一切片已原子发布为 `2dec0c4324ad018351986902f486aeee1513da5a`，远端 ref 与精确四文件均复核。该提交 CI 的 Spelling 通过；Formatting 报告 95 个既有文件，四个 touched 文件均不在其中。Frontend/Linux 全套执行 4,823 项后因另外五个测试文件失败，Windows/macOS 取消；不能宣称整套 CI 通过。相关修复由其他 owner 独立处理。
 
 ## 下一验收
 
-完成本批原子发布后核对远端精确四路径与该提交 CI；整体 Web/Electron 产品行为仍须在最终组合源码验收。新的 async 边界另从真实消费者选择并先复现，不把其他上游成员差异当作实现清单。
+第一切片的发布与 CI 已核对；第二切片按下方独立验收。整体 Web/Electron 产品行为仍须在最终组合源码验收。新的 async 边界另从真实消费者选择并先复现，不把其他上游成员差异当作实现清单。
+
+## 第二切片：TextMate 取消后仍观察已启动的工作
+
+- 基线：`c6d6db1ef0171832536c6ff16e87a939c8c8a813`，独立本地分支 `base-cancel-error`；起始工作树与 index 均为空。第一切片 `2dec0c4` 已发布，`raceCancellation` 的完整字节已单独锁定，本切片不得改变它。
+- 准入链：TextMateGrammarService 注册/替换语法 → `materializeTextMateGrammarCatalog` 同步启动 `loadGrammar` → loader 在启动期间取消 signal → `raceCancellationError` → 调用方收到分类取消、已启动的 catalog Promise.all 仍被观察 → 旧 loader 晚失败或晚成功都不能产生未处理拒绝。
+- 唯一 owner：base 的 rejecting race 拥有自己的取消订阅与外层 Promise；TextMate 服务继续拥有 revision、catalog 与 loader 生命周期，不向 base 移业务状态，不取消共享底层工作。
+- 准确写入边界：`src/ash/base/common/async.ts` 中的 `raceCancellationError`、`src/ash/base/test/common/async.test.ts`、既有 `src/ash/workbench/services/textMate/test/common/textMateGrammarService.test.ts`、本文件。TextMate 生产源码与其他 async helper 只读。
+- 已复现（只读实际运行）：稳定编译产物的真实 catalog 入口在 loader 中同步取消后正常返回 CancellationError 并保留原 reason；loader 晚失败使 strict 子进程退出 1，晚成功也因 catalog 的后置 abort guard 拒绝而退出 1。入口前已取消的对照通过，loader 调用 0 次；这是不同的入口语义，不能统改为 CancellationError。
+- 当前契约：保留 `PromiseLike<T>` 同化，正常 work 的原值/原错误，取消时既有 CancellationError/message/reason/cause，以及 catalog 入口 `AbortSignal.throwIfAborted` 的原生 reason/AbortError 行为。清理抛错、重入和注册期间取消也必须验证，不能机械套用 value race 的代码。
+- 正式红测：新增真实 catalog strict 回归、原生入口对照、PromiseLike/原错误控制，以及 rejecting race 清理异常/重入/注册期取消回归后，原生产源码的标准两文件 `test:unit` 实际执行 57 项，12 失败（base 10、TextMate 2），退出 1。独立 reviewer 建议再保留注册自身抛错的契约回归；将 helper 暂复基线后的标准 `test:unit --run src/ash/base/test/common/async.test.ts --grep 'failed subscription registration'` 实际执行 1 项，因底层晚拒绝产生 strict 未处理拒绝而失败。前两次 fixture 类型失败已修正，不作为红测证据。
+- 原 owner 修复：预取消仍立即固定既有 CancellationError，但所有分支都保留 PromiseLike 同化与原工作的成功/拒绝处理器。成功、原错误、取消均先固定外层胜者，再清理唯一订阅；清理失败沿既有 unexpected-error 报告契约，报告器抛错继续保留两个错误。注册期间同步取消会清理返回的 handle；注册失败也观察已经启动的工作。TextMate 入口原生 abort guard 不变。
+- 标准绿测：最终五文件 `test:unit` 选择 async、cancellation、lifecycle、Clipboard、TextMateGrammarService，实际 100 项（44/16/21/5/14）与 runner 5 项通过，退出 0；入口的 common 类型检查、完整 test TypeScript 编译与本树正常 generated 准备均通过。
+- 生产构建：最终源码 `pnpm run build:renderer` 的 common/renderer 类型编译与正常 Renderer 生产打包通过，退出 0。产物在本树生成，未复制其他 worktree 的 protocol 或构建输出；仅有既有 `PLUGIN_TIMINGS` 提示。
+- 集成复验：fetch 最新 main `721e4297e9982c8fab4e3df4c87ebfe41466efff` 后，干净检查树 apply-check 四路径通过；验证分支无冲突 fast-forward 并保持四任务 blob 不变。在该最新基线重新执行标准 100 项与 runner 5 项、`build:renderer` 均退出 0，生产与测试编译 hash 仍与独立 review 一致。
+- 最终发布基线：恢复集成后 fetch main `f7d93765cf32a5cca44000c4748eeb3a7edfb3c3`，新增仅三个其他测试 fixture。验证分支无冲突 fast-forward，重新执行标准 100 项与 runner 5 项、`build:renderer` 均退出 0；生产与测试编译 hash 再次核对不变。
+- 独立 review：稳定产物的 Node `24.21.0` strict 模式 78/78 场景通过。覆盖真实 AbortSignal/token、三胜者与清理失败/重入/报告器抛错、PromiseLike/跨 realm Promise、注册失败、reason/cause，以及真实 TextMate Registry/Catalog/Service 的 supersession/disposal。helper 外字节、已发布 `raceCancellation` 与生产/编译 SHA256 在验收前后完全不变；没有本切片阻塞。
+- 后续验收：按最新基线原子发布后核对远端精确四路径与该提交 CI。未验证 Service 同步重入注册、全套 CI 或产品 Playwright，不将本次定向测试与构建提升为这些验收。
+- 非本批：`Delayer` 在当前 `src/ash` 生产中没有调用方；`Throttler`/`ThrottledDelayer` 没有当前生产调用边，不因名字存在于上游而造功能。已读取的 Terminal timeout 由调用方 finally 主动 cancel，尚未复现它自身的缺口。

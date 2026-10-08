@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { TextMateGrammarService } from "../../common/textMateGrammarService.js";
+import { materializeTextMateGrammarCatalog } from "../../common/textMateGrammarCatalog.js";
+import { TextMateGrammarRegistry } from "../../common/textMateGrammarRegistry.js";
+import { spawnSync } from 'node:child_process';
 
 test("grammar service materializes registered contributions into its catalog", async () => {
 	using service = new TextMateGrammarService();
@@ -159,6 +162,67 @@ test("prepared grammars reject a registry change before commit", async () => {
 	assert.throws(() => prepared.commit(), /registry changed after preparation/);
 	const catalog = await service.whenReady();
 	assert.deepEqual(catalog.grammars.map(entry => entry.scopeName), ["source.old", "source.external"]);
+});
+
+for (const outcome of ['resolve', 'reject'] as const) {
+	test(`materialization observes a late loader ${outcome} after cancellation during loading`, () => {
+		const catalogModule = new URL('../../common/textMateGrammarCatalog.js', import.meta.url).href;
+		const registryModule = new URL('../../common/textMateGrammarRegistry.js', import.meta.url).href;
+		const asyncModule = new URL('../../../../../base/common/async.js', import.meta.url).href;
+		const errorsModule = new URL('../../../../../base/common/errors.js', import.meta.url).href;
+		const result = spawnSync(process.execPath, ['--unhandled-rejections=strict', '--input-type=module', '--eval', `
+			import assert from 'node:assert/strict';
+			import { materializeTextMateGrammarCatalog } from ${JSON.stringify(catalogModule)};
+			import { TextMateGrammarRegistry } from ${JSON.stringify(registryModule)};
+			import { promiseWithResolvers } from ${JSON.stringify(asyncModule)};
+			import { isCancellationError } from ${JSON.stringify(errorsModule)};
+			const controller = new AbortController();
+			const reason = new Error('catalog superseded during grammar loading');
+			const work = promiseWithResolvers();
+			let loads = 0;
+			using registry = new TextMateGrammarRegistry();
+			using registration = registry.register({
+				scopeName: 'source.audit', filePath: 'audit.tmLanguage.json',
+				loadGrammar() { loads++; controller.abort(reason); return work.promise; },
+			});
+			const snapshot = registry.currentSnapshot;
+			const pending = materializeTextMateGrammarCatalog(snapshot, snapshot.revision, controller.signal);
+			await assert.rejects(pending, error => isCancellationError(error) && error.reason === reason && error.cause === reason);
+			assert.equal(loads, 1);
+			if (${JSON.stringify(outcome)} === 'resolve') {
+				work.resolve({ scopeName: 'source.audit', patterns: [] });
+			} else {
+				work.reject(new Error('late grammar IO failure'));
+			}
+			await new Promise(resolve => setImmediate(resolve));
+		`], { encoding: 'utf8', timeout: 10_000 });
+		assert.equal(result.status, 0, result.stderr);
+	});
+}
+
+for (const reason of [new Error('catalog already stopped'), undefined]) {
+	test(`materialization keeps ${reason ? 'custom' : 'default'} AbortSignal semantics before starting any loader`, async () => {
+		const controller = new AbortController();
+		controller.abort(reason);
+		let loads = 0;
+		using registry = new TextMateGrammarRegistry();
+		using registration = registry.register({
+			scopeName: 'source.audit', filePath: 'audit.tmLanguage.json', loadGrammar: () => { loads++; return grammar('source.audit'); },
+		});
+		const snapshot = registry.currentSnapshot;
+		await assert.rejects(materializeTextMateGrammarCatalog(snapshot, snapshot.revision, controller.signal), error => error === controller.signal.reason);
+		assert.equal(loads, 0);
+	});
+}
+
+test('live materialization preserves the original loader failure', async () => {
+	const failure = new Error('grammar IO failed');
+	using registry = new TextMateGrammarRegistry();
+	using registration = registry.register({
+		scopeName: 'source.audit', filePath: 'audit.tmLanguage.json', loadGrammar: () => Promise.reject(failure),
+	});
+	const snapshot = registry.currentSnapshot;
+	await assert.rejects(materializeTextMateGrammarCatalog(snapshot, snapshot.revision, new AbortController().signal), error => error === failure);
 });
 
 function grammar(scopeName: string): string {
