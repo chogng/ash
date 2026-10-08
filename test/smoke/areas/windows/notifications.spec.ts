@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
 import { mkdir, readFile, realpath, rmdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join, relative } from 'node:path';
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import type { PlaywrightApplication } from '../../../automation/playwrightDriver.js';
+import type { Workbench } from '../../../automation/workbench.js';
 import { expect, test } from '../../../automation/test.js';
 import { Menus } from '../../../automation/menus.js';
+import { waitForElectronWindowState } from '../../../automation/electronDriver.js';
 
 async function notificationClipboard(application: PlaywrightApplication, page: Page): Promise<{ read(): Promise<string>; }> {
 	// Start with a fixture value; never read or retain the user's previous clipboard.
@@ -17,6 +20,35 @@ async function notificationClipboard(application: PlaywrightApplication, page: P
 	await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
 	await page.evaluate(marker => navigator.clipboard.writeText(marker), marker);
 	return { read: () => page.evaluate(() => navigator.clipboard.readText()) };
+}
+
+async function useCustomNotificationMenu(application: PlaywrightApplication, workbench: Workbench): Promise<void> {
+	if (!('windows' in application)) return;
+	await workbench.settingsEditor.openUserSettingsUI();
+	await workbench.settingsEditor.selectGroup('workbench');
+	await workbench.settingsEditor.selectCategory('layout');
+	await workbench.settingsEditor.element.locator('[data-configuration-key="window.menuStyle"]').getByRole('combobox').click();
+	await workbench.page.getByRole('option', { name: 'Custom', exact: true }).click();
+	await workbench.page.keyboard.press('Escape');
+}
+
+async function focusNotificationWindow(application: PlaywrightApplication, page: Page): Promise<void> {
+	if (!('windows' in application)) throw new Error('Expected Electron windows');
+	// OS keyboard delivery also requires activation of this isolated macOS application.
+	if (process.platform === 'darwin') await application.evaluate(({ app }) => app.focus({ steal: true }));
+	const window = await application.browserWindow(page);
+	try { await window.evaluate(window => window.focus()); }
+	finally { await window.dispose(); }
+	await waitForElectronWindowState(application, page, { focused: true });
+}
+
+async function pressNotificationContextMenuKey(application: PlaywrightApplication, row: Locator): Promise<void> {
+	if (!('windows' in application) || process.platform !== 'darwin') { await row.press('Shift+F10'); return; }
+	const pid = application.process().pid;
+	assert.ok(Number.isSafeInteger(pid));
+	// Exercise AppKit's keyboard input when reopening a macOS system menu.
+	// Renderer-injected keys do not enter the same OS event loop.
+	await new Promise<void>((resolve, reject) => execFile('osascript', ['-e', `tell application "System Events"\n tell first application process whose unix id is ${pid}\n  key code 109 using {shift down}\n end tell\nend tell`], { timeout: 10_000 }, error => { if (error) reject(error); else resolve(); }));
 }
 
 for (const input of ['mouse', 'ContextMenu', 'Shift+F10'] as const) {
@@ -41,13 +73,23 @@ for (const input of ['mouse', 'ContextMenu', 'Shift+F10'] as const) {
 	});
 }
 
-test('notification Copy Text reports the real browser clipboard permission rejection once', async ({ target, application, workbench }) => {
+test('notification Copy Text reports the real browser clipboard permission rejection once', async ({ target, application, workbench }, testInfo) => {
 	test.skip(target.kind !== 'browser', 'Chromium owns the real browser clipboard permission boundary.');
 	const page = workbench.page;
 	await notificationClipboard(application, page);
 	const session = await page.context().newCDPSession(page);
-	await session.send('Browser.setPermission', { permission: { name: 'clipboard-write' }, setting: 'denied', origin: new URL(page.url()).origin });
+	const { targetInfo } = await session.send('Target.getTargetInfo');
+	const browserContextId = targetInfo.browserContextId;
+	assert.ok(browserContextId);
 	try {
+		await page.context().clearPermissions();
+		// Browser-domain permission commands need the page's isolated context. Deny
+		// both clipboard variants rather than retain the marker's read/write grant.
+		for (const allowWithoutSanitization of [false, true]) {
+			await session.send('Browser.setPermission', { browserContextId, permission: { name: 'clipboard-write', allowWithoutSanitization }, setting: 'denied', origin: new URL(page.url()).origin });
+		}
+		const permission = await page.evaluate(async () => (await navigator.permissions.query({ name: 'clipboard-write' as PermissionName })).state);
+		expect(permission).toBe('denied');
 		await workbench.quickaccess.runCommand('notifications.clearAll');
 		await workbench.quickaccess.runCommand('showEditorScreenReaderNotification');
 		await workbench.quickaccess.runCommand('notifications.showList');
@@ -60,9 +102,10 @@ test('notification Copy Text reports the real browser clipboard permission rejec
 		await expect(center.locator('[data-notification-id]')).toHaveCount(2);
 		await expect(center.locator('.ash-notification-message').filter({ hasText: /denied|not allowed|permissions/i })).toHaveCount(1);
 		await expect(row.getByRole('button', { name: 'Always Enable', exact: true })).toBeVisible();
+		await testInfo.attach('notification-clipboard-permission', { body: JSON.stringify({ browserContextId, permission, messages: await center.locator('.ash-notification-message').allTextContents() }), contentType: 'application/json' });
 	} finally {
-		await session.send('Browser.setPermission', { permission: { name: 'clipboard-write' }, setting: 'granted', origin: new URL(page.url()).origin });
-		await session.detach();
+		try { await page.context().clearPermissions(); await page.context().grantPermissions(['clipboard-read', 'clipboard-write']); }
+		finally { await session.detach(); }
 	}
 });
 
@@ -90,14 +133,7 @@ test('notification Copy Text copies a real backend action error without its cont
 
 test('notification Copy Text menu Escape restores the row before center Escape restores its origin', async ({ application, workbench }) => {
 	const page = workbench.page;
-	if ('windows' in application) {
-		await workbench.settingsEditor.openUserSettingsUI();
-		await workbench.settingsEditor.selectGroup('workbench');
-		await workbench.settingsEditor.selectCategory('layout');
-		await workbench.settingsEditor.element.locator('[data-configuration-key="window.menuStyle"]').getByRole('combobox').click();
-		await page.getByRole('option', { name: 'Custom', exact: true }).click();
-		await page.keyboard.press('Escape');
-	}
+	await useCustomNotificationMenu(application, workbench);
 	const clipboard = await notificationClipboard(application, page);
 	await workbench.quickaccess.runCommand('notifications.clearAll');
 	await workbench.quickaccess.runCommand('showEditorScreenReaderNotification');
@@ -121,18 +157,108 @@ test('notification Copy Text menu Escape restores the row before center Escape r
 
 interface NotificationPopupEvidence {
 	readonly windowId: number;
+	readonly windowFocused: boolean;
+	readonly windowVisible: boolean;
+	readonly windowBounds: { x: number; y: number; width: number; height: number; } | undefined;
+	readonly contentBounds: { x: number; y: number; width: number; height: number; } | undefined;
+	readonly zoom: number | undefined;
+	readonly x: number | undefined;
+	readonly y: number | undefined;
+	readonly positioningItem: number | undefined;
+	readonly frameRoutingId: number | undefined;
 	readonly labels: readonly string[];
+	readonly popupOrder: number;
+	popupReturnOrder?: number;
+	showOrder?: number;
+	closeEventOrder?: number;
 	callback: boolean;
+	callbackOrder?: number;
 	closeCalls: number;
+	closeRequestOrder?: number;
+	closeReturnOrder?: number;
 }
 
 interface NotificationPopupProbe {
 	readonly evidence: NotificationPopupEvidence[];
+	readonly writes: { text: string; order: number; }[];
 	restore(): void;
 }
 
-test('notification backend completion cancels a genuine Electron popup and releases the next presentation', async ({ target, application, workbench }, testInfo) => {
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires the real desktop host and backend.');
+async function notificationPopupProbe(application: PlaywrightApplication): Promise<{ read(): Promise<Pick<NotificationPopupProbe, 'evidence' | 'writes'>>; restore(): Promise<void>; }> {
+	if (!('windows' in application)) throw new Error('Expected Electron windows');
+	await application.evaluate(({ Menu, clipboard, BrowserWindow }) => {
+		const state = globalThis as typeof globalThis & { ashNotificationPopupProbe?: NotificationPopupProbe; };
+		if (state.ashNotificationPopupProbe) throw new Error('Another notification popup probe is active');
+		const popup = Menu.prototype.popup;
+		const close = Menu.prototype.closePopup;
+		const write = clipboard.writeText;
+		const opened: { menu: InstanceType<typeof Menu>; window: Parameters<typeof close>[0]; record: NotificationPopupEvidence; removeListeners(): void; }[] = [];
+		const evidence: NotificationPopupEvidence[] = [];
+		const writes: NotificationPopupProbe['writes'] = [];
+		let order = 0;
+		Menu.prototype.popup = function (options) {
+			const window = options?.window;
+			const record: NotificationPopupEvidence = {
+				windowId: window?.id ?? -1,
+				windowFocused: window?.isFocused() ?? false,
+				windowVisible: window?.isVisible() ?? false,
+				windowBounds: window?.getBounds(),
+				contentBounds: window?.getContentBounds(),
+				zoom: window instanceof BrowserWindow ? window.webContents.getZoomFactor() : undefined,
+				x: options?.x,
+				y: options?.y,
+				positioningItem: options?.positioningItem,
+				frameRoutingId: options?.frame?.routingId,
+				labels: this.items.map(item => item.label),
+				popupOrder: ++order,
+				callback: false,
+				closeCalls: 0,
+			};
+			evidence.push(record);
+			const show = (): void => { record.showOrder = ++order; };
+			const closed = (): void => { record.closeEventOrder = ++order; };
+			this.once('menu-will-show', show);
+			this.once('menu-will-close', closed);
+			opened.push({ menu: this, window: options?.window, record, removeListeners: () => { this.off('menu-will-show', show); this.off('menu-will-close', closed); } });
+			// Keep the actual OS popup and callback; observing them must not settle the product request.
+			try { return popup.call(this, { ...options, callback: () => { record.callbackOrder = ++order; record.callback = true; options?.callback?.(); } }); }
+			finally { record.popupReturnOrder = ++order; }
+		};
+		Menu.prototype.closePopup = function (window) {
+			const current = opened.find(item => item.menu === this);
+			if (current) { current.record.closeCalls++; current.record.closeRequestOrder = ++order; }
+			close.call(this, window);
+			if (current) current.record.closeReturnOrder = ++order;
+		};
+		clipboard.writeText = function (text) {
+			writes.push({ text, order: ++order });
+			return write.call(this, text);
+		};
+		state.ashNotificationPopupProbe = {
+			evidence, writes,
+			restore() {
+				Menu.prototype.popup = popup;
+				Menu.prototype.closePopup = close;
+				clipboard.writeText = write;
+				for (const item of opened) {
+					item.removeListeners();
+					if (!item.record.callback) close.call(item.menu, item.window);
+				}
+				delete state.ashNotificationPopupProbe;
+			},
+		};
+	});
+	return {
+		read: () => application.evaluate(() => {
+			const { evidence, writes } = (globalThis as typeof globalThis & { ashNotificationPopupProbe: NotificationPopupProbe; }).ashNotificationPopupProbe;
+			return { evidence, writes };
+		}),
+		restore: () => application.evaluate(() => (globalThis as typeof globalThis & { ashNotificationPopupProbe: NotificationPopupProbe; }).ashNotificationPopupProbe.restore()),
+	};
+}
+
+test('notification Copy Text selected in a genuine Electron popup writes after its OS callback', async ({ target, application, workbench }, testInfo) => {
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || process.platform !== 'darwin', 'Uses macOS input targeted at the owned Electron process.');
 	if (!('windows' in application)) throw new Error('Expected Electron windows');
 	test.skip(!await workbench.menus.isSystemMenu(application), 'Requires the system menu configuration.');
 	const page = workbench.page;
@@ -140,67 +266,87 @@ test('notification backend completion cancels a genuine Electron popup and relea
 	await workbench.quickaccess.runCommand('notifications.clearAll');
 	await workbench.quickaccess.runCommand('showEditorScreenReaderNotification');
 	await workbench.quickaccess.runCommand('notifications.showList');
-	const failure = await blockConfigurationWrite(page, application);
-	await application.evaluate(({ Menu }) => {
-		const state = globalThis as typeof globalThis & { ashNotificationPopupProbe?: NotificationPopupProbe; };
-		if (state.ashNotificationPopupProbe) throw new Error('Another notification popup probe is active');
-		const popup = Menu.prototype.popup;
-		const close = Menu.prototype.closePopup;
-		const opened: { menu: InstanceType<typeof Menu>; window: Parameters<typeof close>[0]; record: NotificationPopupEvidence; }[] = [];
-		const evidence: NotificationPopupEvidence[] = [];
-		Menu.prototype.popup = function (options) {
-			const record = { windowId: options?.window?.id ?? -1, labels: this.items.map(item => item.label), callback: false, closeCalls: 0 };
-			evidence.push(record);
-			opened.push({ menu: this, window: options?.window, record });
-			// Keep the actual OS popup and callback; observing them must not settle the product request.
-			popup.call(this, { ...options, callback: () => { record.callback = true; options?.callback?.(); } });
-		};
-		Menu.prototype.closePopup = function (window) {
-			const current = opened.find(item => item.menu === this);
-			if (current) current.record.closeCalls++;
-			close.call(this, window);
-		};
-		state.ashNotificationPopupProbe = {
-			evidence,
-			restore() {
-				Menu.prototype.popup = popup;
-				Menu.prototype.closePopup = close;
-				for (const item of opened) if (!item.record.callback) close.call(item.menu, item.window);
-				delete state.ashNotificationPopupProbe;
-			},
-		};
-	});
-	const evidence = () => application.evaluate(() => (globalThis as typeof globalThis & { ashNotificationPopupProbe: NotificationPopupProbe; }).ashNotificationPopupProbe.evidence);
+	const row = page.locator('.ash-notifications-center [data-notification-id]');
+	const id = await row.getAttribute('data-notification-id');
+	const message = await row.locator('.ash-notification-message').textContent();
+	const probe = await notificationPopupProbe(application);
 	try {
-		const center = page.locator('.ash-notifications-center');
-		const row = center.locator('[data-notification-id]').first();
+		await focusNotificationWindow(application, page);
 		await row.focus();
-		await row.press('Shift+F10');
-		await expect.poll(async () => (await evidence()).length).toBe(1);
-		// DOM click starts the real producer while the OS popup remains open. Its actual
-		// failed persistence adds a record, replaces the anchor, and cancels this request.
-		await row.getByRole('button', { name: 'Always Enable', exact: true }).evaluate(button => (button as HTMLButtonElement).click());
-		await expect(center.locator('.ash-notification-message').filter({ hasText: failure.message })).toHaveCount(1);
-		await expect.poll(async () => (await evidence())[0]).toMatchObject({ labels: ['Copy Text'], callback: true, closeCalls: 1 });
-		const nextRow = center.locator('[data-notification-id]').first();
-		await nextRow.focus();
-		await nextRow.press('Shift+F10');
-		await expect.poll(async () => (await evidence()).length).toBe(2);
-		await center.getByRole('button', { name: 'Clear All', exact: true }).evaluate(button => (button as HTMLButtonElement).click());
-		await expect.poll(async () => (await evidence())[1]).toMatchObject({ labels: ['Copy Text'], callback: true, closeCalls: 1 });
-		expect(await clipboard.read()).toBe('ash-notification-copy-fixture');
-		await failure.assertUnchanged();
-		await testInfo.attach('notification-real-popup', { body: JSON.stringify(await evidence()), contentType: 'application/json' });
+		await pressNotificationContextMenuKey(application, row);
+		await expect.poll(async () => (await probe.read()).evidence).toMatchObject([{ labels: ['Copy Text'], callback: false, closeCalls: 0 }]);
+		const pid = application.process().pid;
+		assert.ok(Number.isSafeInteger(pid));
+		// Playwright's renderer key events do not drive the macOS popup. Send real
+		// input only to this fixture's process and leave OS dispatch unchanged.
+		await new Promise<void>((resolve, reject) => execFile('osascript', ['-e', `tell application "System Events"\n tell first application process whose unix id is ${pid}\n  set frontmost to true\n  key code 125\n  key code 36\n end tell\nend tell`], { timeout: 10_000 }, error => { if (error) reject(error); else resolve(); }));
+		await expect.poll(() => clipboard.read()).toBe(message);
+		const result = await probe.read();
+		expect(result.evidence).toMatchObject([{ labels: ['Copy Text'], callback: true, closeCalls: 0 }]);
+		expect(result.writes.map(write => write.text)).toEqual([message]);
+		expect(result.evidence[0].callbackOrder).toBeLessThan(result.writes[0].order);
+		await expect(row).toHaveAttribute('data-notification-id', id!);
+		await expect(row.getByRole('button', { name: 'Always Enable', exact: true })).toBeVisible();
 	} finally {
-		try { await application.evaluate(() => (globalThis as typeof globalThis & { ashNotificationPopupProbe: NotificationPopupProbe; }).ashNotificationPopupProbe.restore()); }
-		finally { try { await failure.assertUnchanged(); } finally { await failure.dispose(); } }
+		try { await testInfo.attach('notification-real-popup-selection', { body: JSON.stringify(await probe.read()), contentType: 'application/json' }); }
+		finally { await probe.restore(); }
 	}
 });
+
+for (const waitForShow of [false, true]) {
+	test(`notification backend completion cancels a genuine Electron popup and releases the next presentation${waitForShow ? ' after its OS show event' : ''}`, async ({ target, application, workbench }, testInfo) => {
+		test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires the real desktop host and backend.');
+		if (!('windows' in application)) throw new Error('Expected Electron windows');
+		test.skip(!await workbench.menus.isSystemMenu(application), 'Requires the system menu configuration.');
+		const page = workbench.page;
+		const clipboard = await notificationClipboard(application, page);
+		await workbench.quickaccess.runCommand('notifications.clearAll');
+		await workbench.quickaccess.runCommand('showEditorScreenReaderNotification');
+		await workbench.quickaccess.runCommand('notifications.showList');
+		const failure = await blockConfigurationWrite(page, application);
+		const probe = await notificationPopupProbe(application);
+		const evidence = async () => (await probe.read()).evidence;
+		try {
+			const center = page.locator('.ash-notifications-center');
+			const row = center.locator('[data-notification-id]').first();
+			await focusNotificationWindow(application, page);
+			await row.focus();
+			await pressNotificationContextMenuKey(application, row);
+			await expect.poll(async () => (await evidence()).length).toBe(1);
+			// DOM click starts the real producer while the OS popup remains open. Its actual
+			// failed persistence adds a record, replaces the anchor, and cancels this request.
+			await row.getByRole('button', { name: 'Always Enable', exact: true }).evaluate(button => (button as HTMLButtonElement).click());
+			await expect(center.locator('.ash-notification-message').filter({ hasText: failure.message })).toHaveCount(1);
+			await expect.poll(async () => (await evidence())[0]).toMatchObject({ labels: ['Copy Text'], callback: true, closeCalls: 1 });
+			const nextRow = center.locator('[data-notification-id]').first();
+			// Confirm ownership stayed with this window without reactivating the app between popups.
+			await waitForElectronWindowState(application, page, { focused: true });
+			await nextRow.focus();
+			await pressNotificationContextMenuKey(application, nextRow);
+			await expect.poll(async () => (await evidence()).length).toBe(2);
+			if (waitForShow) await expect.poll(async () => Boolean((await evidence())[1].showOrder)).toBe(true);
+			await center.getByRole('button', { name: 'Clear All', exact: true }).evaluate(button => (button as HTMLButtonElement).click());
+			await expect.poll(async () => (await evidence())[1]).toMatchObject({ labels: ['Copy Text'], callback: true, closeCalls: 1 });
+			const records = await evidence();
+			for (const record of records) expect(record.closeRequestOrder).toBeLessThan(record.callbackOrder!);
+			expect(records[0].callbackOrder).toBeLessThan(records[1].popupOrder);
+			expect(await clipboard.read()).toBe('ash-notification-copy-fixture');
+			await failure.assertUnchanged();
+		} finally {
+			try { await testInfo.attach('notification-real-popup', { body: JSON.stringify(await probe.read()), contentType: 'application/json' }); }
+			finally {
+				try { await probe.restore(); }
+				finally { try { await failure.assertUnchanged(); } finally { await failure.dispose(); } }
+			}
+		}
+	});
+}
 
 test('notification copy menu cancellation preserves a genuine DialogService modal focus', async ({ target, application, workbench }) => {
 	test.skip(target.appServerMode !== 'required', 'Uses the production extension installation input dialog.');
 	const page = workbench.page;
-	test.skip(await workbench.menus.isSystemMenu(application), 'Browser menu and browser modal share document focus.');
+	await useCustomNotificationMenu(application, workbench);
+	expect(await workbench.menus.isSystemMenu(application)).toBe(false);
 	await workbench.quickaccess.runCommand('notifications.clearAll');
 	await workbench.quickaccess.runCommand('showEditorScreenReaderNotification');
 	await workbench.quickaccess.runCommand('notifications.showList');
