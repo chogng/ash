@@ -12,6 +12,7 @@ export default defineConfig({
 			output: rendererOutput,
 			input: {
 				appTools: resolve(import.meta.dirname, "appTools.html"),
+				browserView: resolve(import.meta.dirname, "browserView.html"),
 				composite: resolve(import.meta.dirname, 'composite.html'),
 				actionWidget: resolve(import.meta.dirname, 'actionWidget.html'),
 				search: resolve(import.meta.dirname, 'search.html'),

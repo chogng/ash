@@ -117,7 +117,7 @@ test('downloads report completion and cancellation and closing a page releases t
 		expect(await readFile(filename, 'utf8')).toBe('downloaded content');
 		await start('/pending', join(testWorkspace.directory, 'pending.txt'));
 		await expect(progress).toContainText('downloading');
-		await editor.getByRole('button', { name: 'Cancel downloads', exact: true }).click();
+		await workbench.menus.select(application, () => editor.getByRole('button', { name: 'More Actions', exact: true }).click(), ['Cancel downloads']);
 		await expect(progress).toContainText('cancelled');
 		await start('/pending', join(testWorkspace.directory, 'closed.txt'));
 		await expect(progress).toContainText('downloading');
@@ -166,7 +166,7 @@ test('website permission dialogs allow, remember, reset and deny the requesting 
 		await expect(editor.getByRole('status')).toHaveText('Permission granted');
 		await ask();
 		expect(await prompt()).toEqual([]);
-		await editor.getByRole('button', { name: 'Reset all website permissions', exact: true }).click();
+		await workbench.menus.select(application, () => editor.getByRole('button', { name: 'More Actions', exact: true }).click(), ['Reset all website permissions']);
 		await ask();
 		await expect.poll(prompt).toHaveLength(1);
 		await answer(1);
@@ -207,7 +207,7 @@ test('sharing a user page exposes only that page to the chosen thread and revoca
 			dialog.showMessageBox = ((...args: [Electron.MessageBoxOptions] | [Electron.BrowserWindow, Electron.MessageBoxOptions]) => new Promise<Electron.MessageBoxReturnValue>(respond => prompts.push({ options: args.at(-1) as Electron.MessageBoxOptions, respond }))) as typeof dialog.showMessageBox;
 		});
 		try {
-			await page.getByRole('button', { name: 'Share with Agent', exact: true }).click();
+			await workbench.menus.select(application, () => page.locator('.ash-browser-editor').getByRole('button', { name: 'More Actions', exact: true }).click(), ['Share with Agent']);
 			await expect.poll(() => electron.evaluate(() => (globalThis as unknown as { browserPrompts: BrowserPrompt[]; }).browserPrompts.map(prompt => prompt.options))).toMatchObject([{ title: 'Share with Agent', detail: 'This page is currently shared.', buttons: ['Revoke all access', 'Cancel'] }]);
 			await electron.evaluate(() => (globalThis as unknown as { browserPrompts: BrowserPrompt[]; }).browserPrompts.shift()!.respond({ response: 0, checkboxChecked: false }));
 			await expect(page.locator('.ash-browser-editor').getByRole('status')).toHaveText('This page is private.');
@@ -357,6 +357,215 @@ test('desktop browser agent observes loaded pages, edits fields and follows navi
 		await new Promise<void>(resolve => server.close(() => resolve()));
 	}
 });
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`desktop BrowserView navigation and accessibility stay usable in ${locale}`, async ({ target, application: initialApplication, workbench: initialWorkbench, restartWorkbench }, testInfo) => {
+		test.skip(target.kind !== 'electron', 'The integrated browser is a desktop capability');
+		let application = initialApplication;
+		let workbench = initialWorkbench;
+		await workbench.settingsEditor.openUserSettingsUI();
+		await workbench.settingsEditor.selectGroup('workbench');
+		await workbench.settingsEditor.selectCategory('layout');
+		await workbench.settingsEditor.element.locator('[data-configuration-key="window.menuStyle"]').getByRole('combobox').click();
+		await workbench.page.getByRole('option', { name: 'Custom', exact: true }).click();
+		await workbench.settingsEditor.element.locator('.ash-modal-editor-close').click();
+		if (locale === 'zh-CN') {
+			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+			const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
+			await picker.getByRole('combobox').fill('简体中文');
+			await picker.getByRole('combobox').press('Enter');
+			({ application, workbench } = await restartWorkbench());
+		}
+		const labels = locale === 'zh-CN' ? {
+			toolbar: '浏览器导航', address: '浏览器地址', webpage: '网页。按 F6 返回地址栏。', back: '后退', forward: '前进', reload: '重新加载', stop: '停止', go: '转到', help: '帮助',
+			loading: '正在加载网页…', failure: '无法加载页面：', helpTitle: '浏览器无障碍帮助', accessibleViewTitle: '无障碍帮助', helpText: '网页使用浏览器的无障碍树。', pageActions: ['分享给 Agent', '重置所有网站权限', '取消下载'],
+		} : {
+			toolbar: 'Browser navigation', address: 'Browser address', webpage: 'Webpage. Press F6 to return to the address field.', back: 'Back', forward: 'Forward', reload: 'Reload', stop: 'Stop', go: 'Go', help: 'Help',
+			loading: 'Loading page…', failure: 'Unable to load page:', helpTitle: 'Browser accessibility help', accessibleViewTitle: 'Accessibility Help', helpText: 'Webpages use the browser’s accessibility tree.', pageActions: ['Share with Agent', 'Reset all website permissions', 'Cancel downloads'],
+		};
+		let finishSlowLoad: (() => void) | undefined;
+		const server = createServer((request, response) => {
+			if (request.url === '/slow') {
+				finishSlowLoad = () => response.end('<title>Stopped page</title>');
+				return;
+			}
+			if (request.url === '/failed') { request.socket.destroy(); return; }
+			response.setHeader('Content-Type', 'text/html');
+			response.end('<title>Navigation page</title><input aria-label="Page keyboard input"><button onclick="document.title = \'Keyboard action\'">Page action</button>');
+		});
+		await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+		const address = server.address();
+		if (!address || typeof address === 'string') { throw new Error('Missing fixture endpoint'); }
+		const url = `http://127.0.0.1:${address.port}/`;
+		const electron = application as ElectronApplication;
+		const page = workbench.page;
+		try {
+			await installBrowserNetworkPolicy(electron, url);
+			await workbench.quickaccess.runCommand('ash.browser.open');
+			const editor = page.locator('.ash-browser-editor');
+			await expect(editor).toBeVisible();
+			await expect(editor.getByRole('toolbar', { name: labels.toolbar, exact: true })).toBeVisible();
+			await expect(editor.locator('.ash-browser-viewport')).toHaveAttribute('aria-label', labels.webpage);
+			const addressField = editor.getByRole('textbox', { name: labels.address, exact: true });
+			for (const name of [labels.back, labels.forward, labels.reload, labels.go, labels.help]) {
+				await expect(editor.getByRole('button', { name, exact: true })).toBeVisible();
+			}
+			await addressField.fill(url);
+			await addressField.press('Enter');
+			await expect(editor.getByRole('status')).toHaveText('Navigation page');
+			const hostWindow = await electron.browserWindow(page);
+			for (const [size, width] of [['normal', 1200], ['narrow', 800]] as const) {
+				await hostWindow.evaluate((window, width) => window.setSize(width, 800), width);
+				await expect.poll(() => page.evaluate(() => window.innerWidth)).toBe(width);
+				const geometry = await editor.locator('.ash-browser-toolbar').evaluate(toolbar => {
+					const bounds = toolbar.getBoundingClientRect();
+					const controls = [toolbar.querySelector('input')!, ...toolbar.querySelectorAll('button')];
+					const rectangles = controls.map(control => control.getBoundingClientRect());
+					return {
+						toolbarWidth: bounds.width, addressWidth: rectangles[0]!.width,
+						contained: rectangles.every(rect => rect.width > 0 && rect.height > 0 && rect.left >= bounds.left && rect.right <= bounds.right && rect.top >= bounds.top && rect.bottom <= bounds.bottom),
+						nonOverlapping: rectangles.every((rect, index) => rectangles.slice(index + 1).every(other => rect.right <= other.left || other.right <= rect.left || rect.bottom <= other.top || other.bottom <= rect.top)),
+						unobscured: controls.every((control, index) => {
+							const rect = rectangles[index]!;
+							const target = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+							return target !== null && control.contains(target);
+						}),
+						singleLine: [...toolbar.querySelectorAll('button')].every(button => {
+							const bounds = button.getBoundingClientRect();
+							return bounds.height <= 32 && button.scrollHeight <= button.clientHeight && button.scrollWidth <= button.clientWidth;
+						}),
+						overflow: toolbar.scrollWidth > toolbar.clientWidth,
+					};
+				});
+				await testInfo.attach(`browser-navigation-${locale}-${size}`, { body: await page.screenshot(), contentType: 'image/png' });
+				await testInfo.attach(`browser-geometry-${locale}-${size}`, { body: JSON.stringify(geometry), contentType: 'application/json' });
+				expect(geometry.addressWidth).toBeGreaterThanOrEqual(120);
+				expect(geometry).toMatchObject({ contained: true, nonOverlapping: true, unobscured: true, singleLine: true, overflow: false });
+			}
+			await hostWindow.dispose();
+			const more = editor.locator('.ash-browser-page-actions').getByRole('button', { name: locale === 'en' ? 'More Actions' : '更多操作', exact: true });
+			await more.focus();
+			await more.press('Enter');
+			for (const label of labels.pageActions) { await expect(page.getByRole('menuitem', { name: label, exact: true })).toBeVisible(); }
+			await page.keyboard.press('Escape');
+			await expect(page.getByRole('menu')).toHaveCount(0);
+			await expect(more).toBeFocused();
+			const sharing = await workbench.dialogs.expectMessage(application, labels.pageActions[0]!, async () => {
+				await more.press('Enter');
+				await page.keyboard.press('Home');
+				await page.keyboard.press('Enter');
+			});
+			expect(sharing.title).toBe(labels.pageActions[0]);
+			for (const index of [1, 2]) {
+				await more.focus(); await more.press('Enter'); await page.keyboard.press('Home');
+				for (let step = 0; step < index; step++) { await page.keyboard.press('ArrowDown'); }
+				await page.keyboard.press('Enter');
+				await expect(page.getByRole('menu')).toHaveCount(0);
+				await expect(more).toBeFocused();
+			}
+
+			await editor.locator('.ash-browser-viewport').focus();
+			await electron.evaluate(async ({ BrowserWindow }) => {
+				const view = BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).find(child => 'webContents' in child) as Electron.WebContentsView;
+				await view.webContents.executeJavaScript("history.pushState({}, '', '/routed'); document.title = 'Routed page';");
+			});
+			await expect(addressField).toHaveValue(`${url}routed`);
+			await editor.getByRole('button', { name: labels.back, exact: true }).click();
+			await expect(addressField).toHaveValue(url);
+			await editor.getByRole('button', { name: labels.forward, exact: true }).click();
+			await expect(addressField).toHaveValue(`${url}routed`);
+			const back = editor.getByRole('button', { name: labels.back, exact: true });
+			await back.focus(); await back.press('ArrowRight');
+			await expect(editor.getByRole('button', { name: labels.reload, exact: true })).toBeFocused();
+			await addressField.fill(`${url}slow`);
+			await addressField.press('Enter');
+			await expect.poll(() => finishSlowLoad !== undefined).toBe(true);
+			await expect(editor.getByRole('status')).toHaveText(labels.loading);
+			await editor.getByRole('button', { name: labels.stop, exact: true }).click();
+			await expect(editor.getByRole('button', { name: labels.reload, exact: true })).toBeEnabled();
+			await expect(editor.getByRole('status')).not.toHaveText(labels.loading);
+			await addressField.fill(`${url}failed`);
+			await addressField.press('Enter');
+			await expect(editor.getByRole('status')).toContainText(labels.failure);
+			const helpMessage = await workbench.dialogs.expectMessage(application, labels.helpTitle, () => editor.getByRole('button', { name: labels.help, exact: true }).click());
+			expect(helpMessage.message).toContain(labels.helpText);
+			await addressField.focus();
+			await addressField.press('Alt+F1');
+			const helpDialog = page.getByRole('dialog', { name: labels.accessibleViewTitle, exact: true });
+			await expect(helpDialog.getByRole('textbox')).toHaveValue(new RegExp(labels.helpText));
+			await testInfo.attach(`browser-help-${locale}`, { body: await page.screenshot(), contentType: 'image/png' });
+			await page.keyboard.press('Escape');
+			await expect(addressField).toBeFocused();
+			await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
+			await expect(editor).toHaveCount(0);
+			const urls = () => electron.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).filter(view => 'webContents' in view).map(view => (view as Electron.WebContentsView).webContents.getURL()));
+			await expect.poll(async () => (await urls()).filter(candidate => candidate.startsWith(url))).toEqual([]);
+		} finally {
+			server.closeAllConnections();
+			await new Promise<void>(resolve => server.close(() => resolve()));
+		}
+	});
+	test(`desktop BrowserView Enter hands keyboard input to the page and commands return to Workbench in ${locale}`, async ({ target, application: initialApplication, workbench: initialWorkbench, restartWorkbench }, testInfo) => {
+		test.skip(target.kind !== 'electron', 'Keyboard focus crosses real Electron WebContents');
+		let application = initialApplication;
+		let workbench = initialWorkbench;
+		if (locale === 'zh-CN') {
+			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+			const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
+			await picker.getByRole('combobox').fill('简体中文');
+			await picker.getByRole('combobox').press('Enter');
+			({ application, workbench } = await restartWorkbench());
+		}
+		const server = createServer((_request, response) => {
+			response.setHeader('Content-Type', 'text/html');
+			response.end('<title>Keyboard page</title><input aria-label="Page keyboard input"><button>Page action</button>');
+		});
+		await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+		const address = server.address();
+		if (!address || typeof address === 'string') { throw new Error('Missing keyboard fixture endpoint'); }
+		const url = `http://127.0.0.1:${address.port}/`;
+		const electron = application as ElectronApplication;
+		const page = workbench.page;
+		try {
+			await installBrowserNetworkPolicy(electron, url);
+			await workbench.quickaccess.runCommand('ash.browser.open');
+			const editor = page.locator('.ash-browser-editor');
+			const addressField = editor.getByRole('textbox', { name: locale === 'en' ? 'Browser address' : '浏览器地址', exact: true });
+			await addressField.fill(url); await addressField.press('Enter');
+			await expect(editor.getByRole('status')).toHaveText('Keyboard page');
+			const pageView = await electron.evaluateHandle(({ BrowserWindow }, url) => BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).find(child => 'webContents' in child && (child as Electron.WebContentsView).webContents.getURL() === url) as Electron.WebContentsView, url);
+			try {
+				// No test focus/click occurs after Enter: the product must hand keyboard input to the page.
+				await expect.poll(() => pageView.evaluate(view => view.webContents.isFocused())).toBe(true);
+				await pageView.evaluate(view => {
+					view.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Tab' });
+					view.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Tab' });
+				});
+				await expect.poll(() => pageView.evaluate(view => view.webContents.executeJavaScript("document.activeElement?.getAttribute('aria-label')"))).toBe('Page keyboard input');
+				await pageView.evaluate(view => {
+					for (const character of 'page text') { view.webContents.sendInputEvent({ type: 'char', keyCode: character }); }
+				});
+				await expect.poll(() => pageView.evaluate(view => view.webContents.executeJavaScript("document.querySelector('input').value"))).toBe('page text');
+				await pageView.evaluate(view => {
+					const modifiers: ('meta' | 'control' | 'shift')[] = process.platform === 'darwin' ? ['meta', 'shift'] : ['control', 'shift'];
+					view.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'P', modifiers });
+					view.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'P', modifiers });
+				});
+				const commands = workbench.quickaccess.element;
+				await expect(commands).toBeVisible();
+				await expect(commands.getByRole('combobox')).toBeFocused();
+				await page.keyboard.press('Escape');
+			} finally { await pageView.dispose(); }
+			await testInfo.attach(`browser-keyboard-${locale}`, { body: await page.screenshot(), contentType: 'image/png' });
+			await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
+			await expect(editor).toHaveCount(0);
+		} finally {
+			server.closeAllConnections();
+			await new Promise<void>(resolve => server.close(() => resolve()));
+		}
+	});
+
+}
 
 test('desktop browser opens visible pages, navigates history, resizes and releases closed tabs', async ({ target, application, workbench }) => {
 	test.skip(target.kind !== 'electron', 'The integrated browser is a desktop capability');

@@ -12,28 +12,26 @@
 .ash-browser-toolbar {
 	display: flex;
 	align-items: center;
+	flex-wrap: wrap;
 	flex: 0 0 auto;
 	gap: 4px;
 	padding: 4px;
 	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
 }
-.ash-browser-toolbar input {
-	flex: 1;
-	min-width: 0;
+.ash-browser-navigation,
+.ash-browser-page-actions {
+	flex: 0 0 auto;
 }
-.ash-browser-toolbar button,
-.ash-browser-toolbar input {
-	color: var(--ash-editor-foreground);
-	background: var(--ash-editor-background);
-	border: var(--ash-strokeThickness) solid var(--ash-border);
-	font: inherit;
+.ash-browser-page-actions {
+	margin-left: auto;
 }
-.ash-browser-toolbar :focus-visible {
-	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
-	outline-offset: -1px;
+.ash-browser-address {
+	flex: 1 1 120px;
+	min-width: 120px;
 }
-.ash-browser-toolbar button:disabled {
-	color: var(--ash-description-foreground);
+.ash-browser-toolbar.compact > .ash-browser-address {
+	order: -1;
+	flex-basis: 100%;
 }
 .ash-browser-status {
 	flex: 0 0 auto;

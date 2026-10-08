@@ -17,6 +17,9 @@ import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { IDialogsModel } from '../../../common/dialogs.js';
 import { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
+import type { IAction } from '../../../../base/common/actions.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import './media/browser.css';
 
 /** Workbench controls and geometry for one Main-owned web page. */
@@ -28,9 +31,9 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 	private viewportDomNode!: HTMLDivElement;
 	private statusDomNode!: HTMLDivElement;
 	private downloadDomNode!: HTMLDivElement;
-	private backDomNode!: HTMLButtonElement;
-	private forwardDomNode!: HTMLButtonElement;
-	private reloadDomNode!: HTMLButtonElement;
+	private addressInput!: InputBox;
+	private navigationToolbar!: WorkbenchToolBar;
+	private navigationActions: readonly IAction[] = [];
 	private model: IBrowserViewModel | undefined;
 	private readonly modelListeners = this._register(new DisposableStore());
 	private targetId: string | undefined;
@@ -66,24 +69,17 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 		this.domNode.className = 'ash-browser-editor';
 		const toolbar = h(document, 'div');
 		toolbar.className = 'ash-browser-toolbar';
-		toolbar.setAttribute('role', 'toolbar');
-		toolbar.setAttribute('aria-label', 'Browser navigation');
-		const button = (label: string, action: () => Promise<void>): HTMLButtonElement => {
-			const element = h(document, 'button'); element.type = 'button'; element.textContent = label;
-			this._register(addDisposableListener(element, 'click', () => { void action().catch(error => this.report(error)); }));
-			toolbar.append(element); return element;
-		};
-		this.backDomNode = button('Back', () => this.target().goBack());
-		this.forwardDomNode = button('Forward', () => this.target().goForward());
-		this.reloadDomNode = button('Reload', () => this.model?.state.loading ? this.target().stop() : this.target().reload());
-		this.addressDomNode = h(document, 'input');
-		this.addressDomNode.type = 'url'; this.addressDomNode.setAttribute('aria-label', 'Browser address');
-		this.addressDomNode.disabled = true;
-		this.addressDomNode.spellcheck = false;
-		toolbar.append(this.addressDomNode);
-		button('Go', () => this.navigate());
-		button('Help', () => this.showHelp());
+		const navigation = h(document, 'div');
+		navigation.className = 'ash-browser-navigation';
+		toolbar.append(navigation);
+		this.navigationToolbar = this._register(new WorkbenchToolBar(navigation, this.menus, { ariaLabel: localize({ bundle: 'ash.workbench', key: 'browser.navigationToolbar' }, 'Browser navigation') }));
+		this.setNavigationActions();
+		this.addressInput = this._register(new InputBox(toolbar, { presentation: 'compact', enabled: false, ariaLabel: localize({ bundle: 'ash.workbench', key: 'browser.address' }, 'Browser address') }));
+		this.addressInput.element.classList.add('ash-browser-address');
+		this.addressDomNode = this.addressInput.inputElement;
+		this.addressDomNode.type = 'url';
 		const sharing = h(document, 'div');
+		sharing.className = 'ash-browser-page-actions';
 		toolbar.append(sharing);
 		this.sharingToolbar = this._register(new WorkbenchToolBar(sharing, this.menus, { ariaLabel: localize({ bundle: 'ash.workbench', key: 'browser.pageActions' }, 'Page actions') }));
 		this.setPageActions();
@@ -94,7 +90,7 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 		this.downloadDomNode.setAttribute('aria-label', localize({ bundle: 'ash.workbench', key: 'browser.downloads' }, 'Downloads'));
 		this.viewportDomNode = h(document, 'div'); this.viewportDomNode.className = 'ash-browser-viewport';
 		this.viewportDomNode.tabIndex = 0;
-		this.viewportDomNode.setAttribute('aria-label', 'Webpage. Press F6 to return to the address field.');
+		this.viewportDomNode.setAttribute('aria-label', localize({ bundle: 'ash.workbench', key: 'browser.webpage' }, 'Webpage. Press F6 to return to the address field.'));
 		this._register(addDisposableListener(this.viewportDomNode, 'focus', () => { this.focusOutside = false; this.refreshLayout(); void this.update.then(() => this.target().focus()).catch(error => this.report(error)); }));
 		this.domNode.append(toolbar, this.statusDomNode, this.downloadDomNode, this.viewportDomNode); container.append(this.domNode);
 		super.create(this.domNode);
@@ -114,7 +110,12 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 					() => this.helpContent(), () => focused.focus(), AccessibilityVerbositySettingId.Browser);
 			},
 		}));
-		const observer = new ResizeObserver(() => this.refreshLayout()); observer.observe(this.viewportDomNode);
+		const observer = new ResizeObserver(entries => {
+			// The root owns available width. Changing its child's height must not feed back into the observed size.
+			if (entries.some(entry => entry.target === this.domNode)) { toolbar.classList.toggle('compact', toolbar.clientWidth < 320); }
+			this.refreshLayout();
+		});
+		observer.observe(this.domNode); observer.observe(this.viewportDomNode);
 		this._register(toDisposable(() => observer.disconnect()));
 		this._register(addDisposableListener(document.defaultView!, 'resize', () => this.refreshLayout()));
 		this._register(addDisposableListener<FocusEvent>(document, 'focusin', event => {
@@ -130,20 +131,20 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 		signal.throwIfAborted();
 		this.modelListeners.clear();
 		this.model = model;
-		this.addressDomNode.disabled = false;
+		this.addressInput.enabled = true;
 		this.targetId = model.id;
 		this.setPageActions();
 		this.modelListeners.add(model.onDidChangeState(state => this.render(state)));
 		this.modelListeners.add(model.onDidEvent(event => {
 			if (event.type === 'focusAddress') { this.focus(); }
-			if (event.type === 'loadFailed') { this.statusDomNode.textContent = `Unable to load page: ${event.errorDescription}`; }
-			if (event.type === 'renderProcessGone') { this.statusDomNode.textContent = `Page stopped: ${event.reason}`; }
+			if (event.type === 'loadFailed') { this.statusDomNode.textContent = localize({ bundle: 'ash.workbench', key: 'browser.loadFailure' }, 'Unable to load page: {0}', event.errorDescription); }
+			if (event.type === 'renderProcessGone') { this.statusDomNode.textContent = localize({ bundle: 'ash.workbench', key: 'browser.processGone' }, 'Page stopped: {0}', event.reason); }
 			if (event.type === 'downloadProgress') { this.downloadDomNode.hidden = false; this.downloadDomNode.textContent = localize({ bundle: 'ash.workbench', key: 'browser.downloadProgress' }, '{0}: {1} / {2} bytes ({3})', event.filename, event.receivedBytes, event.totalBytes, downloadState(event.state)); }
 		}));
 		this.render(model.state);
 		this.refreshLayout();
 	}
-	public override clearInput(): void { this.visible = false; this.addressDomNode.disabled = true; this.refreshLayout(); this.modelListeners.clear(); }
+	public override clearInput(): void { this.visible = false; this.addressInput.enabled = false; this.setNavigationActions(); this.refreshLayout(); this.modelListeners.clear(); }
 	public override layout(_dimension: IDimension): void { this.refreshLayout(); }
 	public override setVisible(visibility: boolean): void {
 		super.setVisible(visibility); this.visible = visibility; this.refreshLayout();
@@ -151,16 +152,47 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 	public override focus(): void {
 		this.addressDomNode.focus(); this.addressDomNode.select();
 		if (this.configuration.getValue<boolean>('accessibility.verbosity.browser')) {
-			this.statusDomNode.textContent = 'Enter a URL and press Enter. Press Alt+F1 for browser help.';
+			this.statusDomNode.textContent = localize({ bundle: 'ash.workbench', key: 'browser.focusHelp' }, 'Enter a URL and press Enter. Press Alt+F1 for browser help.');
 		}
 	}
 	private target(): IBrowserViewModel {
 		if (!this.model) { throw new Error('Browser page is closed'); }
 		return this.model;
 	}
-	private navigate(): Promise<void> { return this.target().loadURL(this.addressDomNode.value.trim()); }
+	private async navigate(): Promise<void> {
+		const model = this.target();
+		const url = this.addressDomNode.value.trim();
+		const document = this.addressDomNode.ownerDocument;
+		const focused = document.activeElement;
+		await model.loadURL(url);
+		// Navigation can finish after the user moves to another pane, edits the URL or opens an overlay.
+		if (!this.isDisposed && this.visible && this.model === model && document.activeElement === focused && this.addressDomNode.value.trim() === url && !this.menuVisible && this.dialogs.dialogs.length === 0) {
+			this.viewportDomNode.focus();
+		}
+	}
+	private setNavigationActions(state?: IBrowserViewState): void {
+		const back = localize({ bundle: 'ash.workbench', key: 'browser.back' }, 'Back');
+		const forward = localize({ bundle: 'ash.workbench', key: 'browser.forward' }, 'Forward');
+		const reload = state?.loading ? localize({ bundle: 'ash.workbench', key: 'browser.stop' }, 'Stop') : localize({ bundle: 'ash.workbench', key: 'browser.reload' }, 'Reload');
+		const actions: readonly IAction[] = [
+			{ id: 'browser.back', label: back, tooltip: back, icon: Lxicon.arrowLeft, enabled: state?.canGoBack === true, run: () => this.target().goBack().catch(error => this.report(error)) },
+			{ id: 'browser.forward', label: forward, tooltip: forward, icon: Lxicon.arrowRight, enabled: state?.canGoForward === true, run: () => this.target().goForward().catch(error => this.report(error)) },
+			{ id: 'browser.reload', label: reload, tooltip: reload, icon: state?.loading ? Lxicon.close : Lxicon.refresh, enabled: state !== undefined, run: () => (this.model?.state.loading ? this.target().stop() : this.target().reload()).catch(error => this.report(error)) },
+		];
+		// Keep retained action identities through title/URL updates so keyboard focus and DOM stay stable.
+		this.navigationActions = actions.map((action, index) => {
+			const previous = this.navigationActions[index];
+			return previous?.label === action.label && previous.enabled === action.enabled && previous.icon === action.icon ? previous : action;
+		});
+		this.navigationToolbar.setActions(this.navigationActions);
+	}
 	private setPageActions(): void {
+		const go = localize({ bundle: 'ash.workbench', key: 'browser.go' }, 'Go');
+		const help = localize({ bundle: 'ash.workbench', key: 'browser.help' }, 'Help');
 		this.sharingToolbar.setActions([
+			{ id: 'browser.go', label: go, tooltip: go, icon: Lxicon.arrowRight, enabled: true, run: () => this.navigate().catch(error => this.report(error)) },
+			{ id: 'browser.help', label: help, tooltip: help, icon: Lxicon.question, enabled: true, run: () => this.showHelp().catch(error => this.report(error)) },
+		], [
 			{ id: 'browser.share', label: localize({ bundle: 'ash.workbench', key: 'browser.share' }, 'Share with Agent'), enabled: this.model?.info.owner.type === 'user', tooltip: '', run: () => this.share().catch(error => this.report(error)) },
 			{ id: 'browser.permissions', label: localize({ bundle: 'ash.workbench', key: 'browser.resetPermissions' }, 'Reset all website permissions'), enabled: true, tooltip: '', run: () => this.pageService.clearPermissions(this.target().id).catch(error => this.report(error)) },
 			{ id: 'browser.cancelDownloads', label: localize({ bundle: 'ash.workbench', key: 'browser.cancelDownloads' }, 'Cancel downloads'), enabled: true, tooltip: '', run: () => this.pageService.cancelDownloads(this.target().id).catch(error => this.report(error)) },
@@ -188,9 +220,8 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 	}
 	private render(state: IBrowserViewState): void {
 		if (this.addressDomNode.ownerDocument.activeElement !== this.addressDomNode) { this.addressDomNode.value = state.url; }
-		this.backDomNode.disabled = !state.canGoBack; this.forwardDomNode.disabled = !state.canGoForward;
-		this.reloadDomNode.textContent = state.loading ? 'Stop' : 'Reload';
-		this.statusDomNode.textContent = state.errorDescription ? localize({ bundle: 'ash.workbench', key: 'browser.loadFailure' }, 'Unable to load page: {0}', state.errorDescription) : state.loading ? 'Loading page…' : state.title || state.url;
+		this.setNavigationActions(state);
+		this.statusDomNode.textContent = state.errorDescription ? localize({ bundle: 'ash.workbench', key: 'browser.loadFailure' }, 'Unable to load page: {0}', state.errorDescription) : state.loading ? localize({ bundle: 'ash.workbench', key: 'browser.loading' }, 'Loading page…') : state.title || state.url;
 	}
 	private refreshLayout(): void {
 		if (!this.targetId || !this.viewportDomNode || this.isDisposed) { return; }
@@ -211,11 +242,11 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 	}
 	private report(error: unknown): void { if (!this.isDisposed) { this.statusDomNode.textContent = error instanceof Error ? error.message : String(error); } }
 	private helpContent(): string {
-		return localize({ bundle: 'ash.workbench', key: 'browser.accessibilityHelp' }, 'Use Tab to move through browser controls. Enter in the address field navigates. Ctrl+L (Command+L on macOS) or F6 in the webpage returns to the address field. Back and Forward navigate page history. Close the editor tab to close its webpage. Set workbench.externalUriOpeners to ash.browser.open for websites you want to open here. Webpages use the browser’s accessibility tree. Share with Agent allows a chosen conversation to observe this page. Agent input and navigation require an isolated Agent page. Revoke all access ends that grant. Website permission dialogs name the requesting site. Reset all website permissions removes its decisions. Downloads ask for a save location; Cancel downloads stops active transfers.');
+		return localize({ bundle: 'ash.workbench', key: 'browser.accessibilityHelp' }, 'Use Tab to move through browser controls. Enter in the address field navigates and focuses the webpage. Ctrl+Shift+P (Command+Shift+P on macOS) opens the Command Palette from the webpage. Ctrl+L (Command+L on macOS) or F6 in the webpage returns to the address field. Back and Forward navigate page history. Close the editor tab to close its webpage. Set workbench.externalUriOpeners to ash.browser.open for websites you want to open here. Webpages use the browser’s accessibility tree. The More Actions menu contains sharing, website permission reset and download cancellation. Share with Agent allows a chosen conversation to observe this page. Agent input and navigation require an isolated Agent page. Revoke all access ends that grant. Website permission dialogs name the requesting site. Reset all website permissions removes its decisions. Downloads ask for a save location; Cancel downloads stops active transfers.');
 	}
 
 	private showHelp(): Promise<void> {
-		return this.dialogService.showMessage({ severity: DialogSeverity.Info, title: 'Browser accessibility help', message: this.helpContent() });
+		return this.dialogService.showMessage({ severity: DialogSeverity.Info, title: localize({ bundle: 'ash.workbench', key: 'browser.accessibilityHelpTitle' }, 'Browser accessibility help'), message: this.helpContent() });
 	}
 }
 

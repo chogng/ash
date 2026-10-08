@@ -145,6 +145,15 @@ export class BrowserView extends Disposable {
 				event.preventDefault();
 				this.window.webContents.focus();
 				this.emit({ type: 'focusAddress', targetId: this.id });
+			} else if (input.type === 'keyDown' && (input.control || input.meta) && input.shift && !input.alt && input.key.toLowerCase() === 'p') {
+				// The webpage has a separate WebContents; Workbench owns shortcut resolution and command execution.
+				event.preventDefault();
+				this.window.webContents.focus();
+				const modifiers: Electron.KeyboardInputEvent['modifiers'] = [];
+				if (input.control) { modifiers.push('control'); }
+				if (input.meta) { modifiers.push('meta'); }
+				modifiers.push('shift');
+				this.window.webContents.sendInputEvent({ type: 'keyDown', keyCode: input.key, modifiers });
 			}
 		});
 		this.on(contents, "did-start-loading", () => this.emitState());

@@ -32,6 +32,24 @@ suite('Browser view ownership and operations', () => {
 		assert.deepEqual([f.children.size, f.events.filter(e => e.type === 'created').length, (await f.manager.getState(id)).url], [1, 1, 'https://example.test/']);
 	});
 
+	test('page command shortcuts return to Workbench while ordinary page input stays on the page', async () => {
+		using f = fixture();
+		await f.create();
+		let prevented = 0;
+		const event = { preventDefault: () => { prevented++; } };
+		for (const modifier of ['control', 'meta'] as const) {
+			f.contents.emit('before-input-event', event, { type: 'keyDown', key: 'P', shift: true, [modifier]: true });
+		}
+		for (const input of [{ type: 'keyDown', key: 'p' }, { type: 'keyDown', key: 'P', control: true }, { type: 'keyUp', key: 'P', control: true, shift: true }]) {
+			f.contents.emit('before-input-event', event, input);
+		}
+		assert.deepEqual({ prevented, focused: f.workbenchFocused, input: f.workbenchInput, addressEvents: f.events.filter(event => event.type === 'focusAddress') }, {
+			prevented: 2, focused: 2,
+			input: [{ type: 'keyDown', keyCode: 'P', modifiers: ['control', 'shift'] }, { type: 'keyDown', keyCode: 'P', modifiers: ['meta', 'shift'] }],
+			addressEvents: [],
+		});
+	});
+
 	test('layout precedes visibility and follows the host zoom', async () => {
 		using f = fixture();
 		const page = await f.create();
@@ -274,7 +292,8 @@ export function fixture() {
 	const partitions = new Map<string, Electron.Session>();
 	const f = {
 		[Symbol.dispose]: () => store.dispose(), events, children, contents, partitions,
-		url: '', title: 'Example', loading: false, attached: false, networkReleases: 0,
+		url: '', title: 'Example', loading: false, attached: false, networkReleases: 0, workbenchFocused: 0,
+		workbenchInput: [] as Electron.KeyboardInputEvent[],
 		commands: [] as Array<{ method: string; params: unknown; }>,
 		observations: [] as string[], cancelled: [] as string[], retired: [] as string[],
 		observe: async (pageId: string): Promise<IBrowserViewObservation> => ({ targetId: pageId, url: f.url, title: f.title, loading: f.loading }),
@@ -284,7 +303,7 @@ export function fixture() {
 		remote: false,
 		proxy: async () => ({ localPort: 1234, signal: signal(), ...toDisposable(() => { f.networkReleases++; }) }),
 	};
-	const window = { id: 1, contentView: { addChildView: (view: WebContentsView) => children.add(view), removeChildView: (view: WebContentsView) => children.delete(view) }, webContents: { getZoomFactor: () => 2, focus: () => { } }, isDestroyed: () => false } as unknown as BrowserWindow;
+	const window = { id: 1, contentView: { addChildView: (view: WebContentsView) => children.add(view), removeChildView: (view: WebContentsView) => children.delete(view) }, webContents: { getZoomFactor: () => 2, focus: () => { f.workbenchFocused++; }, sendInputEvent: (input: Electron.KeyboardInputEvent) => { f.workbenchInput.push(input); } }, isDestroyed: () => false } as unknown as BrowserWindow;
 	const instantiation = store.add(new InstantiationService());
 	const manager = store.add(instantiation.createInstance(BrowserViewMainService, {
 		window, getWorkspaceId: () => 'workspace-one',

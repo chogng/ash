@@ -285,5 +285,22 @@
     "editorActions": "Editor actions",
     "openEditors": "Open editors",
     "editorShortcuts": "Editor shortcuts"
+  },
+  "ash.workbench": {
+    "browser.accessibilityHelp": "Use Tab to move through browser controls. Enter in the address field navigates and focuses the webpage. Ctrl+Shift+P (Command+Shift+P on macOS) opens the Command Palette from the webpage. Ctrl+L (Command+L on macOS) or F6 in the webpage returns to the address field. Back and Forward navigate page history. Close the editor tab to close its webpage. Set workbench.externalUriOpeners to ash.browser.open for websites you want to open here. Webpages use the browser’s accessibility tree. The More Actions menu contains sharing, website permission reset and download cancellation. Share with Agent allows a chosen conversation to observe this page. Agent input and navigation require an isolated Agent page. Revoke all access ends that grant. Website permission dialogs name the requesting site. Reset all website permissions removes its decisions. Downloads ask for a save location; Cancel downloads stops active transfers.",
+    "browser.accessibilityHelpTitle": "Browser accessibility help",
+    "browser.address": "Browser address",
+    "browser.back": "Back",
+    "browser.forward": "Forward",
+    "browser.focusHelp": "Enter a URL and press Enter. Press Alt+F1 for browser help.",
+    "browser.go": "Go",
+    "browser.help": "Help",
+    "browser.loadFailure": "Unable to load page: {0}",
+    "browser.loading": "Loading page…",
+    "browser.navigationToolbar": "Browser navigation",
+    "browser.processGone": "Page stopped: {0}",
+    "browser.reload": "Reload",
+    "browser.stop": "Stop",
+    "browser.webpage": "Webpage. Press F6 to return to the address field."
   }
 }
