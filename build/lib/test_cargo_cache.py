@@ -35,7 +35,9 @@ class CargoCacheTests(unittest.TestCase):
                         )
             self.assertEqual((session / "state.bin").read_bytes(), b"12345678")
 
-    def session(self, root: Path, profile: str, name: str, timestamp: int) -> Path:
+    def session(
+        self, root: Path, profile: str, name: str, timestamp_seconds: int
+    ) -> Path:
         directory = root / profile
         directory.mkdir(parents=True, exist_ok=True)
         (directory / ".cargo-lock").touch()
@@ -43,8 +45,9 @@ class CargoCacheTests(unittest.TestCase):
         session.mkdir(parents=True)
         data = session / "state.bin"
         data.write_bytes(b"12345678")
-        os.utime(data, ns=(timestamp, timestamp))
-        os.utime(session, ns=(timestamp, timestamp))
+        # Whole seconds preserve the age ordering on Windows filesystems too.
+        os.utime(data, (timestamp_seconds, timestamp_seconds))
+        os.utime(session, (timestamp_seconds, timestamp_seconds))
         return session
 
     def test_artifact_budget_removes_complete_old_profiles_and_keeps_lock_inodes(self):
@@ -62,7 +65,7 @@ class CargoCacheTests(unittest.TestCase):
                 output = old / name
                 output.parent.mkdir(parents=True, exist_ok=True)
                 output.write_bytes(b"obsolete")
-                os.utime(output, ns=(1, 1))
+                os.utime(output, (1, 1))
             lock = old / ".cargo-lock"
             inode = lock.stat().st_ino
             self.assertEqual(trim_artifact_cache(root, 8, idle_seconds=0), 32)
