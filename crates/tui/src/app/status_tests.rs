@@ -480,6 +480,7 @@ fn panel(tokens: u64, capacity: Option<u64>) -> crate::context::Panel {
 fn context_catalog() -> ash_app_server_protocol::protocol::model::ModelListResult {
     let model = inspection(12_345, None).model.unwrap();
     ash_app_server_protocol::protocol::model::ModelListResult {
+        catalog_scopes: None,
         models: vec![
             ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
                 model.clone(),

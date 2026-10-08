@@ -31,6 +31,7 @@ pub(super) struct ModelContextCatalog {
     registry: ProviderConfigRegistry,
     entries: HashMap<ModelRef, ModelCatalogEntry>,
     discovered: BTreeMap<ProviderId, Vec<ModelCatalogEntry>>,
+    scopes: BTreeMap<String, Option<String>>,
 }
 
 impl ModelContextCatalog {
@@ -50,6 +51,7 @@ impl ModelContextCatalog {
         let manager = manager.with_registry(registry.clone());
         let mut entries = HashMap::new();
         let mut discovered = BTreeMap::new();
+        let mut scopes = BTreeMap::new();
         for provider in config.providers.values() {
             let seed = manager
                 .static_snapshot(&provider.provider)
@@ -66,6 +68,12 @@ impl ModelContextCatalog {
                 Err(ModelProviderError::Credential(_)) => None,
                 Err(error) => return Err(CoreError::Model(error.to_string())),
             };
+            scopes.insert(
+                provider.connection.to_string(),
+                binding
+                    .as_ref()
+                    .map(|binding| binding.scope().source_scope().as_str().to_owned()),
+            );
             if let Some(binding) = binding {
                 let observed = manager
                     .list_discovered(&[binding.scope().clone()], &CatalogQuery::all())
@@ -83,7 +91,12 @@ impl ModelContextCatalog {
             registry,
             entries,
             discovered,
+            scopes,
         })
+    }
+
+    pub(super) fn scope(&self, connection: &str) -> Option<String> {
+        self.scopes.get(connection).cloned().flatten()
     }
 
     pub(super) fn discovered(&self, provider: &ProviderId) -> &[ModelCatalogEntry] {

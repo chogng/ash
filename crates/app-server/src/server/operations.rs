@@ -24,7 +24,6 @@ use ash_app_server_protocol::protocol::initialize::InitializeResult;
 use ash_app_server_protocol::protocol::initialize::ProtocolVersion;
 use ash_app_server_protocol::protocol::initialize::ServerCapabilities;
 use ash_app_server_protocol::protocol::model::ModelListParams;
-use ash_app_server_protocol::protocol::model::ModelListResult;
 use ash_app_server_protocol::protocol::model::ModelPreferencesUpdateParams;
 use ash_app_server_protocol::protocol::provider::ProviderModelsListFailureCodeDto;
 use ash_app_server_protocol::protocol::provider::ProviderModelsListFailureDto;
@@ -574,9 +573,7 @@ impl AppServer {
 
     pub(super) fn model_list(&self, params: &Value) -> Result<Value, RpcError> {
         let _: ModelListParams = decode(params)?;
-        result(&ModelListResult {
-            models: self.model_catalog.list().map_err(core_error)?,
-        })
+        result(&self.model_catalog.catalog_snapshot().map_err(core_error)?)
     }
 
     pub(super) fn model_preferences_update(&self, params: &Value) -> Result<Value, RpcError> {

@@ -55,6 +55,7 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 	private accountState: AccountState | undefined;
 	private modelAccountConnections: ReadonlySet<string> | undefined;
 	private providerState = '[]';
+	private readonly externalScopes = new Map<string, string | null>();
 	constructor(@IModelApi private readonly modelApi: IModelApi,
 		@IAppServerApi private readonly appServer: IAppServerApi, @IServerEventApi events: IServerEventApi,
 		@ILanguageModelsConfigurationService private readonly preferences: ILanguageModelsConfigurationService,
@@ -63,6 +64,11 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 		this._register(preferences.onDidChangeModels(() => this.changed.fire()));
 		const subscription = events.subscribe(event => {
 			if (event.method === 'provider/models/updated') {
+				const scope = 'catalogScope' in event.params ? event.params.catalogScope : undefined;
+				if (scope && this.externalScopes.get(scope.connection) !== scope.identity) {
+					this.externalScopes.set(scope.connection, scope.identity);
+					this.retireModelCatalog();
+				}
 				// The tagged outcome describes one provider observation, not the global catalog.
 				this.invalidateModelCatalog();
 			} else if (event.method === 'provider/apiKey/changed') {
@@ -81,6 +87,7 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 			this.invalidateModelCatalog();
 		}));
 		const connection = appServer.onConnectionState(state => {
+			this.externalScopes.clear();
 			this.accountScope = undefined;
 			this.accountState = undefined;
 			this.modelAccountConnections = undefined;
@@ -207,15 +214,7 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 				// A hot daemon may have published its account event before this window subscribed.
 				// Accept the snapshot only for the catalog attempt that requested it.
 				this.accountState = account;
-				const models = [...catalog.models];
-				for (const connection of ['kimi-desktop', 'kimi-cli']) {
-					if (!providers.providers.some(provider => provider.connection === connection && provider.ready)) { continue; }
-					models.push(...await this.modelApi.listProviderModels(connection));
-					if (!this.isCurrentCatalogLoad(generation, connectionGeneration) || revision !== this.catalogRevision) { break; }
-				}
-				if (!this.isCurrentCatalogLoad(generation, connectionGeneration)) { break; }
-				if (revision !== this.catalogRevision) { continue; }
-				this.acceptModelCatalog(models, providers);
+				this.acceptModelCatalog(catalog, providers);
 				return;
 			} catch (error) {
 				if (!this.isCurrentCatalogLoad(generation, connectionGeneration)) { break; }
@@ -225,16 +224,20 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 		}
 	}
 
-	private acceptModelCatalog(entries: Readonly<ModelListResult['models']>, providers: ProviderListResult): void {
+	private acceptModelCatalog(snapshot: ModelListResult, providers: ProviderListResult): void {
 		const identities = new Set<string>();
-		const catalog = entries.map(entry => {
+		const catalog = snapshot.models.map(entry => {
 			const identity = modelRefIdentity(entry.model);
 			if (identities.has(identity)) { throw new Error(`Model catalog contains duplicate entry '${entry.model.provider}/${entry.model.model}'`); }
 			identities.add(identity);
 			return modelCatalogEntry(entry);
 		});
+		const scopes = snapshot.catalog_scopes ?? [];
+		const scopeChanged = scopes.some(scope => this.externalScopes.get(scope.connection) !== scope.identity);
+		this.externalScopes.clear();
+		for (const scope of scopes) { this.externalScopes.set(scope.connection, scope.identity); }
 		const providerState = JSON.stringify(modelProviderStatuses(providers));
-		const changed = !sameModelCatalog(this.modelCatalog, catalog) || this.providerState !== providerState;
+		const changed = scopeChanged || !sameModelCatalog(this.modelCatalog, catalog) || this.providerState !== providerState;
 		this.modelCatalog = Object.freeze(catalog);
 		this.providerState = providerState;
 		this.modelAccountConnections = new Set(providers.providers.map(provider => provider.connection));

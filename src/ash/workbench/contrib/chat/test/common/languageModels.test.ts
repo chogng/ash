@@ -112,6 +112,7 @@ function catalogFixture(resources: DisposableStore, omitAccounts = false) {
 	const source = {
 		generation: 1,
 		catalog: [modelEntry('initial')],
+		catalogScopes: [] as NonNullable<ModelListResult['catalog_scopes']>,
 		providers: [{ provider: 'openai', connection: 'chatgpt-subscription', access: 'subscription', active: true, configured: true, ready: true, displayName: 'ChatGPT', apiKeyPolicy: 'unsupported', apiKeyConfigured: false }] as ProviderListResult['providers'],
 		catalogReads: 0,
 		providerReads: 0,
@@ -138,7 +139,7 @@ function catalogFixture(resources: DisposableStore, omitAccounts = false) {
 		} as IAccountApi, { subscribe: events.event })));
 	}
 	services.registerInstance(IModelApi, {
-		listModels: async () => { source.catalogReads++; return source.readCatalog ? source.readCatalog() : { models: source.catalog }; },
+		listModels: async () => { source.catalogReads++; return source.readCatalog ? source.readCatalog() : { models: source.catalog, catalog_scopes: source.catalogScopes }; },
 		listProviders: async () => { source.providerReads++; return { providers: source.providers }; },
 		listProviderModels: async (connection: string) => { source.discoveries.push(connection); return source.readDiscovery ? source.readDiscovery(connection) : []; },
 		setModel: async () => { source.configWrites++; },
@@ -625,4 +626,63 @@ test('a failed initial account read cannot publish an unscoped catalog and can r
 test('model catalog creation rejects a missing required account service', () => {
 	using resources = new DisposableStore();
 	assert.throws(() => catalogFixture(resources, true), { message: `Unknown service: ${IAccountService.description}` });
+});
+
+
+function externalModelsUpdated(identity: string | null): ServerNotification {
+	return { method: 'provider/models/updated', params: { connection: 'kimi-desktop', catalogScope: { connection: 'kimi-desktop', identity }, result: { type: 'failed', failure: { code: 'unreachable' } } } };
+}
+
+test('ready external connections read cached authoritative rows without remote discovery', async () => {
+	using resources = new DisposableStore();
+	const { source, models } = catalogFixture(resources);
+	source.providers.push({ provider: 'kimi-desktop', connection: 'kimi-desktop', access: 'local', active: true, configured: true, ready: true, displayName: 'Kimi Desktop', apiKeyPolicy: 'unsupported', apiKeyConfigured: false });
+	source.readDiscovery = async () => { throw new Error('Network unavailable'); };
+	source.catalogScopes = [{ connection: 'kimi-desktop', identity: 'scope-a' }];
+	assert.deepEqual({ names: (await models.listModels()).map(entry => entry.model.model), discoveries: source.discoveries }, { names: ['initial'], discoveries: [] });
+});
+
+for (const identity of ['scope-b', null]) {
+	test(`external credential changes retire previous rows before a failed read (${identity})`, async () => {
+		using resources = new DisposableStore();
+		const { source, models, events } = catalogFixture(resources);
+		source.catalogScopes = [{ connection: 'kimi-desktop', identity: 'scope-a' }];
+		await models.listModels();
+		source.readCatalog = async () => { throw new Error('Current scope unavailable'); };
+		events.fire(externalModelsUpdated(identity));
+		await settleCatalogEvents();
+		assert.deepEqual(await models.listModels(), []);
+		assert.deepEqual([source.configWrites, source.selectionWrites], [0, 0]);
+	});
+}
+
+test('same external credential failure retains the exact accepted catalog', async () => {
+	using resources = new DisposableStore();
+	const { source, models, events } = catalogFixture(resources);
+	source.catalogScopes = [{ connection: 'kimi-desktop', identity: 'scope-a' }];
+	const catalog = await models.listModelCatalog();
+	const changes = source.changes;
+	source.readCatalog = async () => { throw new Error('Temporary read failure'); };
+	events.fire(externalModelsUpdated('scope-a'));
+	await settleCatalogEvents();
+	assert.equal(await models.listModelCatalog(), catalog);
+	assert.equal(source.changes, changes);
+});
+
+test('a late external snapshot cannot restore credentials retired by a scope notification', async () => {
+	using resources = new DisposableStore();
+	const { source, models, events } = catalogFixture(resources);
+	source.catalogScopes = [{ connection: 'kimi-desktop', identity: 'scope-a' }];
+	await models.listModels();
+	const pending = new DeferredPromise<ModelListResult>();
+	source.readCatalog = () => pending.p;
+	const refresh = models.refreshModels();
+	source.readCatalog = undefined;
+	source.catalog = [modelEntry('current-external')];
+	source.catalogScopes = [{ connection: 'kimi-desktop', identity: 'scope-b' }];
+	events.fire(externalModelsUpdated('scope-b'));
+	await pending.complete({ models: [modelEntry('retired-external')], catalog_scopes: [{ connection: 'kimi-desktop', identity: 'scope-a' }] });
+	await refresh;
+	await settleCatalogEvents();
+	assert.deepEqual((await models.listModels()).map(entry => entry.model.model), ['current-external']);
 });

@@ -19,6 +19,7 @@ fn model_summary_resolves_the_selected_models_access_path() {
     selected.display_name = "GPT-5.6".into();
     selected.default_reasoning_effort = Some(ReasoningEffort::High);
     let catalog = ModelListResult {
+        catalog_scopes: None,
         models: vec![selected],
     };
 
@@ -55,6 +56,7 @@ fn model_reasoning_effort_overrides_catalog_value() {
     selected.display_name = "GPT-5.6".into();
     selected.default_reasoning_effort = Some(ReasoningEffort::Medium);
     let catalog = ModelListResult {
+        catalog_scopes: None,
         models: vec![selected],
     };
 
@@ -99,6 +101,7 @@ fn context_capacity_comes_only_from_the_matching_catalog_entry() {
     let mut selected = entry("provider", "model", ModelAccess::ApiKey);
     selected.available_context_window = Some(90_000);
     let catalog = ModelListResult {
+        catalog_scopes: None,
         models: vec![selected],
     };
     let summary = ModelSummary::from_catalog(
@@ -183,6 +186,7 @@ fn collaboration_effort_steps_use_supported_values_and_stop_at_boundaries() {
     .collect();
     selected.default_reasoning_effort = Some(ReasoningEffort::High);
     let catalog = ModelListResult {
+        catalog_scopes: None,
         models: vec![selected],
     };
     let mut config = crate::test_support::empty_config_snapshot();
@@ -257,6 +261,7 @@ fn collaboration_effort_without_a_default_initializes_the_first_supported_level(
         let mut selected = entry("openai", "test-model", ModelAccess::ApiKey);
         selected.supported_reasoning_efforts = vec![ReasoningEffort::Low.into()];
         let catalog = ModelListResult {
+            catalog_scopes: None,
             models: vec![selected],
         };
         let mut config = crate::test_support::empty_config_snapshot();
@@ -294,6 +299,7 @@ fn collaboration_effort_unsupported_models_do_not_write_config() {
             model: "model".into(),
         });
         let catalog = ModelListResult {
+            catalog_scopes: None,
             models: vec![entry("custom", "model", ModelAccess::ApiKey)],
         };
         let transport = ConfigTransport {
@@ -353,6 +359,7 @@ fn reasoning_effort_uses_each_provider_and_models_catalog_levels_and_order() {
         ),
     ];
     let catalog = ModelListResult {
+        catalog_scopes: None,
         models: cases
             .iter()
             .map(|(provider, model, levels, default, _)| {

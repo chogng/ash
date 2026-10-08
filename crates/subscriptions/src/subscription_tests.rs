@@ -74,6 +74,9 @@ struct SwitchingCatalog {
 }
 
 impl SubscriptionCatalog<String, &'static str> for SwitchingCatalog {
+    fn external_scope(&self, _: &ModelConnectionId) -> Result<Option<String>, &'static str> {
+        Ok(None)
+    }
     fn refresh(&self, _: &ModelConnectionId) -> Result<Vec<String>, &'static str> {
         self.login.update_account(account("Pro")).unwrap();
         Ok(vec!["old-account-model".into()])
@@ -81,6 +84,9 @@ impl SubscriptionCatalog<String, &'static str> for SwitchingCatalog {
 }
 
 impl SubscriptionCatalog<String, &'static str> for Catalog {
+    fn external_scope(&self, _: &ModelConnectionId) -> Result<Option<String>, &'static str> {
+        Ok(None)
+    }
     fn refresh(&self, connection: &ModelConnectionId) -> Result<Vec<String>, &'static str> {
         assert_eq!(connection.as_str(), PROVIDER);
         self.calls.fetch_add(1, Ordering::Relaxed);
@@ -96,11 +102,15 @@ struct EventLog {
     order: Mutex<Vec<&'static str>>,
     models: Mutex<Vec<ModelsUpdate<String, &'static str>>>,
     accounts: Mutex<Vec<ash_login::AccountState>>,
+    external: Mutex<Vec<ExternalModelsUpdate<String, &'static str>>>,
 }
 
 struct ChannelEvents(Mutex<mpsc::Sender<ModelsUpdate<String, &'static str>>>);
 
 impl SubscriptionEvents<String, &'static str> for ChannelEvents {
+    fn external_models_updated(&self, _: ExternalModelsUpdate<String, &'static str>) {
+        unreachable!()
+    }
     fn models_updated(&self, update: ModelsUpdate<String, &'static str>) {
         self.0.lock().unwrap().send(update).unwrap();
     }
@@ -116,6 +126,9 @@ impl LoginEvents for EventLog {
 }
 
 impl SubscriptionEvents<String, &'static str> for EventLog {
+    fn external_models_updated(&self, update: ExternalModelsUpdate<String, &'static str>) {
+        self.external.lock().unwrap().push(update);
+    }
     fn models_updated(&self, update: ModelsUpdate<String, &'static str>) {
         self.order.lock().unwrap().push("models");
         self.models.lock().unwrap().push(update);
@@ -157,6 +170,7 @@ fn account_and_model_changes_publish_in_order_once() {
     let sources = Sources {
         login,
         connections: vec![PROVIDER],
+        external_connections: Vec::new(),
         catalog: catalog.clone() as Arc<dyn SubscriptionCatalog<String, &'static str>>,
         events: events.clone() as Arc<dyn SubscriptionEvents<String, &'static str>>,
     };
@@ -212,6 +226,7 @@ fn failed_discovery_waits_for_the_next_remote_interval() {
     let sources = Sources {
         login: Arc::new(LoginService::deferred(driver)),
         connections: vec![PROVIDER],
+        external_connections: Vec::new(),
         catalog: catalog.clone() as Arc<dyn SubscriptionCatalog<String, &'static str>>,
         events: events.clone() as Arc<dyn SubscriptionEvents<String, &'static str>>,
     };
@@ -254,6 +269,7 @@ fn remote_metadata_updates_account_before_matching_models() {
     let sources = Sources {
         login,
         connections: vec![PROVIDER],
+        external_connections: Vec::new(),
         catalog: catalog() as Arc<dyn SubscriptionCatalog<String, &'static str>>,
         events: events.clone() as Arc<dyn SubscriptionEvents<String, &'static str>>,
     };
@@ -301,6 +317,7 @@ fn signed_out_accounts_make_no_remote_requests_and_external_login_is_observed() 
     let sources = Sources {
         login,
         connections: vec![PROVIDER],
+        external_connections: Vec::new(),
         catalog: catalog.clone() as Arc<dyn SubscriptionCatalog<String, &'static str>>,
         events: events.clone() as Arc<dyn SubscriptionEvents<String, &'static str>>,
     };
@@ -338,6 +355,7 @@ fn account_change_during_discovery_discards_the_old_model_result() {
     let sources = Sources {
         login: login.clone(),
         connections: vec![PROVIDER],
+        external_connections: Vec::new(),
         catalog: Arc::new(SwitchingCatalog { login })
             as Arc<dyn SubscriptionCatalog<String, &'static str>>,
         events: events.clone() as Arc<dyn SubscriptionEvents<String, &'static str>>,
@@ -365,6 +383,7 @@ fn observer_starts_and_stops_with_its_owner() {
     let observer = SubscriptionObserver::start(
         login,
         vec![PROVIDER],
+        Vec::new(),
         catalog() as Arc<dyn SubscriptionCatalog<String, &'static str>>,
         Arc::new(ChannelEvents(Mutex::new(sender)))
             as Arc<dyn SubscriptionEvents<String, &'static str>>,
@@ -374,4 +393,68 @@ fn observer_starts_and_stops_with_its_owner() {
     assert_eq!(update.account_id, "account-1");
     assert_eq!(update.result, Ok(vec!["first".into()]));
     drop(observer);
+}
+
+struct ExternalCatalog {
+    scope: Mutex<Option<String>>,
+    rotate_during_request: AtomicBool,
+    unavailable: AtomicBool,
+    calls: AtomicUsize,
+}
+impl SubscriptionCatalog<String, &'static str> for ExternalCatalog {
+    fn external_scope(&self, _: &ModelConnectionId) -> Result<Option<String>, &'static str> {
+        Ok(self.scope.lock().unwrap().clone())
+    }
+    fn refresh(&self, _: &ModelConnectionId) -> Result<Vec<String>, &'static str> {
+        self.calls.fetch_add(1, Ordering::Relaxed);
+        let scope = self.scope.lock().unwrap().clone().unwrap();
+        if self.rotate_during_request.swap(false, Ordering::Relaxed) {
+            *self.scope.lock().unwrap() = Some("new-scope".into());
+        }
+        if self.unavailable.load(Ordering::Relaxed) {
+            return Err("unreachable");
+        }
+        Ok(vec![scope])
+    }
+}
+
+#[test]
+fn external_catalog_retires_before_failure_and_discards_late_credentials_without_login() {
+    let catalog = Arc::new(ExternalCatalog {
+        scope: Mutex::new(Some("old-scope".into())),
+        rotate_during_request: AtomicBool::new(false),
+        unavailable: AtomicBool::new(false),
+        calls: AtomicUsize::new(0),
+    });
+    let events = Arc::new(EventLog::default());
+    let sources = Sources {
+        login: Arc::new(LoginService::deferred(Arc::new(AccountDriver {
+            account: Mutex::new(None),
+        }))),
+        connections: Vec::new(),
+        external_connections: vec!["kimi-desktop"],
+        catalog: catalog.clone(),
+        events: events.clone(),
+    };
+    let mut observed = Observed::default();
+    let cancellation = CancellationSource::new();
+    observed.check(&sources, false, &cancellation.token());
+    assert_eq!(events.external.lock().unwrap().len(), 2);
+    observed.check(&sources, false, &cancellation.token());
+    assert_eq!(catalog.calls.load(Ordering::Relaxed), 1);
+    catalog.rotate_during_request.store(true, Ordering::Relaxed);
+    observed.check(&sources, true, &cancellation.token());
+    assert_eq!(events.external.lock().unwrap().len(), 2);
+    catalog.unavailable.store(true, Ordering::Relaxed);
+    observed.check(&sources, false, &cancellation.token());
+    let updates = events.external.lock().unwrap().clone();
+    assert_eq!(updates[2].scope.as_deref(), Some("new-scope"));
+    assert_eq!(updates[2].result, Ok(Vec::new()));
+    assert_eq!(updates[3].result, Err("unreachable"));
+    observed.check(&sources, false, &cancellation.token());
+    assert_eq!(catalog.calls.load(Ordering::Relaxed), 3);
+    *catalog.scope.lock().unwrap() = None;
+    observed.check(&sources, false, &cancellation.token());
+    assert_eq!(events.external.lock().unwrap().last().unwrap().scope, None);
+    assert!(events.accounts.lock().unwrap().is_empty());
 }

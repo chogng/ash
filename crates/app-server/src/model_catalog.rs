@@ -78,6 +78,24 @@ pub(crate) trait ModelCatalog: Send + Sync {
         Err(ModelCatalogRefreshError::Unsupported)
     }
     fn list(&self) -> Result<Vec<ModelCatalogEntry>, CoreError>;
+
+    /// Captures current credential scopes with their cached rows, without network discovery.
+    fn catalog_snapshot(
+        &self,
+    ) -> Result<ash_app_server_protocol::protocol::model::ModelListResult, CoreError> {
+        Ok(ash_app_server_protocol::protocol::model::ModelListResult {
+            models: self.list()?,
+            catalog_scopes: None,
+        })
+    }
+
+    /// Reads an external connection's opaque cache identity without refreshing it.
+    fn external_scope(
+        &self,
+        _connection: &ash_protocol::ModelConnectionId,
+    ) -> Result<Option<String>, ModelCatalogRefreshError> {
+        Ok(None)
+    }
     /// Reads the current request path for a model; catalog metadata can differ from the active account.
     fn current_access(&self, model: &ModelRef) -> Result<ModelAccess, CoreError>;
     fn configured_default(&self) -> Result<Option<ModelRef>, CoreError>;

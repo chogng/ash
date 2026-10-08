@@ -315,11 +315,11 @@ async function verifySubscriptionUpdates(application: PlaywrightApplication, web
 		last_refresh: new Date().toISOString(),
 	}));
 	await client.request(APP_SERVER_METHODS['account/read'], {});
-	const waitFor = async (name: string, effort: 'medium' | 'high', invalid: boolean, from: number, timeout: number): Promise<ProviderModelsUpdated> => {
-		let found: ProviderModelsUpdated | undefined;
+	const waitFor = async (name: string, effort: 'medium' | 'high', invalid: boolean, from: number, timeout: number): Promise<Extract<ProviderModelsUpdated, { accountId: string; }>> => {
+		let found: Extract<ProviderModelsUpdated, { accountId: string; }> | undefined;
 		await expect.poll(async () => {
 			await writeCache(name, effort, invalid);
-			found = updates.slice(from).map(update => update.value).find(update => invalid ? update.result.type === 'failed' : update.result.type === 'models' && update.result.models.some(entry => entry.display_name === name));
+			found = updates.slice(from).map(update => update.value).find((update): update is Extract<ProviderModelsUpdated, { accountId: string; }> => 'accountId' in update && (invalid ? update.result.type === 'failed' : update.result.type === 'models' && update.result.models.some(entry => entry.display_name === name)));
 			return !!found;
 		}, { message: `Expected real Rust ${invalid ? 'failed' : name} notification`, timeout, intervals: [1000, 5000, 10000] }).toBe(true);
 		return found!;

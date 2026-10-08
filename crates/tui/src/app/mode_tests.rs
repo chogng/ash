@@ -750,6 +750,7 @@ fn model_options_work_in_both_modes_and_keep_the_draft_after_dismissal() {
     ];
     info.default_reasoning_effort = Some(ash_protocol::ReasoningEffort::Medium);
     let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
+        catalog_scopes: None,
         models: vec![{
             let mut entry = ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
                 model, &info,

@@ -6,6 +6,8 @@
 
 模型路径使用 `https://api.kimi.com/coding/v1/chat/completions`。Ash 发送自己的 `User-Agent`、`X-Msh-Platform`、版本和随机 device ID，不复用其他客户端的品牌 identity。OAuth wire 以 [官方 Kimi CLI OAuth 源码](https://github.com/MoonshotAI/kimi-cli/blob/main/src/kimi_cli/auth/oauth.py) 为依据，并与 [CLIProxyAPI 的 Kimi adapter](https://github.com/router-for-me/CLIProxyAPI/blob/main/internal/auth/kimi/kimi.go) 交叉验证。
 
+账户 ID 是当前登录 device ID 的单向 SHA-256 摘要，不是固定的 `current`。重新登录产生新的设备身份，即使 token 和 credential revision 相同也会退役旧账户；正常 token 续期保持账户 ID。额度查询、资料刷新和单账户登出必须使用当前 `account/read` 返回的 ID；旧 ID 的请求在读取新账户资料前拒绝。私有 device ID 不进入账户 RPC，已有 credential envelope 无需迁移。
+
 当前 credential key 是 `provider/kimi/current/oauth`。value 是由本 crate 私有解释并在 token rotation 时整体替换的 JSON envelope；`ash-secrets` 只把它作为 opaque bytes 保存。
 
 `KimiDesktop` 读取 Kimi Desktop 的 `daimon-share/daimon/runtime/kimi-code/config.toml` 中 `daimon-kimi-code` 凭据，限定目标为 `https://agent-gw.kimi.com/coding/v1`。每次请求重新读取，由 Kimi Desktop 负责凭据轮换和删除；Ash 不写入这个文件、不把它复制到 SecretStore，也不将它当作 Ash 的 OAuth 账户。桌面端模型目录来自该网关 `/models`。

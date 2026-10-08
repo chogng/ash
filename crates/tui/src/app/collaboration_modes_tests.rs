@@ -911,6 +911,7 @@ fn effort_data() -> crate::models::ModelPickerData {
     });
     config.model_reasoning_effort = Some(ReasoningEffort::High);
     let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
+        catalog_scopes: None,
         models: vec![
             ash_app_server_protocol::protocol::model::ModelCatalogEntry {
                 retirement: None,

@@ -5118,3 +5118,118 @@ fn trace_settings_require_profile_owner_restart_and_are_shared_by_directory_host
         ash_rollout_trace::RecorderState::Disabled
     );
 }
+
+#[test]
+fn external_kimi_snapshot_reads_only_the_current_cached_scope_without_network() {
+    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
+    struct ModelsEndpoint {
+        calls: AtomicUsize,
+        unavailable: AtomicBool,
+    }
+    impl OperationClient for ModelsEndpoint {
+        fn execute(&self, _: &ClientRequest) -> Result<ClientResponse, ClientError> {
+            self.calls.fetch_add(1, Ordering::Relaxed);
+            if self.unavailable.load(Ordering::Relaxed) {
+                return Err(ClientError::Transport("unreachable".into()));
+            }
+            Ok(ClientResponse::new(
+                200,
+                Vec::new(),
+                br#"{"data":[{"id":"external-model","display_name":"External Model"}]}"#.to_vec(),
+            ))
+        }
+    }
+    for connection_name in ["kimi-desktop", "kimi-cli"] {
+        let profile = tempfile::tempdir().unwrap();
+        let home = profile.path().join("cli");
+        let (path, content) = if connection_name == "kimi-desktop" {
+            (profile.path().join("desktop.toml"), "[providers.daimon-kimi-code]\ntype = \"kimi\"\nbase_url = \"https://agent-gw.kimi.com/coding/v1\"\napi_key = \"credential-a\"\n".to_owned())
+        } else {
+            std::fs::create_dir_all(home.join("credentials")).unwrap();
+            std::fs::write(home.join("device_id"), "fixture-device").unwrap();
+            std::fs::write(home.join("config.toml"), "[providers.\"managed:kimi-code\"]\ntype = \"kimi\"\nbase_url = \"https://api.kimi.com/coding/v1\"\n[providers.\"managed:kimi-code\".oauth]\nstorage = \"file\"\nkey = \"oauth/kimi-code\"\n").unwrap();
+            (
+                home.join("credentials/kimi-code.json"),
+                r#"{"access_token":"credential-a","expires_at":4102444800}"#.to_owned(),
+            )
+        };
+        std::fs::write(&path, &content).unwrap();
+        let endpoint = Arc::new(ModelsEndpoint {
+            calls: AtomicUsize::new(0),
+            unavailable: AtomicBool::new(false),
+        });
+        let registry = ProviderConfigRegistry::builtin();
+        let runtime = ModelProviderRuntime::with_client_and_secrets(
+            registry.clone(),
+            endpoint.clone(),
+            Arc::new(MemorySecretStore::default()),
+        )
+        .with_catalog_cache(profile.path().join("models"));
+        let runtime = Arc::new(if connection_name == "kimi-desktop" {
+            runtime.with_kimi_desktop(Arc::new(ash_kimi::KimiDesktop::at(path.clone())))
+        } else {
+            runtime.with_kimi_cli(Arc::new(ash_kimi::KimiCli::at(home)))
+        });
+        let service = ConfigBackedModelService {
+            config: Arc::new(ConfigStore::open(profile.path().join("config.json")).unwrap()),
+            dir_config: None,
+            provider_configs: registry,
+            models_manager: runtime.models_manager(),
+            catalog_provider: runtime.clone(),
+            catalog_runtime: Arc::new(tokio::runtime::Runtime::new().unwrap()),
+            resolver: Arc::new(ModelProviderSnapshotResolver {
+                model_provider: runtime,
+            }),
+        };
+        let connection = ash_protocol::ModelConnectionId::new(connection_name).unwrap();
+        let external = |snapshot: &ash_app_server_protocol::protocol::model::ModelListResult| {
+            snapshot
+                .models
+                .iter()
+                .filter(|entry| entry.model.provider.as_str() == connection_name)
+                .map(|entry| entry.model.model.as_str().to_owned())
+                .collect::<Vec<_>>()
+        };
+        let before = service.catalog_snapshot().unwrap();
+        assert!(external(&before).is_empty());
+        assert_eq!(endpoint.calls.load(Ordering::Relaxed), 0);
+        service.refresh(&connection).unwrap();
+        let accepted = service.catalog_snapshot().unwrap();
+        assert_eq!(external(&accepted), ["external-model"]);
+        assert_eq!(endpoint.calls.load(Ordering::Relaxed), 1);
+        endpoint.unavailable.store(true, Ordering::Relaxed);
+        assert!(service.refresh(&connection).is_err());
+        assert_eq!(
+            external(&service.catalog_snapshot().unwrap()),
+            ["external-model"]
+        );
+        std::fs::write(&path, content.replace("credential-a", "credential-b")).unwrap();
+        let replaced = service.catalog_snapshot().unwrap();
+        assert!(external(&replaced).is_empty());
+        assert_ne!(accepted.catalog_scopes, replaced.catalog_scopes);
+        assert!(service.refresh(&connection).is_err());
+        assert!(external(&service.catalog_snapshot().unwrap()).is_empty());
+        std::fs::remove_file(&path).unwrap();
+        let revoked = service.catalog_snapshot().unwrap();
+        assert_eq!(
+            revoked
+                .catalog_scopes
+                .unwrap()
+                .into_iter()
+                .find(|scope| scope.connection == connection_name)
+                .unwrap()
+                .identity,
+            None
+        );
+        let cache = std::fs::read_to_string(
+            profile
+                .path()
+                .join(format!("models/{connection_name}.json")),
+        )
+        .unwrap();
+        assert!(!cache.contains("credential-a"));
+        assert!(!cache.contains("credential-b"));
+    }
+}

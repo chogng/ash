@@ -70,7 +70,10 @@ fn context_panel_reads_environment_before_any_request_and_preserves_thread_scope
             expected_scope,
             expected_detail: ContextReadDetail::Usage,
             model: None,
-            catalog: ModelListResult { models: vec![] },
+            catalog: ModelListResult {
+                catalog_scopes: None,
+                models: vec![],
+            },
         });
         let panel = load_panel(&mut client, scope, ContextReadDetail::Usage).unwrap();
         assert_eq!(panel.inspection.estimated_tokens, 400);
@@ -84,7 +87,10 @@ fn context_diagnostics_explicitly_requests_definitions() {
         expected_scope: ContextReadScope::Environment,
         expected_detail: ContextReadDetail::Diagnostics,
         model: None,
-        catalog: ModelListResult { models: vec![] },
+        catalog: ModelListResult {
+            catalog_scopes: None,
+            models: vec![],
+        },
     });
     let panel = load_panel(&mut client, None, ContextReadDetail::Diagnostics).unwrap();
     assert_eq!(panel.title(), "Developer: Context diagnostics");
@@ -122,7 +128,10 @@ fn context_summary_categories_are_read_only_for_keyboard_and_pointer_input() {
             )
             .collect(),
         },
-        &ModelListResult { models: vec![] },
+        &ModelListResult {
+            catalog_scopes: None,
+            models: vec![],
+        },
     );
     let body = Rect::new(0, 0, 80, 24);
     let list = panel.context_areas(body)[1];
@@ -174,6 +183,7 @@ fn context_loads_the_inspected_models_display_name_from_its_provider() {
     );
     let other = ModelRef::new(ProviderId::new("other").unwrap(), model.model.clone());
     let catalog = ModelListResult {
+        catalog_scopes: None,
         models: vec![
             ModelCatalogEntry::from_info(other.clone(), &ModelInfo::new(other.model, "Other name")),
             ModelCatalogEntry::from_info(

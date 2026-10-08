@@ -208,7 +208,10 @@ fn model_option_failure_is_visible_without_interrupting_the_turn_or_draft() {
             crate::thread::TurnActivity::Working,
         ));
         app.insert_text("keep draft");
-        let catalog = ash_app_server_protocol::protocol::model::ModelListResult { models: vec![] };
+        let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
+            catalog_scopes: None,
+            models: vec![],
+        };
         app.update(crate::models::Event::PickerOpened(
             crate::models::model_choices(&catalog, &crate::test_support::empty_config_snapshot())
                 .unwrap(),
@@ -303,6 +306,7 @@ fn status_line_context_follows_thread_snapshots() {
         model: "model".into(),
     });
     let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
+        catalog_scopes: None,
         models: vec![
             ash_app_server_protocol::protocol::model::ModelCatalogEntry {
                 retirement: None,

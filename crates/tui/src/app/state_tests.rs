@@ -1492,7 +1492,10 @@ fn config_owns_the_advisor_model_picker() {
         ),
         advisor: advisor_choices(
             &config,
-            &ash_app_server_protocol::protocol::model::ModelListResult { models: vec![] },
+            &ash_app_server_protocol::protocol::model::ModelListResult {
+                catalog_scopes: None,
+                models: vec![],
+            },
             Language::English,
         ),
     });
@@ -2011,9 +2014,7 @@ fn chatgpt_subscription_shows_fetched_models_in_chinese() {
     app.update(ConfigEvent::Subscription(SubscriptionEvent::ModelsUpdated(
         ash_app_server_protocol::protocol::provider::ProviderModelsUpdated {
             connection: "chatgpt-subscription".into(),
-            account_id: "account-2".into(),
-            organization: None,
-            plan: Some("pro".into()),
+            authority: ash_app_server_protocol::protocol::provider::ProviderModelsAuthorityDto::Subscription { account_id: "account-2".into(), organization: None, plan: Some("pro".into()) },
             result: ash_app_server_protocol::protocol::provider::ProviderModelsListResult::Models {
                 models: vec![ModelCatalogEntry::from_info(next, &info)],
             },
@@ -4016,9 +4017,7 @@ fn xai_subscription_displays_server_plan() {
     app.update(ConfigEvent::Subscription(SubscriptionEvent::ModelsUpdated(
         ash_app_server_protocol::protocol::provider::ProviderModelsUpdated {
             connection: "xai-subscription".into(),
-            account_id: "login-a".into(),
-            organization: None,
-            plan: Some("SuperGrok Heavy".into()),
+            authority: ash_app_server_protocol::protocol::provider::ProviderModelsAuthorityDto::Subscription { account_id: "login-a".into(), organization: None, plan: Some("SuperGrok Heavy".into()) },
             result: ash_app_server_protocol::protocol::provider::ProviderModelsListResult::Models {
                 models: vec![ModelCatalogEntry::from_info(discovered, &info)],
             },

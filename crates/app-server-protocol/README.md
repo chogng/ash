@@ -16,6 +16,8 @@
 
 `model/list` 的 `ModelCatalogEntry.settings` 返回当前连接和目录生效后的模型请求配置，来源类型为共享 protocol 的 `ModelSettings`。列表不暴露基础提示词正文。新执行使用同一批目录资料绑定模型默认参数和预算，目录刷新只影响后续执行。
 
+`model/list.catalog_scopes` 随缓存行返回当前外部连接的无秘密身份；`identity: null` 表示当前凭证不可用。读取不发起网络发现。`provider/models/updated` 的 authority 必须是订阅的 `accountId` / `organization` / `plan`，或外部连接的 `catalogScope`；外部来源不创建账户，缺少这两类身份的通知解码失败。外部身份变化先发出 `empty` 退役通知，远程刷新结果仅在同一身份仍有效时发布。消费者注册通知后再读取快照，并以请求代次拒绝被通知取代的迟到结果。
+
 `fs/writeBinaryFile` 接收原始字节的 base64，最多 50 MiB。可选 `options.mode` 明确选择
 `create`（已有文件包括空文件时拒绝）、`replace`（文件不存在时拒绝）或 `createOrReplace`。
 `options.expectedRevision` 对原始字节执行版本校验；校验和发布由文件系统在同一目录锁内完成，

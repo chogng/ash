@@ -127,9 +127,12 @@ fn model_notifications_replace_models_for_the_current_account() {
     });
     let updated = ProviderModelsUpdated {
         connection: SubscriptionProvider::ChatGpt.id().into(),
-        account_id: "account-1".into(),
-        organization: None,
-        plan: Some("pro".into()),
+        authority:
+            ash_app_server_protocol::protocol::provider::ProviderModelsAuthorityDto::Subscription {
+                account_id: "account-1".into(),
+                organization: None,
+                plan: Some("pro".into()),
+            },
         result: ProviderModelsListResult::Models {
             models: vec![model(
                 "openai",
@@ -155,7 +158,14 @@ fn model_notifications_replace_models_for_the_current_account() {
     assert!(!subscription.needs_initial_read());
 
     let mut stale = updated;
-    stale.account_id = "previous-account".into();
+    let ash_app_server_protocol::protocol::provider::ProviderModelsAuthorityDto::Subscription {
+        account_id,
+        ..
+    } = &mut stale.authority
+    else {
+        unreachable!()
+    };
+    *account_id = "previous-account".into();
     stale.result = ProviderModelsListResult::Models {
         models: vec![model(
             "openai",
@@ -176,9 +186,12 @@ fn failed_model_observation_replaces_loading_state() {
 
     subscription.update(SubscriptionEvent::ModelsUpdated(ProviderModelsUpdated {
         connection: SubscriptionProvider::ChatGpt.id().into(),
-        account_id: "account-1".into(),
-        organization: None,
-        plan: Some("pro".into()),
+        authority:
+            ash_app_server_protocol::protocol::provider::ProviderModelsAuthorityDto::Subscription {
+                account_id: "account-1".into(),
+                organization: None,
+                plan: Some("pro".into()),
+            },
         result: ProviderModelsListResult::Failed {
             failure: ProviderModelsListFailureDto {
                 code: ProviderModelsListFailureCodeDto::Unreachable,

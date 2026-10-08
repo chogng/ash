@@ -560,6 +560,7 @@ fn model_list_opens_inline_and_restores_input_after_close() {
     ];
     info.default_reasoning_effort = Some(ash_protocol::ReasoningEffort::Medium);
     let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
+        catalog_scopes: None,
         models: vec![
             ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
                 model.clone(),

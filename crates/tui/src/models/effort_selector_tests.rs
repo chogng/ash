@@ -359,6 +359,7 @@ fn effort_selector_generates_uniform_ticks_from_catalog_level_counts() {
         info.supported_reasoning_efforts = catalog_levels(levels);
         info.default_reasoning_effort = levels.last().copied();
         let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
+            catalog_scopes: None,
             models: vec![
                 ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
                     model, &info,

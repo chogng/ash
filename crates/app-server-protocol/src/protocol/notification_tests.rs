@@ -78,9 +78,11 @@ fn registry_decodes_subscription_model_updates_with_account_identity() {
         notification,
         ServerNotification::ProviderModelsUpdated(ProviderModelsUpdated {
             connection: "xai-subscription".into(),
-            account_id: "account-1".into(),
-            organization: None,
-            plan: Some("SuperGrok Heavy".into()),
+            authority: super::super::provider::ProviderModelsAuthorityDto::Subscription {
+                account_id: "account-1".into(),
+                organization: None,
+                plan: Some("SuperGrok Heavy".into())
+            },
             result: ProviderModelsListResult::Empty,
         })
     );
@@ -114,4 +116,21 @@ fn registry_rejects_invalid_payloads_for_known_notifications() {
             .is_err(),
         "known notifications must retain strict payload validation"
     );
+}
+
+#[test]
+fn registry_decodes_external_catalog_scopes_without_inventing_login_accounts() {
+    for identity in [serde_json::json!("fingerprint"), serde_json::Value::Null] {
+        let wire = json!({ "connection": "kimi-cli", "catalogScope": { "connection": "kimi-cli", "identity": identity }, "result": { "type": "empty" } });
+        let decoded =
+            decode_server_notification("provider/models/updated".into(), wire.clone()).unwrap();
+        let ServerNotification::ProviderModelsUpdated(update) = decoded else {
+            panic!("expected catalog observation");
+        };
+        assert!(matches!(
+            update.authority,
+            super::super::provider::ProviderModelsAuthorityDto::External { .. }
+        ));
+        assert_eq!(serde_json::to_value(update).unwrap(), wire);
+    }
 }

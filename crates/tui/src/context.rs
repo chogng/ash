@@ -637,7 +637,10 @@ where
     let catalog = if result.context.model.is_some() {
         client.list_models()?
     } else {
-        ModelListResult { models: Vec::new() }
+        ModelListResult {
+            catalog_scopes: None,
+            models: Vec::new(),
+        }
     };
     Ok(match detail {
         ContextReadDetail::Usage => panel(result.context, &catalog),

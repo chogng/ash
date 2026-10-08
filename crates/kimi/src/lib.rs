@@ -30,6 +30,8 @@ use ash_secrets::SecretStore;
 use ash_secrets::SecretValue;
 use serde::Deserialize;
 use serde::Serialize;
+use sha2::Digest;
+use sha2::Sha256;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
@@ -238,9 +240,7 @@ impl KimiOAuth {
         account_id: &str,
         cancellation: &CancellationToken,
     ) -> Result<(), KimiError> {
-        self.validate_account(account_id)?;
-        let (target, device_id, revision) =
-            self.api_target_with_identity(ash_client::RequestPurpose::Account)?;
+        let (target, device_id, revision) = self.api_target_for_account(account_id)?;
         let account = backend_client::kimi::Client::new(self.client.as_ref(), &target)
             .map_err(kimi_request_error)?
             .read_account(cancellation)
@@ -259,9 +259,7 @@ impl KimiOAuth {
         account_id: &str,
         cancellation: &CancellationToken,
     ) -> Result<(backend_client::kimi::Account, backend_client::kimi::Usage), KimiError> {
-        self.validate_account(account_id)?;
-        let (target, device_id, revision) =
-            self.api_target_with_identity(ash_client::RequestPurpose::Account)?;
+        let (target, device_id, revision) = self.api_target_for_account(account_id)?;
         let client = backend_client::kimi::Client::new(self.client.as_ref(), &target)
             .map_err(kimi_request_error)?;
         let account = client
@@ -274,14 +272,35 @@ impl KimiOAuth {
         Ok((account, usage))
     }
 
-    fn validate_account(&self, account_id: &str) -> Result<(), KimiError> {
-        if account_id != "current" {
+    fn api_target_for_account(
+        &self,
+        account_id: &str,
+    ) -> Result<(ResolvedApiTarget, String, u64), KimiError> {
+        let credential = self.load_credential()?.ok_or_else(|| {
+            KimiError::with_kind(KimiErrorKind::Authentication, "Kimi Code is not signed in")
+        })?;
+        if account_id != Self::account_id(&credential.device_id) {
             return Err(KimiError::with_kind(
                 KimiErrorKind::AccountChanged,
                 "Kimi account changed",
             ));
         }
-        Ok(())
+        let target = self.api_target_with_identity(ash_client::RequestPurpose::Account)?;
+        // Refresh may race a new sign-in. Validate the identity of the actual request target
+        // as well as rejecting stale callers before any token refresh or account request.
+        if account_id != Self::account_id(&target.1) {
+            return Err(KimiError::with_kind(
+                KimiErrorKind::AccountChanged,
+                "Kimi account changed",
+            ));
+        }
+        Ok(target)
+    }
+
+    fn account_id(device_id: &str) -> String {
+        // Kimi provides no stable user identity during sign-in. The login's device remains
+        // unchanged on token rotation; only its one-way fingerprint leaves this owner.
+        format!("{:x}", Sha256::digest(device_id.as_bytes()))
     }
 
     fn credential_at_identity(&self, device_id: &str, revision: u64) -> Result<(), KimiError> {
@@ -517,7 +536,7 @@ impl KimiOAuth {
         AccountSnapshot {
             account: AccountRef {
                 provider: KIMI_PROVIDER_ID.into(),
-                account_id: "current".into(),
+                account_id: Self::account_id(&credential.device_id),
             },
             email: profile
                 .as_ref()
@@ -669,6 +688,16 @@ impl InteractiveLoginDriver for KimiOAuth {
             return Err(LoginError::new(
                 LoginErrorKind::InvalidInput,
                 "account is not owned by the Kimi login driver",
+            ));
+        }
+        if self
+            .load_credential()
+            .map_err(login_driver_error)?
+            .is_some_and(|credential| account.account_id != Self::account_id(&credential.device_id))
+        {
+            return Err(LoginError::new(
+                LoginErrorKind::Conflict,
+                "Kimi account changed",
             ));
         }
         *self.profile.lock().map_err(login_lock_error)? = None;

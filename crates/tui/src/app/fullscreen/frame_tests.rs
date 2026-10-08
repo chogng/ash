@@ -2600,6 +2600,7 @@ fn configured_model_summary() -> ModelSummary {
         model: "claude-sonnet".into(),
     };
     let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
+        catalog_scopes: None,
         models: vec![
             ash_app_server_protocol::protocol::model::ModelCatalogEntry {
                 retirement: None,
@@ -2735,6 +2736,7 @@ fn custom_model_choices(
         .map(|config| (config.provider.clone(), config.connection.clone()))
         .collect();
     let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
+        catalog_scopes: None,
         models: vec![
             ash_app_server_protocol::protocol::model::ModelCatalogEntry {
                 retirement: None,
@@ -2847,7 +2849,14 @@ fn model_picker_shows_signed_in_chatgpt_and_xai_in_one_chinese_list() {
     info.access = ash_protocol::ModelAccess::Subscription;
     models.insert(0, ModelCatalogEntry::from_info(newest, &info));
     app.update(ModelEvent::PickerOpened(
-        crate::models::model_choices(&ModelListResult { models }, &config).unwrap(),
+        crate::models::model_choices(
+            &ModelListResult {
+                catalog_scopes: None,
+                models,
+            },
+            &config,
+        )
+        .unwrap(),
     ));
     assert_eq!(
         app.list_selection().unwrap().visible_items()[0].label(),
@@ -2879,6 +2888,7 @@ fn model_picker_without_configured_connections_shows_builtin_models() {
         ash_protocol::ModelId::new("gpt-unconfigured").unwrap(),
     );
     let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
+        catalog_scopes: None,
         models: vec![
             ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
                 model.clone(),
@@ -2949,6 +2959,7 @@ fn model_pins_preserve_catalog_order_and_focus_in_both_screen_modes() {
     use ash_app_server_protocol::protocol::model::ModelListResult;
 
     let catalog = ModelListResult {
+        catalog_scopes: None,
         models: ["first", "second", "third", "fourth"]
             .into_iter()
             .map(|id| {
@@ -3162,6 +3173,7 @@ fn model_picker_cycles_supported_effort_in_place_and_commits_on_enter() {
     ];
     info.default_reasoning_effort = Some(ReasoningEffort::Medium);
     let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
+        catalog_scopes: None,
         models: vec![
             ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(model, &info),
             ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(

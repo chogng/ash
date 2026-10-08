@@ -308,7 +308,10 @@ fn down_from_provider_tab_advances_from_the_highlighted_kimi_row() {
 fn advisor_choices_are_localized_and_config_owned() {
     let choices = advisor_choices(
         &empty_config_snapshot(),
-        &ash_app_server_protocol::protocol::model::ModelListResult { models: vec![] },
+        &ash_app_server_protocol::protocol::model::ModelListResult {
+            catalog_scopes: None,
+            models: vec![],
+        },
         Language::Chinese,
     );
     let state = ListSelectionState::new(choices.settings.model);
@@ -367,6 +370,7 @@ fn configured_advisor_model_is_selected_when_opening_config() {
     let mut config = empty_config_snapshot();
     config.advisor = Some(AdvisorConfig::new(model.clone()));
     let mut catalog = ModelListResult {
+        catalog_scopes: None,
         models: vec![ModelCatalogEntry {
             retirement: None,
             description: None,
@@ -489,7 +493,10 @@ fn advisor_switch_refreshes_in_place_and_keeps_the_model() {
     let mut advisor = AdvisorConfig::new(model);
     advisor.enabled = false;
     config.advisor = Some(advisor.clone());
-    let catalog = ash_app_server_protocol::protocol::model::ModelListResult { models: vec![] };
+    let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
+        catalog_scopes: None,
+        models: vec![],
+    };
     let mut editor = super::ConfigEditor::new(config_choices(
         &config,
         &providers(),

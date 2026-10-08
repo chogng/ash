@@ -1583,6 +1583,8 @@ use crate::protocol::model::ContextToolDefinition;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::model::ModelCatalogEntry;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::model::ModelCatalogScope;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::model::ModelListParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::model::ModelListResult;
@@ -1657,6 +1659,8 @@ use crate::protocol::provider::ProviderApiKeySetResult;
 use crate::protocol::provider::ProviderCatalogEntryDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::provider::ProviderListResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::provider::ProviderModelsAuthorityDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::provider::ProviderModelsListFailureCodeDto;
 #[cfg(any(test, feature = "export"))]
@@ -5752,6 +5756,7 @@ typescript_bindings! {
     Personality,
     ModelCatalogEntry,
     ModelListParams,
+    ModelCatalogScope,
     ModelListResult,
     ModelPreferencesUpdateParams,
     ProviderApiKeyDto,
@@ -5766,6 +5771,7 @@ typescript_bindings! {
     ProviderModelsListFailureDto,
     ProviderModelsListResult,
     ProviderModelsUpdated,
+    ProviderModelsAuthorityDto,
     ProviderCatalogEntryDto,
     ProviderListResult,
     StableTurnErrorCode,

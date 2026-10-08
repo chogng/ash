@@ -2392,7 +2392,7 @@ test('Model discovery refreshes the picker after an older catalog request comple
 	assert.equal(pickerEntry.supportedReasoningEfforts[0].description, 'Quick tasks');
 });
 
-test("Language models service includes ready Kimi connections in the model catalog", async () => {
+test("Language models service reads cached Kimi connections from the authoritative model catalog", async () => {
 	const desktop = { model: { provider: 'kimi-desktop', model: 'desktop-k2' }, displayName: 'Desktop K2' };
 	const cli = { model: { provider: 'kimi-cli', model: 'cli-k2' }, displayName: 'CLI K2' };
 	const provider = (connection: string): ModelProviderCredentialStatus => ({
@@ -2401,14 +2401,14 @@ test("Language models service includes ready Kimi connections in the model catal
 	});
 	const fake = fakeApi({
 		providers: [provider('kimi-desktop'), provider('kimi-cli')],
-		providerModels: { 'kimi-desktop': [desktop], 'kimi-cli': [cli] },
+		models: [desktop, cli],
 	});
 	using chat = createChatService(fake.api);
 
 	assert.deepEqual((await modelsFor(chat).listModelCatalog()).map(({ model, displayName }) => ({ model, displayName })), [desktop, cli]);
-	assert.deepEqual(fake.providerModelRequests, ['kimi-desktop', 'kimi-cli']);
+	assert.deepEqual(fake.providerModelRequests, []);
 	assert.deepEqual((await modelsFor(chat).listModelCatalog()).map(({ model, displayName }) => ({ model, displayName })), [desktop, cli]);
-	assert.deepEqual(fake.providerModelRequests, ['kimi-desktop', 'kimi-cli']);
+	assert.deepEqual(fake.providerModelRequests, []);
 });
 
 test("Chat picker excludes a hidden selected model", async () => {

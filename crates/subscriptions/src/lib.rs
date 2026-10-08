@@ -26,6 +26,8 @@ const REMOTE_CHECK_INTERVAL: Duration = Duration::from_secs(5 * 60);
 /// metadata. The observer binds the result to the account it observed.
 pub trait SubscriptionCatalog<M, E>: Send + Sync {
     fn refresh(&self, connection: &ModelConnectionId) -> Result<Vec<M>, E>;
+    /// Reads a file-owned external credential scope without contacting its endpoint.
+    fn external_scope(&self, connection: &ModelConnectionId) -> Result<Option<String>, E>;
 }
 
 /// Receives account-bound model changes from the subscription observer.
@@ -33,6 +35,7 @@ pub trait SubscriptionCatalog<M, E>: Send + Sync {
 /// Product hosts convert these values to their own notification protocol.
 pub trait SubscriptionEvents<M, E>: Send + Sync {
     fn models_updated(&self, update: ModelsUpdate<M, E>);
+    fn external_models_updated(&self, update: ExternalModelsUpdate<M, E>);
 }
 
 /// Model discovery outcome for one unchanged subscription account.
@@ -42,6 +45,14 @@ pub struct ModelsUpdate<M, E> {
     pub account_id: String,
     pub organization: Option<String>,
     pub plan: Option<String>,
+    pub result: Result<Vec<M>, E>,
+}
+
+/// Observation for an external credential owner, which does not create a login account.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ExternalModelsUpdate<M, E> {
+    pub connection: String,
+    pub scope: Option<String>,
     pub result: Result<Vec<M>, E>,
 }
 
@@ -55,12 +66,15 @@ pub struct SubscriptionObserver {
 struct Sources<M, E> {
     login: Arc<LoginService>,
     connections: Vec<&'static str>,
+    external_connections: Vec<&'static str>,
     catalog: Arc<dyn SubscriptionCatalog<M, E>>,
     events: Arc<dyn SubscriptionEvents<M, E>>,
 }
 
 struct Observed<M, E> {
     models: BTreeMap<String, ModelsUpdate<M, E>>,
+    external_models: BTreeMap<String, ExternalModelsUpdate<M, E>>,
+    external_attempts: BTreeMap<String, Option<String>>,
     // A failed request waits for the next remote interval instead of retrying
     // on every local credential check.
     model_attempts: BTreeMap<String, CatalogIdentity>,
@@ -71,6 +85,8 @@ impl<M, E> Default for Observed<M, E> {
     fn default() -> Self {
         Self {
             models: BTreeMap::new(),
+            external_models: BTreeMap::new(),
+            external_attempts: BTreeMap::new(),
             model_attempts: BTreeMap::new(),
             remote_attempts: BTreeMap::new(),
         }
@@ -88,6 +104,7 @@ impl SubscriptionObserver {
     pub fn start<M, E>(
         login: Arc<LoginService>,
         connections: Vec<&'static str>,
+        external_connections: Vec<&'static str>,
         catalog: Arc<dyn SubscriptionCatalog<M, E>>,
         events: Arc<dyn SubscriptionEvents<M, E>>,
     ) -> Self
@@ -98,6 +115,7 @@ impl SubscriptionObserver {
         let sources = Sources {
             login,
             connections,
+            external_connections,
             catalog,
             events,
         };
@@ -142,12 +160,62 @@ impl Drop for SubscriptionObserver {
 }
 
 impl<M: Clone + Eq, E: Clone + Eq + std::fmt::Debug> Observed<M, E> {
+    fn check_external(&mut self, sources: &Sources<M, E>, remote_due: bool) {
+        for &connection in &sources.external_connections {
+            let id = ModelConnectionId::new(connection).expect("registered external connection ID");
+            let scope = match sources.catalog.external_scope(&id) {
+                Ok(scope) => scope,
+                Err(error) => {
+                    log::warn!("External catalog scope observation failed: {error:?}");
+                    continue;
+                }
+            };
+            let previous = self.external_attempts.get(connection).cloned().flatten();
+            let changed = self.external_attempts.get(connection) != Some(&scope);
+            if changed {
+                self.external_models.remove(connection);
+                self.external_attempts
+                    .insert(connection.into(), scope.clone());
+                // Retire the old authority before a potentially slow or failed discovery.
+                // An unavailable, never-used connection has no prior rows to retire.
+                if scope.is_some() || previous.is_some() {
+                    sources
+                        .events
+                        .external_models_updated(ExternalModelsUpdate {
+                            connection: connection.into(),
+                            scope: scope.clone(),
+                            result: Ok(Vec::new()),
+                        });
+                }
+            }
+            if scope.is_none() || (!changed && !remote_due) {
+                continue;
+            }
+            let result = sources.catalog.refresh(&id);
+            // An external application can rotate or delete its credentials during a request.
+            // The manager isolates old results; the observer must also suppress their events.
+            if sources.catalog.external_scope(&id) != Ok(scope.clone()) {
+                continue;
+            }
+            let update = ExternalModelsUpdate {
+                connection: connection.into(),
+                scope,
+                result,
+            };
+            if self.external_models.get(connection) != Some(&update) {
+                sources.events.external_models_updated(update.clone());
+                self.external_models.insert(connection.into(), update);
+            }
+        }
+    }
+
     fn check(
         &mut self,
         sources: &Sources<M, E>,
         remote_due: bool,
         cancellation: &CancellationToken,
     ) {
+        self.check_external(sources, remote_due);
         let Ok(state) = sources.login.refresh() else {
             log::warn!("Subscription account observation failed");
             return;

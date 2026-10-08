@@ -12,7 +12,7 @@ Ash 将自己的 Kimi Code 登录与本机 Kimi Desktop、Kimi Code CLI 的连�
 
 `kimi-cli`：Ash 读取 `KIMI_CODE_HOME` 或 `~/.kimi-code/config.toml` 中 `managed:kimi-code` 的 OAuth 文件引用，并从 `credentials/` 读取当前 access token、从 `device_id` 读取登录设备标识。模型来自 CLI 配置端点的 `/models`。Ash 不修改 CLI 配置或凭据；CLI 负责续期。令牌过期后须在 Kimi Code 中刷新，Ash 会重新读取。只有源码、没有 CLI 登录凭据时，这条连接不会就绪。
 
-Ash Code 的 `/model` 与 Ash Desktop 模型选择器都会读取已就绪的外部连接动态模型。可分别用 `kimi-desktop/<型号>`、`kimi-cli/<型号>` 选择。
+Ash Code 的 `/model` 与 Ash Desktop 模型选择器从后台读取当前凭证范围的缓存模型目录；共享后台发现外部连接模型，读取列表本身不发起网络请求。凭证变化时，上一范围的模型会退役；同范围临时网络失败保留已知元数据。可分别用 `kimi-desktop/<型号>`、`kimi-cli/<型号>` 选择。
 
 外部连接只用于模型调用和模型目录。`/config → Providers → Kimi`、账户页和 `/usage` 仍对应 Ash 自己的 `kimi-subscription` 登录。桌面端连接是否可用，以桌面端当前运行配置和实际网关请求为准。
 

@@ -74,15 +74,30 @@ pub enum ProviderModelsListResult {
     },
 }
 
-/// Model observation for one unchanged subscription account.
+/// Model observation for one unchanged account or external credential scope.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderModelsUpdated {
     pub connection: String,
-    pub account_id: String,
-    pub organization: Option<String>,
-    pub plan: Option<String>,
+    #[serde(flatten)]
+    pub authority: ProviderModelsAuthorityDto,
     pub result: ProviderModelsListResult,
+}
+
+/// A subscription account or an external credential owner must authorize every observation.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(untagged)]
+pub enum ProviderModelsAuthorityDto {
+    Subscription {
+        #[serde(rename = "accountId")]
+        account_id: String,
+        organization: Option<String>,
+        plan: Option<String>,
+    },
+    External {
+        #[serde(rename = "catalogScope")]
+        catalog_scope: super::model::ModelCatalogScope,
+    },
 }
 
 /// Inbound-only provider API key that redacts diagnostics and clears its allocation on drop.

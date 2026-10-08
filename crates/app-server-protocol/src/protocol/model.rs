@@ -164,6 +164,18 @@ pub struct ModelPreferencesUpdateParams {
 #[serde(rename_all = "snake_case")]
 pub struct ModelListResult {
     pub models: Vec<ModelCatalogEntry>,
+    /// Current external credential scopes captured with these cached model rows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub catalog_scopes: Option<Vec<ModelCatalogScope>>,
+}
+
+/// Opaque identity of a catalog authority; an absent identity means unavailable credentials.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub struct ModelCatalogScope {
+    pub connection: String,
+    pub identity: Option<String>,
 }
 
 #[cfg(test)]

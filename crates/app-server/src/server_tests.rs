@@ -380,8 +380,9 @@ fn kimi_account_and_usage_rpc_read_the_current_subscription_without_exposing_cre
     let login = Arc::new(LoginService::new(auth.clone()).unwrap());
     auth.install_login_service(&login).unwrap();
     // Production subscription observation refreshes metadata separately from account/read.
+    let account_id = auth.read_account().unwrap().unwrap().account.account_id;
     auth.refresh_account(
-        "current",
+        &account_id,
         &ash_async_utils::CancellationSource::new().token(),
     )
     .unwrap();
@@ -402,7 +403,7 @@ fn kimi_account_and_usage_rpc_read_the_current_subscription_without_exposing_cre
     let usage = call(
         &server,
         &mut connection,
-        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"account/rateLimits/read","params":{"provider":"kimi-subscription","accountId":"current"}}),
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"account/rateLimits/read","params":{"provider":"kimi-subscription","accountId":account_id}}),
     );
     assert_eq!(usage["result"]["plan"], "Allegro");
     assert_eq!(usage["result"]["limits"].as_array().unwrap().len(), 2);
@@ -422,7 +423,7 @@ fn kimi_account_and_usage_rpc_read_the_current_subscription_without_exposing_cre
     let unauthorized = call(
         &server,
         &mut connection,
-        serde_json::json!({"jsonrpc":"2.0","id":5,"method":"account/rateLimits/read","params":{"provider":"kimi-subscription","accountId":"current"}}),
+        serde_json::json!({"jsonrpc":"2.0","id":5,"method":"account/rateLimits/read","params":{"provider":"kimi-subscription","accountId":account_id}}),
     );
     assert_eq!(
         unauthorized["error"]["message"],
@@ -437,7 +438,7 @@ fn kimi_account_and_usage_rpc_read_the_current_subscription_without_exposing_cre
     let after_logout = call(
         &server,
         &mut connection,
-        serde_json::json!({"jsonrpc":"2.0","id":7,"method":"account/rateLimits/read","params":{"provider":"kimi-subscription","accountId":"current"}}),
+        serde_json::json!({"jsonrpc":"2.0","id":7,"method":"account/rateLimits/read","params":{"provider":"kimi-subscription","accountId":account_id}}),
     );
     assert_eq!(
         after_logout["error"]["message"],

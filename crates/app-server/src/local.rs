@@ -2624,7 +2624,44 @@ impl ModelCatalog for ConfigBackedModelService {
     fn list(
         &self,
     ) -> Result<Vec<ash_app_server_protocol::protocol::model::ModelCatalogEntry>, CoreError> {
-        let config = self.resolved_config()?;
+        Ok(self.catalog_snapshot()?.models)
+    }
+
+    fn external_scope(
+        &self,
+        id: &ash_protocol::ModelConnectionId,
+    ) -> Result<Option<String>, crate::model_catalog::ModelCatalogRefreshError> {
+        let config = self
+            .resolved_config()
+            .map_err(|_| crate::model_catalog::ModelCatalogRefreshError::InvalidConfiguration)?;
+        let connection = config
+            .connections
+            .get(id)
+            .cloned()
+            .unwrap_or_else(|| ModelProviderConfig::for_connection(id.clone()));
+        match self.catalog_provider.catalog_binding(&connection) {
+            Ok(binding) => {
+                Ok(binding.map(|binding| binding.scope().source_scope().as_str().to_owned()))
+            }
+            Err(ash_model_provider::ModelProviderError::Credential(_)) => Ok(None),
+            Err(_) => Err(crate::model_catalog::ModelCatalogRefreshError::InvalidConfiguration),
+        }
+    }
+
+    fn catalog_snapshot(
+        &self,
+    ) -> Result<ash_app_server_protocol::protocol::model::ModelListResult, CoreError> {
+        let mut config = self.resolved_config()?;
+        // External credentials do not create login accounts. Include their implicit connection
+        // so the same capture supplies both cached rows and the identity that authorized them.
+        for connection in ["kimi-desktop", "kimi-cli"] {
+            let id =
+                ash_protocol::ModelConnectionId::new(connection).expect("external connection ID");
+            config
+                .providers
+                .entry(ash_protocol::ProviderId::new(connection).expect("external provider ID"))
+                .or_insert_with(|| ModelProviderConfig::for_connection(id));
+        }
         let registry = self
             .provider_configs
             .with_configs(config.providers.values())
@@ -2685,7 +2722,29 @@ impl ModelCatalog for ConfigBackedModelService {
                 models.push(entry);
             }
         }
-        Ok(models)
+        let mut scopes = Vec::new();
+        for connection in ["kimi-desktop", "kimi-cli"] {
+            let provider = ash_protocol::ProviderId::new(connection).expect("external provider ID");
+            for entry in contexts.discovered(&provider) {
+                if models.iter().any(|model| &model.model == entry.model()) {
+                    continue;
+                }
+                let mut model =
+                    runtime_catalog_entry(entry, &config, &registry, &self.catalog_provider)?;
+                model.discovered = Some(true);
+                models.push(model);
+            }
+            scopes.push(
+                ash_app_server_protocol::protocol::model::ModelCatalogScope {
+                    connection: connection.into(),
+                    identity: contexts.scope(connection),
+                },
+            );
+        }
+        Ok(ash_app_server_protocol::protocol::model::ModelListResult {
+            models,
+            catalog_scopes: Some(scopes),
+        })
     }
 
     fn current_access(&self, model: &ash_protocol::ModelRef) -> Result<ModelAccess, CoreError> {

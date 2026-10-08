@@ -1020,3 +1020,16 @@ test('host cancellation retires only its request and ignores late completion', a
 	hot.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', method: '$/cancelRequest', params: { id: 'unknown-host' } }) });
 	assert.equal(client.state, 'ready');
 });
+
+
+test('the generated protocol client decodes external catalog scopes and revocation without an account', async () => {
+	const transport = new FakeTransport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	await client.connect();
+	const observed: ServerNotification[] = [];
+	using listener = client.onNotification(notification => { observed.push(notification); });
+	const expected: ServerNotification[] = ['scope-a', null].map(identity => ({ method: 'provider/models/updated', params: { connection: 'kimi-cli', catalogScope: { connection: 'kimi-cli', identity }, result: { type: 'empty' } } }));
+	for (const notification of expected) { transport.emitNotification(notification); }
+	assert.deepEqual(observed, expected);
+});

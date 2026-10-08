@@ -136,9 +136,9 @@ Explicit `refresh` 仍返回 typed error，调用方可另行读取 last-known s
 - `ash-model-provider-info` 提供 immutable `ProviderConfigRegistry` 和 seed，不依赖本 crate。
 - `ash-model-provider` 持有并公开同一个 `ModelsManager` clone；`Provider::resolve_model` 消费 manager
   的 static resolution，不再维护第二套 catalog gate。
-- Local App Server 从 provider runtime 取得该 manager；`model/list` 的 `discovered` 视图只列出
-  最新成功发现或当前账户持久缓存观察到的模型身份；`builtIn` 视图读取内置固定目录，Session
-  model validation 调用 manager。
+- Local App Server 从 provider runtime 取得该 manager；`model/list` 合并内置固定目录与当前
+  external/custom scope 的缓存发现记录，并一起返回外部凭证范围，不发起网络刷新。Session
+  model validation 与执行消费同一个 manager。
 - 动态 provider adapter 应在 `ash-model-provider`/`ash-api` 边界实现 `ModelCatalogSource`，本 crate
   不增加 provider switch。
 
@@ -154,7 +154,7 @@ Unknown merge、fresh/stale/expired、304 generation 稳定和 per-scope singlef
 scope 或 resolution 时必须同步相应 table test、本文和系统文档；新增 protocol-visible 字段还要同步
 App Server DTO/schema fixture。
 
-当前实现有 per-scope 进程内缓存及按供应商文件、账户 scope 隔离的持久发现记录；尚无全局/per-provider 并发上限、退避抖动或用户 trust/policy override。Ollama、ChatGPT、xAI、Kimi 和部分 API 连接已接入动态目录；不支持发现的供应商在 TUI 中没有发现条目。App Server 的 `model/list` DTO 投影 identity、display name、access、context、capabilities、settings 与 defaults；本 crate 的 availability、generation、freshness 和 warnings 都不进入产品模型列表，也不作为发送消息的门禁。App Server 还没有 `model/updated` 通知；显式刷新使用 `provider/models/list`。
+当前实现有 per-scope 进程内缓存及按供应商文件、账户 scope 隔离的持久发现记录；尚无全局/per-provider 并发上限、退避抖动或用户 trust/policy override。Ollama、ChatGPT、xAI、Kimi 和部分 API 连接已接入动态目录；不支持发现的供应商在 TUI 中没有发现条目。App Server 的 `model/list` DTO 投影 identity、display name、access、context、capabilities、settings 与 defaults；本 crate 的 availability、generation、freshness 和 warnings 都不进入产品模型列表，也不作为发送消息的门禁。`model/list.catalog_scopes` 返回与外部缓存行同次捕获的无秘密身份；`provider/models/updated` 通过订阅账户或外部凭证范围区分 authority，变化后消费者重新读取目录。显式刷新继续使用 `provider/models/list`。
 
 跨 provider 模型选择同样尚未实现：当前 `ModelsManager::resolve` 只校验一个准确 `ModelRef`，没有候选排序、`ModelSelectionDecision`、替换原因或客户端警告。计划实现必须复用本 crate 的同一批 snapshot 与 `ModelRequirements`，只在 Agent 或工作流运行创建前选择一次；准确模型不可用时先检查同 catalog scope 的已验证兼容候选，再检查同 provider 的其他允许 scope，最后检查其他允许 provider。选择结果冻结后，catalog refresh 或真实调用失败都不能触发后台换模型。完整行为与类型边界见 [`docs/models-manager.md`](../../docs/models-manager.md#103-模型选择与替换)。
 

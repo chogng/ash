@@ -216,6 +216,7 @@ impl Subscription {
                 self.update_account(account);
             }
             SubscriptionEvent::ModelsUpdated(updated) => {
+                let ash_app_server_protocol::protocol::provider::ProviderModelsAuthorityDto::Subscription { account_id, organization, plan } = updated.authority else { return; };
                 let account = self
                     .account
                     .as_ref()
@@ -223,9 +224,9 @@ impl Subscription {
                 if updated.connection == self.provider.id()
                     && account.is_some_and(|account| {
                         account.status == AccountStatusDto::Ready
-                            && account.account_id == updated.account_id
-                            && account.organization == updated.organization
-                            && account.plan == updated.plan
+                            && account.account_id == account_id
+                            && account.organization == organization
+                            && account.plan == plan
                     })
                 {
                     self.models = Some(match updated.result {

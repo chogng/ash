@@ -50,7 +50,10 @@ fn account_profile_is_bound_to_the_current_device_login() {
     secrets.store(&key, &credential("device-a")).unwrap();
     let runtime = KimiOAuth::with_client(secrets.clone(), client);
     runtime
-        .refresh_account("current", &CancellationSource::new().token())
+        .refresh_account(
+            &runtime.read_account().unwrap().unwrap().account.account_id,
+            &CancellationSource::new().token(),
+        )
         .unwrap();
     assert_eq!(
         runtime.read_account().unwrap().unwrap().plan.as_deref(),
@@ -164,11 +167,13 @@ fn api_target_refreshes_expiring_credentials_and_rotates_the_stored_revision() {
     let login = Arc::new(LoginService::new(driver).unwrap());
     runtime.install_login_service(&login).unwrap();
 
+    let identity_before_refresh = runtime.read_account().unwrap().unwrap().account;
     let target = runtime.api_target().unwrap();
     assert!(target.headers().iter().any(|header| {
         header.name() == "Authorization" && header.value() == "Bearer new-access"
     }));
     let account = runtime.read_account().unwrap().unwrap();
+    assert_eq!(account.account, identity_before_refresh);
     assert_eq!(account.credential_revision, 8);
     assert_eq!(login.read().unwrap().accounts[0].credential_revision, 8);
     let requests = client.requests.lock().unwrap();
@@ -195,10 +200,7 @@ fn logout_removes_only_the_local_kimi_oauth_envelope() {
         .unwrap();
 
     runtime
-        .logout(&AccountRef {
-            provider: KIMI_PROVIDER_ID.into(),
-            account_id: "current".into(),
-        })
+        .logout(&runtime.read_account().unwrap().unwrap().account)
         .unwrap();
 
     assert!(
@@ -207,4 +209,50 @@ fn logout_removes_only_the_local_kimi_oauth_envelope() {
             .unwrap()
             .is_none()
     );
+}
+
+#[test]
+fn repeated_login_retires_the_account_identity_even_at_the_same_revision() {
+    let client = Arc::new(ScriptedClient::new([]));
+    let runtime = KimiOAuth::with_client(Arc::new(MemorySecretStore::default()), client.clone());
+    let credential = |device_id: &str| TokenCredential {
+        access_token: "same-token".into(),
+        refresh_token: "same-refresh".into(),
+        token_type: "Bearer".into(),
+        scope: "coding".into(),
+        expires_at: Some(now_epoch_seconds() + 3600),
+        device_id: device_id.into(),
+        credential_revision: 1,
+    };
+    runtime.store_credential(&credential("device-a")).unwrap();
+    let login = LoginService::new(runtime.clone()).unwrap();
+    let previous = login.read().unwrap().accounts[0].clone();
+    runtime.store_credential(&credential("device-b")).unwrap();
+    let current = login.refresh().unwrap().accounts[0].clone();
+    assert_ne!(previous.account, current.account);
+    assert_eq!(previous.credential_revision, current.credential_revision);
+    assert_eq!(previous.plan, current.plan);
+    assert!(!previous.account.account_id.contains("device-a"));
+    assert!(!current.account.account_id.contains("device-b"));
+    let cancellation = CancellationSource::new();
+    assert_eq!(
+        runtime
+            .read_subscription(&previous.account.account_id, &cancellation.token())
+            .unwrap_err()
+            .kind(),
+        KimiErrorKind::AccountChanged
+    );
+    assert_eq!(
+        runtime
+            .refresh_account(&previous.account.account_id, &cancellation.token())
+            .unwrap_err()
+            .kind(),
+        KimiErrorKind::AccountChanged
+    );
+    assert_eq!(
+        runtime.logout(&previous.account).unwrap_err().kind(),
+        LoginErrorKind::Conflict
+    );
+    assert!(runtime.subscription_ready().unwrap());
+    assert!(client.requests.lock().unwrap().is_empty());
 }

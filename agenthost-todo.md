@@ -4,15 +4,13 @@
 
 本文件保留原云端方案与历史验证。2026-10-08 接手集成已包含 B1 持久会话事实、B2 公开账号范围下的模型目录生命周期、picker 焦点保持和 B3 被动管理状态。首次账号快照缺口在本批修复：接受目录前通过现有账号服务建立范围，首个同账号或无关账号事件的失败重读保留有效目录，真实换账号及重连隔离迟到结果。当前验证与后续工作以 [接手 TODO](agenthost-handoff-todo.md) 为入口；下面明确标为历史的验证不代表本批重新执行。根目录位置保留原约定。
 
-### 第二批交付范围与重要未闭环项
+### 2026-10-08 后续凭证范围修复
 
-第二批实现的是**当前公开身份可区分的模型目录更新**。不能把它标成所有账户/模型来源的身份隔离已经完成，也不能把类型检查、Web 构建或 WidgetModel 单测标成真实 picker 产品验收。
+1. **Kimi subscription 重登录已修复。** 账户 ID 由 Kimi owner 对私有 device ID 做单向摘要；新登录改变 ID，token 轮换保持 ID。新旧 revision 同为 1 的重登录也会退役旧目录。过期账户的查询、资料刷新和登出不能操作新账户。
+2. **external `kimi-desktop` / `kimi-cli` 已接通后台观察和缓存快照。** `model/list` 同次捕获当前凭证范围与缓存发现行，读取不触发远程请求。共享观察器每 60 秒检查凭证身份，每 5 分钟刷新远程目录；身份变化先通知退役，刷新后校验身份，迟到结果不作为当前数据发布。外部来源不创建 `AccountDto`；通知 authority 使用外部 scope，正常订阅仍使用账户身份。
+3. **首次账户快照缺口已修复。** 模型 service 通过现有必需账号 service 建立权威范围，保留同账户失败语义，隔离换账户与重连的迟到结果。
 
-1. **Kimi subscription 同公开身份重登录未闭环。** `AccountDto.accountId` 固定为 `current`，实际目录身份是 Rust 私有 `device_id`；新设备登录可把 `credentialRevision` 重置为 1，正常 token 轮换又会递增它。`account/login/completed` 没有 provider 字段，成功事件也不能可靠区分 Kimi 重登录和无关 GitHub 登录。本片没有追加 Rust/公共协议，也没有声称解决这个场景。
-2. **external `kimi-desktop` / `kimi-cli` 身份与缓存读取未闭环。** 它们使用私有凭证摘要作用域，不属于现有 subscription observer；发现模型未纳入权威 `model/list`，而 `provider/models/list` 会发起远程刷新。本片保留已有接入方式；不能承诺外部凭证切换后刷新失败时不会保留旧目录。
-3. **首次账户快照缺口已修复。** 模型服务通过必需的 `IAccountService` 在首次目录接受前读取权威账号范围；账号事件由同一服务提供。初始快照失败不发布无范围目录，可重试；迟到快照或失败不能覆盖换账号或重连后的目录。此修复不扩展上述两类私有凭证身份契约。
-
-这些约束与最小后续契约的只读方案见 `agenthost-catalog-epoch-plan.md`（原提案尚未交付）。方案沿原有 backend catalog/subscription/runtime owner 增加不含私有设备或凭证信息的 view epoch；需与 SCM 的共享协议集成协调后另行批准实施。
+旧 `agenthost-catalog-epoch-plan.md` 未交付；本批按当前用户授权沿既有 Kimi、ModelsManager、subscription observer 和前端 service owner 实施，没有新增第二个持久 catalog 或假定缺失提案已获批准。验证与环境限制以 [接手 TODO](agenthost-handoff-todo.md) 为准。
 
 ### 第一批历史验证
 
@@ -177,6 +175,8 @@ Session.model 缺失仅表示目录没有模型事实，不能据此推断没有
 准确 Turn 状态的后续选项：在 catalog 保存最新 TurnId/TurnStatus，改变 Thread 与 Session catalog 版本并从 verified history 回建，生成新契约，再复用现有 executionStatus mapper。这是新协议/存储决定，当前还没有可直接复用的精确被动 primitive。不能把这一选项藏在粗粒度状态批次里。
 
 ## 第四批 验证恢复 权限 取消与历史
+
+2026-10-08 本批已运行协议/Renderer/Sessions 迟到与恢复回归、App Server 权限和 connection owner 测试，以及真实 Web/Electron 中英文 Stop、失败、草稿和 profile 重开。各项完整验收仍含未覆盖环境，复选框不整体勾选；具体通过数量和缺口见 [当前接手记录](agenthost-handoff-todo.md#当前验证)。
 
 这是定向验证与缺陷驱动批次，不是预先授权整目录重写。前述前三批通过后，先复用已有覆盖，只有观察到差异才登记具体修改路径。
 
