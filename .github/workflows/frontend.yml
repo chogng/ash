@@ -57,7 +57,8 @@ permissions:
 
 concurrency:
   group: frontend-${{ github.ref }}
-  cancel-in-progress: true
+  # Finish main acceptance; newer runs replace only the pending main run.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   check:

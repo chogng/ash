@@ -8,6 +8,13 @@ import { playwrightTargetForProject } from '../test/automation/testTarget.ts';
 const repositoryRoot = resolve(import.meta.dirname, '..');
 const workflow = readFileSync(resolve(repositoryRoot, '.github/workflows/frontend.yml'), 'utf8');
 
+test('Frontend CI finishes main acceptance and cancels stale runs on other refs', () => {
+	const concurrency = workflow.match(/^concurrency:\n((?:[ \t].*\n)+)/m)?.[1];
+	assert.ok(concurrency, 'Frontend CI must retain its per-ref concurrency group');
+	assert.match(concurrency, /^  group: frontend-\$\{\{ github\.ref \}\}$/m);
+	assert.match(concurrency, /^  cancel-in-progress: \$\{\{ github\.ref != 'refs\/heads\/main' \}\}$/m);
+});
+
 test('Frontend CI smoke commands select configured Playwright projects', () => {
 	const names = new Set(config.projects?.map(project => project.name));
 	const projects = [
