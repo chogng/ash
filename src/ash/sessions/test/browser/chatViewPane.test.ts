@@ -3519,3 +3519,37 @@ test('approval capabilities reach the composer through committed backend notific
 	assert.deepEqual(model.inputState.interaction?.request, interaction.request);
 	await nextTask();
 });
+
+for (const kind of ['Code', 'Cowork']) {
+	test(`${kind} concurrent model visibility saves preserve both enabled rows after the first durable write`, async () => {
+		using configuration = new WorkbenchConfigurationService();
+		const firstWrite = new DeferredPromise<void>();
+		const started = new DeferredPromise<void>();
+		const write = configuration.updateValue.bind(configuration);
+		let writes = 0;
+		configuration.updateValue = async (key, value) => {
+			if (key === ModelCatalogConfiguration.hiddenModels && ++writes === 1) {
+				void started.complete();
+				await firstWrite.p;
+			}
+			await write(key, value);
+		};
+		const entries = ['first', 'second'].map(model => ({ model: { provider: 'custom', model }, displayName: model }));
+		const fake = fakeApi({ models: entries });
+		using storage = createTestStorage();
+		using chat = createChatService(fake.api, configuration, storage);
+		using services = new InstantiationService();
+		services.registerInstance(IConfigurationService, configuration);
+		services.registerInstance(IStorageService, storage);
+		using cowork = services.createInstance(CoworkModelPreferencesService, CoworkModelPreferences);
+		const models = modelsFor(chat);
+		const visibility = kind === 'Code' ? models : cowork;
+		const first = visibility.setModelVisible(entries[0]!.model, true);
+		await started.p;
+		const second = visibility.setModelVisible(entries[1]!.model, true);
+		await firstWrite.complete();
+		await Promise.all([first, second]);
+		assert.deepEqual((await models.listModels()).map(entry => entry.model), entries.map(entry => entry.model));
+		assert.equal(writes, 2);
+	});
+}

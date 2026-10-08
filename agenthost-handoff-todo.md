@@ -1,33 +1,36 @@
 # AgentHost 接手与后续 TODO
 
-当前由本聊天接手。用户在 2026-10-08 授权把 agenthost 原五个提交整合到 main，并由我们继续负责；下方旧快照中的停工、禁止提交和发布许可安排是接手前历史，不再代表当前授权。
+当前由本聊天接手。用户在 2026-10-08 授权整合 agenthost 到 main 并继续剩余工作，随后授权整合其他工作树的提交。旧快照中的停工和禁止发布安排仅作历史记录。
 
-## 本批代码
+## 本批结果
 
-- 保留 `64b456ad0`、`77e38dcb9`、`6b4921a7c`、`1b216a571`、`388e4276f` 五个已有提交，范围涵盖 B1–B3 与真实 host 回归。
-- 首次账号范围修复单独提交：模型服务必需注入现有账号服务，接受首批目录前读取权威快照；同账号和无关账号重读失败保留有效目录，换账号立即退役旧目录，旧快照及失败不回流新 connection。
-- Sessions 在创建模型服务前注册账号服务；对应 fixture 使用真实账号适配器，新增缺失必需服务的创建阶段回归。
-- 原红测重新执行：38 项中 31 通过、7 失败。修复后的模型测试 39 项全通过；补齐 Chat fixture 的账号读取后，pane 测试 83 项全通过。完整集成验证结果见下节。
+- 首次账号快照修复和原 B1–B3 五个提交已在 main `0fff2125f25ffe641b5a3393fc47034d39dc52ba`。
+- Kimi owner 对私有 device ID 做单向摘要作为公开账号身份：重登录换身份，token 轮换保留身份；旧账号查询、资料刷新和登出不能操作新账号。
+- `model/list` 同次捕获 external Kimi 当前凭证范围与缓存目录，读取不发远程请求。既有共享观察器检查外部身份并定期刷新；换身份先退役旧目录，迟到结果不发布；同身份临时失败保留当前缓存。外部来源不创建登录账号。
+- Rust 协议增加外部 authority，同步生成器、真实 decoder、Renderer 与 TUI 调用方。原 subscription 通知仍使用账户身份。
+- 真实 Web 重开测试发现连续打开模型开关时，两次持久写入覆盖彼此。Code/Cowork 在既有配置 service 排队重新计算并写入，销毁时清理待执行任务；已开始的持久写入仍可结束。
 
 ## 当前验证
 
-本批九个验证步骤全部通过，精确命令、退出码及日志哈希记录于 `.build/agenthost-evidence/main-integration-20261008/validation.json`。
+本批日志和哈希记录于 `.build/agenthost-evidence/credential-scopes-20261008/validation.json`。
 
-- 199 项单元测试（8 文件，含账号范围、Sessions、picker 和分层）与 5 项 runner 回归。
-- renderer、generated protocol 和 automation 类型检查；正常完整 Web 与桌面构建，无新增构建 warning。
-- 53 项 Chromium 集成；真实 App Server-backed Web 与 Mac Electron 会话模型持久化、Code/Cowork 和 profile 重开各 1 项通过。
-- Playwright 仍打印已有 NO_COLOR/FORCE_COLOR 环境 warning。本批未重跑五分钟 B2 观察周期或 Windows/Linux CI。
+| 范围              | 实际结果                                                                                                                                   |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Rust owners       | Kimi、subscriptions、app-server verify；protocol 107 个测试及 warnings；app-server 660 个测试通过、3 个按原有标记忽略。                    |
+| 恢复与权限        | Core 307 个通过、2 个原有忽略；MCP durable enablement 定向测试 1 个；TUI subscription 24 个及 all-target warnings。                        |
+| 前端              | 7 文件共 250 个单元测试及 runner 回归通过，53 个 Chromium 集成通过；Renderer、protocol、automation 类型检查与正常完整 Web/桌面构建通过。   |
+| 真实 Web/Electron | 各 3 个 Playwright 场景通过：root/child 模型 profile 重开、Code/Cowork、多窗口，以及中英文后台分支、Stop、重复 interrupt、失败与草稿恢复。 |
 
-旧五提交的六个 Rust owner verify、TUI 调用方编译与中英文 B3 验证保留在原证据目录；已核对完整验收 JSON 的 SHA256 `3fade43ffe923a2a49d7ba9f1b6f5376cc489043734ce7567b2b4515b5f84d7d` 和五提交 rebase 等价证明。本批没有改动 Rust 或公共协议；真实 UI 入口按源码契约自动选择/准备 runtime package。
+已真实复现 Kimi 固定公开身份与并发 visibility 写入的红测，修复后转绿。首次 Electron 重跑因仍选择旧 runtime 而在 schema 握手失败；桌面准备脚本发布匹配 runtime 后，相同场景全部通过。Web 首次冷启动 fixture 超时单独保留，最终结果来自完成的重跑。没有弱化原场景断言。
 
-## 我们接着负责的工作
+## 尚需对应环境或证据的工作
 
-1. Kimi subscription 同公开身份重新登录：先确认 backend catalog/subscription/runtime 的身份范围契约，区分新设备登录与 token 轮换；现有公开 `accountId=current` 不足以证明范围相同。
-2. External `kimi-desktop` / `kimi-cli` 的凭证范围与权威目录读取：明确失败时目录保留、退役与重试语义。原引用的 epoch 提案尚未交付，不视为已经批准的实现方案。
-3. 复用原第四批恢复、权限、取消、多窗口和历史覆盖，按真实失败推进；真实 OS sleep/wake、禁用 MCP 恢复、外部账号与 Windows/Linux CI 仍需对应环境证据。
-4. 隔离 UI 记录中的麦克风枚举失败与 `TerminalOperationFailed` 先定位 owner，再决定是否属于本模块，不扩大本批修复。
+- Windows/Linux CI、真实外部账号切换、实际 OS sleep/wake、disabled MCP 跨进程重开仍缺运行证据。MCP 定向测试只证明 runtime intent 不更改 durable enablement。
+- 本批未重跑五分钟真实 B2 观察周期；周期与迟到身份隔离由 observer 回归覆盖。TUI 已编译并执行 subscription 行为测试，未宣称真实外部模型 picker 全场景验收。
+- 原隔离窗口的麦克风枚举失败与 `TerminalOperationFailed` 尚未证明根因或修复。Terminal 错误归属 app-server terminal/environment runtime；不能仅凭通用错误码判断来源。
+- `agenthost-catalog-epoch-plan.md` 仍未交付。本批复用既有 Kimi、ModelsManager、subscription observer 和前端 owner，没有假定该提案已经批准，也没有新增第二份持久模型目录。
 
-以下保留原交接快照及验证历史，以便追溯旧 SHA、失败与证据；其中未完成状态以本页当前部分为准。
+以下保留原交接快照与证据；历史未完成状态以本页当前部分为准。
 
 ## 原交接快照（接手前）
 

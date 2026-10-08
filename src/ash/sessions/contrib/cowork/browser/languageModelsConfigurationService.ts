@@ -1,6 +1,7 @@
 import type { ModelRef } from '../../../../workbench/services/chat/common/chatService.js';
 import { Emitter } from '../../../../base/common/event.js';
-import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { TaskQueue } from '../../../../base/common/async.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import type { ModelCatalogEntry } from '../../../../workbench/services/chat/common/modelCatalog.js';
@@ -13,8 +14,10 @@ export class LanguageModelsConfigurationService extends Disposable implements IL
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChangeModels = this.changed.event;
 	private readonly modelVisibility = new Map<string, ModelVisibilityPreference>();
+	private readonly visibilityUpdates = new TaskQueue();
 	constructor(private readonly preferences: { readonly defaultModelSetting: string; readonly selectedModelStorageKey: string; }, @IConfigurationService private readonly configuration: IConfigurationService, @IStorageService private readonly storage: IStorageService) {
 		super();
+		this._register(toDisposable(() => this.visibilityUpdates.clearPending()));
 		this.acceptHiddenModels(configuration.getValue(ModelCatalogConfiguration.hiddenModels));
 		this._register(storage.onDidChangeValue(event => {
 			if (event.scope === StorageScope.PROFILE && event.key === this.preferences.selectedModelStorageKey) { this.changed.fire(); }
@@ -48,12 +51,15 @@ export class LanguageModelsConfigurationService extends Disposable implements IL
 		return preference ? preference.visible === true : isModelVisibleByDefault(model);
 	}
 
-	public async setModelVisible(model: ModelRef, visible: boolean): Promise<void> {
-		const identity = modelRefIdentity(model);
-		if (visible === this.isModelVisible(model)) { return; }
-		const models = [...this.modelVisibility.values()].filter(candidate => modelRefIdentity(candidate) !== identity);
-		if (visible !== isModelVisibleByDefault(model)) { models.push(visible ? { ...model, visible: true } : { ...model }); }
-		await this.configuration.updateValue(ModelCatalogConfiguration.hiddenModels, models);
+	public setModelVisible(model: ModelRef, visible: boolean): Promise<void> {
+		return this.visibilityUpdates.schedule(async () => {
+			// Recompute after the previous durable write: separate switches share one setting.
+			const identity = modelRefIdentity(model);
+			if (visible === this.isModelVisible(model)) { return; }
+			const models = [...this.modelVisibility.values()].filter(candidate => modelRefIdentity(candidate) !== identity);
+			if (visible !== isModelVisibleByDefault(model)) { models.push(visible ? { ...model, visible: true } : { ...model }); }
+			await this.configuration.updateValue(ModelCatalogConfiguration.hiddenModels, models);
+		});
 	}
 
 	private acceptHiddenModels(models: readonly ModelVisibilityPreference[]): void {
