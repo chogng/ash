@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Page } from '@playwright/test';
+import { QuickAccess } from '../../../automation/quickaccess.js';
 import { expect, test } from '../../../automation/test.js';
 import { AppServerProtocolClient } from '../../../../src/ash/platform/agentHost/browser/appServerProtocolClient.js';
 import { ChildProcessJsonlTransport } from '../../../../src/ash/platform/agentHost/node/childProcessJsonlTransport.js';
@@ -8,10 +9,8 @@ import { createAppServerDaemonLauncher } from '../../../../src/ash/platform/app-
 import { APP_SERVER_METHODS } from '../../../../.build/protocol/typescript/index.js';
 import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION } from '../../../../src/ash/platform/agentHost/common/appServerTransport.js';
 
-async function openTrace(page: Page, title = 'View Execution Trace'): Promise<void> {
-	await page.keyboard.press('F1');
-	await page.locator('.ash-quick-pick').getByRole('combobox').fill(title);
-	await page.locator('.ash-quick-pick').getByRole('combobox').press('Enter');
+async function openTrace(page: Page): Promise<void> {
+	await new QuickAccess(page).runCommand('sessions.trace.open');
 	await expect(page.locator('.ash-agent-trace')).toBeVisible();
 }
 
@@ -148,7 +147,7 @@ test('Execution Trace command and help use Chinese in the real Sessions window',
 	await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
 	await expect(workbench.page.locator('.ash-agent-trace')).toHaveCount(0);
 	const page = await workbench.openAgentsWindow(target.kind);
-	await openTrace(page, '查看执行 Trace');
+	await openTrace(page);
 	const viewer = page.locator('.ash-agent-trace');
 	await expect(viewer.getByRole('button', { name: '导入 Trace', exact: true })).toBeVisible();
 	await expect(viewer.getByRole('button', { name: '查看请求／响应', exact: true })).toBeVisible();
@@ -265,4 +264,88 @@ test('Execution Trace opens current saved history and follows real new Turns and
 		await frames?.close(); launcher?.dispose();
 		if (!frames && !page.isClosed()) { await page.evaluate(() => (globalThis as typeof globalThis & { ashTraceFixtureSocket?: WebSocket; }).ashTraceFixtureSocket?.close()); }
 	}
+});
+
+test('Execution Trace keeps the latest import and reviews exported evidence offline', async ({ application, workbench }, testInfo) => {
+	await workbench.quickaccess.runCommand('ash.agentTrace.open');
+	const page = workbench.page;
+	const viewer = page.locator('.ash-agent-trace');
+	await page.evaluate(() => {
+		const read = File.prototype.text;
+		const pending = new Map<string, (text: string) => void>();
+		File.prototype.text = function (): Promise<string> {
+			if (['earlier.json', 'latest.json'].includes(this.name)) { return new Promise(resolve => pending.set(this.name, resolve)); }
+			return read.call(this);
+		};
+		(globalThis as typeof globalThis & { ashTraceImportFixture: { names(): string[]; finish(name: string, text: string): void; }; }).ashTraceImportFixture = {
+			names: () => [...pending.keys()],
+			finish(name, text) { pending.get(name)!(text); pending.delete(name); },
+		};
+	});
+	const event = (sequence: number, value: Record<string, unknown>): unknown => ({ eventId: `event-${sequence}`, sequence, recordedAt: sequence, event: { ...value, threadId: 'root', turnId: 'review-turn' } });
+	const trace = {
+		formatVersion: 3, sessionId: 'offline-review', futureField: 'retained', historyPrefixes: [{ prefixId: 'retained-prefix', events: [] }],
+		threads: [{
+			threadId: 'root', events: [
+				event(1, { type: 'threadCreated', title: 'Offline execution review' }),
+				event(2, { type: 'turnAccepted' }),
+				event(3, { type: 'itemCompleted', item: { type: 'toolCall', toolCallId: 'shell-call', name: 'shell' } }),
+				event(4, { type: 'itemCompleted', item: { type: 'toolResult', toolCallId: 'shell-call', text: 'offline failure: exit 1', isError: true } }),
+			]
+		}],
+		diagnostics: {
+			formatVersion: 1, captureId: 'review-capture', recordingStatus: 'incomplete', droppedRecords: 1,
+			events: [
+				{ eventId: 'model-start', sequence: 1, recordedAt: 1, threadId: 'root', turnId: 'review-turn', event: { type: 'modelAttemptStarted', attemptId: 'review-model', requestPayload: { payloadId: 'payload-1', kind: 'coreRequest', byteLength: 1, status: 'saved', digest: 'sha256:' + '0'.repeat(64) } } },
+				{ eventId: 'model-response', sequence: 2, recordedAt: 2, threadId: 'root', turnId: 'review-turn', event: { type: 'modelAttemptCompleted', attemptId: 'review-model', responsePayload: { payloadId: 'payload-2', kind: 'modelResponse', byteLength: 1, status: 'saved', digest: 'sha256:' + '0'.repeat(64) } } },
+			],
+			payloads: { 'payload-1': { instructions: 'Offline review instructions', input: [] }, 'payload-2': { output: [{ type: 'toolCall', value: { id: 'shell-call' } }] } },
+		},
+		graph: {
+			nodes: {
+				model: { id: 'model', kind: 'modelAttempt', label: 'Offline model', threadId: 'root', turnId: 'review-turn', eventKey: 'diagnostic:1' },
+				tool: { id: 'tool', kind: 'toolCall', label: 'shell', threadId: 'root', turnId: 'review-turn', eventKey: 'root:3' },
+				result: { id: 'result', kind: 'toolResult', label: 'failed result', threadId: 'root', turnId: 'review-turn', eventKey: 'root:4' },
+			},
+			edges: [{ from: 'model', to: 'tool', kind: 'requestsTool' }, { from: 'tool', to: 'result', kind: 'result' }], warnings: ['one historical record omitted'],
+		},
+	};
+	await viewer.locator('input[type=file]').setInputFiles({ name: 'earlier.json', mimeType: 'application/json', buffer: Buffer.from('{}') });
+	await viewer.locator('input[type=file]').setInputFiles({ name: 'latest.json', mimeType: 'application/json', buffer: Buffer.from('{}') });
+	await expect.poll(() => page.evaluate(() => (globalThis as typeof globalThis & { ashTraceImportFixture: { names(): string[]; }; }).ashTraceImportFixture.names())).toEqual(['earlier.json', 'latest.json']);
+	await page.evaluate(() => (globalThis as typeof globalThis & { ashTraceImportFixture: { finish(name: string, text: string): void; }; }).ashTraceImportFixture.finish('earlier.json', JSON.stringify({ formatVersion: 3, sessionId: 'earlier', threads: [], historyPrefixes: [] })));
+	await expect(viewer.getByRole('button', { name: 'Export trace', exact: true })).toBeDisabled();
+	await page.evaluate(trace => (globalThis as typeof globalThis & { ashTraceImportFixture: { finish(name: string, text: string): void; }; }).ashTraceImportFixture.finish('latest.json', JSON.stringify(trace)), trace);
+	await expect(viewer.getByRole('status')).toHaveText('Imported · latest.json');
+	await expect(viewer.locator('.ash-agent-trace-event')).toHaveCount(6);
+	await viewer.locator('.ash-agent-trace-event[data-key="diagnostic:1"]').click();
+	await viewer.getByRole('button', { name: 'View request / response', exact: true }).click();
+	await expect(viewer.getByRole('region', { name: 'Execution event details' })).toContainText('Offline review instructions');
+	await viewer.getByRole('button', { name: 'View relationships', exact: true }).click();
+	await viewer.locator('.ash-agent-trace-relation').filter({ hasText: 'shell' }).click();
+	await expect(viewer.locator('.ash-agent-trace-event[data-key="root:3"]')).toHaveAttribute('aria-pressed', 'true');
+	await viewer.getByRole('button', { name: 'Errors only', exact: true }).click();
+	await expect(viewer.locator('.ash-agent-trace-event:visible')).toHaveCount(1);
+	await viewer.locator('.ash-agent-trace-event[data-key="root:4"]').click();
+	await expect(viewer.getByRole('region', { name: 'Execution event details' })).toContainText('offline failure: exit 1');
+	let exportedPath: string;
+	if ('windows' in application) {
+		exportedPath = testInfo.outputPath('offline-review.json');
+		await application.evaluate(({ BrowserWindow }, path) => {
+			BrowserWindow.getAllWindows()[0]!.webContents.session.once('will-download', (_event, item) => item.setSavePath(path));
+		}, exportedPath);
+		await viewer.getByRole('button', { name: 'Export trace', exact: true }).click();
+		await expect.poll(async () => { try { return JSON.parse(await readFile(exportedPath, 'utf8')); } catch { return undefined; } }).toEqual(trace);
+	} else {
+		const pending = page.waitForEvent('download');
+		await viewer.getByRole('button', { name: 'Export trace', exact: true }).click();
+		exportedPath = (await (await pending).path())!;
+	}
+	const exported = await readFile(exportedPath);
+	expect(JSON.parse(exported.toString())).toEqual(trace);
+	await viewer.locator('input[type=file]').setInputFiles({ name: 'reviewed.json', mimeType: 'application/json', buffer: exported });
+	await expect(viewer.getByRole('status')).toHaveText('Imported · reviewed.json');
+	await expect(viewer.getByRole('region', { name: 'Execution event details' })).toContainText('offline failure: exit 1');
+	await expect(viewer.locator('.ash-agent-trace-summary')).toContainText('1 records omitted');
+	await testInfo.attach('execution-trace-offline-review', { body: await viewer.screenshot(), contentType: 'image/png' });
 });

@@ -304,7 +304,7 @@ suite('Execution Trace editor', () => {
 				assert.equal(selected?.dataset.key, scenario.key);
 				if (scenario.eventId) {
 					assert.match(pane.getAccessibleContent(), new RegExp(`"eventId": "${scenario.eventId}"`));
-					const filter = dom.window.document.querySelector<HTMLInputElement>('.ash-inputbox input')!;
+					const filter = dom.window.document.querySelector<HTMLInputElement>('input[aria-label="Filter execution events"]')!;
 					filter.value = 'no-such-filter-match';
 					filter.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
 					assert.equal(selected!.hidden, true);
@@ -318,6 +318,149 @@ suite('Execution Trace editor', () => {
 				} else {
 					assert.equal(dom.window.document.querySelectorAll('.ash-agent-trace-event').length, 0);
 					assert.doesNotMatch(pane.getAccessibleContent(), /Finding saved execution event|Located child/);
+				}
+			} finally { dom.window.close(); }
+		});
+	}
+
+	for (const order of ['older first', 'newer first', 'newer invalid', 'older fails'] as const) {
+		test(`keeps the last selected import when ${order}`, async () => {
+			const dom = new JSDOM('<!doctype html><body></body>');
+			try {
+				using services = new InstantiationService();
+				using configuration = new InMemoryConfigurationService();
+				using context = new ContextKeyService();
+				services.registerInstance(IConfigurationService, configuration);
+				services.registerInstance(IContextKeyService, context);
+				services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
+				services.registerInstance(IChatService, { onDidChangeSession: Event.None, onDidUpdateThread: Event.None, onDidBecomeReady: Event.None } as unknown as IChatService);
+				using pane = registerTestComponentServices(services).createInstance(AgentTraceEditor);
+				pane.create(dom.window.document.body);
+				await pane.setInput({ resource: createAgentTraceResource() }, new AbortController().signal);
+				const input = dom.window.document.querySelector<HTMLInputElement>('input[type=file]')!;
+				const selectFile = (name: string, content: Promise<string>): void => {
+					const file = new dom.window.File([], name);
+					Object.defineProperty(file, 'text', { value: () => content });
+					Object.defineProperty(input, 'files', { configurable: true, value: [file] });
+					input.dispatchEvent(new dom.window.Event('change'));
+				};
+				const capture = (id: string): string => JSON.stringify({ formatVersion: 3, sessionId: id, historyPrefixes: [], threads: [{ threadId: id, events: [{ eventId: id, sequence: 1, recordedAt: 1, event: { type: 'threadCreated', threadId: id, title: id } }] }] });
+				const older = new DeferredPromise<string>();
+				const newer = new DeferredPromise<string>();
+				selectFile('older.json', older.p);
+				selectFile('newer.json', newer.p);
+				if (order === 'older first') {
+					await older.complete(capture('older'));
+					assert.equal(dom.window.document.querySelectorAll('.ash-agent-trace-event').length, 0);
+					await newer.complete(capture('newer'));
+				} else if (order === 'newer invalid') {
+					await newer.complete('{"formatVersion":2}');
+					await older.complete(capture('older'));
+				} else if (order === 'older fails') {
+					await older.error(new Error('old file failed'));
+					assert.doesNotMatch(pane.getAccessibleContent(), /old file failed/);
+					await newer.complete(capture('newer'));
+				} else {
+					await newer.complete(capture('newer'));
+					await older.complete(capture('older'));
+				}
+				await Promise.resolve();
+				if (order === 'newer invalid') {
+					assert.match(pane.getAccessibleContent(), /Expected rollout format version 3/);
+					assert.equal(dom.window.document.querySelectorAll('.ash-agent-trace-event').length, 0);
+				} else {
+					assert.match(pane.getAccessibleContent(), /Imported · newer.json/);
+					assert.equal(dom.window.document.querySelector<HTMLElement>('.ash-agent-trace-thread')?.dataset.threadId, 'newer');
+				}
+			} finally { dom.window.close(); }
+		});
+	}
+
+	for (const scenario of ['refresh', 'hide', 'close', 'replace', 'payload failure', 'captured relationships'] as const) {
+		test(`keeps one bounded export while ${scenario}`, async () => {
+			const dom = new JSDOM('<!doctype html><body></body>');
+			try {
+				using services = new InstantiationService();
+				using configuration = new InMemoryConfigurationService();
+				using context = new ContextKeyService();
+				const payload = new DeferredPromise<unknown>();
+				const requested = new DeferredPromise<void>();
+				const refreshed = new DeferredPromise<void>();
+				const downloaded = new DeferredPromise<void>();
+				const artifacts: Blob[] = [];
+				const captured = scenario === 'captured relationships';
+				let payloadReads = 0;
+				let graphReads = 0;
+				dom.window.URL.createObjectURL = blob => { assert.ok(blob instanceof Blob); artifacts.push(blob); void downloaded.complete(); return 'blob:trace'; };
+				dom.window.URL.revokeObjectURL = () => { };
+				dom.window.HTMLAnchorElement.prototype.click = () => { };
+				services.registerInstance(IConfigurationService, configuration);
+				services.registerInstance(IContextKeyService, context);
+				services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
+				const graph = {
+					nodes: {
+						root: { id: 'root', kind: 'thread', label: 'Root', threadId: 'root', turnId: null, eventKey: 'root:1' },
+						tool: { id: 'tool', kind: 'toolCall', label: 'Tool', threadId: 'root', turnId: 'turn', eventKey: 'root:2' },
+						attempt: { id: 'attempt', kind: 'modelAttempt', label: 'Model', threadId: 'root', turnId: 'turn', eventKey: 'diagnostic:1' },
+						later: { id: 'later', kind: 'toolCall', label: 'Later nested call', threadId: 'root', turnId: 'turn', eventKey: 'root:3' },
+						cell: { id: 'cell', kind: 'codeCell', label: 'Later cell', threadId: 'root', turnId: 'turn', eventKey: 'root:2' },
+					},
+					edges: [{ from: 'root', to: 'tool', kind: 'owns' }, { from: 'root', to: 'attempt', kind: 'owns' }, { from: 'attempt', to: 'tool', kind: 'requestsTool' }, { from: 'tool', to: 'cell', kind: 'executes' }, { from: 'cell', to: 'later', kind: 'nestedTool' }], warnings: [],
+				};
+				services.registerInstance(IChatService, {
+					onDidChangeSession: Event.None, onDidUpdateThread: Event.None, onDidBecomeReady: Event.None,
+					readTrace: async (sessionId: string, after: Readonly<Record<string, number>>) => ({
+						trace: { formatVersion: 3, sessionId, futureField: 'retained', historyPrefixes: [{ prefixId: 'saved' }], threads: [{ threadId: 'root', events: after.root ? [{ eventId: 'later', sequence: 3, recordedAt: 3, event: { type: 'turnCompleted', threadId: 'root', turnId: 'later' } }] : [{ eventId: 'root', sequence: 1, recordedAt: 1, event: { type: 'threadCreated', threadId: 'root' } }, { eventId: 'tool', sequence: 2, recordedAt: 2, event: { type: 'itemCompleted', threadId: 'root', turnId: 'turn', item: { type: 'toolCall', toolCallId: 'tool', name: 'shell' } } }, ...(captured ? [{ eventId: 'nested', sequence: 3, recordedAt: 3, event: { type: 'itemCompleted', threadId: 'root', turnId: 'turn', item: { type: 'toolCall', toolCallId: 'nested', name: 'nested' } } }] : [])] }] }, cursors: { root: after.root ? 3 : captured ? 3 : 2 }, hasMore: false,
+					}),
+					readTraceDiagnostics: async (_session: string, after: number) => {
+						if (after) { void refreshed.complete(); }
+						return { diagnostics: { formatVersion: 1, captureId: 'capture', recordingStatus: 'disabled', droppedRecords: 0, events: after ? [] : [{ eventId: 'request', threadId: 'root', turnId: 'turn', sequence: 1, recordedAt: 1, event: { type: 'modelAttemptStarted', attemptId: 'attempt', requestPayload: { payloadId: 'payload-1', kind: 'coreRequest', byteLength: 1, status: 'saved', digest: 'sha256:' + '0'.repeat(64) } } }, ...(captured ? [{ eventId: 'completed', threadId: 'root', turnId: 'turn', sequence: 2, recordedAt: 2, event: { type: 'modelAttemptCompleted', attemptId: 'attempt' } }] : [])] }, cursor: captured ? 2 : 1, hasMore: false };
+					},
+					readTracePayload: () => { payloadReads++; void requested.complete(); return payload.p; },
+					readTraceGraph: async () => { graphReads++; return graph; },
+					subscribeThread: async (_session: string, _thread: string, after: number) => ({ thread: { sequence: after } }), unsubscribeThread: async () => { },
+				} as unknown as IChatService);
+				using pane = registerTestComponentServices(services).createInstance(AgentTraceEditor);
+				pane.create(dom.window.document.body);
+				await pane.setInput({ resource: createAgentTraceResource('s') }, new AbortController().signal);
+				const button = [...dom.window.document.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Export trace')!;
+				button.click();
+				await requested.p;
+				assert.equal(button.disabled, true);
+				const filter = dom.window.document.querySelector<HTMLInputElement>('input[aria-label="Filter execution events"]')!;
+				filter.value = 'no visible rows';
+				filter.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+				assert.equal(button.disabled, true);
+				button.click();
+				assert.equal(payloadReads, 1);
+				if (scenario === 'hide') { pane.setVisible(false); }
+				else if (scenario === 'close') { pane.clearInput(); }
+				else if (scenario === 'replace') { await pane.setInput({ resource: createAgentTraceResource('other') }, new AbortController().signal); }
+				else {
+					[...dom.window.document.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Refresh')!.click();
+					await refreshed.p;
+					await Promise.resolve();
+					assert.equal(dom.window.document.querySelectorAll('.ash-agent-trace-event').length, captured ? 5 : 4);
+					assert.equal(button.disabled, true);
+				}
+				if (scenario === 'payload failure') { await payload.error(new Error('payload unavailable')); }
+				else { await payload.complete({ instructions: 'saved evidence' }); }
+				await Promise.resolve();
+				if (['hide', 'close', 'replace'].includes(scenario)) {
+					assert.equal(artifacts.length, 0);
+					assert.equal(graphReads, 0);
+				} else {
+					await downloaded.p;
+					assert.equal(artifacts.length, 1);
+					const artifact = JSON.parse(await artifacts[0].text());
+					assert.equal(artifact.futureField, 'retained');
+					assert.deepEqual(artifact.historyPrefixes, [{ prefixId: 'saved' }]);
+					assert.deepEqual(artifact.threads[0].events.map((event: { sequence: number; }) => event.sequence), captured ? [1, 2, 3] : [1, 2]);
+					assert.deepEqual(Object.keys(artifact.graph.nodes), captured ? Object.keys(graph.nodes) : ['root', 'tool', 'attempt']);
+					assert.deepEqual(artifact.graph.edges, captured ? graph.edges : graph.edges.slice(0, 2));
+					assert.equal(artifact.graph.warnings.length > 0, !captured);
+					assert.equal(artifact.diagnostics.recordingStatus, scenario === 'payload failure' ? 'incomplete' : 'disabled');
+					assert.equal(button.disabled, false);
 				}
 			} finally { dom.window.close(); }
 		});

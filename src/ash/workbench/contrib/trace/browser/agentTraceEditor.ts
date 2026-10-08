@@ -47,6 +47,8 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 	private readonly subscriptions = new Set<string>();
 	private subscriptionOwner: object = {};
 	private revision = 0;
+	private importSelection = 0;
+	private exportOperation: object | undefined;
 	private loading = false;
 	private dirty = false;
 	private isShown = true;
@@ -188,6 +190,8 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 
 	public override clearInput(): void {
 		this.revision++;
+		this.importSelection++;
+		this.exportOperation = undefined;
 		this.pendingInput.clear();
 		this.inputSignal = undefined;
 		this.refreshScheduler.cancel();
@@ -288,22 +292,25 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 
 	private async importFile(file: File): Promise<void> {
 		const revision = this.revision;
+		// Selection order owns the result, even when a newer file fails before an older read.
+		const selection = ++this.importSelection;
 		try {
 			if (file.size > 64 * 1024 * 1024) { throw new Error(localize('agentTrace.fileSize', 'Trace files must be smaller than 64 MiB.')); }
-			const trace = parseAgentTrace(JSON.parse(await file.text()));
-			if (revision !== this.revision || this.isDisposed) { return; }
+			const text = await file.text();
+			if (revision !== this.revision || selection !== this.importSelection || this.isDisposed) { return; }
+			const trace = parseAgentTrace(JSON.parse(text));
 			this.clearInput();
 			this.trace = trace;
 			this.statusDomNode.textContent = localize('agentTrace.imported', 'Imported · {0}', file.name);
 			this.render();
 		} catch (error) {
-			if (revision === this.revision && !this.isDisposed) { this.statusDomNode.textContent = localize('agentTrace.failed', 'Could not load trace: {0}', String(error)); }
+			if (revision === this.revision && selection === this.importSelection && !this.isDisposed) { this.statusDomNode.textContent = localize('agentTrace.failed', 'Could not load trace: {0}', String(error)); }
 		}
 	}
 
 	private render(): void {
 		if (!this.domNode) { return; }
-		this.exportButton.enabled = !!this.trace;
+		this.exportButton.enabled = !!this.trace && !this.exportOperation;
 		this.relationsButton.enabled = !!this.trace;
 		this.locationDomNode.hidden = !this.location?.threadId;
 		if (!this.location?.threadId) { this.locationDomNode.textContent = ''; }
@@ -508,8 +515,11 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 	}
 
 	private async exportTrace(): Promise<void> {
-		if (!this.trace) { return; }
+		if (!this.trace || this.exportOperation) { return; }
 		const revision = this.revision;
+		const sessionId = this.sessionId;
+		const operation = {};
+		this.exportOperation = operation;
 		this.exportButton.enabled = false;
 		try {
 			const capture = this.trace;
@@ -517,21 +527,30 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 			let incomplete = false;
 			for (const record of capture.diagnostics?.events ?? []) {
 				const payload = diagnosticPayload(record);
-				if (!payload || payload.status !== 'saved' || Object.hasOwn(payloads, payload.payloadId)) { continue; }
-				if (!this.sessionId || !capture.diagnostics?.captureId) { incomplete = true; continue; }
-				try { payloads[payload.payloadId] = await this.chat.readTracePayload(this.sessionId, capture.diagnostics.captureId, payload.payloadId); }
+				if (!payload) { continue; }
+				if (payload.status !== 'saved') { incomplete = true; continue; }
+				if (Object.hasOwn(payloads, payload.payloadId)) { continue; }
+				if (!sessionId || !capture.diagnostics?.captureId) { incomplete = true; continue; }
+				try { payloads[payload.payloadId] = await this.chat.readTracePayload(sessionId, capture.diagnostics.captureId, payload.payloadId); }
 				catch { incomplete = true; }
 				if (revision !== this.revision || this.isDisposed) { return; }
 			}
-			const graph = capture.graph ?? (this.sessionId ? await this.chat.readTraceGraph(this.sessionId) : undefined);
+			let graph = capture.graph ?? (sessionId ? await this.chat.readTraceGraph(sessionId) : undefined);
 			if (revision !== this.revision || this.isDisposed) { return; }
+			if (graph && sessionId) { graph = graphForCapture(capture, graph); }
 			const artifact = { ...capture, graph, diagnostics: capture.diagnostics && { ...capture.diagnostics, payloads, recordingStatus: incomplete ? 'incomplete' : capture.diagnostics.recordingStatus } };
 			const serialized = JSON.stringify(artifact, null, 2);
 			const blob = new Blob([serialized], { type: 'application/json' });
 			if (blob.size > 64 * 1024 * 1024) { throw new Error(localize('agentTrace.fileSize', 'Trace files must be smaller than 64 MiB.')); }
 			triggerDownload(blob, 'session.agent-trace.json', this.domNode.ownerDocument);
 		} catch (error) { if (revision === this.revision && !this.isDisposed) { this.statusDomNode.textContent = localize('agentTrace.failed', 'Could not load trace: {0}', String(error)); } }
-		finally { if (revision === this.revision && !this.isDisposed) { this.exportButton.enabled = !!this.trace; } }
+		finally {
+			// An older export must not unlock a replacement input's operation.
+			if (this.exportOperation === operation) {
+				this.exportOperation = undefined;
+				if (!this.isDisposed) { this.exportButton.enabled = !!this.trace; }
+			}
+		}
 	}
 
 	public getAccessibleContent(): string {
@@ -547,6 +566,8 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 		if (visible) { this.requestRefresh(); }
 		else {
 			this.revision++;
+			this.exportOperation = undefined;
+			this.exportButton.enabled = !!this.trace;
 			this.refreshScheduler.cancel();
 			this.diagnosticPoll.cancel();
 			this.releaseSubscriptions();
@@ -558,6 +579,39 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 	public override layout(dimension: IDimension): void { this.domNode.style.width = `${dimension.width}px`; this.domNode.style.height = `${dimension.height}px`; }
 	public override focus(): void { (this.selected && this.rows.get(this.selected) || this.filter.inputElement).focus(); }
 	public override getControl(): IEditorControl | undefined { return undefined; }
+}
+
+
+/** The server graph may advance during payload reads; export only identities in the frozen capture.
+ * Missing causal witnesses remain omissions rather than borrowing later diagnostic responses. */
+function graphForCapture(capture: AgentTrace, graph: AgentTraceGraph): AgentTraceGraph {
+	const threads = new Map(capture.threads.map(thread => [thread.threadId, thread]));
+	const eventKeys = new Set(capture.threads.flatMap(thread => thread.events.map(record => `${thread.threadId}:${record.sequence}`)));
+	const diagnostics = new Map((capture.diagnostics?.events ?? []).map(record => [`diagnostic:${record.sequence}`, record]));
+	for (const key of diagnostics.keys()) { eventKeys.add(key); }
+	const completed = new Set([...diagnostics.values()].filter(record => record.event.type === 'modelAttemptCompleted').map(record => JSON.stringify([record.threadId, record.turnId, record.event.attemptId])));
+	const nodes = Object.fromEntries(Object.entries(graph.nodes).filter(([, node]) => node.eventKey !== null ? eventKeys.has(node.eventKey) : node.kind === 'thread' && threads.has(node.threadId)));
+	// A Code Mode cell points at its parent call; its nested call supplies the cell's evidence.
+	const cells = new Set(graph.edges.filter(edge => edge.kind === 'nestedTool' && nodes[edge.to]).map(edge => edge.from));
+	for (const node of Object.values(nodes)) {
+		if (node.kind === 'codeCell' && !cells.has(node.id)) { delete nodes[node.id]; }
+	}
+	const edges = graph.edges.filter(edge => {
+		const from = nodes[edge.from];
+		const to = nodes[edge.to];
+		if (!from || !to) { return false; }
+		if (edge.kind === 'requestsTool') {
+			const attempt = diagnostics.get(from.eventKey ?? '');
+			return !!attempt && completed.has(JSON.stringify([attempt.threadId, attempt.turnId, attempt.event.attemptId]));
+		}
+		if (edge.kind === 'delegates') {
+			return !!threads.get(from.threadId)?.events.some(record => record.event.type === 'delegationStarted' && record.event.childThreadId === to.threadId);
+		}
+		return true;
+	});
+	const omitted = Object.keys(graph.nodes).length - Object.keys(nodes).length + graph.edges.length - edges.length;
+	const warnings = omitted ? [...graph.warnings, localize('agentTrace.graphScope', '{0} relationship entries excluded: their saved events or causal evidence are outside this capture.', omitted)] : graph.warnings;
+	return { ...graph, nodes, edges, warnings };
 }
 
 function eventIsError(record: AgentTraceEvent): boolean {
