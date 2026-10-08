@@ -1,5 +1,6 @@
+import { sessionManagementLabel } from '../sessionManagementLabels.js';
 import { onUnexpectedError } from '../../../base/common/errors.js';
-import { localize2 } from '../../../nls.js';
+import { localize, localize2 } from '../../../nls.js';
 import { Lxicon } from "../../../base/common/lxicons.js";
 import { DisposableStore } from "../../../base/common/lifecycle.js";
 import { Action2, MenuId, registerAction2 } from "../../../platform/actions/common/actions.js";
@@ -83,7 +84,8 @@ registerAction2(class ShowChatHistoryAction extends Action2 {
 				sessionId: session.sessionId,
 				threadId: thread.threadId,
 				label: session.title.trim() || "Chat",
-				description: threads.length > 1 ? `Thread ${index + 1}` : undefined,
+				description: [threads.length > 1 ? localize('sessions.history.thread', 'Thread {0}', index + 1) : undefined, sessionManagementLabel(thread.management)].filter(Boolean).join(' · ') || undefined,
+				detail: thread.management?.activity?.text ?? thread.management?.summary ?? undefined,
 			}));
 		});
 		disposables.add(quickPick.onDidAccept((item) => {

@@ -3,7 +3,7 @@ import { isCancellationError } from "../../../../base/common/errors.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { createUuid } from "../../../../base/common/uuid.js";
 import { observableValue } from "../../../../base/common/observable.js";
-import type { IActiveSessionThread, IUntitledChatSession, ISession, ModelRef, SessionId, SessionWorkspaceSelection, ThreadId } from "../common/session.js";
+import type { IActiveSessionThread, IUntitledChatSession, ISession, SessionManagementInfo, ModelRef, SessionId, SessionWorkspaceSelection, ThreadId } from "../common/session.js";
 import type { ISessionsManagementService, SessionsManagementState } from "../common/sessionsManagement.js";
 import type { ISessionsProvider } from "../common/sessionsProvider.js";
 import type { ChatAgent } from '../../../../workbench/services/chat/common/chatService.js';
@@ -346,12 +346,17 @@ function sameModel(left: ModelRef | null | undefined, right: ModelRef | null | u
 	return left?.provider === right?.provider && left?.model === right?.model;
 }
 
+function sameManagement(left: SessionManagementInfo | undefined, right: SessionManagementInfo | undefined): boolean {
+	return left?.status === right?.status && left?.statusChangedAtUnixMs === right?.statusChangedAtUnixMs
+		&& left?.activity?.type === right?.activity?.type && left?.activity?.text === right?.activity?.text && left?.summary === right?.summary;
+}
+
 function sameSession(left: ISession | undefined, right: ISession | undefined): boolean {
 	if (!left || !right) return left === right;
 	if (left.title !== right.title || left.status !== right.status || left.agentTree !== right.agentTree || left.chats.length !== right.chats.length) return false;
-	if (!sameModel(left.model, right.model) || left.workspace?.authorityId !== right.workspace?.authorityId || left.workspace?.root !== right.workspace?.root) return false;
+	if (!sameManagement(left.management, right.management) || !sameModel(left.model, right.model) || left.workspace?.authorityId !== right.workspace?.authorityId || left.workspace?.root !== right.workspace?.root) return false;
 	return left.chats.every((chat, index) => {
 		const next = right.chats[index];
-		return next?.threadId === chat.threadId && next.status === chat.status && next.title === chat.title && next.executionStatus === chat.executionStatus;
+		return next?.threadId === chat.threadId && next.status === chat.status && next.title === chat.title && next.executionStatus === chat.executionStatus && sameManagement(next.management, chat.management);
 	});
 }

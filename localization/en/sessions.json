@@ -1,5 +1,14 @@
 {
   "ash": {
+    "sessions.history.thread": "Thread {0}",
+    "sessions.management.help": "The session list shows background activity without opening conversations. Needs input, Working, Ready for review, Failed and Stopped are management states. Session History shows the state of each branch. Opening a branch preserves the other conversations and drafts.",
+    "sessions.management.idle": "Idle",
+    "sessions.management.needsInput": "Needs input",
+    "sessions.management.working": "Working",
+    "sessions.management.readyForReview": "Ready for review",
+    "sessions.management.completed": "Completed",
+    "sessions.management.failed": "Failed",
+    "sessions.management.stopped": "Stopped",
     "sessions.conversation.editorName": "Session",
     "sessions.settings.executionTrace": "Execution trace",
     "sessions.activity.chat": "Chat",

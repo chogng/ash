@@ -243,6 +243,7 @@ fn session() -> Session {
 
 fn root() -> SessionThread {
     SessionThread {
+        manager: None,
         thread_id: thread_id("root"),
         title: "Main Task".into(),
         created_at_unix_ms: 1_000,
@@ -257,6 +258,7 @@ fn root() -> SessionThread {
 
 fn child(value: &str) -> SessionThread {
     SessionThread {
+        manager: None,
         thread_id: thread_id(value),
         title: value.into(),
         created_at_unix_ms: 1_000,

@@ -44,12 +44,21 @@ export interface AgentTreeNode {
 	readonly children: readonly AgentTreeNode[];
 }
 
+/** Coarse durable activity; this does not identify an exact Turn state or waiting reason. */
+export interface SessionManagementInfo {
+	readonly status: 'idle' | 'needsInput' | 'working' | 'readyForReview' | 'completed' | 'failed' | 'stopped';
+	readonly statusChangedAtUnixMs: number;
+	readonly activity?: { readonly type: 'operation' | 'question' | 'failure'; readonly text: string; } | null;
+	readonly summary?: string | null;
+}
+
 export interface IChat {
 	readonly threadId: ThreadId;
 	readonly origin: ThreadOrigin;
 	readonly status: ChatStatus;
 	readonly title?: string;
 	readonly executionStatus?: AgentThreadExecutionStatus;
+	readonly management?: SessionManagementInfo;
 }
 
 export type SessionStatus = "active" | "archived";
@@ -67,6 +76,7 @@ export interface ISession {
 	readonly title: string;
 	readonly status: SessionStatus;
 	readonly model?: ModelRef | null;
+	readonly management?: SessionManagementInfo;
 	readonly workspace?: {
 		readonly authorityId: string;
 		readonly root: string;

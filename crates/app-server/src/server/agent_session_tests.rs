@@ -910,3 +910,124 @@ fn analysis_modes_inspect_workflow_commands_without_launching_workflow_agents() 
         assert!(root.delegations.is_empty());
     }
 }
+
+#[test]
+fn catalog_only_connections_observe_branch_management_and_full_reads_share_its_facts() {
+    let threads = Arc::new(ThreadController::with_store(Arc::new(
+        InMemoryThreadStore::default(),
+    )));
+    let session_id = ash_protocol::SessionId::new("management-session").unwrap();
+    let thread_id = ThreadId::new(session_id.as_str()).unwrap();
+    threads
+        .create_thread(ash_core::CreateThreadRequest {
+            agent_id: ash_protocol::AgentId::new("management-agent").unwrap(),
+            origin: Default::default(),
+            agent: None,
+            session_id: session_id.clone(),
+            thread_id: thread_id.clone(),
+            title: "Management".into(),
+            execution_target: None,
+        })
+        .unwrap();
+    let (sender, _) = mpsc::channel();
+    let server = AppServer::new(threads.clone(), Arc::new(CaptureModel(sender)));
+    let mut connection = server.connection();
+    call(
+        &server,
+        &mut connection,
+        "initialize",
+        serde_json::json!({"clientInfo":{"name":"catalog-only","version":"1"}}),
+    );
+    let initial = call(
+        &server,
+        &mut connection,
+        "session/catalog/subscribe",
+        serde_json::json!({}),
+    );
+    assert_eq!(
+        initial["result"]["sessions"][0]["threads"][0]["manager"]["status"],
+        "idle"
+    );
+    connection.outbound_notifications.drain();
+    let before = threads.read_thread(&thread_id).unwrap().sequence;
+    let turn = threads
+        .start_turn(
+            &thread_id,
+            ash_core::StartTurnRequest {
+                context_policy: Default::default(),
+                mode: Default::default(),
+                advisor: None,
+                kind: ash_protocol::TurnKind::Coding,
+                instructions: ash_protocol::TurnInstructions::new(
+                    "fixture",
+                    "management",
+                    "1",
+                    "Return the synthetic answer.",
+                )
+                .unwrap(),
+                command_id: CommandId::new("management-start").unwrap(),
+                expected_sequence: core_api::SequenceExpectation::Exact(before),
+                model: None,
+                reasoning_effort: None,
+                policy_revision: "fixture-policy".into(),
+                approval_mode: ash_protocol::ApprovalMode::Manual,
+                tool_mode: ash_protocol::ToolMode::Direct,
+                tool_profile: None,
+                activated_skills: Vec::new(),
+                input: vec![ash_protocol::UserInput::Text {
+                    text: "Synthetic management test".into(),
+                }],
+            },
+        )
+        .unwrap()
+        .turn_id;
+    server.notify_thread_updates(&thread_id, before).unwrap();
+    let notifications = connection.outbound_notifications.drain();
+    assert!(
+        notifications
+            .iter()
+            .any(|value| value["method"] == "session/changed")
+    );
+    assert!(
+        !notifications
+            .iter()
+            .any(|value| value["method"] == "session/thread/updated")
+    );
+    let catalog = call(
+        &server,
+        &mut connection,
+        "session/catalog/read",
+        serde_json::json!({"sessionId":session_id}),
+    );
+    let full = call(
+        &server,
+        &mut connection,
+        "session/read",
+        serde_json::json!({"sessionId":session_id}),
+    );
+    assert_eq!(
+        catalog["result"]["session"]["threads"][0]["manager"]["status"],
+        "working"
+    );
+    assert_eq!(full["result"]["session"], catalog["result"]["session"]);
+    threads
+        .complete_turn(&thread_id, &turn, "done".into())
+        .unwrap();
+    let catalog = call(
+        &server,
+        &mut connection,
+        "session/catalog/read",
+        serde_json::json!({"sessionId":session_id}),
+    );
+    let full = call(
+        &server,
+        &mut connection,
+        "session/read",
+        serde_json::json!({"sessionId":session_id}),
+    );
+    assert_eq!(
+        catalog["result"]["session"]["threads"][0]["manager"]["status"],
+        "readyForReview"
+    );
+    assert_eq!(full["result"]["session"], catalog["result"]["session"]);
+}

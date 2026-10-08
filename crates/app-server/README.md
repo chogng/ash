@@ -70,6 +70,8 @@ RPC trace 从请求接收开始计时，记录资源等待、执行队列等待�
 语义索引重建先准备新资源，成功后替换工具和监听；失败保留当前服务。删除 grep 索引只更新
 grep 后端，不重建或移除目录执行规则。
 
+`session/read` 和被动 `session/catalog/read` 返回同源的 Session 与分支管理事实。完整读取仍按现有入口装配 Agent tree；管理状态分类由 Core 维护，App Server 不再次计算。目录订阅不授予交互权限，也不增加 Thread 历史订阅。
+
 环境和目录授权语义见 [`docs/environment-access.md`](../../docs/environment-access.md)，wire contract 见
 [`docs/ash-app-server-api.md`](../../docs/ash-app-server-api.md)。
 

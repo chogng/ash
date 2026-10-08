@@ -437,6 +437,7 @@ fn session_catalog() -> Vec<ash_protocol::Session> {
             execution_target: None,
             manager: Default::default(),
             threads: vec![ash_protocol::SessionThread {
+                manager: None,
                 thread_id: ash_protocol::ThreadId::new(name).unwrap(),
                 title: "main".into(),
                 created_at_unix_ms: 1,

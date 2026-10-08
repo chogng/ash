@@ -2788,3 +2788,60 @@ fn session_catalog_uses_root_model_even_when_a_child_uses_a_different_model() {
         Some(model)
     );
 }
+
+#[test]
+fn passive_branch_management_follows_wait_stop_completion_and_failure() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let threads = ThreadController::with_store(store.clone());
+    let thread = create_thread(&threads, "branch management");
+    let session_id = SessionId::new("session_1").unwrap();
+    let assert_status = |status| {
+        let record = threads.thread_catalog_record(&thread).unwrap();
+        let session = threads.read_session_catalog(&session_id).unwrap().unwrap();
+        assert_eq!(record.manager.status, status);
+        assert_eq!(record.thread.manager, None);
+        assert_eq!(session.threads[0].manager, Some(record.manager));
+    };
+    assert_status(ash_protocol::SessionManagerStatus::Idle);
+    let turn = start_turn(&threads, &thread, "management-wait");
+    assert_status(ash_protocol::SessionManagerStatus::Working);
+    threads
+        .request_turn_interaction(
+            &thread,
+            &turn,
+            RequestTurnInteraction {
+                request_id: RequestId::new("management-question").unwrap(),
+                item_id: None,
+                request: user_input_interaction(),
+                deadline: None,
+            },
+        )
+        .unwrap();
+    assert_status(ash_protocol::SessionManagerStatus::NeedsInput);
+    threads
+        .interrupt_turn(
+            &thread,
+            InterruptTurnRequest {
+                command_id: CommandId::new("management-stop").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                turn_id: turn,
+            },
+        )
+        .unwrap();
+    assert_status(ash_protocol::SessionManagerStatus::Stopped);
+    let turn = start_turn(&threads, &thread, "management-complete");
+    threads
+        .complete_turn(&thread, &turn, "done".into())
+        .unwrap();
+    assert_status(ash_protocol::SessionManagerStatus::ReadyForReview);
+    let turn = start_turn(&threads, &thread, "management-fail");
+    threads
+        .fail_turn(&thread, &turn, StableTurnError::model_invocation_failed())
+        .unwrap();
+    assert_status(ash_protocol::SessionManagerStatus::Failed);
+    let reopened = ThreadController::with_store(store);
+    assert_eq!(
+        reopened.read_session_catalog(&session_id).unwrap(),
+        threads.read_session_catalog(&session_id).unwrap()
+    );
+}

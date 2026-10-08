@@ -130,6 +130,7 @@ fn resume_items_show_time_and_tokens_without_branches_or_ids() {
         execution_target: None,
         manager: Default::default(),
         threads: vec![SessionThread {
+            manager: None,
             thread_id: ThreadId::new("thread-sized").unwrap(),
             title: "main".into(),
             created_at_unix_ms: 1,

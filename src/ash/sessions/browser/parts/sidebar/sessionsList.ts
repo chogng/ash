@@ -12,6 +12,8 @@ import type { ISessionsManagementService } from "../../../services/sessions/comm
 import type { IGitHubService } from '../../../contrib/github/browser/githubService.js';
 import { getPullRequestLabel } from '../../../contrib/github/common/types.js';
 import { getHighestPriorityPullRequestIcon } from '../../../../workbench/common/chatPullRequest.js';
+import { sessionManagementLabel } from '../../sessionManagementLabels.js';
+import type { SessionManagementInfo } from '../../../services/sessions/common/session.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
 import { colorCssVariable } from '../../../../platform/theme/common/colorUtils.js';
 
@@ -120,7 +122,7 @@ export class SessionsList extends DomWidget {
 			if (!thread || session.status !== "active") continue;
 			const key = `session:${session.sessionId}`;
 			const item = this.items.get(key) ?? this.items.set(key, new SessionListItem(ownerDocument));
-			item.update(session.title || "Untitled Session", current !== undefined, () => this.viewService.openSession(session.sessionId, thread.threadId));
+			item.update(session.title || "Untitled Session", current !== undefined, () => this.viewService.openSession(session.sessionId, thread.threadId), session.management);
 			const requests = this.github.getSessionPullRequests(session.sessionId);
 			item.updatePullRequests(getHighestPriorityPullRequestIcon(requests.map(request => request.icon)), requests.map(getPullRequestLabel).join('\n'));
 			grouped.set(session.sessionId, item.domNode);
@@ -161,6 +163,9 @@ class SessionListItem extends AbstractDisposable {
 	readonly domNode: HTMLButtonElement;
 	private readonly label: HTMLSpanElement;
 	private readonly pullRequest: HTMLSpanElement;
+	private readonly management: HTMLSpanElement;
+	private managementDescription: string | undefined;
+	private pullRequestDescription = '';
 	private open: () => void = () => { };
 	private readonly clickListener;
 
@@ -175,17 +180,28 @@ class SessionListItem extends AbstractDisposable {
 		appendIcon(Lxicon.chat4, avatar);
 		this.label = h(ownerDocument, 'span');
 		this.label.className = 'ash-sessions-list-label';
+		this.management = h(ownerDocument, 'span');
+		this.management.className = 'ash-sessions-list-management';
+		this.management.hidden = true;
+		this.management.setAttribute('aria-live', 'polite');
+		const content = h(ownerDocument, 'span');
+		content.className = 'ash-sessions-list-content';
+		content.append(this.label, this.management);
 		this.pullRequest = h(ownerDocument, 'span');
 		this.pullRequest.className = 'ash-sessions-list-pr';
 		this.pullRequest.setAttribute('aria-hidden', 'true');
 		this.pullRequest.hidden = true;
-		this.domNode.append(avatar, this.label, this.pullRequest);
+		this.domNode.append(avatar, content, this.pullRequest);
 		this.clickListener = addDisposableListener(this.domNode, "click", () => this.open());
 	}
 
-	update(title: string, selected: boolean, open: () => void): void {
+	update(title: string, selected: boolean, open: () => void, management?: SessionManagementInfo): void {
 		if (this.label.textContent !== title) this.label.textContent = title;
-		this.domNode.title = title;
+		const state = sessionManagementLabel(management);
+		if (this.management.textContent !== (state ?? '')) this.management.textContent = state ?? '';
+		this.management.hidden = state === undefined;
+		this.managementDescription = [state, management?.activity?.text, management?.summary].filter(Boolean).join('. ');
+		this.updateDescription();
 		this.domNode.classList.toggle("selected", selected);
 		this.domNode.setAttribute("aria-current", selected ? "page" : "false");
 		this.open = open;
@@ -198,8 +214,14 @@ class SessionListItem extends AbstractDisposable {
 			appendIcon(icon, this.pullRequest);
 			this.pullRequest.style.color = `var(${colorCssVariable(icon.color!.id)})`;
 		}
-		this.domNode.title = description ? `${this.label.textContent}\n${description}` : this.label.textContent!;
-		this.domNode.setAttribute('aria-label', description ? `${this.label.textContent}. ${description}` : this.label.textContent!);
+		this.pullRequestDescription = description;
+		this.updateDescription();
+	}
+
+	private updateDescription(): void {
+		const parts = [this.label.textContent, this.managementDescription, this.pullRequestDescription].filter(Boolean);
+		this.domNode.title = parts.join('\n');
+		this.domNode.setAttribute('aria-label', parts.join('. '));
 	}
 
 	protected override disposeCore(): void {

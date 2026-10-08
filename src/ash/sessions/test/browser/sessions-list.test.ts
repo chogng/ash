@@ -1,3 +1,10 @@
+import { builtinLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
+import { formatNlsMessage, setNlsResolver, resetNlsResolver } from '../../../nls.js';
+import { sessionManagementLabel } from '../../browser/sessionManagementLabels.js';
+import { toDisposable } from '../../../base/common/lifecycle.js';
+import { URI } from '../../../base/common/uri.js';
+import { computePullRequestIcon } from '../../../workbench/common/chatPullRequest.js';
+import type { IResolvedSessionPullRequest } from '../../contrib/github/common/types.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -62,4 +69,50 @@ test("SessionsList keeps session buttons and focus while refreshing", () => {
 	list.dispose();
 	changes.dispose();
 	dom.window.close();
+});
+
+
+test('SessionsList updates passive status without changing row identity or selection', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using domLifetime = toDisposable(() => dom.window.close());
+	using changes = new Emitter<void>();
+	const opened: string[] = [];
+	let session = {
+		sessionId: 'background', title: 'Background session', status: 'active' as const, nextApprovalMode: 'manual' as const,
+		chats: [{ threadId: 'root', origin: { type: 'root' as const }, status: 'active' as const }],
+		management: { status: 'working', statusChangedAtUnixMs: 10 },
+	};
+	const sessionService = { get sessions() { return [session]; }, untitledSessions: [], state: 'ready' } as unknown as ISessionsManagementService;
+	const viewService = { onDidChange: changes.event, activeSelection: undefined, visibleSelections: [], openSession(id: string) { opened.push(id); } } as unknown as ISessionsService;
+	const request: IResolvedSessionPullRequest = { uri: URI.parse('https://github.com/fixture/repo/pull/7'), owner: 'fixture', repo: 'repo', number: 7, title: 'Synthetic PR', state: 'open', status: { hasFailingChecks: true }, icon: computePullRequestIcon('open', { hasFailingChecks: true }) };
+	using list = new SessionsList(dom.window.document.body, sessionService, viewService, 'Sessions', 'New Session', { onDidChange: Event.None, getSessionPullRequests: () => [request], initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { } });
+	const button = list.domNode.querySelector<HTMLButtonElement>('.ash-sessions-list-item')!;
+	button.focus();
+	const items = list.domNode.querySelector<HTMLDivElement>('.ash-sessions-list-items')!;
+	items.scrollTop = 37;
+	assert.equal(button.querySelector('.ash-sessions-list-management')?.textContent, 'Working');
+
+	session = { ...session, management: { status: 'needsInput', statusChangedAtUnixMs: 20 } };
+	changes.fire();
+	assert.equal(list.domNode.querySelector('.ash-sessions-list-item'), button);
+	assert.equal(button.querySelector('.ash-sessions-list-management')?.textContent, 'Needs input');
+	assert.equal(button.getAttribute('aria-label'), 'Background session. Needs input. fixture/repo #7 · Synthetic PR · Open · Checks failed');
+	assert.equal(button.querySelector('svg[data-ash-icon-id="git-pull-request-error"]')?.getAttribute('aria-hidden'), 'true');
+	assert.equal(button.getAttribute('aria-current'), 'false');
+	assert.equal(dom.window.document.activeElement, button);
+	assert.equal(items.scrollTop, 37);
+	assert.deepEqual(opened, []);
+	list.dispose();
+	dom.window.close();
+});
+
+
+test('passive management labels use the installed Chinese catalog and retain unknown states', () => {
+	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	try {
+		const statuses = ['idle', 'needsInput', 'working', 'readyForReview', 'completed', 'failed', 'stopped'] as const;
+		assert.deepEqual(statuses.map(status => sessionManagementLabel({ status, statusChangedAtUnixMs: 10 })), ['空闲', '需要回应', '进行中', '待审阅', '已完成', '失败', '已停止']);
+		assert.equal(sessionManagementLabel(undefined), undefined);
+	} finally { resetNlsResolver(); }
 });

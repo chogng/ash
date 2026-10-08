@@ -117,6 +117,7 @@ fn catalog(session_id: &SessionId, thread_id: &ThreadId, sequence: u64) -> Threa
         },
         session_id: session_id.clone(),
         thread: SessionThread {
+            manager: None,
             thread_id: thread_id.clone(),
             title: "Primary".into(),
             created_at_unix_ms: 1,
@@ -797,6 +798,89 @@ fn sqlite_session_list_tracks_thread_archive_in_the_event_transaction() {
     drop(connection);
     drop(store);
     fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn sqlite_session_cache_migration_retains_outer_branch_management_without_history_replay() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("branch-management.sqlite3");
+    let session_id = SessionId::new("branch-management").unwrap();
+    let thread_id = ThreadId::new(session_id.as_str()).unwrap();
+    let store = SqliteThreadStore::open(&path).unwrap();
+    append_created_thread(&store, &session_id, &thread_id, 1);
+    let mut record = catalog(&session_id, &thread_id, 1);
+    record.manager = SessionManagerInfo {
+        status: ash_protocol::SessionManagerStatus::NeedsInput,
+        status_changed_at_unix_ms: 23,
+        activity: Some(ash_protocol::SessionManagerActivity::Question {
+            text: "Choose a path".into(),
+        }),
+        summary: None,
+    };
+    store.backfill_catalog(&record).unwrap();
+    let mut cached =
+        serde_json::to_value(store.read_session(&session_id).unwrap().unwrap()).unwrap();
+    cached["threads"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("manager");
+    let cached = serde_json::to_string(&cached).unwrap();
+    drop(store);
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    connection
+        .execute(
+            "UPDATE session_catalog SET record_json = ?1, record_version = 2, record_digest = ?2",
+            rusqlite::params![
+                cached,
+                ash_protocol::ContentDigest::sha256(cached.as_bytes()).as_str()
+            ],
+        )
+        .unwrap();
+    connection.execute_batch("DELETE FROM thread_events; UPDATE ash_schema_migrations SET version = 12 WHERE component = 'event-store';").unwrap();
+    let before: (String, i64, String) = connection
+        .query_row(
+            "SELECT record_json, record_version, record_digest FROM thread_catalog",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .unwrap();
+    drop(connection);
+
+    let reopened = SqliteThreadStore::open(&path).unwrap();
+    assert!(
+        matches!(reopened.load(&thread_id), Err(ThreadStoreError::Storage(message)) if message.contains("durable event tail"))
+    );
+    let restored = reopened.read_session(&session_id).unwrap().unwrap();
+    let wire = serde_json::to_value(&restored).unwrap();
+    assert_eq!(
+        wire["threads"][0]["manager"],
+        serde_json::to_value(&record.manager).unwrap()
+    );
+    assert_eq!(restored.manager, record.manager);
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    let after = connection
+        .query_row(
+            "SELECT record_json, record_version, record_digest FROM thread_catalog",
+            [],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
+            },
+        )
+        .unwrap();
+    assert_eq!(after, before);
+    assert_eq!(
+        connection
+            .query_row("SELECT record_version FROM session_catalog", [], |row| row
+                .get::<_, i64>(
+                0
+            ))
+            .unwrap(),
+        3
+    );
 }
 
 #[test]

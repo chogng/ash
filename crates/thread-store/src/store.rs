@@ -61,7 +61,14 @@ pub fn session_from_catalog(
         execution_target: root.execution_target.clone(),
         model: root.model.clone(),
         manager,
-        threads: records.into_iter().map(|record| record.thread).collect(),
+        threads: records
+            .into_iter()
+            .map(|mut record| {
+                // The outer catalog owns this fact. Old nested metadata must never overwrite it.
+                record.thread.manager = Some(record.manager);
+                record.thread
+            })
+            .collect(),
     })
 }
 

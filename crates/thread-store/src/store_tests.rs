@@ -43,6 +43,7 @@ fn batch(expected_sequence: u64, event_sequence: u64) -> ThreadEventBatch {
             },
             session_id: ash_protocol::SessionId::new("session_1").expect("test ID is non-empty"),
             thread: SessionThread {
+                manager: None,
                 thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
                 title: "test".into(),
                 created_at_unix_ms: 1,
@@ -80,4 +81,22 @@ fn validation_rejects_event_sequence_outside_the_batch() {
         validate_append_batch(&batch(0, 2), 0),
         Err(ThreadStoreError::InvalidBatch(_))
     ));
+}
+
+#[test]
+fn session_branches_use_outer_management_even_with_stale_nested_metadata() {
+    let mut record = batch(0, 1).catalog;
+    record.manager = ash_protocol::SessionManagerInfo {
+        status: ash_protocol::SessionManagerStatus::Working,
+        status_changed_at_unix_ms: 12,
+        activity: Some(ash_protocol::SessionManagerActivity::Operation {
+            text: "Running a tool".into(),
+        }),
+        summary: None,
+    };
+    record.thread.manager = Some(SessionManagerInfo::default());
+    let expected = record.manager.clone();
+    let session = session_from_catalog(vec![record]).unwrap();
+    assert_eq!(session.manager, expected);
+    assert_eq!(session.threads[0].manager, Some(expected));
 }

@@ -1,3 +1,4 @@
+import { sessionManagementLabel } from '../sessionManagementLabels.js';
 import { localize2, localize } from '../../../nls.js';
 import { DisposableStore } from "../../../base/common/lifecycle.js";
 import { Action2, registerAction2 } from "../../../platform/actions/common/actions.js";
@@ -139,7 +140,8 @@ registerAction2(class ShowSessionsChatHistoryAction extends Action2 {
 				sessionId: session.sessionId,
 				threadId: thread.threadId,
 				label: session.title.trim() || "Session",
-				description: threads.length > 1 ? `Thread ${index + 1}` : undefined,
+				description: [threads.length > 1 ? localize('sessions.history.thread', 'Thread {0}', index + 1) : undefined, sessionManagementLabel(thread.management)].filter(Boolean).join(' · ') || undefined,
+				detail: thread.management?.activity?.text ?? thread.management?.summary ?? undefined,
 			}));
 		});
 		disposables.add(quickPick.onDidAccept(item => {

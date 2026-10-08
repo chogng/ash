@@ -172,6 +172,7 @@ function toSession(session: SessionDto, threads: readonly ThreadDto[] = [], prev
 			root: session.executionTarget.root,
 		},
 		model: session.model,
+		management: { ...session.manager },
 		nextApprovalMode: previous?.nextApprovalMode ?? "manual",
 		chats: session.threads.map(thread => {
 			const detail = byId.get(thread.threadId);
@@ -183,6 +184,7 @@ function toSession(session: SessionDto, threads: readonly ThreadDto[] = [], prev
 					: { type: "root" as const },
 				status: thread.status,
 				title: detail?.title ?? thread.title,
+				management: thread.manager ? { ...thread.manager } : undefined,
 				executionStatus: detail ? executionStatus(detail.turns.at(-1)?.status) : prior?.executionStatus ?? "idle",
 			};
 		}),

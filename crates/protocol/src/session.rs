@@ -81,4 +81,8 @@ pub struct SessionThread {
     #[ts(optional = nullable)]
     pub forked_from_id: Option<ThreadId>,
     pub status: ThreadStatus,
+    /// Coarse management facts from the owning Thread catalog; absent in older stored metadata.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub manager: Option<SessionManagerInfo>,
 }

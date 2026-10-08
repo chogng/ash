@@ -3245,6 +3245,7 @@ fn thread_catalog_record(snapshot: &ThreadSnapshot) -> ThreadCatalogRecord {
         },
         session_id: snapshot.session_id.clone(),
         thread: SessionThread {
+            manager: None,
             thread_id: snapshot.thread_id.clone(),
             title: snapshot.title.clone(),
             created_at_unix_ms: snapshot.created_at_unix_ms,

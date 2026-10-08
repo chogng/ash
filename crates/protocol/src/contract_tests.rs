@@ -638,6 +638,7 @@ fn canonical_session_contains_root_model_and_thread_lineage_without_history() {
         manager: Default::default(),
         threads: vec![
             SessionThread {
+                manager: None,
                 thread_id: ThreadId::new("thread_root").expect("test ID is non-empty"),
                 title: "task".into(),
                 created_at_unix_ms: 1,
@@ -649,6 +650,7 @@ fn canonical_session_contains_root_model_and_thread_lineage_without_history() {
                 status: ThreadStatus::Active,
             },
             SessionThread {
+                manager: None,
                 thread_id: ThreadId::new("thread_child").expect("test ID is non-empty"),
                 title: "review".into(),
                 created_at_unix_ms: 2,
@@ -668,6 +670,26 @@ fn canonical_session_contains_root_model_and_thread_lineage_without_history() {
     assert_eq!(
         session.threads[1].forked_from_id.as_ref(),
         Some(&session.threads[0].thread_id)
+    );
+    let legacy_branch = serde_json::to_value(&session.threads[0]).unwrap();
+    assert!(legacy_branch.get("manager").is_none());
+    assert_eq!(
+        serde_json::from_value::<SessionThread>(legacy_branch)
+            .unwrap()
+            .manager,
+        None
+    );
+    session.threads[0].manager = Some(SessionManagerInfo {
+        status: SessionManagerStatus::NeedsInput,
+        status_changed_at_unix_ms: 42,
+        activity: Some(SessionManagerActivity::Question {
+            text: "Choose a path".into(),
+        }),
+        summary: None,
+    });
+    assert_eq!(
+        serde_json::to_value(&session.threads[0]).unwrap()["manager"]["status"],
+        "needsInput"
     );
     let without_model = serde_json::to_value(&session).unwrap();
     assert!(without_model.get("model").is_none());

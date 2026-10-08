@@ -19,6 +19,7 @@ fn response() -> SessionResult {
         ("fork-1", "Alternative"),
     ] {
         threads.push(ash_protocol::SessionThread {
+            manager: None,
             thread_id: ThreadId::new(id).unwrap(),
             title: title.into(),
             created_at_unix_ms: 0,

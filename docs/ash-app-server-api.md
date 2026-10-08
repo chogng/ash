@@ -1066,6 +1066,8 @@ Session subscription 和显式 `session/thread/subscribe` 都接收同一 Thread
 `SessionThreadProjection` snapshot/gap；Session 自身没有 sequence 或 committed gap。同一
 connection 会接收这些 child Thread 的实时 update。产品宿主应先应用 aggregate snapshot/gap，再
 接收实时 notification；发现 durable 空洞时重新执行 `session/subscribe`。
+`session/read`、`session/list` 和 `session/catalog/read` 的 Session 管理状态来自同一批 Core 目录记录。`threads[].manager` 是该分支已有的粗粒度状态、活动与摘要；旧元数据可能省略此字段，缺失不等于 Idle。Working 合并执行与取消，NeedsInput 合并等待类型，不能推断精确 Turn 状态。读取目录不订阅分支历史，也不授予回答交互的能力。
+
 需要单独读取一个 Thread 的客户端使用 `session/thread/read` 和
 `session/thread/subscribe`，并始终携带 `sessionId`；这保证了 Thread scope 在协议边界被验证。
 

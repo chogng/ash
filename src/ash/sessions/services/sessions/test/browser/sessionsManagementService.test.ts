@@ -160,6 +160,28 @@ for (const selected of [true, false]) {
 	});
 }
 
+for (const selected of [true, false]) {
+	test(`management-only catalog changes propagate without loading details (selected: ${selected})`, async () => {
+		const fake = sessionHost([session('session-1', 'thread-1'), session('session-2', 'thread-2')]);
+		using service = createManagement(fake);
+		await service.initialize();
+		if (selected) service.selectThread('session-2', 'thread-2');
+		await waitFor(() => service.active?.session.agentTree !== undefined);
+		const subscriptions = fake.subscribeCount;
+		let changes = 0;
+		using listener = service.onDidChange(() => { changes++; });
+		const manager = { status: 'working' as const, statusChangedAtUnixMs: 12, activity: { type: 'operation' as const, text: 'Running a tool' }, summary: 'Background work' };
+		fake.sessions[1] = { ...fake.sessions[1]!, manager, threads: fake.sessions[1]!.threads.map(thread => ({ ...thread, manager })) };
+		fake.emit({ method: 'session/changed', params: { sessionId: 'session-2', agentTreeChanged: false } });
+		await waitFor(() => fake.readCatalogCount === 1);
+		await new Promise<void>(resolve => setImmediate(resolve));
+
+		const updated = service.sessions[1]!;
+		assert.deepEqual(updated, { ...updated, management: manager, chats: updated.chats.map(chat => ({ ...chat, management: manager })) });
+		assert.deepEqual({ subscriptions: fake.subscribeCount, changes, active: service.active?.threadId, execution: updated.chats[0]?.executionStatus }, { subscriptions, changes: 1, active: selected ? 'thread-2' : 'thread-1', execution: 'idle' });
+	});
+}
+
 for (const target of [{ type: 'local' as const, root: '/new' }, { type: 'ssh' as const, host: 'new-host', root: '/old' }, null]) {
 	test(`workspace-only catalog changes update the selected Session (${target?.type ?? 'none'})`, async () => {
 		const fake = sessionHost([{ ...session('session-1', 'thread-1'), executionTarget: { type: 'local', root: '/old' } }]);
@@ -218,7 +240,10 @@ test('reconnection restores background details as well as the selected Session',
 test('a refresh from an old connection cannot revert a newer catalog or suppress later changes', async () => {
 	const oldModel = { provider: 'provider', model: 'old' };
 	const restoredModel = { provider: 'provider', model: 'restored' };
-	const fake = sessionHost([{ ...session('session-1', 'thread-1'), model: oldModel }]);
+	const oldManagement = { status: 'working' as const, statusChangedAtUnixMs: 10 };
+	const restoredManagement = { status: 'stopped' as const, statusChangedAtUnixMs: 20 };
+	const originalSession = session('session-1', 'thread-1');
+	const fake = sessionHost([{ ...originalSession, model: oldModel, manager: oldManagement, threads: originalSession.threads.map(thread => ({ ...thread, manager: oldManagement })) }]);
 	fake.host.model.readModel = async () => ({ provider: 'provider', model: 'default' });
 	using service = createManagement(fake);
 	await service.initialize();
@@ -229,12 +254,12 @@ test('a refresh from an old connection cannot revert a newer catalog or suppress
 	fake.emit({ method: 'session/changed', params: { sessionId: 'session-1', agentTreeChanged: false } });
 	await waitFor(() => release !== undefined);
 	fake.setConnectionState('crashed');
-	fake.sessions[0] = { ...fake.sessions[0]!, title: 'Restored', model: restoredModel };
+	fake.sessions[0] = { ...fake.sessions[0]!, title: 'Restored', model: restoredModel, manager: restoredManagement, threads: fake.sessions[0]!.threads.map(thread => ({ ...thread, manager: restoredManagement })) };
 	fake.setConnectionState('ready');
 	await waitFor(() => service.active?.session.title === 'Restored' && service.active.session.agentTree !== undefined);
-	release({ session: { ...fake.sessions[0]!, title: 'Stale', model: oldModel } });
+	release({ session: { ...fake.sessions[0]!, title: 'Stale', model: oldModel, manager: oldManagement, threads: fake.sessions[0]!.threads.map(thread => ({ ...thread, manager: oldManagement })) } });
 	await new Promise<void>(resolve => setImmediate(resolve));
-	assert.deepEqual({ title: service.active?.session.title, model: service.active?.session.model }, { title: 'Restored', model: restoredModel });
+	assert.deepEqual({ title: service.active?.session.title, model: service.active?.session.model, management: service.active?.session.management, branch: service.active?.session.chats[0]?.management }, { title: 'Restored', model: restoredModel, management: restoredManagement, branch: restoredManagement });
 	fake.host.session.readCatalog = original;
 	fake.sessions[0] = { ...fake.sessions[0]!, title: 'Changed again', model: undefined };
 	fake.emit({ method: 'session/changed', params: { sessionId: 'session-1', agentTreeChanged: false } });

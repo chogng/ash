@@ -215,6 +215,13 @@ sequence because no such sequence exists.
 Durable sequence and gap handling belong to the Thread-backed Chat runtime and
 `session/thread/update`.
 
+Session and branch `management` values retain the catalog’s coarse status, activity,
+and summary. The sidebar announces the Session status; history labels show each
+branch status. Missing branch metadata stays unknown. These values do not change
+precise execution status, subscribe to background histories, select a conversation,
+or overwrite a draft’s model. Rows retain their DOM identity, focus, scroll position,
+and pull-request annotation as management changes.
+
 `session.ts` is the frontend Session product boundary and re-exports the shared
 Chat identity and model-reference types. Transport DTO mapping stays private to
 the App Server provider. Sessions views consume `ISessionsManagementService`

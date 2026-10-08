@@ -106,7 +106,7 @@ test("Sessions History opens the selected active chat", async () => {
 		},
 	];
 	const services = new InstantiationService();
-	services.registerInstance(ISessionsManagementService, { sessions } as ISessionsManagementService);
+	services.registerInstance(ISessionsManagementService, { sessions, onDidChange: Event.None } as ISessionsManagementService);
 	services.registerInstance(ISessionsService, {
 		openSession: (sessionId: string, threadId: string) => opened.push({ sessionId, threadId }),
 	} as unknown as ISessionsService);
@@ -119,6 +119,35 @@ test("Sessions History opens the selected active chat", async () => {
 	assert.deepEqual(quickInput.picker?.items.map(item => item.label), ["First Session"]);
 	quickInput.picker?.acceptFirst();
 	assert.deepEqual(opened, [{ sessionId: "session-1", threadId: "thread-1" }]);
+});
+
+test('Session History shows each branch management state in Chinese before opening details', async () => {
+	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	using services = new InstantiationService();
+	const quickInput = new TestQuickInputService();
+	const opened: string[] = [];
+	services.registerInstance(ISessionsManagementService, {
+		sessions: [{
+			sessionId: 'branch-session', title: 'Branch session', status: 'active', nextApprovalMode: 'manual',
+			chats: [
+				{ threadId: 'root', origin: { type: 'root' }, status: 'active', management: { status: 'readyForReview', statusChangedAtUnixMs: 10 } },
+				{ threadId: 'fork', origin: { type: 'fork', parentThreadId: 'root', parentSequence: 1 }, status: 'active', management: { status: 'needsInput', statusChangedAtUnixMs: 20, activity: { type: 'question', text: 'Choose a path' } } },
+			],
+		}], onDidChange: Event.None
+	} as unknown as ISessionsManagementService);
+	services.registerInstance(ISessionsService, { openSession: (_sessionId: string, threadId: string) => opened.push(threadId) } as unknown as ISessionsService);
+	services.registerInstance(IQuickInputService, quickInput);
+	using commands = new CommandService(services);
+	try {
+		await commands.executeCommand(SHOW_CHAT_HISTORY_COMMAND_ID);
+		assert.deepEqual(quickInput.picker?.items.map(item => ({ label: item.label, description: item.description, detail: item.detail })), [
+			{ label: 'Branch session', description: '分支 1 · 待审阅', detail: undefined },
+			{ label: 'Branch session', description: '分支 2 · 需要回应', detail: 'Choose a path' },
+		]);
+		assert.deepEqual(opened, []);
+		quickInput.picker?.hide();
+	} finally { resetNlsResolver(); }
 });
 
 class TestQuickInputService implements IQuickInputService {

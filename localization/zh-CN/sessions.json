@@ -1,5 +1,14 @@
 {
   "ash": {
+    "sessions.history.thread": "分支 {0}",
+    "sessions.management.help": "会话列表直接显示后台活动，无需打开对话。“需要回应”“进行中”“待审阅”“失败”和“已停止”表示管理状态。会话历史显示各分支的状态。打开分支会保留其他对话和草稿。",
+    "sessions.management.idle": "空闲",
+    "sessions.management.needsInput": "需要回应",
+    "sessions.management.working": "进行中",
+    "sessions.management.readyForReview": "待审阅",
+    "sessions.management.completed": "已完成",
+    "sessions.management.failed": "失败",
+    "sessions.management.stopped": "已停止",
     "sessions.conversation.editorName": "会话",
     "sessions.settings.executionTrace": "执行轨迹",
     "cowork.input.modelActions": "模型和思考强度",

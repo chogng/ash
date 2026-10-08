@@ -804,8 +804,8 @@ impl ThreadStore for SqliteThreadStore {
     }
 }
 
-// Catalog version 2 includes the selected model. Older Thread and Session rows must
-// be rebuilt from authoritative history before their list metadata can be trusted.
+// Thread catalog version 2 includes the selected model. Its existing outer manager
+// remains authoritative when rebuilding newer Session cache formats.
 fn query_catalog(
     connection: &Connection,
     filter: &str,
@@ -944,7 +944,7 @@ fn decode_session_catalog(
     version: i64,
     digest: &str,
 ) -> Result<Session, ThreadStoreError> {
-    if version != 2 || ContentDigest::sha256(json.as_bytes()).as_str() != digest {
+    if version != 3 || ContentDigest::sha256(json.as_bytes()).as_str() != digest {
         return Err(ThreadStoreError::SessionCatalogDamaged(session_id.clone()));
     }
     let mut session = serde_json::from_str::<Session>(json)
@@ -988,7 +988,7 @@ pub(super) fn write_session_catalog(
     connection
         .execute(
             "INSERT INTO session_catalog (session_id, record_json, record_version, record_digest)
-             VALUES (?1, ?2, 2, ?3)
+             VALUES (?1, ?2, 3, ?3)
              ON CONFLICT(session_id) DO UPDATE SET
                  record_json = excluded.record_json,
                  record_version = excluded.record_version,

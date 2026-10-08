@@ -53,20 +53,11 @@ use ash_app_server_protocol::protocol::turn::TurnInterruptResult;
 use ash_app_server_protocol::protocol::turn::TurnStartResult;
 use ash_app_server_protocol::protocol::turn::TurnSteerResult;
 use ash_app_server_protocol::schema_hash;
-use ash_protocol::AgentRequest;
 use ash_protocol::AgentRequestEnvelope;
 use ash_protocol::HookEvent;
 use ash_protocol::ModelAccess;
 use ash_protocol::Session;
-use ash_protocol::SessionManagerActivity;
-use ash_protocol::SessionManagerInfo;
-use ash_protocol::SessionManagerStatus;
-use ash_protocol::SessionStatus;
-use ash_protocol::SessionThread;
-use ash_protocol::ThreadArchiveReason;
-use ash_protocol::ThreadItem;
 use ash_protocol::ThreadStatus;
-use ash_protocol::TurnStatus;
 use ash_protocol::UserInput;
 use ash_typst::TypstCompileError;
 use ash_typst::TypstCompileOutcome;
@@ -2028,54 +2019,14 @@ impl AppServer {
             .agent_runtime()
             .read_session(session_id)
             .map_err(core_error)?;
-        let mut snapshots = view.threads;
-        if snapshots.is_empty() {
-            return Err(core_error(core_api::CoreError::NotFound(
-                session_id.to_string(),
-            )));
-        }
-        snapshots.sort_by(|left, right| left.thread_id.cmp(&right.thread_id));
-        let root = snapshots
-            .iter()
-            .find(|thread| thread.thread_id.as_str() == session_id.as_str())
-            .unwrap_or(&snapshots[0]);
-        let status = if snapshots
-            .iter()
-            .all(|thread| thread.status == ThreadStatus::Archived)
-        {
-            SessionStatus::Archived
-        } else {
-            SessionStatus::Active
-        };
-        let manager = session_manager_info(&snapshots, root.created_at_unix_ms, status);
-        let execution_target = self
+        // Core writes root facts and branch management into one durable catalog. Detailed
+        // reads share that source instead of maintaining a second status classifier here.
+        let session = self
             .agent_runtime()
-            .read_session_catalog(&session_id)
+            .read_session_catalog(session_id)
             .map_err(core_error)?
-            .and_then(|session| session.execution_target);
+            .ok_or_else(|| core_error(core_api::CoreError::NotFound(session_id.to_string())))?;
         let agent_tree = view.agent_tree;
-        let session = Session {
-            session_id: session_id.clone(),
-            title: root.title.clone(),
-            model: root.turns.last().and_then(|turn| turn.model.clone()),
-            status,
-            execution_target,
-            manager,
-            threads: snapshots
-                .into_iter()
-                .map(|thread| SessionThread {
-                    completed_turn_duration_ms: thread.completed_turn_duration_ms(),
-                    active_turn_started_at_unix_ms: thread.active_turn_started_at_unix_ms(),
-                    usage: thread.usage,
-                    thread_id: thread.thread_id,
-                    title: thread.title,
-                    created_at_unix_ms: thread.created_at_unix_ms,
-                    parent_thread_id: thread.parent_thread_id,
-                    forked_from_id: thread.forked_from_id,
-                    status: thread.status,
-                })
-                .collect(),
-        };
         Ok(ash_app_server_protocol::protocol::session::SessionResult {
             session,
             agent_tree,
@@ -2136,174 +2087,6 @@ pub(super) fn provider_models_failure_code(
         ModelCatalogRefreshError::Cancelled => ProviderModelsListFailureCodeDto::Cancelled,
         ModelCatalogRefreshError::Unknown => ProviderModelsListFailureCodeDto::Unknown,
     }
-}
-
-fn session_manager_info(
-    threads: &[ThreadView],
-    created_at_unix_ms: u64,
-    lifecycle: SessionStatus,
-) -> SessionManagerInfo {
-    if lifecycle == SessionStatus::Archived {
-        let stopped = threads
-            .iter()
-            .any(|thread| thread.archive_reason == Some(ThreadArchiveReason::Stopped));
-        let archived_at = threads
-            .iter()
-            .filter_map(|thread| thread.archived_at_unix_ms)
-            .max()
-            .unwrap_or(created_at_unix_ms);
-        let completed_at = latest_turn(threads, |_| true)
-            .filter(|(_, turn)| turn.status == TurnStatus::Completed)
-            .map(|(_, turn)| turn.status_changed_at_unix_ms)
-            .unwrap_or(archived_at);
-        return SessionManagerInfo {
-            status: if stopped {
-                SessionManagerStatus::Stopped
-            } else {
-                SessionManagerStatus::Completed
-            },
-            status_changed_at_unix_ms: if stopped { archived_at } else { completed_at },
-            activity: None,
-            summary: None,
-        };
-    }
-
-    if let Some((_, turn)) = latest_turn(threads, |status| {
-        matches!(
-            status,
-            TurnStatus::WaitingForApproval
-                | TurnStatus::WaitingForUserInput
-                | TurnStatus::WaitingForCapability
-        )
-    }) {
-        return SessionManagerInfo {
-            status: SessionManagerStatus::NeedsInput,
-            status_changed_at_unix_ms: turn.status_changed_at_unix_ms,
-            activity: turn.pending_interaction.as_ref().map(|interaction| {
-                SessionManagerActivity::Question {
-                    text: interaction_question(&interaction.request),
-                }
-            }),
-            summary: None,
-        };
-    }
-
-    if let Some((thread, turn)) = latest_turn(threads, |status| {
-        matches!(
-            status,
-            TurnStatus::Created | TurnStatus::Running | TurnStatus::Cancelling
-        )
-    }) {
-        return SessionManagerInfo {
-            status: SessionManagerStatus::Working,
-            status_changed_at_unix_ms: turn.status_changed_at_unix_ms,
-            activity: working_operation(thread, turn),
-            summary: None,
-        };
-    }
-
-    let Some((_, turn)) = latest_turn(threads, |_| true) else {
-        return SessionManagerInfo {
-            status: SessionManagerStatus::Idle,
-            status_changed_at_unix_ms: created_at_unix_ms,
-            activity: None,
-            summary: None,
-        };
-    };
-    match turn.status {
-        TurnStatus::Failed => SessionManagerInfo {
-            status: SessionManagerStatus::Failed,
-            status_changed_at_unix_ms: turn.status_changed_at_unix_ms,
-            activity: turn
-                .failure
-                .as_ref()
-                .map(|failure| SessionManagerActivity::Failure {
-                    text: failure.message.clone(),
-                }),
-            summary: None,
-        },
-        TurnStatus::Interrupted => SessionManagerInfo {
-            status: SessionManagerStatus::Stopped,
-            status_changed_at_unix_ms: turn.status_changed_at_unix_ms,
-            activity: None,
-            summary: None,
-        },
-        TurnStatus::Completed => SessionManagerInfo {
-            status: SessionManagerStatus::ReadyForReview,
-            status_changed_at_unix_ms: turn.status_changed_at_unix_ms,
-            activity: None,
-            summary: None,
-        },
-        _ => SessionManagerInfo {
-            status: SessionManagerStatus::Idle,
-            status_changed_at_unix_ms: created_at_unix_ms,
-            activity: None,
-            summary: None,
-        },
-    }
-}
-
-fn latest_turn(
-    threads: &[ThreadView],
-    accepts: impl Fn(TurnStatus) -> bool,
-) -> Option<(&ThreadView, &core_api::TurnView)> {
-    threads
-        .iter()
-        .flat_map(|thread| thread.turns.iter().map(move |turn| (thread, turn)))
-        .filter(|(_, turn)| accepts(turn.status))
-        .max_by_key(|(_, turn)| turn.status_changed_at_unix_ms)
-}
-
-fn interaction_question(request: &AgentRequest) -> String {
-    match request {
-        AgentRequest::Approval { request } => request.reason.clone(),
-        AgentRequest::UserInput { request } => request
-            .questions
-            .first()
-            .map(|question| question.question.clone())
-            .unwrap_or_else(|| "Waiting for user input".into()),
-        AgentRequest::DynamicTool { call } => format!("Run {}?", call.name),
-    }
-}
-
-fn working_operation(
-    thread: &ThreadView,
-    turn: &core_api::TurnView,
-) -> Option<SessionManagerActivity> {
-    let unresolved_tool = thread.items.iter().rev().find_map(|item| {
-        let ThreadItem::ToolCall {
-            turn_id,
-            tool_call_id,
-            name,
-            ..
-        } = item
-        else {
-            return None;
-        };
-        if turn_id != &turn.turn_id
-            || thread.items.iter().any(|candidate| {
-                matches!(
-                    candidate,
-                    ThreadItem::ToolResult {
-                        tool_call_id: result_id,
-                        ..
-                    } if result_id == tool_call_id
-                )
-            })
-        {
-            return None;
-        }
-        Some(format!("Running {name}"))
-    });
-    let text = unresolved_tool.or_else(|| {
-        turn.plan.as_ref().and_then(|plan| {
-            plan.steps
-                .iter()
-                .find(|step| step.status == ash_protocol::PlanStepStatus::InProgress)
-                .map(|step| step.step.clone())
-        })
-    })?;
-    Some(SessionManagerActivity::Operation { text })
 }
 
 fn thread_mutation(
