@@ -91,7 +91,7 @@
 	pointer-events: none;
 }
 
-.ash-input-box-scrollable {
+.ash-input-box-flexible > .ash-input-box-scrollable {
 	position: relative;
 	inset: auto;
 }

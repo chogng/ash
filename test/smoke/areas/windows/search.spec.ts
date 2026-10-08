@@ -228,20 +228,20 @@ test('Search Dismiss restores match focus across collapsed branches through the 
 	await workbench.menus.select(application, () => toolbar.getByRole('button', { name: 'More Actions', exact: true }).click(), ['View as tree']);
 	const folder = (name: string) => tree.getByRole('treeitem', { name, exact: true });
 	const file = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path').getByText('b.ts', { exact: true }) });
-	await folder('b').locator('.ash-tree-twistie').click();
+	await folder('b/nested').locator('.ash-tree-twistie').click();
 	await folder('c').locator('.ash-tree-twistie').click();
 	const dismissKey = process.platform === 'darwin' ? 'Meta+Backspace' : 'Delete';
 	await tree.locator('.ash-search-match', { hasText: 'ash_focus_token second' }).click();
 	await tree.press(dismissKey);
 	await expect(workbench.search.status).toHaveText('4 results');
-	for (const name of ['b', 'nested']) { await expect(folder(name)).toHaveAttribute('aria-expanded', 'true'); }
+	await expect(folder('b/nested')).toHaveAttribute('aria-expanded', 'true');
 	await expect(file).toHaveAttribute('aria-expanded', 'true');
 	await expect(folder('c')).toHaveAttribute('aria-expanded', 'false');
 	const next = tree.getByRole('treeitem', { name: 'Line 1, column 1: ash_focus_token next', exact: true });
 	await expect(next).toHaveAttribute('aria-selected', 'true');
 	await expect(tree).toHaveAttribute('aria-activedescendant', (await next.getAttribute('id'))!);
 	await expect(tree).toBeFocused();
-	await folder('b').locator('.ash-tree-twistie').click();
+	await folder('b/nested').locator('.ash-tree-twistie').click();
 	await folder('c').locator('.ash-tree-twistie').click();
 	await tree.locator('.ash-search-match', { hasText: 'ash_focus_token tail' }).click();
 	await tree.press(dismissKey);
@@ -377,9 +377,9 @@ test('Search title and input geometry remain usable while resizing the actual Si
 		expect(sash).not.toBeNull();
 		await page.mouse.move(sash!.x + sash!.width / 2, sash!.y + sash!.height / 2);
 		await page.mouse.down();
-		await page.mouse.move(sash!.x + sash!.width / 2 + width - frame!.width, sash!.y + sash!.height / 2, { steps: 5 });
+		await page.mouse.move(sash!.x + sash!.width / 2 + width - (await sidebar.boundingBox())!.width, sash!.y + sash!.height / 2, { steps: 5 });
 		await page.mouse.up();
-		await expect.poll(async () => (await sidebar.locator('..').boundingBox())!.width).toBeCloseTo(width, 0);
+		await expect.poll(async () => (await sidebar.boundingBox())!.width).toBeCloseTo(width, 0);
 		await workbench.waitForUiIdle();
 		const geometry = await sidebar.evaluate(element => {
 			const heading = element.querySelector('.ash-pane-composite-title')!;
@@ -400,11 +400,15 @@ test('Search title and input geometry remain usable while resizing the actual Si
 		expect(geometry.titleFits).toBe(true);
 		expect(geometry.toolbarAtTop).toBe(true);
 		expect(geometry.fits).toBe(true);
-		await test.info().attach(`search-sidebar-${width}px`, { body: await sidebar.screenshot(), contentType: 'image/png' });
+		const screenshot = test.info().outputPath(`search-sidebar-${width}px.png`);
+		await sidebar.screenshot({ path: screenshot });
+		await test.info().attach(`search-sidebar-${width}px`, { path: screenshot, contentType: 'image/png' });
 	}
 	await query.fill('中文😀 long query '.repeat(60));
 	await expect.poll(async () => (await query.boundingBox())!.height).toBe(134);
-	await query.press('ControlOrMeta+End');
+	await query.press(process.platform === 'darwin' ? 'Meta+ArrowUp' : 'Control+Home');
+	expect(await query.evaluate((input: HTMLTextAreaElement) => input.selectionStart)).toBe(0);
+	await query.press(process.platform === 'darwin' ? 'Meta+ArrowDown' : 'Control+End');
 	await expect.poll(() => query.evaluate((input: HTMLTextAreaElement) => input.scrollTop)).toBeGreaterThan(0);
 	await expect(query).toHaveCSS('scrollbar-width', 'none');
 	await originalToolbar!.dispose();
@@ -645,7 +649,6 @@ test.describe('Search with a granted browser folder', () => {
 });
 
 test('Search translates query options and file filters into Chinese', async ({ target, workbench, restartWorkbench }) => {
-	test.skip(target.appServerMode === 'required', 'Locale restart is covered by the UI projects.');
 	await workbench.settingsEditor.openUserSettingsUI();
 	await workbench.settingsEditor.selectCategory('general');
 	await workbench.page.getByRole('combobox', { name: 'Interface language', exact: true }).click();
@@ -657,18 +660,27 @@ test('Search translates query options and file filters into Chinese', async ({ t
 	await expect(search.getByRole('button', { name: '区分大小写', exact: true })).toHaveText('Aa');
 	await expect(search.getByRole('button', { name: '使用正则表达式', exact: true })).toHaveText('.*');
 	await expect(search.getByRole('button', { name: '全字匹配', exact: true })).toHaveText('ab');
-	await search.getByRole('button', { name: '切换替换', exact: true }).click();
 	await expect(search.getByRole('textbox', { name: '替换', exact: true })).toBeVisible();
 	await expect(search.getByRole('button', { name: '保留大小写', exact: true })).toHaveText('AB');
 	await search.getByRole('button', { name: '切换搜索详细信息', exact: true }).click();
 	await expect(search.getByRole('textbox', { name: '包含的文件', exact: true })).toHaveAttribute('placeholder', '例如 *.ts、src/**/include');
 	await expect(search.getByRole('textbox', { name: '排除的文件', exact: true })).toBeVisible();
+	await expect(search.getByRole('button', { name: '切换搜索详细信息', exact: true })).toHaveText('搜索条件');
+	await expect(search.locator('.ash-search-filter-help')).toHaveText('用逗号分隔 glob 模式。“包含”限定搜索范围；“排除”跳过匹配的文件。');
+	if (target.appServerMode === 'required') {
+		const query = search.getByRole('textbox', { name: '搜索工作区', exact: true });
+		await query.fill('value');
+		await query.press('Enter');
+		await expect(workbench.search.status).toHaveText('1 个结果');
+		await expect(workbench.search.element.locator('.ash-search-match')).toHaveCount(1);
+	}
 	const query = search.getByRole('textbox', { name: '搜索工作区', exact: true });
 	await query.focus();
 	await query.press('Alt+F1');
 	await expect(workbench.page.getByRole('dialog').getByRole('textbox')).toHaveValue(/跨文件搜索[\s\S]*移除结果[\s\S]*不会删除文件/);
 	await workbench.page.keyboard.press('Escape');
 	await expect(query).toBeFocused();
+	await workbench.page.locator('[data-part="sidebar"]').screenshot({ path: test.info().outputPath('search-sidebar-zh-CN.png') });
 	await workbench.page.getByRole('toolbar', { name: '搜索结果操作', exact: true }).getByRole('button', { name: '更多操作', exact: true }).click();
 	await expect(workbench.page.getByRole('menuitem', { name: '移除结果', exact: true })).toBeVisible();
 	await expect(workbench.page.getByRole('menuitem', { name: '复制全部结果', exact: true })).toBeVisible();
@@ -971,7 +983,7 @@ test('Search Expand All exposes its command only for fully collapsed results and
 	await expect(tree.locator('.ash-search-match')).toHaveCount(2);
 	await expect(tree.locator('[aria-expanded="false"]')).toHaveCount(0);
 	await expect(collapse).toBeFocused();
-	await tree.getByRole('treeitem', { name: 'b', exact: true }).locator('.ash-tree-twistie').click();
+	await tree.getByRole('treeitem', { name: 'b/nested', exact: true }).locator('.ash-tree-twistie').click();
 	await expect(tree).toBeFocused();
 	await expect(collapse).toBeVisible();
 	await expect(toolbar.getByRole('button', { name: 'Expand All', exact: true })).toHaveCount(0);

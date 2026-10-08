@@ -14,7 +14,7 @@ import {
 import { Emitter, type Event } from "../../../common/event.js";
 import { HistoryNavigator, type IHistory } from '../../../common/history.js';
 import { IME } from "../../../common/ime.js";
-import { Disposable, toDisposable } from "../../../common/lifecycle.js";
+import { Disposable, MutableDisposable, toDisposable } from "../../../common/lifecycle.js";
 
 export interface InputBoxOptions<Flexible extends boolean = false> {
 	readonly flexibleHeight?: Flexible;
@@ -129,7 +129,13 @@ export class InputBox<Flexible extends boolean = false> extends Disposable {
 			// Browser selection and caret reveal remain authoritative and are mirrored by the managed scrollbar.
 			this._register(addDisposableListener(this.inputElement, 'scroll', () => scrollable.setScrollPositionNow({ scrollTop: this.inputElement.scrollTop })));
 			if (targetWindow.ResizeObserver) {
-				const observer = new targetWindow.ResizeObserver(() => this.layout());
+				const scheduled = this._register(new MutableDisposable());
+				// Height changes must leave the observer delivery cycle; disposal cancels pending layout.
+				const observer = new targetWindow.ResizeObserver(() => {
+					if (!scheduled.value) {
+						scheduled.value = scheduleAtNextAnimationFrame(targetWindow, () => { scheduled.clear(); this.layout(); });
+					}
+				});
 				observer.observe(this.element);
 				this._register(toDisposable(() => observer.disconnect()));
 			}

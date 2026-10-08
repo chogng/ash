@@ -114,6 +114,8 @@ export class SearchView extends ViewPane {
 		const document = container.ownerDocument;
 		const form = h(document, "form");
 		form.className = "ash-search-form";
+		// Attach before creating scoped inputs so keyboard commands inherit this pane's context.
+		this.contentElement.append(form);
 		this.searchWidget = this._register(instantiation.createInstance(SearchWidget, form));
 		this.historyInputs.set('search', this.searchWidget.searchInput.inputBox);
 		this.historyInputs.set('replace', this.searchWidget.replaceInput.inputBox);
@@ -130,11 +132,13 @@ export class SearchView extends ViewPane {
 		const filters = h(document, "div");
 		this.filtersElement = filters;
 		filters.className = "ash-search-filters";
+		form.append(detailsRow, filters);
 		filters.id = `ash-search-filters-${options.id}`;
 		this.detailsButton.domNode.setAttribute("aria-controls", filters.id);
 		const includes = h(document, "label");
 		includes.className = "ash-search-filter-field";
 		includes.append(createText(document, localize("search.includes", "files to include")));
+		filters.append(includes);
 		const includeBox = this._register(instantiation.createInstance(ContextScopedHistoryInputBox<false>, includes, {
 			presentation: "compact",
 			placeholder: localize("search.includesPlaceholder", "e.g. *.ts, src/**/include"),
@@ -145,6 +149,7 @@ export class SearchView extends ViewPane {
 		const excludes = h(document, "label");
 		excludes.className = "ash-search-filter-field";
 		excludes.append(createText(document, localize("search.excludes", "files to exclude")));
+		filters.append(excludes);
 		const excludeBox = this._register(instantiation.createInstance(ContextScopedHistoryInputBox<false>, excludes, {
 			presentation: "compact",
 			placeholder: localize("search.excludesPlaceholder", "e.g. *.ts, src/**/exclude"),
@@ -158,10 +163,9 @@ export class SearchView extends ViewPane {
 		const filterHelp = h(document, 'div');
 		filterHelp.className = 'ash-search-filter-help';
 		filterHelp.textContent = localize('search.filterHelp', 'Separate glob patterns with commas. Include narrows the search; Exclude omits matching files.');
-		filters.append(includes, excludes, filterHelp);
+		filters.append(filterHelp);
 		this.applyConfiguration();
 		this.setDetailsExpanded(Boolean(this.includeInput.value || this.excludeInput.value));
-		form.append(detailsRow, filters);
 		this.statusElement = h(document, "div");
 		this.statusElement.className = "ash-search-status";
 		this.statusElement.setAttribute("role", "status");

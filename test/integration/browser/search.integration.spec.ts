@@ -58,7 +58,10 @@ test('Search inputs wrap within shared height limits, preserve caret and use man
 	const long = '中文😀 long search text '.repeat(40);
 	await query.fill(long);
 	await expect.poll(async () => (await query.boundingBox())!.height).toBe(134);
-	await query.press('ControlOrMeta+End');
+	await query.press(process.platform === 'darwin' ? 'Meta+ArrowUp' : 'Control+Home');
+	expect(await query.evaluate((input: HTMLTextAreaElement) => input.selectionStart)).toBe(0);
+	await query.press(process.platform === 'darwin' ? 'Meta+ArrowDown' : 'Control+End');
+	await expect.poll(() => query.evaluate((input: HTMLTextAreaElement) => input.scrollTop)).toBeGreaterThan(0);
 	const scrolling = await query.evaluate((input: HTMLTextAreaElement) => ({
 		value: input.value, caret: input.selectionEnd, scroll: input.scrollTop, overflowing: input.scrollHeight > input.clientHeight,
 		browserBar: getComputedStyle(input).scrollbarWidth, managed: input.parentElement!.querySelectorAll('.ash-scrollbar-track-vertical').length,
@@ -66,7 +69,8 @@ test('Search inputs wrap within shared height limits, preserve caret and use man
 	expect(scrolling).toMatchObject({ value: long, caret: long.length, overflowing: true, browserBar: 'none', managed: 1 });
 	expect(scrolling.scroll).toBeGreaterThan(0);
 	await query.fill('first\nsecond');
-	await query.press('ControlOrMeta+Home');
+	await query.press(process.platform === 'darwin' ? 'Meta+ArrowUp' : 'Control+Home');
+	expect(await query.evaluate((input: HTMLTextAreaElement) => input.selectionStart)).toBe(0);
 	await query.press('ArrowDown');
 	await expect(query).toHaveValue('first\nsecond');
 	expect(await query.evaluate((input: HTMLTextAreaElement) => input.selectionStart)).toBeGreaterThan(5);
@@ -381,12 +385,12 @@ test('Dismiss expands the next nested result branch and the last same-kind branc
 	const tree = page.getByRole('tree', { name: 'Search results', exact: true });
 	const folder = (name: string) => tree.getByRole('treeitem', { name, exact: true });
 	const file = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path').getByText('b.ts', { exact: true }) });
-	await folder('b').locator('.ash-tree-twistie').click();
+	await folder('b/nested').locator('.ash-tree-twistie').click();
 	await folder('c').locator('.ash-tree-twistie').click();
 	await tree.getByRole('treeitem', { name: 'Line 2, column 7: const needle = true;', exact: true }).click();
 	await page.evaluate(() => window.ashSearchIntegration.dismiss());
 	await expect(page.getByRole('status')).toHaveText('4 results');
-	for (const name of ['b', 'nested']) { await expect(folder(name)).toHaveAttribute('aria-expanded', 'true'); }
+	await expect(folder('b/nested')).toHaveAttribute('aria-expanded', 'true');
 	await expect(file).toHaveAttribute('aria-expanded', 'true');
 	await expect(folder('c')).toHaveAttribute('aria-expanded', 'false');
 	const next = tree.getByRole('treeitem', { name: 'Line 8, column 7: const needle = true;', exact: true });
@@ -394,12 +398,12 @@ test('Dismiss expands the next nested result branch and the last same-kind branc
 	await expect(tree).toHaveAttribute('aria-activedescendant', await next.getAttribute('id') as string);
 	await expect(tree).toBeFocused();
 
-	await folder('b').locator('.ash-tree-twistie').click();
+	await folder('b/nested').locator('.ash-tree-twistie').click();
 	await folder('c').locator('.ash-tree-twistie').click();
 	await tree.getByRole('treeitem', { name: 'Line 10, column 7: const needle = true;', exact: true }).click();
 	await page.evaluate(() => window.ashSearchIntegration.dismiss());
 	await expect(page.getByRole('status')).toHaveText('3 results');
-	for (const name of ['b', 'nested']) { await expect(folder(name)).toHaveAttribute('aria-expanded', 'true'); }
+	await expect(folder('b/nested')).toHaveAttribute('aria-expanded', 'true');
 	await expect(file).toHaveAttribute('aria-expanded', 'true');
 	const last = tree.getByRole('treeitem', { name: 'Line 9, column 7: const needle = true;', exact: true });
 	await expect(last).toHaveAttribute('aria-selected', 'true');
@@ -419,12 +423,12 @@ test('Dismiss restores file focus inside a collapsed folder without expanding th
 	const folder = (name: string) => tree.getByRole('treeitem', { name, exact: true });
 	const file = (name: string) => tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path').getByText(name, { exact: true }) });
 	await file('b.ts').locator('.ash-tree-twistie').click();
-	await folder('b').locator('.ash-tree-twistie').click();
+	await folder('b/nested').locator('.ash-tree-twistie').click();
 	await folder('c').locator('.ash-tree-twistie').click();
 	await file('a.ts').click();
 	await page.evaluate(() => window.ashSearchIntegration.dismiss());
 	await expect(page.getByRole('status')).toHaveText('3 results');
-	for (const name of ['b', 'nested']) { await expect(folder(name)).toHaveAttribute('aria-expanded', 'true'); }
+	await expect(folder('b/nested')).toHaveAttribute('aria-expanded', 'true');
 	await expect(file('b.ts')).toHaveAttribute('aria-expanded', 'false');
 	await expect(file('b.ts')).toHaveAttribute('aria-selected', 'true');
 	await expect(tree).toHaveAttribute('aria-activedescendant', await file('b.ts').getAttribute('id') as string);
@@ -539,17 +543,20 @@ test('registered Search keeps query controls and labeled filters usable at the m
 				const replacement = widget.querySelector('.ash-search-replace-field textarea')!.getBoundingClientRect();
 				const controls = field.querySelector('[role="toolbar"]')!.getBoundingClientRect();
 				const narrow = widget.classList.contains('ash-search-widget-narrow');
+				const widgetBounds = widget.getBoundingClientRect();
 				return {
 					inputWidth: input.width, aligned: Math.abs(input.left - replacement.left) < 0.01 && Math.abs(input.right - replacement.right) < 0.01,
 					inside: controls.left >= bounds.left && controls.right <= bounds.right + 0.01 && controls.top >= bounds.top && controls.bottom <= bounds.bottom + 0.01,
-					narrowOptions: !narrow || controls.top >= input.bottom, fits: widget.scrollWidth <= widget.clientWidth
+					narrowOptions: !narrow || controls.top >= input.bottom, fits: widget.scrollWidth <= widget.clientWidth,
+					width: widget.clientWidth, scrollWidth: widget.scrollWidth,
+					overflowing: Array.from(widget.querySelectorAll('*')).filter(element => element.getBoundingClientRect().right > widgetBounds.right + 0.01).map(element => ({ className: element.className, right: element.getBoundingClientRect().right, width: element.getBoundingClientRect().width })),
 				};
 			});
 			expect(geometry.inputWidth).toBeGreaterThanOrEqual(100);
 			expect(geometry.aligned).toBe(true);
 			expect(geometry.inside).toBe(true);
 			expect(geometry.narrowOptions).toBe(true);
-			expect(geometry.fits).toBe(true);
+			expect(geometry.fits, JSON.stringify({ theme, requestedWidth: width, ...geometry })).toBe(true);
 			await expect(include).toHaveCSS('min-height', '22px');
 		}
 	}
@@ -561,13 +568,103 @@ test('registered Search exposes Chinese labels and localized result counts', asy
 	await expect(query).toHaveAttribute('placeholder', '搜索');
 	await expect(page.getByRole('button', { name: '区分大小写', exact: true })).toHaveText('Aa');
 	await expect(page.getByRole('button', { name: '使用正则表达式', exact: true })).toHaveText('.*');
-	await page.getByRole('button', { name: '切换搜索详细信息', exact: true }).click();
+	const details = page.getByRole('button', { name: '切换搜索详细信息', exact: true });
+	await expect(details).toHaveText('搜索条件');
+	await details.click();
 	await expect(page.getByRole('textbox', { name: '包含的文件', exact: true })).toHaveAttribute('placeholder', '例如 *.ts、src/**/include');
 	await expect(page.getByRole('textbox', { name: '排除的文件', exact: true })).toBeVisible();
+	await expect(page.locator('.ash-search-filter-help')).toHaveText('用逗号分隔 glob 模式。“包含”限定搜索范围；“排除”跳过匹配的文件。');
+	await page.getByRole('textbox', { name: '包含的文件', exact: true }).fill('src/**');
+	await details.click();
+	await expect(details).toHaveText('搜索条件 · 筛选已启用');
 	await query.fill('needle');
 	await query.press('Enter');
 	await expect(page.getByRole('status')).toHaveText('1 个结果');
 });
+
+for (const mode of ['flat', 'tree'] as const) {
+	test(`Search ${mode} results preserve source paths, preview coordinates and geometry across Sidebar widths`, async ({ page }) => {
+		await page.goto('/search.html');
+		const sidebar = page.locator('[data-part="sidebar"]');
+		const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
+		const tree = page.getByRole('tree', { name: 'Search results', exact: true });
+		const toolbar = page.getByRole('toolbar', { name: 'Search result actions', exact: true });
+		await query.fill('layout');
+		await query.press('Enter');
+		await expect(page.getByRole('status')).toHaveText('3 results');
+		const snapshot = await page.evaluate(() => window.ashSearchIntegration.snapshot());
+		if (mode === 'tree') {
+			await page.getByRole('button', { name: 'More Actions', exact: true }).click();
+			await page.evaluate(() => window.ashSearchIntegration.selectTreeView());
+			await expect(tree.getByRole('treeitem', { name: 'src/ash', exact: true })).toHaveCount(1);
+			await expect(tree.getByRole('treeitem', { name: 'base/browser/ui/inputbox', exact: true })).toHaveCount(1);
+			await expect(tree.getByRole('treeitem', { name: 'workbench/contrib/search/browser', exact: true })).toHaveCount(1);
+			await expect(tree.getByRole('treeitem', { name: 'src/ash/workbench/contrib/search/browser', exact: true })).toHaveCount(1);
+		} else {
+			await expect(tree.locator('.ash-search-folder-path')).toHaveCount(0);
+			await expect(tree.locator('.ash-icon-label-description')).toContainText([
+				'workspace • src/ash/base/browser/ui/inputbox',
+				'workspace • src/ash/workbench/contrib/search/browser',
+				'other • src/ash/workbench/contrib/search/browser',
+			]);
+		}
+		await expect(tree.locator('.ash-search-file-path .ash-icon-label-text')).toHaveText(mode === 'tree' ? ['searchView.ts', 'inputbox.ts', 'searchView.ts'] : ['inputbox.ts', 'searchView.ts', 'searchView.ts']);
+		await expect(tree.locator('.ash-search-preview mark')).toHaveText(['layout', 'layout', 'layout']);
+		expect((await tree.locator('.ash-search-line-number').allTextContents()).sort()).toEqual(['1000', '3456', '43']);
+		const late = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-line-number').getByText('3456', { exact: true }) });
+		expect((await late.locator('.ash-search-preview').innerText()).length).toBeLessThanOrEqual(250);
+		await expect(late.locator('.ash-search-preview mark')).toHaveText('layout');
+		await late.dblclick();
+		expect((await page.evaluate(() => window.ashSearchIntegration.opened)).at(-1)).toMatchObject({
+			resource: 'file:///workspace/src/ash/workbench/contrib/search/browser/searchView.ts',
+			options: { selection: { startLineNumber: 3456, startColumn: '中文😀 long context '.repeat(36).length + 1, endLineNumber: 3456, endColumn: '中文😀 long context '.repeat(36).length + 7 } },
+		});
+		for (const theme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
+			await page.evaluate(value => window.ashSearchIntegration.setTheme(value), theme);
+			for (const width of [180, 220, 280, 400, 600]) {
+				await page.evaluate(value => window.ashSearchIntegration.setWidth(value), width);
+				await query.focus();
+				await expect.poll(() => page.locator('.ash-search-widget').evaluate(widget => widget.classList.contains('ash-search-widget-narrow'))).toBe(width < 284);
+				const geometry = await sidebar.evaluate(element => {
+					const bounds = element.getBoundingClientRect();
+					const title = element.querySelector('.ash-sidebar-title-label')!.getBoundingClientRect();
+					const toolbar = element.querySelector('[aria-label="Search result actions"]')!.getBoundingClientRect();
+					const input = element.querySelector('.ash-search-query-field textarea')!.getBoundingClientRect();
+					const replacement = element.querySelector('.ash-search-replace-field textarea')!.getBoundingClientRect();
+					const previews = Array.from(element.querySelectorAll('.ash-search-match')).map(row => {
+						const content = row.getBoundingClientRect();
+						const line = row.querySelector('.ash-search-line-number')!.getBoundingClientRect();
+						const preview = row.querySelector('.ash-search-preview')!.getBoundingClientRect();
+						return { lineWidth: line.width, origin: preview.left - content.left, width: preview.width, fits: preview.right <= bounds.right + 0.01 };
+					});
+					const files = Array.from(element.querySelectorAll('.ash-search-file-heading')).filter(row => row.querySelector('.ash-search-file-count')).map(row => {
+						const label = row.querySelector('.ash-icon-label-text')!.getBoundingClientRect();
+						const count = row.querySelector('.ash-search-file-count')!.getBoundingClientRect();
+						return { width: label.width, separated: label.right <= count.left + 0.01, fits: count.right <= bounds.right + 0.01 };
+					});
+					return { width: bounds.width, titleFits: title.right <= toolbar.left, toolbarAtTop: toolbar.bottom <= input.top, alignedInputs: input.left === replacement.left && input.right === replacement.right, previews, files };
+				});
+				expect(geometry.titleFits).toBe(true);
+				expect(geometry.toolbarAtTop).toBe(true);
+				expect(geometry.alignedInputs).toBe(true);
+				expect(geometry.previews).toHaveLength(3);
+				expect(geometry.files).toHaveLength(3);
+				for (const preview of geometry.previews) {
+					expect(preview.lineWidth).toBeCloseTo(geometry.previews[0]!.lineWidth, 2);
+					expect(preview.origin).toBeCloseTo(geometry.previews[0]!.origin, 2);
+					expect(preview.width).toBeGreaterThan(0);
+					expect(preview.fits).toBe(true);
+				}
+				for (const file of geometry.files) { expect(file.width).toBeGreaterThan(0); expect(file.separated).toBe(true); expect(file.fits).toBe(true); }
+				await expect(page.locator('.ash-pane-composite-title-view-actions').getByRole('toolbar', { name: 'Search result actions', exact: true })).toHaveCount(1);
+				await test.info().attach(`search-${mode}-${theme}-${width}px-geometry`, { body: JSON.stringify(geometry, null, 2), contentType: 'application/json' });
+				await test.info().attach(`search-${mode}-${theme}-${width}px`, { body: await sidebar.screenshot(), contentType: 'image/png' });
+			}
+		}
+		await expect(toolbar).toBeVisible();
+		expect(await page.evaluate(() => window.ashSearchIntegration.snapshot())).toEqual(snapshot);
+	});
+}
 
 test('Search opens each occurrence at UTF-16 columns and keeps same-path roots separate', async ({ page }) => {
 	await page.goto('/search.html');

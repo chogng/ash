@@ -80,6 +80,13 @@ test('Search exposes query and replacement as multiline inputs and folding repla
 		const row = view.element.querySelector<HTMLElement>('.ash-search-replace-row')!;
 		assert.equal(row.hidden, false, 'Search and Replace are visible when Search first opens');
 		assert.deepEqual([query.tagName, replacement.tagName], ['TEXTAREA', 'TEXTAREA']);
+		const context = services.get(IContextKeyService);
+		for (const label of ['Search workspace', 'Replace', 'Files to include', 'Files to exclude']) {
+			const field = input(view.element, label);
+			field.focus();
+			assert.equal(context.getContext(field).getValue('searchViewletFocus'), true, `${label} inherits Search keyboard commands through its history scope`);
+			assert.equal(context.getContext(field).getValue('historyNavigationWidgetFocus'), true);
+		}
 		replacement.value = 'first\nsecond';
 		replacement.dispatchEvent(new browser.window.Event('input', { bubbles: true }));
 		replacement.focus();

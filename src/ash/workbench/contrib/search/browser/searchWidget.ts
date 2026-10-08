@@ -1,8 +1,8 @@
-import { h } from '../../../../base/browser/dom.js';
+import { h, scheduleAtNextAnimationFrame } from '../../../../base/browser/dom.js';
 import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import { LabelActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { ContextScopedFindInput, ContextScopedReplaceInput } from '../../../../platform/history/browser/contextScopedHistoryWidget.js';
@@ -61,6 +61,8 @@ export class SearchWidget extends Disposable {
 			onClick: () => this.setReplaceExpanded(this.replaceRow.hidden),
 		}));
 		queryRow.append(queryField);
+		// History scopes capture their DOM parent at construction, before later focus events.
+		this.domNode.append(queryRow);
 		this.searchInput = this._register(instantiation.createInstance(ContextScopedFindInput<true>, queryField, {
 			label: localize('search.queryLabel', 'Search workspace'),
 			placeholder: localize('search.query', 'Search'),
@@ -85,6 +87,7 @@ export class SearchWidget extends Disposable {
 		const replaceField = h(document, 'div');
 		replaceField.className = 'ash-search-replace-field';
 		this.replaceRow.append(replaceField);
+		this.domNode.append(this.replaceRow);
 		this.replaceInput = this._register(instantiation.createInstance(ContextScopedReplaceInput<true>, replaceField, {
 			label: localize('search.replace', 'Replace'),
 			presentation: 'compact',
@@ -95,9 +98,8 @@ export class SearchWidget extends Disposable {
 		this.replaceActions = this._register(new ActionBar(replaceField, {
 			ariaLabel: localize('search.replaceActions', 'Replacement actions'),
 			highlightToggledItems: true,
-			actionViewItemProvider: action => action.id === 'search.preserveCase' ? new LabelActionViewItem(action, { label: 'AB', ariaLabel: action.label }) : undefined,
+			actionViewItemProvider: action => new LabelActionViewItem(action, { label: action.id === 'search.preserveCase' ? 'AB' : '', ariaLabel: action.label }),
 		}));
-		this.domNode.append(queryRow, this.replaceRow);
 		this.setReplaceExpanded(true);
 		for (const input of [this.searchInput, this.replaceInput]) {
 			this._register(input.inputBox.onDidChange(() => this.changed.fire()));
@@ -116,7 +118,13 @@ export class SearchWidget extends Disposable {
 		this.updateOptions();
 		const targetWindow = document.defaultView!;
 		if (targetWindow.ResizeObserver) {
-			const observer = new targetWindow.ResizeObserver(() => this.layout());
+			const scheduled = this._register(new MutableDisposable());
+			// Responsive classes can resize the observed widget; apply them in the next frame.
+			const observer = new targetWindow.ResizeObserver(() => {
+				if (!scheduled.value) {
+					scheduled.value = scheduleAtNextAnimationFrame(targetWindow, () => { scheduled.clear(); this.layout(); });
+				}
+			});
 			observer.observe(this.domNode);
 			this._register(toDisposable(() => observer.disconnect()));
 		}

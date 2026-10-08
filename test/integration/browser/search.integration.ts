@@ -146,6 +146,16 @@ instantiation.registerInstance(IContentSearchService, {
 	search: async (query, options) => {
 		queries.push(query);
 		const first = { dirId: 'first', path: 'src/main.ts', lineNumber: 1, preview: 'const needle = true;', ranges: [{ start: 6, end: 12 }] };
+		if (query.text === 'layout') {
+			const preview = `${'中文😀 long context '.repeat(36)}layout${' trailing text '.repeat(30)}`;
+			const start = preview.indexOf('layout');
+			options?.onProgress?.([
+				{ ...first, path: 'src/ash/workbench/contrib/search/browser/searchView.ts', lineNumber: 3456, preview, ranges: [{ start, end: start + 6 }] },
+				{ ...first, path: 'src/ash/base/browser/ui/inputbox/inputbox.ts', lineNumber: 43, preview: 'before layout\nafter', ranges: [{ start: 7, end: 13 }] },
+				{ ...first, dirId: 'second', path: 'src/ash/workbench/contrib/search/browser/searchView.ts', lineNumber: 1000, preview: 'const layout = true;', ranges: [{ start: 6, end: 12 }] },
+			]);
+			return { resultCount: 3, limitHit: false, error: undefined };
+		}
 		if (query.text === 'focus') {
 			options?.onProgress?.([
 				{ ...first, path: 'a/a.ts' },
