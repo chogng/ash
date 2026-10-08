@@ -7,7 +7,7 @@ import test from 'node:test';
 
 const specs = ['editor/edit.spec.ts', 'sessions/session.spec.ts', 'windows/quickaccess.spec.ts', 'windows/themes.spec.ts'];
 
-function select(paths: readonly string[], eventName = 'pull_request'): { full: boolean; connected: boolean; files: string[] } {
+function select(paths: readonly string[], eventName = 'pull_request'): { full: boolean; connected: boolean; files: string[]; } {
 	const root = mkdtempSync(join(tmpdir(), 'ash-ci-plan-'));
 	const git = (...args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 	try {
