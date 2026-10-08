@@ -2,7 +2,7 @@
 
 建议先修复已存在的模型目录与会话模型一致性，再接通后台会话的被动状态显示，最后验证断线恢复和权限生命周期。保留 Ash 的 Rust 执行与持久化架构；VS Code 用来核对公开职责和可观察行为，不作为 Node runtime、私有类图或协议的移植模板。
 
-本文件供云端方案审阅和分批实施。按后续授权，第一批六文件和第二批两文件已在隔离云端 clone 完成各自可验证闭环，分开导出补丁。第一批已交付本地消费；两批真实 Web/Electron 交互与 Mac 产品验收仍待完成。第三批及后续目录身份契约只有方案，没有实施。没有提交或推送。根目录位置按本次用户要求选择，不启动 `/develop` 四份阶段产物流程。
+本文件保留原云端方案与历史验证。2026-10-08 接手集成已包含 B1 持久会话事实、B2 公开账号范围下的模型目录生命周期、picker 焦点保持和 B3 被动管理状态。首次账号快照缺口在本批修复：接受目录前通过现有账号服务建立范围，首个同账号或无关账号事件的失败重读保留有效目录，真实换账号及重连隔离迟到结果。当前验证与后续工作以 [接手 TODO](agenthost-handoff-todo.md) 为入口；下面明确标为历史的验证不代表本批重新执行。根目录位置保留原约定。
 
 ### 第二批交付范围与重要未闭环项
 
@@ -10,11 +10,11 @@
 
 1. **Kimi subscription 同公开身份重登录未闭环。** `AccountDto.accountId` 固定为 `current`，实际目录身份是 Rust 私有 `device_id`；新设备登录可把 `credentialRevision` 重置为 1，正常 token 轮换又会递增它。`account/login/completed` 没有 provider 字段，成功事件也不能可靠区分 Kimi 重登录和无关 GitHub 登录。本片没有追加 Rust/公共协议，也没有声称解决这个场景。
 2. **external `kimi-desktop` / `kimi-cli` 身份与缓存读取未闭环。** 它们使用私有凭证摘要作用域，不属于现有 subscription observer；发现模型未纳入权威 `model/list`，而 `provider/models/list` 会发起远程刷新。本片保留已有接入方式；不能承诺外部凭证切换后刷新失败时不会保留旧目录。
-3. **首次账户快照是保守边界。** 若目录已加载、此前没有见过账户快照，第一个账户通知无法证明缓存属于哪个账户，因而会退役旧视图。这可能在无关登录触发首个快照、随后读取失败时暂时显示空目录；后续已建立身份的无关 GitHub 更新和同账户 token 轮换不会错误清空。
+3. **首次账户快照缺口已修复。** 模型服务通过必需的 `IAccountService` 在首次目录接受前读取权威账号范围；账号事件由同一服务提供。初始快照失败不发布无范围目录，可重试；迟到快照或失败不能覆盖换账号或重连后的目录。此修复不扩展上述两类私有凭证身份契约。
 
-这些约束与最小后续契约的只读方案见 [agenthost-catalog-epoch-plan.md](agenthost-catalog-epoch-plan.md)。方案沿原有 backend catalog/subscription/runtime owner 增加不含私有设备或凭证信息的 view epoch；需与 SCM 的共享协议集成协调后另行批准实施。
+这些约束与最小后续契约的只读方案见 `agenthost-catalog-epoch-plan.md`（原提案尚未交付）。方案沿原有 backend catalog/subscription/runtime owner 增加不含私有设备或凭证信息的 view epoch；需与 SCM 的共享协议集成协调后另行批准实施。
 
-### 第一批实际结果
+### 第一批历史验证
 
 2026-10-08 UTC，代码基线仍为 `dd086508b8c0eabe5931793302e8f7dc3d7a47b3` 加下述未提交六文件 diff：
 
@@ -31,7 +31,7 @@
 
 剩余验收是实际 picker DOM、pane/profile 关闭重开、Code/Cowork、多窗口和 Web/Electron 运行时。模型/DI 至 inputState/startTurn 的单测通过不等于这些交互已通过。锁定 Chromium 下载曾收到截断 ZIP，随后安装调用的 approval review 被取消；已停止此步骤，未改用系统 Chromium。云端没有就绪的 Electron binary/display，Mac 需消费完整补丁与本文件后验证。
 
-### 第二批实际结果
+### 第二批历史验证
 
 2026-10-08 UTC，仍基于 Ash `dd086508b8c0eabe5931793302e8f7dc3d7a47b3`；本片只新增下列两文件未提交 diff，未改动第一批六文件：
 
@@ -155,18 +155,20 @@ Session.model 缺失仅表示目录没有模型事实，不能据此推断没有
 
 ## 第三批 显示后台会话的被动管理状态
 
-依赖目录读取、通知和 owner 保持成立。上游依据为 ac4cf28d。现有 Session catalog subscription 已在 committed Thread event 后发布 `session/changed`，但无需订阅全部历史。Ash 目前的每个 SessionThread 只暴露 Active/Archived 生命周期等元数据；`IChat.executionStatus` 无详情时沿用旧值或 idle，而且列表没有生产显示消费者。
+本批已按粗粒度管理事实实现，对应提交 `388e4276f`；原验收涵盖 Rust owner、旧缓存迁移及 Web/Electron 中英文后台列表场景。以下保留原方案的职责与验收契约。
 
-**建议本批采用现有粗粒度管理状态。** `ThreadCatalogRecord.manager` 已由 Core 的 `thread_manager_info` 生成，能区分 Idle、NeedsInput、Working、ReadyForReview、Failed、Stopped 等管理事实。Working 合并 created/running/cancelling，NeedsInput 合并三类等待；它不是精确 TurnStatus。
+原调查基线要求目录读取、通知和 owner 保持成立，上游依据为 ac4cf28d。现有 Session catalog subscription 在 committed Thread event 后发布 `session/changed`，无需订阅全部历史。本批在原生命周期元数据之外透出同源管理事实，列表无需加载详情即可显示该事实；它不伪造精确 Turn 执行状态。
 
-- [ ] 确认产品选择：先显示现有管理事实，还是新增精确 latest-turn summary。推荐前者；后者另列下一节，未确认前不追加持久状态。
-- [ ] `crates/protocol/src/session.rs` 为 SessionThread 暴露已有 manager；`crates/thread-store/src/store.rs` 的 `session_from_catalog` 透出同一事实。
-- [ ] `crates/core/src/thread_controller.rs` 只调整现有目录构造所必需的投影，复用已存在的 `thread_manager_info`，不新增执行 reducer。`crates/app-server/src/server/operations.rs` 的 full Session 结果必须使用同源事实；只读核对 `session_operations.rs` 的被动路径。
-- [ ] `crates/state/src/sqlite/thread.rs`、`crates/state/src/sqlite/connection.rs` 更新必要的 Session catalog 格式与迁移：从 verified ThreadCatalogRecord 重建，不能默认把旧行全部变 idle，不能为了列表读取重放每份历史。
-- [ ] 从 Rust source 重新生成 TS、schema 和 decoder；核对 registry/export 与 fixtures，需要时才改 `crates/app-server-protocol` 的实际生成 owner。
-- [ ] `src/ash/sessions/services/sessions/common/session.ts` 增加前端领域 management-state 契约，provider 做机械转换，management 保持更新与 equality 正确。不能伪造 `executionStatus=running` 或具体 waitingReason。
-- [ ] `src/ash/sessions/browser/parts/sidebar/sessionsList.ts` 现有 row 显示本地化状态及 aria 描述；复用 Ash 自有 DOM、主题和尺寸，保留 row identity、焦点、滚动与 PR 图标。
-- [ ] 在 `src/ash/sessions/test/browser/sessions-list.test.ts`、management 单测、Rust store/catalog/update broker 测试及现有 Sessions Web/Electron smoke 中验证后台切换。新文案同步所属 NLS 和语言词条，至少覆盖一种非默认语言。
+**本批采用现有粗粒度管理状态。** `ThreadCatalogRecord.manager` 已由 Core 的 `thread_manager_info` 生成，能区分 Idle、NeedsInput、Working、ReadyForReview、Failed、Stopped 等管理事实。Working 合并 created/running/cancelling，NeedsInput 合并三类等待；它不是精确 TurnStatus。
+
+- [x] 采用现有粗粒度管理事实；精确 latest-turn summary 仍属于独立的后续协议/存储决定。
+- [x] `crates/protocol/src/session.rs` 为 SessionThread 暴露已有 manager；`crates/thread-store/src/store.rs` 的 `session_from_catalog` 透出同一事实。
+- [x] `crates/core/src/thread_controller.rs` 只调整现有目录构造所必需的投影，复用已存在的 `thread_manager_info`，不新增执行 reducer。`crates/app-server/src/server/operations.rs` 的 full Session 结果必须使用同源事实；只读核对 `session_operations.rs` 的被动路径。
+- [x] `crates/state/src/sqlite/thread.rs`、`crates/state/src/sqlite/connection.rs` 更新必要的 Session catalog 格式与迁移：从 verified ThreadCatalogRecord 重建，不能默认把旧行全部变 idle，不能为了列表读取重放每份历史。
+- [x] 从 Rust source 重新生成 TS、schema 和 decoder；核对 registry/export 与 fixtures，需要时才改 `crates/app-server-protocol` 的实际生成 owner。
+- [x] `src/ash/sessions/services/sessions/common/session.ts` 增加前端领域 management-state 契约，provider 做机械转换，management 保持更新与 equality 正确。不能伪造 `executionStatus=running` 或具体 waitingReason。
+- [x] `src/ash/sessions/browser/parts/sidebar/sessionsList.ts` 现有 row 显示本地化状态及 aria 描述；复用 Ash 自有 DOM、主题和尺寸，保留 row identity、焦点、滚动与 PR 图标。
+- [x] 在 `src/ash/sessions/test/browser/sessions-list.test.ts`、management 单测、Rust store/catalog/update broker 测试及现有 Sessions Web/Electron smoke 中验证后台切换。新文案同步所属 NLS 和语言词条，至少覆盖一种非默认语言。
 
 验收：另一 connection 启动、等待输入、失败、完成或停止后，未打开详情的会话行会更新；subscriber 数量和 history-load 次数不因状态显示增加；选择、draft、焦点和滚动保留；重连后 retired connection 的活动事实不残留。
 

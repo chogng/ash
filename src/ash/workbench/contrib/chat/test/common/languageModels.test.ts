@@ -4,9 +4,12 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Event, Emitter } from '../../../../../base/common/event.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
-import type { AccountDto, ModelListResult, ProviderListResult, ProviderModelsListResult, ServerNotification } from '../../../../../../../.build/protocol/typescript/index.js';
+import type { AccountDto, AccountReadResult, ModelListResult, ProviderListResult, ProviderModelsListResult, ServerNotification } from '../../../../../../../.build/protocol/typescript/index.js';
 import { IAppServerApi, IServerEventApi, type AppServerConnectionState } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { IModelApi } from '../../../../../platform/sessions/common/sessionApi.js';
+import type { IAccountApi } from '../../../../../platform/accounts/common/accountApi.js';
+import { IAccountService } from '../../../../../platform/accounts/common/accountService.js';
+import { AppServerAccountService } from '../../../../services/accounts/browser/appServerAccountService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { LanguageModelsService } from '../../common/languageModels.js';
 import { ILanguageModelsConfigurationService } from '../../common/languageModelsConfiguration.js';
@@ -20,6 +23,7 @@ test('retirement-only catalog changes notify consumers and keep date-only eviden
 			{ onConnectionState: () => ({ dispose() { } }) } as unknown as IAppServerApi,
 			{ subscribe: () => ({ dispose() { } }) } as unknown as IServerEventApi,
 			{ onDidChangeModels: Event.None } as unknown as ILanguageModelsConfigurationService,
+			{ onDidChangeAccounts: Event.None, read: async () => ({ revision: 1n, accounts: [] }) } as unknown as IAccountService,
 		));
 		let changes = 0;
 		resources.add(models.onDidChangeModels(() => changes++));
@@ -88,6 +92,7 @@ test('model input capabilities notify consumers and do not change previous catal
 		{ onConnectionState: () => ({ dispose() { } }) } as unknown as IAppServerApi,
 		{ subscribe: () => ({ dispose() { } }) } as unknown as IServerEventApi,
 		{ onDidChangeModels: Event.None } as unknown as ILanguageModelsConfigurationService,
+		{ onDidChangeAccounts: Event.None, read: async () => ({ revision: 1n, accounts: [] }) } as unknown as IAccountService,
 	));
 	const snapshots = [];
 	let changes = 0;
@@ -100,7 +105,7 @@ test('model input capabilities notify consumers and do not change previous catal
 	assert.deepEqual({ snapshots, changes }, { snapshots: [null, ['text'], ['text', 'image'], null], changes: 4 });
 });
 
-function catalogFixture(resources: DisposableStore) {
+function catalogFixture(resources: DisposableStore, omitAccounts = false) {
 	const events = resources.add(new Emitter<ServerNotification>());
 	const states = resources.add(new Emitter<AppServerConnectionState>());
 	const services = resources.add(new InstantiationService());
@@ -110,6 +115,9 @@ function catalogFixture(resources: DisposableStore) {
 		providers: [{ provider: 'openai', connection: 'chatgpt-subscription', access: 'subscription', active: true, configured: true, ready: true, displayName: 'ChatGPT', apiKeyPolicy: 'unsupported', apiKeyConfigured: false }] as ProviderListResult['providers'],
 		catalogReads: 0,
 		providerReads: 0,
+		account: accountRead(),
+		accountReads: 0,
+		readAccount: undefined as (() => Promise<AccountReadResult>) | undefined,
 		discoveries: [] as string[],
 		selectionWrites: 0,
 		configWrites: 0,
@@ -124,6 +132,11 @@ function catalogFixture(resources: DisposableStore) {
 		onConnectionState: states.event,
 	});
 	services.registerInstance(IServerEventApi, { subscribe: events.event });
+	if (!omitAccounts) {
+		services.registerInstance(IAccountService, resources.add(new AppServerAccountService({
+			read: async () => { source.accountReads++; return source.readAccount ? source.readAccount() : source.account; },
+		} as IAccountApi, { subscribe: events.event })));
+	}
 	services.registerInstance(IModelApi, {
 		listModels: async () => { source.catalogReads++; return source.readCatalog ? source.readCatalog() : { models: source.catalog }; },
 		listProviders: async () => { source.providerReads++; return { providers: source.providers }; },
@@ -149,16 +162,15 @@ function modelsUpdated(result: ProviderModelsListResult = { type: 'empty' }): Se
 	};
 }
 
-function accountUpdate(update: Partial<AccountDto> = {}): ServerNotification {
+function accountRead(update: Partial<AccountDto> = {}): AccountReadResult {
 	return {
-		method: 'account/updated',
-		params: {
-			account: {
-				revision: '1',
-				accounts: [{ provider: 'chatgpt-subscription', accountId: 'account-a', email: null, displayName: null, organization: null, plan: 'Plus', status: 'ready', credentialRevision: '1', ...update }],
-			},
-		},
+		revision: '1',
+		accounts: [{ provider: 'chatgpt-subscription', accountId: 'account-a', email: null, displayName: null, organization: null, plan: 'Plus', status: 'ready', credentialRevision: '1', ...update }],
 	};
+}
+
+function accountUpdate(update: Partial<AccountDto> = {}): ServerNotification {
+	return { method: 'account/updated', params: { account: accountRead(update) } };
 }
 
 async function settleCatalogEvents(): Promise<void> {
@@ -508,4 +520,109 @@ test('provider-only readiness changes notify consumers even when model metadata 
 	events.fire(modelsUpdated());
 	await settleCatalogEvents();
 	assert.equal(source.changes, changes + 1);
+});
+
+for (const event of [
+	accountUpdate({ credentialRevision: '2' }),
+	{ method: 'account/login/completed', params: { loginId: 'first-login', status: { type: 'failed', failure: { code: 'cancelled', message: 'Cancelled' } }, account: accountRead() } },
+] satisfies ServerNotification[]) {
+	test(`the first same-account ${event.method} keeps a loaded catalog when rereading fails`, async () => {
+		using resources = new DisposableStore();
+		const { source, models, events } = catalogFixture(resources);
+		const snapshot = await models.listModelCatalog();
+		const changes = source.changes;
+		source.readCatalog = async () => { throw new Error('Temporary catalog failure'); };
+		events.fire(event);
+		await settleCatalogEvents();
+		assert.equal(await models.listModelCatalog(), snapshot);
+		assert.deepEqual({ changes: source.changes, accountReads: source.accountReads, catalogReads: source.catalogReads }, { changes, accountReads: 1, catalogReads: 2 });
+	});
+}
+
+test('the first unrelated account event keeps a loaded catalog when rereading fails', async () => {
+	using resources = new DisposableStore();
+	const { source, models, events } = catalogFixture(resources);
+	const snapshot = await models.listModelCatalog();
+	const changes = source.changes;
+	source.readCatalog = async () => { throw new Error('Temporary catalog failure'); };
+	events.fire({ method: 'account/updated', params: { account: { revision: '2', accounts: [...source.account.accounts, { provider: 'github', accountId: 'github-user', email: null, displayName: null, organization: null, plan: null, status: 'ready', credentialRevision: '1' }] } } });
+	await settleCatalogEvents();
+	assert.equal(await models.listModelCatalog(), snapshot);
+	assert.deepEqual({ changes: source.changes, accountReads: source.accountReads, catalogReads: source.catalogReads }, { changes, accountReads: 1, catalogReads: 2 });
+});
+
+test('the first changed model account clears a loaded catalog before a failing reread', async () => {
+	using resources = new DisposableStore();
+	const { source, models, events } = catalogFixture(resources);
+	await models.listModels();
+	source.readCatalog = async () => { throw new Error('New account unavailable'); };
+	events.fire(accountUpdate({ accountId: 'account-b' }));
+	const immediate = await models.listModels();
+	await settleCatalogEvents();
+	assert.deepEqual({ immediate, settled: await models.listModels() }, { immediate: [], settled: [] });
+});
+
+test('an initial account snapshot gates catalog acceptance and cannot replace a changed account', async () => {
+	using resources = new DisposableStore();
+	const { source, models, events } = catalogFixture(resources);
+	const account = new DeferredPromise<AccountReadResult>();
+	const catalog = new DeferredPromise<ModelListResult>();
+	source.readAccount = () => account.p;
+	source.readCatalog = () => catalog.p;
+	let completed = false;
+	const pending = models.listModels().then(entries => { completed = true; return entries; });
+	await catalog.complete({ models: [modelEntry('old-account')] });
+	await settleCatalogEvents();
+	const acceptedBeforeAccount = completed;
+	source.catalog = [modelEntry('new-account')];
+	source.readCatalog = undefined;
+	events.fire(accountUpdate({ accountId: 'account-b' }));
+	await settleCatalogEvents();
+	await account.complete(accountRead());
+	const current = await pending;
+	source.readCatalog = async () => { throw new Error('Temporary catalog failure'); };
+	events.fire(accountUpdate({ accountId: 'account-b', credentialRevision: '2' }));
+	await settleCatalogEvents();
+	assert.deepEqual({ acceptedBeforeAccount, returned: current.map(entry => entry.model.model), retained: (await models.listModels()).map(entry => entry.model.model) }, { acceptedBeforeAccount: false, returned: ['new-account'], retained: ['new-account'] });
+});
+
+for (const rejects of [false, true]) {
+	test(`a reconnected catalog ignores an old account snapshot ${rejects ? 'failure' : 'completion'}`, async () => {
+		using resources = new DisposableStore();
+		const { source, models, events, states } = catalogFixture(resources);
+		const account = new DeferredPromise<AccountReadResult>();
+		void account.p.catch(() => { });
+		source.readAccount = () => account.p;
+		const retired = models.listModels();
+		states.fire('crashed');
+		source.generation++;
+		source.readAccount = undefined;
+		source.account = accountRead({ accountId: 'account-b' });
+		source.catalog = [modelEntry('restored')];
+		states.fire('ready');
+		await settleCatalogEvents();
+		if (rejects) await account.error(new Error('Retired account read'));
+		else await account.complete(accountRead());
+		const current = await retired;
+		source.readCatalog = async () => { throw new Error('Temporary catalog failure'); };
+		events.fire(accountUpdate({ accountId: 'account-b', credentialRevision: '2' }));
+		await settleCatalogEvents();
+		assert.deepEqual({ returned: current.map(entry => entry.model.model), retained: (await models.listModels()).map(entry => entry.model.model) }, { returned: ['restored'], retained: ['restored'] });
+	});
+}
+
+test('a failed initial account read cannot publish an unscoped catalog and can retry', async () => {
+	using resources = new DisposableStore();
+	const { source, models } = catalogFixture(resources);
+	source.readAccount = async () => { throw new Error('Account snapshot unavailable'); };
+	let failure: unknown;
+	try { await models.listModels(); } catch (error) { failure = error; }
+	const changesBeforeRetry = source.changes;
+	source.readAccount = undefined;
+	assert.deepEqual({ failure: failure instanceof Error ? failure.message : undefined, changesBeforeRetry, recovered: (await models.listModels()).map(entry => entry.model.model), accountReads: source.accountReads }, { failure: 'Account snapshot unavailable', changesBeforeRetry: 0, recovered: ['initial'], accountReads: 2 });
+});
+
+test('model catalog creation rejects a missing required account service', () => {
+	using resources = new DisposableStore();
+	assert.throws(() => catalogFixture(resources, true), { message: `Unknown service: ${IAccountService.description}` });
 });

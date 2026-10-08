@@ -1,4 +1,4 @@
-import type { AccountReadResult, ModelListResult, ProviderListResult } from '../../../../../../.build/protocol/typescript/index.js';
+import type { ModelListResult, ProviderListResult } from '../../../../../../.build/protocol/typescript/index.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { canceled } from '../../../../base/common/errors.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -7,6 +7,7 @@ import { IModelApi, type CustomModelProvider, type ModelProviderTestResult } fro
 import type { ModelPreferencesUpdate } from '../../../../platform/sessions/common/sessionApi.js';
 import type { ApprovalReviewModelSelection } from '../../../../platform/sessions/common/sessionApi.js';
 import { IAppServerApi, IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
+import { IAccountService, type AccountState } from '../../../../platform/accounts/common/accountService.js';
 import { ILanguageModelsConfigurationService } from './languageModelsConfiguration.js';
 import type { ModelRef, ModelProviderCredentialStatus } from '../../../services/chat/common/chatService.js';
 import { modelRefIdentity, type ModelCatalogEntry } from '../../../services/chat/common/modelCatalog.js';
@@ -51,25 +52,18 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 	private catalogGeneration = 0;
 	private catalogAttemptRevision = 0;
 	private accountScope: string | undefined;
-	private accountState: AccountReadResult | undefined;
+	private accountState: AccountState | undefined;
 	private modelAccountConnections: ReadonlySet<string> | undefined;
 	private providerState = '[]';
 	constructor(@IModelApi private readonly modelApi: IModelApi,
 		@IAppServerApi private readonly appServer: IAppServerApi, @IServerEventApi events: IServerEventApi,
-		@ILanguageModelsConfigurationService private readonly preferences: ILanguageModelsConfigurationService) {
+		@ILanguageModelsConfigurationService private readonly preferences: ILanguageModelsConfigurationService,
+		@IAccountService private readonly accounts: IAccountService) {
 		super();
 		this._register(preferences.onDidChangeModels(() => this.changed.fire()));
 		const subscription = events.subscribe(event => {
 			if (event.method === 'provider/models/updated') {
 				// The tagged outcome describes one provider observation, not the global catalog.
-				this.invalidateModelCatalog();
-			} else if (event.method === 'account/updated' || event.method === 'account/login/completed') {
-				this.accountState = event.params.account;
-				const scope = accountCatalogScope(this.accountState, this.modelAccountConnections);
-				if (scope !== this.accountScope) {
-					this.accountScope = scope;
-					this.retireModelCatalog();
-				}
 				this.invalidateModelCatalog();
 			} else if (event.method === 'provider/apiKey/changed') {
 				this.retireModelCatalog(true);
@@ -77,6 +71,15 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 			}
 		});
 		this._register(toDisposable(() => subscription.dispose()));
+		this._register(accounts.onDidChangeAccounts(state => {
+			this.accountState = state;
+			const scope = accountCatalogScope(state, this.modelAccountConnections);
+			if (scope !== this.accountScope) {
+				this.accountScope = scope;
+				this.retireModelCatalog();
+			}
+			this.invalidateModelCatalog();
+		}));
 		const connection = appServer.onConnectionState(state => {
 			this.accountScope = undefined;
 			this.accountState = undefined;
@@ -198,9 +201,12 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 			const revision = this.catalogRevision;
 			this.catalogAttemptRevision = revision;
 			try {
-				const [catalog, providers] = await Promise.all([this.modelApi.listModels(), this.modelApi.listProviders()]);
+				const [catalog, providers, account] = await Promise.all([this.modelApi.listModels(), this.modelApi.listProviders(), this.accountState ?? this.accounts.read()]);
 				if (!this.isCurrentCatalogLoad(generation, connectionGeneration)) { break; }
 				if (revision !== this.catalogRevision) { continue; }
+				// A hot daemon may have published its account event before this window subscribed.
+				// Accept the snapshot only for the catalog attempt that requested it.
+				this.accountState = account;
 				const models = [...catalog.models];
 				for (const connection of ['kimi-desktop', 'kimi-cli']) {
 					if (!providers.providers.some(provider => provider.connection === connection && provider.ready)) { continue; }
@@ -238,7 +244,7 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 	}
 }
 
-function accountCatalogScope(account: AccountReadResult, modelConnections: ReadonlySet<string> | undefined): string {
+function accountCatalogScope(account: AccountState, modelConnections: ReadonlySet<string> | undefined): string {
 	// Internal token rotation and unrelated login integrations do not change model membership.
 	return JSON.stringify(account.accounts.filter(entry => !modelConnections || modelConnections.has(entry.provider)).map(entry => JSON.stringify([entry.provider, entry.accountId, entry.organization, entry.plan, entry.status])).sort());
 }

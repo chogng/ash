@@ -379,6 +379,8 @@ export abstract class Workbench extends Disposable {
 		services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
 		if (options.createTextDocumentHost) { this._register(options.createTextDocumentHost(services)); }
 		services.registerInstance(IChatService, chat);
+		const accountService = this._register(new AppServerAccountService(options.api.accounts, options.api.events));
+		services.registerInstance(IAccountService, accountService);
 		services.registerInstance(ILanguageModelsConfigurationService, this._register(services.createInstance(LanguageModelsConfigurationService, ChatModelPreferences)));
 		services.registerInstance(ILanguageModelsService, this._register(services.createInstance(LanguageModelsService)));
 		services.registerInstance(IInstructionService, options.api.instructions);
@@ -393,8 +395,6 @@ export abstract class Workbench extends Disposable {
 		const localization = this._register(new WorkbenchLocalizationService());
 		services.registerInstance(ILocalizationService, localization);
 		services.registerInstance(IRemoteAgentService, this._register(new AppServerRemoteAgentService({ api: options.api.appServer, remoteApi: options.api.remote })));
-		const accountService = this._register(new AppServerAccountService(options.api.accounts, options.api.events));
-		services.registerInstance(IAccountService, accountService);
 		services.registerInstance(IGitHubService, options.api.github);
 		const sessionGitHub = this._register(services.createInstance(SessionsGitHubService));
 		services.registerInstance(ISessionsGitHubService, sessionGitHub);

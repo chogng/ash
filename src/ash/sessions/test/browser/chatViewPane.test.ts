@@ -16,6 +16,8 @@ import { ILanguageModelsConfigurationService as ICoworkModelPreferences } from '
 import { LanguageModelsConfigurationService as CoworkModelPreferencesService } from '../../contrib/cowork/browser/languageModelsConfigurationService.js';
 import { initializeTestLocalization } from '../../../workbench/services/localization/test/common/localizationTestUtils.js';
 import { resetNlsResolver } from '../../../nls.js';
+import { IAccountService } from '../../../platform/accounts/common/accountService.js';
+import { AppServerAccountService } from '../../../workbench/services/accounts/browser/appServerAccountService.js';
 import { IModelApi, ISessionApi, IThreadApi, ITurnApi } from '../../../platform/sessions/common/sessionApi.js';
 import { ITurnChangesApi } from '../../../platform/turnChanges/common/turnChangesApi.js';
 import { IAppServerSkillApi } from '../../../platform/agentHost/common/appServerApi.js';
@@ -1856,6 +1858,7 @@ function createChatService(api: IRendererHost, configurationService?: WorkbenchC
 	const services = inputResources.add(new InstantiationService());
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	registerChatBackend(services, api);
+	services.registerInstance(IAccountService, inputResources.add(new AppServerAccountService(api.accounts, api.events)));
 	services.registerInstance(IConfigurationService, configurationService ?? inputResources.add(new WorkbenchConfigurationService()));
 	services.registerInstance(IStorageService, storage);
 	services.registerInstance(ILanguageModelsConfigurationService, inputResources.add(services.createInstance(LanguageModelsConfigurationService, ChatModelPreferences)));
@@ -2893,6 +2896,7 @@ function fakeApi(options: FakeOptions = {}): {
 		?? (options.createSession?.sessionId === sessionId ? options.createSession : undefined)
 		?? session(sessionId);
 	const api = {
+		accounts: { read: async () => ({ revision: '1', accounts: [] }) },
 		appServer: {
 			get connectionGeneration() { return connectionGeneration; },
 			getConnectionState: async () => "ready" as const,
