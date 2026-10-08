@@ -133,7 +133,7 @@ export function markAsDisposed(disposable: TrackableDisposable): void {
 	if (!isNoneDisposable(disposable)) disposableTracker?.markAsDisposed(disposable);
 }
 
-/** Marks a process-lifetime disposable as intentionally not owned by a disposable store. */
+/** Excludes a process-lifetime root and its registered descendants from leak reports. */
 export function markAsSingleton<T extends IDisposable>(singleton: T): T {
 	if (!isNoneDisposable(singleton)) disposableTracker?.markAsSingleton(singleton);
 	return singleton;
@@ -254,7 +254,25 @@ export class DisposableTracker implements IDisposableTracker {
 	}
 
 	leaks(): readonly DisposableLeak[] {
-		return [...this.records.values()].filter(record => !record.isSingleton).map((record) => ({
+		// Recompute from current roots so detaching or transferring ownership restores reporting.
+		const singletonOwned = new Set<TrackableDisposable>();
+		const pending = [...this.records.values()]
+			.filter(record => record.isSingleton && !record.owner)
+			.map(record => record.disposable);
+		while (pending.length > 0) {
+			const disposable = pending.pop()!;
+			if (singletonOwned.has(disposable)) {
+				continue;
+			}
+			singletonOwned.add(disposable);
+			const record = this.records.get(disposable);
+			if (record) {
+				for (const child of record.children) {
+					pending.push(child);
+				}
+			}
+		}
+		return [...this.records.values()].filter(record => !singletonOwned.has(record.disposable)).map((record) => ({
 			disposable: record.disposable,
 			label: record.label,
 			ownerLabel: record.owner ? this.label(record.owner) : undefined,

@@ -1,5 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
+import { Emitter } from "../../common/event.js";
 import {
 	AbstractDisposable,
 	DisposableMap,
@@ -230,4 +231,84 @@ test("only one DisposableTracker can be installed in a JavaScript realm", () => 
 		() => installDisposableTracker(new DisposableTracker()),
 		/already installed/,
 	);
+});
+
+test("singleton ownership excludes existing descendants and late registrations", () => {
+	const tracker = new DisposableTracker();
+	using installation = installDisposableTracker(tracker);
+	using root = new DisposableStore();
+	const child = root.add(new DisposableStore());
+	child.add(toDisposable(() => { }));
+	assert.equal(tracker.leaks().length, 3);
+
+	markAsSingleton(root);
+	tracker.assertNoLeaks();
+	child.add(toDisposable(() => { }));
+	root.add(new DisposableStore()).add(toDisposable(() => { }));
+	tracker.assertNoLeaks();
+});
+
+test("detaching and reparenting a singleton descendant restores leak reporting", () => {
+	const tracker = new DisposableTracker();
+	using installation = installDisposableTracker(tracker);
+	using root = markAsSingleton(new DisposableStore());
+	const child = root.add(new DisposableStore());
+	const leaf = child.add(toDisposable(() => { }));
+	tracker.assertNoLeaks();
+
+	root.delete(child);
+	assert.deepEqual(tracker.leaks().map(leak => leak.disposable), [child, leaf]);
+	using ordinary = new DisposableStore();
+	ordinary.add(child);
+	assert.deepEqual(tracker.leaks().map(leak => leak.disposable), [child, leaf, ordinary]);
+	ordinary.delete(child);
+	root.add(child);
+	assert.deepEqual(tracker.leaks().map(leak => leak.disposable), [ordinary]);
+});
+
+test("singleton marks do not hide an ordinary owning root", () => {
+	const tracker = new DisposableTracker();
+	using installation = installDisposableTracker(tracker);
+	using root = new DisposableStore();
+	const child = root.add(markAsSingleton(new DisposableStore()));
+	const leaf = child.add(toDisposable(() => { }));
+
+	assert.deepEqual(tracker.leaks().map(leak => leak.disposable), [root, child, leaf]);
+});
+
+test("singleton emitters do not exempt caller-owned listeners or unrelated resources", () => {
+	const tracker = new DisposableTracker();
+	using installation = installDisposableTracker(tracker);
+	using root = markAsSingleton(new DisposableStore());
+	const emitter = root.add(new Emitter<void>());
+	using listener = emitter.event(() => { });
+	using unrelated = toDisposable(() => { });
+
+	assert.deepEqual(tracker.leaks().map(leak => leak.disposable), [listener, unrelated]);
+	root.dispose();
+	assert.deepEqual(tracker.leaks().map(leak => leak.disposable), [listener, unrelated]);
+});
+
+test("singleton ownership still rejects cycles and multiple owners", () => {
+	const tracker = new DisposableTracker();
+	using installation = installDisposableTracker(tracker);
+	using root = markAsSingleton(new DisposableStore());
+	const child = root.add(new DisposableStore());
+	using ordinary = new DisposableStore();
+
+	assert.throws(() => child.add(root), /ownership cannot contain a cycle/);
+	assert.throws(() => ordinary.add(child), /already belongs to DisposableStore/);
+	assert.deepEqual(tracker.leaks().map(leak => leak.disposable), [ordinary]);
+});
+
+test("detached descendants remain leaks after their former singleton owner is disposed", () => {
+	const tracker = new DisposableTracker();
+	using installation = installDisposableTracker(tracker);
+	using root = markAsSingleton(new DisposableStore());
+	using child = root.add(new DisposableStore());
+	const leaf = child.add(toDisposable(() => { }));
+	root.delete(child);
+	root.dispose();
+
+	assert.deepEqual(tracker.leaks().map(leak => leak.disposable), [child, leaf]);
 });
