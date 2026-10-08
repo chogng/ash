@@ -136,7 +136,7 @@ export class ScmViewPane extends ViewPane {
 		};
 		updateTwistieLayout();
 		this._register(resourceIconRenderer.onDidChangeResourceIcons(updateTwistieLayout));
-		this.tree.element.setAttribute('aria-description', localize('scm.changesTreeHelp', 'Use the title toolbar to commit or refresh, and More Actions to change list, tree and sorting or run Git operations. Files are grouped by directory. Use Up and Down to navigate and preview files, Left to collapse, and Right to expand a group or directory. Press Enter or Space on a directory to toggle it. Press Shift+F10 on a group in tree view, then choose Collapse All to fold its directories. Press Enter on a file to open and pin it, or Space to preview while keeping focus here. Hold Ctrl, Command, or Alt when clicking or pressing Enter to open in a side group. Double-click pins the file and focuses its editor. Press F1 for Git branch, worktree, stash, tag and remote commands, integration continue or abort, and partial staging.'));
+		this.tree.element.setAttribute('aria-description', localize('scm.changesTreeHelp', 'Use the title toolbar to commit or refresh, and More Actions to change list, tree and sorting or run Git operations. Files are grouped by directory. Use Up and Down to navigate and preview files, Left to collapse, and Right to expand a group or directory. Press Enter or Space on a directory to toggle it. Press Shift+F10 on a group in tree view, then choose Collapse All to fold its directories. Press Enter on a file to open and pin it, or Space to preview while keeping focus here. Hold Ctrl, Command, or Alt when clicking or pressing Enter to open in a side group. Double-click pins the file and focuses its editor. Press F1 for Git branch, worktree, stash, tag and remote commands, integration continue or abort, and partial staging. Previous resource group: workbench.scm.action.focusPreviousResourceGroup. Next resource group: workbench.scm.action.focusNextResourceGroup. Assign shortcuts in Keyboard Shortcuts to cycle through this repository\'s groups without changing their expansion.'));
 		this.welcomeController = this._register(instantiationService.createInstance(ViewWelcomeController, this.contentElement, this, ViewsRegistry));
 		this._register(this.onDidFocus(() => {
 			if (this.welcomeController.enabled && configurationService.getValue<boolean>(AccessibilityVerbositySettingId.Scm) !== false) {
@@ -208,6 +208,28 @@ export class ScmViewPane extends ViewPane {
 
 	public async refresh(): Promise<void> {
 		await this.provider?.refresh();
+	}
+
+	public focusPreviousResourceGroup(): void {
+		this.moveResourceGroupFocus(-1);
+	}
+
+	public focusNextResourceGroup(): void {
+		this.moveResourceGroupFocus(1);
+	}
+
+	private moveResourceGroupFocus(direction: -1 | 1): void {
+		if (this.isDisposed) return;
+		const groups = this.tree.model.rootNodes;
+		if (groups.length === 0) return;
+		// Only a group header with DOM focus continues a cycle; files, folders and other controls start at the first group.
+		const focused = this.tree.element.ownerDocument.activeElement === this.tree.element ? this.tree.focus : undefined;
+		const current = groups.findIndex(node => node.element === focused);
+		if (current >= 0 && groups.length === 1) return;
+		const target = groups[current < 0 ? 0 : (current + direction + groups.length) % groups.length]!;
+		this.tree.setSelection([target.id]);
+		this.tree.setFocus(target.id);
+		this.tree.domFocus();
 	}
 
 	public collapseAllResources(group: ISCMResourceGroup): void {

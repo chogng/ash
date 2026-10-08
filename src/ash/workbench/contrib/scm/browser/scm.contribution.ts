@@ -34,7 +34,8 @@ import { ISCMService, ISCMViewService, SCMHistoryBusyContext, SCMProviderContext
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
-import { restoreFocus } from '../../../../base/browser/focus.js';
+import { isFocusable, restoreFocus } from '../../../../base/browser/focus.js';
+import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { FocusedViewContext } from '../../../common/contextkeys.js';
@@ -42,6 +43,14 @@ import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { REPOSITORIES_VIEW_PANE_ID, SCMRepositoriesViewPane } from './scmRepositoriesViewPane.js';
 
 const scmViewSortMenu = MenuId.for('SCMViewSort');
+CommandsRegistry.register('workbench.scm.action.focusPreviousResourceGroup', async accessor => {
+	const pane = await accessor.get(IViewsService).openView<ScmViewPane>(VIEW_PANE_ID);
+	pane?.focusPreviousResourceGroup();
+});
+CommandsRegistry.register('workbench.scm.action.focusNextResourceGroup', async accessor => {
+	const pane = await accessor.get(IViewsService).openView<ScmViewPane>(VIEW_PANE_ID);
+	pane?.focusNextResourceGroup();
+});
 MenusRegistry.appendMenuItem(MenuId.SCMTitle, {
 	submenu: scmViewSortMenu, title: localize2('scm.viewSort', 'View & Sort'),
 	when: ContextKeyExpr.notEquals(SCMProviderContext.key, ''), group: '0_view', order: 2,
@@ -98,9 +107,25 @@ AccessibleViewRegistry.register({
 	type: AccessibleViewType.Help,
 	priority: 100,
 	name: 'scm',
-	when: ContextKeyExpr.and(FocusedViewContext.isEqualTo(VIEW_PANE_ID), ContextKeyExpr.equals('scm.providerCount', 0)),
+	when: FocusedViewContext.isEqualTo(VIEW_PANE_ID),
 	getProvider: accessor => {
 		const focused = accessor.get(ILayoutService).mainContainer.ownerDocument.activeElement as HTMLElement;
+		if ([...accessor.get(ISCMService).repositories].length > 0) {
+			const pane = accessor.get(IViewsService).getViewWithId<ScmViewPane>(VIEW_PANE_ID);
+			if (!pane?.isBodyVisible() || !pane.hasFocus()) return undefined;
+			// The tree owns the instructions; the help dialog resolves the user's bindings when displayed.
+			const description = pane.element.querySelector('[role="tree"]')?.getAttribute('aria-description');
+			if (!description) return undefined;
+			const content = description
+				.replaceAll('workbench.scm.action.focusPreviousResourceGroup', '<keybinding:workbench.scm.action.focusPreviousResourceGroup>')
+				.replaceAll('workbench.scm.action.focusNextResourceGroup', '<keybinding:workbench.scm.action.focusNextResourceGroup>');
+			return new AccessibleContentProvider(AccessibleViewProviderId.Scm, { type: AccessibleViewType.Help }, () => content, () => {
+				const active = focused.ownerDocument.activeElement;
+				if (!pane.isDisposed && pane.isBodyVisible() && isFocusable(focused) && (active === focused.ownerDocument.body || pane.element.contains(active))) {
+					restoreFocus(focused);
+				}
+			}, AccessibilityVerbositySettingId.Scm);
+		}
 		return new AccessibleContentProvider(AccessibleViewProviderId.Scm, { type: AccessibleViewType.Help },
 			() => localize('scm.welcome.help', 'Source control has no repositories yet. Open a folder containing a Git repository, clone a repository when available, or initialize a repository in an open folder. Use Tab and Shift+Tab to move between the available buttons. Press Enter or Space to run an action. Once a repository is available, this view shows its changes.'),
 			() => restoreFocus(focused), AccessibilityVerbositySettingId.Scm);

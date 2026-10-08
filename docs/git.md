@@ -70,6 +70,13 @@ macOS 菜单键仍由宿主处理；其他平台按列表键盘契约注册分�
 Escape 关闭菜单并返回树。此动作不出现在列表模式、视图标题工具栏或命令面板中，也不修改仓库内容。
 打开菜单后切换仓库或更换资源分组快照，会使捕获的旧上下文失效。
 
+资源组焦点导航使用 `workbench.scm.action.focusPreviousResourceGroup` 与
+`workbench.scm.action.focusNextResourceGroup`。两个命令没有默认快捷键，也不出现在 F1 中；
+可在键盘快捷方式中自行绑定。命令打开 Changes，并在当前显示仓库的分组标题之间循环。
+焦点位于文件、目录或树外时，从首个分组开始。只有一个已聚焦分组时保持原状，没有分组时不移动焦点。
+导航设置标题的选择和焦点，并由现有树显示目标行，不展开目标分组或目录，也不修改 Git 状态。
+Alt+F1 帮助显示用户实际绑定的按键；关闭后返回仍可见的原焦点目标。
+
 ## SCM History 行布局
 
 History 使用公共 [`ListView`](../src/ash/base/browser/ui/list/listView.ts) 管理滚动、行高、
@@ -323,8 +330,8 @@ stderr 和非 UTF-8 path 不进入 Renderer；工作树的绝对目录路径是�
 - 部分暂存要求每侧文本不超过 2 MiB，且 diff 满足后端计算上限；冲突、重命名、子模块、二进制和非 UTF-8 内容不能部分暂存；
 - pull 固定为 fast-forward only；discard 不删除 untracked 文件；
 - 当前 registry 来自已授权目录集合，不接受客户端提交任意 repository root；
-- 工作树 change row 尚未接入 editor diff/open workflow；history changed-file row 已支持打开
-  commit/parent 文本 Diff。
+- 工作树 change row 已经由 Git provider 接入共享 Editor 服务，支持工作文件或 index 的差异打开；
+  分组的 View All 使用 MultiDiff，history changed-file row 支持 commit/parent 文本 Diff。
 - `git/graph` 展示本地分支、已 fetch 的远端分支、标签和当前 HEAD 可达的提交；当前不会读取 `~/.config/gh/hosts.yml`，
   也不会调用 GitHub API，因此尚未提供 PR、Checks、review 或实时远端分支状态；这些属于独立的
   provider connector/权限能力，不能由 SCM graph 猜测；

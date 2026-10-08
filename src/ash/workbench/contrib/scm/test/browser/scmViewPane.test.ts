@@ -35,7 +35,8 @@ import { URI } from "../../../../../base/common/uri.js";
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { isMacintosh } from '../../../../../base/common/platform.js';
 import { IMenuService, MenuId, registerAction2 } from "../../../../../platform/actions/common/actions.js";
-import { ICommandService } from "../../../../../platform/commands/common/commands.js";
+import { CommandsRegistry, ICommandService } from "../../../../../platform/commands/common/commands.js";
+import { KeybindingsRegistry } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
 import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
 import { IContextMenuService, IContextViewService } from "../../../../../platform/contextview/browser/contextView.js";
@@ -1087,6 +1088,10 @@ test('Changes title actions execute on their captured repository and retain view
 });
 
 type ResourceGroupMenuFixture = DisposableStore & {
+	readonly services: InstantiationService;
+	readonly scm: SCMService;
+	readonly openedViews: readonly string[];
+	readonly viewHost: { getViewWithId: () => ScmViewPane; openView: (id: string) => Promise<ScmViewPane | undefined>; };
 	readonly browser: JSDOM;
 	readonly pane: ScmViewPane;
 	readonly tree: HTMLElement;
@@ -1104,7 +1109,7 @@ type ResourceGroupMenuFixture = DisposableStore & {
 	readonly removeGroup: (label: string) => void;
 };
 
-async function createResourceGroupMenuFixture(renderContextMenu = false): Promise<ResourceGroupMenuFixture> {
+async function createResourceGroupMenuFixture(renderContextMenu = false, groupLabels: readonly string[] = ['Staged Changes', 'Changes']): Promise<ResourceGroupMenuFixture> {
 	const resources = new DisposableStore();
 	const browser = new JSDOM('<!doctype html><body></body>');
 	const globals = installDomGlobals(browser);
@@ -1116,9 +1121,11 @@ async function createResourceGroupMenuFixture(renderContextMenu = false): Promis
 	};
 	resources.add(toDisposable(disposeDom));
 	try {
+		await import('../../browser/scm.contribution.js');
 		const { ScmViewPane } = await import('../../browser/scmViewPane.js');
 		const dependencies = resources.add(createTestEditorServices(undefined, undefined, browser.window.document));
 		const services = resources.add(dependencies.createChild());
+		services.registerInstance(ILayoutService, { mainContainer: browser.window.document.body } as unknown as ILayoutService);
 		const scm = resources.add(new SCMService());
 		const views = resources.add(new SCMViewService(scm));
 		const changes = resources.add(new Emitter<void>());
@@ -1127,7 +1134,7 @@ async function createResourceGroupMenuFixture(renderContextMenu = false): Promis
 			decorations: { badge: 'M', tooltip: 'Modified', kind: 'modified' },
 			openLabel: `Open ${path}`, actions: [], open: async () => { },
 		});
-		let groups: readonly ISCMResourceGroup[] = ['Staged Changes', 'Changes'].map((label, index) => ({
+		let groups: readonly ISCMResourceGroup[] = groupLabels.map((label, index) => ({
 			id: String(index), label,
 			resources: [resource('root.ts'), resource('src/one.ts'), resource('src/nested/two.ts'), resource('other/three.ts')],
 			actions: [],
@@ -1178,7 +1185,12 @@ async function createResourceGroupMenuFixture(renderContextMenu = false): Promis
 		registerCodeEditorServices(services);
 		if (renderContextMenu) contextMenu = resources.add(services.createInstance(BrowserContextMenuService));
 		const pane = resources.add(services.createInstance(ScmViewPane, browser.window.document.body, { id: VIEW_PANE_ID, title: 'Changes' }));
-		services.registerInstance(IViewsService, { getViewWithId: () => pane } as unknown as IViewsService);
+		const openedViews: string[] = [];
+		const viewHost: ResourceGroupMenuFixture['viewHost'] = {
+			getViewWithId: () => pane,
+			openView: async (id: string) => { openedViews.push(id); pane.setVisible(true); return pane; },
+		};
+		services.registerInstance(IViewsService, viewHost as unknown as IViewsService);
 		browser.window.document.body.append(pane.element);
 		pane.setVisible(true);
 		const tree = pane.element.querySelector<HTMLElement>('[role="tree"]')!;
@@ -1190,7 +1202,7 @@ async function createResourceGroupMenuFixture(renderContextMenu = false): Promis
 			return following.slice(0, end < 0 ? following.length : end).find(row => row.querySelector('.ash-scm-folder .ash-icon-label-text')?.textContent === label)!;
 		};
 		return Object.assign(resources, {
-			browser, pane, tree, views, menus, commands, group, folder,
+			browser, pane, tree, views, menus, commands, group, folder, services, scm, openedViews, viewHost,
 			key: (value: string, shiftKey = false) => { tree.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: value, shiftKey, bubbles: true, cancelable: true })); },
 			lastMenu: (): IContextMenuDelegate => { assert.ok(menu, 'The real group input must open a context menu'); return menu; },
 			menuCount: () => menuCount,
@@ -1204,6 +1216,158 @@ async function createResourceGroupMenuFixture(renderContextMenu = false): Promis
 		throw error;
 	}
 }
+
+for (const mode of ['tree', 'list'] as const) {
+	test(`SCM resource group navigation cycles through rendered groups in ${mode} mode without expanding them`, async () => {
+		using fixture = await createResourceGroupMenuFixture(false, ['Merge Changes', 'Staged Changes', 'Changes']);
+		const { tree, group, commands, key } = fixture;
+		fixture.pane.viewMode = mode;
+		tree.focus();
+		key('Home');
+		key('ArrowLeft');
+		const first = group('Merge Changes');
+		const expansion = first.getAttribute('aria-expanded');
+		for (const [command, label] of [
+			['focusPreviousResourceGroup', 'Changes'],
+			['focusNextResourceGroup', 'Merge Changes'],
+			['focusNextResourceGroup', 'Staged Changes'],
+			['focusNextResourceGroup', 'Changes'],
+			['focusNextResourceGroup', 'Merge Changes'],
+		]) {
+			await commands.executeCommand(`workbench.scm.action.${command}`);
+			assert.equal(tree.getAttribute('aria-activedescendant'), group(label!).id);
+			assert.deepEqual([...tree.querySelectorAll('[aria-selected="true"]')].map(row => row.id), [group(label!).id]);
+			assert.equal(fixture.browser.window.document.activeElement, tree);
+			assert.equal(first.getAttribute('aria-expanded'), expansion);
+		}
+		assert.deepEqual(fixture.openedViews, Array(5).fill(VIEW_PANE_ID));
+		for (const id of ['workbench.scm.action.focusPreviousResourceGroup', 'workbench.scm.action.focusNextResourceGroup']) {
+			assert.ok(CommandsRegistry.hasCommand(id));
+			assert.equal(KeybindingsRegistry.getKeybindings().some(rule => 'command' in rule && rule.command === id), false);
+			assert.equal(fixture.menus.getMenuActions(MenuId.CommandPalette).flatMap(([, actions]) => actions).some(action => action.id === id), false);
+		}
+	});
+}
+
+test('SCM resource group navigation starts at the first group from a file, folder or outside tree focus', async () => {
+	using fixture = await createResourceGroupMenuFixture();
+	const { tree, commands, key, group } = fixture;
+	for (const direction of ['focusPreviousResourceGroup', 'focusNextResourceGroup']) {
+		for (const steps of [1, 2, 3]) {
+			tree.focus();
+			key('Home');
+			for (let index = 0; index < steps; index++) key('ArrowDown');
+			await commands.executeCommand(`workbench.scm.action.${direction}`);
+			assert.equal(tree.getAttribute('aria-activedescendant'), group('Staged Changes').id);
+		}
+		await commands.executeCommand('workbench.scm.action.focusNextResourceGroup');
+		const input = fixture.browser.window.document.createElement('input');
+		fixture.browser.window.document.body.append(input);
+		input.focus();
+		await commands.executeCommand(`workbench.scm.action.${direction}`);
+		assert.equal(tree.getAttribute('aria-activedescendant'), group('Staged Changes').id);
+		input.remove();
+	}
+});
+
+test('SCM resource group navigation handles zero and one group without changing a focused single group', async () => {
+	using fixture = await createResourceGroupMenuFixture(false, ['Changes']);
+	const { tree, commands, key, group } = fixture;
+	await commands.executeCommand('workbench.scm.action.focusPreviousResourceGroup');
+	assert.equal(tree.getAttribute('aria-activedescendant'), group('Changes').id);
+	key('ArrowLeft');
+	const before = tree.outerHTML;
+	await commands.executeCommand('workbench.scm.action.focusNextResourceGroup');
+	assert.equal(tree.outerHTML, before);
+	fixture.removeGroup('Changes');
+	await commands.executeCommand('workbench.scm.action.focusNextResourceGroup');
+	await commands.executeCommand('workbench.scm.action.focusPreviousResourceGroup');
+	assert.equal(tree.querySelectorAll('[role="treeitem"]').length, 0);
+});
+
+test('SCM resource group navigation follows replacement snapshots and the repository selected while the view opens', async () => {
+	using fixture = await createResourceGroupMenuFixture();
+	const { commands, tree, group } = fixture;
+	await commands.executeCommand('workbench.scm.action.focusNextResourceGroup');
+	fixture.refresh();
+	await commands.executeCommand('workbench.scm.action.focusNextResourceGroup');
+	assert.equal(tree.getAttribute('aria-activedescendant'), group('Changes').id);
+	fixture.removeGroup('Changes');
+	await commands.executeCommand('workbench.scm.action.focusPreviousResourceGroup');
+	assert.equal(tree.getAttribute('aria-activedescendant'), group('Staged Changes').id);
+	const opening = new DeferredPromise<ScmViewPane>();
+	fixture.viewHost.openView = () => opening.p;
+	const outside = fixture.browser.window.document.createElement('input');
+	fixture.browser.window.document.body.append(outside);
+	outside.focus();
+	const operation = commands.executeCommand('workbench.scm.action.focusNextResourceGroup');
+	fixture.views.selectRepository('second');
+	await opening.complete(fixture.pane);
+	await operation;
+	assert.equal(tree.getAttribute('aria-activedescendant'), group('Staged Changes').id);
+	assert.deepEqual(JSON.parse(group('Staged Changes').getAttribute('data-tree-id')!), ['second', '0']);
+});
+
+test('SCM resource group navigation ignores unavailable views and disposed panes', async () => {
+	using fixture = await createResourceGroupMenuFixture();
+	fixture.viewHost.openView = async () => undefined;
+	await fixture.commands.executeCommand('workbench.scm.action.focusNextResourceGroup');
+	fixture.viewHost.openView = async () => fixture.pane;
+	fixture.pane.dispose();
+	const outside = fixture.browser.window.document.createElement('input');
+	fixture.browser.window.document.body.append(outside);
+	outside.focus();
+	await fixture.commands.executeCommand('workbench.scm.action.focusPreviousResourceGroup');
+	assert.equal(fixture.browser.window.document.activeElement, outside);
+});
+
+test('SCM resource group navigation help reuses tree instructions and restores only a visible owned focus target', async () => {
+	using fixture = await createResourceGroupMenuFixture(true);
+	const help = AccessibleViewRegistry.getImplementations().find(implementation => implementation.name === 'scm' && implementation.type === AccessibleViewType.Help)!;
+	fixture.tree.focus();
+	const provider = help.getProvider(fixture.services)!;
+	assert.match(provider.provideContent(), /<keybinding:workbench.scm.action.focusPreviousResourceGroup>/);
+	assert.match(provider.provideContent(), /<keybinding:workbench.scm.action.focusNextResourceGroup>/);
+	fixture.browser.window.document.body.focus();
+	provider.dispose();
+	assert.equal(fixture.browser.window.document.activeElement, fixture.tree);
+	const hidden = help.getProvider(fixture.services)!;
+	fixture.pane.setVisible(false);
+	const outside = fixture.browser.window.document.createElement('input');
+	fixture.browser.window.document.body.append(outside);
+	outside.focus();
+	hidden.dispose();
+	hidden.dispose();
+	assert.equal(fixture.browser.window.document.activeElement, outside);
+	assert.equal(help.getProvider(fixture.services), undefined);
+	fixture.pane.setVisible(true);
+	fixture.tree.focus();
+	const removed = help.getProvider(fixture.services)!;
+	fixture.pane.dispose();
+	outside.focus();
+	removed.dispose();
+	assert.equal(fixture.browser.window.document.activeElement, outside);
+});
+
+test('SCM resource group navigation help preserves welcome content and Chinese instructions', async () => {
+	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	try {
+		using fixture = await createResourceGroupMenuFixture(true);
+		const help = AccessibleViewRegistry.getImplementations().find(implementation => implementation.name === 'scm' && implementation.type === AccessibleViewType.Help)!;
+		fixture.tree.focus();
+		using provider = help.getProvider(fixture.services)!;
+		assert.match(provider.provideContent(), /上一个资源分组/);
+		assert.match(provider.provideContent(), /<keybinding:workbench.scm.action.focusNextResourceGroup>/);
+		fixture.scm.getRepository('first')!.dispose();
+		fixture.scm.getRepository('second')!.dispose();
+		using welcome = help.getProvider(fixture.services)!;
+		assert.match(welcome.provideContent(), /源代码管理尚无仓库/);
+		assert.doesNotMatch(welcome.provideContent(), /focusNextResourceGroup/);
+	} finally {
+		resetNlsResolver();
+	}
+});
 
 test('SCM group right-click collapses only its directories recursively and retains tree state on refresh', async () => {
 	using fixture = await createResourceGroupMenuFixture();

@@ -75,7 +75,7 @@
     "git.status.unmerged": "合并冲突",
     "git.status.untracked": "未跟踪",
     "scm.changesTree": "源代码管理更改",
-    "scm.changesTreeHelp": "使用标题工具栏提交或刷新，通过“更多操作”切换列表、树形和排序，并运行 Git 操作。文件按目录分组。使用上下方向键导航并预览文件，左方向键折叠分组或目录，右方向键展开分组或目录。在目录上按 Enter 或空格切换折叠状态。在树形视图的分组上按 Shift+F10，选择“全部折叠”以折叠该分组内的所有目录。在文件上按 Enter 打开并固定文件，按空格预览并保留此处焦点。点击或按 Enter 时按住 Ctrl、Command 或 Alt，可在侧边分组打开。双击固定文件并聚焦其编辑器。按 F1 使用 Git 分支、工作树、储藏、标签、远端、继续或中止整合操作，以及部分暂存命令。",
+    "scm.changesTreeHelp": "使用标题工具栏提交或刷新，通过“更多操作”切换列表、树形和排序，并运行 Git 操作。文件按目录分组。使用上下方向键导航并预览文件，左方向键折叠分组或目录，右方向键展开分组或目录。在目录上按 Enter 或空格切换折叠状态。在树形视图的分组上按 Shift+F10，选择“全部折叠”以折叠该分组内的所有目录。在文件上按 Enter 打开并固定文件，按空格预览并保留此处焦点。点击或按 Enter 时按住 Ctrl、Command 或 Alt，可在侧边分组打开。双击固定文件并聚焦其编辑器。按 F1 使用 Git 分支、工作树、储藏、标签、远端、继续或中止整合操作，以及部分暂存命令。 上一个资源分组：workbench.scm.action.focusPreviousResourceGroup。下一个资源分组：workbench.scm.action.focusNextResourceGroup。可在键盘快捷方式中为这些命令配置快捷键，在当前仓库的分组间循环导航并保持折叠状态。",
     "git.cloneCommandTitle": "Git: 克隆仓库",
     "git.cloneUrlTitle": "克隆仓库",
     "git.cloneUrlPlaceholder": "输入仓库地址",

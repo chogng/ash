@@ -3,8 +3,10 @@ import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { expect, test } from '../../../automation/test.js';
+import type { Workbench } from '../../../automation/workbench.js';
 
 const run = promisify(execFile);
+const altKeyLabel = process.platform === 'darwin' ? 'Option' : 'Alt';
 
 const groupChangeFiles = ['root.ts', 'src/one.ts', 'src/nested/two.ts', 'other/three.ts'];
 
@@ -21,14 +23,32 @@ async function prepareGroupChanges(directory: string): Promise<void> {
 	await writeFile(join(directory, 'untracked.txt'), 'Keep this untracked file.\n');
 }
 
-async function groupRepositoryState(directory: string): Promise<unknown> {
+async function groupRepositoryState(directory: string, files: readonly string[] = ['main.ts', 'untracked.txt', ...groupChangeFiles]): Promise<unknown> {
 	const [head, index, status, contents] = await Promise.all([
 		run('git', ['rev-parse', 'HEAD'], { cwd: directory }),
 		run('git', ['ls-files', '--stage', '-z'], { cwd: directory }),
 		run('git', ['status', '--porcelain=v1', '-z'], { cwd: directory }),
-		Promise.all(['main.ts', 'untracked.txt', ...groupChangeFiles].map(path => readFile(join(directory, path), 'utf8'))),
+		Promise.all(files.map(path => readFile(join(directory, path), 'utf8'))),
 	]);
 	return { head: head.stdout, index: index.stdout, status: status.stdout, contents };
+}
+
+async function bindResourceGroupNavigation(workbench: Workbench): Promise<void> {
+	// Each scenario owns its profile; saving the real shortcuts file exercises production binding reload.
+	await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
+	const editor = workbench.editors.groupAt(0).editor;
+	const bindings = JSON.stringify([
+		{ key: 'ctrl+alt+k', command: 'workbench.scm.action.focusPreviousResourceGroup' },
+		{ key: 'ctrl+alt+j', command: 'workbench.scm.action.focusNextResourceGroup' },
+	]);
+	await editor.input.press('ControlOrMeta+A');
+	await editor.input.evaluate((element, source) => {
+		const clipboardData = new DataTransfer();
+		clipboardData.setData('text/plain', source);
+		element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
+	}, bindings);
+	await editor.waitForEditorContents(content => content === bindings);
+	await workbench.quickaccess.runCommand('workbench.action.files.save');
 }
 
 test.describe('SCM editor groups', () => {
@@ -36,6 +56,94 @@ test.describe('SCM editor groups', () => {
 	test.beforeEach(async ({ target, testWorkspace }) => {
 		test.skip(target.appServerMode !== 'required', 'Requires a connected Git workspace.');
 		await writeFile(testWorkspace.file, 'const value = 2;\n');
+	});
+
+	test('SCM resource group navigation uses saved bindings, reveals groups and preserves collapse in tree and list views', async ({ application, testWorkspace, workbench }) => {
+		await prepareGroupChanges(testWorkspace.directory);
+		await mkdir(join(testWorkspace.directory, 'bulk'));
+		const bulkFiles = Array.from({ length: 40 }, (_, index) => `bulk/${index}.ts`);
+		await Promise.all(bulkFiles.map(path => writeFile(join(testWorkspace.directory, path), 'export const bulk = 1;\n')));
+		await run('git', ['add', '--', ...bulkFiles], { cwd: testWorkspace.directory });
+		await bindResourceGroupNavigation(workbench);
+		const page = workbench.page;
+		const tree = page.getByRole('tree', { name: 'Source control changes', exact: true });
+		const group = (label: string) => tree.getByRole('treeitem').filter({ has: page.locator('.ash-scm-section-label').getByText(label, { exact: true }) });
+		const focused = async (label: string): Promise<void> => {
+			await expect(group(label)).toBeVisible();
+			await expect(tree).toBeFocused();
+			await expect(tree).toHaveAttribute('aria-activedescendant', (await group(label).getAttribute('id'))!);
+			await expect(tree.locator('[aria-selected="true"] .ash-scm-section-label')).toHaveText(label);
+		};
+		const files = ['main.ts', 'untracked.txt', ...groupChangeFiles, ...bulkFiles];
+		const before = await groupRepositoryState(testWorkspace.directory, files);
+		await page.keyboard.press('Control+Alt+J');
+		await focused('Staged Changes');
+		await page.keyboard.press('Control+Alt+J');
+		await focused('Changes');
+		expect(await group('Changes').evaluate(row => {
+			const bounds = row.getBoundingClientRect();
+			const viewport = row.closest('[role="tree"]')!.getBoundingClientRect();
+			return bounds.top >= viewport.top && bounds.bottom <= viewport.bottom;
+		})).toBe(true);
+		await page.keyboard.press('Control+Alt+K');
+		await focused('Staged Changes');
+		await tree.press('ArrowLeft');
+		await expect(group('Staged Changes')).toHaveAttribute('aria-expanded', 'false');
+		await page.keyboard.press('Control+Alt+K');
+		await focused('Changes');
+		await page.keyboard.press('Control+Alt+J');
+		await focused('Staged Changes');
+		await expect(group('Staged Changes')).toHaveAttribute('aria-expanded', 'false');
+		await workbench.menus.select(application, () => page.getByRole('toolbar', { name: 'Source control actions', exact: true }).getByRole('button', { name: 'More Actions', exact: true }).click(), ['View as List']);
+		await expect(tree.locator('.ash-scm-folder')).toHaveCount(0);
+		await tree.focus();
+		await page.keyboard.press('Control+Alt+J');
+		await focused('Changes');
+		await page.keyboard.press('Control+Alt+J');
+		await focused('Staged Changes');
+		await expect(group('Staged Changes')).toHaveAttribute('aria-expanded', 'false');
+		for (const close of ['Escape', 'button', 'Escape']) {
+			const focus = await tree.getAttribute('aria-activedescendant');
+			await tree.press('Alt+F1');
+			const help = page.getByRole('dialog');
+			await expect(help.getByRole('textbox')).toHaveValue(new RegExp(`Previous resource group: Control\\+${altKeyLabel}\\+K[\\s\\S]*Next resource group: Control\\+${altKeyLabel}\\+J`, 'u'));
+			if (close === 'button') await help.getByRole('button', { name: 'Close', exact: true }).click();
+			else await page.keyboard.press('Escape');
+			await expect(help).toHaveCount(0);
+			await expect(tree).toBeFocused();
+			await expect(tree).toHaveAttribute('aria-activedescendant', focus!);
+		}
+		expect(await groupRepositoryState(testWorkspace.directory, files)).toEqual(before);
+	});
+
+	test('SCM resource group navigation handles a single collapsed group and an empty repository', async ({ testWorkspace, workbench }) => {
+		await bindResourceGroupNavigation(workbench);
+		const page = workbench.page;
+		const tree = page.getByRole('tree', { name: 'Source control changes', exact: true });
+		await page.keyboard.press('Control+Alt+J');
+		await expect(tree).toBeFocused();
+		const group = tree.getByRole('treeitem').filter({ has: page.locator('.ash-scm-section-label') });
+		await expect(group).toHaveCount(1);
+		await tree.press('ArrowLeft');
+		const focus = await tree.getAttribute('aria-activedescendant');
+		const before = await groupRepositoryState(testWorkspace.directory, ['main.ts']);
+		for (const key of ['Control+Alt+J', 'Control+Alt+K']) {
+			await page.keyboard.press(key);
+			await expect(tree).toHaveAttribute('aria-activedescendant', focus!);
+			await expect(group).toHaveAttribute('aria-expanded', 'false');
+			await expect(group).toHaveAttribute('aria-selected', 'true');
+		}
+		expect(await groupRepositoryState(testWorkspace.directory, ['main.ts'])).toEqual(before);
+		await writeFile(testWorkspace.file, 'const value = 1;\n');
+		await expect(group).toHaveCount(0);
+		const empty = await groupRepositoryState(testWorkspace.directory, ['main.ts']);
+		const editor = workbench.editors.groupAt(0).editor;
+		await editor.input.focus();
+		await page.keyboard.press('Control+Alt+J');
+		await page.keyboard.press('Control+Alt+K');
+		await expect(editor.input).toBeFocused();
+		await expect(group).toHaveCount(0);
+		expect(await groupRepositoryState(testWorkspace.directory, ['main.ts'])).toEqual(empty);
 	});
 
 	test('SCM group Collapse All folds only the target group recursively and survives Git refresh', async ({ application, testWorkspace, workbench }) => {
@@ -530,5 +638,46 @@ test.describe('SCM merge editor groups', () => {
 		await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
 		await expect(original.tabs.filter({ hasText: 'main.ts' })).toHaveCount(1);
 		await expect(original.content.locator('.ash-merge-inputs')).toHaveCount(0);
+	});
+});
+
+test.describe('SCM resource group navigation with conflicts', () => {
+	test.use({ gitRepository: true, gitMergeConflict: true });
+	test('SCM resource group navigation cycles all three real Git groups and localizes help after restart', async ({ target, testWorkspace, workbench, restartWorkbench }) => {
+		test.skip(target.appServerMode !== 'required', 'Requires real Git conflict, index and worktree groups.');
+		await prepareGroupChanges(testWorkspace.directory);
+		await bindResourceGroupNavigation(workbench);
+		await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+		const picker = workbench.page.locator('.ash-quick-pick');
+		await picker.getByRole('combobox').fill('简体中文');
+		await picker.getByRole('combobox').press('Enter');
+		({ workbench } = await restartWorkbench());
+		const page = workbench.page;
+		const tree = page.getByRole('tree', { name: '源代码管理更改', exact: true });
+		const group = (label: string) => tree.getByRole('treeitem').filter({ has: page.locator('.ash-scm-section-label').getByText(label, { exact: true }) });
+		const before = await groupRepositoryState(testWorkspace.directory);
+		await page.keyboard.press('Control+Alt+K');
+		await expect(group('Merge Changes')).toHaveAttribute('aria-selected', 'true');
+		await tree.press('ArrowLeft');
+		for (const [key, label] of [
+			['Control+Alt+K', 'Changes'],
+			['Control+Alt+J', 'Merge Changes'],
+			['Control+Alt+J', 'Staged Changes'],
+			['Control+Alt+J', 'Changes'],
+			['Control+Alt+J', 'Merge Changes'],
+		]) {
+			await page.keyboard.press(key!);
+			await expect(group(label!)).toHaveAttribute('aria-selected', 'true');
+			await expect(tree).toBeFocused();
+			await expect(tree).toHaveAttribute('aria-activedescendant', (await group(label!).getAttribute('id'))!);
+		}
+		await expect(group('Merge Changes')).toHaveAttribute('aria-expanded', 'false');
+		await expect(tree).toHaveAttribute('aria-description', /上一个资源分组.*focusPreviousResourceGroup/u);
+		await tree.press('Alt+F1');
+		await expect(page.getByRole('dialog').getByRole('textbox')).toHaveValue(new RegExp(`上一个资源分组：Control\\+${altKeyLabel}\\+K[\\s\\S]*下一个资源分组：Control\\+${altKeyLabel}\\+J`, 'u'));
+		await page.keyboard.press('Escape');
+		await expect(page.getByRole('dialog')).toHaveCount(0);
+		await expect(tree).toBeFocused();
+		expect(await groupRepositoryState(testWorkspace.directory)).toEqual(before);
 	});
 });
