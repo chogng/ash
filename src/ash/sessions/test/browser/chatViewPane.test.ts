@@ -1443,11 +1443,13 @@ test("SessionsManagementService selects another untitled session and permits the
 	assert.equal(fake.createThreadRequests.length, 0);
 });
 
-test("SessionsManagementService persists and reflects the model", async () => {
+test("SessionsManagementService writes the default without replacing existing Session models", async () => {
+	const firstModel = { provider: 'openai', model: 'first' };
+	const secondModel = { provider: 'openai', model: 'second' };
 	const fake = fakeApi({
 		sessions: [
-			session("session-1", "thread-1"),
-			session("session-2", "thread-2"),
+			{ ...session("session-1", "thread-1"), model: firstModel },
+			{ ...session("session-2", "thread-2"), model: secondModel },
 		],
 	});
 	using service = new SessionsManagementService(fake.api);
@@ -1456,9 +1458,8 @@ test("SessionsManagementService persists and reflects the model", async () => {
 
 	await service.setModel(model);
 
-	assert.deepEqual(service.sessions.find(({ sessionId }) => sessionId === "session-1")?.model, model);
-	assert.deepEqual(service.sessions.find(({ sessionId }) => sessionId === "session-2")?.model, model);
-	assert.deepEqual(service.active?.session.model, model);
+	assert.deepEqual(service.sessions.map(value => value.model), [firstModel, secondModel]);
+	assert.deepEqual(service.active?.session.model, firstModel);
 	assert.deepEqual(fake.modelRequests.map(request => request.model), [model]);
 });
 
@@ -2427,6 +2428,87 @@ test("Chat picker excludes a hidden selected model", async () => {
 	assert.deepEqual(model.selectedModel, entry.model);
 });
 
+for (const kind of ['Code', 'Cowork'] as const) {
+	test(`${kind} reopens root and child models independently of the profile default`, async () => {
+		const rootModel = { provider: 'provider', model: 'root-a' };
+		const childModel = { provider: 'provider', model: 'child-b' };
+		const defaultModel = { provider: 'provider', model: 'default-c' };
+		const durable = {
+			...session('session-1', 'thread-1'), model: rootModel,
+			chats: [...session('session-1', 'thread-1').chats, { threadId: 'child', origin: { type: 'fork' as const, parentThreadId: 'thread-1', parentSequence: 4 }, status: 'active' as const }],
+		};
+		const root = thread('Root answer');
+		let currentThread = { ...root, turns: root.turns.map(turn => ({ ...turn, model: rootModel })) };
+		const fake = fakeApi({ sessions: [durable], models: [rootModel, childModel, defaultModel].map(model => ({ model, displayName: model.model })), thread: () => currentThread });
+		fake.api.model.readModel = async () => defaultModel;
+		using configuration = new WorkbenchConfigurationService();
+		await configuration.updateValue(ModelCatalogConfiguration.defaultModel, 'provider/default-c');
+		await configuration.updateValue(CoworkModelPreferences.defaultModelSetting, 'provider/default-c');
+		using chat = createChatService(fake.api, configuration);
+		using sessions = new SessionsManagementService(fake.api);
+		await sessions.openThread('session-1', 'thread-1');
+		using services = new InstantiationService();
+		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
+		services.registerInstance(IAppServerSkillApi, fake.api.skills);
+		services.registerInstance(ILanguageModelsService, modelsFor(chat));
+		services.registerInstance(IConfigurationService, configuration);
+		using storage = createTestStorage();
+		services.registerInstance(IStorageService, storage);
+		using preferences = services.createInstance(CoworkModelPreferencesService, CoworkModelPreferences);
+		services.registerInstance(ICoworkModelPreferences, preferences);
+		const selection = { kind: 'session' as const, active: sessions.active! };
+		using widget = kind === 'Code' ? services.createInstance(ChatWidgetModel, chat, selection, sessions) : services.createInstance(CoworkWidgetModel, chat, selection, sessions);
+		await widget.initialize();
+		assert.deepEqual({ catalog: sessions.active?.session.model, picker: widget.inputState.selectedModel }, { catalog: rootModel, picker: rootModel });
+		await widget.send('Continue the root');
+		currentThread = { ...root, threadId: 'child', origin: { type: 'fork', parentThreadId: 'thread-1', parentSequence: 4 }, turns: root.turns.map(turn => ({ ...turn, model: childModel })) };
+		await sessions.openThread('session-1', 'child');
+		await widget.selectThread(sessions.active!);
+		assert.deepEqual({ catalog: sessions.active?.session.model, picker: widget.inputState.selectedModel }, { catalog: rootModel, picker: childModel });
+		await widget.send('Continue the child');
+		assert.deepEqual(fake.turnStartRequests.map(request => request.model), [rootModel, childModel]);
+	});
+
+	test(`${kind} preserves an unsent manual choice and explicit Auto across Session catalog model updates`, async () => {
+		const initialModel = { provider: 'provider', model: 'initial' };
+		const nextModel = { provider: 'provider', model: 'next' };
+		const manualModel = { provider: 'provider', model: 'manual' };
+		const persisted = [{ ...session('session-1', 'thread-1'), model: initialModel }];
+		const fake = fakeApi({ sessions: persisted });
+		using chat = createChatService(fake.api);
+		using sessions = new SessionsManagementService(fake.api);
+		await sessions.openThread('session-1', 'thread-1');
+		using services = new InstantiationService();
+		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
+		services.registerInstance(IAppServerSkillApi, fake.api.skills);
+		services.registerInstance(ILanguageModelsService, modelsFor(chat));
+		using configuration = new WorkbenchConfigurationService();
+		using storage = createTestStorage();
+		services.registerInstance(IConfigurationService, configuration);
+		services.registerInstance(IStorageService, storage);
+		using preferences = services.createInstance(CoworkModelPreferencesService, CoworkModelPreferences);
+		services.registerInstance(ICoworkModelPreferences, preferences);
+		const selection = { kind: 'session' as const, active: sessions.active! };
+		using widget = kind === 'Code' ? services.createInstance(ChatWidgetModel, chat, selection, sessions) : services.createInstance(CoworkWidgetModel, chat, selection, sessions);
+		await widget.initialize();
+		await widget.selectModel(manualModel);
+		persisted[0] = { ...persisted[0]!, model: nextModel };
+		fake.emit({ method: 'session/changed', params: { sessionId: 'session-1', agentTreeChanged: false } });
+		await waitFor(() => sessions.active?.session.model?.model === nextModel.model);
+		await widget.selectThread(sessions.active!);
+		assert.deepEqual({ selected: widget.inputState.selectedModel, automatic: widget.inputState.isAutomaticModel }, { selected: manualModel, automatic: false });
+		await widget.send('Use the unsent manual choice');
+		await widget.selectAutomaticModel();
+		persisted[0] = { ...persisted[0]!, model: initialModel };
+		fake.emit({ method: 'session/changed', params: { sessionId: 'session-1', agentTreeChanged: false } });
+		await waitFor(() => sessions.active?.session.model?.model === initialModel.model);
+		await widget.selectThread(sessions.active!);
+		assert.equal(widget.inputState.isAutomaticModel, true);
+		await widget.send('Use explicit Auto');
+		assert.deepEqual(fake.turnStartRequests.map(request => request.model), [manualModel, undefined]);
+	});
+}
+
 test("ChatWidgetModel selects models per chat without changing the global model", async () => {
 	const firstModel: ModelRef = { provider: "openai", model: "gpt-first" };
 	const secondModel: ModelRef = { provider: "openai", model: "gpt-second" };
@@ -3003,6 +3085,7 @@ function sessionDto(value: ISession): SessionDto {
 		sessionId: value.sessionId,
 		title: value.title,
 		status: value.status,
+		model: value.model,
 		manager: { status: "idle", statusChangedAtUnixMs: 0 },
 		threads: value.chats.map(chat => ({
 			threadId: chat.threadId,

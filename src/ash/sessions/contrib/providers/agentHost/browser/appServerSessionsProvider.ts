@@ -18,7 +18,6 @@ export interface AppServerSessionsProviderHost {
 export class AppServerSessionsProvider extends Disposable implements ISessionsProvider {
 	private readonly subscribed = new Set<SessionId>();
 	private catalogSubscribed = false;
-	private model: ModelRef | null = null;
 	private readonly _onDidChangeCatalog = this._register(new Emitter<void>());
 	readonly onDidChangeCatalog = this._onDidChangeCatalog.event;
 	private readonly _onDidChangeSession = this._register(new Emitter<{ sessionId: SessionId; detailChanged: boolean; }>());
@@ -58,24 +57,18 @@ export class AppServerSessionsProvider extends Disposable implements ISessionsPr
 		this.assertNotDisposed();
 		const generation = this.appServer.connectionGeneration;
 		const subscribing = !this.catalogSubscribed;
-		const catalog = (subscribing ? this.sessionApi.subscribeCatalog() : this.sessionApi.list()).then(async result => {
+		const result = await (subscribing ? this.sessionApi.subscribeCatalog() : this.sessionApi.list()).then(async result => {
 			if (generation !== this.appServer.connectionGeneration) { throw canceled(); }
 			if (this.isDisposed) {
 				if (subscribing) { await this.sessionApi.unsubscribeCatalog(); }
 				throw canceled();
 			}
-			// Keep ownership even when reading the model fails after the catalog subscribed.
 			this.catalogSubscribed = true;
 			return result;
 		});
-		const [result, model] = await Promise.all([
-			catalog,
-			this.modelApi.readModel(),
-		]);
 		this.assertCurrentConnection(generation);
 		this.catalogSubscribed = true;
-		this.model = model;
-		return result.sessions.map(session => ({ ...toSession(session), model }));
+		return result.sessions.map(session => toSession(session));
 	}
 
 	async listAgents(): Promise<readonly ChatAgent[]> {
@@ -89,7 +82,7 @@ export class AppServerSessionsProvider extends Disposable implements ISessionsPr
 		const generation = this.appServer.connectionGeneration;
 		const result = await this.sessionApi.readCatalog({ sessionId });
 		this.assertCurrentConnection(generation);
-		return result.session ? { ...toSession(result.session, [], previous), model: previous?.model ?? this.model } : undefined;
+		return result.session ? toSession(result.session, [], previous) : undefined;
 	}
 
 	async subscribe(session: ISession): Promise<ISession> {
@@ -126,16 +119,16 @@ export class AppServerSessionsProvider extends Disposable implements ISessionsPr
 		const created = await this.sessionApi.create({ commandId: commandId("session"), title, executionTarget, agent: agent ? { type: 'exact', source: { type: 'directory', id: agent.sourceId }, name: agent.name } : { type: 'default' } });
 		const thread = await this.sessionApi.createThread({ commandId: commandId("thread"), sessionId: created.session.sessionId, title: "Main" });
 		const selected = model ?? await this.modelApi.readModel();
-		const session = await this.subscribe({ ...toSession(thread.session), model: selected ?? null });
+		const session = await this.subscribe(toSession(thread.session));
 		if (!session.chats.some(candidate => candidate.threadId === thread.threadId && candidate.status === "active")) {
 			throw new Error(`Created Thread is missing from subscribed Session snapshot: ${thread.threadId}`);
 		}
-		return { session, threadId: thread.threadId };
+		// Defaults apply to this known creation flow, never to persisted catalog facts.
+		return { session: { ...session, model: session.model ?? selected ?? null }, threadId: thread.threadId };
 	}
 
 	async setModel(model: ModelRef): Promise<void> {
 		await this.modelApi.setModel({ commandId: commandId("model"), model });
-		this.model = model;
 	}
 
 	async archive(session: ISession): Promise<ISession> {
@@ -178,7 +171,7 @@ function toSession(session: SessionDto, threads: readonly ThreadDto[] = [], prev
 			authorityId: session.executionTarget.type === 'local' ? 'local' : session.executionTarget.host,
 			root: session.executionTarget.root,
 		},
-		model: previous?.model,
+		model: session.model,
 		nextApprovalMode: previous?.nextApprovalMode ?? "manual",
 		chats: session.threads.map(thread => {
 			const detail = byId.get(thread.threadId);

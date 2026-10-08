@@ -1,10 +1,17 @@
 use super::SqliteThreadStore;
 use super::SqliteTurnChangeStore;
 use super::TurnChangeCommandOutcome;
+use ash_core::CreateThreadRequest;
+use ash_core::RequestTurnInteraction;
+use ash_core::StartTurnRequest;
+use ash_core::ThreadController;
 use ash_history::CURRENT_STORED_EVENT_SCHEMA_VERSION;
 use ash_history::EventId;
 use ash_history::StoredEvent;
 use ash_history::Timestamp;
+use ash_protocol::ModelId;
+use ash_protocol::ModelRef;
+use ash_protocol::ProviderId;
 use ash_protocol::SessionId;
 use ash_protocol::SessionManagerInfo;
 use ash_protocol::SessionThread;
@@ -27,6 +34,7 @@ use git_turn_changes::TurnChangeStoreError;
 use git_turn_changes::TurnCommitStore;
 use std::collections::BTreeMap;
 use std::fs;
+use std::sync::Arc;
 use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
@@ -789,6 +797,233 @@ fn sqlite_session_list_tracks_thread_archive_in_the_event_transaction() {
     drop(connection);
     drop(store);
     fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn sqlite_session_catalog_tracks_model_only_updates() {
+    assert_session_catalog_fact_updates(
+        Some(ModelRef::new(
+            ProviderId::new("test").unwrap(),
+            ModelId::new("selected-model").unwrap(),
+        )),
+        None,
+    );
+}
+
+#[test]
+fn sqlite_session_catalog_tracks_target_only_updates() {
+    assert_session_catalog_fact_updates(
+        None,
+        Some(ash_protocol::SessionExecutionTarget::Local {
+            root: std::env::temp_dir().join("catalog-project"),
+        }),
+    );
+}
+
+fn assert_session_catalog_fact_updates(
+    model: Option<ModelRef>,
+    execution_target: Option<ash_protocol::SessionExecutionTarget>,
+) {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("catalog-facts.sqlite3");
+    let session_id = SessionId::new("catalog-facts").unwrap();
+    let thread_id = ThreadId::new(session_id.as_str()).unwrap();
+    let store = SqliteThreadStore::open(&path).unwrap();
+    append_created_thread(&store, &session_id, &thread_id, 1);
+    // The store accepts the caller's complete catalog, independently from event reduction.
+    // Isolate exported facts that can change without changing Thread display metadata.
+    for (index, (model, execution_target)) in [(model, execution_target), (None, None)]
+        .into_iter()
+        .enumerate()
+    {
+        let sequence = index as u64 + 2;
+        let mut record = catalog(&session_id, &thread_id, sequence);
+        record.model = model;
+        record.execution_target = execution_target;
+        store
+            .append_batch(&ThreadEventBatch {
+                history_prefixes: Vec::new(),
+                batch_id: format!("catalog-facts-{sequence}"),
+                thread_id: thread_id.clone(),
+                expected_sequence: sequence - 1,
+                events: vec![StoredEvent {
+                    time_context: None,
+                    schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
+                    event_id: EventId(format!("catalog-facts-{sequence}")),
+                    sequence,
+                    thread_id: thread_id.clone(),
+                    recorded_at: Timestamp(u128::from(sequence)),
+                    command: None,
+                    event: ThreadEvent::AdvisorConfigured {
+                        thread_id: thread_id.clone(),
+                        selection: Default::default(),
+                    },
+                }],
+                catalog: record.clone(),
+            })
+            .unwrap();
+        let expected = session_from_catalog(vec![record.clone()]).unwrap();
+        assert_eq!(store.session_catalog(&session_id).unwrap(), vec![record]);
+        assert_eq!(
+            store.read_session(&session_id).unwrap(),
+            Some(expected.clone())
+        );
+        assert_eq!(store.list_sessions().unwrap(), vec![expected.clone()]);
+        let reopened = SqliteThreadStore::open(&path).unwrap();
+        assert_eq!(
+            reopened.read_session(&session_id).unwrap(),
+            Some(expected.clone())
+        );
+        assert_eq!(reopened.list_sessions().unwrap(), vec![expected]);
+    }
+    let expected = store.list_sessions().unwrap();
+    drop(store);
+    let reopened = SqliteThreadStore::open(&path).unwrap();
+    assert_eq!(reopened.list_sessions().unwrap(), expected);
+}
+
+fn start_catalog_model_turn(
+    threads: &ThreadController,
+    thread_id: &ThreadId,
+    command: &str,
+    model: ModelRef,
+) -> TurnId {
+    threads
+        .start_turn(
+            thread_id,
+            StartTurnRequest {
+                context_policy: Default::default(),
+                mode: Default::default(),
+                advisor: None,
+                command_id: ash_protocol::CommandId::new(command).unwrap(),
+                expected_sequence: core_api::SequenceExpectation::Any,
+                model: Some(model),
+                reasoning_effort: None,
+                kind: Default::default(),
+                instructions: ash_protocol::TurnInstructions::new(
+                    "test",
+                    "catalog-model",
+                    "1",
+                    "Test catalog model persistence",
+                )
+                .unwrap(),
+                policy_revision: "catalog-policy".into(),
+                approval_mode: ash_protocol::ApprovalMode::Manual,
+                tool_mode: ash_protocol::ToolMode::Direct,
+                tool_profile: None,
+                activated_skills: Vec::new(),
+                input: vec![ash_protocol::UserInput::Text {
+                    text: "Continue the task".into(),
+                }],
+            },
+        )
+        .unwrap()
+        .turn_id
+}
+
+#[test]
+fn sqlite_session_catalog_follows_waiting_turn_model_migration_and_reopen() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("catalog-model-migration.sqlite3");
+    let session_id = SessionId::new("catalog-model-migration").unwrap();
+    let thread_id = ThreadId::new(session_id.as_str()).unwrap();
+    let store = Arc::new(SqliteThreadStore::open(&path).unwrap());
+    let threads = ThreadController::with_store(store.clone());
+    threads
+        .create_thread(CreateThreadRequest {
+            execution_target: None,
+            agent_id: ash_protocol::AgentId::new("catalog-model-agent").unwrap(),
+            origin: Default::default(),
+            agent: None,
+            session_id: session_id.clone(),
+            thread_id: thread_id.clone(),
+            title: "Model migration".into(),
+        })
+        .unwrap();
+    let old = ModelRef::new(
+        ProviderId::new("legacy-provider").unwrap(),
+        ModelId::new("selected-model").unwrap(),
+    );
+    let new = ModelRef::new(
+        ProviderId::new("current-provider").unwrap(),
+        old.model.clone(),
+    );
+    let completed = start_catalog_model_turn(&threads, &thread_id, "completed", old.clone());
+    threads
+        .complete_turn(&thread_id, &completed, "Historical answer".into())
+        .unwrap();
+    let waiting = start_catalog_model_turn(&threads, &thread_id, "waiting", old.clone());
+    threads
+        .request_turn_interaction(
+            &thread_id,
+            &waiting,
+            RequestTurnInteraction {
+                request_id: ash_protocol::RequestId::new("catalog-question").unwrap(),
+                item_id: None,
+                request: ash_protocol::AgentRequest::UserInput {
+                    request: ash_protocol::RequestUserInput {
+                        questions: vec![ash_protocol::UserInputQuestion {
+                            id: "continue".into(),
+                            header: "Continue".into(),
+                            question: "Continue the task?".into(),
+                            options: Vec::new(),
+                            allow_free_form: true,
+                        }],
+                    },
+                },
+                deadline: None,
+            },
+        )
+        .unwrap();
+    let before = threads.read_thread(&thread_id).unwrap();
+    let before_catalog = store.session_catalog(&session_id).unwrap();
+    assert_eq!(
+        before.turns[1].status,
+        ash_protocol::TurnStatus::WaitingForUserInput
+    );
+    assert_eq!(store.list_sessions().unwrap()[0].model, Some(old.clone()));
+    drop(threads);
+    drop(store);
+    let store = Arc::new(SqliteThreadStore::open(&path).unwrap());
+    let threads = ThreadController::with_store(store.clone());
+    assert_eq!(threads.recover_thread(&thread_id).unwrap(), before);
+    let mapping = [(old.provider, new.provider.clone())].into_iter().collect();
+    threads.migrate_model_providers(&mapping).unwrap();
+    let after = threads.read_thread(&thread_id).unwrap();
+    let after_catalog = store.session_catalog(&session_id).unwrap();
+    assert_eq!(after_catalog[0].thread, before_catalog[0].thread);
+    assert_eq!(after_catalog[0].manager, before_catalog[0].manager);
+    assert_eq!(after.sequence, before.sequence + 1);
+    assert_eq!(after.turns[0], before.turns[0]);
+    assert_eq!(after.items, before.items);
+    assert_eq!(
+        after.turns[1].pending_interaction,
+        before.turns[1].pending_interaction
+    );
+    assert_eq!(after.turns[1].status, before.turns[1].status);
+    assert_eq!(after.turns[1].model, Some(new.clone()));
+    let expected = session_from_catalog(after_catalog).unwrap();
+    assert_eq!(expected.model, Some(new.clone()));
+    assert_eq!(
+        store.read_session(&session_id).unwrap(),
+        Some(expected.clone())
+    );
+    assert_eq!(store.list_sessions().unwrap(), vec![expected.clone()]);
+    threads.migrate_model_providers(&mapping).unwrap();
+    assert_eq!(
+        threads.read_thread(&thread_id).unwrap().sequence,
+        after.sequence
+    );
+    drop(threads);
+    drop(store);
+    let reopened = Arc::new(SqliteThreadStore::open(&path).unwrap());
+    let recovered = ThreadController::with_store(reopened.clone());
+    assert_eq!(recovered.read_thread(&thread_id).unwrap(), after);
+    assert_eq!(
+        recovered.read_session_catalog(&session_id).unwrap(),
+        Some(expected.clone())
+    );
+    assert_eq!(reopened.list_sessions().unwrap(), vec![expected]);
 }
 
 #[test]

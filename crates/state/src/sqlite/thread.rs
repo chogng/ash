@@ -926,7 +926,11 @@ fn session_list_changed(
     let Ok(previous) = serde_json::from_str::<ThreadCatalogRecord>(&json) else {
         return Ok(true);
     };
+    // Root model and authority are catalog facts outside SessionThread. A provider migration
+    // can change the selection while leaving the Thread's lifecycle and activity unchanged.
     Ok(previous.session_id != record.session_id
+        || previous.model != record.model
+        || previous.execution_target != record.execution_target
         || previous.thread != record.thread
         || previous.manager != record.manager
         || previous.archived_at_unix_ms != record.archived_at_unix_ms

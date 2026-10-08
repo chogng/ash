@@ -173,13 +173,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 
 	async setModel(model: ModelRef): Promise<void> {
 		await this.initialize();
-		if (this._sessions.length > 0 && this._sessions.every(session => sameModel(session.model, model))) return;
 		await this.provider.setModel(model);
-		this._sessions = this._sessions.map(session => ({ ...session, model }));
-		if (this._active) {
-			const session = this._sessions.find(candidate => candidate.sessionId === this._active?.session.sessionId);
-			if (session) this._active = { session, threadId: this._active.threadId };
-		}
 		this._error = undefined;
 		this._onDidChange.fire();
 	}
@@ -355,6 +349,7 @@ function sameModel(left: ModelRef | null | undefined, right: ModelRef | null | u
 function sameSession(left: ISession | undefined, right: ISession | undefined): boolean {
 	if (!left || !right) return left === right;
 	if (left.title !== right.title || left.status !== right.status || left.agentTree !== right.agentTree || left.chats.length !== right.chats.length) return false;
+	if (!sameModel(left.model, right.model) || left.workspace?.authorityId !== right.workspace?.authorityId || left.workspace?.root !== right.workspace?.root) return false;
 	return left.chats.every((chat, index) => {
 		const next = right.chats[index];
 		return next?.threadId === chat.threadId && next.status === chat.status && next.title === chat.title && next.executionStatus === chat.executionStatus;

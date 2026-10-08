@@ -9,7 +9,7 @@ import { ISessionApi, ITurnApi, IModelApi } from "../../../../../platform/sessio
 import { createDisconnectedRendererApi } from '../../../../../platform/agentHost/browser/rendererApi.js';
 import { SessionsManagementService } from "../../browser/sessionsManagementService.js";
 import { AppServerSessionsProvider } from "../../../../contrib/providers/agentHost/browser/appServerSessionsProvider.js";
-import type { IUntitledChatSession, SessionExecutionTarget, SessionWorkspaceSelection } from "../../common/session.js";
+import type { IUntitledChatSession, ModelRef, SessionExecutionTarget, SessionWorkspaceSelection } from "../../common/session.js";
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
@@ -60,15 +60,146 @@ for (const reconnect of [false, true]) {
 	});
 }
 
-test('a model read failure preserves catalog ownership until disposal', async () => {
+test('catalog discovery does not depend on reading the global default model', async () => {
 	const fake = sessionHost([]);
-	fake.host.model.readModel = async () => { throw new Error('Model unavailable'); };
+	let modelReads = 0;
+	fake.host.model.readModel = async () => { modelReads++; throw new Error('Model unavailable'); };
 	let released = 0;
 	fake.host.session.unsubscribeCatalog = async () => { released++; };
 	const provider = createProvider(fake);
-	try { await assert.rejects(provider.list(), /Model unavailable/); }
+	try { assert.deepEqual(await provider.list(), []); }
 	finally { provider.dispose(); }
-	assert.equal(released, 1);
+	assert.deepEqual({ modelReads, released }, { modelReads: 0, released: 1 });
+});
+
+test('list and subscription retain each root model independently of child and global models', async () => {
+	const rootModel = { provider: 'provider', model: 'root-a' };
+	const childModel = { provider: 'provider', model: 'child-b' };
+	const defaultModel = { provider: 'provider', model: 'default-c' };
+	const otherModel = { provider: 'other-provider', model: 'other-root' };
+	const root = session('session-1', 'thread-1');
+	const fake = sessionHost([
+		{ ...root, model: rootModel, threads: [...root.threads, { ...root.threads[0]!, threadId: 'child', parentThreadId: 'thread-1' }] },
+		{ ...session('session-2', 'thread-2'), model: otherModel },
+	]);
+	let modelReads = 0;
+	fake.host.model.readModel = async () => { modelReads++; return defaultModel; };
+	const subscribe = fake.host.session.subscribe;
+	fake.host.session.subscribe = async params => {
+		const result = await subscribe(params);
+		return {
+			...result,
+			threadProjections: result.threadProjections.map(detail => ({
+				...detail,
+				thread: {
+					...detail.thread,
+					turns: [{
+						turnId: 'turn', status: 'completed', mode: 'agent', kind: 'coding', toolMode: 'direct', approvalMode: 'manual',
+						usage: emptyUsage(), items: [], model: detail.thread.threadId === 'child' ? childModel : rootModel,
+					}],
+				},
+			})),
+		};
+	};
+	using provider = createProvider(fake);
+	const listed = await provider.list();
+	const opened = await provider.subscribe(listed[0]!);
+	assert.deepEqual({ listed: listed.map(value => value.model), opened: opened.model, modelReads }, { listed: [rootModel, otherModel], opened: rootModel, modelReads: 0 });
+});
+
+for (const absent of [undefined, null]) {
+	test(`catalog model absence (${absent}) clears the previous model without applying a default`, async () => {
+		const fake = sessionHost([{ ...session('session-1', 'thread-1'), model: { provider: 'provider', model: 'old' } }]);
+		fake.host.model.readModel = async () => ({ provider: 'provider', model: 'default' });
+		using provider = createProvider(fake);
+		const previous = (await provider.list())[0]!;
+		fake.sessions[0] = { ...fake.sessions[0]!, model: absent };
+		const catalog = await provider.readCatalog('session-1', previous);
+		const opened = await provider.subscribe(previous);
+		const listed = await provider.list();
+		assert.deepEqual([catalog?.model, opened.model, listed[0]?.model], [absent, absent, absent]);
+	});
+}
+
+for (const selected of [undefined, { provider: 'provider', model: 'manual' }]) {
+	test(`only creating a known new Session applies its chosen or default model (${selected?.model ?? 'default'})`, async () => {
+		const fake = sessionHost([]);
+		const defaultModel = { provider: 'provider', model: 'default' };
+		let modelReads = 0;
+		fake.host.model.readModel = async () => { modelReads++; return defaultModel; };
+		fake.host.session.create = async () => {
+			const value = session('created', 'created-thread');
+			fake.sessions.push(value);
+			return { session: value, agentTree: { roots: [] } };
+		};
+		fake.host.session.createThread = async () => ({ session: fake.sessions[0]!, threadId: 'created-thread' });
+		using provider = createProvider(fake);
+		const active = await provider.create('New', { type: 'current' }, selected);
+		const persisted = await provider.readCatalog('created', active.session);
+		assert.deepEqual({ created: active.session.model, persisted: persisted?.model, modelReads }, { created: selected ?? defaultModel, persisted: undefined, modelReads: selected ? 0 : 1 });
+	});
+}
+
+for (const selected of [true, false]) {
+	test(`model-only catalog changes update the Session without reloading details (selected: ${selected})`, async () => {
+		const initialModel = { provider: 'provider', model: 'old' };
+		const nextModel = { provider: 'provider', model: 'new' };
+		const fake = sessionHost([session('session-1', 'thread-1'), { ...session('session-2', 'thread-2'), model: initialModel }]);
+		using service = createManagement(fake);
+		await service.initialize();
+		if (selected) service.selectThread('session-2', 'thread-2');
+		await waitFor(() => service.active?.session.agentTree !== undefined);
+		const subscriptions = fake.subscribeCount;
+		let changes = 0;
+		using listener = service.onDidChange(() => { changes++; });
+		fake.sessions[1] = { ...fake.sessions[1]!, model: nextModel };
+		fake.emit({ method: 'session/changed', params: { sessionId: 'session-2', agentTreeChanged: false } });
+		await waitFor(() => fake.readCatalogCount === 1);
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.deepEqual({ model: service.sessions[1]?.model, active: service.active?.threadId, subscriptions: fake.subscribeCount, changes }, { model: nextModel, active: selected ? 'thread-2' : 'thread-1', subscriptions, changes: 1 });
+	});
+}
+
+for (const target of [{ type: 'local' as const, root: '/new' }, { type: 'ssh' as const, host: 'new-host', root: '/old' }, null]) {
+	test(`workspace-only catalog changes update the selected Session (${target?.type ?? 'none'})`, async () => {
+		const fake = sessionHost([{ ...session('session-1', 'thread-1'), executionTarget: { type: 'local', root: '/old' } }]);
+		using service = createManagement(fake);
+		await service.initialize();
+		await waitFor(() => service.active?.session.agentTree !== undefined);
+		const subscriptions = fake.subscribeCount;
+		fake.sessions[0] = { ...fake.sessions[0]!, executionTarget: target };
+		fake.emit({ method: 'session/changed', params: { sessionId: 'session-1', agentTreeChanged: false } });
+		await waitFor(() => fake.readCatalogCount === 1);
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.deepEqual({ workspace: service.active?.session.workspace, subscriptions: fake.subscribeCount }, { workspace: target ? { authorityId: target.type === 'ssh' ? target.host : 'local', root: target.root } : null, subscriptions });
+	});
+}
+
+test('a default model write preserves durable catalog models and the active facade', async () => {
+	const first = { provider: 'provider', model: 'first' };
+	const second = { provider: 'provider', model: 'second' };
+	const fake = sessionHost([{ ...session('session-1', 'thread-1'), model: first }, { ...session('session-2', 'thread-2'), model: second }]);
+	const written: ModelRef[] = [];
+	fake.host.model.setModel = async ({ model }) => { written.push(model); };
+	using service = createManagement(fake);
+	await service.initialize();
+	await waitFor(() => service.active?.session.agentTree !== undefined);
+	const active = service.active;
+	const selected = { provider: 'provider', model: 'default' };
+	await service.setModel(selected);
+	assert.deepEqual({ models: service.sessions.map(value => value.model), written }, { models: [first, second], written: [selected] });
+	assert.equal(service.active, active);
+});
+
+test('matching durable Session models do not suppress a default model write', async () => {
+	const model = { provider: 'provider', model: 'same' };
+	const fake = sessionHost([{ ...session('session-1', 'thread-1'), model }]);
+	fake.host.model.readModel = async () => model;
+	const written: ModelRef[] = [];
+	fake.host.model.setModel = async request => { written.push(request.model); };
+	using service = createManagement(fake);
+	await service.setModel(model);
+	assert.deepEqual(written, [model]);
 });
 
 test('reconnection restores background details as well as the selected Session', async () => {
@@ -85,7 +216,10 @@ test('reconnection restores background details as well as the selected Session',
 });
 
 test('a refresh from an old connection cannot revert a newer catalog or suppress later changes', async () => {
-	const fake = sessionHost([session('session-1', 'thread-1')]);
+	const oldModel = { provider: 'provider', model: 'old' };
+	const restoredModel = { provider: 'provider', model: 'restored' };
+	const fake = sessionHost([{ ...session('session-1', 'thread-1'), model: oldModel }]);
+	fake.host.model.readModel = async () => ({ provider: 'provider', model: 'default' });
 	using service = createManagement(fake);
 	await service.initialize();
 	await waitFor(() => service.active?.session.agentTree !== undefined);
@@ -95,16 +229,17 @@ test('a refresh from an old connection cannot revert a newer catalog or suppress
 	fake.emit({ method: 'session/changed', params: { sessionId: 'session-1', agentTreeChanged: false } });
 	await waitFor(() => release !== undefined);
 	fake.setConnectionState('crashed');
-	fake.sessions[0] = { ...fake.sessions[0]!, title: 'Restored' };
+	fake.sessions[0] = { ...fake.sessions[0]!, title: 'Restored', model: restoredModel };
 	fake.setConnectionState('ready');
 	await waitFor(() => service.active?.session.title === 'Restored' && service.active.session.agentTree !== undefined);
-	release({ session: { ...fake.sessions[0]!, title: 'Stale' } });
+	release({ session: { ...fake.sessions[0]!, title: 'Stale', model: oldModel } });
 	await new Promise<void>(resolve => setImmediate(resolve));
-	assert.equal(service.active?.session.title, 'Restored');
+	assert.deepEqual({ title: service.active?.session.title, model: service.active?.session.model }, { title: 'Restored', model: restoredModel });
 	fake.host.session.readCatalog = original;
-	fake.sessions[0] = { ...fake.sessions[0]!, title: 'Changed again' };
+	fake.sessions[0] = { ...fake.sessions[0]!, title: 'Changed again', model: undefined };
 	fake.emit({ method: 'session/changed', params: { sessionId: 'session-1', agentTreeChanged: false } });
 	await waitFor(() => service.active?.session.title === 'Changed again');
+	assert.deepEqual({ title: service.active?.session.title, model: service.active?.session.model }, { title: 'Changed again', model: undefined });
 	assert.equal(service.state, 'ready');
 });
 
@@ -173,12 +308,13 @@ test('a catalog result from an old connection cannot replace the restored catalo
 	using service = createManagement(fake);
 	const initial = service.initialize();
 	fake.setConnectionState('crashed');
-	fake.sessions.push(session('fresh', 'fresh-thread'));
+	const restoredModel = { provider: 'provider', model: 'restored' };
+	fake.sessions.push({ ...session('fresh', 'fresh-thread'), model: restoredModel });
 	fake.setConnectionState('ready');
 	await waitFor(() => service.active?.threadId === 'fresh-thread' && service.active.session.agentTree !== undefined);
-	release({ sessions: [session('stale', 'stale-thread')] });
+	release({ sessions: [{ ...session('stale', 'stale-thread'), model: { provider: 'provider', model: 'stale' } }] });
 	await initial;
-	assert.deepEqual({ ids: service.sessions.map(session => session.sessionId), state: service.state, error: service.error }, { ids: ['fresh'], state: 'ready', error: undefined });
+	assert.deepEqual({ ids: service.sessions.map(session => session.sessionId), model: service.active?.session.model, state: service.state, error: service.error }, { ids: ['fresh'], model: restoredModel, state: 'ready', error: undefined });
 });
 
 for (const outcome of ['success', 'failure']) {
@@ -653,7 +789,7 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection, work
 			if (state !== 'ready') catalogSubscribed = false;
 			for (const listener of connectionListeners) listener(state);
 		},
-		host: { session: api, model: { ...createDisconnectedRendererApi().model, readModel: async () => null }, turn, events, workspace, selectWorkspace: async (_folders: readonly { readonly label: string; readonly target: SessionExecutionTarget; }[]): Promise<SessionExecutionTarget | undefined> => undefined },
+		host: { session: api, model: { ...createDisconnectedRendererApi().model, readModel: async (): Promise<ModelRef | null> => null }, turn, events, workspace, selectWorkspace: async (_folders: readonly { readonly label: string; readonly target: SessionExecutionTarget; }[]): Promise<SessionExecutionTarget | undefined> => undefined },
 		sessions,
 		archiveRequests,
 		interruptRequests,
