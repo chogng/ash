@@ -45,6 +45,9 @@ import { MenuId } from "../../../../../platform/actions/common/actions.js";
 import { MenuService } from "../../../../../platform/actions/common/menuService.js";
 import type { IAction } from "../../../../../base/common/actions.js";
 import '../../browser/searchActionsTopBar.js';
+import { DeferredPromise } from '../../../../../base/common/async.js';
+import type { IContentSearchComplete, IContentSearchOptions } from '../../../../../platform/search/common/search.js';
+import type { SearchReplaceResult } from '../../browser/replace.js';
 
 const matches: readonly ContentSearchMatch[] = [
 	{
@@ -62,6 +65,242 @@ const matches: readonly ContentSearchMatch[] = [
 		ranges: [{ start: 4, end: 10 }],
 	},
 ];
+
+test('Search lifecycle commands cancel retained results, replace running queries and clear inputs in two stages', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	const globals = installDomGlobals(browser);
+	const jobs: { query: IContentSearchQuery; options: IContentSearchOptions; completion: DeferredPromise<IContentSearchComplete>; }[] = [];
+	try {
+		using store = new DisposableStore();
+		const services = createServices(store, browser, {
+			search(query, options = {}) {
+				const completion = new DeferredPromise<IContentSearchComplete>();
+				jobs.push({ query, options, completion });
+				options.onProgress?.(matches);
+				options.signal?.addEventListener('abort', () => options.onProgress?.([{ ...matches[0]!, path: 'synchronous-abort.ts' }]), { once: true });
+				return completion.p;
+			},
+		});
+		const { SearchView } = await import('../../browser/searchView.js');
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
+		registerView(services, view);
+		const queryInput = input(view.element, 'Search workspace');
+		const replacement = input(view.element, 'Replace');
+		const includes = input(view.element, 'Files to include');
+		const excludes = input(view.element, 'Files to exclude');
+		const commands = services.get(ICommandService);
+		const menus = services.createInstance(MenuService);
+		const palette = (id: string) => menus.getMenuActions(MenuId.CommandPalette).flatMap(([, actions]) => actions).find(action => action.id === id);
+		assert.equal(palette('search.action.cancel'), undefined);
+		assert.equal(palette('search.action.clearSearchResults'), undefined);
+		queryInput.value = 'needle'; replacement.value = 'replacement'; includes.value = 'src/**'; excludes.value = '**/*.test.ts';
+		for (const field of [queryInput, replacement, includes, excludes]) { field.dispatchEvent(new browser.window.Event('input', { bubbles: true })); }
+		view.element.querySelector<HTMLButtonElement>('button[aria-label="Match Case"]')!.click();
+		assert.equal(palette('search.action.refreshSearchResults')?.enabled, true);
+		await commands.executeCommand('search.action.refreshSearchResults');
+		assert.equal(jobs.length, 1);
+		assert.equal(services.get(IContextKeyService).getValue('searchState'), 1);
+		assert.equal(browser.window.document.activeElement, queryInput);
+		view.getControl().domFocus();
+		await commands.executeCommand('search.action.cancel');
+		assert.equal(jobs[0]!.options.signal?.aborted, true);
+		assert.equal(view.getSearchResultSnapshot()?.matchCount, 2);
+		assert.equal(browser.window.document.activeElement, queryInput);
+		assert.equal(view.element.querySelector('.ash-search-status')?.textContent, 'Search stopped. 2 results retained.');
+		assert.equal(view.cancelSearch(), false);
+		jobs[0]!.options.onProgress?.([{ ...matches[0]!, path: 'late-cancel.ts' }]);
+		assert.equal(view.searchResult.count, 2);
+		await commands.executeCommand('search.action.refreshSearchResults');
+		queryInput.value = 'again'; queryInput.dispatchEvent(new browser.window.Event('input', { bubbles: true }));
+		await commands.executeCommand('search.action.refreshSearchResults');
+		assert.equal(jobs.length, 3);
+		assert.equal(jobs[1]!.options.signal?.aborted, true);
+		jobs[1]!.options.onProgress?.([{ ...matches[0]!, path: 'late-refresh.ts' }]);
+		await jobs[1]!.completion.complete({ resultCount: 3, limitHit: true, error: 'stale failure' });
+		assert.equal(view.searchResult.count, 2);
+		assert.equal(view.getControl().element.getAttribute('aria-busy'), 'true');
+		await commands.executeCommand('search.action.clearSearchResults');
+		assert.equal(jobs[2]!.options.signal?.aborted, true);
+		assert.deepEqual([queryInput.value, replacement.value, includes.value, excludes.value], ['', '', 'src/**', '**/*.test.ts']);
+		assert.deepEqual({ results: view.searchResult.count, snapshot: view.getSearchResultSnapshot(), state: services.get(IContextKeyService).getValue('searchState'), status: view.element.querySelector('.ash-search-status')?.textContent }, { results: 0, snapshot: undefined, state: 0, status: '' });
+		assert.equal(palette('search.action.clearSearchResults')?.enabled, true);
+		jobs[2]!.options.onProgress?.([{ ...matches[0]!, path: 'late-clear.ts' }]);
+		assert.equal(view.searchResult.count, 0);
+		await commands.executeCommand('search.action.clearSearchResults');
+		assert.deepEqual([includes.value, excludes.value], ['', '']);
+		assert.equal(palette('search.action.clearSearchResults'), undefined);
+		queryInput.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
+		assert.equal(queryInput.value, 'again');
+		queryInput.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+		assert.equal(queryInput.value, '');
+		queryInput.value = 'final'; queryInput.dispatchEvent(new browser.window.Event('input', { bubbles: true }));
+		await commands.executeCommand('search.action.refreshSearchResults');
+		assert.equal(jobs[3]!.query.caseSensitivity, 'sensitive');
+		assert.deepEqual(jobs[3]!.query.includePatterns, []);
+		view.setVisible(false);
+		await commands.executeCommand('search.action.clearSearchResults');
+		await commands.executeCommand('search.action.cancel');
+		await commands.executeCommand('search.action.refreshSearchResults');
+		assert.equal(jobs.length, 4);
+		assert.equal(jobs[3]!.options.signal?.aborted, false);
+		view.dispose();
+		jobs[3]!.options.onProgress?.([{ ...matches[0]!, path: 'late-dispose.ts' }]);
+		assert.equal(jobs[3]!.options.signal?.aborted, true);
+		assert.equal(view.searchResult.count, 0);
+		for (const key of ['searchState', 'viewHasSearchPattern', 'viewHasReplacePattern', 'viewHasFilePattern']) {
+			assert.equal(services.get(IContextKeyService).getValue(key), key === 'searchState' ? 0 : false);
+		}
+	} finally {
+		for (const job of jobs) { await job.completion.complete({ resultCount: 2, limitHit: false, error: undefined }); }
+		browser.window.close();
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
+	}
+});
+
+test('Search lifecycle clears zero-result queries and input-only patterns and an empty refresh creates no job', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	const globals = installDomGlobals(browser);
+	let searches = 0;
+	try {
+		using store = new DisposableStore();
+		const services = createServices(store, browser, { search: async () => { searches++; return { resultCount: 0, limitHit: false, error: undefined }; } });
+		const { SearchView } = await import('../../browser/searchView.js');
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
+		registerView(services, view);
+		const commands = services.get(ICommandService);
+		const menus = services.createInstance(MenuService);
+		const clear = () => menus.getMenuActions(MenuId.CommandPalette).flatMap(([, actions]) => actions).find(action => action.id === 'search.action.clearSearchResults');
+		const queryInput = input(view.element, 'Search workspace');
+		queryInput.value = 'absent'; queryInput.dispatchEvent(new browser.window.Event('input', { bubbles: true }));
+		await commands.executeCommand('search.action.refreshSearchResults');
+		await waitFor(() => view.getControl().element.getAttribute('aria-busy') === 'false');
+		assert.equal(view.element.querySelector('.ash-search-status')?.textContent, 'No results found.');
+		assert.equal(clear()?.enabled, true);
+		await commands.executeCommand('search.action.clearSearchResults');
+		assert.equal(queryInput.value, '');
+		for (const label of ['Replace', 'Files to include', 'Files to exclude']) {
+			const field = input(view.element, label);
+			field.value = 'pattern'; field.dispatchEvent(new browser.window.Event('input', { bubbles: true }));
+			assert.equal(clear()?.enabled, true);
+			await commands.executeCommand('search.action.clearSearchResults');
+			assert.deepEqual({ value: field.value, clear: clear(), results: view.searchResult.count }, { value: '', clear: undefined, results: 0 });
+		}
+		input(view.element, 'Files to include').value = 'src/**';
+		await commands.executeCommand('search.action.refreshSearchResults');
+		assert.deepEqual({ searches, query: queryInput.value, includes: input(view.element, 'Files to include').value, status: view.element.querySelector('.ash-search-status')?.textContent }, { searches: 1, query: '', includes: 'src/**', status: '' });
+	} finally {
+		browser.window.close();
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
+	}
+});
+
+for (const operation of ['replace', 'undo'] as const) {
+	test(`Search lifecycle clearing blocks a late ${operation} from restarting search or writing its failure`, async () => {
+		const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+		const globals = installDomGlobals(browser);
+		const replacement = new DeferredPromise<SearchReplaceResult>();
+		const undo = new DeferredPromise<void>();
+		const result: SearchReplaceResult = { ariaSummary: 'applied', isApplied: true, resources: [], undo: () => undo.p, saveErrors: ['late save failure'] };
+		let searches = 0;
+		let signal: AbortSignal | undefined;
+		let pending: Promise<unknown> | undefined;
+		try {
+			using store = new DisposableStore();
+			const services = createServices(store, browser, { search: async (_query, options) => { searches++; options?.onProgress?.(matches); return { resultCount: 2, limitHit: false, error: undefined }; } }, undefined, undefined,
+				{ replace: async (_matches, _query, _replacement, options) => { signal = options.signal; return operation === 'replace' ? replacement.p : result; } });
+			const { SearchView } = await import('../../browser/searchView.js');
+			using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
+			registerView(services, view);
+			input(view.element, 'Search workspace').value = 'needle';
+			view.triggerQueryChange();
+			await waitFor(() => view.getSearchResultSnapshot()?.matchCount === 2);
+			view.getControl().setFocus(view.searchResult.files[0]!.matches[0]!.id);
+			let actions: readonly IAction[] = [];
+			services.get(IContextMenuService).showContextMenu = delegate => { actions = delegate.getActions?.() ?? []; };
+			const action = (id: string) => {
+				view.element.querySelector<HTMLButtonElement>('button[aria-label="More Actions"]')!.click();
+				return actions.find(action => action.id === id)!;
+			};
+			pending = Promise.resolve(action('search.replaceSelected').run());
+			if (operation === 'undo') {
+				await pending;
+				assert.equal(searches, 2);
+				pending = Promise.resolve(action('search.undoReplacement').run());
+			}
+			await services.get(ICommandService).executeCommand('search.action.clearSearchResults');
+			if (operation === 'replace') { assert.equal(signal?.aborted, true); await replacement.complete(result); }
+			else { await undo.error(new Error('late undo failure')); }
+			await pending;
+			assert.deepEqual({ searches, results: view.searchResult.count, query: input(view.element, 'Search workspace').value, status: view.element.querySelector('.ash-search-status')?.textContent }, { searches: operation === 'replace' ? 1 : 2, results: 0, query: '', status: '' });
+		} finally {
+			await replacement.complete(result);
+			await undo.complete();
+			await pending;
+			browser.window.close();
+			for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
+		}
+	});
+}
+
+test('Search lifecycle slow-search timer belongs to its query and errors restore idle actions', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	const globals = installDomGlobals(browser);
+	const originalTimeout = browser.window.setTimeout.bind(browser.window);
+	const originalClearTimeout = browser.window.clearTimeout.bind(browser.window);
+	const scheduled = new Map<number, () => void>();
+	const cancelled: number[] = [];
+	let nextTimer = 1_000_000;
+	const jobs: DeferredPromise<IContentSearchComplete>[] = [];
+	// Control only the owner's two-second UI timer; jsdom and widget scheduling remain real.
+	browser.window.setTimeout = ((handler: TimerHandler, delay?: number, ...args: unknown[]) => {
+		if (delay !== 2_000 || typeof handler !== 'function') { return originalTimeout(handler, delay, ...args); }
+		const id = nextTimer++;
+		scheduled.set(id, () => handler(...args));
+		return id;
+	}) as typeof browser.window.setTimeout;
+	browser.window.clearTimeout = id => { if (id !== undefined && scheduled.has(id)) { cancelled.push(id); } else { originalClearTimeout(id); } };
+	try {
+		using store = new DisposableStore();
+		const services = createServices(store, browser, { search() { const job = new DeferredPromise<IContentSearchComplete>(); jobs.push(job); return job.p; } });
+		const { SearchView } = await import('../../browser/searchView.js');
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
+		registerView(services, view);
+		const queryInput = input(view.element, 'Search workspace');
+		queryInput.value = 'needle';
+		const commands = services.get(ICommandService);
+		await commands.executeCommand('search.action.refreshSearchResults');
+		assert.equal(scheduled.size, 1);
+		const oldTimer = [...scheduled.keys()][0]!;
+		await commands.executeCommand('search.action.refreshSearchResults');
+		assert.ok(cancelled.includes(oldTimer));
+		scheduled.get(oldTimer)!();
+		assert.equal(services.get(IContextKeyService).getValue('searchState'), 1);
+		const currentTimer = [...scheduled.keys()].at(-1)!;
+		view.element.querySelector<HTMLButtonElement>('button[aria-label="Refresh search"]')!.focus();
+		scheduled.get(currentTimer)!();
+		const cancel = view.element.querySelector<HTMLButtonElement>('button[aria-label="Cancel Search"]')!;
+		assert.ok(cancel);
+		assert.equal(browser.window.document.activeElement, cancel);
+		assert.equal(services.get(IContextKeyService).getValue('searchState'), 2);
+		await jobs[1]!.error(new Error('backend failed'));
+		await waitFor(() => view.getControl().element.getAttribute('aria-busy') === 'false');
+		assert.equal(services.get(IContextKeyService).getValue('searchState'), 0);
+		assert.equal(view.element.querySelector('.ash-search-status')?.textContent, 'backend failed');
+		assert.ok(view.element.querySelector('button[aria-label="Refresh search"]'));
+		await commands.executeCommand('search.action.refreshSearchResults');
+		const disposedTimer = [...scheduled.keys()].at(-1)!;
+		view.dispose();
+		assert.ok(cancelled.includes(disposedTimer));
+		scheduled.get(disposedTimer)!();
+		assert.equal(services.get(IContextKeyService).getValue('searchState'), 0);
+	} finally {
+		for (const job of jobs) { await job.complete({ resultCount: 0, limitHit: false, error: undefined }); }
+		browser.window.setTimeout = originalTimeout;
+		browser.window.clearTimeout = originalClearTimeout;
+		browser.window.close();
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
+	}
+});
 
 test("BrowserContentSearchService pulls bounded batches and releases the job", async () => {
 	const readCursors: number[] = [];
@@ -300,7 +539,7 @@ function installDomGlobals(browser: JSDOM): readonly string[] {
 	return Object.keys(globals);
 }
 
-function createServices(store: DisposableStore, browser: JSDOM, search: IContentSearchService, configured?: WorkbenchConfigurationService, workspace?: WorkspaceContextService): InstantiationService {
+function createServices(store: DisposableStore, browser: JSDOM, search: IContentSearchService, configured?: WorkbenchConfigurationService, workspace?: WorkspaceContextService, replace?: IReplaceService): InstantiationService {
 	const configuration = configured ?? store.add(new WorkbenchConfigurationService());
 	const services = store.add(new InstantiationService());
 	services.registerInstance(ICommandService, store.add(new CommandService(services)));
@@ -321,7 +560,7 @@ function createServices(store: DisposableStore, browser: JSDOM, search: IContent
 	services.registerInstance(IBulkEditService, editing.service);
 	services.registerInstance(IDialogService, editing.dialogs);
 	services.registerInstance(IWorkingCopyService, editing.workingCopies);
-	services.registerInstance(IReplaceService, services.createInstance(ReplaceService));
+	services.registerInstance(IReplaceService, replace ?? services.createInstance(ReplaceService));
 	return services;
 }
 

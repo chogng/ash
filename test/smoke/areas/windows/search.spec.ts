@@ -3,6 +3,157 @@ import { basename, dirname, join } from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import type { ElectronApplication } from '@playwright/test';
 
+interface SearchLifecycleBoundary {
+	holdStart: boolean;
+	holdRead: boolean;
+	blocked: { method: string; searchId?: string; }[];
+	created: string[];
+	released: string[];
+	readErrors: number;
+	release(): void;
+	dispose(): void;
+}
+
+test('Search lifecycle cancels creation and partial results, refreshes a running job and clears before searching again', async ({ target, workbench, testWorkspace }) => {
+	test.skip(target.appServerMode !== 'required', 'Uses actual backend jobs, files and protocol responses.');
+	const path = join(testWorkspace.directory, 'src/lifecycle.txt');
+	const token = 'ash_lifecycle_token';
+	await mkdir(dirname(path), { recursive: true });
+	const initial = Array.from({ length: 150 }, (_, index) => `${token} ${index + 1}`).join('\n') + '\n';
+	await writeFile(path, initial);
+	const page = workbench.page;
+	await workbench.search.open();
+	await page.getByRole('button', { name: 'Toggle Search Details', exact: true }).click();
+	const includes = workbench.search.element.getByRole('textbox', { name: 'Files to include', exact: true });
+	const excludes = workbench.search.element.getByRole('textbox', { name: 'Files to exclude', exact: true });
+	await includes.fill('src/**');
+	await excludes.fill('**/*.skip');
+	await page.getByRole('button', { name: 'Match Case', exact: true }).click();
+	const tree = workbench.search.element.getByRole('tree');
+	// Delay requests at the existing transport boundary; all jobs and responses still come from the real server.
+	await page.evaluate(() => {
+		const owner = globalThis as typeof globalThis & { searchLifecycleBoundary?: SearchLifecycleBoundary; };
+		const socketSend = WebSocket.prototype.send;
+		const portSend = MessagePort.prototype.postMessage;
+		const pending = new Map<number, { method: string; searchId?: string; }>();
+		const observers = new Map<WebSocket | MessagePort, EventListener>();
+		const held: (() => void)[] = [];
+		const frame = (value: unknown): string | undefined => typeof value === 'string' ? value : value && typeof value === 'object' && 'frame' in value && typeof value.frame === 'string' ? value.frame : undefined;
+		const state: SearchLifecycleBoundary = {
+			holdStart: true, holdRead: false, blocked: [], created: [], released: [], readErrors: 0,
+			release() { state.holdStart = false; state.holdRead = false; for (const send of held.splice(0)) { send(); } },
+			dispose() {
+				state.release();
+				WebSocket.prototype.send = socketSend;
+				MessagePort.prototype.postMessage = portSend;
+				for (const [transport, observer] of observers) { transport.removeEventListener('message', observer); }
+				delete owner.searchLifecycleBoundary;
+			},
+		};
+		const route = (transport: WebSocket | MessagePort, value: unknown, send: () => void): void => {
+			const source = frame(value);
+			if (!source) { send(); return; }
+			let request: { id?: number; method?: string; params?: { query?: string; searchId?: string; afterMatch?: number; }; };
+			try { request = JSON.parse(source); } catch { send(); return; }
+			if (typeof request.id !== 'number' || !request.method?.startsWith('grep/search/')) { send(); return; }
+			pending.set(request.id, { method: request.method, searchId: request.params?.searchId });
+			if (!observers.has(transport)) {
+				const observer: EventListener = event => {
+					if (!(event instanceof MessageEvent)) { return; }
+					const source = frame(event.data);
+					if (!source) { return; }
+					const response = JSON.parse(source) as { id?: number; result?: { searchId?: string; }; error?: unknown; };
+					if (typeof response.id !== 'number') { return; }
+					const request = pending.get(response.id);
+					if (!request) { return; }
+					pending.delete(response.id);
+					if (request.method === 'grep/search/start' && response.result?.searchId) { state.created.push(response.result.searchId); }
+					if (request.method === 'grep/search/cancel' && !response.error && request.searchId) { state.released.push(request.searchId); }
+					if (request.method === 'grep/search/read' && response.error) { state.readErrors++; }
+				};
+				observers.set(transport, observer);
+				transport.addEventListener('message', observer);
+			}
+			if ((state.holdStart && request.method === 'grep/search/start') || (state.holdRead && request.method === 'grep/search/read' && (request.params?.afterMatch ?? 0) >= 100)) {
+				state.blocked.push({ method: request.method, searchId: request.params?.searchId }); held.push(send);
+			} else { send(); }
+		};
+		WebSocket.prototype.send = function (data) { route(this, data, () => socketSend.call(this, data)); };
+		MessagePort.prototype.postMessage = function (message: unknown, options?: Transferable[] | StructuredSerializeOptions) { route(this, message, () => { Reflect.apply(portSend, this, options === undefined ? [message] : [message, options]); }); };
+		owner.searchLifecycleBoundary = state;
+	});
+	const boundary = () => page.evaluate(() => {
+		const state = (globalThis as typeof globalThis & { searchLifecycleBoundary: SearchLifecycleBoundary; }).searchLifecycleBoundary;
+		return { blocked: state.blocked, created: state.created, released: state.released, readErrors: state.readErrors };
+	});
+	const release = () => page.evaluate(() => (globalThis as typeof globalThis & { searchLifecycleBoundary: SearchLifecycleBoundary; }).searchLifecycleBoundary.release());
+	const holdReads = () => page.evaluate(() => { (globalThis as typeof globalThis & { searchLifecycleBoundary: SearchLifecycleBoundary; }).searchLifecycleBoundary.holdRead = true; });
+	try {
+		await workbench.search.query.fill(token);
+		await workbench.search.query.press('Enter');
+		await expect.poll(async () => (await boundary()).blocked.map(request => request.method)).toEqual(['grep/search/start']);
+		await expect(tree).toHaveAttribute('aria-busy', 'true');
+		await workbench.quickaccess.runCommand('search.action.cancel');
+		await expect(workbench.search.status).toHaveText('Search stopped. 0 results retained.');
+		await expect(workbench.search.query).toBeFocused();
+		expect((await boundary()).created).toEqual([]);
+		await release();
+		await expect.poll(async () => (await boundary()).released.length).toBe(1);
+		await holdReads();
+		await workbench.search.query.press('Enter');
+		await expect.poll(async () => (await boundary()).blocked.length).toBe(2);
+		await expect(workbench.search.status).toHaveText('100 results…');
+		await tree.focus();
+		await tree.press('Escape');
+		await expect(workbench.search.status).toHaveText('Search stopped. 100 results retained.');
+		await expect(workbench.search.query).toBeFocused();
+		await expect.poll(async () => (await boundary()).released.length).toBe(2);
+		await release();
+		await expect.poll(async () => (await boundary()).readErrors).toBe(1);
+		await holdReads();
+		await workbench.search.query.press('Enter');
+		await expect.poll(async () => (await boundary()).blocked.length).toBe(3);
+		await expect(workbench.search.status).toHaveText('100 results…');
+		const refreshed = `${token} refreshed\n${token} second\n`;
+		await writeFile(path, refreshed);
+		await page.evaluate(() => { (globalThis as typeof globalThis & { searchLifecycleBoundary: SearchLifecycleBoundary; }).searchLifecycleBoundary.holdRead = false; });
+		await workbench.quickaccess.runCommand('search.action.refreshSearchResults');
+		await expect(workbench.search.status).toHaveText('2 results');
+		await expect(workbench.search.query).toBeFocused();
+		await expect.poll(async () => (await boundary()).released.length).toBe(4);
+		await release();
+		await expect.poll(async () => (await boundary()).readErrors).toBe(2);
+		await expect(workbench.search.status).toHaveText('2 results');
+		await workbench.openExplorer();
+		await workbench.quickaccess.runCommand('search.action.clearSearchResults');
+		await workbench.quickaccess.runCommand('search.action.refreshSearchResults');
+		await expect(workbench.search.element).toBeHidden();
+		expect((await boundary()).created).toHaveLength(4);
+		await workbench.search.open();
+		await expect(workbench.search.status).toHaveText('2 results');
+		await workbench.quickaccess.runCommand('search.action.clearSearchResults');
+		await expect(workbench.search.query).toHaveValue('');
+		await expect(includes).toHaveValue('src/**');
+		await expect(excludes).toHaveValue('**/*.skip');
+		await expect(tree.getByRole('treeitem')).toHaveCount(0);
+		await workbench.quickaccess.runCommand('search.action.clearSearchResults');
+		await expect(includes).toHaveValue('');
+		await expect(excludes).toHaveValue('');
+		await expect(page.getByRole('button', { name: 'Match Case', exact: true })).toHaveAttribute('aria-pressed', 'true');
+		await workbench.search.query.press('ArrowUp');
+		await expect(workbench.search.query).toHaveValue(token);
+		await workbench.search.query.press('Enter');
+		await expect(workbench.search.status).toHaveText('2 results');
+		await expect.poll(async () => (await boundary()).released.length).toBe(5);
+		const evidence = await boundary();
+		expect(new Set(evidence.created).size).toBe(5);
+		expect([...evidence.released].sort()).toEqual([...evidence.created].sort());
+		expect(await readFile(path, 'utf8')).toBe(refreshed);
+	} finally {
+		await page.evaluate(() => (globalThis as typeof globalThis & { searchLifecycleBoundary?: SearchLifecycleBoundary; }).searchLifecycleBoundary?.dispose());
+	}
+});
+
 test('Search Dismiss removes retained matches, files and folders without changing disk contents', async ({ target, application, workbench, testWorkspace }) => {
 	test.skip(target.appServerMode !== 'required', 'Uses actual workspace content searches.');
 	const contents = [
@@ -155,7 +306,7 @@ test('Search selects exact matches, opens beside the editor and supports result 
 	await expect(workbench.search.status).toHaveText('2 results');
 	await page.getByRole('button', { name: 'Clear search results', exact: true }).click();
 	await expect(tree.getByRole('treeitem')).toHaveCount(0);
-	await expect(workbench.search.query).toHaveValue('needle');
+	await expect(workbench.search.query).toHaveValue('');
 	await expect(workbench.search.query).toBeFocused();
 });
 
@@ -608,7 +759,7 @@ test('Search Copy uses result selection, explicit context rows and collapsed fol
 	for (const [path, content] of contents) { expect(await readFile(join(testWorkspace.directory, path), 'utf8')).toBe(content); }
 });
 
-test('Search Copy menus preserve outside focus and release old row callbacks in Electron', async ({ target, application, workbench, testWorkspace }) => {
+test('Search Copy menus release old row callbacks and follow focus contracts in Electron', async ({ target, application, workbench, testWorkspace }) => {
 	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Exercises Electron Browser menus with an actual workspace search.');
 	const page = workbench.page;
 	await writeFile(join(testWorkspace.directory, 'main.ts'), 'ash_copy_focus_token original\n');
@@ -661,7 +812,7 @@ test('Search Copy menus preserve outside focus and release old row callbacks in 
 	await page.getByRole('button', { name: 'Refresh search', exact: true }).evaluate((button: HTMLButtonElement) => button.click());
 	await expect(workbench.search.status).toHaveText('2 results');
 	await expect(page.getByRole('menu')).toHaveCount(0);
-	await expect(editor.input).toBeFocused();
+	await expect(workbench.search.query).toBeFocused();
 	// A retained old DOM handle must not reopen a menu after its listeners are released.
 	await removedContent!.dispatchEvent('contextmenu', { bubbles: true, cancelable: true });
 	await expect(page.getByRole('menu')).toHaveCount(0);

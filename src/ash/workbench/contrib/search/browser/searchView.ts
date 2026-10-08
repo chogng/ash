@@ -32,6 +32,7 @@ import { URI } from "../../../../base/common/uri.js";
 import { SearchEditorID } from "../../searchEditor/browser/constants.js";
 import { serializeSearchResultForEditor } from "../../searchEditor/browser/searchEditorSerialization.js";
 import type { ContextMenuAnchor } from "../../../../base/browser/contextmenu.js";
+import { SearchStateKey, SearchUIState } from "../common/search.js";
 
 /** Workspace content-search form and incrementally populated result tree. */
 export class SearchView extends ViewPane {
@@ -61,6 +62,11 @@ export class SearchView extends ViewPane {
 	private readonly resourceResultFocused: IContextKey<boolean>;
 	private readonly hasSearchResultsKey: IContextKey<boolean>;
 	private readonly hasSomeCollapsibleKey: IContextKey<boolean>;
+	private readonly hasSearchPatternKey: IContextKey<boolean>;
+	private readonly hasReplacePatternKey: IContextKey<boolean>;
+	private readonly hasFilePatternKey: IContextKey<boolean>;
+	private readonly searchStateKey: IContextKey<SearchUIState>;
+	private readonly slowSearchTimer = this._register(new MutableDisposable());
 	private readonly resultActions: WorkbenchToolBar;
 	private readonly rowResources = this._register(new DisposableMap<HTMLElement, DisposableStore>());
 	private readonly resultMenu = this._register(new MutableDisposable());
@@ -70,6 +76,7 @@ export class SearchView extends ViewPane {
 	private sortByCount = false;
 	private lastOpenedMatchId: string | undefined;
 	private searchController: AbortController | undefined;
+	private searchTask: Promise<void> | undefined;
 	private searchRevision = 0;
 	private searchCompletion: Pick<IContentSearchComplete, "limitHit" | "error"> | undefined;
 	private searchCancelled = false;
@@ -97,7 +104,14 @@ export class SearchView extends ViewPane {
 		// The command palette lives outside this pane; its derived flags belong to the window's Search owner.
 		this.hasSearchResultsKey = SearchContext.HasSearchResults.bindTo(contextKeyService);
 		this.hasSomeCollapsibleKey = SearchContext.ViewHasSomeCollapsibleKey.bindTo(contextKeyService);
-		this._register(toDisposable(() => { this.hasSearchResultsKey.reset(); this.hasSomeCollapsibleKey.reset(); }));
+		this.hasSearchPatternKey = SearchContext.ViewHasSearchPatternKey.bindTo(contextKeyService);
+		this.hasReplacePatternKey = SearchContext.ViewHasReplacePatternKey.bindTo(contextKeyService);
+		this.hasFilePatternKey = SearchContext.ViewHasFilePatternKey.bindTo(contextKeyService);
+		this.searchStateKey = SearchStateKey.bindTo(contextKeyService);
+		this._register(toDisposable(() => {
+			this.hasSearchResultsKey.reset(); this.hasSomeCollapsibleKey.reset();
+			this.hasSearchPatternKey.reset(); this.hasReplacePatternKey.reset(); this.hasFilePatternKey.reset(); this.searchStateKey.reset();
+		}));
 		const focused = SearchContext.SearchViewFocusedKey.bindTo(scopedContext);
 		this._register(addDisposableListener(this.element, "focusin", () => focused.set(true)));
 		this._register(addDisposableListener(this.element, "focusout", event => {
@@ -227,6 +241,8 @@ export class SearchView extends ViewPane {
 		this.tree.domNode.classList.add("ash-search-results-tree");
 		// Scope the shortcut to the tree so deleting text in a query cannot dismiss results.
 		const resultContext = this._register(scopedContext.createScoped(this.tree.domNode));
+		// Ash lists do not publish listFocus; this tree scope also covers cancellation before the first result.
+		SearchContext.SearchResultListFocusedKey.bindTo(resultContext).set(true);
 		this.resultFocused = SearchContext.FileMatchOrMatchFocusKey.bindTo(resultContext);
 		this.resourceResultFocused = SearchContext.FileMatchOrFolderMatchWithResourceFocusKey.bindTo(resultContext);
 		const updateAriaHint = () => {
@@ -257,15 +273,18 @@ export class SearchView extends ViewPane {
 			}
 		}));
 		this._register(addDisposableListener(this.queryInput, "input", () => { this.queryInput.rows = Math.min(5, this.queryInput.value.split("\n").length); this.updateResultActions(); }));
+		for (const field of [this.replaceInput, this.includeInput, this.excludeInput]) {
+			this._register(addDisposableListener(field, "input", () => this.updateResultActions()));
+		}
 		this._register(addDisposableListener(form, "submit", (event) => {
 			event.preventDefault();
-			void this.startSearch();
+			this.triggerQueryChange();
 		}));
 		// Multiple text fields prevent implicit submission; IME confirmation must stay in the input.
 		this._register(addDisposableListener(form, "keydown", event => {
 			if (event.key === "Enter" && !event.isComposing && !(event.target === this.queryInput && (event.shiftKey || event.altKey)) && (event.target === this.queryInput || event.target === this.includeInput || event.target === this.excludeInput)) {
 				event.preventDefault();
-				void this.startSearch();
+				this.triggerQueryChange();
 			}
 		}));
 		this._register(configurationService.onDidChangeConfiguration(event => {
@@ -275,20 +294,22 @@ export class SearchView extends ViewPane {
 				event.affectsConfiguration(ContentSearchConfiguration.regularExpression) ||
 				event.affectsConfiguration(ContentSearchConfiguration.includePatterns) ||
 				event.affectsConfiguration(ContentSearchConfiguration.excludePatterns)
-			) this.applyConfiguration();
+			) { this.applyConfiguration(); this.updateResultActions(); }
 		}));
-		this._register(workspaceContext.onDidChangeWorkspace(() => this.clearResults()));
+		this._register(workspaceContext.onDidChangeWorkspace(() => this.clearSearchResults(false)));
 		this._register(addDisposableListener(this.contentElement, "keydown", event => {
 			if (event.key === "F4") {
 				event.preventDefault();
 				this.moveMatch(event.shiftKey ? -1 : 1);
-			} else if (event.key === "Escape" && this.searchController) {
+			} else if (event.key === "Escape" && !event.isComposing && !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey && this.searchController && (event.target === this.queryInput || event.target === this.replaceInput || event.target === this.includeInput || event.target === this.excludeInput)) {
 				event.preventDefault();
-				this.cancelSearch();
+				this.cancelSearch(false);
 			}
 		}));
 		this._register(toDisposable(() => {
 			this.searchController?.abort();
+			this.searchController = undefined;
+			this.searchTask = undefined;
 			this.replaceController?.abort();
 			this.result.clear();
 		}));
@@ -382,14 +403,15 @@ export class SearchView extends ViewPane {
 		]);
 	}
 
-	private async startSearch(): Promise<void> {
+	public triggerQueryChange(options?: { preserveFocus?: boolean; }): void {
+		if (this.isDisposed) { return; }
 		const text = this.queryInput.value;
 		if (!text) {
-			this.statusElement.textContent = localize("search.enterQuery", "Enter text to search.");
-			this.queryInput.focus();
+			this.clearSearchResults(false);
 			return;
 		}
-		this.searchController?.abort();
+		this.slowSearchTimer.clear();
+		const previousController = this.searchController;
 		this.saveHistory();
 		const AbortControllerConstructor =
 			this.element.ownerDocument.defaultView?.AbortController ??
@@ -400,15 +422,34 @@ export class SearchView extends ViewPane {
 		this.searchCompletion = undefined;
 		this.searchCancelled = false;
 		this.result = new SearchResultImpl(this.workspaceContext.getWorkspace().folders);
-		this.resultQuery = this.query(text);
+		const query = this.query(text);
+		this.resultQuery = query;
 		this.lastOpenedMatchId = undefined;
 		this.tree.setChildren([]);
 		this.tree.element.setAttribute("aria-busy", "true");
+		this.searchStateKey.set(SearchUIState.Searching);
+		const ownerWindow = this.element.ownerDocument.defaultView!;
+		const timeout = ownerWindow.setTimeout(() => {
+			if (!this.isDisposed && revision === this.searchRevision && this.searchController === controller) {
+				this.searchStateKey.set(SearchUIState.SlowSearch);
+				this.updateResultActions();
+			}
+		}, 2_000);
+		this.slowSearchTimer.value = toDisposable(() => ownerWindow.clearTimeout(timeout));
 		this.updateResultActions();
 		this.statusElement.textContent = localize("search.searching", "Searching workspace…");
+		if (options?.preserveFocus === false) { this.queryInput.focus(); }
+		// Publish the new owner before notifying the old provider, which can deliver a final batch synchronously.
+		previousController?.abort();
+		if (this.isDisposed || revision !== this.searchRevision) { return; }
+		// Commands schedule work without waiting; replacement callers await this owner's current task.
+		this.searchTask = this.runSearch(query, controller, revision);
+	}
+
+	private async runSearch(query: IContentSearchQuery, controller: AbortController, revision: number): Promise<void> {
 		try {
 			const complete = await this.searchService.search(
-				this.resultQuery,
+				query,
 				{
 					signal: controller.signal,
 					onProgress: (matches) => {
@@ -436,8 +477,11 @@ export class SearchView extends ViewPane {
 			this.updateSearchResultCount();
 		} finally {
 			if (!this.isDisposed && revision === this.searchRevision) {
+				this.slowSearchTimer.clear();
 				this.tree.element.setAttribute("aria-busy", "false");
 				this.searchController = undefined;
+				this.searchTask = undefined;
+				this.searchStateKey.set(SearchUIState.Idle);
 				this.updateResultActions();
 			}
 		}
@@ -469,33 +513,57 @@ export class SearchView extends ViewPane {
 		return this.configurationService.getValue<T>(key);
 	}
 
-	private cancelSearch(): void {
-		this.searchController?.abort();
+	public cancelSearch(focus = true): boolean {
+		if (this.isDisposed || !this.searchController) { return false; }
+		this.slowSearchTimer.clear();
+		const controller = this.searchController;
 		this.searchController = undefined;
+		this.searchTask = undefined;
 		// Invalidate callbacks immediately; some providers finish a batch after receiving cancellation.
 		this.searchRevision++;
 		this.searchCancelled = true;
+		this.searchStateKey.set(SearchUIState.Idle);
 		this.tree.element.setAttribute("aria-busy", "false");
 		this.updateSearchResultCount();
 		this.updateResultActions();
+		if (focus) { this.queryInput.focus(); }
+		controller.abort();
+		return true;
 	}
 
-	private clearResults(): void {
-		this.replaceController?.abort();
+	public clearSearchResults(clearInput = true): void {
+		if (this.isDisposed) { return; }
+		this.slowSearchTimer.clear();
+		const replaceController = this.replaceController;
+		const searchController = this.searchController;
 		this.undoReplacement = undefined;
-		this.searchController?.abort();
 		this.searchController = undefined;
+		this.searchTask = undefined;
 		this.searchRevision++;
 		this.searchCompletion = undefined;
 		this.searchCancelled = false;
+		this.searchStateKey.set(SearchUIState.Idle);
 		this.result.clear();
 		this.resultQuery = undefined;
 		this.lastOpenedMatchId = undefined;
 		this.tree.setChildren([]);
 		this.tree.element.setAttribute("aria-busy", "false");
 		this.statusElement.textContent = "";
+		if (clearInput) {
+			// Repeated clear removes filters only after the query and replacement are already empty.
+			const fields = this.queryInput.value || this.replaceInput.value
+				? [this.queryInput, this.replaceInput]
+				: [this.queryInput, this.replaceInput, this.includeInput, this.excludeInput];
+			for (const field of fields) {
+				field.value = "";
+				// Reset input-history navigation, retaining its persisted entries and the selected search options.
+				field.dispatchEvent(new this.element.ownerDocument.defaultView!.Event("input", { bubbles: true }));
+			}
+			this.queryInput.focus();
+		}
 		this.updateResultActions();
-		this.queryInput.focus();
+		replaceController?.abort();
+		searchController?.abort();
 	}
 
 	public getSearchResultSnapshot(): { readonly query: string; readonly content: string; readonly matchCount: number; } | undefined {
@@ -536,6 +604,10 @@ export class SearchView extends ViewPane {
 		const hasSomeCollapsible = this.tree.model.visibleNodes.some(node => node.collapsible && !node.collapsed);
 		this.hasSearchResultsKey.set(hasResults);
 		this.hasSomeCollapsibleKey.set(hasSomeCollapsible);
+		this.hasSearchPatternKey.set(this.queryInput.value.length > 0);
+		this.hasReplacePatternKey.set(this.replaceInput.value.length > 0);
+		this.hasFilePatternKey.set(this.includeInput.value.length > 0 || this.excludeInput.value.length > 0);
+		const slowSearch = this.searchStateKey.get() === SearchUIState.SlowSearch;
 		const showExpandAll = hasResults && !hasSomeCollapsible;
 		const canReplace = hasResults && !this.searchController && !this.replaceController;
 		this.replaceActions.setActions([
@@ -558,28 +630,21 @@ export class SearchView extends ViewPane {
 		]);
 		this.resultActions.setActions([
 			{
+				// Refresh and slow-search cancellation share a slot so keyboard focus survives the transition.
 				id: "search.refresh",
-				label: localize("search.refresh", "Refresh search"),
-				tooltip: localize("search.refresh", "Refresh search"),
-				icon: Lxicon.refresh,
-				enabled: this.queryInput.value.length > 0 && !this.searchController,
-				run: () => this.startSearch(),
-			},
-			{
-				id: "search.stop",
-				label: localize("search.stop", "Stop search"),
-				tooltip: localize("search.stop", "Stop search"),
-				icon: Lxicon.close,
-				enabled: Boolean(this.searchController),
-				run: () => this.cancelSearch(),
+				label: slowSearch ? localize("search.cancel", "Cancel Search") : localize("search.refresh", "Refresh search"),
+				tooltip: slowSearch ? localize("search.cancel", "Cancel Search") : localize("search.refresh", "Refresh search"),
+				icon: slowSearch ? Lxicon.close : Lxicon.refresh,
+				enabled: slowSearch || this.queryInput.value.length > 0,
+				run: () => this.commands.executeCommand(slowSearch ? SearchCommandIds.CancelSearchActionId : SearchCommandIds.RefreshSearchResultsActionId),
 			},
 			{
 				id: "search.clear",
 				label: localize("search.clear", "Clear search results"),
 				tooltip: localize("search.clear", "Clear search results"),
 				icon: Lxicon.trash,
-				enabled: hasResults || Boolean(this.searchController),
-				run: () => this.clearResults(),
+				enabled: Boolean(hasResults || this.hasSearchPatternKey.get() || this.hasReplacePatternKey.get() || this.hasFilePatternKey.get()),
+				run: () => this.commands.executeCommand(SearchCommandIds.ClearSearchResultsActionId),
 			},
 			{
 				// Keep the toolbar slot's identity so changing its operation preserves keyboard focus.
@@ -692,13 +757,14 @@ export class SearchView extends ViewPane {
 	private async undoLatestReplacement(): Promise<void> {
 		const undo = this.undoReplacement!;
 		this.undoReplacement = undefined;
-		this.replaceController = new AbortController();
+		const controller = new AbortController();
+		this.replaceController = controller;
 		this.updateResultActions();
 		try {
 			await undo();
-			if (!this.isDisposed) { await this.startSearch(); }
+			if (!this.isDisposed && !controller.signal.aborted) { this.triggerQueryChange(); await this.searchTask; }
 		} catch (error) {
-			if (!this.isDisposed) { this.statusElement.textContent = error instanceof Error ? error.message : String(error); }
+			if (!this.isDisposed && !controller.signal.aborted) { this.statusElement.textContent = error instanceof Error ? error.message : String(error); }
 		} finally {
 			if (!this.isDisposed) { this.replaceController = undefined; this.updateResultActions(); }
 		}
@@ -727,10 +793,11 @@ export class SearchView extends ViewPane {
 			}
 			this.saveHistory();
 			const result = await this.replaceService.replace(matches, query, replacement, { preview, preserveCase: this.preserveCase, signal: controller.signal });
-			if (!result.isApplied || this.isDisposed) { return; }
+			if (!result.isApplied || this.isDisposed || controller.signal.aborted) { return; }
 			this.undoReplacement = result.undo;
-			await this.startSearch();
-			if (result.saveErrors.length) { this.statusElement.textContent = localize("search.replaceSaveFailed", "Changes were applied, but saving failed: {0}", result.saveErrors.join("; ")); }
+			this.triggerQueryChange();
+			await this.searchTask;
+			if (!this.isDisposed && !controller.signal.aborted && result.saveErrors.length) { this.statusElement.textContent = localize("search.replaceSaveFailed", "Changes were applied, but saving failed: {0}", result.saveErrors.join("; ")); }
 		} catch (error) {
 			if (!this.isDisposed && !controller.signal.aborted) { this.statusElement.textContent = error instanceof Error ? error.message : String(error); }
 		} finally {

@@ -120,7 +120,7 @@ export class BrowserContentSearchService implements IContentSearchService {
 		options: IContentSearchOptions,
 	): Promise<IContentSearchComplete> {
 		throwIfAborted(options.signal);
-		const started = await this.api.start({
+		const start = this.api.start({
 			...(folder ? { dirId: folder.id } : {}),
 			query: query.wholeWord ? `\\b(?:${query.patternKind === 'regex' ? query.text : escapeRegExpCharacters(query.text.replace(/\r\n|\r/g, '\n')).replaceAll('\n', '\\r?\\n')})\\b` : query.text,
 			patternKind: query.wholeWord ? 'regex' : query.patternKind,
@@ -130,6 +130,17 @@ export class BrowserContentSearchService implements IContentSearchService {
 			excludePatterns: [...query.excludePatterns],
 			maxResults: query.maxResults ?? DEFAULT_MAX_RESULTS,
 		});
+		let started: Awaited<typeof start>;
+		try {
+			started = await (options.signal ? raceCancellationError(start, options.signal) : start);
+		} catch (error) {
+			if (options.signal?.aborted) {
+				// Cancellation ends renderer waiting now; a handle delivered later still belongs to this call.
+				void start.then(job => this.api.cancel({ ...(folder ? { dirId: folder.id } : {}), searchId: job.searchId })).catch(() => { /* Failed starts have no handle; a closed connection already owns cleanup. */ });
+			}
+			throwIfAborted(options.signal);
+			throw error;
+		}
 		let cursor = 0;
 		try {
 			while (true) {

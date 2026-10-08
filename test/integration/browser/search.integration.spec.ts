@@ -231,7 +231,7 @@ test('Copy menu replacement does not overwrite the next menu focus origin', asyn
 	await expect(query).toBeFocused();
 });
 
-test('Copy menu release on hiding Search and refreshing rows preserves outside editor focus', async ({ page }) => {
+test('Copy menu release on hiding Search preserves editor focus and refresh focuses the query', async ({ page }) => {
 	await page.goto('/search.html');
 	await page.evaluate(() => {
 		const editor = document.createElement('div');
@@ -263,7 +263,7 @@ test('Copy menu release on hiding Search and refreshing rows preserves outside e
 	await page.getByRole('button', { name: 'Refresh search', exact: true }).evaluate((button: HTMLButtonElement) => button.click());
 	await expect(page.getByRole('menu')).toHaveCount(0);
 	await expect(page.getByRole('status')).toHaveText('1 results');
-	await expect(editor).toBeFocused();
+	await expect(query).toBeFocused();
 });
 
 test('Dismiss updates retained results and focus while refresh restores the searched files', async ({ page }) => {
@@ -507,32 +507,98 @@ test('Search opens each occurrence at UTF-16 columns and keeps same-path roots s
 	await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.opened.at(-1))).toMatchObject({ resource: 'file:///workspace/src/main.ts', options: { selection: { startColumn: 13 } } });
 });
 
-test('Search stop retains delivered matches and rejects late batches after refresh and clear', async ({ page }) => {
+test('Search lifecycle refreshes running tasks, cancels retained results, clears twice and searches again', async ({ page }) => {
+	await page.clock.install();
 	await page.goto('/search.html');
 	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
 	const tree = page.getByRole('tree', { name: 'Search results', exact: true });
-	const stop = page.getByRole('button', { name: 'Stop search', exact: true });
+	const refresh = page.getByRole('button', { name: 'Refresh search', exact: true });
+	const cancel = page.getByRole('button', { name: 'Cancel Search', exact: true });
+	const clear = page.getByRole('button', { name: 'Clear search results', exact: true });
+	await expect(clear).toBeDisabled();
 	await query.fill('slow');
 	await query.press('Enter');
-	await expect(stop).toBeEnabled();
+	await expect(refresh).toBeEnabled();
+	await expect(cancel).toHaveCount(0);
 	await expect(tree).toHaveAttribute('aria-busy', 'true');
-	await query.press('Escape');
+	await refresh.focus();
+	await page.clock.fastForward(2_000);
+	await expect(cancel).toBeFocused();
+	await expect(refresh).toHaveCount(0);
+	await cancel.press('Enter');
+	await expect(query).toBeFocused();
 	await expect(page.getByRole('status')).toHaveText('Search stopped. 1 results retained.');
-	await expect(stop).toBeDisabled();
+	await expect(refresh).toBeEnabled();
 	await expect(tree.locator('.ash-search-match')).toHaveCount(1);
-	expect(await page.evaluate(() => window.ashSearchIntegration.cancelled())).toBe(1);
-	await query.fill('needle');
+	await page.evaluate(() => window.ashSearchIntegration.finishLateSearch());
+	await expect(tree.locator('.ash-search-match')).toHaveCount(1);
+	await query.fill('slow');
 	await query.press('Enter');
+	await expect(tree).toHaveAttribute('aria-busy', 'true');
+	await query.fill('needle');
+	await refresh.click();
+	await expect(query).toBeFocused();
 	await expect(page.getByRole('status')).toHaveText('1 results');
 	await page.evaluate(() => window.ashSearchIntegration.finishLateSearch());
 	await expect(page.locator('.ash-search-file-path')).toHaveText(['workspace • src/main.ts']);
-	await page.getByRole('button', { name: 'Refresh search', exact: true }).click();
-	expect(await page.evaluate(() => window.ashSearchIntegration.queries.map(query => query.text))).toEqual(['slow', 'needle', 'needle']);
-	await page.getByRole('button', { name: 'Clear search results', exact: true }).click();
-	await expect(tree.getByRole('treeitem')).toHaveCount(0);
-	await expect(tree).toHaveAttribute('aria-busy', 'false');
-	await expect(query).toHaveValue('needle');
+	expect(await page.evaluate(() => window.ashSearchIntegration.cancelled())).toBe(2);
+	await page.getByRole('button', { name: 'Toggle Replace', exact: true }).click();
+	await page.getByRole('textbox', { name: 'Replace', exact: true }).fill('replacement');
+	await page.getByRole('button', { name: 'Toggle Search Details', exact: true }).click();
+	const includes = page.getByRole('textbox', { name: 'Files to include', exact: true });
+	const excludes = page.getByRole('textbox', { name: 'Files to exclude', exact: true });
+	await includes.fill('src/**');
+	await excludes.fill('**/*.test.ts');
+	await clear.click();
+	await expect(query).toHaveValue('');
 	await expect(query).toBeFocused();
+	await expect(page.getByRole('textbox', { name: 'Replace', exact: true })).toHaveValue('');
+	await expect(includes).toHaveValue('src/**');
+	await expect(excludes).toHaveValue('**/*.test.ts');
+	await expect(tree.getByRole('treeitem')).toHaveCount(0);
+	await expect(page.getByRole('status')).toBeHidden();
+	await clear.click();
+	await expect(includes).toHaveValue('');
+	await expect(excludes).toHaveValue('');
+	await expect(clear).toBeDisabled();
+	await query.press('ArrowUp');
+	await expect(query).toHaveValue('needle');
+	await query.press('ArrowDown');
+	await expect(query).toHaveValue('');
+	await query.fill('slow');
+	await query.press('Enter');
+	await includes.focus();
+	await includes.press('Escape');
+	await expect(includes).toBeFocused();
+	await expect(page.getByRole('status')).toHaveText('Search stopped. 1 results retained.');
+	await query.press('Enter');
+	await tree.focus();
+	await tree.press('Escape');
+	await expect(query).toBeFocused();
+	await clear.click();
+	await page.evaluate(() => window.ashSearchIntegration.finishLateSearch());
+	await expect(tree.getByRole('treeitem')).toHaveCount(0);
+	await query.fill('needle');
+	await query.press('Enter');
+	await expect(page.getByRole('status')).toHaveText('1 results');
+});
+
+test('Search lifecycle Chinese controls and help explain cancellation and repeated clearing', async ({ page }) => {
+	await page.clock.install();
+	await page.goto('/search.html?locale=zh-CN');
+	const query = page.getByRole('textbox', { name: '搜索工作区', exact: true });
+	await query.fill('slow');
+	await query.press('Enter');
+	await page.clock.fastForward(2_000);
+	await page.getByRole('button', { name: '取消搜索', exact: true }).click();
+	await expect(query).toBeFocused();
+	await expect(page.getByRole('status')).toHaveText('搜索已停止，保留 1 个结果。');
+	await page.getByRole('button', { name: '清空搜索结果', exact: true }).click();
+	await expect(query).toHaveValue('');
+	const help = await page.evaluate(() => window.ashSearchIntegration.help());
+	expect(help).toContain('搜索: 刷新');
+	expect(help).toContain('两项输入已为空时再次清空');
+	expect(help).toContain('搜索选项和输入历史保留');
 });
 
 test('Search virtualizes a thousand matches and navigates to an offscreen result', async ({ page }) => {

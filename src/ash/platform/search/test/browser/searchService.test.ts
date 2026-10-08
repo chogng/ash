@@ -161,6 +161,46 @@ test('cancelling during job creation releases the returned job without reading i
 	assert.deepEqual(released, ['late-job']);
 });
 
+test('cancelling a pending start settles promptly and releases its late handle exactly once', async () => {
+	const controller = new AbortController();
+	const started = new DeferredPromise<{ searchId: string; }>();
+	const released: string[] = [];
+	let failure: unknown;
+	const api: IContentSearchApi = {
+		start() { return started.p; },
+		async read() { assert.fail('late cancelled handles must not be read'); },
+		async cancel(params) { released.push(params.searchId); throw new Error('connection closed during late cleanup'); },
+	};
+	const pending = new BrowserContentSearchService(api).search(query, { signal: controller.signal });
+	const settled = pending.catch(error => { failure = error; });
+	try {
+		controller.abort();
+		// An event-loop turn is a settlement barrier; the start response remains under test control.
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.equal((failure as Error | undefined)?.name, 'AbortError');
+		assert.deepEqual(released, []);
+	} finally {
+		await started.complete({ searchId: 'late-job' });
+		await settled;
+	}
+	assert.deepEqual(released, ['late-job']);
+});
+
+test('a rejected late start keeps the cancellation outcome without releasing an unknown handle', async () => {
+	const controller = new AbortController();
+	const started = new DeferredPromise<{ searchId: string; }>();
+	const api: IContentSearchApi = {
+		start() { return started.p; },
+		async read() { assert.fail('cancelled search must not read'); },
+		async cancel() { assert.fail('failed start created no handle'); },
+	};
+	const pending = new BrowserContentSearchService(api).search(query, { signal: controller.signal });
+	const rejected = assert.rejects(pending, { name: 'AbortError' });
+	controller.abort();
+	await started.error(new Error('late start failure'));
+	await rejected;
+});
+
 test('cancelling an in-flight read suppresses its late results and releases the job', async () => {
 	const controller = new AbortController();
 	const reading = new DeferredPromise<void>();

@@ -1,5 +1,14 @@
 import type { IView } from '../../../common/views.js';
 import type { LanguageWorkspaceSymbol, LanguageWorkspaceSymbolProvider } from '../../../../editor/common/languages.js';
+import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
+
+export enum SearchUIState {
+	Idle,
+	Searching,
+	SlowSearch,
+}
+
+export const SearchStateKey = new RawContextKey<SearchUIState>('searchState', SearchUIState.Idle);
 
 /** The Search view owns results; consumers may capture a completed, retained result. */
 export interface ISearchView extends IView {
