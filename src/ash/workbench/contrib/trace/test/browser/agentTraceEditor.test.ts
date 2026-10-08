@@ -638,6 +638,56 @@ suite('Execution Trace editor', () => {
 		} finally { dom.window.close(); }
 	});
 
+	for (const completion of ['before resume', 'after resume'] as const) {
+		test(`retries an interrupted body read completed ${completion} and preserves a loaded reading position`, async () => {
+			const dom = new JSDOM('<!doctype html><body></body>');
+			dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+			setIconResolver(dom.window.document, getIconDefinition);
+			try {
+				using services = new InstantiationService();
+				const first = new DeferredPromise<unknown>(); const second = new DeferredPromise<unknown>();
+				const resumed = new DeferredPromise<void>(); const resumedAgain = new DeferredPromise<void>();
+				let payloadReads = 0; let diagnosticReads = 0;
+				services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
+				services.registerInstance(IChatService, {
+					onDidChangeSession: Event.None, onDidUpdateThread: Event.None, onDidBecomeReady: Event.None,
+					readTrace: async () => ({ trace: { formatVersion: 3, sessionId: 's', historyPrefixes: [], threads: [{ threadId: 'root', events: [] }] }, cursors: { root: 0 }, hasMore: false }),
+					readTraceDiagnostics: async (_session: string, after: number) => {
+						diagnosticReads++;
+						if (diagnosticReads === 2) { void resumed.complete(); }
+						if (diagnosticReads === 3) { void resumedAgain.complete(); }
+						return { diagnostics: { formatVersion: 1, captureId: 'capture', recordingStatus: 'disabled', droppedRecords: 0, events: after ? [] : [{ eventId: 'request', sequence: 1, recordedAt: 1, threadId: 'root', turnId: 'turn', event: { type: 'modelAttemptStarted', attemptId: 'attempt', requestPayload: { payloadId: 'payload-1', kind: 'coreRequest', byteLength: 1, status: 'saved', digest: 'sha256:' + '0'.repeat(64) } } }] }, cursor: 1, hasMore: false };
+					},
+					readTracePayload: async () => { payloadReads++; return payloadReads === 1 ? first.p : second.p; },
+					subscribeThread: async () => ({ thread: { sequence: 0 } }), unsubscribeThread: async () => { },
+				} as unknown as IChatService);
+				registerCodeEditorServices(services);
+				using pane = registerTestComponentServices(services).createInstance(AgentTraceEditor);
+				pane.create(dom.window.document.body); measureTreeViewport(dom.window.document);
+				await pane.setInput({ resource: createAgentTraceResource('s') }, new AbortController().signal);
+				dom.window.document.querySelector<HTMLButtonElement>('[role=tab][id$="-input"]')!.click();
+				assert.equal(payloadReads, 1);
+				pane.setVisible(false);
+				if (completion === 'before resume') { await first.complete({ instructions: 'stale body' }); await Promise.resolve(); await Promise.resolve(); }
+				pane.setVisible(true);
+				await resumed.p; await Promise.resolve(); await Promise.resolve();
+				assert.equal(payloadReads, 2, 'showing the same selected Input must reread the interrupted payload');
+				if (completion === 'after resume') { await first.complete({ instructions: 'stale body' }); await Promise.resolve(); await Promise.resolve(); }
+				assert.doesNotMatch(pane.getAccessibleContent(), /stale body/);
+				await second.complete({ instructions: 'resumed body' }); await Promise.resolve(); await Promise.resolve();
+				[...dom.window.document.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Saved body')!.click();
+				const editor = services.get(ICodeEditorService).listCodeEditors()[0];
+				assert.match(services.get(IModelService).getModels()[0].getValue(), /resumed body/);
+				editor.setPosition({ lineNumber: 2, column: 1 });
+				pane.setVisible(false); pane.setVisible(true);
+				await resumedAgain.p; await Promise.resolve(); await Promise.resolve();
+				assert.equal(payloadReads, 2, 'a loaded body must remain cached across visibility changes');
+				assert.deepEqual([editor.getPosition()?.lineNumber, editor.getPosition()?.column], [2, 1]);
+				assert.equal(pane.getControl(), editor);
+			} finally { dom.window.close(); }
+		});
+	}
+
 	test('keeps the current body when an earlier selected event finishes its payload read later', async () => {
 		const dom = new JSDOM('<!doctype html><body></body>');
 		dom.window.HTMLCanvasElement.prototype.getContext = () => null;

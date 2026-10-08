@@ -89,6 +89,7 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 	private dimension: IDimension = { width: 900, height: 600 };
 	private detailValue: unknown;
 	private detailIdentity: string | undefined;
+	private pendingEvidence: { readonly identity: string | undefined; } | undefined;
 	private detailText = '';
 	private bodySectionIdentity: string | undefined;
 	private graphRequest: Promise<AgentTraceGraph> | undefined;
@@ -334,7 +335,7 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 		this.dirty = false;
 		this.viewModel = new AgentTraceViewModel();
 		this.filteredCollapse = undefined; this.filterKey = '';
-		this.detailIdentity = undefined; this.detailValue = undefined;
+		this.detailIdentity = undefined; this.detailValue = undefined; this.pendingEvidence = undefined;
 		this.bodySectionIdentity = undefined; this.graphRequest = undefined;
 		this.bodyEditor.clear(); this.bodyModel.clear();
 		this.inspectorResources.clear();
@@ -628,6 +629,8 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 	private async loadEvidence(entry: TraceEntry, payload: NonNullable<ReturnType<AgentTraceViewModel['payload']>['ref']>): Promise<void> {
 		const revision = this.revision;
 		const identity = this.detailIdentity;
+		const request = { identity };
+		this.pendingEvidence = request;
 		try {
 			const evidence = await this.chat.readTracePayload(this.sessionId!, this.trace!.diagnostics!.captureId!, payload.payloadId);
 			if (revision !== this.revision || this.isDisposed || !this.trace?.diagnostics) { return; }
@@ -635,6 +638,7 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 			this.viewModel.update(this.trace);
 			if (identity === this.detailIdentity && entry.id === this.selected) { this.renderInspector(); }
 		} catch (error) { if (revision === this.revision && identity === this.detailIdentity && !this.isDisposed) { this.statusDomNode.textContent = localize('agentTrace.failed', 'Could not load trace: {0}', String(error)); } }
+		finally { if (this.pendingEvidence === request) { this.pendingEvidence = undefined; } }
 	}
 
 	private async loadRelationships(): Promise<void> {
@@ -726,6 +730,10 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 		this.isShown = visible;
 		if (visible) { this.requestRefresh(); }
 		else {
+			// Hiding abandons an unfinished read. Invalidate only that cached render so
+			// resuming retries it without resetting a body that is already being read.
+			if (this.pendingEvidence && this.pendingEvidence.identity === this.detailIdentity) { this.detailIdentity = undefined; this.detailValue = undefined; }
+			this.pendingEvidence = undefined;
 			this.revision++;
 			this.exportOperation = undefined;
 			this.refreshScheduler.cancel();

@@ -1,7 +1,7 @@
 import { createServer, type ServerResponse } from 'node:http';
 import { join } from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
-import type { Locator } from '@playwright/test';
+import type { Locator, Page, TestInfo } from '@playwright/test';
 import { expect, test as base } from '../../../automation/test.js';
 import { Menus } from '../../../automation/menus.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
@@ -89,6 +89,26 @@ const test = base.extend<{ traceModelFixture: TraceModelFixture; }>({
 	},
 });
 
+/** The caption belongs to the evidence artifact, not the product UI. Screenshots
+ * document asserted runtime state and never replace the scenario's assertions. */
+async function captureFixtureEvidence(page: Page, testInfo: TestInfo, name: string, state: string, scope: 'page' | 'trace'): Promise<void> {
+	const bounds = scope === 'trace' ? await page.locator('.ash-agent-trace').boundingBox() : null;
+	await page.evaluate(({ state, bounds }) => {
+		const caption = document.createElement('aside');
+		caption.id = 'ash-trace-fixture-evidence-caption';
+		caption.textContent = `CONTROLLED LOCAL HTTP MODEL FIXTURE · no paid account · Real App Server/Core/tools/child records · ${state}`;
+		Object.assign(caption.style, { position: 'fixed', bottom: '8px', left: '8px', right: '8px', zIndex: '2147483647', padding: '8px 12px', border: '1px solid #667085', background: '#101828', color: '#ffffff', font: '12px/1.5 system-ui', pointerEvents: 'none' });
+		if (bounds) { Object.assign(caption.style, { left: `${bounds.x + 8}px`, right: 'auto', width: `${bounds.width - 40}px`, bottom: `${window.innerHeight - bounds.y - bounds.height + 8}px` }); }
+		document.body.append(caption);
+	}, { state, bounds });
+	try {
+		const path = testInfo.outputPath(name);
+		if (scope === 'trace') { await page.locator('.ash-agent-trace').screenshot({ path }); }
+		else { await page.screenshot({ path }); }
+		await testInfo.attach(name, { path, contentType: 'image/png' });
+	} finally { await page.evaluate(() => document.getElementById('ash-trace-fixture-evidence-caption')?.remove()); }
+}
+
 async function selectRecord(viewer: Locator, eventId: string): Promise<void> {
 	const filter = viewer.getByRole('textbox', { name: 'Filter execution events' });
 	await filter.fill(eventId);
@@ -149,6 +169,12 @@ test('Execution Trace follows a controlled model through real tools, parallel ch
 		await viewer.getByRole('dialog', { name: 'Find and replace', exact: true }).getByRole('button', { name: 'Close find', exact: true }).click();
 		await expect(viewer.getByRole('dialog', { name: 'Find and replace', exact: true })).toBeHidden();
 		await viewer.getByRole('tab', { name: 'Relations', exact: true }).click();
+		if (target.kind === 'browser') {
+			await expect(viewer.locator('.ash-agent-trace-relation').filter({ hasText: 'Result present in model input' }).filter({ hasText: 'fixture-shell' })).toHaveCount(1);
+			await workbench.setAppearance(application, 'dark', page);
+			await expect(page.locator('#app')).toHaveAttribute('data-color-theme', 'ash-dark');
+			await captureFixtureEvidence(page, testInfo, 'ash-dark-wide.png', 'Next model input contains the saved shell result; outgoing call continues to wait_agent', 'page');
+		}
 		await viewer.locator('.ash-agent-trace-relation').filter({ hasText: 'Result present in model input' }).filter({ hasText: 'fixture-shell' }).click();
 		await expect(viewer.getByRole('treeitem', { selected: true }).locator('.ash-agent-trace-event')).toHaveAttribute('data-event-id', result.eventId);
 		await selectRecord(viewer, attempts[0].eventId);
@@ -168,6 +194,12 @@ test('Execution Trace follows a controlled model through real tools, parallel ch
 		await selectRecord(viewer, satisfied.eventId);
 		await viewer.getByRole('tab', { name: 'Relations', exact: true }).click();
 		await expect(viewer.locator('.ash-agent-trace-relation').filter({ hasText: 'Join satisfied' })).toHaveCount(3);
+		if (target.kind === 'browser') {
+			await workbench.setAppearance(application, 'light', page);
+			await expect(page.locator('#app')).toHaveAttribute('data-color-theme', 'ash-light');
+			await captureFixtureEvidence(page, testInfo, 'ash-light-narrow.png', 'Saved join request and two returned child results satisfy the same parent join', 'trace');
+			await workbench.setAppearance(application, 'dark', page);
+		}
 		await page.getByRole('button', { name: 'Close Execution Trace', exact: true }).click();
 		await new QuickAccess(page).runCommand('sessions.trace.open');
 		await expect(viewer.getByRole('status')).toContainText('Live');
