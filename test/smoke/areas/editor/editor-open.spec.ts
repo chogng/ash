@@ -1,5 +1,6 @@
 import { mkdir, readFile, realpath, unlink, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import type { ElectronApplication, Page } from "@playwright/test";
 import { expect, test } from "../../../automation/test.js";
 
@@ -1374,7 +1375,7 @@ function selectedCharacterCount(status: string | null): number {
 
 
 for (const mode of ['manual save', 'unsaved', 'auto save after delay', 'auto save on focus change'] as const) {
-	test(`Code preserves ${mode} file edits across restart`, async ({ target, testWorkspace, workbench, restartWorkbench }) => {
+	test(`Code preserves ${mode} file edits across restart`, async ({ target, testWorkspace, workbench, application, restartWorkbench }) => {
 		test.skip(target.appServerMode !== 'required', 'Requires the Code App Server product');
 		if (mode.startsWith('auto save')) {
 			await workbench.settingsEditor.openUserSettingsUI();
@@ -1402,12 +1403,12 @@ for (const mode of ['manual save', 'unsaved', 'auto save after delay', 'auto sav
 		const tab = group.title.locator('.ash-tab').filter({ hasText: 'main.ts' });
 		if (mode === 'unsaved') {
 			await expect(tab).toHaveAttribute('data-state', 'dirty');
-			await expect.poll(() => hasWorkingCopyBackup(workbench.page, content), { message: 'unsaved content has a durable backup' }).toBe(true);
+			await expect.poll(() => hasWorkingCopyBackup(workbench.page, content, target.kind === 'electron' ? application as ElectronApplication : undefined), { message: 'unsaved content has a durable backup' }).toBe(true);
 			expect(await readFile(testWorkspace.file, 'utf8')).toBe('const value = 1;\n');
 		} else {
 			await expect.poll(() => readFile(testWorkspace.file, 'utf8'), { message: `${mode} reaches the workspace without further input` }).toBe(content);
 			await expect(tab).not.toHaveAttribute('data-state', 'dirty');
-			await expect.poll(() => hasWorkingCopyBackup(workbench.page, content)).toBe(false);
+			await expect.poll(() => hasWorkingCopyBackup(workbench.page, content, target.kind === 'electron' ? application as ElectronApplication : undefined)).toBe(false);
 		}
 
 		// Display-language selection is an existing user action that requests a real
@@ -1416,7 +1417,7 @@ for (const mode of ['manual save', 'unsaved', 'auto save after delay', 'auto sav
 		const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
 		await picker.getByRole('combobox').fill('简体中文');
 		await picker.getByRole('combobox').press('Enter');
-		({ workbench } = await restartWorkbench());
+		({ workbench, application } = await restartWorkbench());
 		group = workbench.editors.groupAt(0);
 		await expect(group.tabs.filter({ hasText: 'main.ts' })).toHaveCount(1);
 		await expect(group.editor.lines).toHaveText([content]);
@@ -1427,7 +1428,7 @@ for (const mode of ['manual save', 'unsaved', 'auto save after delay', 'auto sav
 			await group.editor.input.focus();
 			await group.editor.input.press('ControlOrMeta+S');
 			await expect.poll(() => readFile(testWorkspace.file, 'utf8')).toBe(content);
-			await expect.poll(() => hasWorkingCopyBackup(workbench.page, content)).toBe(false);
+			await expect.poll(() => hasWorkingCopyBackup(workbench.page, content, target.kind === 'electron' ? application as ElectronApplication : undefined)).toBe(false);
 		}
 		await expect(restoredTab).not.toHaveAttribute('data-state', 'dirty');
 	});
@@ -1493,7 +1494,15 @@ test("Code restores an untitled draft and opens the next document separately", a
 	await expect(group.content.locator(".stanza-editor-line-text").first()).toContainText("recovered untitled draft");
 });
 
-async function hasWorkingCopyBackup(page: Page, content: string): Promise<boolean> {
+async function hasWorkingCopyBackup(page: Page, content: string, application?: ElectronApplication): Promise<boolean> {
+	if (application) {
+		const directory = await application.evaluate(({ app }) => app.getPath('userData'));
+		const database = new DatabaseSync(join(directory, 'profile', 'state.sqlite3'), { readOnly: true });
+		try {
+			const records = database.prepare('SELECT content FROM backup_contents WHERE client_id = ?').all('ash-editor') as { content: string; }[];
+			return records.some(record => (JSON.parse(record.content) as { content?: string; }).content === content);
+		} finally { database.close(); }
+	}
 	return page.evaluate(async expectedContent => {
 		const database = await new Promise<IDBDatabase>((resolve, reject) => {
 			const opening = indexedDB.open("ash-working-copy-backups", 1);

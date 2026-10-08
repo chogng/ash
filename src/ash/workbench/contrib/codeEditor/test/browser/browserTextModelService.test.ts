@@ -1,5 +1,6 @@
 import { TestLanguageConfigurationService } from '../../../../../editor/test/common/modes/testLanguageConfigurationService.js';
 import assert from "node:assert/strict";
+import { createHash } from 'node:crypto';
 import { test } from "mocha";
 import { isCancellationError } from "../../../../../base/common/errors.js";
 import { Emitter, Event } from "../../../../../base/common/event.js";
@@ -280,6 +281,161 @@ test("Stanza text model refuses to overwrite externally changed content", async 
 	await assert.rejects(reference.save(new AbortController().signal), error => error instanceof TextModelConflictError);
 	assert.equal(reference.isDirty, true);
 	assert.deepEqual(textFiles.savedTexts, []);
+});
+
+test('external JSON writes preserve shared dirty references and mark conflicts only after rejected saves', async () => {
+	const resource = URI.file('/profile/keybindings.json');
+	const source = '[{"key":"ctrl+alt+y","command":"workbench.action.openKeyboardShortcuts"}]';
+	const files = new TestTextFileService('[]');
+	using models = new BrowserTextModelService(new BrowserTextResourceStore(files));
+	using first = await models.acquire({ resource }, new AbortController().signal);
+	using second = await models.acquire({ resource }, new AbortController().signal);
+	files.setText(source);
+	await models.refresh(resource);
+	assert.deepEqual([first.model.getText(), first.isDirty], [source, false]);
+	first.model.setValue('// unsaved\n' + source);
+	const version = first.model.version;
+	const conflicts: boolean[] = [];
+	using listener = second.onDidChangeExternalChange(() => conflicts.push(second.hasExternalChange));
+	files.setText('[]');
+	await models.refresh(resource);
+	assert.deepEqual([first.hasExternalChange, second.hasExternalChange, first.model.getText(), first.model.version, conflicts], [false, false, '// unsaved\n' + source, version, []]);
+	await assert.rejects(first.save(new AbortController().signal), TextModelConflictError);
+	assert.deepEqual([first.hasExternalChange, second.hasExternalChange, files.savedTexts, first.isDirty, first.model.getText(), conflicts], [true, true, [], true, '// unsaved\n' + source, [true]]);
+});
+
+for (const initialText of [undefined, 'bootstrap']) {
+	test(`a stale background read cannot replace text or revision acknowledged by an overlapping save (${initialText ?? 'mixed EOL'})`, async () => {
+		const resource = URI.file('/project/concurrent-save.txt');
+		const files = new TestTextFileService(initialText === undefined ? 'first\r\nsecond\nthird\n' : 'saved', text => createHash('sha256').update(text).digest('hex'));
+		const started = new DeferredPromise<void>();
+		const release = new DeferredPromise<void>();
+		let delayRead = false;
+		using models = new BrowserTextModelService(new BrowserTextResourceStore({
+			onDidSave: Event.None,
+			onDidChangeFiles: files.onDidChangeFiles,
+			resolve: async request => {
+				const content = await files.resolve(request);
+				if (delayRead) { await started.complete(); await release.p; }
+				return content;
+			},
+			save: request => files.save(request),
+		}));
+		using reference = await models.acquire({ resource, ...(initialText === undefined ? {} : { initialText }) }, new AbortController().signal);
+		const expectedText = initialText ?? 'first\nsecond\nthird\n';
+		const version = reference.model.version;
+		delayRead = true;
+		const refreshing = models.refresh(resource);
+		try {
+			await started.p;
+			await reference.save(new AbortController().signal);
+		} finally {
+			await release.complete();
+			await refreshing;
+		}
+		assert.deepEqual([reference.model.getText(), reference.model.version, reference.isDirty, reference.hasExternalChange], [expectedText, version, false, false]);
+		reference.model.setValue('later edit');
+		await reference.save(new AbortController().signal);
+		assert.deepEqual([files.savedTexts, reference.hasExternalChange, reference.isDirty], [[expectedText, 'later edit'], false, false]);
+	});
+}
+
+for (const completionFails of [false, true]) {
+	test(`stale reads preserve save recovery ownership and allow explicit retry (${completionFails})`, async () => {
+		const resource = URI.file('/project/recovery-save.txt');
+		const files = new TestTextFileService('first\r\nsecond\nthird\n', text => createHash('sha256').update(text).digest('hex'));
+		const reading = new DeferredPromise<void>();
+		const releaseRead = new DeferredPromise<void>();
+		const completing = new DeferredPromise<void>();
+		const releaseCompletion = new DeferredPromise<void>();
+		let delayRead = false;
+		let fail = completionFails;
+		const failure = new Error('backup completion failed');
+		using models = new BrowserTextModelService(new BrowserTextResourceStore({
+			onDidSave: Event.None,
+			onDidChangeFiles: files.onDidChangeFiles,
+			resolve: async request => {
+				const content = await files.resolve(request);
+				if (delayRead) { await reading.complete(); await releaseRead.p; }
+				return content;
+			},
+			save: request => files.save(request),
+		}));
+		using first = await models.acquire({ resource }, new AbortController().signal);
+		using second = await models.acquire({ resource }, new AbortController().signal);
+		using participant = models.addSaveCompletionParticipant({
+			prepare: async (model, _signal, recovery) => {
+				recovery.acknowledge(model.version);
+				return async () => {
+					await completing.complete();
+					await releaseCompletion.p;
+					if (fail) throw failure;
+				};
+			},
+		});
+		delayRead = true;
+		const refreshing = models.refresh(resource);
+		await reading.p;
+		const saving = first.save(new AbortController().signal).then(() => undefined, error => error as unknown);
+		try {
+			await completing.p;
+			await releaseRead.complete();
+			await refreshing;
+			assert.deepEqual([second.model.getText(), second.isDirty, second.hasExternalChange, models.hasPendingSaveRecovery(resource)], ['first\nsecond\nthird\n', false, false, true]);
+			first.model.setValue('later edit');
+		} finally {
+			await releaseRead.complete();
+			await releaseCompletion.complete();
+			await Promise.all([saving, refreshing]);
+		}
+		const result = await saving;
+		if (completionFails) {
+			assert.ok(result instanceof TextModelSaveCompletionError && result.fileSaved && result.cause === failure);
+			await assert.rejects(models.waitForSaveRecovery(resource), error => error === result);
+		} else {
+			assert.equal(result, undefined);
+			await models.waitForSaveRecovery(resource);
+		}
+		assert.deepEqual([second.model.getText(), second.isDirty, second.hasExternalChange, models.hasPendingSaveRecovery(resource)], ['later edit', true, false, completionFails]);
+		fail = false;
+		await first.save(new AbortController().signal);
+		assert.deepEqual([files.savedTexts, second.isDirty, second.hasExternalChange, models.hasPendingSaveRecovery(resource)], [['first\nsecond\nthird\n', 'later edit'], false, false, false]);
+	});
+}
+
+test('refresh waiting for a save cannot read ahead of another queued save', async () => {
+	const resource = URI.file('/project/queued-save.txt');
+	const files = new TestTextFileService('saved');
+	using models = new BrowserTextModelService(new BrowserTextResourceStore(files));
+	using reference = await models.acquire({ resource }, new AbortController().signal);
+	const firstStarted = new DeferredPromise<void>();
+	const secondStarted = new DeferredPromise<void>();
+	const firstCheckpoint = new DeferredPromise<void>();
+	const secondCheckpoint = new DeferredPromise<void>();
+	let checkpoints = 0;
+	using participant = models.addSaveCompletionParticipant({
+		prepare: async () => {
+			if (++checkpoints === 1) { await firstStarted.complete(); await firstCheckpoint.p; }
+			else { await secondStarted.complete(); await secondCheckpoint.p; }
+			return undefined;
+		},
+	});
+	const firstSaving = reference.save(new AbortController().signal);
+	await firstStarted.p;
+	const refreshing = models.refresh(resource);
+	const secondSaving = reference.save(new AbortController().signal);
+	try {
+		await firstCheckpoint.complete();
+		await secondStarted.p;
+		await Promise.all([firstSaving, refreshing]);
+		assert.deepEqual([files.resolveCount, files.savedTexts, reference.isDirty, models.hasPendingSaveRecovery(resource)], [1, ['saved'], false, true]);
+	} finally {
+		await firstCheckpoint.complete();
+		await secondCheckpoint.complete();
+		await Promise.all([firstSaving, secondSaving, refreshing]);
+	}
+	await models.refresh(resource);
+	assert.deepEqual([files.resolveCount, files.savedTexts, reference.hasExternalChange, models.hasPendingSaveRecovery(resource)], [2, ['saved', 'saved'], false, false]);
 });
 
 test("Stanza text model reloads clean external changes and reports dirty-model conflicts only on save", async () => {
@@ -567,7 +723,7 @@ class TestTextFileService implements ITextFileService {
 	private revision = 1;
 	readonly onDidChangeFiles = this.fileChanges.event;
 
-	constructor(private text: string) { }
+	constructor(private text: string, private readonly revisionOfText?: (text: string) => string) { }
 
 	async resolve(request: { resource: URI; bootstrapText?: string; }) {
 		this.resolveCount += 1;
@@ -600,7 +756,7 @@ class TestTextFileService implements ITextFileService {
 	}
 
 	private currentRevision(): string {
-		return `revision-${this.revision}`;
+		return this.revisionOfText?.(this.text) ?? `revision-${this.revision}`;
 	}
 }
 

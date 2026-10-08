@@ -399,11 +399,13 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		const entry = this.entries.get(resource.toString());
 		// Background reads must not advance the persisted baseline of local edits.
 		if (!entry || entry.dirty || entry.resource.scheme === Schemas.untitled) return;
-		await entry.saveQueue;
-		if (entry.disposed || entry.dirty) return;
+		// A save can acknowledge a new revision without changing the text model version.
+		const observedSaveQueue = entry.saveQueue;
+		await observedSaveQueue;
+		if (entry.disposed || entry.dirty || entry.saveQueue !== observedSaveQueue) return;
 		const observedVersion = entry.model.version;
 		const content = await this.resourceStore.resolve({ resource }, new AbortController().signal);
-		if (entry.disposed || entry.dirty || entry.model.version !== observedVersion) return;
+		if (entry.disposed || entry.dirty || entry.model.version !== observedVersion || entry.saveQueue !== observedSaveQueue) return;
 		if (content.revision !== undefined && content.revision === entry.revision) {
 			this.setExternalChange(entry, false);
 			return;
