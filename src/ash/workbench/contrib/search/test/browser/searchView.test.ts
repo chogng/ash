@@ -925,3 +925,101 @@ test('Copy menu callbacks cannot clear a replacement and keyboard menus ignore i
 		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
 	}
 });
+
+test('Copy Path uses only the first selected file while explicit detached files and folders retain their URI', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	const globals = installDomGlobals(browser);
+	const written: string[] = [];
+	try {
+		using store = new DisposableStore();
+		const services = createServices(store, browser, {
+			search: async (_query, options) => {
+				options?.onProgress?.([...matches, { ...matches[0]!, path: 'other.ts' }]);
+				return { resultCount: 3, limitHit: false, error: undefined };
+			}
+		});
+		services.registerInstance(IClipboardService, new BrowserClipboardService({ writeText: async value => { written.push(value); } } as Clipboard));
+		const { SearchView } = await import('../../browser/searchView.js');
+		await import('../../browser/searchActionsCopy.js');
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
+		registerView(services, view);
+		input(view.element, 'Search workspace').value = 'needle';
+		view.element.querySelector('form')!.dispatchEvent(new browser.window.Event('submit', { cancelable: true }));
+		await waitFor(() => view.getSearchResultSnapshot()?.matchCount === 3);
+		const tree = view.getControl();
+		const [file, other] = view.searchResult.files;
+		const folder = view.searchResult.children[0]!;
+		const before = view.getSearchResultSnapshot();
+		const commands = services.get(ICommandService);
+		tree.setFocus(file!.id);
+		tree.setSelection([file!.id, other!.id]);
+		assert.deepEqual(tree.selection.map(element => element.id), [other!.id, file!.id]);
+		await commands.executeCommand(SearchCommandIds.CopyPathCommandId);
+		await commands.executeCommand(SearchCommandIds.CopyPathCommandId, file);
+		await commands.executeCommand(SearchCommandIds.CopyPathCommandId, folder);
+		assert.deepEqual(written, ['/workspace/other.ts', '/workspace/src/main.ts', '/workspace']);
+		for (const selection of [[], [other!.matches[0]!.id, file!.id]]) {
+			tree.setSelection(selection);
+			assert.ok(!tree.selection.length || tree.selection[0]!.kind === 'match');
+			await commands.executeCommand(SearchCommandIds.CopyPathCommandId);
+		}
+		tree.setSelection([file!.id]);
+		view.setVisible(false);
+		await commands.executeCommand(SearchCommandIds.CopyPathCommandId);
+		assert.equal(written.length, 3);
+		assert.deepEqual(view.getSearchResultSnapshot(), before);
+		view.searchResult.clear();
+		await view.queueRefreshTree();
+		await commands.executeCommand(SearchCommandIds.CopyPathCommandId, file);
+		await commands.executeCommand(SearchCommandIds.CopyPathCommandId, folder);
+		assert.deepEqual(written.slice(3), ['/workspace/src/main.ts', '/workspace']);
+		assert.equal(view.searchResult.count, 0);
+		using formatter = services.get(ILabelService).registerFormatter({ scheme: 'file', format: resource => 'formatted:' + resource.path });
+		await commands.executeCommand(SearchCommandIds.CopyPathCommandId, file);
+		assert.equal(written.at(-1), 'formatted:/workspace/src/main.ts');
+	} finally {
+		browser.window.close();
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
+	}
+});
+
+test('Copy Path preserves a running search and propagates clipboard failures without changing results', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	const globals = installDomGlobals(browser);
+	const denied = new Error('Clipboard permission denied');
+	let finish: (() => void) | undefined;
+	let aborted = false;
+	let rejected = false;
+	const written: string[] = [];
+	try {
+		using store = new DisposableStore();
+		const services = createServices(store, browser, {
+			search: async (_query, options) => {
+				options?.signal?.addEventListener('abort', () => { aborted = true; }, { once: true });
+				options?.onProgress?.(matches);
+				await new Promise<void>(resolve => { finish = resolve; });
+				return { resultCount: 2, limitHit: false, error: undefined };
+			}
+		});
+		services.registerInstance(IClipboardService, new BrowserClipboardService({ writeText: async value => { if (rejected) { throw denied; } written.push(value); } } as Clipboard));
+		const { SearchView } = await import('../../browser/searchView.js');
+		await import('../../browser/searchActionsCopy.js');
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
+		registerView(services, view);
+		input(view.element, 'Search workspace').value = 'needle';
+		view.element.querySelector('form')!.dispatchEvent(new browser.window.Event('submit', { cancelable: true }));
+		await waitFor(() => finish !== undefined);
+		const file = view.searchResult.files[0]!;
+		const before = file.matches.map(match => match.id);
+		await services.get(ICommandService).executeCommand(SearchCommandIds.CopyPathCommandId, file);
+		rejected = true;
+		await assert.rejects(services.get(ICommandService).executeCommand(SearchCommandIds.CopyPathCommandId, file), error => error === denied);
+		assert.deepEqual({ written, matches: file.matches.map(match => match.id), aborted, busy: view.getControl().element.getAttribute('aria-busy') }, { written: ['/workspace/src/main.ts'], matches: before, aborted: false, busy: 'true' });
+		finish!();
+		await waitFor(() => view.getSearchResultSnapshot()?.matchCount === 2);
+	} finally {
+		finish?.();
+		browser.window.close();
+		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
+	}
+});

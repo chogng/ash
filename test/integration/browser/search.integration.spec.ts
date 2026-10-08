@@ -1,5 +1,84 @@
 import { expect, test } from '@playwright/test';
 
+test('Copy Path shortcut copies the first selected file and ignores input focus, matches and extra modifiers', async ({ page }) => {
+	await page.goto('/search.html');
+	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
+	await query.fill('中文');
+	await query.press('Enter');
+	await expect(page.getByRole('status')).toHaveText('3 results');
+	const tree = page.getByRole('tree', { name: 'Search results', exact: true });
+	const first = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path', { hasText: 'workspace • src/main.ts' }) });
+	const other = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path', { hasText: 'other • src/main.ts' }) });
+	await first.click();
+	await other.click({ modifiers: ['ControlOrMeta'] });
+	await tree.press('ControlOrMeta+Alt+c');
+	await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['/workspace/src/main.ts']);
+	await tree.press('ControlOrMeta+Shift+Alt+c');
+	await query.focus();
+	await query.press('ControlOrMeta+Alt+c');
+	await tree.getByRole('treeitem', { name: 'Line 1, column 6: 中文😀 needle needle', exact: true }).click();
+	await tree.press('ControlOrMeta+Alt+c');
+	expect(await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['/workspace/src/main.ts']);
+	await expect(page.getByRole('status')).toHaveText('3 results');
+});
+
+test('Copy Path menus copy explicit file and folder URIs and release callbacks on refresh and hiding', async ({ page }) => {
+	await page.goto('/search.html');
+	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
+	await query.fill('中文');
+	await query.press('Enter');
+	await expect(page.getByRole('status')).toHaveText('3 results');
+	const tree = page.getByRole('tree', { name: 'Search results', exact: true });
+	const first = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path', { hasText: 'workspace • src/main.ts' }) });
+	const other = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path', { hasText: 'other • src/main.ts' }) });
+	await first.click();
+	await other.click({ button: 'right' });
+	await page.getByRole('menuitem', { name: 'Copy Path', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['/other/src/main.ts']);
+	await page.getByRole('toolbar', { name: 'Search result actions', exact: true }).getByRole('button', { name: 'More Actions', exact: true }).click();
+	await page.evaluate(() => window.ashSearchIntegration.selectTreeView());
+	const folder = tree.getByRole('treeitem', { name: 'other', exact: true });
+	await folder.click();
+	await tree.press('ControlOrMeta+Alt+c');
+	expect(await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['/other/src/main.ts']);
+	await tree.press('Shift+F10');
+	await page.getByRole('menuitem', { name: 'Copy Path', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['/other/src/main.ts', '/other']);
+	const removedContent = await folder.locator('.ash-search-result').elementHandle();
+	expect(removedContent).not.toBeNull();
+	await tree.press('Shift+F10');
+	await expect(page.getByRole('menuitem', { name: 'Copy Path', exact: true })).toBeVisible();
+	await query.focus();
+	await page.getByRole('button', { name: 'Refresh search', exact: true }).evaluate((button: HTMLButtonElement) => button.click());
+	await expect(page.getByRole('menu')).toHaveCount(0);
+	await expect(query).toBeFocused();
+	await removedContent!.dispatchEvent('contextmenu', { bubbles: true, cancelable: true });
+	await expect(page.getByRole('menu')).toHaveCount(0);
+	await removedContent!.dispose();
+	await folder.click();
+	await tree.press('Shift+F10');
+	await expect(page.getByRole('menuitem', { name: 'Copy Path', exact: true })).toBeVisible();
+	await page.evaluate(() => window.ashSearchIntegration.setSearchVisible(false));
+	await expect(page.getByRole('menu')).toHaveCount(0);
+	await expect(tree).toBeHidden();
+	expect(await page.evaluate(() => window.ashSearchIntegration.snapshot()?.matchCount)).toBe(3);
+});
+
+test('Copy Path menu excludes matching lines and translates its path-only help', async ({ page }) => {
+	await page.goto('/search.html?locale=zh-CN');
+	const query = page.getByRole('textbox', { name: '搜索工作区', exact: true });
+	await query.fill('needle');
+	await query.press('Enter');
+	await expect(page.getByRole('status')).toHaveText('1 个结果');
+	await page.locator('.ash-search-match').click({ button: 'right' });
+	await expect(page.getByRole('menuitem', { name: '复制路径', exact: true })).toHaveCount(0);
+	await page.keyboard.press('Escape');
+	await page.locator('.ash-search-file-path').click({ button: 'right' });
+	await page.getByRole('menuitem', { name: '复制路径', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['/workspace/src/main.ts']);
+	expect(await page.evaluate(() => window.ashSearchIntegration.help())).toContain('仅在选择首项是文件时复制其路径');
+});
+
 test('Copy shortcut uses the first selection and a context menu copies its explicit row', async ({ page }) => {
 	await page.goto('/search.html');
 	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
@@ -535,6 +614,23 @@ test('Copy All reads the latest incremental results and its help is translated',
 
 test.describe('Windows search clipboard formatting', () => {
 	test.use({ userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/143.0.0.0 Safari/537.36' });
+	test('Copy Path uses the Windows shortcut and does not claim Control+Alt+C', async ({ page }) => {
+		await page.goto('/search.html?windows=1');
+		const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
+		await query.fill('windows');
+		await query.press('Enter');
+		await expect(page.getByRole('status')).toHaveText('2 results');
+		await page.locator('.ash-search-file-path').filter({ hasText: 'src/main.ts' }).click();
+		const tree = page.getByRole('tree', { name: 'Search results', exact: true });
+		await tree.press('Control+Alt+c');
+		expect(await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual([]);
+		await tree.press('Shift+Alt+c');
+		await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['C:\\workspace\\src\\main.ts']);
+		await tree.press('Control+Shift+Alt+c');
+		await query.focus();
+		await query.press('Shift+Alt+c');
+		expect(await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['C:\\workspace\\src\\main.ts']);
+	});
 	test('Copy formats a single multi-line match and its file with Windows labels and separators', async ({ page }) => {
 		await page.goto('/search.html?windows=1');
 		const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });

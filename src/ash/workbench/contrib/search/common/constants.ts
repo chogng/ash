@@ -7,9 +7,11 @@ export const enum SearchCommandIds {
 	RemoveActionId = 'search.action.remove',
 	CopyAllCommandId = 'search.action.copyAll',
 	CopyMatchCommandId = 'search.action.copyMatch',
+	CopyPathCommandId = 'search.action.copyPath',
 }
 
 export const SearchContext = {
 	SearchViewFocusedKey: new RawContextKey<boolean>('searchViewletFocus', false),
 	FileMatchOrMatchFocusKey: new RawContextKey<boolean>('fileMatchOrMatchFocus', false),
+	FileMatchOrFolderMatchWithResourceFocusKey: new RawContextKey<boolean>('fileMatchOrFolderMatchWithResourceFocus', false),
 };

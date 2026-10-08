@@ -44,6 +44,32 @@ registerAction2(class CopyMatchCommandAction extends Action2 {
 	}
 });
 
+registerAction2(class CopyPathCommandAction extends Action2 {
+	constructor() {
+		super({
+			id: SearchCommandIds.CopyPathCommandId,
+			title: localize2('search.copyPath', 'Copy Path'),
+			keybinding: {
+				weight: KeybindingWeight.WorkbenchContrib,
+				when: ContextKeyExpr.and(SearchContext.SearchViewFocusedKey.isEqualTo(true), SearchContext.FileMatchOrFolderMatchWithResourceFocusKey.isEqualTo(true)),
+				primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyCode.KeyC,
+				win: { primary: KeyMod.Shift | KeyMod.Alt | KeyCode.KeyC },
+			},
+		});
+	}
+
+	public override async run(accessor: ServicesAccessor, fileMatch?: SearchFileMatch | SearchFolderMatch): Promise<void> {
+		if (!fileMatch) {
+			const selected = accessor.get(IViewsService).getActiveViewWithId<SearchView>(SEARCH_VIEW_ID)?.getControl().selection[0];
+			// Implicit selection accepts files only; an explicit folder carries its own resource.
+			if (selected?.kind !== 'file') { return; }
+			fileMatch = selected;
+		}
+		const text = accessor.get(ILabelService).getUriLabel(fileMatch.resource, { noPrefix: true });
+		await accessor.get(IClipboardService).writeText(text);
+	}
+});
+
 registerAction2(class CopyAllCommandAction extends Action2 {
 	constructor() {
 		super({ id: SearchCommandIds.CopyAllCommandId, title: localize2('search.copyAll', 'Copy All') });

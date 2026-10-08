@@ -676,3 +676,47 @@ test('Search Copy menus preserve outside focus and release old row callbacks in 
 	await expect.poll(() => page.evaluate(() => Boolean(document.activeElement?.closest('.ash-search')))).toBe(false);
 	expect(await readFile(join(testWorkspace.directory, 'main.ts'), 'utf8')).toBe('ash_copy_focus_token fresh\n');
 });
+
+test('Search Copy Path copies file and folder paths through real search and the host clipboard', async ({ target, application, workbench, testWorkspace }) => {
+	test.skip(target.appServerMode !== 'required', 'Uses an actual workspace search backend.');
+	const page = workbench.page;
+	const contents = [['src/main.ts', 'ash_copy_path_token main\n'], ['src/other.ts', 'ash_copy_path_token other\n']] as const;
+	for (const [path, content] of contents) {
+		await mkdir(dirname(join(testWorkspace.directory, path)), { recursive: true });
+		await writeFile(join(testWorkspace.directory, path), content);
+	}
+	if (target.kind === 'browser') {
+		await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+		await page.evaluate(() => navigator.clipboard.writeText('ash-copy-path-fixture'));
+	} else {
+		await (application as ElectronApplication).evaluate(({ clipboard }) => clipboard.writeText('ash-copy-path-fixture'));
+	}
+	const readCopied = () => target.kind === 'browser' ? page.evaluate(() => navigator.clipboard.readText()) : (application as ElectronApplication).evaluate(({ clipboard }) => clipboard.readText());
+	const pathLabel = (path: string) => join(testWorkspace.directory, path).replace(/^([a-z]):/i, (_prefix, drive: string) => drive.toUpperCase() + ':');
+	await workbench.search.open();
+	await workbench.search.search('ash_copy_path_token');
+	await expect(workbench.search.status).toHaveText('2 results');
+	const tree = workbench.search.element.getByRole('tree');
+	const main = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path', { hasText: 'src/main.ts' }) });
+	const other = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-file-path', { hasText: 'src/other.ts' }) });
+	await main.click();
+	await other.click({ modifiers: ['ControlOrMeta'] });
+	const shortcut = process.platform === 'win32' ? 'Shift+Alt+c' : 'ControlOrMeta+Alt+c';
+	await tree.press(shortcut);
+	await expect.poll(readCopied).toBe(pathLabel('src/main.ts'));
+	await workbench.menus.select(application, () => other.click({ button: 'right' }), ['Copy Path']);
+	await expect.poll(readCopied).toBe(pathLabel('src/other.ts'));
+	await workbench.search.query.focus();
+	await workbench.search.query.press(shortcut);
+	expect(await readCopied()).toBe(pathLabel('src/other.ts'));
+	const toolbar = page.getByRole('toolbar', { name: 'Search result actions', exact: true });
+	await workbench.menus.select(application, () => toolbar.getByRole('button', { name: 'More Actions', exact: true }).click(), ['View as tree']);
+	const folder = tree.getByRole('treeitem', { name: 'src', exact: true });
+	await folder.click();
+	await tree.press(shortcut);
+	expect(await readCopied()).toBe(pathLabel('src/other.ts'));
+	await workbench.menus.select(application, () => folder.click({ button: 'right' }), ['Copy Path']);
+	await expect.poll(readCopied).toBe(pathLabel('src'));
+	await expect(workbench.search.status).toHaveText('2 results');
+	for (const [path, content] of contents) { expect(await readFile(join(testWorkspace.directory, path), 'utf8')).toBe(content); }
+});

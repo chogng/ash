@@ -58,6 +58,7 @@ export class SearchView extends ViewPane {
 	private readonly resultsElement: HTMLDivElement;
 	private readonly tree: WorkbenchObjectTree<RenderableMatch>;
 	private readonly resultFocused: IContextKey<boolean>;
+	private readonly resourceResultFocused: IContextKey<boolean>;
 	private readonly resultActions: WorkbenchToolBar;
 	private readonly rowResources = this._register(new DisposableMap<HTMLElement, DisposableStore>());
 	private readonly resultMenu = this._register(new MutableDisposable());
@@ -221,6 +222,7 @@ export class SearchView extends ViewPane {
 		// Scope the shortcut to the tree so deleting text in a query cannot dismiss results.
 		const resultContext = this._register(scopedContext.createScoped(this.tree.domNode));
 		this.resultFocused = SearchContext.FileMatchOrMatchFocusKey.bindTo(resultContext);
+		this.resourceResultFocused = SearchContext.FileMatchOrFolderMatchWithResourceFocusKey.bindTo(resultContext);
 		const updateAriaHint = () => {
 			const hint = configurationService.getValue<boolean>(AccessibilityVerbositySettingId.Find) ? localize("search.helpHint", "Press Alt+F1 for search accessibility help.") : "";
 			this.queryInput.setAttribute("aria-description", hint);
@@ -522,6 +524,7 @@ export class SearchView extends ViewPane {
 
 	private updateResultActions(): void {
 		this.resultFocused.set(this.tree.focus !== undefined && !this.replaceController);
+		this.resourceResultFocused.set(this.tree.focus?.kind === "file" || this.tree.focus?.kind === "folder");
 		const hasResults = this.result.count > 0;
 		const canReplace = hasResults && !this.searchController && !this.replaceController;
 		this.replaceActions.setActions([
@@ -833,7 +836,25 @@ export class SearchView extends ViewPane {
 		this.resultMenu.value = lifetime;
 		this.contextMenuService.showContextMenu({
 			getAnchor: () => anchor,
-			getActions: () => [{ id: SearchCommandIds.CopyMatchCommandId, label: localize("search.copy", "Copy"), tooltip: "", enabled: true, run: () => this.commands.executeCommand(SearchCommandIds.CopyMatchCommandId, element) }],
+			getActions: () => {
+				const actions = [{
+					id: SearchCommandIds.CopyMatchCommandId,
+					label: localize("search.copy", "Copy"),
+					tooltip: "",
+					enabled: true,
+					run: () => this.commands.executeCommand(SearchCommandIds.CopyMatchCommandId, element),
+				}];
+				if (element.kind !== "match") {
+					actions.push({
+						id: SearchCommandIds.CopyPathCommandId,
+						label: localize("search.copyPath", "Copy Path"),
+						tooltip: "",
+						enabled: true,
+						run: () => this.commands.executeCommand(SearchCommandIds.CopyPathCommandId, element),
+					});
+				}
+				return actions;
+			},
 			onHide: () => {
 				open = false;
 				// Desktop close callbacks may arrive after a successor menu has taken ownership.

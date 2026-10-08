@@ -151,6 +151,13 @@ Copy 读取 active Search 的 selection 首项，不合并多选；无 active Se
 界面菜单在其结果行移除、Search 隐藏或 SearchView 释放时关闭；行移除时释放监听，
 不保留旧菜单入口。
 
+Copy Path 使用 `search.action.copyPath`，文件和文件夹结果的右键或 Shift+F10 菜单
+显式传入该行，只复制 `ILabelService.getUriLabel(resource, { noPrefix: true })` 的路径，
+不包含匹配内容或末尾换行。树中的 Ctrl/Cmd+Alt+C（Windows 为 Shift+Alt+C）
+读取 active Search 的 selection 首项，仅文件行执行；文件夹、匹配行、无选择或 inactive
+Search 不写剪贴板。显式文件或文件夹参数即使已从活动结果移除，仍复制自身 URI 的标签。
+剪贴板错误向调用方传播，不改变结果、文件或当前搜索任务，菜单复用上述行释放规则。
+
 协议提供三个有界 pull RPC：
 
 - `grep/search/start` 冻结目录、查询和上限，返回 `searchId`。
