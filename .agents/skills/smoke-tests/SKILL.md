@@ -55,7 +55,7 @@ A grep pattern can select more than one test. Check the selected list when the t
 
 For an intermittent failure that appears only in CI, run the affected test repeatedly in the failing CI environment and stop on the first failure. This is a temporary diagnostic change, not a permanent CI step.
 
-1. Identify the failing platform, mode and test title from the job log. `.github/workflows/frontend.yml` uses one runner each for Linux Browser and Windows/macOS Electron. PRs run core scenarios and affected areas selected by `build/frontend.ts`; main and manual runs execute full UI and connected projects.
+1. Identify the failing platform, mode and test title from the job log. `.github/workflows/frontend.yml` uses one runner each for Linux Browser and Windows/macOS Electron. PRs run core startup, command and editing scenarios selected by `build/frontend.ts`. Backend or backend-consumer changes additionally prepare one Linux backend and run core save, task execution and cancellation scenarios. PR Electron jobs remain UI-only. Main and manual runs execute full UI and connected projects on all three platforms. PR jobs have a 30-minute limit; full acceptance has a 90-minute limit.
 2. On a temporary branch, keep the existing preparation step. Replace the matching smoke test step with a loop over its `no-compile` command. The example below replaces the Electron UI step; use `pnpm run test:smoke:browser:no-compile` for Browser UI.
 3. Increase the job's `timeout-minutes` if the selected test needs more time for all iterations. Keep the existing failure artifact upload step.
 4. Fix the failure, then remove the loop and restore the normal CI command and timeout before merging.

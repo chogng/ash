@@ -80,7 +80,7 @@ jobs:
           - surface: electron
             runner: windows-latest
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 90
+    timeout-minutes: ${{ github.event_name == 'pull_request' && 30 || 90 }}
     env:
       PLAYWRIGHT_LIST_PRINT_FAILURES_INLINE: "1"
     defaults:
@@ -93,7 +93,7 @@ jobs:
           node-version-file: .nvmrc
       - name: Select PR scenarios or full regression
         id: plan
-        run: node build/frontend.ts plan
+        run: node build/frontend.ts plan ${{ matrix.surface }}
       - uses: ./.github/actions/setup-frontend
         id: setup
         with:

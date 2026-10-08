@@ -2,12 +2,16 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 
+// Windows' default cmd shell does not receive the POSIX exit wrapper. Return the
+// fixture process's actual exit code so every platform verifies success.
+const buildCommand = process.platform === 'win32' ? 'node smoke-task.cjs & exit' : 'node smoke-task.cjs';
+
 test.beforeEach(async ({ target, testWorkspace }) => {
 	test.skip(target.appServerMode !== 'required', 'Requires workspace tasks and terminal execution.');
 	await mkdir(join(testWorkspace.directory, '.vscode'));
 	await writeFile(join(testWorkspace.directory, '.vscode', 'tasks.json'), JSON.stringify({
 		version: '2.0.0', tasks: [
-			{ label: 'Smoke build', type: 'shell', command: 'node smoke-task.cjs', group: 'build' },
+			{ label: 'Smoke build', type: 'shell', command: buildCommand, group: 'build' },
 			{ label: 'Smoke watch', type: 'shell', command: 'node smoke-watch.cjs' },
 		]
 	}));
@@ -90,7 +94,7 @@ for (const locale of ['en', 'zh-CN']) {
 
 		await writeFile(configurationPath, JSON.stringify({
 			version: '2.0.0', tasks: [
-				{ label: 'Smoke configured', type: 'shell', command: 'node smoke-task.cjs', customMetadata: { providerVersion: 2 }, problemMatcher: [] },
+				{ label: 'Smoke configured', type: 'shell', command: buildCommand, customMetadata: { providerVersion: 2 }, problemMatcher: [] },
 			]
 		}));
 		// The fixture also contributes four Cargo tasks; correcting this task must keep those siblings.

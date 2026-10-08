@@ -82,7 +82,7 @@ pnpm 根据 `devEngines.runtime` 下载并使用固定的 Node 版本，通常�
 | `pnpm stylelint:update`                           | 用真实颜色、尺寸注册表更新变量清单，保留组件变量；审阅生成差异后再检查     |
 | `pnpm clean`                                      | 清理本地产物和 Python 缓存                                                 |
 
-格式化工具按语言选择：TS/JS 使用 [`tsfmt.json`](../tsfmt.json)，Rust 使用 [`rustfmt.toml`](../rustfmt.toml)，Python 使用固定版本 Ruff，配置与文档使用 [Prettier](../.prettierrc.toml)。前端与 Rust 格式化入口只处理第一方源码；检查命令不修改文件。修改后优先检查受影响的文件，完整格式检查见 [Formatting CI](../.github/workflows/format.yml)。
+格式化工具按语言选择：TS/JS 使用 [`tsfmt.json`](../tsfmt.json)，Rust 使用 [`rustfmt.toml`](../rustfmt.toml)，Python 使用固定版本 Ruff，配置与文档使用 [Prettier](../.prettierrc.toml)。前端与 Rust 格式化入口只处理第一方源码；检查命令不修改文件。修改后优先在本地修复受影响的文件。[Formatting CI](../.github/workflows/format.yml) 使用 `pnpm format:ci`：PR 只检查相对目标提交改动且仍存在的文件，main 和手动运行检查全仓。格式化配置、实现或依赖运行环境变化时，PR 也执行对应的完整检查。
 
 `just spellcheck` 使用固定版本 codespell，扫描范围和允许词分别由 [`.codespellrc`](../.codespellrc)、[`.codespellignore`](../.codespellignore) 维护。`pnpm stylelint` 检查生产 CSS 的变量与选择器；更新变量清单使用 `pnpm stylelint:update` 并审阅差异。
 
