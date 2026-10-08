@@ -382,6 +382,16 @@ test('Design color preview cancels without editing and one committed range gestu
 	view.domNode.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'r', bubbles: true }));
 	const model = view.designEditors.document.model;
 	const fillButton = view.propertiesDomNode.querySelector<HTMLButtonElement>('button[aria-label="Fill"]')!;
+	// jsdom has no layout; model the painted trigger without making hidden or detached targets visible.
+	Object.defineProperty(fillButton, 'getClientRects', {
+		value(this: Element): readonly DOMRect[] {
+			if (!this.isConnected || this.closest('[hidden]')) return [];
+			for (let element: Element | null = this; element; element = element.parentElement) {
+				if (browser.window.getComputedStyle(element).display === 'none') return [];
+			}
+			return [new browser.window.DOMRect(0, 0, 100, 20)];
+		},
+	});
 	fillButton.focus(); fillButton.click();
 	const picker = browser.window.document.querySelector<HTMLElement>('.ash-color-picker')!;
 	const alpha = picker.querySelector<HTMLInputElement>('input[aria-label="Opacity"]')!;

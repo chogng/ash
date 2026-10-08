@@ -41,6 +41,16 @@ test('Advisor focuses its saved model, Disable when disabled and the menu when t
 		));
 		document.body.append(content.domNode);
 		const button = content.domNode.querySelector<HTMLButtonElement>('[aria-label="Advisor model"]')!;
+		// jsdom has no layout; model the painted trigger without making hidden or detached targets visible.
+		Object.defineProperty(button, 'getClientRects', {
+			value(this: Element): readonly DOMRect[] {
+				if (!this.isConnected || this.closest('[hidden]')) return [];
+				for (let element: Element | null = this; element; element = element.parentElement) {
+					if (dom.window.getComputedStyle(element).display === 'none') return [];
+				}
+				return [new dom.window.DOMRect(0, 0, 100, 20)];
+			},
+		});
 		for (const state of [
 			{ enabled: true, visible: true, label: 'GPT-6.1 Sol' },
 			{ enabled: false, visible: true, label: 'Disable' },
