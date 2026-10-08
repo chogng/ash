@@ -14,7 +14,7 @@ export interface WebLaunchResult {
 }
 
 /** Owns the authenticated Web backend and profile for one smoke scenario. */
-export async function launchWeb(workspaceDirectory: string, productServices: { readonly reportIssueUrl?: string; } = {}): Promise<WebLaunchResult> {
+export async function launchWeb(workspaceDirectory: string, options: { readonly reportIssueUrl?: string; readonly backendConfiguration?: string; } = {}): Promise<WebLaunchResult> {
 	const root = resolve(import.meta.dirname, '../..');
 	const profileDirectory = await mkdtemp(join(tmpdir(), 'ash-w-'));
 	const productServicesPath = join(profileDirectory, 'product-services.json');
@@ -39,10 +39,11 @@ export async function launchWeb(workspaceDirectory: string, productServices: { r
 		}
 	};
 	try {
-		await writeFile(productServicesPath, JSON.stringify({ schemaVersion: 2, ...productServices }) + '\n');
+		await writeFile(productServicesPath, JSON.stringify({ schemaVersion: 2, reportIssueUrl: options.reportIssueUrl }) + '\n');
+		if (options.backendConfiguration) { await writeFile(join(profileDirectory, 'config.toml'), options.backendConfiguration); }
 		const languageServer = process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER;
 		if (languageServer) {
-			await writeFile(join(profileDirectory, 'config.toml'), `[languageServers.servers.rust-analyzer]\nmode = "enabled"\nexecutable = ${JSON.stringify(languageServer)}\n`);
+			await writeFile(join(profileDirectory, 'config.toml'), `${options.backendConfiguration ?? ''}\n[languageServers.servers.rust-analyzer]\nmode = "enabled"\nexecutable = ${JSON.stringify(languageServer)}\n`);
 		}
 		launch = await startWeb({ port: 0, assets: join(root, '.build/desktop/web/ash'), environment });
 		const { endpoint, ticket } = launch.info;

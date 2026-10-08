@@ -1,10 +1,10 @@
 # Ash Execution Trace UI 改进方案
 
-当前实现与验证见文末[落地状态](#落地状态2026-10-08)；下方保留原调研交接正文。
+当前实现采用共享执行树与检查器，已扩展保存证据驱动的模型/工具消费、子任务返回与汇合导航。最新运行结果见文末检查点；下方保留原调研交接正文。
 
 调研日期：2026-10-08。只读对照基线：chogng/ash@dd086508b8c0eabe5931793302e8f7dc3d7a47b3。
 
-此文件是实现交接方案，不表示 UI 已修改或验收。本次未操作用户电脑或生产代码。已有 1a6d89fa8、cac4c2f8c 修复来自任务报告；落地时以这些修复后的实际代码为起点，不覆盖 P1 精确定位、导出快照一致性、最后导入文件生效等行为。
+以下调研交接正文记录当时状态；该阶段尚未修改 UI 或操作用户电脑。后续实现和验收单独列在文末。已有 1a6d89fa8、cac4c2f8c 修复来自任务报告；落地时以这些修复后的实际代码为起点，不覆盖 P1 精确定位、导出快照一致性、最后导入文件生效等行为。
 
 ## 结论
 
@@ -155,3 +155,15 @@ headless Chromium 复跑先暴露详情零高度：TabList 会填满宿主，直
 Desktop 与 Web 最新 runtime 包源码摘要、完整文件哈希和协议均通过；Electron 确实与 AgentHost 独立应用并行，每个任务 workers=1、独立产物目录，无本树构建与验收同时写产物。修复只改 Trace smoke 驱动及重启后的 application 句柄，保留菜单状态、动作结果、完整导出和中文断言，没有追加生产图/Core/协议变更。详情与保留的首轮失败证据见 [路线检查点](trace-todo.md#desktop-与真实-electron-复验e05e17e93)。
 
 四主题宽窄 headless 及 20,000 事件测量沿用已有验证边界，不能写成 Electron 全主题截图已通过；P2 完整模型/工具/子任务链、retry/审批代表记录、分享脱敏和旧版同机时间基线继续保留。
+
+### 受控模型与真实执行闭环检查点
+
+当前界面按已保存 Thread 前缀锚定模型 attempt 的诊断阶段；子 Thread 保留自身 sequence，共享 ObjectTree 显示轻量层级线。请求前缀不提供完成阶段与并发持久事件的精确交错顺序。关系列表合并既有后端 graph 与按明确身份派生的工具结果、子任务返回、join 和加载后 Core input 消费关系；重复标识、错父 Thread、错 digest、跨 Turn 或缺少证据时不连线。没有新增 Core/Rust/protocol 契约。原始捕获、正文与导出继续归共享编辑器。
+
+已修复真实长请求的 Find 装配、正文切换继承旧搜索/滚动位置，以及切换事件后的迟到正文关系缓存。只读正文仍按需创建；迟到正文不能替换当前阅读内容，关闭释放 model/editor。
+
+当前源码正常 full Web 与 Desktop 准备通过，66 项 / 8 文件定向单测通过。Web 与 Electron 各自一次完成 8/8 场景；每端包含六项既有回归与两项本地模型 fixture 经真实 App Server 的调用链。父任务三次模型调用、真实 shell、两个并行子任务、返回/汇合、下一次模型输入的工具结果、关系跳转、重开、15 份正文完整导出和离线复查通过。另有错误与取消并行场景，保存终止状态并在重开后复查。fixture 不使用付费账户或私密上下文；导入 fixture 和真实执行链分开报告。
+
+最新 headless 2/2 覆盖四主题宽窄及 20,000 事件，挂载 29 行；本轮导入约 333 ms、筛选约 79 ms，关闭后 model/editor 为 0。已查看深色宽屏和浅色窄屏两张代表图。这些图片来自共享组件与离线 fixture；Electron 四主题截图、旧版同机时间基线、retry/审批 deadline、部分输出的流式取消、费用与分享脱敏仍保留验收项。当前两种包源码摘要、文件哈希和协议校验通过；未复用其它树产物，不 push。
+
+证据：[66 项单测](.build/trace-validation/flow-current-unit.log)、[Web 八场景](.build/trace-validation/flow-current-web-eight.log)、[Electron 八场景](.build/trace-validation/flow-desktop-electron-eight.log)、[退出记录](.build/trace-validation/flow-desktop-state.json)、[性能测量](.build/trace-validation/flow-current-headless-evidence/long-history-measurements.json)、[截图附件](.build/trace-validation/flow-current-headless-evidence/attachments.json)。完整能力边界见 [Trace roadmap](trace-todo.md#当前受控模型与真实执行闭环检查点)。

@@ -15,6 +15,8 @@ import type { AgentTracePage } from '../../../../services/chat/common/agentTrace
 import { registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import { AgentTraceEditor } from '../../browser/agentTraceEditor.js';
 import { EditorOption } from '../../../../../editor/common/config/editorOptions.js';
+import { setIconResolver } from '../../../../../base/browser/ui/lxicons/lxicon.js';
+import { getIconDefinition } from '../../../../../platform/theme/common/iconRegistry.js';
 import { IModelService } from '../../../../../editor/common/services/model.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
@@ -601,6 +603,7 @@ suite('Execution Trace editor', () => {
 	test('creates one readonly body model on demand and releases it with its input', async () => {
 		const dom = new JSDOM('<!doctype html><body></body>');
 		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+		setIconResolver(dom.window.document, getIconDefinition);
 		try {
 			using services = new InstantiationService();
 			services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
@@ -620,10 +623,15 @@ suite('Execution Trace editor', () => {
 			assert.equal(models.getModels().length, 1);
 			assert.equal(editors.listCodeEditors().length, 1);
 			assert.equal(editors.listCodeEditors()[0].getOption(EditorOption.readOnly), true);
+			assert.equal(pane.getControl(), editors.listCodeEditors()[0]);
+			assert.ok(editors.listCodeEditors()[0].getContribution('editor.contrib.findController'));
 			assert.match(models.getModels()[0].getValue(), /saved output/);
+			editors.listCodeEditors()[0].setPosition({ lineNumber: 2, column: 1 });
 			dom.window.document.querySelector<HTMLButtonElement>('[role=tab][id$="-overview"]')!.click();
+			assert.equal(pane.getControl(), undefined);
 			dom.window.document.querySelector<HTMLButtonElement>('[role=tab][id$="-raw"]')!.click();
 			assert.equal(models.getModels().length, 1);
+			assert.equal(editors.listCodeEditors()[0].getPosition()!.lineNumber, 1);
 			pane.clearInput();
 			assert.equal(models.getModels().length, 0);
 			assert.equal(editors.listCodeEditors().length, 0);
@@ -633,6 +641,7 @@ suite('Execution Trace editor', () => {
 	test('keeps the current body when an earlier selected event finishes its payload read later', async () => {
 		const dom = new JSDOM('<!doctype html><body></body>');
 		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+		setIconResolver(dom.window.document, getIconDefinition);
 		try {
 			using services = new InstantiationService();
 			const first = new DeferredPromise<unknown>(); const second = new DeferredPromise<unknown>();
@@ -640,8 +649,9 @@ suite('Execution Trace editor', () => {
 			services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 			services.registerInstance(IChatService, {
 				onDidChangeSession: Event.None, onDidUpdateThread: Event.None, onDidBecomeReady: Event.None,
-				readTrace: async () => ({ trace: { formatVersion: 3, sessionId: 's', historyPrefixes: [], threads: [{ threadId: 'root', events: [] }] }, cursors: { root: 0 }, hasMore: false }),
-				readTraceDiagnostics: async () => ({ diagnostics: { formatVersion: 1, captureId: 'capture', recordingStatus: 'disabled', droppedRecords: 0, events: [1, 2].map(sequence => ({ eventId: `request-${sequence}`, sequence, recordedAt: sequence, threadId: 'root', turnId: 'turn', event: { type: 'modelAttemptStarted', attemptId: `attempt-${sequence}`, requestPayload: { payloadId: `payload-${sequence}`, kind: 'coreRequest', byteLength: 1, status: 'saved', digest: 'sha256:' + '0'.repeat(64) } } })) }, cursor: 2, hasMore: false }),
+				readTrace: async () => ({ trace: { formatVersion: 3, sessionId: 's', historyPrefixes: [], threads: [{ threadId: 'root', events: [{ eventId: 'result', sequence: 1, recordedAt: 1, event: { type: 'itemCompleted', threadId: 'root', turnId: 'turn', item: { type: 'toolResult', toolCallId: 'call', text: 'saved result' } } }] }] }, cursors: { root: 1 }, hasMore: false }),
+				readTraceDiagnostics: async () => ({ diagnostics: { formatVersion: 1, captureId: 'capture', recordingStatus: 'disabled', droppedRecords: 0, events: [1, 2].map(sequence => ({ eventId: `request-${sequence}`, sequence, recordedAt: sequence, threadId: 'root', turnId: 'turn', event: { type: 'modelAttemptStarted', attemptId: `attempt-${sequence}`, sourceThreadSequence: 1, requestPayload: { payloadId: `payload-${sequence}`, kind: 'coreRequest', byteLength: 1, status: 'saved', digest: 'sha256:' + '0'.repeat(64) } } })) }, cursor: 2, hasMore: false }),
+				readTraceGraph: async () => ({ nodes: {}, edges: [], warnings: [] }),
 				readTracePayload: async (_session: string, _capture: string, id: string) => { reads.push(id); return id === 'payload-1' ? first.p : second.p; },
 				subscribeThread: async () => ({ thread: { sequence: 0 } }), unsubscribeThread: async () => { },
 			} as unknown as IChatService);
@@ -649,6 +659,7 @@ suite('Execution Trace editor', () => {
 			using pane = registerTestComponentServices(services).createInstance(AgentTraceEditor);
 			pane.create(dom.window.document.body); measureTreeViewport(dom.window.document);
 			await pane.setInput({ resource: createAgentTraceResource('s') }, new AbortController().signal);
+			dom.window.document.querySelector<HTMLElement>('[data-event-id="request-1"]')!.click();
 			dom.window.document.querySelector<HTMLButtonElement>('[role=tab][id$="-input"]')!.click();
 			dom.window.document.querySelector<HTMLElement>('[data-event-id="request-2"]')!.click();
 			assert.deepEqual(reads, ['payload-1', 'payload-2']);
@@ -656,9 +667,14 @@ suite('Execution Trace editor', () => {
 			[...dom.window.document.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Saved body')!.click();
 			const models = services.get(IModelService);
 			assert.match(models.getModels()[0].getValue(), /current body/);
-			await first.complete({ instructions: 'earlier body' }); await Promise.resolve(); await Promise.resolve();
+			await first.complete({ instructions: 'earlier body', input: [{ type: 'toolResult', callId: 'call' }] }); await Promise.resolve(); await Promise.resolve();
 			assert.match(models.getModels()[0].getValue(), /current body/);
 			assert.doesNotMatch(models.getModels()[0].getValue(), /earlier body/);
+			dom.window.document.querySelector<HTMLElement>('[data-event-id="request-1"]')!.click();
+			dom.window.document.querySelector<HTMLButtonElement>('[role=tab][id$="-relations"]')!.click();
+			await Promise.resolve(); await Promise.resolve();
+			assert.match(dom.window.document.querySelector('.ash-agent-trace-relation')?.textContent ?? '', /Result present in model input/);
+			assert.deepEqual(reads, ['payload-1', 'payload-2']);
 		} finally { dom.window.close(); }
 	});
 

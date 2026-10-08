@@ -5,11 +5,8 @@ import { Menus, type ElectronMenuItem } from '../../../automation/menus.js';
 import type { PlaywrightApplication } from '../../../automation/playwrightDriver.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { expect, test } from '../../../automation/test.js';
-import { AppServerProtocolClient } from '../../../../src/ash/platform/agentHost/browser/appServerProtocolClient.js';
-import { ChildProcessJsonlTransport } from '../../../../src/ash/platform/agentHost/node/childProcessJsonlTransport.js';
-import { createAppServerDaemonLauncher } from '../../../../src/ash/platform/app-server-daemon/electron-main/appServerDaemonLauncher.js';
+import { connectTraceAppServer } from './traceFixture.js';
 import { APP_SERVER_METHODS } from '../../../../.build/protocol/typescript/index.js';
-import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION } from '../../../../src/ash/platform/agentHost/common/appServerTransport.js';
 
 async function openTrace(page: Page): Promise<void> {
 	await new QuickAccess(page).runCommand('sessions.trace.open');
@@ -192,7 +189,7 @@ test('Execution Trace command and help use Chinese in the real Sessions window',
 	await expect(viewer.locator('.ash-agent-trace-event:visible')).toHaveCount(1);
 	await viewer.getByRole('textbox', { name: '筛选执行事件' }).fill('');
 	await selectTraceAction(viewer, application, '帮助');
-	await expect(page.getByRole('dialog', { name: '无障碍帮助' }).getByRole('textbox')).toHaveValue(/各 Thread 自己的顺序[\s\S]*指定定位[\s\S]*显示筛选[\s\S]*ModelService 的语义输入/u);
+	await expect(page.getByRole('dialog', { name: '无障碍帮助' }).getByRole('textbox')).toHaveValue(/各 Thread 自己的顺序[\s\S]*指定定位[\s\S]*显示筛选[\s\S]*ModelService 的语义输入[\s\S]*已保存 Thread 前缀[\s\S]*子任务结果返回与等待条件[\s\S]*缺少证据的关联保持未知/u);
 	await page.keyboard.press('Escape');
 	if (process.env.ASH_AGENT_TRACE_EVAL_FIXTURE) {
 		await viewer.locator('input[type=file]').setInputFiles(process.env.ASH_AGENT_TRACE_EVAL_FIXTURE);
@@ -208,46 +205,9 @@ test('Execution Trace opens current saved history and follows real new Turns and
 	test.skip(target.appServerMode !== 'required', 'Uses real persistent history from the product App Server.');
 	test.setTimeout(120_000);
 	const page = await workbench.openAgentsWindow(target.kind);
-	const listeners = new Map<string, Set<(value: unknown) => void>>();
-	const emit = (event: string, value: unknown): void => { for (const listener of listeners.get(event) ?? []) { listener(value); } };
-	let frames: ChildProcessJsonlTransport | undefined;
-	let launcher: ReturnType<typeof createAppServerDaemonLauncher>['launcher'] | undefined;
-	let frameSubscription: { dispose(): void; } | undefined;
-	let closeSubscription: { dispose(): void; } | undefined;
-	if ('evaluate' in application) {
-		const host = await application.evaluate(({ app }) => ({ appPath: app.getAppPath(), resourcesPath: process.resourcesPath, electronExecutable: process.execPath, profileRoot: process.env.ASH_HOME!, sourceEnvironment: { PATH: process.env.PATH, HOME: process.env.HOME, SystemRoot: process.env.SystemRoot, ASH_RG_PATH: process.env.ASH_RG_PATH, ASH_PRODUCT_SERVICES_PATH: process.env.ASH_PRODUCT_SERVICES_PATH } }));
-		({ launcher } = createAppServerDaemonLauncher({ ...host, packageLocation: { appPath: host.appPath, resourcesPath: host.resourcesPath, isPackaged: false, platform: process.platform }, workspaceRoot: testWorkspace.directory, role: 'agents' }));
-		await launcher.validate();
-		frames = new ChildProcessJsonlTransport(launcher.launch());
-		frameSubscription = frames.onFrame(frame => emit(WEB_APP_SERVER_FRAME_EVENT, { frame }));
-		closeSubscription = frames.onClose(error => emit(WEB_APP_SERVER_CLOSED_EVENT, { message: error.message }));
-	} else {
-		await page.exposeFunction('ashTraceFixtureFrame', (frame: string) => emit(WEB_APP_SERVER_FRAME_EVENT, { frame }));
-		await page.evaluate(async () => {
-			const endpoint = new URL('/ash/app-server', sessionStorage.getItem('ash.appServer.endpoint')!);
-			const token = sessionStorage.getItem(`ash.appServer.session:${endpoint.origin}`)!;
-			endpoint.protocol = 'ws:';
-			const socket = new WebSocket(endpoint, `ash-session.${token}`);
-			const fixture = globalThis as typeof globalThis & { ashTraceFixtureSocket?: WebSocket; ashTraceFixtureFrame(frame: string): Promise<void>; };
-			fixture.ashTraceFixtureSocket = socket;
-			socket.onmessage = event => { void fixture.ashTraceFixtureFrame(String(event.data)); };
-			await new Promise<void>((resolve, reject) => { socket.onopen = () => resolve(); socket.onerror = () => reject(new Error('Trace fixture connection failed')); });
-		});
-	}
-	const client = new AppServerProtocolClient({
-		on(event, listener) { let group = listeners.get(event); if (!group) { group = new Set(); listeners.set(event, group); } group.add(listener); },
-		off(event, listener) { listeners.get(event)?.delete(listener); },
-		send(event, value) {
-			if (event === WEB_APP_SERVER_CONNECT_EVENT) { emit(WEB_APP_SERVER_CONNECTED_EVENT, { protocolVersion: WEB_APP_SERVER_PROTOCOL_VERSION, workspaceId: 'trace-fixture', workspaceRoot: testWorkspace.directory }); }
-			else if (event === WEB_APP_SERVER_FRAME_EVENT) {
-				const frame = (value as { frame: string; }).frame;
-				if (frames) { void frames.send(frame); }
-				else { void page.evaluate(frame => (globalThis as typeof globalThis & { ashTraceFixtureSocket: WebSocket; }).ashTraceFixtureSocket.send(frame), frame); }
-			} else if (event !== WEB_APP_SERVER_DISCONNECT_EVENT) { throw new Error(`Unexpected trace fixture event ${event}`); }
-		},
-	});
+	const connection = await connectTraceAppServer(application, page, testWorkspace.directory);
+	const { client } = connection;
 	try {
-		await client.connect();
 		const session = await client.request(APP_SERVER_METHODS['session/create'], { commandId: 'trace-create', title: 'Trace live session', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
 		const sessionId = session.session.sessionId;
 		const created = await client.request(APP_SERVER_METHODS['session/request'], { commandId: 'trace-thread', sessionId, request: { type: 'createThread', title: 'Trace root' } });
@@ -295,9 +255,7 @@ test('Execution Trace opens current saved history and follows real new Turns and
 		await viewer.getByRole('tab', { name: 'Raw record', exact: true }).click();
 		await expect(viewer.getByRole('tabpanel')).toContainText('trace-after-close');
 	} finally {
-		client.dispose(); frameSubscription?.dispose(); closeSubscription?.dispose();
-		await frames?.close(); launcher?.dispose();
-		if (!frames && !page.isClosed()) { await page.evaluate(() => (globalThis as typeof globalThis & { ashTraceFixtureSocket?: WebSocket; }).ashTraceFixtureSocket?.close()); }
+		await connection.close();
 	}
 });
 

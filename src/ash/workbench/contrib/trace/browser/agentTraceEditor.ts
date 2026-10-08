@@ -1,3 +1,5 @@
+// Sessions loads a smaller editor bundle; saved bodies still need the shared Find contribution.
+import { CommonFindController } from '../../../../editor/contrib/find/browser/findController.js';
 import './agentTraceEditor.css';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
 import { triggerDownload } from '../../../../base/browser/fileAccess.js';
@@ -39,7 +41,7 @@ import { CodeEditorWidget } from '../../../../editor/browser/widget/codeEditor/c
 import { AgentTraceViewModel, eventLabel, recordingLabel, evidenceLabel, relationLabel, type TraceEntry } from './agentTraceModel.js';
 
 type DetailTab = 'overview' | 'input' | 'output' | 'relations' | 'raw';
-interface TraceRelation { readonly id: string; readonly label: string; readonly target?: TraceEntry; }
+interface TraceRelation { readonly id: string; readonly label: string; readonly target?: TraceEntry; readonly kind?: string; readonly outgoing?: boolean; }
 let detailSequence = 0;
 
 export const agentTraceEditorId = 'ash.agentTrace';
@@ -200,7 +202,7 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 		this.treeDomNode = h(document, 'div', { className: 'ash-agent-trace-tree' });
 		this.tree = this._register(new ObjectTree<TraceEntry>(this.treeDomNode, {
 			ariaLabel: localize('agentTrace.timeline', 'Execution timeline'), scrolling: 'managed', getHeight: () => 24,
-			indent: 12, indentGuides: 'onHover', expandOnlyOnTwistieClick: true,
+			indent: 12, indentGuides: 'always', expandOnlyOnTwistieClick: true,
 			modelOptions: { identityProvider: { getId: entry => entry.id }, filter: { filter: entry => entry.kind === 'event' ? this.viewModel.matched.has(entry.id) : TreeVisibility.Recurse } },
 			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: entry => entry.label },
 			renderElement: entry => {
@@ -551,6 +553,17 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 				if (isRecord(event.decision)) {
 					field(localize('agentTrace.decisionField', 'Decision'), eventLabel(entry.record));
 				}
+				if (entry.diagnostic) {
+					field(localize('agentTrace.attemptIdField', 'Model attempt ID'), entry.diagnostic.event.attemptId);
+					field(localize('agentTrace.prefixField', 'Saved Thread prefix'), entry.diagnostic.event.sourceThreadSequence);
+					field(localize('agentTrace.purposeField', 'Purpose'), entry.diagnostic.event.purpose);
+					field(localize('agentTrace.evidenceField', 'Evidence boundary'), localize('agentTrace.accountingUnknown', 'The saved accounting and loop decision do not identify this attempt. Repeated calls alone do not prove a retry.'));
+				}
+				if (isRecord(event.result)) {
+					field(localize('agentTrace.delegationIdField', 'Delegation ID'), event.result.delegationId);
+					field(localize('agentTrace.outcomeField', 'Outcome'), event.result.status);
+					field(localize('agentTrace.resultSummary', 'Child result'), event.result.summary);
+				}
 				field(localize('agentTrace.modelField', 'Model'), invocation?.resolvedModel);
 				field(localize('agentTrace.outcomeField', 'Outcome'), invocation?.outcome);
 				if (typeof invocation?.startedAtUnixMs === 'number' && typeof invocation.completedAtUnixMs === 'number' && invocation.completedAtUnixMs >= invocation.startedAtUnixMs) { field(localize('agentTrace.durationField', 'Model duration (ms)'), invocation.completedAtUnixMs - invocation.startedAtUnixMs); }
@@ -578,7 +591,7 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 			else { await this.loadEvidence(entry, payload); }
 		} else {
 			const item = isRecord(entry.record?.event.item) ? entry.record.event.item : undefined;
-			const value = this.tab === 'output' ? item?.type === 'agentMessage' || item?.type === 'toolResult' ? item.text ?? item : undefined : item?.type === 'userMessage' || item?.type === 'toolCall' ? item.arguments ?? item.text ?? item : entry.record?.event.type === 'turnAccepted' ? entry.record.event : undefined;
+			const value = this.tab === 'output' ? item?.type === 'agentMessage' || item?.type === 'toolResult' ? item.text ?? item : undefined : item?.type === 'userMessage' || item?.type === 'toolCall' ? item.argumentsJson ?? item.arguments ?? item.text ?? item : entry.record?.event.type === 'turnAccepted' ? entry.record.event : undefined;
 			if (value !== undefined) { this.renderBodySections(value); }
 			else { this.detailsDomNode.append(h(document, 'p', this.trace?.diagnostics && this.trace.diagnostics.recordingStatus !== 'disabled' ? localize('agentTrace.noBody', 'No body is recorded for this event and tab.') : this.trace && recordingLabel(this.trace) || '')); }
 		}
@@ -603,7 +616,11 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 			this.bodyModel.value = this.models.createModel('', null, undefined, true);
 			this.bodyEditor.value.setModel(this.bodyModel.value);
 		}
+		// A newly selected body must not inherit another event's match or reading position.
+		CommonFindController.get(this.bodyEditor.value)?.closeFindWidget();
 		this.models.updateModel(this.bodyModel.value!, text);
+		this.bodyEditor.value.setPosition({ lineNumber: 1, column: 1 });
+		this.bodyEditor.value.setScrollPosition({ scrollTop: 0, scrollLeft: 0 });
 		this.detailText = text;
 		this.bodyEditor.value.layout({ width: Math.max(0, this.inspectorDomNode.clientWidth - 24), height: Math.max(0, this.inspectorDomNode.clientHeight - 112) });
 	}
@@ -615,6 +632,7 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 			const evidence = await this.chat.readTracePayload(this.sessionId!, this.trace!.diagnostics!.captureId!, payload.payloadId);
 			if (revision !== this.revision || this.isDisposed || !this.trace?.diagnostics) { return; }
 			this.trace = { ...this.trace, diagnostics: { ...this.trace.diagnostics, payloads: { ...this.trace.diagnostics.payloads, [payload.payloadId]: evidence } } };
+			this.viewModel.update(this.trace);
 			if (identity === this.detailIdentity && entry.id === this.selected) { this.renderInspector(); }
 		} catch (error) { if (revision === this.revision && identity === this.detailIdentity && !this.isDisposed) { this.statusDomNode.textContent = localize('agentTrace.failed', 'Could not load trace: {0}', String(error)); } }
 	}
@@ -627,18 +645,30 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 			if (revision === this.revision) { this.graphRequest = undefined; }
 			if (revision !== this.revision || this.isDisposed || !this.trace || this.tab !== 'relations') { return; }
 			if (graph) { this.trace = { ...this.trace, graph }; this.renderRelationships(graph); }
-			else { this.relationList.items = []; this.relationWarning.textContent = localize('agentTrace.noRelationships', 'No saved relationships for this capture.'); }
+			else { this.renderRelationships({ nodes: {}, edges: [], warnings: [] }); }
 		} catch (error) { if (revision === this.revision && !this.isDisposed) { this.graphRequest = undefined; this.statusDomNode.textContent = localize('agentTrace.failed', 'Could not load trace: {0}', String(error)); } }
 	}
 
 	private renderRelationships(graph: AgentTraceGraph): void {
 		const selected = new Set(Object.values(graph.nodes).filter(node => this.viewModel.graphTarget(node)?.id === this.selected).map(node => node.id));
-		this.relationList.items = graph.edges.filter(edge => selected.has(edge.from) || selected.has(edge.to)).map((edge, index) => {
+		const relations: TraceRelation[] = graph.edges.filter(edge => selected.has(edge.from) || selected.has(edge.to)).map((edge, index) => {
 			const outgoing = selected.has(edge.from);
 			const target = graph.nodes[outgoing ? edge.to : edge.from];
-			return { id: `${index}:${edge.from}:${edge.to}:${edge.kind}`, label: `${outgoing ? localize('agentTrace.outgoing', 'Outgoing') : localize('agentTrace.incoming', 'Incoming')} · ${relationLabel(edge.kind)} · ${target.label}`, target: this.viewModel.graphTarget(target) };
+			return { id: `${index}:${edge.from}:${edge.to}:${edge.kind}`, label: `${outgoing ? localize('agentTrace.outgoing', 'Outgoing') : localize('agentTrace.incoming', 'Incoming')} · ${relationLabel(edge.kind)} · ${target.label}`, target: this.viewModel.graphTarget(target), kind: edge.kind, outgoing };
 		});
-		this.relationWarning.textContent = graph.warnings.length ? graph.warnings.join('\n') : this.relationList.items.length ? '' : localize('agentTrace.noRelationships', 'No saved relationships for this capture.');
+		const entry = this.selected ? this.viewModel.entries.get(this.selected) : undefined;
+		if (entry) {
+			for (const relation of this.viewModel.relations(entry)) {
+				const item = relation.target.record?.event.item;
+				const targetLabel = isRecord(item) && typeof item.toolCallId === 'string' ? `${relation.target.label} · ${item.toolCallId}` : relation.target.label;
+				const label = `${relation.outgoing ? localize('agentTrace.outgoing', 'Outgoing') : localize('agentTrace.incoming', 'Incoming')} · ${relationLabel(relation.kind)} · ${targetLabel}`;
+				if (!relations.some(value => value.target?.id === relation.target.id && value.kind === relation.kind && value.outgoing === relation.outgoing)) { relations.push({ id: `saved:${relation.kind}:${relation.outgoing}:${relation.target.id}`, label, target: relation.target, kind: relation.kind, outgoing: relation.outgoing }); }
+			}
+		}
+		this.relationList.items = relations;
+		const warnings = [...graph.warnings];
+		if (entry?.diagnostic || (isRecord(entry?.record?.event.item) && entry.record.event.item.type === 'toolResult')) { warnings.push(localize('agentTrace.consumptionUnknown', 'A result-to-model link requires that result’s call ID in the saved Core input. Without that evidence, consumption is unknown. Request bodies load on demand from Input; time proximity does not prove a link.')); }
+		this.relationWarning.textContent = warnings.length ? warnings.join('\n') : relations.length ? '' : localize('agentTrace.noRelationships', 'No saved relationships for this capture.');
 	}
 
 	private async exportTrace(): Promise<void> {
@@ -715,7 +745,7 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 		this.split.value!.layout(dimension.width < 640 ? height : dimension.width, dimension.width < 640 ? dimension.width : height);
 	}
 	public override focus(): void { if (this.selected) { this.tree.domFocus(); } else { this.filter.focus(); } }
-	public override getControl(): IEditorControl | undefined { return undefined; }
+	public override getControl(): IEditorControl | undefined { return this.bodyEditorHost && !this.bodyEditorHost.hidden ? this.bodyEditor.value : undefined; }
 }
 
 

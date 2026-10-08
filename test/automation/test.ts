@@ -31,6 +31,8 @@ interface PlaywrightFixtures {
 	readonly gitMergeConflict: boolean;
 	readonly openWorkspace: boolean;
 	readonly reportIssueUrl: string | undefined;
+	/** Isolated config.toml contents installed before the owning App Server starts. */
+	readonly backendConfiguration: string | undefined;
 	readonly target: PlaywrightTarget;
 	readonly application: PlaywrightApplication;
 	readonly driver: PlaywrightDriver;
@@ -44,14 +46,15 @@ export const test = base.extend<PlaywrightFixtures>({
 	gitMergeConflict: [false, { option: true }],
 	openWorkspace: [true, { option: true }],
 	reportIssueUrl: [undefined, { option: true }],
+	backendConfiguration: [undefined, { option: true }],
 	// Workspace options may depend on the platform. Connection addresses belong
 	// to the later launch, otherwise target -> server -> workspace -> target cycles.
 	target: async ({ }, use, testInfo) => {
 		await use(playwrightTargetForProject(testInfo.project.name));
 	},
-	webAppServer: [async ({ testWorkspace, reportIssueUrl }, use, testInfo) => {
+	webAppServer: [async ({ testWorkspace, reportIssueUrl, backendConfiguration }, use, testInfo) => {
 		if (testInfo.project.name !== 'browser-app-server') { await use(undefined); return; }
-		const server = await launchWeb(testWorkspace.directory, { reportIssueUrl });
+		const server = await launchWeb(testWorkspace.directory, { reportIssueUrl, backendConfiguration });
 		try { await use(server); } finally { await server.close(); }
 	}, { timeout: 75_000 }],
 	testWorkspace: async ({ includeLargeTestFile, gitRepository, gitMergeConflict }, use) => {
@@ -64,7 +67,7 @@ export const test = base.extend<PlaywrightFixtures>({
 	},
 	// Startup (30s), process exit (10s), and daemon stop (30s) have independent
 	// owned budgets. Keep them inside the fixture budget; test actions retain 45s.
-	runningApplication: [async ({ target, testWorkspace, openWorkspace, webAppServer, baseURL }, use, testInfo) => {
+	runningApplication: [async ({ target, testWorkspace, openWorkspace, webAppServer, baseURL, backendConfiguration }, use, testInfo) => {
 		// Restart replaces the driver; retain errors from each application generation.
 		const generations: WorkbenchDiagnostics[] = [];
 		const diagnostics = {
@@ -134,11 +137,17 @@ export const test = base.extend<PlaywrightFixtures>({
 			workspacePermissions: openWorkspace ? 'development' as const : undefined,
 		};
 		try {
+			// Startup-only backend options must be present before the daemon is composed.
+			if (backendConfiguration) {
+				const profileDirectory = join(userDataDirectory, 'profile');
+				await mkdir(profileDirectory, { recursive: true });
+				await writeFile(join(profileDirectory, 'config.toml'), backendConfiguration);
+			}
 			const languageServer = process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER;
 			if (languageServer && target.appServerMode === 'required') {
 				const profileDirectory = join(userDataDirectory, 'profile');
-				await mkdir(profileDirectory);
-				await writeFile(join(profileDirectory, 'config.toml'), `[languageServers.servers.rust-analyzer]\nmode = "enabled"\nexecutable = ${JSON.stringify(languageServer)}\n`);
+				await mkdir(profileDirectory, { recursive: true });
+				await writeFile(join(profileDirectory, 'config.toml'), `${backendConfiguration ?? ''}\n[languageServers.servers.rust-analyzer]\nmode = "enabled"\nexecutable = ${JSON.stringify(languageServer)}\n`);
 			}
 			let current = await launchElectron(options);
 			try {

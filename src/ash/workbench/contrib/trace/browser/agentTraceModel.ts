@@ -3,6 +3,12 @@ import { localize } from '../../../../nls.js';
 import type { ObjectTreeElement } from '../../../../base/browser/ui/tree/objectTreeModel.js';
 import { diagnosticPayload, type AgentTrace, type AgentTraceEvent, type AgentTraceDiagnosticEvent, type AgentTraceNode, type AgentTracePayloadRef } from '../../../services/chat/common/agentTrace.js';
 
+export interface SavedTraceRelation {
+	readonly kind: string;
+	readonly outgoing: boolean;
+	readonly target: TraceEntry;
+}
+
 export interface TraceEntry {
 	readonly id: string;
 	readonly kind: 'thread' | 'turn' | 'event';
@@ -26,6 +32,7 @@ export class AgentTraceViewModel {
 	private readonly entriesByKey = new Map<string, TraceEntry[]>();
 	private readonly searchText = new WeakMap<TraceEntry, string>();
 	private capture: AgentTrace | undefined;
+	private readonly savedRelations = new Map<string, SavedTraceRelation[]>();
 	eventCount = 0;
 	shownCount = 0;
 
@@ -35,6 +42,7 @@ export class AgentTraceViewModel {
 		this.entries.clear();
 		this.entriesByKey.clear();
 		this.eventCount = 0;
+		this.savedRelations.clear();
 		const threads = new Map<string, { element: TraceEntry; children: ObjectTreeElement<TraceEntry>[]; collapsed: boolean; }>();
 		for (const thread of trace?.threads ?? []) {
 			const created = thread.events.find(record => record.event.type === 'threadCreated')?.event;
@@ -53,7 +61,7 @@ export class AgentTraceViewModel {
 		const add = (threadId: string, raw: AgentTraceEvent | AgentTraceDiagnosticEvent, diagnostic: boolean): void => {
 			let entry = this.records.get(raw);
 			if (!entry) {
-				const turnId = diagnostic ? (raw as AgentTraceDiagnosticEvent).turnId : typeof raw.event.turnId === 'string' ? raw.event.turnId : undefined;
+				const turnId = diagnostic ? (raw as AgentTraceDiagnosticEvent).turnId : typeof raw.event.turnId === 'string' ? raw.event.turnId : isRecord(raw.event.seed) && typeof raw.event.seed.parentTurnId === 'string' ? raw.event.seed.parentTurnId : undefined;
 				const record: AgentTraceEvent = diagnostic ? { ...raw, event: { ...raw.event, threadId, turnId } } : raw as AgentTraceEvent;
 				entry = { id: JSON.stringify([diagnostic ? 'diagnostic' : 'durable', threadId, raw.sequence]), kind: 'event', threadId, turnId, key: diagnostic ? `diagnostic:${raw.sequence}` : `${threadId}:${raw.sequence}`, record, diagnostic: diagnostic ? raw as AgentTraceDiagnosticEvent : undefined, label: compactEventLabel(record), failed: eventIsError(record) };
 				this.records.set(raw, entry);
@@ -81,6 +89,16 @@ export class AgentTraceViewModel {
 		};
 		for (const thread of trace?.threads ?? []) { for (const record of thread.events) { add(thread.threadId, record, false); } }
 		for (const record of trace?.diagnostics?.events ?? []) { add(record.threadId, record, true); }
+		// An attempt's saved prefix places all its diagnostic phases between durable
+		// records. Wall clocks and independent child sequence numbers cannot establish causality.
+		const prefixes = new Map<string, number>();
+		for (const record of trace?.diagnostics?.events ?? []) {
+			if (record.event.type === 'modelAttemptStarted' && Number.isSafeInteger(record.event.sourceThreadSequence) && (record.event.sourceThreadSequence as number) >= 0) { prefixes.set(JSON.stringify([record.threadId, record.turnId, record.event.attemptId]), record.event.sourceThreadSequence as number); }
+		}
+		const position = (entry: TraceEntry): number => entry.diagnostic ? (prefixes.get(JSON.stringify([entry.threadId, entry.turnId, entry.diagnostic.event.attemptId])) ?? Number.POSITIVE_INFINITY) : entry.record!.sequence;
+		for (const turn of turns.values()) {
+			turn.children.sort((a, b) => position(a.element) - position(b.element) || Number(!!a.element.diagnostic) - Number(!!b.element.diagnostic) || a.element.record!.sequence - b.element.record!.sequence);
+		}
 		for (const group of [...threads.values(), ...turns.values()]) { this.entries.set(group.element.id, group.element); }
 		const roots = [...threads.values()];
 		for (const thread of trace?.threads ?? []) {
@@ -99,6 +117,7 @@ export class AgentTraceViewModel {
 			if (parent && !cursor) { parent.children.push(child); roots.splice(roots.indexOf(child), 1); }
 		}
 		this.roots = roots;
+		this.deriveRelations();
 		return true;
 	}
 
@@ -126,6 +145,84 @@ export class AgentTraceViewModel {
 		// Graph model attempts use the diagnostic namespace; a durable Thread named
 		// "diagnostic" can otherwise share the exact external event key.
 		return candidates.find(entry => node.kind === 'modelAttempt' ? !!entry.diagnostic : !entry.diagnostic);
+	}
+
+	public relations(entry: TraceEntry): readonly SavedTraceRelation[] { return this.savedRelations.get(entry.id) ?? []; }
+
+	private deriveRelations(): void {
+		const records = [...this.entries.values()].filter(entry => entry.record);
+		const calls = new Map<string, TraceEntry[]>();
+		const results = new Map<string, TraceEntry[]>();
+		const produced = new Map<string, TraceEntry[]>();
+		const received = new Map<string, TraceEntry[]>();
+		const joins = new Map<string, TraceEntry[]>();
+		const requests = new Map<string, TraceEntry[]>();
+		const key = (...parts: unknown[]): string => JSON.stringify(parts);
+		const index = (map: Map<string, TraceEntry[]>, identity: string, entry: TraceEntry): void => { const values = map.get(identity) ?? []; values.push(entry); map.set(identity, values); };
+		const unique = (values: TraceEntry[] | undefined): TraceEntry | undefined => values?.length === 1 ? values[0] : undefined;
+		const link = (source: TraceEntry | undefined, target: TraceEntry | undefined, kind: string): void => {
+			if (!source || !target || source === target) { return; }
+			for (const [owner, other, outgoing] of [[source, target, true], [target, source, false]] as const) {
+				const values = this.savedRelations.get(owner.id) ?? [];
+				if (!values.some(value => value.target === other && value.kind === kind && value.outgoing === outgoing)) { values.push({ target: other, kind, outgoing }); this.savedRelations.set(owner.id, values); }
+			}
+		};
+		for (const entry of records) {
+			const event = entry.record!.event;
+			const item = isRecord(event.item) ? event.item : undefined;
+			if (event.type === 'itemCompleted' && typeof item?.toolCallId === 'string') {
+				if (item.type === 'toolCall') { index(calls, key(entry.threadId, entry.turnId, item.toolCallId), entry); }
+				if (item.type === 'toolResult') { index(results, key(entry.threadId, entry.turnId, item.toolCallId), entry); }
+			}
+			if (event.type === 'delegationRequested' && isRecord(event.seed) && typeof event.seed.delegationId === 'string') { index(requests, key(entry.threadId, event.seed.delegationId), entry); }
+			if (isRecord(event.result)) {
+				const result = event.result;
+				if (typeof result.delegationId === 'string' && typeof result.childThreadId === 'string' && typeof result.digest === 'string') {
+					const identity = key(result.delegationId, result.childThreadId, result.digest);
+					if (event.type === 'delegationResultProduced' && entry.threadId === result.childThreadId) { index(produced, identity, entry); }
+					if (event.type === 'delegationResultReceived') { index(received, identity, entry); }
+				}
+			}
+			if (event.type === 'agentJoinRequested' && isRecord(event.join) && typeof event.join.joinId === 'string') { index(joins, key(entry.threadId, event.join.joinId), entry); }
+		}
+		for (const [identity, entries] of results) { link(unique(calls.get(identity)), unique(entries), 'result'); }
+		for (const [identity, entries] of received) {
+			const source = unique(produced.get(identity));
+			const target = unique(entries);
+			const origin = source && this.capture?.threads.find(thread => thread.threadId === source.threadId)?.events.find(record => record.event.type === 'threadCreated')?.event.origin;
+			const result = target?.record?.event.result;
+			if (isRecord(origin) && origin.type === 'agentSpawn' && origin.parentThreadId === target?.threadId && isRecord(result) && origin.delegationId === result.delegationId) { link(source, target, 'returnsResult'); }
+		}
+		for (const entry of records) {
+			const event = entry.record!.event;
+			if (event.type === 'delegationStarted' && typeof event.delegationId === 'string' && typeof event.childThreadId === 'string') {
+				const child = this.entries.get(key('thread', event.childThreadId));
+				const origin = this.capture?.threads.find(thread => thread.threadId === event.childThreadId)?.events.find(record => record.event.type === 'threadCreated')?.event.origin;
+				if (isRecord(origin) && origin.type === 'agentSpawn' && origin.parentThreadId === entry.threadId && origin.delegationId === event.delegationId) { link(entry, child, 'delegates'); link(unique(requests.get(key(entry.threadId, event.delegationId))), entry, 'startsDelegation'); }
+			}
+			if (event.type === 'agentJoinSatisfied' && typeof event.joinId === 'string' && Array.isArray(event.satisfiedBy)) {
+				const requested = unique(joins.get(key(entry.threadId, event.joinId)));
+				if (requested && isRecord(requested.record?.event.join)) {
+					const expected = requested.record.event.join.delegations;
+					link(requested, entry, 'satisfiesJoin');
+					for (const delegationId of event.satisfiedBy) {
+						if (typeof delegationId !== 'string' || !Array.isArray(expected) || !expected.includes(delegationId)) { continue; }
+						const candidates = [...received.values()].flat().filter(candidate => candidate.threadId === entry.threadId && isRecord(candidate.record?.event.result) && candidate.record.event.result.delegationId === delegationId);
+						link(unique(candidates), entry, 'satisfiesJoin');
+					}
+				}
+			}
+			const diagnostic = entry.diagnostic;
+			const payload = diagnostic && diagnosticPayload(diagnostic);
+			const body = payload && this.capture?.diagnostics?.payloads?.[payload.payloadId];
+			if (diagnostic?.event.type === 'modelAttemptStarted' && payload?.kind === 'coreRequest' && isRecord(body) && Array.isArray(body.input) && typeof diagnostic.event.sourceThreadSequence === 'number') {
+				for (const input of body.input) {
+					if (!isRecord(input) || input.type !== 'toolResult' || typeof input.callId !== 'string') { continue; }
+					const result = unique(results.get(key(entry.threadId, entry.turnId, input.callId)));
+					if (result && result.record!.sequence <= diagnostic.event.sourceThreadSequence) { link(result, entry, 'modelInput'); }
+				}
+			}
+		}
 	}
 
 	payload(entry: TraceEntry, output: boolean): { ref?: AgentTracePayloadRef; record?: AgentTraceDiagnosticEvent; } {
@@ -181,6 +278,12 @@ export function eventLabel(record: AgentTraceEvent): string {
 			detail = localize('agentTrace.loopDecision', 'Loop · {0} · {1} · stop: {2} · phases: {3}', loopActionLabel(decision?.action), loopReasonLabel(decision?.reason), stopReasonLabel(decision?.stopReason), phases);
 			break;
 		}
+		case 'delegationRequested': detail = localize('agentTrace.delegationRequested', 'Child task requested'); break;
+		case 'delegationStarted': detail = localize('agentTrace.delegationStarted', 'Child task started'); break;
+		case 'delegationResultProduced': detail = localize('agentTrace.resultProduced', 'Child result produced · {0}', isRecord(event.result) ? String(event.result.status) : ''); break;
+		case 'delegationResultReceived': detail = localize('agentTrace.resultReceived', 'Child result received · {0}', isRecord(event.result) ? String(event.result.status) : ''); break;
+		case 'agentJoinRequested': detail = localize('agentTrace.joinRequested', 'Waiting for child tasks'); break;
+		case 'agentJoinSatisfied': detail = localize('agentTrace.joinSatisfied', 'Child task wait satisfied'); break;
 		case 'toolCall': detail = localize('agentTrace.toolCall', 'Tool call · {0}', String(item?.name ?? '')); break;
 		case 'toolResult': detail = item?.isError ? localize('agentTrace.toolFailed', 'Tool failed · {0}', String(item?.toolCallId ?? '')) : localize('agentTrace.toolResult', 'Tool result · {0}', String(item?.toolCallId ?? '')); break;
 		case 'toolExecutionStarted': detail = localize('agentTrace.toolStarted', 'Tool execution started'); break;
@@ -277,6 +380,10 @@ export function relationLabel(kind: string): string {
 		case 'deliversMessage': return localize('agentTrace.deliversMessage', 'Message delivery');
 		case 'delegates': return localize('agentTrace.delegates', 'Delegation');
 		case 'invokes': return localize('agentTrace.invokes', 'Runtime call');
+		case 'modelInput': return localize('agentTrace.modelInput', 'Result present in model input');
+		case 'returnsResult': return localize('agentTrace.returnsResult', 'Child result returned');
+		case 'startsDelegation': return localize('agentTrace.startsDelegation', 'Delegation started');
+		case 'satisfiesJoin': return localize('agentTrace.satisfiesJoin', 'Join satisfied');
 		case 'requestsTool': return localize('agentTrace.requestsTool', 'Model requested tool');
 		default: return kind;
 	}
