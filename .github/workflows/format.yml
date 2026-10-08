@@ -30,7 +30,7 @@ jobs:
       - name: Test formatter commands and file boundaries
         run: pnpm test:format
       - name: Test and check import path spelling
-        run: pnpm test:import-case && pnpm check:import-case
+        run: pnpm test:import-case && pnpm test:git-hooks && pnpm check:import-case
       - name: Check TypeScript and JavaScript formatting
         if: always() && !cancelled()
         run: pnpm format:ts

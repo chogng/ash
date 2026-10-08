@@ -130,6 +130,7 @@
     "check:import-case": "node build/importCase.ts --check",
     "fix:import-case": "node build/importCase.ts --fix",
     "test:import-case": "node --test build/importCase.test.ts",
+    "test:git-hooks": "node --test build/gitHooks.test.ts",
     "format:ts": "node build/format.ts --check",
     "format:ts:fix": "node build/format.ts --write",
     "format:config": "prettier --check \"**/*.{json,jsonc,yml,yaml,md,css,html}\"",

@@ -47,7 +47,7 @@
 
 pnpm 根据 `devEngines.runtime` 下载并使用固定的 Node 版本，通常不需要单独安装 Node。`pnpm install` 可在 PowerShell 与 Bash 中执行。运行 Electron 或 Browser Workbench 前需要前端依赖；只开发 CLI/TUI 时按所需 Rust 工具和后端资源准备环境。
 
-本地 `pnpm install` 自动启用仓库 Git 钩子，也可执行 `pnpm hooks:install` 为已有 checkout 启用。提交前检查暂存区，推送前检查待推送提交的第一方 TS/JS 相对导入大小写，以 Git 记录的文件名为准；不需要编译。发现错误后运行 `pnpm fix:import-case`，审阅修复并重新暂存。已有自定义 `core.hooksPath` 时安装命令会停止，保留原配置；需将对应检查接入已有钩子。
+本地 `pnpm install` 自动启用仓库 Git 钩子，也可执行 `pnpm hooks:install` 为已有 checkout 启用。提交前检查暂存区，推送前检查待推送提交的第一方 TS/JS 相对导入大小写，以 Git 记录的文件名为准；不需要编译。钩子通过 `pnpm exec node` 使用仓库固定的 Node，适用于 Windows Git Bash、macOS 和 Linux。发现错误后运行 `pnpm fix:import-case`，审阅修复并重新暂存。已有自定义 `core.hooksPath` 时自动安装只提示并保留原配置，不阻断依赖安装；显式 `pnpm hooks:install` 会停止，需将对应检查接入已有钩子。CI 保留独立检查。
 
 ### 项目命令
 

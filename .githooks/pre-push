@@ -4,5 +4,5 @@ do
     case "$local_oid" in
         0000000000000000000000000000000000000000) continue ;;
     esac
-    node build/importCase.ts --check --revision "$local_oid" || exit $?
+    pnpm exec node build/importCase.ts --check --revision "$local_oid" || exit $?
 done

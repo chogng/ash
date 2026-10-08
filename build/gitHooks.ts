@@ -7,9 +7,13 @@ if (!process.env.CI || process.argv.includes('--install')) {
 	if (current.status !== 0 && current.status !== 1) { throw new Error('Cannot read Git hook configuration'); }
 	const path = current.stdout.trim();
 	if (path && path !== '.githooks') {
-		throw new Error(`Existing Git hooks at ${path}; add the import-case checks there before enabling repository hooks.`);
+		const message = `Existing Git hooks at ${path}; add the import-case checks there before enabling repository hooks.`;
+		if (process.argv.includes('--install')) { throw new Error(message); }
+		// Dependency installation must preserve another device's hook owner.
+		console.warn(message);
+	} else {
+		const installed = spawnSync('git', ['config', '--local', 'core.hooksPath', '.githooks'], { cwd: root, stdio: 'inherit' });
+		if (installed.status !== 0) { throw new Error('Cannot install repository Git hooks'); }
+		console.log('Installed local staged and pre-push import-case checks.');
 	}
-	const installed = spawnSync('git', ['config', '--local', 'core.hooksPath', '.githooks'], { cwd: root, stdio: 'inherit' });
-	if (installed.status !== 0) { throw new Error('Cannot install repository Git hooks'); }
-	console.log('Installed local staged and pre-push import-case checks.');
 }
