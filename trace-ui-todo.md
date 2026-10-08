@@ -110,8 +110,20 @@
 
 旧界面新增两条红测均失败：2,000 条记录全部挂载、详情没有五个页签。迁移后六个 Trace 测试文件共 57 项通过，其中编辑器 27 项：覆盖定位/订阅/导出/导入、虚拟视口、诊断与持久序号冲突的关系跳转、按需只读模型创建与释放，以及正文迟到响应不会覆盖新选择。定向 CSS 检查为 0 errors / 0 design suggestions，Renderer、浏览器集成与 smoke 类型检查通过，7 个修改的 TypeScript 文件格式检查通过。仓库 hygiene 通过：263 个 CSS 文件为 0 errors / 0 design suggestions，设计 token 一致性 2 项通过。
 
-第一次新版浏览器集成的两个场景未通过；fixture 未装载共享控件样式且使用了未注册的图标，导致树视口为空。现已使用仓库图标与共享样式修正，尚未按当前 UI 队列补跑。新的正常 Desktop/Web 构建、light/dark/HC 宽窄截图、20,000 事件性能实测和 Electron 场景均未完成；不能以改造前图片或旧测试通过覆盖这些验收。
+第一次新版浏览器集成的两个场景未通过；fixture 未装载共享控件样式且使用了未注册的图标。修正后复跑进一步暴露详情宿主零高度，现已按共享控件契约修复；两个 headless 场景、最新正常 Desktop/Web 前端构建、四主题宽窄截图与 20,000 事件实测均通过。Electron 与真实 App Server 场景仍待验收；不能以合成 fixture 或改造前图片覆盖这些验收。
 
 Sherpa 官方归档正常重试的大小与 SHA-256 已通过锁定校验；完整后端准备尚未完成。原失败响应的临时文件已由下载器清理，原实测 hash 未保留，不能推断先前失败原因。
 
 导出身份复核又补充一条失败回归：相同 eventKey 来自其它 Thread/Turn，或把持久记录误作模型诊断时，旧范围过滤会错误收入图节点。修复同时核对来源、Thread 与 Turn；关系定位建立键索引，避免每个图节点反复扫描全历史。该新增回归先失败、修复后通过；关闭仍在分页读取的输入时，进度条也立即隐藏。
+
+### 更新到最新 main 后的运行复验
+
+本树已 fetch 并无冲突 rebase 到 `77fcedc89`。UI 与文档分别提交，P1 与导入导出提交保留；没有 push。
+
+headless Chromium 复跑先暴露详情零高度：TabList 会填满宿主，直接挂到检查器会挤掉详情；滚动控件的额外 block 宿主也未给绝对定位视口分配高度。现在给 TabList 独立的一行，滚动根直接占内容区，不改共享控件内部样式。测试中的错误 editor CSS 名称改为实际 Saved execution body region，并断言宽窄面板可见及模型/编辑器释放。
+
+修复后两个集成场景通过：light、dark、两种 HC 的宽/窄布局、树/页签/分栏键盘、错误与选中前景、空筛选保留详情、Accessible View 屏幕外事件，以及按需原始正文。保存 8 张实际 headless 截图；真实 Electron 与 App Server 场景仍另行验收。
+
+20,000 事件本次单样本：导入至 Imported 状态约 315 ms，搜索并选择目标约 65 ms，初次 mounted rows 为 29；正文打开时 1 个模型/编辑器，关闭后均为 0。计时包含 Playwright 文件传输/交互，服务初始化已完成，同时存在两个后端编译任务；没有同机旧版相同数据集的时间基线，不据此宣称整体性能提升。
+
+修复后的正常 Desktop/Web 前端构建与 smoke 编译已通过；最终 57 项 Trace 单测、hygiene、格式检查均已通过。后端正常准备先因默认 Python 无 tomllib 停止，再由 PYTHON 指向本机 Python 3.12；后一次 Cargo 因终端服务器断连退出，现通过独立进程重跑正常命令并记录退出码，CARGO_BUILD_JOBS=2。所有 Cargo/runtime/protocol/包使用本树，sourceDigest/包契约与真实 initialize 待构建完成核验；没有复用其它树产物。
