@@ -1,4 +1,4 @@
-name: 🖥️ App Bug
+name: 🖥️ Ash App Bug
 description: Report an issue with the Ash app
 labels:
   - app
@@ -10,10 +10,17 @@ body:
         If you find the same issue, add a 👍 reaction instead of opening a duplicate.
 
         Do not report security vulnerabilities in a public issue. Follow the repository Security Policy instead.
+
   - type: input
     id: version
     attributes:
-      label: What version of Ash are you using? (From “About Ash” dialog)?
+      label: What version of the Ash App are you using (From “About Ash” dialog)?
+    validations:
+      required: true
+  - type: input
+    id: plan
+    attributes:
+      label: What subscription do you have?
     validations:
       required: true
   - type: input
@@ -46,4 +53,5 @@ body:
     id: notes
     attributes:
       label: Additional information
-      description: Logs, screenshots, related issues, recent regressions, or anything else that may help.
+      description: Is there anything else you think we should know?
+

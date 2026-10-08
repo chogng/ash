@@ -12,21 +12,17 @@ body:
         1. Search existing issues for similar features. If you find one, 👍 it rather than opening a new one.
         2. The Ash team will try to balance the varying needs of the community when prioritizing or rejecting new features. Not all features will be accepted. See [Contributing](https://github.com/openai/codex/blob/main/docs/contributing.md) for more details.
 
-  - type: dropdown
-    id: product
+  - type: input
+    id: variant
     attributes:
-      label: Which Ash product is this for?
-      options:
-        - App
-        - CLI
-        - All
+      label: Which variant of Ash are you using?
+      description: (e.g., App, CLI, Web)
     validations:
       required: true
   - type: textarea
     id: feature
     attributes:
       label: What feature would you like to see?
-      description: Describe the capability or behavior you want. You do not need to propose an implementation.
     validations:
       required: true
   - type: textarea

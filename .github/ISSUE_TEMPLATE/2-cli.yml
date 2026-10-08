@@ -14,18 +14,25 @@ body:
         Make sure you are running the [latest](https://npmjs.com/package/@chogng/ash) version of Ash CLI. The bug you are experiencing may already have been fixed.
 
         If your version supports it, please run `ash doctor --json` and paste the output in the "Ash doctor report" field below. This helps us diagnose install, config, auth, terminal, MCP, network, and local state issues.
+
   - type: input
     id: version
     attributes:
-      label: What version of the Ash CLI are you using?
-      description: Use `ash --version`
+      label: What version of Ash CLI is running?
+      description: use `ash --version`
+    validations:
+      required: true
+  - type: input
+    id: plan
+    attributes:
+      label: What subscription do you have?
     validations:
       required: true
   - type: input
     id: model
     attributes:
       label: Which model were you using?
-      description: Like `gpt-5.6-sol`, `claude-fable-5`, etc.
+      description: Like `gpt-5.2`, `gpt-5.2-codex`, etc.
   - type: input
     id: platform
     attributes:
@@ -40,16 +47,10 @@ body:
       description: |
         Also note any multiplexer in use (screen / tmux / zellij).
         E.g., VS Code, Terminal.app, iTerm2, Ghostty, Windows Terminal (WSL / PowerShell)
-  - type: input
-    id: multiplexer
-    attributes:
-      label: Are you using a terminal multiplexer?
-      description: "Examples: tmux, zellij, screen. Write `none` if not applicable."
-      placeholder: none / tmux 3.x / zellij ...
   - type: textarea
     id: doctor
     attributes:
-      label: ash doctor report
+      label: Ash doctor report
       description: |
         If available, run `ash doctor --json` and paste the full output here.
 
@@ -79,4 +80,4 @@ body:
     id: notes
     attributes:
       label: Additional information
-      description: TERM/COLORTERM values, logs, screenshots, related issues, or recent regressions.
+      description: Is there anything else you think we should know?

@@ -1,5 +1,5 @@
 name: 🪲 Other Bug
-description: Report an issue in
+description: Report an issue in Ash Web, integrations, or other Ash components
 labels:
   - bug
 body:
