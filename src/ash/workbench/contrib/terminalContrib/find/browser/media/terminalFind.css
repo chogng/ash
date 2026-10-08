@@ -1,0 +1,50 @@
+.ash-terminal-find {
+	position: absolute;
+	z-index: 10;
+	top: var(--ash-spacing-size80);
+	right: var(--ash-spacing-size80);
+	width: 380px;
+	max-width: calc(100% - 2 * var(--ash-spacing-size80));
+	box-sizing: border-box;
+	padding: var(--ash-spacing-size80);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-widget-border));
+	border-radius: var(--ash-cornerRadius-large);
+	background: var(--ash-editor-background);
+	color: var(--ash-foreground);
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-regular);
+}
+
+.ash-terminal-find[hidden] {
+	display: none;
+	pointer-events: none;
+}
+
+.ash-terminal-find-query {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-terminal-find-query > .ash-input-box {
+	flex: 1;
+	min-width: 0;
+}
+
+.ash-terminal-find-result {
+	flex-shrink: 0;
+	font-size: var(--ash-fontSize-label1);
+}
+
+.ash-terminal-find-controls {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--ash-spacing-size40);
+	margin-top: var(--ash-spacing-size40);
+}
+
+.ash-terminal-find.invalid .ash-terminal-find-result {
+	color: var(--ash-error-foreground);
+}

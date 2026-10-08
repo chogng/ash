@@ -8,7 +8,7 @@ import { ITerminalService, type ITerminalInstance } from '../../../src/ash/workb
 import { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
 import { TERMINAL_VIEW_ID } from '../../../src/ash/workbench/contrib/terminal/common/terminal.js';
 import { SEARCH_VIEW_ID } from '../../../src/ash/workbench/contrib/search/common/constants.js';
-import { TerminalInstanceWidget } from '../../../src/ash/workbench/contrib/terminal/browser/instance/terminalInstanceWidget.js';
+import { XtermTerminal } from '../../../src/ash/workbench/contrib/terminal/browser/xterm/xtermTerminal.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { Disposable } from '../../../src/ash/base/common/lifecycle.js';
 import { IFileSearchService } from '../../../src/ash/platform/search/common/fileSearch.js';
@@ -277,11 +277,11 @@ const terminalInstance: ITerminalInstance = {
 	...Disposable.None, id: 'context-shell', dirId: 'workspace', processId: 1, initialCwd: '/workspace', title: 'Shell',
 	profile: { profileId: 'shell', title: 'Shell', isDefault: true }, state: 'running', exitCode: undefined,
 	onDidWriteData: terminalOutput.event, onDidExit: Event.None, onDidChangeCommandStatus: Event.None, onDidChangeState: Event.None,
-	write: () => { }, processBinary: async () => { }, resize: () => { }, close: async () => { },
+	xterm: undefined, xtermReadyPromise: Promise.resolve(undefined), getContribution: () => null, attachToElement: () => { }, detachFromElement: () => { }, sendText: async () => { }, processBinary: async () => { }, resize: () => { }, close: async () => { },
 };
 const terminalHost = document.createElement('div');
 document.body.append(terminalHost);
-const terminalScreen = hasContextSources ? resources.add(services.createInstance(TerminalInstanceWidget, terminalHost, terminalInstance)) : undefined;
+const terminalScreen = hasContextSources ? resources.add(services.createInstance(XtermTerminal, terminalHost, terminalInstance)) : undefined;
 if (hasContextSources) terminalOutput.fire({ data: new TextEncoder().encode(`\x1b[32m${terminalSource}\x1b[0m\r\n`), trackCommit: false });
 const terminalInstances = hasContextSources ? [terminalInstance] : [];
 services.registerInstance(ITerminalService, { instances: terminalInstances } as unknown as ITerminalService);

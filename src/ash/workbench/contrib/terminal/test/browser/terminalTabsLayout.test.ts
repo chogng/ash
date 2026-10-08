@@ -1,3 +1,6 @@
+import { Emitter, Event } from '../../../../../base/common/event.js';
+import { Disposable } from '../../../../../base/common/lifecycle.js';
+import type { ITerminalInstance, ITerminalService } from '../../browser/terminal.js';
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
@@ -20,7 +23,7 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { TerminalTabsLayout } = await import("../../../../../workbench/contrib/terminal/browser/view/terminalTabsLayout.js");
+const { TerminalTabbedView } = await import("../../../../../workbench/contrib/terminal/browser/terminalTabbedView.js");
 
 suiteTeardown(() => {
 	browserEnvironment.window.close();
@@ -31,9 +34,23 @@ suiteTeardown(() => {
 
 test("Terminal instance list sash resizes the right column within its bounds", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
-	const widgets = h(dom.window.document, "main");
-	const tabs = h(dom.window.document, "aside");
-	using layout = new TerminalTabsLayout(widgets, tabs);
+	const parent = h(dom.window.document, 'main');
+	using changed = new Emitter<void>();
+	const createInstance = (id: string): ITerminalInstance => ({
+		...Disposable.None, id, dirId: 'folder', processId: 1, initialCwd: '/folder', title: id,
+		profile: { profileId: 'shell', title: 'Shell', isDefault: true }, state: 'running', exitCode: undefined,
+		onDidWriteData: Event.None, onDidChangeCommandStatus: Event.None, onDidExit: Event.None, onDidChangeState: Event.None,
+		xterm: undefined, xtermReadyPromise: Promise.resolve(undefined), getContribution: () => null, attachToElement() { }, detachFromElement() { }, async sendText() { }, processBinary: async () => { }, resize() { }, close: async () => { },
+	});
+	const instances = [createInstance('one'), createInstance('two')];
+	const terminals: ITerminalService = {
+		...Disposable.None, instances, activeInstance: instances[0], onDidCreateInstance: Event.None,
+		onDidDisposeInstance: Event.None, onDidChangeInstances: changed.event, onDidChangeActiveInstance: Event.None,
+		getProfiles: async () => [], createTerminal: async () => { throw new Error('Unexpected creation'); },
+		relaunchTerminal: async () => { }, setActiveInstance() { }, moveTerminal() { }, closeTerminal: async () => { },
+	};
+	using layout = new TerminalTabbedView(parent, terminals);
+	const tabs = layout.element.querySelector<HTMLElement>('.ash-terminal-tabs')!;
 	dom.window.document.body.append(layout.element);
 	layout.layout(1_000, 200);
 	const panes = layout.element.querySelectorAll<HTMLElement>(":scope > .ash-split-view-pane");
@@ -61,7 +78,8 @@ test("Terminal instance list sash resizes the right column within its bounds", (
 	}
 	assert.equal(panes[1]?.style.width, "500px");
 
-	layout.setInstanceListPresentation("hidden");
+	const second = instances.pop()!;
+	changed.fire();
 	assert.equal(panes[1]?.hidden, true);
 	assert.equal(panes[0]?.style.width, "1000px");
 	const hiddenSash = layout.element.querySelector<HTMLElement>(":scope > .ash-sash");
@@ -69,7 +87,8 @@ test("Terminal instance list sash resizes the right column within its bounds", (
 	assert.equal(hiddenSash.classList.contains("ash-sash-disabled"), true);
 	assert.equal(hiddenSash.getAttribute("aria-disabled"), "true");
 
-	layout.setInstanceListPresentation("visible");
+	instances.push(second);
+	changed.fire();
 	assert.equal(panes[1]?.hidden, false);
 	assert.equal(panes[1]?.style.width, "500px");
 	assert.equal(layout.element.querySelector(":scope > .ash-sash"), hiddenSash);

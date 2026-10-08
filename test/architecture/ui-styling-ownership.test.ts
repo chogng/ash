@@ -145,7 +145,7 @@ test("Menubar icon actions use ToolBar's label hiding without hiding their icon"
 test("Split actions own their joined geometry outside Terminal", async () => {
 	const sourceRoot = join(process.cwd(), "src", "ash");
 	const dropdownCss = await readFile(join(sourceRoot, "base", "browser", "ui", "dropdown", "dropdown.css"), "utf8");
-	const terminalCss = await readFile(join(sourceRoot, "workbench", "contrib", "terminal", "browser", "view", "media", "terminal.css"), "utf8");
+	const terminalCss = await readFile(join(sourceRoot, "workbench", "contrib", "terminal", "browser", "media", "terminal.css"), "utf8");
 	const workbenchCss = await readFile(join(sourceRoot, "workbench", "browser", "media", "style.css"), "utf8");
 
 	assert.match(dropdownCss, /\.ash-dropdown-with-primary-action-view-item\s*\{[^}]*display: flex;[^}]*gap: 0;[^}]*border-radius: var\(--ash-cornerRadius-small\);/s);

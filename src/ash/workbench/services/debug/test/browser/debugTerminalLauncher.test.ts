@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Event } from '../../../../../base/common/event.js';
+import { DeferredPromise } from '../../../../../base/common/async.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
@@ -28,7 +29,7 @@ test('DAP runInTerminal creates an integrated PowerShell terminal with quoted ar
 	const writes: string[] = [];
 	const terminals = {
 		getProfiles: async () => [{ profileId: 'powershell', title: 'PowerShell', isDefault: true }],
-		createTerminal: async () => ({ state: 'running', processId: 1234, write: (value: string) => writes.push(value) }),
+		createTerminal: async () => ({ state: 'running', processId: 1234, sendText: async (value: string, shouldExecute: boolean) => { writes.push(value + (shouldExecute ? '\r' : '')); } }),
 	} as unknown as ITerminalService;
 	const response = await launchWithTerminalRequest(terminals, { kind: 'integrated', title: 'Debug app', cwd: 'C:\\work tree', args: ['C:\\bin\\app.exe', 'a b', "don't"], env: { MODE: 'debug value', REMOVE_ME: null } });
 
@@ -46,6 +47,39 @@ test('DAP runInTerminal rejects external terminals before acquiring a profile', 
 
 suite('DAP terminal availability', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	for (const outcome of ['acknowledge', 'reject', 'close'] as const) {
+		test(`runInTerminal waits for process input and handles ${outcome}`, async () => {
+			using resources = new DisposableStore();
+			const acknowledgement = new DeferredPromise<void>();
+			const submitted = new DeferredPromise<void>();
+			const calls: string[] = [];
+			const processes: ITerminalProcessService = {
+				getConnectionState: async () => 'ready', onConnectionState: Event.None,
+				listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
+				create: async () => ({ ready: { pid: 1234, cwd: '/workspace' }, terminalId: 'debug-process', profile: { profileId: 'shell', title: 'Shell', isDefault: true }, connectionPersistence: 'connectionOwned' }),
+				read: async () => ({ terminalId: 'debug-process', commandEventGap: false, chunks: [], nextSequence: 0, commandEvents: [], nextCommandSequence: 0, exited: false, exitCode: undefined, outputGap: false }),
+				write: async () => { calls.push('write'); void submitted.complete(undefined); await acknowledgement.p; },
+				resize: async () => { }, close: async () => { calls.push('close'); },
+			};
+			const workspace = resources.add(new WorkspaceContextService({ id: 'test', uri: URI.file('/workspace') }));
+			const services = resources.add(new InstantiationService(new ServiceCollection([ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
+			const terminals = resources.add(services.createInstance(TerminalService));
+			let finished = false;
+			const pending = launchWithTerminalRequest(terminals, { kind: 'integrated', args: ['app'] }).then(response => { finished = true; return response; });
+			await submitted.p;
+			assert.equal(finished, false);
+			if (outcome === 'acknowledge') void acknowledgement.complete(undefined);
+			else if (outcome === 'reject') void acknowledgement.error(new Error('debug input rejected'));
+			else await terminals.closeTerminal(terminals.activeInstance!);
+			const response = await pending;
+			assert.deepEqual({ success: response.success, calls, instances: terminals.instances.length }, {
+				success: outcome === 'acknowledge', calls: outcome === 'acknowledge' ? ['write'] : ['write', 'close'], instances: outcome === 'acknowledge' ? 1 : 0,
+			});
+			if (outcome === 'reject') assert.equal(response.message, 'debug input rejected');
+			if (outcome === 'close') void acknowledgement.complete(undefined);
+		});
+	}
 
 	for (const persistence of ['connectionOwned', 'reconnectable'] as const) {
 		test(`fails the reverse request when its ${persistence} terminal cannot accept commands`, async () => {

@@ -21,7 +21,7 @@
 - [x] Windows 服务 9 项测试，覆盖真实认证管道、连续连接、延迟读取、受限令牌和安装文件权限；没有安装 SCM 服务或账户。
 - [x] 账户库完整普通测试：38 项通过，2 项需安装账户的用例忽略；包括真实受限 PowerShell、ConPTY、输出排空、ACL 恢复与代理身份边界。账户库与服务的 warning 门禁通过。
 - [ ] 管理员账户验收：安装、认证管道、真实文件权限、网络、PTY、后代回收、运行器更新、服务更新和清理。程序已构建；首次 UAC 启动返回“操作已被用户取消”，尚未安装测试账户或服务。
-- [ ] 新 pin 的 PSEC 成功执行：在具备完整能力的 Windows 主机运行 `scripts/test-psec.ps1 -Capability required`；本机无法覆盖，旧 ARM64 CI 结果不能复用。
+- [x] 新 pin 的 PSEC 成功执行：Windows 11 25H2 ARM64、build `26200.9457` 的 CI 实际通过 7 项适配器执行、3 项 ConPTY 和 4 项产品 RPC，包含目录别名限制；Server 2022/2025 x64 通过适配器及产品缺能力拒绝。三个 PSEC 任务全部通过，源码提交、原始失败及边界见 [本轮验收](docs/windows-sandbox-acceptance-runbook.md#2026-10-07-psec-终端与执行服务-rpc-验收)。本机 23H2 仍缺能力；网络矩阵与 App Server PSEC 产品链未覆盖。
 
 本轮本机证据保存在 `.build/acceptance/mxc-upgrade-windows-20261007/`。Bazel 已构建 Ash 库，但官方构建脚本仍产生 3 条辅助程序 `cargo:rustc-link-arg-bin` 不受支持提示；这些辅助程序没有取得 Bazel 构建资格。Windows Rust ProcessContainer 仍不提供 PTY，Ash 保留自己的终端启动器。
 

@@ -12,7 +12,7 @@ import { INotificationService } from '../../../../../platform/notification/commo
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { Schemas } from '../../../../../base/common/network.js';
 import { REVEAL_IN_EXPLORER_COMMAND_ID } from '../../../files/browser/fileConstants.js';
-import { FOCUS_TERMINAL_COMMAND_ID } from '../../../terminal/common/terminal.js';
+import { TerminalCommandId } from '../../../terminal/common/terminal.js';
 import { FOCUS_SEARCH_COMMAND_ID } from '../../../search/common/constants.js';
 import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
 
@@ -66,7 +66,7 @@ export class DefaultChatAttachmentWidget extends Disposable {
 				await this.commands.executeCommand(OpenSettingsCommandId, 'tools');
 			} else if (resource.scheme === Schemas.internal && resource.authority === 'terminal') {
 				const id = new URLSearchParams(resource.query).get('id');
-				if (id) await this.commands.executeCommand(FOCUS_TERMINAL_COMMAND_ID, id);
+				if (id) await this.commands.executeCommand(TerminalCommandId.Focus, id);
 			} else if (resource.scheme === Schemas.internal && resource.authority === 'search-results') {
 				await this.commands.executeCommand(FOCUS_SEARCH_COMMAND_ID);
 			} else if (this.attachment.kind === 'directory') {

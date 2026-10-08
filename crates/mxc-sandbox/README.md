@@ -60,7 +60,7 @@ SDK 的 Seatbelt 策略固定可写根以及只读、拒绝路径的祖先目录
 - Windows 的 Rust SDK 仍不支持 ProcessContainer 分配 PTY，因此宿主通过 `with_pty_helper` 提供启动器。`utils-pty` 启动该程序的 `--ash-mxc-pty` 角色，产品入口先调用 `arg0::dispatch`。
 - Windows 交接格式归 Ash，包含具体命令、显式环境、文件和网络策略、准备阶段的文件身份。内部角色通过官方发布的 1.0 契约重建 SDK 请求，不反序列化 SDK 内部执行模型。新增宿主 ACL 授权字段会被拒绝。
 - Windows 交接请求最多 1 MiB UTF-8，按字符边界拆成不超过 8 KiB 的环境项；帮助进程检查块数、总字节数、缺块、重复键及多余字段。工作负载环境与启动器环境分开，传输变量不注入工作负载，显式空环境保持为空。PSEC 所需的 `SYSTEMROOT` 和 `LOCALAPPDATA` 由执行器提供。
-- `tests/pty.rs` 在 Unix 实际验证输入、resize、环境、只读拒绝、退出、前台作业中断和回收；Windows 普通回归验证帮助进程入口，[PSEC 终端用例](tests/pty/windows.rs) 另检查真实终端输入、尺寸、大环境、传输变量隔离、只读拒写、退出码及后代回收。这些用例须在支持 PSEC 的系统显式执行，已接入 `scripts/test-psec.ps1`；交叉编译不代表对应系统已通过运行验收。
+- `tests/pty.rs` 在 Unix 实际验证输入、resize、环境、只读拒绝、退出、前台作业中断和回收；Windows 普通回归验证帮助进程入口，[PSEC 终端用例](tests/pty/windows.rs) 另检查真实终端输入、尺寸、大环境、传输变量隔离、只读拒写、退出码及后代回收。[执行服务验收](../exec-server/README.md#pty-边界) 通过产品可执行文件和 RPC 检查帮助进程装配、重连与退出输出。这些用例须在支持 PSEC 的系统显式执行，已接入 `scripts/test-psec.ps1`；交叉编译不代表对应系统已通过运行验收。
 
 ## SDK 依赖
 
@@ -74,7 +74,7 @@ SDK 的 Seatbelt 策略固定可写根以及只读、拒绝路径的祖先目录
 
 ## 验证
 
-2026-10-07 的 Codex 对照修改在 macOS ARM64 上通过适配器 34 项库测试和 7 项实际 PTY 测试，1 项需要显式局域网地址的用例未运行；执行服务库及 15 项执行集成回归串行通过，PowerShell 路径分类定向回归通过。两 crate 的 Windows ARM64/x64 全部测试目标通过编译及 warning 门禁，但本轮没有运行新增的 Windows PSEC/ConPTY 用例。Windows 验收脚本只有在逐项实际通过后才记录对应范围成功。
+2026-10-07 的 Codex 对照修改在 macOS ARM64 上通过适配器 34 项库测试和 7 项实际 PTY 测试，1 项需要显式局域网地址的用例未运行；执行服务库及 15 项执行集成回归串行通过，PowerShell 路径分类定向回归通过。两 crate 的 Windows ARM64/x64 全部测试目标通过编译及 warning 门禁。新 pin 在 Windows 11 25H2 ARM64 CI 实际通过 7 项 PSEC 适配器执行、3 项 ConPTY 和 4 项产品执行服务 RPC 用例；目录别名 fixture 修复后也通过原有只读与拒绝断言。两个 Server x64 的适配器与产品 RPC 缺能力拒绝用例通过；三个 PSEC 任务全部成功，具体提交、原始失败与覆盖范围见 [终端与 RPC 验收](../../docs/windows-sandbox-acceptance-runbook.md#2026-10-07-psec-终端与执行服务-rpc-验收)。
 
 本轮执行服务普通 Cargo 构建和 Bazel 适配器库构建通过。Bazel 的固定 SDK 裁剪清单已补入 MXC 进程回收所需的 `libproc`，此前失败的 PTY 测试与执行服务可执行目标已成功构建；Bazel 运行的 7 项 PTY 测试通过，执行服务实际启动及 SIGTERM 退出验证通过。首次并发执行服务回归停在既有延迟输出测试，单独及串行复测通过，该逻辑未修改。
 
@@ -84,7 +84,7 @@ SDK 的 Seatbelt 策略固定可写根以及只读、拒绝路径的祖先目录
 
 2026-10-07 升级至 `c45e7d5a` 后，Windows 适配器 13 项单元测试、文件身份 11 项测试、文件快照 2 项测试、账户文件策略 8 项测试、SDK ACL 35 项测试与继承 2 项测试、PSEC 诊断 2 项测试通过。WSL2 中 Linux 适配器 11 项单元测试和文件快照 2 项测试通过，官方 PTY 的 6 项实机测试通过，覆盖前台作业中断后 shell 继续运行；文件/退出码、后代回收和 Windows 程序互操作绕过的 3 项回归通过。Linux SDK 的退出观察测试和 Seatbelt 策略生成 84 项测试通过；后者不代表 macOS 实际执行验证。
 
-Windows/Linux warning 门禁、Windows 执行服务 Cargo 构建、适配器 Bazel 构建及依赖检查通过。Bazel 会提示官方构建脚本的 3 条 `cargo:rustc-link-arg-bin` 指令不受支持：这些指令给 SDK 的辅助程序添加资源，本次 Ash 库目标不构建这些程序。该提示仍存在，不能据此宣布辅助程序已完成 Bazel 验证。Windows PSEC 成功执行与 PTY 仍需对应系统验收。
+Windows/Linux warning 门禁、Windows 执行服务 Cargo 构建、适配器 Bazel 构建及依赖检查通过。Bazel 会提示官方构建脚本的 3 条 `cargo:rustc-link-arg-bin` 指令不受支持：这些指令给 SDK 的辅助程序添加资源，本次 Ash 库目标不构建这些程序。该提示仍存在，不能据此宣布辅助程序已完成 Bazel 验证。Windows PSEC 成功执行与 PTY 的当前 ARM64 证据见上方 2026-10-07 记录，其他 Windows 客户端系统仍需分别验收。
 
 2026-10-02 在 Windows 11 23H2（build 22631）完成适配器、执行器、执行服务与账户后端的活动测试、执行服务 Cargo 构建、依赖检查和 warning 门禁。另显式运行 PSEC 不可用用例，确认执行前拒绝。同机 WSL2 的 Ubuntu 24.04.5 x64 已实际验证 Bubblewrap：NAT 和 mirrored 模式下，Linux 文件系统及 `/mnt/c` 上的目录权限、隐藏路径与别名、元数据保护、退出码、后代回收和 Windows 可执行文件互操作回归均通过，受管代理用例分别通过。正常构建、适配器及 SDK 的 check 和 warning 门禁通过；SDK 运行器测试 39 项通过。Windows 11 25H2 ARM64 CI 另有 7 项 PSEC 成功路径证据；它不能证明本机 x64 支持。截至该次验收，macOS ARM64 只有测试目标编译结果，Bazel 打包未验证；当前文件与终端实测见上方 2026-10-06 记录。具体环境、原始失败及范围见 [WSL 验收记录](../../docs/windows-sandbox-acceptance-runbook.md#2026-10-02-wsl2-实机验收) 与 [补充验收](../../docs/windows-sandbox-acceptance-runbook.md#2026-10-02-psecwslc-与网络补充验收)。
 

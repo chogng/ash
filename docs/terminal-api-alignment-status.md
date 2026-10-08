@@ -1,13 +1,29 @@
 # Terminal API 对齐状态
 
-终端基座的文件归属与 DI 接线已迁移：平台契约位于 `platform/terminal/common/terminal.ts`，实例契约与实例管理位于 `workbench/contrib/terminal/browser/terminal.ts`、`terminalService.ts`。Shell 的 `terminalProcessManager.ts` 已接管读取游标、命令排序、分页排空与 xterm 解析等待。Workbench 与 Sessions 注册所选进程能力，由共同的 Terminal contribution 创建窗口实例服务。SSH 宿主直接选择完整适配器；本地和 SSH 的字节、退出码转换已收回协议边界。完整 VS Code Terminal API、SSH backend 契约及 terminalContrib 尚未完成。
+## Find 本批准入
+
+用户在终端执行 Find → 当前窗口命令与 `ITerminalInstance.getContribution` → `TerminalFindContribution` / `TerminalFindWidget` → 该实例唯一 `XtermTerminal` 的 SearchAddon → 匹配选区、高亮、结果数与焦点恢复 → 浏览器真实输入断言和 Web / Electron 产品场景。实例拥有贡献，屏幕拥有搜索插件，Find 控件拥有查询与选项；不复制上游私有结构、DOM 或 CSS。
+
+当前行为：Find 搜索解析后的屏幕和回滚内容，支持大小写、整词、正则、跨屏幕换行匹配、上下一个与结果数读出。无效正则不执行搜索；查询期间到达的新输出更新匹配。Ctrl/Command+F 只在终端或 Find 焦点生效，搜索文字不进入 stdin；Escape 清除匹配并恢复终端焦点。切换实例、隐藏面板保留各自查询和选项；关闭实例先释放贡献，再移除屏幕，取消首次加载插件时尚未生效的查询。Find 使用已有 `accessibility.verbosity.find` 与独立的 Alt+F1 帮助，中文文案已接入；这不代表终端输出 Accessible View 与帮助已经补齐。
+
+允许路径：双方同路径的 `terminal/browser/{terminal.ts,terminalInstance.ts,terminal.contribution.ts,xterm/xtermTerminal.ts}`、`terminal/common/terminalContextKey.ts` 与平台 `accessibility/browser/accessibleView.ts` 只补贡献挂载、搜索端口、焦点上下文和帮助标识。上游同路径缺失文件 `terminal/browser/terminalExtensions.ts`、`terminalContrib/find/{common/terminal.find.ts,browser/terminal.find.contribution.ts,browser/terminalFindWidget.ts,browser/terminalFindAccessibilityHelp.ts,browser/media/terminalFind.css}` 承接实际调用链。注册上下文只传当前实例，不预建尚无消费者的进程／布局管理器。
+
+配套允许路径：`package.json` / `pnpm-lock.yaml` 仅增加与 xterm 6 配套的 SearchAddon；`localization/zh-CN/workbench.json` 增加可见文案；`test/integration/browser/{terminal.integration.ts,terminal.integration.spec.ts,chatInput.integration.ts}`、`terminal/test/browser/terminalTabsLayout.test.ts`、`services/tasks/test/browser/taskService.test.ts` 同步真实链验证和实例 fixtures；`test/smoke/areas/windows/terminal.spec.ts` 验证真实 PTY 查找、实例隔离、关闭释放。本文与两个 Terminal README 同步职责和结果。未列路径只读；旧迁移和用户改动已保存于本批基线之外，不回退。
+
+本批验证：正常 `pnpm test:unit` 执行 Terminal 实例／Tabs、Tasks、Debug launcher 与两项架构检查，共 82 项通过；Chromium Terminal 全量 35 项通过。正常 `test:smoke:desktop` 与 `test:smoke:browser:full` 均完成构建与准备，Terminal / Tasks / Debug 的真实 App Server 场景各 7 项通过。`typecheck:renderer` 通过，17 个触及 TS 文件 formatter 通过，新 Find CSS 的 stylelint 通过，本批本地化缺词为零。
+
+验证修复了两个生命周期问题：新屏幕的早到焦点必须在贡献就绪时同步；实例关闭必须先移除贡献监听，再释放屏幕，避免 `focusout` 访问已释放的渲染器。另修正 SearchAddon 在同一查询改变选项时沿用旧匹配缓存的问题。四种主题、中文标签／帮助、原始 stdin 不接收 Find 按键、Tab／Escape、回滚区、跨屏幕换行、输出更新与首次搜索尚在加载时关闭均由真实浏览器状态断言覆盖。测试主题只绑定新增 Find fixture，避免改变旧 pane fixture 的几何基线。
+
+以上运行环境为 macOS；未验证 Windows/Linux、真实 SSH 或实际 VoiceOver 读出。本批不改 Rust／生成协议，不新增第二个进程后端，不删除文件。Find 的查询历史与工作区搜索、完整标准贡献 hooks、终端输出专属无障碍贡献、分组分屏和 Agent 会话接管仍未完成。
+
+终端基座的文件归属与 DI 接线已迁移：平台契约位于 `platform/terminal/common/terminal.ts`，实例契约与实例管理位于 `workbench/contrib/terminal/browser/terminal.ts`、`terminalService.ts`。Shell 的 `terminalProcessManager.ts` 已接管输入队列、尺寸合并、读取游标、命令排序、分页排空与 xterm 解析等待；实例生命周期迁入 `terminalInstance.ts`，它创建并保留唯一 xterm、绑定原始输入；程序消费者使用 `sendText`，管理器的输入和尺寸请求等待后端确认，取消不回放旧输入。屏幕与 Tab 分别迁入 `xterm/xtermTerminal.ts` 和 `terminalTabbedView.ts`。Workbench 与 Sessions 注册所选进程能力，由共同的 Terminal contribution 创建窗口实例服务。SSH 宿主直接选择完整适配器；本地和 SSH 的字节、退出码转换已收回协议边界。完整 VS Code Terminal API、SSH backend 契约及 terminalContrib 尚未完成。
 
 ## 职责与调用链
 
 | Owner                                                                     | 当前职责与状态                                                                                                       |
 | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | [platform/terminal](../src/ash/platform/terminal/README.md)               | 前端进程契约与 DI 标识；现有 Rust 协议适配、SSH 租约管理继续接入同一后端                                             |
-| [contrib/terminal](../src/ash/workbench/contrib/terminal/README.md)       | 唯一实例集合、活动项和输入队列；进程管理器拥有读取游标、命令排序和解析等待；View 和 xterm 拥有屏幕、焦点、主题及布局 |
+| [contrib/terminal](../src/ash/workbench/contrib/terminal/README.md)       | 服务拥有实例集合与活动项；实例拥有连接/生命周期；管理器拥有输入/尺寸/读取；View、Tab 与 xterm 各自拥有 UI |
 | [services/terminal](../src/ash/workbench/services/terminal/README.md)     | 宿主输出 PTY 创建通知与生命周期已接入 Web API 和 Terminal contribution；不保存 Shell 实例服务                        |
 | `contrib/tasks/browser/taskService.ts`                                    | 任务发现、执行与终端命令状态；稳定依赖经构造 DI 注入，注册仍由 Code 模式选择                                         |
 | `contrib/debug/browser/debugService.ts`                                   | Debug 执行编排与 DAP `runInTerminal`；稳定依赖经构造 DI 注入，工厂源仍指向同一个共享 registry                        |
@@ -46,7 +62,7 @@
 
 调用方包括两个 Workbench 创建入口、Code 服务装载、Renderer host/适配器类型、Terminal View/Widget/标题动作/profile 图标、Tasks View、Testing View、voice、对应单测及浏览器 fixtures。共享 Task、Debug、Testing 和 Extension Host 契约没有反向导入 Terminal contribution。标准缺失服务在创建时失败；Debug 宿主明确不提供 DAP 时仍可装配配置服务，启动 Debug 前报告不可用，不创建另一套执行实现。
 
-## 目录调查（2026-10-04，迁移后）
+## 目录调查（2026-10-07，迁移后）
 
 比较 `src/ash` 与只读 `../vscode/src/vs` 的生产 `.ts`、`.css`，排除 `test` 目录及 `.test.ts`。只表示文件路径，不表示完整行为完成率。
 
@@ -54,8 +70,8 @@
 | ----------------------------------- | --: | ------: | -------: | -----: | ---------: |
 | `platform/terminal`                 |   4 |      46 |        1 |      3 |         45 |
 | `workbench/services/terminal`       |   1 |       1 |        1 |      0 |          0 |
-| `workbench/contrib/terminal`        |  15 |      89 |        8 |      7 |         81 |
-| `workbench/contrib/terminalContrib` |   4 |     170 |        3 |      1 |        167 |
+| `workbench/contrib/terminal`        |  17 |      89 |       17 |      0 |         72 |
+| `workbench/contrib/terminalContrib` |   3 |     170 |        3 |      0 |        167 |
 
 新增同路径 owner 承接已有 Ash 调用契约。公开名称与参数仍有差异：平台继续使用进程 ID、分页读取和命令游标；进程管理器已接入 Shell 输出事件与解析等待；完整事件型 child process/backend、process manager 的其他公开能力、profile/configuration、分组、编辑区终端和扩展自供 PTY 尚未对齐。本批不把文件迁移或 DI 标识计为完整公开 API 对齐。
 
@@ -100,7 +116,7 @@
 
 重连测试旧路径 `platform/terminal/test/electron-main/reconnectableTerminalMainService.test.ts` 实际测试 Renderer 租约管理；本批没有取得它的准确退出确认，保留原测试路径与覆盖。
 
-Terminal 专属无障碍帮助、输出 Accessible View、verbosity、Find、历史、Quick Fix、Sticky Scroll、Suggest、剪贴板、完整 links provider、分屏和持久化仍未接通。Node PTY Host 的执行职责由 Rust 后端承担，不能创建第二套执行后端；无当前调用方的 embedder、扩展 PTY 或贡献 API 不创建空实现。
+Terminal 输出专属无障碍帮助、输出 Accessible View、terminal verbosity、历史、Quick Fix、Sticky Scroll、Suggest、剪贴板、完整 links provider、分屏和持久化仍未接通。Find 的当前行为与独立帮助见本文开头；查找历史和工作区搜索仍待补。Node PTY Host 的执行职责由 Rust 后端承担，不能创建第二套执行后端；没有真实消费者的扩展 PTY 能力不创建空实现。
 
 标准 `ITerminalChildProcess` 还要求完整属性查询/更新、signal、binary input、数据确认等真实操作。第五批已经补齐创建/attach 的真实 pid 与启动 cwd、当前进程目录和尺寸查询、原始字节输入，以及 Unix 前台进程组中断。当前目录查询在 macOS/Linux 可用；其他平台返回 `null`，不以启动目录代替。Windows 的显式进程中断返回结构化 `TerminalUnsupported`，不注入伪装成信号的输入。通用属性集合、解析后数据确认、进程列表和跨窗口 detach/恢复仍未完成；不能给这些标准方法填空实现。现有 30 秒连接租约也不等同于上游 backend 的持久化。
 
@@ -186,6 +202,33 @@ Terminal 专属无障碍帮助、输出 Accessible View、verbosity、Find、历
 
 Chromium Terminal Playwright 22 项通过，新增 3 项经过生产服务注册与真实 xterm，覆盖加载期间停止续读、分块中文/emoji、完成与退出、关闭取消和隐藏解析不抢焦点。生产 `pnpm build`、`typecheck:renderer`、automation 编译通过；当前产物的真实 Electron + App Server Terminal 3 项通过。构建无 warning/error；stylelint 为 0 错误、1 条未修改 Sessions CSS 的建议，Playwright 保留既有颜色环境提示。目录审计仅增加上游同路径进程管理器，旧实例读取 owner 已退出；46 个文档相对目标及 `git diff --check` 通过。未修改 Rust 或生成协议，未运行 Rust 单测；Windows/Linux 和真实 SSH transport 产品场景未验证。
 
+### 当前批准批：实例、屏幕与终端界面职责（2026-10-07）
+
+用户明确选择“迁回对应职责文件”，批准八处旧 UI 文件退出；保留 Ash 的实现、DOM、样式与 Rust 适配器。输入、尺寸请求和取消首先迁至 `TerminalProcessManager`，实例负责进程身份与连接状态，服务负责实例集合。此切片的既有 33 项实例单测通过后，开始屏幕迁移；屏幕迁移的 26 项 Chromium 场景通过后，再迁移 Tab 与命令。不能把同路径落位计为完整 VS Code API 或功能对齐。
+
+| 准确路径（相对 `src/ash/workbench/contrib/terminal/`） | 关系与本批职责 / 生产调用方 / 验证 |
+| --- | --- |
+| `browser/terminalProcessManager.ts`、`browser/terminalService.ts` | 双方都有；现有服务→实例→管理器→PTY，将输入队列、UTF-8 分块、二进制顺序、尺寸合并和停止后的丢弃收敛到管理器；实例生命周期单测 |
+| `browser/terminalInstance.ts` | 仅 VS Code；从服务迁回实例身份、创建/关闭、连接状态及输出事件；服务创建它，实例单测及真实 PTY smoke |
+| `browser/xterm/xtermTerminal.ts` | 仅 VS Code；View→屏幕，将 widget、主题转换与 alternate scroll 迁入唯一屏幕 owner；保留独立算法及既有 Ash helper 契约，原有测试改 import，Chromium 验证真实解析和输入 |
+| `browser/terminalTabbedView.ts` | 仅 VS Code；View→Tab/分栏，迁入现有列表渲染、选择、拖动与尺寸状态；实例集合仍由服务拥有；分栏单测及 Chromium Tab 行为 |
+| `browser/terminalIcon.ts` | 仅 VS Code；Tab/标题→profile 图标，迁回既有可信 profile 映射；保持 Ash profile 契约，未声称完成上游 profile 服务 |
+| `browser/terminalView.ts` | 双方都有；迁移屏幕/Tab 依赖，将既有标题 UI 归入 View，保留可见性、初始化、焦点和失败状态；浏览器及 Electron |
+| `browser/terminalActions.ts`、`browser/terminalMenus.ts`、`common/terminalContextKey.ts`、`common/terminal.ts` | 前三者仅 VS Code、后者双方都有；标题按钮→窗口 CommandService→当前窗口 View，命令定义与菜单静态注册，View 只拥有 toolbar/context；迁移真实使用的标准命令 ID，验证多窗口及标题动作 |
+| `browser/terminal.contribution.ts` | 双方都有；只加载动作/菜单，退出其 Focus 命令实现，不改变服务或 View 装配 |
+| `browser/media/terminal.css`、`browser/media/terminalVoice.css` | 仅 VS Code；原有 Ash 样式原样迁回屏幕 owner，View/voice 加载；计算样式、主题和焦点的浏览器验证 |
+
+批准的准确旧路径为 `browser/instance/alternateScroll.ts`、`browser/instance/terminalInstanceWidget.ts`、`browser/instance/terminalTheme.ts`、`browser/view/media/terminal.css`、`browser/view/terminalProfileIcon.ts`、`browser/view/terminalTabsLayout.ts`、`browser/view/terminalTitleActions.ts`，以及 `src/ash/workbench/contrib/terminalContrib/voice/browser/terminalVoice.css`。旧文件均由 Git 跟踪；同批迁移全部生产与测试引用，不保留另一套实现。
+
+必要调用方/验证范围为 `src/ash/workbench/contrib/terminalContrib/voice/browser/terminalVoice.ts`、`src/ash/workbench/contrib/chat/browser/attachments/chatAttachmentWidgets.ts`，既有 Terminal 四个 UI 单测和 `terminalService.test.ts`，`test/integration/browser/terminal.integration.ts`、`.spec.ts`、`chatInput.integration.ts`、`test/architecture/ui-styling-ownership.test.ts`，Terminal 与 terminalContrib README、`docs/ash-desktop-architecture.md` 与本台账；`localization/zh-CN/workbench.json` 同步迁移 Tab 标签与命令失败提示。浏览器编译另需在 `test/integration/browser/files.integration.ts` 的离线 API fixture 补现有必填 `connectionGeneration`；不改文件夹产品实现。实际 Electron trace 另证明 `test/automation/terminal.ts` 与 `test/smoke/areas/windows/terminal.spec.ts` 使用了旧 Panel 标签；同步为现有生产按钮的 “Toggle Panel Visibility” 与 “Close Panel”，保留所有执行、焦点和输出断言。其他来源不明的 Rust 与脚本变化保留，不属于本批。
+
+实现依照 Ash 当前生命周期：屏幕保留延迟加载与隐藏解析；Tab 组件只订阅服务状态，释放时取消订阅；命令从调用窗口的 accessor 取 View，不保存某个窗口的回调。完整 child process/backend、group、profile/configuration、编辑区终端、服务器 ACK 与 Agent 会话接管仍待后续闭合。
+
+
+本批准入后的验证：新增创建回调输入回归先失败，管理器改为在实例公布前就绪后，正常单测入口的 11 个受影响文件共 81 项通过，runner 自测 5 项通过。新增回归启用 disposable tracker，覆盖读取启动前的文本与尺寸请求；既有用例继续覆盖断线丢弃、二进制顺序和 UTF-8 边界。Chromium Terminal 29 项通过，新增三项验证实际 View 的窗口命令路由与释放、四种 xterm 主题的参数及计算样式、child 控制和保存/恢复 alternate scroll。真实 Electron 与 Web + App Server 的 Terminal 三项各自通过，覆盖 Shell 输入执行、焦点与隐藏/恢复、多实例输出隔离、实际工作目录写盘和退出后 Relaunch。
+
+Desktop 正常构建、完整 Web 构建和 automation 编译通过，Renderer 类型检查通过。两份 CSS 与 Git 中迁移前的内容逐字相同；定向 stylelint 为 0 错误，保留原有终端状态字号的 1 条设计建议。全仓 stylelint 当前被本批未修改的 `contrib/trace/browser/agentTraceEditor.css` 六个未知变量阻塞，未放宽规则或修改该界面。Playwright 保留既有 NO_COLOR/FORCE_COLOR 环境提示。旧生产/测试 import 为零，仅 Ash 的生产文件目前剩已确认保留的三处平台 Rust 适配器；目录数量只描述落位，不表示功能完成率。Rust 后端为端到端测试完成构建，本批未编辑 Rust 实现或协议，未运行 Rust 单测，也未验证 Windows/Linux 或真实 SSH transport。
+
 ## 验证
 
 受影响测试使用真实 DI 创建入口。平台重连覆盖 connection generation 与 token 旋转；实例测试覆盖空窗口、字节/命令顺序、输入、尺寸、关闭、本地断线、SSH 续读及 Relaunch；Tasks/Debug 覆盖缺失依赖、任务状态、compound 与 DAP 反向终端请求；分层检查覆盖共享服务不依赖 contribution。
@@ -249,3 +292,37 @@ Chromium Terminal Playwright 22 项通过，新增 3 项经过生产服务注册
 用户随后要求修复这两项问题。真实 Electron 在 Windows 125% 缩放下复现：请求 1002×702 与 1001×701 都返回 1003×703，单次补偿停留在取整区间；继续累积补偿到请求 1000×700 后，返回保存的 1002×702。`CodeWindow` 现在在窗口状态跟踪前最多执行 4 次尺寸读回与累积补偿，达到目标即停止，非正请求立即退出，避免 OS 尺寸约束导致无界重试。现有 Electron 场景增加连续三次关闭/重开，仍逐次严格比较完整矩形；调查用的全局 hook 已移除。
 
 三个 CSS 引用已回到已注册的 `--ash-fontSize-label1`、`--ash-fontWeight-semiBold` 与 `--ash-fontSize-heading3`；没有新增变量或放宽 lint。App Tools 的现有浏览器集成 fixture 接入实际主题绑定，覆盖分组标题与装饰粒子的计算样式、四种主题、键盘焦点、减少动态效果和释放，6 项 Playwright 全部通过。窗口定向单测 76 项与 runner 自测 5 项通过；正常 Desktop 构建、automation 编译通过，真实 Electron 的草稿交接和包含连续三次重开的完整打开/返回场景 2 项通过。stylelint 检查 258 个 CSS 文件，0 错误、0 设计建议。构建曾提示 Vite CSS 插件耗时占比较高，Playwright 仍有颜色环境提示；没有类型或打包错误。
+
+### 输入确认与取消批准入（2026-10-07）
+
+用户输入/听写、运行 Task、DAP runInTerminal → XtermTerminal/voice/TaskService/DebugService → 现有实例输入端口 → TerminalProcessManager → 平台 write/resize RPC → 后端确认或失败 → 调用者 Promise 与 Task/DAP 状态。管理器唯一拥有批次、尺寸合并、操作确认和取消；实例保留连接与进程生命周期。先闭合下层返回值与失败语义，再迁移实例 sendText 与原始键盘端口，不能把现有实例 write 的 stdin 语义计为对齐。
+
+本批准确路径均已在 Ash 存在：terminal/browser 的 terminalProcessManager.ts、terminalInstance.ts、terminal.ts、xterm/xtermTerminal.ts（双方都有；仅输入/尺寸 Promise、关闭/恢复隔离与输入错误处理）；terminalContrib/voice/browser/terminalVoice.ts、contrib/tasks/browser/taskService.ts、contrib/debug/browser/debugService.ts（既有生产消费者；等待或处理确认，发送失败关闭资源并结束运行）；terminal/test/browser/terminalService.test.ts、services/tasks/test/browser/taskService.test.ts、services/debug/test/browser/debugTerminalLauncher.test.ts（行为回归）；test/integration/browser/terminal.integration.ts、terminal.integration.spec.ts、chatInput.integration.ts（消费契约同步及真实输入）；terminal/README.md 与本台账（职责与验证）。不新建/移动/删除文件，不修改 Rust、生成协议或 CSS，其他工作树改动保持原样。
+
+验证目标：文本合并与 UTF-8 拆批保序；文本、二进制与尺寸调用等待真实 RPC 确认；关闭、退出、断线立即取消待发送和进行中的确认；旧连接迟到结果不污染恢复后的状态；Task 启动调用等待发送完成且失败不保留运行项，DAP 不在写入未确认时返回成功；Web/Electron 的键盘、隐藏、退出和 Relaunch 保持通过。
+
+测试消费者追加准入：`src/ash/workbench/contrib/terminal/test/browser/terminalTabsLayout.test.ts` 只同步既有 fake 实例的 Promise 输入签名，不修改布局断言。
+
+### sendText 与原始键盘责任批准入（2026-10-07）
+
+下层确认批已通过 Terminal/Tab 单测与 Task/DAP 的确认、拒绝、取消入口测试，Chromium 29 项通过。下一链路：View.attachToElement → 实例唯一创建并拥有 XtermTerminal → 原始 onData/onBinary → 实例当前进程管理器；Tasks、Debug、voice → 实例 sendText → 换行/执行语义 → 同一输入队列。sendText 使用上游公开签名与注释，并由上游 voice/sendSequence/执行工具调用行为确定文本与控制字符场景；只读取最小 sendText 片段确认 CRLF/LF 归一及 bracketed-paste 行为。Ash 自行实现，原始键盘流不进入文本归一端口。
+
+准确范围为前一批的实例、契约、屏幕、生产消费者与测试 fixture，加 `src/ash/workbench/contrib/terminal/browser/terminalView.ts`（双方都有；局部移交屏幕创建/释放给实例，View 只 attach/detach 与呈现）。公开 xterm、xtermReadyPromise、attachToElement、detachFromElement 都有上游对应且被 View 的真实调用链使用。保留屏幕构造的 Ash 子集与既有布局/CSS；没有新增专属公开端口。移除旧实例 stdin write，消费者同批转 sendText，原始输入绑定迁至实例。实例关闭释放唯一屏幕，View 释放只 detach，后续 View 可重附原屏幕保留输出。
+
+验证新增：sendText 的执行/非执行/CRLF/不重复 Enter、bracketed-paste 只在 child 已启用时包装；键盘 Ctrl+J 字节不归一，原始鼠标不改编码；屏幕重新附着不丢输出、不重复发送输入；窗口与实例释放仍取消未完成加载/输入。
+
+文档追加准入：`docs/ash-desktop-architecture.md` 仅同步 Terminal 章节的屏幕生命周期、输入调用链与确认语义，保护该文档其余已存在改动。
+
+构建失败追加准入：`test/automation/tsconfig.json` 仅将仓库已有 `src/typings/css.d.ts` 纳入 include。实例公开 xterm 类型使 automation 的类型图到达屏幕动态 CSS import；正常 Renderer 构建成功后 automation 的 tsc 报 TS2307，须使用测试/Renderer 已有 CSS 声明，不新增宽泛类型或更改编译规则。
+
+文案追加准入：`localization/zh-CN/workbench.json` 仅补 Task 输入发送失败及清理失败两条消息。Output 是用户可见入口，新的失败日志必须使用现有 localize 并覆盖中文；不改已有其他词条。
+
+本轮输入确认与 sendText 的当前结果：旧实例 stdin write 已移除，所有生产消费者与 fixture 已同步。程序输入使用标准 sendText 签名；原始键盘/鼠标及终端应答由实例直连唯一管理器，不做换行转换。管理器文本拆批、二进制顺序与合并尺寸返回实际 RPC 确认；断线、关闭、退出取消待发送和进行中的等待，重连不被旧 transport 的未完成写入阻塞，旧结果不污染状态。实例拥有唯一屏幕与输入监听，View detach 不销毁输出；重新 attach 不重复绑定。
+
+生命周期复查继续限定在实例 dispose 与上述真实实例测试：TaskRun 会保留已结束实例的 metadata，因此实例关闭后清空 screen 和已解析为屏幕的 readiness promise 引用，再由原 disposable owner 释放资源；避免记录继续保留大段缓冲区。真实实例关闭测试同时断言公开 xterm 已为空，没有新增测试专用生产 helper。
+
+本轮新增 15 项单测回归，正常入口的 11 个文件共 96 项通过，runner 自测 5 项通过；新增中文失败日志与清理失败保留原始错误后，Task 文件 9 项独立重跑通过。Chromium Terminal 31 项通过，新增真实实例的 startup DA 应答、Ctrl+J、程序粘贴和屏幕重新附着；既有鼠标场景随后改为真实 TerminalInstance→进程适配器入口，高位二进制字节用例单独通过。最后补充释放屏幕引用后，25 项实例生命周期单测和真实实例关闭/重新附着场景独立重跑通过。完整 Renderer 与 automation 类型检查、15 个文件的格式检查和职责文档 37 个相对目标通过。Desktop 与完整 Web 正常构建通过；最新产物的 Electron、Web + App Server Terminal/Tasks/Debug 各 6 项通过。后端构建没有 warning，Playwright 保留既有 NO_COLOR/FORCE_COLOR 提示。
+
+首次新增消费者 fixture 漏了 read 结果的 terminalId/commandEventGap，完整测试编译指出后已补齐；screen-only fixture 过早初始化破坏其延迟加载断言，已恢复 fixture 的显式初始化边界，真实实例由生产服务装配测试覆盖。automation 类型图到达动态 CSS import 后出现 TS2307，已纳入仓库现有 CSS 声明，编译及正常产品场景通过；没有绕过类型检查。
+
+该输入批次没有修改 Rust、生成协议、CSS 或新增/移动/删除文件。后端为产品测试完成构建，未运行 Rust 单测；运行验证为 macOS，未验证 Windows/Linux 与真实 SSH transport。服务器输出 ACK/背压、完整 child process/backend、profile/configuration、编辑区终端、真正分组分屏、终端输出无障碍等 terminalContrib 与 Agent 会话接管仍待后续闭合；Find 的后续进展见本文开头。

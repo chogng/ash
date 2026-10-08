@@ -666,7 +666,13 @@ async function runDebuggeeInTerminal(terminalService: ITerminalService, value: u
 		await terminalService.closeTerminal(terminal);
 		throw new Error(localize('debug.terminalUnavailable', 'The terminal is unavailable. The debug command was not sent. Restart debugging.'));
 	}
-	terminal.write(`${terminalCommand(request, profile)}\r`);
+	try {
+		await terminal.sendText(terminalCommand(request, profile), true);
+	} catch (error) {
+		// Preserve the dispatch error even if the unavailable transport also rejects close.
+		await terminalService.closeTerminal(terminal).catch(() => { });
+		throw error;
+	}
 	return Object.freeze({ shellProcessId: terminal.processId });
 }
 

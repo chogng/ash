@@ -9,6 +9,7 @@ import { DisposableStore, toDisposable } from '../../../../../base/common/lifecy
 import { URI } from "../../../../../base/common/uri.js";
 import { ITerminalProcessService, type ITerminalProcessCreateOptions, type ITerminalProcessReadResult, type TerminalProcessConnectionState } from "../../../../../platform/terminal/common/terminal.js";
 import { TerminalService } from "../../browser/terminalService.js";
+import { TerminalProcessManager } from '../../browser/terminalProcessManager.js';
 import { ITerminalService, type ITerminalInstance } from "../../browser/terminal.js";
 import { WorkspaceContextService } from "../../../../services/workspaces/browser/workspaceContextService.js";
 
@@ -107,11 +108,11 @@ test("TerminalService batches input, coalesces resize, and releases terminals", 
 		profile: { type: "profile", profileId: "command-prompt" },
 	});
 
-	instance.write("a");
-	instance.write("b");
+	const sent = Promise.all([instance.sendText("a", false), instance.sendText("b", false)]);
 	instance.resize({ rows: 30, cols: 100 });
 	instance.resize({ rows: 31, cols: 101 });
 	await waitFor(() => processService.writeCalls.length === 1 && processService.resizeCalls.length === 1);
+	await sent;
 	await service.closeTerminal(instance);
 
 	assert.equal(processService.writeCalls[0].data, "ab");
@@ -284,10 +285,10 @@ suite('Terminal process identity and raw input', () => {
 		const service = services.get(ITerminalService);
 		const instance = await service.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
 		const text = '中'.repeat(25_000);
-		instance.write(text);
+		const textSent = instance.sendText(text, false);
 		const bytes = instance.processBinary('\0\x80\xff');
-		instance.write('after');
-		await bytes;
+		const following = instance.sendText('after', false);
+		await Promise.all([textSent, bytes, following]);
 		await waitFor(() => processes.writeCalls.length === 4);
 		assert.deepEqual(processes.writeCalls.map(call => call.data), [text.slice(0, 20_480), text.slice(20_480), new Uint8Array([0, 0x80, 0xff]), 'after']);
 	});
@@ -312,6 +313,8 @@ class TestTerminalProcessService implements ITerminalProcessService {
 	readonly readCursors: number[] = [];
 	readonly commandReadCursors: number[] = [];
 	readonly closeCalls: string[] = [];
+	public readonly writeGates: Promise<void>[] = [];
+	public readonly resizeGates: Promise<void>[] = [];
 	public readonly creationGates: Promise<void>[] = [];
 	public readonly closeGates: Promise<void>[] = [];
 	public readonly closeOptions: Array<{ terminalId: string; dirId?: string; }> = [];
@@ -343,10 +346,12 @@ class TestTerminalProcessService implements ITerminalProcessService {
 
 	async write(params: { terminalId: string; data: string | Uint8Array; }) {
 		this.writeCalls.push(params);
+		await this.writeGates.shift();
 	}
 
 	async resize(params: { terminalId: string; rows: number; cols: number; }) {
 		this.resizeCalls.push(params);
+		await this.resizeGates.shift();
 	}
 
 	async read(params: { terminalId: string; afterSequence: number; afterCommandSequence: number; maxChunks: number; }) {
@@ -431,6 +436,151 @@ test('TerminalService rejects missing process and workspace registrations before
 suite('TerminalService lifecycle', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('sendText normalizes Enter, executes once, and permits insertion without execution', async () => {
+		const processes = new TestTerminalProcessService([]);
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace);
+		const instance = await services.get(ITerminalService).createTerminal({ dimensions: { cols: 80, rows: 24 }, profile: { type: 'default' } });
+		await instance.sendText('first\r\nsecond\n', false);
+		await instance.sendText('command', true);
+		await instance.sendText('already complete\r', true);
+		await instance.sendText('insert', false, true);
+		await instance.sendText('', true);
+		assert.deepEqual(processes.writeCalls.map(call => call.data), ['first\rsecond\r', 'command\r', 'already complete\r', 'insert', '\r']);
+		await instance.close();
+		await assert.rejects(instance.sendText('late', true), isCancellationError);
+	});
+
+	test('merged text waits for the backend acknowledgement and preserves the original failure', async () => {
+		const acknowledgement = deferred<void>();
+		const processes = new TestTerminalProcessService([]);
+		processes.writeGates.push(acknowledgement.promise);
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace);
+		const terminals = services.get(ITerminalService);
+		const instance = await terminals.createTerminal({ dimensions: { cols: 80, rows: 24 }, profile: { type: 'default' } });
+		const failure = new Error('PTY rejected input');
+		let finished = 0;
+		const first = assert.rejects(instance.sendText('a', false).then(() => { finished++; }), error => error === failure);
+		const second = assert.rejects(instance.sendText('b', false).then(() => { finished++; }), error => error === failure);
+		await waitFor(() => processes.writeCalls.length === 1);
+		assert.deepEqual({ finished, input: processes.writeCalls[0].data }, { finished: 0, input: 'ab' });
+		acknowledgement.reject(failure);
+		await Promise.all([first, second]);
+		assert.equal(instance.state, 'error');
+		await assert.rejects(instance.sendText('after failure', false), isCancellationError);
+	});
+
+	test('a large text write waits for its final UTF-8 batch before completing', async () => {
+		const acknowledgement = deferred<void>();
+		const processes = new TestTerminalProcessService([]);
+		processes.writeGates.push(Promise.resolve(), acknowledgement.promise);
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace);
+		const instance = await services.get(ITerminalService).createTerminal({ dimensions: { cols: 80, rows: 24 }, profile: { type: 'default' } });
+		const text = '🙂'.repeat(20_000);
+		let finished = false;
+		const sent = instance.sendText(text, false).then(() => { finished = true; });
+		await waitFor(() => processes.writeCalls.length === 2);
+		assert.deepEqual({ finished, joined: processes.writeCalls.map(call => call.data).join(''), bytes: processes.writeCalls.map(call => new TextEncoder().encode(call.data as string).length) }, {
+			finished: false, joined: text, bytes: [61_440, 18_560],
+		});
+		acknowledgement.resolve();
+		await sent;
+		assert.equal(finished, true);
+	});
+
+	for (const boundary of ['close', 'disconnect', 'exit'] as const) {
+		test(`${boundary} cancels queued and in-flight text and binary acknowledgements`, async () => {
+			const acknowledgement = deferred<void>();
+			const read = deferred<ITerminalProcessReadResult>();
+			const processes = new TestTerminalProcessService([read.promise]);
+			processes.writeGates.push(acknowledgement.promise);
+			using workspace = folderWorkspaceContext();
+			using services = terminalServices(processes, workspace);
+			const instance = await services.get(ITerminalService).createTerminal({ dimensions: { cols: 80, rows: 24 }, profile: { type: 'default' } });
+			const inFlight = assert.rejects(instance.sendText('sent', false), isCancellationError);
+			await waitFor(() => processes.writeCalls.length === 1);
+			const binary = assert.rejects(instance.processBinary('\xff'), isCancellationError);
+			const queued = assert.rejects(instance.sendText('queued', false), isCancellationError);
+			if (boundary === 'close') await instance.close();
+			else if (boundary === 'disconnect') processes.emitConnectionState('crashed');
+			else read.resolve(readResult({ exited: true, exitCode: 0 }));
+			await Promise.all([inFlight, binary, queued]);
+			acknowledgement.resolve();
+			assert.deepEqual(processes.writeCalls.map(call => call.data), ['sent']);
+		});
+	}
+
+	test('reconnection accepts fresh input without waiting for or replaying an old write', async () => {
+		const oldAcknowledgement = deferred<void>();
+		const processes = new TestTerminalProcessService([], 'reconnectable');
+		processes.writeGates.push(oldAcknowledgement.promise);
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace);
+		const instance = await services.get(ITerminalService).createTerminal({ dimensions: { cols: 80, rows: 24 }, profile: { type: 'default' } });
+		const cancelled = assert.rejects(instance.sendText('old input', false), isCancellationError);
+		await waitFor(() => processes.writeCalls.length === 1);
+		processes.emitConnectionState('crashed');
+		await cancelled;
+		processes.emitConnectionState('ready');
+		await waitFor(() => instance.state === 'running');
+		await instance.sendText('fresh input', false);
+		oldAcknowledgement.reject(new Error('late old transport error'));
+		await Promise.resolve();
+		assert.deepEqual({ state: instance.state, input: processes.writeCalls.map(call => call.data) }, { state: 'running', input: ['old input', 'fresh input'] });
+	});
+
+	test('coalesced dimensions wait for acknowledgement and stop cancels an in-flight resize', async () => {
+		const acknowledgement = deferred<void>();
+		const processes = new TestTerminalProcessService([]);
+		processes.resizeGates.push(acknowledgement.promise);
+		using services = new InstantiationService(new ServiceCollection([ITerminalProcessService, processes]));
+		using manager = services.createInstance(TerminalProcessManager, { terminalId: 'terminal-1' });
+		let finished = 0;
+		const first = assert.rejects(manager.setDimensions(90, 30).then(() => { finished++; }), isCancellationError);
+		const second = assert.rejects(manager.setDimensions(100, 40).then(() => { finished++; }), isCancellationError);
+		await waitFor(() => processes.resizeCalls.length === 1);
+		assert.deepEqual({ finished, dimensions: processes.resizeCalls }, { finished: 0, dimensions: [{ terminalId: 'terminal-1', rows: 40, cols: 100 }] });
+		manager.stop();
+		await Promise.all([first, second]);
+		acknowledgement.resolve();
+	});
+
+	test('every caller of coalesced dimensions completes after the last size is accepted', async () => {
+		const acknowledgement = deferred<void>();
+		const processes = new TestTerminalProcessService([]);
+		processes.resizeGates.push(acknowledgement.promise);
+		using services = new InstantiationService(new ServiceCollection([ITerminalProcessService, processes]));
+		using manager = services.createInstance(TerminalProcessManager, { terminalId: 'terminal-1' });
+		let finished = 0;
+		const first = manager.setDimensions(90, 30).then(() => { finished++; });
+		const second = manager.setDimensions(100, 40).then(() => { finished++; });
+		await waitFor(() => processes.resizeCalls.length === 1);
+		assert.equal(finished, 0);
+		acknowledgement.resolve();
+		await Promise.all([first, second]);
+		assert.equal(finished, 2);
+	});
+
+	test('a creation listener can send input and dimensions before reading starts', async () => {
+		const processes = new TestTerminalProcessService([]);
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace);
+		const terminals = services.get(ITerminalService);
+		using listener = terminals.onDidCreateInstance(instance => {
+			instance.sendText('early input', false);
+			instance.resize({ cols: 91, rows: 31 });
+		});
+		const instance = await terminals.createTerminal({ dimensions: { cols: 80, rows: 24 }, profile: { type: 'default' } });
+		await waitFor(() => processes.writeCalls.length === 1 && processes.resizeCalls.length === 1);
+		assert.deepEqual({ writes: processes.writeCalls, dimensions: processes.resizeCalls }, {
+			writes: [{ terminalId: 'terminal-1', data: 'early input' }],
+			dimensions: [{ terminalId: 'terminal-1', cols: 91, rows: 31 }],
+		});
+		await instance.close();
+	});
+
 	test('list changes describe the final membership, order, titles and active instance', async () => {
 		const processService = new TestTerminalProcessService([]);
 		using workspace = folderWorkspaceContext();
@@ -472,7 +622,7 @@ suite('TerminalService lifecycle', () => {
 			processService.emitConnectionState('crashed');
 			creation.resolve();
 			const instance = await pending;
-			instance.write('unsent');
+			await assert.rejects(instance.sendText('unsent', false), isCancellationError);
 			instance.resize({ rows: 30, cols: 100 });
 			await Promise.resolve();
 			assert.deepEqual({
@@ -596,9 +746,10 @@ suite('TerminalService lifecycle', () => {
 		const instance = await service.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
 		const output: Uint8Array[] = [];
 		using listener = instance.onDidWriteData(event => output.push(event.data));
-		instance.write('queued');
+		const cancelledInput = assert.rejects(instance.sendText('queued', false), isCancellationError);
 		instance.resize({ rows: 30, cols: 100 });
 		instance.dispose();
+		await cancelledInput;
 		read.resolve(readResult({ chunks: [{ sequence: 1, data: new Uint8Array([65]) }], nextSequence: 1 }));
 		await instance.close();
 		services.dispose();

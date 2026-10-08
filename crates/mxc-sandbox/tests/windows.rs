@@ -244,15 +244,23 @@ fn psec_filesystem_aliases_keep_read_only_and_denied_overrides() {
     std::fs::write(&secret, "secret-canary").unwrap();
     // Denied files with hard links are rejected before PSEC preparation. A junction
     // reaches the same single-linked file, so this scenario exercises execution policy.
-    let linked = std::process::Command::new(
-        Path::new(&std::env::var_os("SystemRoot").unwrap()).join("System32/cmd.exe"),
-    )
-    .args(["/d", "/c", "mklink", "/J"])
-    .arg(&junction)
-    .arg(&config)
-    .output()
-    .unwrap();
+    // Use the filesystem provider instead of cmd's mklink parser. The fixture is
+    // created through ordinary paths; the sandbox policy keeps canonical paths.
+    let link = powershell(format!(
+        "$ErrorActionPreference='Stop'; New-Item -ItemType Junction -Path {} -Target {} | Out-Null",
+        literal(&temp.path().join("config-alias")),
+        literal(&temp.path().join("config")),
+    ));
+    let linked = std::process::Command::new(link.program)
+        .args(link.arguments)
+        .output()
+        .unwrap();
     assert!(linked.status.success(), "{linked:?}");
+    assert_eq!(
+        std::fs::canonicalize(&junction).unwrap(),
+        std::fs::canonicalize(&config).unwrap(),
+        "junction fixture must reach the protected directory"
+    );
     let scope = SandboxScope::single(dir.clone())
         .with_path_rules(vec![
             SandboxPathRule::exact(

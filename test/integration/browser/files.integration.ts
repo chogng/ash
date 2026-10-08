@@ -216,7 +216,8 @@ const integration = {
 			executeCommand: async () => { throw new Error('Unexpected extension command'); },
 		});
 		services.registerInstance(IAppServerApi, {
-			connectionGeneration: 0, getConnectionState: async () => 'stopped', getSlashCommands: async () => [], onConnectionState: () => toDisposable(() => { }),
+			connectionGeneration: 0,
+			getConnectionState: async () => 'stopped', getSlashCommands: async () => [], onConnectionState: () => toDisposable(() => { }),
 		});
 		services.registerInstance(IWorkspaceContextService, lifetime.add(new WorkspaceContextService({
 			id: 'offline-folders', folders: [browserRoot, backendRoot, unknownRoot].map((uri, index) => ({ uri, index, id: String(index), name: `Root ${index}` })),

@@ -1,9 +1,14 @@
+import { IMenuService } from '../../../../../platform/actions/common/actions.js';
+import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { CommandRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { TerminalCommandId } from '../../common/terminal.js';
+import { setupTerminalMenus } from '../../browser/terminalMenus.js';
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import type { IAction } from "../../../../../base/common/actions.js";
 import { Event } from "../../../../../base/common/event.js";
-import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
+import { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { ITerminalInstance } from "../../browser/terminal.js";
 import { AppServerAvailableContext } from '../../../../common/contextkeys.js';
 
@@ -35,7 +40,7 @@ const [
 	import("../../../../../platform/actions/common/menuService.js"),
 	import('../../../../../platform/instantiation/common/instantiationService.js'),
 	import("../../../../../workbench/services/commands/common/commandService.js"),
-	import("../../../../../workbench/contrib/terminal/browser/view/terminalTitleActions.js"),
+	import("../../../../../workbench/contrib/terminal/browser/terminalView.js"),
 ]);
 
 suiteTeardown(() => {
@@ -44,6 +49,8 @@ suiteTeardown(() => {
 		Reflect.deleteProperty(globalThis, name);
 	}
 });
+
+setupTerminalMenus();
 
 let shownProfileActions: readonly IAction[] = [];
 let shownProfileAnchor: unknown;
@@ -69,20 +76,24 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 	using contextKeyService = new ContextKeyService();
 	const appServerAvailable = AppServerAvailableContext.bindTo(contextKeyService);
 	appServerAvailable.set(true);
-	const commandService = new CommandService(new InstantiationService());
+	using registryOwner = new InstantiationService();
+	const registry = new CommandRegistry();
+	using registration = registry.registerMany([
+		{ id: TerminalCommandId.New, handler: () => { createdProfiles.push(undefined); } },
+		{ id: TerminalCommandId.NewWithProfile, handler: (_accessor, profileId) => { createdProfiles.push(String(profileId)); } },
+		{ id: TerminalCommandId.Focus, handler: () => focusCount++ },
+		{ id: TerminalCommandId.Relaunch, handler: () => { } },
+		{ id: TerminalCommandId.Kill, handler: () => { } },
+		{ id: TerminalCommandId.Clear, handler: () => clearCount++ },
+	]);
+	using commandService = new CommandService(registryOwner, registry);
 	const menuService = new MenuService(commandService, contextKeyService);
-	using titleActions = new TerminalTitleActions(ownerDocument.body, {
-		menuService,
-		contextMenuService,
-		contextKeyService,
-		createTerminal: (profileId) => {
-			createdProfiles.push(profileId);
-		},
-		focusActive: () => focusCount++,
-		relaunchActive() { },
-		killActive() { },
-		clearActive: () => clearCount++,
-	});
+	registryOwner.registerInstance(ICommandService, commandService);
+	registryOwner.registerInstance(IMenuService, menuService);
+	registryOwner.registerInstance(IContextMenuService, contextMenuService);
+	registryOwner.registerInstance(IContextKeyService, contextKeyService);
+	using titleActions = registryOwner.createInstance(TerminalTitleActions, ownerDocument.body);
+
 	const commandPromptProfile = { profileId: "cmd", title: "Command Prompt", isDefault: true };
 	const powerShellProfile = { profileId: "pwsh", title: "PowerShell", isDefault: false };
 	const unavailableProfile = titleActions.element.querySelector<HTMLButtonElement>(".ash-dropdown-with-primary-dropdown > .ash-button");
@@ -102,8 +113,8 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 	assert.equal(profile.querySelector(".ash-button-label")?.textContent, "Select Terminal Profile");
 	assert.equal(profile.getAttribute("aria-label"), "Select Terminal Profile");
 	assert.ok(profile.querySelector("svg.ash-icon"));
-	assert.equal(toolbar.querySelectorAll("[data-action-id='ash.terminal.new']").length, 1);
-	assert.equal(toolbar.querySelector("[data-action-id='ash.terminal.newWithProfile']"), null);
+	assert.equal(toolbar.querySelectorAll("[data-action-id='workbench.action.terminal.new']").length, 1);
+	assert.equal(toolbar.querySelector("[data-action-id='workbench.action.terminal.newWithProfile']"), null);
 	const newTerminal = [...toolbar.querySelectorAll("button")].find((button) => button.textContent === "New Terminal");
 	assert.ok(newTerminal);
 	assert.equal([...toolbar.querySelectorAll("button")].some((button) => button.textContent === "Close Panel"), false);
@@ -140,14 +151,14 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 	assert.equal(focusCount, 1);
 	assert.equal(toolbar.textContent?.includes("Kill Terminal"), true);
 	assert.equal(toolbar.textContent?.includes("Relaunch Terminal"), false);
-	const killTerminal = [...toolbar.querySelectorAll("[data-action-id]")].find((item) => item.getAttribute("data-action-id") === "ash.terminal.kill");
+	const killTerminal = [...toolbar.querySelectorAll("[data-action-id]")].find((item) => item.getAttribute("data-action-id") === "workbench.action.terminal.kill");
 	const moreActions = toolbar.querySelector<HTMLElement>("[data-action-id='ash.toolbar.moreActions']");
 	assert.ok(killTerminal);
 	assert.ok(moreActions);
 	assert.equal(killTerminal.compareDocumentPosition(moreActions) & browserEnvironment.window.Node.DOCUMENT_POSITION_FOLLOWING, browserEnvironment.window.Node.DOCUMENT_POSITION_FOLLOWING);
 	assert.equal(toolbar.querySelector("[data-action-id='workbench.action.toggleMaximizedPanel']"), null);
 	moreActions.querySelector("button")?.click();
-	const clearTerminal = shownProfileActions.find((action) => action.id === "ash.terminal.clear");
+	const clearTerminal = shownProfileActions.find((action) => action.id === "workbench.action.terminal.clear");
 	assert.ok(clearTerminal);
 	assert.equal(shownProfileActions.some((action) => action.id.startsWith("ash.compositeBar.open.")), false);
 	await clearTerminal.run();

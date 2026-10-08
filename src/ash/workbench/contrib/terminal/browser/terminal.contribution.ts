@@ -1,13 +1,11 @@
-import { AppServerAvailableContext } from '../../../common/contextkeys.js';
-import { localize, localize2 } from '../../../../nls.js';
+import { registerTerminalActions } from './terminalActions.js';
+import { setupTerminalMenus } from './terminalMenus.js';
 import '../../terminalContrib/voice/browser/terminal.voice.contribution.js';
 import '../../terminalContrib/links/browser/terminal.links.contribution.js';
-import { Action2, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
+import '../../terminalContrib/find/browser/terminal.find.contribution.js';
 import { SyncDescriptor } from "../../../../platform/instantiation/common/descriptors.js";
-import { type ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
 import { ViewContainerLocation, WorkbenchViewContainerId, type WorkbenchViewRegistry, ViewsRegistry } from "../../../common/views.js";
-import { IViewsService } from "../../../services/views/common/viewsService.js";
-import { FOCUS_TERMINAL_COMMAND_ID, TERMINAL_VIEW_ID } from "../common/terminal.js";
+import { TERMINAL_VIEW_ID } from "../common/terminal.js";
 import { TerminalViewPane } from "./terminalView.js";
 import { ITerminalProcessService } from '../../../../platform/terminal/common/terminal.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
@@ -29,26 +27,8 @@ registerWorkbenchServiceContribution({
 
 export { TERMINAL_VIEW_ID } from "../common/terminal.js";
 
-registerAction2(class FocusTerminalAction extends Action2 {
-	constructor() {
-		super({
-			id: FOCUS_TERMINAL_COMMAND_ID,
-			title: localize2({ bundle: "ash", key: "workbench.focusTerminal" }, "Focus Terminal"),
-			f1: true, precondition: AppServerAvailableContext.isEqualTo(true),
-			menu: { id: MenuId.MenubarTerminalMenu, group: "1_terminal", order: 1 },
-		});
-	}
-
-	override run(accessor: ServicesAccessor, instanceId?: unknown): Promise<boolean> {
-		if (instanceId !== undefined) {
-			const terminals = accessor.get(ITerminalService);
-			const instance = terminals.instances.find(instance => instance.id === instanceId);
-			if (!instance) { throw new Error(localize('terminal.context.closed', 'This terminal has been closed')); }
-			terminals.setActiveInstance(instance);
-		}
-		return accessor.get(IViewsService).focusView(TERMINAL_VIEW_ID);
-	}
-});
+registerTerminalActions();
+setupTerminalMenus();
 
 /** Registers the integrated terminal in the Workbench panel. */
 export function registerTerminalView(registry: WorkbenchViewRegistry = ViewsRegistry): void {

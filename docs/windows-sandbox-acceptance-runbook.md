@@ -35,11 +35,11 @@ just test ash-mxc-sandbox --lib --test windows
 
 这是固定测试环境的预期，不是产品按版本分流的代码。产品仍按本次请求准备结果选择 MXC 或账户后端，严格策略不降低要求，启动错误不重跑。三种运行器的 PSEC 预期均已有 CI 结果，见 [补充验收](#2026-10-02-psecwslc-与网络补充验收)。镜像能力改变时测试应失败并要求复核，不能自动把失败变为通过。Windows 11 x64 和具体旧版客户端仍需对应运行器，不由 Server 或 ARM64 结果替代。
 
-PSEC 检查不安装账户、不改变系统权限。`test-psec.ps1 -Capability absent` 只在适配器明确返回 `UnsupportedPolicy` 时通过；其他准备故障仍失败。默认 `required` 则必须先成功创建 PSEC 环境，再逐项运行命令、文件和生命周期测试，汇总全部失败。不存在的测试名不能计为通过。
+PSEC 检查不安装账户、不改变系统权限。`test-psec.ps1 -Capability absent` 只在适配器明确返回 `UnsupportedPolicy` 且独立执行服务拒绝启动工作负载时通过；其他准备故障仍失败。默认 `required` 则必须先成功创建 PSEC 环境，再逐项运行命令、文件和生命周期测试，汇总全部失败。不存在的测试名不能计为通过。
 
 账户任务在独立的临时托管机器上运行 `test-windows-sandbox.ps1`，按已有安装计划创建账户，执行测试，并在 finally 中移除安装；同时运行后端选择与禁止重跑测试。手动 `self-hosted` 只运行 PSEC 成功路径，要求 `self-hosted`、`Windows`、`psec` 标签，以及 PowerShell 7、Python 3.11+、Rustup 和 MSVC 工具链。
 
-PSEC 报告包含系统版本、架构、工具链、MXC pin、各项退出码和输出。ARM64 另通过 `probe-psec-network.py` 保存系统报告的 PSEC 版本与 `NetworkIngress` 标志；这项只读查询不创建环境、不启动命令，也不宣布 Managed 支持。账户结果见独立任务日志及安装计划。能力不支持用例通过只证明拒绝行为，不是 PSEC 成功证明。PSEC ConPTY、完整网络矩阵、App Server 产品链路及 WSL 尚未纳入此任务。
+PSEC 报告包含系统版本、架构、工具链、MXC pin、测试及产品程序的 SHA-256、各项退出码和输出。ARM64 另通过 `probe-psec-network.py` 保存系统报告的 PSEC 版本与 `NetworkIngress` 标志；这项只读查询不创建环境、不启动命令，也不宣布 Managed 支持。账户结果见独立任务日志及安装计划。能力不支持用例通过只证明拒绝行为，不是 PSEC 成功证明。ConPTY 及[独立执行服务 RPC](../crates/exec-server/README.md#pty-边界) 用例已接入此入口，只有逐项实际通过后才在报告中标记覆盖；实际结果见 [终端与 RPC 验收](#2026-10-07-psec-终端与执行服务-rpc-验收)。完整网络矩阵、App Server 产品链路及 WSL 尚未纳入此任务。
 
 账户 CI 为受限子进程测试启用 `ASH_WINDOWS_SANDBOX_DIAGNOSTICS`：超过原有 10 秒期限时，在终止 Job 前保存 CPU 时间、线程栈及模块转储，再继续原有失败和清理。诊断只针对受控测试子进程，不包含堆内存，随账户 artifact 保存；正常完成的子进程记录执行时间。
 
@@ -49,9 +49,29 @@ PSEC 报告包含系统版本、架构、工具链、MXC pin、各项退出码�
 
 账户程序、服务、终端探针及网络探针已完成正常 Cargo 构建。新 SDK 的 ACL、继承恢复、账户文件策略与适配器测试已通过，详见 [适配器验证](../crates/mxc-sandbox/README.md#验证)。执行服务首轮 34 项通过，1 项把带与不带 Windows 扩展路径前缀的同一目录判为不同目录；改为比较规范化后的实际目录，失败项复跑通过，warning 门禁通过。Windows 服务 9 项测试通过，覆盖真实认证管道、连续连接、延迟读取、受限客户端及安装权限；这轮测试不注册 SCM 服务或创建账户。
 
-管理员入口已准备在 `.build/acceptance/mxc-upgrade-windows-20261007/run-admin-acceptance.ps1`。首次提权启动返回“操作已被用户取消”，本次尚未创建测试账户、安装服务或改动 WFP。新版账户的真实执行、PTY、安装更新及清理仍等待管理员验收；新 pin 的 PSEC 成功路径需要具备完整能力的 Windows 主机。待验收范围与 Linux/macOS 交接见根目录 [MXC-TODO.md](../MXC-TODO.md)。
+管理员入口已准备在 `.build/acceptance/mxc-upgrade-windows-20261007/run-admin-acceptance.ps1`。首次提权启动返回“操作已被用户取消”，本次尚未创建测试账户、安装服务或改动 WFP。新版账户的本机真实执行、PTY、安装更新及清理仍等待管理员验收；新 pin 的 PSEC 成功路径已取得下述 ARM64 CI 证据，不能扩写为本机 23H2 支持。待验收范围与 Linux/macOS 交接见根目录 [MXC-TODO.md](../MXC-TODO.md)。
 
 普通权限下，账户库完整测试实际为 38 项通过、2 项需安装账户的用例忽略，包含真实受限令牌 PowerShell、ConPTY 和输出排空；账户库与服务的 warning 门禁通过。这些结果不代替独立账户登录、SCM 安装更新和完整执行链的管理员验收。
+
+## 2026-10-07 PSEC 终端与执行服务 RPC 验收
+
+提交 `90386325263a5f36854fc38249f9c5829b9fab41` 的 [首轮 CI](https://github.com/chogng/ash/actions/runs/37644631016) 在 Windows 11 Enterprise 25H2 ARM64、build `26200.9457`、镜像 `20260924.168.1` 上实际通过 3 项 PSEC ConPTY 和 4 项产品执行服务 RPC 用例。RPC 启动实际 `ash-exec-server.exe`，验证帮助进程装配、输入与尺寸、重连去重、只读拒写、取消及后代回收、管道标准输出与错误输出、真实退出码及退出输出排空。三台 Windows 各通过适配器 17 项和执行服务 43 项单元测试，包括非 Unicode 环境变量与实际终端发现回归。
+
+Server 2022/2025 x64 的两个 PSEC 任务通过，分别显式执行适配器缺能力拒绝和产品 RPC 拒绝用例。ARM64 的目录别名用例在 `mklink /J` 创建 fixture 时失败，尚未进入隔离断言，因此首轮 PSEC 整体验收仍失败。其余 6 项适配器执行用例及能力探测通过。已保存全部 PSEC artifact 后取消仍运行的账户任务，让修复轮开始；取消的账户任务不计作完整账户验收通过。
+
+提交 `929d6fba652bf20ea29fec71706b97b273c8156b` 的 [第二轮 CI](https://github.com/chogng/ash/actions/runs/37646486478) 改用相对名称调用 `mklink`，仍在创建 junction 时失败，错误由路径语法变为无法创建目录或文件。两个 Server PSEC 任务、ARM64 的 4 项 RPC 和 3 项 ConPTY 再次通过；保存 PSEC 证据后取消已被替代的账户任务。
+
+当前 fixture 通过现有 PowerShell 文件系统 provider 创建 junction，使用普通绝对路径，并先核对它确实解析到受保护目录；文件策略和拒绝断言保持原有要求。提交 `cf36d2cee976488907da60e5574dbe5b36227b15` 的 [第三轮 CI](https://github.com/chogng/ash/actions/runs/37648037730) 三个 PSEC 任务全部通过，无失败重跑。
+
+| 运行器 | 本轮 PSEC 任务结果 |
+| --- | --- |
+| Windows 11 Enterprise 25H2 ARM64，`26200.9457` | 78 项通过：17 项适配器单测、43 项执行服务单测、3 项普通回归、1 项能力探测、7 项适配器执行、3 项 ConPTY 和 4 项产品 RPC；包括目录别名只读与拒绝断言 |
+| Windows Server 2022 x64 | 65 项通过：相同的 63 项单测与普通回归，加适配器及产品 RPC 各 1 项缺能力拒绝；不代表 PSEC 成功执行 |
+| Windows Server 2025 x64 | 同样 65 项通过，范围为缺能力时的启动前拒绝 |
+
+逐项验收日志均核对为恰好 1 项通过、0 失败、0 忽略；正常忽略列表没有计入运行通过数。最终报告为 ARM64 `passed-listed-scope` 和两个 Server 的 `passed-unsupported-capability`。并行账户任务仍在运行，不计入这项 PSEC 结论。
+
+证据保存在 `.build/acceptance/psec-rpc-20261007/`，包含精确源码与 CI 提交核对、原始失败、逐项测试日志、系统及 MXC pin、6 个测试及产品程序的 SHA-256；`verification.json` 核对三台机器报告、实际用例数、未覆盖范围和本地代码与 CI 提交一致。本轮使用 MXC `c45e7d5a485036d88f469aa363efaa3c651564bc`。ARM64 网络只读查询仍为 PSEC `1.0`、`NetworkIngress=false`；严格 Managed、完整网络矩阵、App Server PSEC 产品链路和其他 Windows 客户端系统仍不在本轮通过范围。
 
 ## 2026-10-02 服务及账户管理员验收
 

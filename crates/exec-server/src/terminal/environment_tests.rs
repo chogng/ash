@@ -1,5 +1,51 @@
 use super::*;
 
+#[cfg(any(unix, windows))]
+#[test]
+fn process_environment_ignores_non_unicode_without_losing_safe_values() {
+    const CHILD: &str = "ASH_TERMINAL_ENVIRONMENT_TEST_CHILD";
+    if std::env::var_os(CHILD).is_none() {
+        // Exercise the real process environment without mutating the parallel test runner.
+        let current = std::thread::current();
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", current.name().unwrap(), "--nocapture"])
+            .env(CHILD, "1")
+            .env(non_unicode(), "unrepresentable-name")
+            .env("IGNORED_NON_UNICODE", non_unicode())
+            .env("LC_INVALID", non_unicode())
+            .env("LANG", "中文🧊.UTF-8")
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{output:?}");
+        assert!(
+            String::from_utf8(output.stdout)
+                .unwrap()
+                .contains("1 passed")
+        );
+        return;
+    }
+    let environment = safe_process_environment();
+    assert_eq!(environment["LANG"], "中文🧊.UTF-8");
+    assert!(!environment.contains_key("LC_INVALID"));
+    assert!(!environment.contains_key("IGNORED_NON_UNICODE"));
+    assert!(!environment.contains_key(CHILD));
+    assert_eq!(environment["TERM_PROGRAM"], "ash");
+    let profiles = crate::terminal::profiles::TerminalProfileCatalog::discover();
+    assert_eq!(profiles.environment()["LANG"], "中文🧊.UTF-8");
+}
+
+#[cfg(unix)]
+fn non_unicode() -> OsString {
+    use std::os::unix::ffi::OsStringExt;
+    OsString::from_vec(vec![b'x', 255])
+}
+
+#[cfg(windows)]
+fn non_unicode() -> OsString {
+    use std::os::windows::ffi::OsStringExt;
+    OsString::from_wide(&[0xd800])
+}
+
 #[test]
 fn environment_keeps_safe_values_and_excludes_secrets() {
     let environment = TerminalEnvironment::from_variables([

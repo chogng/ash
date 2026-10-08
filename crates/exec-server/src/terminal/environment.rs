@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ffi::OsString;
 
 const CONTROLLED_TERMINAL_ENVIRONMENT: [(&str, &str); 3] = [
     ("TERM", "xterm-256color"),
@@ -14,13 +15,18 @@ pub(crate) struct TerminalEnvironment {
 
 impl TerminalEnvironment {
     pub(crate) fn from_process() -> Self {
-        Self::from_variables(std::env::vars())
+        Self::from_variables(std::env::vars_os())
     }
 
-    fn from_variables(variables: impl IntoIterator<Item = (String, String)>) -> Self {
+    fn from_variables(variables: impl IntoIterator<Item = (OsString, OsString)>) -> Self {
         let mut environment = HashMap::new();
         for (key, value) in variables {
-            let Some(key) = normalized_allowed_environment_key(&key) else {
+            // Filter before converting values: unrelated or unrepresentable process
+            // variables cannot panic or become different child variables through lossy conversion.
+            let Some(key) = key.to_str().and_then(normalized_allowed_environment_key) else {
+                continue;
+            };
+            let Ok(value) = value.into_string() else {
                 continue;
             };
             if is_valid_environment_value(&value) {
@@ -40,6 +46,8 @@ impl TerminalEnvironment {
     }
 }
 
+/// Returns allowlisted Unicode process variables and controlled terminal identity.
+/// Variables with non-Unicode names or values are ignored.
 pub fn safe_process_environment() -> HashMap<String, String> {
     TerminalEnvironment::from_process().variables
 }

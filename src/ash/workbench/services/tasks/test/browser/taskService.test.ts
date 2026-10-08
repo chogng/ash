@@ -9,6 +9,8 @@ import { IOutputService } from '../../../output/common/output.js';
 import assert from "node:assert/strict";
 import { suite, test } from 'mocha';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+import { DeferredPromise } from '../../../../../base/common/async.js';
+import { isCancellationError } from '../../../../../base/common/errors.js';
 import { resetNlsResolver } from '../../../../../nls.js';
 import { ITerminalProcessService } from '../../../../../platform/terminal/common/terminal.js';
 import { TerminalService } from '../../../../contrib/terminal/browser/terminalService.js';
@@ -173,7 +175,12 @@ class FakeTerminalInstance extends Disposable implements ITerminalInstance {
 	readonly onDidExit = Event.None;
 	readonly onDidChangeState = Event.None;
 	constructor(readonly id: string, readonly dirId: string, readonly title: string) { super(); }
-	write(data: string): void { this.writes.push(data); }
+	async sendText(data: string, shouldExecute: boolean): Promise<void> { this.writes.push(data + (shouldExecute ? '\r' : '')); }
+	readonly xterm = undefined;
+	readonly xtermReadyPromise = Promise.resolve(undefined);
+	getContribution(): null { return null; }
+	attachToElement(): void { throw new Error('Task test has no terminal view'); }
+	detachFromElement(): void { }
 	resize(_dimensions: ITerminalDimensions): void { }
 	async close(): Promise<void> { this.state = "exited"; }
 	command(event: ITerminalCommandStatusEvent): void { this.commandEmitter.fire(event); }
@@ -193,6 +200,57 @@ test('TaskService rejects a missing terminal registration before opening its Out
 
 suite('TaskService terminal availability', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	for (const outcome of ['acknowledge', 'reject', 'cancel'] as const) {
+		test(`task dispatch waits for process input and handles ${outcome}`, async () => {
+			using localization = toDisposable(resetNlsResolver);
+			initializeTestLocalization(outcome === 'reject' ? 'zh-CN' : 'en');
+			using resources = new DisposableStore();
+			const acknowledgement = new DeferredPromise<void>();
+			const submitted = new DeferredPromise<void>();
+			const root = URI.file('/workspace');
+			const calls: string[] = [];
+			const processes: ITerminalProcessService = {
+				getConnectionState: async () => 'ready', onConnectionState: Event.None,
+				listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }],
+				create: async () => ({ ready: { pid: 1234, cwd: '/workspace' }, terminalId: 'task-process', profile: { profileId: 'shell', title: 'Shell', isDefault: true }, connectionPersistence: 'connectionOwned' }),
+				read: async () => ({ terminalId: 'task-process', commandEventGap: false, chunks: [], nextSequence: 0, commandEvents: [], nextCommandSequence: 0, exited: false, exitCode: undefined, outputGap: false }),
+				write: async () => { calls.push('write'); void submitted.complete(undefined); await acknowledgement.p; },
+				resize: async () => { }, close: async () => { calls.push('close'); if (outcome === 'reject') throw new Error('task close rejected'); },
+			};
+			const workspace: IWorkspaceContextService = { onDidChangeWorkspace: Event.None, getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'Workspace', index: 0 }] }), getWorkbenchState: () => 2, getWorkspaceFolder: () => null };
+			const logs: string[] = [];
+			const output = { createChannel: () => ({ ...Disposable.None, appendLine: (entry: { text: string; }) => { logs.push(entry.text); } }) } as unknown as IOutputService;
+			const services = resources.add(new InstantiationService(new ServiceCollection(
+				[IFileService, resources.add(createTestFileService(new FakeFileService(root, {})))], [IWorkspaceContextService, workspace],
+				[ITerminalProcessService, processes], [IOutputService, output], [ILogService, new NullLoggerService()],
+			)));
+			const terminals = resources.add(services.createInstance(TerminalService));
+			services.registerInstance(ITerminalService, terminals);
+			const tasks = resources.add(services.createInstance(TaskService));
+			resources.add(tasks.registerTaskProvider({ id: 'test', provideTasks: () => [{ id: 'check', label: 'Check', command: 'check', group: 'build' }] }));
+			await tasks.refresh();
+			let finished = false;
+			const run = tasks.run(tasks.tasks[0]).finally(() => { finished = true; });
+			const failure = new Error('task input rejected');
+			const result = outcome === 'acknowledge' ? run : assert.rejects(run, outcome === 'cancel' ? isCancellationError : error => error === failure);
+			await submitted.p;
+			assert.equal(finished, false);
+			if (outcome === 'acknowledge') void acknowledgement.complete(undefined);
+			else if (outcome === 'reject') void acknowledgement.error(failure);
+			else await tasks.terminate(tasks.activeRuns[0]);
+			await result;
+			assert.deepEqual({ status: tasks.lastRun?.status, active: tasks.activeRuns.length, terminals: terminals.instances.length, calls }, {
+				status: outcome === 'acknowledge' ? 'running' : outcome === 'reject' ? 'failed' : 'canceled',
+				active: outcome === 'acknowledge' ? 1 : 0, terminals: outcome === 'acknowledge' ? 1 : 0,
+				calls: outcome === 'acknowledge' ? ['write'] : ['write', 'close'],
+			});
+			if (outcome === 'reject') {
+				assert.deepEqual(logs.slice(-2), ['无法发送任务“Check”：task input rejected', '无法关闭任务终端：task close rejected']);
+			}
+			if (outcome === 'cancel') void acknowledgement.complete(undefined);
+		});
+	}
 
 	for (const persistence of ['connectionOwned', 'reconnectable'] as const) {
 		test(`rejects a ${persistence} terminal that cannot accept the task command`, async () => {

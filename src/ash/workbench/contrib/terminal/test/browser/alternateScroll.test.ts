@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { AlternateScrollMode } from '../../browser/instance/alternateScroll.js';
+import { AlternateScrollMode } from '../../browser/xterm/xtermTerminal.js';
 
 test('Alternate scroll mode blocks wheel-to-arrow conversion only when the child disables it', () => {
 	const mode = new AlternateScrollMode();

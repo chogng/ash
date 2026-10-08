@@ -115,7 +115,7 @@ Rust primitive 与 model adapter 的实现细节分别见
 
 | 能力                                                            | Owner                                          | 当前状态                                                                    |
 | --------------------------------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------- |
-| 每实例 xterm、Tab、输入、焦点和 panel actions                   | Renderer                                       | ✅ `TerminalViewPane` / `TerminalInstanceWidget`                            |
+| 每实例 xterm、Tab、输入、焦点和 panel actions                   | Renderer                                       | ✅ `TerminalViewPane` / `XtermTerminal` / `TerminalTabbedView`                            |
 | 实例列表、active instance、输入 batching 与 resize coalescing   | Renderer `ITerminalService`                    | ✅                                                                          |
 | 前端进程契约与 App Server DTO adapter                           | Renderer `platform/terminal`                   | 已接通生成 decoder，适配器统一转换原始字节与退出码；Main 透明转发协议 frame |
 | SSH Terminal bearer lease 与 attach                             | Renderer `ReconnectableTerminalProcessService` | 同一后端内 30 秒有界恢复；Main 不保存 token                                 |
@@ -845,8 +845,12 @@ Ctrl/Cmd+Alt+V 启动，再按该快捷键结束，
 
 Terminal 的实例契约与实例管理位于 `workbench/contrib/terminal/browser/terminal.ts` 和
 `terminalService.ts`。Tasks、Debug 的执行编排由各自 contribution 消费该契约。输入
-batching、resize coalescing 与进程创建/关闭由 `TerminalService` 负责；增量读取、两个游标、
-命令事件排序和解析等待由每个 Shell 的 `terminalProcessManager.ts` 负责。process contract 位于
+batching、resize coalescing、增量读取、两个游标、命令事件排序和解析等待由每个 Shell 的
+`terminalProcessManager.ts` 负责；进程身份、创建/关闭、连接状态与每实例唯一 xterm 的生命周期由 `terminalInstance.ts` 负责，
+窗口实例集合和活动项由 `TerminalService` 负责。View 只附着/移除屏幕与管理呈现；
+实例绑定原始键盘和鼠标输入，Tasks、Debug 和 voice 使用 `sendText`。管理器 write/resize
+的 Promise 等待后端 RPC 确认，关闭或断线取消等待，恢复后不回放旧输入；确认不代替命令完成事件。
+process contract 位于
 platform layer 的 `ITerminalProcessService`。`IRendererHost` 直接提供该领域契约；Electron、
 Vite development 和 disconnected runtime 分别实现它，wire DTO 只出现在对应 runtime
 implementation 内。Contribution 和 xterm view 都不直接调用 `IRendererHost`：
@@ -855,6 +859,7 @@ implementation 内。Contribution 和 xterm view 都不直接调用 `IRendererHo
 TerminalViewPane / xterm
   → ITerminalService
   → TerminalService (Renderer)
+  → TerminalInstance / TerminalProcessManager
   → ITerminalProcessService
   → AppServerTerminalProcessService / SSH ReconnectableTerminalProcessService
   → Renderer AppServerProtocolClient
@@ -871,7 +876,7 @@ Web 宿主的 `window.createTerminal` 通过 `IEmbedderTerminalService` 接收�
 宿主的打开、关闭及监听释放沿窗口与实例生命周期处理；当前只补齐宿主输出所需的进程事件契约，
 Shell 输出已通过 `IProcessDataEvent.writePromise` 等待 xterm 的真实解析回调，再续读、发布命令完成
 和退出；完整标准 child process 的输入、属性及服务器 flow control 仍未完成。
-已有 Shell 首次输出会加载解析器，即使实例隐藏也可完成后台 Tasks；不显示隐藏面板、不改变焦点。
+实例附着 View 时加载其唯一解析器，即使已有实例隐藏也可完成后台 Tasks；不显示隐藏面板、不改变焦点。
 进程管理器在关闭或断线时取消读取等待，恢复同一 Shell 时保留原屏幕写入和字节游标；
 Relaunch 使用新管理器，旧回调不影响新进程。OS PTY drainer 与 bounded ring 仍由 Rust 拥有，
 Renderer 的解析确认不等于服务器输出背压。

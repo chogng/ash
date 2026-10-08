@@ -1,7 +1,7 @@
 import { registerWorkbenchServiceContribution } from '../../../browser/workbenchServiceContributions.js';
 import { localize } from '../../../../nls.js';
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { getErrorMessage } from "../../../../base/common/errors.js";
+import { getErrorMessage, isCancellationError } from "../../../../base/common/errors.js";
 import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
 import { FileKind, FileNotFoundError, IFileService } from "../../../../platform/files/common/files.js";
@@ -157,7 +157,16 @@ export class TaskService extends Disposable implements ITaskService {
 		this._lastRun = run;
 		this.startTaskEmitter.fire(run);
 		const command = substituteWorkspaceVariables(currentTask.command, workspaceFolder.uri);
-		terminal.write(`${taskTerminalCommand(command, terminal.profile.profileId)}\r`);
+		try {
+			await terminal.sendText(taskTerminalCommand(command, terminal.profile.profileId), true);
+		} catch (error) {
+			run.fail(isCancellationError(error));
+			this.log('error', 'execution', localize('tasks.terminalSendFailed', "Could not send task '{0}': {1}", currentTask.label, errorMessage(error)));
+			await this.terminalService.closeTerminal(terminal).catch(closeError => {
+				this.log('error', 'execution', localize('tasks.terminalCloseFailed', 'Could not close the task terminal: {0}', errorMessage(closeError)));
+			});
+			throw error;
+		}
 		this.log("debug", "execution", `Task '${currentTask.label}' is running in terminal '${terminal.id}'.`);
 		return run;
 	}
@@ -301,6 +310,10 @@ class TaskRun extends Disposable implements ITaskRun {
 
 	cancel(): void {
 		this.setStatus("canceled", undefined);
+	}
+
+	fail(canceled: boolean): void {
+		this.setStatus(canceled ? 'canceled' : 'failed', undefined);
 	}
 
 	private acceptCommandStatus(event: ITerminalCommandStatusEvent): void {

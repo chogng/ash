@@ -1,5 +1,10 @@
+import { selectionBackground, selectionForeground } from "../../../../../platform/theme/common/colors/baseColors.js";
+import type { IColorTheme } from "../../../../../platform/theme/common/themeService.js";
+import * as terminalColors from "../../common/terminalColorRegistry.js";
+
 import type { FitAddon } from "@xterm/addon-fit";
-import type { Terminal, IDecoration } from "@xterm/xterm";
+import type { SearchAddon, ISearchOptions, ISearchResultChangeEvent } from '@xterm/addon-search';
+import type { Terminal, IDecoration, ITheme } from "@xterm/xterm";
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { IThemeService } from "../../../../../platform/theme/common/themeService.js";
 import { IOpenerService } from "../../../../../platform/opener/common/opener.js";
@@ -8,13 +13,16 @@ import { computeLinks } from "../../../../../editor/common/languages/linkCompute
 import { onUnexpectedError } from "../../../../../base/common/errors.js";
 import { localize } from "../../../../../nls.js";
 import type { ITerminalCommandStatusEvent, ITerminalDimensions, ITerminalInstance } from "../terminal.js";
-import { terminalTheme } from "./terminalTheme.js";
-import { AlternateScrollMode } from "./alternateScroll.js";
 import { h } from "../../../../../base/browser/dom.js";
 import { observeResize } from "../../../../../base/browser/observer.js";
+import { Emitter } from '../../../../../base/common/event.js';
+import { Color } from '../../../../../base/common/color.js';
+import { CancellationError } from '../../../../../base/common/errors.js';
+import { searchMatchBackground } from '../../../../../platform/theme/common/colors/searchColors.js';
+import { contrastBorder, focusBorder } from '../../../../../platform/theme/common/colors/baseColors.js';
 
 /** One persistent xterm renderer bound to exactly one Terminal instance. */
-export class TerminalInstanceWidget extends Disposable {
+export class XtermTerminal extends Disposable {
 	readonly element: HTMLDivElement;
 	private terminal: Terminal | undefined;
 	private fitAddon: FitAddon | undefined;
@@ -25,8 +33,22 @@ export class TerminalInstanceWidget extends Disposable {
 	private readonly commandDecorations = new Map<string, TerminalCommandDecoration>();
 	private visible = false;
 	private readonly linkPicker = this._register(new MutableDisposable<DisposableStore>());
+	private searchAddon: SearchAddon | undefined;
+	private searchInitialization: Promise<SearchAddon> | undefined;
+	private searchGeneration = 0;
+	private activeSearch: { term: string; options: ISearchOptions; } | undefined;
+	private lastFindResult: ISearchResultChangeEvent | undefined;
+	private readonly _onDidChangeFindResults = this._register(new Emitter<ISearchResultChangeEvent>());
+	public readonly onDidChangeFindResults = this._onDidChangeFindResults.event;
+	public get findResult(): ISearchResultChangeEvent | undefined { return this.lastFindResult; }
 
-	constructor(container: HTMLElement, readonly instance: ITerminalInstance, @IThemeService private readonly themeService: IThemeService, @IOpenerService private readonly openerService: IOpenerService, @IQuickInputService private readonly quickInputService: IQuickInputService) {
+	constructor(
+		container: HTMLElement,
+		readonly instance: ITerminalInstance,
+		@IThemeService private readonly themeService: IThemeService,
+		@IOpenerService private readonly openerService: IOpenerService,
+		@IQuickInputService private readonly quickInputService: IQuickInputService,
+	) {
 		super();
 		this.element = h(container.ownerDocument, "div");
 		this.element.className = "ash-terminal-instance";
@@ -70,6 +92,12 @@ export class TerminalInstanceWidget extends Disposable {
 		this._register(observeResize(this.element, () => this.fit()));
 	}
 
+	public get raw(): Terminal {
+		this.assertNotDisposed();
+		if (!this.terminal) { throw new Error('The terminal renderer has not been initialized'); }
+		return this.terminal;
+	}
+
 	initialize(): Promise<void> {
 		this.assertNotDisposed();
 		this.initialization ??= this.loadTerminal();
@@ -105,11 +133,8 @@ export class TerminalInstanceWidget extends Disposable {
 		this.registerAlternateScrollMode(terminal);
 		this._register(this.themeService.onDidColorThemeChange(theme => {
 			terminal.options.theme = terminalTheme(theme);
+			if (this.activeSearch) { void this.findNext(this.activeSearch.term, { ...this.activeSearch.options, incremental: true }).catch(onUnexpectedError); }
 		}));
-		const input = terminal.onData(data => this.instance.write(data));
-		this._register(toDisposable(() => input.dispose()));
-		const binaryInput = terminal.onBinary(data => { void this.instance.processBinary(data).catch(onUnexpectedError); });
-		this._register(toDisposable(() => binaryInput.dispose()));
 		for (const write of this.pendingWrites) write(terminal);
 		this.pendingWrites.length = 0;
 		this.fit();
@@ -140,8 +165,70 @@ export class TerminalInstanceWidget extends Disposable {
 		this.terminal?.focus();
 	}
 
-	clear(): void {
+	clearBuffer(): void {
 		this.writeWhenReady(terminal => terminal.clear());
+	}
+
+	public findNext(term: string, searchOptions: ISearchOptions): Promise<boolean> {
+		return this.search(term, searchOptions, false);
+	}
+
+	public findPrevious(term: string, searchOptions: ISearchOptions): Promise<boolean> {
+		return this.search(term, searchOptions, true);
+	}
+
+	public clearSearchDecorations(): void {
+		this.searchGeneration++;
+		this.activeSearch = undefined;
+		this.searchAddon?.clearDecorations();
+		this.terminal?.clearSelection();
+		this.lastFindResult = { resultIndex: -1, resultCount: 0 };
+		this._onDidChangeFindResults.fire(this.lastFindResult);
+	}
+
+	private async search(term: string, options: ISearchOptions, previous: boolean): Promise<boolean> {
+		const generation = ++this.searchGeneration;
+		const addon = await (this.searchInitialization ??= this.loadSearchAddon());
+		if (this.isDisposed || generation !== this.searchGeneration) { return false; }
+		const previousOptions = this.activeSearch?.options;
+		if (previousOptions && (previousOptions.regex !== options.regex || previousOptions.wholeWord !== options.wholeWord || previousOptions.caseSensitive !== options.caseSensitive)) {
+			// The addon caches decorated matches by query; option changes need a fresh cache too.
+			addon.clearDecorations();
+		}
+		this.activeSearch = { term, options };
+		const theme = this.themeService.getColorTheme();
+		const hex = (id: string): string | undefined => {
+			const color = theme.getColor(id);
+			return color ? Color.Format.CSS.formatHex(color) : undefined;
+		};
+		const decoratedOptions: ISearchOptions = {
+			...options,
+			decorations: {
+				matchBackground: hex(searchMatchBackground),
+				matchBorder: hex(contrastBorder),
+				activeMatchBackground: hex(selectionBackground),
+				activeMatchBorder: hex(focusBorder),
+				matchOverviewRuler: hex(searchMatchBackground)!,
+				activeMatchColorOverviewRuler: hex(focusBorder)!,
+			},
+		};
+		return previous ? addon.findPrevious(term, decoratedOptions) : addon.findNext(term, decoratedOptions);
+	}
+
+	private async loadSearchAddon(): Promise<SearchAddon> {
+		await this.initialize();
+		const { SearchAddon } = await import('@xterm/addon-search');
+		if (this.isDisposed) { throw new CancellationError(); }
+		const addon = new SearchAddon({ highlightLimit: 1000 });
+		this.raw.loadAddon(addon);
+		this.searchAddon = addon;
+		const results = addon.onDidChangeResults(result => {
+			this.lastFindResult = result;
+			this._onDidChangeFindResults.fire(result);
+		});
+		// xterm owns addon disposal; this owner releases the Ash event adapter.
+		this._register(toDisposable(() => results.dispose()));
+		return addon;
 	}
 
 	/** Uses xterm's parsed screen, including a selection when present; raw PTY bytes are not a transcript. */
@@ -149,7 +236,7 @@ export class TerminalInstanceWidget extends Disposable {
 		if (this.isDisposed || signal.aborted) { return undefined; }
 		await this.initialize();
 		if (this.isDisposed || signal.aborted) { return undefined; }
-		const terminal = this.terminal!;
+		const terminal = this.raw;
 		// An empty write completes after queued output. Disposal or cancellation must also release the reader.
 		let release: ReturnType<typeof toDisposable> | undefined;
 		let abort: (() => void) | undefined;
@@ -190,7 +277,7 @@ export class TerminalInstanceWidget extends Disposable {
 	public async openDetectedLink(): Promise<void> {
 		await this.initialize();
 		this.assertNotDisposed();
-		const buffer = this.terminal!.buffer.active;
+		const buffer = this.raw.buffer.active;
 		const lines: string[] = [];
 		for (let index = 0; index < buffer.length; index++) {
 			const line = buffer.getLine(index)!;
@@ -309,4 +396,75 @@ function terminalCommandStatusLabel(status: ITerminalCommandStatusEvent["status"
 		case "failed": return exitCode === undefined ? "Command failed" : `Command failed with exit code ${exitCode}`;
 		case "canceled": return "Command was canceled";
 	}
+}
+
+/** Projects the workbench theme into xterm's renderer theme contract. */
+export function terminalTheme(theme: IColorTheme): ITheme {
+	return {
+		background: theme.getColorCss(terminalColors.terminalBackground),
+		foreground: theme.getColorCss(terminalColors.terminalForeground),
+		cursor: theme.getColorCss(terminalColors.terminalCursorForeground),
+		selectionForeground: theme.getColorCss(selectionForeground),
+		selectionBackground: theme.getColorCss(selectionBackground),
+		black: theme.getColorCss(terminalColors.terminalAnsiBlack),
+		red: theme.getColorCss(terminalColors.terminalAnsiRed),
+		green: theme.getColorCss(terminalColors.terminalAnsiGreen),
+		yellow: theme.getColorCss(terminalColors.terminalAnsiYellow),
+		blue: theme.getColorCss(terminalColors.terminalAnsiBlue),
+		magenta: theme.getColorCss(terminalColors.terminalAnsiMagenta),
+		cyan: theme.getColorCss(terminalColors.terminalAnsiCyan),
+		white: theme.getColorCss(terminalColors.terminalAnsiWhite),
+		brightBlack: theme.getColorCss(terminalColors.terminalAnsiBrightBlack),
+		brightRed: theme.getColorCss(terminalColors.terminalAnsiBrightRed),
+		brightGreen: theme.getColorCss(terminalColors.terminalAnsiBrightGreen),
+		brightYellow: theme.getColorCss(terminalColors.terminalAnsiBrightYellow),
+		brightBlue: theme.getColorCss(terminalColors.terminalAnsiBrightBlue),
+		brightMagenta: theme.getColorCss(terminalColors.terminalAnsiBrightMagenta),
+		brightCyan: theme.getColorCss(terminalColors.terminalAnsiBrightCyan),
+		brightWhite: theme.getColorCss(terminalColors.terminalAnsiBrightWhite),
+	};
+}
+
+const ALTERNATE_SCROLL_MODE = 1007;
+
+type TerminalScreen = 'normal' | 'alternate';
+type MouseTrackingMode = 'none' | 'x10' | 'vt200' | 'drag' | 'any';
+type TerminalParameters = ArrayLike<number | readonly number[]>;
+
+/** Tracks xterm alternate-scroll control sequences that xterm.js does not expose as a mode. */
+export class AlternateScrollMode {
+	private enabled = true;
+	private saved: boolean | undefined;
+
+	public set(parameters: TerminalParameters, enabled: boolean): void {
+		if (hasAlternateScroll(parameters)) {
+			this.enabled = enabled;
+		}
+	}
+
+	public save(parameters: TerminalParameters): void {
+		if (hasAlternateScroll(parameters)) {
+			this.saved = this.enabled;
+		}
+	}
+
+	public restore(parameters: TerminalParameters): void {
+		if (hasAlternateScroll(parameters) && this.saved !== undefined) {
+			this.enabled = this.saved;
+			this.saved = undefined;
+		}
+	}
+
+	public shouldProcessWheel(screen: TerminalScreen, mouseTracking: MouseTrackingMode): boolean {
+		return screen !== 'alternate' || mouseTracking !== 'none' || this.enabled;
+	}
+}
+
+function hasAlternateScroll(parameters: TerminalParameters): boolean {
+	for (let index = 0; index < parameters.length; index++) {
+		if (parameters[index] === ALTERNATE_SCROLL_MODE) {
+			return true;
+		}
+	}
+	return false;
 }

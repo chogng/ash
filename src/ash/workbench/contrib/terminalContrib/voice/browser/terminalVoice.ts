@@ -1,4 +1,4 @@
-import './terminalVoice.css';
+import '../../../terminal/browser/media/terminalVoice.css';
 import { h, addDisposableListener } from '../../../../../base/browser/dom.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { Disposable, MutableDisposable, DisposableStore } from '../../../../../base/common/lifecycle.js';
@@ -10,6 +10,7 @@ import { IChatSpeechToTextService, ChatSpeechToTextState } from '../../../chat/b
 import { IDictationOnboardingService } from '../../../chat/browser/speechToText/dictationOnboarding.js';
 import { DictationSession, DictationAccessibilityHelp } from '../../../chat/browser/speechToText/dictationSession.js';
 import { localize } from '../../../../../nls.js';
+import { isCancellationError } from '../../../../../base/common/errors.js';
 
 /** Speech only edits shell input. Enter and terminal control sequences must stay user actions. */
 export function postProcessTerminalDictation(text: string): string {
@@ -45,7 +46,11 @@ export class TerminalVoiceSession extends Disposable {
 		this.session = this._register(instantiation.createInstance(
 			DictationSession,
 			{
-				insertText: (text: string) => { this.target!.write(postProcessTerminalDictation(text)); },
+				insertText: (text: string) => {
+					void this.target!.sendText(postProcessTerminalDictation(text), false).catch(error => {
+						if (!isCancellationError(error)) { notifications.error(String(error)); }
+					});
+				},
 				focus,
 			},
 			preview,

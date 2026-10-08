@@ -13,7 +13,7 @@ export class Terminal {
 	}
 
 	async show(): Promise<void> {
-		await this.page.getByRole('button', { name: 'Show Panel', exact: true }).click();
+		await this.page.getByRole('button', { name: 'Toggle Panel Visibility', exact: true }).click();
 		await this.activeInstance.locator('.xterm-helper-textarea').waitFor({ state: 'attached' });
 	}
 

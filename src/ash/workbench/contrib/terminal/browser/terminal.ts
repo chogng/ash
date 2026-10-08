@@ -3,6 +3,7 @@ import type { Event } from "../../../../base/common/event.js";
 import type { IDisposable } from "../../../../base/common/lifecycle.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import type { IProcessDataEvent, IShellLaunchConfig } from '../../../../platform/terminal/common/terminal.js';
+import type { XtermTerminal } from './xterm/xtermTerminal.js';
 
 /** Character-cell dimensions used by Workbench terminal callers. */
 export interface ITerminalDimensions {
@@ -61,10 +62,21 @@ export interface ITerminalInstance extends IDisposable {
 	readonly onDidExit: Event<number | undefined>;
 	readonly onDidChangeState: Event<TerminalInstanceState>;
 
-	write(data: string): void;
+	readonly xterm: XtermTerminal | undefined;
+	readonly xtermReadyPromise: Promise<XtermTerminal | undefined>;
+	getContribution<T extends ITerminalContribution>(id: string): T | null;
+	attachToElement(container: HTMLElement): void;
+	detachFromElement(): void;
+	/** Sends text to stdin, optionally executing it or applying the child Shell's paste mode. */
+	sendText(text: string, shouldExecute: boolean, bracketedPasteMode?: boolean): Promise<void>;
 	processBinary(data: string): Promise<void>;
 	resize(dimensions: ITerminalDimensions): void;
 	close(): Promise<void>;
+}
+
+/** Per-instance features share the instance's screen and release with the instance. */
+export interface ITerminalContribution extends IDisposable {
+	xtermReady?(xterm: XtermTerminal): void;
 }
 
 /** Reads the retained terminal screen without changing the active terminal or focus. */

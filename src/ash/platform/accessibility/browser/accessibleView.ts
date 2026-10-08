@@ -57,6 +57,7 @@ export const enum AccessibleViewProviderId {
 	TraceSettings = 'traceSettings',
 	IssueReporter = 'issueReporter',
 	Output = 'output',
+	TerminalFindHelp = 'terminalFindHelp',
 }
 
 export const enum AccessibleViewType {
