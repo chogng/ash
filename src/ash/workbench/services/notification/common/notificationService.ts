@@ -29,7 +29,8 @@ function validateNotification(options: NotificationOptions): void {
 	const actionIds = new Set<string>();
 	for (const action of options.actions ?? []) {
 		if (!/^[A-Za-z][A-Za-z0-9._-]{0,127}$/.test(action.id)) throw new TypeError(`Invalid notification action ID: ${action.id}`);
-		if (!actionIds.add(action.id)) throw new RangeError(`Duplicate notification action ID: ${action.id}`);
+		if (actionIds.has(action.id)) throw new RangeError(`Duplicate notification action ID: ${action.id}`);
+		actionIds.add(action.id);
 		if (typeof action.label !== "string" || action.label.trim().length === 0) throw new TypeError("Notification action label must not be empty");
 		if (typeof action.run !== "function") throw new TypeError(`Notification action '${action.id}' must provide a callback`);
 	}

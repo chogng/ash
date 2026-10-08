@@ -1,18 +1,20 @@
 import "./media/notifications.css";
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
-import type { IAction, IActionRunner } from "../../../../base/common/actions.js";
+import { Button } from '../../../../base/browser/ui/button/button.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, DisposableMap, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
 import { createServiceIdentifier, IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import { IContextKeyService, RawContextKey } from "../../../../platform/contextkey/common/contextkey.js";
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { localize } from "../../../../nls.js";
-import { INotificationService, type NotificationItem } from "../../../../platform/notification/common/notification.js";
+import { INotificationService } from "../../../../platform/notification/common/notification.js";
 import { StatusbarAlignment, type IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
 import { NotificationsToasts } from "./notificationsToasts.js";
 import { StatusbarHeight } from "../workbenchPartDimensions.js";
 import { CopyNotificationMessageAction } from './notificationsActions.js';
+import type { NotificationActionRunner } from './notificationsCommands.js';
+import { NotificationRenderer } from './notificationsViewer.js';
 
 export interface INotificationsCenter {
 	show(): void;
@@ -28,16 +30,17 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 	private readonly panel: HTMLElement;
 	private readonly list: HTMLElement;
 	private readonly clearButton: HTMLButtonElement;
-	private readonly toggleButton?: HTMLButtonElement;
+	private readonly toggleButton?: Button;
 	private open = false;
 	private previousFocus: Element | null = null;
 	private readonly copyAction: CopyNotificationMessageAction;
 	private copyMenu: CancellationTokenSource | undefined;
+	private readonly renderers = this._register(new DisposableMap<number, NotificationRenderer>());
 
 	constructor(
 		root: HTMLElement,
 		toastContainer: HTMLElement,
-		private readonly actionRunner: IActionRunner,
+		private readonly actionRunner: NotificationActionRunner,
 		statusbar: IStatusbarService | undefined,
 		getHelpHint: (() => string | undefined) | undefined,
 		@INotificationService private readonly service: INotificationService,
@@ -56,11 +59,11 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 		this.panel.hidden = true;
 		const header = h(document, "div"); header.className = "ash-notifications-center-header";
 		const title = h(document, "h2"); title.textContent = localize('notifications.title', 'Notifications');
-		this.clearButton = h(document, "button"); this.clearButton.type = "button"; this.clearButton.className = "ash-notifications-clear";
-		this.clearButton.textContent = localize('notifications.clearAll', 'Clear All');
-		const hide = h(document, "button"); hide.type = "button"; hide.className = "ash-notifications-hide";
-		hide.setAttribute("aria-label", localize('notifications.hideCenter', 'Hide Notification Center')); hide.textContent = "×";
-		header.append(title, this.clearButton, hide);
+		header.append(title);
+		const clear = this._register(new Button(header, { label: localize('notifications.clearAll', 'Clear All'), presentation: 'quiet', size: 'small' }));
+		this.clearButton = clear.domNode; this.clearButton.classList.add('ash-notifications-clear');
+		const hide = this._register(new Button(header, { label: localize('notifications.hideCenter', 'Hide Notification Center'), icon: Lxicon.close, iconOnly: true, presentation: 'quiet', size: 'small' }));
+		hide.domNode.classList.add('ash-notifications-hide');
 		this.list = h(document, "div"); this.list.className = "ash-notifications-list"; this.list.setAttribute("role", "list");
 		this.panel.append(header, this.list); root.append(this.panel);
 		this._register(toDisposable(() => this.panel.remove()));
@@ -75,8 +78,8 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 			if (!this.panel.contains(event.relatedTarget as Node | null)) focused.reset();
 		}));
 		this._register(toDisposable(() => focused.reset()));
-		this._register(addDisposableListener(this.clearButton, "click", () => this.clearAll()));
-		this._register(addDisposableListener(hide, "click", () => this.hide()));
+		this._register(clear.onDidClick(() => this.clearAll()));
+		this._register(hide.onDidClick(() => this.hide()));
 		this._register(addDisposableListener(this.list, "click", event => {
 			const Element = document.defaultView?.Element;
 			const target = event.target;
@@ -108,20 +111,16 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 				this.hide();
 			}
 		};
-		document.addEventListener("keydown", onEscape, true);
-		this._register(toDisposable(() => document.removeEventListener("keydown", onEscape, true)));
+		this._register(addDisposableListener(document, "keydown", onEscape, true));
 		if (statusbar) {
 			const entry = () => ({ icon: this.service.getNotifications().length ? Lxicon.bellDot : Lxicon.bell, text: "", ariaLabel: localize('notifications.showCenter', 'Show Notification Center'), tooltip: localize('notifications.showCenter', 'Show Notification Center'), run: () => this.toggle() });
 			const bell = this._register(statusbar.addEntry(entry(), { id: "ash.status.notifications", alignment: StatusbarAlignment.Right, priority: 500 }));
 			this._register(service.onDidAdd(() => bell.update(entry())));
 			this._register(service.onDidRemove(() => bell.update(entry())));
 		} else {
-			this.toggleButton = h(document, "button"); this.toggleButton.type = "button"; this.toggleButton.className = "ash-notifications-toggle";
-			this.toggleButton.textContent = localize('notifications.title', 'Notifications');
-			this.toggleButton.setAttribute("aria-label", localize('notifications.showCenter', 'Show Notification Center'));
-			root.append(this.toggleButton);
-			this._register(toDisposable(() => this.toggleButton?.remove()));
-			this._register(addDisposableListener(this.toggleButton, "click", () => this.toggle()));
+			const toggle = this._register(new Button(root, { label: localize('notifications.title', 'Notifications'), ariaLabel: localize('notifications.showCenter', 'Show Notification Center'), presentation: 'quiet', size: 'small' }));
+			this.toggleButton = toggle; toggle.toggleClassName('ash-notifications-toggle', true);
+			this._register(toggle.onDidClick(() => this.toggle()));
 		}
 		this.toasts = toasts;
 		this.render();
@@ -166,7 +165,7 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 	}
 
 	private render(): void {
-		// Every render replaces the anchor rows, so only this center's presentation expires.
+		if (this.isDisposed) return;
 		this.cancelCopyMenu();
 		const document = this.panel.ownerDocument;
 		const focusedRow = document.activeElement?.closest<HTMLElement>("[data-notification-id]");
@@ -174,9 +173,17 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 		const items = this.service.getNotifications().slice().reverse();
 		this.clearButton.disabled = items.length === 0;
 		if (this.toggleButton) this.toggleButton.hidden = items.length === 0;
-		this.list.replaceChildren(...items.map(item => this.renderItem(document, item)));
+		this.list.querySelector('.ash-notifications-empty')?.remove();
+		for (const id of this.renderers.keys()) {
+			if (!items.some(item => item.id === id)) this.renderers.deleteAndDispose(id);
+		}
+		// Immutable records retain their controls through background updates.
+		for (const [index, item] of items.entries()) {
+			const renderer = this.renderers.get(item.id) ?? this.renderers.set(item.id, new NotificationRenderer(document, item, 'center', this.actionRunner));
+			if (this.list.children[index] !== renderer.domNode) this.list.insertBefore(renderer.domNode, this.list.children[index] ?? null);
+		}
 		if (!items.length) { const empty = h(document, "p"); empty.className = "ash-notifications-empty"; empty.textContent = localize('notifications.empty', 'No notifications'); this.list.append(empty); }
-		if (focusedId && this.open) {
+		if (focusedId && this.open && document.activeElement === document.body) {
 			(this.list.querySelector<HTMLElement>(`[data-notification-id="${focusedId}"]`) ?? this.list.querySelector<HTMLElement>("[data-notification-id]") ?? this.panel).focus();
 		}
 	}
@@ -220,27 +227,4 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 		source?.dispose(true);
 	}
 
-	private renderItem(document: Document, item: NotificationItem): HTMLElement {
-		const row = h(document, "article"); row.className = "ash-notifications-row"; row.dataset.notificationId = String(item.id);
-		row.setAttribute("role", "listitem"); row.tabIndex = 0;
-		const message = h(document, "div"); message.className = "ash-notification-message"; message.textContent = item.message;
-		row.append(message);
-		if (item.source) { const source = h(document, "div"); source.className = "ash-notification-source"; source.textContent = item.source; row.append(source); }
-		if (item.actions?.length) {
-			const actions = h(document, "div"); actions.className = "ash-notification-actions";
-			for (const action of item.actions) {
-				const button = h(document, "button"); button.type = "button"; button.textContent = action.label; button.className = "ash-notification-action";
-				const notificationAction: IAction = {
-					id: action.id, label: action.label, tooltip: "", enabled: true,
-					run: () => action.run(),
-				};
-				button.addEventListener("click", () => { void Promise.resolve().then(() => this.actionRunner.run(notificationAction)); });
-				actions.append(button);
-			}
-			row.append(actions);
-		}
-		const remove = h(document, "button"); remove.type = "button"; remove.className = "ash-notifications-remove"; remove.dataset.notificationRemove = String(item.id);
-		remove.setAttribute("aria-label", localize('notifications.remove', 'Remove notification')); remove.textContent = "×";
-		row.append(remove); return row;
-	}
 }

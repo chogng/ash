@@ -13,19 +13,33 @@
 .ash-notification,
 .ash-notifications-row {
 	display: flex;
+	flex-shrink: 0;
 	gap: 10px;
 	align-items: flex-start;
 	padding: 10px 12px;
 	border: var(--ash-strokeThickness) solid
 		var(--ash-widget-border, var(--ash-foreground));
-	border-radius: var(--ash-cornerRadius-medium);
+	border-radius: var(--ash-cornerRadius-large);
 	color: var(--ash-foreground);
-	background: var(--ash-editor-background, var(--ash-workbench-background));
+	background: var(--ash-editor-widgetBackground);
 	box-shadow: 0 4px 16px var(--ash-widget-shadow);
 }
 .ash-notification-content {
 	min-width: 0;
 	flex: 1 1 auto;
+}
+.ash-notification-severity {
+	display: flex;
+	flex: 0 0 auto;
+	align-items: center;
+	height: 24px;
+	color: var(--ash-accent-foreground);
+}
+.ash-notification-warning > .ash-notification-severity {
+	color: var(--ash-warning-foreground);
+}
+.ash-notification-error > .ash-notification-severity {
+	color: var(--ash-error-foreground);
 }
 .ash-notification-message {
 	white-space: pre-wrap;
@@ -33,8 +47,9 @@
 }
 .ash-notification-source {
 	margin-top: 4px;
-	opacity: 0.75;
-	font-size: 0.9em;
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+	overflow-wrap: anywhere;
 }
 .ash-notification-actions {
 	display: flex;
@@ -42,25 +57,14 @@
 	margin-top: 8px;
 	flex-wrap: wrap;
 }
-.ash-notification-action,
-.ash-notification-close,
-.ash-notifications-center button,
-.ash-notifications-toggle {
-	border: var(--ash-strokeThickness) solid
-		var(--ash-button-border, var(--ash-foreground));
-	border-radius: var(--ash-cornerRadius-small);
-	color: inherit;
-	background: var(--ash-button-background, transparent);
-	cursor: pointer;
+.ash-notification-action {
+	max-width: 100%;
+	min-width: 0;
 }
 .ash-notification-close,
 .ash-notifications-remove,
 .ash-notifications-hide {
-	inline-size: 24px;
-	block-size: 24px;
-	padding: 0;
-	font-size: 18px;
-	line-height: 20px;
+	flex: 0 0 auto;
 }
 .ash-notifications-center {
 	position: absolute;
@@ -73,9 +77,9 @@
 	flex-direction: column;
 	border: var(--ash-strokeThickness) solid
 		var(--ash-widget-border, var(--ash-foreground));
-	border-radius: var(--ash-cornerRadius-medium);
+	border-radius: var(--ash-cornerRadius-large);
 	color: var(--ash-foreground);
-	background: var(--ash-editor-background, var(--ash-workbench-background));
+	background: var(--ash-editor-widgetBackground);
 	box-shadow: 0 6px 24px var(--ash-widget-shadow);
 }
 .ash-notifications-center[hidden] {
@@ -83,6 +87,7 @@
 }
 .ash-notifications-center-header {
 	display: flex;
+	flex-shrink: 0;
 	align-items: center;
 	gap: 8px;
 	padding: 8px 12px;
@@ -91,8 +96,10 @@
 }
 .ash-notifications-center-header h2 {
 	flex: 1;
+	min-width: 0;
 	margin: 0;
-	font-size: 1em;
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-semiBold);
 }
 .ash-notifications-list {
 	min-height: 0;
@@ -103,24 +110,15 @@
 	gap: 8px;
 }
 .ash-notifications-row {
-	position: relative;
-	padding-inline-end: 44px;
-	flex-direction: column;
-	gap: 0;
+	flex-shrink: 0;
+	border: 0;
+	border-radius: 0;
 	box-shadow: none;
 }
 .ash-notifications-center:focus-visible,
-.ash-notifications-row:focus-visible,
-.ash-notifications-center button:focus-visible,
-.ash-notification button:focus-visible,
-.ash-notifications-toggle:focus-visible {
+.ash-notifications-row:focus-visible {
 	outline: 2px solid var(--ash-focusBorder, currentColor);
 	outline-offset: 2px;
-}
-.ash-notifications-remove {
-	position: absolute;
-	inset-inline-end: 8px;
-	inset-block-start: 8px;
 }
 .ash-notifications-empty {
 	margin: 8px;
