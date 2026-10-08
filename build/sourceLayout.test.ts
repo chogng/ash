@@ -73,7 +73,7 @@ test("frontend Node tools and backend package builders have separate language ow
 		assert.deepEqual(walk(join(import.meta.dirname, directory)).filter(path => extname(path) === ".py"), [], directory);
 	}
 	for (const [directory, entries] of [
-		['desktop', ['__init__.py', 'develop.py', 'test_develop.py']],
+		['desktop', ['__init__.py', 'ci.py', 'develop.py', 'test_ci.py', 'test_develop.py']],
 		['protocol', ['__init__.py', 'artifacts.py', 'generate.py', 'test_generate.py']],
 	] as const) {
 		assert.deepEqual(walk(join(import.meta.dirname, directory)).filter(path => extname(path) === '.py').map(path => path.slice(join(import.meta.dirname, directory).length + 1)).sort(), [...entries].sort(), directory);
