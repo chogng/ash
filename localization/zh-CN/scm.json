@@ -348,6 +348,7 @@
     "git.commitIncludingUntrackedDescription": "暂存未被忽略的未跟踪文件",
     "git.commitScope": "选择要提交的更改",
     "git.noCommitToAmend": "没有可修改的提交。",
+    "git.amendHeadChanged": "确认修改提交时，提交或分支已变化。请检查当前提交后重试。",
     "git.commitMessageRequired": "请输入提交信息。",
     "git.committing": "正在提交选定的更改…",
     "git.commitCreated": "已创建提交 {0}。{1}",

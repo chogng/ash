@@ -223,6 +223,9 @@ Git revision 或复制统计规则。
 未暂存的新路径只有显式选择后才加入。未解决的 index 冲突在自动暂存之前拒绝。
 `amend` 替换最后一次提交并保留父提交；`sign_off` 让 Git 根据当前仓库身份添加 `Signed-off-by`，
 不创建身份，也不启用 GPG。所有组合和旧 `GitCommand::Amend` 共用同一个禁用 hooks 的执行入口。
+`with_expected_head` 校验已有提交目标，并在暂存前比较实际 OID、HEAD 类型和分支名，忽略 upstream 数量。
+过期目标不会执行 add 或 commit；未指定目标的旧调用继续兼容。此执行前条件依赖调用方已有的仓库操作锁，
+不提供跨进程 Git 写入的原子 CAS。
 Message 从 stdin 读取，成功后返回 HEAD object ID。暂存成功而创建提交失败时保留真实 index，调用方应刷新状态，
 不能假设回滚。Remote mutation non-interactive；`fetch_default` 获取默认远端并 prune，`fetch` 获取全部远端并 prune，
 `pull_fast_forward` 明确使用 `--ff-only`，`push` 使用 repository 当前 upstream/default。

@@ -29,10 +29,12 @@ test('GitService preserves legacy commit parameters and forwards explicit commit
 	using service = new GitService({ api, appServerApi, eventApi, workspaceContext, canCloneRepository: false }, configuration, new NullLoggerService());
 	await service.listRepositories();
 	await service.commit('Legacy staged message', 'nested');
-	const result = await service.commit('Signed amended message', 'nested', { scope: 'includeUntracked', mode: 'amend', signoff: 'add' });
+	const result = await service.commit('Signed amended message', 'nested', { scope: 'includeUntracked', mode: 'amend', signoff: 'add', expectedHead: { type: 'branch', name: 'main', objectId: 'captured', upstream: undefined } });
+	await service.commit('Detached message', 'nested', { mode: 'amend', expectedHead: { type: 'detached', objectId: 'captured' } });
 	assert.deepEqual(requests, [
 		{ repositoryId: 'nested', message: 'Legacy staged message' },
-		{ repositoryId: 'nested', message: 'Signed amended message', scope: 'includeUntracked', mode: 'amend', signoff: 'add' },
+		{ repositoryId: 'nested', message: 'Signed amended message', scope: 'includeUntracked', mode: 'amend', signoff: 'add', expectedHead: { type: 'branch', name: 'main', objectId: 'captured', upstream: null } },
+		{ repositoryId: 'nested', message: 'Detached message', mode: 'amend', expectedHead: { type: 'detached', objectId: 'captured' } },
 	]);
 	assert.equal(result.status.workspacePath, '/workspace/nested');
 	assert.equal(service.activeRepository?.id, 'root');

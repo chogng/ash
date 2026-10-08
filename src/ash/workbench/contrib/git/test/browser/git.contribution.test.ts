@@ -265,7 +265,7 @@ for (const [id, options] of [
 		fixture.provider.input.value = 'One repository draft';
 		await fixture.commands.executeCommand(id, fixture.provider.id);
 		assert.deepEqual({ requests: fixture.requests, draft: fixture.provider.input.value, busy: fixture.provider.isBusy }, {
-			requests: [['commit', 'One repository draft', fixture.provider.id, options]], draft: '', busy: false,
+			requests: [['commit', 'One repository draft', fixture.provider.id, 'mode' in options && options.mode === 'amend' ? { ...options, expectedHead: fixture.status.head } : options]], draft: '', busy: false,
 		});
 	});
 }
@@ -322,7 +322,7 @@ for (const confirmed of [false, true]) {
 		await fixture.provider.refresh();
 		await fixture.commands.executeCommand('git.commitAmend', fixture.provider.id);
 		assert.deepEqual({ requests: fixture.requests, draft: fixture.provider.input.value, busy: fixture.provider.isBusy }, {
-			requests: [['message', selectedId, fixture.provider.id], ...(confirmed ? [['commit', 'Previous subject\n\nPrevious body.', fixture.provider.id, { mode: 'amend' }]] : [])],
+			requests: [['message', selectedId, fixture.provider.id], ...(confirmed ? [['commit', 'Previous subject\n\nPrevious body.', fixture.provider.id, { mode: 'amend', expectedHead: fixture.status.head }]] : [])],
 			draft: confirmed ? '' : 'Previous subject\n\nPrevious body.\n', busy: false,
 		});
 	});
@@ -342,6 +342,97 @@ test('SCM commit workflow amend cancels after an edit during confirmation', asyn
 	await operation;
 	assert.deepEqual({ requests: fixture.requests, draft: fixture.provider.input.value, busy: fixture.provider.isBusy }, { requests: [], draft: 'Future message', busy: false });
 });
+
+for (const phase of ['message read', 'confirmation']) {
+	for (const change of ['new commit', 'same commit on another branch']) {
+		test(`SCM amendment keeps its target when HEAD changes during ${phase}: ${change}`, async () => {
+			const reading = new DeferredPromise<void>();
+			const message = new DeferredPromise<string>();
+			const confirming = new DeferredPromise<void>();
+			const decision = new DeferredPromise<{ confirmed: boolean; }>();
+			let changedStatus: GitStatus | undefined;
+			let commits = 0;
+			let confirmations = 0;
+			using fixture = commitFixture({
+				status: async () => { await Promise.resolve(); return changedStatus ?? fixture.status; },
+				commitMessage: async () => { await reading.complete(); return phase === 'message read' ? message.p : 'Previous subject\n\nPrevious body.\n'; },
+				commit: async () => { commits++; return { objectId: baseId, status: { ...changedStatus!, revision: 3, changes: [] } }; },
+				stage: async () => { assert.fail('An abandoned amendment must not stage changes.'); },
+			}, async () => { confirmations++; await confirming.complete(); return phase === 'confirmation' ? decision.p : { confirmed: true }; });
+			await fixture.provider.refresh();
+			const operation = fixture.commands.executeCommand('git.commitAmend', fixture.provider.id);
+			await (phase === 'message read' ? reading.p : confirming.p);
+			changedStatus = {
+				...fixture.status, revision: 2,
+				head: { type: 'branch', name: change === 'new commit' ? 'main' : 'other', objectId: change === 'new commit' ? baseId : selectedId, upstream: undefined },
+			};
+			await fixture.provider.refresh();
+			await message.complete('Previous subject\n\nPrevious body.\n');
+			await decision.complete({ confirmed: true });
+			await operation;
+			assert.deepEqual({ commits, confirmations, draft: fixture.provider.input.value, busy: fixture.provider.isBusy }, {
+				commits: 0, confirmations: phase === 'message read' ? 0 : 1,
+				draft: phase === 'message read' ? '' : 'Previous subject\n\nPrevious body.\n', busy: false,
+			});
+		});
+	}
+}
+
+test('SCM amendment keeps its captured target when only upstream counts change', async () => {
+	const confirming = new DeferredPromise<void>();
+	const decision = new DeferredPromise<{ confirmed: boolean; }>();
+	let changedStatus: GitStatus | undefined;
+	using fixture = commitFixture({ status: async () => { await Promise.resolve(); return changedStatus ?? fixture.status; } }, async () => { await confirming.complete(); return decision.p; });
+	await fixture.provider.refresh();
+	const operation = fixture.commands.executeCommand('git.commitAmend', fixture.provider.id);
+	await confirming.p;
+	changedStatus = { ...fixture.status, revision: 2, head: { type: 'branch', name: 'main', objectId: selectedId, upstream: { name: 'origin/main', ahead: 7, behind: 3 } } };
+	await fixture.provider.refresh();
+	await decision.complete({ confirmed: true });
+	await operation;
+	assert.deepEqual(fixture.requests, [['message', selectedId, fixture.provider.id], ['commit', 'Previous subject\n\nPrevious body.', fixture.provider.id, { mode: 'amend', expectedHead: fixture.status.head }]]);
+	assert.equal(fixture.provider.input.value, '');
+});
+
+test('SCM amendment retains its full draft when the backend rejects a stale target', async () => {
+	let changedStatus: GitStatus | undefined;
+	let captured: unknown;
+	using fixture = commitFixture({
+		status: async () => { await Promise.resolve(); return changedStatus ?? fixture.status; },
+		commit: async (_message, _repository, options) => {
+			captured = options?.expectedHead;
+			changedStatus = { ...fixture.status, revision: 2, head: { type: 'branch', name: 'main', objectId: baseId, upstream: undefined } };
+			throw new Error('GitOperationFailed');
+		},
+	});
+	await fixture.provider.refresh();
+	await fixture.commands.executeCommand('git.commitAmend', fixture.provider.id);
+	assert.deepEqual({ target: captured, draft: fixture.provider.input.value, busy: fixture.provider.isBusy }, { target: fixture.status.head, draft: 'Previous subject\n\nPrevious body.\n', busy: false });
+});
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`SCM amendment rejects a HEAD kind change and explains the retained draft in ${locale}`, async () => {
+		const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale === locale)!;
+		setNlsResolver((bundle, key, original, parameters) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? original, parameters));
+		try {
+			const confirming = new DeferredPromise<void>();
+			const decision = new DeferredPromise<{ confirmed: boolean; }>();
+			let changedStatus: GitStatus | undefined;
+			using fixture = commitFixture({ status: async () => { await Promise.resolve(); return changedStatus ?? fixture.status; } }, async () => { await confirming.complete(); return decision.p; });
+			await fixture.provider.refresh();
+			const operation = fixture.commands.executeCommand('git.commitAmend', fixture.provider.id);
+			await confirming.p;
+			changedStatus = { ...fixture.status, revision: 2, head: { type: 'detached', objectId: selectedId } };
+			await fixture.provider.refresh();
+			await decision.complete({ confirmed: true });
+			await operation;
+			assert.deepEqual({ requests: fixture.requests, draft: fixture.provider.input.value, message: fixture.provider.statusMessage }, {
+				requests: [['message', selectedId, fixture.provider.id]], draft: 'Previous subject\n\nPrevious body.\n',
+				message: locale === 'zh-CN' ? '确认修改提交时，提交或分支已变化。请检查当前提交后重试。' : 'The commit or branch changed while confirming Amend. Review the current commit and retry.',
+			});
+		} finally { resetNlsResolver(); }
+	});
+}
 
 for (const initial of ['', 'Existing draft']) {
 	test(`SCM commit workflow undo preserves newer text while awaiting confirmation: ${initial || 'empty'}`, async () => {
@@ -414,7 +505,7 @@ test('SCM commit workflow keeps its repository across a switch during confirmati
 	await decision.complete({ confirmed: true });
 	await operation;
 	assert.deepEqual({ requests: first.requests, first: first.provider.input.value, other: other.input.value }, {
-		requests: [['commit', 'Captured message', first.provider.id, { mode: 'amend' }]], first: '', other: 'Other draft',
+		requests: [['commit', 'Captured message', first.provider.id, { mode: 'amend', expectedHead: first.status.head }]], first: '', other: 'Other draft',
 	});
 });
 

@@ -18,6 +18,7 @@ fn commit_options_preserve_legacy_requests_and_reject_unknown_intents() {
     assert!(decoded.scope.is_none());
     assert!(decoded.mode.is_none());
     assert!(decoded.signoff.is_none());
+    assert!(decoded.expected_head.is_none());
     assert_eq!(serde_json::to_value(decoded).unwrap(), legacy);
     for scope in ["staged", "tracked", "includeUntracked"] {
         for mode in ["create", "amend"] {
@@ -33,6 +34,22 @@ fn commit_options_preserve_legacy_requests_and_reject_unknown_intents() {
         invalid[field] = serde_json::json!(value);
         assert!(serde_json::from_value::<GitCommitParams>(invalid).is_err());
     }
+}
+
+#[test]
+fn amend_target_round_trips_branch_and_detached_identity() {
+    for head in [
+        serde_json::json!({"type":"branch","name":"main","objectId":"a".repeat(40),"upstream":null}),
+        serde_json::json!({"type":"branch","name":"main","objectId":"a".repeat(40),"upstream":{"name":"origin/main","ahead":3,"behind":2}}),
+        serde_json::json!({"type":"detached","objectId":"a".repeat(40)}),
+    ] {
+        let request =
+            serde_json::json!({"message":"Full message","mode":"amend","expectedHead":head});
+        let decoded: GitCommitParams = serde_json::from_value(request.clone()).unwrap();
+        assert_eq!(serde_json::to_value(decoded).unwrap(), request);
+    }
+    let invalid = serde_json::json!({"message":"message","mode":"amend","expectedHead":{"type":"tag","objectId":"a".repeat(40)}});
+    assert!(serde_json::from_value::<GitCommitParams>(invalid).is_err());
 }
 
 fn initialization() -> InitializeResult {

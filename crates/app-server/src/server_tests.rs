@@ -6749,6 +6749,213 @@ fn git_status_rpc_returns_dir_repository_state() {
 }
 
 #[test]
+fn git_amend_rejects_advanced_head_before_any_staging() {
+    assert_stale_amend_target_is_rejected("new commit");
+}
+
+#[test]
+fn git_amend_rejects_same_oid_branch_switch_before_any_staging() {
+    assert_stale_amend_target_is_rejected("another branch");
+}
+
+#[test]
+fn git_amend_accepts_current_target_and_legacy_requests() {
+    for bound in [false, true] {
+        for scope in ["staged", "tracked", "includeUntracked"] {
+            let directory = tempfile::tempdir().unwrap();
+            let root = directory.path();
+            run_git(root, &["init", "--initial-branch=main"]);
+            run_git(root, &["config", "user.name", "Ash Test"]);
+            run_git(root, &["config", "user.email", "ash@example.test"]);
+            std::fs::write(root.join("tracked.txt"), "initial\n").unwrap();
+            run_git(root, &["add", "."]);
+            run_git(root, &["commit", "-m", "initial"]);
+            let server = server()
+                .with_git_root(dir_authorization(root, DirPermission::MutateRepository))
+                .unwrap();
+            let mut connection = server.connection();
+            initialize(&server, &mut connection);
+            let status = call(
+                &server,
+                &mut connection,
+                serde_json::json!({"jsonrpc":"2.0","id":2,"method":"git/status","params":{}}),
+            );
+            std::fs::write(root.join("tracked.txt"), "staged\n").unwrap();
+            run_git(root, &["add", "tracked.txt"]);
+            std::fs::write(root.join("tracked.txt"), "working\n").unwrap();
+            std::fs::write(root.join("new.txt"), "untracked\n").unwrap();
+            let mut params = serde_json::json!({"message":"Amended message\n\nComplete body.","mode":"amend","scope":scope});
+            if bound {
+                let mut target = status["result"]["head"].clone();
+                target["upstream"] = serde_json::json!({"name":"origin/main","ahead":7,"behind":3});
+                params["expectedHead"] = target;
+            }
+            let committed = call(
+                &server,
+                &mut connection,
+                serde_json::json!({"jsonrpc":"2.0","id":3,"method":"git/commit","params":params}),
+            );
+            assert!(committed.get("error").is_none(), "{committed}");
+            assert_ne!(
+                committed["result"]["objectId"],
+                status["result"]["head"]["objectId"]
+            );
+            assert_eq!(committed["result"]["status"]["head"]["name"], "main");
+            let contents = std::process::Command::new("git")
+                .current_dir(root)
+                .args(["show", "HEAD:tracked.txt"])
+                .output()
+                .unwrap();
+            assert!(contents.status.success());
+            assert_eq!(
+                String::from_utf8(contents.stdout).unwrap(),
+                if scope == "staged" {
+                    "staged\n"
+                } else {
+                    "working\n"
+                }
+            );
+            assert_eq!(
+                std::fs::read_to_string(root.join("tracked.txt")).unwrap(),
+                "working\n"
+            );
+            assert_eq!(
+                std::fs::read_to_string(root.join("new.txt")).unwrap(),
+                "untracked\n"
+            );
+        }
+    }
+}
+
+#[test]
+fn git_amend_rejects_invalid_target_before_mutation() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    run_git(root, &["init", "--initial-branch=main"]);
+    run_git(
+        root,
+        &[
+            "-c",
+            "user.name=Ash Test",
+            "-c",
+            "user.email=ash@example.test",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "initial",
+        ],
+    );
+    let index = std::fs::read(root.join(".git/index")).unwrap();
+    let head = std::fs::read(root.join(".git/refs/heads/main")).unwrap();
+    let server = server()
+        .with_git_root(dir_authorization(root, DirPermission::MutateRepository))
+        .unwrap();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    for (request_index, target) in [
+        serde_json::json!({"type":"unborn","name":"main"}),
+        serde_json::json!({"type":"detached","objectId":"invalid"}),
+        serde_json::json!({"type":"branch","name":"","objectId":"a".repeat(40),"upstream":null}),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let rejected = call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc":"2.0","id":request_index + 2,"method":"git/commit","params":{"message":"must reject","mode":"amend","scope":"includeUntracked","expectedHead":target}}),
+        );
+        assert_eq!(
+            rejected["error"]["data"]["kind"], "InvalidParams",
+            "{rejected}"
+        );
+        assert_eq!(std::fs::read(root.join(".git/index")).unwrap(), index);
+        assert_eq!(
+            std::fs::read(root.join(".git/refs/heads/main")).unwrap(),
+            head
+        );
+    }
+}
+
+fn assert_stale_amend_target_is_rejected(change: &str) {
+    for scope in ["staged", "tracked", "includeUntracked"] {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path();
+        run_git(root, &["init", "--initial-branch=main"]);
+        run_git(root, &["config", "user.name", "Ash Test"]);
+        run_git(root, &["config", "user.email", "ash@example.test"]);
+        std::fs::write(root.join("tracked.txt"), "initial\n").unwrap();
+        run_git(root, &["add", "."]);
+        run_git(root, &["commit", "-m", "Old target", "-m", "Old body."]);
+        let server = server()
+            .with_git_root(dir_authorization(root, DirPermission::MutateRepository))
+            .unwrap();
+        let mut connection = server.connection();
+        initialize(&server, &mut connection);
+        let status = call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc":"2.0","id":2,"method":"git/status","params":{}}),
+        );
+        let target = status["result"]["head"].clone();
+        let message = call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc":"2.0","id":3,"method":"git/commitMessage","params":{"objectId":target["objectId"]}}),
+        );
+        let draft = message["result"]["message"].as_str().unwrap();
+        assert_eq!(draft.trim(), "Old target\n\nOld body.");
+        match change {
+            "new commit" => {
+                std::fs::write(root.join("tracked.txt"), "external commit\n").unwrap();
+                run_git(root, &["add", "."]);
+                run_git(root, &["commit", "-m", "New target"]);
+            }
+            "another branch" => run_git(root, &["switch", "-c", "other"]),
+            _ => unreachable!(),
+        }
+        std::fs::write(root.join("tracked.txt"), "staged\n").unwrap();
+        run_git(root, &["add", "tracked.txt"]);
+        std::fs::write(root.join("tracked.txt"), "working\n").unwrap();
+        std::fs::write(root.join("new.txt"), "untracked\n").unwrap();
+        let branch_path = root
+            .join(".git/refs/heads")
+            .join(if change == "another branch" {
+                "other"
+            } else {
+                "main"
+            });
+        let head = std::fs::read(root.join(".git/HEAD")).unwrap();
+        let branch = std::fs::read(&branch_path).unwrap();
+        let index = std::fs::read(root.join(".git/index")).unwrap();
+        let rejected = call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc":"2.0","id":4,"method":"git/commit","params":{"message":draft,"mode":"amend","scope":scope,"expectedHead":target}}),
+        );
+        assert_eq!(
+            (
+                rejected["error"]["data"]["kind"].as_str(),
+                std::fs::read(root.join(".git/HEAD")).unwrap(),
+                std::fs::read(&branch_path).unwrap(),
+                std::fs::read(root.join(".git/index")).unwrap(),
+                std::fs::read_to_string(root.join("tracked.txt")).unwrap(),
+                std::fs::read_to_string(root.join("new.txt")).unwrap()
+            ),
+            (
+                Some("GitOperationFailed"),
+                head,
+                branch,
+                index,
+                "working\n".into(),
+                "untracked\n".into()
+            ),
+            "stale {change} target with {scope}: {rejected}",
+        );
+    }
+}
+
+#[test]
 fn restricted_dir_exposes_git_status_but_rejects_mutations() {
     let root = std::env::temp_dir().join(format!(
         "ash-app-server-restricted-git-{}-{}",

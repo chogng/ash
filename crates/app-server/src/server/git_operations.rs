@@ -41,6 +41,7 @@ use ash_app_server_protocol::protocol::git::GitConflictFileParams;
 use ash_app_server_protocol::protocol::git::GitFetchModeDto;
 use ash_app_server_protocol::protocol::git::GitFetchParams;
 use ash_app_server_protocol::protocol::git::GitGraphParams;
+use ash_app_server_protocol::protocol::git::GitHeadDto;
 use ash_app_server_protocol::protocol::git::GitHistoryResult;
 use ash_app_server_protocol::protocol::git::GitIndexDiffResult;
 use ash_app_server_protocol::protocol::git::GitIndexEditParams;
@@ -728,6 +729,25 @@ impl AppServer {
         let request = match params.signoff.unwrap_or(GitCommitSignoffDto::None) {
             GitCommitSignoffDto::None => request,
             GitCommitSignoffDto::Add => request.sign_off(),
+        };
+        let request = match params.expected_head {
+            Some(head) => {
+                let head = match head {
+                    GitHeadDto::Branch {
+                        name, object_id, ..
+                    } => ash_git::GitHead::Branch {
+                        name,
+                        object_id,
+                        upstream: None,
+                    },
+                    GitHeadDto::Detached { object_id } => ash_git::GitHead::Detached { object_id },
+                    GitHeadDto::Unborn { name } => ash_git::GitHead::Unborn { name },
+                };
+                request
+                    .with_expected_head(head)
+                    .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?
+            }
+            None => request,
         };
         let committed = self
             .git_runtime_service()?

@@ -50,12 +50,23 @@ test.describe('Git repository operations', () => {
 		await expect.poll(() => git('stash', 'list')).toBe('');
 		expect(await readFile(testWorkspace.file, 'utf8')).toBe('const value = 7;\n');
 
-		await git('add', 'main.ts');
-		await git('commit', '-m', 'Commit to amend');
-		const parent = await git('rev-parse', 'HEAD^');
 		await workbench.git.open();
+		await workbench.quickaccess.runCommand('git.refresh');
+		await expect(page.locator('.ash-scm-changes')).toContainText('main.ts');
+		await workbench.quickaccess.runCommand('git.stageAll');
+		await expect(page.getByRole('treeitem', { name: /^Staged Changes/u }).first()).toBeVisible();
+		expect(await git('show', ':main.ts')).toBe('const value = 7;');
 		const input = page.locator('.ash-scm-input');
 		const editor = input.getByRole('textbox', { name: /^Commit message/u });
+		await editor.focus();
+		await page.keyboard.insertText('Commit to amend');
+		// Creating the target through SCM keeps its HEAD owner current before Amend.
+		await workbench.git.selectTitleMenu(application, ['Commit', 'Commit Staged']);
+		await expect.poll(() => git('log', '-1', '--format=%s')).toBe('Commit to amend');
+		await expect(input.locator('.stanza-editor-placeholder-text')).toBeVisible();
+		const head = await git('rev-parse', 'HEAD');
+		await expect(page.locator('.ash-scm-status')).toContainText(`Created commit ${head.slice(0, 7)}.`);
+		const parent = await git('rev-parse', 'HEAD^');
 		await editor.focus();
 		await page.keyboard.insertText('UI amended commit\n\nComplete amended body.');
 		await workbench.dialogs.confirm(application, 'Confirm Git Operation', 'Continue', () => workbench.git.selectTitleMenu(application, ['Commit', 'Amend Last Commit…']));

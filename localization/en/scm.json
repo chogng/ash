@@ -107,6 +107,7 @@
     "git.commitIncludingUntrackedDescription": "Stage untracked files that are not ignored",
     "git.commitScope": "Choose changes to commit",
     "git.noCommitToAmend": "There is no commit to amend.",
+    "git.amendHeadChanged": "The commit or branch changed while confirming Amend. Review the current commit and retry.",
     "git.commitMessageRequired": "Enter a commit message.",
     "git.committing": "Committing selected changes…",
     "git.commitCreated": "Created commit {0}. {1}",

@@ -732,6 +732,10 @@ pub struct GitCommitParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub signoff: Option<GitCommitSignoffDto>,
+    /// Captured Amend target, checked before staging; upstream counts are ignored.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub expected_head: Option<GitHeadDto>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

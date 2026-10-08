@@ -3,6 +3,7 @@ use super::GitPathspecSet;
 use crate::GitChangeStatus;
 use crate::GitClient;
 use crate::GitError;
+use crate::GitHead;
 use crate::test_support::TestBareRepository;
 use crate::test_support::TestRepository;
 use std::path::PathBuf;
@@ -238,6 +239,119 @@ async fn scoped_and_amended_commits_keep_repository_hooks_disabled() {
         .unwrap();
     assert!(!repository.path(".git/hook-ran").exists());
     assert_eq!(repository.git(&["log", "-1", "--format=%s"]), "amended");
+}
+
+#[tokio::test]
+async fn amend_target_compares_head_kind_and_ignores_upstream_counts() {
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "initial\n");
+    repository.commit_all("initial");
+    let object_id = repository.git(&["rev-parse", "HEAD"]);
+    let client = GitClient::system();
+    let opened = client.open_repository(repository.root()).await.unwrap();
+    let branch = GitHead::Branch {
+        name: "main".into(),
+        object_id: object_id.clone(),
+        upstream: Some(crate::GitUpstream {
+            name: "origin/main".into(),
+            ahead: 7,
+            behind: 3,
+        }),
+    };
+    repository.git(&["switch", "--detach"]);
+    repository.write("tracked.txt", "working\n");
+    let index = std::fs::read(repository.path(".git/index")).unwrap();
+    let error = client
+        .commit(
+            &opened,
+            &GitCommitRequest::new("stale branch".into())
+                .unwrap()
+                .amend()
+                .with_tracked_changes()
+                .with_expected_head(branch)
+                .unwrap(),
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        GitError::InvalidConfiguration {
+            field: "expected HEAD",
+            ..
+        }
+    ));
+    assert_eq!(std::fs::read(repository.path(".git/index")).unwrap(), index);
+    let detached = GitHead::Detached {
+        object_id: object_id.clone(),
+    };
+    repository.git(&["switch", "main"]);
+    let error = client
+        .commit(
+            &opened,
+            &GitCommitRequest::new("stale detached".into())
+                .unwrap()
+                .amend()
+                .with_tracked_changes()
+                .with_expected_head(detached)
+                .unwrap(),
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        GitError::InvalidConfiguration {
+            field: "expected HEAD",
+            ..
+        }
+    ));
+    let target = GitHead::Branch {
+        name: "main".into(),
+        object_id,
+        upstream: Some(crate::GitUpstream {
+            name: "origin/main".into(),
+            ahead: 7,
+            behind: 3,
+        }),
+    };
+    let result = client
+        .commit(
+            &opened,
+            &GitCommitRequest::new("valid target".into())
+                .unwrap()
+                .amend()
+                .with_tracked_changes()
+                .with_expected_head(target)
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(repository.git(&["rev-parse", "HEAD"]), result.object_id());
+    assert_eq!(repository.git(&["show", "HEAD:tracked.txt"]), "working");
+}
+
+#[test]
+fn amend_target_rejects_unborn_invalid_object_id_and_empty_branch() {
+    for head in [
+        GitHead::Unborn {
+            name: "main".into(),
+        },
+        GitHead::Detached {
+            object_id: "not-an-object".into(),
+        },
+        GitHead::Branch {
+            name: "".into(),
+            object_id: "a".repeat(40),
+            upstream: None,
+        },
+    ] {
+        assert!(
+            GitCommitRequest::new("message".into())
+                .unwrap()
+                .amend()
+                .with_expected_head(head)
+                .is_err()
+        );
+    }
 }
 
 #[test]

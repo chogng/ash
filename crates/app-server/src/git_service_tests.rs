@@ -7,6 +7,7 @@ use ash_file_access::Permissions;
 use ash_git::GitClient;
 use ash_git::GitCommitRequest;
 use ash_git::GitExecutionLimits;
+use ash_git::GitHead;
 use std::collections::HashSet;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
@@ -98,6 +99,74 @@ fn commit_requires_write_permission_for_the_whole_checkout_before_staging() {
         "unstaged inside"
     );
     assert_eq!(git(&root, &["ls-files", "nested/new.txt"]), "");
+}
+
+#[test]
+fn stale_amend_target_never_runs_add_or_commit_for_any_scope() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path().canonicalize().unwrap();
+    git(&root, &["init", "--initial-branch=main"]);
+    git(&root, &["config", "user.name", "Ash Test"]);
+    git(&root, &["config", "user.email", "ash@example.invalid"]);
+    std::fs::write(root.join("tracked.txt"), "initial\n").unwrap();
+    git(&root, &["add", "."]);
+    git(&root, &["commit", "-m", "initial"]);
+    let expected = GitHead::Branch {
+        name: "main".into(),
+        object_id: git(&root, &["rev-parse", "HEAD"]),
+        upstream: None,
+    };
+    git(&root, &["switch", "-c", "other"]);
+    std::fs::write(root.join("tracked.txt"), "staged\n").unwrap();
+    git(&root, &["add", "tracked.txt"]);
+    std::fs::write(root.join("tracked.txt"), "working\n").unwrap();
+    std::fs::write(root.join("new.txt"), "untracked\n").unwrap();
+    let index = std::fs::read(root.join(".git/index")).unwrap();
+    let authorization = Grant::for_environment(
+        Dir::open_local(&root).unwrap(),
+        GrantSource::HostConfiguration,
+        Permissions::new([Permission::MutateRepository]),
+    )
+    .authorize(Permission::MutateRepository)
+    .unwrap();
+    let mut service = GitService::new(authorization, root.clone()).unwrap();
+    let (client, commands) = recording_git(&root);
+    service.client = client;
+    for request in [
+        GitCommitRequest::new("staged".into()).unwrap(),
+        GitCommitRequest::new("tracked".into())
+            .unwrap()
+            .with_tracked_changes(),
+        GitCommitRequest::new("all".into())
+            .unwrap()
+            .with_untracked_changes(),
+    ] {
+        std::fs::write(&commands, "").unwrap();
+        let error = service
+            .commit(
+                request
+                    .amend()
+                    .with_expected_head(expected.clone())
+                    .unwrap(),
+            )
+            .err()
+            .unwrap();
+        assert!(matches!(
+            error,
+            super::GitServiceError::Git(ash_git::GitError::InvalidConfiguration {
+                field: "expected HEAD",
+                ..
+            })
+        ));
+        let recorded = std::fs::read_to_string(&commands).unwrap();
+        assert!(
+            !recorded.lines().any(|line| line
+                .split_whitespace()
+                .any(|argument| matches!(argument, "add" | "commit"))),
+            "{recorded}"
+        );
+        assert_eq!(std::fs::read(root.join(".git/index")).unwrap(), index);
+    }
 }
 
 #[test]

@@ -673,6 +673,11 @@ Rust service 负责最终边界校验和 repository-relative 映射。Commit mes
 和 `signoff: none | add`。省略时保持 index-only 创建提交且不添加签名尾注。`tracked` 暂存已跟踪文件，
 `includeUntracked` 显式加入未跟踪且未被忽略的文件；当前 index 中已有的新文件始终属于提交范围。
 `amend` 替换最后一次提交，`add` 使用 Git 当前身份添加 `Signed-off-by`，不是 GPG 签名。
+可选 `expectedHead` 复用 HEAD 的 tagged DTO，绑定读取说明和用户确认时的提交 OID、HEAD 类型及分支名；
+upstream 名称和 ahead/behind 数量不参与比较。目标必须是已有提交；非法目标返回 `InvalidParams`。
+现有仓库 operation lock 内使用实际 snapshot，在任何 `add` 前拒绝过期目标并返回 `GitOperationFailed`，
+保留 HEAD、index 和工作文件。省略该字段的既有调用继续兼容。
+这是执行前条件，operation lock 只串行化 Ash 操作；它不是阻止所有外部 Git 并发写入的原子 CAS。
 服务端在暂存前检查整个 checkout 的 `MutateRepository` 授权及未解决冲突；仅有子目录授权时拒绝提交，
 包括 index-only 请求，因为 index 可能含目录外的更改。选项为闭合枚举，不接受任意 Git argv。
 旧 `git/command` 的 `amend` 仍兼容，并委托同一个 commit 执行入口。暂存后失败会发布真实 status，

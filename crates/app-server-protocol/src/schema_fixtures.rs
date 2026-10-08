@@ -699,6 +699,7 @@ fn dto_driven_schema_contains_registered_rpc_envelopes() {
     assert!(definitions["GitCommitParams"]["properties"]["scope"].is_object());
     assert!(definitions["GitCommitParams"]["properties"]["mode"].is_object());
     assert!(definitions["GitCommitParams"]["properties"]["signoff"].is_object());
+    assert!(definitions["GitCommitParams"]["properties"]["expectedHead"].is_object());
     assert_eq!(
         definitions["GitCommitScopeDto"]["enum"],
         serde_json::json!(["staged", "tracked", "includeUntracked"])

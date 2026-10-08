@@ -322,9 +322,11 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 					this.setMessage(localize('git.noCommitToAmend', 'There is no commit to amend.'));
 					return;
 				}
+				commitOptions.expectedHead = head;
 				if (!message) {
 					const previous = await this.gitService.commitMessage(head.objectId, this.id);
 					if (this.isDisposed || this.inputRevision !== revision) return;
+					if (!this.validateAmendTarget(head)) { return; }
 					this.input.value = previous;
 					revision = this.inputRevision;
 					message = previous.trim();
@@ -336,6 +338,7 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 					primaryButton: localize('git.confirmOperationButton', 'Continue'),
 				});
 				if (!confirmed.confirmed || this.isDisposed || this.inputRevision !== revision) return;
+				if (!this.validateAmendTarget(head)) { return; }
 			}
 			if (!message) {
 				this.setMessage(localize('git.commitMessageRequired', 'Enter a commit message.'));
@@ -357,6 +360,14 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 			}
 		});
 		return resultId;
+	}
+
+	private validateAmendTarget(expected: GitHead): boolean {
+		const current = this.status?.head;
+		const matches = current && current.type !== 'unborn' && expected.type !== 'unborn' && current.type === expected.type && current.objectId === expected.objectId && (current.type !== 'branch' || expected.type === 'branch' && current.name === expected.name);
+		if (matches) { return true; }
+		this.setMessage(localize('git.amendHeadChanged', 'The commit or branch changed while confirming Amend. Review the current commit and retry.'));
+		return false;
 	}
 
 	public async undoCommit(): Promise<void> {

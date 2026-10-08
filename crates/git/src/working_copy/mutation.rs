@@ -60,6 +60,7 @@ pub struct GitCommitRequest {
     scope: CommitScope,
     mode: CommitMode,
     signoff: CommitSignoff,
+    expected_head: Option<GitHead>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -100,6 +101,7 @@ impl GitCommitRequest {
             scope: CommitScope::Staged,
             mode: CommitMode::Create,
             signoff: CommitSignoff::None,
+            expected_head: None,
         })
     }
 
@@ -125,6 +127,33 @@ impl GitCommitRequest {
     pub fn sign_off(mut self) -> Self {
         self.signoff = CommitSignoff::Add;
         self
+    }
+
+    /// Binds the captured HEAD identity; upstream counts are not part of the target.
+    pub fn with_expected_head(mut self, head: GitHead) -> GitResult<Self> {
+        let object_id = match &head {
+            GitHead::Branch {
+                name, object_id, ..
+            } => {
+                if name.is_empty() || name.len() > 1024 || name.contains('\0') {
+                    return Err(GitError::InvalidConfiguration {
+                        field: "expected HEAD branch",
+                        requirement: "must be nonempty, NUL-free and no larger than 1024 bytes",
+                    });
+                }
+                object_id
+            }
+            GitHead::Detached { object_id } => object_id,
+            GitHead::Unborn { .. } => {
+                return Err(GitError::InvalidConfiguration {
+                    field: "expected HEAD",
+                    requirement: "must identify an existing commit",
+                });
+            }
+        };
+        crate::objects::validate_object_id(object_id, "expected HEAD")?;
+        self.expected_head = Some(head);
+        Ok(self)
     }
 }
 
@@ -234,9 +263,42 @@ impl GitClient {
         request: &GitCommitRequest,
     ) -> GitResult<crate::client::GitCommandOutput> {
         // An all-changes intent must not stage unresolved conflict markers as a resolution.
-        if self
-            .snapshot(repository)
-            .await?
+        let snapshot = self.snapshot(repository).await?;
+        if let Some(expected) = &request.expected_head {
+            let matches = match (expected, snapshot.head()) {
+                (
+                    GitHead::Branch {
+                        name, object_id, ..
+                    },
+                    GitHead::Branch {
+                        name: current_name,
+                        object_id: current_id,
+                        ..
+                    },
+                ) => name == current_name && object_id == current_id,
+                (
+                    GitHead::Detached { object_id },
+                    GitHead::Detached {
+                        object_id: current_id,
+                    },
+                ) => object_id == current_id,
+                (GitHead::Branch { .. }, GitHead::Detached { .. } | GitHead::Unborn { .. })
+                | (GitHead::Detached { .. }, GitHead::Branch { .. } | GitHead::Unborn { .. })
+                | (
+                    GitHead::Unborn { .. },
+                    GitHead::Branch { .. } | GitHead::Detached { .. } | GitHead::Unborn { .. },
+                ) => false,
+            };
+            if !matches {
+                return Err(GitError::InvalidConfiguration {
+                    field: "expected HEAD",
+                    requirement: "must still match the captured commit and branch",
+                });
+            }
+        }
+        // The App Server owner serializes Ash operations. External Git writers can
+        // still race after this precondition; it is not a cross-process transaction.
+        if snapshot
             .changes()
             .iter()
             .any(|change| change.is_conflicted())

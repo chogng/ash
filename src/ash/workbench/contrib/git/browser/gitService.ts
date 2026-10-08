@@ -1,5 +1,5 @@
 import type { GitCommand, GitCommandResult, GitCatalog, GitIndexDiff, GitIndexSelection, GitCommitDetails, GitFetchTarget, GitCommitOptions } from '../common/gitService.js';
-import type { ConfigReadResult, GitConfigDto, GitHeadDto, GitRepositoryChangeDto, GitRepositoryDto, GitStatusResult } from "../../../../../../.build/protocol/typescript/index.js";
+import type { ConfigReadResult, GitCommitParams, GitConfigDto, GitHeadDto, GitRepositoryChangeDto, GitRepositoryDto, GitStatusResult } from "../../../../../../.build/protocol/typescript/index.js";
 import { Emitter } from "../../../../base/common/event.js";
 import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
@@ -382,7 +382,10 @@ export class GitService extends Disposable implements IGitService {
 
 	async commit(message: string, repositoryId?: string, options: GitCommitOptions = {}): Promise<GitCommitResult> {
 		const repository = await this.getRepository(repositoryId);
-		const result = await this.api.commit({ repositoryId: repository.id, message, ...options });
+		const { expectedHead, ...intent } = options;
+		const params: GitCommitParams = { repositoryId: repository.id, message, ...intent };
+		if (expectedHead) { params.expectedHead = expectedHead.type === 'branch' ? { ...expectedHead, upstream: expectedHead.upstream ?? null } : expectedHead; }
+		const result = await this.api.commit(params);
 		return { objectId: result.objectId, status: toGitStatus(result.status, repository) };
 	}
 
