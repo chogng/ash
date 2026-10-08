@@ -104,6 +104,15 @@ reads the same saved result. Save failures keep the model and report an unknown
 outcome; the adapter does not replay an already applied edit. `textDocument/list`
 reads dirty text working copies under the requested root; searches replace each
 corresponding disk result with this text without updating the shared index.
+List containment normalizes Windows drive-letter spelling independently of the
+renderer OS, including unreserved percent-encoded drive letters, and keeps the
+original relative filename spelling. Encoded separators and reserved characters
+are not decoded for this comparison. All other path case stays distinct, including
+POSIX directories and UNC shares; the request has no server filesystem
+case-sensitivity metadata. Existing URI scheme, authority,
+query, fragment and directory boundaries still apply. UNC host comparison keeps
+its existing case-insensitive URI semantics. Cross-host parsing of backslash paths
+is unchanged; this comparison rule does not extend `URI.file` separator handling.
 Creates use the file service, including missing parent directories. Delete and
 move currently require closed resources, as defined by the workspace edit service.
 File-operation rollback retains the serialized bytes, including BOM and mixed EOLs.

@@ -12,6 +12,7 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { URI } from '../../../../../base/common/uri.js';
+import { Schemas } from '../../../../../base/common/network.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import { ITextModelService } from '../../../../../editor/common/services/resolverService.js';
 import { AppServerProtocolClient } from '../../../../../platform/agentHost/browser/appServerProtocolClient.js';
@@ -330,6 +331,68 @@ test('document search snapshots contain only unsaved text within the requested d
 	b.model.applyOperations([{ range: b.model.getFullModelRange(), text: 'other unsaved' }]);
 	assert.deepEqual(await host.transport.call('textDocument/list', { root: 'C:/workspace' }), { kind: 'documents', documents: [{ relativePath: 'open.txt', text: 'unsaved' }] });
 	assert.equal(host.files.contents.get(inside.toString()), 'disk');
+});
+
+for (const scenario of [
+	{ name: 'uppercase server drive', root: 'C:/workspace', resource: URI.file('c:/workspace/Folder/Mixed.txt'), relativePath: 'Folder/Mixed.txt' },
+	{ name: 'uppercase editor drive', root: 'c:/workspace', resource: URI.file('C:/workspace/Folder/Mixed.txt'), relativePath: 'Folder/Mixed.txt' },
+	{ name: 'encoded uppercase editor drive with matching server case', root: 'C:/workspace', resource: URI.parse('file:///%43:/workspace/Mixed.txt'), relativePath: 'Mixed.txt' },
+	{ name: 'encoded uppercase editor drive with lowercase server drive', root: 'c:/workspace', resource: URI.parse('file:///%43:/workspace/Mixed.txt'), relativePath: 'Mixed.txt' },
+	{ name: 'encoded lowercase editor drive with uppercase server drive', root: 'C:/workspace', resource: URI.parse('file:///%63:/workspace/Mixed.txt'), relativePath: 'Mixed.txt' },
+	{ name: 'uppercase hexadecimal drive escape', root: 'j:/workspace', resource: URI.parse('file:///%4A:/workspace/Mixed.txt'), relativePath: 'Mixed.txt' },
+	{ name: 'lowercase hexadecimal drive escape', root: 'J:/workspace', resource: URI.parse('file:///%4a:/workspace/Mixed.txt'), relativePath: 'Mixed.txt' },
+	{ name: 'uppercase hexadecimal lowercase-drive escape', root: 'J:/workspace', resource: URI.parse('file:///%6A:/workspace/Mixed.txt'), relativePath: 'Mixed.txt' },
+	{ name: 'lowercase hexadecimal lowercase-drive escape', root: 'j:/workspace', resource: URI.parse('file:///%6a:/workspace/Mixed.txt'), relativePath: 'Mixed.txt' },
+	{ name: 'encoded drive separator remains reserved', root: 'C:/workspace', resource: URI.parse('file:///%43:%2Fworkspace/Mixed.txt') },
+	{ name: 'encoded drive colon remains reserved', root: 'C:/workspace', resource: URI.parse('file:///%43%3A/workspace/Mixed.txt') },
+	{ name: 'encoded drive preserves encoded directory separator', root: 'C:/workspace', resource: URI.parse('file:///%43:/workspace%2Fother/Mixed.txt') },
+	{ name: 'encoded drive preserves encoded backslash', root: 'C:/workspace', resource: URI.parse('file:///%43:/workspace%5Cother/Mixed.txt') },
+	{ name: 'encoded reserved character is not a drive letter', root: 'C:/workspace', resource: URI.parse('file:///%2F:/workspace/Mixed.txt') },
+	{ name: 'drive root', root: 'C:/', resource: URI.file('c:/Folder/Mixed.txt'), relativePath: 'Folder/Mixed.txt' },
+	{ name: 'trailing root separator', root: 'C:/workspace/', resource: URI.file('c:/workspace/Mixed.txt'), relativePath: 'Mixed.txt' },
+	{ name: 'POSIX root', root: '/', resource: URI.file('/workspace/Mixed.txt'), relativePath: 'workspace/Mixed.txt' },
+	{ name: 'POSIX matching case', root: '/Workspace', resource: URI.file('/Workspace/Mixed.txt'), relativePath: 'Mixed.txt' },
+	{ name: 'POSIX distinct case', root: '/Workspace', resource: URI.file('/workspace/Mixed.txt') },
+	{ name: 'drive directory case remains distinct', root: 'C:/Workspace', resource: URI.file('c:/workspace/Mixed.txt') },
+	{ name: 'sibling directory boundary', root: 'C:/workspace', resource: URI.file('c:/workspace-other/Mixed.txt') },
+	{ name: 'different drive', root: 'C:/workspace', resource: URI.file('d:/workspace/Mixed.txt') },
+	{ name: 'UNC same authority', root: '//SERVER/share/workspace', resource: URI.file('//server/share/workspace/Mixed.txt'), relativePath: 'Mixed.txt' },
+	{ name: 'UNC different authority', root: '//server/share/workspace', resource: URI.file('//other/share/workspace/Mixed.txt') },
+	{ name: 'UNC share boundary', root: '//server/share', resource: URI.file('//server/share-other/Mixed.txt') },
+	{ name: 'UNC path case remains distinct', root: '//server/Share', resource: URI.file('//server/share/Mixed.txt') },
+	{ name: 'different scheme', root: '/workspace', resource: URI.from({ scheme: Schemas.untitled, path: '/workspace/Mixed.txt' }) },
+	{ name: 'query identity', root: 'C:/workspace', resource: URI.file('c:/workspace/Mixed.txt').with({ query: 'version=1' }) },
+	{ name: 'fragment identity', root: 'C:/workspace', resource: URI.file('c:/workspace/Mixed.txt').with({ fragment: 'revision' }) },
+	{ name: 'encoded separator stays inside its segment', root: 'C:/workspace', resource: URI.parse('file:///C:/workspace%2Fother/Mixed.txt') },
+]) {
+	test('document search snapshots respect ' + scenario.name, async () => {
+		using host = await fixture();
+		const resource = scenario.resource.scheme === Schemas.file ? scenario.resource : URI.file('/document-list-fixture.txt');
+		host.files.contents.set(resource.toString(), 'disk');
+		using reference = await host.models.acquire({ resource }, new AbortController().signal);
+		using copy = workingCopy(reference);
+		using registration = host.workingCopies.register({ ...copy, resource: scenario.resource, get isDirty() { return reference.isDirty; } });
+		reference.model.applyOperations([{ range: reference.model.getFullModelRange(), text: 'unsaved' }]);
+		assert.deepEqual(await host.transport.call('textDocument/list', { root: scenario.root }), {
+			kind: 'documents',
+			documents: scenario.relativePath === undefined ? [] : [{ relativePath: scenario.relativePath, text: 'unsaved' }],
+		});
+		assert.equal(host.files.contents.get(resource.toString()), 'disk');
+	});
+}
+
+test('document search snapshots exclude clean text and dirty structured documents', async () => {
+	using host = await fixture();
+	using lifetime = new DisposableStore();
+	for (const [name, backupKind, dirty] of [['clean.txt', 'text', false], ['structured.json', 'structuredDocument', true]] as const) {
+		const resource = URI.file('/workspace/' + name);
+		host.files.contents.set(resource.toString(), 'disk');
+		const reference = lifetime.add(await host.models.acquire({ resource }, new AbortController().signal));
+		const copy = lifetime.add(workingCopy(reference));
+		lifetime.add(host.workingCopies.register({ ...copy, backupKind, get isDirty() { return reference.isDirty; } }));
+		if (dirty) { reference.model.applyOperations([{ range: reference.model.getFullModelRange(), text: 'unsaved' }]); }
+	}
+	assert.deepEqual(await host.transport.call('textDocument/list', { root: '/workspace' }), { kind: 'documents', documents: [] });
 });
 
 test('a failed save reports a committed edit without losing the model or undo history', async () => {

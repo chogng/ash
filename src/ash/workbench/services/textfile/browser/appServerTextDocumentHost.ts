@@ -2,7 +2,8 @@ import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { Disposable, DisposableMap, toDisposable, type IDisposable, type IReference } from '../../../../base/common/lifecycle.js';
 import { isCancellationError, onUnexpectedError } from '../../../../base/common/errors.js';
 import { URI } from '../../../../base/common/uri.js';
-import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
+import { extUri } from '../../../../base/common/resources.js';
+import { Schemas } from '../../../../base/common/network.js';
 import type { LanguageWorkspaceEdit, LanguageWorkspaceEditEntry } from '../../../../editor/common/languages.js';
 import { ITextModelService, type ITextModelService as ITextModelServiceContract, type IResolvedTextEditorModel } from '../../../../editor/common/services/resolverService.js';
 import { AppServerProtocolClient } from '../../../../platform/agentHost/browser/appServerProtocolClient.js';
@@ -48,9 +49,9 @@ export class AppServerTextDocumentHost extends Disposable {
 
 	private list(path: string, signal: AbortSignal): TextDocumentListResult {
 		throwIfCancelled(signal);
-		const root = documentResource(path);
+		const root = documentComparisonResource(documentResource(path));
 		const documents = this.workingCopies.getAll()
-			.filter(copy => copy.backupKind === 'text' && copy.isDirty && extUriBiasedIgnorePathCase.isEqualOrParent(copy.resource, root))
+			.filter(copy => copy.backupKind === 'text' && copy.isDirty && extUri.isEqualOrParent(documentComparisonResource(copy.resource), root))
 			.map(copy => ({ relativePath: copy.resource.path.slice(root.path.replace(/\/$/u, '').length).replace(/^\//u, ''), text: copy.backup() }));
 		return { kind: 'documents', documents };
 	}
@@ -131,6 +132,17 @@ export class AppServerTextDocumentHost extends Disposable {
 			for (const snapshot of consumed) { this.snapshots.deleteAndDispose(snapshot); }
 		}
 	}
+}
+
+function documentComparisonResource(resource: URI): URI {
+	if (resource.scheme !== Schemas.file || resource.authority) { return resource; }
+	const path = resource.toEncodedComponents().path;
+	const drive = /^\/([A-Za-z]|%[\dA-Fa-f]{2}):\//u.exec(path)?.[1];
+	if (!drive) { return resource; }
+	const letter = drive.startsWith('%') ? String.fromCharCode(Number.parseInt(drive.slice(1), 16)) : drive;
+	if (!/^[A-Za-z]$/u.test(letter)) { return resource; }
+	// Decode only an unreserved drive letter; preserve path case and every other encoded component.
+	return resource.withEncodedPath(`/${letter.toLowerCase()}${path.slice(drive.length + 1)}`);
 }
 
 function documentResource(path: string): URI {
