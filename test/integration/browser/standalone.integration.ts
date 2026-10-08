@@ -2844,6 +2844,9 @@ window.ashStandaloneIntegration = {
 		services.registerInstance(IFileTextModelService, {
 			...services.get(ITextModelResourceService),
 			addSaveParticipant: participant => snapshots.addSaveParticipant(participant),
+			addSaveCompletionParticipant: participant => snapshots.addSaveCompletionParticipant(participant),
+			hasPendingSaveRecovery: resource => snapshots.hasPendingSaveRecovery(resource),
+			waitForSaveRecovery: resource => snapshots.waitForSaveRecovery(resource),
 			getModel: resource => resource.toString() === callerModel.uri.toString() ? callerModel : null,
 			getModels: () => [callerModel],
 			onModelRemoved: EventUtils.None,
