@@ -36,7 +36,7 @@ The regular commands run their matching `pretest:smoke:*` preparation first. The
 | `--list` | Show selected tests without running them. |
 | `--repeat-each=N` | Repeat every selected test N times in one run. |
 | `--max-failures=1` | Stop after the first failed test. |
-| `--shard=N/M` | Run one file-level partition of the suite. CI uses four independent runners per Electron OS with one worker each. |
+| `--shard=N/M` | Run one file-level partition of the suite. CI uses four independent runners per Electron suite and OS with one worker each; UI and connected suites run in parallel. |
 
 ```bash
 # Prepare and run the Browser UI suite
@@ -55,7 +55,7 @@ A grep pattern can select more than one test. Check the selected list when the t
 
 For an intermittent failure that appears only in CI, run the affected test repeatedly in the failing CI environment and stop on the first failure. This is a temporary diagnostic change, not a permanent CI step.
 
-1. Identify the failing surface, shard and test title from the job log. `.github/workflows/frontend.yml` calls `frontend-tests.yml` for Linux Browser and Windows/macOS Electron. Each Electron platform builds once and transfers the current build to four independent file shards for both UI and App Server-connected suites.
+1. Identify the failing surface, suite, shard and test title from the job log. `.github/workflows/frontend.yml` calls `frontend-tests.yml` for Linux Browser and Windows/macOS Electron. Each Electron platform builds once and transfers the current build to separate UI and App Server-connected suites, each with four independent file shards.
 2. On a temporary branch, keep the existing preparation step. Replace the matching smoke test step with a loop over its `no-compile` command. The example below replaces the Electron UI step; use `pnpm run test:smoke:browser:no-compile` for Browser UI.
 3. Increase the job's `timeout-minutes` if the selected test needs more time for all iterations. Keep the existing failure artifact upload step.
 4. Fix the failure, then remove the loop and restore the normal CI command and timeout before merging.
@@ -75,7 +75,7 @@ The first failure is enough to reproduce the problem. Stopping there preserves i
 
 ## Debugging CI smoke failures
 
-Start with the failing test and error in the GitHub Actions job log. The workflow uploads `.build/desktop/playwright/` on failure as `frontend-<surface>-<runner>-<shard>`; use the exact name in the failing job. The run ID appears in the Actions run URL. Download the artifact for the failing surface and shard:
+Start with the failing test and error in the GitHub Actions job log. The workflow uploads `.build/desktop/playwright/` on failure as `frontend-electron-<runner>-<suite>-<shard>` or `frontend-browser-<runner>-1`; use the exact name in the failing job. The run ID appears in the Actions run URL. Download the artifact for the failing suite and shard:
 
 ```bash
 gh run download <run-id> -n frontend-electron-windows-latest-2 -D ./logs

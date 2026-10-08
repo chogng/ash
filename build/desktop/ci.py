@@ -113,7 +113,7 @@ def archive(root: Path, output: Path, *, backend_only: bool = False) -> None:
         if not path.exists():
             raise FileNotFoundError(f"Missing Electron test build output: {path}")
     output.parent.mkdir(parents=True, exist_ok=True)
-    # Fast compression is enough for this run's four consumers. Tar retains Unix
+    # Fast compression is enough for this run's consumers. Tar retains Unix
     # executable modes; dereferencing leaves declarative resources single-link files.
     with tarfile.open(output, "w:gz", compresslevel=1, dereference=True) as bundle:
         for path in paths:

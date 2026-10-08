@@ -112,12 +112,13 @@ jobs:
           path: .build/desktop/playwright/
           if-no-files-found: warn
   test:
-    name: shard ${{ matrix.shard }}/${{ inputs.shard-total }}
+    name: ${{ matrix.suite }} shard ${{ matrix.shard }}/${{ inputs.shard-total }}
     needs: prepare-electron
     if: inputs.surface == 'electron'
     strategy:
       fail-fast: false
       matrix:
+        suite: [ui, connected]
         shard: ${{ fromJSON(inputs.shards) }}
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 90
@@ -145,17 +146,19 @@ jobs:
           # Rebase the generation's resources and dependency links to this checkout.
           pnpm exec node build/python.ts -B build/desktop/develop.py --select-prepared
       - name: Test Electron UI
+        if: matrix.suite == 'ui'
         run: pnpm run test:smoke:ui:no-compile --shard=${{ matrix.shard }}/${{ inputs.shard-total }}
       - name: Test connected Electron
+        if: matrix.suite == 'connected'
         run: pnpm run smoketest-no-compile --shard=${{ matrix.shard }}/${{ inputs.shard-total }}
       - name: Test connected Academic document editing
         # This focused project has only two files; run it once to avoid empty shards.
-        if: matrix.shard == 1
+        if: matrix.suite == 'connected' && matrix.shard == 1
         run: pnpm exec node test/smoke/run.ts electron-editor-app-server
       - name: Upload test diagnostics
         if: failure() || cancelled()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: frontend-${{ inputs.surface }}-${{ inputs.runner }}-${{ matrix.shard }}
+          name: frontend-${{ inputs.surface }}-${{ inputs.runner }}-${{ matrix.suite }}-${{ matrix.shard }}
           path: .build/desktop/playwright/
           if-no-files-found: warn

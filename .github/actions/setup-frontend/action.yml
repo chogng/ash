@@ -86,7 +86,14 @@ runs:
     # Electron lifecycle scenarios also attach with Chromium over CDP.
     - name: Install Chromium
       shell: bash
-      run: pnpm exec playwright install --with-deps chromium
+      run: |
+        # Linux needs shared libraries. On Windows, --with-deps installs a Server
+        # media feature even for the Chromium CDP client used by Electron tests.
+        if [ "$RUNNER_OS" = Linux ]; then
+          pnpm exec playwright install --with-deps chromium
+        else
+          pnpm exec playwright install chromium
+        fi
     - name: Save frontend downloads
       if: inputs.build == 'true' && github.ref == 'refs/heads/main' && steps.downloads.outputs.cache-hit != 'true'
       uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0

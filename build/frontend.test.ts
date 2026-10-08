@@ -41,7 +41,7 @@ test('Frontend CI retains Academic coverage without rerunning the Workbench file
 
 	const connectedStep = testsWorkflow.match(/- name: Test connected Academic document editing\n([\s\S]*?)(?=\n      -)/)?.[1];
 	assert.ok(connectedStep, 'Frontend CI must retain connected Academic document editing');
-	assert.match(connectedStep, /if: matrix\.shard == 1/);
+	assert.match(connectedStep, /if: matrix\.suite == 'connected' && matrix\.shard == 1/);
 	assert.match(connectedStep, /node test\/smoke\/run\.ts electron-editor-app-server/);
 	const editorProject = config.projects?.find(project => project.name === 'electron-editor-app-server');
 	assert.deepEqual(editorProject?.testMatch, ['**/areas/editor/academic-open.spec.ts', '**/areas/editor/editor-open.spec.ts']);
@@ -73,9 +73,12 @@ test('Frontend shards preserve serial UI workers and unique failure diagnostics'
 	assert.equal(config.workers, 1);
 	assert.equal(config.fullyParallel, false);
 	assert.match(testsWorkflow, /fail-fast: false/);
+	assert.match(testsWorkflow, /suite: \[ui, connected\]/);
+	assert.match(testsWorkflow, /if: matrix\.suite == 'ui'/);
+	assert.match(testsWorkflow, /if: matrix\.suite == 'connected'/);
 	assert.match(testsWorkflow, /shard: \$\{\{ fromJSON\(inputs.shards\) \}\}/);
 	assert.match(testsWorkflow, /smoketest-no-compile --shard=\$\{\{ matrix.shard \}\}\/\$\{\{ inputs.shard-total \}\}/);
-	assert.match(testsWorkflow, /name: frontend-\$\{\{ inputs.surface \}\}-\$\{\{ inputs.runner \}\}-\$\{\{ matrix.shard \}\}/);
+	assert.match(testsWorkflow, /name: frontend-\$\{\{ inputs.surface \}\}-\$\{\{ inputs.runner \}\}-\$\{\{ matrix.suite \}\}-\$\{\{ matrix.shard \}\}/);
 	assert.match(setupAction, /save-if:.*github.ref == 'refs\/heads\/main'/);
 	assert.match(setupAction, /shared-key: check/);
 });
