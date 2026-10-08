@@ -74,6 +74,8 @@ jobs:
             runner: macos-26
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
+    env:
+      PLAYWRIGHT_LIST_PRINT_FAILURES_INLINE: "1"
     defaults:
       run:
         shell: bash
@@ -157,9 +159,9 @@ jobs:
         if: matrix.surface == 'electron'
         run: pnpm exec node test/smoke/run.ts electron-editor-app-server
       - name: Upload test diagnostics
-        if: failure()
+        if: failure() || cancelled()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: frontend-${{ matrix.surface }}-${{ matrix.runner }}
           path: .build/desktop/playwright/
-          if-no-files-found: ignore
+          if-no-files-found: warn
