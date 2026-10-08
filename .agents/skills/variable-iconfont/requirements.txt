@@ -1,0 +1,3 @@
+fonttools[woff]>=4.58
+PyYAML>=6.0
+brotli>=1.1

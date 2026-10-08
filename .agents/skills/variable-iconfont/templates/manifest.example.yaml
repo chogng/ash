@@ -1,0 +1,18 @@
+family: Variable Icons
+units_per_em: 1000
+
+axis:
+  name: Animation
+  tag: ANIM
+  min: 0
+  default: 0
+  max: 100
+
+preview_positions: [0, 25, 50, 75, 100]
+
+glyphs:
+  - name: folder
+    unicode: E001
+    advance_width: 1000
+    start: ../examples/folder/folder.start.svg
+    end: ../examples/folder/folder.end.svg
