@@ -212,6 +212,7 @@ instantiation.registerInstance(IWorkbenchLayoutService, layout);
 const sidebar = store.add(instantiation.createInstance(SidebarPart, layout.domNode, {
 	viewDescriptorService: descriptors, contextKeyService: instantiation.get(IContextKeyService),
 	localizationService: instantiation.get(ILocalizationService),
+	compositeBarContextMenuProvider: menus,
 	openComposite: (id: string, focus?: boolean) => panes.openPaneComposite(id, ViewContainerLocation.Sidebar, focus).then(composite => composite ?? null),
 }));
 // Unrelated regions use empty Parts; Search, its Sidebar, construction, visibility, title and geometry use their production owners.
@@ -231,6 +232,7 @@ if (!(pane instanceof SearchView)) { throw new Error('Search registration did no
 window.addEventListener('pagehide', () => store.dispose(), { once: true });
 let secondView: import('../../../src/ash/base/common/lifecycle.js').IDisposable | undefined;
 window.ashSearchIntegration = {
+	setLineNumbers: value => configuration.updateValue('search.showLineNumbers', value),
 	selectTreeView: async () => {
 		if (!treeViewAction) { throw new Error('Search toolbar did not provide View as tree'); }
 		await treeViewAction.run();
@@ -262,6 +264,7 @@ window.ashSearchIntegration = {
 declare global {
 	interface Window {
 		ashSearchIntegration: {
+			setLineNumbers(value: boolean): Promise<void>;
 			selectTreeView(): Promise<void>;
 			setSearchVisible(value: boolean): Promise<void>;
 			focusedView(): string | undefined;

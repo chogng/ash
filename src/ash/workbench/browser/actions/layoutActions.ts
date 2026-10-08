@@ -87,7 +87,7 @@ for (const side of ['left', 'right'] as const) {
 				title: side === 'left' ? localize2('workbench.movePrimarySideBarLeft', 'Move Primary Side Bar Left') : localize2('workbench.movePrimarySideBarRight', 'Move Primary Side Bar Right'),
 				f1: true,
 				precondition: IsSessionsWindowContext.isEqualTo(false),
-				menu: [MenuId.SidebarTitle, ActivityBarContextMenu].map(id => ({ id, group: '3_layout', order: 1, when: ContextKeyExpr.notEquals(sideKey, side) })),
+				menu: [MenuId.ViewContainerTitleContext, ActivityBarContextMenu].map(id => ({ id, group: '3_layout', order: 1, when: ContextKeyExpr.and(ContextKeyExpr.notEquals(sideKey, side), id === MenuId.ViewContainerTitleContext ? ContextKeyExpr.equals('viewContainerLocation', 'sidebar') : undefined) })),
 			});
 		}
 		override run(accessor: ServicesAccessor): Promise<void> {
@@ -108,7 +108,8 @@ export class ToggleSidebarPositionAction extends Action2 {
 }
 registerAction2(ToggleSidebarPositionAction);
 
-for (const id of [MenuId.SidebarTitle, ActivityBarContextMenu]) {
-	MenusRegistry.appendMenuItem(id, { submenu: MenuId.ActivityBarPositionMenu, title: localize2('workbench.activityBarPosition', 'Activity Bar Position'), group: '3_layout', order: 2 });
-	MenusRegistry.appendMenuItem(id, { submenu: activityBarSizeMenu, title: localize2('workbench.activityBarSize', 'Activity Bar Size'), group: '3_layout', order: 3, when: ContextKeyExpr.equals(locationKey, ActivityBarPosition.DEFAULT) });
+for (const id of [MenuId.ViewContainerTitleContext, ActivityBarContextMenu]) {
+	const sidebar = id === MenuId.ViewContainerTitleContext ? ContextKeyExpr.equals('viewContainerLocation', 'sidebar') : undefined;
+	MenusRegistry.appendMenuItem(id, { submenu: MenuId.ActivityBarPositionMenu, title: localize2('workbench.activityBarPosition', 'Activity Bar Position'), group: '3_layout', order: 2, when: sidebar });
+	MenusRegistry.appendMenuItem(id, { submenu: activityBarSizeMenu, title: localize2('workbench.activityBarSize', 'Activity Bar Size'), group: '3_layout', order: 3, when: ContextKeyExpr.and(sidebar, ContextKeyExpr.equals(locationKey, ActivityBarPosition.DEFAULT)) });
 }

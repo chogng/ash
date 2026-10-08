@@ -197,3 +197,91 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 	await Promise.resolve();
 	assert.deepEqual(createdProfiles, [undefined, "pwsh"]);
 });
+
+
+test('Terminal View lends its actual title toolbar to Panel and retains it through switching', async () => {
+	const { DisposableStore, toDisposable } = await import('../../../../../base/common/lifecycle.js');
+	const { registerTestComponentServices } = await import('../../../../test/common/testEditorServices.js');
+	const { ITerminalService } = await import('../../browser/terminal.js');
+	const { TerminalViewPane } = await import('../../browser/terminalView.js');
+	const { IWorkbenchLayoutService } = await import('../../../../services/layout/browser/layoutService.js');
+	const { WorkspaceContextService } = await import('../../../../services/workspaces/browser/workspaceContextService.js');
+	const { IWorkspaceContextService } = await import('../../../../../platform/workspace/common/workspace.js');
+	const { IPreferencesService } = await import('../../../../services/preferences/common/preferences.js');
+	const { INotificationService } = await import('../../../../../platform/notification/common/notification.js');
+	const { NotificationService } = await import('../../../../services/notification/common/notificationService.js');
+	const { WorkbenchLayout } = await import('../../../../browser/layout.js');
+	const { Dimension } = await import('../../../../../base/browser/dom.js');
+	const { WorkbenchConfigurationService } = await import('../../../../services/configuration/browser/configurationService.js');
+	const { IConfigurationService } = await import('../../../../../platform/configuration/common/configuration.js');
+	const { IAccessibleViewService } = await import('../../../../../platform/accessibility/browser/accessibleView.js');
+	const { IChatSpeechToTextService, ChatSpeechToTextService } = await import('../../../chat/browser/speechToText/chatSpeechToTextService.js');
+	const { IDictationOnboardingService, DictationOnboardingService } = await import('../../../chat/browser/speechToText/dictationOnboarding.js');
+	const { WorkbenchViewRegistry, IViewDescriptorService, ViewContainerLocation } = await import('../../../../common/views.js');
+	const { ViewDescriptorService } = await import('../../../../services/views/browser/viewDescriptorService.js');
+	const { SyncDescriptor } = await import('../../../../../platform/instantiation/common/descriptors.js');
+	const { PaneComposite } = await import('../../../../browser/parts/views/paneComposite.js');
+	const { PanelPart } = await import('../../../../browser/parts/panel/panelPart.js');
+	const { ILocalizationService } = await import('../../../../services/localization/common/localizationService.js');
+	using resources = new DisposableStore();
+	const services = resources.add(registerTestComponentServices(new InstantiationService()));
+	const context = resources.add(new ContextKeyService());
+	services.registerInstance(IContextKeyService, context);
+	AppServerAvailableContext.bindTo(context).set(true);
+	const commands = new CommandRegistry();
+	let created = 0;
+	resources.add(commands.registerMany([{ id: TerminalCommandId.New, handler: () => { created++; } }]));
+	const commandService = resources.add(new CommandService(services, commands));
+	services.registerInstance(ICommandService, commandService);
+	services.registerInstance(IMenuService, new MenuService(commandService, context));
+	services.registerInstance(IContextMenuService, contextMenuService);
+	services.registerInstance(IWorkspaceContextService, resources.add(new WorkspaceContextService({ id: 'terminal-title-test', folders: [] })));
+	// This scenario has no workspace or shell. Any shell acquisition would violate the title lifecycle boundary.
+	services.registerInstance(ITerminalService, {
+		instances: [], activeInstance: undefined,
+		onDidCreateInstance: Event.None, onDidDisposeInstance: Event.None, onDidChangeInstances: Event.None, onDidChangeActiveInstance: Event.None,
+		getProfiles: async () => [], createTerminal: async () => { throw new Error('Unexpected shell acquisition'); },
+		relaunchTerminal: async () => { }, setActiveInstance() { }, moveTerminal() { }, closeTerminal: async () => { },
+		...toDisposable(() => { }),
+	});
+	services.registerInstance(IConfigurationService, resources.add(new WorkbenchConfigurationService()));
+	services.registerInstance(IWorkbenchLayoutService, resources.add(services.createInstance(WorkbenchLayout, browserEnvironment.window.document.body, { initialDimension: new Dimension(800, 600) })));
+	services.registerInstance(IPreferencesService, { openSettings: async () => { } } as import('../../../../services/preferences/common/preferences.js').IPreferencesService);
+	services.registerInstance(INotificationService, resources.add(new NotificationService()));
+	services.registerInstance(IAccessibleViewService, { ...toDisposable(() => { }), show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp() { } });
+	services.registerInstance(IChatSpeechToTextService, resources.add(new ChatSpeechToTextService(undefined)));
+	services.registerInstance(IDictationOnboardingService, resources.add(services.createInstance(DictationOnboardingService)));
+	services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, source) => source });
+	const registry = new WorkbenchViewRegistry();
+	const terminal = { id: 'test.terminal', title: 'Terminal', location: ViewContainerLocation.Panel };
+	const empty = { id: 'test.empty', title: 'Empty', location: ViewContainerLocation.Panel };
+	resources.add(registry.registerViewContainer(terminal));
+	resources.add(registry.registerViewContainer(empty));
+	resources.add(registry.registerViews(terminal.id, [{ id: 'test.terminalView', title: 'Terminal', canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(TerminalViewPane) }]));
+	const descriptors = resources.add(new ViewDescriptorService({ registry }, context));
+	services.registerInstance(IViewDescriptorService, descriptors);
+	const panel = resources.add(services.createInstance(PanelPart, browserEnvironment.window.document.body));
+	const create = (descriptor: typeof terminal) => services.createInstance(PaneComposite, panel.domNode, {
+		viewContainer: descriptor, model: descriptors.getViewContainerModel(descriptor.id), instantiationService: services,
+		contextKeyService: context, paneHeaders: 'hidden', paneLayout: 'fill',
+	});
+	const composite = create(terminal);
+	panel.addComposite(composite);
+	panel.addComposite(create(empty));
+	panel.showComposite(terminal.id);
+	const pane = composite.getView('test.terminalView')!;
+	const toolbar = pane.partTitleProjection!.actions!;
+	assert.equal(panel.domNode.querySelector('.ash-pane-composite-title-view-actions [role="toolbar"][aria-label="Terminal actions"]'), toolbar);
+	assert.equal(toolbar.getAttribute('role'), 'toolbar');
+	assert.equal(toolbar.querySelectorAll('[data-action-id="workbench.action.terminal.new"]').length, 1);
+	toolbar.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.terminal.new"] button')!.click();
+	await Promise.resolve();
+	assert.equal(created, 1);
+	panel.showComposite(empty.id);
+	assert.equal(toolbar.isConnected, false);
+	panel.showComposite(terminal.id);
+	assert.equal(composite.getView('test.terminalView'), pane);
+	assert.equal(panel.domNode.querySelector('.ash-pane-composite-title-view-actions [role="toolbar"][aria-label="Terminal actions"]'), toolbar);
+	panel.dispose();
+	assert.equal(toolbar.isConnected, false);
+});

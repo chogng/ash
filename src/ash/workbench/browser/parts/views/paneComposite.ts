@@ -1,11 +1,12 @@
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { compositePanelId, compositeTabId } from "../compositeBar.js";
-import { Emitter } from "../../../../base/common/event.js";
 import { localize } from "../../../services/localization/common/localizationService.js";
 import { ViewPaneContainer, type ViewPaneContainerOptions } from "./viewPaneContainer.js";
 import type { PartTitleProjection, ViewPane } from "./viewPane.js";
 import { IStorageService } from "../../../../platform/storage/common/storage.js";
 import type { IPaneComposite } from "../../../common/panecomposite.js";
+import { IMenuService, MenuId, SubmenuItemAction } from '../../../../platform/actions/common/actions.js';
+import { Separator, type IAction } from '../../../../base/common/actions.js';
 
 export interface PaneCompositeOptions extends ViewPaneContainerOptions {
 	readonly paneHeaders?: PaneHeaderVisibility;
@@ -24,8 +25,6 @@ export type PaneLayout = "stack" | "fill";
  */
 export class PaneComposite extends ViewPaneContainer implements IPaneComposite {
 	title: string;
-	private readonly titleChange = this._register(new Emitter<void>());
-	readonly onDidChangeTitle = this.titleChange.event;
 	private mergedPane: ViewPane | undefined;
 	private mergedPaneWasCollapsed = false;
 
@@ -34,8 +33,9 @@ export class PaneComposite extends ViewPaneContainer implements IPaneComposite {
 		options: PaneCompositeOptions,
 		@IStorageService storageService: IStorageService,
 		@IThemeService themeService: IThemeService,
+		@IMenuService menuService: IMenuService,
 	) {
-		super(container, options, storageService, themeService);
+		super(container, options, storageService, themeService, menuService);
 		this.title = localize(options.localizationService, options.viewContainer.localizationKey, options.viewContainer.title);
 		this.element.classList.add("ash-pane-composite");
 		this.element.classList.toggle("ash-pane-composite-pane-headers-hidden", options.paneHeaders === "hidden");
@@ -60,13 +60,28 @@ export class PaneComposite extends ViewPaneContainer implements IPaneComposite {
 		return paneTitle && paneTitle !== this.title ? `${this.title}: ${paneTitle}` : this.title;
 	}
 
-	setMergedTitleActionsHost(host?: HTMLElement): void {
-		this.mergedPane?.setHeaderActionsHost(host);
+	setMergedTitleActionsHost(host?: HTMLElement, actions?: HTMLElement): void {
+		this.mergedPane?.setHeaderActionsHost(host, actions);
+	}
+
+	public override getActions(): readonly IAction[] {
+		return [...super.getActions(), ...this.mergedPane?.getActions() ?? []];
+	}
+
+	public override getSecondaryActions(): readonly IAction[] {
+		const containerActions = super.getSecondaryActions();
+		const viewActions = this.mergedPane?.getSecondaryActions() ?? [];
+		if (containerActions.length === 0) return viewActions;
+		const onlyContainerAction = containerActions.length === 1 ? containerActions[0] : undefined;
+		if (viewActions.length === 0 && onlyContainerAction instanceof SubmenuItemAction && onlyContainerAction.item.submenu === MenuId.for('ViewsSubMenu')) return onlyContainerAction.actions;
+		if (viewActions.length === 0) return containerActions;
+		return [...containerActions, new Separator(), ...viewActions];
 	}
 
 	private updateMergedPane(): void {
 		const pane = this.panes.length === 1 ? this.panes[0] : undefined;
 		if (pane === this.mergedPane) return;
+		const restoreFocus = (this.mergedPane ?? pane)?.captureTitleActionsFocus();
 		if (this.mergedPane) {
 			this.mergedPane.setHeaderVisible(true);
 			if (this.mergedPaneWasCollapsed) this.mergedPane.setExpanded(false);
@@ -77,7 +92,9 @@ export class PaneComposite extends ViewPaneContainer implements IPaneComposite {
 			pane.setHeaderVisible(false);
 			pane.setExpanded(true);
 		}
-		this.titleChange.fire();
+		this.updateTitleArea();
+		// Header and Part renderers have different lifetimes, but a surviving action keeps keyboard focus.
+		restoreFocus?.();
 	}
 
 	get partTitleProjection(): PartTitleProjection | undefined {

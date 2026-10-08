@@ -4,6 +4,7 @@ import { Action2, MenuId, registerAction2 } from "../../../../platform/actions/c
 import type { ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
 import { AuxiliaryBarVisibleContext, SideBarVisibleContext } from "../../../common/contextkeys.js";
 import { IWorkbenchLayoutService } from "../../../services/layout/browser/layoutService.js";
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 
 export const ToggleSideBarCommandId = "workbench.action.toggleSideBar";
 export const ToggleAuxiliaryBarCommandId = "workbench.action.toggleAuxiliaryBar";
@@ -33,8 +34,8 @@ registerAction2(class ToggleSideBarAction extends Action2 {
 					order: 9,
 				},
 				{
-					id: MenuId.SidebarTitle,
-					when: SideBarVisibleContext.isEqualTo(true),
+					id: MenuId.ViewContainerTitleContext,
+					when: ContextKeyExpr.and(SideBarVisibleContext.isEqualTo(true), ContextKeyExpr.equals('viewContainerLocation', 'sidebar')),
 					group: '2_visibility',
 					order: 1,
 				},

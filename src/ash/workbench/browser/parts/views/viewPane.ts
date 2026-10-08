@@ -11,6 +11,7 @@ import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import type { IViewContentDescriptor, WorkbenchViewRegistry } from '../../../common/views.js';
 import { localize } from '../../../../nls.js';
+import type { IAction } from '../../../../base/common/actions.js';
 
 /** Runtime inputs supplied by a browser view container to every pane. */
 export type IViewPaneOptions = IPaneOptions;
@@ -23,6 +24,42 @@ export interface PartTitleProjection {
 
 /** A titled, independently managed view hosted inside a workbench view container. */
 export abstract class ViewPane extends Pane implements IView {
+	private readonly titleAreaUpdate = this._register(new Emitter<void>());
+	public readonly onDidChangeTitleArea = this.titleAreaUpdate.event;
+
+	public getActions(): readonly IAction[] { return []; }
+	public getSecondaryActions(): readonly IAction[] { return []; }
+
+	protected updateTitleArea(): void {
+		this.titleAreaUpdate.fire();
+	}
+
+	public override setTitle(title: string): void {
+		if (title === this.paneTitle) return;
+		super.setTitle(title);
+		this.updateTitleArea();
+	}
+
+	public override setHeaderActionsHost(host?: HTMLElement, actions?: HTMLElement): void {
+		super.setHeaderActionsHost(host);
+		if (!host || !actions) return;
+		// The Part owns the renderer; this View keeps the scope and focus tracker on the lent action root.
+		const focused = actions.contains(actions.ownerDocument.activeElement) ? actions.ownerDocument.activeElement as HTMLElement : undefined;
+		this.headerActionsElement.append(actions);
+		actions.setAttribute('aria-label', this.headerActionsElement.getAttribute('aria-label') ?? this.paneTitle);
+		focused?.focus();
+	}
+
+	public captureTitleActionsFocus(): (() => void) | undefined {
+		const activeElement = this.headerActionsElement.ownerDocument.activeElement;
+		if (!this.headerActionsElement.contains(activeElement)) return undefined;
+		const actionId = (activeElement as HTMLElement).closest<HTMLElement>('[data-action-id]')?.dataset.actionId;
+		if (!actionId) return undefined;
+		return () => {
+			const entry = [...this.headerActionsElement.querySelectorAll<HTMLElement>('[data-action-id]')].find(element => element.dataset.actionId === actionId);
+			entry?.querySelector<HTMLElement>('button:not(:disabled), [tabindex]')?.focus();
+		};
+	}
 	protected readonly viewWelcomeState = this._register(new Emitter<void>());
 	public readonly onDidChangeViewWelcomeState = this.viewWelcomeState.event;
 

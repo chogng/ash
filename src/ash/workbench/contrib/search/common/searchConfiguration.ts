@@ -1,10 +1,17 @@
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../../../platform/configuration/common/configurationRegistry.js";
 import { Registry } from "../../../../platform/registry/common/platform.js";
+import { localize } from "../../../../nls.js";
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 
 /** Typed defaults owned by the Workbench content-search surface. */
 export const ContentSearchConfiguration = Object.freeze({
+	showLineNumbers: configurationRegistry.registerConfiguration<boolean>({
+		key: "search.showLineNumbers",
+		defaultValue: false,
+		parse: value => parseBoolean(value, "search.showLineNumbers"),
+		setting: booleanSetting(localize("search.showLineNumbers.title", "Show line numbers"), localize("search.showLineNumbers", "Controls whether to show line numbers for search results.")),
+	}),
 	matchCase: configurationRegistry.registerConfiguration<boolean>({
 		key: "search.matchCase",
 		defaultValue: false,

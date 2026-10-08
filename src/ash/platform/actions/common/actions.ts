@@ -68,6 +68,8 @@ export class MenuId {
 	static readonly CommandCenter = new MenuId("CommandCenter");
 	static readonly GlobalActivity = new MenuId("GlobalActivity");
 	static readonly SidebarTitle = new MenuId('SidebarTitle');
+	static readonly ViewContainerTitle = new MenuId('ViewContainerTitle');
+	static readonly ViewContainerTitleContext = new MenuId('ViewContainerTitleContext');
 	static readonly ActivityBarPositionMenu = new MenuId('ActivityBarPositionMenu');
 	static readonly TitleBar = new MenuId("TitleBar");
 	static readonly TitleBarLeft = new MenuId("TitleBarLeft");

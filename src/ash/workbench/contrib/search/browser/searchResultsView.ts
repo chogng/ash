@@ -1,4 +1,4 @@
-import { addDisposableListener, h, text as createText } from '../../../../base/browser/dom.js';
+import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import type { ContextMenuAnchor } from '../../../../base/browser/contextmenu.js';
 import { IconLabel } from '../../../../base/browser/ui/iconlabel/iconlabel.js';
 import { CountBadge } from '../../../../base/browser/ui/countBadge/countBadge.js';
@@ -6,6 +6,8 @@ import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../
 import { IHoverService } from '../../../../platform/hover/browser/hoverService.js';
 import { localize } from '../../../../nls.js';
 import type { RenderableMatch } from './searchTreeModel/searchResult.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { ContentSearchConfiguration } from '../common/searchConfiguration.js';
 
 interface SearchResultRenderOptions {
 	readonly treeView: boolean;
@@ -23,6 +25,7 @@ export class SearchResultsRenderer extends Disposable {
 		private readonly showContextMenu: (element: RenderableMatch, anchor: ContextMenuAnchor) => void,
 		private readonly onRemoveElement: (element: RenderableMatch) => void,
 		@IHoverService private readonly hover: IHoverService,
+		@IConfigurationService private readonly configuration: IConfigurationService,
 	) { super(); }
 
 	public setLineNumberBudget(maximumLineNumber: number): void {
@@ -36,15 +39,24 @@ export class SearchResultsRenderer extends Disposable {
 		this.rows.set(content, resources);
 		if (element.kind === 'match') {
 			content.classList.add('ash-search-match');
-			// The budget is shared by this result set, so adjacent lines keep one text origin.
-			content.style.gridTemplateColumns = `calc(${this.lineNumberDigits}ch + 4px) minmax(0, 1fr)`;
-			const line = h(this.document, 'span');
-			line.className = 'ash-search-line-number';
-			line.textContent = String(element.range.startLineNumber);
+			const showLineNumbers = this.configuration.getValue<boolean>(ContentSearchConfiguration.showLineNumbers);
+			const extraLines = element.range.endLineNumber - element.range.startLineNumber;
+			const lineLabel = (showLineNumbers ? `${element.range.startLineNumber}:` : '') + (extraLines > 0 ? `+${extraLines}` : '');
+			if (lineLabel) {
+				// A shared budget aligns numbered results; a multiline hint remains visible without line numbers.
+				const digits = showLineNumbers ? Math.max(this.lineNumberDigits + 1, lineLabel.length) : lineLabel.length;
+				content.style.gridTemplateColumns = `calc(${digits}ch + 4px) minmax(0, 1fr)`;
+				const line = h(this.document, 'span');
+				line.className = 'ash-search-line-number';
+				line.textContent = lineLabel;
+				content.append(line);
+			} else {
+				content.style.gridTemplateColumns = 'minmax(0, 1fr)';
+			}
 			const preview = h(this.document, 'code');
 			preview.className = 'ash-search-preview';
 			appendPreview(this.document, preview, element);
-			content.append(line, preview);
+			content.append(preview);
 			content.setAttribute('aria-label', localize('search.matchLabel', 'Line {0}, column {1}: {2}', element.range.startLineNumber, element.range.startColumn, element.preview));
 		} else {
 			content.classList.add('ash-search-file-heading');
@@ -94,14 +106,19 @@ function appendPreview(document: Document, container: HTMLElement, match: Extrac
 	// Only presentation boundaries change. The complete hit and backend UTF-16 range stay intact,
 	// even when one unusually long match exceeds the surrounding-text budget.
 	if (start > 0 && isLowSurrogate(before.charCodeAt(start))) { start++; }
-	let end = Math.min(after.length, Math.max(0, 248 - (before.length - start) - hit.length));
+	// Reserve the ellipses and rendered context separators within the existing preview text limit.
+	let end = Math.min(after.length, Math.max(0, 246 - (before.length - start) - hit.length));
 	if (end < after.length && isLowSurrogate(after.charCodeAt(end))) { end--; }
-	if (start) { container.append(createText(document, '…')); }
-	container.append(createText(document, before.slice(start)));
+	// Context yields width before the hit so narrow result rows still show what matched.
+	const prefix = h(document, 'span');
+	prefix.className = 'ash-search-preview-context';
+	prefix.textContent = (start ? '…' : '') + before.slice(start);
 	const mark = h(document, 'mark');
 	mark.textContent = hit;
-	container.append(mark, createText(document, after.slice(0, end)));
-	if (end < after.length) { container.append(createText(document, '…')); }
+	const suffix = h(document, 'span');
+	suffix.className = 'ash-search-preview-context';
+	suffix.textContent = after.slice(0, end) + (end < after.length ? '…' : '');
+	container.append(prefix, mark, suffix);
 }
 
 function isLowSurrogate(value: number): boolean { return value >= 0xdc00 && value <= 0xdfff; }

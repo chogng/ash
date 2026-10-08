@@ -126,6 +126,11 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 		this.partTitleActionsDomNode.className = "ash-pane-composite-title-part-actions";
 		this.titleActionsSlotDomNode.append(this.viewTitleActionsDomNode, this.partTitleActionsDomNode);
 		this.titleDomNode.append(this.titleContentDomNode, this.titleActionsSlotDomNode);
+		const compositeActions = h(ownerDocument, 'div');
+		compositeActions.className = 'ash-pane-composite-title-view-actions';
+		this.titleActionsSlotDomNode.insertBefore(compositeActions, this.viewTitleActionsDomNode);
+		const contextMenus = options.titleActions?.contextMenuProvider ?? options.compositeBarContextMenuProvider;
+		if (contextMenus) this.createCompositeToolBar(compositeActions, contextMenus, ariaLabel);
 
 		if (options.titleActions) {
 			const actions = this._register(new MenuWorkbenchToolBar(
@@ -150,6 +155,18 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 				}
 			}
 		}));
+	}
+
+	public override showComposite(compositeId: string, focus = false): void {
+		if (this.activeCompositeId) this.getComposite(this.activeCompositeId)?.setMergedTitleActionsHost();
+		super.showComposite(compositeId, focus);
+	}
+
+	protected override updateTitleArea(): void {
+		super.updateTitleArea();
+		if (this.activeCompositeId) {
+			this.getComposite(this.activeCompositeId)?.setMergedTitleActionsHost(this.viewTitleActionsDomNode, this.compositeToolBar?.element);
+		}
 	}
 
 	/** Resolves the last valid workspace selection, then falls back to the Registry default. */

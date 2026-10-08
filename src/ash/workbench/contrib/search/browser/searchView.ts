@@ -34,6 +34,7 @@ import { SearchEditorID } from "../../searchEditor/browser/constants.js";
 import { serializeSearchResultForEditor } from "../../searchEditor/browser/searchEditorSerialization.js";
 import type { ContextMenuAnchor } from "../../../../base/browser/contextmenu.js";
 import { SearchStateKey, SearchUIState } from "../common/search.js";
+import type { IAction } from '../../../../base/common/actions.js';
 
 /** Workspace content-search form and incrementally populated result tree. */
 export class SearchView extends ViewPane {
@@ -61,7 +62,9 @@ export class SearchView extends ViewPane {
 	private readonly hasFilePatternKey: IContextKey<boolean>;
 	private readonly searchStateKey: IContextKey<SearchUIState>;
 	private readonly slowSearchTimer = this._register(new MutableDisposable());
-	private readonly resultActions: WorkbenchToolBar;
+	private readonly resultActions = this._register(new MutableDisposable<WorkbenchToolBar>());
+	private primaryResultActions: readonly IAction[] = [];
+	private secondaryResultActions: readonly IAction[] = [];
 	private readonly resultRenderer: SearchResultsRenderer;
 	private readonly resultMenu = this._register(new MutableDisposable());
 	private menuElement: RenderableMatch | undefined;
@@ -216,13 +219,12 @@ export class SearchView extends ViewPane {
 		};
 		updateAriaHint();
 		this._register(configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(ContentSearchConfiguration.showLineNumbers)) { this.renderResults(); }
 			if (event.affectsConfiguration(AccessibilityVerbositySettingId.Find)) { updateAriaHint(); }
 		}));
 		this._register(this.tree.onDidOpen(event => { void this.openResult(event); }));
-		this.resultActions = this._register(new WorkbenchToolBar(this.headerActionsElement, contextMenuService, {
-			ariaLabel: localize("search.resultsActions", "Search result actions"),
-			highlightToggledItems: true,
-		}));
+		this.headerActionsElement.setAttribute('aria-label', localize("search.resultsActions", "Search result actions"));
+		this.renderHeaderActions();
 		this.updateResultActions();
 		this._register(this.tree.onDidChangeFocus(() => this.updateResultActions()));
 		this._register(this.tree.onDidChangeSelection(() => this.updateResultActions()));
@@ -523,7 +525,7 @@ export class SearchView extends ViewPane {
 		const showExpandAll = hasResults && !hasSomeCollapsible;
 		const canReplace = hasResults && !this.searchController && !this.replaceController;
 		this.searchWidget.setReplaceEnabled(canReplace);
-		this.resultActions.setActions([
+		this.primaryResultActions = [
 			{
 				// Refresh and slow-search cancellation share a slot so keyboard focus survives the transition.
 				id: "search.refresh",
@@ -553,7 +555,8 @@ export class SearchView extends ViewPane {
 					for (const node of this.tree.model.rootNodes) { this.tree.collapseRecursive(node.id); }
 				},
 			},
-		], [
+		];
+		this.secondaryResultActions = [
 			{
 				id: SearchCommandIds.CopyMatchCommandId,
 				label: localize("search.copy", "Copy"),
@@ -646,7 +649,31 @@ export class SearchView extends ViewPane {
 				enabled: hasResults,
 				run: () => this.moveMatch(-1),
 			},
-		]);
+		];
+		this.resultActions.value?.setActions(this.primaryResultActions, this.secondaryResultActions);
+		this.updateTitleArea();
+	}
+
+	public override getActions(): readonly IAction[] { return this.primaryResultActions; }
+	public override getSecondaryActions(): readonly IAction[] { return this.secondaryResultActions; }
+
+	public override setHeaderVisible(visible: boolean): void {
+		super.setHeaderVisible(visible);
+		this.renderHeaderActions();
+	}
+
+	private renderHeaderActions(): void {
+		if (!this.isHeaderVisible()) {
+			this.resultActions.clear();
+			return;
+		}
+		if (!this.resultActions.value) {
+			this.resultActions.value = new WorkbenchToolBar(this.headerActionsElement, this.contextMenuService, {
+				ariaLabel: localize("search.resultsActions", "Search result actions"),
+				highlightToggledItems: true,
+			});
+		}
+		this.resultActions.value.setActions(this.primaryResultActions, this.secondaryResultActions);
 	}
 
 	private async undoLatestReplacement(): Promise<void> {

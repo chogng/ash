@@ -146,13 +146,25 @@
 }
 
 .ash-search-preview {
+	display: flex;
 	min-width: 0;
 	overflow: hidden;
-	text-overflow: ellipsis;
 	white-space: pre;
 }
 
+.ash-search-preview-context {
+	flex: 0 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
 .ash-search-preview mark {
+	flex: 0 0 auto;
+	max-width: 100%;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
 	color: inherit;
 	background: var(--ash-search-matchBackground);
 }

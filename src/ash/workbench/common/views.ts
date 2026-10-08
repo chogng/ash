@@ -11,9 +11,15 @@ import type { SyncDescriptor } from "../../platform/instantiation/common/descrip
 import type { Icon } from "../../base/common/icon.js";
 import { createServiceIdentifier } from "../../platform/instantiation/common/instantiation.js";
 import { localize2, type LocalizationKey } from "../../nls.js";
-import { Action2, MenuId, registerAction2 } from '../../platform/actions/common/actions.js';
+import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../platform/instantiation/common/instantiation.js';
-import { ActiveViewletContext, getVisibleViewContextKey } from './contextkeys.js';
+import { getVisibleViewContextKey } from './contextkeys.js';
+
+MenusRegistry.appendMenuItem(MenuId.ViewContainerTitle, {
+	title: localize2('views', 'Views'),
+	submenu: MenuId.for('ViewsSubMenu'),
+	group: '1_views',
+});
 
 /** Workbench region capable of hosting registered view containers. */
 export enum ViewContainerLocation {
@@ -358,7 +364,7 @@ export class WorkbenchViewRegistry extends Disposable {
 						precondition: view.canToggleVisibility === false ? ContextKeyExpr.false() : ContextKeyExpr.and(view.when, ContextKeyExpr.or(
 							ContextKeyExpr.not(getVisibleViewContextKey(view.id)), ...views.filter(other => other.id !== view.id).map(other => ContextKeyExpr.has(getVisibleViewContextKey(other.id))),
 						)),
-						menu: container.location === ViewContainerLocation.Sidebar ? { id: MenuId.SidebarTitle, group: '1_views', order: view.order, when: ContextKeyExpr.and(ActiveViewletContext.isEqualTo(container.id), view.when) } : undefined,
+						menu: [MenuId.for('ViewsSubMenu'), MenuId.ViewContainerTitleContext].map(id => ({ id, group: '1_views', order: view.order, when: ContextKeyExpr.and(ContextKeyExpr.equals('viewContainer', container.id), view.when) })),
 					});
 				}
 				override run(accessor: ServicesAccessor): void {

@@ -12,6 +12,9 @@ import { observeElementSize } from "../../../../base/browser/observer.js";
 import type { IDimension } from "../../../../base/browser/dom.js";
 import { IStorageService, StorageScope, StorageTarget } from "../../../../platform/storage/common/storage.js";
 import { Composite } from '../../composite.js';
+import { IMenuService, MenuId, type IMenu, SubmenuItemAction } from '../../../../platform/actions/common/actions.js';
+import { getActionBarActions, getFlatContextMenuActions } from '../../../../platform/actions/browser/menuEntryActionViewItem.js';
+import type { IAction } from '../../../../base/common/actions.js';
 
 /** Construction inputs for one browser view container. */
 export interface ViewPaneContainerOptions {
@@ -48,6 +51,8 @@ export class ViewPaneContainer extends Composite {
 	private mountedPanes: ViewPane[] = [];
 	private syncing = false;
 	private didLayout = false;
+	private readonly titleMenu: IMenu;
+	private readonly titleContextMenu: IMenu;
 	private readonly viewsAdded = this._register(new Emitter<readonly ViewPane[]>());
 	private readonly viewsRemoved = this._register(new Emitter<readonly ViewPane[]>());
 	private readonly viewVisibility = this._register(new Emitter<{ view: ViewPane; visible: boolean; }>());
@@ -64,6 +69,7 @@ export class ViewPaneContainer extends Composite {
 		options: ViewPaneContainerOptions,
 		@IStorageService private readonly storageService: IStorageService,
 		@IThemeService themeService: IThemeService,
+		@IMenuService menuService: IMenuService,
 	) {
 		super(options.viewContainer.id, themeService, storageService);
 		const ownerDocument = container.ownerDocument;
@@ -76,6 +82,13 @@ export class ViewPaneContainer extends Composite {
 		super.create(element);
 		this.id = options.viewContainer.id;
 		this.viewContainer = options.viewContainer;
+		const menuContext = this._register(options.contextKeyService.createScoped(element));
+		menuContext.setContext('viewContainer', this.id);
+		menuContext.setContext('viewContainerLocation', this.viewContainer.location);
+		this.titleMenu = this._register(menuService.createMenu(MenuId.ViewContainerTitle, menuContext));
+		this.titleContextMenu = this._register(menuService.createMenu(MenuId.ViewContainerTitleContext, menuContext));
+		this._register(this.titleMenu.onDidChange(() => this.updateTitleArea()));
+		this._register(this.titleContextMenu.onDidChange(() => this.updateTitleArea()));
 		this.headersVisible = options.paneHeaders !== "hidden";
 		this.paneView = this._register(new PaneView(element));
 		this.model = options.model;
@@ -155,6 +168,20 @@ export class ViewPaneContainer extends Composite {
 		this.panes[0]?.focus();
 	}
 
+	public override getActions(): readonly IAction[] {
+		return getActionBarActions(this.titleMenu.getActions(), 'navigation').primary;
+	}
+
+	public override getSecondaryActions(): readonly IAction[] {
+		return getActionBarActions(this.titleMenu.getActions(), 'navigation').secondary.filter(action =>
+			!(action instanceof SubmenuItemAction && action.item.submenu === MenuId.for('ViewsSubMenu') && !action.actions.some(item => item.enabled)),
+		);
+	}
+
+	public override getContextMenuActions(): readonly IAction[] {
+		return getFlatContextMenuActions(this.titleContextMenu.getActions());
+	}
+
 	private syncPanes(): void {
 		this.syncing = true;
 		try {
@@ -186,6 +213,7 @@ export class ViewPaneContainer extends Composite {
 				pane.setVisible(this.isVisible());
 				const item = new ViewPaneItem(pane, this.readSize(descriptor.id) ?? 200);
 				this._panes.set(descriptor.id, item);
+				item.listenToTitle(() => this.updateTitleArea());
 				item.listenToViewEvents(
 					visible => this.viewVisibility.fire({ view: pane, visible }),
 					() => this.viewFocus.fire(pane),
@@ -215,6 +243,7 @@ export class ViewPaneContainer extends Composite {
 			this.syncing = false;
 		}
 		this.saveState();
+		this.updateTitleArea();
 	}
 
 	private stateKey(viewId: string, field: "size" | "collapsed"): string {
@@ -276,6 +305,9 @@ export class ViewPaneContainer extends Composite {
 }
 
 class ViewPaneItem extends Disposable {
+	public listenToTitle(listener: () => void): void {
+		this._register(this.pane.onDidChangeTitleArea(listener));
+	}
 	public listenToViewEvents(visibility: (visible: boolean) => void, focus: () => void, blur: () => void): void {
 		this._register(this.pane.onDidChangeBodyVisibility(visibility));
 		this._register(this.pane.onDidFocus(focus));

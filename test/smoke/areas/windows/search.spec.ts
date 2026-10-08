@@ -14,6 +14,37 @@ interface SearchLifecycleBoundary {
 	dispose(): void;
 }
 
+test('Search line numbers default off and user settings update retained real backend results', async ({ target, workbench, testWorkspace }) => {
+	test.skip(target.appServerMode !== 'required', 'Uses actual workspace content searches and user configuration.');
+	const content = 'ash_line_setting_token first\nash_line_setting_token second\n';
+	const path = join(testWorkspace.directory, 'line-setting.txt');
+	await writeFile(path, content);
+	await workbench.search.open();
+	await workbench.search.search('ash_line_setting_token');
+	const rows = workbench.search.element.locator('.ash-search-match');
+	await expect(workbench.search.status).toHaveText('2 results');
+	await expect(rows.locator('.ash-search-line-number')).toHaveCount(0);
+	const retained = await rows.allTextContents();
+	for (const enabled of [true, false]) {
+		await workbench.settingsEditor.openUserSettingsUI();
+		await workbench.settingsEditor.selectEditorCategory('editor-search');
+		const settings = workbench.settingsEditor.element;
+		const toggle = settings.getByRole('switch', { name: 'Show line numbers', exact: true });
+		await toggle.locator('..').locator('.ash-switch-track').click();
+		await expect(toggle).toBeChecked({ checked: enabled });
+		await settings.locator('.ash-modal-editor-close').click();
+		await expect(workbench.search.query).toHaveValue('ash_line_setting_token');
+		await expect(workbench.search.status).toHaveText('2 results');
+		if (enabled) {
+			await expect(rows.locator('.ash-search-line-number')).toHaveText(['1:', '2:']);
+		} else {
+			await expect(rows.locator('.ash-search-line-number')).toHaveCount(0);
+			expect(await rows.allTextContents()).toEqual(retained);
+		}
+	}
+	expect(await readFile(path, 'utf8')).toBe(content);
+});
+
 test('Search lifecycle cancels creation and partial results, refreshes a running job and clears before searching again', async ({ target, workbench, testWorkspace }) => {
 	test.skip(target.appServerMode !== 'required', 'Uses actual backend jobs, files and protocol responses.');
 	const path = join(testWorkspace.directory, 'src/lifecycle.txt');
@@ -363,7 +394,7 @@ test('Search title and input geometry remain usable while resizing the actual Si
 	await expect(toolbar).toBeHidden();
 	await workbench.search.open();
 	await expect(query).toHaveValue('value');
-	expect(await originalToolbar!.evaluate(node => node === document.querySelector('.ash-pane-composite-title [aria-label="Search result actions"]'))).toBe(true);
+	expect(await originalToolbar!.evaluate(node => node === document.querySelector('.ash-pane-composite-title [role="toolbar"][aria-label="Search result actions"]'))).toBe(true);
 	for (const width of [180, 220, 280, 400, 600]) {
 		const frame = await sidebar.locator('..').boundingBox();
 		expect(frame).not.toBeNull();
@@ -384,7 +415,7 @@ test('Search title and input geometry remain usable while resizing the actual Si
 		const geometry = await sidebar.evaluate(element => {
 			const heading = element.querySelector('.ash-pane-composite-title')!;
 			const title = heading.querySelector('.ash-sidebar-title-label')!.getBoundingClientRect();
-			const actions = heading.querySelector('[aria-label="Search result actions"]')!.getBoundingClientRect();
+			const actions = heading.querySelector('[role="toolbar"][aria-label="Search result actions"]')!.getBoundingClientRect();
 			const bounds = heading.getBoundingClientRect();
 			const widget = element.querySelector('.ash-search-widget')!;
 			const query = widget.querySelector('.ash-search-query-field textarea')!.getBoundingClientRect();
@@ -648,12 +679,12 @@ test.describe('Search with a granted browser folder', () => {
 	});
 });
 
-test('Search translates query options and file filters into Chinese', async ({ target, workbench, restartWorkbench }) => {
+test('Search translates query options and file filters into Chinese', async ({ target, application, workbench, restartWorkbench }) => {
 	await workbench.settingsEditor.openUserSettingsUI();
 	await workbench.settingsEditor.selectCategory('general');
 	await workbench.page.getByRole('combobox', { name: 'Interface language', exact: true }).click();
 	await workbench.page.getByRole('option', { name: '简体中文', exact: true }).click();
-	({ workbench } = await restartWorkbench());
+	({ application, workbench } = await restartWorkbench());
 	await workbench.page.locator('[data-part="activitybar"]').getByRole('tab', { name: '搜索', exact: true }).click();
 	const search = workbench.page.locator('.ash-search');
 	await expect(search.getByRole('textbox', { name: '搜索工作区', exact: true })).toHaveAttribute('placeholder', '搜索');
@@ -681,10 +712,9 @@ test('Search translates query options and file filters into Chinese', async ({ t
 	await workbench.page.keyboard.press('Escape');
 	await expect(query).toBeFocused();
 	await workbench.page.locator('[data-part="sidebar"]').screenshot({ path: test.info().outputPath('search-sidebar-zh-CN.png') });
-	await workbench.page.getByRole('toolbar', { name: '搜索结果操作', exact: true }).getByRole('button', { name: '更多操作', exact: true }).click();
-	await expect(workbench.page.getByRole('menuitem', { name: '移除结果', exact: true })).toBeVisible();
-	await expect(workbench.page.getByRole('menuitem', { name: '复制全部结果', exact: true })).toBeVisible();
-	await workbench.page.keyboard.press('Escape');
+	const menuItems = await workbench.menus.inspect(application, () => workbench.page.getByRole('toolbar', { name: '搜索结果操作', exact: true }).getByRole('button', { name: '更多操作', exact: true }).click());
+	expect(menuItems.map(item => item.label)).toContain('移除结果');
+	expect(menuItems.map(item => item.label)).toContain('复制全部结果');
 	await workbench.quickaccess.runCommand('search.action.openNewEditor');
 	const editorQuery = workbench.page.getByRole('textbox', { name: '搜索编辑器查询', exact: true });
 	await expect(editorQuery).toBeVisible();
@@ -957,6 +987,31 @@ test('Search Copy Path copies file and folder paths through real search and the 
 	for (const [path, content] of contents) { expect(await readFile(join(testWorkspace.directory, path), 'utf8')).toBe(content); }
 });
 
+test('Search first backend results show Collapse and refresh restores expanded default results', async ({ target, workbench, testWorkspace }) => {
+	test.skip(target.appServerMode !== 'required', 'Uses the first result batch from an actual workspace search.');
+	for (const name of ['first.txt', 'second.txt']) {
+		await writeFile(join(testWorkspace.directory, name), 'ash_first_batch_token\n');
+	}
+	await workbench.search.open();
+	await workbench.search.search('ash_first_batch_token');
+	await expect(workbench.search.status).toHaveText('2 results');
+	const tree = workbench.search.element.getByRole('tree');
+	const toolbar = workbench.page.getByRole('toolbar', { name: 'Search result actions', exact: true });
+	const collapse = toolbar.getByRole('button', { name: 'Collapse all results', exact: true });
+	await expect(collapse).toBeEnabled();
+	await expect(toolbar.getByRole('button', { name: 'Expand All', exact: true })).toHaveCount(0);
+	await expect(tree.locator('.ash-search-match')).toHaveCount(2);
+	await expect(tree.locator('.ash-search-line-number')).toHaveCount(0);
+	await collapse.click();
+	await expect(toolbar.getByRole('button', { name: 'Expand All', exact: true })).toBeVisible();
+	await expect(tree.locator('.ash-search-match')).toHaveCount(0);
+	await workbench.quickaccess.runCommand('search.action.refreshSearchResults');
+	await expect(workbench.search.status).toHaveText('2 results');
+	await expect(collapse).toBeEnabled();
+	await expect(toolbar.getByRole('button', { name: 'Expand All', exact: true })).toHaveCount(0);
+	await expect(tree.locator('.ash-search-match')).toHaveCount(2);
+});
+
 test('Search Expand All exposes its command only for fully collapsed results and expands the actual backend tree', async ({ target, application, workbench, testWorkspace }) => {
 	test.skip(target.appServerMode !== 'required', 'Uses an actual workspace search backend.');
 	const contents = [['a/main.ts', 'ash_expand_all_token main\n'], ['b/nested/other.ts', 'ash_expand_all_token other\n']] as const;
@@ -970,11 +1025,23 @@ test('Search Expand All exposes its command only for fully collapsed results and
 	await expect(workbench.search.status).toHaveText('2 results');
 	const tree = workbench.search.element.getByRole('tree');
 	const toolbar = page.getByRole('toolbar', { name: 'Search result actions', exact: true });
+	const collapse = toolbar.getByRole('button', { name: 'Collapse all results', exact: true });
+	await expect(collapse).toBeEnabled();
+	await expect(toolbar.getByRole('button', { name: 'Expand All', exact: true })).toHaveCount(0);
+	await expect(tree.locator('.ash-search-match')).toHaveCount(2);
+	await expect(tree.locator('.ash-search-line-number')).toHaveCount(0);
+	await collapse.click();
+	await expect(toolbar.getByRole('button', { name: 'Expand All', exact: true })).toBeVisible();
+	await expect(tree.locator('.ash-search-match')).toHaveCount(0);
+	await workbench.quickaccess.runCommand('search.action.refreshSearchResults');
+	await expect(workbench.search.status).toHaveText('2 results');
+	await expect(collapse).toBeEnabled();
+	await expect(toolbar.getByRole('button', { name: 'Expand All', exact: true })).toHaveCount(0);
+	await expect(tree.locator('.ash-search-match')).toHaveCount(2);
 	await workbench.menus.select(application, () => toolbar.getByRole('button', { name: 'More Actions', exact: true }).click(), ['View as tree']);
 	await workbench.quickaccess.open('>search.action.expandSearchResults');
 	await expect(workbench.quickaccess.items).toHaveCount(0);
 	await workbench.quickaccess.close();
-	const collapse = toolbar.getByRole('button', { name: 'Collapse all results', exact: true });
 	await collapse.focus();
 	await collapse.press('Enter');
 	await expect(toolbar.getByRole('button', { name: 'Expand All', exact: true })).toBeFocused();

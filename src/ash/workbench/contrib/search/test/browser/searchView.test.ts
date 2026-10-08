@@ -66,6 +66,43 @@ const matches: readonly ContentSearchMatch[] = [
 	},
 ];
 
+test('Search sidebar hides line numbers by default and applies explicit changes without searching again', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	const globals = installDomGlobals(browser);
+	try {
+		using store = new DisposableStore();
+		let searches = 0;
+		const services = createServices(store, browser, {
+			search: async (_query, options) => {
+				searches++;
+				options?.onProgress?.([...matches, { dirId: 'workspace', path: 'src/main.ts', lineNumber: 10, preview: 'needle\nnext', ranges: [{ start: 0, end: 11 }] }]);
+				return { resultCount: 3, limitHit: false, error: undefined };
+			},
+		});
+		const configuration = services.get(IConfigurationService);
+		assert.equal(configuration.getValue(ContentSearchConfiguration.showLineNumbers), false);
+		const { SearchView } = await import('../../browser/searchView.js');
+		using view = services.createInstance(SearchView, browser.window.document.body, { id: SEARCH_VIEW_ID, title: 'Search' });
+		registerView(services, view);
+		input(view.element, 'Search workspace').value = 'needle';
+		view.element.querySelector('form')!.dispatchEvent(new browser.window.Event('submit', { cancelable: true }));
+		await waitFor(() => view.getSearchResultSnapshot()?.matchCount === 3);
+		const snapshot = view.getSearchResultSnapshot();
+		const labels = (): (string | null)[] => [...view.element.querySelectorAll('.ash-search-line-number')].map(element => element.textContent);
+		assert.deepEqual(labels(), ['+1']);
+		assert.match(view.element.querySelector('.ash-search-match')!.getAttribute('aria-label')!, /Line 4, column 7/);
+		await configuration.updateValue(ContentSearchConfiguration.showLineNumbers, true);
+		assert.deepEqual(labels(), ['4:', '9:', '10:+1']);
+		await configuration.updateValue(ContentSearchConfiguration.showLineNumbers, false);
+		assert.deepEqual(labels(), ['+1']);
+		assert.equal(searches, 1);
+		assert.deepEqual(view.getSearchResultSnapshot(), snapshot);
+	} finally {
+		browser.window.close();
+		for (const name of globals) Reflect.deleteProperty(globalThis, name);
+	}
+});
+
 test('Search exposes query and replacement as multiline inputs and folding replacement preserves its value', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	const globals = installDomGlobals(browser);

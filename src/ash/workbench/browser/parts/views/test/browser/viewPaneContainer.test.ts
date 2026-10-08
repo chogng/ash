@@ -17,7 +17,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { toDisposable } = await import("../../../../../../base/common/lifecycle.js");
+const { toDisposable, DisposableStore } = await import("../../../../../../base/common/lifecycle.js");
 const { ContextKeyService, IContextKeyService } = await import("../../../../../../platform/contextkey/browser/contextKeyService.js");
 const { ViewContainerLocation } = await import("../../../../../../workbench/common/views.js");
 const { ViewPaneContainer } = await import("../../../../../../workbench/browser/parts/views/viewPaneContainer.js");
@@ -50,12 +50,15 @@ test("ViewPaneContainer opens a fixed visible view without toggling its visibili
 			throw new Error("fixed view visibility cannot be changed");
 		},
 	} satisfies IViewContainerModel;
-	using container = registerTestComponentServices(services).createInstance(ViewPaneContainer, browserEnvironment.window.document.body, {
+	const options = {
 		viewContainer,
 		model,
 		contextKeyService: contextKeys,
 		instantiationService: services,
-	});
+	};
+	registerTestComponentServices(services);
+	assert.throws(() => services.createInstance(ViewPaneContainer, browserEnvironment.window.document.body, options), /Unknown service:.*menuService/i);
+	using container = registerContainerServices(services).createInstance(ViewPaneContainer, browserEnvironment.window.document.body, options);
 
 	assert.doesNotThrow(() => container.openView("test.fixed-view"));
 	assert.equal(visibilityChanges, 0);
@@ -91,7 +94,7 @@ test('ViewPaneContainer derives preferred width from visible view content', asyn
 	services.registerInstance(IContextKeyService, contextKeys);
 	using descriptors = services.createInstance(ViewDescriptorService, { registry });
 	const model = descriptors.getViewContainerModel(descriptor.id)!;
-	using container = registerTestComponentServices(services).createInstance(ViewPaneContainer, browserEnvironment.window.document.body, {
+	using container = registerContainerServices(services).createInstance(ViewPaneContainer, browserEnvironment.window.document.body, {
 		viewContainer: descriptor, model, contextKeyService: contextKeys, instantiationService: services,
 	});
 	assert.equal(container.getOptimalWidth(), 376);
@@ -116,7 +119,7 @@ test("ViewPaneContainer opens a collapsed view and focuses only when requested",
 	const viewContainer: IViewContainerDescriptor = { id: "test", title: "Test", location: ViewContainerLocation.Panel };
 	const descriptor = { id: "test.view", title: "Test View", collapsed: true, ctorDescriptor: new SyncDescriptor(TestView) };
 	const views = [descriptor];
-	using container = registerTestComponentServices(services).createInstance(ViewPaneContainer, browserEnvironment.window.document.body, {
+	using container = registerContainerServices(services).createInstance(ViewPaneContainer, browserEnvironment.window.document.body, {
 		viewContainer,
 		model: {
 			viewContainer,
@@ -175,7 +178,7 @@ test("ViewPaneContainer retains hidden view instances and restores workspace siz
 	const options = { viewContainer, model: descriptors.getViewContainerModel(viewContainer.id), instantiationService: services, contextKeyService: contextKeys };
 	assert.throws(() => services.createInstance(ViewPaneContainer, browserEnvironment.window.document.body, options), /Unknown service: storageService/);
 	services.registerInstance(IStorageService, storage);
-	const container = registerTestComponentServices(services).createInstance(ViewPaneContainer, browserEnvironment.window.document.body, options);
+	const container = registerContainerServices(services).createInstance(ViewPaneContainer, browserEnvironment.window.document.body, options);
 	container.layout({ height: 600, width: 280 });
 	const first = container.getView("test.first") as TestView;
 	const second = container.getView("test.second") as TestView;
@@ -198,7 +201,7 @@ test("ViewPaneContainer retains hidden view instances and restores workspace siz
 	assert.deepEqual([container.getViewSize(first), container.getViewSize(second)], [572, 28]);
 	container.dispose();
 	assert.equal(disposed, 2);
-	using restored = registerTestComponentServices(services).createInstance(ViewPaneContainer, browserEnvironment.window.document.body, options);
+	using restored = registerContainerServices(services).createInstance(ViewPaneContainer, browserEnvironment.window.document.body, options);
 	const restoredSecond = restored.getView(second.id)!;
 	restored.layout({ height: 600, width: 280 });
 	assert.equal(restoredSecond.isExpanded(), false);
@@ -207,7 +210,7 @@ test("ViewPaneContainer retains hidden view instances and restores workspace siz
 	using otherStorage = createStorage("other");
 	using otherServices = services.createChild();
 	otherServices.registerInstance(IStorageService, otherStorage);
-	using otherWorkspace = otherServices.createInstance(ViewPaneContainer, browserEnvironment.window.document.body, { ...options, instantiationService: otherServices });
+	using otherWorkspace = registerContainerServices(otherServices).createInstance(ViewPaneContainer, browserEnvironment.window.document.body, { ...options, instantiationService: otherServices });
 	otherWorkspace.layout({ height: 600, width: 280 });
 	const otherSecond = otherWorkspace.getView(second.id)!;
 	assert.equal(otherSecond.isExpanded(), false);
@@ -216,4 +219,106 @@ test("ViewPaneContainer retains hidden view instances and restores workspace siz
 	views.dispose();
 	assert.equal(restored.panes.length, 0);
 	assert.equal(disposed, 6);
+});
+
+const { IMenuService } = await import('../../../../../../platform/actions/common/actions.js');
+const { MenuService } = await import('../../../../../../platform/actions/common/menuService.js');
+const { CommandService } = await import('../../../../../../workbench/services/commands/common/commandService.js');
+const titleMenuResources = new DisposableStore();
+suiteTeardown(() => titleMenuResources.dispose());
+
+function registerContainerServices(services: InstanceType<typeof InstantiationService>): InstanceType<typeof InstantiationService> {
+	registerTestComponentServices(services);
+	if (!services.has(IMenuService)) {
+		const context = titleMenuResources.add(new ContextKeyService());
+		const commands = titleMenuResources.add(new CommandService(services));
+		services.registerInstance(IMenuService, new MenuService(commands, context));
+	}
+	return services;
+}
+
+
+test('Pane Composite combines scoped container and View actions while retaining the global title menu', async () => {
+	const { WorkbenchViewRegistry, IViewDescriptorService } = await import('../../../../../../workbench/common/views.js');
+	const { ViewDescriptorService } = await import('../../../../../../workbench/services/views/browser/viewDescriptorService.js');
+	const { ViewPane } = await import('../../viewPane.js');
+	const { PaneComposite } = await import('../../paneComposite.js');
+	const { SidebarPart } = await import('../../../../../../workbench/browser/parts/sidebar/sidebarPart.js');
+	const { SyncDescriptor } = await import('../../../../../../platform/instantiation/common/descriptors.js');
+	const { MenusRegistry, MenuId } = await import('../../../../../../platform/actions/common/actions.js');
+	const { ContextKeyExpr } = await import('../../../../../../platform/contextkey/common/contextkey.js');
+	using resources = new DisposableStore();
+	const services = resources.add(new InstantiationService());
+	const context = resources.add(new ContextKeyService());
+	const registry = new WorkbenchViewRegistry();
+	let runs = 0;
+	class ActionView extends ViewPane {
+		constructor(container: HTMLElement, options: import('../../viewPane.js').IViewPaneOptions) {
+			super(container, options);
+			this.headerActionsElement.setAttribute('aria-label', 'View title actions');
+		}
+		public override getActions(): readonly import('../../../../../../base/common/actions.js').IAction[] { return [{ id: 'fixture.viewAction', label: 'View action', tooltip: '', enabled: true, run: () => { runs++; } }]; }
+	}
+	const active = { id: 'fixture.title-actions', title: 'Actions', location: ViewContainerLocation.Sidebar, mergeViewWithContainerWhenSingleView: true };
+	const empty = { id: 'fixture.empty-title', title: 'Empty', location: ViewContainerLocation.Sidebar };
+	const registration = resources.add(registry.registerViewContainer(active));
+	resources.add(registry.registerViewContainer(empty));
+	resources.add(registry.registerViews(active.id, [{ id: 'fixture.action-view', title: 'View', canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(ActionView) }]));
+	const descriptors = resources.add(new ViewDescriptorService({ registry }, context));
+	services.registerInstance(IViewDescriptorService, descriptors);
+	const menus = registerContainerServices(services).get(IMenuService);
+	resources.add(MenusRegistry.appendMenuItem(MenuId.ViewContainerTitle, { command: { id: 'fixture.containerAction', title: 'Container action' }, group: 'navigation', when: ContextKeyExpr.equals('viewContainer', active.id) }));
+	resources.add(MenusRegistry.appendMenuItem(MenuId.ViewContainerTitleContext, { command: { id: 'fixture.containerContext', title: 'Container context' }, when: ContextKeyExpr.equals('viewContainer', active.id) }));
+	resources.add(MenusRegistry.appendMenuItem(MenuId.SidebarTitle, { command: { id: 'fixture.globalAction', title: 'Global action' }, group: 'navigation' }));
+	let shown: readonly import('../../../../../../base/common/actions.js').IAction[] = [];
+	const part = resources.add(services.createInstance(SidebarPart, browserEnvironment.window.document.body, {
+		openComposite: async () => null, viewDescriptorService: descriptors, contextKeyService: context,
+		titleActions: { menuService: menus, contextMenuProvider: { showContextMenu: (delegate: import('../../../../../../base/browser/contextmenu.js').IContextMenuDelegate) => { shown = delegate.getActions?.() ?? []; } }, menuId: MenuId.SidebarTitle, primaryGroup: 'navigation' },
+	}));
+	const create = (descriptor: typeof active | typeof empty) => services.createInstance(PaneComposite, part.domNode, {
+		viewContainer: descriptor, model: descriptors.getViewContainerModel(descriptor.id), instantiationService: services, contextKeyService: context,
+		mergeViewWithContainerWhenSingleView: descriptor === active,
+	});
+	const composite = create(active);
+	part.addComposite(composite);
+	part.addComposite(create(empty));
+	part.showComposite(active.id);
+	const titleToolbar = part.domNode.querySelector<HTMLElement>('[role="toolbar"][aria-label="View title actions"]')!;
+	assert.ok(titleToolbar);
+	assert.deepEqual(composite.getActions().map(action => action.id), ['fixture.containerAction', 'fixture.viewAction']);
+	assert.deepEqual(composite.getSecondaryActions(), [], 'A disabled sole-view toggle does not create a Views menu');
+	assert.equal(part.domNode.querySelectorAll('.ash-pane-composite-title [data-action-id="fixture.viewAction"]').length, 1);
+	part.domNode.querySelector<HTMLButtonElement>('[data-action-id="fixture.viewAction"] button')!.click();
+	assert.equal(runs, 1);
+	part.setVisible(false);
+	part.setVisible(true);
+	part.showComposite(active.id);
+	assert.equal(part.domNode.querySelectorAll('.ash-pane-composite-title [data-action-id="fixture.viewAction"]').length, 1, 'Reopening the retained Composite keeps its title actions attached');
+	part.domNode.querySelector('.ash-workbench-part-title')!.dispatchEvent(new browserEnvironment.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+	assert.ok(shown.some(action => action.id === 'fixture.containerContext'));
+	assert.equal(shown.some(action => action.id === 'fixture.globalAction'), false);
+	resources.add(registry.registerViews(active.id, [{ id: 'fixture.toggleable', title: 'Toggleable', canToggleVisibility: true, hideByDefault: true, ctorDescriptor: new SyncDescriptor(ActionView) }]));
+	const viewActions = composite.getSecondaryActions();
+	assert.deepEqual(viewActions.map(action => action.id), ['fixture.toggleable.toggleVisibility', 'fixture.action-view.toggleVisibility'], 'A sole Views submenu becomes direct title actions in menu order');
+	await viewActions.find(action => action.id === 'fixture.toggleable.toggleVisibility')!.run();
+	assert.equal(descriptors.getViewContainerModel(active.id).isVisible('fixture.toggleable'), true);
+	await composite.getSecondaryActions().find(action => action.id === 'fixture.toggleable.toggleVisibility')!.run();
+	assert.equal(descriptors.getViewContainerModel(active.id).isVisible('fixture.toggleable'), false);
+	part.showComposite(empty.id);
+	assert.equal(titleToolbar.getAttribute('aria-label'), 'Empty', 'The retained renderer releases the previous View accessible name');
+	assert.equal(part.domNode.querySelector('[data-action-id="fixture.viewAction"]'), null);
+	assert.equal(part.domNode.querySelectorAll('[data-action-id="fixture.globalAction"]').length, 1);
+	shown = [];
+	part.domNode.querySelector('.ash-workbench-part-title')!.dispatchEvent(new browserEnvironment.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+	assert.equal(shown.some(action => action.id === 'fixture.containerContext'), false);
+	part.showComposite(active.id);
+	assert.equal(part.getComposite(active.id), composite);
+	let titleChanges = 0;
+	resources.add(composite.onTitleAreaUpdate(() => titleChanges++));
+	registration.dispose();
+	assert.equal(part.activeCompositeId, undefined);
+	assert.equal(part.domNode.querySelector('[data-action-id="fixture.viewAction"]'), null);
+	const before = titleChanges;
+	resources.add(MenusRegistry.appendMenuItem(MenuId.ViewContainerTitle, { command: { id: 'fixture.afterDispose', title: 'After disposal' }, group: 'navigation' }));
+	assert.equal(titleChanges, before, 'Removed containers release their menu subscriptions');
 });

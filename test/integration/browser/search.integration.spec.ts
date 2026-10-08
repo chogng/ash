@@ -1,6 +1,43 @@
 import { expect, test } from '@playwright/test';
 
-test('Search registration merges one title and moves the same toolbar through view switching and multiple views', async ({ page }) => {
+test('Search line numbers default off and change live without altering matches or submitting another query', async ({ page }) => {
+	await page.goto('/search.html');
+	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
+	await query.fill('layout');
+	await query.press('Enter');
+	await expect(page.getByRole('status')).toHaveText('3 results');
+	const rows = page.locator('.ash-search-match');
+	await expect(rows.locator('.ash-search-line-number')).toHaveCount(0);
+	const snapshot = await page.evaluate(() => window.ashSearchIntegration.snapshot());
+	const measure = () => rows.evaluateAll(elements => elements.map(element => ({
+		preview: element.querySelector('.ash-search-preview')!.getBoundingClientRect().width,
+		origin: element.querySelector('.ash-search-preview')!.getBoundingClientRect().left - element.getBoundingClientRect().left,
+	})));
+	const unnumbered = await measure();
+	await page.evaluate(() => window.ashSearchIntegration.setLineNumbers(true));
+	expect((await rows.locator('.ash-search-line-number').allTextContents()).sort()).toEqual(['1000:', '3456:', '43:']);
+	const numbered = await measure();
+	for (let index = 0; index < numbered.length; index++) {
+		expect(numbered[index].origin).toBeGreaterThan(unnumbered[index].origin);
+		expect(numbered[index].preview).toBeLessThan(unnumbered[index].preview);
+	}
+	await page.evaluate(() => window.ashSearchIntegration.setLineNumbers(false));
+	await expect(rows.locator('.ash-search-line-number')).toHaveCount(0);
+	expect(await measure()).toEqual(unnumbered);
+	expect(await page.evaluate(() => window.ashSearchIntegration.snapshot())).toEqual(snapshot);
+	expect((await page.evaluate(() => window.ashSearchIntegration.queries)).length).toBe(1);
+	await query.fill('windows');
+	await query.press('Enter');
+	await expect(page.getByRole('status')).toHaveText('2 results');
+	await expect(rows.locator('.ash-search-line-number')).toHaveText('+1');
+	const multiline = rows.filter({ hasText: 'next' }).locator('.ash-search-preview');
+	const hintWidth = (await multiline.boundingBox())!.width;
+	await page.evaluate(() => window.ashSearchIntegration.setLineNumbers(true));
+	await expect(rows.locator('.ash-search-line-number')).toHaveText(['2:', '9:+1']);
+	expect((await multiline.boundingBox())!.width).toBeLessThan(hintWidth);
+});
+
+test('Search registration merges View and container actions and preserves state and focus through title host switching', async ({ page }) => {
 	await page.goto('/search.html');
 	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
 	const toolbar = page.getByRole('toolbar', { name: 'Search result actions', exact: true });
@@ -13,8 +50,8 @@ test('Search registration merges one title and moves the same toolbar through vi
 	await query.press('Enter');
 	await expect(page.getByRole('status')).toHaveText('1 results');
 	const before = await page.evaluate(() => window.ashSearchIntegration.snapshot());
-	const original = await toolbar.elementHandle();
-	expect(original).not.toBeNull();
+	const originalHost = await page.locator('.ash-pane-composite-title-view-actions .ash-pane-view-header-actions').elementHandle();
+	expect(originalHost).not.toBeNull();
 	const refresh = toolbar.getByRole('button', { name: 'Refresh search', exact: true });
 	await refresh.focus();
 	await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.focusedView())).toBe('ash.searchView');
@@ -22,7 +59,7 @@ test('Search registration merges one title and moves the same toolbar through vi
 	await expect(paneHeader).toBeVisible();
 	await expect(paneHeader.getByRole('toolbar', { name: 'Search result actions', exact: true })).toHaveCount(1);
 	await expect(refresh).toBeFocused();
-	expect(await original!.evaluate(node => node === document.querySelector('[aria-label="Search result actions"]'))).toBe(true);
+	expect(await originalHost!.evaluate(node => node === document.querySelector('.ash-search')!.parentElement!.querySelector('.ash-pane-view-header-actions'))).toBe(true);
 	await page.evaluate(() => window.ashSearchIntegration.setSecondView(false));
 	await expect(paneHeader).toBeHidden();
 	await expect(refresh).toBeFocused();
@@ -33,7 +70,7 @@ test('Search registration merges one title and moves the same toolbar through vi
 	await expect(title).toHaveText('Search');
 	await expect(toolbar).toBeVisible();
 	await expect(query).toHaveValue('needle');
-	expect(await original!.evaluate(node => node === document.querySelector('.ash-pane-composite-title-view-actions [aria-label="Search result actions"]'))).toBe(true);
+	expect(await originalHost!.evaluate(node => node === document.querySelector('.ash-pane-composite-title-view-actions .ash-pane-view-header-actions'))).toBe(true);
 	expect(await page.evaluate(() => window.ashSearchIntegration.snapshot())).toEqual(before);
 	await page.evaluate(() => window.ashSearchIntegration.setSecondView(true));
 	await paneHeader.getByRole('button', { name: 'Search', exact: true }).click();
@@ -44,7 +81,7 @@ test('Search registration merges one title and moves the same toolbar through vi
 	await expect(query).toBeHidden();
 	await paneHeader.getByRole('button', { name: 'Search', exact: true }).click();
 	await expect(query).toBeVisible();
-	await original!.dispose();
+	await originalHost!.dispose();
 });
 
 test('Search inputs wrap within shared height limits, preserve caret and use managed scrolling', async ({ page }) => {
@@ -585,6 +622,7 @@ test('registered Search exposes Chinese labels and localized result counts', asy
 for (const mode of ['flat', 'tree'] as const) {
 	test(`Search ${mode} results preserve source paths, preview coordinates and geometry across Sidebar widths`, async ({ page }) => {
 		await page.goto('/search.html');
+		await page.evaluate(() => window.ashSearchIntegration.setLineNumbers(true));
 		const sidebar = page.locator('[data-part="sidebar"]');
 		const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
 		const tree = page.getByRole('tree', { name: 'Search results', exact: true });
@@ -610,8 +648,8 @@ for (const mode of ['flat', 'tree'] as const) {
 		}
 		await expect(tree.locator('.ash-search-file-path .ash-icon-label-text')).toHaveText(mode === 'tree' ? ['searchView.ts', 'inputbox.ts', 'searchView.ts'] : ['inputbox.ts', 'searchView.ts', 'searchView.ts']);
 		await expect(tree.locator('.ash-search-preview mark')).toHaveText(['layout', 'layout', 'layout']);
-		expect((await tree.locator('.ash-search-line-number').allTextContents()).sort()).toEqual(['1000', '3456', '43']);
-		const late = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-line-number').getByText('3456', { exact: true }) });
+		expect((await tree.locator('.ash-search-line-number').allTextContents()).sort()).toEqual(['1000:', '3456:', '43:']);
+		const late = tree.getByRole('treeitem').filter({ has: page.locator('.ash-search-line-number').getByText('3456:', { exact: true }) });
 		expect((await late.locator('.ash-search-preview').innerText()).length).toBeLessThanOrEqual(250);
 		await expect(late.locator('.ash-search-preview mark')).toHaveText('layout');
 		await late.dblclick();
@@ -635,7 +673,8 @@ for (const mode of ['flat', 'tree'] as const) {
 						const content = row.getBoundingClientRect();
 						const line = row.querySelector('.ash-search-line-number')!.getBoundingClientRect();
 						const preview = row.querySelector('.ash-search-preview')!.getBoundingClientRect();
-						return { lineWidth: line.width, origin: preview.left - content.left, width: preview.width, fits: preview.right <= bounds.right + 0.01 };
+						const highlight = row.querySelector('.ash-search-preview mark')!.getBoundingClientRect();
+						return { lineWidth: line.width, origin: preview.left - content.left, width: preview.width, fits: preview.right <= bounds.right + 0.01, highlightFits: highlight.left >= preview.left - 0.01 && highlight.right <= preview.right + 0.01 };
 					});
 					const files = Array.from(element.querySelectorAll('.ash-search-file-heading')).filter(row => row.querySelector('.ash-search-file-count')).map(row => {
 						const label = row.querySelector('.ash-icon-label-text')!.getBoundingClientRect();
@@ -654,6 +693,7 @@ for (const mode of ['flat', 'tree'] as const) {
 					expect(preview.origin).toBeCloseTo(geometry.previews[0]!.origin, 2);
 					expect(preview.width).toBeGreaterThan(0);
 					expect(preview.fits).toBe(true);
+					expect(preview.highlightFits).toBe(true);
 				}
 				for (const file of geometry.files) { expect(file.width).toBeGreaterThan(0); expect(file.separated).toBe(true); expect(file.fits).toBe(true); }
 				await expect(page.locator('.ash-pane-composite-title-view-actions').getByRole('toolbar', { name: 'Search result actions', exact: true })).toHaveCount(1);
@@ -796,6 +836,7 @@ test('Search lifecycle Chinese controls and help explain cancellation and repeat
 
 test('Search virtualizes a thousand matches and navigates to an offscreen result', async ({ page }) => {
 	await page.goto('/search.html');
+	await page.evaluate(() => window.ashSearchIntegration.setLineNumbers(true));
 	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
 	await query.fill('large');
 	await query.press('Enter');
@@ -808,7 +849,7 @@ test('Search virtualizes a thousand matches and navigates to an offscreen result
 	await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.opened.at(-1))).toMatchObject({
 		resource: 'file:///workspace/src/main.ts', options: { preserveFocus: true, selection: { startLineNumber: 1000, endLineNumber: 1000 } },
 	});
-	await expect(tree.locator('.ash-search-line-number').last()).toHaveText('1000');
+	await expect(tree.locator('.ash-search-line-number').last()).toHaveText('1000:');
 	expect(await rows.count()).toBeLessThan(100);
 });
 

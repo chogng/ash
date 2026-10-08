@@ -104,10 +104,8 @@ export class SidebarPart extends PaneCompositePart {
 	}
 
 	override showComposite(compositeId: string, focus = false): void {
-		const previousId = this.activeCompositeId;
-		if (previousId) this.getComposite(previousId)?.setMergedTitleActionsHost();
 		super.showComposite(compositeId, focus);
-		this.activeTitleListener.value = this.getComposite(compositeId)?.onDidChangeTitle(() => this.updateActiveTitle());
+		this.activeTitleListener.value = this.getComposite(compositeId)?.onTitleAreaUpdate(() => this.updateActiveTitle());
 		this.updateActiveTitle();
 	}
 
@@ -116,6 +114,5 @@ export class SidebarPart extends PaneCompositePart {
 		const composite = this.getComposite(this.activeCompositeId);
 		if (!composite) return;
 		this.activeTitleDomNode.textContent = composite.getTitle();
-		composite.setMergedTitleActionsHost(this.viewTitleActionsDomNode);
 	}
 }
