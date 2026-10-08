@@ -3560,7 +3560,7 @@ test('completion snippets navigate and undo through the mounted editor', async (
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
 	await page.goto('/standalone.html');
-	await page.evaluate(() => window.ashStandaloneIntegration.enableCompletionNavigation('${1:name}(${2:value})$0'));
+	await page.evaluate(() => window.ashStandaloneIntegration.enableCompletionNavigation('${1:name}(${2:value})$TM_SELECTED_TEXT$0'));
 	const input = page.locator('#caller .stanza-editor-input');
 	await input.focus();
 	await page.keyboard.press('Control+Space');

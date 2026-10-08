@@ -281,9 +281,15 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 			try {
 				if (!options.skipSaveParticipants && this.saveParticipants.size > 0) {
 					this.ensureEntryAlive(entry);
-					for (const participant of this.saveParticipants) {
-						throwIfCancelled(signal, 'Text model save was cancelled');
-						await raceCancellationError(participant.participate(entry.model, options.reason ?? SaveReason.EXPLICIT, signal), signal);
+					// A save must not join cleanup edits with the user's preceding input.
+					entry.model.pushStackElement();
+					try {
+						for (const participant of this.saveParticipants) {
+							throwIfCancelled(signal, 'Text model save was cancelled');
+							await raceCancellationError(participant.participate(entry.model, options.reason ?? SaveReason.EXPLICIT, signal), signal);
+						}
+					} finally {
+						if (!entry.model.isDisposed()) entry.model.pushStackElement();
 					}
 					// Participant edits belong to this save, not a later dirty snapshot.
 					this.ensureEntryAlive(entry);

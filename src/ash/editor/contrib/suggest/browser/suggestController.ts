@@ -329,11 +329,15 @@ registerEditorContribution({
 			providers: [new WordBasedCompletionItemProvider(context.editorWorker)],
 			...(context.options.completionWorkerFactory ? { workerFactory: context.options.completionWorkerFactory } : {}),
 		}));
+		const fileVariables = createSnippetVariables(context.model.uri);
 		const session = context.register(new SuggestModel(completions.results, context.editor, {
 			resolver: completions,
 			onResolveError: context.onLanguageError,
 			onDidAccept: item => completions.executeCompletionCommand(context.model.getLanguageId(), item, new AbortController().signal),
-			snippetVariables: createSnippetVariables(context.model.uri),
+			snippetVariables: {
+				// Completion acceptance requires a collapsed selection, so selected text is empty.
+				resolveVariable: name => name === 'TM_SELECTED_TEXT' ? '' : fileVariables.resolveVariable(name),
+			},
 		}));
 		return context.instantiationService.createInstance(SuggestController,
 			context.editor,

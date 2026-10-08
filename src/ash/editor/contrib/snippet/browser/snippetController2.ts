@@ -2,6 +2,7 @@ import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { Disposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { EditorContributionInstantiation, registerEditorContribution } from '../../../browser/editorExtensions.js';
+import type { Range } from '../../../common/core/range.js';
 import { type IEditorContribution } from '../../../common/editorCommon.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type Snippet } from '../common/snippetParser.js';
@@ -44,6 +45,10 @@ export class SnippetController2 extends Disposable implements IEditorContributio
 
 	public isInSnippet(): boolean {
 		return this.session.value !== undefined;
+	}
+
+	public getSessionEnclosingRange(): Range | undefined {
+		return this.session.value?.getEnclosingRange();
 	}
 
 	public cancel(resetSelection = false): void {

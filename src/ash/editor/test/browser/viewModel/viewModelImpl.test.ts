@@ -219,7 +219,7 @@ test('ViewModel owns line projection, cursor, layout, and visible-line publicati
 	assert.deepEqual(visible.at(-1), { startLineNumber: 1, endLineNumber: 3 });
 });
 
-test('ViewModel resets cursor markers through CursorsController after model flush', () => {
+test('ViewModel preserves cursor markers across structural edits and resets them only on model replacement', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = dom.window.document.querySelector('main')!;
 	using cleanup = toDisposable(() => dom.window.close());
@@ -250,6 +250,21 @@ test('ViewModel resets cursor markers through CursorsController after model flus
 		if (event instanceof CursorStateChangedEvent) outgoing.push(event);
 	});
 	viewModel.setSelections('test', [new Selection(1, 2, 1, 2), new Selection(2, 2, 2, 2)], CursorChangeReason.Explicit);
+	outgoing.length = 0;
+	captured.cursorEvents.length = 0;
+
+	model.pushStackElement();
+	model.pushEditOperations(viewModel.getSelections(), [{ range: new Range(2, 4, 2, 4), text: '\n' }], () => null);
+	model.pushStackElement();
+	assert.deepEqual(viewModel.getSelections(), [new Selection(1, 2, 1, 2), new Selection(2, 2, 2, 2)]);
+	assert.equal(viewModel.getLineCount(), 3);
+	assert.equal(outgoing.some(event => event.reason === CursorChangeReason.ContentFlush), false);
+	model.undo();
+	assert.deepEqual(viewModel.getSelections(), [new Selection(1, 2, 1, 2), new Selection(2, 2, 2, 2)]);
+	assert.equal(viewModel.getLineCount(), 2);
+	model.redo();
+	assert.deepEqual(viewModel.getSelections(), [new Selection(1, 2, 1, 2), new Selection(2, 2, 2, 2)]);
+	assert.equal(viewModel.getLineCount(), 3);
 	outgoing.length = 0;
 	captured.cursorEvents.length = 0;
 

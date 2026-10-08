@@ -28,7 +28,8 @@ import { DocumentSymbolsOutlineCreator } from './outline/documentSymbolsOutline.
 
 registerWorkbenchContribution('workbench.contrib.documentSymbolsOutline', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(DocumentSymbolsOutlineCreator));
 
-registerWorkbenchContribution(SaveParticipantsContribution.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(SaveParticipantsContribution));
+// Cleanup uses CodeEditorService, whose EditorParts dependency is registered after BlockStartup.
+registerWorkbenchContribution(SaveParticipantsContribution.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(SaveParticipantsContribution));
 
 registerWorkbenchContribution("workbench.contrib.codeLensCachePersistence", WorkbenchPhase.BlockStartup, accessor => bindCodeLensCacheStorage(accessor.get(IStorageService)));
 
@@ -84,14 +85,11 @@ registerEditorPane({
 			colorDecoratorsLimit: configuration?.getValue(CodeEditorConfiguration.colorDecoratorsLimit),
 			defaultColorDecorators: configuration?.getValue(CodeEditorConfiguration.defaultColorDecorators),
 			formatOnSave: configuration?.getValue(CodeEditorConfiguration.formatOnSave),
-			trimTrailingWhitespace: configuration?.getValue(CodeEditorConfiguration.trimTrailingWhitespace),
-			trimTrailingWhitespaceInRegexAndStrings: configuration?.getValue(CodeEditorConfiguration.trimTrailingWhitespaceInRegexAndStrings),
 			find: configuration ? {
 				seedSearchStringFromSelection: configuration.getValue(CodeEditorConfiguration.findSeedFromSelection),
 				autoFindInSelection: configuration.getValue(CodeEditorConfiguration.findAutoFindInSelection),
 				loop: configuration.getValue(CodeEditorConfiguration.findLoop),
 			} : undefined,
-			insertFinalNewLine: configuration?.getValue(CodeEditorConfiguration.insertFinalNewLine),
 			onSave: options.onSave,
 			onSaveError: saveErrorHandler ? (error, resource) => saveErrorHandler.onSaveError(error, resource) : undefined,
 			onOpenLocation: options.onOpenLocation,

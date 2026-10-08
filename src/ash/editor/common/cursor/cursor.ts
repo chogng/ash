@@ -708,7 +708,8 @@ export class CursorsController extends Disposable {
 		this.cursorHistory.length = 0;
 		this.cursorRedoHistory.length = 0;
 		this.invalidateActiveComposition();
-		if (rawEvent.containsEvent(RawContentChangedType.Flush)) {
+		// Structural edits rebuild view lines too; only replacing model content resets cursor markers.
+		if (rawEvent.containsEvent(RawContentChangedType.Flush) && event.contentChangedEvent.isFlush) {
 			const oldSelections = this.cursors.getSelections();
 			this.cursors.dispose();
 			this.cursors = new CursorCollection(this.context);

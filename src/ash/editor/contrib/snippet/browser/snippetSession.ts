@@ -93,6 +93,19 @@ export class SnippetSession extends Disposable {
 	/** Whether this session has released its tracked tabstops. */
 	get isDisposed(): boolean { return super.isDisposed; }
 
+	public getEnclosingRange(): Range | undefined {
+		if (this.isDisposed || this.model.isDisposed() || this.editor.getModel() !== this.model) return undefined;
+		const ranges = this.groups.flatMap(group => group.ranges);
+		ranges.push(...this.transforms.map(transform => transform.range));
+		// An explicit $0 owns the final stop even when literal text follows it.
+		if (!this.groups.some(group => group.index === 0)) ranges.push(...this.finalRanges);
+		let enclosing: Range | undefined;
+		for (const tracked of ranges) {
+			enclosing = enclosing ? enclosing.plusRange(tracked.range) : tracked.range;
+		}
+		return enclosing;
+	}
+
 	/** Advances to the next tabstop; Tab after an explicit final stop belongs to the editor. */
 	selectNext(): boolean {
 		this.assertNotDisposed();

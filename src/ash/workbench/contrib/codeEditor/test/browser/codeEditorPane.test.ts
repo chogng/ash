@@ -24,7 +24,10 @@ import { TextModel } from "../../../../../editor/common/model/textModel.js";
 import { EDITOR_FONT_DEFAULTS } from "../../../../../editor/common/config/fontInfo.js";
 import type { EditorPaneOptions, EditorPanePart, EditorPanePartOptions } from "../../../../browser/parts/editor/textResourceEditor.js";
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { ITextModelResourceService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
+import { IFileTextModelService, ITextModelResourceService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
+import { SaveParticipantsContribution } from '../../browser/saveParticipants.js';
+import '../../../codeActions/browser/codeActions.contribution.js';
+import { WorkbenchConfigurationService } from '../../../../services/configuration/browser/configurationService.js';
 import { ITextModelService } from '../../../../../editor/common/services/resolverService.js';
 import { TextModelResolverService } from '../../../../services/textmodelResolver/common/textModelResolverService.js';
 import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
@@ -533,17 +536,20 @@ test('acknowledged text saves cannot replay an older crash backup before the cle
 	}
 });
 
-test("Stanza editor pane trims trailing whitespace before saving", async () => {
+test("Stanza editor pane saves through the shared whitespace participant", async () => {
 	const dom = createTestDom("<!doctype html><body><main></main></body>");
 	const parent = dom.window.document.querySelector<HTMLElement>("main")!;
 	const textFiles = new ImmediateTextFiles("alpha  \n beta\t\n");
 	const resourceStore = new BrowserTextResourceStore(textFiles);
 	using models = new BrowserTextModelService(resourceStore);
-	using services = paneServices(models);
-	const pane = createPane(services, resourceStore, {
-		trimTrailingWhitespace: true,
-		createPart: createInertEditorPart,
-	});
+	using parentServices = paneServices(models);
+	using configuration = new WorkbenchConfigurationService();
+	using services = parentServices.createChild();
+	services.registerInstance(IConfigurationService, configuration);
+	services.registerInstance(IFileTextModelService, models);
+	await services.get(IConfigurationService).updateValue('files.trimTrailingWhitespace', true);
+	using participants = services.createInstance(SaveParticipantsContribution);
+	using pane = createPane(services, resourceStore, { createPart: createInertEditorPart });
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\trim.ts") }, new AbortController().signal);
 
@@ -554,17 +560,20 @@ test("Stanza editor pane trims trailing whitespace before saving", async () => {
 	dom.window.close();
 });
 
-test("Stanza editor pane inserts the configured final newline before saving", async () => {
+test("Stanza editor pane saves through the shared final newline participant", async () => {
 	const dom = createTestDom("<!doctype html><body><main></main></body>");
 	const parent = dom.window.document.querySelector<HTMLElement>("main")!;
 	const textFiles = new ImmediateTextFiles("alpha");
 	const resourceStore = new BrowserTextResourceStore(textFiles);
 	using models = new BrowserTextModelService(resourceStore);
-	using services = paneServices(models);
-	const pane = createPane(services, resourceStore, {
-		insertFinalNewLine: true,
-		createPart: createInertEditorPart,
-	});
+	using parentServices = paneServices(models);
+	using configuration = new WorkbenchConfigurationService();
+	using services = parentServices.createChild();
+	services.registerInstance(IConfigurationService, configuration);
+	services.registerInstance(IFileTextModelService, models);
+	await services.get(IConfigurationService).updateValue('files.insertFinalNewline', true);
+	using participants = services.createInstance(SaveParticipantsContribution);
+	using pane = createPane(services, resourceStore, { createPart: createInertEditorPart });
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\final-newline.ts") }, new AbortController().signal);
 
@@ -646,7 +655,6 @@ test("Stanza editor pane forwards Workbench editor preferences to each created p
 		},
 		indentation: { kind: EditorIndentationKind.Tabs, tabSize: 2 },
 		showUnicodeHighlights: false,
-		insertFinalNewLine: true,
 		createPart: options => {
 			received = options;
 			return createInertEditorPart();

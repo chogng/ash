@@ -3,6 +3,7 @@ import { basename, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type { ElectronApplication, Page } from "@playwright/test";
 import { expect, test } from "../../../automation/test.js";
+import type { Workbench } from '../../../automation/workbench.js';
 
 test('browser picked folders refresh expanded directories and clean editors on resume while preserving unsaved edits', async ({ target, workbench }) => {
 	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled', 'Requires browser folder access');
@@ -2013,3 +2014,108 @@ test('Agent countdown preserves keyboard focus, can be cancelled, and accepts a 
 	await expect(group.editor.lines).toHaveText(['agent next']);
 	expect(await readFile(path, 'utf8')).toBe('agent next');
 });
+
+
+for (const mode of ['manual', 'After Delay', 'On Focus Change', 'On Window Change'] as const) {
+	test(`save cleanup persists configured bytes through ${mode} in the product`, async ({ target, testWorkspace, workbench, reloadWorkbench }) => {
+		test.skip(target.appServerMode !== 'required', 'Requires the Code App Server product');
+		await configureSaveCleanup(workbench, true, mode === 'manual' ? undefined : mode);
+		const name = 'save-cleanup.txt';
+		const path = join(testWorkspace.directory, name);
+		await writeFile(path, '\uFEFFfirst \r\nlast  ');
+		await workbench.page.locator('.ash-explorer').getByRole('treeitem', { name, exact: true }).dblclick();
+		const group = workbench.editors.groupAt(0);
+		await group.editor.waitForEditorFocus();
+		await group.editor.input.press('ControlOrMeta+Home');
+		await group.editor.input.press('End');
+		await workbench.page.keyboard.insertText(' ');
+		if (mode === 'manual') await group.editor.input.press('ControlOrMeta+S');
+		else if (mode === 'On Focus Change') await workbench.page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.rs', exact: true }).dblclick();
+		else if (mode === 'On Window Change') await workbench.page.evaluate(() => window.dispatchEvent(new Event('blur')));
+		const expected = mode === 'After Delay' ? '\uFEFFfirst  \r\nlast\r\n' : '\uFEFFfirst\r\nlast\r\n';
+		await expect.poll(() => readFile(path), { message: `${mode} saves cleanup through the product participant chain` }).toEqual(Buffer.from(expected));
+		const tab = group.tabs.filter({ hasText: name });
+		await expect(tab).not.toHaveAttribute('aria-label', /unsaved changes/u);
+		if (mode === 'After Delay') await expect(workbench.page.getByRole('button', { name: 'Ln 1, Col 8', exact: true })).toBeVisible();
+		({ workbench } = await reloadWorkbench());
+		await workbench.editors.groupAt(0).tabs.filter({ hasText: name }).click();
+		await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text === expected.slice(1).replaceAll('\r\n', '\n'));
+		expect(await readFile(path)).toEqual(Buffer.from(expected));
+	});
+}
+
+test('save cleanup uses live settings, preserves undo and keeps a manually saved draft after reload', async ({ target, testWorkspace, workbench, reloadWorkbench }) => {
+	test.skip(target.appServerMode !== 'required', 'Requires the Code App Server product');
+	await configureSaveCleanup(workbench, true);
+	await workbench.page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
+	let group = workbench.editors.groupAt(0);
+	await group.editor.waitForEditorFocus();
+	await group.editor.input.press('ControlOrMeta+A');
+	await workbench.page.keyboard.insertText('typed  \nlast  ');
+	await group.editor.input.press('ControlOrMeta+S');
+	await expect.poll(() => readFile(testWorkspace.file, 'utf8')).toBe('typed\nlast\n');
+	await group.editor.input.press('ControlOrMeta+z');
+	await group.editor.waitForEditorContents(text => text === 'typed  \nlast  ');
+	await expect(group.tabs.filter({ hasText: 'main.ts' })).toHaveAttribute('aria-label', /unsaved changes/u);
+	await configureSaveCleanup(workbench, false);
+	await group.editor.waitForEditorFocus();
+	await group.editor.input.press('ControlOrMeta+S');
+	await expect.poll(() => readFile(testWorkspace.file, 'utf8')).toBe('typed  \nlast  ');
+	({ workbench } = await reloadWorkbench());
+	group = workbench.editors.groupAt(0);
+	await group.editor.waitForEditorContents(text => text === 'typed  \nlast  ');
+	await expect(group.tabs.filter({ hasText: 'main.ts' })).not.toHaveAttribute('aria-label', /unsaved changes/u);
+});
+
+test('save cleanup protects a completion snippet during AUTO and retains Tab navigation after explicit cleanup', async ({ target, testWorkspace, workbench, reloadWorkbench }) => {
+	test.skip(target.appServerMode !== 'required', 'Requires the Code App Server product');
+	await configureSaveCleanup(workbench, true, 'After Delay');
+	const name = 'save-cleanup-snippet.js';
+	const path = join(testWorkspace.directory, name);
+	await writeFile(path, '');
+	await workbench.page.locator('.ash-explorer').getByRole('treeitem', { name, exact: true }).dblclick();
+	let group = workbench.editors.groupAt(0);
+	await group.editor.waitForEditorFocus();
+	await group.editor.input.pressSequentially('forof');
+	await group.editor.input.press('Control+Space');
+	const option = group.content.locator('.stanza-editor-completion-option').filter({ hasText: 'forof' });
+	await expect(option).toHaveCount(1);
+	await expect(option).toHaveAttribute('aria-selected', 'true');
+	await option.click();
+	await expect.poll(() => readFile(path, 'utf8')).toBe('for (const element of object) {\n\t\n}\n');
+	await group.editor.input.press('Tab');
+	await workbench.page.keyboard.insertText('items');
+	await expect.poll(() => readFile(path, 'utf8')).toBe('for (const element of items) {\n\t\n}\n');
+	await group.editor.input.press('Shift+Tab');
+	await workbench.page.keyboard.insertText('entry');
+	await group.editor.input.press('Tab');
+	await group.editor.input.press('ControlOrMeta+S');
+	await expect.poll(() => readFile(path, 'utf8')).toBe('for (const entry of items) {\n\n}\n');
+	await group.editor.input.press('Tab');
+	await group.editor.input.pressSequentially('run();');
+	await expect.poll(() => readFile(path, 'utf8')).toBe('for (const entry of items) {\nrun();\n}\n');
+	({ workbench } = await reloadWorkbench());
+	group = workbench.editors.groupAt(0);
+	await group.editor.waitForEditorContents(text => text === 'for (const entry of items) {\nrun();\n}\n');
+	await expect(group.tabs.filter({ hasText: name })).not.toHaveAttribute('aria-label', /unsaved changes/u);
+});
+
+async function configureSaveCleanup(workbench: Workbench, enabled: boolean, autoSave?: 'After Delay' | 'On Focus Change' | 'On Window Change'): Promise<void> {
+	await workbench.settingsEditor.openUserSettingsUI();
+	await workbench.settingsEditor.selectEditorCategory('editor-files');
+	const settings = workbench.settingsEditor.element;
+	for (const key of ['files.trimTrailingWhitespace', 'files.insertFinalNewline']) {
+		await settings.getByRole('searchbox').fill(`@id:${key}`);
+		const row = settings.locator(`[data-settings-item-id="${key}"]`);
+		const control = settings.locator(`[data-configuration-key="${key}"]`);
+		if (await control.isChecked() !== enabled) await row.locator('.ash-switch-track').click();
+		await expect(control).toBeChecked({ checked: enabled });
+		await expect(row.locator('.ash-settings-indicators')).toBeHidden();
+	}
+	if (autoSave) {
+		await settings.getByRole('searchbox').fill('@id:files.autoSave');
+		await settings.locator('[data-configuration-key="files.autoSave"]').getByRole('combobox').click();
+		await workbench.page.getByRole('option', { name: autoSave, exact: true }).click();
+	}
+	await settings.locator('.ash-modal-editor-close').click();
+}

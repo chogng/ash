@@ -1,8 +1,14 @@
 import { raceCancellationError } from '../../../../base/common/async.js';
+import { throwIfCancelled } from '../../../../base/common/cancellation.js';
+import * as strings from '../../../../base/common/strings.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { HierarchicalKind } from '../../../../base/common/hierarchicalKind.js';
 import { combinedDisposable, Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IBulkEditService } from '../../../../editor/browser/services/bulkEditService.js';
+import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
+import { trimTrailingWhitespace } from '../../../../editor/common/commands/trimTrailingWhitespaceCommand.js';
+import { EditOperation } from '../../../../editor/common/core/editOperation.js';
+import { Position } from '../../../../editor/common/core/position.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, LanguageDiagnosticSeverity, type LanguageCodeActionRequest } from '../../../../editor/common/languages.js';
 import type { TextModel } from '../../../../editor/common/model/textModel.js';
@@ -10,6 +16,7 @@ import { ILanguageFeaturesService } from '../../../../editor/common/services/lan
 import { EditSources } from '../../../../editor/common/textModelEditSource.js';
 import { getCodeActions } from '../../../../editor/contrib/codeAction/browser/codeAction.js';
 import { CodeActionKind } from '../../../../editor/contrib/codeAction/common/types.js';
+import { SnippetController2 } from '../../../../editor/contrib/snippet/browser/snippetController2.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -24,6 +31,56 @@ const diagnosticSeverity = {
 	[MarkerSeverity.Information]: LanguageDiagnosticSeverity.Information,
 	[MarkerSeverity.Hint]: LanguageDiagnosticSeverity.Hint,
 };
+
+class TrimWhitespaceParticipant implements ITextModelSaveParticipant {
+	constructor(
+		@IConfigurationService private readonly configuration: IConfigurationService,
+		@ICodeEditorService private readonly codeEditors: ICodeEditorService,
+	) { }
+
+	public async participate(model: TextModel, reason: SaveReason, signal: AbortSignal): Promise<void> {
+		throwIfCancelled(signal, 'Save whitespace cleanup was cancelled');
+		const overrides = { resource: model.uri, overrideIdentifier: model.getLanguageId() };
+		if (!this.configuration.getValue<boolean>('files.trimTrailingWhitespace', overrides)) return;
+		const editors = this.codeEditors.listCodeEditors().filter(editor => editor.getModel() === model);
+		const protectedPositions: Position[] = [];
+		if (reason === SaveReason.AUTO) {
+			for (const editor of editors) {
+				protectedPositions.push(...(editor.getSelections() ?? []).map(selection => selection.getPosition()));
+				const snippet = SnippetController2.get(editor)?.getSessionEnclosingRange();
+				if (!snippet) continue;
+				// Placeholder navigation can return to any tracked line in the active session.
+				for (let line = snippet.startLineNumber; line <= snippet.endLineNumber; line++) {
+					protectedPositions.push(new Position(line, model.getLineMaxColumn(line)));
+				}
+			}
+		}
+		const operations = trimTrailingWhitespace(model, protectedPositions, this.configuration.getValue<boolean>('files.trimTrailingWhitespaceInRegexAndStrings', overrides));
+		if (operations.length === 0) return;
+		const editor = editors.find(candidate => candidate.hasTextFocus()) ?? editors[0];
+		const selections = [...(editor?.getSelections() ?? [])];
+		model.pushEditOperations(selections, operations, () => selections);
+	}
+}
+
+class FinalNewLineParticipant implements ITextModelSaveParticipant {
+	constructor(
+		@IConfigurationService private readonly configuration: IConfigurationService,
+		@ICodeEditorService private readonly codeEditors: ICodeEditorService,
+	) { }
+
+	public async participate(model: TextModel, _reason: SaveReason, signal: AbortSignal): Promise<void> {
+		throwIfCancelled(signal, 'Save final newline insertion was cancelled');
+		const overrides = { resource: model.uri, overrideIdentifier: model.getLanguageId() };
+		if (!this.configuration.getValue<boolean>('files.insertFinalNewline', overrides)) return;
+		const lastLine = model.getLineCount();
+		if (strings.lastNonWhitespaceIndex(model.getLineContent(lastLine)) === -1) return;
+		const editors = this.codeEditors.listCodeEditors().filter(editor => editor.getModel() === model);
+		const editor = editors.find(candidate => candidate.hasTextFocus()) ?? editors[0];
+		const selections = [...(editor?.getSelections() ?? [])];
+		model.pushEditOperations(selections, [EditOperation.insert(new Position(lastLine, model.getLineMaxColumn(lastLine)), model.getEOL())], () => selections);
+	}
+}
 
 class CodeActionOnSaveParticipant implements ITextModelSaveParticipant {
 	constructor(
@@ -98,6 +155,8 @@ export class SaveParticipantsContribution extends Disposable implements IWorkben
 		@IInstantiationService instantiation: IInstantiationService,
 	) {
 		super();
+		this._register(models.addSaveParticipant(instantiation.createInstance(TrimWhitespaceParticipant)));
 		this._register(models.addSaveParticipant(instantiation.createInstance(CodeActionOnSaveParticipant)));
+		this._register(models.addSaveParticipant(instantiation.createInstance(FinalNewLineParticipant)));
 	}
 }

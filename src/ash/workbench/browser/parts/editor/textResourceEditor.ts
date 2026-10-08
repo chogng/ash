@@ -36,9 +36,6 @@ import type { IViewZoneChangeAccessor } from '../../../../editor/browser/editorB
 import type { ICursorSelectionChangedEvent } from "../../../../editor/common/cursorEvents.js";
 
 import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
-import { trimTrailingWhitespace } from "../../../../editor/common/commands/trimTrailingWhitespaceCommand.js";
-import { EditOperation } from '../../../../editor/common/core/editOperation.js';
-import { Position } from '../../../../editor/common/core/position.js';
 import { AbstractTextCodeEditor, type ITextCodeEditorControl } from './textCodeEditor.js';
 import { toEditorPaneSelectionChangeReason } from './textEditor.js';
 
@@ -122,8 +119,6 @@ export interface EditorPaneOptions {
 	readonly colorDecoratorsLimit?: CodeEditorWidgetOptions["colorDecoratorsLimit"];
 	readonly defaultColorDecorators?: CodeEditorWidgetOptions["defaultColorDecorators"];
 	readonly formatOnSave?: boolean;
-	readonly trimTrailingWhitespace?: boolean;
-	readonly trimTrailingWhitespaceInRegexAndStrings?: boolean;
 	readonly find?: CodeEditorWidgetOptions["find"];
 	readonly indentation?: CodeEditorWidgetOptions["indentation"];
 	/** Browser paragraph direction forwarded to every created editor part. */
@@ -133,7 +128,6 @@ export interface EditorPaneOptions {
 	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | Promise<void>;
 	readonly placeholder?: string;
 	readonly showUnicodeHighlights?: boolean;
-	readonly insertFinalNewLine?: boolean;
 	readonly onSave?: () => Promise<void | boolean>;
 	/** Uses the current working copy because the pane can be reused for another resource. */
 	readonly onSaveError?: (error: unknown, resource: URI | undefined) => void | Promise<void>;
@@ -341,23 +335,6 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 					});
 				},
 			});
-			if (modelReference && this.options.trimTrailingWhitespace) {
-				beforeSaveHooks.unshift(() => {
-					const selections = [...(part?.getSelections?.() ?? [])];
-					const operations = trimTrailingWhitespace(resolvedModel, [], this.options.trimTrailingWhitespaceInRegexAndStrings ?? true);
-					if (operations.length > 0) resolvedModel.pushEditOperations(selections, operations, () => selections);
-				});
-			}
-			if (modelReference && this.options.insertFinalNewLine) {
-				beforeSaveHooks.push(() => {
-					const model = resolvedModel;
-					const lineCount = model.getLineCount();
-					if (!lineCount || strings.lastNonWhitespaceIndex(model.getLineContent(lineCount)) === -1) return;
-					const selections = [...(part?.getSelections?.() ?? [])];
-					const operations = [EditOperation.insert(new Position(lineCount, model.getLineMaxColumn(lineCount)), model.getEOL())];
-					model.pushEditOperations(selections, operations, () => selections);
-				});
-			}
 			if (modelReference) workingCopy = new EditorWorkingCopy(
 				modelReference,
 				input,
