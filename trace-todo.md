@@ -78,6 +78,12 @@ Trace 已能读取和跟随 Agent 的持久执行历史。本路线在现有能�
 
 独立 worktree 使用 `trace-todo.md`，原 `.md` 扩展名与 36,201 字节历史全文保留；本任务未改动接手时含未提交内容的主树 `TODO.md`；交付前现文件与保全文字节一致。本轮已经完成 P1 定位、P2 保存证据导航、P3 导出边界修复和 P4 可靠导入/离线复查的第一批闭环。正式 Web 与 Electron 各自一次通过 8 个场景，完整模型/工具/并行子任务调用链使用明确标注的本地 HTTP 模型 fixture。审批等待/超时、失败重试归组、带部分输出的流式取消、费用与分享脱敏继续保留验收项。
 
+### Storage 基线集成复核
+
+已审批的模型/工具闭环与正文恢复候选无冲突跟进 `main` `e4d668f37`。本次源码检查点为 `657016924`；Trace 源码、测试与诊断协议相对上一检查点未变。Storage 改动涉及 Electron 主进程启动、flush 与 close，因此重新执行正常 Desktop 准备和真实 Electron Trace 八场景，均一次通过。Trace 与 Storage 定向单测共 83 项 / 9 文件通过；两种本树运行包的源码摘要、文件哈希和协议契约仍匹配。新日志无新增 warning，仅既有 Playwright NO_COLOR / FORCE_COLOR 提示。
+
+[本次退出记录](.build/trace-validation/storage-main-loop-state.json)、[83 项单测](.build/trace-validation/storage-main-loop-unit.log)、[正常 Desktop 准备](.build/trace-validation/storage-main-loop-desktop-prepare.log)、[Electron 八场景](.build/trace-validation/storage-main-loop-electron-eight.log)、[包契约](.build/trace-validation/storage-main-loop-package-contract.json)。此前 `86ac6c9cf` 上的 Trace 68 项单测、headless 2/2 与 Renderer 编译见 [轻量复核](.build/trace-validation/latest-main-86ac-state.json)。完整 Web 8/8 继续保留其 `5db5dfcec` 基线，不冒充本次重复运行。受控本地 HTTP 模型 fixture、原 TODO 字节保全、Library v4 + 独立复审 delta 和后续未验收范围均保持原边界。
+
 ### 审查修复与已发布 main 复验
 
 独立审查发现：Input 正文读取中隐藏 Trace，旧读取完成被 revision 丢弃；重新显示同一事件时，旧渲染身份却阻止重读。[编辑器](src/ash/workbench/contrib/trace/browser/agentTraceEditor.ts) 现只失效尚未完成读取的渲染状态，保留已加载正文与阅读位置；请求身份防止迟到旧读取清理新读取。[两个新回归](src/ash/workbench/contrib/trace/test/browser/agentTraceEditor.test.ts) 覆盖旧读取在恢复前/后完成，两种顺序都先红（只有一次 read）后绿（恰好第二次 read），再次隐藏/显示已加载正文不增加读取或重置位置。

@@ -175,3 +175,7 @@ Input 正文在隐藏 Trace 时尚未完成的读取，现会在恢复同一选�
 代表性截图来自本地 HTTP 模型 fixture 经真实 App Server 的执行场景，并带明确的 fixture 标签；标签属于证据产物的测试注释，不属于产品界面。截图不替代关系跳转、状态、导出和生命周期断言。重开范围为编辑器/窗口和离线导入，App Server 停止重启后的磁盘恢复仍未验收。重试、费用与分享脱敏继续保留。
 
 [深色代表图](.build/trace-validation/published-main-visibility-web-results/areas-sessions-trace-flow--6289c-turns-and-offline-reopening-browser-app-server/ash-dark-wide.png) 与 [浅色 Trace 区域图](.build/trace-validation/published-main-visibility-web-results/areas-sessions-trace-flow--6289c-turns-and-offline-reopening-browser-app-server/ash-light-narrow.png) 已查看并更新原 Library 图片身份；完整补丁 v4 保持不变，最小正文修复 delta 单独供复审，见 [交付回执](.build/trace-handoff/reviewed/trace-review-library.json)。这些是 Browser 实际模型 fixture 场景，未扩大为全 Electron 主题或整窗响应式验收。
+
+### Storage 基线交付复核
+
+已审批候选在 `e4d668f37` 基线上保持相同 Trace 源码和测试。正常 Desktop 准备、83 项 / 9 文件 Trace 与 Storage 单测、本树两种包契约，以及真实 Electron 八场景均通过，见 [集成退出记录](.build/trace-validation/storage-main-loop-state.json)。源码检查点 `657016924`；此前 Web 8/8 明确保留 `5db5dfcec` 基线。局部模型 fixture 与未验收边界未扩大，Library v4 + 独立 delta 和两图版本 1 未重复上传。
