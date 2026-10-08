@@ -8,6 +8,9 @@ inputs:
   backend-cache:
     description: Restore an exactly matching prepared Electron backend before building.
     default: "false"
+  browser:
+    description: Download the headless browser for Browser tests.
+    default: "false"
 
 outputs:
   backend-cache-hit:
@@ -83,16 +86,17 @@ runs:
     - name: Install workspace dependencies
       shell: bash
       run: pnpm install --frozen-lockfile
-    # Electron lifecycle scenarios also attach with Chromium over CDP.
+    # Playwright drives Electron's bundled browser without a separate Chromium.
     - name: Install Chromium
+      if: inputs.browser == 'true'
       shell: bash
       run: |
-        # Linux needs shared libraries. On Windows, --with-deps installs a Server
-        # media feature even for the Chromium CDP client used by Electron tests.
+        # Match VS Code's headless Browser download. Hosted Linux additionally
+        # needs shared libraries; Windows and macOS do not need --with-deps.
         if [ "$RUNNER_OS" = Linux ]; then
-          pnpm exec playwright install --with-deps chromium
+          pnpm exec playwright install --with-deps --only-shell chromium
         else
-          pnpm exec playwright install chromium
+          pnpm exec playwright install --only-shell chromium
         fi
     - name: Save frontend downloads
       if: inputs.build == 'true' && github.ref == 'refs/heads/main' && steps.downloads.outputs.cache-hit != 'true'

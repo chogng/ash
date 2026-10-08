@@ -107,8 +107,13 @@ test('Frontend Electron shards consume one current-run build without rebuilding 
 	assert.doesNotMatch(preparation, /pretest:smoke:desktop/);
 	const chromium = setupAction.match(/- name: Install Chromium\n([\s\S]*?)(?=\n    -)/)?.[1];
 	assert.ok(chromium);
-	assert.match(chromium, /playwright install --with-deps chromium/);
-	assert.doesNotMatch(chromium, /if:/);
+	assert.match(chromium, /if: inputs\.browser == 'true'/);
+	assert.match(chromium, /playwright install --with-deps --only-shell chromium/);
+	const browser = testsWorkflow.split('  browser:\n')[1]?.split(/^  [\w-]+:/m)[0];
+	assert.ok(browser);
+	assert.match(browser, /browser: "true"/);
+	assert.doesNotMatch(builder, /browser: "true"/);
+	assert.doesNotMatch(shards, /browser: "true"/);
 	assert.match(testsWorkflow, /pnpm test:unit --jobs 4/);
 });
 
