@@ -194,6 +194,7 @@ test('Execution Trace command and help use Chinese in the real Sessions window',
 	if (process.env.ASH_AGENT_TRACE_EVAL_FIXTURE) {
 		await viewer.locator('input[type=file]').setInputFiles(process.env.ASH_AGENT_TRACE_EVAL_FIXTURE);
 		await expect(viewer.getByRole('status')).toContainText('已导入');
+		await expect(page.locator('.ash-agent-trace-navigation-view').getByRole('button', { name: '恢复执行 Trace', exact: true })).toBeVisible();
 		await viewer.getByRole('textbox', { name: '筛选执行事件' }).fill('modelRequestPrepared');
 		await viewer.locator('.ash-agent-trace-event:visible').first().click();
 		await inspectInput(viewer, '输入', '已保存正文');

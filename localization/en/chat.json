@@ -220,6 +220,14 @@
     "agentTrace.savedBody": "Saved execution body",
     "agentTrace.outgoing": "Outgoing",
     "agentTrace.incoming": "Incoming",
-    "agentTrace.turnOrdinal": "Turn {0}"
+    "agentTrace.turnOrdinal": "Turn {0}",
+    "agentTrace.navigationTitle": "Trace",
+    "agentTrace.resume": "Resume execution trace",
+    "agentTrace.current": "View current conversation",
+    "agentTrace.offline": "Open offline capture",
+    "agentTrace.navigationContext": "Viewing Session {0} · Thread {1} · Turn {2}",
+    "agentTrace.offlineContext": "Offline capture. Choose Import in Trace to load a saved file.",
+    "agentTrace.navigationHelp": "Trace is an independent Activity Bar destination. Resume restores the last saved Session, Thread and Turn location. View current conversation opens the selected conversation at its current Thread and latest recorded Turn. Changing the conversation does not silently change the trace being reviewed. Open offline capture opens the import page; imported file contents stay in the editor and must be imported again after closing the window. Tab moves between navigation actions. Enter or Space activates an action. Use the Trace tree and detail tabs to read saved evidence. Escape closes this help.",
+    "agentTrace.activityHelp": "Trace opens saved execution in its own page. Resume keeps the last reviewed location; the View Execution Trace command and View current conversation explicitly locate the selected Thread and latest recorded Turn."
   }
 }

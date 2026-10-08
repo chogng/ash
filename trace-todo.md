@@ -1,6 +1,6 @@
 # Trace roadmap
 
-Trace 已能读取和跟随 Agent 的持久执行历史。本路线在现有能力上，优先完成 **具体 Turn 定位 → 模型与工具关系 → 一致导出 → 离线复查**，让一次失败从会话入口一直查到原始证据。本文沿根目录 `TODO.md` 的 `.md` 扩展名使用 `trace-todo.md`，原内容完整保留在后半部分。接手时主树 `TODO.md` 含未提交内容，已只读保全；本任务未删除或覆盖。交付前只读核对，主树现文件与保全文字节一致。
+Trace 已能读取和跟随 Agent 的持久执行历史。本路线在现有能力上，优先完成 **具体 Turn 定位 → 模型与工具关系 → 一致导出 → 离线复查**，让一次失败从会话入口一直查到原始证据。本文沿根目录 `TODO.md` 的 `.md` 扩展名使用 `trace-todo.md`，历史内容保留在后半部分；格式统一前的原始 36,201 字节另存 [只读接手快照](.build/trace-handoff/reviewed/original-TODO-before-format.md)。接手时主树 `TODO.md` 含未提交内容，已只读保全；本任务未删除或覆盖。交付前只读核对，主树现文件与保全文字节一致。
 
 初始源码核对基线：2026-10-08，父任务确认当时已发布的 `main` 提交 `e05e17e93`。交付分支随后跟进已先集成 SCM / Search 的 `main` `5db5dfcec`，Trace 的后端事实未在本批扩展。下文“现有”表示该基线源码已具备；已有能力与本轮改动分开列出，实际运行结果见验证摘要。
 
@@ -77,6 +77,23 @@ Trace 已能读取和跟随 Agent 的持久执行历史。本路线在现有能�
 ## 验证摘要（2026-10-08）
 
 独立 worktree 使用 `trace-todo.md`，原 `.md` 扩展名与 36,201 字节历史全文保留；本任务未改动接手时含未提交内容的主树 `TODO.md`；交付前现文件与保全文字节一致。本轮已经完成 P1 定位、P2 保存证据导航、P3 导出边界修复和 P4 可靠导入/离线复查的第一批闭环。正式 Web 与 Electron 各自一次通过 8 个场景，完整模型/工具/并行子任务调用链使用明确标注的本地 HTTP 模型 fixture。审批等待/超时、失败重试归组、带部分输出的流式取消、费用与分享脱敏继续保留验收项。
+
+### 独立 Activity Bar 导航（追加用户要求）
+
+Trace 现分别注册到 Workbench 和 Sessions 的既有 Activity Bar / ViewContainer。Sessions 使用既有 `ISessionsLayoutService.openEntry` 打开保留的独立 editor page；Chat 与 Code 继续由原布局所有者管理。没有另建导航栏、记录器或执行状态。共享 [导航侧栏](src/ash/workbench/contrib/trace/browser/agentTraceNavigation.ts) 只显示复查定位并调用既有命令；[Sessions 入口](src/ash/sessions/contrib/trace/browser/trace.contribution.ts) 与 [Workbench 入口](src/ash/workbench/contrib/trace/browser/trace.contribution.ts) 共用同一个 AgentTraceEditor。
+
+- [x] 独立入口恢复上次有效的 Session／Thread／Turn URI；无有效保存地址时打开当前会话或离线页。非法保存地址不能打开其它 scheme。
+- [x] 切换到会话 B 后，独立 Trace 仍恢复复查的 A；“查看执行 Trace”命令和侧栏“查看当前对话”显式定位当前 Thread 与最新已记录 Turn。
+- [x] Chat / Trace 切换保留编辑器中的离线捕获与筛选；窗口重开恢复导航位置。文件正文不跨窗口保存，离线捕获重开后明确要求重新导入。
+- [x] 普通与紧凑 Activity Bar 的实际尺寸、方向键、Enter／Space、ARIA 当前页、侧栏无障碍帮助及中文通过真实 Web 验证。
+- [x] Web 四主题的实际 ID、1280px 宽屏与 900px 窄窗布局、当前 Thread／Turn 和真实窗口重开通过；整组 11/11。
+- [x] Electron 整组 11/11 通过；实际四主题 ID、1280px／900px 宽窄布局、键盘、普通/紧凑入口与窗口恢复通过，深色宽屏／浅色窄屏图片已逐张查看。
+
+[三个新增真实导航场景](test/smoke/areas/sessions/trace-navigation.spec.ts)、[Web 11/11](.build/trace-validation/navigation-current-web-eleven.log)、[正常 Desktop 准备与包核验](.build/trace-validation/navigation-current-state.json)、[最终 Electron 11/11](.build/trace-validation/navigation-menu-retry-electron-eleven.log)、[最终退出记录](.build/trace-validation/navigation-menu-retry-state.json)。首次 Electron 紧凑设置测试错误地用 DOM 定位系统菜单，并记录关闭超时；复用既有 Menus 驱动后，三个 Web 导航场景复跑 3/3、同组 Electron 11/11，设置和导航断言未放宽。菜单 popup 的进程内选择 hook 不算实际 OS 菜单验收。75 项 / 8 文件 Trace 单测、headless 2/2 和 Renderer 检查通过；hygiene 检查 264 CSS，0 errors / 0 design suggestions，设计 token 2 项通过。
+
+代表图：真实 Web [深色宽屏](.build/trace-validation/navigation-menu-retry-web-results/areas-sessions-trace-navig-85902-tes-current-Thread-and-Turn-browser-app-server/trace-navigation-dark-wide.png)、[浅色窄窗](.build/trace-validation/navigation-menu-retry-web-results/areas-sessions-trace-navig-85902-tes-current-Thread-and-Turn-browser-app-server/trace-navigation-light-narrow.png)；真实 Electron [深色宽屏](.build/trace-validation/navigation-current-electron-results/areas-sessions-trace-navig-85902-tes-current-Thread-and-Turn-electron-app-server/trace-navigation-dark-wide.png)、[浅色窄窗](.build/trace-validation/navigation-current-electron-results/areas-sessions-trace-navig-85902-tes-current-Thread-and-Turn-electron-app-server/trace-navigation-light-narrow.png)。它们来自正式 App Server 的 shell Turn，注释明确标明 fixture；没有付费模型或私密上下文。截图展示独立导航，行为结论来自实际状态与 DOM 断言。旧 Library v4、复审 delta 与代表图身份未覆盖。
+
+本批基于格式修复后的 `e89acf67a`，未扩展 Core／Rust／protocol；既有 8 个模型、工具、导入导出与持久历史回归继续保留。首次终端断连与驱动假设失败分别保存在 `navigation-attempt1` 至 `navigation-attempt5`，不覆盖失败证据。
 
 ### Storage 基线集成复核
 

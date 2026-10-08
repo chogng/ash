@@ -26,7 +26,13 @@ Workbench 通用 Agent Sidebar 不受影响。
 该会话。也可传入 `{ sessionId, threadId, turnId?, eventId? }`，定位所属 Thread 的 Turn 或持久事件
 （包括诊断事件）；Turn 或 event 定位必须带 Thread ID。定位参数随编辑器 URI 保存，重开恢复同一目标。
 Sessions 的“查看执行 Trace”（`sessions.trace.open`）取得当前 Session 与 Thread，并用已有 agent tree
-中的最近 Turn 身份定位，切换 Code 布局后调用同一个 Workbench 命令；没有当前会话时仍可导入 Trace。
+中的最近 Turn 身份定位，打开独立 Trace 页面；没有当前会话时仍可导入 Trace。
+
+Workbench 和 Sessions 的 Activity Bar 都提供独立 Trace 入口，复用同一个编辑器。Sessions 的
+`sessions.open.trace` 恢复上次复查的 Session／Thread／Turn，不会因切换 Chat 自动替换复查上下文。
+侧栏显示当前复查身份；“查看当前对话”显式定位当前 Chat，“打开离线捕获”打开导入页。
+导航位置随窗口恢复；导入文件正文只保留在编辑器生命周期内，关闭窗口后需要重新导入。
+Workbench 的 `ash.agentTrace.resume` 同样恢复有效位置；无有效位置时打开导入页。
 
 页面逐页查找目标，命中后选中并滚动到事件；读取完成仍没有对应事实时明确显示未找到，不自动用第一条
 事件替代。定位事件被全文或错误筛选隐藏时，保留它的详情并显示隐藏原因；方向键或点击仍可选择其他事件。

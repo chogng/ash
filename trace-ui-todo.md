@@ -179,3 +179,9 @@ Input 正文在隐藏 Trace 时尚未完成的读取，现会在恢复同一选�
 ### Storage 基线交付复核
 
 已审批候选在 `e4d668f37` 基线上保持相同 Trace 源码和测试。正常 Desktop 准备、83 项 / 9 文件 Trace 与 Storage 单测、本树两种包契约，以及真实 Electron 八场景均通过，见 [集成退出记录](.build/trace-validation/storage-main-loop-state.json)。源码检查点 `657016924`；此前 Web 8/8 明确保留 `5db5dfcec` 基线。局部模型 fixture 与未验收边界未扩大，Library v4 + 独立 delta 和两图版本 1 未重复上传。
+
+### 独立 Activity Bar 导航
+
+共享导航侧栏复用 ViewPane、Button、Storage 和既有命令。Workbench 与 Sessions 分别注册各自现有 ViewContainer；Sessions 通过原 layout entry 打开独立 Trace page，Chat / Code 保留原所有权。仅保存有效的只读定位 URI，捕获、正文与订阅仍归共享编辑器；执行事实仍归 ThreadStore。
+
+真实 Web 11/11 通过，覆盖独立入口、普通/紧凑导航、键盘、中文、A/B 会话隔离、显式当前 Thread/Turn、真实窗口重开和四主题宽窄断言。当前深色宽屏、浅色窄屏截图来自真实 App Server shell Turn，带明确测试 fixture 注释；不使用付费模型，截图不作为行为判定依据。正常 Desktop 准备与本树双 runtime 包核验通过；修复测试菜单 owner 后，正式 Electron 整组 11/11、相同 Web 导航 3/3 通过。四主题实际 ID、普通/紧凑入口、宽窄布局与窗口重开均有行为断言；Web 与 Electron 各两张代表图已逐张查看。系统菜单选择由既有进程内 hook 驱动，不算实际 OS popup 验收。hygiene 检查 264 CSS 为 0 errors / 0 design suggestions；详情见 [路线记录](trace-todo.md#独立-activity-bar-导航追加用户要求)。
