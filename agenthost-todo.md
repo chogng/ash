@@ -2,7 +2,17 @@
 
 建议先修复已存在的模型目录与会话模型一致性，再接通后台会话的被动状态显示，最后验证断线恢复和权限生命周期。保留 Ash 的 Rust 执行与持久化架构；VS Code 用来核对公开职责和可观察行为，不作为 Node runtime、私有类图或协议的移植模板。
 
-本文件供云端方案审阅和分批实施。按后续授权，第一批已在隔离云端 clone 实现并通过 Rust、标准 TypeScript 定向测试与 Web 构建；真实 Web/Electron 交互和 Mac 验收仍待执行。其余批次尚未开始，没有提交或推送。根目录位置按本次用户要求选择，不启动 `/develop` 四份阶段产物流程。
+本文件供云端方案审阅和分批实施。按后续授权，第一批六文件和第二批两文件已在隔离云端 clone 完成各自可验证闭环，分开导出补丁。第一批已交付本地消费；两批真实 Web/Electron 交互与 Mac 产品验收仍待完成。第三批及后续目录身份契约只有方案，没有实施。没有提交或推送。根目录位置按本次用户要求选择，不启动 `/develop` 四份阶段产物流程。
+
+### 第二批交付范围与重要未闭环项
+
+第二批实现的是**当前公开身份可区分的模型目录更新**。不能把它标成所有账户/模型来源的身份隔离已经完成，也不能把类型检查、Web 构建或 WidgetModel 单测标成真实 picker 产品验收。
+
+1. **Kimi subscription 同公开身份重登录未闭环。** `AccountDto.accountId` 固定为 `current`，实际目录身份是 Rust 私有 `device_id`；新设备登录可把 `credentialRevision` 重置为 1，正常 token 轮换又会递增它。`account/login/completed` 没有 provider 字段，成功事件也不能可靠区分 Kimi 重登录和无关 GitHub 登录。本片没有追加 Rust/公共协议，也没有声称解决这个场景。
+2. **external `kimi-desktop` / `kimi-cli` 身份与缓存读取未闭环。** 它们使用私有凭证摘要作用域，不属于现有 subscription observer；发现模型未纳入权威 `model/list`，而 `provider/models/list` 会发起远程刷新。本片保留已有接入方式；不能承诺外部凭证切换后刷新失败时不会保留旧目录。
+3. **首次账户快照是保守边界。** 若目录已加载、此前没有见过账户快照，第一个账户通知无法证明缓存属于哪个账户，因而会退役旧视图。这可能在无关登录触发首个快照、随后读取失败时暂时显示空目录；后续已建立身份的无关 GitHub 更新和同账户 token 轮换不会错误清空。
+
+这些约束与最小后续契约的只读方案见 [agenthost-catalog-epoch-plan.md](agenthost-catalog-epoch-plan.md)。方案沿原有 backend catalog/subscription/runtime owner 增加不含私有设备或凭证信息的 view epoch；需与 SCM 的共享协议集成协调后另行批准实施。
 
 ### 第一批实际结果
 
@@ -21,15 +31,34 @@
 
 剩余验收是实际 picker DOM、pane/profile 关闭重开、Code/Cowork、多窗口和 Web/Electron 运行时。模型/DI 至 inputState/startTurn 的单测通过不等于这些交互已通过。锁定 Chromium 下载曾收到截断 ZIP，随后安装调用的 approval review 被取消；已停止此步骤，未改用系统 Chromium。云端没有就绪的 Electron binary/display，Mac 需消费完整补丁与本文件后验证。
 
+### 第二批实际结果
+
+2026-10-08 UTC，仍基于 Ash `dd086508b8c0eabe5931793302e8f7dc3d7a47b3`；本片只新增下列两文件未提交 diff，未改动第一批六文件：
+
+- 生产 owner：`src/ash/workbench/contrib/chat/common/languageModels.ts`。
+- 对应测试：`src/ash/workbench/contrib/chat/test/common/languageModels.test.ts`。
+- 消费 `provider/models/updated`、`account/updated`、`account/login/completed` 和原有 API-key/connection 事件。Models、Empty、Failed 均作为失效信号，重读完整后台目录和 provider 状态，不能用单 provider payload 替换全局数组。
+- 完成并发刷新合并、刷新中失效补读、成功/失败完成微任务边界、旧连接/旧账户调用者的迟到结果与错误、pending successor 所有权和 dispose 检查。旧调用者不会在新账户结果之后再写回捕获的空视图。
+- 公开 model account 的 accountId/organization/plan/status 变化先发布空的当前可选视图，避免 pane 在新账户查询失败时保留旧数组；同账户查询失败保留有效快照。以真实 provider connection 集合过滤无关登录账户，credentialRevision-only token 轮换只重读，不误当新身份清空。
+- 比较 provider 状态与模型元数据，provider-only readiness 改变会通知，完全相同结果保持安静。目录刷新不调用模型选择、默认值、visibility 或配置写入 API。
+- 最初标准红测共 20 项，3 通过、17 失败；独立复核新增的成功完成边界、同时完成的消费者、token 轮换与 GitHub 范围四项也真实复现红测。修复后最终 service 文件有 30 项通过，包括真正权威空目录必须清空的独立回归。
+- 最终标准 `pnpm test:unit --run src/ash/workbench/contrib/chat/test/common/languageModels.test.ts --run src/ash/sessions/services/sessions/test/browser/sessionsManagementService.test.ts --run src/ash/sessions/test/browser/chatViewPane.test.ts --run src/ash/sessions/test/browser/chatViewPane.startup.test.ts` 通过完整 test 编译、5 个 runner 回归和 164 个定向测试。已有 Code/Cowork 手选/Auto 回归继续通过，但它们不是新 provider notification 入口的真实产品验收。
+- `pnpm typecheck:renderer`、`pnpm build:web`、两文件格式、`git diff --check` 通过；独立源码复核在上述明确公开身份范围内无阻塞。没有运行 Cargo，也没有改 Rust、Core、Trace、公共 Terminal/SCM 协议、锁文件或公共规则。
+- 第一批六文件 SHA256 全部保持不变。第二批补丁在 clean HEAD 的两文件 fixture 上完成 `git apply --check`、实际 apply 和逐字节比对。
+
+独立源码补丁为 `agenthost-b2.patch`，35,119 bytes，SHA256 `682821e7a3a691d5746af0d341d60fe5c8dc7ac414f7b722fc12e82ee85875d7`。只含本批两文件；本文件、后续只读契约方案与证据单独交付。先保存第一批本地 checkpoint，再消费第二批，保持两片可独立审阅与提交。
+
+尚需统一 Mac 验收：已打开的 Code/Cowork picker 收到真实 provider notification 后更新；失败/Empty/账户变化行为可解释；模型、能力和 thinking 选项反映权威目录；手选、显式 Auto、隐藏模型与 profile 默认保持各自 owner；pane/profile 重开、重连和多窗口验证。Kimi 两类身份未闭环不能因这些常规用例通过而标成完成。
+
 ## 现有能力与演进方向
 
-| 现有能力 | 初始审计确认的缺口 | 演进方向 |
-| --- | --- | --- |
-| 一份 Rust 后台服务、多窗口独立 connection；Renderer 持有协议客户端，Main 透明转发 | 连接与恢复已有覆盖，仍需验证不同宿主的恢复边界 | 保留拓扑，验证 generation、订阅重建、未知结果和窗口关闭隔离 |
-| Rust 持久化根 Thread 模型并提供 Session.model | SQLite 的 Session 目录失效判定遗漏 model；前端目录映射忽略 Session.model | 第一批修复真实持久事实到模型选择器的完整链路 |
-| Rust 维护模型发现结果，发布 provider/models/updated | 前端 LanguageModelsService 不消费该通知 | 第二批使真实模型目录更新抵达已打开的选择器，保留账户与结果语义 |
-| Session 目录读取不加载整份历史；订阅按需加载详情 | 后台目录缺少每个 Thread 的管理状态，列表也未呈现该状态 | 第三批暴露现有粗粒度管理事实；精确 Turn 状态另行决定 |
-| Core 拥有 Thread/Turn 顺序、policy、交互、取消和执行 | 本轮未证明需要替换这些 owner | 后续只补可复现的端到端差异，沿现有 Rust owner 修复 |
+| 现有能力                                                                          | 初始审计确认的缺口                                                       | 演进方向                                                       |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------- |
+| 一份 Rust 后台服务、多窗口独立 connection；Renderer 持有协议客户端，Main 透明转发 | 连接与恢复已有覆盖，仍需验证不同宿主的恢复边界                           | 保留拓扑，验证 generation、订阅重建、未知结果和窗口关闭隔离    |
+| Rust 持久化根 Thread 模型并提供 Session.model                                     | SQLite 的 Session 目录失效判定遗漏 model；前端目录映射忽略 Session.model | 第一批修复真实持久事实到模型选择器的完整链路                   |
+| Rust 维护模型发现结果，发布 provider/models/updated                               | 前端 LanguageModelsService 不消费该通知                                  | 第二批使真实模型目录更新抵达已打开的选择器，保留账户与结果语义 |
+| Session 目录读取不加载整份历史；订阅按需加载详情                                  | 后台目录缺少每个 Thread 的管理状态，列表也未呈现该状态                   | 第三批暴露现有粗粒度管理事实；精确 Turn 状态另行决定           |
+| Core 拥有 Thread/Turn 顺序、policy、交互、取消和执行                              | 本轮未证明需要替换这些 owner                                             | 后续只补可复现的端到端差异，沿现有 Rust owner 修复             |
 
 ### 审计基线与证据范围
 
@@ -40,15 +69,15 @@
 
 相关上游变化：
 
-| UTC 日期 | 提交与公开变化 | Ash 使用方式 |
-| --- | --- | --- |
-| 2026-10-07 19:18:18 | [ac4cf28d 缓存 peer chat 详情并在未订阅时提供状态](https://github.com/microsoft/vscode/commit/ac4cf28d8cc5d9bdf08b8578d1931135fa12a1ae) | 核对被动目录状态、详情按需加载和前端缓存责任 |
-| 2026-10-07 19:18:41 | [e11f0d83 保留启动期间的 Codex 模型选择](https://github.com/microsoft/vscode/commit/e11f0d833b19f1035dde69cf974b1515863d884f) | 核对已持久化选择、临时选择与默认模型的优先级 |
-| 2026-10-07 21:16:50 | [b3a9b152 空 SDK 刷新时保留模型目录](https://github.com/microsoft/vscode/commit/b3a9b152d558e1bd66ae0437cf6d6cae2a9707ad) | 仅借鉴失败不应意外清空的行为；Ash 的成功 Empty 有独立含义 |
-| 2026-10-07 21:22:27 | [19f093cc 启动前执行 MCP enablement](https://github.com/microsoft/vscode/commit/19f093cc13efc8e2c0e3fc694a03cdaa6afc7169) | 后续核对禁用、恢复、认证与工具可见性，不能只隐藏 picker |
-| 2026-10-08 01:07:22 | [91fa1538 OS sleep 后保留 relay 恢复](https://github.com/microsoft/vscode/commit/91fa1538649fa815b4c6810eda29f032e6e9a342) | 核对恢复计时与重新鉴权；不移植 AHP reconnect/outbox |
-| 2026-10-08 01:25:41 | [51ec2ee4 AHP 与 legacy version 兼容](https://github.com/microsoft/vscode/commit/51ec2ee42fdaa95257129e1dcea2f64cb7ae55e3) | 核对兼容失败可观察性；Ash 仍使用自身 major/schema hash 锁步契约 |
-| 2026-10-08 03:59:07 | [58afa23a 标题策略与旧配置迁移](https://github.com/microsoft/vscode/commit/58afa23a1cb18ac5d0aa894d9f2d88765889fae3) | 暂列后续产品能力，当前不增加同名设置或工具 |
+| UTC 日期            | 提交与公开变化                                                                                                                          | Ash 使用方式                                                    |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| 2026-10-07 19:18:18 | [ac4cf28d 缓存 peer chat 详情并在未订阅时提供状态](https://github.com/microsoft/vscode/commit/ac4cf28d8cc5d9bdf08b8578d1931135fa12a1ae) | 核对被动目录状态、详情按需加载和前端缓存责任                    |
+| 2026-10-07 19:18:41 | [e11f0d83 保留启动期间的 Codex 模型选择](https://github.com/microsoft/vscode/commit/e11f0d833b19f1035dde69cf974b1515863d884f)           | 核对已持久化选择、临时选择与默认模型的优先级                    |
+| 2026-10-07 21:16:50 | [b3a9b152 空 SDK 刷新时保留模型目录](https://github.com/microsoft/vscode/commit/b3a9b152d558e1bd66ae0437cf6d6cae2a9707ad)               | 仅借鉴失败不应意外清空的行为；Ash 的成功 Empty 有独立含义       |
+| 2026-10-07 21:22:27 | [19f093cc 启动前执行 MCP enablement](https://github.com/microsoft/vscode/commit/19f093cc13efc8e2c0e3fc694a03cdaa6afc7169)               | 后续核对禁用、恢复、认证与工具可见性，不能只隐藏 picker         |
+| 2026-10-08 01:07:22 | [91fa1538 OS sleep 后保留 relay 恢复](https://github.com/microsoft/vscode/commit/91fa1538649fa815b4c6810eda29f032e6e9a342)              | 核对恢复计时与重新鉴权；不移植 AHP reconnect/outbox             |
+| 2026-10-08 01:25:41 | [51ec2ee4 AHP 与 legacy version 兼容](https://github.com/microsoft/vscode/commit/51ec2ee42fdaa95257129e1dcea2f64cb7ae55e3)              | 核对兼容失败可观察性；Ash 仍使用自身 major/schema hash 锁步契约 |
+| 2026-10-08 03:59:07 | [58afa23a 标题策略与旧配置迁移](https://github.com/microsoft/vscode/commit/58afa23a1cb18ac5d0aa894d9f2d88765889fae3)                    | 暂列后续产品能力，当前不增加同名设置或工具                      |
 
 ## 职责与真实调用链
 
@@ -56,15 +85,15 @@ Ash 的 [前后端边界](docs/frontend-app-server-boundary.md)已明确 `platfo
 
 下表的 VS Code 前端缩写路径相对 `src/vs/`，Ash 前端缩写路径相对 `src/ash/`；`crates/` 路径相对仓库根目录。后续 todo 均列完整仓库相对路径。
 
-| 职责 | VS Code 证据入口 | Ash 唯一 owner 与调用链 |
-| --- | --- | --- |
-| 服务契约与装配 | `platform/agentHost/common/agentService.ts`、`common/agent.ts`；`workbench/services/agentHost/electron-browser/agentHostService.ts` | `platform/agentHost/common/appServerApi.ts`；各领域 common API；`workbench/browser/workbench.ts`、`sessions/browser/workbench.ts` 经现有 DI 创建 service/provider |
-| 初始化、请求配对与事件 | `platform/agentHost/browser/agentHostProtocolClient.ts`、`common/state/sessionProtocol.ts` | `platform/agentHost/browser/appServerProtocolClient.ts` 负责一个 Renderer connection 的 pending、双向 dispatch、decoder、generation 与关闭；生成契约源在 `crates/app-server-protocol` |
-| transport 与进程 | `platform/agentHost/common/agent.ts` 中 starter/connection 契约及对应宿主 | `appServerMessagePortTransport.ts` / `appServerWebSocketTransport.ts` → Main `appServerConnectionRelay.ts` → `platform/app-server-daemon` → `crates/app-server-daemon` → 共享 Rust App Server |
-| Session/Chat/Thread | `sessions/contrib/providers/agentHost/browser/baseAgentHostSessionsProvider.ts`；`platform/agentHost/node/agentService.ts` | `AppServerSessionsProvider` → `platform/sessions/browser/sessionApi.ts` → `app-server/server/session_operations.rs` → Core/Thread store；`SessionsManagementService` 仅拥有显示目录、草稿与路由 |
-| 状态、历史与流 | `node/agentHostStateManager.ts`、`node/agentSideEffects.ts` 与 AHP channels | `crates/core` reducer/controller 拥有顺序和执行事实，`crates/state` 保存 verified catalog/history；`ChatService` 与 pane model 接收 snapshot/transcript/update 并维护呈现状态 |
-| 模型与工具 | 上游 provider 与 catalog 契约 | `crates/models-manager`、`crates/subscriptions`、`crates/model-provider` 拥有发现和调用；Frontend `LanguageModelsService` 拥有显示目录，pane 拥有未发送选择；工具执行不迁入 frontend |
-| 权限与取消 | 上游 permission/turn/provider 契约及行为测试 | Rust Core policy/interaction/turn owner；`ChatService` → `ITurnApi` → `session/request` 的 typed interrupt/interaction。取消 Promise 不代表后台停止 |
+| 职责                   | VS Code 证据入口                                                                                                                    | Ash 唯一 owner 与调用链                                                                                                                                                                         |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 服务契约与装配         | `platform/agentHost/common/agentService.ts`、`common/agent.ts`；`workbench/services/agentHost/electron-browser/agentHostService.ts` | `platform/agentHost/common/appServerApi.ts`；各领域 common API；`workbench/browser/workbench.ts`、`sessions/browser/workbench.ts` 经现有 DI 创建 service/provider                               |
+| 初始化、请求配对与事件 | `platform/agentHost/browser/agentHostProtocolClient.ts`、`common/state/sessionProtocol.ts`                                          | `platform/agentHost/browser/appServerProtocolClient.ts` 负责一个 Renderer connection 的 pending、双向 dispatch、decoder、generation 与关闭；生成契约源在 `crates/app-server-protocol`           |
+| transport 与进程       | `platform/agentHost/common/agent.ts` 中 starter/connection 契约及对应宿主                                                           | `appServerMessagePortTransport.ts` / `appServerWebSocketTransport.ts` → Main `appServerConnectionRelay.ts` → `platform/app-server-daemon` → `crates/app-server-daemon` → 共享 Rust App Server   |
+| Session/Chat/Thread    | `sessions/contrib/providers/agentHost/browser/baseAgentHostSessionsProvider.ts`；`platform/agentHost/node/agentService.ts`          | `AppServerSessionsProvider` → `platform/sessions/browser/sessionApi.ts` → `app-server/server/session_operations.rs` → Core/Thread store；`SessionsManagementService` 仅拥有显示目录、草稿与路由 |
+| 状态、历史与流         | `node/agentHostStateManager.ts`、`node/agentSideEffects.ts` 与 AHP channels                                                         | `crates/core` reducer/controller 拥有顺序和执行事实，`crates/state` 保存 verified catalog/history；`ChatService` 与 pane model 接收 snapshot/transcript/update 并维护呈现状态                   |
+| 模型与工具             | 上游 provider 与 catalog 契约                                                                                                       | `crates/models-manager`、`crates/subscriptions`、`crates/model-provider` 拥有发现和调用；Frontend `LanguageModelsService` 拥有显示目录，pane 拥有未发送选择；工具执行不迁入 frontend            |
+| 权限与取消             | 上游 permission/turn/provider 契约及行为测试                                                                                        | Rust Core policy/interaction/turn owner；`ChatService` → `ITurnApi` → `session/request` 的 typed interrupt/interaction。取消 Promise 不代表后台停止                                             |
 
 ### 第一批闭环
 
@@ -112,12 +141,12 @@ Session.model 缺失仅表示目录没有模型事实，不能据此推断没有
 
 依赖第一批的模型事实与选择优先级固定。用户收益是账户或订阅模型列表变化能抵达已打开的选择器，失败不会意外替换当前可用快照。
 
-现有链路：`crates/subscriptions/src/lib.rs` 观察账户与发现 → `crates/app-server/src/server/subscription_adapter.rs` → `provider/models/updated` → generated decoder → `IServerEventApi`。`LanguageModelsService` 目前仅处理 `provider/apiKey/changed`，遗漏此更新。
+初始缺口链路：`crates/subscriptions/src/lib.rs` 观察账户与发现 → `crates/app-server/src/server/subscription_adapter.rs` → `provider/models/updated` → generated decoder → `IServerEventApi`。基线 `LanguageModelsService` 仅处理 `provider/apiKey/changed`，遗漏此更新；本片现已原地消费，具体可证明范围和未闭环项见文首。
 
-- [ ] 在 `src/ash/workbench/contrib/chat/common/languageModels.ts` 原地消费该事件作为 invalidation，重读当前 `model/list` 和 provider 状态；不把某一个 subscription 的 payload 直接替换全局目录。
-- [ ] 将 connection generation、dispose、并发刷新与“刷新期间又有新通知”的责任闭合在该 service。旧 load 完成不得覆盖新连接目录；合并通知后仍至少完成一次涵盖最新失效的刷新。
-- [ ] 在 `src/ash/workbench/contrib/chat/test/common/languageModels.test.ts` 增加 Models、Empty、Failed、账户切换、连续通知、迟到结果与 picker selection 保留测试。
-- [ ] 复用 `crates/app-server/src/server/subscription_adapter_tests.rs`、`crates/subscriptions/src/subscription_tests.rs` 和 `crates/models-manager/src/manager_tests.rs` 的真实语义；补齐缺失的 Empty/Failed 序列化或集成覆盖。没有后端生产缺口时不为凑跨端 diff 修改 Rust。
+- [x] 在 `src/ash/workbench/contrib/chat/common/languageModels.ts` 原地消费该事件作为 invalidation，重读当前 `model/list` 和 provider 状态；不把某一个 subscription 的 payload 直接替换全局目录。
+- [x] 将 connection generation、dispose、并发刷新与“刷新期间又有新通知”的责任闭合在该 service。旧 load 完成不得覆盖新连接目录；合并通知后仍至少完成一次涵盖最新失效的刷新。
+- [x] 在 `src/ash/workbench/contrib/chat/test/common/languageModels.test.ts` 增加 Models、Empty、Failed、公开账户切换、连续通知、迟到结果、消费者赋值与零选择/配置写入回归；实际 picker 手选/Auto 验收仍属下一项。
+- [x] 只读核对 `crates/app-server/src/server/subscription_adapter_tests.rs`、`crates/subscriptions/src/subscription_tests.rs` 和 `crates/models-manager/src/manager_tests.rs` 的既有 Models/Empty/Failed 语义。本片没有修改或重跑 Rust；确有目录身份缺口已单列后续契约方案，不能为凑跨端 diff 修改 Rust。subscription adapter 自身 Empty 覆盖的补齐随后续协议批次安排。
 - [ ] 通过 Code/Cowork 的真实模型选择器验证目录、能力、thinking 选项和非默认语言。仅在确有缺口时登记相关 pane 路径。
 
 **结果语义不可照搬上游：** Ash `ProviderModelsListResult` 明确区分成功 Models、成功 Empty 和 Failed。成功空发现会更新 backend 最新发现集；失败保留已有 metadata，认证/权限失败会降级可用性。账户、organization 或 plan 改变时旧结果由 subscription owner 丢弃。禁止统一忽略 Empty，也禁止保留上一个账户的可选模型。Frontend 以当前 backend 查询为权威。
@@ -160,27 +189,27 @@ Session.model 缺失仅表示目录没有模型事实，不能据此推断没有
 
 ## 与正在进行工作的边界
 
-| 工作 | 本计划的交集与处理 |
-| --- | --- |
+| 工作                          | 本计划的交集与处理                                                                                                                                                                   |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Trace / Sessions / Core trace | 第一批不改 `core` 执行与 trace recorder；第三批如触及 `thread_controller.rs`，必须与 Trace 任务对照 exact diff、串行集成。`sessionApi.ts` 同时承载 trace API，默认只读，禁止整体整理 |
-| SCM 与 Git 协议 | 初始模型修复无需 `git/*` 或 turnChanges；第三批生成 shared protocol 时只在双方变更合并后统一生成/验证，不能覆盖另一任务 schema fixture |
-| Preferences 输入迁移 | 不改 keybinding/input/settings editor；模型默认值、visibility 和 pane 临时选择保持既有 owner。模型服务路径变更必须核对相关配置任务的实际 diff |
-| Notifications 菜单 | 不改 contextmenu、toast 或全局 action failure 路径；新状态文案只放所属 Sessions 行 |
-| Search 生命周期 | 不改 search controller、cancel handle 或 session file/search provider；generic connection 测试不代表 Search 可重新执行 |
-| Output | 不改 output filter/autoscroll；诊断只说明已测失败，不引入另一份日志状态或新 output owner |
+| SCM 与 Git 协议               | 初始模型修复无需 `git/*` 或 turnChanges；第三批生成 shared protocol 时只在双方变更合并后统一生成/验证，不能覆盖另一任务 schema fixture                                               |
+| Preferences 输入迁移          | 不改 keybinding/input/settings editor；模型默认值、visibility 和 pane 临时选择保持既有 owner。模型服务路径变更必须核对相关配置任务的实际 diff                                        |
+| Notifications 菜单            | 不改 contextmenu、toast 或全局 action failure 路径；新状态文案只放所属 Sessions 行                                                                                                   |
+| Search 生命周期               | 不改 search controller、cancel handle 或 session file/search provider；generic connection 测试不代表 Search 可重新执行                                                               |
+| Output                        | 不改 output filter/autoscroll；诊断只说明已测失败，不引入另一份日志状态或新 output owner                                                                                             |
 
 云端只能确认 main 已提交内容，无法判断这些任务尚未集成的本地冲突。执行者开始每批前读取真实工作树并保护已有变化；中途发现新路径时重新确认边界。
 
 ## 环境与验证安排
 
-初始审计环境为 Linux，约 9.8 GiB 总内存、30 GiB 可用磁盘，缺少 Rust/Just/前端依赖。按后续授权现已在 task-local 路径固定 Rust 1.98.0、Node 24.21.0、pnpm 12.8.0、Just 1.46.0，并使用仓库 hashed Python venv、冻结 JS lock 和 Rust generator。Cargo 仅使用 2 jobs、单个 package 验证；未修改全局工具配置或启动 workspace/V8 构建。完成检查后约 22 GiB 磁盘与 7 GiB 内存可用，保留正常缓存，不主动清理。
+初始审计环境为 Linux，约 9.8 GiB 总内存、30 GiB 可用磁盘，缺少 Rust/Just/前端依赖。按后续授权现已在 task-local 路径固定 Rust 1.98.0、Node 24.21.0、pnpm 12.8.0、Just 1.46.0，并使用仓库 hashed Python venv、冻结 JS lock 和 Rust generator。Cargo 仅使用 2 jobs、单个 package 验证；未修改全局工具配置或启动 workspace/V8 构建。第一批结束时约 22 GiB 磁盘与 7 GiB 内存可用；第二批复用依赖/生成物，结束时云端约 12 GiB 磁盘可用。保留正常缓存，不主动清理。第二批未占用 Cargo build/verify 进程或共享可写 target。
 
 - 文档可在云端立即校对路径、链接、Markdown 和 whitespace；这些检查不验证产品行为。
 - 第一批不改 wire schema，但 TS 测试仍需要有效生成物；可复用与源码指纹匹配的 backend package contract，否则需要 Rust generator，不能手写 `.build/protocol` 来绕过。
 - 按仓库脚本准备工具链后串行运行 `just verify ash-state` 和定向前端测试。Rust 初次冷构建先评估依赖图、V8/其他资源与磁盘，限制并发；不直接启动全 workspace build。
 - 第三批需 `just generate-protocol`、`just verify ash-protocol`、`just verify ash-app-server-protocol`、受影响 `ash-state`/`ash-core`/`ash-app-server` 检查、`pnpm typecheck:protocol` 和 renderer/build 验证。依据实际变动范围缩小 package，不并行争抢同一 Cargo cache。
 - Web 和 Linux Electron 的真实协议/UI行为在相应环境可验证；macOS 的真实系统菜单、OS sleep/wake 和 macOS daemon/窗口边界需在连接的 Mac 上验证。云端 Linux 通过不能标记为 macOS 通过。
-- 方案、第一批源码补丁和验证证据在云端交付。后续用户已授权首批云端红绿实现，本地消费完整补丁与 todo 并完成 Mac 运行时验收；其余批次仍需按计划确认。不私自提交、push、开 PR 或修改公共规则。
+- 方案、第一/第二批独立源码补丁和验证证据在云端交付。本地先保存第一批 checkpoint，再按完整补丁与 todo 消费第二批，统一完成 Mac 运行时验收；其余批次和新增身份契约仍需确认。不私自提交、push、开 PR 或修改公共规则。
 
 ## 非目标与后续规范建议
 

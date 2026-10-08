@@ -1,5 +1,6 @@
-import type { ModelListResult } from '../../../../../../.build/protocol/typescript/index.js';
+import type { AccountReadResult, ModelListResult, ProviderListResult } from '../../../../../../.build/protocol/typescript/index.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
+import { canceled } from '../../../../base/common/errors.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { IModelApi, type CustomModelProvider, type ModelProviderTestResult } from '../../../../platform/sessions/common/sessionApi.js';
@@ -44,21 +45,47 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChangeModels = this.changed.event;
 	private modelCatalog: readonly ModelCatalogEntry[] = [];
-	private modelCatalogLoad: Promise<readonly ModelCatalogEntry[]> | undefined;
+	private modelCatalogLoad: Promise<void> | undefined;
 	private hasLoadedModelCatalog = false;
+	private catalogRevision = 0;
+	private catalogGeneration = 0;
+	private catalogAttemptRevision = 0;
+	private accountScope: string | undefined;
+	private accountState: AccountReadResult | undefined;
+	private modelAccountConnections: ReadonlySet<string> | undefined;
+	private providerState = '[]';
 	constructor(@IModelApi private readonly modelApi: IModelApi,
-		@IAppServerApi appServer: IAppServerApi, @IServerEventApi events: IServerEventApi,
+		@IAppServerApi private readonly appServer: IAppServerApi, @IServerEventApi events: IServerEventApi,
 		@ILanguageModelsConfigurationService private readonly preferences: ILanguageModelsConfigurationService) {
 		super();
 		this._register(preferences.onDidChangeModels(() => this.changed.fire()));
 		const subscription = events.subscribe(event => {
-			if (event.method === 'provider/apiKey/changed') { this.changed.fire(); }
+			if (event.method === 'provider/models/updated') {
+				// The tagged outcome describes one provider observation, not the global catalog.
+				this.invalidateModelCatalog();
+			} else if (event.method === 'account/updated' || event.method === 'account/login/completed') {
+				this.accountState = event.params.account;
+				const scope = accountCatalogScope(this.accountState, this.modelAccountConnections);
+				if (scope !== this.accountScope) {
+					this.accountScope = scope;
+					this.retireModelCatalog();
+				}
+				this.invalidateModelCatalog();
+			} else if (event.method === 'provider/apiKey/changed') {
+				this.retireModelCatalog(true);
+				this.invalidateModelCatalog();
+			}
 		});
 		this._register(toDisposable(() => subscription.dispose()));
 		const connection = appServer.onConnectionState(state => {
-			if (state === 'ready') { void this.refreshModels().catch(() => { }); }
+			this.accountScope = undefined;
+			this.accountState = undefined;
+			this.modelAccountConnections = undefined;
+			this.retireModelCatalog();
+			if (state === 'ready') { this.invalidateModelCatalog(); }
 		});
 		this._register(toDisposable(() => connection.dispose()));
+		this._register(toDisposable(() => this.retireModelCatalog()));
 	}
 	public getDefaultNewChatModel(models: readonly ModelCatalogEntry[]): ModelRef | undefined { return this.preferences.getDefaultNewChatModel(models); }
 	public rememberSelectedModel(model: ModelRef | undefined): void { this.preferences.rememberSelectedModel(model); }
@@ -102,17 +129,7 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 
 	public async listModelProviders(): Promise<readonly ModelProviderCredentialStatus[]> {
 		const result = await this.modelApi.listProviders();
-		return result.providers.map(provider => ({
-			provider: provider.provider,
-			connection: provider.connection,
-			access: provider.access,
-			active: provider.active,
-			configured: provider.configured,
-			ready: provider.ready,
-			displayName: provider.displayName,
-			apiKeyPolicy: provider.apiKeyPolicy,
-			apiKeyConfigured: provider.apiKeyConfigured,
-		}));
+		return modelProviderStatuses(result);
 	}
 
 	public async setModelProviderApiKey(connection: string, apiKey: string): Promise<void> {
@@ -127,27 +144,82 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 	}
 
 	public async refreshModels(): Promise<readonly ModelCatalogEntry[]> {
-		if (this.modelCatalogLoad) { return this.modelCatalogLoad; }
-		const load = this.loadModelCatalog();
+		this.assertNotDisposed();
+		const load = this.modelCatalogLoad ?? this.loadModelCatalog(++this.catalogGeneration, this.appServer.connectionGeneration);
 		this.modelCatalogLoad = load;
+		const generation = this.catalogGeneration;
+		const connectionGeneration = this.appServer.connectionGeneration;
 		try {
-			return await load;
+			try { await load; } catch (error) {
+				if (this.isDisposed) { throw canceled(error); }
+				if (generation === this.catalogGeneration && connectionGeneration === this.appServer.connectionGeneration && this.catalogAttemptRevision === this.catalogRevision) { throw error; }
+			}
+			if (connectionGeneration !== this.appServer.connectionGeneration && this.modelCatalogLoad === load) { this.retireModelCatalog(); }
+			// Retired callers must not publish an empty view after a pending successor publishes its rows.
+			while (generation !== this.catalogGeneration && this.modelCatalogLoad && this.modelCatalogLoad !== load) {
+				const successor: Promise<void> = this.modelCatalogLoad;
+				try { await successor; } catch { /* The retired caller returns the current scope, including a failed empty scope. */ }
+				if (successor === this.modelCatalogLoad) { break; }
+			}
+			if (this.isDisposed) { throw canceled(); }
+			return this.modelCatalog;
 		} finally {
-			if (this.modelCatalogLoad === load) { this.modelCatalogLoad = undefined; }
+			if (this.modelCatalogLoad === load) {
+				this.modelCatalogLoad = undefined;
+				// A notification can arrive after success or failure settles but before this cleanup.
+				if (this.catalogAttemptRevision !== this.catalogRevision) { void this.refreshModels().catch(() => { }); }
+			}
 		}
 	}
 
-	private async loadModelCatalog(): Promise<readonly ModelCatalogEntry[]> {
-		const [catalog, providers] = await Promise.all([this.modelApi.listModels(), this.modelApi.listProviders()]);
-		const models: Parameters<typeof this.acceptModelCatalog>[0][number][] = [...catalog.models];
-		for (const connection of ['kimi-desktop', 'kimi-cli']) {
-			if (!providers.providers.some(provider => provider.connection === connection && provider.ready)) { continue; }
-			models.push(...await this.modelApi.listProviderModels(connection));
-		}
-		return this.acceptModelCatalog(models);
+	private invalidateModelCatalog(): void {
+		this.catalogRevision++;
+		void this.refreshModels().catch(() => { });
 	}
 
-	private acceptModelCatalog(entries: Readonly<ModelListResult['models']>): readonly ModelCatalogEntry[] {
+	private retireModelCatalog(forceNotification = false): void {
+		this.catalogGeneration++;
+		this.modelCatalogLoad = undefined;
+		const hadModels = this.modelCatalog.length > 0 || this.providerState !== '[]';
+		this.modelCatalog = Object.freeze([]);
+		this.providerState = '[]';
+		// Consumers retain their old array on read failure, so publish an empty current view now.
+		this.hasLoadedModelCatalog = true;
+		if ((hadModels || forceNotification) && !this.isDisposed) { this.changed.fire(); }
+	}
+
+	private isCurrentCatalogLoad(generation: number, connectionGeneration: number): boolean {
+		if (this.isDisposed) { throw canceled(); }
+		return generation === this.catalogGeneration && connectionGeneration === this.appServer.connectionGeneration;
+	}
+
+	private async loadModelCatalog(generation: number, connectionGeneration: number): Promise<void> {
+		while (this.isCurrentCatalogLoad(generation, connectionGeneration)) {
+			const revision = this.catalogRevision;
+			this.catalogAttemptRevision = revision;
+			try {
+				const [catalog, providers] = await Promise.all([this.modelApi.listModels(), this.modelApi.listProviders()]);
+				if (!this.isCurrentCatalogLoad(generation, connectionGeneration)) { break; }
+				if (revision !== this.catalogRevision) { continue; }
+				const models = [...catalog.models];
+				for (const connection of ['kimi-desktop', 'kimi-cli']) {
+					if (!providers.providers.some(provider => provider.connection === connection && provider.ready)) { continue; }
+					models.push(...await this.modelApi.listProviderModels(connection));
+					if (!this.isCurrentCatalogLoad(generation, connectionGeneration) || revision !== this.catalogRevision) { break; }
+				}
+				if (!this.isCurrentCatalogLoad(generation, connectionGeneration)) { break; }
+				if (revision !== this.catalogRevision) { continue; }
+				this.acceptModelCatalog(models, providers);
+				return;
+			} catch (error) {
+				if (!this.isCurrentCatalogLoad(generation, connectionGeneration)) { break; }
+				if (revision !== this.catalogRevision) { continue; }
+				throw error;
+			}
+		}
+	}
+
+	private acceptModelCatalog(entries: Readonly<ModelListResult['models']>, providers: ProviderListResult): void {
 		const identities = new Set<string>();
 		const catalog = entries.map(entry => {
 			const identity = modelRefIdentity(entry.model);
@@ -155,12 +227,34 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 			identities.add(identity);
 			return modelCatalogEntry(entry);
 		});
-		const changed = !sameModelCatalog(this.modelCatalog, catalog);
+		const providerState = JSON.stringify(modelProviderStatuses(providers));
+		const changed = !sameModelCatalog(this.modelCatalog, catalog) || this.providerState !== providerState;
 		this.modelCatalog = Object.freeze(catalog);
+		this.providerState = providerState;
+		this.modelAccountConnections = new Set(providers.providers.map(provider => provider.connection));
+		if (this.accountState) { this.accountScope = accountCatalogScope(this.accountState, this.modelAccountConnections); }
 		this.hasLoadedModelCatalog = true;
 		if (changed) { this.changed.fire(); }
-		return this.modelCatalog;
 	}
+}
+
+function accountCatalogScope(account: AccountReadResult, modelConnections: ReadonlySet<string> | undefined): string {
+	// Internal token rotation and unrelated login integrations do not change model membership.
+	return JSON.stringify(account.accounts.filter(entry => !modelConnections || modelConnections.has(entry.provider)).map(entry => JSON.stringify([entry.provider, entry.accountId, entry.organization, entry.plan, entry.status])).sort());
+}
+
+function modelProviderStatuses(result: ProviderListResult): ModelProviderCredentialStatus[] {
+	return result.providers.map(provider => ({
+		provider: provider.provider,
+		connection: provider.connection,
+		access: provider.access,
+		active: provider.active,
+		configured: provider.configured,
+		ready: provider.ready,
+		displayName: provider.displayName,
+		apiKeyPolicy: provider.apiKeyPolicy,
+		apiKeyConfigured: provider.apiKeyConfigured,
+	}));
 }
 
 function modelCatalogEntry(entry: ModelListResult['models'][number]): ModelCatalogEntry {
