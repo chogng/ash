@@ -87,16 +87,16 @@
 ## 实现顺序与验收
 
 - [ ] 在现有 Trace 分支做纯投影层：稳定身份、短 label、字段摘要、正文分类、错误/缺失状态；保留 unknown 字段和完整导出。
-- [ ] 手写 button 树迁移到 ObjectTree，managed 固定行虚拟化；P1 location / relation jump 面向模型身份，不依赖 rows DOM 是否挂载。
-- [ ] CSS grid 迁移到 SplitView；左侧搜索/树，右侧标题/TabList/按需正文。
-- [ ] 七个等权重按钮收敛成 Refresh / More 和局部错误过滤；Request / Response 和 Relationships 移入相应详情 tab。
-- [ ] 概览默认，raw JSON 单独 tab；saved evidence / imported payload / 缺失提示在新结构中可回查。
+- [x] 手写 button 树迁移到 ObjectTree，managed 固定行虚拟化；P1 location / relation jump 面向模型身份，不依赖 rows DOM 是否挂载。
+- [x] CSS grid 迁移到 SplitView；左侧搜索/树，右侧标题/TabList/按需正文。
+- [x] 七个等权重按钮收敛成 Refresh / More 和局部错误过滤；Request / Response 和 Relationships 移入相应详情 tab。
+- [x] 概览默认，raw JSON 单独 tab；saved evidence / imported payload / 缺失提示在新结构中可回查。
 - [ ] 相关单测、normal Desktop / Web 构建、stylelint / hygiene。明确 passed、failed、never run，focused checks 不当作全通过。
 - [ ] Web / Electron 实际截图：light、dark、HC；宽/窄；多 Thread/Turn、多层关系、失败、disabled evidence、omitted payload、超长 ID/正文、空结果。
 - [ ] 键盘路径：搜索 → 树上下/左右 → 选择 → tabs → 正文 → 关系跳转 → 精确目标展开并 reveal。
 - [ ] P1 回归：durable / diagnostic sequence 冲突、未挂载虚拟行定位、filter 清除、连续选择/正文读取、导出期间增量、连续导入、hidden/show、input 切换、dispose。
 - [ ] 长历史实测：事件数、首次展示/搜索时间、mounted row 数、listener / model 清理。不能把“已虚拟化”直接当性能验收。
-- [ ] 真实持久会话独立验收；合成 fixture 截图/录像不能替代后端端到端通过。已有 Sherpa 校验阻塞不会因视觉变更消失。
+- [x] 真实持久会话独立验收；正式 Web / Electron initialize、历史定位、实时增量与关闭重开通过。合成 fixture 截图/录像不能替代后端端到端通过。
 
 ## 交接范围
 
@@ -147,3 +147,11 @@ headless Chromium 复跑先暴露详情零高度：TabList 会填满宿主，直
 本轮记录见 [整组退出码](.build/trace-validation/web-six-current-main-state.json)、[Web 六场景](.build/trace-validation/current-main-web-six.log)、[57 项单测](.build/trace-validation/current-main-unit.log)、[Library 截图身份](.build/trace-validation/ui-headless-library-images.json)。不 push 未完成双端验收的状态。
 
 本次轻量复验：hygiene 通过（263 CSS 文件，0 errors / 0 design suggestions；设计 token 2 项），8 个修改 TypeScript 文件格式通过。当前无 Cargo、Trace 监督器或 App Server 进程；见 [轻量记录](.build/trace-validation/current-main-light-checks.json) 与 [进程检查](.build/trace-validation/current-main-processes.json)。
+
+### Desktop 与 Electron 阶段检查点
+
+基线更新到 `e05e17e93` 后，正常 Desktop 后端准备、完整前端构建和 smoke 编译通过，CARGO_BUILD_JOBS=1；正式 Electron 首轮 2 项通过、4 项因测试驱动的菜单 owner 不匹配失败。复用现有 Menus helper 修复后，4 项 Electron 和相同 4 项正式 Web 复跑通过。六个 Electron 场景分别通过，包含真实 initialize、持久 shell Turns、当前 Turn 定位、实时增量、fork Thread 和关闭重开。菜单 popup、导出路径与重启确认的进程内测试 hook 不算实际 OS 菜单/对话框验收；五个导入场景的合成模型证据不算真实 provider loop 验收。
+
+Desktop 与 Web 最新 runtime 包源码摘要、完整文件哈希和协议均通过；Electron 确实与 AgentHost 独立应用并行，每个任务 workers=1、独立产物目录，无本树构建与验收同时写产物。修复只改 Trace smoke 驱动及重启后的 application 句柄，保留菜单状态、动作结果、完整导出和中文断言，没有追加生产图/Core/协议变更。详情与保留的首轮失败证据见 [路线检查点](trace-todo.md#desktop-与真实-electron-复验e05e17e93)。
+
+四主题宽窄 headless 及 20,000 事件测量沿用已有验证边界，不能写成 Electron 全主题截图已通过；P2 完整模型/工具/子任务链、retry/审批代表记录、分享脱敏和旧版同机时间基线继续保留。
