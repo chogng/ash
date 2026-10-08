@@ -27,6 +27,7 @@ export class OutputAccessibilityHelp implements IAccessibleViewImplementation {
 					localize('output.help.overview', 'Output is a read-only editor. New output updates this view and any editor opened for the same channel.'),
 					localize('output.help.navigation', 'Use arrow keys to read output, Shift with arrow keys to select text, and Ctrl+C or Command+C to copy. Ctrl+F or Command+F opens Find.'),
 					localize('output.help.controls', 'Use Tab and Shift+Tab to reach the channel selector, filters, Clear Output, Auto Scroll, and More Output Actions. Separate alternative text filters with commas and prefix exclusions with !. Spaces and - are literal. Severity and category filters only affect this view.'),
+					localize('output.help.categories', 'Category choices apply to the selected channel. Older saved category choices apply to all channels until you change each category; only that category moves to the selected channel. Reset Filters clears category choices for all channels.'),
 				];
 				if (filters.textFilterNotice === 'restored') {
 					content.push(localize('output.filterRestored', 'Saved filter restored. Edit or clear to use comma-separated filters.'));

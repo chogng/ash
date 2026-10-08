@@ -240,15 +240,19 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 		if (changed) this.persistAndFire();
 	}
 
-	isCategoryVisible(category: string): boolean {
-		return !this.hiddenCategories.has(category);
+	isCategoryVisible(category: string, channelId: string): boolean {
+		return !this.hiddenCategories.has(category) && !this.hiddenCategories.has(channelCategoryKey(category, channelId));
 	}
 
-	setCategoryVisible(category: string, visible: boolean): void {
+	setCategoryVisible(category: string, visible: boolean, channelId: string): void {
 		const normalized = category.trim();
-		if (!normalized) throw new TypeError("Output category must be non-empty");
-		const changed = updateHiddenSet(this.hiddenCategories, normalized, visible);
-		if (changed) this.persistAndFire();
+		if (!normalized || normalized.includes('\0')) throw new TypeError("Output category must be non-empty and cannot contain null bytes");
+		const key = channelCategoryKey(normalized, validateChannelId(channelId));
+		// An old category has no channel identity. Only explicit input can move
+		// that choice; restoration and unrelated filters keep its global effect.
+		const migrated = this.hiddenCategories.delete(normalized);
+		const changed = updateHiddenSet(this.hiddenCategories, key, visible);
+		if (changed || migrated) this.persistAndFire();
 	}
 
 	reset(): void {
@@ -263,8 +267,8 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 		this.persistAndFire();
 	}
 
-	matches(entry: IOutputEntry): boolean {
-		if (this.hiddenSeverities.has(entry.severity) || (entry.category && this.hiddenCategories.has(entry.category))) return false;
+	matches(entry: IOutputEntry, channelId: string): boolean {
+		if (this.hiddenSeverities.has(entry.severity) || (entry.category && !this.isCategoryVisible(entry.category, channelId))) return false;
 		const restored = this.textSyntaxVersion === 1;
 		const haystack = (restored ? `${entry.category ?? ""} ${entry.text}` : entry.text).toLocaleLowerCase();
 		const terms = restored ? parseRestoredFilterTerms(this._text) : parseFilterTerms(this._text);
@@ -316,6 +320,12 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 		}
 		this.changeEmitter.fire();
 	}
+}
+
+function channelCategoryKey(category: string, channelId: string): string {
+	// Entries and channel IDs cannot contain null bytes. A tagged JSON tuple
+	// keeps their identities distinct and survives older readers of string arrays.
+	return '\0' + JSON.stringify([channelId, category]);
 }
 
 function updateHiddenSet<T>(set: Set<T>, value: T, visible: boolean): boolean {

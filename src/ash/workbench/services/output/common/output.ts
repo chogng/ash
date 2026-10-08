@@ -112,10 +112,11 @@ export interface IOutputViewFilters {
 	isSeverityVisible(severity: OutputEntrySeverity): boolean;
 	setSeverityVisible(severity: OutputEntrySeverity, visible: boolean): void;
 	setMinimumSeverity(severity: OutputEntrySeverity): void;
-	isCategoryVisible(category: string): boolean;
-	setCategoryVisible(category: string, visible: boolean): void;
+	isCategoryVisible(category: string, channelId: string): boolean;
+	/** Explicit category input moves any legacy global choice to this channel only. */
+	setCategoryVisible(category: string, visible: boolean, channelId: string): void;
 	reset(): void;
-	matches(entry: IOutputEntry): boolean;
+	matches(entry: IOutputEntry, channelId: string): boolean;
 }
 
 export const CONTEXT_IN_OUTPUT = new RawContextKey<boolean>('inOutput', false);

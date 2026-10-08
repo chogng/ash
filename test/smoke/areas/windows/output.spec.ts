@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { expect, test } from '../../../automation/test.js';
 import type { ElectronApplication } from '@playwright/test';
+import { readStorageEntries, seedStorageOnNextLoad } from '../../../automation/storage.js';
+import { StorageScope, StorageTarget } from '../../../../src/ash/platform/storage/common/storage.js';
 
 const execute = promisify(execFile);
 
@@ -327,3 +329,141 @@ test.describe('Git-backed Output smart scrolling', () => {
 		});
 	}
 });
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`Output category choices isolate real Window and Extension Host logs and migrate legacy choices (${locale})`, async ({ target, application, workbench, reloadWorkbench, restartWorkbench }, testInfo) => {
+		test.skip(target.appServerMode !== 'required', 'Requires the real Extension Host fleet response and its isolated product profile.');
+		// Locale restart and three persisted-state reloads each use the real backend.
+		test.setTimeout(90_000);
+		if (locale === 'zh-CN') {
+			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+			const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
+			await language.fill('简体中文');
+			await language.press('Enter');
+			({ workbench, application } = await restartWorkbench());
+		}
+		let page = workbench.page;
+		const labels = locale === 'zh-CN' ? { filter: '筛选输出', reset: '重置筛选', unsupported: '已保留由较新版本保存的筛选条件。本窗口中的修改不会保存。', categoryHelp: '类别选项作用于所选通道。旧版保存的类别选项仍作用于所有通道，直到逐项更改；每次只将该类别迁移到所选通道。重置筛选会清除所有通道的类别选项。' } : { filter: 'Filter Output', reset: 'Reset Filters', unsupported: 'A newer saved filter is preserved. Changes in this window are not saved.', categoryHelp: 'Category choices apply to the selected channel. Older saved category choices apply to all channels until you change each category; only that category moves to the selected channel. Reset Filters clears category choices for all channels.' };
+		const output = () => page.locator('[data-view-id="ash.output"]');
+		const lines = async (): Promise<string[]> => (await output().locator('.view-line').allTextContents()).map(line => line.replaceAll('\u00a0', ' ')).filter(Boolean);
+		const select = async (channel: string): Promise<void> => {
+			await workbench.quickaccess.runCommand('workbench.action.output.showChannels');
+			await workbench.quickaccess.select(channel);
+			await expect(page.locator('.ash-output-title-actions')).toContainText(channel);
+		};
+		const readWindowStart = async (): Promise<void> => {
+			// Only a channel with visible content owns an editor input. Read its
+			// startup logs above the virtualized tail once lifecycle is visible.
+			await output().locator('.stanza-editor-input').focus();
+			await page.keyboard.press('ControlOrMeta+Home');
+		};
+		const category = async (name: string, checked: boolean, change: boolean): Promise<void> => {
+			await page.locator('.ash-output-title-actions').getByRole('button', { name: labels.filter, exact: true }).click();
+			const item = page.getByRole('menuitemcheckbox', { name, exact: true });
+			await expect(item).toHaveAttribute('aria-checked', String(checked));
+			if (change) {
+				await item.focus();
+				await item.press('Enter');
+			} else {
+				await page.keyboard.press('Escape');
+			}
+		};
+		const reset = async (): Promise<void> => {
+			await page.locator('.ash-output-title-actions').getByRole('button', { name: labels.filter, exact: true }).click();
+			await page.getByRole('menuitem', { name: labels.reset, exact: true }).press('Enter');
+		};
+		const workspaceId = target.kind === 'browser' ? await page.evaluate(() => {
+			const host = (globalThis as unknown as { ashWebWorkbenchHost: { workspace: { id: string; }; }; }).ashWebWorkbenchHost;
+			return host.workspace.id;
+		}) : await page.evaluate(async () => {
+			const bridge = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<{ id: string; }>; }; }; }).ash;
+			return (await bridge.ipcRenderer.invoke('ash:workspace:context:read')).id;
+		});
+		const identity = { scope: StorageScope.WORKSPACE, id: workspaceId };
+		const savedFilter = async (): Promise<string | undefined> => (await readStorageEntries(application, page, identity))['output.filterState']?.value;
+		await select('Extension Host');
+		// Ready is published only after the existing fleet reconcile/list response
+		// reaches the production owner. No producer or transport is replaced.
+		await expect.poll(lines).toContain('Extension Host fleet is ready.');
+		const hostBaseline = await lines();
+		const input = output().locator('.stanza-editor-input');
+		await input.focus();
+		await page.keyboard.press('Alt+F1');
+		await expect.poll(() => page.locator('.ash-accessible-view-content').inputValue()).toContain(labels.categoryHelp);
+		await page.keyboard.press('Escape');
+		await expect(input).toBeFocused();
+		await select('Window');
+		await readWindowStart();
+		await expect.poll(lines).toContain('Workbench restored');
+		await workbench.quickaccess.runCommand('workbench.action.output.openInEditor');
+		const rawEditor = workbench.editors.groupAt(0).content;
+		const rawLines = async (): Promise<string[]> => (await rawEditor.locator('.view-line').allTextContents()).map(line => line.replaceAll('\u00a0', ' ')).filter(Boolean);
+		const rawWindow = await rawLines();
+		expect(rawWindow).toContain('Workbench restored');
+		await category('lifecycle', true, true);
+		await expect.poll(lines).not.toContain('Workbench restored');
+		// Window keeps appending focus traces; filtering must retain the original prefix.
+		await expect.poll(async () => (await rawLines()).slice(0, rawWindow.length)).toEqual(rawWindow);
+		await select('Extension Host');
+		await expect.poll(lines).toEqual(hostBaseline);
+		await category('lifecycle', true, true);
+		await expect.poll(lines).not.toContain('Extension Host fleet is ready.');
+		await select('Window');
+		await category('lifecycle', false, false);
+		await expect.poll(lines).not.toContain('Workbench restored');
+		await reset();
+		await readWindowStart();
+		await expect.poll(lines).toContain('Workbench restored');
+		const legacy = JSON.stringify({ syntaxVersion: 2, text: '', hiddenSeverities: [], hiddenCategories: ['lifecycle', 'connection'] });
+		// Existing storage fixtures seed only saved data before the next owner loads.
+		await seedStorageOnNextLoad(application, page, identity, { 'output.filterState': { value: legacy, target: StorageTarget.MACHINE } });
+		({ workbench, application } = await reloadWorkbench());
+		page = workbench.page;
+		await select('Window');
+		await expect.poll(lines).not.toContain('Workbench restored');
+		await category('lifecycle', false, false);
+		await select('Extension Host');
+		await expect.poll(lines).not.toContain('Extension Host fleet is ready.');
+		await select('App Server');
+		await expect(output().locator('.view-lines')).toHaveCount(0);
+		expect(await savedFilter()).toBe(legacy);
+		await select('Window');
+		await category('lifecycle', false, true);
+		await readWindowStart();
+		await expect.poll(lines).toContain('Workbench restored');
+		await select('Extension Host');
+		await expect.poll(lines).toContain('Extension Host fleet is ready.');
+		await category('lifecycle', true, false);
+		await select('App Server');
+		await expect(output().locator('.view-lines')).toHaveCount(0);
+		await category('connection', false, false);
+		await expect.poll(async () => {
+			const raw = await savedFilter();
+			return raw === undefined ? undefined : JSON.parse(raw).hiddenCategories;
+		}).toEqual(['connection']);
+		const migrated = await savedFilter();
+		({ workbench, application } = await reloadWorkbench());
+		page = workbench.page;
+		await select('Extension Host');
+		await expect.poll(lines).toContain('Extension Host fleet is ready.');
+		await select('App Server');
+		await expect(output().locator('.view-lines')).toHaveCount(0);
+		await reset();
+		await expect(output().locator('.view-lines')).toContainText('connection');
+		const future = JSON.stringify({ syntaxVersion: 3, text: 'future', hiddenCategories: ['lifecycle'], future: { retained: true } });
+		await seedStorageOnNextLoad(application, page, identity, { 'output.filterState': { value: future, target: StorageTarget.MACHINE } });
+		({ workbench, application } = await reloadWorkbench());
+		page = workbench.page;
+		await select('Window');
+		await expect(output().getByRole('searchbox', { name: labels.filter, exact: true })).toHaveAttribute('title', labels.unsupported);
+		await category('lifecycle', true, true);
+		await expect.poll(lines).not.toContain('Workbench restored');
+		await select('Extension Host');
+		await expect.poll(lines).toContain('Extension Host fleet is ready.');
+		expect(await savedFilter()).toBe(future);
+		await reset();
+		await expect.poll(lines).toContain('Extension Host fleet is ready.');
+		expect(await savedFilter()).toBe(future);
+		await testInfo.attach(`output-channel-categories-${locale}`, { body: JSON.stringify({ backend: 'real extensionHost/reconcile or list', hostBaseline, rawWindow, legacy, migrated, untouchedFuture: await savedFilter(), identity: 'channel and category JSON tuple', finalHost: await lines() }), contentType: 'application/json' });
+	});
+}

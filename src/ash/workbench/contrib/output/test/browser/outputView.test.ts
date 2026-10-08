@@ -127,12 +127,62 @@ test('Output keeps severity and category filters and preserves multiline log rec
 	view.output.filters.setSeverityVisible('warning', false);
 	assert.deepEqual(view.visibleLines(), []);
 	view.output.filters.setSeverityVisible('warning', true);
-	view.output.filters.setCategoryVisible('build', false);
+	view.output.filters.setCategoryVisible('build', false, view.channel.id);
 	assert.deepEqual(view.visibleLines(), []);
 	view.output.filters.reset();
 	view.filter('!continuation');
 	assert.deepEqual(view.visibleLines(), ['other record']);
 });
+
+function categoryMenuItem(view: OutputViewTestEnvironment, category: string): HTMLButtonElement {
+	const button = view.pane.partTitleProjection!.actions!.querySelector<HTMLButtonElement>('[data-action-id="ash.output.filter"] button');
+	assert.ok(button);
+	button.click();
+	const item = [...browserEnvironment.window.document.querySelectorAll<HTMLButtonElement>('[role="menuitemcheckbox"]')].find(item => item.getAttribute('aria-label') === category);
+	assert.ok(item, `Category menu item is available: ${category}`);
+	return item;
+}
+
+for (const restored of [false, true]) {
+	test(`Output category menu applies explicit choices to its channel and retains other legacy choices (${restored ? 'restored' : 'fresh'})`, async () => {
+		using resources = new DisposableStore();
+		const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+		const storage = resources.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'channel-categories', backend: browser.window.localStorage, flushInterval: 0 }));
+		resources.add(toDisposable(() => browser.window.close()));
+		const saved = JSON.stringify({ syntaxVersion: 2, text: '', hiddenSeverities: [], hiddenCategories: ['lifecycle', 'build'] });
+		if (restored) storage.store('output.filterState', saved, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		const view = await createOutputView(resources, 'log', storage);
+		const second = resources.add(view.output.createChannel({ id: 'second', label: 'Second', kind: 'log' }));
+		for (const [channel, label] of [[view.channel, 'first'], [second, 'second']] as const) {
+			channel.appendLine({ text: `${label} lifecycle`, category: 'lifecycle' });
+			channel.appendLine({ text: `${label} build`, category: 'build' });
+			channel.appendLine({ text: `${label} other` });
+		}
+		using reference = await view.services.get(ITextModelService).createModelReference(view.channel.uri);
+		assert.deepEqual(view.visibleLines(), restored ? ['first other'] : ['first lifecycle', 'first build', 'first other']);
+		if (restored) assert.equal(storage.get('output.filterState', StorageScope.WORKSPACE), saved);
+		const firstChoice = categoryMenuItem(view, 'lifecycle');
+		assert.equal(firstChoice.getAttribute('aria-checked'), String(!restored));
+		firstChoice.click();
+		await new Promise<void>(resolve => setTimeout(resolve, 0));
+		assert.deepEqual(view.visibleLines(), restored ? ['first lifecycle', 'first other'] : ['first build', 'first other']);
+		assert.equal(reference.object.textEditorModel.getValue(), 'first lifecycle\nfirst build\nfirst other\n');
+		view.output.selectChannel(second.id);
+		await waitForChannel(view.editor, second);
+		assert.deepEqual(view.visibleLines(), restored ? ['second lifecycle', 'second other'] : ['second lifecycle', 'second build', 'second other']);
+		const secondChoice = categoryMenuItem(view, 'lifecycle');
+		assert.equal(secondChoice.getAttribute('aria-checked'), 'true');
+		secondChoice.click();
+		await new Promise<void>(resolve => setTimeout(resolve, 0));
+		assert.deepEqual(view.visibleLines(), restored ? ['second other'] : ['second build', 'second other']);
+		view.output.selectChannel(view.channel.id);
+		await waitForChannel(view.editor, view.channel);
+		assert.deepEqual(view.visibleLines(), restored ? ['first lifecycle', 'first other'] : ['first build', 'first other']);
+		view.output.filters.reset();
+		assert.deepEqual(view.visibleLines(), ['first lifecycle', 'first build', 'first other']);
+		assert.equal(second.getText(), 'second lifecycle\nsecond build\nsecond other\n');
+	});
+}
 
 test('Output filters follow channel switching, inactive appends, clearing and disposal', async () => {
 	using resources = new DisposableStore();

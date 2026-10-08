@@ -44,6 +44,7 @@ export class OutputViewPane extends ViewPane {
 	private loadedModel: TextModel | null = null;
 	private boundChannel: IOutputChannel | undefined;
 	private changingContent = false;
+	private renderPending = false;
 	private focusRequested = false;
 	private readonly filters: IOutputViewFilters;
 	private readonly filterInput: HTMLInputElement;
@@ -133,11 +134,13 @@ export class OutputViewPane extends ViewPane {
 	private async bindActiveChannel(channel: IOutputChannel | undefined): Promise<void> {
 		const viewState = this.editor.saveViewState();
 		if (this.boundChannel && viewState) this.viewStates.set(this.boundChannel.id, viewState);
-		this.boundChannel = channel;
-		this.editor.setModel(null);
-		this.loadedModel = null;
-		this.modelReference.clear();
-		this.activeChannelListener.value = channel?.onDidChange(() => this.render());
+		this.changeContent(() => {
+			this.boundChannel = channel;
+			this.editor.setModel(null);
+			this.loadedModel = null;
+			this.modelReference.clear();
+			this.activeChannelListener.value = channel?.onDidChange(() => this.render());
+		});
 		this.render();
 		if (!channel) {
 			return;
@@ -154,9 +157,11 @@ export class OutputViewPane extends ViewPane {
 				throw new TypeError('Output requires a TextModel');
 			}
 			this.modelReference.value = reference;
-			this.loadedModel = model;
-			this.editor.setModel(model);
-			this.editor.restoreViewState(this.viewStates.get(channel.id) ?? null);
+			this.changeContent(() => {
+				this.loadedModel = model;
+				this.editor.setModel(model);
+				this.editor.restoreViewState(this.viewStates.get(channel.id) ?? null);
+			});
 			this.render();
 			if (this.focusRequested && this.isVisible()) {
 				this.focusRequested = false;
@@ -169,10 +174,25 @@ export class OutputViewPane extends ViewPane {
 		}
 	}
 
+	private changeContent(change: () => void): void {
+		// Editor model changes can synchronously append Window diagnostics.
+		// Consume them after the current operation releases the editor's DOM.
+		this.changingContent = true;
+		try { change(); }
+		finally {
+			this.changingContent = false;
+			if (this.renderPending) {
+				this.renderPending = false;
+				this.render();
+			}
+		}
+	}
+
 	private render(): void {
+		if (this.changingContent) { this.renderPending = true; return; }
 		const active = this.outputService.activeChannel;
 		const categories = active ? categoriesOf(active.entries) : [];
-		const titleStateKey = [this.outputService.channels.map(channel => channel.id).join("\0"), active?.id ?? "", (active?.entries.length ?? 0) > 0, this.autoScroll, this.filters.text, ...OutputSeverities.map(severity => this.filters.isSeverityVisible(severity)), ...categories.map(category => `${category}:${this.filters.isCategoryVisible(category)}`)].join("\u0001");
+		const titleStateKey = [this.outputService.channels.map(channel => channel.id).join("\0"), active?.id ?? "", (active?.entries.length ?? 0) > 0, this.autoScroll, this.filters.text, ...OutputSeverities.map(severity => this.filters.isSeverityVisible(severity)), ...categories.map(category => `${category}:${this.filters.isCategoryVisible(category, active!.id)}`)].join("\u0001");
 		if (titleStateKey !== this.titleStateKey) {
 			this.titleStateKey = titleStateKey;
 			this.titleActions.updateActions(this.createTitleActions(active));
@@ -197,28 +217,27 @@ export class OutputViewPane extends ViewPane {
 		let line = 1;
 		let previousEndedWithCarriageReturn = false;
 		for (const entry of active.entries) {
-			const recordMatches = active.kind === 'log' && this.filters.matches(entry);
+			const recordMatches = active.kind === 'log' && this.filters.matches(entry, active.id);
 			const text = previousEndedWithCarriageReturn && entry.text.startsWith('\n') ? entry.text.slice(1) : entry.text;
 			previousEndedWithCarriageReturn = entry.text.endsWith('\r');
 			const count = (text.match(/\r\n|\r|\n/g) ?? []).length;
 			const end = line + count - (/[\r\n]$/.test(entry.text) || text.length === 0 ? 1 : 0);
 			for (let number = line; number <= end; number++) {
 				// Ordinary output is a stream: one model line may span or share producer writes.
-				const matches = active.kind === 'log' ? recordMatches : this.filters.matches({ ...entry, text: model.getLineContent(number) });
+				const matches = active.kind === 'log' ? recordMatches : this.filters.matches({ ...entry, text: model.getLineContent(number) }, active.id);
 				visibleLines.set(number, Boolean(visibleLines.get(number)) || matches);
 				severities.set(number, entry.severity);
 			}
 			line += count;
 		}
-		this.changingContent = true;
-		try {
+		this.changeContent(() => {
 			const hasVisibleContent = [...visibleLines.values()].some(Boolean);
 			if (!hasVisibleContent && active.entries.length > 0) { this.editor.setModel(null); return; }
 			if (this.editor.getModel() !== model) this.editor.setModel(model);
 			this.editor.setHiddenAreas([...visibleLines].filter(([, visible]) => !visible).map(([number]) => new Range(number, 1, number, model.getLineMaxColumn(number))));
 			this.decorations.set([...severities].filter(([, severity]) => severity === 'error' || severity === 'warning').map(([number, severity]) => ({ range: new Range(number, 1, number, model.getLineMaxColumn(number)), options: { description: 'output-severity', inlineClassName: `ash-output-${severity}` } })));
 			if (this.autoScroll) this.scrollToEnd();
-		} finally { this.changingContent = false; }
+		});
 	}
 
 	private createActionViewItem(action: IAction, options: ActionViewItemOptions): ActionViewItem | undefined {
@@ -244,11 +263,12 @@ export class OutputViewPane extends ViewPane {
 	}
 
 	private filterActions(): readonly IAction[] {
-		const categories = categoriesOf(this.outputService.activeChannel?.entries ?? []);
+		const channel = this.outputService.activeChannel;
+		const categories = categoriesOf(channel?.entries ?? []);
 		const levelActions = (["trace", "debug", "information", "warning", "error"] as const).map(severity => this.action(`ash.output.filter.minimum.${severity}`, severityLabel(severity), localize('output.showMinimum', 'Show {0} and above', severityLabel(severity)), undefined, true, undefined, () => this.filters.setMinimumSeverity(severity)));
 		const logLevel = new SubmenuAction("ash.output.filter.minimum", localize('output.logLevel', 'Log Level'), levelActions);
 		const severityActions = OutputSeverities.map(severity => this.action(`ash.output.filter.severity.${severity}`, severityLabel(severity), localize('output.showSeverity', 'Show {0}', severityLabel(severity)), undefined, true, this.filters.isSeverityVisible(severity), () => this.filters.setSeverityVisible(severity, !this.filters.isSeverityVisible(severity))));
-		const categoryActions = categories.map(category => this.action(`ash.output.filter.category.${category}`, category, localize('output.showCategory', 'Show category {0}', category), undefined, true, this.filters.isCategoryVisible(category), () => this.filters.setCategoryVisible(category, !this.filters.isCategoryVisible(category))));
+		const categoryActions = categories.map(category => this.action(`ash.output.filter.category.${category}`, category, localize('output.showCategory', 'Show category {0} in this channel. Changing an older saved global choice moves only that category to this channel.', category), undefined, true, this.filters.isCategoryVisible(category, channel!.id), () => this.filters.setCategoryVisible(category, !this.filters.isCategoryVisible(category, channel!.id), channel!.id)));
 		return [logLevel, new Separator(), ...severityActions, ...(categoryActions.length ? [new Separator(), ...categoryActions] : []), new Separator(), this.action("ash.output.filter.reset", localize('output.reset', 'Reset Filters'), localize('output.resetTooltip', 'Reset Output Filters'), undefined, true, undefined, () => { this.filterInput.value = ""; this.filters.reset(); })];
 	}
 
