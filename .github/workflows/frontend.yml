@@ -26,7 +26,6 @@ on:
       - "rust-toolchain.toml"
       - ".cargo/**"
       - ".github/workflows/frontend.yml"
-      - ".github/workflows/frontend-tests.yml"
       - ".github/actions/setup-frontend/**"
       - "scripts/install_python_tools.py"
       - "scripts/requirements.txt"
@@ -54,7 +53,6 @@ on:
       - "rust-toolchain.toml"
       - ".cargo/**"
       - ".github/workflows/frontend.yml"
-      - ".github/workflows/frontend-tests.yml"
       - ".github/actions/setup-frontend/**"
       - "scripts/install_python_tools.py"
       - "scripts/requirements.txt"
@@ -69,60 +67,97 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  browser:
-    uses: ./.github/workflows/frontend-tests.yml
-    with:
-      surface: browser
-      runner: ubuntu-24.04
-      shards: "[1]"
-      shard-total: 1
-  electron-windows:
-    uses: ./.github/workflows/frontend-tests.yml
-    with:
-      surface: electron
-      runner: windows-latest
-      shards: "[1,2,3,4]"
-      shard-total: 4
-  electron-macos:
-    uses: ./.github/workflows/frontend-tests.yml
-    with:
-      surface: electron
-      runner: macos-26
-      shards: "[1,2,3,4]"
-      shard-total: 4
-  browser-check:
-    # Preserve the required check name and reject failed, skipped or cancelled shards.
-    name: browser (ubuntu-24.04)
-    if: always()
-    needs: browser
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
+  test:
+    name: ${{ matrix.surface }} (${{ matrix.runner }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - surface: browser
+            runner: ubuntu-24.04
+          - surface: electron
+            runner: macos-26
+          - surface: electron
+            runner: windows-latest
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    env:
+      PLAYWRIGHT_LIST_PRINT_FAILURES_INLINE: "1"
+    defaults:
+      run:
+        shell: bash
     steps:
-      - name: Require all surface shards to pass
-        env:
-          RESULT: ${{ needs.browser.result }}
-        run: test "$RESULT" = success
-  electron-windows-check:
-    # Preserve the required check name and reject failed, skipped or cancelled shards.
-    name: electron (windows-latest)
-    if: always()
-    needs: electron-windows
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - name: Require all surface shards to pass
-        env:
-          RESULT: ${{ needs.electron-windows.result }}
-        run: test "$RESULT" = success
-  electron-macos-check:
-    # Preserve the required check name and reject failed, skipped or cancelled shards.
-    name: electron (macos-26)
-    if: always()
-    needs: electron-macos
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - name: Require all surface shards to pass
-        env:
-          RESULT: ${{ needs.electron-macos.result }}
-        run: test "$RESULT" = success
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: .nvmrc
+      - name: Select PR scenarios or full regression
+        id: plan
+        run: node build/frontend.ts plan
+      - uses: ./.github/actions/setup-frontend
+        id: setup
+        with:
+          build: ${{ steps.plan.outputs.connected }}
+          backend-cache: ${{ matrix.surface == 'electron' && steps.plan.outputs.connected == 'true' }}
+          browser: ${{ matrix.surface == 'browser' }}
+      # Portable hygiene belongs to Linux; product builds still run on each OS.
+      - name: Check portable frontend contracts
+        if: matrix.surface == 'browser'
+        run: |
+          pnpm localization:check
+          pnpm stylelint
+          pnpm typecheck:protocol
+          pnpm typecheck:build
+          pnpm test:build
+      - name: Test frontend units
+        if: matrix.surface == 'browser'
+        run: pnpm test:unit --jobs 4
+      - name: Test browser integration
+        if: matrix.surface == 'browser'
+        run: pnpm run test:browser:integration --project=chromium
+      - name: Prepare production browser UI smoke tests
+        if: matrix.surface == 'browser'
+        run: pnpm run pretest:smoke:browser
+      - name: Test production browser UI
+        if: matrix.surface == 'browser'
+        run: pnpm exec node build/frontend.ts test browser-ui
+      - name: Prepare Electron UI smoke tests
+        if: matrix.surface == 'electron'
+        run: pnpm run pretest:smoke:ui
+      - name: Prepare connected Web smoke tests
+        if: matrix.surface == 'browser' && steps.plan.outputs.connected == 'true'
+        # Web requires a different production entry and packaged Node runtime.
+        run: pnpm run pretest:smoke:browser:full
+      - name: Test connected Web
+        if: matrix.surface == 'browser' && steps.plan.outputs.connected == 'true'
+        run: pnpm exec node build/frontend.ts test browser-app-server
+      - name: Prepare connected Electron smoke tests
+        if: matrix.surface == 'electron' && steps.plan.outputs.connected == 'true' && steps.setup.outputs.backend-cache-hit != 'true'
+        # UI preparation already built Desktop and checked automation types.
+        run: pnpm run prepare:backend
+      - name: Select cached Electron backend
+        if: matrix.surface == 'electron' && steps.plan.outputs.connected == 'true' && steps.setup.outputs.backend-cache-hit == 'true'
+        run: pnpm exec node build/python.ts -B build/desktop/develop.py --select-prepared
+      - name: Archive prepared backend
+        if: matrix.surface == 'electron' && github.ref == 'refs/heads/main' && steps.setup.outputs.backend-cache-hit != 'true'
+        run: python -B build/desktop/ci.py .build/ci/backend.tar.gz
+      - name: Save prepared backend
+        if: matrix.surface == 'electron' && github.ref == 'refs/heads/main' && steps.setup.outputs.backend-cache-hit != 'true'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: .build/ci/backend.tar.gz
+          key: ${{ steps.setup.outputs.backend-cache-key }}
+      - name: Test Electron UI
+        if: matrix.surface == 'electron'
+        run: pnpm exec node build/frontend.ts test electron-ui
+      - name: Test connected Electron
+        if: matrix.surface == 'electron' && steps.plan.outputs.connected == 'true'
+        run: pnpm exec node build/frontend.ts test electron-app-server
+      # Academic Workbench and document editing already belong to these suites.
+      - name: Upload test diagnostics
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: frontend-${{ matrix.surface }}-${{ matrix.runner }}
+          path: .build/desktop/playwright/
+          if-no-files-found: warn

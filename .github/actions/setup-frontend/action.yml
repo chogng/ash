@@ -1,5 +1,5 @@
 name: Set up frontend tests
-description: Install frontend tools and reuse downloads; only builders restore Cargo outputs.
+description: Install frontend tools and reuse downloads and exactly matching backend packages.
 
 inputs:
   build:
@@ -58,8 +58,9 @@ runs:
       with:
         go-version: "1.26"
         cache: false
-    - name: Cache App Server builds
-      if: inputs.build == 'true' && steps.backend.outputs.cache-hit != 'true'
+    - name: Cache protocol and App Server builds
+      # Even disconnected UI builds generate protocol contracts through Cargo.
+      if: steps.backend.outputs.cache-hit != 'true'
       uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       with:
         workspaces: ". -> .build/cargo"
@@ -99,7 +100,7 @@ runs:
           pnpm exec playwright install --only-shell chromium
         fi
     - name: Save frontend downloads
-      if: inputs.build == 'true' && github.ref == 'refs/heads/main' && steps.downloads.outputs.cache-hit != 'true'
+      if: github.ref == 'refs/heads/main' && steps.downloads.outputs.cache-hit != 'true'
       uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
       with:
         path: .build/downloads

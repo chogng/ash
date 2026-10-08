@@ -1,4 +1,4 @@
-"""Cache backend packages and transfer Electron test builds without local paths."""
+"""Cache exactly matching backend packages without local paths."""
 
 import argparse
 import hashlib
@@ -38,7 +38,7 @@ def backend_cache_key(root: Path, environment: Mapping[str, str] = os.environ) -
         for name in (
             "build/desktop/ci.py",
             ".github/actions/setup-frontend/action.yml",
-            ".github/workflows/frontend-tests.yml",
+            ".github/workflows/frontend.yml",
             "scripts/install_python_tools.py",
             "scripts/requirements.txt",
             "package.json",
@@ -87,7 +87,7 @@ def backend_cache_key(root: Path, environment: Mapping[str, str] = os.environ) -
     return f"frontend-backend-v1-{default_target()}-{digest.hexdigest()}"
 
 
-def archive(root: Path, output: Path, *, backend_only: bool = False) -> None:
+def archive(root: Path, output: Path) -> None:
     # Published package names and vendored resources can exceed Windows MAX_PATH.
     if os.name == "nt":
         root = Path("\\\\?\\" + str(root.resolve()).removeprefix("\\\\?\\"))
@@ -97,36 +97,20 @@ def archive(root: Path, output: Path, *, backend_only: bool = False) -> None:
     # Transfer only the selected package and its manifest, not old generations,
     # Cargo intermediates or prepare-inputs.json with builder-specific paths.
     paths.append(sorted((store / "manifests").glob("[0-9]" * 20 + ".json"))[-1])
-    binding = None
-    if not backend_only:
-        paths += [
-            root / ".build/desktop" / name
-            for name in ("package.json", "main", "preload", "renderer", "localization")
-        ]
-        paths += [
-            root / ".build/protocol",
-            root / ".build/protocol-sources.json",
-            root / "src/ash/platform/extensions/common/generated",
-        ]
-        binding = root / "node_modules/native-keymap/build/Release/keymapping.node"
-    for path in paths + ([binding] if binding else []):
+    for path in paths:
         if not path.exists():
-            raise FileNotFoundError(f"Missing Electron test build output: {path}")
+            raise FileNotFoundError(f"Missing prepared backend output: {path}")
     output.parent.mkdir(parents=True, exist_ok=True)
-    # Fast compression is enough for this run's consumers. Tar retains Unix
+    # Fast compression is enough for CI consumers. Tar retains Unix
     # executable modes; dereferencing leaves declarative resources single-link files.
     with tarfile.open(output, "w:gz", compresslevel=1, dereference=True) as bundle:
         for path in paths:
             bundle.add(path, arcname=path.relative_to(root).as_posix())
-        # Extract outside pnpm's directory links, then copy into the installed module.
-        if binding:
-            bundle.add(binding, arcname=".build/ci/keymapping.node")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output", type=Path, nargs="?")
-    parser.add_argument("--backend-only", action="store_true")
     parser.add_argument("--cache-key", action="store_true")
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[2]
@@ -135,4 +119,4 @@ if __name__ == "__main__":
     elif args.output is None:
         parser.error("output is required when archiving a build")
     else:
-        archive(root, args.output, backend_only=args.backend_only)
+        archive(root, args.output)
