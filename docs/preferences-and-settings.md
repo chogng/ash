@@ -19,7 +19,7 @@ GitHub 设置页显示复用 Codex 登录和 Ash 的 GitHub 账号，检查指�
 
 ## 打开路径
 
-[`preferencesActions.ts`](../src/ash/workbench/contrib/preferences/browser/preferencesActions.ts) 注册四个打开命令。调用方通过 `IPreferencesService` 选择内容，服务再把相应的 `EditorInput` 交给 Workbench `EditorService`。`openSettings(target?: string)` 的字符串表示分类或区段，不是 `ConfigurationTarget`：
+[`preferencesActions.ts`](../src/ash/workbench/contrib/preferences/browser/preferencesActions.ts) 注册四个打开命令。调用方通过 `IPreferencesService` 选择内容，服务再把相应的 `EditorInput` 交给 Workbench `EditorService`。`openSettings(options?: IOpenSettingsOptions)` 在 Workbench 和 Sessions 接受同一图形打开契约：`query` 指定搜索，`section` 指定 Ash 分类或区段，`target` 只接受 `USER`/`USER_LOCAL`。未知选项、错误参数类型及未实现的配置目标在改变现有页面前被拒绝：
 
 | 调用                                  | 打开的内容                                                  | 呈现位置     |
 | ------------------------------------- | ----------------------------------------------------------- | ------------ |
@@ -27,6 +27,8 @@ GitHub 设置页显示复用 Codex 登录和 Ash 的 GitHub 账号，检查指�
 | `openUserSettings()`                  | 当前用户设置的 JSONC 资源，由普通文本编辑器处理             | 普通编辑器组 |
 | `openGlobalKeybindingSettings(false)` | `KeybindingsEditor`，由 `preferences.contribution.ts` 注册  | 普通编辑器组 |
 | `openGlobalKeybindingSettings(true)`  | 当前 profile 的 `keybindings.json` JSONC 资源               | 普通编辑器组 |
+
+`workbench.action.openSettings` 命令接受查询字符串或上述选项对象，例如 `"editor.fontFamily"` 或 `{ "query": "@modified" }`；现有区段入口使用 `{ section: "models" }`。Workbench Preferences 服务持有固定资源输入；当前 pane 注册打开选项委托，清空输入或销毁时释放委托。查询直接进入该页面的搜索框，复用已打开页面时更新筛选并聚焦搜索；显式空查询清除筛选。未传 query 时保留页面原有搜索状态，区段定位仍清除筛选并显示对应区段。普通搜索同时匹配设置 ID 和说明，可继续编辑结果并沿原有配置链保存。关闭后搜索值随页面释放，配置值按既有持久化资源恢复。JSONC 的键定位继续使用 `openUserSettings({ revealSetting: ... })`，不把图形查询作为 JSON 写入。
 
 图形设置页从 Configuration Registry 取得可编辑设置，经 `SettingsEditorModel` 和 `settingsLayout.ts` 组成页面，再由设置控件读写配置服务。JSON 路径经 `SettingsFileSystemProvider` 读写同一份用户设置源。两种设置入口共享配置数据，不共享页面容器。
 
@@ -90,10 +92,10 @@ API key 输入框失焦即保存，清空即移除；成功保存不弹通知，
 | 范围     | VS Code                                                                                                                                            | Ash 当前状态与影响                                                                                                                                                                                   |
 | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 页面组织 | `openPreferences()` 打开已注册的 `PreferencesEditor`；pane registry 负责页签、共享搜索与子页面生命周期。`openSettings(options)` 另有图形/JSON 路径 | `SettingsEditor` 直接打开到模态组。没有对应容器和 pane registry；这是实际差异，不能断言上游容器没有职责或必然多余                                                                                    |
-| 打开契约 | `IOpenSettingsOptions` 包含配置目标、query、JSON 选择、folder URI、焦点与编辑器组等选项                                                            | `openSettings()` 仅接受区段字符串；`openUserSettings()` 仅支持用户目标和顶层键定位。配置目标、搜索条件与区段定位尚未形成同一公开契约                                                                 |
+| 打开契约 | `IOpenSettingsOptions` 包含配置目标、query、JSON 选择、folder URI、焦点与编辑器组等选项                                                            | `openSettings(options)` 支持 query、区段及本地用户目标；`openUserSettings()` 支持用户目标和顶层键定位。JSON、folder、焦点模式及编辑器组选项仍未覆盖                                                  |
 | 配置目标 | Application、Local User、Remote User、Workspace、Folder 及语言设置入口                                                                             | 当前持久化写入限于 `USER`/`USER_LOCAL`；用户 JSONC 支持合法的语言覆盖块。资源级写入、远程和工作区目标未实现，不能把枚举或空配置层当作能力完成                                                        |
 | 设置目录 | 配置 schema 进入设置模型；模型支持变更事件，渲染根据目标与配置状态更新                                                                             | `DefaultSettings` 只收集声明了 `.setting` 元数据的键；设置模型在创建时固定。布局未匹配到任一此类键会抛错。适用于当前静态目录，尚不是动态配置贡献链路                                                 |
-| 搜索     | 支持配置状态、语言、扩展等语义过滤                                                                                                                 | 当前 `SettingsSearchQuery` 支持普通文本、`@id:` 和 `@modified`；`@lang:` 等仍会被当作普通文本。不能声明支持上游全部过滤条件                                                                          |
+| 搜索     | 支持配置状态、语言、扩展等语义过滤                                                                                                                 | 当前 `SettingsSearchQuery` 支持设置 ID、普通文本、`@id:` 和 `@modified`；`@lang:` 等仍会被当作普通文本。不能声明支持上游全部过滤条件                                                                 |
 | 领域内容 | 配置系统保持配置语义，各领域保留业务状态                                                                                                           | GitHub 已使用领域数据模型和共享 `SettingsSectionRenderer`；Models、Hooks、Skills 等仍以 `SettingsContent` 接入控件。Workbench 与 Sessions 共享部分 renderer 和内容实现，但 Sessions 仍手工组织设置项 |
 
 ### 已修复缺陷

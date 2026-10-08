@@ -15,7 +15,7 @@ import { h } from '../../../../base/browser/dom.js';
 import type { IDimension } from '../../../../base/browser/dom.js';
 import type { IContextViewProvider } from '../../../../base/browser/ui/contextview/contextview.js';
 import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
-import { toDisposable } from '../../../../base/common/lifecycle.js';
+import { MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { IDirPermissionsService } from '../../../../platform/dirPermissions/common/dirPermissionsService.js';
 import { IAgentCapabilitiesService } from '../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
@@ -35,8 +35,8 @@ import { IGitService } from '../../git/common/gitService.js';
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import { ILocaleService, LocalizationConfiguration } from '../../../services/localization/common/locale.js';
 import { IPreferencesService } from '../../../services/preferences/common/preferences.js';
-import type { ISelectSetting, ISetting, ISettingsEditorModel } from '../../../services/preferences/common/preferences.js';
-import { isSettingsEditorInput } from '../../../services/preferences/common/settingsEditorInput.js';
+import type { IOpenSettingsOptions, ISelectSetting, ISetting, ISettingsEditorModel } from '../../../services/preferences/common/preferences.js';
+import { SettingsEditorInput, isSettingsEditorInput } from '../../../services/preferences/common/settingsEditorInput.js';
 import { DefaultSettings, SettingsEditorModel } from '../../../services/preferences/common/settingsModels.js';
 import { SettingsRenderer } from './settingsRenderers.js';
 import { SkillsSettingsContent } from '../../skills/browser/skillsSettingsContent.js';
@@ -83,6 +83,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 	private rootDomNode: HTMLDivElement | undefined;
 	private searchWidget: SettingsSearchWidget | undefined;
 	private visible = false;
+	private readonly inputOptions = this._register(new MutableDisposable());
 	private sectionToReveal: string | undefined;
 
 	constructor(
@@ -280,7 +281,17 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		if (signal.aborted) throw signal.reason;
 		this.languageServerSettings.setInput(input);
 		this.search(this.searchWidget?.value ?? '');
-		const targetId = new URLSearchParams(input.resource.toEncodedComponents().query).get('target');
+		this.inputOptions.clear();
+		if (input instanceof SettingsEditorInput) {
+			this.inputOptions.value = input.attachOptionsHandler(options => this.applyOptions(options));
+		} else {
+			const parameters = new URLSearchParams(input.resource.query);
+			this.applyOptions({ section: parameters.get('target') ?? undefined, query: parameters.get('query') ?? undefined });
+		}
+	}
+
+	private applyOptions(options: IOpenSettingsOptions): void {
+		const targetId = options.section;
 		if (targetId) {
 			// The content model owns section identities and their containing page.
 			const target = this.treeModel.getNode(targetId);
@@ -294,9 +305,14 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 			this.sectionToReveal = targetId !== category.id ? targetId : undefined;
 			this.revealSection();
 		}
+		if (options.query !== undefined) {
+			this.searchWidget!.value = options.query;
+			this.focus();
+		}
 	}
 
 	public override clearInput(): void {
+		this.inputOptions.clear();
 		if (this.searchWidget) this.searchWidget.value = '';
 	}
 

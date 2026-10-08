@@ -55,7 +55,7 @@ export class TerminalVoiceSession extends Disposable {
 			},
 			preview,
 			() => isVisible() && this.target === terminals.activeInstance && this.target?.state === 'running',
-			async () => { await preferences.openSettings('dictation'); },
+			async () => { await preferences.openSettings({ section: 'dictation' }); },
 		));
 		this._register(instantiation.createInstance(DictationAccessibilityHelp, this.session, container, controls));
 		this._register(onboarding.registerHost({ container: this.element, focusTarget: container, isVisible }));

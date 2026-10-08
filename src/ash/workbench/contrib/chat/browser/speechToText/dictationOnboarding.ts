@@ -103,7 +103,7 @@ class DictationOnboardingBanner extends Disposable {
 		const settings = this._register(new Button(actions, { label: localize({ bundle: 'ash', key: 'dictation.prepareSettings' }, 'Model and API settings'), presentation: 'secondary' }));
 		const done = this._register(new Button(actions, { label: localize({ bundle: 'ash', key: 'dictation.done' }, 'Done'), presentation: 'quiet' }));
 		this._register(done.onDidClick(close));
-		this._register(settings.onDidClick(() => { void preferences.openSettings('dictation'); }));
+		this._register(settings.onDidClick(() => { void preferences.openSettings({ section: 'dictation' }); }));
 		this._register(this.test.onDidClick(() => { void this.toggleTrial(); }));
 		this._register(addDisposableListener(this.domNode, 'keydown', event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); } }));
 		this._register(this.microphone.onDidSelect(({ value }) => { void this.configure(DictationConfiguration.inputDevice, value); }));

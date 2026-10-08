@@ -28,8 +28,9 @@ import { WorkbenchConfigurationService } from '../../../../../workbench/services
 import { BrowserTextResourceStore } from '../../../../../workbench/contrib/codeEditor/browser/browserTextResourceStore.js';
 import type { EditorOpenOptions, EditorOpenTarget, IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
 import { PreferencesService } from '../../../../../workbench/services/preferences/browser/preferencesService.js';
+import type { IOpenSettingsOptions } from '../../../../../workbench/services/preferences/common/preferences.js';
 import { configurationSettingBinding, SettingModel } from '../../../../../workbench/services/preferences/common/settingsModels.js';
-import { UserSettingsResource } from '../../../../../workbench/services/preferences/common/settingsEditorInput.js';
+import { createSettingsEditorInput, SettingsEditorInput, UserSettingsResource } from '../../../../../workbench/services/preferences/common/settingsEditorInput.js';
 import { SettingsFileSystemProvider } from '../../../../../workbench/contrib/preferences/common/settingsFilesystemProvider.js';
 import { createJsonCompletionProvider } from '../../../../../workbench/services/language/common/jsonLanguageFeatures.js';
 import { SmartSnippetInserter } from '../../../../../workbench/contrib/preferences/common/smartSnippetInserter.js';
@@ -231,6 +232,44 @@ test('PreferencesService opens User Settings JSON as a pinned JSON editor input'
 	assert.equal(opened?.input.label, 'User Settings (JSON)');
 	assert.equal(opened?.options?.pinned, true);
 	assert.equal(opened?.target, undefined);
+});
+
+test('PreferencesService passes graphical queries and sections while rejecting unsupported options before opening', async () => {
+	const opened: IResourceEditorInput[] = [];
+	const requests: IOpenSettingsOptions[] = [];
+	using listeners = new DisposableStore();
+	const editorService: IEditorService = {
+		...emptyEditorServiceState,
+		openEditor(input, options, target): Promise<void> {
+			assert.deepEqual({ options, target }, { options: { pinned: true }, target: 'modalGroup' });
+			assert.ok(input instanceof SettingsEditorInput);
+			if (opened.length === 0) listeners.add(input.attachOptionsHandler(options => requests.push(options)));
+			opened.push(input);
+			return Promise.resolve();
+		},
+		focusActiveEditor() { },
+	};
+	using models = new BrowserTextModelService({ onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: '{}', revision: undefined }), save: async () => ({ revision: undefined }) });
+	using preferences = new PreferencesService(editorService, models, keybindingProfile.files, keybindingProfile.profiles, keybindingProfile.services);
+	for (const query of ['editor.fontFamily', 'font & 中文 + @id:editor.font*', '']) {
+		await preferences.openSettings({ query, section: 'models', target: ConfigurationTarget.USER_LOCAL });
+		assert.deepEqual(requests.at(-1), { query, section: 'models', target: ConfigurationTarget.USER_LOCAL });
+		assert.deepEqual(Object.fromEntries(new URLSearchParams(createSettingsEditorInput('models', { query }).resource.query)), { query, target: 'models' });
+	}
+	await preferences.openSettings({ target: ConfigurationTarget.USER });
+	assert.equal(opened.at(-1)!.resource.query, '');
+	for (const options of [null, [], true, { query: 1 }, { section: '' }, { section: 1 }, { revealSetting: { key: 'editor.fontFamily' } }, { target: ConfigurationTarget.WORKSPACE }, { target: ConfigurationTarget.USER_REMOTE }]) {
+		await assert.rejects(preferences.openSettings(options as IOpenSettingsOptions));
+	}
+	assert.equal(opened.length, 4, 'rejected requests never reach EditorService');
+	assert.equal(requests.length, 4);
+	assert.ok(opened.every(input => input === opened[0]), 'opening options retain the same Settings resource identity');
+	const input = opened[0]!;
+	assert.ok(input instanceof SettingsEditorInput);
+	preferences.dispose();
+	assert.throws(() => input.applyOptions({ query: 'disposed' }), ReferenceError);
+	assert.throws(() => input.attachOptionsHandler(() => { }), ReferenceError);
+	assert.equal(requests.length, 4, 'disposal retires the delegate before later opening requests');
 });
 
 test('the text-model save path updates configuration and accepts later external changes', async () => {

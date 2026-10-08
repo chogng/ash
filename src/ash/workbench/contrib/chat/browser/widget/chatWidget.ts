@@ -114,7 +114,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			listAgents: () => this.model.listAgents(),
 			selectAgent: agent => this.model.selectAgent(agent),
 			selectMode: mode => this.model.selectMode(mode),
-			openModelSettings: (category = 'models') => commandService.executeCommand(OpenSettingsCommandId, category),
+			openModelSettings: (category = 'models') => commandService.executeCommand(OpenSettingsCommandId, { section: category }),
 			resolveInteraction: (response) => this.model.resolveInteraction(response),
 		};
 		this.inputPart = this._register(createInputPart

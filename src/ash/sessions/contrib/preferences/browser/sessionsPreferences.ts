@@ -42,7 +42,7 @@ import { SettingsTreeModel, type SettingsContent, type SettingsContentItem, type
 import { SettingsSearchQuery } from '../../../../workbench/contrib/preferences/browser/settingsSearch.js';
 import { SettingsSearchMenu } from '../../../../workbench/contrib/preferences/browser/settingsSearchMenu.js';
 import type { SettingWidgetOptions } from '../../../../workbench/contrib/preferences/browser/settingsWidgets.js';
-import type { ISetting } from '../../../../workbench/services/preferences/common/preferences.js';
+import { validateSettingsEditorOptions, type IOpenSettingsOptions, type ISetting } from '../../../../workbench/services/preferences/common/preferences.js';
 import { SessionsConfiguration } from '../../../common/configuration.js';
 import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
 import { SessionsCustomizeContent } from './sessionsCustomizeContent.js';
@@ -81,6 +81,7 @@ export class SessionsPreferences extends Disposable {
 	private readonly activeDialog = this._register(new MutableDisposable<DisposableStore>());
 	private dialog: Dialog | undefined;
 	private navigate: ((categoryId: string, marketplaceOptions?: MarketplaceOpenOptions) => void) | undefined;
+	private applyQuery: ((query: string) => void) | undefined;
 
 	constructor(
 		private readonly container: HTMLElement,
@@ -106,7 +107,7 @@ export class SessionsPreferences extends Disposable {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsSettings,
 					{ type: AccessibleViewType.Help },
-					() => localize('sessions.settings.help', 'Sessions Settings has categories on the left and settings on the right. General contains dictation settings; Models contains chat models and API connections. Tools shows the current tool catalog and execution requirements. Git & PRs contains Codex review account status, repository access checks, and official review management links. Agents contains the Advisor model and enable switch. Execution trace shows the running recorder, detailed recording switch and save directory. Save trace settings explicitly, then restart the owning App Server to apply them. Other changes are saved immediately. Design contains canvas cursor and accessibility settings. Customize has Settings, Plugins, Skills, and Hooks tabs. Use Left and Right to move between tabs, then Enter or Space to open one. Use search to filter settings. Open More actions for a configuration setting and choose Copy Setting as JSON to copy its key and current value; copying does not save settings. The local dictation table lists available and installed models. Use arrow keys to move between rows and cells, and Tab to reach Install, Use model, Cancel, or Uninstall. Preparation continues after Settings closes. Cloud dictation uses the API connections in Models. Press Escape to close Settings.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.modifiedHelp' }, 'Type @modified or choose Modified in Filter Settings to show settings saved in local user settings, including explicit default values. Combine it with text or @id: filters. Language-only overrides and service status are excluded. Reset removes a saved override; failed saves keep the previous results. Clear Filters keeps your search text.'),
+					() => localize('sessions.settings.help', 'Sessions Settings has categories on the left and settings on the right. General contains dictation settings; Models contains chat models and API connections. Tools shows the current tool catalog and execution requirements. Git & PRs contains Codex review account status, repository access checks, and official review management links. Agents contains the Advisor model and enable switch. Execution trace shows the running recorder, detailed recording switch and save directory. Save trace settings explicitly, then restart the owning App Server to apply them. Other changes are saved immediately. Design contains canvas cursor and accessibility settings. Customize has Settings, Plugins, Skills, and Hooks tabs. Use Left and Right to move between tabs, then Enter or Space to open one. Use search to filter settings. Open More actions for a configuration setting and choose Copy Setting as JSON to copy its key and current value; copying does not save settings. The local dictation table lists available and installed models. Use arrow keys to move between rows and cells, and Tab to reach Install, Use model, Cancel, or Uninstall. Preparation continues after Settings closes. Cloud dictation uses the API connections in Models. Press Escape to close Settings.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.modifiedHelp' }, 'Type @modified or choose Modified in Filter Settings to show settings saved in local user settings, including explicit default values. Combine it with text or @id: filters. Language-only overrides and service status are excluded. Reset removes a saved override; failed saves keep the previous results. Clear Filters keeps your search text.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.openQueryHelp' }, 'Search accepts setting IDs or words. Opening Settings with a query focuses the search field and updates the existing page. An empty query clears the filter. Press Escape in a non-empty search field to clear it.'),
 					() => focused.focus(),
 					AccessibilityVerbositySettingId.SessionsSettings,
 				);
@@ -114,10 +115,13 @@ export class SessionsPreferences extends Disposable {
 		}));
 	}
 
-	public async open(categoryId?: string, marketplaceOptions?: MarketplaceOpenOptions): Promise<void> {
+	public async open(options: IOpenSettingsOptions = {}, marketplaceOptions?: MarketplaceOpenOptions): Promise<void> {
+		const validated = validateSettingsEditorOptions(options);
+		const categoryId = validated.section;
 		if (this.dialog?.element.open) {
 			if (categoryId) { this.navigate?.(categoryId, marketplaceOptions); }
-			this.dialog.element.focus();
+			if (validated.query !== undefined) this.applyQuery?.(validated.query);
+			else this.dialog.element.focus();
 			return;
 		}
 		const ownerDocument = this.container.ownerDocument;
@@ -178,6 +182,7 @@ export class SessionsPreferences extends Disposable {
 			placeholder: localize('sessions.settings.search', 'Search settings'),
 			ariaLabel: localize('sessions.settings.search', 'Search settings'),
 		}));
+		if (validated.query !== undefined) searchInput.value = validated.query;
 		const dialog = resources.add(new Dialog(this.container, {
 			title: localize('sessions.settings.title', 'Sessions Settings'),
 			content,
@@ -324,6 +329,10 @@ export class SessionsPreferences extends Disposable {
 			render();
 			pageScrollable.scrollTo(0, 0);
 		}));
+		this.applyQuery = query => {
+			searchInput.value = query;
+			searchInput.focus();
+		};
 		render();
 		dialog.element.classList.add('ash-sessions-settings-dialog');
 		const hint = this.accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.SessionsSettings);
@@ -344,10 +353,12 @@ export class SessionsPreferences extends Disposable {
 		this.activeDialog.value = resources;
 		try {
 			const shown = dialog.show();
+			if (validated.query !== undefined) searchInput.focus();
 			if (marketplaceOptions) void customizeContent.openPlugins(marketplaceOptions);
 			await shown;
 		} finally {
 			this.navigate = undefined;
+			this.applyQuery = undefined;
 			this.dialog = undefined;
 			this.activeDialog.clear();
 		}

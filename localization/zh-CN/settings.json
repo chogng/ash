@@ -302,7 +302,13 @@
     "categories.chat-code-blocks.label": "代码块",
     "categories.chat-code-blocks.description": "设置回复中代码块的字体、间距和自动换行。",
     "categories.github.label": "GitHub",
-    "categories.github.description": "连接账号并管理 Codex 拉取请求审查。"
+    "categories.github.description": "连接账号并管理 Codex 拉取请求审查。",
+    "open.invalidOptions": "打开设置的选项必须是对象。",
+    "open.unsupportedOption": "不支持打开设置选项 {0}。",
+    "open.invalidQuery": "设置查询必须是字符串。",
+    "open.invalidSection": "设置区段必须是非空字符串。",
+    "open.unsupportedTarget": "此设置编辑器仅支持本地用户设置。",
+    "search.openQueryHelp": "搜索支持设置 ID 或词语。使用查询打开设置时，焦点会移到搜索框，并更新已有页面。空查询会清除筛选条件。在非空搜索框中按 Escape 可清除搜索。"
   },
   "ash": {
     "color.settings.focusedRowBackground": "包含键盘焦点的设置行的背景色。",

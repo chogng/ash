@@ -54,7 +54,7 @@ export class SettingsSearchQuery {
 			if (!matchesId) return false;
 		}
 		if (this.terms.length === 0) return true;
-		const searchableText = [target.title, target.description, ...(target.keywords ?? []), ...(target.tags ?? [])]
+		const searchableText = [target.id, target.title, target.description, ...(target.keywords ?? []), ...(target.tags ?? [])]
 			.join(' ')
 			.toLocaleLowerCase();
 		return this.terms.every(term => searchableText.includes(term));

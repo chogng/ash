@@ -337,7 +337,7 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 		const model = this.model;
 		this.codexActions.setActions([
 			this.action('requestCodexReview', localize('github.editor.requestCodex', 'Request Codex review'), model.canWrite && !model.codexReviewRequested && model.repository?.host === 'github.com', () => model.requestCodexReview()),
-			this.action('codexSettings', localize('github.editor.codexSettings', 'Codex review settings'), true, () => this.preferences.openSettings('github')),
+			this.action('codexSettings', localize('github.editor.codexSettings', 'Codex review settings'), true, () => this.preferences.openSettings({ section: 'github' })),
 		]);
 		this.codexNotice.textContent = model.codexReviewRequested
 			? localize('github.editor.codexRequested', 'Posted @codex review. Refresh to read PR comments and review discussions. The official Connector must be authorized for this repository.')

@@ -4,6 +4,86 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Workbench } from '../../../automation/workbench.js';
 
+test('Sessions Settings command queries reuse search and restore saved values after reopening', async ({ application, target, workbench, runningApplication }, testInfo) => {
+	await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
+	const group = workbench.editors.groupAt(0);
+	await group.editor.input.press('ControlOrMeta+A');
+	await group.editor.input.evaluate((element, source) => {
+		const clipboardData = new DataTransfer();
+		clipboardData.setData('text/plain', source);
+		element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
+	}, JSON.stringify([
+		{ key: 'ctrl+alt+y', command: 'workbench.action.openSettings', args: 'sessions.activityBar.compact' },
+		{ key: 'ctrl+alt+u', command: 'workbench.action.openSettings', args: { query: '@id:sessions.activityBar.compact', target: 3 } },
+		{ key: 'ctrl+alt+i', command: 'workbench.action.openSettings', args: { query: '' } },
+		{ key: 'ctrl+alt+o', command: 'workbench.action.openSettings', args: { section: 'tools' } },
+	]));
+	await group.editor.input.press('ControlOrMeta+S');
+	await expect(group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
+	let sessionsPage = await workbench.openAgentsWindow(target.kind);
+	const openQuery = async (): Promise<void> => {
+		const launcher = sessionsPage.locator('[data-part="activitybar"] .ash-sessions-activity-bottom button').last();
+		await expect(launcher).toBeVisible();
+		await launcher.focus();
+		await expect(launcher).toBeFocused();
+		await sessionsPage.keyboard.press('Control+Alt+Y');
+		const settings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
+		await expect(settings.getByRole('searchbox')).toHaveValue('sessions.activityBar.compact');
+		await expect(settings.getByRole('searchbox')).toBeFocused();
+		await settings.getByRole('searchbox').evaluate(element => element.setAttribute('data-settings-query-reuse', 'retained'));
+		await settings.getByRole('searchbox').press('Control+Alt+U');
+		await expect(settings.getByRole('searchbox')).toHaveAttribute('data-settings-query-reuse', 'retained');
+		await expect(settings.getByRole('searchbox')).toHaveValue('@id:sessions.activityBar.compact');
+		await expect(settings.getByRole('searchbox')).toBeFocused();
+		await expect(sessionsPage.getByRole('dialog', { name: 'Sessions Settings' })).toHaveCount(1);
+	};
+	await openQuery();
+	let settings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
+	const compact = settings.locator('[data-settings-item-id="sessions.activityBar.compact"]').getByRole('switch');
+	await expect(compact).not.toBeChecked();
+	await compact.press('Space');
+	await expect(compact).toBeChecked();
+	const readSaved = async (): Promise<unknown> => {
+		if ('windows' in application) {
+			const profile = await application.evaluate(() => process.env.ASH_HOME!);
+			return JSON.parse(await readFile(join(profile, 'settings.json'), 'utf8'))['sessions.activityBar.compact'];
+		}
+		return sessionsPage.evaluate(async () => {
+			const database = await new Promise<IDBDatabase>((resolve, reject) => {
+				const request = indexedDB.open('ash-configuration');
+				request.onsuccess = () => resolve(request.result);
+				request.onerror = () => reject(request.error);
+			});
+			try {
+				return await new Promise<unknown>((resolve, reject) => {
+					const request = database.transaction('resources', 'readonly').objectStore('resources').get('settings.json');
+					request.onsuccess = () => resolve(JSON.parse(request.result.document.source)['sessions.activityBar.compact']);
+					request.onerror = () => reject(request.error);
+				});
+			} finally { database.close(); }
+		});
+	};
+	await expect.poll(readSaved).toBe(true);
+	await settings.getByRole('searchbox').press('Control+Alt+I');
+	await expect(settings.getByRole('searchbox')).toHaveValue('');
+	await expect(settings.getByRole('searchbox')).toBeFocused();
+	await settings.getByRole('searchbox').press('Control+Alt+O');
+	await expect(settings.getByRole('button', { name: 'Tools', exact: true })).toHaveAttribute('aria-current', 'page');
+	await settings.evaluate(element => (element as HTMLDialogElement).requestClose());
+	await expect(settings).toHaveCount(0);
+	await openQuery();
+	await expect(sessionsPage.locator('[data-settings-item-id="sessions.activityBar.compact"]').getByRole('switch')).toBeChecked();
+	await sessionsPage.getByRole('dialog', { name: 'Sessions Settings' }).evaluate(element => (element as HTMLDialogElement).requestClose());
+	sessionsPage = await workbench.reopenAgentsWindow(application, sessionsPage);
+	await openQuery();
+	settings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
+	await expect(settings.locator('[data-settings-item-id="sessions.activityBar.compact"]').getByRole('switch')).toBeChecked();
+	await expect.poll(readSaved).toBe(true);
+	await settings.evaluate(element => (element as HTMLDialogElement).requestClose());
+	await testInfo.attach('sessions-settings-query-diagnostics', { body: JSON.stringify(runningApplication.diagnostics), contentType: 'application/json' });
+	expect(runningApplication.diagnostics.errors).toEqual([]);
+});
+
 test('Sessions Modified Settings refreshes after external writes, reset and window reload', async ({ application, target, workbench, runningApplication }, testInfo) => {
 	const workbenchUrl = workbench.page.url();
 	await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');

@@ -9,14 +9,15 @@ import { Registry } from '../../../../platform/registry/common/platform.js';
 import { localize } from '../../../../nls.js';
 import { IEditorService } from '../../editor/common/editorService.js';
 import { IFileTextModelService } from '../../textmodelResolver/common/textModelResourceService.js';
-import type { IOpenSettingsOptions, IPreferencesService } from '../common/preferences.js';
-import { createSettingsEditorInput, createUserSettingsEditorInput } from '../common/settingsEditorInput.js';
+import { validateSettingsEditorOptions, type IOpenSettingsOptions, type IPreferencesService } from '../common/preferences.js';
+import { SettingsEditorInput, createUserSettingsEditorInput } from '../common/settingsEditorInput.js';
 import { createKeybindingsJsonEditorInput, isKeybindingsEditorInput, KeybindingsEditorInput } from './keybindingsEditorInput.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 
 /** Routes Preferences through the editor and its shared, revision-aware file models. */
 export class PreferencesService extends Disposable implements IPreferencesService {
 	private readonly lifetime = new AbortController();
+	private readonly settingsEditorInput = this._register(new SettingsEditorInput());
 	private keybindingsEditorInput: WeakRef<KeybindingsEditorInput> | undefined;
 
 	constructor(
@@ -30,8 +31,10 @@ export class PreferencesService extends Disposable implements IPreferencesServic
 		this._register(toDisposable(() => this.lifetime.abort()));
 	}
 
-	public async openSettings(target?: string): Promise<void> {
-		await this.editorService.openEditor(createSettingsEditorInput(target), { pinned: true }, 'modalGroup');
+	public async openSettings(options: IOpenSettingsOptions = {}): Promise<void> {
+		const validated = validateSettingsEditorOptions(options);
+		await this.editorService.openEditor(this.settingsEditorInput, { pinned: true }, 'modalGroup');
+		this.settingsEditorInput.applyOptions(validated);
 	}
 
 	public async openUserSettings(options: IOpenSettingsOptions = {}): Promise<void> {

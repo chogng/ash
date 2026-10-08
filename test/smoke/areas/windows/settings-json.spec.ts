@@ -43,6 +43,88 @@ async function captureCopiedSetting(application: PlaywrightApplication, page: Pa
 }
 
 for (const locale of ['en', 'zh-CN']) {
+	test(`Settings command queries reuse the page and persist edits after reload (${locale})`, async ({ application, workbench, restartWorkbench, reloadWorkbench, runningApplication }, testInfo) => {
+		const chinese = locale === 'zh-CN';
+		if (chinese) {
+			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+			const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
+			await picker.getByRole('combobox').fill('简体中文');
+			await picker.getByRole('combobox').press('Enter');
+			({ application, workbench } = await restartWorkbench());
+		}
+		await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
+		const group = workbench.editors.groupAt(0);
+		await group.editor.input.press('ControlOrMeta+A');
+		await pasteJson(group.editor.input, JSON.stringify([
+			{ key: 'ctrl+alt+y', command: 'workbench.action.openSettings', args: 'editor.fontSize' },
+			{ key: 'ctrl+alt+u', command: 'workbench.action.openSettings', args: { query: '@id:editor.fontSize', target: 3 } },
+			{ key: 'ctrl+alt+i', command: 'workbench.action.openSettings', args: { query: '' } },
+			{ key: 'ctrl+alt+o', command: 'workbench.action.openSettings', args: { section: 'models' } },
+		], null, 2));
+		await group.editor.input.press('ControlOrMeta+S');
+		await expect(group.tabs.filter({ hasText: chinese ? '键盘快捷方式（JSON）' : 'Keyboard Shortcuts (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
+		const openQuery = async (): Promise<void> => {
+			await workbench.page.keyboard.press('Control+Alt+Y');
+			const settings = workbench.settingsEditor.element;
+			await expect(settings.getByRole('searchbox')).toHaveValue('editor.fontSize');
+			await expect(settings.getByRole('searchbox')).toBeFocused();
+			await expect(settings.locator('[data-settings-item-id="editor.fontSize"]')).toHaveCount(1);
+			await settings.getByRole('searchbox').evaluate(element => element.setAttribute('data-settings-query-reuse', 'retained'));
+			await settings.getByRole('searchbox').press('Control+Alt+U');
+			await expect(settings.getByRole('searchbox')).toHaveAttribute('data-settings-query-reuse', 'retained');
+			await expect(settings.getByRole('searchbox')).toHaveValue('@id:editor.fontSize');
+			await expect(settings.getByRole('searchbox')).toBeFocused();
+			await expect(settings.locator('.ash-settings-content-tree [data-settings-item-id]')).toHaveCount(1);
+			await expect(workbench.page.locator('.ash-settings-search input')).toHaveCount(1);
+		};
+		await openQuery();
+		let settings = workbench.settingsEditor.element;
+		const size = settings.locator('[data-settings-item-id="editor.fontSize"]').getByRole('spinbutton');
+		await size.fill('26');
+		await size.press('Tab');
+		const readSaved = async (): Promise<unknown> => {
+			if ('windows' in application) {
+				const profile = await application.evaluate(() => process.env.ASH_HOME!);
+				return JSON.parse(await readFile(join(profile, 'settings.json'), 'utf8'))['editor.fontSize'];
+			}
+			return workbench.page.evaluate(async () => {
+				const database = await new Promise<IDBDatabase>((resolve, reject) => {
+					const request = indexedDB.open('ash-configuration');
+					request.onsuccess = () => resolve(request.result);
+					request.onerror = () => reject(request.error);
+				});
+				try {
+					return await new Promise<unknown>((resolve, reject) => {
+						const request = database.transaction('resources', 'readonly').objectStore('resources').get('settings.json');
+						request.onsuccess = () => resolve(JSON.parse(request.result.document.source)['editor.fontSize']);
+						request.onerror = () => reject(request.error);
+					});
+				} finally { database.close(); }
+			});
+		};
+		await expect.poll(readSaved).toBe(26);
+		await settings.getByRole('searchbox').press('Control+Alt+I');
+		await expect(settings.getByRole('searchbox')).toHaveValue('');
+		await expect(settings.getByRole('searchbox')).toBeFocused();
+		await expect(settings.locator('.ash-settings-content-tree [data-settings-item-id]')).not.toHaveCount(1);
+		await settings.getByRole('searchbox').press('Control+Alt+O');
+		await expect(settings.locator('[data-settings-container]')).toHaveAttribute('data-active-settings-category', 'models');
+		await settings.locator('.ash-modal-editor-close').click();
+		await openQuery();
+		await expect(workbench.settingsEditor.element.locator('[data-settings-item-id="editor.fontSize"]').getByRole('spinbutton')).toHaveValue('26');
+		await workbench.settingsEditor.element.locator('.ash-modal-editor-close').click();
+		({ application, workbench } = await reloadWorkbench());
+		await openQuery();
+		settings = workbench.settingsEditor.element;
+		await expect(settings.locator('[data-settings-item-id="editor.fontSize"]').getByRole('spinbutton')).toHaveValue('26');
+		await expect.poll(readSaved).toBe(26);
+		await settings.getByRole('searchbox').press('Escape');
+		await expect(settings.getByRole('searchbox')).toHaveValue('');
+		await settings.locator('.ash-modal-editor-close').click();
+		await testInfo.attach('settings-query-diagnostics', { body: JSON.stringify(runningApplication.diagnostics), contentType: 'application/json' });
+		expect(runningApplication.diagnostics.errors).toEqual([]);
+	});
+
 	test(`Modified Settings composes filters and restores saved overrides (${locale})`, async ({ application, workbench, restartWorkbench, reloadWorkbench, runningApplication }, testInfo) => {
 		const chinese = locale === 'zh-CN';
 		if (chinese) {

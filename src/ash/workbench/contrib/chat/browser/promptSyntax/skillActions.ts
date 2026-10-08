@@ -61,7 +61,7 @@ export function registerSkillActions(): void {
 			if (!choice) return;
 			if (choice.manage) {
 				picker.hide();
-				await preferences.openSettings('skills');
+				await preferences.openSettings({ section: 'skills' });
 				return;
 			}
 			const skill = choice.skill;

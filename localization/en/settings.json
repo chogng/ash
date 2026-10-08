@@ -246,6 +246,12 @@
     "trace.verbosity": "Execution trace settings accessibility help",
     "trace.verbosityDescription": "Announce how to open accessibility help in execution trace settings.",
     "categories.execution-trace.label": "Execution trace",
-    "categories.execution-trace.description": "Manage detailed recording and inspect the running backend configuration."
+    "categories.execution-trace.description": "Manage detailed recording and inspect the running backend configuration.",
+    "open.invalidOptions": "Settings opening options must be an object.",
+    "open.unsupportedOption": "Settings opening option {0} is not supported.",
+    "open.invalidQuery": "The Settings query must be a string.",
+    "open.invalidSection": "The Settings section must be a non-empty string.",
+    "open.unsupportedTarget": "This Settings editor supports only local user settings.",
+    "search.openQueryHelp": "Search accepts setting IDs or words. Opening Settings with a query focuses the search field and updates the existing page. An empty query clears the filter. Press Escape in a non-empty search field to clear it."
   }
 }

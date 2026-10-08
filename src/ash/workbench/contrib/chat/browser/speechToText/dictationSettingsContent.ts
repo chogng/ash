@@ -85,7 +85,7 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 		this.connectionStatus.setAttribute('role', 'status');
 		this.cloud.append(this.connectionStatus);
 		const connections = this._register(new Button(this.cloud, { label: localize('dictation.connections.manage', 'Manage API connections'), presentation: 'secondary' }));
-		this._register(connections.onDidClick(() => { void preferences.openSettings('models'); }));
+		this._register(connections.onDidClick(() => { void preferences.openSettings({ section: 'models' }); }));
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(AccessibilityVerbositySettingId.DictationModels)) { updateHint(); }
 			if (event.affectsConfiguration(DictationConfiguration.backend) || event.affectsConfiguration(DictationConfiguration.cloudProvider)) {

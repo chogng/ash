@@ -490,10 +490,10 @@ export abstract class Workbench extends Disposable {
 		const accessibleViewService = this._register(services.createInstance(AccessibleViewService));
 		services.registerInstance(IAccessibleViewService, accessibleViewService);
 		const preferences = this._register(services.createInstance(SessionsPreferences, this.domNode, () => { void commandService.executeCommand('sessions.open.code').catch(error => notificationService.error(String(error))); }));
-		this._register(CommandsRegistry.register(OPEN_PLUGINS_COMMAND_ID, () => preferences.open('plugins', { mode: 'installed' })));
+		this._register(CommandsRegistry.register(OPEN_PLUGINS_COMMAND_ID, () => preferences.open({ section: 'plugins' }, { mode: 'installed' })));
 		this._register(CommandsRegistry.register(OPEN_MARKETPLACE_COMMAND_ID, (_accessor, value: unknown) => {
 			const options = value as MarketplaceOpenOptions | string | undefined;
-			return preferences.open('plugins', typeof options === 'string' ? { query: options.trim() } : { mode: 'browse', ...options });
+			return preferences.open({ section: 'plugins' }, typeof options === 'string' ? { query: options.trim() } : { mode: 'browse', ...options });
 		}));
 		const accountMenu = this._register(new SessionsAccountMenu(accountService, contextMenus, preferences, options.returnToWorkbench));
 
@@ -643,7 +643,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IEditorService, editors);
 		const workbenchPreferences = this._register(services.createInstance(PreferencesService));
 		services.registerInstance(IPreferencesService, {
-			openSettings: category => preferences.open(category),
+			openSettings: options => preferences.open(options),
 			openUserSettings: options => workbenchPreferences.openUserSettings(options),
 			openGlobalKeybindingSettings: textual => workbenchPreferences.openGlobalKeybindingSettings(textual),
 		});

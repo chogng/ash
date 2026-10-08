@@ -3,7 +3,7 @@ import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import { IPreferencesService } from '../../../services/preferences/common/preferences.js';
+import { IPreferencesService, type IOpenSettingsOptions } from '../../../services/preferences/common/preferences.js';
 import { OpenKeyboardShortcutsCommandId, OpenSettingsCommandId, OpenSettingsJsonCommandId } from '../common/preferences.js';
 
 registerAction2(class OpenSettingsAction extends Action2 {
@@ -32,9 +32,10 @@ registerAction2(class OpenSettingsAction extends Action2 {
 		});
 	}
 
-	override run(accessor: ServicesAccessor, target?: unknown): Promise<void> {
-		if (target !== undefined && (typeof target !== 'string' || target.length === 0)) throw new TypeError('Settings target must be a non-empty string');
-		return accessor.get(IPreferencesService).openSettings(target);
+	override run(accessor: ServicesAccessor, args?: unknown): Promise<void> {
+		// Each host's Preferences owner validates command data before opening or changing its live surface.
+		const options = typeof args === 'string' ? { query: args } : args as IOpenSettingsOptions | undefined;
+		return accessor.get(IPreferencesService).openSettings(options);
 	}
 });
 

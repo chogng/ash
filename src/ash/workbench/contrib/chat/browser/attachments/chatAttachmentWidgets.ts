@@ -63,7 +63,7 @@ export class DefaultChatAttachmentWidget extends Disposable {
 				const threadId = parameters.get('threadId');
 				if (sessionId && threadId) await this.navigation.openConversation(sessionId, threadId);
 			} else if (resource.scheme === Schemas.internal && resource.authority === 'agent-tools') {
-				await this.commands.executeCommand(OpenSettingsCommandId, 'tools');
+				await this.commands.executeCommand(OpenSettingsCommandId, { section: 'tools' });
 			} else if (resource.scheme === Schemas.internal && resource.authority === 'terminal') {
 				const id = new URLSearchParams(resource.query).get('id');
 				if (id) await this.commands.executeCommand(TerminalCommandId.Focus, id);

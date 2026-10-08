@@ -55,7 +55,7 @@ export class EditorDictation extends Disposable {
 			target,
 			preview,
 			() => !this.isDisposed && !editor.getContainerDomNode().closest('[hidden]') && !editor.getOption(EditorOption.readOnly),
-			async () => { await preferences.openSettings('dictation'); },
+			async () => { await preferences.openSettings({ section: 'dictation' }); },
 		));
 		this._register(instantiation.createInstance(DictationAccessibilityHelp, this.session, editor.getContainerDomNode(), controls));
 		this._register(onboarding.registerHost({

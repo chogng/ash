@@ -176,7 +176,7 @@ test('Sessions Models switches control the model picker visibility preference', 
 	services.registerInstance(IFileService, {} as IFileService);
 	services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, fallback) => fallback });
 	const { IPreferencesService } = await import('../../../workbench/services/preferences/common/preferences.js');
-	services.registerInstance(IPreferencesService, { openSettings: category => preferences.open(category) } as import('../../../workbench/services/preferences/common/preferences.js').IPreferencesService);
+	services.registerInstance(IPreferencesService, { openSettings: options => preferences.open(options) } as import('../../../workbench/services/preferences/common/preferences.js').IPreferencesService);
 	services.registerInstance(IAccountService, { onDidChangeAccounts: Event.None, onDidCompleteLogin: Event.None, read: async () => ({ revision: 1n, accounts: [] }), startLogin: async () => { throw new Error('Not used'); }, cancelLogin: async () => { }, logout: async () => { } });
 	services.registerInstance(IGitHubService, { listAccounts: async () => [] } as unknown as IGitHubService);
 	services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async () => { }, cancel: async () => { } });
@@ -214,7 +214,7 @@ test('Sessions Models switches control the model picker visibility preference', 
 	cancelledMenu.menu.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 	assert.equal(cancelledMenu.menu.isConnected, false);
 	assert.equal(window.document.activeElement, cancelledMenu.more);
-	void preferences.open('tools');
+	void preferences.open({ section: 'tools' });
 	await new Promise<void>(resolve => setImmediate(resolve));
 	assert.equal(window.document.querySelector('[aria-current="page"]')?.textContent, 'Tools');
 	assert.match(window.document.querySelector('.ash-agent-capabilities-list')?.textContent ?? '', /read_file/);
@@ -264,6 +264,17 @@ test('Sessions Models switches control the model picker visibility preference', 
 	assert.deepEqual(removedKeys, ['openai']);
 	const modelSearch = window.document.querySelector<HTMLInputElement>('.ash-sessions-settings-search input[type="search"]');
 	assert.ok(modelSearch);
+	await import('../../../workbench/contrib/preferences/browser/preferencesActions.js');
+	await commands.executeCommand('workbench.action.openSettings', 'sessions.activityBar.compact');
+	assert.equal(window.document.querySelector('.ash-sessions-settings-search input[type="search"]'), modelSearch);
+	assert.equal(modelSearch.value, 'sessions.activityBar.compact');
+	assert.equal(window.document.activeElement, modelSearch);
+	assert.equal(window.document.querySelectorAll('.ash-sessions-settings-content-tree [data-settings-item-id]').length, 1);
+	await assert.rejects(commands.executeCommand('workbench.action.openSettings', { query: 'changed', target: 5 }));
+	assert.equal(modelSearch.value, 'sessions.activityBar.compact');
+	await commands.executeCommand('workbench.action.openSettings', { query: '' });
+	assert.equal(modelSearch.value, '');
+	assert.equal(window.document.activeElement, modelSearch);
 	modelSearch.value = '@id:sessions.activityBar.compact';
 	modelSearch.dispatchEvent(new window.Event('input', { bubbles: true }));
 	const filter = window.document.querySelector<HTMLButtonElement>('.ash-sessions-settings-search .ash-settings-search-filter');
@@ -344,7 +355,13 @@ test('Sessions Models switches control the model picker visibility preference', 
 	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
-		const reopened = preferences.open();
+		const reopened = preferences.open({ query: 'sessions.activityBar.compact' });
+		const reopenedSearch = window.document.querySelector<HTMLInputElement>('.ash-sessions-settings-search input[type="search"]')!;
+		assert.equal(reopenedSearch.value, 'sessions.activityBar.compact');
+		assert.equal(window.document.activeElement, reopenedSearch);
+		await assert.rejects(commands.executeCommand('workbench.action.openSettings', { query: 1 }), /设置查询必须是字符串/u);
+		await assert.rejects(commands.executeCommand('workbench.action.openSettings', { target: 5 }), /此设置编辑器仅支持本地用户设置/u);
+		assert.equal(reopenedSearch.value, 'sessions.activityBar.compact');
 		assert.equal(window.document.querySelector('.ash-settings-search-filter')?.getAttribute('aria-label'), '筛选设置');
 		const reopenedMenu = openCopyMenu('外观', '复制设置为 JSON');
 		reopenedMenu.copy.click();

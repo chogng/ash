@@ -120,6 +120,7 @@ const configurationRegistry = Registry.as<InstanceType<typeof ConfigurationRegis
 const { EditorPart } = await import('../../../../browser/parts/editor/editorPart.js');
 const { EditorPaneRegistry, EditorPanes } = await import('../../../../browser/editor.js');
 const { SettingsSearchQuery } = await import('../../browser/settingsSearch.js');
+await import('../../browser/preferencesActions.js');
 const { createSettingsLayout, settingsRootNodes, SettingsCategories, SettingsLayout } = await import('../../browser/settingsLayout.js');
 const { TOCTreeModel } = await import('../../browser/tocTree.js');
 const { SettingsEditorId } = await import('../../browser/settingsEditor.js');
@@ -732,6 +733,12 @@ test('Settings search normalizes pasted setting syntax and matches complete meta
 		title: 'Font size',
 		description: 'Configure the editor font size.',
 	}), false);
+});
+
+test('Settings ordinary search matches IDs and combines them with metadata words', () => {
+	const metadata = { id: 'editor.fontFamily', title: 'Font family', description: 'Editor typography.' };
+	assert.deepEqual(['editor.fontFamily', 'EDITOR.FONT', 'editor.font typography', 'font missing'].map(query => new SettingsSearchQuery(query).matches(metadata)), [true, true, true, false]);
+	assert.equal(new SettingsSearchQuery('typography').matches({ title: 'Font family', description: 'Editor typography.' }), true);
 });
 
 test('Settings search composes setting ID and text filters', () => {
@@ -1534,7 +1541,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(host.hidden, true);
 	assert.match(prompts[0] ?? '', /\/profile\/config.toml.*namespace \(user\)/);
 	await preferences.openSettings();
-	await preferences.openSettings('dictation');
+	await preferences.openSettings({ section: 'dictation' });
 	assert.equal(root.querySelector('[data-settings-container]')?.getAttribute('data-active-settings-category'), 'general');
 	assert.equal(root.querySelector('[data-tree-id="general"]')?.getAttribute('aria-selected'), 'true');
 	assert.equal(root.querySelector('[data-settings-category-id="dictation"]'), null);
@@ -1659,7 +1666,25 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	search.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Escape' }));
 	assert.equal(search.value, '');
 	assert.ok(root.querySelectorAll('.ash-settings-content-tree [data-settings-item-id]').length > 1);
-	await preferences.openSettings('models');
+	const commands = editorServices.get(ICommandService);
+	await commands.executeCommand('workbench.action.openSettings', 'editor.fontFamily');
+	assert.equal(root.querySelector('.ash-settings-search input'), search, 'query opening reuses the search owner');
+	assert.equal(search.value, 'editor.fontFamily');
+	assert.equal(ownerDocument.activeElement, search);
+	assert.deepEqual([...root.querySelectorAll<HTMLElement>('.ash-settings-content-tree [data-settings-item-id]')].map(row => row.dataset.settingsItemId).sort(), ['chat.editor.fontFamily', 'editor.fontFamily']);
+	assert.equal(root.querySelector(`[data-configuration-key="${CodeEditorConfiguration.fontFamily}"]`), fontFamily);
+	await commands.executeCommand('workbench.action.openSettings', { query: '@id:editor.fontSize' });
+	assert.equal(search.value, '@id:editor.fontSize');
+	assert.equal(root.querySelectorAll('.ash-settings-content-tree [data-settings-item-id]').length, 1);
+	await assert.rejects(commands.executeCommand('workbench.action.openSettings', { query: 'changed', target: 5 }));
+	assert.equal(search.value, '@id:editor.fontSize');
+	await preferences.openSettings();
+	assert.equal(search.value, '@id:editor.fontSize', 'an opening request without query preserves the current filter');
+	await commands.executeCommand('workbench.action.openSettings', { query: '' });
+	assert.equal(search.value, '');
+	assert.equal(ownerDocument.activeElement, search);
+	assert.ok(root.querySelectorAll('.ash-settings-content-tree [data-settings-item-id]').length > 1);
+	await preferences.openSettings({ section: 'models' });
 	assert.equal(root.querySelector<HTMLElement>('[data-settings-container]')?.dataset.activeSettingsCategory, 'models');
 
 	root.querySelector<HTMLButtonElement>('.ash-modal-editor-close')?.click();
