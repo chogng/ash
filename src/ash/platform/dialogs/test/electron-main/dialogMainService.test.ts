@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { tmpdir } from 'node:os';
+import { release, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { BrowserWindow, MessageBoxOptions, MessageBoxReturnValue, OpenDialogOptions, SaveDialogOptions } from 'electron';
 import { test } from 'mocha';
@@ -61,22 +61,30 @@ test('four-button prompt keeps its cancel and default positions on Linux', () =>
 
 test('dialog main service maps message, confirmation, and prompt results', async () => {
 	const options: MessageBoxOptions[] = [];
-	const responses = [0, 1, 1, 2];
+	const selections = ['OK', 'Cancel', 'Discard', 'Cancel'];
 	using dialogs = new DialogMainService(api(async value => {
 		options.push(value);
-		return { response: responses.shift()!, checkboxChecked: true };
+		const response = value.buttons!.indexOf(selections.shift()!);
+		assert.notEqual(response, -1);
+		return { response, checkboxChecked: true };
 	}));
 	const window = windowWithId(1);
 	const message = await dialogs.perform(window, { kind: 'show', id: 1, request: { kind: 'message', severity: DialogSeverity.Info, message: 'Notice' } });
 	const confirmation = await dialogs.perform(window, { kind: 'show', id: 2, request: { kind: 'confirmation', message: 'Continue?' } });
 	const prompt = await dialogs.perform(window, { kind: 'show', id: 3, request: { kind: 'prompt', message: 'Save?', primaryButton: 'Save', secondaryButton: 'Discard' } });
 	const cancelledPrompt = await dialogs.perform(window, { kind: 'show', id: 4, request: { kind: 'prompt', message: 'Save?', primaryButton: 'Save', secondaryButton: 'Discard' } });
+	let expectedButtons = [['OK'], ['Confirm', 'Cancel'], ['Save', 'Discard', 'Cancel'], ['Save', 'Discard', 'Cancel']];
+	if (process.platform === 'linux') {
+		expectedButtons = [['OK'], ['Cancel', 'Confirm'], ['Discard', 'Cancel', 'Save'], ['Discard', 'Cancel', 'Save']];
+	} else if (process.platform === 'darwin' && Number.parseInt(release(), 10) < 24) {
+		expectedButtons = [['OK'], ['Confirm', 'Cancel'], ['Save', 'Cancel', 'Discard'], ['Save', 'Cancel', 'Discard']];
+	}
 	assert.deepEqual({ message, confirmation, prompt, cancelledPrompt, buttons: options.map(value => value.buttons) }, {
 		message: { button: DialogResult.Primary, checkboxChecked: true },
 		confirmation: { button: DialogResult.Cancel, checkboxChecked: true },
 		prompt: { button: DialogResult.Secondary, checkboxChecked: true },
 		cancelledPrompt: { button: DialogResult.Cancel, checkboxChecked: true },
-		buttons: [['OK'], ['Confirm', 'Cancel'], ['Save', 'Discard', 'Cancel'], ['Save', 'Discard', 'Cancel']],
+		buttons: expectedButtons,
 	});
 });
 
@@ -84,11 +92,19 @@ test('dialog main service returns the selected action index and checkbox state',
 	let shown: MessageBoxOptions | undefined;
 	using dialogs = new DialogMainService(api(async options => {
 		shown = options;
-		return { response: 2, checkboxChecked: true };
+		const response = options.buttons!.indexOf('Third');
+		assert.notEqual(response, -1);
+		return { response, checkboxChecked: true };
 	}));
 	const request = { kind: 'choice' as const, severity: DialogSeverity.Warning, message: 'Choose action', buttons: ['First', 'Second', 'Third'], cancelButton: 'Cancel' };
 	const result = await dialogs.perform(windowWithId(11), { kind: 'show', id: 1, request });
-	assert.deepEqual(shown?.buttons, ['First', 'Second', 'Third', 'Cancel']);
+	let expectedButtons = ['First', 'Second', 'Third', 'Cancel'];
+	if (process.platform === 'linux') {
+		expectedButtons = ['Third', 'Second', 'Cancel', 'First'];
+	} else if (process.platform === 'darwin' && Number.parseInt(release(), 10) < 24) {
+		expectedButtons = ['First', 'Cancel', 'Second', 'Third'];
+	}
+	assert.deepEqual(shown?.buttons, expectedButtons);
 	assert.equal(shown?.type, 'warning');
 	assert.deepEqual(result, { button: DialogResult.Primary, buttonIndex: 2, checkboxChecked: true });
 });

@@ -2,7 +2,7 @@ import { createTestFileService } from '../../../../test/common/testEditorService
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
-import { FileKind, FileNotFoundError, IFileService, type IFileStat, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
+import { createFileSystemProviderError, FileKind, FileNotFoundError, FileSystemProviderErrorCode, IFileService, type IFileStat, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import { IWorkspaceContextService, type IAnyWorkspaceIdentifier } from '../../../../../platform/workspace/common/workspace.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
@@ -182,7 +182,15 @@ export class DebugViewTestServices extends Disposable {
 				if (!this.documents.has(resource.toString())) throw new FileNotFoundError(resource);
 				return stat(resource);
 			},
-			createDirectory: async resource => ({ ...stat(resource), kind: FileKind.Directory }), readFile: unexpected, readDirectory: unexpected, writeFile: unexpected,
+			createDirectory: async resource => ({ ...stat(resource), kind: FileKind.Directory }), readFile: unexpected, readDirectory: unexpected,
+			writeFile: async (resource, bytes, options) => {
+				const key = resource.toString();
+				if (this.documents.has(key) && !options.overwrite) { throw createFileSystemProviderError('File already exists', FileSystemProviderErrorCode.FileExists); }
+				if (!this.documents.has(key) && !options.create) { throw new FileNotFoundError(resource); }
+				this.documents.set(key, new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes));
+				this.writes++;
+				return { stat: { ...stat(resource), sizeBytes: bytes.byteLength }, revision: String(this.writes) };
+			},
 			createFile: unexpected, copy: unexpected, rename: unexpected, delete: unexpected,
 		})));
 		return services;
