@@ -24,6 +24,25 @@ Path casing is a policy decision. The default policy treats local `file:` paths
 as written. `extUriBiasedIgnorePathCase` follows the current native platform,
 and remote providers can create an `ExtUri` matching their own semantics.
 
+File-backed frontend owners use `IUriIdentityService` from
+`platform/uriIdentity/common/uriIdentity.ts`. It selects comparison semantics
+from the registered provider's `PathCaseSensitive` capability and establishes
+canonical document URIs while retaining query and the caller's fragment.
+Providers without a registered scheme retain case-sensitive comparison.
+Canonicalization normalizes encoded path segments without resolving symlinks
+or granting filesystem access.
+
+`FileService` publishes provider registration and capability changes. The
+identity service invalidates that scheme's bounded spelling cache immediately;
+open models and working copies retain their own lifetimes. File models reject
+new acquisition when a changed policy matches multiple existing models, so
+edited documents are never silently merged.
+
+Local disk providers use the host's default casing policy; IndexedDB, browser
+folder handles and settings resources preserve case. App Server filesystem
+providers currently preserve case because their protocol does not advertise
+filesystem casing. Remote identity must not be inferred from the renderer OS.
+
 `ExtUri.isEqualOrParent(base, parentCandidate)` checks directory boundaries
 under the same path casing policy. Scheme, authority, query, and fragment must
 match; callers can explicitly ignore the fragment. Git repository selection

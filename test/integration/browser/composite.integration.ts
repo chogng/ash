@@ -1,3 +1,4 @@
+import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { h } from '../../../src/ash/base/browser/dom.js';
 import '../../../src/ash/base/browser/ui/actionbar/actionbar.css';
 import '../../../src/ash/base/browser/ui/grid/grid.css';
@@ -29,12 +30,11 @@ import { BrowserStorageService } from '../../../src/ash/workbench/services/stora
 import { ViewDescriptorService } from '../../../src/ash/workbench/services/views/browser/viewDescriptorService.js';
 import { ViewsService } from '../../../src/ash/workbench/services/views/browser/viewsService.js';
 import { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
-import { StandaloneServices } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
 import { createTestEditorServices, registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { EditorPaneRegistry } from '../../../src/ash/workbench/browser/editor.js';
 import { EditorPaneMatch } from '../../../src/ash/workbench/browser/parts/editor/editorPane.js';
 import { EditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
-import { CODE_EDITOR_ID, TextResourceEditor } from '../../../src/ash/workbench/browser/parts/editor/textResourceEditor.js';
+import { CODE_EDITOR_ID, TextResourceEditor, type EditorPaneOptions } from '../../../src/ash/workbench/browser/parts/editor/textResourceEditor.js';
 import { IFileTextModelService, ITextModelResourceService } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
 import { BrowserTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/browser/browserTextModelService.js';
 import type { ITextResourceStore } from '../../../src/ash/workbench/services/textmodelResolver/common/textResourceStore.js';
@@ -42,6 +42,12 @@ import { URI } from '../../../src/ash/base/common/uri.js';
 import type { IEditorPane } from '../../../src/ash/workbench/common/editor.js';
 import { SessionGridLayout } from '../../../src/ash/sessions/browser/parts/sessions/sessionGridLayout.js';
 import type { IView } from '../../../src/ash/base/browser/ui/grid/grid.js';
+import { IFileService, FileSystemProviderCapabilities } from '../../../src/ash/platform/files/common/files.js';
+import { IUriIdentityService } from '../../../src/ash/platform/uriIdentity/common/uriIdentity.js';
+import { MemoryFileService } from '../../../src/ash/workbench/contrib/bulkEdit/test/browser/bulkEditTestServices.js';
+import { FileEditorInput } from '../../../src/ash/workbench/contrib/files/browser/editors/fileEditorInput.js';
+import { StandaloneServices } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
+import { CodeEditorWidget } from '../../../src/ash/editor/browser/widget/codeEditor/codeEditorWidget.js';
 
 interface CompositeState {
 	readonly id: string;
@@ -70,6 +76,7 @@ declare global {
 			readonly partEvents: readonly { id: string; focus?: boolean; visible: boolean; }[];
 			openEditor(name: string): Promise<void>;
 			closeEditor(name: string): Promise<void>;
+			openFileAliases(target?: 'modalGroup'): Promise<{ tabs: number; models: number; retained: boolean; text: string; }>;
 			editorState(): readonly { name: string; focused: boolean; visible: boolean; retained: boolean; }[];
 		};
 	}
@@ -91,6 +98,7 @@ class FocusView extends ViewPane {
 }
 
 const resources = new DisposableStore();
+const uriIdentityServices = resources.add(new TestUriIdentityServices());
 const locale = new URLSearchParams(location.search).get('locale');
 if (locale) {
 	const catalog = builtinLanguagePackCatalogs.find(candidate => candidate.locale === locale)!;
@@ -150,8 +158,9 @@ const resourceStore: ITextResourceStore = {
 	resolve: async request => ({ resource: request.resource, text: request.bootstrapText ?? '', revision: undefined }),
 	save: async () => ({ revision: undefined }),
 };
-const modelServices = resources.add(StandaloneServices.initialize().createChild());
-const models = resources.add(new BrowserTextModelService(resourceStore));
+const modelServices = resources.add(new InstantiationService());
+modelServices.registerInstance(IUriIdentityService, uriIdentityServices.get(IUriIdentityService));
+const models = resources.add(uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {}));
 modelServices.registerInstance(IFileTextModelService, models);
 modelServices.registerInstance(ITextModelResourceService, models);
 const editorServices = resources.add(createTestEditorServices(undefined, modelServices));
@@ -159,7 +168,7 @@ resources.add(bindColorTheme(editorServices.get(IThemeService), document.documen
 const editorRegistry = new EditorPaneRegistry();
 resources.add(editorRegistry.registerEditorPane({
 	id: CODE_EDITOR_ID, name: 'Text editor', canOpen: () => EditorPaneMatch.Default,
-	create: () => editorServices.createInstance(TextResourceEditor, resourceStore, { lineNumbers: true }),
+	create: () => editorServices.createInstance(TextResourceEditor, resourceStore, { lineNumbers: 'on', createPart: options => StandaloneServices.initialize().createInstance(CodeEditorWidget, options) } satisfies EditorPaneOptions),
 }));
 const editor = resources.add(editorServices.createInstance(EditorPart, editorHost, { registry: editorRegistry }));
 editor.layout({ width: 800, height: 260 });
@@ -181,6 +190,19 @@ window.ashCompositeIntegration = {
 	editorEvents,
 	partEvents,
 	openEditor,
+	openFileAliases: async target => {
+		const provider = new class extends MemoryFileService {
+			public override readonly capabilities = FileSystemProviderCapabilities.FileReadWrite;
+		}([]);
+		resources.add(uriIdentityServices.get(IFileService).registerProvider('file', provider));
+		const lower = { resource: URI.file('/composite/Alias.txt'), initialText: 'original content' };
+		const firstPane = await editor.openEditor(lower, { pinned: true }, target);
+		const firstModel = models.getModel(lower.resource)!;
+		firstModel.setValue('unsaved content');
+		const alias = resources.add(new FileEditorInput(URI.file('/composite/ALIAS.txt')));
+		const secondPane = await editor.openEditor(alias, { pinned: true }, target);
+		return { tabs: editor.activeGroup.inputs.length, models: models.getModels().length, retained: firstPane === secondPane && firstModel === models.getModel(alias.resource), text: firstModel.getText() };
+	},
 	closeEditor: async name => { await editor.closeEditor(editorInput(name)); },
 	editorState: () => [...editorPanes].map(([name, { pane, control }]) => ({ name, focused: pane.hasFocus(), visible: pane.isVisible(), retained: control === pane.getControl() })),
 	state: () => [...composites].map(([id, composite]) => ({

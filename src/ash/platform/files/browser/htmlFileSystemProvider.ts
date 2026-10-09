@@ -62,7 +62,7 @@ const ROOT_PREFIX = '/@browser/';
 
 /** File access for folders explicitly selected through the browser picker. */
 export class HTMLFileSystemProvider extends Disposable implements IFileSystemProviderWithFileReadStreamCapability {
-	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy | FileSystemProviderCapabilities.FileReadStream;
+	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy | FileSystemProviderCapabilities.FileReadStream | FileSystemProviderCapabilities.PathCaseSensitive;
 	public readonly onDidChangeCapabilities = Event.None;
 	private readonly changes = this._register(new Emitter<IFileChangeEvent>());
 	private readonly database: Promise<IndexedDB>;

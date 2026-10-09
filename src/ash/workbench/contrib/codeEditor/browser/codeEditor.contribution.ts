@@ -111,7 +111,7 @@ registerEditorPane({
 		const resourceStore = getBrowserTextResourceStore(options.textFileService);
 		const configuration = options.configurationService;
 		return instantiationService.createInstance(TextDiffEditor, resourceStore, {
-			modelService: getBrowserTextModelService(resourceStore),
+			modelService: getBrowserTextModelService(resourceStore, instantiationService),
 			createComputationService: () => diffService.createComputationService(),
 			showLineNumbers: configuration?.getValue(CodeEditorConfiguration.diffShowLineNumbers),
 			showInlineChanges: configuration?.getValue(CodeEditorConfiguration.diffShowInlineChanges),

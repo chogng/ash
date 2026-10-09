@@ -1,9 +1,10 @@
+import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { createTestFileService } from '../../../../test/common/testEditorServices.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { TestDialogService } from '../../../../contrib/bulkEdit/test/browser/bulkEditTestServices.js';
 import { MemoryResourceStore, MemoryFileService } from '../../../../contrib/bulkEdit/test/browser/bulkEditTestServices.js';
 import assert from "node:assert/strict";
-import { test } from "mocha";
+import { test, suiteTeardown } from "mocha";
 import { isCancellationError } from "../../../../../base/common/errors.js";
 import { Event } from "../../../../../base/common/event.js";
 import { URI } from "../../../../../base/common/uri.js";
@@ -18,14 +19,17 @@ import { ResourceTextEdit } from '../../../../../editor/browser/services/bulkEdi
 import { FileKind, FileNotFoundError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileService } from "../../../../../platform/files/common/files.js";
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 
+const uriIdentityServices = new TestUriIdentityServices();
+suiteTeardown(() => uriIdentityServices.dispose());
+
 ensureNoDisposablesAreLeakedInTestSuite();
 
 test("workspace edits preflight every document before mutating and persist closed resources", async () => {
 	const first = URI.file("C:\\project\\first.ts");
 	const second = URI.file("C:\\project\\second.ts");
 	using store = new MemoryResourceStore([[first, "alpha"], [second, "bravo"]]);
-	using models = new BrowserTextModelService(store);
-	using workingCopies = new BrowserWorkingCopyService();
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, store, {});
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
 	const files = new MemoryFileService([[first, "alpha"], [second, "bravo"]]);
@@ -48,8 +52,8 @@ test("workspace edit undo restores multiple closed documents", async () => {
 	const first = URI.file('C:\\project\\first.ts');
 	const second = URI.file('C:\\project\\second.ts');
 	using store = new MemoryResourceStore([[first, 'alpha'], [second, 'bravo']]);
-	using models = new BrowserTextModelService(store);
-	using workingCopies = new BrowserWorkingCopyService();
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, store, {});
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
 	using fileService = createTestFileService(new MemoryFileService([[first, 'alpha'], [second, 'bravo']]));
@@ -69,9 +73,9 @@ test("workspace edit undo restores multiple closed documents", async () => {
 test('approved bulk edits still reject a document that changed during preview', async () => {
 	const resource = URI.file('/workspace/stale.ts');
 	using store = new MemoryResourceStore([[resource, 'original']]);
-	using models = new BrowserTextModelService(store);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, store, {});
 	using reference = await models.acquire({ resource }, new AbortController().signal);
-	using workingCopies = new BrowserWorkingCopyService();
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
 
@@ -89,8 +93,8 @@ test('bulk edit progress follows the committed operations and undo restores thei
 	const first = URI.file('/workspace/first.ts');
 	const second = URI.file('/workspace/second.ts');
 	using store = new MemoryResourceStore([[first, 'a'], [second, 'b']]);
-	using models = new BrowserTextModelService(store);
-	using workingCopies = new BrowserWorkingCopyService();
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, store, {});
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
 
@@ -114,8 +118,8 @@ test('bulk edits with unchanged text and ignored file operations report no appli
 	const resource = URI.file('/workspace/unchanged.ts');
 	const missing = URI.file('/workspace/missing.ts');
 	using store = new MemoryResourceStore([[resource, 'original']]);
-	using models = new BrowserTextModelService(store);
-	using workingCopies = new BrowserWorkingCopyService();
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, store, {});
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
 	const files = new MemoryFileService([[resource, 'original']]);
@@ -138,8 +142,8 @@ test('bulk edits with unchanged text and ignored file operations report no appli
 test('bulk text edits against one resource use the original coordinate space', async () => {
 	const resource = URI.file('C:\\project\\one.ts');
 	using store = new MemoryResourceStore([[resource, 'abc def']]);
-	using models = new BrowserTextModelService(store);
-	using workingCopies = new BrowserWorkingCopyService();
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, store, {});
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
 
@@ -160,8 +164,8 @@ test('bulk text edits against one resource use the original coordinate space', a
 test('bulk language workspace edits preserve explicitly ordered document operations', async () => {
 	const resource = URI.file('C:\\project\\one.ts');
 	using store = new MemoryResourceStore([[resource, 'abc def']]);
-	using models = new BrowserTextModelService(store);
-	using workingCopies = new BrowserWorkingCopyService();
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, store, {});
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
 
@@ -183,8 +187,8 @@ test('bulk language workspace edits preserve explicitly ordered document operati
 test("workspace edit undo reverses a created file and its inserted text", async () => {
 	const resource = URI.file('C:\\project\\new.ts');
 	using store = new MemoryResourceStore([]);
-	using models = new BrowserTextModelService(store);
-	using workingCopies = new BrowserWorkingCopyService();
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, store, {});
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
 	const files = new MemoryFileService([]);
@@ -208,8 +212,8 @@ test('workspace edit undo restores file creation, rename, and deletion together'
 	const renamed = URI.file('C:\\project\\renamed.ts');
 	const deleted = URI.file('C:\\project\\deleted.ts');
 	using store = new MemoryResourceStore([]);
-	using models = new BrowserTextModelService(store);
-	using workingCopies = new BrowserWorkingCopyService();
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, store, {});
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
 	const files = new MemoryFileService([[source, 'source'], [deleted, 'deleted']]);
@@ -237,8 +241,8 @@ test('workspace edit undo leaves all resources intact when another target change
 	const first = URI.file('C:\\project\\first.ts');
 	const second = URI.file('C:\\project\\second.ts');
 	using store = new MemoryResourceStore([[first, 'alpha'], [second, 'bravo']]);
-	using models = new BrowserTextModelService(store);
-	using workingCopies = new BrowserWorkingCopyService();
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, store, {});
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
 	using fileService = createTestFileService(new MemoryFileService([[first, 'alpha'], [second, 'bravo']]));
@@ -261,8 +265,8 @@ test('workspace edit undo leaves all resources intact when another target change
 test("workspace edits keep open working copies dirty instead of saving behind the editor", async () => {
 	const resource = URI.file("C:\\project\\open.ts");
 	using store = new MemoryResourceStore([[resource, "alpha"]]);
-	using models = new BrowserTextModelService(store);
-	using workingCopies = new BrowserWorkingCopyService();
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, store, {});
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
 	using fileService = createTestFileService(new MemoryFileService([[resource, "alpha"]]));
@@ -283,8 +287,8 @@ test("workspace edit preflight rejects stale or invalid edits without changing a
 	const first = URI.file("C:\\project\\first.ts");
 	const second = URI.file("C:\\project\\second.ts");
 	using store = new MemoryResourceStore([[first, "alpha"], [second, "bravo"]]);
-	using models = new BrowserTextModelService(store);
-	using workingCopies = new BrowserWorkingCopyService();
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, store, {});
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
 	using fileService = createTestFileService(new MemoryFileService([[first, "alpha"], [second, "bravo"]]));
@@ -308,8 +312,8 @@ test("workspace edit preflight rejects a changed target content baseline atomica
 	const first = URI.file("C:\\workspace\\first.ts");
 	const second = URI.file("C:\\workspace\\second.ts");
 	using store = new MemoryResourceStore([[first, "first"], [second, "changed"]]);
-	using models = new BrowserTextModelService(store);
-	using workingCopies = new BrowserWorkingCopyService();
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, store, {});
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
 	using fileService = createTestFileService(new MemoryFileService([[first, "first"], [second, "changed"]]));
@@ -328,8 +332,8 @@ test("workspace edit preflight rejects a changed target content baseline atomica
 test("workspace edit applies create then text edit in protocol order", async () => {
 	const created = URI.file("C:\\workspace\\created.ts");
 	using store = new MemoryResourceStore([]);
-	using models = new BrowserTextModelService(store);
-	using workingCopies = new BrowserWorkingCopyService();
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, store, {});
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
 	const files = new MemoryFileService([]);
@@ -351,8 +355,8 @@ test("workspace edit rolls back created resources when a later operation fails",
 	const created = URI.file("C:\\workspace\\created.ts");
 	const target = URI.file("C:\\workspace\\target.ts");
 	using store = new MemoryResourceStore([]);
-	using models = new BrowserTextModelService(store);
-	using workingCopies = new BrowserWorkingCopyService();
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, store, {});
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
 	const files = new MemoryFileService([[target, "occupied"]]);
@@ -374,8 +378,8 @@ test("workspace edit rolls back created resources when a later operation fails",
 test("workspace edits classify caller cancellation before mutating resources", async () => {
 	const created = URI.file("C:\\workspace\\cancelled.ts");
 	using store = new MemoryResourceStore([]);
-	using models = new BrowserTextModelService(store);
-	using workingCopies = new BrowserWorkingCopyService();
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, store, {});
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
 	const files = new MemoryFileService([]);
@@ -416,8 +420,8 @@ function workingCopy(reference: Awaited<ReturnType<BrowserTextModelService["acqu
 test("workspace edit content checks accept the current CRLF document and preserve its EOL", async () => {
 	const resource = URI.file("C:\\project\\crlf.ts");
 	using store = new MemoryResourceStore([[resource, "alpha\r\nbravo"]]);
-	using models = new BrowserTextModelService(store);
-	using workingCopies = new BrowserWorkingCopyService();
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, store, {});
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
 	using fileService = createTestFileService(new MemoryFileService([[resource, "alpha\r\nbravo"]]));
@@ -438,8 +442,8 @@ test("workspace edits recheck model versions after asynchronous file operations"
 	const resource = URI.file("C:\\project\\version.ts");
 	const created = URI.file("C:\\project\\created.ts");
 	using store = new MemoryResourceStore([[resource, "original"]]);
-	using models = new BrowserTextModelService(store);
-	using workingCopies = new BrowserWorkingCopyService();
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, store, {});
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
 	using reference = await models.acquire({ resource }, new AbortController().signal);

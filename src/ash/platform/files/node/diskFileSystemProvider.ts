@@ -1,3 +1,4 @@
+import { isLinux } from '../../../base/common/platform.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { copyFile, link, lstat, mkdir, open, readdir, rm, rmdir, writeFile, type FileHandle } from 'node:fs/promises';
 import { constants, watch } from 'node:fs';
@@ -38,7 +39,7 @@ import {
 
 /** Local file access restricted to the roots granted by the desktop host. */
 export class DiskFileSystemProvider extends Disposable implements IFileSystemProviderWithOpenReadWriteCloseCapability, IFileSystemProviderWithFileReadStreamCapability {
-	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy | FileSystemProviderCapabilities.FileOpenReadWriteClose | FileSystemProviderCapabilities.FileReadStream;
+	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy | FileSystemProviderCapabilities.FileOpenReadWriteClose | FileSystemProviderCapabilities.FileReadStream | (isLinux ? FileSystemProviderCapabilities.PathCaseSensitive : FileSystemProviderCapabilities.None);
 	public readonly onDidChangeCapabilities = Event.None;
 	private readonly changes = this._register(new Emitter<IFileChangeEvent>());
 	public readonly onDidChangeFiles = this.changes.event;

@@ -8,6 +8,8 @@ import { createTestFileService, registerTestComponentServices, createTestEditorS
 import { IGitHubService as ISessionsGitHubService } from '../../contrib/github/browser/githubService.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import { IFileService, FileSystemProviderCapabilities } from '../../../platform/files/common/files.js';
+import { IUriIdentityService } from '../../../platform/uriIdentity/common/uriIdentity.js';
+import { UriIdentityService } from '../../../platform/uriIdentity/common/uriIdentityService.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { WorkspaceContextService } from '../../../workbench/services/workspaces/browser/workspaceContextService.js';
 import { IDialogService, IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
@@ -249,6 +251,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 		watch: (): IDisposable => Disposable.None,
 		onDidChangeFiles: Event.None, stat: unexpectedFileOperation, readDirectory: unexpectedFileOperation, readFile: unexpectedFileOperation, writeFile: unexpectedFileOperation, createFile: unexpectedFileOperation, createDirectory: unexpectedFileOperation, copy: unexpectedFileOperation, rename: unexpectedFileOperation, delete: unexpectedFileOperation
 	}));
+	services.registerInstance(IUriIdentityService, resources.add(services.createInstance(UriIdentityService)));
 	services.registerInstance(IWorkspaceContextService, resources.add(new WorkspaceContextService({ id: 'sessions-test', folders: [] })));
 
 	services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);

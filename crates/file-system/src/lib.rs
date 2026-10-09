@@ -4,6 +4,7 @@ mod elevated;
 mod error;
 mod find_up;
 mod local;
+mod path_case_sensitivity;
 mod service;
 mod text_document;
 mod text_file;
@@ -25,6 +26,8 @@ pub use text_file::TextFileFormat;
 pub use types::FileMutation;
 pub use types::FileMutationError;
 pub use types::FileWriteMode;
+pub use types::PathCaseSensitivity;
+pub use types::PathCaseSensitivityScope;
 pub use types::file_revision;
 pub use types::{
     DirectoryEntry, ExistingTargetBehavior, FileContent, FileDeleteMode, FileMetadata, FileType,

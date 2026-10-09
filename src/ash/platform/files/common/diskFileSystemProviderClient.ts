@@ -1,3 +1,4 @@
+import { isLinux } from '../../../base/common/platform.js';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { decodeBase64, encodeBase64, VSBuffer } from '../../../base/common/buffer.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
@@ -32,7 +33,7 @@ export const LOCAL_FILE_SYSTEM_CHANNEL_NAME = 'localFilesystem';
 
 /** URI serialization and error transport for the desktop file provider. */
 export class DiskFileSystemProviderClient extends Disposable implements IFileSystemProviderWithFileReadStreamCapability {
-	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy | FileSystemProviderCapabilities.FileReadStream;
+	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy | FileSystemProviderCapabilities.FileReadStream | (isLinux ? FileSystemProviderCapabilities.PathCaseSensitive : FileSystemProviderCapabilities.None);
 	public readonly onDidChangeCapabilities = Event.None;
 	private readonly changes = this._register(new Emitter<IFileChangeEvent>());
 	public readonly onDidChangeFiles = this.changes.event;

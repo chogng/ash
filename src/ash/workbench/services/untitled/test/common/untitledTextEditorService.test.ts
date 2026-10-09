@@ -1,3 +1,5 @@
+import type { ITextResourceStore } from '../../../textmodelResolver/common/textResourceStore.js';
+import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
@@ -17,6 +19,9 @@ import { IUntitledTextEditorService } from "../../common/untitledTextEditorServi
 import { CommandService } from "../../../commands/common/commandService.js";
 import { BrowserWorkingCopyService } from "../../../workingCopy/browser/browserWorkingCopyService.js";
 import { IWorkingCopyService, type IWorkingCopy } from "../../../workingCopy/common/workingCopyService.js";
+
+const uriIdentityServices = new TestUriIdentityServices();
+suiteTeardown(() => uriIdentityServices.dispose());
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -40,7 +45,7 @@ await import("../../../../contrib/files/browser/fileActions.contribution.js");
 suiteTeardown(() => browserEnvironment.window.close());
 
 test("untitled service creates stable virtual editor identities", () => {
-	using workingCopies = new BrowserWorkingCopyService();
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using services = new InstantiationService();
 	services.registerInstance(IWorkingCopyService, workingCopies);
 	using models = createModels();
@@ -62,7 +67,7 @@ test("untitled service creates stable virtual editor identities", () => {
 });
 
 test("untitled service publishes display-label changes without changing resource identity", () => {
-	using workingCopies = new BrowserWorkingCopyService();
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using services = new InstantiationService();
 	services.registerInstance(IWorkingCopyService, workingCopies);
 	using models = createModels();
@@ -85,7 +90,7 @@ test("untitled service publishes display-label changes without changing resource
 });
 
 test("restored untitled resources are reused and reserve their document numbers", () => {
-	using workingCopies = new BrowserWorkingCopyService();
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using services = new InstantiationService();
 	services.registerInstance(IWorkingCopyService, workingCopies);
 	using models = createModels();
@@ -106,7 +111,7 @@ test("restored untitled resources are reused and reserve their document numbers"
 });
 
 test("closing the last working copy releases its untitled identity and shared text", async () => {
-	using workingCopies = new BrowserWorkingCopyService();
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using services = new InstantiationService();
 	services.registerInstance(IWorkingCopyService, workingCopies);
 	using models = createModels();
@@ -141,7 +146,7 @@ test("closing the last working copy releases its untitled identity and shared te
 });
 
 test("New Untitled Text Editor opens a compatible text editor input", async () => {
-	using workingCopies = new BrowserWorkingCopyService();
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using services = new InstantiationService();
 	services.registerInstance(IWorkingCopyService, workingCopies);
 	using models = createModels();
@@ -163,7 +168,7 @@ test("New Untitled Text Editor opens a compatible text editor input", async () =
 });
 
 test("New File from Template opens the selected extension template as an untitled editor", async () => {
-	using workingCopies = new BrowserWorkingCopyService();
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using services = new InstantiationService();
 	services.registerInstance(IWorkingCopyService, workingCopies);
 	using models = createModels();
@@ -201,7 +206,7 @@ test("New File from Template opens the selected extension template as an untitle
 });
 
 test('untitled inputs resolve the shared editable text and publish dirty changes', async () => {
-	using workingCopies = new BrowserWorkingCopyService();
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using services = new InstantiationService();
 	using models = createModels();
 	services.registerInstance(IWorkingCopyService, workingCopies);
@@ -228,7 +233,7 @@ test('untitled inputs resolve the shared editable text and publish dirty changes
 });
 
 test('the backup handler restores an editable input and keeps its recovered number reserved', async () => {
-	using workingCopies = new BrowserWorkingCopyService();
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using services = new InstantiationService();
 	using models = createModels();
 	services.registerInstance(IWorkingCopyService, workingCopies);
@@ -249,7 +254,7 @@ test('the backup handler restores an editable input and keeps its recovered numb
 });
 
 test('disposing a draft releases its shared text reference and removes the service identity', async () => {
-	using workingCopies = new BrowserWorkingCopyService();
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using services = new InstantiationService();
 	using models = createModels();
 	services.registerInstance(IWorkingCopyService, workingCopies);
@@ -269,15 +274,15 @@ test('disposing a draft releases its shared text reference and removes the servi
 test('reset cancels pending draft resolution without retaining a text model', async () => {
 	let finishRead: (() => void) | undefined;
 	const reading = new Promise<void>(resolve => { finishRead = resolve; });
-	using models = new BrowserTextModelService({
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, {
 		onDidChange: Event.None,
 		resolve: async request => {
 			await reading;
 			return { resource: request.resource, text: request.bootstrapText ?? '', revision: undefined };
 		},
 		save: async () => ({ revision: undefined }),
-	});
-	using workingCopies = new BrowserWorkingCopyService();
+	} satisfies ITextResourceStore, {});
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using services = new InstantiationService();
 	services.registerInstance(IWorkingCopyService, workingCopies);
 	services.registerInstance(ITextModelResourceService, models);
@@ -294,11 +299,11 @@ test('reset cancels pending draft resolution without retaining a text model', as
 });
 
 function createModels(): BrowserTextModelService {
-	return new BrowserTextModelService({
+	return uriIdentityServices.createInstance(BrowserTextModelService, {
 		onDidChange: Event.None,
 		resolve: async request => ({ resource: request.resource, text: request.bootstrapText ?? '', revision: undefined }),
 		save: async () => ({ revision: undefined }),
-	});
+	} satisfies ITextResourceStore, {});
 }
 
 class TestQuickInputService implements IQuickInputServiceContract {

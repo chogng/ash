@@ -555,6 +555,26 @@ test('FileService removes an incomplete cross-provider copy', async () => {
 suite('FileService capability and watch ownership', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('registration and capability events describe every scheme and stop after the last unregister', () => {
+		using provider = new TestFileProvider('workspace');
+		using service = new FileService();
+		const registrations: unknown[] = [];
+		const capabilities: string[] = [];
+		using registrationListener = service.onDidChangeFileSystemProviderRegistrations(event => {
+			registrations.push([event.scheme, event.added, event.provider === provider, service.hasProvider(URI.parse(`${event.scheme}:/file`))]);
+		});
+		using capabilityListener = service.onDidChangeFileSystemProviderCapabilities(event => capabilities.push(event.scheme));
+		const first = service.registerProvider('first', provider);
+		const second = service.registerProvider('second', provider);
+		provider.setCapabilities(provider.capabilities | FileSystemProviderCapabilities.PathCaseSensitive);
+		first.dispose();
+		provider.setCapabilities(provider.capabilities);
+		second.dispose();
+		provider.setCapabilities(provider.capabilities);
+		assert.deepEqual(registrations, [['first', true, true, true], ['second', true, true, true], ['first', false, true, false], ['second', false, true, false]]);
+		assert.deepEqual(capabilities, ['first', 'second', 'second']);
+	});
+
 	test('text saves preserve BOM and revision while binary imports require an absent target', async () => {
 		using provider = new TestFileProvider('workspace');
 		using service = new FileService();

@@ -16,6 +16,10 @@ use ash_app_server_protocol::protocol::fs::FsFileType;
 use ash_app_server_protocol::protocol::fs::FsFileWriteMode;
 use ash_app_server_protocol::protocol::fs::FsGetMetadataParams;
 use ash_app_server_protocol::protocol::fs::FsGetMetadataResult;
+use ash_app_server_protocol::protocol::fs::FsPathCaseSensitivity;
+use ash_app_server_protocol::protocol::fs::FsPathCaseSensitivityScope;
+use ash_app_server_protocol::protocol::fs::FsReadPathCaseSensitivityParams;
+use ash_app_server_protocol::protocol::fs::FsReadPathCaseSensitivityResult;
 use ash_app_server_protocol::protocol::fs::FsMissingTargetBehavior;
 use ash_app_server_protocol::protocol::fs::FsPasteSystemFilesParams;
 use ash_app_server_protocol::protocol::fs::FsReadBinaryFileParams;
@@ -52,6 +56,31 @@ const MAX_EDITOR_FILE_BYTES: usize = 50 * 1024 * 1024;
 const BINARY_PREVIEW_RESOURCE_TTL: Duration = Duration::from_secs(300);
 
 impl AppServer {
+    pub(super) fn fs_read_path_case_sensitivity(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: FsReadPathCaseSensitivityParams = decode(params)?;
+        let scopes = self
+            .file_system_for_request(
+                params.dir_id.as_deref(),
+                params.session_directory.as_ref(),
+                Permission::BrowseFiles,
+            )?
+            .read_path_case_sensitivity(&params.path)
+            .map_err(file_system_error)?;
+        result(&FsReadPathCaseSensitivityResult {
+            scopes: scopes
+                .into_iter()
+                .map(|scope| FsPathCaseSensitivityScope {
+                    path: scope.path,
+                    sensitivity: match scope.sensitivity {
+                        ash_file_system::PathCaseSensitivity::Sensitive => FsPathCaseSensitivity::Sensitive,
+                        ash_file_system::PathCaseSensitivity::Insensitive => FsPathCaseSensitivity::Insensitive,
+                        ash_file_system::PathCaseSensitivity::Unknown => FsPathCaseSensitivity::Unknown,
+                    },
+                })
+                .collect(),
+        })
+    }
+
     pub(super) fn fs_get_metadata(&self, params: &Value) -> Result<Value, RpcError> {
         let params: FsGetMetadataParams = decode(params)?;
         let metadata = self

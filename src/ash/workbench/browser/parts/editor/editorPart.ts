@@ -1,5 +1,6 @@
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
+import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uriIdentity.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { localize } from '../../../../nls.js';
 import Severity from '../../../../base/common/severity.js';
@@ -60,7 +61,6 @@ import type { ApplyEditorWorkingSetOptions, EditorWorkingSet, EditorWorkingSetLa
 import { parseEditorWorkingSetLayout } from '../../../services/editor/common/editorWorkingSet.js';
 import { ModalEditorPart, type ModalEditorPartOptions } from "./modalEditorPart.js";
 import type { EditorGroupChangeEvent, EditorGroupId, EditorIdentifier, EditorPartChangeEvent, EditorPartState, IEditorStateSource } from "../../../services/editor/common/editorState.js";
-import { editorInputKey } from "./editorTabsControl.js";
 import { WorkbenchConfiguration } from "../../../common/configuration.js";
 import { EditorOpenSideBySideDirectionConfiguration } from '../../../services/editor/common/editorConfiguration.js';
 
@@ -199,6 +199,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
+		@IUriIdentityService private readonly uriIdentity: IUriIdentityService,
 	) {
 		super(container, "editor", themeService, storageService, {
 			borderWidth: () => this.getFloatingBorderWidth() * 2,
@@ -454,7 +455,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	async openEditor(input: IResourceEditorInput, options: EditorOpenOptions = {}, target?: EditorOpenTarget): Promise<IEditorPane> {
 		if (target === "modalGroup") {
 			const modalInput = this.modalEditor.activeInput;
-			if (modalInput && editorInputKey(modalInput) !== editorInputKey(input) && !await this.closeEditor(modalInput)) {
+			if (modalInput && !this.isSameEditor(modalInput, input) && !await this.closeEditor(modalInput)) {
 				throw new CancellationError("Opening the modal editor was cancelled");
 			}
 			const pane = await this.modalEditor.openEditor(input, options);
@@ -468,7 +469,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			if (!options.preserveFocus) this.setActiveGroup(group);
 			return pane;
 		}
-		if (target === undefined && this._groups.length > 1 && this._activeGroup.isLocked && !this._activeGroup.inputs.some(candidate => editorInputKey(candidate) === editorInputKey(input))) {
+		if (target === undefined && this._groups.length > 1 && this._activeGroup.isLocked && !this._activeGroup.inputs.some(candidate => this.isSameEditor(candidate, input))) {
 			const unlocked = this._groups.find(({ group }) => !group.isLocked);
 			const host = unlocked ?? this.insertGroup(this._activeGroup, Direction.Right);
 			try {
@@ -494,6 +495,10 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			this.setActiveGroup(source);
 			throw error;
 		}
+	}
+
+	private isSameEditor(left: IResourceEditorInput, right: IResourceEditorInput): boolean {
+		return left.editorId === right.editorId && this.uriIdentity.extUri.isEqual(left.resource, right.resource);
 	}
 
 	private resolveEditorOpenError(error: unknown, input: IResourceEditorInput, options: EditorOpenOptions, open: (options: EditorOpenOptions) => Promise<IEditorPane>): unknown {
@@ -564,7 +569,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		const fileService = this.groupOptions.fileService;
 		const configuration = this.groupOptions.configurationService;
 		const dialogService = this.dialogService;
-		if (!fileService || !configuration || !dialogService || input.resource.scheme !== "file" || this._groups.some(({ group }) => group.inputs.some(open => editorInputKey(open) === editorInputKey(input)))) return undefined;
+		if (!fileService || !configuration || !dialogService || input.resource.scheme !== "file" || this._groups.some(({ group }) => group.inputs.some(open => this.isSameEditor(open, input)))) return undefined;
 		const thresholdMiB = configuration.getValue<number>(EditorLargeFileConfirmationConfiguration);
 		return fileService.stat(input.resource).then(async stat => {
 			if (stat.sizeBytes < thresholdMiB * 1024 * 1024) return;
@@ -586,7 +591,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	activateEditor(input: IResourceEditorInput): IEditorPane {
-		if (this.modalEditor.activeInput?.resource.toString() === input.resource.toString()) {
+		if (this.modalEditor.activeInput && this.uriIdentity.extUri.isEqual(this.modalEditor.activeInput.resource, input.resource)) {
 			this.modalEditor.focus();
 			return this.modalEditor.activePane!;
 		}
@@ -610,7 +615,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	async closeEditor(input: IResourceEditorInput): Promise<boolean> {
-		if (this.modalEditor.activeInput && editorInputKey(this.modalEditor.activeInput) === editorInputKey(input)) {
+		if (this.modalEditor.activeInput && this.isSameEditor(this.modalEditor.activeInput, input)) {
 			const pane = this.modalEditor.activePane;
 			if (pane && !await this.confirmEditorClose(undefined, input, pane)) return false;
 			if (!this.modalEditor.closeEditor(input)) return false;
@@ -781,7 +786,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		const workingCopy = pane.workingCopy;
 		if (!workingCopy?.isDirty) return true;
 		// Another open view still owns this dirty document, including a custom view in the same group.
-		if (this._groups.some(host => !closingGroups.includes(host.group.id) && host.group.editors.some(other => other.canRevert && (host.group !== group || other.input !== input) && other.input.resource.toString() === input.resource.toString()))) {
+		if (this._groups.some(host => !closingGroups.includes(host.group.id) && host.group.editors.some(other => other.canRevert && (host.group !== group || other.input !== input) && this.uriIdentity.extUri.isEqual(other.input.resource, input.resource)))) {
 			return true;
 		}
 		if (!this.fileDialogService) return false;
@@ -796,7 +801,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		}
 		if (group && input.resource.scheme === 'untitled') return this.saveEditor(group, input, pane);
 		await workingCopy.save(controller.signal);
-		if (group && !group.inputs.some(candidate => editorInputKey(candidate) === editorInputKey(input))) return true;
+		if (group && !group.inputs.some(candidate => this.isSameEditor(candidate, input))) return true;
 		return !workingCopy.isDirty;
 	}
 

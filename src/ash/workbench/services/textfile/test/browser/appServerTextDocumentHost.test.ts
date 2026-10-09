@@ -1,3 +1,4 @@
+import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { type IFileSystemProvider, type IFileWriteOptions, type IFileWriteResult, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import { createTestFileService, createTestTextFileService } from '../../../../test/common/testEditorServices.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
@@ -8,7 +9,7 @@ import { IBulkEditService } from '../../../../../editor/browser/services/bulkEdi
 import { IAccessibilitySignalService } from '../../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import assert from 'node:assert/strict';
 import { mock } from 'node:test';
-import { test } from 'mocha';
+import { test, suiteTeardown } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
@@ -30,6 +31,9 @@ import { IWorkingCopyService, type IWorkingCopy } from '../../../workingCopy/com
 import { AppServerTextDocumentHost } from '../../browser/appServerTextDocumentHost.js';
 import { ChatEditingService } from '../../../../contrib/chat/browser/chatEditing/chatEditingServiceImpl.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+
+const uriIdentityServices = new TestUriIdentityServices();
+suiteTeardown(() => uriIdentityServices.dispose());
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
@@ -147,8 +151,8 @@ class Files extends Disposable implements IFileSystemProvider {
 async function fixture() {
 	const lifetime = new DisposableStore();
 	const files = lifetime.add(new Files());
-	const models = lifetime.add(new BrowserTextModelService(new BrowserTextResourceStore(lifetime.add(createTestTextFileService(files)))));
-	const workingCopies = lifetime.add(new BrowserWorkingCopyService());
+	const models = lifetime.add(uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(lifetime.add(createTestTextFileService(files))), {}));
+	const workingCopies = lifetime.add(uriIdentityServices.createInstance(BrowserWorkingCopyService));
 	const configuration = lifetime.add(new InMemoryConfigurationService());
 	const dialogs = new TestDialogService();
 	const bulk = lifetime.add(new BulkEditService(models, workingCopies, lifetime.add(createTestFileService(files)), configuration, dialogs));

@@ -1,3 +1,5 @@
+import type { ITextResourceStore } from '../../../src/ash/workbench/services/textmodelResolver/common/textResourceStore.js';
+import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import '../../../src/ash/workbench/contrib/scm/browser/quickDiff.contribution.js';
 import { addDisposableListener } from '../../../src/ash/base/browser/dom.js';
 import { CancellationToken, CancellationTokenSource } from '../../../src/ash/base/common/cancellation.js';
@@ -49,6 +51,7 @@ if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
 }
 
 const resources = new DisposableStore();
+const uriIdentityServices = resources.add(new TestUriIdentityServices());
 const editorServices = StandaloneServices.initialize();
 resources.add(toDisposable(resetNlsResolver));
 const symbolProvider = resources.add(editorServices.languageFeaturesService.documentSymbolProvider.register('*', {
@@ -126,11 +129,11 @@ function createSessionChangesPane(): SessionChangesEditor {
 			readTurnChange: async () => ({ summary, files: Array.from({ length: 8 }, (_, index) => ({ path: `file-${index}.ts`, kind: 'modified', binary: false, additions: 1, deletions: 1 })) }),
 			readTurnChangeFile: async (_sessionId: string, _threadId: string, _changeSetId: string, path: string) => ({ path, binary: false, truncated: false, before: `before\n${'shared\n'.repeat(30)}`, after: `after\n${'shared\n'.repeat(30)}` }),
 		} as unknown as IChatService);
-		const models = resources.add(new BrowserTextModelService({
+		const models = resources.add(uriIdentityServices.createInstance(BrowserTextModelService, {
 			onDidChange: Event.None,
 			resolve: async request => ({ resource: request.resource, text: request.bootstrapText ?? '', revision: undefined }),
 			save: async () => { throw new Error('Session review is read-only'); },
-		}));
+		} satisfies ITextResourceStore, {}));
 		resources.add(EditorPanes.registerEditorPane({
 			id: 'integration.sessionMultiDiff', name: 'Session review', canOpen: matchMultiDiffEditor,
 			create: () => sessionServices!.createInstance(MultiDiffEditor, { modelService: models, createComputationService: () => service.createComputationService(), lineHeight: 0 }),

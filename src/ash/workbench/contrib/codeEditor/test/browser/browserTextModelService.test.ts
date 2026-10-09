@@ -1,7 +1,8 @@
+import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { TestLanguageConfigurationService } from '../../../../../editor/test/common/modes/testLanguageConfigurationService.js';
 import assert from "node:assert/strict";
 import { createHash } from 'node:crypto';
-import { test } from "mocha";
+import { test, suiteTeardown } from "mocha";
 import { isCancellationError } from "../../../../../base/common/errors.js";
 import { Emitter, Event } from "../../../../../base/common/event.js";
 import { URI } from "../../../../../base/common/uri.js";
@@ -19,9 +20,12 @@ import { LanguageFeaturesService } from '../../../../../editor/common/services/l
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import type { LanguageTokenResult } from '../../../../../editor/common/tokens/languageTokens.js';
 
+const uriIdentityServices = new TestUriIdentityServices();
+suiteTeardown(() => uriIdentityServices.dispose());
+
 test("Stanza text model service shares one model and preserves edits across panes", async () => {
 	const textFiles = new TestTextFileService("from disk");
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});
 	const input = { resource: URI.file("C:\\project\\main.ts"), initialText: "bootstrap" };
 	const first = await models.acquire(input, new AbortController().signal);
 	const second = await models.acquire({ ...input, initialText: "stale" }, new AbortController().signal);
@@ -52,7 +56,7 @@ test('file model acquisition waits for lexical presentation and cancellation rel
 		id: 'test.file-readiness', languageIds: ['demo'],
 		provideTokens: () => { requests++; void started.complete(); return result.p; },
 	});
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(new TestTextFileService('const value = 1;')), { languageService: languages, languageFeaturesService: features });
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(new TestTextFileService('const value = 1;')), { languageService: languages, languageFeaturesService: features });
 	const input = { resource: URI.file('/project/first.demo'), languageId: 'demo' };
 	const controller = new AbortController();
 	const cancelled = models.acquire(input, controller.signal);
@@ -83,7 +87,7 @@ test('cancelling the final file opener disposes its model during syntax loading'
 			return new Promise<LanguageTokenResult>((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }));
 		},
 	});
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(new TestTextFileService('text')), { languageService: languages, languageFeaturesService: features });
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(new TestTextFileService('text')), { languageService: languages, languageFeaturesService: features });
 	const resource = URI.file('/project/cancel.demo');
 	const controller = new AbortController();
 	const opening = models.acquire({ resource, languageId: 'demo' }, controller.signal);
@@ -99,7 +103,7 @@ test("Stanza text model service creates the model with its resource and resolved
 	using languageService = new LanguageService();
 	using demo = languageService.registerLanguage({ id: "demo", firstLine: "#!.*\\bdemo" });
 	using rust = languageService.registerLanguage({ id: "rust", extensions: [".rs"] });
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles), { languageService });
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), { languageService });
 	const resource = URI.file("C:\\project\\script.cgi");
 	const inferred = await models.acquire({ resource }, new AbortController().signal);
 
@@ -115,7 +119,7 @@ test("Stanza text model service creates the model with its resource and resolved
 
 test("Stanza text model acquisition delegates absent bootstrap content and observes cancellation", async () => {
 	const textFiles = new TestTextFileService("from disk");
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});
 	const resource = URI.file("C:\\project\\main.ts");
 	const reference = await models.acquire({ resource }, new AbortController().signal);
 	assert.equal(reference.model.getText(), "from disk");
@@ -129,7 +133,7 @@ test("Stanza text model acquisition delegates absent bootstrap content and obser
 test('Stanza text model service restores undo and redo after the final reference is released', async () => {
 	const resource = URI.file('C:\\project\\history.ts');
 	const textFiles = new TestTextFileService('alpha');
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});
 	let reference = await models.acquire({ resource }, new AbortController().signal);
 	reference.model.applyOperations([{ range: Range.fromPositions(new Position((0) + 1, (5) + 1)), text: '!' }]);
 	await reference.save(new AbortController().signal);
@@ -154,7 +158,7 @@ test('Stanza text model service restores undo and redo after the final reference
 test('Stanza text model service drops retained history when persisted content changed', async () => {
 	const resource = URI.file('C:\\project\\history.ts');
 	const textFiles = new TestTextFileService('alpha');
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});
 	const first = await models.acquire({ resource }, new AbortController().signal);
 	first.model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (5) + 1)), text: '!' }]);
 	await first.save(new AbortController().signal);
@@ -169,7 +173,7 @@ test('Stanza text model service drops retained history when persisted content ch
 
 test("Stanza text model references track dirty content, save snapshots, and explicitly revert", async () => {
 	const textFiles = new TestTextFileService("from disk");
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});
 	const reference = await models.acquire({ resource: URI.file("C:\\project\\main.ts") }, new AbortController().signal);
 	let dirtyChanges = 0;
 	using listener = reference.onDidChangeDirty(() => dirtyChanges += 1);
@@ -202,7 +206,7 @@ test("Stanza text model references track dirty content, save snapshots, and expl
 
 test('discarding an untitled text model restores its initial content without reading a workspace file', async () => {
 	const textFiles = new TestTextFileService('unrelated file');
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});
 	using reference = await models.acquire({ resource: URI.parse('untitled:/draft'), initialText: '' }, new AbortController().signal);
 	reference.model.applyEdits([{ range: Range.fromPositions(new Position(1, 1)), text: 'unsaved draft' }]);
 	assert.equal(reference.isDirty, true);
@@ -214,7 +218,7 @@ test('discarding an untitled text model restores its initial content without rea
 
 test('initial untitled content is dirty and discarding it leaves an empty document', async () => {
 	const textFiles = new TestTextFileService('unrelated file');
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});
 	using reference = await models.acquire({ resource: URI.parse('untitled:/template'), initialText: 'template body' }, new AbortController().signal);
 	assert.deepEqual({ text: reference.model.getText(), dirty: reference.isDirty }, { text: 'template body', dirty: true });
 
@@ -243,7 +247,7 @@ test("Stanza text model save tolerates its final reference closing before I/O co
 			return { revision: "revision-2" };
 		},
 	};
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});
 	const reference = await models.acquire({ resource: URI.file("C:\\project\\main.ts") }, new AbortController().signal);
 	reference.model.applyEdits([{
 		range: Range.fromPositions(new Position((0) + 1, (0) + 1)),
@@ -257,7 +261,7 @@ test("Stanza text model save tolerates its final reference closing before I/O co
 
 test("Stanza text model preserves the source CRLF convention when saving", async () => {
 	const textFiles = new TestTextFileService("first\r\nsecond");
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});
 	const reference = await models.acquire({ resource: URI.file("C:\\project\\main.ts") }, new AbortController().signal);
 	assert.equal(reference.model.getText(), "first\r\nsecond");
 	reference.model.applyEdits([{
@@ -271,7 +275,7 @@ test("Stanza text model preserves the source CRLF convention when saving", async
 
 test("Stanza text model refuses to overwrite externally changed content", async () => {
 	const textFiles = new TestTextFileService("from disk");
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});
 	const reference = await models.acquire({ resource: URI.file("C:\\project\\main.ts") }, new AbortController().signal);
 	reference.model.applyEdits([{
 		range: Range.fromPositions(new Position((0) + 1, (0) + 1)),
@@ -288,7 +292,7 @@ test('external JSON writes preserve shared dirty references and mark conflicts o
 	const resource = URI.file('/profile/keybindings.json');
 	const source = '[{"key":"ctrl+alt+y","command":"workbench.action.openKeyboardShortcuts"}]';
 	const files = new TestTextFileService('[]');
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(files));
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(files), {});
 	using first = await models.acquire({ resource }, new AbortController().signal);
 	using second = await models.acquire({ resource }, new AbortController().signal);
 	files.setText(source);
@@ -312,7 +316,7 @@ for (const initialText of [undefined, 'bootstrap']) {
 		const started = new DeferredPromise<void>();
 		const release = new DeferredPromise<void>();
 		let delayRead = false;
-		using models = new BrowserTextModelService(new BrowserTextResourceStore({
+		using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore({
 			onDidSave: Event.None,
 			onDidChangeFiles: files.onDidChangeFiles,
 			resolve: async request => {
@@ -321,7 +325,7 @@ for (const initialText of [undefined, 'bootstrap']) {
 				return content;
 			},
 			save: request => files.save(request),
-		}));
+		}), {});
 		using reference = await models.acquire({ resource, ...(initialText === undefined ? {} : { initialText }) }, new AbortController().signal);
 		const expectedText = initialText ?? 'first\nsecond\nthird\n';
 		const version = reference.model.version;
@@ -352,7 +356,7 @@ for (const completionFails of [false, true]) {
 		let delayRead = false;
 		let fail = completionFails;
 		const failure = new Error('backup completion failed');
-		using models = new BrowserTextModelService(new BrowserTextResourceStore({
+		using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore({
 			onDidSave: Event.None,
 			onDidChangeFiles: files.onDidChangeFiles,
 			resolve: async request => {
@@ -361,7 +365,7 @@ for (const completionFails of [false, true]) {
 				return content;
 			},
 			save: request => files.save(request),
-		}));
+		}), {});
 		using first = await models.acquire({ resource }, new AbortController().signal);
 		using second = await models.acquire({ resource }, new AbortController().signal);
 		using participant = models.addSaveCompletionParticipant({
@@ -407,7 +411,7 @@ for (const completionFails of [false, true]) {
 test('refresh waiting for a save cannot read ahead of another queued save', async () => {
 	const resource = URI.file('/project/queued-save.txt');
 	const files = new TestTextFileService('saved');
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(files));
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(files), {});
 	using reference = await models.acquire({ resource }, new AbortController().signal);
 	const firstStarted = new DeferredPromise<void>();
 	const secondStarted = new DeferredPromise<void>();
@@ -442,7 +446,7 @@ test('refresh waiting for a save cannot read ahead of another queued save', asyn
 test("Stanza text model reloads clean external changes and reports dirty-model conflicts only on save", async () => {
 	const resource = URI.file("C:\\project\\main.ts");
 	const textFiles = new TestTextFileService("from disk");
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});
 	const reference = await models.acquire({ resource }, new AbortController().signal);
 
 	textFiles.setText("external clean");
@@ -475,7 +479,7 @@ test("Stanza text model reloads clean external changes and reports dirty-model c
 test('file invalidations and focus checks skip dirty models without advancing their saved revision', async () => {
 	const resource = URI.file('/project/main.ts');
 	const textFiles = new TestTextFileService('first\r\nsecond\nthird\n');
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});
 	using reference = await models.acquire({ resource }, new AbortController().signal);
 	const conflicts: boolean[] = [];
 	using listener = reference.onDidChangeExternalChange(() => conflicts.push(reference.hasExternalChange));
@@ -507,7 +511,7 @@ test('failed background file checks preserve clean and dirty editor states', asy
 		},
 		save: async () => ({ revision: '1' }),
 	};
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});
 	using reference = await models.acquire({ resource }, new AbortController().signal);
 	unavailable = true;
 	const errors: unknown[][] = [];
@@ -535,7 +539,7 @@ test('a background read that overlaps local edits leaves the saved revision and 
 	const started = deferred<void>();
 	const proceed = deferred<void>();
 	let delayRead = false;
-	using models = new BrowserTextModelService(new BrowserTextResourceStore({
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore({
 		onDidSave: Event.None,
 		onDidChangeFiles: textFiles.onDidChangeFiles,
 		resolve: async request => {
@@ -546,7 +550,7 @@ test('a background read that overlaps local edits leaves the saved revision and 
 			return textFiles.resolve(request);
 		},
 		save: request => textFiles.save(request),
-	}));
+	}), {});
 	using reference = await models.acquire({ resource }, new AbortController().signal);
 	textFiles.setText('external');
 	delayRead = true;
@@ -563,7 +567,7 @@ test('a background read that overlaps local edits leaves the saved revision and 
 test('undoing local edits clears a rejected-save conflict when the model returns to its saved state', async () => {
 	const resource = URI.file('/project/undo-conflict.txt');
 	const textFiles = new TestTextFileService('saved');
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});
 	using reference = await models.acquire({ resource }, new AbortController().signal);
 	reference.model.applyOperations([{ range: new Range(1, 1, 1, 1), text: 'local ' }]);
 	textFiles.setText('external');
@@ -576,7 +580,7 @@ test('undoing local edits clears a rejected-save conflict when the model returns
 
 test('workspace rescans do not read untitled documents or mark them conflicted', async () => {
 	const textFiles = new TestTextFileService('unrelated');
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});
 	using reference = await models.acquire({ resource: URI.parse('untitled:/draft'), initialText: 'draft' }, new AbortController().signal);
 	textFiles.fireExternalChange();
 	await models.refresh(reference.resource);
@@ -586,7 +590,7 @@ test('workspace rescans do not read untitled documents or mark them conflicted',
 
 test('file publication waits for its checkpoint and save acknowledgement waits for recovery completion', async () => {
 	const files = new TestTextFileService('original');
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(files));
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(files), {});
 	using first = await models.acquire({ resource: URI.file('/save/main.ts') }, new AbortController().signal);
 	using second = await models.acquire({ resource: first.resource }, new AbortController().signal);
 	const preparing = new DeferredPromise<void>();
@@ -620,7 +624,7 @@ test('file publication waits for its checkpoint and save acknowledgement waits f
 
 test('a rejected checkpoint does not publish the file and retry saves current user text', async () => {
 	const files = new TestTextFileService('original');
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(files));
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(files), {});
 	using reference = await models.acquire({ resource: URI.file('/save/main.ts') }, new AbortController().signal);
 	const rejection = new Error('checkpoint failed');
 	let fail = true;
@@ -642,7 +646,7 @@ test('a rejected checkpoint does not publish the file and retry saves current us
 for (const editedDuringCompletion of [false, true]) {
 	test(`post-publication failure keeps the real baseline and retry preserves later edits (${editedDuringCompletion})`, async () => {
 		const files = new TestTextFileService('original');
-		using models = new BrowserTextModelService(new BrowserTextResourceStore(files));
+		using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(files), {});
 		using reference = await models.acquire({ resource: URI.file('/save/main.ts') }, new AbortController().signal);
 		const started = new DeferredPromise<void>();
 		const release = new DeferredPromise<void>();
@@ -669,7 +673,7 @@ for (const editedDuringCompletion of [false, true]) {
 
 test('cancellation during checkpoint settles recovery before releasing the queue without publishing', async () => {
 	const files = new TestTextFileService('original');
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(files));
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(files), {});
 	using reference = await models.acquire({ resource: URI.file('/save/main.ts') }, new AbortController().signal);
 	const started = new DeferredPromise<void>();
 	const release = new DeferredPromise<void>();
@@ -694,7 +698,7 @@ test('cancellation during checkpoint settles recovery before releasing the queue
 
 test('recovery completion still runs after publication even when cancellation arrives or editing participants are skipped', async () => {
 	const files = new TestTextFileService('original');
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(files));
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(files), {});
 	using reference = await models.acquire({ resource: URI.file('/save/main.ts') }, new AbortController().signal);
 	const started = new DeferredPromise<void>();
 	const release = new DeferredPromise<void>();
@@ -786,7 +790,7 @@ function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value
 
 test('Workbench file models observe their hosts language configuration registrations', async () => {
 	using configurations = new TestLanguageConfigurationService();
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(new TestTextFileService('{value}')), {
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(new TestTextFileService('{value}')), {
 		languageConfigurationService: configurations,
 	});
 	using reference = await models.acquire({ resource: URI.file('/example.ts'), languageId: 'typescript' }, new AbortController().signal);
@@ -803,7 +807,7 @@ test('file model observers see one shared model, language changes and final rele
 	using languages = new LanguageService();
 	using typescript = languages.registerLanguage({ id: 'typescript' });
 	using rust = languages.registerLanguage({ id: 'rust' });
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(new TestTextFileService('content')), { languageService: languages });
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(new TestTextFileService('content')), { languageService: languages });
 	const resource = URI.parse('untitled:/observer');
 	const events: string[] = [];
 	using added = models.onModelAdded(model => { assert.equal(models.getModel(resource), model); events.push('added:' + model.getLanguageId()); });
@@ -825,7 +829,7 @@ test('file model observers see one shared model, language changes and final rele
 test("mixed line endings reload as a clean model and save with the model EOL", async () => {
 	const resource = URI.file("C:\\project\\mixed.txt");
 	const textFiles = new TestTextFileService("original\n");
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});
 	using reference = await models.acquire({ resource }, new AbortController().signal);
 	textFiles.setText("first\r\nsecond\nthird\n");
 	await models.refresh(resource);
@@ -836,7 +840,7 @@ test("mixed line endings reload as a clean model and save with the model EOL", a
 
 test("saving an explicit model EOL change does not restore the original file EOL", async () => {
 	const textFiles = new TestTextFileService("first\r\nsecond");
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});
 	using reference = await models.acquire({ resource: URI.file("C:\\project\\eol.txt") }, new AbortController().signal);
 	reference.model.pushEOL(EndOfLineSequence.LF);
 	await reference.save(new AbortController().signal);
@@ -846,7 +850,7 @@ test("saving an explicit model EOL change does not restore the original file EOL
 test("external file reload is one undo step and retains earlier saved edits", async () => {
 	const resource = URI.file("C:\\project\\reload.txt");
 	const textFiles = new TestTextFileService("first\nsecond");
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});
 	using reference = await models.acquire({ resource }, new AbortController().signal);
 	reference.model.applyOperations([{ range: new Range(1, 6, 1, 6), text: "!" }]);
 	await reference.save(new AbortController().signal);

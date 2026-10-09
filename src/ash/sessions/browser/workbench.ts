@@ -365,7 +365,7 @@ export abstract class Workbench extends Disposable {
 		if (!services.has(IClipboardService)) services.registerInstance(IClipboardService, new BrowserClipboardService(ownerWindow.navigator.clipboard));
 		const textFiles = this._register(services.createInstance(TextFileService));
 		services.registerInstance(ITextFileService, textFiles);
-		const workingCopies = this._register(new BrowserWorkingCopyService());
+		const workingCopies = this._register(services.createInstance(BrowserWorkingCopyService));
 		services.registerInstance(IWorkingCopyService, workingCopies);
 		const textMate = this._register(new BrowserTextMateService());
 		services.registerInstance(ITextMateService, textMate);
@@ -373,7 +373,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IExtensionService, extensionService);
 		const extensionReady = extensionService.start();
 		void extensionReady.catch(error => logger.error('extensions', 'Declarative extension activation failed', error));
-		const textModels = this._register(getBrowserTextModelService(getBrowserTextResourceStore(textFiles), {
+		const textModels = this._register(getBrowserTextModelService(getBrowserTextResourceStore(textFiles), services, {
 			languageService,
 			languageConfigurationService: services.get(ILanguageConfigurationService),
 			languageFeaturesService: services.get(ILanguageFeaturesService),

@@ -17,6 +17,7 @@ import { type ITextMateService } from "../../../services/textMate/common/textMat
 import type { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import type { IDiffService } from "../../../services/diff/common/diffService.js";
 import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
+import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uriIdentity.js';
 import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
 import type { IDocumentCollaborationApi } from "../../../../platform/collaboration/common/documentCollaborationApi.js";
 import type { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
@@ -169,9 +170,9 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	private titleVisible = true;
 	private openSequence = 0;
 
-	constructor(container: HTMLElement, options: EditorGroupOptions, @IInstantiationService instantiationService: IInstantiationService) {
+	constructor(container: HTMLElement, options: EditorGroupOptions, @IInstantiationService instantiationService: IInstantiationService, @IUriIdentityService uriIdentity: IUriIdentityService) {
 		super();
-		this.model = new EditorGroupModel(options.id, options.editorLimit);
+		this.model = new EditorGroupModel(options.id, options.editorLimit, uriIdentity.extUri);
 		this.id = this.model.id;
 		this.registry = options.registry;
 		this.onOpenError = options.onOpenError;

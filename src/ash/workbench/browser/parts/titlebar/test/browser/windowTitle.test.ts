@@ -1,3 +1,4 @@
+import { TestUriIdentityServices } from '../../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { operatingSystem, OperatingSystem } from '../../../../../../base/common/platform.js';
 import { BrowserPathService } from '../../../../../services/path/browser/pathService.js';
 import { createDisconnectedRendererApi } from '../../../../../../platform/agentHost/browser/rendererApi.js';
@@ -6,7 +7,7 @@ import { isWindows } from '../../../../../../base/common/platform.js';
 import { Registry } from '../../../../../../platform/registry/common/platform.js';
 import { Extensions, type IConfigurationRegistry } from '../../../../../../platform/configuration/common/configurationRegistry.js';
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
@@ -28,6 +29,9 @@ import type { IEditorGroup, IEditorGroupsContainer } from '../../../../../servic
 import type { EditorGroupChangeEvent } from '../../../../../services/editor/common/editorState.js';
 import { WindowTitle } from '../../windowTitle.js';
 
+const uriIdentityServices = new TestUriIdentityServices();
+suiteTeardown(() => uriIdentityServices.dispose());
+
 interface TestContext {
 	readonly dom: JSDOM;
 	readonly services: InstantiationService;
@@ -44,7 +48,7 @@ function createContext(resources: DisposableStore): TestContext {
 	resources.add(toDisposable(() => dom.window.close()));
 	const services = resources.add(new InstantiationService());
 	const workspace = resources.add(new WorkspaceContextService({ id: 'test', folders: [] }));
-	const workingCopies = resources.add(new BrowserWorkingCopyService());
+	const workingCopies = resources.add(uriIdentityServices.createInstance(BrowserWorkingCopyService));
 	const labels = resources.add(createTestLabelService(workspace));
 	const editors = resources.add(new TestEditorService());
 	services.registerInstance(IWorkspaceContextService, workspace);

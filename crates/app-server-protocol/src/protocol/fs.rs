@@ -16,6 +16,43 @@ pub enum FsFileType {
     Other,
 }
 
+/// Lookup behavior observed on the target filesystem, independent of the server process OS.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum FsPathCaseSensitivity {
+    Sensitive,
+    Insensitive,
+    Unknown,
+}
+
+/// Observe the existing directory ancestors of a relative path, including a missing destination.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FsReadPathCaseSensitivityParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub dir_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub session_directory: Option<SessionDirSelector>,
+    pub path: PathBuf,
+}
+
+/// One directory-relative scope; the rule applies only to its direct children's names.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FsPathCaseSensitivityScope {
+    pub path: PathBuf,
+    pub sensitivity: FsPathCaseSensitivity,
+}
+
+/// Scopes ordered from the granted root (".") to the deepest existing directory.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FsReadPathCaseSensitivityResult {
+    pub scopes: Vec<FsPathCaseSensitivityScope>,
+}
+
 /// Read metadata for one path relative to the configured directory root.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

@@ -11,6 +11,7 @@ use crate::FileType;
 use crate::FileWriteCondition;
 use crate::FileWriteMode;
 use crate::MissingTargetBehavior;
+use crate::PathCaseSensitivityScope;
 use crate::SystemFileTransferOperation;
 use crate::file_revision;
 use ash_file_access::Authorization;
@@ -250,6 +251,41 @@ impl FileSystem for LocalFileSystem {
     }
     fn get_metadata(&self, path: &Path) -> Result<FileMetadata, FileSystemError> {
         self.execute(Permission::BrowseFiles, |files| files.get_metadata(path))
+    }
+    fn read_path_case_sensitivity(
+        &self,
+        path: &Path,
+    ) -> Result<Vec<PathCaseSensitivityScope>, FileSystemError> {
+        self.execute(Permission::BrowseFiles, |files| {
+            // Validate the entire input before observing any ancestor; missing destinations are allowed.
+            files.resolve_for_write(path)?;
+            let mut scopes = vec![PathCaseSensitivityScope {
+                path: PathBuf::from("."),
+                sensitivity: crate::path_case_sensitivity::inspect(files.handle()),
+            }];
+            let mut relative = PathBuf::new();
+            for component in path.components() {
+                match component {
+                    std::path::Component::CurDir => continue,
+                    std::path::Component::Normal(name) => relative.push(name),
+                    _ => return Err(FileSystemError::InvalidPath(path.to_path_buf())),
+                }
+                let resolved = match files.resolve_existing(&relative) {
+                    Ok(resolved) => resolved,
+                    Err(FileSystemError::NotFound(_)) => break,
+                    Err(error) => return Err(error),
+                };
+                if !files.handle().metadata(&resolved).map_err(io_error)?.is_dir() {
+                    break;
+                }
+                let directory = files.handle().open_dir(resolved).map_err(io_error)?;
+                scopes.push(PathCaseSensitivityScope {
+                    path: relative.clone(),
+                    sensitivity: crate::path_case_sensitivity::inspect(&directory),
+                });
+            }
+            Ok(scopes)
+        })
     }
     fn read_directory(&self, path: &Path) -> Result<Vec<DirectoryEntry>, FileSystemError> {
         self.execute(Permission::BrowseFiles, |files| files.read_directory(path))

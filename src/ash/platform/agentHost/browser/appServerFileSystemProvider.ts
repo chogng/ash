@@ -47,7 +47,8 @@ export interface AppServerFileSystemProviderOptions {
  * Maps workspace resource URIs to the App Server's root-relative filesystem protocol.
  */
 export class AppServerFileSystemProvider extends Disposable implements IFileSystemProviderWithFileReadStreamCapability, ISystemFileTransferService {
-	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy | FileSystemProviderCapabilities.FileReadStream | FileSystemProviderCapabilities.FileWriteElevated | FileSystemProviderCapabilities.FileWriteUnlock;
+	// The transport does not advertise host filesystem casing; preserve distinct paths rather than infer it from the renderer OS.
+	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy | FileSystemProviderCapabilities.FileReadStream | FileSystemProviderCapabilities.FileWriteElevated | FileSystemProviderCapabilities.FileWriteUnlock | FileSystemProviderCapabilities.PathCaseSensitive;
 	public readonly onDidChangeCapabilities = Event.None;
 	private readonly api: IFileApi;
 	private readonly resourceApi: IResourceApi;

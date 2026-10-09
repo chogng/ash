@@ -641,7 +641,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IConfigurationResourceService, configuration);
 		const textFileService = this._register(services.createInstance(TextFileService));
 		services.registerInstance(ITextFileService, textFileService);
-		const workingCopyService = this._register(new BrowserWorkingCopyService());
+		const workingCopyService = this._register(services.createInstance(BrowserWorkingCopyService));
 		services.registerInstance(IWorkingCopyService, workingCopyService);
 		const documentTextModelService = this._register(services.createInstance(DocumentEditorTextModelService));
 		services.registerInstance(IDocumentEditorTextModelService, documentTextModelService);
@@ -666,7 +666,7 @@ export class Workbench extends Disposable {
 		const textMateService = this._register(new BrowserTextMateService());
 		services.registerInstance(ITextMateService, textMateService);
 		const textResourceStore = getBrowserTextResourceStore(textFileService);
-		const textModelService = this._register(getBrowserTextModelService(textResourceStore, {
+		const textModelService = this._register(getBrowserTextModelService(textResourceStore, services, {
 			languageService,
 			languageConfigurationService,
 			languageFeaturesService,

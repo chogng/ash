@@ -1,3 +1,4 @@
+import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
 import { getWindowById, getWindowId } from '../../../../../base/browser/window.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
@@ -6,7 +7,7 @@ import { IAccessibleViewService } from '../../../../../platform/accessibility/br
 import { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
 import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { URI } from '../../../../../base/common/uri.js';
@@ -20,6 +21,9 @@ import { BrowserWorkingCopyService } from '../../../../services/workingCopy/brow
 import { DirtyFilesIndicator } from '../../common/dirtyFilesIndicator.js';
 import { formatNlsMessage, setNlsResolver, resetNlsResolver } from '../../../../../nls.js';
 import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
+
+const uriIdentityServices = new TestUriIdentityServices();
+suiteTeardown(() => uriIdentityServices.dispose());
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
@@ -96,7 +100,7 @@ test('Open Editors follows editor groups, dirty state, activation, and close', a
 test('Dirty file activity follows working copy registration and dirty state', () => {
 	using dirtyChanges = new Emitter<void>();
 	using secondDirtyChanges = new Emitter<void>();
-	using workingCopies = new BrowserWorkingCopyService();
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	let isDirty = true;
 	let activeBadge: NumberBadge | undefined;
 	const activity: IActivityService = {

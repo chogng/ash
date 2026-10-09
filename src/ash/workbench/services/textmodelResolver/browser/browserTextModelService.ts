@@ -19,6 +19,9 @@ import { type SyntaxServiceOptions } from '../../../../editor/common/languages.j
 import { raceCancellationError } from '../../../../base/common/async.js';
 import { SaveReason, type ISaveOptions } from '../../../common/editor.js';
 import type { ITextModelSaveParticipant } from '../common/textModelResourceService.js';
+import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uriIdentity.js';
+import type { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { localize } from '../../../../nls.js';
 
 interface TextModelEntry {
 	readonly resource: URI;
@@ -42,6 +45,7 @@ interface TextModelEntry {
 }
 
 interface SaveRecoveryState {
+	readonly resource: URI;
 	pending: number;
 	latest: Promise<void> | undefined;
 	unresolved: boolean;
@@ -58,14 +62,14 @@ export interface BrowserTextModelServiceOptions {
 	readonly onDidChangeLanguageSupport?: Event<void>;
 }
 
-/** Shares text models by exact resource identity while references are open. */
+/** Shares text models by provider-aware resource identity while references are open. */
 export class BrowserTextModelService extends Disposable implements IFileTextModelService {
 	private readonly entries = new Map<string, TextModelEntry>();
 	// Failed recovery outlives forced pane disposal; retrying the same URI owns its resolution.
 	private readonly saveRecovery = new Map<string, SaveRecoveryState>();
 	private readonly saveParticipants = new Set<ITextModelSaveParticipant>();
 	private readonly saveCompletionParticipants = new Set<ITextModelSaveCompletionParticipant>();
-	private readonly undoRedoParticipant = this._register(new RetainedModelUndoRedoHistory());
+	private readonly undoRedoParticipant = this._register(new RetainedModelUndoRedoHistory({}, resource => this.uriIdentity.extUri.getComparisonKey(resource)));
 	private readonly modelAdded = this._register(new Emitter<TextModel>());
 	private readonly modelRemoved = this._register(new Emitter<TextModel>());
 	private readonly modelLanguageChanged = this._register(new Emitter<{ readonly model: TextModel; readonly oldLanguageId: string; }>());
@@ -73,17 +77,20 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 	public readonly onModelRemoved = this.modelRemoved.event;
 	public readonly onModelLanguageChanged = this.modelLanguageChanged.event;
 
-	public getModel(resource: URI): TextModel | null { return this.entries.get(resource.toString())?.model ?? null; }
+	public getModel(resource: URI): TextModel | null { return this.findEntry(resource)?.[1].model ?? null; }
 	public getModels(): readonly TextModel[] { return [...this.entries.values()].map(entry => entry.model); }
 
 	public hasPendingSaveRecovery(resource?: URI): boolean {
-		const states = resource ? [this.saveRecovery.get(resource.toString())] : this.saveRecovery.values();
+		const states = resource ? this.findSaveRecoveries(resource).map(([, state]) => state) : this.saveRecovery.values();
 		for (const state of states) if (state && (state.pending > 0 || state.unresolved)) return true;
 		return false;
 	}
 
 	public async waitForSaveRecovery(resource?: URI): Promise<void> {
-		if (resource) return this.waitForResourceSaveRecovery(resource.toString());
+		if (resource) {
+			await Promise.all(this.findSaveRecoveries(resource).map(([key]) => this.waitForResourceSaveRecovery(key)));
+			return;
+		}
 		while (this.saveRecovery.size > 0) {
 			await Promise.all([...this.saveRecovery.keys()].map(key => this.waitForResourceSaveRecovery(key)));
 		}
@@ -110,7 +117,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		return toDisposable(() => this.saveCompletionParticipants.delete(participant));
 	}
 
-	constructor(private readonly resourceStore: ITextResourceStore, private readonly options: BrowserTextModelServiceOptions = {}) {
+	constructor(private readonly resourceStore: ITextResourceStore, private readonly options: BrowserTextModelServiceOptions, @IUriIdentityService private readonly uriIdentity: IUriIdentityService) {
 		super();
 		if (options.maintenance && typeof options.maintenance.schedule !== "function") {
 			throw new TypeError("Text model maintenance requires a scheduler");
@@ -124,9 +131,10 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		this.ensureAlive();
 		validateInput(input);
 		throwIfCancelled(signal, "Text model acquisition was cancelled");
+		input = { ...input, resource: this.uriIdentity.asCanonicalUri(input.resource) };
 		const key = input.resource.toString();
-		const current = this.entries.get(key);
-		if (current) return this.acquireReference(key, current, signal);
+		const current = this.findEntry(input.resource);
+		if (current) return this.acquireReference(current[0], current[1], signal);
 
 		const content = await this.resourceStore.resolve({
 			resource: input.resource,
@@ -134,8 +142,8 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		}, signal);
 		throwIfCancelled(signal, "Text model acquisition was cancelled");
 		this.ensureAlive();
-		const concurrent = this.entries.get(key);
-		if (concurrent) return this.acquireReference(key, concurrent, signal);
+		const concurrent = this.findEntry(input.resource);
+		if (concurrent) return this.acquireReference(concurrent[0], concurrent[1], signal);
 		const languageSelection = this.options.languageService
 			? input.languageId !== undefined
 				? this.options.languageService.createById(input.languageId)
@@ -250,7 +258,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 
 	private async saveAs(entry: TextModelEntry, resource: URI, signal: AbortSignal): Promise<void> {
 		this.ensureEntryAlive(entry);
-		if (resource.toString() === entry.resource.toString()) return this.save(entry, signal);
+		if (this.uriIdentity.extUri.isEqual(resource, entry.resource)) return this.save(entry, signal);
 		const text = entry.model.getText();
 		const languageId = entry.model.getLanguageId();
 		// Save As runs against the destination so providers receive its URI and inferred language.
@@ -263,14 +271,19 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		this.ensureEntryAlive(entry);
 		throwIfCancelled(signal, "Text model save was cancelled");
 		// A queued save owns the model until its participants and write finish, even if the pane closes.
-		const lifetime = this.reference(entry.resource.toString(), entry);
 		const key = entry.resource.toString();
-		let recovery = this.saveRecovery.get(key);
+		const exactRecovery = this.saveRecovery.get(key);
+		const recoveries: [string, SaveRecoveryState][] = exactRecovery ? [[key, exactRecovery]] : this.findSaveRecoveries(entry.resource);
+		if (recoveries.length > 1) throw new Error(localize('files.ambiguousSaveRecovery', 'Cannot save {0} because its file system identity matches multiple pending recovery records.', entry.resource.toString()));
+		const existingRecovery = recoveries[0];
+		const recoveryKey = existingRecovery?.[0] ?? key;
+		let recovery = existingRecovery?.[1];
 		if (!recovery) {
-			recovery = { pending: 0, latest: undefined, unresolved: false, error: undefined };
-			this.saveRecovery.set(key, recovery);
+			recovery = { resource: entry.resource, pending: 0, latest: undefined, unresolved: false, error: undefined };
+			this.saveRecovery.set(recoveryKey, recovery);
 		}
 		const state = recovery;
+		const lifetime = this.reference(key, entry);
 		state.pending++;
 		let savedText = entry.model.getText();
 		const encoding = entry.encoding;
@@ -349,7 +362,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 				throw error;
 			} finally {
 				state.pending--;
-				if (state.pending === 0 && !state.unresolved) this.saveRecovery.delete(key);
+				if (state.pending === 0 && !state.unresolved) this.saveRecovery.delete(recoveryKey);
 				entry.completingSave = false;
 				if (!entry.disposed) this.refreshDirty(entry);
 			}
@@ -396,23 +409,27 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 	}
 
 	private acceptFileChange(entry: TextModelEntry, event: TextResourceChangeEvent): void {
-		if (entry.disposed || (event.resources && !event.resources.some(resource => resource.toString() === entry.resource.toString()))) return;
+		if (entry.disposed || (event.resources && !event.resources.some(resource => this.uriIdentity.extUri.isEqual(resource, entry.resource)))) return;
 		// Watcher events are invalidations, including workspace rescans and our own writes.
-		void this.refresh(entry.resource).catch(error => console.error("Could not refresh open file", error));
+		void this.refreshEntry(entry).catch(error => console.error("Could not refresh open file", error));
 	}
 
 	/** Rechecks an open file when its window regains focus and watcher events may have been missed. */
 	async refresh(resource: URI): Promise<void> {
 		this.ensureAlive();
-		const entry = this.entries.get(resource.toString());
+		const entry = this.findEntry(resource)?.[1];
+		if (entry) await this.refreshEntry(entry);
+	}
+
+	private async refreshEntry(entry: TextModelEntry): Promise<void> {
 		// Background reads must not advance the persisted baseline of local edits.
-		if (!entry || entry.dirty || entry.resource.scheme === Schemas.untitled) return;
+		if (entry.disposed || entry.dirty || entry.resource.scheme === Schemas.untitled) return;
 		// A save can acknowledge a new revision without changing the text model version.
 		const observedSaveQueue = entry.saveQueue;
 		await observedSaveQueue;
 		if (entry.disposed || entry.dirty || entry.saveQueue !== observedSaveQueue) return;
 		const observedVersion = entry.model.version;
-		const content = await this.resourceStore.resolve({ resource }, new AbortController().signal);
+		const content = await this.resourceStore.resolve({ resource: entry.resource }, new AbortController().signal);
 		if (entry.disposed || entry.dirty || entry.model.version !== observedVersion || entry.saveQueue !== observedSaveQueue) return;
 		if (content.revision !== undefined && content.revision === entry.revision) {
 			this.setExternalChange(entry, false);
@@ -483,6 +500,25 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		if (entry.disposed) throw new ReferenceError("Text model reference is already disposed");
 	}
 
+	private findEntry(resource: URI): [string, TextModelEntry] | undefined {
+		let match: [string, TextModelEntry] | undefined;
+		// Provider replacement and cache eviction must not orphan an open model or silently merge two edited models.
+		for (const entry of this.entries) {
+			if (!this.uriIdentity.extUri.isEqual(resource, entry[1].resource)) continue;
+			if (match) throw this.ambiguousIdentityError(resource);
+			match = entry;
+		}
+		return match;
+	}
+
+	private findSaveRecoveries(resource: URI): [string, SaveRecoveryState][] {
+		return [...this.saveRecovery].filter(([, state]) => this.uriIdentity.extUri.isEqual(resource, state.resource));
+	}
+
+	private ambiguousIdentityError(resource: URI): Error {
+		return new Error(localize('files.ambiguousIdentity', 'The file system identity for {0} matches multiple open documents. Close the duplicate documents before reopening.', resource.toString()));
+	}
+
 	private ensureAlive(): void {
 		if (this.isDisposed) throw new ReferenceError("BrowserTextModelService is already disposed");
 	}
@@ -494,8 +530,8 @@ function firstLine(text: string): string {
 }
 
 /** Returns a browser model service with the renderer's idle maintenance policy. */
-export function createBrowserTextModelService(resourceStore: ITextResourceStore, options: BrowserTextModelServiceOptions = {}): BrowserTextModelService {
-	return new BrowserTextModelService(resourceStore, {
+export function createBrowserTextModelService(resourceStore: ITextResourceStore, instantiationService: IInstantiationService, options: BrowserTextModelServiceOptions = {}): BrowserTextModelService {
+	return instantiationService.createInstance(BrowserTextModelService, resourceStore, {
 		...options,
 		maintenance: {
 			schedule: callback => runWhenWindowIdle(
@@ -504,16 +540,16 @@ export function createBrowserTextModelService(resourceStore: ITextResourceStore,
 				250,
 			),
 		},
-	});
+	} satisfies BrowserTextModelServiceOptions);
 }
 
 const modelServices = new WeakMap<ITextResourceStore, BrowserTextModelService>();
 
 /** Shares model ownership for every pane backed by one resource store. */
-export function getBrowserTextModelService(resourceStore: ITextResourceStore, options: BrowserTextModelServiceOptions = {}): BrowserTextModelService {
+export function getBrowserTextModelService(resourceStore: ITextResourceStore, instantiationService: IInstantiationService, options: BrowserTextModelServiceOptions = {}): BrowserTextModelService {
 	const existing = modelServices.get(resourceStore);
 	if (existing) return existing;
-	const service = createBrowserTextModelService(resourceStore, options);
+	const service = createBrowserTextModelService(resourceStore, instantiationService, options);
 	modelServices.set(resourceStore, service);
 	return service;
 }

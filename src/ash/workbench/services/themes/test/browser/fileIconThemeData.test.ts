@@ -1,3 +1,5 @@
+import type { ITextResourceStore } from '../../../textmodelResolver/common/textResourceStore.js';
+import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
 import { IResourceIconRenderer } from '../../../../browser/labels.js';
 import { Event } from '../../../../../base/common/event.js';
@@ -13,7 +15,7 @@ import { BrowserHostColorSchemeService } from '../../browser/browserHostColorSch
 import { ColorScheme } from '../../../../../platform/theme/common/theme.js';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { test } from 'mocha';
+import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { ILanguageService } from '../../../../../editor/common/languages/language.js';
 import { LanguageService } from '../../../../../editor/common/services/languageService.js';
@@ -27,6 +29,9 @@ import { WorkbenchFileIconThemesRegistry } from '../../../themes/common/themeExt
 import { WorkbenchConfigurationService } from '../../../configuration/browser/configurationService.js';
 import { FileIconThemeData } from '../../browser/fileIconThemeData.js';
 import { WorkbenchThemeService } from '../../browser/workbenchThemeService.js';
+
+const uriIdentityServices = new TestUriIdentityServices();
+suiteTeardown(() => uriIdentityServices.dispose());
 
 const directory = 'extensions/theme-seti/icons/';
 
@@ -47,7 +52,7 @@ test('packaged Seti resolves filenames, extensions and light variants and can be
 		services.registerInstance(ILanguageService, languages);
 		using hostColors = new BrowserHostColorSchemeService(browser.window as unknown as Window);
 		services.registerInstance(IHostColorSchemeService, hostColors);
-		using models = new BrowserTextModelService({ onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: request.bootstrapText ?? '', revision: undefined }), save: async () => ({ revision: undefined }) }, { languageService: languages });
+		using models = uriIdentityServices.createInstance(BrowserTextModelService, { onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: request.bootstrapText ?? '', revision: undefined }), save: async () => ({ revision: undefined }) } satisfies ITextResourceStore, { languageService: languages });
 		services.registerInstance(IFileTextModelService, models);
 		using themes = services.createInstance(WorkbenchThemeService, browser.window.document.body);
 		themes.initialize();

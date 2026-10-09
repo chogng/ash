@@ -63,6 +63,7 @@ export enum FileSystemProviderCapabilities {
 	FileReadStream = 1 << 4,
 	FileWriteElevated = 1 << 5,
 	FileWriteUnlock = 1 << 6,
+	PathCaseSensitive = 1 << 10,
 	Readonly = 1 << 11,
 }
 
@@ -190,6 +191,8 @@ export interface IFileSystemProvider {
 
 /** Routes file operations through explicitly registered resource schemes. */
 export interface IFileService {
+	readonly onDidChangeFileSystemProviderRegistrations: Event<IFileSystemProviderRegistrationEvent>;
+	readonly onDidChangeFileSystemProviderCapabilities: Event<IFileSystemProviderCapabilitiesChangeEvent>;
 	readonly onDidChangeFiles: Event<IFileChangeEvent>;
 	/** Releases this caller's watch; equivalent requests may share storage resources. */
 	watch(resource: URI, options?: IWatchOptions): IDisposable;
@@ -211,6 +214,17 @@ export interface IFileService {
 	/** Reports routing availability, which does not imply that the provider's storage is currently accessible. */
 	hasProvider(resource: URI): boolean;
 	hasCapability(resource: URI, capability: FileSystemProviderCapabilities): boolean;
+}
+
+export interface IFileSystemProviderRegistrationEvent {
+	readonly scheme: string;
+	readonly provider: IFileSystemProvider;
+	readonly added: boolean;
+}
+
+export interface IFileSystemProviderCapabilitiesChangeEvent {
+	readonly scheme: string;
+	readonly provider: IFileSystemProvider;
 }
 
 export class FileNotFoundError extends FileSystemProviderError {

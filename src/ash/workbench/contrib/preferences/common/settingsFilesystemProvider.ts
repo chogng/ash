@@ -11,7 +11,7 @@ import { SettingsFileSystemScheme, UserSettingsResource } from '../../../service
 /** Exposes the editable current-profile settings source through one virtual scheme. */
 export class SettingsFileSystemProvider extends Disposable implements IFileSystemProvider {
 	public static readonly scheme = SettingsFileSystemScheme;
-	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite;
+	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.PathCaseSensitive;
 	public readonly onDidChangeCapabilities = Event.None;
 
 	private readonly changeEmitter = this._register(new Emitter<IFileChangeEvent>());

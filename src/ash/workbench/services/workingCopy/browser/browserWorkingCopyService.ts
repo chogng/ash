@@ -3,6 +3,7 @@ import { DisposableMap, Disposable, toDisposable } from "../../../../base/common
 import { getOrSet } from "../../../../base/common/map.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { type IWorkingCopy, type IWorkingCopyService } from "../common/workingCopyService.js";
+import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uriIdentity.js';
 
 /** Browser registry for editor-domain working copies. */
 export class BrowserWorkingCopyService extends Disposable implements IWorkingCopyService {
@@ -16,7 +17,7 @@ export class BrowserWorkingCopyService extends Disposable implements IWorkingCop
 	readonly onDidUnregister = this._onDidUnregister.event;
 	readonly onDidChangeDirty = this._onDidChangeDirty.event;
 
-	constructor() {
+	constructor(@IUriIdentityService private readonly uriIdentity: IUriIdentityService) {
 		super();
 		this._register(toDisposable(() => this.copies.clear()));
 	}
@@ -24,9 +25,9 @@ export class BrowserWorkingCopyService extends Disposable implements IWorkingCop
 	register(workingCopy: IWorkingCopy): ReturnType<typeof toDisposable> {
 		this.assertNotDisposed();
 		validateWorkingCopy(workingCopy);
-		const key = workingCopy.resource.toString();
+		const key = this.uriIdentity.asCanonicalUri(workingCopy.resource).toString();
+		if (this.dirtySubscriptions.has(workingCopy)) throw new Error(`Working copy is already registered: ${key}`);
 		const copies = getOrSet(this.copies, key, new Set<IWorkingCopy>());
-		if (copies.has(workingCopy)) throw new Error(`Working copy is already registered: ${key}`);
 		copies.add(workingCopy);
 		this.dirtySubscriptions.set(workingCopy, workingCopy.onDidChangeDirty(() => this._onDidChangeDirty.fire()));
 		this._onDidRegister.fire(workingCopy);
@@ -49,7 +50,8 @@ export class BrowserWorkingCopyService extends Disposable implements IWorkingCop
 	}
 
 	get(resource: URI): readonly IWorkingCopy[] {
-		return [...this.copies.get(resource.toString()) ?? []];
+		// Registrations retain their lifetime keys when the provider's casing policy changes.
+		return this.getAll().filter(copy => this.uriIdentity.extUri.isEqual(resource, copy.resource));
 	}
 
 	getAll(): readonly IWorkingCopy[] {

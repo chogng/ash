@@ -35,7 +35,7 @@ registerEditorPane({
 		const resourceStore = getBrowserTextResourceStore(options.textFileService);
 		const configuration = options.configurationService;
 		return instantiationService.createInstance(MultiDiffEditor, {
-			modelService: getBrowserTextModelService(resourceStore),
+			modelService: getBrowserTextModelService(resourceStore, instantiationService),
 			createComputationService: () => diffService.createComputationService(),
 			lineHeight: configuration?.getValue(CodeEditorConfiguration.lineHeight),
 			fontFamily: configuration?.getValue(CodeEditorConfiguration.fontFamily) || undefined,

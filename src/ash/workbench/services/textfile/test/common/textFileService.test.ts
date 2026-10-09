@@ -1,9 +1,10 @@
+import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { Disposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { Event } from '../../../../../base/common/event.js';
 import { type IFileSystemProvider, type IFileWriteOptions, type IFileWriteResult, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import { createTestTextFileService } from '../../../../test/common/testEditorServices.js';
 import assert from "node:assert/strict";
-import { test } from "mocha";
+import { test, suiteTeardown } from "mocha";
 import { isCancellationError } from "../../../../../base/common/errors.js";
 import { BrowserTextModelService } from "../../../textmodelResolver/browser/browserTextModelService.js";
 import { BrowserTextResourceStore } from "../../../../contrib/codeEditor/browser/browserTextResourceStore.js";
@@ -16,6 +17,9 @@ import {
 	TextFileSaveConflictError,
 	TextFileTooLargeError,
 } from "../../../../../workbench/services/textfile/common/textFileService.js";
+
+const uriIdentityServices = new TestUriIdentityServices();
+suiteTeardown(() => uriIdentityServices.dispose());
 
 test("TextFileService uses bootstrap content without reading the workspace", async () => {
 	const files = new TestFileService("workspace");
@@ -192,7 +196,7 @@ test("text-file editing preserves UTF-8 BOM through the model, resource adapter 
 	for (const hasBom of [false, true]) {
 		const files = new TestFileService(new TextEncoder().encode((hasBom ? "\uFEFF" : "") + "first\r\nsecond"));
 		using service = createTestTextFileService(files);
-		using models = new BrowserTextModelService(new BrowserTextResourceStore(service));
+		using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(service), {});
 		using reference = await models.acquire({ resource: URI.file("C:\\project\\bom.txt") }, new AbortController().signal);
 		reference.model.applyOperations([{ range: new Range(1, 1, 1, 6), text: "saved" }]);
 		await reference.save(new AbortController().signal);
@@ -205,7 +209,7 @@ test("text-file editing preserves UTF-8 BOM through the model, resource adapter 
 test("text-file decoding retains a leading content character after the UTF-8 BOM", async () => {
 	const resource = URI.file("C:\\project\\bom.txt");
 	using service = createTestTextFileService(new TestFileService(new TextEncoder().encode("\uFEFF\uFEFFcontent")));
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(service));
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(service), {});
 	using reference = await models.acquire({ resource }, new AbortController().signal);
 	assert.equal(reference.model.getText(), "\uFEFFcontent");
 });

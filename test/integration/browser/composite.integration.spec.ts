@@ -6,6 +6,17 @@ test.beforeEach(async ({ page }) => {
 	await page.waitForFunction(() => !!window.ashCompositeIntegration);
 });
 
+test('typed case aliases reuse the open editor pane and unsaved model', async ({ page }) => {
+	expect(await page.evaluate(() => window.ashCompositeIntegration.openFileAliases())).toEqual({ tabs: 1, models: 1, retained: true, text: 'unsaved content' });
+	await expect(page.locator('.stanza-editor-line-text').filter({ hasText: 'unsaved content' })).toBeVisible();
+});
+
+test('typed case aliases reuse the modal editor pane and unsaved model', async ({ page }) => {
+	expect(await page.evaluate(() => window.ashCompositeIntegration.openFileAliases('modalGroup'))).toEqual({ tabs: 0, models: 1, retained: true, text: 'unsaved content' });
+	await expect(page.getByRole('dialog')).toBeVisible();
+	await expect(page.locator('.stanza-editor-line-text').filter({ hasText: 'unsaved content' })).toBeVisible();
+});
+
 test('content focus enters once, survives internal Tab navigation and leaves once', async ({ page }) => {
 	await page.evaluate(() => window.ashCompositeIntegration.openView('first.view'));
 	await expect(page.getByRole('textbox', { name: 'First input', exact: true })).toBeFocused();

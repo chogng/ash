@@ -1,13 +1,20 @@
+import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import assert from "node:assert/strict";
-import { test } from "mocha";
+import { test, suiteTeardown } from "mocha";
 import { Emitter } from "../../../../../base/common/event.js";
 import { Disposable } from "../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { BrowserWorkingCopyService } from "../../browser/browserWorkingCopyService.js";
 import type { IWorkingCopy } from "../../common/workingCopyService.js";
+import { FileService } from '../../../../../platform/files/common/fileService.js';
+import { FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
+import { MemoryFileService } from '../../../../contrib/bulkEdit/test/browser/bulkEditTestServices.js';
+
+const uriIdentityServices = new TestUriIdentityServices();
+suiteTeardown(() => uriIdentityServices.dispose());
 
 test("BrowserWorkingCopyService indexes and unregisters format-specific copies", () => {
-	using service = new BrowserWorkingCopyService();
+	using service = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using copy = new FakeWorkingCopy(URI.file("C:\\project\\paper.ash-academic"));
 	const registered: IWorkingCopy[] = [];
 	const unregistered: IWorkingCopy[] = [];
@@ -24,7 +31,7 @@ test("BrowserWorkingCopyService indexes and unregisters format-specific copies",
 });
 
 test('BrowserWorkingCopyService publishes every working copy dirty state change', () => {
-	using service = new BrowserWorkingCopyService();
+	using service = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using first = new FakeWorkingCopy(URI.file('C:\\project\\first.ts'));
 	using second = new FakeWorkingCopy(URI.file('C:\\project\\second.ts'));
 	const changes: boolean[] = [];
@@ -41,7 +48,7 @@ test('BrowserWorkingCopyService publishes every working copy dirty state change'
 });
 
 test('BrowserWorkingCopyService reports initially dirty registrations and removal', () => {
-	using service = new BrowserWorkingCopyService();
+	using service = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using copy = new FakeWorkingCopy(URI.file('C:\\project\\draft.ts'));
 	copy.setDirty(true);
 	const changes: boolean[] = [];
@@ -49,6 +56,30 @@ test('BrowserWorkingCopyService reports initially dirty registrations and remova
 	const registration = service.register(copy);
 	registration.dispose();
 	assert.deepEqual(changes, [true, false]);
+});
+
+test('file aliases find every format-specific working copy and unregister through their original lifetime', () => {
+	using files = new FileService();
+	const provider = new class extends MemoryFileService {
+		public override capabilities = FileSystemProviderCapabilities.FileReadWrite;
+	}([]);
+	using registeredProvider = files.registerProvider('file', provider);
+	using services = new TestUriIdentityServices(files);
+	using copies = services.createInstance(BrowserWorkingCopyService);
+	using first = new FakeWorkingCopy(URI.file('/workspace/Main.txt'));
+	using second = new FakeWorkingCopy(URI.file('/workspace/MAIN.txt'));
+	const firstRegistration = copies.register(first);
+	using secondRegistration = copies.register(second);
+	first.setDirty(true);
+	assert.deepEqual(copies.get(URI.file('/workspace/main.txt')), [first, second]);
+	assert.equal(copies.hasDirtyWorkingCopies, true);
+	assert.throws(() => copies.register(first), /already registered/);
+	registeredProvider.dispose();
+	using replacement = files.registerProvider('file', new MemoryFileService([]));
+	assert.deepEqual(copies.get(first.resource), [first]);
+	assert.deepEqual(copies.get(second.resource), [second]);
+	firstRegistration.dispose();
+	assert.deepEqual([copies.get(first.resource), copies.hasDirtyWorkingCopies], [[], false]);
 });
 
 class FakeWorkingCopy extends Disposable implements IWorkingCopy {

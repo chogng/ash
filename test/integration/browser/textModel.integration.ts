@@ -1,3 +1,4 @@
+import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import '../../../src/ash/workbench/contrib/modernUI/browser/media/roundedCorners.css';
 import { asCssVariableName } from '../../../src/ash/platform/theme/common/sizeUtils.js';
@@ -121,6 +122,7 @@ const root = requiredElement("#editor-root");
 document.body.style.setProperty(asCssVariableName(cornerRadiusSmall), '4px');
 setIconResolver(root.ownerDocument, icon => getIconDefinition(icon));
 const disposables = new DisposableStore();
+const uriIdentityServices = disposables.add(new TestUriIdentityServices());
 const resource = URI.parse("inmemory://editor/main.rs");
 const files = new MemoryTextFiles(resource, "fn main() {\n  answer();\n}\n");
 disposables.add(toDisposable(() => files.dispose()));
@@ -132,7 +134,7 @@ const languageFeaturesService = disposables.add(new LanguageFeaturesService());
 const textMateService = disposables.add(new BrowserTextMateService());
 const extensions = disposables.add(await createLanguageExtensions({ textMateService, languageService, languageConfigurationService, languageFeaturesService }));
 await extensions.start();
-const models = disposables.add(new BrowserTextModelService(resourceStore, {
+const models = disposables.add(uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {
 	languageService, languageConfigurationService, languageFeaturesService,
 	syntaxService: { workerFactory: textMateService.syntaxWorkerFactory },
 	onDidChangeLanguageSupport: textMateService.onDidChange,

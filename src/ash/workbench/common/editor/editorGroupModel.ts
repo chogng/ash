@@ -1,5 +1,5 @@
 import type { IResourceEditorInput } from '../editor.js';
-import { extUri } from '../../../base/common/resources.js';
+import { extUri, type IExtUri } from '../../../base/common/resources.js';
 import { EditorInput } from './editorInput.js';
 
 import type { EditorGroupId, EditorInstanceId } from '../../services/editor/common/editorState.js';
@@ -39,7 +39,7 @@ export class EditorGroupModel {
 	private selectionAnchor: EditorInstanceId | undefined;
 	private locked = false;
 
-	constructor(id?: EditorGroupId, public readonly editorLimit?: 1) {
+	constructor(id?: EditorGroupId, public readonly editorLimit?: 1, private readonly resourceIdentity: IExtUri = extUri) {
 		this.id = id ?? `editor-group-${++editorGroupId}`;
 		const match = /^editor-group-(\d+)$/u.exec(this.id);
 		if (match) {
@@ -87,15 +87,15 @@ export class EditorGroupModel {
 	}
 
 	public indexOf(input: IResourceEditorInput): number {
-		const key = extUri.getComparisonKey(input.resource);
+		const key = this.resourceIdentity.getComparisonKey(input.resource);
 		return this.editors.findIndex(editor => {
 			if (editor.input instanceof EditorInput) {
-				return editor.input.matches(input);
+				return editor.input.matches(input, this.resourceIdentity);
 			}
 			if (input instanceof EditorInput) {
-				return input.matches(editor.input);
+				return input.matches(editor.input, this.resourceIdentity);
 			}
-			return editor.input.editorId === input.editorId && extUri.getComparisonKey(editor.input.resource) === key;
+			return editor.input.editorId === input.editorId && this.resourceIdentity.getComparisonKey(editor.input.resource) === key;
 		});
 	}
 

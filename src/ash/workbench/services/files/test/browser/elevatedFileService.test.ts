@@ -1,5 +1,6 @@
+import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { test, suiteTeardown } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { CancellationError } from '../../../../../base/common/errors.js';
 import { URI } from '../../../../../base/common/uri.js';
@@ -22,6 +23,9 @@ import { BrowserTextResourceStore } from '../../../../contrib/codeEditor/browser
 import { BrowserTextModelService } from '../../../textmodelResolver/browser/browserTextModelService.js';
 import { TextModelConflictError } from '../../../textmodelResolver/common/textModelResourceService.js';
 
+const uriIdentityServices = new TestUriIdentityServices();
+suiteTeardown(() => uriIdentityServices.dispose());
+
 const resource = URI.file('/project/notes.txt');
 const saved: FsWriteFileResult = { revision: 'saved-revision', metadata: { fileType: 'file', readonly: false, sizeBytes: 10, modifiedAtMillis: 1 } };
 
@@ -43,7 +47,7 @@ function fixture(write: (request: FsWriteFileElevatedParams, signal?: AbortSigna
 	services.registerInstance(IFilesConfigurationService, policy);
 	services.registerSingleton(IElevatedFileService, () => services.createInstance(ElectronElevatedFileService));
 	const textFiles = services.createInstance(TextFileService);
-	const models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
+	const models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});
 	return { services, textFiles, models, dispose(): void { models.dispose(); textFiles.dispose(); registration.dispose(); files.dispose(); provider.dispose(); policy.dispose(); configuration.dispose(); workspace.dispose(); services.dispose(); }, [Symbol.dispose](): void { this.dispose(); } };
 }
 

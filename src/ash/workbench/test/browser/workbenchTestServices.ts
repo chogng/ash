@@ -1,3 +1,5 @@
+import type { ITextResourceStore } from '../../services/textmodelResolver/common/textResourceStore.js';
+import { TestUriIdentityServices } from '../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { JSDOM } from 'jsdom';
 import { Event } from '../../../base/common/event.js';
 import { BrowserTextModelService } from '../../services/textmodelResolver/browser/browserTextModelService.js';
@@ -34,6 +36,7 @@ export function workbenchInstantiationService(owner?: Pick<DisposableStore, 'add
 	const services = new TestWorkbenchServices();
 	owner?.add(services);
 	const resources = services.resources;
+	const uriIdentityServices = resources.add(new TestUriIdentityServices());
 	const configuration = resources.add(new WorkbenchConfigurationService());
 	const languages = resources.add(new LanguageService());
 	const features = overrides.languageFeatures ?? resources.add(new LanguageFeaturesService());
@@ -50,11 +53,11 @@ export function workbenchInstantiationService(owner?: Pick<DisposableStore, 'add
 		storage = resources.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'test', backend: browser.window.localStorage, flushInterval: 0 }));
 	}
 	services.registerInstance(IStorageService, storage);
-	const fileModels = resources.add(new BrowserTextModelService({
+	const fileModels = resources.add(uriIdentityServices.createInstance(BrowserTextModelService, {
 		onDidChange: Event.None,
 		resolve: async () => { throw new Error('Filesystem acquisition is outside this Output scenario'); },
 		save: async () => { throw new Error('Filesystem acquisition is outside this Output scenario'); },
-	}));
+	} satisfies ITextResourceStore, {}));
 	services.registerInstance(ITextModelResourceService, fileModels);
 	services.registerInstance(IFileTextModelService, fileModels);
 	services.registerInstance(ITextModelService, services.createInstance(TextModelResolverService));

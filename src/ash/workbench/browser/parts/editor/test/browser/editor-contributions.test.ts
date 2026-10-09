@@ -1,10 +1,11 @@
+import { TestUriIdentityServices } from '../../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { createTestComponentServices } from '../../../../../test/common/testEditorServices.js';
 import { IStorageService } from '../../../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../../../platform/theme/common/themeService.js';
 import { SaveReason, type ISaveOptions } from '../../../../../common/editor.js';
 import type { IResourceEditorInput, IEditorPane, EditorPaneStatus } from '../../../../../common/editor.js';
 import assert from "node:assert/strict";
-import { test } from "mocha";
+import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { Emitter, Event } from "../../../../../../base/common/event.js";
 import type { IAccessibilityService } from "../../../../../../platform/accessibility/common/accessibility.js";
@@ -21,6 +22,9 @@ import type { IEditorPart } from "../../editorPart.js";
 import { EditorAutoSave } from "../../editorAutoSave.js";
 import { EditorStatusContribution } from "../../editorStatus.js";
 
+const uriIdentityServices = new TestUriIdentityServices();
+suiteTeardown(() => uriIdentityServices.dispose());
+
 test("EditorAutoSave saves dirty copies after the configured delay and skips conflicts", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const editorChanges = new Emitter<void>();
@@ -32,7 +36,7 @@ test("EditorAutoSave saves dirty copies after the configured delay and skips con
 	const configuration = new InMemoryConfigurationService();
 	await configuration.updateValue(EditorAutoSaveConfiguration, "afterDelay");
 	await configuration.updateValue(EditorAutoSaveDelayConfiguration, 100);
-	using workingCopies = new BrowserWorkingCopyService();
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using workingCopy = new TestWorkingCopy(URI.file("C:\\project\\auto-save.ts"));
 	using registration = workingCopies.register(workingCopy);
 	using contribution = new EditorAutoSave(editorPart, workingCopies, configuration);
@@ -63,7 +67,7 @@ test("EditorAutoSave observes auxiliary editor window blur", async () => {
 	} as unknown as IEditorPart;
 	const configuration = new InMemoryConfigurationService();
 	await configuration.updateValue(EditorAutoSaveConfiguration, "onWindowChange");
-	using workingCopies = new BrowserWorkingCopyService();
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using workingCopy = new TestWorkingCopy(URI.file("C:\\project\\auxiliary-auto-save.ts"));
 	using registration = workingCopies.register(workingCopy);
 	using contribution = new EditorAutoSave(editorPart, workingCopies, configuration);
@@ -91,7 +95,7 @@ test("EditorAutoSave saves dirty working copies when focus mode loses window foc
 	} as unknown as IEditorPart;
 	const configuration = new InMemoryConfigurationService();
 	await configuration.updateValue(EditorAutoSaveConfiguration, "onFocusChange");
-	using workingCopies = new BrowserWorkingCopyService();
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using workingCopy = new TestWorkingCopy(URI.file("C:\\project\\focus-auto-save.ts"));
 	using registration = workingCopies.register(workingCopy);
 	using contribution = new EditorAutoSave(editorPart, workingCopies, configuration);
@@ -115,7 +119,7 @@ test("EditorAutoSave saves existing dirty working copies when auto save is enabl
 		onDidChangeEditors: editorChanges.event,
 	} as unknown as IEditorPart;
 	const configuration = new InMemoryConfigurationService();
-	using workingCopies = new BrowserWorkingCopyService();
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using workingCopy = new TestWorkingCopy(URI.file("C:\\project\\enabled-auto-save.ts"));
 	using registration = workingCopies.register(workingCopy);
 	using untitled = new TestWorkingCopy(URI.parse("untitled:/draft"));
@@ -147,7 +151,7 @@ test("EditorAutoSave clears a delay timer through the window that created it", a
 	const configuration = new InMemoryConfigurationService();
 	await configuration.updateValue(EditorAutoSaveConfiguration, "afterDelay");
 	await configuration.updateValue(EditorAutoSaveDelayConfiguration, 100);
-	using workingCopies = new BrowserWorkingCopyService();
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using workingCopy = new TestWorkingCopy(URI.file("C:\\project\\window-timer.ts"));
 	using registration = workingCopies.register(workingCopy);
 	using contribution = new EditorAutoSave(editorPart, workingCopies, configuration);

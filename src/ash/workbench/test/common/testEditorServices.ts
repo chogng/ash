@@ -1,3 +1,4 @@
+import type { ITextResourceStore } from '../../services/textmodelResolver/common/textResourceStore.js';
 import { BrowserPathService } from '../../services/path/browser/pathService.js';
 import { IPathService } from '../../../platform/path/common/pathService.js';
 import { IRendererHostService } from '../../../platform/renderer/common/rendererHost.js';
@@ -44,6 +45,8 @@ import { FilesConfigurationService, IFilesConfigurationService } from '../../ser
 import { TextFileService } from '../../services/textfile/browser/textFileService.js';
 import { IWebviewService } from '../../contrib/webview/browser/webview.js';
 import { WebviewService } from '../../contrib/webview/browser/webviewService.js';
+import { IUriIdentityService } from '../../../platform/uriIdentity/common/uriIdentity.js';
+import { UriIdentityService } from '../../../platform/uriIdentity/common/uriIdentityService.js';
 
 /** Assembles the same scheme router as the product around test-owned storage. */
 export function createTestFileService(provider: IFileSystemProvider, schemes: readonly string[] = [Schemas.file, Schemas.ashRemote, Schemas.vscodeUserData, 'ash-settings']): FileService {
@@ -102,6 +105,7 @@ export function registerTestComponentServices(services: InstantiationService, do
 	if (!services.has(IWebviewService)) {
 		services.registerSingleton(IWebviewService, () => services.createInstance(WebviewService));
 	}
+	if (!services.has(IUriIdentityService)) services.registerSingleton(IUriIdentityService, () => services.createInstance(UriIdentityService));
 	if (!services.has(IThemeService)) {
 		services.registerSingleton(IThemeService, () => new TestThemeService(darkColorTheme));
 	}
@@ -157,12 +161,12 @@ export function createTestEditorServices(configuration?: IConfigurationService, 
 	if (!services.has(IRendererHostService)) services.registerInstance(IRendererHostService, createDisconnectedRendererApi());
 	if (!services.has(IPathService)) services.registerSingleton(IPathService, () => services.createInstance(BrowserPathService));
 	if (!services.has(ILabelService)) services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
-	if (!services.has(IWorkingCopyService)) services.registerSingleton(IWorkingCopyService, () => new BrowserWorkingCopyService());
+	if (!services.has(IWorkingCopyService)) services.registerSingleton(IWorkingCopyService, () => services.createInstance(BrowserWorkingCopyService));
 	if (!services.has(IUntitledTextEditorService)) services.registerSingleton(IUntitledTextEditorService, () => services.createInstance(UntitledTextEditorService));
 	if (!services.has(ILogService)) services.registerInstance(ILogService, new NullLoggerService());
 	if (!services.has(IDecorationsService)) services.registerSingleton(IDecorationsService, () => services.createInstance(DecorationsService, document));
 	if (!services.has(ILanguageService)) services.registerSingleton(ILanguageService, () => new LanguageService());
-	if (!services.has(IFileTextModelService)) services.registerSingleton(IFileTextModelService, () => new BrowserTextModelService({ onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: request.bootstrapText ?? '', revision: undefined }), save: async () => ({ revision: undefined }) }));
+	if (!services.has(IFileTextModelService)) services.registerSingleton(IFileTextModelService, () => services.createInstance(BrowserTextModelService, { onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: request.bootstrapText ?? '', revision: undefined }), save: async () => ({ revision: undefined }) } satisfies ITextResourceStore, {}));
 	if (!services.has(ITextModelResourceService)) services.registerSingleton(ITextModelResourceService, () => services.get(IFileTextModelService));
 	if (!services.has(ITextModelService)) services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
 	services.registerSingleton(IResourceLabelService, () => services.createInstance(ResourceLabelService));

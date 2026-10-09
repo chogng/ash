@@ -7,6 +7,21 @@ pub enum FileType {
     Other,
 }
 
+/// Lookup semantics for the direct children of one observed directory.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PathCaseSensitivity {
+    Sensitive,
+    Insensitive,
+    Unknown,
+}
+
+/// A directory-relative scope; its rule does not apply recursively to descendants.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PathCaseSensitivityScope {
+    pub path: std::path::PathBuf,
+    pub sensitivity: PathCaseSensitivity,
+}
+
 /// Metadata for one existing directory path.
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct FileMetadata {

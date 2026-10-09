@@ -1,3 +1,4 @@
+import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { createTestFileService } from '../../../../test/common/testEditorServices.js';
 import { type IFileSystemProvider, type IFileWriteOptions, type IFileWriteResult, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
@@ -42,9 +43,10 @@ export class TestDialogService implements IDialogService {
 }
 
 export class BulkEditTestServices extends Disposable {
+	private readonly uriIdentityServices = this._register(new TestUriIdentityServices());
 	public readonly store: MemoryResourceStore;
 	public readonly models: BrowserTextModelService;
-	public readonly workingCopies = this._register(new BrowserWorkingCopyService());
+	public readonly workingCopies = this._register(this.uriIdentityServices.createInstance(BrowserWorkingCopyService));
 	public readonly files: MemoryFileService;
 	public readonly service: BulkEditService;
 	public readonly configuration = this._register(new InMemoryConfigurationService());
@@ -52,7 +54,7 @@ export class BulkEditTestServices extends Disposable {
 	constructor(resources: readonly (readonly [URI, string])[]) {
 		super();
 		this.store = this._register(new MemoryResourceStore(resources));
-		this.models = this._register(new BrowserTextModelService(this.store));
+		this.models = this._register(this.uriIdentityServices.createInstance(BrowserTextModelService, this.store, {}));
 		this.files = new MemoryFileService(resources);
 		this.service = this._register(new BulkEditService(this.models, this.workingCopies, this._register(createTestFileService(this.files)), this.configuration, this.dialogs));
 	}
@@ -113,7 +115,7 @@ export class MemoryResourceStore implements ITextResourceStore {
 }
 
 export class MemoryFileService implements IFileSystemProvider {
-	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy;
+	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy | FileSystemProviderCapabilities.PathCaseSensitive;
 	public readonly onDidChangeCapabilities = Event.None;
 	public watch(): IDisposable { return Disposable.None; }
 

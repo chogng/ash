@@ -1,3 +1,4 @@
+import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { MarkdownElement } from '../../../src/ash/base/browser/markdownRenderer.js';
@@ -80,6 +81,7 @@ declare global {
 }
 
 const resources = new DisposableStore();
+const uriIdentityServices = resources.add(new TestUriIdentityServices());
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
 const editorServices = resources.add(new StandaloneServiceCollection({}));
 const services = resources.add(editorServices.createChild());
@@ -117,7 +119,7 @@ const store: ITextResourceStore = {
 	resolve: async request => ({ resource: request.resource, text: '', revision: undefined }),
 	save: async () => { throw new Error('A provider-backed Output editor must not save'); },
 };
-services.registerInstance(ITextModelResourceService, resources.add(new BrowserTextModelService(store)));
+services.registerInstance(ITextModelResourceService, resources.add(uriIdentityServices.createInstance(BrowserTextModelService, store, {})));
 services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
 const output = resources.add(services.createInstance(OutputService));
 services.registerInstance(IOutputService, output);

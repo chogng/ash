@@ -1,3 +1,4 @@
+import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { createTestFileService, registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { MultiDiffEditor } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditor.js';
 import '../../../src/ash/workbench/contrib/callHierarchy/browser/callHierarchy.contribution.js';
@@ -2829,10 +2830,11 @@ window.ashStandaloneIntegration = {
 	prepareCodeActionPreview: (kind = 'single') => {
 		if (!(callerModel instanceof stanza.TextModel)) throw new Error('Preview requires the shared text model');
 		actionPreviewResources.clear();
+		const uriIdentityServices = actionPreviewResources.add(new TestUriIdentityServices());
 		callerEditor.setValue('value');
 		const parent = StandaloneServices.get(IInstantiationService);
 		const services = actionPreviewResources.add(parent.createChild());
-		const snapshots = actionPreviewResources.add(new BrowserTextModelService(actionPreviewResources.add(new MemoryResourceStore([]))));
+		const snapshots = actionPreviewResources.add(uriIdentityServices.createInstance(BrowserTextModelService, actionPreviewResources.add(new MemoryResourceStore([])), {}));
 		services.registerInstance(ITextModelResourceService, {
 			acquire: async (input, signal) => input.resource.toString() === callerModel.uri.toString() ? ({
 				resource: callerModel.uri, model: callerModel, isDirty: false, hasExternalChange: false,
@@ -2854,7 +2856,7 @@ window.ashStandaloneIntegration = {
 			refresh: async () => { },
 			onModelAdded: EventUtils.None,
 		});
-		services.registerInstance(IWorkingCopyService, actionPreviewResources.add(new BrowserWorkingCopyService()));
+		services.registerInstance(IWorkingCopyService, actionPreviewResources.add(uriIdentityServices.createInstance(BrowserWorkingCopyService)));
 		services.registerSingleton(IFileService, () => createTestFileService(new MemoryFileService([[callerModel.uri, 'value']]), [callerModel.uri.scheme]));
 		services.registerInstance(IDialogService, new TestDialogService());
 		services.registerInstance(IEditorService, {

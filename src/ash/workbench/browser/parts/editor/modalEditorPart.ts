@@ -1,4 +1,5 @@
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uriIdentity.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import { CancellationError, isCancellationError } from '../../../../base/common/errors.js';
 import { EditorOpenSource } from '../../../../platform/editor/common/editor.js';
@@ -17,7 +18,6 @@ import type { EditorOpenOptions } from '../../../services/editor/common/editorSe
 import { type EditorGroupOptions, EditorOpenSupersededError } from './editorGroupView.js';
 import type { EditorPaneCreationOptions } from './editorPane.js';
 import type { IEditorPaneRegistry } from '../../editor.js';
-import { editorInputKey } from './editorTabsControl.js';
 
 export interface ModalEditorPartOptions {
 	readonly container: HTMLElement;
@@ -58,6 +58,7 @@ export class ModalEditorPart extends Disposable {
 	constructor(
 		private readonly options: ModalEditorPartOptions,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IUriIdentityService private readonly uriIdentity: IUriIdentityService,
 	) {
 		super();
 		const ownerDocument = options.container.ownerDocument;
@@ -161,7 +162,7 @@ export class ModalEditorPart extends Disposable {
 		if (!descriptor) {
 			throw new RangeError(`No editor can open ${input.resource}`);
 		}
-		if (this.currentEntry && editorInputKey(this.currentEntry.input) === editorInputKey(input) && this.currentEntry.instance.pane.id === descriptor.id) {
+		if (this.currentEntry && this.isSameEditor(this.currentEntry.input, input) && this.currentEntry.instance.pane.id === descriptor.id) {
 			this.currentEntry = { input, instance: this.currentEntry.instance };
 			this.updateTitle(input);
 			this.show(openOptions.preserveFocus === true);
@@ -200,7 +201,7 @@ export class ModalEditorPart extends Disposable {
 	}
 
 	public closeEditor(input: IResourceEditorInput): boolean {
-		if (!this.currentEntry || editorInputKey(this.currentEntry.input) !== editorInputKey(input)) return false;
+		if (!this.currentEntry || !this.isSameEditor(this.currentEntry.input, input)) return false;
 		this.openSequence += 1;
 		this.cancelPendingOpen();
 		this.hide();
@@ -214,6 +215,10 @@ export class ModalEditorPart extends Disposable {
 	public focus(): void {
 		if (!this.visible) return;
 		this.focusEditorContent();
+	}
+
+	private isSameEditor(left: IResourceEditorInput, right: IResourceEditorInput): boolean {
+		return left.editorId === right.editorId && this.uriIdentity.extUri.isEqual(left.resource, right.resource);
 	}
 
 	private cancelPendingOpen(): void {

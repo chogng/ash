@@ -1,3 +1,5 @@
+import type { ITextResourceStore } from '../../../src/ash/workbench/services/textmodelResolver/common/textResourceStore.js';
+import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
 import { GitHubSettingsModel } from '../../../src/ash/workbench/contrib/github/browser/githubSettingsModel.js';
 import { SettingsSectionRenderer } from '../../../src/ash/workbench/contrib/preferences/browser/settingsSectionRenderer.js';
@@ -123,6 +125,7 @@ class ReviewTransport implements AppServerTransport {
 }
 
 const resources = new DisposableStore();
+const uriIdentityServices = resources.add(new TestUriIdentityServices());
 const services = resources.add(new InstantiationService());
 services.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'github-review', backend: window.localStorage, flushInterval: 0 })));
 setIconResolver(document, icon => getIconDefinition(icon));
@@ -148,7 +151,7 @@ services.registerInstance(IRemoteAgentService, { connectionState: 'connected', c
 services.registerInstance(IAccountService, { onDidChangeAccounts: accounts.event, onDidCompleteLogin: Event.None, read: async () => initialAccount, startLogin: async () => { throw new Error('Not used'); }, cancelLogin: async () => { }, logout: async (provider, accountId) => { loggedOut.push({ provider, accountId }); transport.accountCatalog = transport.accountCatalog.filter(account => account.id !== accountId); accounts.fire({ revision: 2n, accounts: transport.accountCatalog.map(account => ({ provider: 'github', accountId: account.id, credentialRevision: BigInt(account.credentialRevision), status: 'ready' })) }); } });
 services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async host => { browserHosts.push(host); }, cancel: async () => { } });
 services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
-services.registerInstance(ITextModelResourceService, resources.add(new BrowserTextModelService({ onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: request.bootstrapText!, revision: undefined }), save: async () => { throw new Error('Review snapshots are read-only'); } })));
+services.registerInstance(ITextModelResourceService, resources.add(uriIdentityServices.createInstance(BrowserTextModelService, { onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: request.bootstrapText!, revision: undefined }), save: async () => { throw new Error('Review snapshots are read-only'); } } satisfies ITextResourceStore, {})));
 const dialogs = resources.add(new DialogService()); services.registerInstance(IDialogService, dialogs); services.registerInstance(IDialogsModel, dialogs.model); services.registerInstance(IWorkbenchDialogHandler, new BrowserDialogHandler(document.body));
 resources.add(new DialogHandlerContribution(dialogs.model, services.get(IWorkbenchDialogHandler)));
 const external: string[] = [];

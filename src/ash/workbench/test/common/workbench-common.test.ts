@@ -1,5 +1,6 @@
+import { TestUriIdentityServices } from '../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import assert from "node:assert/strict";
-import { test } from "mocha";
+import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
@@ -52,13 +53,16 @@ import {
 	DialogSeverity,
 } from "../../../platform/dialogs/common/dialogs.js";
 
+const uriIdentityServices = new TestUriIdentityServices();
+suiteTeardown(() => uriIdentityServices.dispose());
+
 test("workbench context keys describe the current workspace", () => {
 	using contextKeys = new ContextKeyService();
 	using workspace = new WorkspaceContextService({
 		id: "workspace",
 		uri: URI.file("C:\\project"),
 	});
-	using workingCopies = new BrowserWorkingCopyService();
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	const initialChanges: string[][] = [];
 	using listener = contextKeys.onDidChangeContext(event => initialChanges.push([...event.keys].sort()));
 	using bindings = createTestWorkbenchContextKeysHandler(contextKeys, { workspaceContextService: workspace, workingCopyService: workingCopies });

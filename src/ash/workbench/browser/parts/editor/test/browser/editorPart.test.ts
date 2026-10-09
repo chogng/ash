@@ -1,3 +1,4 @@
+import { TestUriIdentityServices } from '../../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { createTestComponentServices, registerTestComponentServices, createTestEditorServices } from '../../../../../test/common/testEditorServices.js';
 import type { IResourceEditorInput } from '../../../../../common/editor.js';
 import { WorkbenchWindowBarHeight } from '../../../workbenchPartDimensions.js';
@@ -81,6 +82,9 @@ import type {
 	IAuxiliaryWindow,
 	IAuxiliaryWindowService,
 } from "../../../../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js";
+
+const uriIdentityServices = new TestUriIdentityServices();
+suiteTeardown(() => uriIdentityServices.dispose());
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -997,7 +1001,7 @@ async function createSaveCloseFixture(target: 'tab' | 'modal' | 'all' | 'group',
 		owner.add(toDisposable(() => dom.window.close()));
 		dom.window.HTMLElement.prototype.scrollTo = () => undefined;
 		const files = new CloseGateFiles();
-		const models = owner.add(new BrowserTextModelService(files));
+		const models = owner.add(uriIdentityServices.createInstance(BrowserTextModelService, files, {}));
 		const preparing = new DeferredPromise<void>();
 		const prepareRelease = new DeferredPromise<void>();
 		const completing = new DeferredPromise<void>();

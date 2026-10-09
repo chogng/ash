@@ -1,3 +1,4 @@
+import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import type { IViewsService } from '../../../../services/views/common/viewsService.js';
@@ -5,7 +6,7 @@ import type { MultiDiffEditorOptions } from '../../browser/multiDiffEditor.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { validateJsonValue } from '../../../../../base/common/jsonValue.js';
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { setIconResolver } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { getIconDefinition } from '../../../../../platform/theme/common/iconRegistry.js';
@@ -34,6 +35,9 @@ import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService, type I
 import { CodeEditorConfiguration } from '../../../codeEditor/common/editorConfiguration.js';
 import { EditorLineWrapping, EditorOption } from '../../../../../editor/common/config/editorOptions.js';
 import { type ITextModelResourceService, type TextModelInput, type TextModelReference } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
+
+const uriIdentityServices = new TestUriIdentityServices();
+suiteTeardown(() => uriIdentityServices.dispose());
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 browserEnvironment.window.HTMLCanvasElement.prototype.getContext = () => null;
@@ -115,7 +119,7 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
 	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
-	using models = new BrowserTextModelService(resourceStore);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using commands = new CommandService(new InstantiationService());
 	using contexts = new ContextKeyService();
 	const menus = new MenuService(commands, contexts);
@@ -274,7 +278,7 @@ test('Multi-diff pane acquires text models as files enter the viewport and relea
 	const dom = createTestDom();
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(new BootstrapTextFiles()));
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(new BootstrapTextFiles()), {});
 	using resources = new DisposableStore();
 	const services = createCodeEditorServices(resources);
 	registerDialogs(services);
@@ -348,7 +352,7 @@ test('Multi-diff pane keeps available files open when one comparison fails to lo
 	const dom = createTestDom();
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(new BootstrapTextFiles()));
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(new BootstrapTextFiles()), {});
 	using resources = new DisposableStore();
 	const services = createCodeEditorServices(resources);
 	registerDialogs(services);
@@ -390,7 +394,7 @@ for (const cancellation of ['signal', 'clear'] as const) {
 		const dom = createTestDom();
 		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 		const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
-		using models = new BrowserTextModelService(new BrowserTextResourceStore(new BootstrapTextFiles()));
+		using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(new BootstrapTextFiles()), {});
 		using resources = new DisposableStore();
 		const services = createCodeEditorServices(resources);
 		registerDialogs(services);
@@ -438,7 +442,7 @@ test('Multi-diff pane inherits word wrap and routes the toggle command to its vi
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
 	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
-	using models = new BrowserTextModelService(resourceStore);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using resources = new DisposableStore();
 	const services = createCodeEditorServices(resources);
 	registerDialogs(services);

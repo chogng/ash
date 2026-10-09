@@ -1,5 +1,6 @@
+import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import assert from "node:assert/strict";
-import { test } from "mocha";
+import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { BrowserLifecycleService } from "../../../lifecycle/browser/lifecycleService.js";
 import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
@@ -18,6 +19,9 @@ import { type IWorkingCopy } from "../../common/workingCopyService.js";
 import { BrowserTextModelService } from '../../../textmodelResolver/browser/browserTextModelService.js';
 import { TextModelSaveCompletionError, type TextModelReference } from '../../../textmodelResolver/common/textModelResourceService.js';
 import { TextResourceConflictError, type ITextResourceStore, type TextResourceResolveRequest, type TextResourceSaveRequest } from '../../../textmodelResolver/common/textResourceStore.js';
+
+const uriIdentityServices = new TestUriIdentityServices();
+suiteTeardown(() => uriIdentityServices.dispose());
 
 test('save checkpoints resample edits made before file publication', async () => {
 	using fixture = new SaveBackupFixture();
@@ -213,7 +217,7 @@ test('file write failure retains the prepared dirty content and its original err
 });
 
 test("working-copy backup tracker persists the latest dirty content and deletes clean backups", async () => {
-	using workingCopies = new BrowserWorkingCopyService();
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	const backups = new MemoryBackups();
 	const ownerWindow = new TestWindow();
 	using tracker = new WorkingCopyBackupTracker(workingCopies, backups, ownerWindow as unknown as Window);
@@ -233,7 +237,7 @@ test("working-copy backup tracker persists the latest dirty content and deletes 
 });
 
 test("working-copy backup tracker removes a closed draft and keeps another open copy", async () => {
-	using workingCopies = new BrowserWorkingCopyService();
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using backups = new MemoryBackups();
 	const ownerWindow = new TestWindow();
 	using tracker = new WorkingCopyBackupTracker(workingCopies, backups, ownerWindow as unknown as Window);
@@ -261,7 +265,7 @@ test("working-copy backup tracker removes a closed draft and keeps another open 
 });
 
 test('working-copy backup tracker keeps a dirty copy when another copy of the resource is clean', async () => {
-	using workingCopies = new BrowserWorkingCopyService();
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using backups = new MemoryBackups();
 	const ownerWindow = new TestWindow();
 	using tracker = new WorkingCopyBackupTracker(workingCopies, backups, ownerWindow as unknown as Window);
@@ -283,7 +287,7 @@ test('working-copy backup tracker keeps a dirty copy when another copy of the re
 });
 
 test('working-copy backup tracker retains a crash backup while a clean editor opens for restoration', async () => {
-	using workingCopies = new BrowserWorkingCopyService();
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using backups = new MemoryBackups();
 	const ownerWindow = new TestWindow();
 	using tracker = new WorkingCopyBackupTracker(workingCopies, backups, ownerWindow as unknown as Window);
@@ -304,7 +308,7 @@ test('working-copy backup tracker retains a crash backup while a clean editor op
 });
 
 test('working-copy backup tracker retains content when a clean recovery editor fails and unregisters', async () => {
-	using workingCopies = new BrowserWorkingCopyService();
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using backups = new MemoryBackups();
 	const ownerWindow = new TestWindow();
 	using tracker = new WorkingCopyBackupTracker(workingCopies, backups, ownerWindow as unknown as Window);
@@ -318,7 +322,7 @@ test('working-copy backup tracker retains content when a clean recovery editor f
 });
 
 test('working-copy backup shutdown drains before editor unregister and database close', async () => {
-	using workingCopies = new BrowserWorkingCopyService();
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using owner = new DisposableStore();
 	const database = new ClosingDatabase();
 	const backups = owner.add(new IndexedDbWorkingCopyBackupService('shutdown-test', database.factory));
@@ -343,7 +347,7 @@ test('working-copy backup shutdown drains before editor unregister and database 
 });
 
 test('working-copy backup shutdown retains edits made while final writes are pending', async () => {
-	using workingCopies = new BrowserWorkingCopyService();
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using backups = new ControlledBackups();
 	const ownerWindow = new TestWindow();
 	using tracker = new WorkingCopyBackupTracker(workingCopies, backups, ownerWindow as unknown as Window);
@@ -377,7 +381,7 @@ test('working-copy backup shutdown retains edits made while final writes are pen
 });
 
 test('working-copy backup shutdown captures synchronous edits reentered from backup', async () => {
-	using workingCopies = new BrowserWorkingCopyService();
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using backups = new MemoryBackups();
 	using tracker = new WorkingCopyBackupTracker(workingCopies, backups, new TestWindow() as unknown as Window);
 	using copy = new TestWorkingCopy(URI.file('/shutdown/reentrant.ts'));
@@ -389,7 +393,7 @@ test('working-copy backup shutdown captures synchronous edits reentered from bac
 });
 
 test('working-copy backup shutdown awaits an in-flight clean delete', async () => {
-	using workingCopies = new BrowserWorkingCopyService();
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using backups = new ControlledBackups();
 	const ownerWindow = new TestWindow();
 	using tracker = new WorkingCopyBackupTracker(workingCopies, backups, ownerWindow as unknown as Window);
@@ -413,7 +417,7 @@ test('working-copy backup shutdown awaits an in-flight clean delete', async () =
 });
 
 test('working-copy backup shutdown completes pending clean timers and retains untouched recovery content', async () => {
-	using workingCopies = new BrowserWorkingCopyService();
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using backups = new MemoryBackups();
 	const ownerWindow = new TestWindow();
 	using tracker = new WorkingCopyBackupTracker(workingCopies, backups, ownerWindow as unknown as Window);
@@ -432,7 +436,7 @@ test('working-copy backup shutdown completes pending clean timers and retains un
 
 for (const operation of ['store', 'delete'] as const) {
 	test(`working-copy backup shutdown propagates in-flight ${operation} failure after all final writes settle`, async () => {
-		using workingCopies = new BrowserWorkingCopyService();
+		using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 		using backups = new ControlledBackups();
 		const ownerWindow = new TestWindow();
 		const failureObserved = new DeferredPromise<unknown>();
@@ -473,7 +477,7 @@ for (const failingJoin of ['backup', 'storage', 'other'] as const) {
 			services.registerInstance(ILogService, new NullLoggerService());
 			services.registerSingleton(IStorageService, () => new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'backup-retry', flushInterval: 0 }));
 			using lifecycle = services.createInstance(BrowserLifecycleService, { ownerWindow: browser.window as unknown as Window, onError: () => undefined });
-			using workingCopies = new BrowserWorkingCopyService();
+			using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 			using backups = new ControlledBackups();
 			const ownerWindow = new TestWindow();
 			const errors: unknown[] = [];
@@ -535,7 +539,7 @@ for (const failingJoin of ['backup', 'storage', 'other'] as const) {
 }
 
 test('working-copy backup cancellation is idempotent and retracks the current registry', async () => {
-	using workingCopies = new BrowserWorkingCopyService();
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using backups = new ControlledBackups();
 	const ownerWindow = new TestWindow();
 	using tracker = new WorkingCopyBackupTracker(workingCopies, backups, ownerWindow as unknown as Window);
@@ -568,7 +572,7 @@ test('final backup join captures edits through the overall result and stops prod
 		services.registerInstance(ILogService, new NullLoggerService());
 		services.registerSingleton(IStorageService, () => new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'final-backup', flushInterval: 0 }));
 		using lifecycle = services.createInstance(BrowserLifecycleService, { ownerWindow: browser.window as unknown as Window, onError: () => undefined });
-		using workingCopies = new BrowserWorkingCopyService();
+		using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 		using backups = new ControlledBackups();
 		const ownerWindow = new TestWindow();
 		using tracker = new WorkingCopyBackupTracker(workingCopies, backups, ownerWindow as unknown as Window);
@@ -608,7 +612,7 @@ test('final backup join captures edits through the overall result and stops prod
 });
 
 test('failed backup capture preserves durable content and repeated cancellation permits a fresh shutdown', async () => {
-	using workingCopies = new BrowserWorkingCopyService();
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using backups = new MemoryBackups();
 	using tracker = new WorkingCopyBackupTracker(workingCopies, backups, new TestWindow() as unknown as Window);
 	using copy = new TestWorkingCopy(URI.file('/shutdown/capture-error.ts'));
@@ -635,7 +639,7 @@ test('failed backup capture preserves durable content and repeated cancellation 
 });
 
 test('backup shutdown retains the existing last registered dirty copy for a shared resource', async () => {
-	using workingCopies = new BrowserWorkingCopyService();
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using backups = new MemoryBackups();
 	using tracker = new WorkingCopyBackupTracker(workingCopies, backups, new TestWindow() as unknown as Window);
 	const resource = URI.file('/shutdown/shared.ts');
@@ -660,7 +664,7 @@ test('pagehide before-shutdown backup failure retains the last valid snapshot th
 		services.registerInstance(ILogService, new NullLoggerService());
 		services.registerSingleton(IStorageService, () => new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'failed-pagehide-check', flushInterval: 0 }));
 		using lifecycle = services.createInstance(BrowserLifecycleService, { ownerWindow: browser.window as unknown as Window, onError: () => undefined });
-		using workingCopies = new BrowserWorkingCopyService();
+		using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 		using owner = new DisposableStore();
 		using backups = new MemoryBackups();
 		const errors: unknown[] = [];
@@ -701,7 +705,7 @@ test('failed pagehide drains before forced host disposal without restarting data
 		services.registerInstance(ILogService, new NullLoggerService());
 		services.registerSingleton(IStorageService, () => new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'forced-pagehide', flushInterval: 0 }));
 		using lifecycle = services.createInstance(BrowserLifecycleService, { ownerWindow: browser.window as unknown as Window, onError: () => undefined });
-		using workingCopies = new BrowserWorkingCopyService();
+		using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 		using owner = new DisposableStore();
 		const database = new ClosingDatabase();
 		const backups = owner.add(new IndexedDbWorkingCopyBackupService('forced-pagehide', database.factory));
@@ -840,8 +844,8 @@ class ControlledBackups extends MemoryBackups {
 class SaveBackupFixture extends Disposable {
 	readonly files = new SaveTestFiles();
 	readonly backups = this._register(new ControlledBackups());
-	readonly models = this._register(new BrowserTextModelService(this.files));
-	private readonly copies = this._register(new BrowserWorkingCopyService());
+	readonly models = this._register(uriIdentityServices.createInstance(BrowserTextModelService, this.files, {}));
+	private readonly copies = this._register(uriIdentityServices.createInstance(BrowserWorkingCopyService));
 	readonly clock = new TestWindow();
 	readonly tracker = this._register(new WorkingCopyBackupTracker(this.copies, this.backups, this.clock as unknown as Window, undefined, resource => this.models.hasPendingSaveRecovery(resource)));
 

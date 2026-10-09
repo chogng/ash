@@ -881,6 +881,14 @@ use crate::protocol::fs::FsGetMetadataParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsGetMetadataResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::fs::FsPathCaseSensitivity;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::fs::FsPathCaseSensitivityScope;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::fs::FsReadPathCaseSensitivityParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::fs::FsReadPathCaseSensitivityResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsMissingTargetBehavior;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsPasteSystemFilesParams;
@@ -4133,6 +4141,11 @@ client_methods! {
         response: FsGetMetadataResult,
         serialization: GlobalSharedRead,
     },
+    FsReadPathCaseSensitivity => "fs/readPathCaseSensitivity" {
+        params: FsReadPathCaseSensitivityParams,
+        response: FsReadPathCaseSensitivityResult,
+        serialization: GlobalSharedRead,
+    },
     FsReadDirectory => "fs/readDirectory" {
         params: FsReadDirectoryParams,
         response: FsReadDirectoryResult,
@@ -6220,6 +6233,10 @@ typescript_bindings! {
     FsFileWriteOptions,
     FsGetMetadataParams,
     FsGetMetadataResult,
+    FsPathCaseSensitivity,
+    FsPathCaseSensitivityScope,
+    FsReadPathCaseSensitivityParams,
+    FsReadPathCaseSensitivityResult,
     FsReadDirectoryParams,
     FsReadDirectoryEntry,
     FsReadDirectoryResult,

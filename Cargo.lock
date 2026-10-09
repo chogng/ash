@@ -1456,6 +1456,7 @@ dependencies = [
  "cap-std",
  "clipboard-win",
  "ec4rs",
+ "libc",
  "rand 0.9.5",
  "rustix 1.1.4",
  "serde",

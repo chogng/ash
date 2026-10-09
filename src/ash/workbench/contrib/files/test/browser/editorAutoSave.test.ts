@@ -1,5 +1,6 @@
+import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { URI } from '../../../../../base/common/uri.js';
@@ -10,10 +11,13 @@ import { EditorAutoSaveConfiguration, EditorAutoSaveDelayConfiguration } from '.
 import { BrowserWorkingCopyService } from '../../../../services/workingCopy/browser/browserWorkingCopyService.js';
 import type { IWorkingCopy } from '../../../../services/workingCopy/common/workingCopyService.js';
 
+const uriIdentityServices = new TestUriIdentityServices();
+suiteTeardown(() => uriIdentityServices.dispose());
+
 test('File auto save writes a dirty working copy after the configured delay', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>', { pretendToBeVisual: true });
 	using configuration = new InMemoryConfigurationService();
-	using workingCopies = new BrowserWorkingCopyService();
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using dirtyChanges = new Emitter<void>();
 	using contentChanges = new Emitter<void>();
 	let dirty = false;

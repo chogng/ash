@@ -1,5 +1,6 @@
+import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import assert from "node:assert/strict";
-import { test } from "mocha";
+import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { setIconResolver } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { type CancellationToken } from '../../../../../base/common/cancellation.js';
@@ -27,6 +28,9 @@ import { type ITextModel } from '../../../../../editor/common/model.js';
 import { EditorPaneSelectionChangeReason, type IResourceEditorInput } from '../../../../common/editor.js';
 import { TextFileContentSource, type ResolvedTextFileContent, type TextFileResolveRequest } from "../../../../services/textfile/common/textFileService.js";
 import { type ITextFileService } from "../../../../services/textfile/common/textfiles.js";
+
+const uriIdentityServices = new TestUriIdentityServices();
+suiteTeardown(() => uriIdentityServices.dispose());
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -58,7 +62,7 @@ test('Diff commands navigate and focus the active comparison through the Workben
 	const dom = createTestDom();
 	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
 	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
-	using models = new BrowserTextModelService(resourceStore);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using services = new DisposableStore();
 	const container = registerTestComponentServices(createCodeEditorServices(services));
 	const pane = container.createInstance(DiffEditorPane, resourceStore, {
@@ -171,7 +175,7 @@ test("Stanza diff pane acquires both models, lays out the review view, and relea
 	const parent = requiredElement<HTMLElement>(dom.window.document, "main");
 	const textFiles = new BootstrapTextFiles();
 	const resourceStore = new BrowserTextResourceStore(textFiles);
-	using models = new BrowserTextModelService(resourceStore);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using services = new DisposableStore();
 	const container = registerTestComponentServices(createCodeEditorServices(services));
 	const codeEditorService = container.get(ICodeEditorService);
@@ -233,7 +237,7 @@ test('Diff pane honors a readonly modified resource and preserves shared text wh
 	const dom = createTestDom();
 	try {
 		const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
-		using models = new BrowserTextModelService(resourceStore);
+		using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 		using services = new DisposableStore();
 		const container = registerTestComponentServices(createCodeEditorServices(services));
 		using pane = container.createInstance(DiffEditorPane, resourceStore, {
@@ -263,7 +267,7 @@ test('Diff pane releases both references when loading is cancelled after acquisi
 	const dom = createTestDom();
 	try {
 		const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
-		using models = new BrowserTextModelService(resourceStore);
+		using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 		using services = new DisposableStore();
 		const container = registerTestComponentServices(createCodeEditorServices(services));
 		const cancellation = new AbortController();
@@ -299,7 +303,7 @@ test('Diff pane recomputes an open comparison when ignore-trim-whitespace change
 	const dom = createTestDom();
 	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
 	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
-	using models = new BrowserTextModelService(resourceStore);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using services = new DisposableStore();
 	const container = registerTestComponentServices(createCodeEditorServices(services));
 	const configuration = container.get(IConfigurationService);
@@ -329,7 +333,7 @@ test('Diff pane recomputes an open comparison when ignore-trim-whitespace change
 test('Diff pane recomputes moved blocks when the setting changes in an open comparison', async () => {
 	const dom = createTestDom();
 	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
-	using models = new BrowserTextModelService(resourceStore);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using services = new DisposableStore();
 	const container = registerTestComponentServices(createCodeEditorServices(services));
 	const seen: boolean[] = [];
@@ -361,7 +365,7 @@ test('Diff pane follows the modified language override and language changes', as
 	const dom = createTestDom();
 	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
 	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
-	using models = new BrowserTextModelService(resourceStore);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using services = new DisposableStore();
 	const container = registerTestComponentServices(createCodeEditorServices(services));
 	const configuration = container.get(IConfigurationService);
@@ -399,7 +403,7 @@ test('Diff pane follows configured word wrap and keeps its temporary toggle in t
 	const dom = createTestDom();
 	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
 	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
-	using models = new BrowserTextModelService(resourceStore);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using services = new DisposableStore();
 	const container = registerTestComponentServices(createCodeEditorServices(services));
 	const configuration = container.get(IConfigurationService);
@@ -434,7 +438,7 @@ test('Diff pane updates hidden unchanged regions when settings change', async ()
 	const dom = createTestDom();
 	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
 	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
-	using models = new BrowserTextModelService(resourceStore);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using services = new DisposableStore();
 	const container = registerTestComponentServices(createCodeEditorServices(services));
 	const configuration = container.get(IConfigurationService);

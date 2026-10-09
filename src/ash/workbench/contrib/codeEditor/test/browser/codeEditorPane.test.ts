@@ -1,3 +1,4 @@
+import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { h } from '../../../../../base/browser/dom.js';
@@ -46,6 +47,9 @@ import { getIconDefinition } from '../../../../../platform/theme/common/iconRegi
 import { BrowserWorkingCopyService } from '../../../../services/workingCopy/browser/browserWorkingCopyService.js';
 import { IndexedDbWorkingCopyBackupService } from '../../../../services/workingCopy/browser/indexedDbWorkingCopyBackupService.js';
 import { WorkingCopyBackupTracker } from '../../../../services/workingCopy/browser/workingCopyBackupTracker.js';
+
+const uriIdentityServices = new TestUriIdentityServices();
+suiteTeardown(() => uriIdentityServices.dispose());
 
 function createTestDom(markup: string): JSDOM {
 	const dom = new JSDOM(markup);
@@ -97,7 +101,7 @@ test("Stanza editor pane loads, lays out, focuses, hides, and clears one editor 
 	const resourceStore = new BrowserTextResourceStore(textFiles);
 	using languageService = new LanguageService();
 	using language = languageService.registerLanguage({ id: 'typescript', extensions: ['.ts'] });
-	using models = new BrowserTextModelService(resourceStore, { languageService });
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, { languageService });
 	using services = paneServices(models);
 	const pane = createPane(services, resourceStore, { textDirection: EditorTextDirection.RightToLeft, fontFamily: "Fira Code, monospace", fontSize: 16 });
 	pane.create(parent);
@@ -148,7 +152,7 @@ test('Stanza editor pane updates language status when contributions register aft
 	const resourceStore = new BrowserTextResourceStore(new ImmediateTextFiles('fn main() {}'));
 	using languageService = new LanguageService();
 	using languages = languageService.registerLanguages([]);
-	using models = new BrowserTextModelService(resourceStore, { languageService });
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, { languageService });
 	using services = paneServices(models);
 	using pane = createPane(services, resourceStore, {});
 	pane.create(parent);
@@ -174,7 +178,7 @@ test('Stanza editor pane reports cursor navigation and edit locations', async ()
 	using closeWindow = toDisposable(() => dom.window.close());
 	const parent = dom.window.document.querySelector<HTMLElement>('main')!;
 	const resourceStore = new BrowserTextResourceStore(new ImmediateTextFiles(Array.from({ length: 30 }, (_, index) => `line ${index + 1}`).join('\n')));
-	using models = new BrowserTextModelService(resourceStore);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using services = paneServices(models);
 	using pane = createPane(services, resourceStore, {});
 	pane.create(parent);
@@ -202,7 +206,7 @@ test('open code editor applies live view settings and actions without replacing 
 	using closeWindow = toDisposable(() => dom.window.close());
 	const parent = dom.window.document.querySelector<HTMLElement>('main')!;
 	const resourceStore = new BrowserTextResourceStore(new ImmediateTextFiles('a long line of text'));
-	using models = new BrowserTextModelService(resourceStore);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using services = paneServices(models);
 	const configuration = services.get(IConfigurationService);
 	await configuration.updateValue(CodeEditorConfiguration.lineNumbers, false);
@@ -269,7 +273,7 @@ test('Workbench Go to Line command opens the active editor dialog and focuses it
 	using closeWindow = toDisposable(() => dom.window.close());
 	const parent = dom.window.document.querySelector<HTMLElement>('main')!;
 	const resourceStore = new BrowserTextResourceStore(new ImmediateTextFiles('first\nsecond'));
-	using models = new BrowserTextModelService(resourceStore);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using services = paneServices(models);
 	using pane = createPane(services, resourceStore, {
 		createPart: options => createBrowserEditorPart(services, options),
@@ -292,7 +296,7 @@ test('Stanza editor pane switches files without leaving the old model, DOM, or k
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const parent = dom.window.document.querySelector<HTMLElement>('main')!;
 	const resourceStore = new BrowserTextResourceStore(new ImmediateTextFiles('first file'));
-	using models = new BrowserTextModelService(resourceStore);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using services = paneServices(models);
 	const parts: InstanceType<typeof CodeEditorWidget>[] = [];
 	const pane = createPane(services, resourceStore, {
@@ -368,7 +372,7 @@ test("Stanza editor pane acquires the Workbench language service for its detecte
 	using languageService = new LanguageService();
 	using language = languageService.registerLanguage({ id: 'typescript', extensions: ['.ts'] });
 	using languages = new LanguageFeaturesService();
-	using models = new BrowserTextModelService(resourceStore, { languageService, languageFeaturesService: languages });
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, { languageService, languageFeaturesService: languages });
 	using services = paneServices(models, languages);
 	const diagnostics = new RecordingLanguageDiagnosticsService();
 	const pane = createPane(services, resourceStore, { languageDiagnosticsService: diagnostics });
@@ -406,7 +410,7 @@ test("Stanza editor pane releases a load cancelled before content resolution", a
 	const pending = deferred<ResolvedTextFileContent>();
 	const textFiles = { onDidSave: Event.None, onDidChangeFiles: inertFileChanges, resolve: () => pending.promise, save: async () => ({ revision: undefined }) };
 	const resourceStore = new BrowserTextResourceStore(textFiles);
-	using models = new BrowserTextModelService(resourceStore);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using services = paneServices(models);
 	const pane = createPane(services, resourceStore, {});
 	pane.create(parent);
@@ -432,7 +436,7 @@ for (const close of ['abort', 'clear', 'dispose'] as const) {
 		const dom = createTestDom('<!doctype html><body><main></main></body>');
 		using closeWindow = toDisposable(() => dom.window.close());
 		const resourceStore = new BrowserTextResourceStore(new ImmediateTextFiles(''));
-		using models = new BrowserTextModelService(resourceStore);
+		using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 		using services = paneServices(models);
 		const pending = deferred<TextModel>();
 		using provider = services.get(ITextModelService).registerTextModelContentProvider('review', { provideTextContent: () => pending.promise });
@@ -457,7 +461,7 @@ test("Stanza editor pane saves and reverts its shared model reference", async ()
 	const parent = dom.window.document.querySelector<HTMLElement>("main")!;
 	const textFiles = new ImmediateTextFiles("from disk");
 	const resourceStore = new BrowserTextResourceStore(textFiles);
-	using models = new BrowserTextModelService(resourceStore);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using services = paneServices(models);
 	const resource = URI.file("C:\\project\\main.ts");
 	const reference = await models.acquire({ resource }, new AbortController().signal);
@@ -493,7 +497,7 @@ test('acknowledged text saves cannot replay an older crash backup before the cle
 	const resource = URI.parse('ash-userdata:/user/keybindings.json');
 	const textFiles = new ImmediateTextFiles('original');
 	const store = new BrowserTextResourceStore(textFiles);
-	using copies = new BrowserWorkingCopyService();
+	using copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using backups = new IndexedDbWorkingCopyBackupService('save-acknowledgement', undefined);
 	const timers = new Map<number, () => void>();
 	let nextTimer = 0;
@@ -502,7 +506,7 @@ test('acknowledged text saves cannot replay an older crash backup before the cle
 		clearTimeout(id: number): void { timers.delete(id); },
 	};
 	using tracker = new WorkingCopyBackupTracker(copies, backups, clock as unknown as Window);
-	using models = new BrowserTextModelService(store);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, store, {});
 	using completion = models.addSaveCompletionParticipant({ prepare: (model, signal, recovery) => tracker.prepareSave(model, signal, recovery) });
 	using services = paneServices(models);
 	using pane = createPane(services, store, { workingCopyService: copies, createPart: createInertEditorPart });
@@ -522,7 +526,7 @@ test('acknowledged text saves cannot replay an older crash backup before the cle
 
 		// Reload can interrupt the debounce timer after the save has already acknowledged success.
 		tracker.completeShutdown();
-		using restoredModels = new BrowserTextModelService(store);
+		using restoredModels = uriIdentityServices.createInstance(BrowserTextModelService, store, {});
 		using restoredServices = paneServices(restoredModels);
 		using restoredPane = createPane(restoredServices, store, { createPart: createInertEditorPart });
 		restoredPane.create(dom.window.document.createElement('main'));
@@ -542,7 +546,7 @@ test("Stanza editor pane saves through the shared whitespace participant", async
 	const parent = dom.window.document.querySelector<HTMLElement>("main")!;
 	const textFiles = new ImmediateTextFiles("alpha  \n beta\t\n");
 	const resourceStore = new BrowserTextResourceStore(textFiles);
-	using models = new BrowserTextModelService(resourceStore);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using parentServices = paneServices(models);
 	using configuration = new WorkbenchConfigurationService();
 	using services = parentServices.createChild();
@@ -566,7 +570,7 @@ test("Stanza editor pane saves through the shared final newline participant", as
 	const parent = dom.window.document.querySelector<HTMLElement>("main")!;
 	const textFiles = new ImmediateTextFiles("alpha");
 	const resourceStore = new BrowserTextResourceStore(textFiles);
-	using models = new BrowserTextModelService(resourceStore);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using parentServices = paneServices(models);
 	using configuration = new WorkbenchConfigurationService();
 	using services = parentServices.createChild();
@@ -593,7 +597,7 @@ test("Stanza editor pane resolves extension first-line languages after loading a
 	using languageService = new LanguageService();
 	using languages = new LanguageFeaturesService();
 	using registration = languageService.registerLanguage({ id: "demo", firstLine: "#!.*\\bdemo" }, { priority: 100 });
-	using models = new BrowserTextModelService(resourceStore, { languageService, languageFeaturesService: languages });
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, { languageService, languageFeaturesService: languages });
 	using services = paneServices(models, languages);
 	let languageId: string | undefined;
 	const pane = createPane(services, resourceStore, {
@@ -616,7 +620,7 @@ test("Stanza editor pane forwards Workbench editor preferences to each created p
 	const parent = dom.window.document.querySelector<HTMLElement>("main")!;
 	const textFiles = new ImmediateTextFiles("const value = 1;");
 	const resourceStore = new BrowserTextResourceStore(textFiles);
-	using models = new BrowserTextModelService(resourceStore);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using services = paneServices(models);
 	let received: EditorPanePartOptions | undefined;
 	const pane = createPane(services, resourceStore, {
@@ -712,7 +716,7 @@ test("Workbench owns the code editor save shortcut and reports failures", async 
 	const parent = dom.window.document.querySelector<HTMLElement>("main")!;
 	const textFiles = new ImmediateTextFiles("alpha");
 	const resourceStore = new BrowserTextResourceStore(textFiles);
-	using models = new BrowserTextModelService(resourceStore);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using services = paneServices(models);
 	const errors: unknown[] = [];
 	const failedResources: (URI | undefined)[] = [];
@@ -803,7 +807,7 @@ test('Workbench status follows cursor movement through public editor events', as
 	using closeWindow = toDisposable(() => dom.window.close());
 	const parent = dom.window.document.querySelector<HTMLElement>('main')!;
 	const resourceStore = new BrowserTextResourceStore(new ImmediateTextFiles('alpha'));
-	using models = new BrowserTextModelService(resourceStore);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using services = paneServices(models);
 	using pane = createPane(services, resourceStore, {});
 	pane.create(parent);
@@ -872,7 +876,7 @@ function createInertEditorPart(): EditorPanePart {
 
 test('code editor creation rejects a missing language configuration registration', async () => {
 	const resourceStore = new BrowserTextResourceStore(new ImmediateTextFiles('text'));
-	using models = new BrowserTextModelService(resourceStore);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using languages = new LanguageFeaturesService();
 	using services = new InstantiationService();
 	services.registerInstance(ITextModelResourceService, models);

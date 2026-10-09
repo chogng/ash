@@ -6,6 +6,7 @@ use crate::FileMetadata;
 use crate::FileSystemError;
 use crate::FileWriteCondition;
 use crate::MissingTargetBehavior;
+use crate::PathCaseSensitivityScope;
 use std::any::Any;
 use std::path::Path;
 
@@ -77,6 +78,13 @@ pub trait FileSystem: Send + Sync {
 
     /// Returns metadata for one existing path.
     fn get_metadata(&self, path: &Path) -> Result<FileMetadata, FileSystemError>;
+
+    /// Observes lookup rules along a relative path, including its existing parent for a new file.
+    /// Each scope applies only to direct children. Unsupported filesystems report Unknown.
+    fn read_path_case_sensitivity(
+        &self,
+        path: &Path,
+    ) -> Result<Vec<PathCaseSensitivityScope>, FileSystemError>;
 
     /// Lists the direct children of one existing directory.
     fn read_directory(&self, path: &Path) -> Result<Vec<DirectoryEntry>, FileSystemError>;

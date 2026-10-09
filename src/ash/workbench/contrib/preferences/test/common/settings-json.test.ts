@@ -1,3 +1,5 @@
+import type { ITextResourceStore } from '../../../../services/textmodelResolver/common/textResourceStore.js';
+import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { createTestTextFileService } from '../../../../test/common/testEditorServices.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
@@ -35,6 +37,9 @@ import { SettingsFileSystemProvider } from '../../../../../workbench/contrib/pre
 import { createJsonCompletionProvider } from '../../../../../workbench/services/language/common/jsonLanguageFeatures.js';
 import { SmartSnippetInserter } from '../../../../../workbench/contrib/preferences/common/smartSnippetInserter.js';
 import { emptyEditorServiceState } from '../../../../../workbench/test/common/testEditorService.js';
+
+const uriIdentityServices = new TestUriIdentityServices();
+suiteTeardown(() => uriIdentityServices.dispose());
 
 const jsonRegistry = Registry.as<IJSONContributionRegistry>(JSONExtensions.JSONContribution);
 
@@ -223,7 +228,7 @@ test('PreferencesService opens User Settings JSON as a pinned JSON editor input'
 		},
 		focusActiveEditor() { },
 	};
-	using models = new BrowserTextModelService({ onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: '{}', revision: undefined }), save: async () => ({ revision: undefined }) });
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, { onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: '{}', revision: undefined }), save: async () => ({ revision: undefined }) } satisfies ITextResourceStore, {});
 	using preferences = new PreferencesService(editorService, models, keybindingProfile.files, keybindingProfile.profiles, keybindingProfile.services);
 
 	await preferences.openUserSettings();
@@ -249,7 +254,7 @@ test('PreferencesService passes graphical queries and sections while rejecting u
 		},
 		focusActiveEditor() { },
 	};
-	using models = new BrowserTextModelService({ onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: '{}', revision: undefined }), save: async () => ({ revision: undefined }) });
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, { onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: '{}', revision: undefined }), save: async () => ({ revision: undefined }) } satisfies ITextResourceStore, {});
 	using preferences = new PreferencesService(editorService, models, keybindingProfile.files, keybindingProfile.profiles, keybindingProfile.services);
 	for (const query of ['editor.fontFamily', 'font & 中文 + @id:editor.font*', '']) {
 		await preferences.openSettings({ query, section: 'models', target: ConfigurationTarget.USER_LOCAL });
@@ -279,7 +284,7 @@ test('the text-model save path updates configuration and accepts later external 
 	using provider = new SettingsFileSystemProvider(configuration);
 	using textFiles = createTestTextFileService(provider);
 	const resourceStore = new BrowserTextResourceStore(textFiles);
-	using models = new BrowserTextModelService(resourceStore);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using reference = await models.acquire({ resource: UserSettingsResource }, new AbortController().signal);
 	reference.model.applyOperations([{
 		range: Range.fromPositions(new Position((0) + 1, (0) + 1), reference.model.positionAt(reference.model.length)),
@@ -305,7 +310,7 @@ test('PreferencesService uses the shared dirty model, inserts an undoable defaul
 	using configuration = new WorkbenchConfigurationService({ registry });
 	using provider = new SettingsFileSystemProvider(configuration);
 	using textFiles = createTestTextFileService(provider);
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});
 	using reference = await models.acquire({ resource: UserSettingsResource }, new AbortController().signal);
 	const before = '{\n\t// editor.fontSize is mentioned here, not configured.\n\t"extension.data": { "editor.fontSize": 99 },\n}\n';
 	reference.model.applyEdits([{ range: reference.model.getFullModelRange(), text: before }]);
@@ -345,7 +350,7 @@ test('revealing existing settings preserves edits and real external conflicts re
 	using configuration = new WorkbenchConfigurationService({ registry });
 	using provider = new SettingsFileSystemProvider(configuration);
 	using textFiles = createTestTextFileService(provider);
-	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});
 	using reference = await models.acquire({ resource: UserSettingsResource }, new AbortController().signal);
 	const source = '{ "editor.fontSize": 18, "extension.pending": true }';
 	reference.model.applyEdits([{ range: reference.model.getFullModelRange(), text: source }]);

@@ -1,5 +1,7 @@
+import type { ITextResourceStore } from '../../../services/textmodelResolver/common/textResourceStore.js';
+import { TestUriIdentityServices } from '../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { test, suiteTeardown } from 'mocha';
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { InstantiationService } from '../../../../platform/instantiation/common/instantiationService.js';
@@ -19,8 +21,11 @@ import '../../../contrib/files/browser/editors/fileEditorHandler.js';
 import { CustomEditorInput } from '../../../contrib/customEditor/browser/customEditorInput.js';
 import { EditorInputSerializers } from '../../../services/editor/common/editorInputSerializer.js';
 
+const uriIdentityServices = new TestUriIdentityServices();
+suiteTeardown(() => uriIdentityServices.dispose());
+
 test('text inputs resolve once and retain shared provider text until the last input closes', async () => {
-	using models = new BrowserTextModelService({ onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: '', revision: undefined }), save: async () => ({ revision: undefined }) });
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, { onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: '', revision: undefined }), save: async () => ({ revision: undefined }) } satisfies ITextResourceStore, {});
 	using services = new InstantiationService();
 	services.registerInstance(ITextModelResourceService, models);
 	services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
@@ -41,7 +46,7 @@ test('text inputs resolve once and retain shared provider text until the last in
 });
 
 test('text input retries provider failures and releases content arriving after disposal', async () => {
-	using models = new BrowserTextModelService({ onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: '', revision: undefined }), save: async () => ({ revision: undefined }) });
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, { onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: '', revision: undefined }), save: async () => ({ revision: undefined }) } satisfies ITextResourceStore, {});
 	using services = new InstantiationService();
 	services.registerInstance(ITextModelResourceService, models);
 	services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));

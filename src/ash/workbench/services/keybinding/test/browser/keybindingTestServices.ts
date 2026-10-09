@@ -1,3 +1,4 @@
+import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { FileService } from '../../../../../platform/files/common/fileService.js';
 import { Schemas } from '../../../../../base/common/network.js';
 import { createTestFileService, createTestTextFileService } from '../../../../test/common/testEditorServices.js';
@@ -21,6 +22,7 @@ import { parseUserKeybindings } from '../../common/keybindingIO.js';
 
 /** Real shared file/model assembly for shortcut and Preferences behavior tests. */
 export class KeybindingTestServices extends Disposable {
+	private readonly uriIdentityServices = this._register(new TestUriIdentityServices());
 	public readonly services = this._register(new InstantiationService());
 	public readonly profiles = new UserDataProfileService();
 	public readonly files: FileService;
@@ -33,7 +35,7 @@ export class KeybindingTestServices extends Disposable {
 		const disk = this._register(new DiskFileSystemProvider([URI.file(this.directory)]));
 		const provider = this._register(new FileUserDataProvider(disk, URI.file(this.directory)));
 		this.files = this._register(createTestFileService(provider, [Schemas.vscodeUserData]));
-		this.models = this._register(new BrowserTextModelService(getBrowserTextResourceStore(this._register(createTestTextFileService(this.files)))));
+		this.models = this._register(this.uriIdentityServices.createInstance(BrowserTextModelService, getBrowserTextResourceStore(this._register(createTestTextFileService(this.files))), {}));
 		this.services.registerInstance(IFileService, this.files);
 		this.services.registerInstance(IFileTextModelService, this.models);
 		this.services.registerInstance(IUserDataProfileService, this.profiles);

@@ -73,6 +73,7 @@ const DESIGN_EDITOR_RESOURCE = URI.parse('ash-creator:/design');
 await import('../../contrib/creator/browser/creatorEditor.contribution.js');
 const { createDesignEditorContributions } = await import('../../contrib/creator/design.main.js');
 const services = new InstantiationService();
+services.registerSingleton(IUriIdentityService, () => services.createInstance(UriIdentityService));
 const colorContextView = new ContextView(browser.window.document.body);
 services.registerInstance(IContextViewService, Object.assign(colorContextView, { container: browser.window.document.body }));
 const contextKeys = new ContextKeyService();
@@ -81,7 +82,7 @@ const theme = new TestThemeService(lightColorTheme);
 const commandService = services.invokeFunction(accessor => new CommandService(accessor));
 services.registerInstance(ICommandService, commandService);
 services.registerInstance(IContextKeyService, contextKeys);
-services.registerSingleton(IWorkingCopyService, () => new BrowserWorkingCopyService());
+services.registerSingleton(IWorkingCopyService, () => services.createInstance(BrowserWorkingCopyService));
 services.registerInstance(IConfigurationService, configuration);
 services.registerInstance(IThemeService, theme);
 services.registerInstance(IWorkspaceContextService, new WorkspaceContextService({ id: 'design-test', folders: [] }));
@@ -1288,3 +1289,5 @@ test('Creator shutdown checks dirty documents in hidden modes', async () => {
 		assert.equal(editors.activeEditor.get(), undefined);
 	} finally { saveDecision = ConfirmResult.DONT_SAVE; }
 });
+import { IUriIdentityService } from '../../../platform/uriIdentity/common/uriIdentity.js';
+import { UriIdentityService } from '../../../platform/uriIdentity/common/uriIdentityService.js';

@@ -1,3 +1,5 @@
+import type { ITextResourceStore } from '../../../src/ash/workbench/services/textmodelResolver/common/textResourceStore.js';
+import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { ExtensionResourceLoaderService } from '../../../src/ash/platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import { ExtensionColorThemeService } from '../../../src/ash/workbench/services/extensions/browser/extensionColorThemeService.js';
 import { createBrowserExtensionApi } from '../../../src/ash/platform/extensions/browser/extensionApi.js';
@@ -125,6 +127,7 @@ window.tokenizeInTextMateWorker = async () => {
 };
 
 const resources = new DisposableStore();
+const uriIdentityServices = resources.add(new TestUriIdentityServices());
 const extensionThemes = resources.add(new ExtensionColorThemeService(createBrowserExtensionApi(), {
 	subscribe: () => ({ dispose() { } }),
 }));
@@ -209,7 +212,7 @@ document.querySelector('#default-icons')!.addEventListener('click', () => { void
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
 const workspace = resources.add(new WorkspaceContextService({ id: 'icon-models', folders: [] }));
 resources.add(languages.registerLanguage({ id: 'rust' }));
-const models = resources.add(new BrowserTextModelService({ onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: '', revision: undefined }), save: async () => ({ revision: undefined }) }, { languageService: languages }));
+const models = resources.add(uriIdentityServices.createInstance(BrowserTextModelService, { onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: '', revision: undefined }), save: async () => ({ revision: undefined }) } satisfies ITextResourceStore, { languageService: languages }));
 const labels = resources.add(new ResourceLabels(DEFAULT_LABELS_CONTAINER, { workspaceContextService: workspace, resourceIconRenderer: themes, fileModels: models, languageService: languages }));
 const decorations = resources.add(new DecorationsService(document, new NullLoggerService()));
 const decorationUpdates = resources.add(new Emitter<readonly URI[]>());

@@ -1,3 +1,4 @@
+import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { setNlsResolver, formatNlsMessage } from '../../../src/ash/nls.js';
 import { builtinLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import '../../../src/ash/base/browser/ui/tree/tree.css';
@@ -31,9 +32,10 @@ if (new URLSearchParams(location.search).get('locale') === 'zh-cn') {
 }
 
 const store = new DisposableStore();
+const uriIdentityServices = store.add(new TestUriIdentityServices());
 const backend = store.add(new TestExecutionService());
 const workspace = store.add(new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') }));
-const copies = store.add(new BrowserWorkingCopyService());
+const copies = store.add(uriIdentityServices.createInstance(BrowserWorkingCopyService));
 let scriptRuns = 0;
 const tasks: ITaskService = {
 	...Disposable.None,

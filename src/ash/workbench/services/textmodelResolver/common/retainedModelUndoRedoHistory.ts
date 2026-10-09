@@ -22,7 +22,7 @@ export class RetainedModelUndoRedoHistory extends AbstractDisposable {
 	private readonly maxTextUnits: number;
 	private retainedTextUnits = 0;
 
-	constructor(options: RetainedModelUndoRedoHistoryOptions = {}) {
+	constructor(options: RetainedModelUndoRedoHistoryOptions = {}, private readonly resourceKey: (resource: URI) => string = resource => resource.toString()) {
 		super();
 		this.maxEntries = readLimit(options.maxEntries, DEFAULT_MAX_ENTRIES, 'maxEntries');
 		this.maxTextUnits = readLimit(options.maxTextUnits, DEFAULT_MAX_TEXT_UNITS, 'maxTextUnits');
@@ -30,7 +30,7 @@ export class RetainedModelUndoRedoHistory extends AbstractDisposable {
 
 	public remember(resource: URI, model: TextModel): void {
 		this.assertNotDisposed();
-		const key = resource.toString();
+		const key = this.resourceKey(resource);
 		this.delete(key);
 		const snapshot = model.createUndoRedoSnapshot();
 		if (!snapshot) return;
@@ -43,7 +43,7 @@ export class RetainedModelUndoRedoHistory extends AbstractDisposable {
 
 	public restore(resource: URI, model: TextModel): boolean {
 		this.assertNotDisposed();
-		const key = resource.toString();
+		const key = this.resourceKey(resource);
 		const entry = this.retained.get(key);
 		if (!entry) return false;
 		this.delete(key);
@@ -52,7 +52,7 @@ export class RetainedModelUndoRedoHistory extends AbstractDisposable {
 
 	public forget(resource: URI): void {
 		this.assertNotDisposed();
-		this.delete(resource.toString());
+		this.delete(this.resourceKey(resource));
 	}
 
 	protected disposeCore(): void {

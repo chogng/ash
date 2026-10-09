@@ -1,3 +1,4 @@
+import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { createTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
@@ -5,7 +6,7 @@ import { ICommandService } from '../../../../../platform/commands/common/command
 import { StandaloneCommandService } from '../../../../../editor/standalone/browser/standaloneServices.js';
 import { Event } from '../../../../../base/common/event.js';
 import assert from "node:assert/strict";
-import { test } from "mocha";
+import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { type IDimension } from "../../../../../base/browser/dom.js";
 import { URI } from "../../../../../base/common/uri.js";
@@ -35,6 +36,9 @@ import { DOCUMENT_FRAGMENT_CLIPBOARD_MIME, documentFromPlainText, serializeDocum
 import { createDefaultDocumentSchema, DocumentSchema } from "../../../../../editor/common/model/documentSchema.js";
 import { h } from "../../../../../base/browser/dom.js";
 
+const uriIdentityServices = new TestUriIdentityServices();
+suiteTeardown(() => uriIdentityServices.dispose());
+
 await import("../../../../../editor/contrib/documentEditor.contribution.js");
 await import('../../../academic/browser/academicEditor.contribution.js');
 await import('../../browser/documentEditor.contribution.js');
@@ -55,7 +59,7 @@ const testDialogs: IDialogService = {
 
 class EditorPane extends DocumentEditorPane {
 	constructor(document: Document, files: ITextFileService, options: Partial<EditorPaneOptions> = {}) {
-		const copies = new BrowserWorkingCopyService();
+		const copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 		const models = new DocumentEditorTextModelService(files, copies);
 		const services = createTestComponentServices(undefined, undefined, document);
 		const codeEditors = new StandaloneCodeEditorService();
@@ -78,7 +82,7 @@ test('registered Academic panes share one model, save baseline and working copy 
 	const schema = createAcademicDocumentSchema();
 	const document = createEmptyAcademicDocument(schema);
 	const files = new MemoryTextFiles(serializeDocument(document, schema));
-	using copies = new BrowserWorkingCopyService();
+	using copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using models = new DocumentEditorTextModelService(files, copies);
 	using services = createTestComponentServices(undefined, undefined, environment.window.document);
 	services.registerInstance(IDocumentEditorTextModelService, models);
@@ -115,7 +119,7 @@ test('registered Academic panes share one model, save baseline and working copy 
 });
 
 test('shared untitled save uses a live view after the original view closes', async () => {
-	using copies = new BrowserWorkingCopyService();
+	using copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using models = new DocumentEditorTextModelService(new MemoryTextFiles('Draft'), copies);
 	const input = { resource: URI.parse('untitled:document/shared'), contentType: 'test.document', schema: createDefaultDocumentSchema() };
 	let saves = 0;
@@ -128,7 +132,7 @@ test('shared untitled save uses a live view after the original view closes', asy
 });
 
 test('structured acquisition rejects plain text, cancellation and conflicting document types', async () => {
-	using copies = new BrowserWorkingCopyService();
+	using copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using models = new DocumentEditorTextModelService(new MemoryTextFiles('Initial'), copies);
 	const input = { resource: URI.file('/document.ash-paper'), contentType: 'test.document', schema: createDefaultDocumentSchema() };
 	using reference = await models.acquire(input, new AbortController().signal);

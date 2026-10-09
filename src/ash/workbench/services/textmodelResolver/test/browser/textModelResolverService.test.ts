@@ -1,5 +1,7 @@
+import type { ITextResourceStore } from '../../common/textResourceStore.js';
+import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { test, suiteTeardown } from 'mocha';
 import { Emitter } from '../../../../../base/common/event.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
@@ -18,18 +20,21 @@ import { ITextModelResourceService } from '../../common/textModelResourceService
 import type { TextResourceChangeEvent } from '../../common/textResourceStore.js';
 import { TextModelResolverService } from '../../common/textModelResolverService.js';
 
+const uriIdentityServices = new TestUriIdentityServices();
+suiteTeardown(() => uriIdentityServices.dispose());
+
 test('document symbol command resolves a closed Workbench resource and releases its model', async () => {
 	const resource = URI.file('/workspace/symbols.ts');
 	using changes = new Emitter<TextResourceChangeEvent>();
 	let resolves = 0;
-	using models = new BrowserTextModelService({
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, {
 		onDidChange: changes.event,
 		resolve: async request => {
 			resolves++;
 			return { resource: request.resource, text: 'first second', revision: '1' };
 		},
 		save: async () => ({ revision: '1' }),
-	});
+	} satisfies ITextResourceStore, {});
 	using features = new LanguageFeaturesService();
 	using first = features.documentSymbolProvider.register('*', {
 		provideDocumentSymbols: () => [symbol('first', 1, 6)],
@@ -60,11 +65,11 @@ test('document symbol command resolves a closed Workbench resource and releases 
 });
 
 test('provider references share text and release it after the last editor model closes', async () => {
-	using models = new BrowserTextModelService({
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, {
 		onDidChange: () => ({ dispose() { }, [Symbol.dispose]() { } }),
 		resolve: async request => ({ resource: request.resource, text: '', revision: '1' }),
 		save: async () => ({ revision: '1' }),
-	});
+	} satisfies ITextResourceStore, {});
 	using services = new InstantiationService();
 	services.registerInstance(ITextModelResourceService, models);
 	const resolver = services.createInstance(TextModelResolverService);

@@ -25,6 +25,8 @@ import {
 	type IFileStreamContent,
 	type IReadFileStreamOptions,
 	type IFileSystemProvider,
+	type IFileSystemProviderRegistrationEvent,
+	type IFileSystemProviderCapabilitiesChangeEvent,
 	type IFileStat,
 	type IFileWriteRequest,
 	type IFileWriteOptions,
@@ -44,12 +46,16 @@ interface WatchRegistration extends IDisposable {
 /** Owns scheme routing and subscriptions; providers retain their storage lifetimes. */
 export class FileService extends Disposable implements IFileService {
 	private readonly changeEmitter = this._register(new Emitter<IFileChangeEvent>());
+	private readonly registrationEmitter = this._register(new Emitter<IFileSystemProviderRegistrationEvent>());
+	private readonly capabilitiesEmitter = this._register(new Emitter<IFileSystemProviderCapabilitiesChangeEvent>());
 	private readonly providers = new Map<string, ProviderRegistration>();
 	private readonly providerListeners = this._register(new DisposableMap<IFileSystemProvider>());
 	private readonly watches = this._register(new DisposableMap<string, WatchRegistration>());
 	private readonly reads = this._register(new DisposableMap<object, DisposableStore>());
 
 	public readonly onDidChangeFiles = this.changeEmitter.event;
+	public readonly onDidChangeFileSystemProviderRegistrations = this.registrationEmitter.event;
+	public readonly onDidChangeFileSystemProviderCapabilities = this.capabilitiesEmitter.event;
 
 	constructor() {
 		super();
@@ -72,10 +78,16 @@ export class FileService extends Disposable implements IFileService {
 			const listeners = new DisposableStore();
 			this.providerListeners.set(provider, listeners);
 			listeners.add(provider.onDidChangeFiles(event => this.acceptProviderChange(provider, event)));
-			listeners.add(provider.onDidChangeCapabilities(() => this.acceptProviderChange(provider, { resources: undefined })));
+			listeners.add(provider.onDidChangeCapabilities(() => {
+				for (const [scheme, registration] of this.providers) {
+					if (registration.provider === provider) this.capabilitiesEmitter.fire({ scheme, provider });
+				}
+				this.acceptProviderChange(provider, { resources: undefined });
+			}));
 		}
 		const registration = { provider };
 		this.providers.set(scheme, registration);
+		this.registrationEmitter.fire({ scheme, provider, added: true });
 		return toDisposable(() => {
 			if (this.providers.get(scheme) !== registration) {
 				return;
@@ -87,6 +99,7 @@ export class FileService extends Disposable implements IFileService {
 			if (![...this.providers.values()].some(current => current.provider === provider)) {
 				this.providerListeners.deleteAndDispose(provider);
 			}
+			this.registrationEmitter.fire({ scheme, provider, added: false });
 		});
 	}
 

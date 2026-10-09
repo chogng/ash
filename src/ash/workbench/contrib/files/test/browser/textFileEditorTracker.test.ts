@@ -11,6 +11,7 @@ import { TextFileContentSource } from '../../../../services/textfile/common/text
 import { type ITextFileService } from '../../../../services/textfile/common/textfiles.js';
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 import { TextFileEditorTracker } from '../../browser/editors/textFileEditorTracker.js';
+import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 
 test('File editor tracker reloads clean visible files after window focus and keeps dirty edits', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
@@ -27,7 +28,8 @@ test('File editor tracker reloads clean visible files after window focus and kee
 		},
 		save: async () => { throw new Error('Unexpected save'); },
 	};
-	const models = getBrowserTextModelService(getBrowserTextResourceStore(textFiles));
+	using services = new TestUriIdentityServices();
+	using models = getBrowserTextModelService(getBrowserTextResourceStore(textFiles), services);
 	using reference = await models.acquire({ resource }, new AbortController().signal);
 	const editorService = {
 		...emptyEditorServiceState,

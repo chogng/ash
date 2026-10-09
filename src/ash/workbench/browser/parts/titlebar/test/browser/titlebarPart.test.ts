@@ -1,10 +1,11 @@
+import { TestUriIdentityServices } from '../../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { operatingSystem, OperatingSystem } from '../../../../../../base/common/platform.js';
 import { BrowserPathService } from '../../../../../services/path/browser/pathService.js';
 import { createDisconnectedRendererApi } from '../../../../../../platform/agentHost/browser/rendererApi.js';
 import { registerTestComponentServices } from '../../../../../test/common/testEditorServices.js';
 import type { IEditorGroup, IEditorGroupsContainer } from '../../../../../services/editor/common/editorGroupsService.js';
 import assert from "node:assert/strict";
-import { test } from "mocha";
+import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import type {
 	IContextMenuService,
@@ -16,6 +17,9 @@ import type { ILocalizationService } from "../../../../../../workbench/services/
 import { h } from "../../../../../../base/browser/dom.js";
 import { Emitter, Event } from "../../../../../../base/common/event.js";
 import { Lxicon } from "../../../../../../base/common/lxicons.js";
+
+const uriIdentityServices = new TestUriIdentityServices();
+suiteTeardown(() => uriIdentityServices.dispose());
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -160,7 +164,7 @@ test('title service shares the resolved title with its registered part and relea
 	services.registerInstance(LocalizationServiceId, { whenReady: Promise.resolve(), translate: (_bundle, _key, fallback) => fallback });
 	services.registerInstance(IEditorService, editors);
 	services.registerInstance(IWorkspaceContextService, workspace);
-	services.registerInstance(IWorkingCopyService, resources.add(new BrowserWorkingCopyService()));
+	services.registerInstance(IWorkingCopyService, resources.add(uriIdentityServices.createInstance(BrowserWorkingCopyService)));
 	services.registerInstance(ILabelService, resources.add(createTestLabelService(workspace)));
 	services.registerInstance(IConfigurationService, resources.add(new InMemoryConfigurationService()));
 	services.registerInstance(IContextKeyService, contextKeys);

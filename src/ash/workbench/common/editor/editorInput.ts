@@ -1,6 +1,6 @@
 import type { Event } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
-import { extUri } from '../../../base/common/resources.js';
+import { extUri, type IExtUri } from '../../../base/common/resources.js';
 import type { URI } from '../../../base/common/uri.js';
 import type { IResourceEditorInput } from '../editor.js';
 
@@ -17,8 +17,8 @@ export abstract class EditorInput extends Disposable implements IResourceEditorI
 		return this.getName();
 	}
 
-	public matches(other: IResourceEditorInput): boolean {
-		return this.editorId === other.editorId && extUri.isEqual(this.resource, other.resource) &&
+	public matches(other: IResourceEditorInput, resourceIdentity: IExtUri = extUri): boolean {
+		return this.editorId === other.editorId && resourceIdentity.isEqual(this.resource, other.resource) &&
 			(!(other instanceof EditorInput) || this.typeId === other.typeId);
 	}
 }

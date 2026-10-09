@@ -1,3 +1,4 @@
+import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { StandaloneCommandService } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
@@ -146,6 +147,7 @@ const codeBlockDocument = schema.createDocument([schema.createNode("codeBlock", 
 const codeBlockFiles = new MemoryTextFiles(codeBlockResource, serializeDocument(codeBlockDocument, schema));
 const structuredFiles = new MemoryTextFiles(structuredResource, serializeDocument(documentFromPlainText(schema, "Title\nBody"), schema));
 const disposables = new DisposableStore();
+const uriIdentityServices = disposables.add(new TestUriIdentityServices());
 const services = disposables.add(new InstantiationService());
 const dialogs = disposables.add(new DialogService());
 services.registerInstance(IDialogService, dialogs);
@@ -156,7 +158,7 @@ const opener = disposables.add(services.createInstance(OpenerService));
 services.registerInstance(IOpenerService, opener);
 disposables.add(opener.registerExternalOpener({ openExternal: async href => { openedLinks.push(href); return true; } }));
 disposables.add(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(document.body)));
-const copies = disposables.add(new BrowserWorkingCopyService());
+const copies = disposables.add(uriIdentityServices.createInstance(BrowserWorkingCopyService));
 const files: ITextFileService = {
 	onDidChangeFiles: codeBlockFiles.onDidChangeFiles,
 	onDidSave: Event.any(codeBlockFiles.onDidSave, structuredFiles.onDidSave),

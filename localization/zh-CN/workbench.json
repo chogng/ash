@@ -1,5 +1,7 @@
 {
   "ash": {
+    "files.ambiguousIdentity": "文件系统中的“{0}”对应多个已打开的文档。请关闭重复文档后重新打开。",
+    "files.ambiguousSaveRecovery": "无法保存“{0}”，因为其文件系统标识对应多份尚未完成的恢复记录。",
     "views": "视图",
     "files.saveBackupFailedTitle": "文件已保存，恢复备份尚未完成",
     "files.saveBackupFailedMessage": "“{0}”已保存，但未能完成其恢复备份：{1}。请再次保存以重试。本次保存之后的修改仍保留在编辑器中。",
