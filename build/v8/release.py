@@ -6,6 +6,7 @@ import argparse
 import gzip
 import json
 import re
+import runpy
 import shlex
 import shutil
 import subprocess
@@ -113,16 +114,22 @@ def upstream_toolchain(upstream: Path, version: str, root: Path = ROOT) -> str:
 def prepare_compiler(
     upstream: Path, binding_compiler: Path, root: Path = ROOT
 ) -> dict[str, str]:
+    upstream = upstream.resolve()
     upstream_toolchain(upstream, release_metadata(root)["version"], root)
     update = upstream / "tools/clang/scripts/update.py"
-    revision = subprocess.check_output(
-        [sys.executable, str(update), "--print-revision"], text=True
-    ).strip()
+    # --print-revision requires an installed compiler. Read the source pin before
+    # downloading, then ask the updater to verify the installed version afterward.
+    revision = runpy.run_path(str(update))["PACKAGE_VERSION"]
     if revision != source_lock(root)["clangRevision"]:
         raise ValueError("Upstream Chromium compiler differs from source lock")
     subprocess.run(
         [sys.executable, str(update), "--package", "clang"], check=True, cwd=upstream
     )
+    installed = subprocess.check_output(
+        [sys.executable, str(update), "--print-revision"], text=True
+    ).strip()
+    if installed != revision:
+        raise ValueError("Installed Chromium compiler differs from source lock")
     compiler = upstream / "third_party/llvm-build/Release+Asserts"
     clang = (
         binding_compiler / "bin" / ("clang.exe" if sys.platform == "win32" else "clang")

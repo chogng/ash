@@ -2,17 +2,20 @@
 
 import gzip
 import json
+import os
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from build.lib.v8 import load_v8_lock
 from build.v8.release import (
     BUILD_TARGETS,
     ROOT,
     checksum_name,
+    prepare_compiler,
     provenance_name,
     release_metadata,
     stage_pair,
@@ -244,6 +247,52 @@ class V8ReleaseTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "pinned binding compiler"):
             stage_pair(self.upstream, target, self.dist, self.root)
         self.assertFalse(self.dist.exists())
+
+    def test_compiler_bootstraps_a_clean_relative_checkout(self):
+        source = json.loads((self.root / "third_party/v8/source-lock.json").read_text())
+        stamp = (
+            self.upstream / "third_party/llvm-build/Release+Asserts/cr_build_revision"
+        )
+        stamp.unlink()
+        update = self.upstream / "tools/clang/scripts/update.py"
+        update.parent.mkdir(parents=True)
+        update.write_text(
+            "from pathlib import Path\nimport sys\n"
+            f"PACKAGE_VERSION = {source['clangRevision']!r}\n"
+            "if __name__ == '__main__':\n"
+            "    stamp = Path(__file__).resolve().parents[3] / 'third_party/llvm-build/Release+Asserts/cr_build_revision'\n"
+            "    if '--print-revision' in sys.argv:\n"
+            "        if not stamp.exists(): sys.exit(1)\n"
+            "        print(stamp.read_text())\n"
+            "    else:\n"
+            "        stamp.write_text(PACKAGE_VERSION)\n"
+        )
+        binding_compiler = self.root / "binding compiler"
+        library = binding_compiler / "lib" / "libclang.so"
+        library.parent.mkdir(parents=True)
+        library.write_bytes(b"fixture library")
+        expected = source["bindingCompiler"][sys.platform]["version"]
+        check_output = subprocess.check_output
+
+        def query(command, **kwargs):
+            if Path(command[0]).name in {"clang", "clang.exe"}:
+                return (
+                    f"clang version {expected}\n"
+                    if "--version" in command
+                    else str(binding_compiler / "lib/clang/19") + "\n"
+                )
+            return check_output(command, **kwargs)
+
+        previous = Path.cwd()
+        try:
+            os.chdir(self.root)
+            with patch("build.v8.release.subprocess.check_output", side_effect=query):
+                values = prepare_compiler(Path("upstream"), binding_compiler, self.root)
+        finally:
+            os.chdir(previous)
+        self.assertEqual(source["clangRevision"], stamp.read_text())
+        self.assertEqual(str(stamp.parent.resolve()), values["clang_base_path"])
+        self.assertEqual(str(library.parent.resolve()), values["libclang_path"])
 
     def test_stage_rejects_an_unpinned_gnu_sysroot(self):
         target = "x86_64-unknown-linux-gnu"
