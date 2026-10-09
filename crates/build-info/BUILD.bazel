@@ -14,6 +14,7 @@ rust_library(
     crate_name = "ash_build_info",
     srcs = glob(["src/**/*.rs"]),
     edition = "2024",
+    rustc_env_files = ["//:workspace-version-env"],
     deps = all_crate_deps() + [":build_script"],
     visibility = ["//visibility:public"],
 )
@@ -22,4 +23,5 @@ rust_test(
     name = "build-info-unit-tests",
     crate = ":build-info",
     deps = all_crate_deps(normal = True, normal_dev = True),
+    rustc_env_files = ["//:workspace-version-env"],
 )

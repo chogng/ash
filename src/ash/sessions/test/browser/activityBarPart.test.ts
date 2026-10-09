@@ -83,13 +83,15 @@ test('Sessions Activity Bar selects Chat, Collaboration, Library, Code, and Crea
 			{ icon: 'projects', disabled: false },
 			{ icon: 'code', disabled: false },
 			{ icon: 'symbol-color', disabled: false },
+			{ icon: 'history', disabled: false },
+			{ icon: 'agent', disabled: false },
 			{ icon: 'account', disabled: false },
 		]);
 		assert.deepEqual([...bar.domNode.querySelectorAll('.ash-sessions-activity-top, .ash-sessions-activity-bottom')].map(group =>
 			[...group.querySelectorAll('button')].map(button => button.getAttribute('aria-label')),
-		), [['Chat', 'Collaboration', 'Library', 'Code', 'Creator'], ['Accounts']]);
+		), [['Chat', 'Collaboration', 'Library', 'Code', 'Creator', 'Trace', 'Symphony'], ['Accounts']]);
 		assert.ok(buttons.every(button => button.classList.contains('icon-only')));
-		assert.equal(bar.domNode.querySelectorAll('.ash-composite-bar-navigation-item > button.ash-sessions-activity-item').length, 5);
+		assert.equal(bar.domNode.querySelectorAll('.ash-composite-bar-navigation-item > button.ash-sessions-activity-item').length, 7);
 		assert.equal(bar.domNode.querySelectorAll('.ash-composite-bar-navigation-item.checked').length, 1);
 		assert.equal(buttons[0]?.getAttribute('aria-current'), 'page');
 		buttons[1]?.click();
@@ -112,9 +114,9 @@ test('Sessions Activity Bar selects Chat, Collaboration, Library, Code, and Crea
 		assert.deepEqual(selectedActions, ['chat', 'teams', 'library', 'code', 'creator', 'chat']);
 		assert.equal(buttons[0]?.getAttribute('aria-current'), 'page');
 		assert.equal(buttons[4]?.getAttribute('aria-current'), null);
-		buttons[5]?.click();
+		buttons[7]?.click();
 		await Promise.resolve();
-		assert.equal(accountAnchor, buttons[5]);
+		assert.equal(accountAnchor, buttons[7]);
 		using titlebar = registerTestComponentServices(services).createInstance(TitlebarPart, ownerDocument.body, 'application-menu');
 		const renderTitlebarAccount = (visible: boolean): void => titlebar.setActivityActions(visible ? [bar.accountAction] : [], (action, options) => bar.createAccountActionViewItem(action, options, 'titlebar'));
 		for (const position of [ActivityBarPosition.TOP, ActivityBarPosition.BOTTOM]) {
@@ -222,7 +224,7 @@ test('navigation order survives a new window and includes new menu contributions
 	using restored = registerTestComponentServices(services).createInstance(ActivityBarPart, document.body, { showAccountMenu() { } });
 	assert.deepEqual([...restored.domNode.querySelectorAll('button')].slice(0, 5).map(button => button.getAttribute('aria-label')), ['Chat', 'Collaboration', 'Library', 'Creator', 'Code']);
 	using contribution = MenusRegistry.appendMenuItem(Menus.ActivityBar, { command: { id: 'test.activity', title: 'Test action', icon: Lxicon.chat2 }, order: 60 });
-	assert.deepEqual([...restored.domNode.querySelectorAll('button')].map(button => button.getAttribute('aria-label')), ['Chat', 'Collaboration', 'Library', 'Creator', 'Code', 'Test action', 'Accounts']);
+	assert.deepEqual([...restored.domNode.querySelectorAll('button')].map(button => button.getAttribute('aria-label')), ['Chat', 'Collaboration', 'Library', 'Creator', 'Code', 'Trace', 'Symphony', 'Test action', 'Accounts']);
 	assert.equal(restored.domNode.querySelector('button')!.getAttribute('aria-current'), 'page');
 });
 

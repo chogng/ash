@@ -174,6 +174,8 @@ iframe 通过 `acquireAshWebviewApi().postMessage()` 通信，宿主校验来源
 
 测试入口会准备对应输入；完整 Web 测试不构建 Electron Main/Preload。Electron UI、Browser UI 和真实后端测试使用各自的 Playwright 项目，失败时查看报告和 trace。
 
+[Frontend CI](../.github/workflows/frontend.yml) 的 PR 验证保留 Linux 单测、浏览器集成、类型和协议检查，以及三个平台的启动、命令、编辑核心冒烟，每个平台使用一个 runner，作业限时 30 分钟。涉及后端或其前端调用方的改动，仅在 Linux 额外构建一次后端，验证保存、任务执行和取消；PR 的 Electron 验证使用仅 UI 模式。main 和手动运行执行完整 UI 与连接态回归，包含 Windows/macOS 后端集成，作业限时 90 分钟。限时是执行上限，实际耗时仍需以运行结果验证。
+
 Academic 文件打开与保存已纳入 `pnpm test:desktop:app`，直接在 Code 工作台验证。旧模式迁移见 [工作台与文档贡献](workbench-modes.md)。
 
 ### UI 场景录屏

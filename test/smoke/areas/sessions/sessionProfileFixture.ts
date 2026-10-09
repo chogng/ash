@@ -68,7 +68,7 @@ export async function connectProfile(application: PlaywrightApplication, web: We
 	const host = web ? {
 		appPath: webPackage!, resourcesPath: webPackage!, electronExecutable: process.execPath,
 		profileRoot: web.profileDirectory, sourceEnvironment: { ...createTestEnvironment(web.profileDirectory, process.env), ASH_PRODUCT_SERVICES_PATH: join(web.profileDirectory, 'product-services.json') },
-	} : await (application as Extract<PlaywrightApplication, { evaluate: unknown }>).evaluate(({ app }) => ({
+	} : await (application as Extract<PlaywrightApplication, { evaluate: unknown; }>).evaluate(({ app }) => ({
 		appPath: app.getAppPath(), resourcesPath: process.resourcesPath, electronExecutable: process.execPath,
 		profileRoot: process.env.ASH_HOME!, sourceEnvironment: { PATH: process.env.PATH, HOME: process.env.HOME, SystemRoot: process.env.SystemRoot, ASH_RG_PATH: process.env.ASH_RG_PATH, ASH_PRODUCT_SERVICES_PATH: process.env.ASH_PRODUCT_SERVICES_PATH },
 	}));

@@ -15,6 +15,7 @@ archive_override(
     patch_strip = 1,
     patches = [
         "//third_party/rules_rs:module_dot_bazel_version.patch",
+        "//third_party/rules_rs:linux_zlib_snapshot.patch",
         "//third_party/rules_rs:windows_gnullvm_exec_triples.patch",
     ],
     strip_prefix = "rules_rs-0.0.96",
@@ -186,6 +187,34 @@ crate.annotation(
 )
 
 inject_repo(crate, "aws-lc")
+
+# Build the locked crate's bundled sources instead of probing host liblzma.
+crate.annotation(
+    crate = "lzma-sys",
+    build_script_env = {"LZMA_API_STATIC": "1"},
+    repositories = ["crates"],
+)
+
+# Load Wayland at runtime so host library directories cannot override the
+# LLVM toolchain's pinned libc. The feature's optional dependency must also
+# be declared because annotations add flags after Cargo feature resolution.
+crate.annotation(
+    crate = "wayland-sys",
+    crate_features = ["dlopen"],
+    deps = ["@crates//:once_cell-1.21.4"],
+    repositories = ["crates"],
+)
+crate.annotation(
+    crate = "wayland-backend",
+    crate_features = ["dlopen"],
+    repositories = ["crates"],
+)
+
+crate.annotation(
+    crate = "sherpa-onnx-sys",
+    deps = ["//bazel:sherpa-cpp-runtime"],
+    repositories = ["crates"],
+)
 
 # The V8 crate build script consumes checksum-pinned sandbox-enabled archives and bindings.
 # They are build inputs only: the resulting executables link V8 statically.

@@ -29,12 +29,11 @@ jobs:
         run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Test formatter commands and file boundaries
         run: pnpm test:format
-      - name: Check TypeScript and JavaScript formatting
+      - name: Test and check import path spelling
+        run: pnpm test:import-case && pnpm test:git-hooks && pnpm check:import-case
+      - name: Check changed PR files or full main formatting
         if: always() && !cancelled()
-        run: pnpm format:ts
-      - name: Check configuration and documentation formatting
-        if: always() && !cancelled()
-        run: pnpm format:config
+        run: pnpm format:ci
 
   rust:
     runs-on: ubuntu-24.04

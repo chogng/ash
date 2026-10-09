@@ -5,8 +5,8 @@ import { expect, test as base } from '../../../automation/test.js';
 import { APP_SERVER_METHODS } from '../../../../.build/protocol/typescript/index.js';
 import { connectProfile } from './sessionProfileFixture.js';
 
-interface ModelFixture { readonly url: string; readonly requests: string[]; readonly held: ServerResponse[] }
-const test = base.extend<{ symphonyModel: ModelFixture }>({
+interface ModelFixture { readonly url: string; readonly requests: string[]; readonly held: ServerResponse[]; }
+const test = base.extend<{ symphonyModel: ModelFixture; }>({
 	symphonyModel: async ({ }, use) => {
 		const requests: string[] = [];
 		const held: ServerResponse[] = [];
@@ -64,6 +64,9 @@ test('built-in Symphony concurrently runs tasks, pauses, resumes and preserves c
 	await expect(page.locator('.ash-symphony-monitor')).toContainText('15 tokens');
 	const slow = tasks.getByRole('option', { name: /^Slow task/ });
 	await slow.click();
+	await expect(slow).toHaveAttribute('aria-selected', 'true');
+	await expect(slow).toHaveClass(/\bselected\b/);
+	await expect(tasks.getByRole('option', { name: /^Fast task/ })).not.toHaveClass(/\bselected\b/);
 	await page.locator('.ash-symphony-monitor').getByRole('button', { name: 'Pause', exact: true }).click();
 	await expect(slow).toContainText('Paused');
 	await page.locator('.ash-symphony-monitor').getByRole('button', { name: 'Resume', exact: true }).click();
@@ -104,6 +107,7 @@ test('built-in Symphony concurrently runs tasks, pauses, resumes and preserves c
 });
 
 test('Symphony keyboard help and controls use Chinese in the Agents Window', async ({ target, application, workbench, restartWorkbench }) => {
+	test.skip(target.appServerMode !== 'required', 'Requires the product App Server to enable Symphony and execution controls');
 	await workbench.page.keyboard.press('ControlOrMeta+,');
 	const settings = workbench.page.locator('.ash-settings-editor');
 	await settings.locator('[data-settings-category-id="general"]').click();

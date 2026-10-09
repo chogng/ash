@@ -151,6 +151,9 @@ def copy_prepared_contract(root: Path, destination: Path, metadata: dict) -> Non
 
 
 def matching_package_contract(root: Path, package: Path) -> tuple[Path, dict] | None:
+    # Published store paths can exceed MAX_PATH even in a short CI checkout.
+    if os.name == "nt":
+        package = Path("\\\\?\\" + str(package.resolve()).removeprefix("\\\\?\\"))
     directory = package / PACKAGE_PROTOCOL
     try:
         manifest, metadata = read_contract(

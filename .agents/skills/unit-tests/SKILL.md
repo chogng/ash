@@ -26,6 +26,7 @@ The frontend, editor, and extension commands prepare resources and compile tests
 | `--runGlob <pattern>` | Match emitted `.js` paths relative to `.build/desktop/test`. Cannot be combined with `--run`. |
 | `--grep <pattern>` | Match full Mocha test titles in the selected files. |
 | `--timeout <milliseconds>` | Positive integer; default 60,000 per test. |
+| `--jobs <count>` | Positive integer; default 1. Run up to this many isolated file processes concurrently, with each file's output kept together. Frontend CI uses 4. |
 
 ```bash
 pnpm test:unit --run src/ash/workbench/contrib/preferences/test/browser/settings.test.ts --grep 'Models Settings'

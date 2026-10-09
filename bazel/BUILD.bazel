@@ -1,1 +1,35 @@
+load("@rules_cc//cc:defs.bzl", "cc_import", "cc_library")
+
 package(default_visibility = ["//visibility:public"])
+
+config_setting(
+    name = "linux",
+    constraint_values = ["@platforms//os:linux"],
+)
+
+# The prebuilt speech SDK uses the GNU C++ ABI. Keep its runtime separate from
+# LLVM's default libc++ and build it against the same hermetic libc toolchain.
+genrule(
+    name = "sherpa-stdcxx-files",
+    srcs = ["@llvm//runtimes/libstdcxx:libstdcxx_shared_soname"],
+    outs = ["sherpa-runtime/libstdc++.so", "sherpa-runtime/libstdc++.so.6"],
+    # Bazel derives the runtime search directory from the linker input. Both
+    # names must share a directory so the loader finds the declared SONAME.
+    cmd = "cp $< $(location sherpa-runtime/libstdc++.so) && cp $< $(location sherpa-runtime/libstdc++.so.6)",
+    target_compatible_with = ["@platforms//os:linux"],
+)
+
+cc_import(
+    name = "sherpa-stdcxx",
+    interface_library = "sherpa-runtime/libstdc++.so",
+    shared_library = "sherpa-runtime/libstdc++.so.6",
+    target_compatible_with = ["@platforms//os:linux"],
+)
+
+cc_library(
+    name = "sherpa-cpp-runtime",
+    deps = select({
+        ":linux": [":sherpa-stdcxx"],
+        "//conditions:default": [],
+    }),
+)

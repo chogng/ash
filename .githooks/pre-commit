@@ -1,0 +1,2 @@
+#!/bin/sh
+exec pnpm exec node build/importCase.ts --check --staged

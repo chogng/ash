@@ -1,6 +1,6 @@
 import { runUnitTests } from './mocha.ts';
 
-runUnitTests([
+await runUnitTests([
 	'src/ash/editor/**/test/**/*.test.js',
 	'src/ash/workbench/contrib/academic/**/test/**/*.test.js',
 	'src/ash/workbench/contrib/codeEditor/**/test/**/*.test.js',

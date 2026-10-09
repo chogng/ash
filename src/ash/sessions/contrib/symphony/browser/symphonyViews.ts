@@ -40,30 +40,36 @@ export class SymphonyTasksView extends ViewPane {
 		container.append(actions);
 		const configure = (): void => { if (symphony.available && this.source.value.trim()) { void symphony.configure(this.source.value.trim()); } };
 		const load = this._register(new Button(actions, { label: localize('symphony.loadWorkflow', 'Load workflow'), onClick: configure }));
-		const choose = this._register(new Button(actions, { label: localize('symphony.chooseFile', 'Choose file'), presentation: 'secondary', onClick: () => {
-			void dialogs.showOpenDialog({ title: localize('symphony.chooseFile', 'Choose file'), canSelectFolders: false, canSelectFiles: true, canSelectMany: false, filters: [{ name: 'Markdown', extensions: ['md'] }] }).then(resources => {
-				if (!this.isDisposed && resources?.[0]) { this.source.value = resources[0].fsPath; configure(); }
-			}).catch(error => { status(String(error)); });
-		} }));
+		const choose = this._register(new Button(actions, {
+			label: localize('symphony.chooseFile', 'Choose file'), presentation: 'secondary', onClick: () => {
+				void dialogs.showOpenDialog({ title: localize('symphony.chooseFile', 'Choose file'), canSelectFolders: false, canSelectFiles: true, canSelectMany: false, filters: [{ name: 'Markdown', extensions: ['md'] }] }).then(resources => {
+					if (!this.isDisposed && resources?.[0]) { this.source.value = resources[0].fsPath; configure(); }
+				}).catch(error => { status(String(error)); });
+			}
+		}));
 		this._register(addDisposableListener(this.source.inputElement, 'keydown', event => { if (event.key === 'Enter') { event.preventDefault(); configure(); } }));
 		const picker = this._register(new SelectBox(container, { options: [], ariaLabel: localize('symphony.workflow', 'Workflow'), presentation: 'field' }));
-		const enable = this._register(new Button(container, { label: localize('symphony.disableWorkflow', 'Pause dispatch'), presentation: 'secondary', onClick: () => {
-			const workflow = symphony.state.get().workflows.find(workflow => workflow.id === picker.value);
-			if (workflow) { void symphony.enable(workflow.id, !workflow.enabled); }
-		} }));
+		const enable = this._register(new Button(container, {
+			label: localize('symphony.disableWorkflow', 'Pause dispatch'), presentation: 'secondary', onClick: () => {
+				const workflow = symphony.state.get().workflows.find(workflow => workflow.id === picker.value);
+				if (workflow) { void symphony.enable(workflow.id, !workflow.enabled); }
+			}
+		}));
 		container.append(h(document, 'p', { className: 'ash-symphony-muted' }, localize('symphony.dispatchHint', 'Pausing dispatch keeps current conversations running.')));
 		const title = this._register(new InputBox(container, { ariaLabel: localize('symphony.taskTitle', 'Task title'), placeholder: localize('symphony.taskTitle', 'Task title') }));
 		const prompt = this._register(new InputBox<true>(container, { flexibleHeight: true, ariaLabel: localize('symphony.instructions', 'Instructions'), placeholder: localize('symphony.instructions', 'Instructions') }));
-		const create = this._register(new Button(container, { label: localize('symphony.createTask', 'Create task'), presentation: 'primary', onClick: () => {
-			const submittedTitle = title.value;
-			const submittedPrompt = prompt.value;
-			if (picker.value && submittedTitle.trim()) {
-				void symphony.submit(picker.value, submittedTitle.trim(), submittedPrompt).then(() => {
-					// Submitting includes a refresh; preserve the next draft typed while it completes.
-					if (!symphony.state.get().error && title.value === submittedTitle && prompt.value === submittedPrompt) { title.value = ''; prompt.value = ''; }
-				});
+		const create = this._register(new Button(container, {
+			label: localize('symphony.createTask', 'Create task'), presentation: 'primary', onClick: () => {
+				const submittedTitle = title.value;
+				const submittedPrompt = prompt.value;
+				if (picker.value && submittedTitle.trim()) {
+					void symphony.submit(picker.value, submittedTitle.trim(), submittedPrompt).then(() => {
+						// Submitting includes a refresh; preserve the next draft typed while it completes.
+						if (!symphony.state.get().error && title.value === submittedTitle && prompt.value === submittedPrompt) { title.value = ''; prompt.value = ''; }
+					});
+				}
 			}
-		} }));
+		}));
 		const error = h(document, 'p', { className: 'ash-symphony-error', attributes: { role: 'status' } });
 		const workflowError = h(document, 'p', { className: 'ash-symphony-error', attributes: { role: 'status' } });
 		container.append(error, workflowError, h(document, 'h2', {}, localize('symphony.conversations', 'Conversations')));
@@ -71,7 +77,7 @@ export class SymphonyTasksView extends ViewPane {
 		container.append(list);
 		const empty = h(document, 'p', { className: 'ash-symphony-muted' }, localize('symphony.noConversations', 'Load a workflow and create a task, or wait for tracker issues.'));
 		container.append(empty);
-		const rows = new Map<string, { node: HTMLElement; title: HTMLElement; metadata: HTMLElement }>();
+		const rows = new Map<string, { node: HTMLElement; title: HTMLElement; metadata: HTMLElement; }>();
 		const rowHovers = new Map<string, ReturnType<ReturnType<typeof getHoverDelegate>['setupHover']>>();
 		this._register(addDisposableListener(list, 'click', event => {
 			const row = (event.target as HTMLElement).closest<HTMLElement>('[data-conversation]');
@@ -119,7 +125,7 @@ export class SymphonyTasksView extends ViewPane {
 				row.metadata.textContent = metrics(item);
 				row.node.setAttribute('aria-label', `${item.title}, ${metrics(item)}`);
 				row.node.setAttribute('aria-selected', String(item.id === state.selected));
-
+				row.node.classList.toggle('selected', item.id === state.selected);
 			}
 			empty.hidden = state.conversations.length > 0;
 			list.setAttribute('aria-activedescendant', state.selected ? `symphony-${state.selected}` : '');

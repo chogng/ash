@@ -241,11 +241,11 @@ export class SessionsPreferences extends Disposable {
 		let activeCategory = categoryId === 'customize' || categoryId === 'skills' || categoryId === 'plugins' || categoryId === 'hooks' ? categories.findIndex(category => category.content === customizeContent)
 			: categoryId === 'dictation' ? categories.findIndex(category => category.content === dictationContent)
 				: categoryId === 'execution-permissions' ? categories.findIndex(category => category.content === executionContent)
-				: categoryId === 'github' ? categories.findIndex(category => category.content === githubContent)
-					: categoryId === 'execution-trace' ? categories.findIndex(category => category.content === traceContent)
-						: categoryId === 'agents' ? categories.findIndex(category => category.content === advisorContent)
-							: categoryId === 'models' ? categories.findIndex(category => category.content === modelContent)
-								: categoryId === 'tools' ? categories.findIndex(category => category.id === 'tools') : 0;
+					: categoryId === 'github' ? categories.findIndex(category => category.content === githubContent)
+						: categoryId === 'execution-trace' ? categories.findIndex(category => category.content === traceContent)
+							: categoryId === 'agents' ? categories.findIndex(category => category.content === advisorContent)
+								: categoryId === 'models' ? categories.findIndex(category => category.content === modelContent)
+									: categoryId === 'tools' ? categories.findIndex(category => category.id === 'tools') : 0;
 		const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 		const treeModel = resources.add(new SettingsTreeModel<ISetting | SettingsContentItem>(id =>
 			// Keep service-only sections out of the local-user filter without creating configuration copies.
@@ -327,10 +327,10 @@ export class SessionsPreferences extends Disposable {
 			if (categoryId === 'skills' || categoryId === 'plugins' || categoryId === 'hooks') customizeContent.selectTab(categoryId);
 			activeCategory = categoryId === 'customize' || categoryId === 'skills' || categoryId === 'plugins' || categoryId === 'hooks' ? categories.findIndex(category => category.content === customizeContent)
 				: categoryId === 'execution-permissions' ? categories.findIndex(category => category.content === executionContent)
-				: categoryId === 'github' ? categories.findIndex(category => category.content === githubContent)
-					: categoryId === 'agents' ? categories.findIndex(category => category.content === advisorContent)
-						: categoryId === 'models' ? categories.findIndex(category => category.content === modelContent)
-							: categoryId === 'tools' ? categories.findIndex(category => category.id === 'tools') : categories.findIndex(category => category.content === dictationContent);
+					: categoryId === 'github' ? categories.findIndex(category => category.content === githubContent)
+						: categoryId === 'agents' ? categories.findIndex(category => category.content === advisorContent)
+							: categoryId === 'models' ? categories.findIndex(category => category.content === modelContent)
+								: categoryId === 'tools' ? categories.findIndex(category => category.id === 'tools') : categories.findIndex(category => category.content === dictationContent);
 			searchInput.value = '';
 			render();
 			if (marketplaceOptions) void customizeContent.openPlugins(marketplaceOptions);

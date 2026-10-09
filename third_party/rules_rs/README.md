@@ -5,6 +5,12 @@ The repository pins `rules_rs 0.0.96` through the archive override in the root
 
 - `module_dot_bazel_version.patch`, which preserves module version metadata
   when the archive override bypasses the Bazel Central Registry patch set.
+- `linux_zlib_snapshot.patch`, which downloads the pinned Linux zlib packages
+  from Ubuntu's dated archive. Live mirrors remove superseded packages; the
+  snapshot preserves both existing package versions and SHA-256 checksums.
+  This matches Codex's backport of upstream commit
+  [`8133604`](https://github.com/hermeticbuild/rules_rs/commit/81336041f1c092b94ba0d35384c4dfc03ce45a07).
+  Remove this patch when the pinned release includes that fix.
 - `windows_gnullvm_exec_triples.patch`, which makes Windows Rust host tools use
   the same gnullvm ABI as the repository's hermetic LLVM/MinGW C++ toolchain.
   This is required for `rustc` to load proc-macro DLLs and link Bazel host tools

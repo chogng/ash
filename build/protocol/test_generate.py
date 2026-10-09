@@ -2,6 +2,7 @@
 
 import subprocess
 import json
+import os
 import shutil
 import tempfile
 import unittest
@@ -217,6 +218,27 @@ class ProtocolPreparationTests(unittest.TestCase):
             self.assertEqual(
                 modified, (other / ".build/protocol/metadata.json").stat().st_mtime_ns
             )
+
+    @unittest.skipUnless(os.name == "nt", "Windows package path boundary")
+    def test_long_package_paths_restore_protocol_without_cargo(self):
+        from build.protocol.generate import generate_protocol
+
+        package = self.package_contract()
+        branch = self.root / ("package-path-" * 8)
+        selected = branch / ("package-path-" * 8) / "backend-package"
+        extended = Path("\\\\?\\" + str(selected))
+        shutil.copytree(package, extended)
+        self.addCleanup(shutil.rmtree, Path("\\\\?\\" + str(branch)))
+        self.clear_contract()
+        generate_protocol(
+            root=self.root, package_root=selected, cargo="no-cargo-installed"
+        )
+        self.discovery.assert_not_called()
+        self.exporter.assert_not_called()
+        self.assertEqual(
+            (package / "ash-resources/protocol/typescript/index.ts").read_bytes(),
+            (self.root / ".build/protocol/typescript/index.ts").read_bytes(),
+        )
 
     def test_source_or_manifest_changes_require_a_fresh_export(self):
         from build.protocol.generate import generate_protocol

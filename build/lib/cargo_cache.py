@@ -27,7 +27,12 @@ def _file_stats(directory: Path, excluded=()):
                 elif entry.name not in excluded and entry.is_file(
                     follow_symlinks=False
                 ):
-                    yield entry.stat(follow_symlinks=False)
+                    # Windows DirEntry.stat omits file IDs needed to deduplicate hard links.
+                    yield (
+                        os.stat(entry.path, follow_symlinks=False)
+                        if os.name == "nt"
+                        else entry.stat(follow_symlinks=False)
+                    )
 
 
 def _profiles(target: Path):

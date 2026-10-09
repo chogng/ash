@@ -66,5 +66,8 @@ jobs:
         run: just lint
       - name: Check Python format
         run: just python-format-check
+      # Package contract tests consume generated artifacts from a clean checkout.
+      - name: Prepare protocol contract for package tests
+        run: just generate-protocol
       - name: Test build, package, signing and repository contracts
         run: just test-python build scripts code

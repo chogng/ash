@@ -43,7 +43,11 @@ pnpm test:desktop:smoke:ui
 
 应用场景复用 `test/automation/test.ts` 的 fixture：它负责工作区、配置、启动、重启、全窗口错误收集和退出清理。不同场景使用独立数据，同一场景重启保留数据。Explorer 导航复用 `workbench.openExplorer()`，设置导航复用 `workbench.settingsEditor`，终端输入复用 `workbench.terminal`，工作区搜索复用 `workbench.search`，系统和网页菜单复用 `workbench.menus`，消息与确认对话框复用 `workbench.dialogs`，常规 Sessions 入口复用 `workbench.openAgentsWindow(target.kind)`；专门验证快捷键、菜单或窗口入口的场景保留对应真实操作。工作台和 Sessions 的启动入口均等待自身状态恢复完成；导航辅助代码等待操作结果，功能断言留在用例中。
 
-Frontend CI 运行全部单元测试、Chromium 浏览器集成测试，以及 Browser、Electron UI 和连接真实 App Server 的完整 smoke suite；连接测试不再通过文件白名单或 grep 缩小范围。Academic Workbench 使用独立项目。需要联网下载出版社 PDF 的语料测试使用 `electron-pdf-corpus-app-server` 独立项目，不进入普通 smoke suite。
+Frontend CI 在 Linux Browser、macOS Electron 和 Windows Electron 各使用一个 runner，Playwright 保留一个 worker，避免桌面焦点与固定端口竞争。PR 在 Linux 运行全部单元测试、Chromium 浏览器集成测试和可移植的构建、协议、CSS、词条检查；各平台运行启动、命令、编辑与撤销的核心冒烟，并按 `build/frontend.ts` 中的源码 owner 对照表运行受影响区域。后端、协议、平台服务和需要持久化的编辑器等改动还运行真实连接场景；不需要后端的改动跳过 App Server 开发包的大编译，但仍生成构建所需的协议。共享源码和未映射 owner 在 PR 依靠全部单元、浏览器集成和核心冒烟，细节端到端回归交给 main；这是一项明确的覆盖取舍，路径映射不是产品依赖图，也不保证穷尽跨 feature 影响。PR 冒烟遇到首次失败立即退出，避免继续耗时收集相同运行中的错误。路径比较失败会使检查失败，不会把失败当成“没有相关改动”。
+
+合入 main 后和手动触发时运行完整 UI 与连接真实 App Server 的项目，保留全部细节回归。纯构建工具或 CI 调度改动在 PR 验证对应构建与包契约、各平台核心 UI，不因此重新编译整个 App Server；后端源码、Cargo 配置和协议 owner 的改动仍需真实连接。Academic Workbench 和 Academic 文档编辑已经包含在普通项目中，不再额外重跑相同文件；出版社 PDF 下载仍属于单独的 opt-in 项目。Browser 单测使用 `--jobs 4`，每个文件仍在独立进程中运行，本地默认串行。新增测试优先放在最窄的单元或组件层，只有跨窗口、进程、后端持久化等完整用户流程进入端到端测试，避免把同一规则重复写成昂贵的全应用场景。
+
+`.github/workflows/frontend.yml` 保留三个原有检查名称，取消同一 PR 的旧提交运行；每个平台在同一个任务中构建和测试，删除了分片调度及前端产物传输。Electron UI 与连接测试复用同一份 Desktop 输出，不再二次编译。`.github/actions/setup-frontend` 复用工具和下载缓存；Electron 使用内置 Chromium，只有 Browser 下载 headless Chromium，Linux 同时安装所需系统库。需要连接的 Electron 任务按后端源码、资源、依赖锁、构建脚本、编译环境和 hosted runner 镜像版本恢复完全匹配的后端包；命中时恢复协议并选择后端，未命中时正常构建，不使用前缀回退。缓存只在 main 写回。失败诊断产物命名为 `frontend-<surface>-<runner>`。
 
 真实 App Server 场景运行文件保存、BOM/CRLF、外部修改后的撤销，以及手动保存、未保存、延迟自动保存、切换编辑器自动保存后的重启恢复；Browser 还验证未保存内容在页面重载后的恢复。终端覆盖输入、工作区目录、面板关闭再打开、多实例输出隔离和 shell 退出后的重新启动。Search 验证大小写、正则、包含与排除条件及清除结果；Tasks 验证发现、执行、重跑、取消和实际输出；Settings 验证即时生效、重启保存和恢复默认。CI 配置覆盖 Linux Browser、macOS Electron 和 Windows Electron；终端进程在窗口重启后的恢复尚未实现，不属于当前覆盖。
 

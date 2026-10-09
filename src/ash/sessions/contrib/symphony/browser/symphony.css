@@ -65,7 +65,7 @@
 	background: var(--ash-list-hoverBackground);
 }
 
-.ash-symphony-row[aria-selected='true'] {
+.ash-symphony-row.selected {
 	background: var(--ash-sessions-selectionBackground);
 	outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
 	outline-offset: -1px;

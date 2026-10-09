@@ -123,8 +123,13 @@ def resolve_v8_cargo_env(
     if environment.get("RUSTY_V8_MIRROR"):
         return {}
 
-    resolve_v8_artifacts(spec, lock_path=lock_path, cache_root=cache_root)
-    return {"RUSTY_V8_MIRROR": str(cache_root)}
+    artifacts = resolve_v8_artifacts(spec, lock_path=lock_path, cache_root=cache_root)
+    # Cargo's restored build-script output can outlive generated files in its
+    # registry sources. Point bindings at the verified cache we own instead.
+    return {
+        "RUSTY_V8_ARCHIVE": str(artifacts.archive.resolve()),
+        "RUSTY_V8_SRC_BINDING_PATH": str(artifacts.binding.resolve()),
+    }
 
 
 def resolve_v8_artifacts(

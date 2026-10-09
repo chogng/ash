@@ -86,7 +86,7 @@ class V8ArtifactTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "must be set together"):
             resolve_v8_cargo_env(spec, environ={"RUSTY_V8_ARCHIVE": "/archive"})
 
-    def test_environment_uses_the_cargo_mirror_layout(self) -> None:
+    def test_environment_uses_verified_artifacts_outside_cargo_registry(self) -> None:
         spec = TARGETS["aarch64-apple-darwin"]
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -109,7 +109,17 @@ class V8ArtifactTests(unittest.TestCase):
                 cache_root=cache,
             )
 
-            self.assertEqual({"RUSTY_V8_MIRROR": str(cache)}, environment)
+            self.assertEqual(
+                {
+                    "RUSTY_V8_ARCHIVE": str(
+                        (mirror / entry["archive"]["name"]).resolve()
+                    ),
+                    "RUSTY_V8_SRC_BINDING_PATH": str(
+                        (mirror / entry["binding"]["name"]).resolve()
+                    ),
+                },
+                environment,
+            )
 
     def test_lock_rejects_a_target_gap(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
