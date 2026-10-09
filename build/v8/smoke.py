@@ -54,9 +54,39 @@ def prepare_musl_linker(target: str, output: Path, root: Path = ROOT) -> dict[st
     if actual_version != version:
         raise ValueError("Extracted Zig toolchain version differs from source lock")
     triple = target.replace("-unknown", "")
-    wrapper = output / f"{target}-cc"
+    if target == "aarch64-unknown-linux-musl":
+        # Zig's cc frontend rejects Rust's Cortex-A53 workaround. Its bundled
+        # GNU LLD accepts it; raw linker flavor needs the workaround explicitly.
+        # Rust owns the musl CRT. Build only the missing instruction-cache helper
+        # from the same checksum-pinned toolchain, leaving other builtins to Rust.
+        builtins = (output / f"{target}-clear-cache.a").resolve()
+        subprocess.run(
+            [
+                str(zig),
+                "build-lib",
+                str(zig.parent / "lib/compiler_rt/clear_cache.zig"),
+                "-target",
+                triple,
+                "-O",
+                "ReleaseFast",
+                "-fno-compiler-rt",
+                f"-femit-bin={builtins}",
+            ],
+            check=True,
+        )
+        wrapper = output / f"{target}-ld"
+        command = (
+            f'{shlex.quote(str(zig))} ld.lld --fix-cortex-a53-843419 "$@" '
+            f"{shlex.quote(str(builtins))}"
+        )
+        rustflags = "-C linker-flavor=ld -C link-self-contained=yes"
+    else:
+        wrapper = output / f"{target}-cc"
+        command = f'{shlex.quote(str(zig))} cc -target {triple} "$@"'
+        # Zig owns musl's startup objects; Rust's bundled CRT would define _start twice.
+        rustflags = "-C link-self-contained=no"
     wrapper.write_text(
-        f'#!/bin/sh\nexec {shlex.quote(str(zig))} cc -target {triple} "$@"\n',
+        f"#!/bin/sh\nexec {command}\n",
         encoding="utf-8",
         newline="\n",
     )
@@ -64,9 +94,7 @@ def prepare_musl_linker(target: str, output: Path, root: Path = ROOT) -> dict[st
     prefix = f"CARGO_TARGET_{target.upper().replace('-', '_')}"
     return {
         f"{prefix}_LINKER": str(wrapper.resolve()),
-        # Zig supplies musl and its startup objects. Rust's bundled CRT would
-        # define _start twice; Zig also supplies compiler-rt for ARM cache flushes.
-        f"{prefix}_RUSTFLAGS": "-C link-self-contained=no",
+        f"{prefix}_RUSTFLAGS": rustflags,
     }
 
 

@@ -118,12 +118,26 @@ class V8SmokeTests(unittest.TestCase):
             patch(
                 "build.v8.smoke.subprocess.check_output", return_value=version + "\n"
             ),
+            patch("build.v8.smoke.subprocess.run") as build_runtime,
         ):
-            values = prepare_musl_linker("aarch64-unknown-linux-musl", output)
+            arm_values = prepare_musl_linker("aarch64-unknown-linux-musl", output)
+            x64_values = prepare_musl_linker("x86_64-unknown-linux-musl", output)
         prefix = "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL"
-        self.assertEqual("-C link-self-contained=no", values[prefix + "_RUSTFLAGS"])
-        wrapper = Path(values[prefix + "_LINKER"])
-        self.assertIn("cc -target aarch64-linux-musl", wrapper.read_text())
+        self.assertEqual(
+            "-C linker-flavor=ld -C link-self-contained=yes",
+            arm_values[prefix + "_RUSTFLAGS"],
+        )
+        wrapper = Path(arm_values[prefix + "_LINKER"])
+        self.assertIn('ld.lld --fix-cortex-a53-843419 "$@"', wrapper.read_text())
+        self.assertIn("aarch64-unknown-linux-musl-clear-cache.a", wrapper.read_text())
+        build_runtime.assert_called_once()
+        self.assertIn("-fno-compiler-rt", build_runtime.call_args.args[0])
+        prefix = "CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL"
+        self.assertEqual("-C link-self-contained=no", x64_values[prefix + "_RUSTFLAGS"])
+        self.assertIn(
+            "cc -target x86_64-linux-musl",
+            Path(x64_values[prefix + "_LINKER"]).read_text(),
+        )
 
     def test_msvc_cannot_enter_the_windows_gnu_toolchain(self):
         with self.assertRaisesRegex(ValueError, "artifact ABI"):
