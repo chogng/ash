@@ -1,0 +1,13 @@
+package(default_visibility = ["//visibility:public"])
+
+# rules_rs needs a repository it can inject into generated crate build rules.
+# Keep the implementation in Ash; this adapter only forwards the paired inputs.
+alias(
+    name = "rusty_v8_archive_for_target",
+    actual = "@//third_party/v8:rusty_v8_archive_for_target",
+)
+
+alias(
+    name = "rusty_v8_binding_for_target",
+    actual = "@//third_party/v8:rusty_v8_binding_for_target",
+)

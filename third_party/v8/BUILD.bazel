@@ -1,4 +1,108 @@
+load("@bazel_skylib//rules:copy_file.bzl", "copy_file")
+load("@rules_cc//cc:cc_static_library.bzl", "cc_static_library")
+load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@//third_party/v8:source.bzl", "v8_source_archive")
+
 package(default_visibility = ["//visibility:public"])
+
+config_setting(
+    name = "use_rusty_v8_custom_libcxx",
+    # Toolchain rules inspect this setting even for prebuilt consumers. Keep its
+    # flag in Ash so their analysis does not need to fetch V8's source module.
+    flag_values = {"@//:rusty_v8_custom_libcxx": "True"},
+)
+
+config_setting(
+    name = "use_rusty_v8_source",
+    flag_values = {"@//:rusty_v8_from_source": "True"},
+)
+
+# LLVM and Rust use separate libc constraints. Inherit the C++ platform and
+# mark Rust as musl too, or its default glibc constraint selects GNU bindings.
+[
+    platform(
+        name = "linux_%s_musl" % arch,
+        constraint_values = [
+            "@rules_rs//rs/platforms/constraints:musl",
+            # Rust's musl target passes -no-pie; the C++ linker must agree.
+            "@llvm//constraints/pie:off",
+        ],
+        parents = ["@llvm//platforms:linux_%s_musl" % arch],
+    )
+    for arch in ["arm64", "amd64"]
+]
+
+# The statically linked x64 musl probe runs on the GNU Linux host kernel.
+# Select this only for the release smoke check, not for arbitrary musl tests.
+toolchain(
+    name = "musl_x64_tests_on_linux_host",
+    exec_compatible_with = [
+        "@platforms//cpu:x86_64",
+        "@platforms//os:linux",
+    ],
+    target_compatible_with = [
+        "@platforms//cpu:x86_64",
+        "@platforms//os:linux",
+        "@llvm//constraints/libc:musl",
+        "@rules_rs//rs/platforms/constraints:musl",
+    ],
+    toolchain = "@bazel_tools//tools/test:empty_toolchain",
+    toolchain_type = "@bazel_tools//tools/test:default_test_toolchain_type",
+)
+
+# V8 embeds Chromium's libc++, while Bazel links its own libc++. Their shared
+# exception ABI symbols collide even though ordinary symbols have namespaces.
+# Only the derived Bazel output changes; release files stay checksum-verified.
+[
+    genrule(
+        name = "rusty_v8_%s_%s_with_compatible_libcxx" % (arch, libc),
+        srcs = [
+            ":libcxx_shared_exception_symbols.txt",
+            "@ash_rusty_v8_%s_unknown_linux_%s_archive//file" % (arch, libc),
+        ],
+        outs = ["librusty_v8_%s_%s_with_compatible_libcxx.a" % (arch, libc)],
+        cmd = """
+            gzip -dc "$(location @ash_rusty_v8_%s_unknown_linux_%s_archive//file)" > "$@.unadjusted"
+            $(location @llvm//tools:llvm-objcopy) \
+                --weaken-symbols="$(location :libcxx_shared_exception_symbols.txt)" \
+                "$@.unadjusted" "$@"
+            rm "$@.unadjusted"
+        """ % (arch, libc),
+        tools = ["@llvm//tools:llvm-objcopy"],
+    )
+    for arch in ["aarch64", "x86_64"]
+    for libc in ["gnu", "musl"]
+]
+
+# AArch64 cache flushes call __clear_cache, which Rust's builtins omit.
+# Merge the matching compiler-rt runtime so the normal Rust linker can resolve it.
+[
+    genrule(
+        name = "rusty_v8_aarch64_%s_for_bazel" % libc,
+        srcs = [
+            ":rusty_v8_aarch64_%s_with_compatible_libcxx" % libc,
+            "@llvm//runtimes/compiler-rt:clang_rt.builtins.static",
+        ],
+        outs = ["librusty_v8_aarch64_%s_for_bazel.a" % libc],
+        cmd = """
+        cat > "$@.mri" <<'EOF'
+create $@
+addlib $(location :rusty_v8_aarch64_%s_with_compatible_libcxx)
+addlib $(location @llvm//runtimes/compiler-rt:clang_rt.builtins.static)
+save
+end
+EOF
+        $(location @llvm//tools:llvm-ar) -M < "$@.mri"
+        $(location @llvm//tools:llvm-ranlib) "$@"
+        rm "$@.mri"
+    """ % libc,
+        tools = [
+            "@llvm//tools:llvm-ar",
+            "@llvm//tools:llvm-ranlib",
+        ],
+    )
+    for libc in ["gnu", "musl"]
+]
 
 config_setting(
     name = "platform_aarch64_unknown_linux_musl",
@@ -21,19 +125,35 @@ config_setting(
 alias(
     name = "rusty_v8_archive_for_target",
     actual = select({
+        ":use_rusty_v8_source": "@//third_party/v8:rusty_v8_source_archive_for_target",
+        "//conditions:default": ":rusty_v8_prebuilt_archive_for_target",
+    }),
+)
+
+alias(
+    name = "rusty_v8_prebuilt_archive_for_target",
+    actual = select({
         "@rules_rs//rs/platforms/config:aarch64-apple-darwin": "@ash_rusty_v8_aarch64_apple_darwin_archive//file",
         "@rules_rs//rs/platforms/config:aarch64-pc-windows-msvc": "@ash_rusty_v8_aarch64_pc_windows_msvc_archive//file",
-        "@rules_rs//rs/platforms/config:aarch64-unknown-linux-gnu": "@ash_rusty_v8_aarch64_unknown_linux_gnu_archive//file",
-        ":platform_aarch64_unknown_linux_musl": "@ash_rusty_v8_aarch64_unknown_linux_musl_archive//file",
+        "@rules_rs//rs/platforms/config:aarch64-unknown-linux-gnu": ":rusty_v8_aarch64_gnu_for_bazel",
+        ":platform_aarch64_unknown_linux_musl": ":rusty_v8_aarch64_musl_for_bazel",
         "@rules_rs//rs/platforms/config:x86_64-apple-darwin": "@ash_rusty_v8_x86_64_apple_darwin_archive//file",
         "@rules_rs//rs/platforms/config:x86_64-pc-windows-msvc": "@ash_rusty_v8_x86_64_pc_windows_msvc_archive//file",
-        "@rules_rs//rs/platforms/config:x86_64-unknown-linux-gnu": "@ash_rusty_v8_x86_64_unknown_linux_gnu_archive//file",
-        ":platform_x86_64_unknown_linux_musl": "@ash_rusty_v8_x86_64_unknown_linux_musl_archive//file",
+        "@rules_rs//rs/platforms/config:x86_64-unknown-linux-gnu": ":rusty_v8_x86_64_gnu_with_compatible_libcxx",
+        ":platform_x86_64_unknown_linux_musl": ":rusty_v8_x86_64_musl_with_compatible_libcxx",
     }),
 )
 
 alias(
     name = "rusty_v8_binding_for_target",
+    actual = select({
+        ":use_rusty_v8_source": "@//third_party/v8:rusty_v8_source_binding_for_target",
+        "//conditions:default": ":rusty_v8_prebuilt_binding_for_target",
+    }),
+)
+
+alias(
+    name = "rusty_v8_prebuilt_binding_for_target",
     actual = select({
         "@rules_rs//rs/platforms/config:aarch64-apple-darwin": "@ash_rusty_v8_aarch64_apple_darwin_binding//file",
         "@rules_rs//rs/platforms/config:aarch64-pc-windows-msvc": "@ash_rusty_v8_aarch64_pc_windows_msvc_binding//file",
@@ -46,4 +166,216 @@ alias(
     }),
 )
 
-exports_files(["runtime-lock.json", "headers.BUILD.bazel"])
+exports_files([
+    "runtime-lock.json",
+    "headers.BUILD.bazel",
+    "libcxx.BUILD.bazel",
+    "libcxxabi.BUILD.bazel",
+    "llvm_libc.BUILD.bazel",
+    "v8_crate.BUILD.bazel",
+    "targets.BUILD.bazel",
+])
+V8_COPTS = ["-std=c++20"]
+
+V8_CUSTOM_LIBCXX_COPTS = select({
+    ":use_rusty_v8_custom_libcxx": [
+        "-nostdinc++",
+        "-D_LIBCPP_DISABLE_VISIBILITY_ANNOTATIONS",
+        "-D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_EXTENSIVE",
+        "-D_LIBCPP_INSTRUMENTED_WITH_ASAN=0",
+        "-D_LIBCXXABI_DISABLE_VISIBILITY_ANNOTATIONS",
+    ],
+    "//conditions:default": [],
+})
+
+V8_STATIC_LIBRARY_FEATURES = [
+    "-symbol_check",
+    "-validate-static-library",
+]
+
+alias(
+    name = "rusty_v8_llvm_libc_headers",
+    actual = "@rusty_v8_llvm_libc//:v8_headers",
+)
+
+cc_library(
+    name = "rusty_v8_custom_libcxx_headers",
+    defines = select({
+        ":platform_aarch64_unknown_linux_musl": ["ANDROID_HOST_MUSL"],
+        ":platform_x86_64_unknown_linux_musl": ["ANDROID_HOST_MUSL"],
+        "//conditions:default": [],
+    }),
+    visibility = ["//visibility:public"],
+    deps = [
+        "@rusty_v8_libcxx//:headers",
+        "@rusty_v8_libcxxabi//:headers",
+    ],
+)
+
+cc_library(
+    name = "rusty_v8_custom_libcxx_runtime",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@rusty_v8_libcxx//:libcxx",
+        "@rusty_v8_libcxxabi//:libcxxabi",
+    ],
+)
+
+genrule(
+    name = "binding_cc_150_4_0",
+    srcs = ["@v8_crate_150_4_0//:binding_cc"],
+    outs = ["binding_150_4_0.cc"],
+    cmd = " ".join([
+        "sed",
+        "-e '/#include \"v8\\/src\\/flags\\/flags.h\"/d'",
+        "-e 's|\"v8/src/libplatform/default-platform.h\"|\"src/libplatform/default-platform.h\"|'",
+        "-e 's|#include \"support.h\"|#include \"support_150_4_0.h\"|'",
+        "-e 's|  namespace i = v8::internal;|  (void)usage;|'",
+        "-e '/using HelpOptions = i::FlagList::HelpOptions;/d'",
+        "-e '/HelpOptions help_options = HelpOptions(HelpOptions::kExit, usage);/d'",
+        "-e 's|  i::FlagList::SetFlagsFromCommandLine(argc, argv, true, help_options);|  v8::V8::SetFlagsFromCommandLine(argc, argv, true);|'",
+        "$(location @v8_crate_150_4_0//:binding_cc)",
+        ">",
+        '"$@"',
+    ]),
+)
+
+genrule(
+    name = "crdtp_binding_cc_150_4_0",
+    srcs = ["@v8_crate_150_4_0//:crdtp_binding_cc"],
+    outs = ["crdtp_binding_150_4_0.cc"],
+    cmd = " ".join([
+        "sed",
+        "-e 's|#include \"support.h\"|#include \"support_150_4_0.h\"|'",
+        "-e 's|\"v8/third_party/inspector_protocol/|\"third_party/inspector_protocol/|g'",
+        "$(location @v8_crate_150_4_0//:crdtp_binding_cc)",
+        ">",
+        '"$@"',
+    ]),
+)
+
+copy_file(
+    name = "support_h_150_4_0",
+    src = "@v8_crate_150_4_0//:support_h",
+    out = "support_150_4_0.h",
+)
+
+cc_library(
+    name = "v8_150_4_0_binding",
+    srcs = [
+        ":binding_cc_150_4_0",
+        ":crdtp_binding_cc_150_4_0",
+    ],
+    hdrs = [":support_h_150_4_0"],
+    copts = V8_COPTS + V8_CUSTOM_LIBCXX_COPTS,
+    deps = [
+        "@v8//:core_lib_icu",
+        "@v8//:rusty_v8_crdtp_headers",
+        "@v8//:rusty_v8_internal_headers",
+    ] + select({
+        ":use_rusty_v8_custom_libcxx": [
+            ":rusty_v8_custom_libcxx_headers",
+        ],
+        "//conditions:default": [],
+    }),
+)
+
+# This is a real C++ dependency closure: Bazel owns generated sources, host
+# tools, per-file compilation and archive merging instead of invoking Cargo/GN.
+cc_static_library(
+    name = "rusty_v8_source_archive_impl",
+    features = V8_STATIC_LIBRARY_FEATURES,
+    deps = [
+        ":rusty_v8_custom_libcxx_runtime",
+        ":v8_150_4_0_binding",
+    ],
+    target_compatible_with = select({
+        "@platforms//os:linux": [],
+        "@platforms//os:macos": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+)
+
+v8_source_archive(
+    name = "rusty_v8_source_archive",
+    src = ":rusty_v8_source_archive_impl",
+)
+
+# Source and downloaded archives require the same exception-ABI adjustment
+# before the Rust consumer links Bazel's libc++ alongside Chromium's libc++.
+genrule(
+    name = "rusty_v8_source_archive_with_compatible_libcxx",
+    srcs = [
+        ":libcxx_shared_exception_symbols.txt",
+        ":rusty_v8_source_archive",
+    ],
+    outs = ["librusty_v8_source_with_compatible_libcxx.a"],
+    cmd = "$(location @llvm//tools:llvm-objcopy) --weaken-symbols=$(location :libcxx_shared_exception_symbols.txt) $(location :rusty_v8_source_archive) $@",
+    tools = ["@llvm//tools:llvm-objcopy"],
+)
+
+genrule(
+    name = "rusty_v8_source_archive_with_arm_builtins",
+    srcs = [
+        ":rusty_v8_source_archive_with_compatible_libcxx",
+        "@llvm//runtimes/compiler-rt:clang_rt.builtins.static",
+    ],
+    outs = ["librusty_v8_source_with_arm_builtins.a"],
+    cmd = """
+        cat > "$@.mri" <<'EOF'
+create $@
+addlib $(location :rusty_v8_source_archive_with_compatible_libcxx)
+addlib $(location @llvm//runtimes/compiler-rt:clang_rt.builtins.static)
+save
+end
+EOF
+        $(location @llvm//tools:llvm-ar) -M < "$@.mri"
+        $(location @llvm//tools:llvm-ranlib) "$@"
+        rm "$@.mri"
+    """,
+    tools = ["@llvm//tools:llvm-ar", "@llvm//tools:llvm-ranlib"],
+)
+
+alias(
+    name = "rusty_v8_source_archive_for_target",
+    actual = select({
+        "@rules_rs//rs/platforms/config:aarch64-unknown-linux-gnu": ":rusty_v8_source_archive_with_arm_builtins",
+        ":platform_aarch64_unknown_linux_musl": ":rusty_v8_source_archive_with_arm_builtins",
+        "@rules_rs//rs/platforms/config:x86_64-unknown-linux-gnu": ":rusty_v8_source_archive_with_compatible_libcxx",
+        ":platform_x86_64_unknown_linux_musl": ":rusty_v8_source_archive_with_compatible_libcxx",
+        "@rules_rs//rs/platforms/config:aarch64-apple-darwin": ":rusty_v8_source_archive",
+        "@rules_rs//rs/platforms/config:x86_64-apple-darwin": ":rusty_v8_source_archive",
+    }),
+)
+
+alias(
+    name = "rusty_v8_source_binding_for_target",
+    # The crate's release bindings describe the same V8 API/layout. Like Codex,
+    # musl uses the matching CPU's GNU binding; it contains no libc declarations.
+    actual = select({
+        "@rules_rs//rs/platforms/config:aarch64-unknown-linux-gnu": "@v8_crate_150_4_0//:src_binding_release_aarch64_unknown_linux_gnu",
+        ":platform_aarch64_unknown_linux_musl": "@v8_crate_150_4_0//:src_binding_release_aarch64_unknown_linux_gnu",
+        "@rules_rs//rs/platforms/config:x86_64-unknown-linux-gnu": "@v8_crate_150_4_0//:src_binding_release_x86_64_unknown_linux_gnu",
+        ":platform_x86_64_unknown_linux_musl": "@v8_crate_150_4_0//:src_binding_release_x86_64_unknown_linux_gnu",
+        "@rules_rs//rs/platforms/config:aarch64-apple-darwin": "@v8_crate_150_4_0//:src_binding_release_aarch64_apple_darwin",
+        "@rules_rs//rs/platforms/config:x86_64-apple-darwin": "@v8_crate_150_4_0//:src_binding_release_x86_64_apple_darwin",
+    }),
+)
+
+filegroup(
+    name = "rusty_v8_source_pair",
+    srcs = [
+        ":rusty_v8_source_archive_for_target",
+        ":rusty_v8_source_binding_for_target",
+    ],
+)
+
+# Publish the original Chromium runtime archive. Linux exception-symbol and
+# compiler-rt adjustments belong to the Bazel consumer, not the release asset.
+filegroup(
+    name = "rusty_v8_source_release_pair",
+    srcs = [
+        ":rusty_v8_source_archive",
+        ":rusty_v8_source_binding_for_target",
+    ],
+)

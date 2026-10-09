@@ -1,0 +1,21 @@
+diff --git a/rust/private/rustc.bzl b/rust/private/rustc.bzl
+--- a/rust/private/rustc.bzl
++++ b/rust/private/rustc.bzl
+@@ -1426,6 +1426,17 @@
+                     if arg not in ("-rtlib=compiler-rt", "--rtlib=compiler-rt")
+                 ]
+ 
++            # rustc passes -nodefaultlibs and supplies the unwind runtime
++            # explicitly. Linux Clang therefore does not consume this driver
++            # selector. Filter it only at the Rust link boundary: C/C++ links
++            # and Cargo build-script linker discovery retain their policy.
++            if toolchain.target_os == "linux":
++                link_args = [
++                    arg
++                    for arg in link_args
++                    if arg != "--unwindlib=none"
++                ]
++
+             # Split link args into individual "--codegen=link-arg=" flags to handle nested spaces.
+             # Additional context: https://github.com/rust-lang/rust/pull/36574
+             rustc_flags.add_all(link_args, format_each = "--codegen=link-arg=%s")

@@ -44,7 +44,7 @@ import { ViewDescriptorService } from '../../../src/ash/workbench/services/views
 import { ViewsService } from '../../../src/ash/workbench/services/views/browser/viewsService.js';
 import { PaneCompositePartService } from '../../../src/ash/workbench/browser/parts/paneCompositePartService.js';
 import { IPaneCompositePartService } from '../../../src/ash/workbench/services/panecomposite/browser/panecomposite.js';
-import { SidebarPart } from '../../../src/ash/workbench/browser/parts/sidebar/SidebarPart.js';
+import { SidebarPart } from '../../../src/ash/workbench/browser/parts/sidebar/sidebarPart.js';
 import { ILocalizationService } from '../../../src/ash/workbench/services/localization/common/localizationService.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { WorkbenchLayout } from '../../../src/ash/workbench/browser/layout.js';
