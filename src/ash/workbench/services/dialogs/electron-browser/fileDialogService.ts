@@ -1,4 +1,6 @@
 import { URI } from '../../../../base/common/uri.js';
+import type { OpenDialogOptions } from '../../../../base/parts/sandbox/common/electronTypes.js';
+import { localize } from '../../../../nls.js';
 import {
 	IDialogService,
 	type IFileDialogService,
@@ -23,17 +25,17 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 		this.validateFileSystem(options.availableFileSystems, options.defaultUri);
 		// Untitled editors carry only a suggested name in a root-level URI.
 		// Pass that name to the system dialog without opening the filesystem root.
-		const path = await this.host.saveFile({
+		const result = await this.host.showSaveDialog({
 			...(options.defaultUri ? {
 				...(options.defaultUri.path !== '/' && options.defaultUri.path.lastIndexOf('/') === 0
-					? { defaultName: options.defaultUri.fsPath.split(/[\\/]/).at(-1) }
+					? { defaultPath: options.defaultUri.fsPath.split(/[\\/]/).at(-1) }
 					: { defaultPath: options.defaultUri.fsPath }),
 			} : {}),
-			...(options.title ? { title: options.title } : {}),
+			title: options.title ?? localize('dialog.saveFileTitle', 'Save File'),
 			...(options.saveLabel ? { buttonLabel: options.saveLabel } : {}),
-			...(options.filters ? { filters: options.filters } : {}),
+			...(options.filters ? { filters: options.filters.map(filter => ({ name: filter.name, extensions: [...filter.extensions] })) } : {}),
 		});
-		return path ? URI.file(path) : undefined;
+		return !result.canceled && result.filePath ? URI.file(result.filePath) : undefined;
 	}
 
 	async showOpenDialog(options: IOpenDialogOptions): Promise<readonly URI[] | undefined> {
@@ -41,16 +43,18 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 		if (options.canSelectFiles === false && options.canSelectFolders !== true) {
 			throw new TypeError('Open dialog must allow files or folders');
 		}
-		const paths = await this.host.pickFile({
-			canSelectFiles: options.canSelectFiles !== false,
-			canSelectFolders: options.canSelectFolders === true,
-			...(options.canSelectMany ? { canSelectMany: true } : {}),
+		const properties: NonNullable<OpenDialogOptions['properties']> = [];
+		if (options.canSelectFiles !== false) { properties.push('openFile'); }
+		if (options.canSelectFolders === true) { properties.push('openDirectory'); }
+		if (options.canSelectMany) { properties.push('multiSelections'); }
+		const result = await this.host.showOpenDialog({
+			properties,
 			...(options.defaultUri ? { defaultPath: options.defaultUri.fsPath } : {}),
-			...(options.title ? { title: options.title } : {}),
+			title: options.title ?? localize('dialog.openFileTitle', 'Open File'),
 			...(options.openLabel ? { buttonLabel: options.openLabel } : {}),
-			...(options.filters ? { filters: options.filters } : {}),
+			...(options.filters ? { filters: options.filters.map(filter => ({ name: filter.name, extensions: [...filter.extensions] })) } : {}),
 		});
-		return paths?.map(path => URI.file(path));
+		return !result.canceled && result.filePaths.length > 0 ? result.filePaths.map(path => URI.file(path)) : undefined;
 	}
 
 	private validateFileSystem(availableFileSystems: readonly string[] | undefined, defaultUri: URI | undefined): void {

@@ -913,12 +913,7 @@ export class Workbench extends Disposable {
 		this._register(setHoverDelegate(hoverService));
 		void configuration.reloadConfiguration().catch((error: unknown) => console.error("Failed to initialize configuration", error));
 		const accessibilityService = this._register(nativeHostApi
-			? new NativeAccessibilityService({
-				root: workbenchRoot,
-				contextKeyService: contextKeys,
-				configurationService: configuration,
-				nativeHostApi,
-			})
+			? services.createInstance(NativeAccessibilityService, workbenchRoot)
 			: new AccessibilityService({
 				root: workbenchRoot,
 				contextKeyService: contextKeys,

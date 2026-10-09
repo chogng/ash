@@ -155,6 +155,8 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 			return lifecycleService;
 		},
 		nativeHostApi: api.nativeHost,
+		keyboardLayoutProvider: api.keyboardLayout,
+		userKeyboardLayoutApi: api.userKeyboardLayout,
 		returnToWorkbench: () => { void invoke<void>(RETURN_TO_WORKBENCH_CHANNEL).catch(onUnexpectedError); },
 		configurationApi: api.configuration,
 		initialConfigurationSnapshot,

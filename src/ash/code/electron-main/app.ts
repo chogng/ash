@@ -50,10 +50,10 @@ import { NativeKeyboardLayoutMainService, keyboardLayoutChannel } from "../../pl
 import { UserKeyboardLayoutMainService, userKeyboardLayoutChannel } from "../../platform/keyboardLayout/electron-main/userKeyboardLayoutMainService.js";
 import { NativeMenubarMainService, nativeMenubarIpcRoutes } from "../../platform/menubar/electron-main/menubarMainService.js";
 import { clearElectronApplicationMenu, createElectronMenubarHost } from "../../platform/menubar/electron-main/menubar.js";
-import { colorSchemeChannel, fileDialogIpcRoutes, nativeHostIpcRoutes, windowAppearanceIpcRoutes, type INativeHostMainService } from "../../platform/native/electron-main/nativeHostIpc.js";
+import { colorSchemeChannel, nativeHostIpcRoutes, type INativeHostMainService } from "../../platform/native/electron-main/nativeHostIpc.js";
 import { UpdateMainService } from '../../platform/update/electron-main/updateMainService.js';
 import { UpdateChannel } from '../../platform/update/common/updateIpc.js';
-import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, NATIVE_HOST_OPEN_WINDOW_CHANNEL, NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL, NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL, validateOpenAgentsWindow, validateSystemWideKeybindings, type INativeSystemWideKeybinding, type IOpenAgentsWindowOptions } from "../../platform/native/common/nativeHost.js";
+import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, validateOpenAgentsWindow, type INativeSystemWideKeybinding, type IOpenAgentsWindowOptions } from "../../platform/native/common/nativeHost.js";
 import { DialogMainService } from '../../platform/dialogs/electron-main/dialogMainService.js';
 import type { DialogRequest } from '../../platform/dialogs/common/dialogs.js';
 import { RETURN_TO_WORKBENCH_CHANNEL, validateReturnToWorkbench } from '../../sessions/common/windowNavigation.js';
@@ -72,7 +72,7 @@ import { extUriBiasedIgnorePathCase } from '../../base/common/resources.js';
 import { DiskFileSystemProvider } from "../../platform/files/node/diskFileSystemProvider.js";
 import { LOCAL_FILE_SYSTEM_CHANNEL_NAME } from "../../platform/files/common/diskFileSystemProviderClient.js";
 import { IWindowsMainService, WindowControlsOverlay, type IOpenConfiguration } from "../../platform/windows/electron-main/windows.js";
-import { RESTORE_WINDOWS_SETTING, TitleBarSetting, parseTitleBarStyle, validateOpenEmptyWindowOptions, type IOpenEmptyWindowOptions, type TitleBarStyleConfiguration } from "../../platform/window/common/window.js";
+import { RESTORE_WINDOWS_SETTING, TitleBarSetting, parseTitleBarStyle, type TitleBarStyleConfiguration } from "../../platform/window/common/window.js";
 import { WindowsStateHandler, WindowSessionStateHandler, type IWindowSessionEntry, type IWindowSessionWindow } from "../../platform/windows/electron-main/windowsStateHandler.js";
 import { WindowsMainService, windowOperationIpcRoute, workspaceContextIpcRoutes, workspaceRecoveryIpcRoute } from "../../platform/windows/electron-main/windowsMainService.js";
 import { LifecycleMainService, windowCloseResponseIpcRoute } from '../../platform/lifecycle/electron-main/lifecycleMainService.js';
@@ -1259,7 +1259,7 @@ export class AshApplication extends Disposable {
 			windowCloseResponseIpcRoute(this.lifecycleMainService, window),
 			this.windowsMainService.fileOpenResponseIpcRoute(window),
 			...nativeHostIpcRoutes({
-				isAdmin,
+				...this.windowHostOperations(window, windowControlsOverlay),
 				openWindow: async options => {
 					const workspace = { ...createEmptyWorkspaceIdentifier(), ...(options.remoteAuthority ? { remoteAuthority: options.remoteAuthority } : {}) };
 					if (!options.forceReuseWindow) {
@@ -1269,30 +1269,8 @@ export class AshApplication extends Disposable {
 					if (options.remoteAuthority !== getWorkspaceRemoteAuthority(workspaceContext.getWorkspace())) throw new Error('Reusing a window must preserve its Remote authority');
 					await replaceWorkspace(workspace, true);
 				},
-				performDialogOperation: operation => this.dialogs.perform(window, operation),
-				performShellCommand: operation => performShellCommand(operation, { isPackaged: app.isPackaged, executablePath: process.execPath }),
-				pickFolder: async () => {
-					const result = await this.dialogs.showOpenDialog({
-						title: "Add Directory",
-						properties: ["openDirectory"],
-					}, window);
-					return result.canceled || !result.filePaths[0] ? undefined : result.filePaths[0];
-				},
-				...this.windowFileDialogs(window),
 				openWorkspace: (root) => transitionToFolder(root, true),
 				openAgentsWindow: options => this.openSessionsWindow(record.workspaceContext.getWorkspace(), record.workspaceContext.getResolvedWorkspace(), options),
-				revealFile: path => {
-					if (!isAbsolute(path)) throw new TypeError('File path to reveal must be absolute');
-					shell.showItemInFolder(path);
-				},
-				isAccessibilitySupportEnabled: () => app.isAccessibilitySupportEnabled(),
-				setWindowTheme: theme => {
-					windowControlsOverlay.setTheme(theme);
-					window.setBackgroundColor(theme.backgroundColor);
-					void this.themeMainService.saveWindowTheme(theme).catch(error => console.error('Failed to save window theme', error));
-				},
-				setWindowDimmed: dimmed => windowControlsOverlay.setDimmed(dimmed),
-				toggleDeveloperTools: () => window.webContents.toggleDevTools(),
 				syncSystemWideKeybindings: bindings => this.globalKeybindings.updateKeybindings(
 					record.id,
 					bindings.filter(binding => binding.commandId === OPEN_AGENTS_WINDOW_COMMAND_ID),
@@ -1336,31 +1314,29 @@ export class AshApplication extends Disposable {
 			});
 	}
 
-	private windowFileDialogs(window: BrowserWindow): Pick<INativeHostMainService, 'pickFile' | 'saveFile'> {
+	private windowHostOperations(window: BrowserWindow, controls: WindowControlsOverlay): Omit<INativeHostMainService, 'openWorkspace' | 'openWindow' | 'openAgentsWindow' | 'syncSystemWideKeybindings'> {
 		return {
-			pickFile: async (options) => {
-				const result = await this.dialogs.showOpenDialog({
-					title: options.title ?? 'Open File',
-					...(options.defaultPath ? { defaultPath: options.defaultPath } : {}),
-					...(options.buttonLabel ? { buttonLabel: options.buttonLabel } : {}),
-					...(options.filters ? { filters: options.filters.map(filter => ({ name: filter.name, extensions: [...filter.extensions] })) } : {}),
-					properties: [
-						...(options.canSelectFiles ? ['openFile' as const] : []),
-						...(options.canSelectFolders ? ['openDirectory' as const] : []),
-						...(options.canSelectMany ? ['multiSelections' as const] : []),
-					],
-				}, window);
-				return result.canceled || result.filePaths.length === 0 ? undefined : result.filePaths;
+			isAdmin,
+			performDialogOperation: operation => this.dialogs.perform(window, operation),
+			performShellCommand: operation => performShellCommand(operation, { isPackaged: app.isPackaged, executablePath: process.execPath }),
+			pickFolder: async () => {
+				const result = await this.dialogs.showOpenDialog({ title: 'Add Directory', properties: ['openDirectory'] }, window);
+				return result.canceled ? undefined : result.filePaths[0];
 			},
-			saveFile: async (options) => {
-				const result = await this.dialogs.showSaveDialog({
-					title: options.title ?? "Save File",
-					...(options.defaultPath || options.defaultName ? { defaultPath: options.defaultPath ?? options.defaultName } : {}),
-					...(options.buttonLabel ? { buttonLabel: options.buttonLabel } : {}),
-					...(options.filters ? { filters: options.filters.map(filter => ({ name: filter.name, extensions: [...filter.extensions] })) } : {}),
-				}, window);
-				return result.canceled || !result.filePath ? undefined : result.filePath;
+			showOpenDialog: options => this.dialogs.showOpenDialog(options, window),
+			showSaveDialog: options => this.dialogs.showSaveDialog(options, window),
+			revealFile: path => {
+				if (!isAbsolute(path)) { throw new TypeError('File path to reveal must be absolute'); }
+				shell.showItemInFolder(path);
 			},
+			isAccessibilitySupportEnabled: () => app.isAccessibilitySupportEnabled(),
+			setWindowTheme: theme => {
+				controls.setTheme(theme);
+				window.setBackgroundColor(theme.backgroundColor);
+				void this.themeMainService.saveWindowTheme(theme).catch(error => console.error('Failed to save window theme', error));
+			},
+			setWindowDimmed: dimmed => controls.setDimmed(dimmed),
+			toggleDeveloperTools: () => window.webContents.toggleDevTools(),
 		};
 	}
 
@@ -1518,36 +1494,18 @@ export class AshApplication extends Disposable {
 						hooksConfigurationIpcRoute(this.profileRoot, () => !getWorkspaceRemoteAuthority(session.workspaceContext.getWorkspace()), openHooksTextFile),
 						...browserViewIpcRoutes(browserServices.get(IBrowserViewMainService)),
 						...remoteWindowContext.ipcRoutes,
-						...fileDialogIpcRoutes(this.windowFileDialogs(window)),
-						...windowAppearanceIpcRoutes({
-							setWindowTheme: theme => {
-								windowControlsOverlay.setTheme(theme);
-								window.setBackgroundColor(theme.backgroundColor);
-								void this.themeMainService.saveWindowTheme(theme).catch(error => console.error('Failed to save window theme', error));
-							},
-							setWindowDimmed: dimmed => windowControlsOverlay.setDimmed(dimmed),
-						}),
 						windowOperationIpcRoute(this.windowsMainService, window),
-						{
-							channel: NATIVE_HOST_OPEN_WINDOW_CHANNEL,
-							validate: validateOpenEmptyWindowOptions,
-							invoke: async (value: unknown) => {
-								const options = value as IOpenEmptyWindowOptions;
+						...nativeHostIpcRoutes({
+							...this.windowHostOperations(window, windowControlsOverlay),
+							openWindow: async options => {
 								const workspace = { ...createEmptyWorkspaceIdentifier(), ...(options.remoteAuthority ? { remoteAuthority: options.remoteAuthority } : {}) };
 								// An empty Workbench requires its own window kind even when the requesting Agents window asks for reuse.
 								await this.openWorkspace(workspace, workspaces);
 							},
-						},
-						{
-							channel: NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL,
-							validate: validateOpenAgentsWindow,
-							invoke: (options: unknown) => this.openSessionsWindow(session.workspaceContext.getWorkspace(), session.workspaceContext.getResolvedWorkspace(), options as IOpenAgentsWindowOptions | undefined),
-						},
-						{
-							channel: NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL,
-							validate: validateSystemWideKeybindings,
-							invoke: (bindings: unknown) => this.globalKeybindings.updateKeybindings(window.id, (bindings as readonly INativeSystemWideKeybinding[]).filter(binding => binding.commandId === OPEN_AGENTS_WINDOW_COMMAND_ID)),
-						},
+							openWorkspace: async root => { await this.openWorkspace(await workspaces.resolveFolder(root), workspaces); },
+							openAgentsWindow: options => this.openSessionsWindow(session.workspaceContext.getWorkspace(), session.workspaceContext.getResolvedWorkspace(), options),
+							syncSystemWideKeybindings: bindings => this.globalKeybindings.updateKeybindings(window.id, bindings.filter(binding => binding.commandId === OPEN_AGENTS_WINDOW_COMMAND_ID)),
+						}),
 						...workspaceContextIpcRoutes(session.workspaceContext),
 						{
 							channel: AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL,

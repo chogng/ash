@@ -2,7 +2,7 @@ import type { IColorScheme } from '../../window/common/window.js';
 import { validateJsonValue, type JsonValue } from '../../../base/common/jsonValue.js';
 import type { SessionMode } from '../../sessions/common/sessionApi.js';
 import type { DisposableHandle } from "../../ipc/common/ipc.js";
-import type { DialogRequest, FileFilter, IDialogOutcome } from '../../dialogs/common/dialogs.js';
+import type { FileFilter, MessageBoxOptions, MessageBoxReturnValue, OpenDialogOptions, OpenDialogReturnValue, SaveDialogOptions, SaveDialogReturnValue } from '../../../base/parts/sandbox/common/electronTypes.js';
 import type { IWorkbenchWindowInfo, IOpenEmptyWindowOptions } from '../../window/common/window.js';
 
 export const NATIVE_HOST_IS_ADMIN_CHANNEL = 'ash:native-host:is-admin';
@@ -42,35 +42,25 @@ export function validateColorScheme(value: unknown): IColorScheme {
 }
 
 export type NativeDialogOperation =
-	| { readonly kind: 'show'; readonly id: number; readonly request: DialogRequest; }
+	| { readonly kind: 'show'; readonly id: number; readonly options: Omit<MessageBoxOptions, 'signal'>; }
 	| { readonly kind: 'cancel'; readonly id: number; };
 
 export function validateNativeDialogOperation(value: unknown): NativeDialogOperation {
-	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Invalid dialog operation');
-	const operation = value as Record<string, unknown>;
+	const operation = dialogFields(value, ['kind', 'id', 'options'], 'dialog operation');
 	if (!Number.isSafeInteger(operation.id) || (operation.id as number) <= 0) throw new TypeError('Invalid dialog ID');
 	if (operation.kind === 'cancel' && Object.keys(operation).sort().join(',') === 'id,kind') return operation as NativeDialogOperation;
-	if (operation.kind !== 'show' || Object.keys(operation).sort().join(',') !== 'id,kind,request') throw new TypeError('Invalid dialog operation');
-	const request = operation.request;
-	if (!request || typeof request !== 'object' || Array.isArray(request)) throw new TypeError('Invalid dialog request');
-	const fields = request as Record<string, unknown>;
-	const allowed = new Set(['kind', 'title', 'message', 'detail', 'severity', 'primaryButton', 'secondaryButton', 'cancelButton', 'checkbox', 'buttons']);
-	if (Object.keys(fields).some(key => !allowed.has(key)) || typeof fields.message !== 'string') throw new TypeError('Invalid dialog request');
-	for (const key of ['title', 'detail', 'primaryButton', 'secondaryButton', 'cancelButton']) {
-		if (fields[key] !== undefined && typeof fields[key] !== 'string') throw new TypeError('Invalid dialog request');
+	if (operation.kind !== 'show' || Object.keys(operation).sort().join(',') !== 'id,kind,options') throw new TypeError('Invalid dialog operation');
+	const options = dialogFields(operation.options, ['message', 'type', 'buttons', 'defaultId', 'title', 'detail', 'checkboxLabel', 'checkboxChecked', 'textWidth', 'cancelId', 'noLink', 'normalizeAccessKeys'], 'message box options');
+	if (typeof options.message !== 'string' || options.type !== undefined && !['none', 'info', 'error', 'question', 'warning'].includes(options.type as string)) throw new TypeError('Invalid message box options');
+	validateDialogStrings(options, ['title', 'detail', 'checkboxLabel']);
+	validateDialogBooleans(options, ['checkboxChecked', 'noLink', 'normalizeAccessKeys']);
+	if (options.buttons !== undefined && (!Array.isArray(options.buttons) || options.buttons.length > 100 || !options.buttons.every(button => typeof button === 'string'))) throw new TypeError('Invalid message box buttons');
+	const buttons = Array.isArray(options.buttons) && options.buttons.length ? options.buttons.length : 1;
+	for (const key of ['defaultId', 'cancelId']) {
+		if (options[key] !== undefined && (!Number.isInteger(options[key]) || (options[key] as number) < (key === 'cancelId' ? -1 : 0) || (options[key] as number) >= buttons)) throw new TypeError('Invalid message box button index');
 	}
-	if (fields.checkbox !== undefined) {
-		const checkbox = fields.checkbox;
-		if (!checkbox || typeof checkbox !== 'object' || Array.isArray(checkbox)) throw new TypeError('Invalid dialog checkbox');
-		const properties = checkbox as Record<string, unknown>;
-		if (Object.keys(properties).some(key => key !== 'label' && key !== 'checked') || typeof properties.label !== 'string' || properties.checked !== undefined && typeof properties.checked !== 'boolean') throw new TypeError('Invalid dialog checkbox');
-	}
-	if (fields.kind === 'message' && fields.buttons === undefined && ['info', 'warning', 'error'].includes(fields.severity as string) && fields.secondaryButton === undefined && fields.cancelButton === undefined) return operation as NativeDialogOperation;
-	if (fields.kind === 'confirmation' && fields.buttons === undefined && fields.severity === undefined && fields.secondaryButton === undefined) return operation as NativeDialogOperation;
-	if (fields.kind === 'prompt' && fields.buttons === undefined && fields.severity === undefined && typeof fields.primaryButton === 'string' && typeof fields.secondaryButton === 'string') return operation as NativeDialogOperation;
-	if (fields.kind === 'choice' && (fields.severity === undefined || ['info', 'warning', 'error'].includes(fields.severity as string)) && fields.primaryButton === undefined && fields.secondaryButton === undefined
-		&& typeof fields.cancelButton === 'string' && Array.isArray(fields.buttons) && fields.buttons.length > 0 && fields.buttons.every(button => typeof button === 'string')) return operation as NativeDialogOperation;
-	throw new TypeError('Invalid dialog request');
+	if (options.textWidth !== undefined && (typeof options.textWidth !== 'number' || !Number.isFinite(options.textWidth) || options.textWidth < 0)) throw new TypeError('Invalid message box text width');
+	return operation as NativeDialogOperation;
 }
 
 export type ShellCommandOperation = 'install' | 'uninstall';
@@ -124,25 +114,6 @@ export interface INativeWindowTheme {
 	readonly backdropColor: string;
 }
 
-/** Native save-dialog defaults supplied by a renderer Workbench. */
-export interface INativeSaveFileOptions {
-	readonly defaultName?: string;
-	readonly defaultPath?: string;
-	readonly title?: string;
-	readonly buttonLabel?: string;
-	readonly filters?: readonly FileFilter[];
-}
-
-export interface INativeOpenDialogOptions {
-	readonly title?: string;
-	readonly defaultPath?: string;
-	readonly buttonLabel?: string;
-	readonly canSelectFiles: boolean;
-	readonly canSelectFolders: boolean;
-	readonly canSelectMany?: boolean;
-	readonly filters?: readonly FileFilter[];
-}
-
 export interface IOpenAgentsWindowOptions {
 	readonly conversation?: { readonly sessionId: string; readonly threadId: string; };
 	readonly draft?: {
@@ -158,7 +129,7 @@ export interface INativeHostApi {
 	isAdmin(): Promise<boolean>;
 	getOSColorScheme(): Promise<IColorScheme>;
 	onDidChangeColorScheme(listener: (scheme: IColorScheme) => void): DisposableHandle;
-	showNativeDialog(request: DialogRequest, signal: AbortSignal): Promise<IDialogOutcome>;
+	showMessageBox(options: MessageBoxOptions): Promise<MessageBoxReturnValue>;
 	installShellCommand(): Promise<string>;
 	uninstallShellCommand(): Promise<string>;
 	listWindows(): Promise<readonly IWorkbenchWindowInfo[]>;
@@ -174,7 +145,7 @@ export interface INativeHostApi {
 	performNativeTabAction(action: 'next' | 'previous' | 'newWindow' | 'merge' | 'toggleBar'): Promise<void>;
 	openNewWindowTab(): Promise<void>;
 	pickFolder(): Promise<string | undefined>;
-	pickFile(options: INativeOpenDialogOptions): Promise<readonly string[] | undefined>;
+	showOpenDialog(options: OpenDialogOptions): Promise<OpenDialogReturnValue>;
 	openWorkspace(root: string): Promise<void>;
 	openWindow(options: IOpenEmptyWindowOptions): Promise<void>;
 	openAgentsWindow(options?: IOpenAgentsWindowOptions): Promise<void>;
@@ -185,7 +156,7 @@ export interface INativeHostApi {
 	setWindowTheme(theme: INativeWindowTheme): Promise<void>;
 	setWindowDimmed(dimmed: boolean): Promise<void>;
 	toggleDeveloperTools(): Promise<void>;
-	saveFile(options?: INativeSaveFileOptions): Promise<string | undefined>;
+	showSaveDialog(options: SaveDialogOptions): Promise<SaveDialogReturnValue>;
 	isAccessibilitySupportEnabled(): Promise<boolean>;
 	onDidChangeAccessibilitySupport(listener: (enabled: boolean) => void): DisposableHandle;
 }
@@ -237,7 +208,7 @@ export function validatePickFolder(value: unknown): undefined {
 	return undefined;
 }
 
-function validateFileFilters(value: unknown): readonly FileFilter[] | undefined {
+function validateFileFilters(value: unknown): FileFilter[] | undefined {
 	if (value === undefined) return undefined;
 	if (!Array.isArray(value) || value.length > 100) throw new TypeError('Invalid file filters');
 	for (const filter of value) {
@@ -248,20 +219,57 @@ function validateFileFilters(value: unknown): readonly FileFilter[] | undefined 
 			throw new TypeError('Invalid file filter');
 		}
 	}
-	return value as readonly FileFilter[];
+	return value as FileFilter[];
 }
 
-export function validatePickFile(value: unknown): INativeOpenDialogOptions {
-	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Invalid open dialog options');
-	const fields = value as Record<string, unknown>;
-	const allowed = new Set(['title', 'defaultPath', 'buttonLabel', 'canSelectFiles', 'canSelectFolders', 'canSelectMany', 'filters']);
-	if (Object.keys(fields).some(key => !allowed.has(key)) || typeof fields.canSelectFiles !== 'boolean' || typeof fields.canSelectFolders !== 'boolean'
-		|| !fields.canSelectFiles && !fields.canSelectFolders || fields.canSelectMany !== undefined && typeof fields.canSelectMany !== 'boolean') throw new TypeError('Invalid open dialog options');
-	for (const key of ['title', 'defaultPath', 'buttonLabel']) {
-		if (fields[key] !== undefined && typeof fields[key] !== 'string') throw new TypeError('Invalid open dialog options');
+function dialogFields(value: unknown, allowed: readonly string[], name: string): Record<string, unknown> {
+	if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(key => !allowed.includes(key))) throw new TypeError(`Invalid ${name}`);
+	return value as Record<string, unknown>;
+}
+
+function validateDialogStrings(fields: Record<string, unknown>, keys: readonly string[]): void {
+	for (const key of keys) {
+		if (fields[key] !== undefined && typeof fields[key] !== 'string') throw new TypeError(`Invalid dialog ${key}`);
 	}
+}
+
+function validateDialogBooleans(fields: Record<string, unknown>, keys: readonly string[]): void {
+	for (const key of keys) {
+		if (fields[key] !== undefined && typeof fields[key] !== 'boolean') throw new TypeError(`Invalid dialog ${key}`);
+	}
+}
+
+function validateDialogProperties(value: unknown, allowed: readonly string[]): void {
+	if (value !== undefined && (!Array.isArray(value) || value.length > allowed.length || !value.every(property => typeof property === 'string' && allowed.includes(property)))) throw new TypeError('Invalid dialog properties');
+}
+
+export function validateOpenDialogOptions(value: unknown): OpenDialogOptions {
+	const fields = dialogFields(value, ['title', 'defaultPath', 'buttonLabel', 'filters', 'properties', 'message', 'securityScopedBookmarks'], 'open dialog options');
+	validateDialogStrings(fields, ['title', 'defaultPath', 'buttonLabel', 'message']);
+	validateDialogBooleans(fields, ['securityScopedBookmarks']);
 	validateFileFilters(fields.filters);
-	return value as INativeOpenDialogOptions;
+	validateDialogProperties(fields.properties, ['openFile', 'openDirectory', 'multiSelections', 'showHiddenFiles', 'createDirectory', 'promptToCreate', 'noResolveAliases', 'treatPackageAsDirectory', 'dontAddToRecent']);
+	return fields as OpenDialogOptions;
+}
+
+export function validateOpenDialogResult(value: unknown): OpenDialogReturnValue {
+	const fields = dialogFields(value, ['canceled', 'filePaths', 'bookmarks'], 'open dialog result');
+	if (typeof fields.canceled !== 'boolean' || !Array.isArray(fields.filePaths) || !fields.filePaths.every(path => typeof path === 'string')
+		|| fields.bookmarks !== undefined && (!Array.isArray(fields.bookmarks) || !fields.bookmarks.every(bookmark => typeof bookmark === 'string'))) throw new TypeError('Invalid open dialog result');
+	return fields as unknown as OpenDialogReturnValue;
+}
+
+export function validateSaveDialogResult(value: unknown): SaveDialogReturnValue {
+	const fields = dialogFields(value, ['canceled', 'filePath', 'bookmark'], 'save dialog result');
+	if (typeof fields.canceled !== 'boolean' || typeof fields.filePath !== 'string' || fields.bookmark !== undefined && typeof fields.bookmark !== 'string') throw new TypeError('Invalid save dialog result');
+	return fields as unknown as SaveDialogReturnValue;
+}
+
+export function validateMessageBoxResult(value: unknown): MessageBoxReturnValue {
+	const fields = dialogFields(value, ['response', 'checkboxChecked'], 'message box result');
+	// Electron can return -1 when cancellation is configured without a cancel button.
+	if (!Number.isSafeInteger(fields.response) || (fields.response as number) < -1 || typeof fields.checkboxChecked !== 'boolean') throw new TypeError('Invalid message box result');
+	return fields as unknown as MessageBoxReturnValue;
 }
 
 export function validateToggleDeveloperTools(value: unknown): undefined {
@@ -278,30 +286,13 @@ export function validateAccessibilitySupportRead(value: unknown): undefined {
 	return undefined;
 }
 
-export function validateSaveFileOptions(value: unknown): INativeSaveFileOptions {
-	if (value === undefined) return {};
-	if (typeof value !== "object" || value === null || Array.isArray(value)) {
-		throw new Error("save file options must be an object");
-	}
-	const candidate = value as Record<string, unknown>;
-	const keys = Object.keys(candidate).sort();
-	if (keys.some(key => !['defaultName', 'defaultPath', 'title', 'buttonLabel', 'filters'].includes(key))) {
-		throw new Error("save file options contain unknown fields");
-	}
-	if (candidate.defaultName !== undefined && (typeof candidate.defaultName !== "string" || candidate.defaultName.trim().length === 0)) {
-		throw new Error("save file default name must be a non-empty string");
-	}
-	for (const key of ['defaultPath', 'title', 'buttonLabel']) {
-		if (candidate[key] !== undefined && typeof candidate[key] !== 'string') throw new TypeError('Invalid save dialog options');
-	}
-	validateFileFilters(candidate.filters);
-	return {
-		...(candidate.defaultName === undefined ? {} : { defaultName: candidate.defaultName }),
-		...(candidate.defaultPath === undefined ? {} : { defaultPath: candidate.defaultPath as string }),
-		...(candidate.title === undefined ? {} : { title: candidate.title as string }),
-		...(candidate.buttonLabel === undefined ? {} : { buttonLabel: candidate.buttonLabel as string }),
-		...(candidate.filters === undefined ? {} : { filters: candidate.filters as readonly FileFilter[] }),
-	};
+export function validateSaveDialogOptions(value: unknown): SaveDialogOptions {
+	const fields = dialogFields(value, ['title', 'defaultPath', 'buttonLabel', 'filters', 'message', 'nameFieldLabel', 'showsTagField', 'properties', 'securityScopedBookmarks'], 'save dialog options');
+	validateDialogStrings(fields, ['title', 'defaultPath', 'buttonLabel', 'message', 'nameFieldLabel']);
+	validateDialogBooleans(fields, ['showsTagField', 'securityScopedBookmarks']);
+	validateFileFilters(fields.filters);
+	validateDialogProperties(fields.properties, ['showHiddenFiles', 'createDirectory', 'treatPackageAsDirectory', 'showOverwriteConfirmation', 'dontAddToRecent']);
+	return fields as SaveDialogOptions;
 }
 
 export function validateAccessibilitySupport(value: unknown): boolean {

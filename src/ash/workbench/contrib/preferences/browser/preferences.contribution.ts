@@ -8,6 +8,7 @@ import { KeybindingsEditor } from './keybindingsEditor.js';
 import { PreferencesContribution } from '../common/preferencesContribution.js';
 import '../common/settingsEditorColorRegistry.js';
 import './keyboardLayoutPicker.js';
+import './keyboardShortcutsTroubleshooting.contribution.js';
 import './preferencesActions.js';
 
 registerEditorPane({

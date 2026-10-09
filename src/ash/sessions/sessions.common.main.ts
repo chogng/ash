@@ -2,6 +2,7 @@
 import './common/theme.js';
 import '../workbench/contrib/commands/common/commands.contribution.js';
 import '../workbench/contrib/preferences/browser/preferencesActions.js';
+import '../workbench/contrib/preferences/browser/keyboardLayoutPicker.js';
 import '../workbench/contrib/chat/browser/chat.contribution.js';
 import '../workbench/services/dialogs/common/dialogService.js';
 import '../workbench/services/path/browser/pathService.js';

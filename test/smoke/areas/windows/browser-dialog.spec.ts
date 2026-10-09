@@ -1,28 +1,57 @@
 import { expect, test } from '../../../automation/test.js';
 import type { Page } from '@playwright/test';
+import type { ISandboxGlobals } from '../../../../src/ash/base/parts/sandbox/electron-browser/sandboxTypes.js';
+import { NATIVE_HOST_PICK_FILE_CHANNEL, NATIVE_HOST_SAVE_FILE_CHANNEL } from '../../../../src/ash/platform/native/common/nativeHost.js';
+import { nativeHostIpcRoutes, type INativeHostMainService } from '../../../../src/ash/platform/native/electron-main/nativeHostIpc.js';
+import { Workbench } from '../../../automation/workbench.js';
 
 test.use({ openWorkspace: false });
+
+test('desktop Workbench and Agents install the complete Host contract and target developer tools at their own window', async ({ target, application, workbench }) => {
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'disabled');
+	if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
+	const agentsPage = await workbench.openAgentsWindow('electron');
+	const routes = nativeHostIpcRoutes({} as INativeHostMainService).map(route => {
+		try { route.validate(null); }
+		catch (error) { return { channel: route.channel, validationError: (error as Error).message }; }
+		throw new Error(`Host route ${route.channel} unexpectedly accepts null`);
+	});
+	for (const page of [workbench.page, agentsPage]) {
+		const validation = await page.evaluate(async routes => {
+			const host = (globalThis as unknown as { ash: ISandboxGlobals; }).ash;
+			return Promise.all(routes.map(async ({ channel, validationError }) => {
+				try { await host.ipcRenderer.invoke(channel, null); return { channel, validated: false }; }
+				catch (error) { return { channel, validated: String(error).includes(validationError) }; }
+			}));
+		}, routes);
+		expect(validation, page.url()).toEqual(routes.map(({ channel }) => ({ channel, validated: true })));
+		const owner = await application.browserWindow(page);
+		const other = await application.browserWindow(page === workbench.page ? agentsPage : workbench.page);
+		try {
+			await page.bringToFront();
+			await new Workbench(page).quickaccess.runCommand('workbench.action.toggleDevTools');
+			await expect.poll(() => owner.evaluate(window => window.webContents.isDevToolsOpened())).toBe(true);
+			expect(await other.evaluate(window => window.webContents.isDevToolsOpened())).toBe(false);
+		} finally {
+			await owner.evaluate(window => window.webContents.closeDevTools());
+		}
+	}
+});
 
 test('browser keeps its save confirmation in the workbench', async ({ target, workbench }) => {
 	test.skip(target.kind !== 'browser', 'This scenario requires the Code browser');
 	const page = workbench.page;
-	await page.keyboard.press('F1');
-	await page.locator('.ash-quick-pick').getByRole('combobox').fill('New Untitled Text Editor');
-	await page.keyboard.press('Enter');
+	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
 	const input = workbench.editors.groupAt(0).content.locator('.stanza-editor-input');
 	await expect(input).toBeVisible();
 	await input.focus();
 	await input.type('unsaved draft');
-	await page.keyboard.press('F1');
-	await page.locator('.ash-quick-pick').getByRole('combobox').fill('Close Editor');
-	await page.keyboard.press('Enter');
+	await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
 	const dialog = page.getByRole('dialog', { name: 'Save Changes' });
 	await expect(dialog).toBeVisible();
 	await dialog.getByRole('button', { name: "Don't Save" }).click();
 	await expect(dialog).toHaveCount(0);
-	await page.keyboard.press('F1');
-	await page.locator('.ash-quick-pick').getByRole('combobox').fill('Reopen Closed Editor');
-	await page.keyboard.press('Enter');
+	await workbench.quickaccess.runCommand('workbench.action.reopenClosedEditor');
 	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'Untitled-1' })).toHaveCount(0);
 });
 
@@ -36,6 +65,39 @@ test('desktop dirty editor sends its choices through the owning window dialog', 
 	const message = await workbench.dialogs.confirm(application, 'Save Changes', "Don't Save", () => workbench.quickaccess.runCommand('workbench.action.closeActiveEditor'));
 	expect(message.buttons).toEqual(['Save', "Don't Save", 'Cancel']);
 	await expect(input).toHaveCount(0);
+});
+
+test('desktop file dialog bridge preserves shared options and complete results in its owning window', async ({ target, application, workbench, testWorkspace }) => {
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'disabled');
+	if (!('windows' in application)) return;
+	const originals = await application.evaluateHandle(({ dialog }) => ({ open: dialog.showOpenDialog, save: dialog.showSaveDialog }));
+	try {
+		await application.evaluate(({ dialog }, path) => {
+			const calls: unknown[] = [];
+			(globalThis as unknown as { fileDialogCalls: unknown[]; }).fileDialogCalls = calls;
+			dialog.showOpenDialog = (async (window: Electron.BaseWindow, options: Electron.OpenDialogOptions) => {
+				calls.push({ windowId: (window as Electron.BrowserWindow).id, options });
+				return { canceled: false, filePaths: [path], bookmarks: ['opened-bookmark'] };
+			}) as typeof dialog.showOpenDialog;
+			dialog.showSaveDialog = (async (window: Electron.BaseWindow, options: Electron.SaveDialogOptions) => {
+				calls.push({ windowId: (window as Electron.BrowserWindow).id, options });
+				return { canceled: true, filePath: '', bookmark: 'cancelled-bookmark' };
+			}) as typeof dialog.showSaveDialog;
+		}, testWorkspace.file);
+		const open = { title: 'Import', filters: [{ name: 'TypeScript', extensions: ['ts'] }], properties: ['openFile', 'multiSelections', 'showHiddenFiles'], securityScopedBookmarks: true };
+		const save = { title: 'Export', defaultPath: testWorkspace.file, nameFieldLabel: 'Name', showsTagField: false, properties: ['showOverwriteConfirmation'], securityScopedBookmarks: true };
+		const result = await workbench.page.evaluate(async ({ openChannel, saveChannel, open, save }) => {
+			const host = (globalThis as unknown as { ash: ISandboxGlobals; }).ash;
+			return [await host.ipcRenderer.invoke(openChannel, open), await host.ipcRenderer.invoke(saveChannel, save)];
+		}, { openChannel: NATIVE_HOST_PICK_FILE_CHANNEL, saveChannel: NATIVE_HOST_SAVE_FILE_CHANNEL, open, save });
+		expect(result).toEqual([{ canceled: false, filePaths: [testWorkspace.file], bookmarks: ['opened-bookmark'] }, { canceled: true, filePath: '', bookmark: 'cancelled-bookmark' }]);
+		const owner = await application.browserWindow(workbench.page);
+		const windowId = await owner.evaluate(window => window.id);
+		expect(await application.evaluate(() => (globalThis as unknown as { fileDialogCalls: unknown[]; }).fileDialogCalls)).toEqual([{ windowId, options: open }, { windowId, options: save }]);
+	} finally {
+		await application.evaluate(({ dialog }, originals) => { dialog.showOpenDialog = originals.open; dialog.showSaveDialog = originals.save; }, originals);
+		await originals.dispose();
+	}
 });
 
 test('browser Save As writes an untitled editor to the selected folder', async ({ target, workbench }) => {
@@ -125,12 +187,9 @@ test('browser Open File selects multiple files from the current workspace', asyn
 		await secondWritable.close();
 		Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
 	});
-	await page.keyboard.press('F1');
-	await page.locator('.ash-quick-pick').getByRole('combobox').fill('Open Folder...');
-	await page.keyboard.press('Enter');
-	await page.keyboard.press('F1');
-	await page.locator('.ash-quick-pick').getByRole('combobox').fill('Open File...');
-	await page.keyboard.press('Enter');
+	await workbench.quickaccess.runCommand('workbench.action.files.openFolderViaWorkspace');
+	await expect(page.locator('.ash-explorer').getByRole('treeitem', { name: 'paper.md', exact: true })).toBeVisible();
+	await workbench.quickaccess.runCommand('workbench.action.files.openFile');
 	const picker = page.locator('.ash-quick-pick');
 	await expect(picker.locator('.ash-quick-pick-row-label', { hasText: 'paper.md' })).toBeVisible();
 	await picker.locator('.ash-quick-pick-row-label', { hasText: 'Select paper.md' }).click();

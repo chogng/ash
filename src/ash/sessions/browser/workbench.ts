@@ -90,6 +90,7 @@ import { ChatTipService, IChatTipService } from '../../workbench/contrib/chat/br
 import { migrateNewChatDraftState, writeNewChatDraftState } from '../contrib/chat/common/newChatDraftState.js';
 import { IAccessibilityService } from '../../platform/accessibility/common/accessibility.js';
 import { AccessibilityService } from '../../platform/accessibility/browser/accessibilityService.js';
+import { NativeAccessibilityService } from '../../workbench/services/accessibility/electron-browser/accessibilityService.js';
 import { ILogService } from '../../platform/log/common/log.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase, type WorkbenchContributionHost } from '../../workbench/common/contributions.js';
 import type { LogService } from '../../platform/log/common/logServiceImpl.js';
@@ -166,8 +167,8 @@ import { IContextMenuService, IContextViewService } from "../../platform/context
 import { BrowserContextViewService } from "../../platform/contextview/browser/contextViewService.js";
 import { HoverService, IHoverService } from "../../platform/hover/browser/hoverService.js";
 import { IKeybindingService } from "../../platform/keybinding/common/keybinding.js";
-import { IKeyboardLayoutService } from "../../platform/keyboardLayout/common/keyboardLayout.js";
-import { IUserKeyboardLayoutService, UnavailableUserKeyboardLayoutService } from "../../platform/keyboardLayout/common/userKeyboardLayout.js";
+import { IKeyboardLayoutService, type IKeyboardLayoutProvider } from "../../platform/keyboardLayout/common/keyboardLayout.js";
+import { IUserKeyboardLayoutService, UnavailableUserKeyboardLayoutService, type IUserKeyboardLayoutApi } from "../../platform/keyboardLayout/common/userKeyboardLayout.js";
 import { IQuickInputService } from "../../platform/quickinput/common/quickInput.js";
 import { IQuickAccessController } from "../../platform/quickinput/common/quickAccess.js";
 import { QuickAccessController } from "../../platform/quickinput/browser/quickAccess.js";
@@ -248,6 +249,8 @@ export interface IWorkbenchOptions {
 	readonly createStorageService: (options: BrowserStorageServiceOptions) => Promise<IStorageService & IDisposable>;
 	readonly createLogService: () => LogService;
 	readonly nativeHostApi?: INativeHostApi;
+	readonly keyboardLayoutProvider?: IKeyboardLayoutProvider;
+	readonly userKeyboardLayoutApi?: IUserKeyboardLayoutApi;
 	readonly returnToWorkbench: () => void;
 	readonly configurationApi?: IConfigurationApi;
 	readonly initialConfigurationSnapshot?: IConfigurationSnapshot;
@@ -438,7 +441,8 @@ export abstract class Workbench extends Disposable {
 			openerService.setDefaultExternalOpener({ openExternal: options.nativeHostApi.openExternal.bind(options.nativeHostApi) });
 		}
 		services.registerInstance(IOpenerService, openerService);
-		services.registerInstance(IUserKeyboardLayoutService, UnavailableUserKeyboardLayoutService);
+		const userKeyboardLayoutService = options.userKeyboardLayoutApi ?? UnavailableUserKeyboardLayoutService;
+		services.registerInstance(IUserKeyboardLayoutService, userKeyboardLayoutService);
 		this._register(CommandsRegistry.register(RETURN_TO_WORKBENCH_COMMAND_ID, () => options.returnToWorkbench()));
 		const contextKeys = this._register(new ContextKeyService());
 		AppServerAvailableContext.bindTo(contextKeys).set(options.api.hasAppServer);
@@ -447,7 +451,9 @@ export abstract class Workbench extends Disposable {
 		workspaceFolderCount.set(workspace.getWorkspace().folders.length);
 		this._register(workspace.onDidChangeWorkspace(() => workspaceFolderCount.set(workspace.getWorkspace().folders.length)));
 		services.registerInstance(IContextKeyService, contextKeys);
-		services.registerInstance(IAccessibilityService, this._register(new AccessibilityService({
+		services.registerInstance(IAccessibilityService, this._register(options.nativeHostApi
+			? services.createInstance(NativeAccessibilityService, this.domNode)
+			: new AccessibilityService({
 			root: this.domNode,
 			contextKeyService: contextKeys,
 			configurationService,
@@ -457,7 +463,8 @@ export abstract class Workbench extends Disposable {
 		const keyboardLayoutService = this._register(new BrowserKeyboardLayoutService({
 			navigator: ownerWindow.navigator,
 			configurationService,
-			userLayoutProvider: UnavailableUserKeyboardLayoutService,
+			layoutProvider: options.keyboardLayoutProvider,
+			userLayoutProvider: userKeyboardLayoutService,
 		}));
 		services.registerInstance(IKeyboardLayoutService, keyboardLayoutService);
 		const keybindings = this._register(services.createInstance(WorkbenchKeybindingService, {

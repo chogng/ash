@@ -16,11 +16,11 @@ test('desktop dialog and shell routes reject malformed requests', async () => {
 		isAdmin: async () => false,
 		performDialogOperation: operation => { operations.push(operation); },
 		performShellCommand: async operation => operation,
-		pickFolder: async () => undefined, pickFile: async () => undefined, openWorkspace: async () => { },
+		pickFolder: async () => undefined, showOpenDialog: async () => ({ canceled: true, filePaths: [] }), openWorkspace: async () => { },
 		openWindow: async options => { operations.push(options); },
 		openAgentsWindow: async options => { operations.push(options ?? 'openAgentsWindow'); },
 		revealFile: () => { },
-		saveFile: async () => undefined,
+		showSaveDialog: async () => ({ canceled: true, filePath: '' }),
 		isAccessibilitySupportEnabled: () => false,
 		setWindowTheme: () => { }, setWindowDimmed: () => { }, toggleDeveloperTools: () => { },
 		syncSystemWideKeybindings: () => ({ failed: [] }),
@@ -29,13 +29,13 @@ test('desktop dialog and shell routes reject malformed requests', async () => {
 	const shell = routes.find(route => route.channel === NATIVE_HOST_SHELL_COMMAND_CHANNEL);
 	assert.ok(dialog);
 	assert.ok(shell);
-	assert.throws(() => dialog.validate({ kind: 'show', id: 0, request: { kind: 'message', severity: 'info', message: 'Hello' } }), /Invalid dialog ID/);
-	assert.throws(() => dialog.validate({ kind: 'show', id: 1, request: { kind: 'message', severity: 'info', message: 'Hello', execute: 'bad' } }), /Invalid dialog request/);
-	assert.deepEqual(dialog.validate({ kind: 'show', id: 2, request: { kind: 'choice', severity: 'warning', message: 'Choose', buttons: ['First', 'Second'], cancelButton: 'Cancel' } }),
-		{ kind: 'show', id: 2, request: { kind: 'choice', severity: 'warning', message: 'Choose', buttons: ['First', 'Second'], cancelButton: 'Cancel' } });
-	assert.throws(() => dialog.validate({ kind: 'show', id: 3, request: { kind: 'choice', message: 'Choose', buttons: [0] } }), /Invalid dialog request/);
-	assert.throws(() => dialog.validate({ kind: 'show', id: 4, request: { kind: 'choice', severity: 'critical', message: 'Choose', buttons: ['First'], cancelButton: 'Cancel' } }), /Invalid dialog request/);
-	await dialog.invoke(dialog.validate({ kind: 'show', id: 1, request: { kind: 'message', severity: 'info', message: 'Hello' } }));
+	assert.throws(() => dialog.validate({ kind: 'show', id: 0, options: { type: 'info', message: 'Hello' } }), /Invalid dialog ID/);
+	assert.throws(() => dialog.validate({ kind: 'show', id: 1, options: { type: 'info', message: 'Hello', execute: 'bad' } }), /Invalid message box options/);
+	assert.deepEqual(dialog.validate({ kind: 'show', id: 2, options: { type: 'warning', message: 'Choose', buttons: ['First', 'Second', 'Cancel'], cancelId: 2 } }),
+		{ kind: 'show', id: 2, options: { type: 'warning', message: 'Choose', buttons: ['First', 'Second', 'Cancel'], cancelId: 2 } });
+	assert.throws(() => dialog.validate({ kind: 'show', id: 3, options: { message: 'Choose', buttons: [0] } }), /Invalid message box buttons/);
+	assert.throws(() => dialog.validate({ kind: 'show', id: 4, options: { type: 'critical', message: 'Choose', buttons: ['First', 'Cancel'] } }), /Invalid message box options/);
+	await dialog.invoke(dialog.validate({ kind: 'show', id: 1, options: { type: 'info', message: 'Hello' } }));
 	assert.equal(operations.length, 1);
 	assert.throws(() => shell.validate('erase'), /Invalid shell command operation/);
 	assert.equal(await shell.invoke(shell.validate('install')), 'install');
@@ -69,7 +69,7 @@ test('desktop window commands reach the window host', async () => {
 		isAdmin: async () => false,
 		onDidRequestOpenExternalUri: () => ({ dispose() { } }),
 		openExternal: async () => { throw new Error('unused'); },
-		showNativeDialog: async () => { throw new Error('unused'); },
+		showMessageBox: async () => { throw new Error('unused'); },
 		installShellCommand: async () => '',
 		uninstallShellCommand: async () => '',
 		listWindows: async () => [],
@@ -85,7 +85,7 @@ test('desktop window commands reach the window host', async () => {
 		performNativeTabAction: async action => { calls.push(`tab:${action}`); },
 		openNewWindowTab: async () => { calls.push('newTab'); },
 		pickFolder: async () => undefined,
-		pickFile: async () => undefined,
+		showOpenDialog: async () => ({ canceled: true, filePaths: [] }),
 		openWorkspace: async () => { },
 		openWindow: async () => { },
 		openAgentsWindow: async () => { calls.push('openAgentsWindow'); },
@@ -94,7 +94,7 @@ test('desktop window commands reach the window host', async () => {
 		setWindowTheme: async () => { },
 		setWindowDimmed: async () => { },
 		toggleDeveloperTools: async () => { },
-		saveFile: async () => undefined,
+		showSaveDialog: async () => ({ canceled: true, filePath: '' }),
 		getOSColorScheme: async () => ({ dark: false, highContrast: false }),
 		onDidChangeColorScheme: () => ({ dispose() { } }),
 		isAccessibilitySupportEnabled: async () => false,

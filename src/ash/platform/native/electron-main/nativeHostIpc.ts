@@ -1,3 +1,4 @@
+import type { OpenDialogOptions, OpenDialogReturnValue, SaveDialogOptions, SaveDialogReturnValue } from '../../../base/parts/sandbox/common/electronTypes.js';
 import type { Event } from '../../../base/common/event.js';
 import type { IServerChannel } from '../../../base/parts/ipc/common/ipc.js';
 import type { IThemeMainService } from '../../theme/electron-main/themeMainService.js';
@@ -22,8 +23,6 @@ import {
 	NATIVE_HOST_REVEAL_FILE_CHANNEL,
 	type INativeSystemWideKeybinding,
 	type INativeSystemWideKeybindingResult,
-	type INativeSaveFileOptions,
-	type INativeOpenDialogOptions,
 	type INativeWindowTheme,
 	type IOpenAgentsWindowOptions,
 	type ShellCommandOperation,
@@ -32,10 +31,10 @@ import {
 	validateNativeWindowTheme,
 	validateWindowDimmed,
 	validatePickFolder,
-	validatePickFile,
+	validateOpenDialogOptions,
 	validateOpenWorkspace,
 	validateOpenAgentsWindow,
-	validateSaveFileOptions,
+	validateSaveDialogOptions,
 	validateToggleDeveloperTools,
 	validateSystemWideKeybindings,
 	validateShellCommandOperation,
@@ -51,12 +50,12 @@ export interface INativeHostMainService {
 	performDialogOperation(operation: NativeDialogOperation): unknown;
 	performShellCommand(operation: ShellCommandOperation): Promise<string>;
 	pickFolder(): Promise<string | undefined>;
-	pickFile(options: INativeOpenDialogOptions): Promise<readonly string[] | undefined>;
+	showOpenDialog(options: OpenDialogOptions): Promise<OpenDialogReturnValue>;
 	openWorkspace(root: string): Promise<void>;
 	openWindow(options: IOpenEmptyWindowOptions): Promise<void>;
 	openAgentsWindow(options?: IOpenAgentsWindowOptions): Promise<void>;
 	revealFile(path: string): void;
-	saveFile(options: INativeSaveFileOptions): Promise<string | undefined>;
+	showSaveDialog(options: SaveDialogOptions): Promise<SaveDialogReturnValue>;
 	isAccessibilitySupportEnabled(): boolean;
 	setWindowTheme(theme: INativeWindowTheme): void;
 	setWindowDimmed(dimmed: boolean): void;
@@ -133,17 +132,17 @@ export function nativeHostIpcRoutes(
 }
 
 /** File pickers belong to their requesting window; picking a path grants no file access. */
-export function fileDialogIpcRoutes(service: Pick<INativeHostMainService, 'pickFile' | 'saveFile'>): readonly IpcRoute<unknown, unknown>[] {
+export function fileDialogIpcRoutes(service: Pick<INativeHostMainService, 'showOpenDialog' | 'showSaveDialog'>): readonly IpcRoute<unknown, unknown>[] {
 	return [
 		{
 			channel: NATIVE_HOST_PICK_FILE_CHANNEL,
-			validate: validatePickFile,
-			invoke: options => service.pickFile(options as INativeOpenDialogOptions),
+			validate: validateOpenDialogOptions,
+			invoke: options => service.showOpenDialog(options as OpenDialogOptions),
 		},
 		{
 			channel: NATIVE_HOST_SAVE_FILE_CHANNEL,
-			validate: validateSaveFileOptions,
-			invoke: options => service.saveFile(options as INativeSaveFileOptions),
+			validate: validateSaveDialogOptions,
+			invoke: options => service.showSaveDialog(options as SaveDialogOptions),
 		},
 	];
 }

@@ -50,14 +50,14 @@ test("native host routes validate folder picking and developer tools", async () 
 			pickedFolder = "/tmp/trusted-folder";
 			return pickedFolder;
 		},
-		pickFile: async () => ['C:\\project\\paper.md'],
+		showOpenDialog: async () => ({ canceled: false, filePaths: ['C:\\project\\paper.md'] }),
 		openWorkspace: async () => { },
 		openWindow: async () => { },
 		openAgentsWindow: async () => { },
 		revealFile: () => { },
-		saveFile: async (options) => {
+		showSaveDialog: async (options) => {
 			savedFileOptions = options;
-			return "C:\\project\\draft.txt";
+			return { canceled: false, filePath: "C:\\project\\draft.txt" };
 		},
 		isAccessibilitySupportEnabled: () => false,
 		setWindowTheme: (theme) => {
@@ -112,23 +112,23 @@ test("native host routes validate folder picking and developer tools", async () 
 	assert.equal(await pickFolder.invoke(pickFolder.validate(undefined)), "/tmp/trusted-folder");
 	assert.equal(pickedFolder, "/tmp/trusted-folder");
 	assert.throws(() => pickFile.validate(null), /Invalid open dialog options/);
-	assert.throws(() => pickFile.validate({ canSelectFiles: false, canSelectFolders: false }), /Invalid open dialog options/);
-	assert.throws(() => pickFile.validate({ canSelectFiles: true, canSelectFolders: false, filters: [{ name: 'Text', extensions: ['../txt'] }] }), /Invalid file filter/);
-	const openOptions = { canSelectFiles: true, canSelectFolders: false, canSelectMany: true, filters: [{ name: 'Text', extensions: ['txt'] }] };
-	assert.deepEqual(await pickFile.invoke(pickFile.validate(openOptions)), ['C:\\project\\paper.md']);
+	assert.throws(() => pickFile.validate({ properties: ['invalid'] }), /Invalid dialog properties/);
+	assert.throws(() => pickFile.validate({ properties: ['openFile'], filters: [{ name: 'Text', extensions: ['../txt'] }] }), /Invalid file filter/);
+	const openOptions = { properties: ['openFile', 'multiSelections'], filters: [{ name: 'Text', extensions: ['txt'] }] };
+	assert.deepEqual(await pickFile.invoke(pickFile.validate(openOptions)), { canceled: false, filePaths: ['C:\\project\\paper.md'] });
 	const packageFilters = [{ name: 'Design', extensions: ['ash-design', 'ash-design.json'] }];
-	assert.deepEqual(pickFile.validate({ ...openOptions, canSelectFolders: true, filters: packageFilters }), { ...openOptions, canSelectFolders: true, filters: packageFilters });
+	assert.deepEqual(pickFile.validate({ ...openOptions, properties: ['openFile', 'openDirectory', 'multiSelections'], filters: packageFilters }), { ...openOptions, properties: ['openFile', 'openDirectory', 'multiSelections'], filters: packageFilters });
 	assert.deepEqual(saveFile.validate({ filters: packageFilters }), { filters: packageFilters });
 	for (const extension of ['.json', 'ash/design', 'ash\\design', 'ash..json', '*.json']) {
 		assert.throws(() => saveFile.validate({ filters: [{ name: 'Invalid', extensions: [extension] }] }), /Invalid file filter/);
 	}
 	assert.throws(
-		() => saveFile.validate({ defaultName: "" }),
-		/default name must be a non-empty string/,
+		() => saveFile.validate({ defaultPath: 42 }),
+		/Invalid dialog defaultPath/,
 	);
-	const validatedSaveFile = saveFile.validate({ defaultName: "Untitled-1" });
-	assert.equal(await saveFile.invoke(validatedSaveFile), "C:\\project\\draft.txt");
-	assert.deepEqual(savedFileOptions, { defaultName: "Untitled-1" });
+	const validatedSaveFile = saveFile.validate({ defaultPath: "Untitled-1" });
+	assert.deepEqual(await saveFile.invoke(validatedSaveFile), { canceled: false, filePath: "C:\\project\\draft.txt" });
+	assert.deepEqual(savedFileOptions, { defaultPath: "Untitled-1" });
 	assert.deepEqual(saveFile.validate({ defaultPath: 'C:\\project\\report.txt', filters: [{ name: 'Text', extensions: ['txt'] }] }), { defaultPath: 'C:\\project\\report.txt', filters: [{ name: 'Text', extensions: ['txt'] }] });
 	assert.throws(
 		() => accessibilitySupport.validate(null),
@@ -171,7 +171,7 @@ test("desktop commands are available from the command palette", async () => {
 		isAdmin: async () => false,
 		onDidRequestOpenExternalUri: () => ({ dispose() { } }),
 		openExternal: async () => { throw new Error('unused'); },
-		showNativeDialog: async () => { throw new Error('unused'); },
+		showMessageBox: async () => { throw new Error('unused'); },
 		installShellCommand: async () => '',
 		uninstallShellCommand: async () => '',
 		listWindows: async () => [],
@@ -187,13 +187,13 @@ test("desktop commands are available from the command palette", async () => {
 		performNativeTabAction: async () => { },
 		openNewWindowTab: async () => { },
 		pickFolder: async () => undefined,
-		pickFile: async () => undefined,
+		showOpenDialog: async () => ({ canceled: true, filePaths: [] }),
 		openWorkspace: async () => { },
 		openWindow: async () => { },
 		openAgentsWindow: async () => { },
 		syncSystemWideKeybindings: async () => ({ failed: [] }),
 		revealFile: async () => { },
-		saveFile: async () => undefined,
+		showSaveDialog: async () => ({ canceled: true, filePath: '' }),
 		getOSColorScheme: async () => ({ dark: false, highContrast: false }),
 		onDidChangeColorScheme: () => ({ dispose() { } }),
 		isAccessibilitySupportEnabled: async () => false,

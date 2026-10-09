@@ -100,11 +100,15 @@ test('keyboard layout stays in commands while the status bar is quiet', async ({
 	await expect(page.locator('[data-statusbar-item-id="ash.status.keyboardLayout"]')).toHaveCount(0);
 	await expect(page.locator('.ash-workbench-statusbar')).toHaveAttribute('aria-live', 'off');
 
-	await page.keyboard.press('F1');
-	await page.locator('.ash-quick-pick').getByRole('combobox').fill('Change Keyboard Layout');
-	await page.keyboard.press('Enter');
+	await workbench.quickaccess.runCommand('workbench.action.changeKeyboardLayout');
 	await expect(page.locator('.ash-quick-pick').getByRole('combobox')).toHaveAttribute('placeholder', 'Select keyboard layout');
 	await page.keyboard.press('Escape');
+	await workbench.quickaccess.runCommand('workbench.action.toggleKeyboardShortcutsTroubleshooting');
+	const output = page.locator('.ash-output:visible');
+	await expect(output).toBeVisible();
+	await expect(output.locator('.view-line').filter({ hasText: 'Keyboard shortcuts troubleshooting enabled.' })).toBeVisible();
+	await workbench.quickaccess.runCommand('workbench.action.toggleKeyboardShortcutsTroubleshooting');
+	await expect(output.locator('.view-line').filter({ hasText: 'Keyboard shortcuts troubleshooting disabled.' })).toBeVisible();
 });
 
 test('opening a folder names the target and explains the permission choice in the selected language', async ({ application, target, testWorkspace, workbench, restartWorkbench }) => {

@@ -165,7 +165,9 @@ The cross-product grammar and the boundary between Ash, App, and Ash Code are de
   contract without importing browser APIs.
 - `workbench/services/keybinding/browser/keyboardLayoutService.ts` uses the
   browser Keyboard Map capability when available and otherwise preserves a
-  stable physical-code fallback.
+  stable physical-code fallback. Both desktop entries supply the Main keyboard
+  layout provider and profile layout API to this same service; desktop Agents
+  must not fall back to the browser-only service assembly.
 - `workbench/services/keybinding/browser/keybindingService.ts` is the concrete
   product service. It owns document listeners, chooses the nearest DOM
   ContextKey scope, reports chord state, prevents handled native events, and
@@ -233,6 +235,26 @@ Context keys connect focus-local state to actions, menus, and keybindings.
   renderer or access the Electron bridge.
 - The service identifier remains in `platform/contextview`. A workbench
   service is a concrete product implementation, not a second contract.
+
+## Desktop dialog boundary
+
+`base/parts/sandbox/common/electronTypes.ts` owns the Electron dialog option and
+result types shared by Renderer and Main. Workbench dialog handlers convert
+domain requests to those options and interpret button indices or selected paths.
+The Host transport validates requests and results without replacing the shared
+types with a second set of picker parameters or path-only responses.
+
+Main's `DialogMainService` owns window attachment, system dialog ordering,
+platform button ordering, and cancellation. `AbortSignal` stays in its originating
+process; the transport sends cancellation by request ID, and Main creates and
+releases its own controller. Browser hosts retain their browser dialog handlers.
+
+Workbench and Agents register the complete Host route set against their own
+window. Common platform operations share one Main implementation; workspace
+and window navigation retain the policy of each window kind. Desktop Renderer
+entries also select the Electron accessibility service, which reads initial
+system support and subscribes to changes for that window's lifetime. Web entries
+keep the browser accessibility service.
 
 ## Configuration architecture
 

@@ -287,6 +287,7 @@
     "dialog.input": "输入",
     "dialog.inputNumber": "{0}，第 {1} 个输入框",
     "dialog.saveFileTitle": "保存文件",
+    "dialog.openFileTitle": "打开文件",
     "dialog.saveFileName": "文件名",
     "dialog.saveChangesTitle": "保存更改",
     "dialog.saveChangesOne": "是否保存对 {0} 的更改？",

@@ -1,13 +1,10 @@
-import type {
-	BrowserWindow, MessageBoxOptions, MessageBoxReturnValue,
-	OpenDialogOptions, OpenDialogReturnValue, SaveDialogOptions, SaveDialogReturnValue,
-} from 'electron';
+import type { BrowserWindow } from 'electron';
+import type { MessageBoxOptions, MessageBoxReturnValue, OpenDialogOptions, OpenDialogReturnValue, SaveDialogOptions, SaveDialogReturnValue } from '../../../base/parts/sandbox/common/electronTypes.js';
 import { access } from 'node:fs/promises';
 import { hash } from '../../../base/common/hash.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
-import { DialogResult, type IDialogOutcome } from '../common/dialogs.js';
 import type { NativeDialogOperation } from '../../native/common/nativeHost.js';
-import { massageMessageBoxOptions, messageBoxOptions, messageBoxOutcome } from './dialogMainUtils.js';
+import { massageMessageBoxOptions } from './dialogMainUtils.js';
 
 export interface ISystemDialogApi {
 	showMessageBox(options: MessageBoxOptions, window?: BrowserWindow): Promise<MessageBoxReturnValue>;
@@ -24,7 +21,7 @@ export class DialogMainService extends Disposable {
 
 	constructor(private readonly api: ISystemDialogApi) { super(); }
 
-	async perform(window: BrowserWindow, operation: NativeDialogOperation): Promise<IDialogOutcome | void> {
+	async perform(window: BrowserWindow, operation: NativeDialogOperation): Promise<MessageBoxReturnValue | void> {
 		this.assertNotDisposed();
 		const active = this.active.get(window.id);
 		if (operation.kind === 'cancel') {
@@ -32,17 +29,17 @@ export class DialogMainService extends Disposable {
 			return;
 		}
 		if (active?.has(operation.id)) throw new Error('Dialog ID is already active');
-		const request = operation.request;
-		if (request.kind === 'input') throw new TypeError('Input dialogs are handled in the renderer');
+		const options = operation.options;
+		const cancelled = (): MessageBoxReturnValue => ({ response: options.cancelId ?? 0, checkboxChecked: options.checkboxChecked ?? false });
 		const controller = new AbortController();
 		const windowActive = active ?? new Map<number, AbortController>();
 		windowActive.set(operation.id, controller);
 		this.active.set(window.id, windowActive);
 		try {
-			const result = await this.showMessageBox(messageBoxOptions(request, controller.signal), window);
-			return controller.signal.aborted ? { button: DialogResult.Cancel } : messageBoxOutcome(request, result);
+			const result = await this.showMessageBox({ ...options, signal: controller.signal }, window);
+			return controller.signal.aborted ? cancelled() : result;
 		} catch (error) {
-			if (controller.signal.aborted) return { button: DialogResult.Cancel };
+			if (controller.signal.aborted) return cancelled();
 			throw error;
 		} finally {
 			windowActive.delete(operation.id);

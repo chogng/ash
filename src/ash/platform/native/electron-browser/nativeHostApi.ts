@@ -20,6 +20,8 @@ import {
 	NATIVE_HOST_REVEAL_FILE_CHANNEL,
 	type INativeHostApi,
 	validateAccessibilitySupport,
+	validateOpenDialogResult,
+	validateSaveDialogResult,
 } from '../common/nativeHost.js';
 import {
 	WINDOW_OPERATION_CHANNEL,
@@ -27,7 +29,7 @@ import {
 	WINDOW_OPEN_EXTERNAL_URI_CHANNEL,
 	type IWorkbenchWindowInfo,
 } from '../../window/common/window.js';
-import { showNativeDialog } from '../../dialogs/electron-browser/dialog.js';
+import { showMessageBox } from '../../dialogs/electron-browser/dialog.js';
 import { normalizeExternalUrl } from '../../opener/common/opener.js';
 
 export function createNativeHostApi(mainProcessService: IMainProcessService): INativeHostApi {
@@ -40,7 +42,7 @@ export function createNativeHostApi(mainProcessService: IMainProcessService): IN
 		},
 		getOSColorScheme: async () => validateColorScheme(await colors.call<unknown>('getOSColorScheme')),
 		onDidChangeColorScheme: listener => colors.listen<unknown>('onDidChangeColorScheme')(value => listener(validateColorScheme(value))),
-		showNativeDialog,
+		showMessageBox,
 		installShellCommand: () => invoke<string>(NATIVE_HOST_SHELL_COMMAND_CHANNEL, 'install'),
 		uninstallShellCommand: () => invoke<string>(NATIVE_HOST_SHELL_COMMAND_CHANNEL, 'uninstall'),
 		listWindows: () => invoke<readonly IWorkbenchWindowInfo[]>(WINDOW_OPERATION_CHANNEL, { kind: 'list' }),
@@ -56,7 +58,7 @@ export function createNativeHostApi(mainProcessService: IMainProcessService): IN
 		performNativeTabAction: action => invoke<void>(WINDOW_OPERATION_CHANNEL, { kind: 'nativeTab', action }),
 		openNewWindowTab: () => invoke<void>(WINDOW_OPERATION_CHANNEL, { kind: 'newTab' }),
 		pickFolder: () => invoke<string | undefined>(NATIVE_HOST_PICK_FOLDER_CHANNEL),
-		pickFile: (options) => invoke<readonly string[] | undefined>(NATIVE_HOST_PICK_FILE_CHANNEL, options),
+		showOpenDialog: async options => validateOpenDialogResult(await invoke<unknown>(NATIVE_HOST_PICK_FILE_CHANNEL, options)),
 		openWorkspace: (root) => invoke<void>(NATIVE_HOST_OPEN_WORKSPACE_CHANNEL, root),
 		openWindow: options => invoke<void>(NATIVE_HOST_OPEN_WINDOW_CHANNEL, options),
 		openAgentsWindow: options => invoke<void>(NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL, options),
@@ -70,7 +72,7 @@ export function createNativeHostApi(mainProcessService: IMainProcessService): IN
 		setWindowTheme: (theme) => invoke<void>(NATIVE_HOST_SET_WINDOW_THEME_CHANNEL, theme),
 		setWindowDimmed: dimmed => invoke<void>(NATIVE_HOST_SET_WINDOW_DIMMED_CHANNEL, dimmed),
 		toggleDeveloperTools: () => invoke<void>(NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL),
-		saveFile: (options) => invoke<string | undefined>(NATIVE_HOST_SAVE_FILE_CHANNEL, options),
+		showSaveDialog: async options => validateSaveDialogResult(await invoke<unknown>(NATIVE_HOST_SAVE_FILE_CHANNEL, options)),
 		async isAccessibilitySupportEnabled(): Promise<boolean> {
 			return validateAccessibilitySupport(await invoke<unknown>(NATIVE_HOST_GET_ACCESSIBILITY_SUPPORT_CHANNEL));
 		},

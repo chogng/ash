@@ -12,6 +12,75 @@ import { Workbench } from '../../../automation/workbench.js';
 import { parseDesignDocument } from '../../../../src/ash/sessions/contrib/creator/common/model/document.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { captureElectronMenu } from '../../../automation/menus.js';
+import type { IKeyboardLayoutDefinition } from '../../../../src/ash/platform/keyboardLayout/common/keyboardLayout.js';
+import { USER_KEYBOARD_LAYOUT_DEFAULT_CONTENT } from '../../../../src/ash/platform/keyboardLayout/common/userKeyboardLayout.js';
+
+test('Sessions keyboard layout commands inspect the active mapping and offer layout selection', async ({ target, workbench }) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	const quickAccess = new QuickAccess(page);
+	await quickAccess.runCommand('workbench.action.inspectKeyMappingsJSON');
+	const group = page.locator('.ash-editor-group').filter({ has: page.getByRole('tab', { name: /^Keyboard Layout \(JSON\)(?:,|$)/ }) });
+	await new Editor(group.locator('.ash-editor-group-content')).waitForEditorContents(contents => contents.includes('"layout"') && contents.includes('"rawMapping"'));
+	await quickAccess.runCommand('workbench.action.changeKeyboardLayout');
+	await expect(quickAccess.input).toHaveAttribute('aria-label', 'Select keyboard layout');
+	await expect(page.getByRole('option', { name: /Auto Detect/ })).toBeVisible();
+	await quickAccess.close();
+});
+
+test('Sessions desktop reads the system keyboard layout and opens the profile layout file', async ({ application, target, workbench }) => {
+	test.skip(target.kind !== 'electron', 'Uses the Sessions desktop platform services.');
+	if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
+	const page = await workbench.openAgentsWindow(target.kind);
+	const layout = await page.evaluate(() => globalThis.ashTestMainProcess.call<IKeyboardLayoutDefinition>('keyboardLayout', 'readKeyboardLayout'));
+	expect(layout).toBeDefined();
+	const quickAccess = new QuickAccess(page);
+	await quickAccess.runCommand('workbench.action.inspectKeyMappings');
+	const group = page.locator('.ash-editor-group').filter({ has: page.getByRole('tab', { name: /^Keyboard Layout(?:,|$)/ }) });
+	await new Editor(group.locator('.ash-editor-group-content')).waitForEditorContents(contents => contents.includes(`"id": "${layout.layout.id}"`) && contents.includes('"source": "native"'));
+	await quickAccess.runCommand('workbench.action.changeKeyboardLayout');
+	await expect(page.getByRole('option', { name: /Auto Detect.*Current:/ })).toContainText(layout.layout.label);
+	const originalOpenPath = await application.evaluateHandle(({ shell }) => shell.openPath);
+	try {
+		await application.evaluate(({ shell }) => {
+			(globalThis as unknown as { openedKeyboardLayout?: string; }).openedKeyboardLayout = undefined;
+			shell.openPath = async path => {
+				(globalThis as unknown as { openedKeyboardLayout?: string; }).openedKeyboardLayout = path;
+				return '';
+			};
+		});
+		await page.getByRole('option', { name: /Configure Keyboard Layout File/ }).click();
+		const readOpenedPath = () => application.evaluate(() => (globalThis as unknown as { openedKeyboardLayout?: string; }).openedKeyboardLayout);
+		await expect.poll(readOpenedPath).toMatch(/keyboard-layout\.json$/);
+		expect(await readFile((await readOpenedPath())!, 'utf8')).toBe(USER_KEYBOARD_LAYOUT_DEFAULT_CONTENT);
+	} finally {
+		await application.evaluate(({ shell }, original) => { shell.openPath = original; }, originalOpenPath);
+		await originalOpenPath.dispose();
+	}
+});
+
+test('Sessions desktop follows system screen-reader detection and live changes in its editor', async ({ application, target, workbench }) => {
+	test.skip(target.kind !== 'electron', 'Uses Electron system screen-reader detection.');
+	if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
+	const initialSupport = await application.evaluate(({ app }) => app.isAccessibilitySupportEnabled());
+	try {
+		await application.evaluate(({ app }) => app.setAccessibilitySupportEnabled(true));
+		const page = await workbench.openAgentsWindow(target.kind);
+		const chat = page.locator('.ash-sessions-chat-slot :is(.ash-chat,.ash-cowork):visible').first();
+		const editor = new Editor(chat);
+		await replaceChatInput(editor, 'System screen-reader detection');
+		const mirror = editor.input.locator('.stanza-native-screen-reader-content');
+		await expect(mirror).toHaveAttribute('aria-hidden', 'false');
+		await expect(mirror).toHaveText('System screen-reader detection');
+		await application.evaluate(({ app }) => app.setAccessibilitySupportEnabled(false));
+		await expect(mirror).toHaveAttribute('aria-hidden', 'true');
+		await expect(mirror).toHaveText('');
+		await application.evaluate(({ app }) => app.setAccessibilitySupportEnabled(true));
+		await expect(mirror).toHaveAttribute('aria-hidden', 'false');
+		await expect(mirror).toHaveText('System screen-reader detection');
+	} finally {
+		await application.evaluate(({ app }, enabled) => app.setAccessibilitySupportEnabled(enabled), initialSupport);
+	}
+});
 
 async function clickCanvasMenu(canvas: Locator, name: string, application: PlaywrightApplication): Promise<void> {
 	const trigger = async (): Promise<void> => { await canvas.focus(); await canvas.press('Shift+F10'); };

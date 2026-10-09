@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { release, tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { BrowserWindow, MessageBoxOptions, MessageBoxReturnValue, OpenDialogOptions, SaveDialogOptions } from 'electron';
+import type { BrowserWindow } from 'electron';
+import type { MessageBoxOptions, MessageBoxReturnValue, OpenDialogOptions, SaveDialogOptions } from '../../../../base/parts/sandbox/common/electronTypes.js';
 import { test } from 'mocha';
-import { DialogResult, DialogSeverity } from '../../common/dialogs.js';
 import { DialogMainService, type ISystemDialogApi } from '../../electron-main/dialogMainService.js';
 import { massageMessageBoxOptions } from '../../electron-main/dialogMainUtils.js';
 
@@ -59,56 +59,6 @@ test('four-button prompt keeps its cancel and default positions on Linux', () =>
 	});
 });
 
-test('dialog main service maps message, confirmation, and prompt results', async () => {
-	const options: MessageBoxOptions[] = [];
-	const selections = ['OK', 'Cancel', 'Discard', 'Cancel'];
-	using dialogs = new DialogMainService(api(async value => {
-		options.push(value);
-		const response = value.buttons!.indexOf(selections.shift()!);
-		assert.notEqual(response, -1);
-		return { response, checkboxChecked: true };
-	}));
-	const window = windowWithId(1);
-	const message = await dialogs.perform(window, { kind: 'show', id: 1, request: { kind: 'message', severity: DialogSeverity.Info, message: 'Notice' } });
-	const confirmation = await dialogs.perform(window, { kind: 'show', id: 2, request: { kind: 'confirmation', message: 'Continue?' } });
-	const prompt = await dialogs.perform(window, { kind: 'show', id: 3, request: { kind: 'prompt', message: 'Save?', primaryButton: 'Save', secondaryButton: 'Discard' } });
-	const cancelledPrompt = await dialogs.perform(window, { kind: 'show', id: 4, request: { kind: 'prompt', message: 'Save?', primaryButton: 'Save', secondaryButton: 'Discard' } });
-	let expectedButtons = [['OK'], ['Confirm', 'Cancel'], ['Save', 'Discard', 'Cancel'], ['Save', 'Discard', 'Cancel']];
-	if (process.platform === 'linux') {
-		expectedButtons = [['OK'], ['Cancel', 'Confirm'], ['Discard', 'Cancel', 'Save'], ['Discard', 'Cancel', 'Save']];
-	} else if (process.platform === 'darwin' && Number.parseInt(release(), 10) < 24) {
-		expectedButtons = [['OK'], ['Confirm', 'Cancel'], ['Save', 'Cancel', 'Discard'], ['Save', 'Cancel', 'Discard']];
-	}
-	assert.deepEqual({ message, confirmation, prompt, cancelledPrompt, buttons: options.map(value => value.buttons) }, {
-		message: { button: DialogResult.Primary, checkboxChecked: true },
-		confirmation: { button: DialogResult.Cancel, checkboxChecked: true },
-		prompt: { button: DialogResult.Secondary, checkboxChecked: true },
-		cancelledPrompt: { button: DialogResult.Cancel, checkboxChecked: true },
-		buttons: expectedButtons,
-	});
-});
-
-test('dialog main service returns the selected action index and checkbox state', async () => {
-	let shown: MessageBoxOptions | undefined;
-	using dialogs = new DialogMainService(api(async options => {
-		shown = options;
-		const response = options.buttons!.indexOf('Third');
-		assert.notEqual(response, -1);
-		return { response, checkboxChecked: true };
-	}));
-	const request = { kind: 'choice' as const, severity: DialogSeverity.Warning, message: 'Choose action', buttons: ['First', 'Second', 'Third'], cancelButton: 'Cancel' };
-	const result = await dialogs.perform(windowWithId(11), { kind: 'show', id: 1, request });
-	let expectedButtons = ['First', 'Second', 'Third', 'Cancel'];
-	if (process.platform === 'linux') {
-		expectedButtons = ['Third', 'Second', 'Cancel', 'First'];
-	} else if (process.platform === 'darwin' && Number.parseInt(release(), 10) < 24) {
-		expectedButtons = ['First', 'Cancel', 'Second', 'Third'];
-	}
-	assert.deepEqual(shown?.buttons, expectedButtons);
-	assert.equal(shown?.type, 'warning');
-	assert.deepEqual(result, { button: DialogResult.Primary, buttonIndex: 2, checkboxChecked: true });
-});
-
 test('dialog main service cancels active and queued renderer requests', async () => {
 	let activeOptions!: MessageBoxOptions;
 	let releaseActive!: (result: MessageBoxReturnValue) => void;
@@ -119,14 +69,14 @@ test('dialog main service cancels active and queued renderer requests', async ()
 		return new Promise(resolve => { releaseActive = resolve; });
 	}));
 	const window = windowWithId(2);
-	const first = dialogs.perform(window, { kind: 'show', id: 1, request: { kind: 'message', severity: DialogSeverity.Error, message: 'Error' } });
-	const second = dialogs.perform(window, { kind: 'show', id: 2, request: { kind: 'confirmation', message: 'Continue?' } });
+	const first = dialogs.perform(window, { kind: 'show', id: 1, options: { message: 'Error', buttons: ['OK'], cancelId: 0 } });
+	const second = dialogs.perform(window, { kind: 'show', id: 2, options: { message: 'Continue?', buttons: ['Confirm', 'Cancel'], cancelId: 1 } });
 	await Promise.resolve();
 	await Promise.resolve();
 	dialogs.cancelWindow(window);
 	assert.equal(activeOptions.signal?.aborted, true);
 	releaseActive({ response: 0, checkboxChecked: false });
-	assert.deepEqual([await first, await second, shows], [{ button: DialogResult.Cancel }, { button: DialogResult.Cancel }, 1]);
+	assert.deepEqual([await first, await second, shows], [{ response: 0, checkboxChecked: false }, { response: 1, checkboxChecked: false }, 1]);
 });
 
 test('dialog main service serializes system dialogs per window and rejects duplicate file dialogs', async () => {

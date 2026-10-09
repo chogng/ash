@@ -1,3 +1,9 @@
+import { release } from 'node:os';
+import type { BrowserWindow } from 'electron';
+import type { MessageBoxOptions } from '../../../../../../base/parts/sandbox/common/electronTypes.js';
+import { DialogMainService } from '../../../../../../platform/dialogs/electron-main/dialogMainService.js';
+import { validateNativeDialogOperation, type INativeHostApi } from '../../../../../../platform/native/common/nativeHost.js';
+import { NativeDialogHandler } from '../../../../../electron-browser/parts/dialogs/dialogHandler.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import "../../dialog.web.contribution.js";
@@ -152,4 +158,74 @@ test("disposing the contribution cancels its active model item", async () => {
 	assert.equal(call?.signal.aborted, true);
 	assert.equal((await confirmation).confirmed, false);
 	call?.resolve(DialogResult.Cancel);
+});
+
+function desktopHandler(dialogs: DialogMainService, id: number): NativeDialogHandler {
+	let sequence = 0;
+	return new NativeDialogHandler({
+		async showMessageBox({ signal, ...options }) {
+			const operation = validateNativeDialogOperation(structuredClone({ kind: 'show', id: ++sequence, options }));
+			const result = await dialogs.perform({ id } as BrowserWindow, operation);
+			assert.ok(result);
+			return result;
+		},
+	} as INativeHostApi, {} as HTMLElement);
+}
+
+test('desktop dialog handler maps message, confirmation, and prompt results', async () => {
+	const options: MessageBoxOptions[] = [];
+	const selections = ['OK', 'Cancel', 'Discard', 'Cancel'];
+	using dialogs = new DialogMainService({
+		showMessageBox: async value => {
+			options.push(value);
+			const response = value.buttons!.indexOf(selections.shift()!);
+			assert.notEqual(response, -1);
+			return { response, checkboxChecked: true };
+		},
+		showOpenDialog: async () => ({ canceled: true, filePaths: [] }),
+		showSaveDialog: async () => ({ canceled: true, filePath: '' }),
+	});
+	const handler = desktopHandler(dialogs, 1);
+	const message = await handler.showDialog({ kind: 'message', severity: DialogSeverity.Info, message: 'Notice' }, new AbortController().signal);
+	const confirmation = await handler.showDialog({ kind: 'confirmation', message: 'Continue?' }, new AbortController().signal);
+	const prompt = await handler.showDialog({ kind: 'prompt', message: 'Save?', primaryButton: 'Save', secondaryButton: 'Discard' }, new AbortController().signal);
+	const cancelledPrompt = await handler.showDialog({ kind: 'prompt', message: 'Save?', primaryButton: 'Save', secondaryButton: 'Discard' }, new AbortController().signal);
+	let expectedButtons = [['OK'], ['Confirm', 'Cancel'], ['Save', 'Discard', 'Cancel'], ['Save', 'Discard', 'Cancel']];
+	if (process.platform === 'linux') {
+		expectedButtons = [['OK'], ['Cancel', 'Confirm'], ['Discard', 'Cancel', 'Save'], ['Discard', 'Cancel', 'Save']];
+	} else if (process.platform === 'darwin' && Number.parseInt(release(), 10) < 24) {
+		expectedButtons = [['OK'], ['Confirm', 'Cancel'], ['Save', 'Cancel', 'Discard'], ['Save', 'Cancel', 'Discard']];
+	}
+	assert.deepEqual({ message, confirmation, prompt, cancelledPrompt, buttons: options.map(value => value.buttons) }, {
+		message: { button: DialogResult.Primary, checkboxChecked: true },
+		confirmation: { button: DialogResult.Cancel, checkboxChecked: true },
+		prompt: { button: DialogResult.Secondary, checkboxChecked: true },
+		cancelledPrompt: { button: DialogResult.Cancel, checkboxChecked: true },
+		buttons: expectedButtons,
+	});
+});
+
+test('desktop dialog handler returns the selected action index and checkbox state', async () => {
+	let shown: MessageBoxOptions | undefined;
+	using dialogs = new DialogMainService({
+		showMessageBox: async options => {
+			shown = options;
+			const response = options.buttons!.indexOf('Third');
+			assert.notEqual(response, -1);
+			return { response, checkboxChecked: true };
+		},
+		showOpenDialog: async () => ({ canceled: true, filePaths: [] }),
+		showSaveDialog: async () => ({ canceled: true, filePath: '' }),
+	});
+	const request = { kind: 'choice' as const, severity: DialogSeverity.Warning, message: 'Choose action', buttons: ['First', 'Second', 'Third'], cancelButton: 'Cancel' };
+	const result = await desktopHandler(dialogs, 11).showDialog(request, new AbortController().signal);
+	let expectedButtons = ['First', 'Second', 'Third', 'Cancel'];
+	if (process.platform === 'linux') {
+		expectedButtons = ['Third', 'Second', 'Cancel', 'First'];
+	} else if (process.platform === 'darwin' && Number.parseInt(release(), 10) < 24) {
+		expectedButtons = ['First', 'Cancel', 'Second', 'Third'];
+	}
+	assert.deepEqual(shown?.buttons, expectedButtons);
+	assert.equal(shown?.type, 'warning');
+	assert.deepEqual(result, { button: DialogResult.Primary, buttonIndex: 2, checkboxChecked: true });
 });

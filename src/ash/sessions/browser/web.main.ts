@@ -83,9 +83,9 @@ export class SessionsBrowserMain extends Disposable {
 					};
 					const dialogs = () => services.get(IDialogService);
 					if (host?.webWorkspaceClient) {
-						return new FileDialogService({ ...common, kind: 'server', client: host.webWorkspaceClient }, dialogs);
+						return services.createInstance(FileDialogService, { ...common, kind: 'server', client: host.webWorkspaceClient }, dialogs);
 					}
-					return new FileDialogService({ ...common, kind: 'local', provider: browserFiles!, pickDirectory: startIn => (ownerWindow as unknown as Window & { showDirectoryPicker: (options?: { startIn?: FileSystemDirectoryHandle; }) => Promise<FileSystemDirectoryHandle>; }).showDirectoryPicker(startIn ? { startIn } : undefined) }, dialogs);
+					return services.createInstance(FileDialogService, { ...common, kind: 'local', provider: browserFiles!, pickDirectory: (startIn?: FileSystemDirectoryHandle) => (ownerWindow as unknown as Window & { showDirectoryPicker: (options?: { startIn?: FileSystemDirectoryHandle; }) => Promise<FileSystemDirectoryHandle>; }).showDirectoryPicker(startIn ? { startIn } : undefined) }, dialogs);
 				},
 				createLifecycleService: services => services.createInstance(BrowserLifecycleService, { ownerWindow, onError: onUnexpectedError }),
 				returnToWorkbench: () => {

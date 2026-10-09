@@ -13,6 +13,10 @@ import { WorkspaceContextService } from '../../../workbench/services/workspaces/
 import { IDialogService, IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { DialogService } from '../../../workbench/services/dialogs/common/dialogService.js';
 import { FileDialogService } from '../../../workbench/services/dialogs/browser/fileDialogService.js';
+import { BrowserPathService } from '../../../workbench/services/path/browser/pathService.js';
+import { IPathService } from '../../../platform/path/common/pathService.js';
+import { IRendererHostService } from '../../../platform/renderer/common/rendererHost.js';
+import { createDisconnectedRendererApi } from '../../../platform/agentHost/browser/rendererApi.js';
 import type { IWebWorkspaceClient } from '../../../workbench/services/workspaces/browser/workspaceOpenService.js';
 import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
 import { IDictationService } from '../../../platform/dictation/common/dictationService.js';
@@ -215,6 +219,8 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	};
 	using resources = new DisposableStore();
 	const services = resources.add(createCodeEditorServices(resources).createChild());
+	services.registerInstance(IRendererHostService, createDisconnectedRendererApi());
+	services.registerSingleton(IPathService, () => services.createInstance(BrowserPathService));
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(ISessionsGitHubService, {
 		onDidChange: Event.None,
@@ -245,7 +251,6 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	}));
 	services.registerInstance(IWorkspaceContextService, resources.add(new WorkspaceContextService({ id: 'sessions-test', folders: [] })));
 
-	services.registerInstance(IFileDialogService, new FileDialogService({ kind: 'server', client: {} as IWebWorkspaceClient, quickInput: () => { throw new Error('Unexpected picker'); }, fileService: () => { throw new Error('Unexpected files'); }, workspaceRoot: () => undefined }, () => dialogs));
 	services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 	services.registerInstance(INotificationService, notifications);
 	const storage = resources.add(new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'test', flushInterval: 0 }));
@@ -267,6 +272,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	services.registerInstance(ILifecycleService, resources.add(services.createInstance(BrowserLifecycleService, { ownerWindow: dom.window as unknown as Window, onError: (error: unknown) => { throw error; } })));
 	const inputs: InstanceType<typeof NewChatInputWidget>[] = [];
 	using editorServices = createTestEditorServices(undefined, services, dom.window.document);
+	services.registerInstance(IFileDialogService, editorServices.createInstance(FileDialogService, { kind: 'server', client: {} as IWebWorkspaceClient, quickInput: () => { throw new Error('Unexpected picker'); }, fileService: () => { throw new Error('Unexpected files'); }, workspaceRoot: () => undefined }, () => dialogs));
 	const paneServices = registerTestComponentServices(editorServices);
 	paneServices.registerInstance(IEditorService, {
 		onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [],
