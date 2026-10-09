@@ -116,7 +116,7 @@ jobs:
             "clang-19=$package_version" "libclang-19-dev=$package_version"
           echo "BINDING_CLANG_BASE_PATH=/usr/lib/llvm-19" >> "$GITHUB_ENV"
           if [ "$TARGET" = aarch64-unknown-linux-gnu ]; then
-            sudo apt-get install --yes --no-install-recommends gcc-aarch64-linux-gnu
+            sudo apt-get install --yes --no-install-recommends gcc-aarch64-linux-gnu libc6-dev-arm64-cross
             echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
           fi
       - name: Install compatible macOS binding compiler
@@ -178,6 +178,11 @@ jobs:
           # Standalone PartitionAlloc assumes glibc's ARM IFUNC headers. Embedded
           # V8 uses its platform allocator; pointer compression and sandbox stay on.
           export GN_ARGS="${GN_ARGS:+$GN_ARGS }v8_enable_partition_alloc=false"
+          if [ -n "${RUSTY_V8_GNU_SYSROOT:-}" ]; then
+            # Upstream only forwards musl SDKs to bindgen; GNU needs the same
+            # target SDK too, especially when parsing ARM headers on x64.
+            export BINDGEN_EXTRA_CLANG_ARGS="$BINDGEN_EXTRA_CLANG_ARGS --sysroot=\"$RUSTY_V8_GNU_SYSROOT\""
+          fi
           cargo "+$UPSTREAM_TOOLCHAIN" build --locked --release --target "$TARGET" --features v8_enable_sandbox
       - name: Stage archive, binding and checksums
         id: stage

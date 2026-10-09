@@ -53,6 +53,7 @@ Clang 23 生成的匿名枚举常量名称不符合此版本 Rust crate 的约�
 GNU 使用固定 SHA-256 的 Chromium Debian sysroot（glibc 2.27），避免
 宿主机头文件引入 Bazel glibc 2.28 不具备的 `__isoc23_*` 等符号。
 ARM64 交叉构建为目标与 x64 构建工具分别选择匹配 CPU 的固定 GNU sysroot。
+GNU binding 生成也显式使用同一份目标 SDK，避免交叉解析时误用宿主头文件。
 musl 的 Cargo 链接器使用固定版本和 SHA-256 的 Zig，并关闭 Rust 自带的
 链接 CRT，由 Zig 统一提供启动对象，避免重复定义 `_start`。构建 sysroot 来自
 Ubuntu/Alpine 软件包，系统 SDK 与 runner 镜像仍由 CI 环境提供。
@@ -66,8 +67,9 @@ ARM64 musl 只链接，其余目标执行测试。Windows 的 Bazel C++ 工具�
 GNU ABI，不能验证 MSVC archive，因此这两个目标使用 Cargo 验证。
 Linux 的 Bazel 消费规则会在派生 archive 中弱化两份 libc++ 共用的异常 ABI
 入口，避免重复符号；下载文件和发布摘要保持原样。
-ARM64 musl 的 Bazel 派生库还合入目标 compiler-rt builtins，补齐 Rust
-musl builtins 未提供的 `__clear_cache`；Cargo 的 Zig 链接器提供同一入口。
+ARM64 Linux 的 Bazel 派生库还合入目标 compiler-rt builtins，补齐 Rust
+builtins 未提供的 `__clear_cache`；Cargo 使用 GNU GCC 或 musl Zig 链接器
+提供同一入口。
 musl 验证平台同时声明 LLVM 与 Rust 的 libc 约束，防止选择 GNU 输入。
 x64 静态探针使用明确的 Linux 测试执行工具链；musl ARM64 仅构建测试程序，
 不要求 x64 runner 具备 ARM64 测试执行平台。

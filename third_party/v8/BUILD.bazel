@@ -57,19 +57,20 @@ toolchain(
     for libc in ["gnu", "musl"]
 ]
 
-# AArch64 cache flushes call __clear_cache, which Rust's musl builtins omit.
+# AArch64 cache flushes call __clear_cache, which Rust's builtins omit.
 # Merge the matching compiler-rt runtime so the normal Rust linker can resolve it.
-genrule(
-    name = "rusty_v8_aarch64_musl_for_bazel",
-    srcs = [
-        ":rusty_v8_aarch64_musl_with_compatible_libcxx",
-        "@llvm//runtimes/compiler-rt:clang_rt.builtins.static",
-    ],
-    outs = ["librusty_v8_aarch64_musl_for_bazel.a"],
-    cmd = """
+[
+    genrule(
+        name = "rusty_v8_aarch64_%s_for_bazel" % libc,
+        srcs = [
+            ":rusty_v8_aarch64_%s_with_compatible_libcxx" % libc,
+            "@llvm//runtimes/compiler-rt:clang_rt.builtins.static",
+        ],
+        outs = ["librusty_v8_aarch64_%s_for_bazel.a" % libc],
+        cmd = """
         cat > "$@.mri" <<'EOF'
 create $@
-addlib $(location :rusty_v8_aarch64_musl_with_compatible_libcxx)
+addlib $(location :rusty_v8_aarch64_%s_with_compatible_libcxx)
 addlib $(location @llvm//runtimes/compiler-rt:clang_rt.builtins.static)
 save
 end
@@ -77,12 +78,14 @@ EOF
         $(location @llvm//tools:llvm-ar) -M < "$@.mri"
         $(location @llvm//tools:llvm-ranlib) "$@"
         rm "$@.mri"
-    """,
-    tools = [
-        "@llvm//tools:llvm-ar",
-        "@llvm//tools:llvm-ranlib",
-    ],
-)
+    """ % libc,
+        tools = [
+            "@llvm//tools:llvm-ar",
+            "@llvm//tools:llvm-ranlib",
+        ],
+    )
+    for libc in ["gnu", "musl"]
+]
 
 config_setting(
     name = "platform_aarch64_unknown_linux_musl",
@@ -107,7 +110,7 @@ alias(
     actual = select({
         "@rules_rs//rs/platforms/config:aarch64-apple-darwin": "@ash_rusty_v8_aarch64_apple_darwin_archive//file",
         "@rules_rs//rs/platforms/config:aarch64-pc-windows-msvc": "@ash_rusty_v8_aarch64_pc_windows_msvc_archive//file",
-        "@rules_rs//rs/platforms/config:aarch64-unknown-linux-gnu": ":rusty_v8_aarch64_gnu_with_compatible_libcxx",
+        "@rules_rs//rs/platforms/config:aarch64-unknown-linux-gnu": ":rusty_v8_aarch64_gnu_for_bazel",
         ":platform_aarch64_unknown_linux_musl": ":rusty_v8_aarch64_musl_for_bazel",
         "@rules_rs//rs/platforms/config:x86_64-apple-darwin": "@ash_rusty_v8_x86_64_apple_darwin_archive//file",
         "@rules_rs//rs/platforms/config:x86_64-pc-windows-msvc": "@ash_rusty_v8_x86_64_pc_windows_msvc_archive//file",

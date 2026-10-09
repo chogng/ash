@@ -194,10 +194,14 @@ def prepare_gnu_sysroot(target: str, output: Path, root: Path = ROOT) -> dict[st
         # GN selects a sysroot per toolchain CPU. A global ARM sysroot would
         # also apply to the x64 torque/mksnapshot tools and prevent them linking.
         return {
-            "GN_ARGS": f"target_sysroot_dir={json.dumps(str(sdk.parent.resolve()))} use_sysroot=true"
+            "GN_ARGS": f"target_sysroot_dir={json.dumps(str(sdk.parent.resolve()))} use_sysroot=true",
+            "RUSTY_V8_GNU_SYSROOT": str(sdk.resolve()),
         }
     # Upstream's target_sysroot is musl-only; an explicit sysroot is safe for x64.
-    return {"GN_ARGS": f"sysroot={json.dumps(str(sdk.resolve()))} use_sysroot=true"}
+    return {
+        "GN_ARGS": f"sysroot={json.dumps(str(sdk.resolve()))} use_sysroot=true",
+        "RUSTY_V8_GNU_SYSROOT": str(sdk.resolve()),
+    }
 
 
 def gnu_sysroot_path(gn_args: str, target: str) -> Path:
