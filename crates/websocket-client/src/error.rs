@@ -46,6 +46,8 @@ impl From<ash_http_client::HttpClientError> for WebSocketClientError {
             }
             ash_http_client::HttpClientError::Transport(_) => Self::ConnectionFailed,
             ash_http_client::HttpClientError::Connection(_) => Self::ConnectionFailed,
+            ash_http_client::HttpClientError::ResponseTooLarge
+            | ash_http_client::HttpClientError::RedirectLimitExceeded => Self::ConnectionFailed,
         }
     }
 }

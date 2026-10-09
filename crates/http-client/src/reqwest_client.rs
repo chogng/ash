@@ -281,7 +281,9 @@ impl ReqwestHttpClient {
             };
             initial.check()?;
             permit.check()?;
-            if let RedirectPolicy::Follow { max_hops } = self.inner.network.config().redirects() {
+            if !request.rejects_redirects()
+                && let RedirectPolicy::Follow { max_hops } = self.inner.network.config().redirects()
+            {
                 let next_method = match response.status().as_u16() {
                     301 | 302 => match method {
                         HttpMethod::Get => Some(method),
@@ -297,7 +299,7 @@ impl ReqwestHttpClient {
                     response.headers().get(reqwest::header::LOCATION),
                 ) {
                     if hops >= max_hops.get() {
-                        return Err(HttpClientError::Transport("redirect limit exceeded".into()));
+                        return Err(HttpClientError::RedirectLimitExceeded);
                     }
                     let location = location.to_str().map_err(|_| {
                         HttpClientError::InvalidRequest("redirect URL is invalid".into())
@@ -358,9 +360,7 @@ impl ReqwestHttpClient {
                 let Some(chunk) = chunk else { break };
                 total = total.saturating_add(chunk.len());
                 if total > limit {
-                    return Err(HttpClientError::Transport(
-                        "response body exceeded configured limit".into(),
-                    ));
+                    return Err(HttpClientError::ResponseTooLarge);
                 }
                 initial.check()?;
                 permit.check()?;
@@ -537,9 +537,18 @@ fn method_name(method: HttpMethod) -> reqwest::Method {
 }
 
 fn is_sensitive_redirect_header(header: &HttpHeader) -> bool {
-    ["authorization", "cookie", "content-length"]
-        .iter()
-        .any(|name| header.name().eq_ignore_ascii_case(name))
+    // Followed redirects discard the body and may select a different proxy route.
+    [
+        "authorization",
+        "cookie",
+        "proxy-authorization",
+        "content-length",
+        "content-type",
+        "content-encoding",
+        "transfer-encoding",
+    ]
+    .iter()
+    .any(|name| header.name().eq_ignore_ascii_case(name))
 }
 
 fn revoked() -> HttpClientError {

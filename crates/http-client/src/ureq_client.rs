@@ -222,9 +222,7 @@ impl HttpClient for UreqHttpClient {
             .read_to_end(&mut body)
             .map_err(|_| HttpClientError::Transport("failed to read response body".into()))?;
         if body.len() > self.response_body_limit {
-            return Err(HttpClientError::Transport(
-                "response body exceeded configured limit".into(),
-            ));
+            return Err(HttpClientError::ResponseTooLarge);
         }
         Ok(HttpResponse::with_received_at(
             status,
@@ -284,9 +282,17 @@ impl UreqHttpClient {
                 .request(method.as_str(), url.as_str());
             for header in request.headers() {
                 if hops == 0
-                    || !["authorization", "cookie", "content-length"]
-                        .iter()
-                        .any(|name| header.name().eq_ignore_ascii_case(name))
+                    || ![
+                        "authorization",
+                        "cookie",
+                        "proxy-authorization",
+                        "content-length",
+                        "content-type",
+                        "content-encoding",
+                        "transfer-encoding",
+                    ]
+                    .iter()
+                    .any(|name| header.name().eq_ignore_ascii_case(name))
                 {
                     builder = builder.set(header.name(), header.value());
                 }
@@ -323,7 +329,7 @@ impl UreqHttpClient {
                 return Ok(response);
             };
             if hops >= max_hops.get() {
-                return Err(HttpClientError::Transport("redirect limit exceeded".into()));
+                return Err(HttpClientError::RedirectLimitExceeded);
             }
             let next_url = url
                 .join(location)
@@ -369,9 +375,7 @@ fn read_bounded(
         }
         total = total.saturating_add(read);
         if total > limit {
-            return Err(HttpClientError::Transport(
-                "response body exceeded configured limit".into(),
-            ));
+            return Err(HttpClientError::ResponseTooLarge);
         }
         emit(&chunk[..read])?;
     }

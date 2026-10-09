@@ -8,6 +8,10 @@ publish = false
 [lib]
 doctest = false
 
+# Consumers exercise the server, TLS fixtures, request capture, and worker teardown.
+[package.metadata.ash.verify]
+test-packages = ["ash-http-client", "ash-client", "ash-backend-client"]
+
 [dependencies]
 rustls = { workspace = true }
 

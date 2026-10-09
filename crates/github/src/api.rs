@@ -180,7 +180,10 @@ impl GitHub {
                     HttpClientError::InvalidConfiguration(_) => {
                         Error::Unavailable("GitHub HTTP configuration is unavailable".into())
                     }
-                    HttpClientError::Connection(_) | HttpClientError::Transport(_) => {
+                    HttpClientError::Connection(_)
+                    | HttpClientError::Transport(_)
+                    | HttpClientError::ResponseTooLarge
+                    | HttpClientError::RedirectLimitExceeded => {
                         Error::Unavailable("GitHub HTTP request failed".into())
                     }
                 }

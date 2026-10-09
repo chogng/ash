@@ -205,6 +205,10 @@ RFC 9110 指出，client 不应自动重试非幂等请求，除非它知道请�
 
 ### 4.2 尝试分类器
 
+当前实现先使用 `HttpClientError` 判断是否重试，再映射到 `ClientError`。参数、应用网络权限、
+静态配置、证书验证器初始化、响应体超限和重定向次数耗尽的错误立即返回；可重放操作的其他
+连接或传输错误仍受 attempt 上限限制。流式 attempt 已经向消费者发布 chunk 后不重试。
+
 Classifier 可以使用：
 
 - `ash-http-client` 返回的 transport failure phase；
@@ -310,10 +314,12 @@ Operation client 在每次 attempt 前计算 remaining budget，并把 bounded a
 
 unary 与 streaming 路径的 cancellation 都从 runtime 贯穿 operation preflight、活跃 attempt 的
 本地等待和 retry timer。streaming attempt 使用有界 channel 把 raw chunks 交给调用线程，取消或
-consumer failure 会断开接收端；已经发布任意 chunk 的 attempt 发生 transport failure 后绝不重放，
-避免重复 delta。取消返回独立 `ClientError::Cancelled`，不会包装成 retryable network failure，也
-不会启动下一次 attempt。由于 `ash-http-client` 仍使用同步 `ureq`，已经进入 socket read 的 worker
-不能被 token 强制关闭；它由 bounded transport timeout 收束，迟到的 chunk 或 response 不再被接受。
+consumer failure 会断开接收端并取消 attempt 的子作用域；即使服务器不再发送 chunk，生产
+`ReqwestHttpClient` 也会停止活跃 I/O，不取消调用方或兄弟操作。已经发布任意 chunk 的 attempt
+发生 transport failure 后绝不重放，避免重复 delta。调用方取消返回独立
+`ClientError::Cancelled`，不会包装成 retryable network failure，也不会启动下一次 attempt。
+同步 `UreqHttpClient` 仍不能通过 token 强制关闭正在读取的 socket，由 bounded transport timeout
+收束，迟到的 chunk 或 response 不再被接受。
 
 当前生产 wire streaming 已覆盖 OpenAI Responses、OpenAI-compatible Chat Completions 与 Anthropic
 Messages SSE。三种 endpoint 都使用原生 wire stream；其他 SSE profile、NDJSON 与 WebSocket 仍需按

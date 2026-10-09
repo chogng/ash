@@ -176,6 +176,99 @@ impl crate::ClientTelemetrySpan for &CapturingTelemetry {
 struct StaticClient;
 
 #[test]
+fn operation_retries_only_retryable_http_failures() {
+    use ash_http_client::HttpClientError;
+    use ash_http_client::HttpConnectionFailure;
+
+    for (error, attempts) in [
+        (HttpClientError::InvalidRequest("policy denied".into()), 1),
+        (
+            HttpClientError::InvalidConfiguration("invalid proxy".into()),
+            1,
+        ),
+        (
+            HttpClientError::Connection(HttpConnectionFailure::CertificateConfiguration),
+            1,
+        ),
+        (HttpClientError::ResponseTooLarge, 1),
+        (HttpClientError::RedirectLimitExceeded, 1),
+        (
+            HttpClientError::Connection(HttpConnectionFailure::Connect),
+            2,
+        ),
+        (
+            HttpClientError::Transport("connection interrupted".into()),
+            2,
+        ),
+    ] {
+        for streaming in [false, true] {
+            for cancellable in [false, true] {
+                let transport = Arc::new(FailingHttpClient {
+                    error: error.clone(),
+                    attempts: AtomicUsize::new(0),
+                });
+                let client = AshClient::new(transport.clone());
+                let request = ClientRequest::new(
+                    ash_http_client::HttpMethod::Get,
+                    "https://example.test/catalog",
+                    vec![],
+                    vec![],
+                    RetryPolicy::replayable(
+                        RetrySafety::Idempotent,
+                        NonZeroU8::new(2).unwrap(),
+                        BackoffPolicy::new(Duration::ZERO, Duration::ZERO),
+                    ),
+                )
+                .unwrap();
+                let source = CancellationSource::new();
+                let mut sink = CollectedBytes::default();
+                let result = match (streaming, cancellable) {
+                    (false, false) => client.execute(&request),
+                    (false, true) => client.execute_with_cancellation(&request, &source.token()),
+                    (true, false) => client.execute_streaming(&request, &mut sink),
+                    (true, true) => client.execute_streaming_with_cancellation(
+                        &request,
+                        &source.token(),
+                        &mut sink,
+                    ),
+                };
+                assert_eq!(result, Err(ClientError::from(error.clone())));
+                assert_eq!(
+                    transport.attempts.load(Ordering::Relaxed),
+                    attempts,
+                    "{error:?}, streaming={streaming}, cancellable={cancellable}"
+                );
+                assert!(sink.bytes.is_empty());
+                assert!(!source.token().is_cancelled());
+            }
+        }
+    }
+}
+
+struct FailingHttpClient {
+    error: ash_http_client::HttpClientError,
+    attempts: AtomicUsize,
+}
+
+impl ash_http_client::HttpClient for FailingHttpClient {
+    fn execute(
+        &self,
+        _: &ash_http_client::HttpRequest,
+    ) -> Result<ClientResponse, ash_http_client::HttpClientError> {
+        self.attempts.fetch_add(1, Ordering::Relaxed);
+        Err(self.error.clone())
+    }
+
+    fn execute_streaming(
+        &self,
+        request: &ash_http_client::HttpRequest,
+        _: &mut dyn ash_http_client::HttpBodySink,
+    ) -> Result<ClientResponse, ash_http_client::HttpClientError> {
+        self.execute(request)
+    }
+}
+
+#[test]
 fn unary_operation_clients_reject_streaming_before_sending() {
     struct UnaryOnly;
     impl OperationClient for UnaryOnly {

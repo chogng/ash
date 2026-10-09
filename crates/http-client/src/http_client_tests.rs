@@ -252,7 +252,7 @@ fn unary_response_body_is_bounded_by_the_transport_configuration() {
 
     assert!(matches!(
         client.execute(&request),
-        Err(HttpClientError::Transport(message)) if message == "response body exceeded configured limit"
+        Err(HttpClientError::ResponseTooLarge)
     ));
     server.join().unwrap();
 }
@@ -348,7 +348,7 @@ fn streaming_success_and_buffered_error_use_independent_limits() {
     assert_eq!(success_sink.body, b"abc");
     assert!(matches!(
         client.execute_streaming(&error_request, &mut CollectedBody::default()),
-        Err(HttpClientError::Transport(message)) if message == "response body exceeded configured limit"
+        Err(HttpClientError::ResponseTooLarge)
     ));
     success_server.join().unwrap();
     error_server.join().unwrap();

@@ -24,6 +24,12 @@ impl HttpClient for ScriptedHttp {
         if request.url().contains("tls.example.test") {
             return Err(HttpClientError::Connection(HttpConnectionFailure::Tls));
         }
+        if request.url().contains("large.example.test") {
+            return Err(HttpClientError::ResponseTooLarge);
+        }
+        if request.url().contains("redirect.example.test") {
+            return Err(HttpClientError::RedirectLimitExceeded);
+        }
         Ok(HttpResponse::new(
             401,
             Vec::new(),
@@ -75,6 +81,8 @@ fn network_diagnostics_preserves_routes_status_and_separates_each_failure_withou
                 "https://ok.example.test/private/path?api-key=secret-query".into(),
             ),
             ("second".into(), "https://tls.example.test/".into()),
+            ("third".into(), "https://large.example.test/".into()),
+            ("fourth".into(), "https://redirect.example.test/".into()),
         ],
     );
     let mut connection = server.connection();
@@ -85,7 +93,7 @@ fn network_diagnostics_preserves_routes_status_and_separates_each_failure_withou
         json!({"jsonrpc":"2.0","id":2,"method":"network/read","params":{}}),
     );
     let targets: NetworkReadResult = serde_json::from_value(read["result"].clone()).unwrap();
-    assert_eq!(targets.targets.len(), 2);
+    assert_eq!(targets.targets.len(), 4);
     assert_eq!(
         targets.targets[0].route,
         ash_app_server_protocol::protocol::diagnostics::NetworkRouteDto::Proxy {
@@ -104,16 +112,23 @@ fn network_diagnostics_preserves_routes_status_and_separates_each_failure_withou
     );
     let report: NetworkDiagnosticsRunResult =
         serde_json::from_value(run["result"].clone()).unwrap();
-    assert_eq!(report.checks.len(), 2);
-    assert_eq!(
-        run["result"]["checks"][0]["outcome"],
-        json!({"type":"reachable","httpStatus":401})
-    );
-    assert_eq!(
-        run["result"]["checks"][1]["outcome"],
-        json!({"type":"failed","failure":"tls"})
-    );
+    assert_eq!(report.checks.len(), 4);
+    for (connection, outcome) in [
+        ("first", json!({"type":"reachable","httpStatus":401})),
+        ("second", json!({"type":"failed","failure":"tls"})),
+        ("third", json!({"type":"failed","failure":"request"})),
+        ("fourth", json!({"type":"failed","failure":"request"})),
+    ] {
+        let check = run["result"]["checks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|check| check["connection"] == connection)
+            .unwrap();
+        assert_eq!(check["outcome"], outcome);
+    }
     let requests = http.0.lock().unwrap();
+    assert_eq!(requests.len(), 4);
     assert_eq!(requests[0].url(), "https://ok.example.test/");
     assert!(
         requests

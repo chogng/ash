@@ -322,7 +322,9 @@ fn http_failure(error: HttpClientError) -> NetworkFailureDto {
         },
         HttpClientError::InvalidConfiguration(_) => NetworkFailureDto::Configuration,
         HttpClientError::InvalidRequest(_) => NetworkFailureDto::Policy,
-        HttpClientError::Transport(_) => NetworkFailureDto::Request,
+        HttpClientError::Transport(_)
+        | HttpClientError::ResponseTooLarge
+        | HttpClientError::RedirectLimitExceeded => NetworkFailureDto::Request,
     }
 }
 

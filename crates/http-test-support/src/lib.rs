@@ -27,6 +27,12 @@ pub struct Request {
 }
 
 impl Request {
+    pub fn has_header(&self, name: &str) -> bool {
+        self.headers
+            .iter()
+            .any(|(key, _)| key.eq_ignore_ascii_case(name))
+    }
+
     pub fn header(&self, name: &str) -> &str {
         let values: Vec<_> = self
             .headers

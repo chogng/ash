@@ -181,7 +181,7 @@ fn input_keeps_its_bottom_rule() {
         self.write(
             "crates/example/Cargo.toml",
             '[package]\nname = "example"\n'
-            '[package.metadata.ash.verify]\ntest-package = "ash-tui"\n',
+            '[package.metadata.ash.verify]\ntest-packages = ["ash-tui"]\n',
         )
         self.assertEqual(self.execute(["verify", "example", "--filter", "request_"]), 0)
         self.assertEqual(
@@ -205,10 +205,103 @@ fn input_keeps_its_bottom_rule() {
         self.write(
             "crates/example/Cargo.toml",
             '[package]\nname = "example"\n'
-            '[package.metadata.ash.verify]\ntest-package = "missing"\n',
+            '[package.metadata.ash.verify]\ntest-packages = ["ash-tui", "missing"]\n',
         )
         self.assertEqual(self.execute(["verify", "example"]), 1)
         self.assertEqual(self.commands, [])
+
+    def test_verify_runs_all_consumers_with_shared_settings_and_test_only_filter(self):
+        self.write(
+            "crates/example/Cargo.toml",
+            '[package]\nname = "example"\n'
+            '[package.metadata.ash.verify]\ntest-packages = ["ash-tui", "example"]\n',
+        )
+        self.assertEqual(
+            self.execute(
+                [
+                    "verify",
+                    "example",
+                    "--filter",
+                    "request_",
+                    "--features",
+                    "one,two",
+                    "--profile",
+                    "dev-small",
+                ]
+            ),
+            0,
+        )
+        self.assertEqual(
+            [(command[1], command[2]) for command in self.commands],
+            [
+                ("check", "example"),
+                ("test", "ash-tui"),
+                ("test", "example"),
+                ("rust-warnings", "example"),
+            ],
+        )
+        for command in self.commands:
+            self.assertEqual(command[command.index("--profile") + 1], "dev-small")
+            self.assertEqual(command[command.index("--features") + 1], "one,two")
+            self.assertEqual("request_" in command, command[1] == "test")
+
+    def test_verify_stops_when_a_later_consumer_fails_or_runs_no_tests(self):
+        self.write("crates/last/Cargo.toml", '[package]\nname = "last"\n')
+        self.write(
+            "crates/example/Cargo.toml",
+            '[package]\nname = "example"\n'
+            "[package.metadata.ash.verify]\n"
+            'test-packages = ["ash-tui", "example", "last"]\n',
+        )
+        for exit_code, expected in [(23, 23), (0, 1)]:
+            with self.subTest(exit_code=exit_code):
+                self.commands.clear()
+
+                def external(command, kwargs):
+                    if command[1:3] == ["test", "example"]:
+                        return subprocess.CompletedProcess(
+                            command,
+                            exit_code,
+                            "test result: ok. 0 passed; 0 failed;\n",
+                            "",
+                        )
+                    return subprocess.CompletedProcess(
+                        command, 0, "test result: ok. 1 passed;\n", ""
+                    )
+
+                self.assertEqual(
+                    self.execute(["verify", "example"], external), expected
+                )
+                self.assertEqual(
+                    [(command[1], command[2]) for command in self.commands],
+                    [("check", "example"), ("test", "ash-tui"), ("test", "example")],
+                )
+
+    def test_verify_rejects_invalid_consumer_lists_before_running_commands(self):
+        for value in ["[]", '"ash-tui"', '["ash-tui", 1]', '["ash-tui", "ash-tui"]']:
+            with self.subTest(value=value):
+                self.commands.clear()
+                self.write(
+                    "crates/example/Cargo.toml",
+                    '[package]\nname = "example"\n'
+                    f"[package.metadata.ash.verify]\ntest-packages = {value}\n",
+                )
+                self.assertEqual(self.execute(["verify", "example"]), 1)
+                self.assertEqual(self.commands, [])
+
+    def test_verify_rejects_malformed_or_unknown_settings_before_running_commands(self):
+        for metadata in [
+            "[package.metadata.ash]\nverify = 1\n",
+            '[package.metadata.ash.verify]\ntest-package = "ash-tui"\n',
+        ]:
+            with self.subTest(metadata=metadata):
+                self.commands.clear()
+                self.write(
+                    "crates/example/Cargo.toml",
+                    '[package]\nname = "example"\n' + metadata,
+                )
+                self.assertEqual(self.execute(["verify", "example"]), 1)
+                self.assertEqual(self.commands, [])
 
     def test_snapshot_runs_actual_function_and_neutralizes_insta_settings(self):
         with patch.dict(

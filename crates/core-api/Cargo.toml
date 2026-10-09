@@ -11,7 +11,7 @@ doctest = false
 
 # Core exercises these host contracts through its real execution and lifecycle tests.
 [package.metadata.ash.verify]
-test-package = "ash-core"
+test-packages = ["ash-core"]
 
 [dependencies]
 ash-utils-image = { workspace = true }

@@ -187,27 +187,42 @@ def verify(args: argparse.Namespace, root: Path) -> int:
     package = tomllib.loads(packages[args.package].read_text(encoding="utf-8"))[
         "package"
     ]
-    test_package = (
-        package.get("metadata", {})
-        .get("ash", {})
-        .get("verify", {})
-        .get("test-package", args.package)
-    )
-    if test_package not in packages:
-        raise ValueError(f"unknown verification test package: {test_package}")
-    if test_package != args.package:
-        print(f"Testing {args.package} through its consumer {test_package}")
+    verification = package.get("metadata", {}).get("ash", {}).get("verify", {})
+    if not isinstance(verification, dict):
+        raise ValueError("verification settings must be a table")
+    if unknown := verification.keys() - {"test-packages"}:
+        raise ValueError(f"unknown verification settings: {', '.join(sorted(unknown))}")
+    test_packages = verification.get("test-packages", [args.package])
+    if (
+        not isinstance(test_packages, list)
+        or not test_packages
+        or any(not isinstance(name, str) for name in test_packages)
+        or len(set(test_packages)) != len(test_packages)
+    ):
+        raise ValueError(
+            "verification test-packages must be a non-empty list of unique names"
+        )
+    for test_package in test_packages:
+        if test_package not in packages:
+            raise ValueError(f"unknown verification test package: {test_package}")
+    if test_packages != [args.package]:
+        print(
+            f"Testing {args.package} through its consumers: {', '.join(test_packages)}"
+        )
     settings = ["--profile", args.profile]
     if args.features:
         settings += ["--features", args.features]
     commands = [
         ["just", "check", args.package, *settings],
-        [
-            "just",
-            "test",
-            test_package,
-            *settings,
-            *([args.filter] if args.filter else []),
+        *[
+            [
+                "just",
+                "test",
+                test_package,
+                *settings,
+                *([args.filter] if args.filter else []),
+            ]
+            for test_package in test_packages
         ],
         ["just", "rust-warnings", args.package, *settings],
     ]

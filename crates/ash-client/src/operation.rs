@@ -167,10 +167,7 @@ impl OperationClient for AshClient {
     fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
         let mut attempt = 1;
         loop {
-            let result = self
-                .transport
-                .execute(request.request())
-                .map_err(ClientError::from);
+            let result = self.transport.execute(request.request());
             let retry_at = match &result {
                 Ok(response)
                     if request
@@ -181,10 +178,14 @@ impl OperationClient for AshClient {
                         Instant::now() + request.retry_policy().backoff_delay(attempt)
                     })
                 }
-                Err(_) if request.retry_policy().should_retry_transport_error(attempt) => {
+                Err(error)
+                    if request
+                        .retry_policy()
+                        .should_retry_transport_error(attempt, error) =>
+                {
                     Instant::now() + request.retry_policy().backoff_delay(attempt)
                 }
-                _ => return result,
+                _ => return result.map_err(ClientError::from),
             };
             attempt += 1;
             let delay = retry_at.saturating_duration_since(Instant::now());
@@ -202,9 +203,8 @@ impl OperationClient for AshClient {
         let mut attempt = 1;
         loop {
             check_cancellation(cancellation)?;
-            let result = self.execute_attempt(request, cancellation);
+            let result = self.execute_attempt(request, cancellation)?;
             let retry_at = match &result {
-                Err(ClientError::Cancelled(_)) => return result,
                 Ok(response)
                     if request
                         .retry_policy()
@@ -214,10 +214,14 @@ impl OperationClient for AshClient {
                         Instant::now() + request.retry_policy().backoff_delay(attempt)
                     })
                 }
-                Err(_) if request.retry_policy().should_retry_transport_error(attempt) => {
+                Err(error)
+                    if request
+                        .retry_policy()
+                        .should_retry_transport_error(attempt, error) =>
+                {
                     Instant::now() + request.retry_policy().backoff_delay(attempt)
                 }
-                _ => return result,
+                _ => return result.map_err(ClientError::from),
             };
             attempt += 1;
             wait_for_retry(
@@ -256,13 +260,15 @@ impl OperationClient for AshClient {
                         Instant::now() + request.retry_policy().backoff_delay(attempt)
                     })
                 }
-                Err(_)
+                Err(error)
                     if !outcome.emitted
-                        && request.retry_policy().should_retry_transport_error(attempt) =>
+                        && request
+                            .retry_policy()
+                            .should_retry_transport_error(attempt, error) =>
                 {
                     Instant::now() + request.retry_policy().backoff_delay(attempt)
                 }
-                _ => return outcome.result,
+                _ => return outcome.result.map_err(ClientError::from),
             };
             attempt += 1;
             wait_for_retry(
@@ -278,7 +284,7 @@ impl AshClient {
         &self,
         request: &ClientRequest,
         cancellation: &CancellationToken,
-    ) -> Result<ClientResponse, ClientError> {
+    ) -> Result<Result<ClientResponse, HttpClientError>, ClientError> {
         let transport = self.transport.clone();
         let request = request.request().clone();
         let attempt_cancellation = cancellation.clone();
@@ -288,11 +294,8 @@ impl AshClient {
             .name("ash-http-attempt".into())
             .spawn(move || {
                 let _context = context.attach();
-                let _ = result_tx.send(
-                    transport
-                        .execute_with_cancellation(&request, &attempt_cancellation)
-                        .map_err(ClientError::from),
-                );
+                let _ = result_tx
+                    .send(transport.execute_with_cancellation(&request, &attempt_cancellation));
             })
             .map_err(|_| ClientError::Transport("failed to start HTTP attempt".into()))?;
 
@@ -301,7 +304,8 @@ impl AshClient {
             match result_rx.recv_timeout(CANCELLATION_POLL_INTERVAL) {
                 Ok(result) => {
                     check_cancellation(cancellation)?;
-                    return result;
+                    // Keep transport facts intact until the operation chooses whether to retry.
+                    return Ok(result);
                 }
                 Err(mpsc::RecvTimeoutError::Timeout) => {}
                 Err(mpsc::RecvTimeoutError::Disconnected) => {
@@ -321,7 +325,11 @@ impl AshClient {
     ) -> Result<StreamingAttemptOutcome, ClientError> {
         let transport = self.transport.clone();
         let request = request.request().clone();
-        let attempt_cancellation = cancellation.clone();
+        let attempt_source = cancellation.child_source();
+        // A rejected chunk must abort I/O even when the server never sends another chunk.
+        // This attempt owns cancellation without cancelling its caller or sibling operations.
+        let _cancel_attempt = attempt_source.cancel_on_drop();
+        let attempt_cancellation = attempt_source.token();
         let (message_tx, message_rx) = mpsc::sync_channel(1);
         let context = opentelemetry::Context::current();
         thread::Builder::new()
@@ -331,13 +339,11 @@ impl AshClient {
                 let mut channel_sink = ChannelHttpBodySink {
                     messages: message_tx.clone(),
                 };
-                let result = transport
-                    .execute_streaming_with_cancellation(
-                        &request,
-                        &attempt_cancellation,
-                        &mut channel_sink,
-                    )
-                    .map_err(ClientError::from);
+                let result = transport.execute_streaming_with_cancellation(
+                    &request,
+                    &attempt_cancellation,
+                    &mut channel_sink,
+                );
                 let _ = message_tx.send(StreamingAttemptMessage::Complete(result));
             })
             .map_err(|_| ClientError::Transport("failed to start HTTP stream attempt".into()))?;
@@ -367,13 +373,13 @@ impl AshClient {
 }
 
 struct StreamingAttemptOutcome {
-    result: Result<ClientResponse, ClientError>,
+    result: Result<ClientResponse, HttpClientError>,
     emitted: bool,
 }
 
 enum StreamingAttemptMessage {
     Chunk(Vec<u8>),
-    Complete(Result<ClientResponse, ClientError>),
+    Complete(Result<ClientResponse, HttpClientError>),
 }
 
 struct ChannelHttpBodySink {

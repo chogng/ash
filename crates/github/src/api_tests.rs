@@ -121,3 +121,52 @@ fn structured_graphql_refusals_do_not_copy_private_server_messages() {
         );
     }
 }
+
+struct FailedResponseHttp(HttpClientError);
+
+impl ash_http_client::HttpClient for FailedResponseHttp {
+    fn execute(&self, _: &HttpRequest) -> std::result::Result<HttpResponse, HttpClientError> {
+        Err(self.0.clone())
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn bounded_response_failures_keep_reads_unavailable_and_dispatched_writes_uncertain() {
+    for error in [
+        HttpClientError::ResponseTooLarge,
+        HttpClientError::RedirectLimitExceeded,
+    ] {
+        for operation in [Operation::Read, Operation::Write] {
+            let source = ash_async_utils::CancellationSource::new();
+            let client = crate::GitHub::for_account(
+                Arc::new(crate::tests::Credentials),
+                Arc::new(FailedResponseHttp(error.clone())),
+                source.token(),
+            )
+            .unwrap();
+            let repository = crate::tests::repository();
+            let response = client
+                .request::<Value>(
+                    &repository.host,
+                    if operation == Operation::Read {
+                        HttpMethod::Get
+                    } else {
+                        HttpMethod::Post
+                    },
+                    &repository.endpoint("issues"),
+                    None,
+                    operation,
+                )
+                .await
+                .map(|response| response.data);
+            assert_eq!(
+                response,
+                Err(if operation == Operation::Read {
+                    Error::Unavailable("GitHub HTTP request failed".into())
+                } else {
+                    Error::SubmissionUncertain
+                })
+            );
+        }
+    }
+}

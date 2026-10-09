@@ -7,6 +7,10 @@ pub enum HttpClientError {
     InvalidConfiguration(String),
     Transport(String),
     Connection(HttpConnectionFailure),
+    /// The configured body bound was exceeded; replaying cannot raise that bound.
+    ResponseTooLarge,
+    /// The complete redirect chain exhausted its configured hop bound.
+    RedirectLimitExceeded,
 }
 
 /// The failed stage of a connection attempt, without peer addresses or credentials.
@@ -42,6 +46,11 @@ impl fmt::Display for HttpClientError {
             }
             Self::Transport(message) => write!(formatter, "HTTP transport failed: {message}"),
             Self::Connection(failure) => write!(formatter, "HTTP connection failed: {failure}"),
+            Self::ResponseTooLarge => formatter
+                .write_str("HTTP transport failed: response body exceeded configured limit"),
+            Self::RedirectLimitExceeded => {
+                formatter.write_str("HTTP transport failed: redirect limit exceeded")
+            }
         }
     }
 }

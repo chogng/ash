@@ -39,6 +39,10 @@ impl From<ash_http_client::HttpClientError> for ClientError {
             ash_http_client::HttpClientError::Connection(failure) => {
                 Self::Transport(failure.to_string())
             }
+            ash_http_client::HttpClientError::ResponseTooLarge
+            | ash_http_client::HttpClientError::RedirectLimitExceeded => {
+                Self::Transport(error.to_string())
+            }
         }
     }
 }

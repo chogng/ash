@@ -1,3 +1,5 @@
+use ash_http_client::HttpClientError;
+use ash_http_client::HttpConnectionFailure;
 use std::num::NonZeroU8;
 use std::time::Duration;
 
@@ -94,8 +96,23 @@ impl RetryPolicy {
             && matches!(status, 408 | 429 | 500 | 502 | 503 | 504)
     }
 
-    pub(crate) fn should_retry_transport_error(self, attempts_completed: u8) -> bool {
+    pub(crate) fn should_retry_transport_error(
+        self,
+        attempts_completed: u8,
+        error: &HttpClientError,
+    ) -> bool {
         self.can_start_another_attempt(attempts_completed)
+            && match error {
+                HttpClientError::Transport(_) => true,
+                HttpClientError::Connection(failure) => {
+                    *failure != HttpConnectionFailure::CertificateConfiguration
+                }
+                // Replaying cannot repair the request, policy, or immutable configuration.
+                HttpClientError::InvalidRequest(_)
+                | HttpClientError::InvalidConfiguration(_)
+                | HttpClientError::ResponseTooLarge
+                | HttpClientError::RedirectLimitExceeded => false,
+            }
     }
 
     pub(crate) fn backoff_delay(self, attempts_completed: u8) -> Duration {

@@ -29,7 +29,7 @@ ash-api / auth / catalog / other HTTP consumers
               ├─ connection reuse
               └─ bounded response
                        │
-                 private ureq
+                 private reqwest / ureq
 ```
 
 Workspace 其他 crate 不应直接创建 `ureq::Agent` 或平行的 proxy/TLS policy。普通 unary HTTP
@@ -151,16 +151,19 @@ WebSocket secure route
 
 ```text
 HttpClient::execute(request)
-└─ UreqHttpClient::execute
-   ├─ agent_for
+└─ ReqwestHttpClient::dispatch
+   ├─ cancellable async attempt + bounded result channel
+   ├─ acquire target network permit
+   ├─ client_for: select a cached pool for this route and HTTP mode
    │  └─ OutboundNetworkSnapshot::proxy_route
    │     └─ ProxyBypass::matches
    │     └─ rule_matches
-   ├─ construct private ureq request + copy headers
+   ├─ construct private reqwest request + copy headers
    ├─ send request body exactly once
+   ├─ follow allowed redirects, rechecking route/permission and removing discarded headers
    ├─ retain HTTP error statuses as responses
    ├─ collect response status + headers
-   ├─ read at most configured limit + 1 byte
+   ├─ stop when received body bytes exceed the configured limit
    └─ reject overflow / return HttpResponse
 
 TelemetryHttpClient::execute
@@ -203,16 +206,21 @@ PEM/file loading、secret lookup 与 credential rotation 不属于本 crate；ca
 - `InvalidRequest`：例如非 HTTP(S) URL；
 - `InvalidConfiguration`：proxy/TLS/identity/limit 无效；
 - `Connection(HttpConnectionFailure)`：DNS、proxy、TLS、system certificate verifier 初始化、connect 或 timeout 阶段；
-- `Transport`：其他 backend send/read/body-limit failure。
+- `ResponseTooLarge` / `RedirectLimitExceeded`：响应体或重定向次数超过配置上限，操作层不重试；
+- `Transport`：其他 backend send/read failure。
 
 Client construction 同样只返回这些 typed errors；本 crate 不提供会在系统证书或 proxy 初始化失败
 时 panic 的 `Default` 实现。
 
 `ReqwestHttpClient` 从 resolver、rustls 和 reqwest 的错误类型识别连接阶段，不匹配平台错误文本；整体截止时间也返回 typed timeout。`UreqHttpClient` 的传输失败仍使用 `Transport`，系统证书验证器构造失败由共享快照返回 `Connection(CertificateConfiguration)`。Backend error 被替换成固定的 crate-owned message，避免 URL、proxy credential、certificate 或 payload 泄漏。App Server 网络诊断使用生产 `ReqwestHttpClient` 的这些分类。
 
-Redirect follow 直接使用 backend 的 bounded redirect policy。当前尚未实现 crate-owned 的
-cross-origin sensitive-header stripping、scheme-downgrade rule 或 body replay classifier；不能在
-上层文档中把这些未来要求写成已有保证。安全敏感调用默认应保持 `RedirectPolicy::Reject`。
+两种 HTTP transport 都逐跳处理 bounded redirects，重新选择目标路由并检查网络权限。
+`HttpRequest::without_redirects()` 优先于 client 的 `RedirectPolicy::Follow`；普通和流式入口
+都返回原始 3xx 与其缓冲响应体，不联系重定向目标。凭据绑定由上层在构造请求时设置，不能
+仅靠猜测认证 header 名称来保护自定义凭据。允许跳转时，后续请求移除 Authorization、Cookie
+和 Proxy-Authorization，代理路由仍按新目标重新选择；丢弃 body 时同时移除 Content-Length、
+Content-Type、Content-Encoding 和 Transfer-Encoding，并按现有 method 规则避免重放写入 body；
+当前没有禁止 HTTPS 降级的规则。
 
 ## 方向偏差检查
 
@@ -242,6 +250,8 @@ bazel test //crates/http-client:http-client-unit-tests
 - header/proxy/certificate/private-key debug redaction；
 - invalid URL/config；
 - one-attempt、non-2xx preservation 与 redirect rejection；
+- 两种 transport 的普通与流式入口均遵守请求级 redirect rejection，且未受限制的请求仍能跳转；
+- 两种 transport 均覆盖 direct/proxy 双向切换，跳转不转发 proxy credential；POST 转 GET 的普通与流式入口同时丢弃 body 和原 body headers；
 - HTTPS 跨来源重定向不发送认证头、响应未完成时触发整体超时、截断响应报脱敏传输错误；
 - bypass domain/IP/port matching 和 direct route；
 - 纯 HTTP 不创建系统证书验证器，HTTPS 惰性创建并缓存失败；
