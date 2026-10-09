@@ -419,6 +419,8 @@ use crate::protocol::common::SchemaHash;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::common::ServerInfo;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::common::ServerOperatingSystem;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::common::SessionId;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::common::StreamInstanceId;
@@ -5442,6 +5444,7 @@ typescript_bindings! {
     TextDocumentChangeDto,
     TextDocumentReleaseParams,
     ServerInfo,
+    ServerOperatingSystem,
     CallStartParams,
     CallResourceParams,
     CallControlParams,
