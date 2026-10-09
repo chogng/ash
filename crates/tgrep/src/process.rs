@@ -24,6 +24,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::Once;
 use std::sync::OnceLock;
+use std::sync::TryLockError;
 use std::sync::Weak;
 use std::sync::mpsc;
 use std::thread;
@@ -103,16 +104,47 @@ impl Server {
         index: &Path,
         cancellation: &CancellationToken,
     ) -> Result<Arc<Self>, Error> {
-        type Pool = std::collections::BTreeMap<(PathBuf, PathBuf), Weak<Server>>;
+        type Slot = Arc<Mutex<Weak<Server>>>;
+        type Pool = std::collections::BTreeMap<(PathBuf, PathBuf), Slot>;
         static SERVERS: OnceLock<Mutex<Pool>> = OnceLock::new();
-        let mut servers = SERVERS.get_or_init(Mutex::default).lock().unwrap();
-        servers.retain(|_, server| server.strong_count() != 0);
         let key = (executable.0.clone(), index.to_path_buf());
-        if let Some(server) = servers.get(&key).and_then(Weak::upgrade) {
+        let slot = {
+            let mut servers = SERVERS
+                .get_or_init(Mutex::default)
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            servers.retain(|_, slot| {
+                Arc::strong_count(slot) > 1
+                    || match slot.try_lock() {
+                        Ok(server) => server.strong_count() != 0,
+                        Err(TryLockError::Poisoned(error)) => {
+                            error.into_inner().strong_count() != 0
+                        }
+                        Err(TryLockError::WouldBlock) => true,
+                    }
+            });
+            Arc::clone(
+                servers
+                    .entry(key)
+                    .or_insert_with(|| Arc::new(Mutex::new(Weak::new()))),
+            )
+        };
+        // Only callers opening the same repository storage wait for its process startup.
+        // The pool never owns a strong server reference or holds its map lock during I/O.
+        let deadline = Instant::now() + TIMEOUT;
+        let mut pooled = loop {
+            check(cancellation, deadline)?;
+            match slot.try_lock() {
+                Ok(guard) => break guard,
+                Err(TryLockError::Poisoned(error)) => break error.into_inner(),
+                Err(TryLockError::WouldBlock) => thread::sleep(POLL),
+            }
+        };
+        if let Some(server) = pooled.upgrade() {
             return Ok(server);
         }
         let server = Arc::new(Self::start(executable, root, index, cancellation)?);
-        servers.insert(key, Arc::downgrade(&server));
+        *pooled = Arc::downgrade(&server);
         Ok(server)
     }
     pub(super) fn start(
@@ -204,7 +236,10 @@ impl Server {
                     "worktree-overlays",
                     "refresh",
                     "search",
-                    "files"
+                    "files",
+                    "file-pages",
+                    "file-fuzzy",
+                    "request-cancellation"
                 ])
                 || hello["profile"] != super::profile()
             {
@@ -218,6 +253,28 @@ impl Server {
     }
     pub(super) fn index(&self) -> &Path {
         &self.index
+    }
+    pub(super) fn is_stopped(&self) -> Result<bool, Error> {
+        Ok(self
+            .child
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .0
+            .try_wait()?
+            .is_some())
+    }
+    pub(super) fn stop(&self) -> Result<(), Error> {
+        let mut child = self.child.lock().unwrap_or_else(|e| e.into_inner());
+        if child.0.try_wait()?.is_none() {
+            if let Err(error) = child.0.kill() {
+                // The process may have exited between the observation and kill.
+                if child.0.try_wait()?.is_none() {
+                    return Err(error.into());
+                }
+            }
+            child.0.wait()?;
+        }
+        Ok(())
     }
     pub(super) fn rpc(
         &self,
@@ -240,6 +297,9 @@ impl Server {
         socket.set_read_timeout(Some(POLL))?;
         socket.set_write_timeout(Some(Duration::from_secs(1)))?;
         let mut envelope = json!({"jsonrpc":"2.0","id":1,"method":method,"params":params});
+        if matches!(method, "files/fuzzy" | "files/refresh" | "files/page") {
+            envelope["cancellable"] = json!(true);
+        }
         if let Protocol::Shared(info) = &self.protocol {
             envelope["protocol"] = json!(info.protocol);
             envelope["instance"] = json!(info.instance);
@@ -292,7 +352,7 @@ impl Server {
                 "tgrep: {}",
                 error["message"].as_str().expect("validated message")
             );
-            return Err(if self.is_shared() && error["code"] == -32002 {
+            return Err(if error["code"] == -32002 {
                 Error::NotReady(message)
             } else {
                 failed(message)

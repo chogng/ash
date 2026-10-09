@@ -61,6 +61,14 @@ Path Service 的资源路径 provider 注册仍没有生产调用方，未扩展
 
 ## 编译与导出
 
+`file/search/fuzzy` 与 `file/search/glob` 都要求显式选择已授权的 Workspace 或 Session 目录，
+在查询期间持有 `SearchFiles` 授权，并使用当前连接的 `operationId` 取消。
+fuzzy 返回 `matches: [{ path, score }]` 与截断前的 `totalMatches`，成功结果注明实际 `freshness`；
+`path` 相对所选目录，`score` 是 Nucleo 评分，客户端按评分合并已授权目录、按 URI 去重后应用总上限。
+默认复用配置的 tgrep 目录注册，在独立于内容就绪的文件名视图中完成全局评分，只传输有界结果；
+引擎错误直接返回，不发布部分排序。关闭索引时读取当前路径。显式 glob 保持当前磁盘与
+ignore override 语义。对应的 `/cancel` 响应只确认取消请求，原查询仍返回终态。
+
 - 队列、通话、协作和任务交付使用各自的 `*-contract` crate；服务端启用执行 feature 时也不改变协议依赖。协议构建不编译这些领域的执行器、SQLite、工具执行、剪贴板或图片处理；默认与服务端 feature 合并后的依赖边界由 `tests/dependency_boundary.rs` 验证。
 - 默认构建使用空实现 `JsonSchema` / `TS` 派生，保留属性但不生成实现；握手 hash 由构建脚本从 `.build/protocol/metadata.json` 写入编译常量。
 - 单元测试使用真实派生验证契约，`schema_hash` 集成测试校验默认运行时、导出器与生成客户端一致。

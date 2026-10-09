@@ -243,7 +243,7 @@ just test-python build
 
 ## Public grep runtime
 
-`lib/tgrep.py` and development `prepare.py` build the same pinned 1.0.12-ash.e9d55db.1 source and Ash runtime patch from
+`lib/tgrep.py` and development `prepare.py` build the same pinned 1.1.0-ash.b614b8c.4 source, Ash runtime patch and shared file-search ranking/admission sources from
 [`third_party/tgrep/runtime-lock.json`](../third_party/tgrep/runtime-lock.json).
 All products and Remote runtimes include `ash-resources/tgrep/tgrep[.exe]` and its
 MIT license. The component digest and complete file manifest include tgrep; signing

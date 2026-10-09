@@ -1,5 +1,9 @@
 //! Incremental fuzzy directory-file search.
 
+mod discovery;
+mod ranking;
+
+use ash_async_utils::CancellationToken;
 use ignore::WalkBuilder;
 use nucleo::Config;
 use nucleo::Injector;
@@ -10,6 +14,7 @@ use nucleo::pattern::CaseMatching;
 use nucleo::pattern::Normalization;
 use std::fmt;
 use std::num::NonZeroUsize;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -22,20 +27,12 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::sync::mpsc::Sender;
 use std::thread;
 use std::time::Duration;
+use std::time::Instant;
 
 const MATCH_TICK: Duration = Duration::from_millis(10);
 const IDLE_WAIT: Duration = Duration::from_millis(100);
 
-/// One fuzzy file-path match relative to the searched directory root.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PathMatch {
-    /// Relevance score produced by Nucleo.
-    pub score: u32,
-    /// UTF-8 path relative to the search root.
-    pub path: PathBuf,
-    /// Sorted, deduplicated character indices used to highlight the fuzzy match.
-    pub indices: Vec<u32>,
-}
+pub use ranking::PathMatch;
 
 /// An incremental snapshot produced for the most recently processed query.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -103,11 +100,71 @@ impl fmt::Debug for PathSearchHandle {
     }
 }
 
-/// Public file-path search capability. Each fuzzy request owns its worker handle.
+/// Public current-disk path queries and incremental search handles.
 #[derive(Debug, Default)]
 pub struct Service;
 
 impl Service {
+    /// Discovers and ranks current disk paths within the caller's authorization lifetime.
+    pub fn fuzzy(
+        &self,
+        root: PathBuf,
+        query: &str,
+        max_results: usize,
+        cancellation: &CancellationToken,
+    ) -> Result<PathSearchSnapshot, Error> {
+        if query.len() > 1024 || query.contains('\0') || !(1..=5000).contains(&max_results) {
+            return Err(Error::InvalidInput(
+                "invalid fuzzy file query or limit".into(),
+            ));
+        }
+        let deadline = Instant::now() + Duration::from_secs(30);
+        let check = || {
+            cancellation
+                .check()
+                .map_err(|reason| Error::Cancelled(reason.reason().to_string()))?;
+            if Instant::now() >= deadline {
+                return Err(Error::Failed("file search exceeded 30 seconds".into()));
+            }
+            Ok(())
+        };
+        check()?;
+        if !root
+            .metadata()
+            .map_err(|error| Error::Failed(error.to_string()))?
+            .is_dir()
+        {
+            return Err(Error::Failed("path-search root must be a directory".into()));
+        }
+        let walker_cancellation = cancellation.clone();
+        let mut builder = path_walker(&root, 1);
+        // Observe cancellation on ignored entries too, before a filtered iterator can advance.
+        builder.filter_entry(move |entry| {
+            !walker_cancellation.is_cancelled()
+                && Instant::now() < deadline
+                && admitted_entry(entry)
+        });
+        let paths = builder.build().filter_map(|entry| {
+            let entry = entry.ok()?;
+            if !entry.file_type().is_some_and(|kind| kind.is_file()) {
+                return None;
+            }
+            let relative = entry.path().strip_prefix(&root).ok()?;
+            relative.to_str()?;
+            Some(Ok(relative.to_path_buf()))
+        });
+        let ranked = ranking::rank(paths, query, max_results, check)?;
+        Ok(PathSearchSnapshot {
+            query: query.to_owned(),
+            matches: ranked.matches,
+            total_match_count: ranked.total_match_count,
+            scanned_file_count: ranked.scanned_file_count,
+            scan_complete: true,
+            search_complete: true,
+            ..PathSearchSnapshot::default()
+        })
+    }
+
     /// Starts a background path search rooted at an existing directory.
     pub fn start(
         &self,
@@ -175,6 +232,7 @@ impl PathSearchHandle {
 
 impl Drop for PathSearchHandle {
     fn drop(&mut self) {
+        // Workers retain the shared state until they observe shutdown; dropping a picker never blocks its UI.
         self.inner.shutdown.store(true, Ordering::Relaxed);
         let _ = self.inner.work_tx.send(WorkSignal::Shutdown);
     }
@@ -197,21 +255,28 @@ enum WorkSignal {
     Shutdown,
 }
 
-fn walker_worker(inner: Arc<SearchInner>, injector: Injector<Arc<str>>) {
-    let mut builder = WalkBuilder::new(&inner.root);
+fn admitted_entry(entry: &ignore::DirEntry) -> bool {
+    entry.depth() == 0
+        || !entry.file_type().is_some_and(|kind| kind.is_dir())
+        || !entry
+            .file_name()
+            .to_str()
+            .is_some_and(|name| discovery::EXCLUDED_DIRECTORIES.contains(&name))
+}
+
+fn path_walker(root: &Path, worker_threads: usize) -> WalkBuilder {
+    let mut builder = WalkBuilder::new(root);
     builder
-        .threads(inner.worker_threads)
+        .threads(worker_threads)
         .hidden(false)
         .follow_links(false)
-        .require_git(true)
-        .filter_entry(|entry| {
-            entry.depth() == 0
-                || !entry.file_type().is_some_and(|kind| kind.is_dir())
-                || !matches!(
-                    entry.file_name().to_str(),
-                    Some(".git" | ".ash" | "node_modules" | "target")
-                )
-        });
+        .require_git(false)
+        .filter_entry(admitted_entry);
+    builder
+}
+
+fn walker_worker(inner: Arc<SearchInner>, injector: Injector<Arc<str>>) {
+    let builder = path_walker(&inner.root, inner.worker_threads);
     let walker = builder.build_parallel();
 
     walker.run(|| {
@@ -329,33 +394,31 @@ fn build_snapshot(
 ) -> PathSearchSnapshot {
     let snapshot = nucleo.snapshot();
     let pattern = snapshot.pattern().column_pattern(0);
-    let mut matches = snapshot
-        .matches()
-        .iter()
-        .take(inner.result_limit)
-        .filter_map(|matched| {
-            let item = snapshot.get_item(matched.idx)?;
+    let mut best = ranking::TopMatches::new(inner.result_limit);
+    for matched in snapshot.matches() {
+        if inner.shutdown.load(Ordering::Relaxed) {
+            break;
+        }
+        if let Some(item) = snapshot.get_item(matched.idx) {
+            best.push(matched.score, Path::new(item.data.as_ref()));
+        }
+    }
+    let matches = best
+        .into_sorted()
+        .into_iter()
+        .map(|(score, path)| {
+            let text = Utf32String::from(path.to_str().expect("walker admits UTF-8 paths"));
             let mut indices = Vec::new();
-            let _ = pattern.indices(
-                item.matcher_columns[0].slice(..),
-                indices_matcher,
-                &mut indices,
-            );
+            let _ = pattern.indices(text.slice(..), indices_matcher, &mut indices);
             indices.sort_unstable();
             indices.dedup();
-            Some(PathMatch {
-                score: matched.score,
-                path: PathBuf::from(item.data.as_ref()),
+            PathMatch {
+                score,
+                path,
                 indices,
-            })
+            }
         })
-        .collect::<Vec<_>>();
-    matches.sort_by(|left, right| {
-        right
-            .score
-            .cmp(&left.score)
-            .then_with(|| left.path.cmp(&right.path))
-    });
+        .collect();
     PathSearchSnapshot {
         query_revision,
         query: query.to_owned(),
@@ -370,6 +433,9 @@ fn build_snapshot(
 #[cfg(test)]
 #[path = "file_search_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+mod ranking_tests;
 
 mod glob;
 pub use glob::Error;

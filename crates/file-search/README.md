@@ -6,8 +6,8 @@
 > discovery 与冻结边界见 [`crates/shell-command/README.md`](../shell-command/README.md)。
 
 - `Service` 提供已授权目录内的 glob 查询，以及路径模糊搜索的创建入口。
-- glob 读取当前磁盘路径；模糊查询使用请求持有的后台路径索引与 Nucleo matcher。
-- Agent、CLI、TUI 和桌面消费公共能力；TS 工作区文件选择器通过 App Server 的 `file/search/glob` 接入。调用方负责授权、取消、交互与输出。
+- glob 读取当前磁盘路径；模糊查询用 Nucleo 匹配已发现的路径或请求持有的后台路径索引。
+- Agent、CLI、TUI 和桌面消费公共能力；TS 工作区文件选择器通过 App Server 的 `file/search/fuzzy` 与 `file/search/glob` 接入。调用方负责授权、取消、交互与输出。
 - 不读取候选文件内容、不注册模型 Tool、不拥有 TUI popup/token 状态。
 
 公共路径搜索能力的职责和实现状态统一见[搜索架构](../../docs/search.md#目标依赖关系)
@@ -18,6 +18,9 @@
 ```text
 src/
 ├── lib.rs                    # Service、PathSearchHandle、worker 与 snapshot
+├── discovery.rs              # 磁盘 walker 与引擎清单共用的目录准入
+├── ranking.rs                # 无 I/O 的有界排序，磁盘服务和 tgrep 共用
+├── ranking_tests.rs          # 排序、截断、Unicode、高亮与输入迭代失败
 ├── glob.rs                   # 有界 glob 枚举、排序、范围校验与取消
 ├── glob_tests.rs             # ignore/override、排序、越界与取消
 ├── file_search_tests.rs      # 增量 query、ignore、排序和高亮索引
@@ -27,6 +30,20 @@ src/
 ```
 
 ## 公共契约
+
+`Service::fuzzy(root, query, max_results, cancellation)` 在调用线程内发现当前磁盘路径，
+用公共评分模块保留最高分的前 N 项，平分时按路径排序，并返回截断前的匹配总数。
+查询最多 1 KiB，结果上限为 1–5,000；发现和评分期间检查取消与 30 秒期限。
+发现、评分与高亮在返回前结束，目录授权覆盖整个操作；高亮只计算保留的结果。
+
+TS 文件查询由 App Server 通过公共 grep 的同一目录注册，请求 tgrep 在自己的路径清单上评分并返回前 N 项。
+[`ranking.rs`](src/ranking.rs) 是纯计算模块，只依赖固定版本的 Nucleo matcher；构建时按
+[`runtime-lock.json`](../../third_party/tgrep/runtime-lock.json) 的哈希编译进引擎，避免复制另一套评分与高亮规则。
+[`discovery.rs`](src/discovery.rs) 的目录排除规则同样按哈希编译进引擎；候选准入属于路径发现，评分不排除目录。
+目录元数据、ignore、变更确认和索引租约由引擎管理，文件名查询不等待内容建索引；
+Ash 只接收有界结果，不缓存完整目录路径。
+配置关闭索引时，`Service::fuzzy` 使用当前磁盘路径搜索并等待本次查询完成；
+引擎故障显式返回错误。TUI 与 CLI 的流式 handle 仍按下述方式持有自己的路径扫描。
 
 `Service::start(root, options)` 验证 root 是目录，返回后台搜索 handle 和
 `Receiver<PathSearchSnapshot>`：
@@ -42,18 +59,19 @@ Nucleo matcher worker
 ```
 
 `PathSearchHandle::update_query` 只更新 matcher pattern，不重启目录遍历。丢弃 handle 会设置
-shutdown 并唤醒 matcher；walker 在遍历 callback 中观察 shutdown。worker 是 detached thread，
-调用方不等待 join。
+shutdown 并唤醒 matcher；walker 在遍历 callback 中观察 shutdown。交互式调用方丢弃 handle
+时不等待 join，worker 结束后释放共享状态。一次性 `Service::fuzzy` 不创建后台 handle。
 
 `PathSearchSnapshot` 携带单调递增的 `query_revision`、query、按 score 降序且按 path 升序打破
 平局的前 N 项、匹配字符索引、扫描文件数以及 scan/search completion 状态。调用方必须同时检查
 revision 和 query，避免输入从 A 变成 B 再回到 A 时接受第一次 A 的过期结果。
+增量 matcher 的全部匹配先按公共前 N 项选择规则筛选，再计算高亮；同分结果不依赖扫描顺序。
 
 路径 walker：
 
-- 使用 Git 作用域内的 `.gitignore`/ignore 语义；
+- 尊重 `.gitignore`/ignore，普通非 Git 目录也应用 `.gitignore`；
 - 不跟随 symlink；
-- 显式跳过 `.git`、`.ash`、`node_modules` 与 `target`；
+- 按共同准入规则跳过根目录下的 `.git`、`.ash`、`node_modules` 与 `target` 子目录；根本身不按名称排除；
 - 跳过非 UTF-8 relative path；
 - 只注入普通文件，不返回目录。
 
@@ -115,9 +133,8 @@ limit 截断时，warning 写入 stderr；JSON match 仍写入 stdout，方便�
 ## 验证
 
 ```bash
-cargo test --manifest-path Cargo.toml -p ash-file-search
-cargo clippy --manifest-path Cargo.toml -p ash-file-search --all-targets --no-deps -- -D warnings
-cargo run --manifest-path Cargo.toml -p ash-file-search -- --help
+just verify ash-file-search --profile ci-test
+just run ash-file-search -- --help
 bazel test //crates/file-search:file-search-unit-tests
 bazel build //crates/file-search:ash-file-search
 ```

@@ -209,6 +209,36 @@ pub struct FileGlobResult {
     pub total_matches: usize,
 }
 
+/// Scores file paths in the selected directory's shared search view.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct FileFuzzyParams {
+    #[schemars(length(min = 1, max = 128))]
+    pub operation_id: String,
+    pub target: FileGlobTarget,
+    #[schemars(length(max = 1024))]
+    pub query: String,
+    #[schemars(range(min = 1, max = 5000))]
+    pub max_results: usize,
+}
+
+/// Root-relative paths in descending fuzzy score order; readiness is not freshness.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FileFuzzyResult {
+    pub matches: Vec<FileFuzzyMatch>,
+    pub total_matches: usize,
+    pub freshness: ContentSearchFreshness,
+}
+
+/// A directory-relative path with the engine score used to merge multiple roots.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FileFuzzyMatch {
+    pub path: String,
+    pub score: u32,
+}
+
 /// Requests cancellation on this connection; the original request carries the terminal result.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

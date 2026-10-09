@@ -20,6 +20,7 @@ ignore = { workspace = true }
 process-hardening = { workspace = true }
 
 [dev-dependencies]
+ash-file-search = { workspace = true }
 tempfile = { workspace = true }
 
 [lints]

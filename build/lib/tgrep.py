@@ -26,6 +26,14 @@ def resolve_tgrep(
     version = lock["version"]
     source = _verified_input(lock_path.parent, lock["source"])
     patch = _verified_input(lock_path.parent, lock["patch"])
+    shared_sources = {}
+    for name in ("ranking", "discovery"):
+        if name in lock:
+            # Shared product policy and computation participate in the runtime's identity.
+            path = (lock_path.parent / lock[name]["file"]).resolve()
+            shared_sources[name] = _verified_input(
+                path.parent, {"file": path.name, "sha256": lock[name]["sha256"]}
+            )
     if spec.target not in lock["targets"]:
         raise RuntimeError(f"No tgrep source build is locked for {spec.target}")
     if explicit_binary is not None:
@@ -41,6 +49,7 @@ def resolve_tgrep(
             {
                 "source": lock["source"]["sha256"],
                 "patch": lock["patch"]["sha256"],
+                "shared_sources": {name: lock[name]["sha256"] for name in shared_sources},
                 "target": spec.target,
                 "toolchain": toolchain,
             },
@@ -92,6 +101,8 @@ def resolve_tgrep(
                 env=patch_environment,
                 check=True,
             )
+            for name, path in shared_sources.items():
+                shutil.copy2(path, directory / f"tgrep-cli/src/ash_{name}.rs")
             target_directory = directory / "target"
             environment = dict(os.environ, CARGO_TARGET_DIR=str(target_directory))
             subprocess.run(

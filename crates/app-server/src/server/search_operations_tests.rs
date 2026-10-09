@@ -215,6 +215,136 @@ fn file_glob_rpc_uses_authorized_roots_ignore_rules_and_limits() {
 }
 
 #[test]
+fn file_fuzzy_rpc_ranks_indexed_binary_paths_and_respects_configuration_and_grants() {
+    use ash_file_access::Dir;
+    use ash_file_access::Grant;
+    use ash_file_access::GrantSource;
+    use ash_file_access::Permissions;
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir(root.path().join(".git")).unwrap();
+    std::fs::write(root.path().join(".gitignore"), "ignored.png\n").unwrap();
+    for name in ["a_l_p_h_a.png", "中文.png", "ignored.png"] {
+        std::fs::write(root.path().join(name), [0, 255, 0]).unwrap();
+    }
+    for index in 0..1050 {
+        std::fs::write(
+            root.path().join(format!("a_l_p_h_a_{index:04}.png")),
+            [0, 255, 0],
+        )
+        .unwrap();
+    }
+    // The strongest name sorts beyond the first engine page and must still win top-1.
+    std::fs::create_dir(root.path().join("zz")).unwrap();
+    std::fs::write(root.path().join("zz/ALPHA.png"), [0, 255, 0]).unwrap();
+    let grant = Grant::for_environment(
+        Dir::open_local(root.path()).unwrap(),
+        GrantSource::HostConfiguration,
+        Permissions::new([Permission::SearchFiles, Permission::InspectRepository]),
+    );
+    let server = glob_server();
+    server
+        .activate_local_dirs(vec![
+            ("folder".into(), grant.clone()),
+            (
+                "inspect-only".into(),
+                Grant::for_environment(
+                    Dir::open_local(root.path()).unwrap(),
+                    GrantSource::HostConfiguration,
+                    Permissions::new([Permission::InspectRepository]),
+                ),
+            ),
+        ])
+        .unwrap();
+    let mut connection = server.connection();
+    glob_call(
+        &server,
+        &mut connection,
+        1,
+        "initialize",
+        serde_json::json!({"clientInfo":{"name":"fuzzy-test","version":"1"}, "capabilities":{}}),
+    );
+    let params = serde_json::json!({"operationId":"rank", "target":{"type":"workspace","dirId":"folder"}, "query":"alpha", "maxResults":1});
+    let response = glob_call(
+        &server,
+        &mut connection,
+        2,
+        "file/search/fuzzy",
+        params.clone(),
+    );
+    assert_eq!(
+        response["result"]["matches"][0]["path"], "zz/ALPHA.png",
+        "{response}"
+    );
+    assert!(response["result"]["matches"][0]["score"].as_u64().unwrap() > 0);
+    assert_eq!(response["result"]["totalMatches"], 1052);
+    assert_eq!(response["result"]["freshness"], "indexed");
+    let mut unicode = params.clone();
+    unicode["operationId"] = serde_json::json!("unicode");
+    unicode["query"] = serde_json::json!("中文");
+    let response = glob_call(
+        &server,
+        &mut connection,
+        3,
+        "file/search/fuzzy",
+        unicode.clone(),
+    );
+    assert_eq!(
+        response["result"]["matches"][0]["path"],
+        serde_json::json!("中文.png"),
+        "{response}"
+    );
+    server
+        .env_runtime
+        .read()
+        .unwrap()
+        .workspace
+        .grep
+        .as_ref()
+        .unwrap()
+        .configure(grep::Backend::Ripgrep)
+        .unwrap();
+    unicode["operationId"] = serde_json::json!("disk");
+    let response = glob_call(&server, &mut connection, 4, "file/search/fuzzy", unicode);
+    assert_eq!(
+        response["result"]["matches"][0]["path"], "中文.png",
+        "{response}"
+    );
+    assert!(response["result"]["matches"][0]["score"].as_u64().unwrap() > 0);
+    assert_eq!(response["result"]["totalMatches"], 1);
+    assert_eq!(response["result"]["freshness"], "current");
+    for (id, field, value, code) in [
+        (5, "maxResults", serde_json::json!(0), -32602),
+        (6, "query", serde_json::json!("x".repeat(1025)), -32602),
+        (
+            7,
+            "target",
+            serde_json::json!({"type":"workspace", "dirId":"missing"}),
+            -32602,
+        ),
+        (
+            8,
+            "target",
+            serde_json::json!({"type":"workspace", "dirId":"inspect-only"}),
+            -32043,
+        ),
+    ] {
+        let mut invalid = params.clone();
+        invalid["operationId"] = serde_json::json!(format!("invalid-{id}"));
+        invalid[field] = value;
+        let response = glob_call(&server, &mut connection, id, "file/search/fuzzy", invalid);
+        assert_eq!(response["error"]["code"], code, "{response}");
+    }
+    grant.revoke();
+    let mut revoked = params;
+    revoked["operationId"] = serde_json::json!("revoked");
+    assert_eq!(
+        glob_call(&server, &mut connection, 9, "file/search/fuzzy", revoked)["error"]["message"],
+        "PermissionRequired"
+    );
+    server.close_connection(connection);
+}
+
+#[test]
 fn file_glob_cancellation_is_connection_owned_and_keeps_a_terminal_reply() {
     use ash_file_access::Dir;
     use ash_file_access::Grant;
@@ -246,30 +376,48 @@ fn file_glob_cancellation_is_connection_owned_and_keeps_a_terminal_reply() {
             }),
         );
     }
-    let cancelled = glob_call(
-        &server,
-        &mut first,
-        2,
-        "file/search/glob/cancel",
-        serde_json::json!({"operationId":"pending"}),
-    );
-    assert_eq!(cancelled["result"], serde_json::Value::Null);
-    let query = serde_json::json!({"operationId":"pending", "target":{"type":"workspace","dirId":"folder"}, "includePatterns":[], "excludePatterns":[], "maxResults":100});
-    let other = glob_call(&server, &mut second, 2, "file/search/glob", query.clone());
-    assert_eq!(other["result"]["paths"], serde_json::json!(["file.txt"]));
-    let terminal = glob_call(&server, &mut first, 3, "file/search/glob", query);
-    assert_eq!(
-        terminal["error"]["message"], "RequestCancelled",
-        "{terminal}"
-    );
-    let invalid = glob_call(
-        &server,
-        &mut first,
-        4,
-        "file/search/glob/cancel",
-        serde_json::json!({"operationId":""}),
-    );
-    assert_eq!(invalid["error"]["code"], -32602);
+    for (index, (method, cancel_method, query)) in [
+        (
+            "file/search/glob",
+            "file/search/glob/cancel",
+            serde_json::json!({"operationId":"pending-glob", "target":{"type":"workspace","dirId":"folder"}, "includePatterns":[], "excludePatterns":[], "maxResults":100}),
+        ),
+        (
+            "file/search/fuzzy",
+            "file/search/fuzzy/cancel",
+            serde_json::json!({"operationId":"pending-fuzzy", "target":{"type":"workspace","dirId":"folder"}, "query":"file", "maxResults":100}),
+        ),
+    ].into_iter().enumerate() {
+        let request_id = 2 + index as u64 * 3;
+        let cancelled = glob_call(
+            &server,
+            &mut first,
+            request_id,
+            cancel_method,
+            serde_json::json!({"operationId":query["operationId"]}),
+        );
+        assert_eq!(cancelled["result"], serde_json::Value::Null);
+        let other = glob_call(&server, &mut second, request_id, method, query.clone());
+        let paths = if method == "file/search/glob" {
+            other["result"]["paths"].clone()
+        } else {
+            serde_json::json!([other["result"]["matches"][0]["path"]])
+        };
+        assert_eq!(paths, serde_json::json!(["file.txt"]), "{other}");
+        let terminal = glob_call(&server, &mut first, request_id + 1, method, query);
+        assert_eq!(
+            terminal["error"]["message"], "RequestCancelled",
+            "{terminal}"
+        );
+        let invalid = glob_call(
+            &server,
+            &mut first,
+            request_id + 2,
+            cancel_method,
+            serde_json::json!({"operationId":""}),
+        );
+        assert_eq!(invalid["error"]["code"], -32602);
+    }
     server.close_connection(first);
     server.close_connection(second);
 }
@@ -379,6 +527,22 @@ fn file_glob_session_target_requires_that_sessions_directory_authorization() {
         serde_json::json!(["session.txt"]),
         "{response}"
     );
+    let mut fuzzy = query.clone();
+    fuzzy["operationId"] = serde_json::json!("session-fuzzy");
+    fuzzy["query"] = serde_json::json!("SESSION");
+    fuzzy.as_object_mut().unwrap().remove("includePatterns");
+    fuzzy.as_object_mut().unwrap().remove("excludePatterns");
+    let response = glob_call(
+        &server,
+        &mut connection,
+        5,
+        "file/search/fuzzy",
+        fuzzy.clone(),
+    );
+    assert_eq!(
+        response["result"]["matches"][0]["path"], "session.txt",
+        "{response}"
+    );
     let mut denied = query.clone();
     denied["operationId"] = serde_json::json!("ungranted-session-root");
     denied["target"]["path"] = serde_json::json!(ungranted.path());
@@ -390,6 +554,11 @@ fn file_glob_session_target_requires_that_sessions_directory_authorization() {
     server
         .remove_session_dir(&session.session_id, &path)
         .unwrap();
+    fuzzy["operationId"] = serde_json::json!("session-fuzzy-revoked");
+    assert_eq!(
+        glob_call(&server, &mut connection, 6, "file/search/fuzzy", fuzzy)["error"]["message"],
+        "PermissionRequired"
+    );
     let mut revoked = query;
     revoked["operationId"] = serde_json::json!("revoked-session-root");
     let response = glob_call(&server, &mut connection, 4, "file/search/glob", revoked);

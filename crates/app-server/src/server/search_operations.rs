@@ -16,6 +16,9 @@ use ash_app_server_protocol::protocol::search::ContentSearchReadParams;
 use ash_app_server_protocol::protocol::search::ContentSearchReadResult;
 use ash_app_server_protocol::protocol::search::ContentSearchStartParams;
 use ash_app_server_protocol::protocol::search::ContentSearchStartResult;
+use ash_app_server_protocol::protocol::search::FileFuzzyMatch;
+use ash_app_server_protocol::protocol::search::FileFuzzyParams;
+use ash_app_server_protocol::protocol::search::FileFuzzyResult;
 use ash_app_server_protocol::protocol::search::FileGlobCancelParams;
 use ash_app_server_protocol::protocol::search::FileGlobParams;
 use ash_app_server_protocol::protocol::search::FileGlobResult;
@@ -31,6 +34,131 @@ use grep::Query as ContentSearchQuery;
 use serde_json::Value;
 
 impl AppServer {
+    pub(super) fn file_fuzzy(
+        &self,
+        params: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
+        let params: FileFuzzyParams = decode(params)?;
+        if params.query.len() > 1024
+            || params.query.contains('\0')
+            || !(1..=5000).contains(&params.max_results)
+        {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let authorization = match params.target {
+            FileGlobTarget::Workspace { dir_id } => self
+                .env_runtime
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .dirs
+                .get(&dir_id)
+                .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))?
+                .authorize(Permission::SearchFiles)
+                .map_err(|_| RpcError::new(-32043, AppServerErrorName::PermissionRequired))?,
+            FileGlobTarget::Session { session_id, path } => self
+                .session_dir_authorization(&session_id, &path, Permission::SearchFiles)
+                .map_err(|error| {
+                    if error.code == -32064 {
+                        RpcError::new(-32043, AppServerErrorName::PermissionRequired)
+                    } else {
+                        error
+                    }
+                })?,
+        };
+        let grep = self
+            .env_runtime
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .workspace
+            .grep
+            .clone();
+        // Keep the directory grant alive through discovery and ranking, including index attachment.
+        let (found, freshness) = authorization
+            .execute(
+                authorization.subject(),
+                authorization.dir(),
+                Permission::SearchFiles,
+                || {
+                    let indexed = match &grep {
+                        Some(service) => service
+                            .indexed_fuzzy(
+                                authorization.dir(),
+                                &params.query,
+                                params.max_results,
+                                cancellation,
+                            )
+                            .map_err(|error| match error {
+                                grep::Error::Cancelled(_) => {
+                                    RpcError::new(-32800, AppServerErrorName::RequestCancelled)
+                                }
+                                grep::Error::InvalidInput(_) => {
+                                    RpcError::new(-32602, AppServerErrorName::InvalidParams)
+                                }
+                                grep::Error::Failed(_) => {
+                                    RpcError::new(-32050, AppServerErrorName::SearchUnavailable)
+                                }
+                            })?,
+                        None => None,
+                    };
+                    match indexed {
+                        Some(found) => Ok((
+                            file_search::PathSearchSnapshot {
+                                query: params.query.clone(),
+                                matches: found
+                                    .matches
+                                    .into_iter()
+                                    .map(|matched| file_search::PathMatch {
+                                        score: matched.score,
+                                        path: matched.path,
+                                        indices: matched.indices,
+                                    })
+                                    .collect(),
+                                total_match_count: found.total_match_count,
+                                scanned_file_count: found.scanned_file_count,
+                                scan_complete: true,
+                                search_complete: true,
+                                ..Default::default()
+                            },
+                            ContentSearchFreshness::Indexed,
+                        )),
+                        None => self
+                            .file_search
+                            .fuzzy(
+                                authorization.dir().canonical_path().to_path_buf(),
+                                &params.query,
+                                params.max_results,
+                                cancellation,
+                            )
+                            .map(|found| (found, ContentSearchFreshness::Current))
+                            .map_err(file_glob_error),
+                    }
+                },
+            )
+            .map_err(|_| RpcError::new(-32043, AppServerErrorName::PermissionRequired))??;
+        result(&FileFuzzyResult {
+            matches: found
+                .matches
+                .into_iter()
+                .map(|matched| FileFuzzyMatch {
+                    score: matched.score,
+                    path: matched
+                        .path
+                        .components()
+                        .map(|part| {
+                            part.as_os_str()
+                                .to_str()
+                                .expect("fuzzy search returns UTF-8 paths")
+                        })
+                        .collect::<Vec<_>>()
+                        .join("/"),
+                })
+                .collect(),
+            total_matches: found.total_match_count,
+            freshness,
+        })
+    }
+
     pub(super) fn file_glob(
         &self,
         params: &Value,

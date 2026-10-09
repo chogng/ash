@@ -2930,6 +2930,10 @@ impl AppServer {
             Some(ClientMethod::GitPull) => self.git_pull(&request.params, cancellation),
             Some(ClientMethod::GitPush) => self.git_push(&request.params, cancellation),
             Some(ClientMethod::FileGlob) => self.file_glob(&request.params, cancellation),
+            Some(ClientMethod::FileFuzzy) => self.file_fuzzy(&request.params, cancellation),
+            Some(ClientMethod::FileFuzzyCancel) => {
+                self.file_glob_cancel(connection, &request.params)
+            }
             Some(ClientMethod::FileGlobCancel) => {
                 self.file_glob_cancel(connection, &request.params)
             }

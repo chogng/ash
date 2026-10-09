@@ -1,16 +1,16 @@
 {
   "schemaVersion": 2,
   "runtime": "tgrep",
-  "version": "1.0.12-ash.e9d55db.1",
+  "version": "1.1.0-ash.b614b8c.4",
   "source": {
     "repository": "https://github.com/microsoft/tgrep",
-    "commit": "e9d55dbbf232f0e228695f15a640cf207d4b3348",
+    "commit": "b614b8c51e76607abffaf73239c42365f0e3c1ff",
     "file": "source.tar.gz",
-    "sha256": "1b590547b2d03c626f2d5ec093338d798c5d18e8e462a176f54300eef361c7aa"
+    "sha256": "4b7ae017f9f7ae9463a4b8f5d8096fc5156d6931c9dc89b58febaf65b88ed7ee"
   },
   "patch": {
     "file": "ash-runtime.patch",
-    "sha256": "df01ea2d4a9dd6822b12dd5c18b375344a936c03b01486760f55b617ea049b0d"
+    "sha256": "0f64532317c751bfbe6f47234b8e2da9b05ce9323f0dc33f39d29c438a413947"
   },
   "targets": [
     "aarch64-apple-darwin",
@@ -21,5 +21,13 @@
     "aarch64-unknown-linux-musl",
     "x86_64-unknown-linux-gnu",
     "x86_64-unknown-linux-musl"
-  ]
+  ],
+  "ranking": {
+    "file": "../../crates/file-search/src/ranking.rs",
+    "sha256": "1479aba3a642d467efa4124cf2d6d2670644e830cac327fc3dec530672985e67"
+  },
+  "discovery": {
+    "file": "../../crates/file-search/src/discovery.rs",
+    "sha256": "28ece5ea0740391cde2167851c1c004ba5902d72ef3169c140d3187b44a6ee27"
+  }
 }

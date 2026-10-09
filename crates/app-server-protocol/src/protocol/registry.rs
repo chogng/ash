@@ -1767,6 +1767,12 @@ use crate::protocol::search::ContentSearchStartParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::search::ContentSearchStartResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::search::FileFuzzyMatch;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::search::FileFuzzyParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::search::FileFuzzyResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::search::FileGlobCancelParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::search::FileGlobParams;
@@ -4647,6 +4653,17 @@ client_methods! {
         serialization: None,
         cancellation: "operationId",
     },
+    FileFuzzy => "file/search/fuzzy" {
+        params: FileFuzzyParams,
+        response: FileFuzzyResult,
+        serialization: None,
+        cancellation: "operationId",
+    },
+    FileFuzzyCancel => "file/search/fuzzy/cancel" {
+        params: FileGlobCancelParams,
+        response: (),
+        serialization: None,
+    },
     FileGlobCancel => "file/search/glob/cancel" {
         params: FileGlobCancelParams,
         response: (),
@@ -6436,6 +6453,9 @@ typescript_bindings! {
     GitOperationResult,
     GitCommitResult,
     FileGlobParams,
+    FileFuzzyParams,
+    FileFuzzyResult,
+    FileFuzzyMatch,
     FileGlobResult,
     FileGlobTarget,
     FileGlobCancelParams,

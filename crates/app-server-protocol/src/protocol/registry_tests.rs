@@ -693,3 +693,30 @@ fn file_glob_round_trips_explicit_directory_and_declares_connection_cancellation
         None
     );
 }
+
+#[test]
+fn file_fuzzy_round_trips_unicode_and_declares_connection_cancellation() {
+    use super::super::search::FileFuzzyParams;
+    use super::super::search::FileFuzzyResult;
+    let result = serde_json::json!({"matches":[{"path":"中文.png","score":42}],"totalMatches":1,"freshness":"indexed"});
+    let decoded: FileFuzzyResult = serde_json::from_value(result.clone()).unwrap();
+    assert_eq!(serde_json::to_value(decoded).unwrap(), result);
+    let wire = serde_json::json!({"operationId":"fuzzy-query", "target":{"type":"session","sessionId":"session","path":"/workspace"}, "query":"中文 SRC", "maxResults":100});
+    let params: FileFuzzyParams = serde_json::from_value(wire.clone()).unwrap();
+    assert_eq!(serde_json::to_value(params).unwrap(), wire);
+    let method = definition("file/search/fuzzy");
+    assert_eq!(method.serialization_scope(&wire).unwrap(), None);
+    assert_eq!(
+        method.cancellation_operation_id(&wire).unwrap().as_deref(),
+        Some("fuzzy-query")
+    );
+    let mut unexpected = wire;
+    unexpected["includePatterns"] = serde_json::json!(["*"]);
+    assert!(serde_json::from_value::<FileFuzzyParams>(unexpected).is_err());
+    assert_eq!(
+        definition("file/search/fuzzy/cancel")
+            .serialization_scope(&serde_json::json!({"operationId":"fuzzy-query"}))
+            .unwrap(),
+        None
+    );
+}

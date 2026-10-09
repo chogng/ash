@@ -307,7 +307,12 @@ fn grep_rpc_shares_search_with_codebase_and_editor_then_releases_the_index() {
     );
     assert_eq!(rebuilt["result"]["ready"], true);
     assert!(rebuilt["result"]["indexedFileCount"].as_u64().unwrap() >= 1);
-    assert!(index_directory.join("tgrep-1.0.12-ash.e9d55db.1").is_dir());
+    let runtime_lock: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../third_party/tgrep/runtime-lock.json"
+    ))
+    .unwrap();
+    let version = runtime_lock["version"].as_str().unwrap();
+    assert!(index_directory.join(format!("tgrep-{version}")).is_dir());
 
     // A substring inside an FTS token must be supplied by the shared grep capability.
     server.codebase_service().unwrap().rebuild().unwrap();

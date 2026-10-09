@@ -3,6 +3,8 @@ use crate::CaseSensitivity;
 use crate::DocumentContent;
 use crate::Error;
 use crate::Freshness;
+use crate::FuzzyFileMatch;
+use crate::FuzzyFileMatches;
 use crate::IndexStatus;
 use crate::Match;
 use crate::MatchRange;
@@ -24,20 +26,25 @@ use std::collections::BTreeMap;
 use std::path::Component;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::Condvar;
 use std::sync::Mutex;
 use std::sync::RwLock;
+use std::sync::Weak;
+use std::time::Duration;
 
 /// Shared engine selection, repository storage, and independent directory registrations.
 pub struct Service {
     ripgrep: RipgrepExecutable,
     storage: Option<Arc<StateRuntime>>,
     state: RwLock<State>,
+    configuration: Mutex<()>,
+    repositories: Mutex<BTreeMap<PathBuf, Weak<IndexStorage>>>,
 }
 struct State {
     backend: Backend,
     executable: Option<tgrep::Executable>,
-    indexes: Mutex<BTreeMap<DirId, Arc<Index>>>,
-    storage: Mutex<BTreeMap<PathBuf, Arc<IndexStorage>>>,
+    changing: bool,
+    indexes: BTreeMap<DirId, Arc<DirectoryIndex>>,
 }
 struct Index {
     search: tgrep::Session,
@@ -47,6 +54,150 @@ struct IndexStorage {
     _lease: Option<DirIndexLease>,
     _temporary: Option<tempfile::TempDir>,
 }
+
+struct DirectoryIndex {
+    root: PathBuf,
+    state: Mutex<DirectoryState>,
+    changed: Condvar,
+}
+struct DirectoryState {
+    admission: Admission,
+    index: IndexPhase,
+    active: usize,
+}
+#[derive(PartialEq)]
+enum Admission {
+    Open,
+    Draining,
+    Closed,
+}
+enum IndexPhase {
+    Vacant,
+    Opening,
+    Ready(Arc<Index>),
+}
+struct DirectoryUse {
+    directory: Arc<DirectoryIndex>,
+}
+struct IndexUse {
+    // Release the session reference before notifying a waiting directory drain.
+    index: Arc<Index>,
+    _directory: DirectoryUse,
+}
+struct OpeningLifetime {
+    _storage: Arc<IndexStorage>,
+    _directory: DirectoryUse,
+}
+
+impl DirectoryIndex {
+    fn new(root: &Dir) -> Self {
+        Self {
+            root: dunce::simplified(root.canonical_path()).to_path_buf(),
+            state: Mutex::new(DirectoryState {
+                admission: Admission::Open,
+                index: IndexPhase::Vacant,
+                active: 0,
+            }),
+            changed: Condvar::new(),
+        }
+    }
+
+    fn acquire(self: &Arc<Self>) -> Result<DirectoryUse, Error> {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        if state.admission != Admission::Open {
+            return Err(Error::Failed(
+                "directory search registration is being released".into(),
+            ));
+        }
+        state.active += 1;
+        Ok(DirectoryUse {
+            directory: Arc::clone(self),
+        })
+    }
+
+    fn close(&self, cancellation: &CancellationToken) -> Result<(), Error> {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        while state.admission == Admission::Draining {
+            cancelled(cancellation)?;
+            state = self
+                .changed
+                .wait_timeout(state, Duration::from_millis(25))
+                .unwrap_or_else(|e| e.into_inner())
+                .0;
+        }
+        cancelled(cancellation)?;
+        if state.admission == Admission::Closed {
+            return Ok(());
+        }
+        state.admission = Admission::Draining;
+        while state.active != 0 {
+            if let Err(error) = cancelled(cancellation) {
+                state.admission = Admission::Open;
+                self.changed.notify_all();
+                return Err(error);
+            }
+            state = self
+                .changed
+                .wait_timeout(state, Duration::from_millis(25))
+                .unwrap_or_else(|e| e.into_inner())
+                .0;
+        }
+        let index = std::mem::replace(&mut state.index, IndexPhase::Vacant);
+        drop(state);
+        let (result, retained) = match index {
+            IndexPhase::Ready(index) => {
+                let mut index = Arc::try_unwrap(index)
+                    .unwrap_or_else(|_| panic!("drained directory retained a search reference"));
+                let result = index.search.close(cancellation).map_err(Error::from);
+                // Keep the storage lease and registration if detachment needs a retry.
+                let retained = result.is_err().then(|| Arc::new(index));
+                (result, retained)
+            }
+            IndexPhase::Vacant => (Ok(()), None),
+            IndexPhase::Opening => unreachable!("opening directory has an active caller"),
+        };
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(index) = retained {
+            state.index = IndexPhase::Ready(index);
+            state.admission = Admission::Open;
+        } else {
+            state.admission = Admission::Closed;
+        }
+        self.changed.notify_all();
+        result
+    }
+}
+impl Drop for DirectoryUse {
+    fn drop(&mut self) {
+        let mut state = self
+            .directory
+            .state
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        state.active -= 1;
+        self.directory.changed.notify_all();
+    }
+}
+impl DirectoryUse {
+    fn retain(&self) -> Self {
+        let mut state = self
+            .directory
+            .state
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        state.active += 1;
+        Self {
+            directory: Arc::clone(&self.directory),
+        }
+    }
+}
+
+fn cancelled(cancellation: &CancellationToken) -> Result<(), Error> {
+    cancellation
+        .check()
+        .map_err(|reason| Error::Cancelled(reason.reason().to_string()))
+}
+
 impl Service {
     /// Resolves managed executables once when the host assembles the shared capability.
     pub fn installed(backend: Backend, storage: Option<Arc<StateRuntime>>) -> Result<Self, Error> {
@@ -78,29 +229,46 @@ impl Service {
             state: RwLock::new(State {
                 backend,
                 executable,
-                indexes: Mutex::new(BTreeMap::new()),
-                storage: Mutex::new(BTreeMap::new()),
+                changing: false,
+                indexes: BTreeMap::new(),
             }),
+            configuration: Mutex::new(()),
+            repositories: Mutex::new(BTreeMap::new()),
         })
     }
 
-    /// Updates the same shared service. Existing searches finish before engines are retired;
-    /// every caller observes the new selection. Registration reconciles writes made while disabled.
+    /// Applies the new backend after admitted queries finish and their registrations detach.
+    /// Concurrent reconfiguration is serialized without retaining the global lookup lock during I/O.
     pub fn configure(&self, backend: Backend) -> Result<(), Error> {
-        let mut state = self.state.write().unwrap_or_else(|e| e.into_inner());
-        if state.backend == backend {
+        let _configuration = self.configuration.lock().unwrap_or_else(|e| e.into_inner());
+        if self.state.read().unwrap_or_else(|e| e.into_inner()).backend == backend {
             return Ok(());
         }
         let executable = match backend {
             Backend::Tgrep => Some(tgrep::Executable::resolve(&InstallContext::current())?),
             Backend::Ripgrep => None,
         };
-        state
-            .indexes
-            .get_mut()
-            .unwrap_or_else(|e| e.into_inner())
-            .clear();
-        state.storage.get_mut().unwrap().clear();
+        let indexes = {
+            let mut state = self.state.write().unwrap_or_else(|e| e.into_inner());
+            state.changing = true;
+            state.indexes.values().cloned().collect::<Vec<_>>()
+        };
+        let cancellation = ash_async_utils::CancellationSource::new();
+        let result = indexes
+            .iter()
+            .try_for_each(|index| index.close(&cancellation.token()));
+        let mut state = self.state.write().unwrap_or_else(|e| e.into_inner());
+        state.changing = false;
+        // Successfully closed registrations must be reopened even if another detach failed.
+        state.indexes.retain(|_, index| {
+            index
+                .state
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .admission
+                != Admission::Closed
+        });
+        result?;
         state.executable = executable;
         state.backend = backend;
         Ok(())
@@ -108,36 +276,108 @@ impl Service {
 
     /// Records writes synchronously so all consumers see Ash edits even before watcher delivery.
     pub fn paths_changed(&self, root: &Dir, paths: &[PathBuf]) {
-        let state = self.state.read().unwrap_or_else(|e| e.into_inner());
-        let indexes = state.indexes.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(index) = indexes.get(&root.id()) {
-            index.search.paths_changed(paths);
+        let directory = self
+            .state
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .indexes
+            .get(&root.id())
+            .cloned();
+        if let Some(directory) = directory {
+            let state = directory.state.lock().unwrap_or_else(|e| e.into_inner());
+            if let IndexPhase::Ready(index) = &state.index {
+                // A cancelled drain can resume this registration, so retain writes while waiting.
+                index.search.paths_changed(paths);
+            }
         }
     }
 
-    /// Wait for active searches and release a canonical directory's lease before filesystem removal.
-    /// Lookup uses the retained identity so retrying cleanup of an absent checkout needs no reopen.
+    /// Keeps this directory registration alive while its engine scores the canonical catalog.
+    pub fn indexed_fuzzy(
+        &self,
+        dir: &Dir,
+        query: &str,
+        max_results: usize,
+        cancellation: &CancellationToken,
+    ) -> Result<Option<FuzzyFileMatches>, Error> {
+        cancelled(cancellation)?;
+        if query.len() > 1024 || query.contains('\0') || !(1..=5000).contains(&max_results) {
+            return Err(Error::InvalidInput(
+                "invalid fuzzy file query or limit".into(),
+            ));
+        }
+        let Some(index) = self.index_for(dir, cancellation)? else {
+            return Ok(None);
+        };
+        let found = index
+            .index
+            .search
+            .file_fuzzy(query, max_results, cancellation)?;
+        Ok(Some(FuzzyFileMatches {
+            matches: found
+                .matches
+                .into_iter()
+                .map(|matched| FuzzyFileMatch {
+                    score: matched.score,
+                    path: matched.path,
+                    indices: matched.indices,
+                })
+                .collect(),
+            total_match_count: found.total_match_count,
+            scanned_file_count: found.scanned_file_count,
+        }))
+    }
+
+    /// Drains only this canonical directory before filesystem removal, observing cancellation.
+    /// Its retained identity permits cleanup retries after the checkout has been removed.
     pub fn release_directory(
         &self,
         canonical_root: &std::path::Path,
         cancellation: &CancellationToken,
     ) -> Result<(), Error> {
-        // Searches retain this read guard through their engine operation. The write guard excludes
-        // new searches while the final registration is detached and its root handles are closed.
-        let state = self.state.write().unwrap_or_else(|e| e.into_inner());
-        let mut indexes = state.indexes.lock().unwrap_or_else(|e| e.into_inner());
-        let id = indexes
-            .iter()
-            .find(|(_, index)| index.search.matches_directory(canonical_root))
-            .map(|(id, _)| id.clone());
-        let index = id.and_then(|id| indexes.remove(&id));
-        drop(indexes);
-        if let Some(index) = index {
-            let index = Arc::try_unwrap(index)
-                .map_err(|_| Error::Failed("search registration is still in use".into()))?;
-            index.search.close(cancellation)?;
+        cancelled(cancellation)?;
+        let registered = {
+            let state = self.state.read().unwrap_or_else(|e| e.into_inner());
+            state
+                .indexes
+                .iter()
+                .find(|(_, index)| index.root == dunce::simplified(canonical_root))
+                .map(|(id, index)| (id.clone(), Arc::clone(index)))
+        };
+        if let Some((id, index)) = registered {
+            index.close(cancellation)?;
+            let mut state = self.state.write().unwrap_or_else(|e| e.into_inner());
+            if state
+                .indexes
+                .get(&id)
+                .is_some_and(|current| Arc::ptr_eq(current, &index))
+            {
+                state.indexes.remove(&id);
+            }
         }
         Ok(())
+    }
+
+    fn registered_index(&self, root: &Dir) -> Result<(Backend, Option<IndexUse>), Error> {
+        let state = self.state.read().unwrap_or_else(|e| e.into_inner());
+        let Some(directory) = state.indexes.get(&root.id()) else {
+            return Ok((state.backend, None));
+        };
+        let usage = directory.acquire()?;
+        let index = {
+            let state = directory.state.lock().unwrap_or_else(|e| e.into_inner());
+            match &state.index {
+                IndexPhase::Ready(index) => Some(Arc::clone(index)),
+                IndexPhase::Vacant | IndexPhase::Opening => None,
+            }
+        };
+        Ok((
+            state.backend,
+            index.map(|index| IndexUse {
+                index,
+                _directory: usage,
+            }),
+        ))
     }
 
     pub fn index_status(
@@ -145,17 +385,12 @@ impl Service {
         root: &Dir,
         cancellation: &CancellationToken,
     ) -> Result<IndexStatus, Error> {
-        let state = self.state.read().unwrap_or_else(|e| e.into_inner());
-        let index = state
-            .indexes
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .get(&root.id())
-            .cloned();
+        cancelled(cancellation)?;
+        let (backend, index) = self.registered_index(root)?;
         match index {
-            Some(index) => Ok(status(index.search.status(cancellation)?)),
+            Some(index) => Ok(status(index.index.search.status(cancellation)?)),
             None => Ok(IndexStatus {
-                enabled: state.backend == Backend::Tgrep,
+                enabled: backend == Backend::Tgrep,
                 ..IndexStatus::default()
             }),
         }
@@ -166,12 +401,10 @@ impl Service {
         root: &Dir,
         cancellation: &CancellationToken,
     ) -> Result<IndexStatus, Error> {
-        let state = self.state.write().unwrap_or_else(|e| e.into_inner());
-        let result = self
-            .index_for(&state, root, cancellation)?
-            .search
-            .rebuild(cancellation)?;
-        Ok(status(result))
+        let index = self
+            .index_for(root, cancellation)?
+            .ok_or_else(|| Error::Failed("selected grep engine does not use an index".into()))?;
+        Ok(status(index.index.search.rebuild(cancellation)?))
     }
 
     /// Clears repository-owned search storage after its worktree registrations are released.
@@ -193,27 +426,80 @@ impl Service {
 
     fn index_for(
         &self,
-        state: &State,
         root: &Dir,
         cancellation: &CancellationToken,
-    ) -> Result<Arc<Index>, Error> {
-        let executable = state
-            .executable
-            .as_ref()
-            .ok_or_else(|| Error::Failed("selected grep engine does not use an index".into()))?;
-        if let Some(index) = state
-            .indexes
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .get(&root.id())
-            .cloned()
-        {
-            return Ok(index);
+    ) -> Result<Option<IndexUse>, Error> {
+        cancelled(cancellation)?;
+        let (executable, usage) = {
+            let mut state = self.state.write().unwrap_or_else(|e| e.into_inner());
+            if state.changing {
+                return Err(Error::Failed("search backend is being reconfigured".into()));
+            }
+            let executable = match state.backend {
+                Backend::Ripgrep => return Ok(None),
+                Backend::Tgrep => state.executable.clone().expect("indexed executable"),
+            };
+            let directory = state
+                .indexes
+                .entry(root.id())
+                .or_insert_with(|| Arc::new(DirectoryIndex::new(root)));
+            (executable, directory.acquire()?)
+        };
+        let directory = &usage.directory;
+        let mut state = directory.state.lock().unwrap_or_else(|e| e.into_inner());
+        loop {
+            cancelled(cancellation)?;
+            match &state.index {
+                IndexPhase::Ready(index) => {
+                    let index = Arc::clone(index);
+                    drop(state);
+                    return Ok(Some(IndexUse {
+                        index,
+                        _directory: usage,
+                    }));
+                }
+                IndexPhase::Vacant => {
+                    state.index = IndexPhase::Opening;
+                    break;
+                }
+                IndexPhase::Opening => {
+                    state = directory
+                        .changed
+                        .wait_timeout(state, Duration::from_millis(25))
+                        .unwrap_or_else(|e| e.into_inner())
+                        .0;
+                }
+            }
         }
+        drop(state);
+        let result = self.open_index(&executable, root, cancellation, &usage);
+        let mut state = directory.state.lock().unwrap_or_else(|e| e.into_inner());
+        state.index = match &result {
+            Ok(index) => IndexPhase::Ready(Arc::clone(index)),
+            Err(_) => IndexPhase::Vacant,
+        };
+        directory.changed.notify_all();
+        drop(state);
+        result.map(|index| {
+            Some(IndexUse {
+                index,
+                _directory: usage,
+            })
+        })
+    }
+
+    fn open_index(
+        &self,
+        executable: &tgrep::Executable,
+        root: &Dir,
+        cancellation: &CancellationToken,
+        usage: &DirectoryUse,
+    ) -> Result<Arc<Index>, Error> {
         let identity = executable.directory_identity(root.canonical_path(), cancellation)?;
-        let mut repositories = state.storage.lock().unwrap();
-        let storage = if let Some(storage) = repositories.get(&identity) {
-            Arc::clone(storage)
+        let mut repositories = self.repositories.lock().unwrap_or_else(|e| e.into_inner());
+        repositories.retain(|_, storage| storage.strong_count() != 0);
+        let storage = if let Some(storage) = repositories.get(&identity).and_then(Weak::upgrade) {
+            storage
         } else {
             let directory = Dir::open_local(&identity).map_err(|e| Error::Failed(e.to_string()))?;
             let lease = self
@@ -230,7 +516,8 @@ impl Service {
                 _lease: lease,
                 _temporary: temporary,
             });
-            repositories.insert(identity, Arc::clone(&storage));
+            // Registrations own leases; this lookup must not keep an unused repository in use.
+            repositories.insert(identity, Arc::downgrade(&storage));
             storage
         };
         drop(repositories);
@@ -240,28 +527,20 @@ impl Service {
             .map(|l| l.directory())
             .or_else(|| storage._temporary.as_ref().map(|t| t.path()))
             .expect("index storage");
-        let search = tgrep::Session::open(
+        let search = tgrep::Session::open_with_lifetime(
             executable.clone(),
             root.canonical_path(),
             &base.join(format!("tgrep-{}", tgrep::VERSION)),
             cancellation,
+            OpeningLifetime {
+                _storage: Arc::clone(&storage),
+                _directory: usage.retain(),
+            },
         )?;
-        let index = Arc::new(Index {
+        Ok(Arc::new(Index {
             search,
             _storage: storage,
-        });
-        // Registration can construct a large base; keep the directory map
-        // available to existing searches. Concurrent registrations share one
-        // engine view, and dropping the unpublished Session releases its reference.
-        let published = {
-            let mut indexes = state.indexes.lock().unwrap_or_else(|e| e.into_inner());
-            Arc::clone(
-                indexes
-                    .entry(root.id())
-                    .or_insert_with(|| Arc::clone(&index)),
-            )
-        };
-        Ok(published)
+        }))
     }
 }
 impl Search for Service {
@@ -402,14 +681,10 @@ impl Service {
                 "search scope escapes its directory".into(),
             ));
         }
-        let state = self.state.read().unwrap_or_else(|e| e.into_inner());
-        match state.backend {
-            Backend::Ripgrep => {
-                crate::ripgrep::search(&self.ripgrep, dir, query, regex.as_str(), cancellation)
-            }
-            Backend::Tgrep => {
-                let index = self.index_for(&state, dir, cancellation)?;
-                let result = index.search.search(
+        match self.index_for(dir, cancellation)? {
+            None => crate::ripgrep::search(&self.ripgrep, dir, query, regex.as_str(), cancellation),
+            Some(index) => {
+                let result = index.index.search.search(
                     &tgrep::Query {
                         pattern: regex.as_str(),
                         scope: &query.scope,

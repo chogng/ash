@@ -9,7 +9,7 @@ use ash_install_context::ManagedExecutable;
 use serde::Deserialize;
 use serde_json::Value;
 use serde_json::json;
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 use std::fmt;
 use std::io::Seek;
 use std::io::SeekFrom;
@@ -17,17 +17,19 @@ use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
-pub const VERSION: &str = "1.0.12-ash.e9d55db.1";
+pub const VERSION: &str = "1.1.0-ash.b614b8c.4";
 const TIMEOUT: Duration = Duration::from_secs(30);
 const INDEX_TIMEOUT: Duration = Duration::from_secs(600);
 
 #[derive(Debug)]
 pub enum Error {
     Failed(String),
-    /// The shared view was invalidated; reconcile before retrying within the same deadline.
+    /// A view was invalidated; reconcile before retrying within the same deadline.
     NotReady(String),
     Cancelled(String),
 }
@@ -164,6 +166,8 @@ pub struct Status {
     pub indexing: bool,
     pub ready: bool,
     pub watcher_active: bool,
+    pub files_ready: bool,
+    pub file_count: usize,
 }
 
 /// A worktree registration in an owned shared search service.
@@ -173,7 +177,91 @@ pub struct Session {
     root: PathBuf,
     process: std::sync::Arc<process::Server>,
     registration: Registration,
-    changed: Mutex<BTreeSet<PathBuf>>,
+    changed: Mutex<PendingChanges>,
+    // The longer startup budget ends once this session observes published content.
+    initial_content_ready: AtomicBool,
+}
+
+#[derive(Default)]
+struct PendingChanges {
+    revision: u64,
+    content_ack: u64,
+    files_ack: u64,
+    paths: BTreeMap<PathBuf, u64>,
+    path_bytes: usize,
+    full_revision: u64,
+}
+
+enum Changes {
+    None,
+    Paths(Vec<PathBuf>),
+    Full,
+}
+
+impl PendingChanges {
+    const PATH_LIMIT: usize = 1024;
+    // JSON escaping can expand one path byte sixfold. Leave ample room in the 1 MiB RPC.
+    const BYTE_LIMIT: usize = 64 * 1024;
+
+    fn record(&mut self, path: PathBuf, revision: u64) {
+        if self.full_revision == revision {
+            return;
+        }
+        if !self.paths.contains_key(&path) {
+            self.path_bytes += path.as_os_str().as_encoded_bytes().len();
+        }
+        self.paths.insert(path, revision);
+        if self.paths.len() > Self::PATH_LIMIT || self.path_bytes > Self::BYTE_LIMIT {
+            // The full revision preserves discarded hints until both consumers acknowledge it.
+            self.full_revision = revision;
+            self.paths.clear();
+            self.path_bytes = 0;
+        }
+    }
+
+    fn since(&self, acknowledgement: u64) -> Changes {
+        if self.full_revision > acknowledgement {
+            return Changes::Full;
+        }
+        let paths: Vec<_> = self
+            .paths
+            .iter()
+            .filter(|(_, revision)| **revision > acknowledgement)
+            .map(|(path, _)| path.clone())
+            .collect();
+        if paths.is_empty() {
+            Changes::None
+        } else {
+            Changes::Paths(paths)
+        }
+    }
+    fn prune(&mut self) {
+        let acknowledged = self.content_ack.min(self.files_ack);
+        self.paths.retain(|_, revision| *revision > acknowledged);
+        self.path_bytes = self
+            .paths
+            .keys()
+            .map(|path| path.as_os_str().as_encoded_bytes().len())
+            .sum();
+        if self.full_revision <= acknowledged {
+            self.full_revision = 0;
+        }
+    }
+}
+
+/// Bounded ranked paths returned by the engine without transferring its candidate catalog.
+#[derive(Debug, Deserialize)]
+pub struct FileSearchResult {
+    pub matches: Vec<FileMatch>,
+    pub total_match_count: usize,
+    pub scanned_file_count: usize,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FileMatch {
+    pub score: u32,
+    pub path: PathBuf,
+    pub indices: Vec<u32>,
 }
 enum Registration {
     Directory,
@@ -190,20 +278,27 @@ enum Registration {
 struct PendingAttachment {
     process: std::sync::Arc<process::Server>,
     params: Option<Value>,
+    lifetime: Option<Box<dyn Send>>,
 }
 impl Drop for PendingAttachment {
     fn drop(&mut self) {
         if let Some(params) = self.params.take() {
             let process = std::sync::Arc::clone(&self.process);
+            let lifetime = self.lifetime.take();
             // Attach runs on the daemon's lifecycle worker even after its connection closes.
             // Replay the same token on that worker, then release it, keeping the owned daemon alive.
             std::thread::spawn(move || {
+                let _lifetime = lifetime;
                 let cancellation = ash_async_utils::CancellationSource::new();
                 let deadline = Instant::now() + INDEX_TIMEOUT;
-                if let Ok(result) =
-                    process.rpc("attach", params.clone(), &cancellation.token(), deadline)
-                {
-                    let _ = process.rpc("detach", json!({"root":params["root"],"view":result["view"],"lease":params["lease"]}), &cancellation.token(), deadline);
+                let released = process.rpc("attach", params.clone(), &cancellation.token(), deadline)
+                    .and_then(|result| process.rpc("detach", json!({"root":result["root"],"view":result["view"],"lease":params["lease"]}), &cancellation.token(), deadline));
+                if released.is_err() {
+                    // Unconfirmed cleanup must end the owned daemon's root reads before the
+                    // caller's directory and storage can be released.
+                    while process.stop().is_err() {
+                        std::thread::sleep(Duration::from_millis(25));
+                    }
                 }
             });
         }
@@ -217,9 +312,21 @@ impl Session {
         index: &Path,
         cancellation: &CancellationToken,
     ) -> Result<Self, Error> {
+        Self::open_with_lifetime(executable, root, index, cancellation, ())
+    }
+
+    /// Retains caller-owned resources until an interrupted registration finishes cleanup.
+    /// Successful registration returns their ownership to the caller's containing session.
+    pub fn open_with_lifetime(
+        executable: Executable,
+        root: &Path,
+        index: &Path,
+        cancellation: &CancellationToken,
+        lifetime: impl Send + 'static,
+    ) -> Result<Self, Error> {
         let root = dunce::canonicalize(root)?;
         let process = process::Server::shared(&executable, &root, index, cancellation)?;
-        let deadline = Instant::now() + INDEX_TIMEOUT;
+        let deadline = Instant::now() + TIMEOUT;
         let registration = if process.is_shared() {
             let identity = executable.identity(&root, cancellation)?;
             static NEXT_LEASE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -230,10 +337,11 @@ impl Session {
                 .as_nanos();
             // Allocate the token before sending; it identifies this registration across retries.
             let lease = format!("{}-{time}-{number}", std::process::id());
-            let params = json!({"root":root,"revision":identity.revision.ok_or_else(|| failed("worktree has no starting revision"))?,"profile":profile(),"lease":lease});
+            let params = json!({"root":root,"revision":identity.revision.ok_or_else(|| failed("worktree has no starting revision"))?,"profile":profile(),"lease":lease,"mode":"paths"});
             let mut pending = PendingAttachment {
                 process: std::sync::Arc::clone(&process),
                 params: Some(params.clone()),
+                lifetime: Some(Box::new(lifetime)),
             };
             let result = process.rpc("attach", params, cancellation, deadline)?;
             let wire_root: PathBuf = serde_json::from_value(result["root"].clone())?;
@@ -263,9 +371,9 @@ impl Session {
             root,
             process,
             registration,
-            changed: Mutex::new(BTreeSet::new()),
+            changed: Mutex::new(PendingChanges::default()),
+            initial_content_ready: AtomicBool::new(false),
         };
-        session.wait_ready(cancellation, deadline)?;
         Ok(session)
     }
     fn wait_ready(&self, cancellation: &CancellationToken, deadline: Instant) -> Result<(), Error> {
@@ -274,22 +382,32 @@ impl Session {
             if self.status(cancellation)?.ready {
                 return Ok(());
             }
+            // Ask the lifecycle worker to prepare content so permanent build failures are
+            // returned to this caller instead of waiting on background retries until timeout.
+            self.refresh(&[], cancellation, deadline)?;
             std::thread::sleep(Duration::from_millis(25));
         }
     }
-    /// Canonical directory identity retained even when the checkout has already been removed.
-    pub fn matches_directory(&self, canonical_root: &Path) -> bool {
-        self.root == dunce::simplified(canonical_root)
-    }
-    /// Consume this registration after in-flight callers finish, before deleting its directory.
-    pub fn close(mut self, cancellation: &CancellationToken) -> Result<(), Error> {
-        if let Registration::Shared { view, lease, .. } = &self.registration {
-            self.process.rpc(
+    /// Release after in-flight callers finish. A failed detach retains the lease for cleanup retries.
+    pub fn close(&mut self, cancellation: &CancellationToken) -> Result<(), Error> {
+        check(cancellation, Instant::now() + INDEX_TIMEOUT)?;
+        if self.process.is_stopped()? {
+            self.registration = Registration::Released;
+            return Ok(());
+        }
+        if let Registration::Shared {
+            root, view, lease, ..
+        } = &self.registration
+        {
+            let result = self.process.rpc(
                 "detach",
-                json!({"root":self.root,"view":view,"lease":lease}),
+                json!({"root":root,"view":view,"lease":lease}),
                 cancellation,
                 Instant::now() + INDEX_TIMEOUT,
-            )?;
+            );
+            if !self.process.is_stopped()? {
+                result?;
+            }
         }
         self.registration = Registration::Released;
         Ok(())
@@ -323,7 +441,7 @@ impl Session {
                     .ok_or_else(|| failed("invalid watcher status"))?,
             ),
         };
-        Ok(Status {
+        let status = Status {
             indexed_file_count: value["num_files"]
                 .as_u64()
                 .ok_or_else(|| failed("invalid file count"))?
@@ -331,13 +449,37 @@ impl Session {
             indexing,
             ready,
             watcher_active,
-        })
+            files_ready: value["files_ready"]
+                .as_bool()
+                .ok_or_else(|| failed("invalid file readiness"))?,
+            file_count: value["file_count"]
+                .as_u64()
+                .ok_or_else(|| failed("invalid file membership count"))?
+                as usize,
+        };
+        if status.ready {
+            self.initial_content_ready.store(true, Ordering::Relaxed);
+        }
+        Ok(status)
     }
     pub fn rebuild(&self, cancellation: &CancellationToken) -> Result<Status, Error> {
-        // Hold pending edits until the engine has acknowledged publication.
-        let mut changed = self.changed.lock().unwrap_or_else(|e| e.into_inner());
+        let revision = self
+            .changed
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .revision;
         self.refresh(&[], cancellation, Instant::now() + INDEX_TIMEOUT)?;
-        changed.clear();
+        {
+            let mut changed = self.changed.lock().unwrap_or_else(|e| e.into_inner());
+            changed.content_ack = changed.content_ack.max(revision);
+            changed.prune();
+        }
+        self.refresh_files(&[], cancellation, Instant::now() + TIMEOUT)?;
+        {
+            let mut changed = self.changed.lock().unwrap_or_else(|e| e.into_inner());
+            changed.files_ack = changed.files_ack.max(revision);
+            changed.prune();
+        }
         self.status(cancellation)
     }
     fn refresh(
@@ -347,14 +489,17 @@ impl Session {
         deadline: Instant,
     ) -> Result<(), Error> {
         match &self.registration {
-            Registration::Shared { view, lease, .. } => {
+            Registration::Shared {
+                root, view, lease, ..
+            } => {
                 let paths = changed
                     .iter()
                     .map(|path| portable(path))
                     .collect::<Result<Vec<_>, _>>()?;
+                let mut method = "refresh";
                 loop {
                     check(cancellation, deadline)?;
-                    let result = self.process.rpc("refresh", json!({"root":self.root,"view":view,"lease":lease,"changed":paths,"full":paths.is_empty()}), cancellation, deadline);
+                    let result = self.process.rpc(method, json!({"root":root,"view":view,"lease":lease,"changed":paths,"full":paths.is_empty()}), cancellation, deadline);
                     match result {
                         Ok(value) => {
                             self.validate_view(&value)?;
@@ -365,7 +510,7 @@ impl Session {
                                 break;
                             }
                         }
-                        Err(Error::NotReady(_)) => {}
+                        Err(Error::NotReady(_)) => method = "refresh/reconcile",
                         Err(error) => return Err(error),
                     }
                     std::thread::sleep(Duration::from_millis(25));
@@ -381,6 +526,11 @@ impl Session {
     }
     pub fn paths_changed(&self, paths: &[PathBuf]) {
         let mut changed = self.changed.lock().unwrap_or_else(|e| e.into_inner());
+        changed.revision = changed
+            .revision
+            .checked_add(1)
+            .expect("path change revision exhausted");
+        let revision = changed.revision;
         for path in paths {
             // Windows filesystem notifications and directory services may spell the same
             // absolute path with or without the extended prefix, including deleted files.
@@ -390,7 +540,7 @@ impl Session {
                     .components()
                     .all(|c| matches!(c, Component::Normal(_)))
                 {
-                    changed.insert(relative.to_path_buf());
+                    changed.record(relative.to_path_buf(), revision);
                 }
             }
         }
@@ -422,16 +572,30 @@ impl Session {
             result.matches.truncate(limit);
             return Ok(result);
         }
-        let mut changed = self.changed.lock().unwrap();
-        if !changed.is_empty() {
-            self.refresh(
-                &changed.iter().cloned().collect::<Vec<_>>(),
-                cancellation,
-                deadline,
-            )?;
-            changed.clear();
+        // Filename attachment does not wait for content. Indexed content callers retain the
+        // existing initialization budget before starting their bounded query deadline.
+        let deadline = if self.initial_content_ready.load(Ordering::Relaxed) {
+            self.wait_ready(cancellation, deadline)?;
+            deadline
+        } else {
+            self.wait_ready(cancellation, Instant::now() + INDEX_TIMEOUT)?;
+            Instant::now() + TIMEOUT
+        };
+        let (revision, changes) = {
+            let changed = self.changed.lock().unwrap_or_else(|e| e.into_inner());
+            (changed.revision, changed.since(changed.content_ack))
+        };
+        match changes {
+            Changes::None => {}
+            Changes::Paths(paths) => self.refresh(&paths, cancellation, deadline)?,
+            Changes::Full => self.refresh(&[], cancellation, deadline)?,
         }
-        drop(changed);
+        {
+            // Writes arriving during I/O remain pending, even if this refresh happened to see them.
+            let mut changed = self.changed.lock().unwrap_or_else(|e| e.into_inner());
+            changed.content_ack = changed.content_ack.max(revision);
+            changed.prune();
+        }
         let mut globs: Vec<String> = query.include.iter().map(|s| (*s).to_owned()).collect();
         globs.extend(query.exclude.iter().map(|g| format!("!{g}")));
         let params = json!({
@@ -474,6 +638,116 @@ impl Session {
             index_stats: Some(index_stats),
         })
     }
+
+    fn refresh_files(
+        &self,
+        paths: &[PathBuf],
+        cancellation: &CancellationToken,
+        deadline: Instant,
+    ) -> Result<(), Error> {
+        loop {
+            check(cancellation, deadline)?;
+            let params = match &self.registration {
+                Registration::Shared {
+                    root, view, lease, ..
+                } => {
+                    json!({"root":root,"view":view,"lease":lease,"changed":paths})
+                }
+                Registration::Directory => json!({"changed":paths}),
+                Registration::Released => return Err(failed("search registration was released")),
+            };
+            match self
+                .process
+                .rpc("files/refresh", params, cancellation, deadline)
+            {
+                Ok(value) => {
+                    if self.process.is_shared() {
+                        self.validate_view(&value)?;
+                    }
+                    if value["files_ready"] != true || value["processed_epoch"].as_u64().is_none() {
+                        return Err(failed("invalid filename refresh acknowledgement"));
+                    }
+                    return Ok(());
+                }
+                Err(Error::NotReady(_)) => std::thread::sleep(Duration::from_millis(25)),
+                Err(error) => return Err(error),
+            }
+        }
+    }
+
+    fn synchronize_files(
+        &self,
+        cancellation: &CancellationToken,
+        deadline: Instant,
+    ) -> Result<(), Error> {
+        let (revision, changes) = {
+            let changed = self.changed.lock().unwrap_or_else(|e| e.into_inner());
+            (changed.revision, changed.since(changed.files_ack))
+        };
+        match changes {
+            Changes::None => {}
+            Changes::Paths(paths) => self.refresh_files(&paths, cancellation, deadline)?,
+            Changes::Full => self.refresh_files(&[], cancellation, deadline)?,
+        }
+        {
+            let mut changed = self.changed.lock().unwrap_or_else(|e| e.into_inner());
+            changed.files_ack = changed.files_ack.max(revision);
+            changed.prune();
+        }
+        Ok(())
+    }
+
+    /// Scores the engine-owned catalog, retaining only the requested best paths on the wire.
+    pub fn file_fuzzy(
+        &self,
+        query: &str,
+        max_results: usize,
+        cancellation: &CancellationToken,
+    ) -> Result<FileSearchResult, Error> {
+        if query.len() > 1024 || query.contains('\0') || !(1..=5000).contains(&max_results) {
+            return Err(failed("invalid fuzzy file query or limit"));
+        }
+        let deadline = Instant::now() + TIMEOUT;
+        self.synchronize_files(cancellation, deadline)?;
+        let value = loop {
+            check(cancellation, deadline)?;
+            match self.rpc(
+                "files/fuzzy",
+                json!({"query":query,"max_results":max_results}),
+                cancellation,
+                deadline,
+            ) {
+                Ok(value) => break value,
+                Err(Error::NotReady(_)) => std::thread::sleep(Duration::from_millis(25)),
+                Err(error) => return Err(error),
+            }
+        };
+        let found: FileSearchResult = serde_json::from_value(value)?;
+        if found.matches.len() > max_results
+            || found.matches.len() > found.total_match_count
+            || found.total_match_count > found.scanned_file_count
+        {
+            return Err(failed("invalid fuzzy file result counts"));
+        }
+        for matched in &found.matches {
+            validate_relative(&matched.path)?;
+            let path = matched
+                .path
+                .to_str()
+                .filter(|path| !path.is_empty())
+                .ok_or_else(|| failed("invalid fuzzy file path"))?;
+            if matched.indices.windows(2).any(|pair| pair[0] >= pair[1])
+                || matched
+                    .indices
+                    .last()
+                    .is_some_and(|index| *index as usize >= path.chars().count())
+            {
+                return Err(failed("invalid fuzzy file highlights"));
+            }
+        }
+        Ok(found)
+    }
+
     fn rpc(
         &self,
         method: &str,
@@ -484,16 +758,21 @@ impl Session {
         match &self.registration {
             Registration::Released => Err(failed("search registration was released")),
             Registration::Directory => self.process.rpc(method, params, cancellation, deadline),
-            Registration::Shared { view, .. } => {
+            Registration::Shared { root, view, .. } => {
                 let value = self.process.rpc(
                     method,
-                    json!({"root":self.root,"view":view,"query":params}),
+                    json!({"root":root,"view":view,"query":params}),
                     cancellation,
                     deadline,
                 )?;
                 self.validate_view(&value)?;
+                let readiness = if matches!(method, "files/page" | "files/fuzzy") {
+                    "files_ready"
+                } else {
+                    "ready"
+                };
                 if method != "status"
-                    && (value["ready"] != true || value["epoch"].as_u64().is_none())
+                    && (value[readiness] != true || value["epoch"].as_u64().is_none())
                 {
                     return Err(failed("worktree query is not ready"));
                 }
@@ -739,11 +1018,14 @@ impl Session {
 }
 impl Drop for Session {
     fn drop(&mut self) {
-        if let Registration::Shared { view, lease, .. } = &self.registration {
+        if let Registration::Shared {
+            root, view, lease, ..
+        } = &self.registration
+        {
             let cancellation = ash_async_utils::CancellationSource::new();
             let _ = self.process.rpc(
                 "detach",
-                json!({"root":self.root,"view":view,"lease":lease}),
+                json!({"root":root,"view":view,"lease":lease}),
                 &cancellation.token(),
                 Instant::now() + Duration::from_secs(1),
             );
@@ -782,3 +1064,6 @@ fn order(matches: &mut Vec<Match>) {
 #[cfg(test)]
 #[path = "session_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+mod file_catalog_test_support;

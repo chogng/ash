@@ -1,38 +1,85 @@
 diff --git a/Cargo.lock b/Cargo.lock
+index 89e1ed0..d8836a9 100644
 --- a/Cargo.lock
 +++ b/Cargo.lock
-@@ -1261,7 +1261,7 @@
- 
+@@ -882,6 +882,15 @@ dependencies = [
+  "instant",
+ ]
+
++[[package]]
++name = "nucleo-matcher"
++version = "0.3.1"
++source = "git+https://github.com/helix-editor/nucleo.git?rev=4253de9faabb4e5c6d81d946a5e35a90f87347ee#4253de9faabb4e5c6d81d946a5e35a90f87347ee"
++dependencies = [
++ "memchr",
++ "unicode-segmentation",
++]
++
+ [[package]]
+ name = "num-traits"
+ version = "0.2.19"
+@@ -1261,8 +1270,9 @@ checksum = "8f50febec83f5ee1df3015341d8bd429f2d1cc62bcba7ea2076759d315084683"
+
  [[package]]
  name = "tgrep-cli"
--version = "1.0.11"
-+version = "1.0.12-ash.e9d55db.1"
+-version = "1.1.0"
++version = "1.1.0-ash.b614b8c.4"
  dependencies = [
++ "nucleo-matcher",
   "anyhow",
   "assert_cmd",
-@@ -1288,7 +1288,7 @@
- 
+  "blake3",
+@@ -1289,7 +1299,7 @@ dependencies = [
+
  [[package]]
  name = "tgrep-core"
--version = "1.0.11"
-+version = "1.0.12-ash.e9d55db.1"
+-version = "1.1.0"
++version = "1.1.0-ash.b614b8c.4"
  dependencies = [
   "anyhow",
   "blake3",
+@@ -1368,6 +1378,12 @@ version = "1.0.24"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
+
++[[package]]
++name = "unicode-segmentation"
++version = "1.13.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "c6f5d3c3b1bf09027a88a6bc961fc00497d651009560b5463668dc81b0fa87a8"
++
+ [[package]]
+ name = "unicode-xid"
+ version = "0.2.6"
 diff --git a/Cargo.toml b/Cargo.toml
+index eece223..a877501 100644
 --- a/Cargo.toml
 +++ b/Cargo.toml
-@@ -4,7 +4,7 @@
+@@ -4,7 +4,7 @@ exclude = ["vendor/ignore"]
  resolver = "2"
- 
+
  [workspace.package]
--version = "1.0.11"
-+version = "1.0.12-ash.e9d55db.1"
+-version = "1.1.0"
++version = "1.1.0-ash.b614b8c.4"
  edition = "2024"
  license = "MIT"
  repository = "https://github.com/microsoft/tgrep"
+diff --git a/tgrep-cli/Cargo.toml b/tgrep-cli/Cargo.toml
+index 8761f23..213babb 100644
+--- a/tgrep-cli/Cargo.toml
++++ b/tgrep-cli/Cargo.toml
+@@ -32,6 +32,8 @@ globset = "0.4.18"
+ memmap2 = "0.9"
+ memchr = "2"
+
++nucleo-matcher = { git = "https://github.com/helix-editor/nucleo.git", rev = "4253de9faabb4e5c6d81d946a5e35a90f87347ee" }
++
+ [target.'cfg(windows)'.dependencies]
+ windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem", "Win32_System_ProcessStatus", "Win32_System_SystemInformation", "Win32_System_Threading"] }
+
 diff --git a/tgrep-cli/src/ash.rs b/tgrep-cli/src/ash.rs
 new file mode 100644
+index 0000000..dab6297
 --- /dev/null
 +++ b/tgrep-cli/src/ash.rs
 @@ -0,0 +1,58 @@
@@ -94,19 +141,615 @@ new file mode 100644
 +    );
 +    Ok(())
 +}
+diff --git a/tgrep-cli/src/ash_files.rs b/tgrep-cli/src/ash_files.rs
+new file mode 100644
+index 0000000..0e19022
+--- /dev/null
++++ b/tgrep-cli/src/ash_files.rs
+@@ -0,0 +1,502 @@
++//! Metadata-only file membership owned by each serving root.
++
++use crate::ash_request::Cancellation;
++use anyhow::Result;
++use anyhow::ensure;
++use serde::Deserialize;
++use serde_json::Value;
++use serde_json::json;
++use std::collections::BTreeSet;
++use std::path::Path;
++use std::path::PathBuf;
++use std::sync::Mutex;
++use std::sync::RwLock;
++use std::time::Duration;
++use std::time::Instant;
++use tgrep_core::gitignore::IgnoreMatcher;
++use tgrep_core::walker::MetaWalkOptions;
++use tgrep_core::worktrees::WorktreeError;
++
++const PAGE_LIMIT: usize = 1024;
++const HINT_LIMIT: usize = 1024;
++
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++struct Cursor {
++    epoch: u64,
++    offset: usize,
++}
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++struct PageParams {
++    page_size: usize,
++    cursor: Option<Cursor>,
++}
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++struct FuzzyParams {
++    query: String,
++    max_results: usize,
++}
++#[derive(Default, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub struct RefreshParams {
++    #[serde(default)]
++    pub changed: Vec<PathBuf>,
++    #[serde(default)]
++    pub full: bool,
++}
++
++struct Pending {
++    revision: u64,
++    full: bool,
++    paths: BTreeSet<String>,
++}
++struct Snapshot {
++    observed: u64,
++    epoch: u64,
++    paths: BTreeSet<String>,
++    ignore: Option<IgnoreMatcher>,
++    ignore_sources: BTreeSet<PathBuf>,
++    checked: Instant,
++    full_reconciliations: u64,
++    path_reconciliations: u64,
++    paths_checked: u64,
++}
++
++pub struct Catalog {
++    root: PathBuf,
++    options: MetaWalkOptions,
++    pending: Mutex<Pending>,
++    refresh: Mutex<()>,
++    snapshot: RwLock<Snapshot>,
++}
++
++impl Catalog {
++    pub fn new(root: &Path, mut options: MetaWalkOptions) -> Self {
++        // File membership includes binaries and large files without reading their bytes.
++        options.max_file_size = None;
++        for name in crate::ash_discovery::EXCLUDED_DIRECTORIES {
++            if !options.exclude_dirs.iter().any(|excluded| excluded == name) {
++                options.exclude_dirs.push((*name).to_owned());
++            }
++        }
++        Self {
++            root: root.to_path_buf(),
++            options,
++            pending: Mutex::new(Pending {
++                revision: 1,
++                full: true,
++                paths: BTreeSet::new(),
++            }),
++            refresh: Mutex::new(()),
++            snapshot: RwLock::new(Snapshot {
++                observed: 0,
++                epoch: 0,
++                paths: BTreeSet::new(),
++                ignore: None,
++                ignore_sources: BTreeSet::new(),
++                checked: Instant::now(),
++                full_reconciliations: 0,
++                path_reconciliations: 0,
++                paths_checked: 0,
++            }),
++        }
++    }
++
++    pub fn invalidate(&self) {
++        let mut pending = self.pending.lock().expect("filename changes");
++        pending.revision += 1;
++        pending.full = true;
++        pending.paths.clear();
++    }
++
++    pub fn invalidate_path(&self, path: &Path) {
++        let relative = path.strip_prefix(&self.root).unwrap_or(path);
++        let Some(text) = relative.to_str() else {
++            self.invalidate();
++            return;
++        };
++        let text = if cfg!(windows) {
++            text.replace('\\', "/")
++        } else {
++            text.to_owned()
++        };
++        if tgrep_core::rooted::validate_index_path(&text).is_err()
++            || relative.components().any(|part| {
++                matches!(
++                    part.as_os_str().to_str(),
++                    Some(".gitignore" | ".ignore" | "p4ignore.ini" | ".git")
++                )
++            })
++        {
++            self.invalidate();
++            return;
++        }
++        let mut pending = self.pending.lock().expect("filename changes");
++        pending.revision += 1;
++        if !pending.full {
++            pending.paths.insert(text);
++            if pending.paths.len() > HINT_LIMIT {
++                // A bounded hint set preserves correctness after bursts or missed notifications.
++                pending.full = true;
++                pending.paths.clear();
++            }
++        }
++    }
++
++    pub fn refresh(
++        &self,
++        changed: &[PathBuf],
++        full: bool,
++        cancellation: &Cancellation<'_>,
++    ) -> Result<u64> {
++        cancellation.check()?;
++        if full || changed.is_empty() {
++            self.invalidate();
++        } else {
++            for path in changed {
++                self.invalidate_path(path);
++            }
++        }
++        self.reconcile(cancellation)
++    }
++
++    pub fn status(&self) -> (bool, usize) {
++        let pending = self.pending.lock().expect("filename changes");
++        let snapshot = self.snapshot.read().expect("filename snapshot");
++        (snapshot.observed == pending.revision, snapshot.paths.len())
++    }
++
++    pub fn statistics(&self) -> Value {
++        let snapshot = self.snapshot.read().expect("filename snapshot");
++        json!({"full_reconciliations": snapshot.full_reconciliations,
++            "path_reconciliations": snapshot.path_reconciliations, "paths_checked": snapshot.paths_checked})
++    }
++
++    fn reconcile(&self, cancellation: &Cancellation<'_>) -> Result<u64> {
++        let _refresh = loop {
++            cancellation.check()?;
++            match self.refresh.try_lock() {
++                Ok(guard) => break guard,
++                Err(std::sync::TryLockError::Poisoned(error)) => {
++                    panic!("filename refresh: {error}")
++                }
++                Err(std::sync::TryLockError::WouldBlock) => {
++                    std::thread::sleep(Duration::from_millis(5))
++                }
++            }
++        };
++        let (revision, mut full, paths) = {
++            let pending = self.pending.lock().expect("filename changes");
++            let snapshot = self.snapshot.read().expect("filename snapshot");
++            if snapshot.observed == pending.revision {
++                return Ok(snapshot.epoch);
++            }
++            (pending.revision, pending.full, pending.paths.clone())
++        };
++        let mut updates = Vec::new();
++        if !full {
++            let snapshot = self.snapshot.read().expect("filename snapshot");
++            for relative in &paths {
++                cancellation.check()?;
++                let absolute = self.root.join(relative);
++                // Inspect ancestors too: directory-to-link replacement removes its old members.
++                let mut ancestor = absolute.parent();
++                let mut ordinary = true;
++                while let Some(path) = ancestor.filter(|path| *path != self.root) {
++                    match std::fs::symlink_metadata(path) {
++                        Ok(metadata) if metadata.file_type().is_dir() => {}
++                        Ok(_) => {
++                            ordinary = false;
++                            break;
++                        }
++                        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
++                            ordinary = false;
++                            break;
++                        }
++                        Err(error) => return Err(error.into()),
++                    }
++                    let prefix = format!(
++                        "{}/",
++                        path.strip_prefix(&self.root)
++                            .expect("contained ancestor")
++                            .to_string_lossy()
++                            .replace('\\', "/")
++                    );
++                    let known = snapshot
++                        .paths
++                        .range(prefix.clone()..)
++                        .next()
++                        .is_some_and(|candidate| candidate.starts_with(&prefix));
++                    if !known {
++                        let (gitignore, dot_ignore) = tgrep_core::gitignore::ignore_files_in(path);
++                        if gitignore
++                            .iter()
++                            .chain(dot_ignore.iter())
++                            .any(|source| !snapshot.ignore_sources.contains(source))
++                        {
++                            full = true;
++                            break;
++                        }
++                    }
++                    ancestor = path.parent();
++                }
++                if full {
++                    break;
++                }
++                let metadata = if ordinary {
++                    match std::fs::symlink_metadata(&absolute) {
++                        Ok(metadata) => Some(metadata),
++                        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
++                        Err(error) => return Err(error.into()),
++                    }
++                } else {
++                    None
++                };
++                let mut replacement = Vec::new();
++                if metadata
++                    .as_ref()
++                    .is_some_and(|metadata| metadata.file_type().is_dir())
++                {
++                    let walk = tgrep_core::walker::walk_file_metadata_interruptible(
++                        &self.root,
++                        &self.options,
++                        Some(&absolute),
++                        &|| cancellation.check().is_err(),
++                    );
++                    cancellation.check()?;
++                    ensure!(
++                        walk.skipped_error == 0,
++                        "incomplete filename subtree discovery"
++                    );
++                    if walk
++                        .gitignore_files
++                        .iter()
++                        .chain(&walk.ignore_files)
++                        .any(|path| !snapshot.ignore_sources.contains(path))
++                    {
++                        full = true;
++                        break;
++                    }
++                    replacement = walk.listed_files;
++                } else if metadata
++                    .as_ref()
++                    .is_some_and(|metadata| metadata.file_type().is_file())
++                    && !snapshot
++                        .ignore
++                        .as_ref()
++                        .is_some_and(|ignore| ignore.is_ignored(Path::new(relative), false))
++                    && !self
++                        .options
++                        .exclude_paths
++                        .iter()
++                        .any(|path| absolute.starts_with(path))
++                    && !relative.rsplit_once('/').is_some_and(|(parent, _)| {
++                        parent.split('/').any(|part| {
++                            self.options
++                                .exclude_dirs
++                                .iter()
++                                .any(|excluded| excluded == part)
++                        })
++                    })
++                {
++                    replacement.push(relative.clone());
++                }
++                if snapshot
++                    .ignore_sources
++                    .iter()
++                    .any(|path| path.starts_with(&absolute))
++                {
++                    full = true;
++                    break;
++                }
++                updates.push((relative.clone(), replacement));
++            }
++        }
++        let walked = if full {
++            let walk = tgrep_core::walker::walk_file_metadata_interruptible(
++                &self.root,
++                &self.options,
++                None,
++                &|| cancellation.check().is_err(),
++            );
++            cancellation.check()?;
++            ensure!(walk.skipped_error == 0, "incomplete filename discovery");
++            let ignore = if self.options.no_ignore {
++                None
++            } else {
++                tgrep_core::gitignore::matcher_from_ignore_paths_with_options(
++                    &self.root,
++                    &walk.gitignore_files,
++                    &walk.ignore_files,
++                    self.options.no_require_git,
++                )
++            };
++            Some((walk, ignore))
++        } else {
++            None
++        };
++        cancellation.check()?;
++        // Publish only the captured revision. Notifications arriving during I/O remain pending.
++        let mut pending = self.pending.lock().expect("filename changes");
++        if revision != pending.revision {
++            return Err(WorktreeError::ChangedDuringReconcile.into());
++        }
++        let mut snapshot = self.snapshot.write().expect("filename snapshot");
++        let mut membership_changed = false;
++        if let Some((walk, ignore)) = walked {
++            let discovered: BTreeSet<_> = walk.listed_files.into_iter().collect();
++            membership_changed = snapshot.observed == 0 || snapshot.paths != discovered;
++            snapshot.paths = discovered;
++            snapshot.ignore = ignore;
++            snapshot.ignore_sources = walk
++                .gitignore_files
++                .into_iter()
++                .chain(walk.ignore_files)
++                .collect();
++            snapshot.full_reconciliations += 1;
++        } else {
++            for (path, replacement) in updates {
++                let prefix = format!("{path}/");
++                let old: Vec<_> = snapshot
++                    .paths
++                    .get(&path)
++                    .into_iter()
++                    .chain(
++                        snapshot
++                            .paths
++                            .range(prefix.clone()..)
++                            .take_while(|candidate| candidate.starts_with(&prefix)),
++                    )
++                    .cloned()
++                    .collect();
++                let replacement: BTreeSet<_> = replacement.into_iter().collect();
++                if old.iter().ne(replacement.iter()) {
++                    membership_changed = true;
++                    for path in old {
++                        snapshot.paths.remove(&path);
++                    }
++                    snapshot.paths.extend(replacement);
++                }
++            }
++            snapshot.path_reconciliations += 1;
++            snapshot.paths_checked += paths.len() as u64;
++        }
++        if membership_changed {
++            snapshot.epoch = revision;
++        }
++        snapshot.observed = revision;
++        // Point repairs must not postpone the safety walk indefinitely.
++        if full {
++            snapshot.checked = Instant::now();
++        }
++        pending.full = false;
++        pending.paths.clear();
++        Ok(snapshot.epoch)
++    }
++
++    fn current(&self, polling_interval: Duration, cancellation: &Cancellation<'_>) -> Result<()> {
++        let due = self
++            .snapshot
++            .read()
++            .expect("filename snapshot")
++            .checked
++            .elapsed()
++            >= polling_interval;
++        if due {
++            self.invalidate();
++        }
++        self.reconcile(cancellation)?;
++        Ok(())
++    }
++
++    pub fn page(
++        &self,
++        params: &Value,
++        polling_interval: Duration,
++        cancellation: &Cancellation<'_>,
++    ) -> Result<Value> {
++        let params: PageParams = serde_json::from_value(params.clone())?;
++        ensure!(
++            (1..=PAGE_LIMIT).contains(&params.page_size),
++            "file page_size must be 1..=1024"
++        );
++        cancellation.check()?;
++        self.current(polling_interval, cancellation)?;
++        let pending = self.pending.lock().expect("filename changes");
++        let snapshot = self.snapshot.read().expect("filename snapshot");
++        ensure!(
++            snapshot.observed == pending.revision,
++            WorktreeError::ChangedDuringReconcile
++        );
++        let offset = match params.cursor {
++            Some(cursor) => {
++                ensure!(cursor.epoch == snapshot.epoch, WorktreeError::NotReady);
++                cursor.offset
++            }
++            None => 0,
++        };
++        ensure!(
++            offset <= snapshot.paths.len(),
++            "file cursor offset exceeds its snapshot"
++        );
++        let files: Vec<_> = snapshot
++            .paths
++            .iter()
++            .skip(offset)
++            .take(params.page_size)
++            .collect();
++        let end = offset + files.len();
++        let cursor =
++            (end < snapshot.paths.len()).then(|| json!({"epoch":snapshot.epoch,"offset":end}));
++        Ok(
++            json!({"files":files,"cursor":cursor,"epoch":snapshot.epoch,"total_files":snapshot.paths.len(),"files_ready":true}),
++        )
++    }
++
++    pub fn fuzzy(
++        &self,
++        params: &Value,
++        polling_interval: Duration,
++        cancellation: &Cancellation<'_>,
++    ) -> Result<Value> {
++        let params: FuzzyParams = serde_json::from_value(params.clone())?;
++        ensure!(
++            params.query.len() <= 1024
++                && !params.query.contains('\0')
++                && (1..=5000).contains(&params.max_results),
++            "invalid fuzzy file query or limit"
++        );
++        cancellation.check()?;
++        self.current(polling_interval, cancellation)?;
++        let snapshot = self.snapshot.read().expect("filename snapshot");
++        let deadline = Instant::now() + Duration::from_secs(30);
++        let mut checked = 0usize;
++        let ranked = crate::ash_ranking::rank(
++            snapshot.paths.iter().map(Ok),
++            &params.query,
++            params.max_results,
++            || {
++                if checked % 128 == 0 {
++                    cancellation.check()?;
++                }
++                checked += 1;
++                ensure!(Instant::now() < deadline, "file search exceeded 30 seconds");
++                Ok::<(), anyhow::Error>(())
++            },
++        )?;
++        cancellation.check()?;
++        // Invalidations can proceed while scoring. Never acknowledge a stale result.
++        let observed = snapshot.observed;
++        let result = json!({"matches":ranked.matches.iter().map(|matched| json!({"score":matched.score,"path":matched.path,"indices":matched.indices})).collect::<Vec<_>>(),
++            "total_match_count":ranked.total_match_count,"scanned_file_count":ranked.scanned_file_count,
++            "epoch":snapshot.epoch,"files_ready":true});
++        drop(snapshot);
++        ensure!(
++            self.pending.lock().expect("filename changes").revision == observed,
++            WorktreeError::ChangedDuringReconcile
++        );
++        Ok(result)
++    }
++}
+diff --git a/tgrep-cli/src/ash_request.rs b/tgrep-cli/src/ash_request.rs
+new file mode 100644
+index 0000000..c18df6a
+--- /dev/null
++++ b/tgrep-cli/src/ash_request.rs
+@@ -0,0 +1,77 @@
++//! Request-scoped cancellation for opt-in, reversible filename operations.
++
++use anyhow::Result;
++use std::io::ErrorKind;
++use std::net::TcpStream;
++
++#[derive(Debug)]
++pub struct Cancelled;
++
++impl std::fmt::Display for Cancelled {
++    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        formatter.write_str("file request cancelled")
++    }
++}
++
++impl std::error::Error for Cancelled {}
++
++pub enum Cancellation<'a> {
++    Disabled,
++    Peer(&'a TcpStream),
++}
++
++impl Cancellation<'_> {
++    pub fn check(&self) -> Result<()> {
++        let Self::Peer(stream) = self else {
++            return Ok(());
++        };
++        match stream.peek(&mut [0]) {
++            Ok(0) => Err(Cancelled.into()),
++            Ok(_) => Ok(()),
++            Err(error)
++                if matches!(error.kind(), ErrorKind::WouldBlock | ErrorKind::Interrupted) =>
++            {
++                Ok(())
++            }
++            Err(error)
++                if matches!(
++                    error.kind(),
++                    ErrorKind::ConnectionReset
++                        | ErrorKind::NotConnected
++                        | ErrorKind::BrokenPipe
++                        | ErrorKind::ConnectionAborted
++                ) =>
++            {
++                Err(Cancelled.into())
++            }
++            Err(error) => Err(error.into()),
++        }
++    }
++}
++
++pub fn enabled(method: &str, opt_in: bool) -> bool {
++    opt_in && matches!(method, "files/fuzzy" | "files/refresh" | "files/page")
++}
++
++pub fn run<T>(
++    stream: &TcpStream,
++    enabled: bool,
++    action: impl FnOnce(&Cancellation<'_>) -> Result<T>,
++) -> Result<T> {
++    if !enabled {
++        return action(&Cancellation::Disabled);
++    }
++    // Opt-in clients keep their sending half open until the request completes. Legacy clients
++    // may half-close it while waiting for a reply, so only opt-in requests observe EOF as cancel.
++    stream.set_nonblocking(true)?;
++    struct Restore<'a>(&'a TcpStream);
++    impl Drop for Restore<'_> {
++        fn drop(&mut self) {
++            let _ = self.0.set_nonblocking(false);
++        }
++    }
++    let _restore = Restore(stream);
++    let cancellation = Cancellation::Peer(stream);
++    cancellation.check()?;
++    action(&cancellation)
++}
 diff --git a/tgrep-cli/src/main.rs b/tgrep-cli/src/main.rs
+index e6d45de..6f0ae22 100644
 --- a/tgrep-cli/src/main.rs
 +++ b/tgrep-cli/src/main.rs
-@@ -13,6 +13,7 @@
+@@ -13,6 +13,11 @@ mod mem;
  mod output;
  mod search;
  mod serve;
 +mod ash;
++mod ash_files;
++mod ash_discovery;
++mod ash_ranking;
++mod ash_request;
  mod status;
  mod walkcount;
- 
-@@ -585,6 +586,11 @@
- 
+
+@@ -597,6 +602,11 @@ impl From<IndexStrategyArg> for builder::IndexStrategy {
+
  #[derive(Subcommand)]
  enum Command {
 +    /// Describe the directory identity and shared-service eligibility for Ash.
@@ -117,166 +760,165 @@ diff --git a/tgrep-cli/src/main.rs b/tgrep-cli/src/main.rs
      /// Build or rebuild the trigram index.
      Index {
          /// Root directory to index.
-@@ -1167,6 +1173,7 @@
+@@ -1194,6 +1204,7 @@ fn run_cli() {
      }
- 
+
      let result = match cli.command {
 +        Some(Command::Identity { path }) => ash::identity(&path),
          Some(Command::Index {
              path,
              exclude,
-diff --git a/tgrep-cli/src/serve/shared/server.rs b/tgrep-cli/src/serve/shared/server.rs
---- a/tgrep-cli/src/serve/shared/server.rs
-+++ b/tgrep-cli/src/serve/shared/server.rs
-@@ -381,8 +381,11 @@
- }
- 
- fn send_error(stream: &mut TcpStream, id: Value, error: &anyhow::Error) {
-+    // Ash distinguishes an invalidated snapshot from permanent protocol/storage failures.
-+    let code = if matches!(error.downcast_ref::<WorktreeError>(),
-+        Some(WorktreeError::NotReady | WorktreeError::ChangedDuringReconcile)) { -32002 } else { -32001 };
-     let response =
--        json!({"jsonrpc":"2.0", "id":id, "error":{"code":-32001,"message":format!("{error:#}")}});
-+        json!({"jsonrpc":"2.0", "id":id, "error":{"code":code,"message":format!("{error:#}")}});
-     if let Err(error) = writeln!(stream, "{response}") {
-         eprintln!("shared RPC error response failed: {error}");
-     }
-@@ -856,13 +859,13 @@
-     }
- 
-     fn describe(&self, entry: &Entry) -> Result<Value> {
--        let snapshot_valid = match entry.view.with_snapshot(|_| ()) {
--            Ok(()) => true,
--            Err(WorktreeError::NotReady) => false,
-+        let (snapshot_valid, num_files) = match entry.view.with_snapshot(|snapshot| snapshot.files("", true).len()) {
-+            Ok(count) => (true, count),
-+            Err(WorktreeError::NotReady) => (false, 0),
-             Err(error) => {
-                 entry.metrics.lock().expect("metrics").error =
-                     Some(format!("validating shared snapshot: {error}"));
--                false
-+                (false, 0)
-             }
-         };
-         let status = entry.view.status()?;
-@@ -874,6 +877,7 @@
-             "root":entry.view.root(), "view":entry.id, "generation":entry.view.generation().key(),
-             "ready":snapshot_valid && status.ready && !running
-                 && checkpoint_epoch == Some(status.epoch),
-+            "num_files":num_files,
-             "epoch":status.epoch, "published_epoch":status.published_epoch,
-             "pending_paths":status.pending_paths, "full_required":status.full_required,
-             "queued":entry.queued.load(Ordering::SeqCst), "last_error":metrics.error,
-@@ -1113,7 +1117,7 @@
-             | "type_clear" => value
-                 .as_array()
-                 .is_some_and(|array| array.iter().all(Value::is_string)),
--            "max_count" | "after_context" | "before_context" | "max_filesize"
-+            "max_results" | "max_count" | "after_context" | "before_context" | "max_filesize"
-             | "regex_size_limit" | "dfa_size_limit" => value.is_null() || value.is_u64(),
-             "case_insensitive"
-             | "fixed_string"
-@@ -1197,10 +1201,9 @@
-             .last
-             .as_ref()
-             .map(|stats| stats.epoch);
--        ensure!(
--            !entry.running.load(Ordering::SeqCst) && checkpoint_epoch == Some(epoch),
--            "shared reconciliation or checkpoint publication incomplete; retry or scan"
--        );
-+        if entry.running.load(Ordering::SeqCst) || checkpoint_epoch != Some(epoch) {
-+            return Err(WorktreeError::NotReady.into());
-+        }
-         Ok(result)
-     }
- 
-@@ -1238,15 +1241,19 @@
-             })??;
-             (json!({"files":paths, "epoch":epoch}), epoch)
-         } else {
--            let request = crate::serve::parse_search_params(query).map_err(anyhow::Error::msg)?;
--            let (paths, total, epoch) = self.query_snapshot(entry, |snapshot| {
--                (
--                    snapshot.candidates(&request.plan, &scope.prefix, scope.hidden),
--                    request.opts.stats.then(|| snapshot.files("", true).len()),
--                    snapshot.epoch(),
--                )
-+            let mut request = crate::serve::parse_search_params(query).map_err(anyhow::Error::msg)?;
-+            let limit = crate::serve::global_result_limit(query).map_err(anyhow::Error::msg)?;
-+            let per_file_limit = request.opts.max_count;
-+            let (paths, raw_count, total, epoch) = self.query_snapshot(entry, |snapshot| {
-+                let candidates = snapshot.candidates(&request.plan, "", true);
-+                let raw_count = candidates.len();
-+                let paths: Vec<_> = candidates.into_iter().filter(|path| {
-+                    scope.relative(path).is_some()
-+                        && snapshot.visibility().is_visible(path, &scope.prefix, scope.hidden)
-+                }).collect();
-+                (paths, raw_count,
-+                    request.opts.stats.then(|| snapshot.files("", true).len()), snapshot.epoch())
-             })?;
--            let raw_count = paths.len();
-             let paths: Vec<_> = paths
-                 .into_iter()
-                 .filter(|path| {
-@@ -1262,6 +1269,11 @@
-             let mut rows = Vec::new();
-             let mut stats = Vec::new();
-             for relative in &paths {
-+                if let Some(limit) = limit {
-+                    if rows.len() == limit { break; }
-+                    let remaining = limit - rows.len();
-+                    request.opts.max_count = Some(per_file_limit.unwrap_or(remaining).min(remaining));
-+                }
-                 let read = (|| -> Result<Vec<u8>> {
-                     let file =
-                         self.query_snapshot(entry, |snapshot| snapshot.open_file(relative))??;
-@@ -1293,7 +1305,8 @@
-                     &request.opts,
-                     Some(&mut budget),
-                 )?;
--                rows.extend(found.rows);
-+                let remaining = limit.map_or(usize::MAX, |limit| limit - rows.len());
-+                rows.extend(found.rows.into_iter().take(remaining));
-                 stats.extend(found.stats);
-             }
-             (
-@@ -1305,10 +1318,9 @@
-                 epoch,
-             )
-         };
--        ensure!(
--            self.query_snapshot(entry, |snapshot| snapshot.epoch() == epoch)?,
--            "view changed during query; retry or scan"
--        );
-+        if !self.query_snapshot(entry, |snapshot| snapshot.epoch() == epoch)? {
-+            return Err(WorktreeError::ChangedDuringReconcile.into());
-+        }
-         for (key, value) in metadata.as_object().expect("metadata object") {
-             result[key] = value.clone();
-         }
 diff --git a/tgrep-cli/src/serve.rs b/tgrep-cli/src/serve.rs
+index 32d3a89..4440b37 100644
 --- a/tgrep-cli/src/serve.rs
 +++ b/tgrep-cli/src/serve.rs
-@@ -1742,6 +1742,15 @@
+@@ -457,6 +457,7 @@ impl RecentReindexCache {
+ }
+
+ struct ServerState {
++    filename_catalog: crate::ash_files::Catalog,
+     index: RwLock<HybridIndex>,
+     /// Read under the index lock so visibility and content change together at
+     /// publication. Native events update it using metadata they already read.
+@@ -878,6 +879,16 @@ pub fn run(root: &Path, index_path: Option<&Path>, options: ServeOptions<'_>) ->
+     );
+
+     let state = Arc::new(ServerState {
++        filename_catalog: crate::ash_files::Catalog::new(
++            &root,
++            tgrep_core::walker::MetaWalkOptions {
++                exclude_dirs: builder::index_exclude_dirs(exclude_dirs, no_ignore),
++                exclude_paths: vec![index_dir.clone()],
++                no_ignore,
++                no_require_git,
++                ..Default::default()
++            },
++        ),
+         index: RwLock::new(hybrid),
+         visibility: RwLock::new(discovery.visibility),
+         hidden_complete: std::sync::atomic::AtomicBool::new(discovery.hidden_complete),
+@@ -1392,7 +1403,15 @@ fn handle_connection(stream: TcpStream, state: &Arc<ServerState>) -> Result<()>
+
+     let mut line = String::new();
+     while reader.read_line(&mut line)? > 0 {
+-        let response = process_request(&line, state);
++        let envelope: serde_json::Value =
++            serde_json::from_str(&line).unwrap_or(serde_json::Value::Null);
++        let enabled = crate::ash_request::enabled(
++            envelope["method"].as_str().unwrap_or(""),
++            envelope["cancellable"] == true,
++        );
++        let response = crate::ash_request::run(&writer, enabled, |cancellation| {
++            Ok(process_request(&line, state, cancellation))
++        })?;
+         writeln!(writer, "{response}")?;
+         writer.flush()?;
+         line.clear();
+@@ -1401,7 +1420,11 @@ fn handle_connection(stream: TcpStream, state: &Arc<ServerState>) -> Result<()>
+     Ok(())
+ }
+
+-fn process_request(request: &str, state: &Arc<ServerState>) -> String {
++fn process_request(
++    request: &str,
++    state: &Arc<ServerState>,
++    cancellation: &crate::ash_request::Cancellation<'_>,
++) -> String {
+     let req: serde_json::Value = match serde_json::from_str(request) {
+         Ok(v) => v,
+         Err(e) => {
+@@ -1419,12 +1442,65 @@ fn process_request(request: &str, state: &Arc<ServerState>) -> String {
+     match method {
+         "search" => handle_search(id, &params, state),
+         "files" => handle_files(id, &params, state),
++        "files/page" => handle_file_page(id, &params, state, cancellation),
++        "files/fuzzy" => file_page_response(
++            id,
++            state
++                .filename_catalog
++                .fuzzy(&params, state.refresh.poll_interval, cancellation),
++        ),
++        "files/refresh" => {
++            let result = (|| {
++                let params: crate::ash_files::RefreshParams = serde_json::from_value(params)?;
++                let epoch =
++                    state
++                        .filename_catalog
++                        .refresh(&params.changed, params.full, cancellation)?;
++                Ok(serde_json::json!({"files_ready":true, "processed_epoch":epoch}))
++            })();
++            file_page_response(id, result)
++        }
+         "status" => handle_status(id, state),
+         "reload" => handle_reload(id, state),
+         _ => json_rpc_error(id, -32601, &format!("Method not found: {method}")),
+     }
+ }
+
++fn file_page_response(id: Option<serde_json::Value>, result: Result<serde_json::Value>) -> String {
++    match result {
++        Ok(value) => json_rpc_result(id, value),
++        Err(error) => {
++            let code = if matches!(
++                error.downcast_ref::<tgrep_core::worktrees::WorktreeError>(),
++                Some(
++                    tgrep_core::worktrees::WorktreeError::NotReady
++                        | tgrep_core::worktrees::WorktreeError::ChangedDuringReconcile
++                )
++            ) {
++                -32002
++            } else {
++                -32001
++            };
++            json_rpc_error(id, code, &format!("{error:#}"))
++        }
++    }
++}
++
++fn handle_file_page(
++    id: Option<serde_json::Value>,
++    params: &serde_json::Value,
++    state: &ServerState,
++    cancellation: &crate::ash_request::Cancellation<'_>,
++) -> String {
++    state.note_search();
++    file_page_response(
++        id,
++        state
++            .filename_catalog
++            .page(params, state.refresh.poll_interval, cancellation),
++    )
++}
++
+ fn handle_files(
+     id: Option<serde_json::Value>,
+     params: &serde_json::Value,
+@@ -1748,6 +1824,21 @@ fn parse_search_params(params: &serde_json::Value) -> std::result::Result<Search
      })
  }
- 
+
 +// Ash's limit is global and distinct from ripgrep's per-file max_count.
 +// A bounded request uses ordered matching so later files never consume its row budget.
 +pub(super) fn global_result_limit(params: &serde_json::Value) -> Result<Option<usize>, String> {
-+    params.get("max_results").map(|value| {
-+        value.as_u64().filter(|n| (1..=5001).contains(n)).map(|n| n as usize)
-+            .ok_or_else(|| "max_results must be between 1 and 5001".into())
-+    }).transpose()
++    params
++        .get("max_results")
++        .map(|value| {
++            value
++                .as_u64()
++                .filter(|n| (1..=5001).contains(n))
++                .map(|n| n as usize)
++                .ok_or_else(|| "max_results must be between 1 and 5001".into())
++        })
++        .transpose()
 +}
 +
  fn handle_search(
      id: Option<serde_json::Value>,
      params: &serde_json::Value,
-@@ -1757,12 +1766,16 @@
+@@ -1763,12 +1854,16 @@ fn handle_search(
          Err(e) => return json_rpc_error(id, -32602, &e),
      };
- 
+
 +    let limit = match global_result_limit(params) {
 +        Ok(limit) => limit,
 +        Err(error) => return json_rpc_error(id, -32602, &error),
@@ -291,19 +933,21 @@ diff --git a/tgrep-cli/src/serve.rs b/tgrep-cli/src/serve.rs
      let pattern = req.pattern;
      let case_insensitive = req.case_insensitive;
      let scope = req.scope;
-@@ -1861,7 +1874,7 @@
-     // Two-phase approach: read-lock for cache hits, then disk I/O outside the
-     // lock, then a single write-lock to promote hits and insert misses.
-     let t_resolve = Instant::now();
+@@ -1900,7 +1995,9 @@ fn handle_search(
+             }
+         }
+     };
 -    let candidate_contents: Vec<(String, Arc<DecodedFile>)> = if encoding.may_differ_from_index() {
-+    let mut candidate_contents: Vec<(String, Arc<DecodedFile>)> = if encoding.may_differ_from_index() {
++    let mut candidate_contents: Vec<(String, Arc<DecodedFile>)> = if encoding
++        .may_differ_from_index()
++    {
          // The cache holds text decoded with the default (BOM-sniffing) rules and
          // is shared by every client. A request that asked for a different
          // `--encoding` must neither read those entries nor write its own, or one
-@@ -1932,23 +1945,37 @@
+@@ -1974,23 +2071,49 @@ fn handle_search(
      };
      let resolve_ms = t_resolve.elapsed().as_secs_f64() * 1000.0;
- 
+
 -    // Parallel regex matching across candidate files
      let t_search = Instant::now();
 -    let per_file: std::result::Result<Vec<FileSearchResult>, String> = candidate_contents
@@ -324,22 +968,34 @@ diff --git a/tgrep-cli/src/serve.rs b/tgrep-cli/src/serve.rs
 +    if let Some(limit) = limit {
 +        candidate_contents.sort_by(|a, b| a.0.cmp(&b.0));
 +        let per_file_limit = opts.max_count;
-+        let mut budget = JsonBudget { remaining: 64 * 1024 * 1024 - 1024 };
++        let mut budget = JsonBudget {
++            remaining: 64 * 1024 * 1024 - 1024,
++        };
 +        for (path, content) in &candidate_contents {
 +            let remaining = limit - matches.len();
 +            opts.max_count = Some(per_file_limit.unwrap_or(remaining).min(remaining));
-+            let file = match search_file_matches_bounded(path, content, &matcher, &opts, Some(&mut budget)) {
++            let file = match search_file_matches_bounded(
++                path,
++                content,
++                &matcher,
++                &opts,
++                Some(&mut budget),
++            ) {
 +                Ok(file) => file,
 +                Err(error) => return json_rpc_error(id, -32603, &error.to_string()),
 +            };
 +            matches.extend(file.rows.into_iter().take(remaining));
 +            file_stats.extend(file.stats);
-+            if matches.len() == limit { break; }
++            if matches.len() == limit {
++                break;
++            }
 +        }
 +    } else {
 +        let per_file: std::result::Result<Vec<FileSearchResult>, String> = candidate_contents
 +            .par_iter()
-+            .map(|(path, content)| search_file_matches(path, content, &matcher, &opts).map_err(|e| format!("{e}")))
++            .map(|(path, content)| {
++                search_file_matches(path, content, &matcher, &opts).map_err(|e| format!("{e}"))
++            })
 +            .collect();
 +        let per_file = match per_file {
 +            Ok(files) => files,
@@ -350,5 +1006,1956 @@ diff --git a/tgrep-cli/src/serve.rs b/tgrep-cli/src/serve.rs
 +            file_stats.extend(file.stats);
 +        }
      }
- 
+
      let search_ms = t_search.elapsed().as_secs_f64() * 1000.0;
+@@ -2330,12 +2453,15 @@ fn collect_match_rows_bounded(
+ }
+
+ fn handle_status(id: Option<serde_json::Value>, state: &ServerState) -> String {
++    let (files_ready, file_count) = state.filename_catalog.status();
+     let refresh = state.refresh.status.lock().unwrap();
+     let index = state.index.read().unwrap();
+     let cache = state.cache.read().unwrap();
+     let indexing = state.indexing.load(Ordering::SeqCst);
+
+     let result = serde_json::json!({
++        "files_ready": files_ready, "file_catalog":state.filename_catalog.statistics(),
++        "file_count": file_count,
+         "num_files": index.num_files(),
+         "num_trigrams": index.num_trigrams(),
+         "cache_size": cache.len(),
+@@ -2856,6 +2982,17 @@ fn start_file_watcher_using(
+                         .paths
+                         .retain(|path| !path.starts_with(&callback_state.index_dir));
+                     if !event.paths.is_empty() || event.need_rescan() {
++                        if !matches!(event.kind, EventKind::Access(_)) {
++                            if event.need_rescan()
++                                || matches!(event.kind, EventKind::Any | EventKind::Other)
++                            {
++                                callback_state.filename_catalog.invalidate();
++                            } else {
++                                for path in &event.paths {
++                                    callback_state.filename_catalog.invalidate_path(path);
++                                }
++                            }
++                        }
+                         enqueue_watcher_event(
+                             &tx,
+                             &callback_overflow,
+@@ -2871,6 +3008,7 @@ fn start_file_watcher_using(
+                 // watcher stopped working" from the outside, and silence makes it
+                 // impossible to tell apart from a bug in our own filtering.
+                 Err(e) => {
++                    callback_state.filename_catalog.invalidate();
+                     eprintln!("[trace] warning: file watcher error: {e}");
+                     if native_capacity_error(&e) {
+                         request_polling(&callback_state, watch_failure_reason(&e));
+@@ -8971,6 +9109,13 @@ mod tests {
+         create_empty_index(index_dir).expect("create empty index");
+         let hybrid = HybridIndex::open(index_dir, root).expect("open empty index");
+         Arc::new(ServerState {
++            filename_catalog: crate::ash_files::Catalog::new(
++                root,
++                tgrep_core::walker::MetaWalkOptions {
++                    exclude_paths: vec![index_dir.to_path_buf()],
++                    ..Default::default()
++                },
++            ),
+             index: RwLock::new(hybrid),
+             visibility: RwLock::new(Default::default()),
+             hidden_complete: std::sync::atomic::AtomicBool::new(true),
+@@ -9287,7 +9432,11 @@ mod tests {
+             .insert("asset.bin".to_string());
+         state.filename_index_ready.store(true, Ordering::SeqCst);
+
+-        let response = process_request(r#"{"jsonrpc":"2.0","method":"files","id":1}"#, &state);
++        let response = process_request(
++            r#"{"jsonrpc":"2.0","method":"files","id":1}"#,
++            &state,
++            &crate::ash_request::Cancellation::Disabled,
++        );
+         let value: serde_json::Value = serde_json::from_str(&response).unwrap();
+         assert_eq!(
+             value.pointer("/result/files").unwrap(),
+diff --git a/tgrep-cli/src/serve/poll_tests.rs b/tgrep-cli/src/serve/poll_tests.rs
+index fc64470..d0e6c72 100644
+--- a/tgrep-cli/src/serve/poll_tests.rs
++++ b/tgrep-cli/src/serve/poll_tests.rs
+@@ -69,7 +69,7 @@ impl Fixture {
+     }
+
+     fn assert_files(&self, expected: &[&str]) {
+-        let response = process_request(r#"{"jsonrpc":"2.0","method":"files","id":1}"#, &self.state);
++        let response = process_request(r#"{"jsonrpc":"2.0","method":"files","id":1}"#, &self.state, &crate::ash_request::Cancellation::Disabled);
+         let value: serde_json::Value = serde_json::from_str(&response).unwrap();
+         let actual: BTreeSet<_> = value["result"]["files"]
+             .as_array()
+diff --git a/tgrep-cli/src/serve/shared/protocol.rs b/tgrep-cli/src/serve/shared/protocol.rs
+index f195805..578cfef 100644
+--- a/tgrep-cli/src/serve/shared/protocol.rs
++++ b/tgrep-cli/src/serve/shared/protocol.rs
+@@ -37,6 +37,8 @@ pub(super) struct Request {
+     pub method: String,
+     pub params: Value,
+     pub id: Value,
++    #[serde(default)]
++    pub cancellable: bool,
+ }
+
+ #[derive(Clone, Debug, Deserialize)]
+diff --git a/tgrep-cli/src/serve/shared/server.rs b/tgrep-cli/src/serve/shared/server.rs
+index fb7dc68..385e1eb 100644
+--- a/tgrep-cli/src/serve/shared/server.rs
++++ b/tgrep-cli/src/serve/shared/server.rs
+@@ -3,8 +3,10 @@ use std::fs::{self, File, OpenOptions};
+ use std::io::{Read, Write};
+ use std::net::{Ipv4Addr, TcpListener, TcpStream};
+ use std::path::{Component, Path, PathBuf};
++use std::sync::RwLock;
++use std::sync::RwLockReadGuard;
+ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+-use std::sync::{Arc, Mutex, mpsc};
++use std::sync::{Arc, Mutex, OnceLock, mpsc};
+ use std::thread;
+ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+@@ -12,7 +14,9 @@ use anyhow::{Context, Result, bail, ensure};
+ use notify::{Event, EventKind};
+ use serde::Deserialize;
+ use serde_json::{Value, json};
+-use tgrep_core::generations::{BuildStats, GenerationManager, IndexingProfile, Repository};
++use tgrep_core::generations::{
++    BuildStats, GenerationKey, GenerationManager, IndexingProfile, Repository,
++};
+ use tgrep_core::worktrees::{
+     ReconcileStats, WorktreeError, WorktreeOptions, WorktreeSnapshot, WorktreeView,
+ };
+@@ -24,6 +28,8 @@ use crate::serve::{WatchMode, WatchRegistry};
+ const CONNECTION_QUEUE: usize = 32;
+ const QUERY_QUEUE: usize = 16;
+ const QUERY_WORKERS: usize = 2;
++const RECONCILE_WORKERS: usize = 2;
++const RELEASE_WORKERS: usize = 2;
+
+ pub struct Options<'a> {
+     pub storage: &'a Path,
+@@ -54,11 +60,21 @@ struct State {
+     policy: Policy,
+     views: Mutex<HashMap<PathBuf, Arc<Entry>>>,
+     sequence: AtomicU64,
++    attachment: Mutex<()>,
+ }
+
+ struct Entry {
+     id: String,
+-    view: WorktreeView,
++    root: PathBuf,
++    repository: Repository,
++    generation: GenerationKey,
++    revision: String,
++    view: OnceLock<WorktreeView>,
++    initialization: Mutex<()>,
++    reconciliation: Mutex<()>,
++    watch_dirty: AtomicBool,
++    filenames: crate::ash_files::Catalog,
++    access: RwLock<()>,
+     leases: Mutex<HashMap<String, Lease>>,
+     queued: AtomicBool,
+     running: AtomicBool,
+@@ -68,6 +84,57 @@ struct Entry {
+     queries: AtomicU64,
+ }
+
++impl Entry {
++    fn query_guard(&self) -> Result<RwLockReadGuard<'_, ()>> {
++        let guard = self.access.read().expect("worktree query access");
++        ensure!(
++            self.active.load(Ordering::SeqCst),
++            "worktree registration released"
++        );
++        // Pin every root read, including identity checks, until final detach drains it.
++        super::validate_repository(&self.root, &self.repository)?;
++        Ok(guard)
++    }
++    fn root(&self) -> &Path {
++        &self.root
++    }
++    fn repository(&self) -> &Repository {
++        &self.repository
++    }
++    fn generation(&self) -> &GenerationKey {
++        &self.generation
++    }
++    fn view(&self) -> Result<&WorktreeView> {
++        self.view
++            .get()
++            .ok_or_else(|| WorktreeError::NotReady.into())
++    }
++    fn ready(&self) -> bool {
++        self.view
++            .get()
++            .is_some_and(|view| view.status().is_ok_and(|status| status.ready))
++    }
++    fn invalidate_all(&self) -> Result<()> {
++        self.filenames.invalidate();
++        self.watch_dirty.store(true, Ordering::SeqCst);
++        if let Some(view) = self.view.get() {
++            view.invalidate_all()?;
++        }
++        Ok(())
++    }
++    fn invalidate_path(&self, path: &Path) -> Result<()> {
++        self.filenames.invalidate_path(path);
++        if !std::fs::symlink_metadata(self.root.join(path)).is_ok_and(|metadata| metadata.is_file())
++        {
++            self.watch_dirty.store(true, Ordering::SeqCst);
++        }
++        if let Some(view) = self.view.get() {
++            view.invalidate_path(path)?;
++        }
++        Ok(())
++    }
++}
++
+ #[derive(Clone)]
+ struct Lease {
+     revision: String,
+@@ -221,37 +288,64 @@ pub fn run(root: &Path, options: Options<'_>) -> Result<()> {
+         },
+         views: Mutex::new(HashMap::new()),
+         sequence: AtomicU64::new(1),
++        attachment: Mutex::new(()),
+     });
+     let (work_tx, work_rx) = mpsc::sync_channel::<Work>(options.max_views);
+-    let worker_state = Arc::clone(&state);
+-    thread::Builder::new()
+-        .name("shared-reconcile".into())
+-        .spawn(move || {
+-            for job in work_rx {
+-                match job {
+-                    Work::Rpc((stream, request)) => {
+-                        respond(stream, &request, &worker_state, || {
+-                            worker_state.lifecycle(&request)
+-                        })
+-                    }
+-                    Work::Reconcile(entry) => {
+-                        let retry_ready = {
+-                            let metrics = entry.metrics.lock().expect("metrics");
+-                            metrics.failures == 0
+-                                || metrics.last_attempt.elapsed() >= retry_delay(metrics.failures)
+-                        };
+-                        if entry.active.load(Ordering::SeqCst)
+-                            && retry_ready
+-                            && !entry.view.status().is_ok_and(|status| status.ready)
+-                            && let Err(error) = worker_state.reconcile(&entry)
+-                        {
+-                            eprintln!("shared reconcile {}: {error}", entry.view.root().display());
++    let work_rx = Arc::new(Mutex::new(work_rx));
++    for index in 0..RECONCILE_WORKERS {
++        let worker_state = Arc::clone(&state);
++        let receiver = Arc::clone(&work_rx);
++        thread::Builder::new()
++            .name(format!("shared-reconcile-{index}"))
++            .spawn(move || {
++                loop {
++                    let Ok(job) = receiver.lock().expect("reconcile queue").recv() else {
++                        break;
++                    };
++                    match job {
++                        Work::Rpc((stream, request)) => {
++                            respond(stream, &request, &worker_state, |_| {
++                                worker_state.lifecycle(&request)
++                            })
++                        }
++                        Work::Reconcile(entry) => {
++                            let retry_ready = {
++                                let metrics = entry.metrics.lock().expect("metrics");
++                                metrics.failures == 0
++                                    || metrics.last_attempt.elapsed()
++                                        >= retry_delay(metrics.failures)
++                            };
++                            if entry.active.load(Ordering::SeqCst)
++                                && retry_ready
++                                && !entry.ready()
++                                && let Err(error) = worker_state.reconcile(&entry)
++                            {
++                                eprintln!("shared reconcile {}: {error}", entry.root().display());
++                            }
++                            entry.queued.store(false, Ordering::SeqCst);
+                         }
+-                        entry.queued.store(false, Ordering::SeqCst);
+                     }
+                 }
+-            }
+-        })?;
++            })?;
++    }
++    // Root draining may wait for an interrupted query; it must not occupy content workers.
++    let (release_tx, release_rx) = mpsc::sync_channel::<RpcJob>(QUERY_QUEUE);
++    let release_rx = Arc::new(Mutex::new(release_rx));
++    for index in 0..RELEASE_WORKERS {
++        let state = Arc::clone(&state);
++        let receiver = Arc::clone(&release_rx);
++        thread::Builder::new()
++            .name(format!("shared-release-{index}"))
++            .spawn(move || {
++                loop {
++                    let Ok((stream, request)) = receiver.lock().expect("release queue").recv()
++                    else {
++                        break;
++                    };
++                    respond(stream, &request, &state, |_| state.lifecycle(&request));
++                }
++            })?;
++    }
+     let (query_tx, query_rx) = mpsc::sync_channel::<RpcJob>(QUERY_QUEUE);
+     let query_rx = Arc::new(Mutex::new(query_rx));
+     for index in 0..QUERY_WORKERS {
+@@ -264,7 +358,9 @@ pub fn run(root: &Path, options: Options<'_>) -> Result<()> {
+                     let Ok((stream, request)) = receiver.lock().expect("query queue").recv() else {
+                         break;
+                     };
+-                    respond(stream, &request, &state, || state.query(&request));
++                    respond(stream, &request, &state, |cancellation| {
++                        state.query(&request, cancellation)
++                    });
+                 }
+             })?;
+     }
+@@ -284,7 +380,7 @@ pub fn run(root: &Path, options: Options<'_>) -> Result<()> {
+                             retry_delay(metrics.failures),
+                         )
+                     };
+-                    let ready = entry.view.status().is_ok_and(|status| status.ready);
++                    let ready = entry.ready();
+                     let periodic = ready
+                         && !schedule_state.policy.no_watch
+                         && elapsed >= schedule_state.policy.interval;
+@@ -292,7 +388,7 @@ pub fn run(root: &Path, options: Options<'_>) -> Result<()> {
+                         && !entry.running.load(Ordering::SeqCst)
+                         && !entry.queued.swap(true, Ordering::SeqCst)
+                     {
+-                        if periodic && let Err(error) = entry.view.invalidate_all() {
++                        if periodic && let Err(error) = entry.invalidate_all() {
+                             eprintln!("shared invalidation: {error}");
+                         }
+                         if schedule_tx
+@@ -312,6 +408,7 @@ pub fn run(root: &Path, options: Options<'_>) -> Result<()> {
+         let state = Arc::clone(&state);
+         let work = work_tx.clone();
+         let queries = query_tx.clone();
++        let releases = release_tx.clone();
+         thread::Builder::new()
+             .name(format!("shared-router-{index}"))
+             .spawn(move || {
+@@ -334,8 +431,12 @@ pub fn run(root: &Path, options: Options<'_>) -> Result<()> {
+                         Err(error) => send_error(&mut stream, Value::Null, &error),
+                         Ok(request) => {
+                             let lifecycle =
+-                                matches!(request.method.as_str(), "attach" | "detach" | "refresh");
+-                            let rejected = if lifecycle {
++                                matches!(request.method.as_str(), "refresh" | "refresh/reconcile")
++                                    || (request.method == "attach"
++                                        && request.params["mode"] != "paths");
++                            let rejected = if request.method == "detach" {
++                                releases.try_send((stream, request)).err().map(unsent)
++                            } else if lifecycle {
+                                 work.try_send(Work::Rpc((stream, request)))
+                                     .err()
+                                     .map(|error| {
+@@ -381,8 +482,17 @@ pub fn run(root: &Path, options: Options<'_>) -> Result<()> {
+ }
+
+ fn send_error(stream: &mut TcpStream, id: Value, error: &anyhow::Error) {
++    // Ash distinguishes an invalidated snapshot from permanent protocol/storage failures.
++    let code = if matches!(
++        error.downcast_ref::<WorktreeError>(),
++        Some(WorktreeError::NotReady | WorktreeError::ChangedDuringReconcile)
++    ) {
++        -32002
++    } else {
++        -32001
++    };
+     let response =
+-        json!({"jsonrpc":"2.0", "id":id, "error":{"code":-32001,"message":format!("{error:#}")}});
++        json!({"jsonrpc":"2.0", "id":id, "error":{"code":code,"message":format!("{error:#}")}});
+     if let Err(error) = writeln!(stream, "{response}") {
+         eprintln!("shared RPC error response failed: {error}");
+     }
+@@ -398,9 +508,10 @@ fn respond(
+     mut stream: TcpStream,
+     request: &Request,
+     state: &State,
+-    action: impl FnOnce() -> Result<Value>,
++    action: impl FnOnce(&crate::ash_request::Cancellation<'_>) -> Result<Value>,
+ ) {
+-    match action().and_then(|mut result| {
++    let enabled = crate::ash_request::enabled(&request.method, request.cancellable);
++    match crate::ash_request::run(&stream, enabled, action).and_then(|mut result| {
+         result["protocol"] = json!(PROTOCOL);
+         result["instance"] = json!(state.registration.instance);
+         result["repository"] = json!(state.registration.repository);
+@@ -417,6 +528,10 @@ fn respond(
+                 eprintln!("shared RPC response failed: {error}");
+             }
+         }
++        Err(error)
++            if error
++                .downcast_ref::<crate::ash_request::Cancelled>()
++                .is_some() => {}
+         Err(error) => send_error(&mut stream, request.id.clone(), &error),
+     }
+ }
+@@ -457,6 +572,16 @@ struct AttachParams {
+     revision: String,
+     profile: IndexingProfile,
+     lease: String,
++    #[serde(default)]
++    mode: AttachmentMode,
++}
++
++#[derive(Default, Deserialize)]
++#[serde(rename_all = "kebab-case")]
++enum AttachmentMode {
++    #[default]
++    Content,
++    Paths,
+ }
+
+ #[derive(Deserialize)]
+@@ -519,17 +644,28 @@ impl State {
+     }
+
+     fn entry(&self, root: &Path, id: Option<&str>) -> Result<Arc<Entry>> {
+-        let root = super::canonical_root(root)?;
+-        let entry = self
+-            .views
+-            .lock()
+-            .expect("views")
+-            .get(&root)
+-            .cloned()
+-            .context("worktree is not attached; attach explicitly")?;
+-        super::validate_repository(&root, entry.view.repository())?;
++        let entry = if let Some(id) = id {
++            let entry = self
++                .views
++                .lock()
++                .expect("views")
++                .values()
++                .find(|entry| entry.id == id)
++                .cloned()
++                .context("worktree is not attached; attach explicitly")?;
++            ensure!(root == entry.root(), "lease belongs to a different root");
++            entry
++        } else {
++            let root = super::canonical_root(root)?;
++            self.views
++                .lock()
++                .expect("views")
++                .get(&root)
++                .cloned()
++                .context("worktree is not attached; attach explicitly")?
++        };
+         ensure!(
+-            id.is_none_or(|id| id == entry.id) && entry.active.load(Ordering::SeqCst),
++            entry.active.load(Ordering::SeqCst),
+             "stale shared view identity"
+         );
+         Ok(entry)
+@@ -559,16 +695,17 @@ impl State {
+     fn invalidate(&self, value: &Value) -> Result<()> {
+         let params: LeaseParams = serde_json::from_value(value.clone())?;
+         let entry = self.lease(&params)?;
++        let _query = entry.query_guard()?;
+         entry.metrics.lock().expect("metrics").failures = 0;
+         if params.full || params.changed.is_empty() {
+-            entry.view.invalidate_all()?;
++            entry.invalidate_all()?;
+         } else {
+             if params.changed.len() > self.policy.hints_per_view {
+-                entry.view.invalidate_all()?;
++                entry.invalidate_all()?;
+                 bail!("too many change hints; full repair scheduled");
+             }
+             for path in &params.changed {
+-                entry.view.invalidate_path(path)?;
++                entry.invalidate_path(path)?;
+             }
+         }
+         Ok(())
+@@ -577,7 +714,7 @@ impl State {
+     fn lifecycle(&self, request: &Request) -> Result<Value> {
+         match request.method.as_str() {
+             "attach" => self.attach(serde_json::from_value(request.params.clone())?),
+-            "refresh" => {
++            "refresh" | "refresh/reconcile" => {
+                 let params: LeaseParams = serde_json::from_value(request.params.clone())?;
+                 let entry = self.lease(&params)?;
+                 let epoch = self.reconcile(&entry)?;
+@@ -586,18 +723,62 @@ impl State {
+                 Ok(value)
+             }
+             "detach" => {
++                // Path attachments run on query workers, so lease changes share one lock.
++                let attachment = self.attachment.lock().expect("attachment");
+                 let params: LeaseParams = serde_json::from_value(request.params.clone())?;
+                 ensure!(
+                     params.changed.is_empty() && !params.full,
+                     "detach does not accept refresh hints"
+                 );
+-                let entry = self.lease(&params)?;
++                // Retrying after a cancelled response must confirm release without reopening
++                // a deleted checkout or touching a later registration for the same root.
++                let entry = self
++                    .views
++                    .lock()
++                    .expect("views")
++                    .values()
++                    .find(|entry| entry.id == params.view)
++                    .cloned();
++                let Some(entry) = entry else {
++                    return Ok(json!({"remaining_leases":0,"view":params.view,"detached":true}));
++                };
++                ensure!(
++                    params.root == entry.root()
++                        || std::fs::canonicalize(&params.root)
++                            .is_ok_and(|root| root == entry.root()),
++                    "lease belongs to a different root"
++                );
+                 let leases = entry.leases.lock().expect("leases");
+-                ensure!(leases.contains_key(&params.lease), "lease already released");
++                if !leases.contains_key(&params.lease) {
++                    return Ok(
++                        json!({"remaining_leases":leases.len(),"view":entry.id,"detached":true}),
++                    );
++                }
++                let remaining = leases.len() - 1;
++                drop(leases);
++                if remaining > 0 {
++                    entry.leases.lock().expect("leases").remove(&params.lease);
++                    return Ok(
++                        json!({"remaining_leases":remaining,"view":entry.id,"detached":true}),
++                    );
++                }
++                // Wait outside the repository attachment lock. Recheck leases afterward,
++                // because another caller may attach while this root drains its readers.
++                drop(attachment);
++                let _queries = entry.access.write().expect("worktree query access");
++                let _attachment = self.attachment.lock().expect("attachment");
++                let leases = entry.leases.lock().expect("leases");
++                if !leases.contains_key(&params.lease) {
++                    return Ok(
++                        json!({"remaining_leases":leases.len(),"view":entry.id,"detached":true}),
++                    );
++                }
+                 let remaining = leases.len() - 1;
+                 drop(leases);
+                 let mut registration_warning = None;
+                 if remaining == 0 {
++                    // A cancelled socket can leave discovery running in a query worker.
++                    // Confirm its root reads have ended before returning the final detach.
+                     if let Err(error) = self.remove_view_marker(&entry) {
+                         let warning = format!("shared view registration cleanup failed: {error:#}");
+                         eprintln!("{warning}");
+@@ -605,7 +786,7 @@ impl State {
+                     }
+                     entry.active.store(false, Ordering::SeqCst);
+                     entry.monitor.lock().expect("monitor").registry = None;
+-                    self.views.lock().expect("views").remove(entry.view.root());
++                    self.views.lock().expect("views").remove(entry.root());
+                 }
+                 entry.leases.lock().expect("leases").remove(&params.lease);
+                 Ok(
+@@ -619,7 +800,6 @@ impl State {
+
+     fn remove_view_marker(&self, entry: &Entry) -> Result<()> {
+         let marker = entry
+-            .view
+             .repository()
+             .git_dir()
+             .join(super::protocol::VIEW_MARKER);
+@@ -645,6 +825,7 @@ impl State {
+     }
+
+     fn attach(&self, params: AttachParams) -> Result<Value> {
++        let attachment = self.attachment.lock().expect("attachment");
+         ensure!(
+             !params.lease.is_empty()
+                 && params.lease.len() <= 128
+@@ -670,10 +851,10 @@ impl State {
+                 .cloned();
+             if let Some(lease) = lease {
+                 ensure!(
+-                    entry.view.root() == root && lease.revision == params.revision,
++                    entry.root() == root && lease.revision == params.revision,
+                     "lease already belongs to a different root or revision"
+                 );
+-                super::validate_repository(&root, entry.view.repository())?;
++                super::validate_repository(&root, entry.repository())?;
+                 self.publish_view(entry)?;
+                 return self.attach_result(entry, &params.lease, &lease);
+             }
+@@ -686,62 +867,43 @@ impl State {
+             total_leases < self.policy.max_leases,
+             "shared lease limit reached"
+         );
+-        let existing = entries
+-            .iter()
+-            .find(|entry| entry.view.root() == root)
+-            .cloned();
++        let existing = entries.iter().find(|entry| entry.root() == root).cloned();
+         ensure!(
+             existing.is_some() || entries.len() < self.policy.max_views,
+             "shared view limit reached"
+         );
+-        let (requested_commit, tree) = repository.resolve_commit_tree(&params.revision)?;
++        let manager = GenerationManager::with_storage(repository.clone(), &self.bases)?;
++        let (requested_commit, generation) = manager.key_for(&params.revision, params.profile)?;
+         let (entry, build) = if let Some(entry) = existing {
+-            super::validate_repository(&root, entry.view.repository())?;
++            super::validate_repository(&root, entry.repository())?;
+             ensure!(
+-                entry.view.generation().key().tree_oid() == tree
+-                    && *entry.view.generation().key().profile() == params.profile,
++                entry.generation() == &generation,
+                 "worktree already pins a different base; release all leases before selecting another"
+             );
+-            let tracked_entries = entry.view.generation().entries().len();
+-            (
+-                entry,
+-                BuildStats {
+-                    reused_generation: true,
+-                    tracked_entries,
+-                    ..Default::default()
+-                },
+-            )
++            let build = entry.metrics.lock().expect("metrics").build.clone();
++            (entry, build)
+         } else {
+-            let root_id = blake3::hash(
+-                root.to_str()
+-                    .context("shared CLI requires a UTF-8 root")?
+-                    .as_bytes(),
+-            )
+-            .to_hex()
+-            .to_string();
+-            let manager = GenerationManager::with_storage(repository, &self.bases)?;
+-            let predecessor = entries.iter().map(|entry| entry.view.generation()).next();
+-            let ensured = manager.ensure(&requested_commit, params.profile, predecessor)?;
+-            let directory = plain_directory(&self.overlays.join(root_id))?;
+-            let directory =
+-                plain_directory(&directory.join(ensured.generation.key().storage_name()))?;
+-            let options = WorktreeOptions {
+-                checkpoint_directory: Some(directory.clone()),
+-                hint_capacity: self.policy.hints_per_view,
+-                walk: tgrep_core::walker::MetaWalkOptions {
+-                    exclude_paths: vec![self.registration.storage.clone()],
+-                    ..Default::default()
+-                },
+-            };
+-            let restored = directory.join("overlay.json").try_exists()?;
+-            let view = if restored {
+-                WorktreeView::restore(&root, Arc::clone(&ensured.generation), options)?
+-            } else {
+-                WorktreeView::new(&root, Arc::clone(&ensured.generation), options)?
++            let walk = tgrep_core::walker::MetaWalkOptions {
++                exclude_paths: vec![
++                    self.registration.storage.clone(),
++                    root.join(".tgrep"),
++                    repository.common_dir().to_path_buf(),
++                    repository.git_dir().to_path_buf(),
++                ],
++                ..Default::default()
+             };
+             let entry = Arc::new(Entry {
+                 id: self.token(),
+-                view,
++                root: root.clone(),
++                repository,
++                generation,
++                revision: requested_commit.clone(),
++                view: OnceLock::new(),
++                initialization: Mutex::new(()),
++                reconciliation: Mutex::new(()),
++                watch_dirty: AtomicBool::new(true),
++                filenames: crate::ash_files::Catalog::new(&root, walk),
++                access: RwLock::new(()),
+                 leases: Mutex::new(HashMap::new()),
+                 queued: AtomicBool::new(false),
+                 running: AtomicBool::new(false),
+@@ -758,20 +920,20 @@ impl State {
+                     last: None,
+                     total_reads: 0,
+                     total_extractions: 0,
+-                    build: ensured.stats.clone(),
+-                    restored,
++                    build: BuildStats::default(),
++                    restored: false,
+                     attempts: 0,
+                     failures: 0,
+                 }),
+                 queries: AtomicU64::new(0),
+             });
+-            // Capture native invalidations before the very first reconciliation.
++            // Capture file membership changes before deferred content construction starts.
+             self.watch(&entry)?;
+             self.views
+                 .lock()
+                 .expect("views")
+                 .insert(root.clone(), Arc::clone(&entry));
+-            (entry, ensured.stats)
++            (entry, BuildStats::default())
+         };
+         let lease = Lease {
+             revision: params.revision,
+@@ -780,9 +942,10 @@ impl State {
+         };
+         if let Err(error) = self.publish_view(&entry) {
+             if entry.leases.lock().expect("leases").is_empty() {
++                let _queries = entry.access.write().expect("worktree query access");
+                 entry.active.store(false, Ordering::SeqCst);
+                 entry.monitor.lock().expect("monitor").registry = None;
+-                self.views.lock().expect("views").remove(entry.view.root());
++                self.views.lock().expect("views").remove(entry.root());
+             }
+             return Err(error);
+         }
+@@ -791,19 +954,23 @@ impl State {
+             .lock()
+             .expect("leases")
+             .insert(params.lease.clone(), lease.clone());
++        drop(attachment);
++        if matches!(params.mode, AttachmentMode::Content) {
++            let _query = entry.query_guard()?;
++            self.initialize(&entry)?;
++        }
+         self.attach_result(&entry, &params.lease, &lease)
+     }
+
+     fn publish_view(&self, entry: &Entry) -> Result<()> {
+         let marker = ViewRegistration {
+             daemon: self.registration.clone(),
+-            root: entry.view.root().to_path_buf(),
++            root: entry.root().to_path_buf(),
+             view: entry.id.clone(),
+-            generation: entry.view.generation().key().clone(),
++            generation: entry.generation().clone(),
+         };
+         publish(
+             &entry
+-                .view
+                 .repository()
+                 .git_dir()
+                 .join(super::protocol::VIEW_MARKER),
+@@ -819,14 +986,85 @@ impl State {
+         Ok(value)
+     }
+
++    fn initialize(&self, entry: &Arc<Entry>) -> Result<()> {
++        let _initialization = entry.initialization.lock().expect("content initialization");
++        if entry.view.get().is_some() {
++            return Ok(());
++        }
++        ensure!(
++            entry.active.load(Ordering::SeqCst),
++            "worktree registration released"
++        );
++        let manager = GenerationManager::with_storage(entry.repository().clone(), &self.bases)?;
++        let entries = self.entries();
++        let predecessor = entries
++            .iter()
++            .filter_map(|other| other.view.get())
++            .map(WorktreeView::generation)
++            .next();
++        let ensured =
++            manager.ensure(&entry.revision, *entry.generation().profile(), predecessor)?;
++        ensure!(
++            ensured.generation.key() == entry.generation(),
++            "generation identity changed"
++        );
++        let root_id = blake3::hash(
++            entry
++                .root()
++                .to_str()
++                .context("shared CLI requires a UTF-8 root")?
++                .as_bytes(),
++        )
++        .to_hex()
++        .to_string();
++        let directory = plain_directory(&self.overlays.join(root_id))?;
++        let directory = plain_directory(&directory.join(entry.generation().storage_name()))?;
++        let options = WorktreeOptions {
++            checkpoint_directory: Some(directory.clone()),
++            hint_capacity: self.policy.hints_per_view,
++            walk: tgrep_core::walker::MetaWalkOptions {
++                exclude_paths: vec![self.registration.storage.clone()],
++                ..Default::default()
++            },
++        };
++        let restored = directory.join("overlay.json").try_exists()?;
++        let view = if restored {
++            WorktreeView::restore(entry.root(), Arc::clone(&ensured.generation), options)?
++        } else {
++            WorktreeView::new(entry.root(), Arc::clone(&ensured.generation), options)?
++        };
++        ensure!(
++            entry.active.load(Ordering::SeqCst),
++            "worktree registration released"
++        );
++        entry
++            .view
++            .set(view)
++            .map_err(|_| anyhow::anyhow!("content initialized twice"))?;
++        let mut metrics = entry.metrics.lock().expect("metrics");
++        metrics.build = ensured.stats;
++        metrics.restored = restored;
++        Ok(())
++    }
++
+     fn reconcile(&self, entry: &Arc<Entry>) -> Result<u64> {
++        // Duplicate refreshes retry rather than blocking every worker on the same worktree.
++        let _reconciliation = match entry.reconciliation.try_lock() {
++            Ok(guard) => guard,
++            Err(std::sync::TryLockError::WouldBlock) => return Err(WorktreeError::NotReady.into()),
++            Err(std::sync::TryLockError::Poisoned(_)) => {
++                bail!("content reconciliation lock poisoned")
++            }
++        };
++        let _query = entry.query_guard()?;
+         entry.running.store(true, Ordering::SeqCst);
+         entry.metrics.lock().expect("metrics").attempts += 1;
+         let result = (|| {
+             self.watch(entry)?;
+-            let stats = entry.view.refresh()?;
++            self.initialize(entry)?;
++            let stats = entry.view()?.refresh()?;
+             let epoch = stats.epoch;
+-            entry.view.save_checkpoint()?;
++            entry.view()?.save_checkpoint()?;
+             Ok((stats, epoch))
+         })();
+         let result = (|| {
+@@ -844,7 +1082,9 @@ impl State {
+                     Ok(epoch)
+                 }
+                 Err(error) => {
+-                    entry.view.invalidate_all()?;
++                    if let Some(view) = entry.view.get() {
++                        view.invalidate_all()?;
++                    }
+                     metrics.error = Some(format!("{error:#}"));
+                     metrics.failures = metrics.failures.saturating_add(1);
+                     Err(error)
+@@ -856,26 +1096,32 @@ impl State {
+     }
+
+     fn describe(&self, entry: &Entry) -> Result<Value> {
+-        let snapshot_valid = match entry.view.with_snapshot(|_| ()) {
+-            Ok(()) => true,
+-            Err(WorktreeError::NotReady) => false,
+-            Err(error) => {
++        let (snapshot_valid, num_files) = match entry
++            .view
++            .get()
++            .map(|view| view.with_snapshot(|snapshot| snapshot.files("", true).len()))
++        {
++            Some(Ok(count)) => (true, count),
++            None | Some(Err(WorktreeError::NotReady)) => (false, 0),
++            Some(Err(error)) => {
+                 entry.metrics.lock().expect("metrics").error =
+                     Some(format!("validating shared snapshot: {error}"));
+-                false
++                (false, 0)
+             }
+         };
+-        let status = entry.view.status()?;
++        let status = entry.view.get().map(WorktreeView::status).transpose()?;
++        let (files_ready, file_count) = entry.filenames.status();
+         let running = entry.running.load(Ordering::SeqCst);
+         let metrics = entry.metrics.lock().expect("metrics");
+         let monitor = entry.monitor.lock().expect("monitor");
+         let checkpoint_epoch = metrics.last.as_ref().map(|stats| stats.epoch);
+         Ok(json!({
+-            "root":entry.view.root(), "view":entry.id, "generation":entry.view.generation().key(),
+-            "ready":snapshot_valid && status.ready && !running
+-                && checkpoint_epoch == Some(status.epoch),
+-            "epoch":status.epoch, "published_epoch":status.published_epoch,
+-            "pending_paths":status.pending_paths, "full_required":status.full_required,
++            "root":entry.root(), "view":entry.id, "generation":entry.generation(),
++            "ready":snapshot_valid && status.as_ref().is_some_and(|status| status.ready && checkpoint_epoch == Some(status.epoch)) && !running,
++            "num_files":num_files,
++            "files_ready":files_ready, "file_catalog":entry.filenames.statistics(), "file_count":file_count, "content_pending":entry.view.get().is_none(),
++            "epoch":status.as_ref().map(|status| status.epoch), "published_epoch":status.as_ref().and_then(|status| status.published_epoch),
++            "pending_paths":status.as_ref().map(|status| status.pending_paths), "full_required":status.as_ref().is_none_or(|status| status.full_required),
+             "queued":entry.queued.load(Ordering::SeqCst), "last_error":metrics.error,
+             "reconcile_running":running,
+             "reconcile_attempts":metrics.attempts, "consecutive_failures":metrics.failures,
+@@ -887,31 +1133,103 @@ impl State {
+             "queries":entry.queries.load(Ordering::SeqCst),
+             "total_reads":metrics.total_reads, "total_extractions":metrics.total_extractions,
+             "last_reconcile":metrics.last.as_ref().map(reconcile_stats), "generation_build":build_stats(&metrics.build),
+-            "base_sharing_views":self.entries().iter().filter(|other| Arc::ptr_eq(other.view.generation().base(), entry.view.generation().base())).count()
++            "base_sharing_views":entry.view.get().map_or(0, |view| self.entries().iter().filter_map(|other| other.view.get()).filter(|other| Arc::ptr_eq(other.generation().base(), view.generation().base())).count())
+         }))
+     }
+
+-    fn query(&self, request: &Request) -> Result<Value> {
++    fn query(
++        &self,
++        request: &Request,
++        cancellation: &crate::ash_request::Cancellation<'_>,
++    ) -> Result<Value> {
++        cancellation.check()?;
+         match request.method.as_str() {
+             "hello" => {
+                 ensure!(request.params == json!({}), "hello params must be empty");
+                 Ok(json!({
+-                    "capabilities":["leases","recoverable-attach","worktree-overlays","refresh","search","files"],
++                    "capabilities":["leases","recoverable-attach","worktree-overlays","refresh","search","files","file-pages","file-fuzzy","request-cancellation"],
+                     "profile":IndexingProfile::default(), "retention":"retain-all",
+                     "limits":{"views":self.policy.max_views, "leases":self.policy.max_leases,
+                         "watches_per_view":self.policy.watches_per_view, "hints_per_view":self.policy.hints_per_view,
+-                        "reconcile_workers":1, "query_workers":QUERY_WORKERS, "query_queue":QUERY_QUEUE,
++                        "reconcile_workers":RECONCILE_WORKERS, "release_workers":RELEASE_WORKERS, "query_workers":QUERY_WORKERS, "query_queue":QUERY_QUEUE,
+                         "work_queue":self.policy.max_views, "connections":CONNECTION_QUEUE,
+                         "request_bytes":MAX_REQUEST, "response_bytes":MAX_RESPONSE, "content_cache_bytes":0}
+                 }))
+             }
++            "attach" => self.attach(serde_json::from_value(request.params.clone())?),
++            "files/fuzzy" => {
++                let params: ViewParams = serde_json::from_value(request.params.clone())?;
++                let entry = self.entry(&params.root, Some(&params.view))?;
++                let _query = entry.query_guard()?;
++                let mut found =
++                    entry
++                        .filenames
++                        .fuzzy(&params.query, self.policy.interval, cancellation)?;
++                found["root"] = json!(entry.root());
++                found["view"] = json!(entry.id);
++                found["generation"] = json!(entry.generation());
++                Ok(found)
++            }
++            "files/page" => {
++                let params: ViewParams = serde_json::from_value(request.params.clone())?;
++                let entry = self.entry(&params.root, Some(&params.view))?;
++                let _query = entry.query_guard()?;
++                let mut page =
++                    entry
++                        .filenames
++                        .page(&params.query, self.policy.interval, cancellation)?;
++                page["root"] = json!(entry.root());
++                page["view"] = json!(entry.id);
++                page["generation"] = json!(entry.generation());
++                Ok(page)
++            }
++            "files/refresh" => {
++                let params: LeaseParams = serde_json::from_value(request.params.clone())?;
++                let entry = self.lease(&params)?;
++                let _query = entry.query_guard()?;
++                // Filename acknowledgement must not revoke an already-ready content snapshot.
++                // Only filename membership is acknowledged; content hints retain their own lifetime.
++                let epoch = entry
++                    .filenames
++                    .refresh(&params.changed, params.full, cancellation)?;
++                if params.full
++                    || params.changed.iter().any(|path| {
++                        !std::fs::symlink_metadata(entry.root.join(path))
++                            .is_ok_and(|metadata| metadata.is_file())
++                    })
++                {
++                    entry.watch_dirty.store(true, Ordering::SeqCst);
++                }
++                if crate::serve::PER_DIRECTORY_WATCHES {
++                    let monitor = entry.monitor.lock().expect("monitor");
++                    if monitor.registry.as_ref().is_some_and(|registry| {
++                        params.changed.iter().any(|path| {
++                            !entry
++                                .root
++                                .join(path)
++                                .parent()
++                                .is_some_and(|parent| registry.watched.contains(parent))
++                        })
++                    }) {
++                        entry.watch_dirty.store(true, Ordering::SeqCst);
++                    }
++                }
++                self.watch(&entry)?;
++                Ok(
++                    json!({"root":entry.root(), "view":entry.id, "generation":entry.generation(),
++                    "files_ready":true, "processed_epoch":epoch}),
++                )
++            }
+             "lookup" => {
+                 let params: RootParams = serde_json::from_value(request.params.clone())?;
+-                self.describe(self.entry(&params.root, None)?.as_ref())
++                let entry = self.entry(&params.root, None)?;
++                let _query = entry.query_guard()?;
++                self.describe(&entry)
+             }
+             "status" | "search" | "files" => {
+                 let params: ViewParams = serde_json::from_value(request.params.clone())?;
+                 let entry = self.entry(&params.root, Some(&params.view))?;
++                let _query = entry.query_guard()?;
+                 if request.method == "status" {
+                     ensure!(params.query == json!({}), "status query must be empty");
+                     return self.describe(&entry);
+@@ -939,8 +1257,12 @@ impl State {
+         if monitor.fallback.is_some() {
+             return Ok(());
+         }
++        if monitor.registry.is_some() && !entry.watch_dirty.swap(false, Ordering::SeqCst) {
++            return Ok(());
++        }
++        entry.watch_dirty.store(false, Ordering::SeqCst);
+         let desired = watch_directories(
+-            entry.view.root(),
++            entry.root(),
+             &self.registration.storage,
+             self.policy.watches_per_view,
+         );
+@@ -949,7 +1271,7 @@ impl State {
+             Err(error) => {
+                 monitor.registry = None;
+                 monitor.fallback = Some(error.to_string());
+-                entry.view.invalidate_all()?;
++                entry.invalidate_all()?;
+                 eprintln!("shared native watch fallback: {error}");
+                 return Ok(());
+             }
+@@ -970,7 +1292,7 @@ impl State {
+                         Ok(_) => {}
+                         Err(error) => {
+                             failed.store(true, Ordering::SeqCst);
+-                            if let Err(invalidation) = entry.view.invalidate_all() {
++                            if let Err(invalidation) = entry.invalidate_all() {
+                                 eprintln!("shared watcher invalidation: {invalidation}");
+                             }
+                             eprintln!("shared watcher: {error}");
+@@ -982,7 +1304,7 @@ impl State {
+                 Ok(watcher) => {
+                     monitor.registry = Some(WatchRegistry {
+                         watcher,
+-                        root: entry.view.root().to_path_buf(),
++                        root: entry.root().to_path_buf(),
+                         watched: HashSet::new(),
+                         budget: self.policy.watches_per_view,
+                         failure: None,
+@@ -993,7 +1315,7 @@ impl State {
+                 }
+                 Err(error) => {
+                     monitor.fallback = Some(format!("native registration failed: {error}"));
+-                    entry.view.invalidate_all()?;
++                    entry.invalidate_all()?;
+                     return Ok(());
+                 }
+             }
+@@ -1007,7 +1329,7 @@ impl State {
+         if let Some(error) = registry.failure.take() {
+             monitor.registry = None;
+             monitor.fallback = Some(error.clone());
+-            entry.view.invalidate_all()?;
++            entry.invalidate_all()?;
+             eprintln!("shared native watch fallback: {error}");
+         }
+         Ok(())
+@@ -1046,12 +1368,12 @@ fn watch_directories(root: &Path, storage: &Path, budget: usize) -> Result<HashS
+
+ fn invalidate_event(entry: &Entry, event: &Event) -> Result<()> {
+     if event_requires_full(event) {
+-        entry.view.invalidate_all()?;
++        entry.invalidate_all()?;
+         return Ok(());
+     }
+     for path in &event.paths {
+-        let Ok(relative) = path.strip_prefix(entry.view.root()) else {
+-            entry.view.invalidate_all()?;
++        let Ok(relative) = path.strip_prefix(entry.root()) else {
++            entry.invalidate_all()?;
+             continue;
+         };
+         // Our own metadata publication must not create an endless repair loop.
+@@ -1064,9 +1386,9 @@ fn invalidate_event(entry: &Entry, event: &Event) -> Result<()> {
+             continue;
+         }
+         if relative.as_os_str().is_empty() {
+-            entry.view.invalidate_all()?;
++            entry.invalidate_all()?;
+         } else {
+-            entry.view.invalidate_path(relative)?;
++            entry.invalidate_path(relative)?;
+         }
+     }
+     Ok(())
+@@ -1081,6 +1403,7 @@ fn event_requires_full(event: &Event) -> bool {
+ fn reconcile_stats(stats: &ReconcileStats) -> Value {
+     json!({
+         "epoch":stats.epoch, "full":stats.full, "files_discovered":stats.files_discovered,
++        "metadata_files_checked":stats.metadata_files_checked,
+         "files_read":stats.files_read, "bytes_read":stats.bytes_read, "files_decoded":stats.files_decoded,
+         "files_extracted":stats.files_extracted, "base_reused":stats.base_reused,
+         "base_files_copied":stats.base_files_copied, "postings_copied":stats.postings_copied,
+@@ -1113,7 +1436,7 @@ fn validate_query(query: &Value, files: bool) -> Result<()> {
+             | "type_clear" => value
+                 .as_array()
+                 .is_some_and(|array| array.iter().all(Value::is_string)),
+-            "max_count" | "after_context" | "before_context" | "max_filesize"
++            "max_results" | "max_count" | "after_context" | "before_context" | "max_filesize"
+             | "regex_size_limit" | "dfa_size_limit" => value.is_null() || value.is_u64(),
+             "case_insensitive"
+             | "fixed_string"
+@@ -1177,12 +1500,11 @@ impl State {
+         entry: &Entry,
+         read: impl FnOnce(WorktreeSnapshot<'_>) -> T,
+     ) -> Result<T> {
+-        ensure!(
+-            !entry.running.load(Ordering::SeqCst),
+-            "shared reconciliation in progress; retry or scan"
+-        );
++        if entry.running.load(Ordering::SeqCst) {
++            return Err(WorktreeError::NotReady.into());
++        }
+         let (epoch, result) = entry
+-            .view
++            .view()?
+             .with_snapshot(|snapshot| (snapshot.epoch(), read(snapshot)))
+             .inspect_err(|error| {
+                 if !matches!(error, WorktreeError::NotReady) {
+@@ -1197,26 +1519,25 @@ impl State {
+             .last
+             .as_ref()
+             .map(|stats| stats.epoch);
+-        ensure!(
+-            !entry.running.load(Ordering::SeqCst) && checkpoint_epoch == Some(epoch),
+-            "shared reconciliation or checkpoint publication incomplete; retry or scan"
+-        );
++        if entry.running.load(Ordering::SeqCst) || checkpoint_epoch != Some(epoch) {
++            return Err(WorktreeError::NotReady.into());
++        }
+         Ok(result)
+     }
+
+     fn search(&self, entry: &Entry, query: &Value, files: bool, id: &Value) -> Result<Value> {
+         validate_query(query, files)?;
+         let scope = crate::serve::SearchScope::parse(query).map_err(anyhow::Error::msg)?;
+-        let scoped_root = entry.view.root().join(&scope.prefix);
++        let scoped_root = entry.root().join(&scope.prefix);
+         ensure!(scoped_root.is_dir(), "scope must be an existing directory");
+         ensure!(
+-            super::worktree_root(&scoped_root)? == entry.view.root()
+-                && fs::canonicalize(&scoped_root)?.starts_with(entry.view.root()),
++            super::worktree_root(&scoped_root)? == entry.root()
++                && fs::canonicalize(&scoped_root)?.starts_with(entry.root()),
+             "scope crosses a repository boundary"
+         );
+         let start = Instant::now();
+         let metadata = json!({
+-            "root":entry.view.root(), "view":entry.id, "generation":entry.view.generation().key(),
++            "root":entry.root(), "view":entry.id, "generation":entry.generation(),
+             "ready":true, "hidden_complete":true, "backend":"shared-v1",
+             "protocol":PROTOCOL, "instance":self.registration.instance,
+             "repository":self.registration.repository
+@@ -1238,15 +1559,29 @@ impl State {
+             })??;
+             (json!({"files":paths, "epoch":epoch}), epoch)
+         } else {
+-            let request = crate::serve::parse_search_params(query).map_err(anyhow::Error::msg)?;
+-            let (paths, total, epoch) = self.query_snapshot(entry, |snapshot| {
++            let mut request =
++                crate::serve::parse_search_params(query).map_err(anyhow::Error::msg)?;
++            let limit = crate::serve::global_result_limit(query).map_err(anyhow::Error::msg)?;
++            let per_file_limit = request.opts.max_count;
++            let (paths, raw_count, total, epoch) = self.query_snapshot(entry, |snapshot| {
++                let candidates = snapshot.candidates(&request.plan, "", true);
++                let raw_count = candidates.len();
++                let paths: Vec<_> = candidates
++                    .into_iter()
++                    .filter(|path| {
++                        scope.relative(path).is_some()
++                            && snapshot
++                                .visibility()
++                                .is_visible(path, &scope.prefix, scope.hidden)
++                    })
++                    .collect();
+                 (
+-                    snapshot.candidates(&request.plan, &scope.prefix, scope.hidden),
++                    paths,
++                    raw_count,
+                     request.opts.stats.then(|| snapshot.files("", true).len()),
+                     snapshot.epoch(),
+                 )
+             })?;
+-            let raw_count = paths.len();
+             let paths: Vec<_> = paths
+                 .into_iter()
+                 .filter(|path| {
+@@ -1262,6 +1597,14 @@ impl State {
+             let mut rows = Vec::new();
+             let mut stats = Vec::new();
+             for relative in &paths {
++                if let Some(limit) = limit {
++                    if rows.len() == limit {
++                        break;
++                    }
++                    let remaining = limit - rows.len();
++                    request.opts.max_count =
++                        Some(per_file_limit.unwrap_or(remaining).min(remaining));
++                }
+                 let read = (|| -> Result<Vec<u8>> {
+                     let file =
+                         self.query_snapshot(entry, |snapshot| snapshot.open_file(relative))??;
+@@ -1276,7 +1619,7 @@ impl State {
+                 let bytes = match read {
+                     Ok(bytes) => bytes,
+                     Err(error) => {
+-                        entry.view.invalidate_all()?;
++                        entry.invalidate_all()?;
+                         entry.metrics.lock().expect("metrics").error =
+                             Some(format!("reading shared candidate {relative}: {error:#}"));
+                         return Err(error.context(format!("reading shared candidate {relative}")));
+@@ -1293,7 +1636,8 @@ impl State {
+                     &request.opts,
+                     Some(&mut budget),
+                 )?;
+-                rows.extend(found.rows);
++                let remaining = limit.map_or(usize::MAX, |limit| limit - rows.len());
++                rows.extend(found.rows.into_iter().take(remaining));
+                 stats.extend(found.stats);
+             }
+             (
+@@ -1305,10 +1649,9 @@ impl State {
+                 epoch,
+             )
+         };
+-        ensure!(
+-            self.query_snapshot(entry, |snapshot| snapshot.epoch() == epoch)?,
+-            "view changed during query; retry or scan"
+-        );
++        if !self.query_snapshot(entry, |snapshot| snapshot.epoch() == epoch)? {
++            return Err(WorktreeError::ChangedDuringReconcile.into());
++        }
+         for (key, value) in metadata.as_object().expect("metadata object") {
+             result[key] = value.clone();
+         }
+diff --git a/tgrep-core/src/generations/mod.rs b/tgrep-core/src/generations/mod.rs
+index fdea927..acea089 100644
+--- a/tgrep-core/src/generations/mod.rs
++++ b/tgrep-core/src/generations/mod.rs
+@@ -517,14 +517,7 @@ impl GenerationManager {
+         profile: IndexingProfile,
+         predecessor: Option<&Arc<Generation>>,
+     ) -> Result<EnsureResult> {
+-        let (commit, tree) = git::commit_tree(&self.repository, revision)?;
+-        let key = GenerationKey {
+-            repository: self.repository.identity.clone(),
+-            tree,
+-            profile,
+-            index_format: INDEX_FORMAT_VERSION,
+-            schema: SCHEMA_VERSION,
+-        };
++        let (commit, key) = self.key_for(revision, profile)?;
+         if let Some(previous) = predecessor {
+             let mut expected = key.clone();
+             expected.tree = previous.key().tree.clone();
+@@ -559,6 +552,25 @@ impl GenerationManager {
+         })
+     }
+
++    /// Resolve the exact identity before reading any blobs or constructing a content index.
++    pub fn key_for(
++        &self,
++        revision: &str,
++        profile: IndexingProfile,
++    ) -> Result<(String, GenerationKey)> {
++        let (commit, tree) = git::commit_tree(&self.repository, revision)?;
++        Ok((
++            commit,
++            GenerationKey {
++                repository: self.repository.identity.clone(),
++                tree,
++                profile,
++                index_format: INDEX_FORMAT_VERSION,
++                schema: SCHEMA_VERSION,
++            },
++        ))
++    }
++
+     /// Open only this exact published key. Missing, partial or invalid generations
+     /// error; they are never repaired/replaced while another reader could map them.
+     pub fn open(&self, key: &GenerationKey) -> Result<Arc<Generation>> {
+diff --git a/tgrep-core/src/visibility.rs b/tgrep-core/src/visibility.rs
+index 01504f0..ccd0945 100644
+--- a/tgrep-core/src/visibility.rs
++++ b/tgrep-core/src/visibility.rs
+@@ -17,6 +17,17 @@ pub struct PathVisibility {
+ }
+
+ impl PathVisibility {
++    /// Forget barriers replaced by a repaired file, subtree, or missing ancestor.
++    pub(crate) fn remove_subtree(&mut self, path: &str) {
++        let prefix = format!("{path}/");
++        self.hidden
++            .retain(|entry, _| entry != path && !entry.starts_with(&prefix));
++    }
++
++    pub(crate) fn merge(&mut self, other: Self) {
++        self.hidden.extend(other.hidden);
++    }
++
+     pub fn is_empty(&self) -> bool {
+         self.hidden.is_empty()
+     }
+diff --git a/tgrep-core/src/walker.rs b/tgrep-core/src/walker.rs
+index 6400128..6c6044d 100644
+--- a/tgrep-core/src/walker.rs
++++ b/tgrep-core/src/walker.rs
+@@ -644,6 +644,38 @@ pub fn walk_file_metadata_with_ignorecase(
+     root: &Path,
+     opts: &MetaWalkOptions,
+     ignorecase: Option<std::sync::Arc<crate::gitignore::CaseInsensitiveIgnore>>,
++) -> MetaWalkResult {
++    walk_file_metadata_scoped_with_ignorecase(root, opts, ignorecase, None, &|| false)
++}
++
++/// Repair one subtree while retaining the registered root's ignore-rule precedence.
++pub fn walk_file_metadata_scoped(
++    root: &Path,
++    opts: &MetaWalkOptions,
++    scope: &Path,
++) -> MetaWalkResult {
++    let ignorecase = git_ignorecase_filter(root, opts.no_ignore, false, false, false);
++    walk_file_metadata_scoped_with_ignorecase(root, opts, ignorecase, Some(scope), &|| false)
++}
++
++/// Stop metadata discovery cooperatively without publishing its incomplete result.
++/// The caller checks cancellation again before using the returned metadata.
++pub fn walk_file_metadata_interruptible(
++    root: &Path,
++    opts: &MetaWalkOptions,
++    scope: Option<&Path>,
++    should_stop: &(dyn Fn() -> bool + Sync),
++) -> MetaWalkResult {
++    let ignorecase = git_ignorecase_filter(root, opts.no_ignore, false, false, false);
++    walk_file_metadata_scoped_with_ignorecase(root, opts, ignorecase, scope, should_stop)
++}
++
++pub(crate) fn walk_file_metadata_scoped_with_ignorecase(
++    root: &Path,
++    opts: &MetaWalkOptions,
++    ignorecase: Option<std::sync::Arc<crate::gitignore::CaseInsensitiveIgnore>>,
++    scope: Option<&Path>,
++    should_stop: &(dyn Fn() -> bool + Sync),
+ ) -> MetaWalkResult {
+     let no_ignore = opts.no_ignore;
+     let max_file_size = opts.max_file_size;
+@@ -662,6 +694,7 @@ pub fn walk_file_metadata_with_ignorecase(
+     let match_root = root.to_path_buf();
+     let root = root.to_path_buf();
+     let exclude_paths = opts.exclude_paths.clone();
++    let scope = scope.map(Path::to_path_buf);
+
+     let walker = WalkBuilder::new(&root)
+         .hidden(false)
+@@ -672,6 +705,11 @@ pub fn walk_file_metadata_with_ignorecase(
+         .git_global(!no_ignore)
+         .git_exclude(!no_ignore)
+         .filter_entry(move |entry| {
++            if scope.as_ref().is_some_and(|scope| {
++                !entry.path().starts_with(scope) && !scope.starts_with(entry.path())
++            }) {
++                return false;
++            }
+             if exclude_paths
+                 .iter()
+                 .any(|path| entry.path().starts_with(path))
+@@ -705,6 +743,10 @@ pub fn walk_file_metadata_with_ignorecase(
+         let visibility = &visibility;
+         let skipped_error = &skipped_error;
+         Box::new(move |entry| {
++            if should_stop() {
++                return ignore::WalkState::Quit;
++            }
++
+             let entry = match entry {
+                 Ok(e) => e,
+                 Err(_) => {
+@@ -718,7 +760,7 @@ pub fn walk_file_metadata_with_ignorecase(
+             }
+
+             let is_dir = entry.file_type().is_some_and(|ft| ft.is_dir());
+-            if is_dir && should_skip_dir(&entry, &exclude) {
++            if is_dir && entry.depth() > 0 && should_skip_dir(&entry, &exclude) {
+                 return ignore::WalkState::Skip;
+             }
+             if !is_dir && !entry.file_type().is_some_and(|ft| ft.is_file()) {
+diff --git a/tgrep-core/src/worktrees.rs b/tgrep-core/src/worktrees.rs
+index 7423b58..a77c3b2 100644
+--- a/tgrep-core/src/worktrees.rs
++++ b/tgrep-core/src/worktrees.rs
+@@ -15,6 +15,7 @@ use std::sync::{Arc, Mutex, RwLock};
+
+ use crate::generations::{Generation, GenerationError, Repository};
+ use crate::gitignore::CaseInsensitiveIgnore;
++use crate::gitignore::IgnoreMatcher;
+ use crate::hybrid::HybridIndex;
+ use crate::live::LiveIndex;
+ use crate::meta::{ContentId, FileVersion, file_version};
+@@ -122,6 +123,8 @@ pub struct ReconcileStats {
+     pub epoch: u64,
+     pub full: bool,
+     pub files_discovered: usize,
++    /// Checkout files opened to verify their current version, excluding retained evidence.
++    pub metadata_files_checked: u64,
+     pub files_read: u64,
+     pub bytes_read: u64,
+     pub files_decoded: u64,
+@@ -162,7 +165,6 @@ impl Control {
+
+ #[derive(Clone)]
+ struct Evidence {
+-    version: FileVersion,
+     listed: bool,
+     content: Option<ContentId>,
+ }
+@@ -172,6 +174,25 @@ struct State {
+     evidence: BTreeMap<String, Evidence>,
+     listed: BTreeSet<String>,
+     visibility: PathVisibility,
++    admission: Option<Arc<Admission>>,
++}
++
++// Published with the evidence it admits. Hint passes reuse this exact policy until a full repair.
++struct Admission {
++    ignore: Option<Arc<IgnoreMatcher>>,
++    ignorecase: Option<Arc<CaseInsensitiveIgnore>>,
++    sources: BTreeMap<PathBuf, FileVersion>,
++}
++
++enum Discovery {
++    Full,
++    Paths {
++        files: BTreeSet<String>,
++        evidence: BTreeMap<String, Evidence>,
++        visibility: PathVisibility,
++        admission: Arc<Admission>,
++        hint_lookups: u64,
++    },
+ }
+
+ /// One canonical worktree identity and an exact, lifetime-pinned generation.
+@@ -244,6 +265,7 @@ impl WorktreeView {
+                 evidence: BTreeMap::new(),
+                 listed: BTreeSet::new(),
+                 visibility: PathVisibility::default(),
++                admission: None,
+             }),
+             reconcile: Mutex::new(()),
+         })
+@@ -289,7 +311,7 @@ impl WorktreeView {
+             .map_err(|_| WorktreeError::Synchronization)?;
+         let epoch = control.invalidate()?;
+         let relative = match relative_path(path) {
+-            Ok(relative) => relative.to_ascii_lowercase(),
++            Ok(relative) => relative,
+             Err(error) => {
+                 control.full = true;
+                 control.hints.clear();
+@@ -297,9 +319,12 @@ impl WorktreeView {
+             }
+         };
+         if !relative.is_ascii()
+-            || relative
+-                .split('/')
+-                .any(|part| matches!(part, ".git" | ".gitignore" | ".ignore" | ".gitattributes"))
++            || relative.split('/').any(|part| {
++                matches!(
++                    part.to_ascii_lowercase().as_str(),
++                    ".git" | ".gitignore" | ".ignore" | ".gitattributes" | "p4ignore.ini"
++                )
++            })
+             || control.hints.len() >= self.options.hint_capacity
+                 && !control.hints.contains(&relative)
+         {
+@@ -330,7 +355,8 @@ impl WorktreeView {
+         self.refresh()
+     }
+
+-    /// Rewalk membership/visibility and process pending hints. With no hints,
++    /// Repair hinted paths/subtrees using published admission and evidence.
++    /// Rule changes and ambiguous hints rewalk membership/visibility. With no hints,
+     /// performs a full content reconciliation, not a success-shaped no-op.
+     ///
+     /// At most one pass is attempted. A concurrent invalidation returns
+@@ -382,6 +408,7 @@ impl WorktreeView {
+         let Prepared {
+             evidence,
+             visibility,
++            admission,
+             upserts,
+             mut stats,
+         } = prepared;
+@@ -417,6 +444,7 @@ impl WorktreeView {
+             .collect();
+         state.evidence = evidence;
+         state.visibility = visibility;
++        state.admission = Some(admission);
+         stats.epoch = epoch;
+         control.published_epoch = Some(epoch);
+         control.full = false;
+@@ -448,54 +476,109 @@ impl WorktreeView {
+                 "worktree identity changed".into(),
+             ));
+         }
+-        let ignorecase = if self.options.walk.no_ignore {
+-            None
+-        } else {
+-            CaseInsensitiveIgnore::try_frozen_snapshot(&self.root)?.map(Arc::new)
+-        };
+         let mut options = self.options.walk.clone();
+         // Metadata alone must not permanently exclude a file whose actual
+         // bytes have become small enough. Bound actual reads instead.
+         options.max_file_size = None;
+-        let walk = walker::walk_file_metadata_with_ignorecase(&self.root, &options, ignorecase);
+-        if walk.skipped_error != 0 {
+-            return Err(WorktreeError::IncompleteWalk(walk.skipped_error));
+-        }
+-        after_discovery();
+-        let mut prepared = Prepared {
+-            evidence: BTreeMap::new(),
+-            visibility: walk.visibility,
+-            upserts: BTreeMap::new(),
+-            stats: ReconcileStats {
+-                full,
+-                files_discovered: walk.listed_files.len(),
+-                ..ReconcileStats::default()
+-            },
+-        };
+         let state = self
+             .state
+             .read()
+             .map_err(|_| WorktreeError::Synchronization)?;
++        let discovery = if full {
++            Discovery::Full
++        } else {
++            self.discover_hints(&state, hints, &options)?
++        };
++        let (paths, mut prepared) = match discovery {
++            Discovery::Full => {
++                let ignorecase = if options.no_ignore {
++                    None
++                } else {
++                    CaseInsensitiveIgnore::try_frozen_snapshot(&self.root)?.map(Arc::new)
++                };
++                let walk = walker::walk_file_metadata_with_ignorecase(
++                    &self.root,
++                    &options,
++                    ignorecase.clone(),
++                );
++                if walk.skipped_error != 0 {
++                    return Err(WorktreeError::IncompleteWalk(walk.skipped_error));
++                }
++                let ignore = (!options.no_ignore)
++                    .then(|| {
++                        walker::build_gitignore_matcher_from_files_with_ignorecase(
++                            &self.root,
++                            &walk.gitignore_files,
++                            &walk.ignore_files,
++                            options.no_require_git,
++                            ignorecase.clone(),
++                        )
++                    })
++                    .flatten()
++                    .map(Arc::new);
++                let mut sources: BTreeMap<_, _> = walk
++                    .gitignore_files
++                    .iter()
++                    .chain(&walk.ignore_files)
++                    .map(|path| Ok((path.clone(), file_version(&fs::metadata(path)?))))
++                    .collect::<std::io::Result<_>>()?;
++                let p4ignore = self.root.join(crate::gitignore::P4IGNORE_FILENAME);
++                match fs::metadata(&p4ignore) {
++                    Ok(metadata) => {
++                        sources.insert(p4ignore, file_version(&metadata));
++                    }
++                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
++                    Err(error) => return Err(error.into()),
++                }
++                let prepared = Prepared {
++                    evidence: BTreeMap::new(),
++                    visibility: walk.visibility,
++                    admission: Arc::new(Admission {
++                        ignore,
++                        ignorecase,
++                        sources,
++                    }),
++                    upserts: BTreeMap::new(),
++                    stats: ReconcileStats {
++                        full: true,
++                        files_discovered: walk.listed_files.len(),
++                        ..ReconcileStats::default()
++                    },
++                };
++                (walk.listed_files, prepared)
++            }
++            Discovery::Paths {
++                files,
++                evidence,
++                visibility,
++                admission,
++                hint_lookups,
++            } => {
++                let prepared = Prepared {
++                    stats: ReconcileStats {
++                        files_discovered: files.len(),
++                        content_reads_avoided: evidence.len() as u64,
++                        hint_lookups,
++                        ..ReconcileStats::default()
++                    },
++                    evidence,
++                    visibility,
++                    admission,
++                    upserts: BTreeMap::new(),
++                };
++                (files.into_iter().collect(), prepared)
++            }
++        };
++        after_discovery();
+         let mut base_contents = None;
+         let mut copies: HashMap<u32, Vec<String>> = HashMap::new();
+-        for path in walk.listed_files {
++        for path in paths {
+             relative_path(Path::new(&path))?;
+             let file = self.files.open_file(Path::new(&path))?;
+-            let metadata = file.metadata()?;
+-            let version = file_version(&metadata);
++            prepared.stats.metadata_files_checked += 1;
+             let previous = state.evidence.get(&path);
+-            // Case aliases must not lose notifications on case-insensitive
+-            // filesystems. Extra verification on case-sensitive trees is safe.
+-            let hinted = !full && is_hinted(&path, hints, &mut prepared.stats.hint_lookups);
+-            let evidence = if !full
+-                && !hinted
+-                && version.is_trusted()
+-                && previous.is_some_and(|entry| entry.version == version)
+-            {
+-                prepared.stats.content_reads_avoided += 1;
+-                previous.expect("verified previous entry").clone()
+-            } else {
+-                let (bytes, version) = read_file(
++            let evidence = {
++                let (bytes, _) = read_file(
+                     &self.files,
+                     Path::new(&path),
+                     file,
+@@ -548,25 +631,23 @@ impl WorktreeView {
+                 } else {
+                     None
+                 };
+-                Evidence {
+-                    version,
+-                    listed,
+-                    content,
+-                }
++                Evidence { listed, content }
+             };
+-            if let Some(id) = evidence.content {
+-                if self.base_content(&path) == Some(id) {
+-                    prepared.stats.base_reused += 1;
+-                } else if !prepared.upserts.contains_key(&path) {
+-                    prepared.stats.overlay_reused += 1;
+-                }
+-            }
+             if prepared.evidence.insert(path, evidence).is_some() {
+                 return Err(WorktreeError::InvalidInput(
+                     "duplicate checkout path".into(),
+                 ));
+             }
+         }
++        for (path, evidence) in &prepared.evidence {
++            if let Some(id) = evidence.content {
++                if self.base_content(path) == Some(id) {
++                    prepared.stats.base_reused += 1;
++                } else if !prepared.upserts.contains_key(path) {
++                    prepared.stats.overlay_reused += 1;
++                }
++            }
++        }
+         // One streaming pass for all verified renames/copies, not one full
+         // posting scan per file. No read/extraction of another checkout.
+         if !copies.is_empty() {
+@@ -596,6 +677,239 @@ impl WorktreeView {
+         Ok(prepared)
+     }
+
++    fn discover_hints(
++        &self,
++        state: &State,
++        hints: &BTreeSet<String>,
++        options: &MetaWalkOptions,
++    ) -> Result<Discovery> {
++        let Some(admission) = &state.admission else {
++            return Ok(Discovery::Full);
++        };
++        if admission.ignore.as_ref().is_some_and(|ignore| {
++            ignore.tracked_membership_fingerprint()
++                != ignore.current_tracked_membership_fingerprint()
++        }) {
++            return Ok(Discovery::Full);
++        }
++        let folded: BTreeSet<_> = hints.iter().map(|path| path.to_ascii_lowercase()).collect();
++        let mut scopes: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
++        let mut hint_lookups = 0;
++        for path in state.evidence.keys() {
++            if let Some(prefix) = hinted_prefix(path, &folded, &mut hint_lookups) {
++                scopes
++                    .entry(prefix.to_ascii_lowercase())
++                    .or_default()
++                    .insert(prefix.to_owned());
++            }
++        }
++        for hint in hints {
++            let selected = scopes.entry(hint.to_ascii_lowercase()).or_default();
++            if selected.is_empty() {
++                selected.insert(hint.clone());
++            } else if !selected.contains(hint) {
++                // Resolve notification case aliases through known paths. A new, distinct
++                // case-sensitive entry requires discovery of both spellings before publication.
++                match fs::symlink_metadata(self.root.join(hint)) {
++                    Ok(metadata) => {
++                        let version = file_version(&metadata);
++                        if !version.is_trusted()
++                            || !self.is_case_alias(hint, selected)?
++                            || !selected.iter().any(|path| {
++                                fs::symlink_metadata(self.root.join(path))
++                                    .is_ok_and(|known| file_version(&known) == version)
++                            })
++                        {
++                            return Ok(Discovery::Full);
++                        }
++                    }
++                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
++                    Err(error) => return Err(error.into()),
++                }
++            }
++        }
++        let scopes: BTreeSet<_> = scopes.into_values().flatten().collect();
++        let mut evidence = state.evidence.clone();
++        let mut visibility = state.visibility.clone();
++        let mut files = BTreeSet::new();
++        let mut checked_rules = BTreeSet::new();
++        for scope in &scopes {
++            if Path::new(scope).ancestors().skip(1).any(|parent| {
++                parent
++                    .to_str()
++                    .is_some_and(|parent| scopes.contains(parent))
++            }) {
++                continue;
++            }
++            let mut relative = PathBuf::new();
++            let mut effective = scope.clone();
++            let mut present = None;
++            for component in Path::new(scope).components() {
++                let parent = self.root.join(&relative);
++                if !options.no_ignore && checked_rules.insert(parent.clone()) {
++                    for name in [".gitignore", ".ignore", "p4ignore.ini"] {
++                        if name == "p4ignore.ini" && parent != self.root {
++                            continue;
++                        }
++                        let source = parent.join(name);
++                        match fs::metadata(&source) {
++                            Ok(metadata)
++                                if admission.sources.get(&source)
++                                    == Some(&file_version(&metadata)) => {}
++                            Ok(_) => return Ok(Discovery::Full),
++                            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
++                                if admission.sources.contains_key(&source) {
++                                    return Ok(Discovery::Full);
++                                }
++                            }
++                            Err(error) => return Err(error.into()),
++                        }
++                    }
++                }
++                relative.push(component);
++                let path = self.root.join(&relative);
++                effective = relative
++                    .to_str()
++                    .expect("validated Unicode hint")
++                    .replace('\\', "/");
++                if options
++                    .exclude_paths
++                    .iter()
++                    .any(|excluded| path.starts_with(excluded))
++                {
++                    present = None;
++                    break;
++                }
++                match fs::symlink_metadata(&path) {
++                    Ok(metadata) if metadata.is_dir() || metadata.is_file() => {
++                        if (metadata.is_dir()
++                            && options.exclude_dirs.iter().any(|name| {
++                                relative.file_name() == Some(std::ffi::OsStr::new(name))
++                            }))
++                            || admission.ignore.as_ref().is_some_and(|ignore| {
++                                ignore.is_ignored(&relative, metadata.is_dir())
++                            })
++                        {
++                            present = None;
++                            break;
++                        }
++                        visibility.record(
++                            &effective,
++                            metadata.is_dir(),
++                            Some(&metadata),
++                            admission.ignore.as_deref(),
++                        );
++                        let is_dir = metadata.is_dir();
++                        present = Some(metadata);
++                        if !is_dir {
++                            break;
++                        }
++                    }
++                    Ok(_) => {
++                        present = None;
++                        break;
++                    }
++                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
++                        present = None;
++                        break;
++                    }
++                    Err(error) => return Err(error.into()),
++                }
++            }
++            // A missing or replaced ancestor also retires its policy sources, even
++            // when the notification only named a former descendant.
++            let absolute = self.root.join(&effective);
++            if admission
++                .sources
++                .keys()
++                .any(|source| source.starts_with(&absolute))
++            {
++                return Ok(Discovery::Full);
++            }
++            evidence.remove(&effective);
++            let prefix = format!("{effective}/");
++            let removed: Vec<_> = evidence
++                .range(prefix.clone()..)
++                .take_while(|(path, _)| path.starts_with(&prefix))
++                .map(|(path, _)| path.clone())
++                .collect();
++            for path in removed {
++                evidence.remove(&path);
++            }
++            visibility.remove_subtree(&effective);
++            if let Some(metadata) = present {
++                if metadata.is_dir() {
++                    let walk = walker::walk_file_metadata_scoped_with_ignorecase(
++                        &self.root,
++                        options,
++                        admission.ignorecase.clone(),
++                        Some(&self.root.join(&effective)),
++                        &|| false,
++                    );
++                    if walk.skipped_error != 0 {
++                        return Err(WorktreeError::IncompleteWalk(walk.skipped_error));
++                    }
++                    if walk
++                        .gitignore_files
++                        .iter()
++                        .chain(&walk.ignore_files)
++                        .any(|source| !admission.sources.contains_key(source))
++                    {
++                        return Ok(Discovery::Full);
++                    }
++                    files.extend(walk.listed_files);
++                    visibility.merge(walk.visibility);
++                } else {
++                    files.insert(effective.clone());
++                    visibility.record(
++                        &effective,
++                        false,
++                        Some(&metadata),
++                        admission.ignore.as_deref(),
++                    );
++                }
++            }
++        }
++        Ok(Discovery::Paths {
++            files,
++            evidence,
++            visibility,
++            admission: Arc::clone(admission),
++            hint_lookups,
++        })
++    }
++
++    fn is_case_alias(&self, hint: &str, known: &BTreeSet<String>) -> Result<bool> {
++        let mut relative = PathBuf::new();
++        for component in hint.split('/') {
++            let mut spelling = None;
++            for entry in fs::read_dir(self.root.join(&relative))? {
++                let name = entry?.file_name();
++                if name
++                    .to_str()
++                    .is_some_and(|name| name.eq_ignore_ascii_case(component))
++                {
++                    // Same-inode hard links can have distinct case-sensitive names.
++                    // Their namespace entries, rather than file identity, distinguish aliases.
++                    if spelling.replace(name).is_some() {
++                        return Ok(false);
++                    }
++                }
++            }
++            let Some(spelling) = spelling else {
++                return Ok(false);
++            };
++            relative.push(spelling);
++            let metadata = fs::symlink_metadata(self.root.join(&relative))?;
++            if !(metadata.is_file() || metadata.is_dir()) {
++                return Ok(false);
++            }
++        }
++        Ok(relative
++            .to_str()
++            .is_some_and(|path| known.contains(&path.replace('\\', "/"))))
++    }
++
+     /// Hold the readiness, overlay, visibility and membership guards together.
+     /// Owned paths and read-only file handles may escape; live IDs never do.
+     /// Do not reenter this view (including invalidation) from the closure.
+@@ -790,6 +1104,7 @@ impl WorktreeSnapshot<'_> {
+ struct Prepared {
+     evidence: BTreeMap<String, Evidence>,
+     visibility: PathVisibility,
++    admission: Arc<Admission>,
+     upserts: BTreeMap<String, TrigramMaskMap>,
+     stats: ReconcileStats,
+ }
+@@ -873,19 +1188,23 @@ fn validate_checkpoint_directory(
+     Ok(())
+ }
+
+-fn is_hinted(path: &str, hints: &BTreeSet<String>, lookups: &mut u64) -> bool {
++fn hinted_prefix<'a>(
++    original: &'a str,
++    hints: &BTreeSet<String>,
++    lookups: &mut u64,
++) -> Option<&'a str> {
+     if hints.is_empty() {
+-        return false;
++        return None;
+     }
+-    let path = path.to_ascii_lowercase();
++    let path = original.to_ascii_lowercase();
+     let mut prefix = path.as_str();
+     loop {
+         *lookups += 1;
+         if hints.contains(prefix) {
+-            return true;
++            return Some(&original[..prefix.len()]);
+         }
+         let Some((parent, _)) = prefix.rsplit_once('/') else {
+-            return false;
++            return None;
+         };
+         prefix = parent;
+     }

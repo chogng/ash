@@ -13,6 +13,8 @@ pub use types::CaseSensitivity;
 pub use types::DocumentContent;
 pub use types::Error;
 pub use types::Freshness;
+pub use types::FuzzyFileMatch;
+pub use types::FuzzyFileMatches;
 pub use types::IndexStats;
 pub use types::IndexStatus;
 pub use types::JobError;

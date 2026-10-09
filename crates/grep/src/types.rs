@@ -3,6 +3,22 @@ use ash_file_access::Dir;
 use std::fmt;
 use std::path::PathBuf;
 
+/// Ranked file names from the directory registration, with counts before truncation.
+#[derive(Debug)]
+pub struct FuzzyFileMatches {
+    pub matches: Vec<FuzzyFileMatch>,
+    pub total_match_count: usize,
+    pub scanned_file_count: usize,
+}
+
+/// One root-relative file name with its relevance score and character highlights.
+#[derive(Debug)]
+pub struct FuzzyFileMatch {
+    pub score: u32,
+    pub path: PathBuf,
+    pub indices: Vec<u32>,
+}
+
 /// Selects the installed engine at application composition time.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Backend {

@@ -40,6 +40,46 @@ fn query(text: &str) -> Query {
 }
 
 #[test]
+fn file_and_content_queries_share_a_registration_and_disabled_index_is_explicit() {
+    let (_temporary, root) = fixture();
+    fs::write(root.canonical_path().join("image.png"), [0, 255, 0]).unwrap();
+    fs::write(root.canonical_path().join("source.rs"), "needle\n").unwrap();
+    let service = Service::new(Backend::Tgrep, ripgrep(), None).unwrap();
+    let token = CancellationSource::new().token();
+    let found = service
+        .indexed_fuzzy(&root, "", 100, &token)
+        .unwrap()
+        .expect("index should be enabled");
+    let paths = found
+        .matches
+        .into_iter()
+        .map(|matched| matched.path)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        paths,
+        [PathBuf::from("image.png"), PathBuf::from("source.rs")]
+    );
+    assert_eq!(
+        service
+            .search(&root, &query("needle"), &token)
+            .unwrap()
+            .matches
+            .len(),
+        1
+    );
+    let count = || service.state.read().unwrap().indexes.len();
+    assert_eq!(count(), 1);
+    service.configure(Backend::Ripgrep).unwrap();
+    assert!(
+        service
+            .indexed_fuzzy(&root, "", 100, &token)
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(count(), 0);
+}
+
+#[test]
 fn both_engines_share_literals_unicode_filters_limits_and_current_reads() {
     let (_tmp, root) = fixture();
     fs::write(
@@ -260,15 +300,14 @@ fn concurrent_first_consumers_publish_one_registration_and_release_extra_referen
     let (first, second) = std::thread::scope(|scope| {
         let register = || {
             barrier.wait();
-            let state = service.state.read().unwrap();
-            service.index_for(&state, &root, &token).unwrap()
+            service.index_for(&root, &token).unwrap().unwrap()
         };
         let first = scope.spawn(register);
         let second = scope.spawn(register);
         barrier.wait();
         (first.join().unwrap(), second.join().unwrap())
     });
-    assert!(Arc::ptr_eq(&first, &second));
+    assert!(Arc::ptr_eq(&first.index, &second.index));
     fs::write(&path, "after_marker\n").unwrap();
     service.paths_changed(&root, &[path]);
     assert_eq!(
@@ -631,7 +670,7 @@ fn unsaved_documents_replace_disk_matches_without_starving_search_limits() {
 }
 
 #[test]
-fn linked_worktrees_use_repository_storage_and_delete_it_after_disabling() {
+fn linked_worktrees_share_storage_until_the_last_registration_is_released() {
     use std::process::Command;
     let temporary = tempfile::tempdir().unwrap();
     let git = |root: &Path, args: &[&str]| {
@@ -704,6 +743,10 @@ fn linked_worktrees_use_repository_storage_and_delete_it_after_disabling() {
         .release_directory(worktree.canonical_path(), &token)
         .unwrap();
     assert!(!service.index_status(&worktree, &token).unwrap().active);
+    assert_eq!(
+        service.clear_index(&root, &token).unwrap(),
+        ash_state::ClearOutcome::InUse
+    );
     assert!(!worktree.canonical_path().join(".git").is_dir());
     git(
         temporary.path(),
@@ -725,10 +768,139 @@ fn linked_worktrees_use_repository_storage_and_delete_it_after_disabling() {
             .len(),
         1
     );
-    service.configure(Backend::Ripgrep).unwrap();
+    service
+        .release_directory(root.canonical_path(), &token)
+        .unwrap();
     assert_eq!(
         service.clear_index(&root, &token).unwrap(),
         ash_state::ClearOutcome::Cleared
     );
     assert!(!directory.exists());
+}
+
+#[test]
+fn directory_release_and_rebuild_do_not_wait_for_another_directory_query() {
+    let (_first_tmp, first) = fixture();
+    let (_second_tmp, second) = fixture();
+    fs::write(first.canonical_path().join("first.txt"), "first").unwrap();
+    fs::write(second.canonical_path().join("second.txt"), "second").unwrap();
+    let service = Service::new(Backend::Tgrep, ripgrep(), None).unwrap();
+    let token = CancellationSource::new().token();
+    service
+        .indexed_fuzzy(&first, "first", 1, &token)
+        .unwrap()
+        .unwrap();
+    service
+        .indexed_fuzzy(&second, "second", 1, &token)
+        .unwrap()
+        .unwrap();
+    // Hold the same per-directory admission guard used by a running indexed query.
+    let _second_query = service.index_for(&second, &token).unwrap().unwrap();
+    service
+        .release_directory(first.canonical_path(), &token)
+        .unwrap();
+    assert!(service.rebuild_index(&first, &token).unwrap().ready);
+    assert_eq!(
+        service
+            .indexed_fuzzy(&second, "second", 1, &token)
+            .unwrap()
+            .unwrap()
+            .matches[0]
+            .path,
+        Path::new("second.txt")
+    );
+}
+
+#[test]
+fn directory_drain_observes_cancellation_and_keeps_its_registration_usable() {
+    let (_temporary, root) = fixture();
+    fs::write(root.canonical_path().join("source.rs"), "needle").unwrap();
+    let service = Service::new(Backend::Tgrep, ripgrep(), None).unwrap();
+    let token = CancellationSource::new().token();
+    let active_query = service.index_for(&root, &token).unwrap().unwrap();
+    let cancel = CancellationSource::new();
+    std::thread::scope(|scope| {
+        let _active_query = active_query;
+        let service = &service;
+        let root = &root;
+        let token = &token;
+        let cancel = &cancel;
+        let (tx, rx) = std::sync::mpsc::channel();
+        scope.spawn(move || {
+            tx.send(service.release_directory(root.canonical_path(), &cancel.token()))
+                .unwrap();
+        });
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let state = service.state.read().unwrap();
+            let directory = state.indexes.get(&root.id()).unwrap();
+            let draining = directory.state.lock().unwrap().admission == Admission::Draining;
+            drop(state);
+            if draining {
+                break;
+            }
+            assert!(Instant::now() < deadline, "release did not start draining");
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert!(
+            service.indexed_fuzzy(&root, "source", 1, &token).is_err(),
+            "draining roots must reject new queries"
+        );
+        assert!(matches!(
+            rx.try_recv(),
+            Err(std::sync::mpsc::TryRecvError::Empty)
+        ));
+        let changed = root.canonical_path().join("source.rs");
+        fs::write(&changed, "after_drain_marker").unwrap();
+        service.paths_changed(root, &[changed]);
+        cancel.cancel();
+        assert!(matches!(
+            rx.recv_timeout(Duration::from_secs(2)).unwrap(),
+            Err(Error::Cancelled(_))
+        ));
+    });
+    assert_eq!(
+        service
+            .search(&root, &query("after_drain_marker"), &token)
+            .unwrap()
+            .matches
+            .len(),
+        1
+    );
+    service
+        .release_directory(root.canonical_path(), &token)
+        .unwrap();
+    assert!(!service.index_status(&root, &token).unwrap().active);
+}
+
+#[test]
+fn releasing_the_last_directory_returns_its_storage_lease_without_disabling_search() {
+    let (_temporary, root) = fixture();
+    fs::write(root.canonical_path().join("source.rs"), "needle").unwrap();
+    let profile = tempfile::tempdir().unwrap();
+    let storage = Arc::new(StateRuntime::open(profile.path()).unwrap());
+    let service = Service::new(Backend::Tgrep, ripgrep(), Some(storage)).unwrap();
+    let token = CancellationSource::new().token();
+    service
+        .indexed_fuzzy(&root, "source", 1, &token)
+        .unwrap()
+        .unwrap();
+    service
+        .release_directory(root.canonical_path(), &token)
+        .unwrap();
+    let status = service.index_status(&root, &token).unwrap();
+    assert!(status.enabled);
+    assert!(!status.active);
+    assert_eq!(
+        service.clear_index(&root, &token).unwrap(),
+        ash_state::ClearOutcome::Cleared
+    );
+    assert_eq!(
+        service
+            .search(&root, &query("needle"), &token)
+            .unwrap()
+            .matches
+            .len(),
+        1
+    );
 }

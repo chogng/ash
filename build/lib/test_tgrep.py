@@ -219,6 +219,48 @@ class TgrepTests(unittest.TestCase):
                             TARGETS["aarch64-apple-darwin"], lock, root / "cache"
                         )
 
+    def test_shared_sources_are_verified_injected_and_part_of_cache_identity(self):
+        for name in ("ranking", "discovery"):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                lock = self.fixture(root)
+                ranking = root / f"{name}.rs"
+                ranking.write_text("pub fn rank() {}\n")
+                data = json.loads(lock.read_text())
+                data[name] = {
+                    "file": ranking.name,
+                    "sha256": hashlib.sha256(ranking.read_bytes()).hexdigest(),
+                }
+                lock.write_text(json.dumps(data))
+                builds = []
+
+                def run(command, **kwargs):
+                    if command[1] == "build":
+                        source = Path(kwargs["cwd"]) / f"tgrep-cli/src/ash_{name}.rs"
+                        builds.append(source.read_bytes())
+                        target = Path(kwargs["env"]["CARGO_TARGET_DIR"])
+                        executable = target / "aarch64-apple-darwin/release/tgrep"
+                        executable.parent.mkdir(parents=True)
+                        executable.write_bytes(source.read_bytes())
+                    elif command[1] == "apply" and "--check" not in command:
+                        (Path(kwargs["cwd"]) / "tgrep-cli/src").mkdir(parents=True)
+
+                with (
+                    patch("build.lib.tgrep.subprocess.run", side_effect=run),
+                    patch("build.lib.tgrep.subprocess.check_output", return_value="toolchain"),
+                    patch("build.lib.tgrep.default_target", return_value="other-target"),
+                ):
+                    first = resolve_tgrep(TARGETS["aarch64-apple-darwin"], lock, root / "cache")
+                    ranking.write_text("pub fn rank() { /* updated */ }\n")
+                    with self.assertRaisesRegex(RuntimeError, "checksum mismatch"):
+                        resolve_tgrep(TARGETS["aarch64-apple-darwin"], lock, root / "cache")
+                    data[name]["sha256"] = hashlib.sha256(ranking.read_bytes()).hexdigest()
+                    lock.write_text(json.dumps(data))
+                    second = resolve_tgrep(TARGETS["aarch64-apple-darwin"], lock, root / "cache")
+                self.assertNotEqual(first.executable, second.executable)
+                self.assertEqual(len(builds), 2)
+                self.assertEqual(second.executable.read_bytes(), ranking.read_bytes())
+
     def test_archive_path_escape_is_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

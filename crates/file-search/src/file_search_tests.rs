@@ -144,3 +144,97 @@ impl Drop for TestWorkspace {
         let _ = fs::remove_dir_all(&self.path);
     }
 }
+
+#[test]
+fn disk_and_streaming_queries_select_stable_prefixes_before_truncation() {
+    let root = TestWorkspace::new();
+    for path in [
+        "aa.rs",
+        "z.rs",
+        "b.rs",
+        "src/main.rs",
+        "node_modules/main.rs",
+        "target/main.rs",
+    ] {
+        root.write(path);
+    }
+    let token = ash_async_utils::CancellationSource::new().token();
+    for query in ["", "rs", "main"] {
+        let all = Service
+            .fuzzy(root.path.clone(), query, 100, &token)
+            .unwrap();
+        for limit in [1, 2] {
+            let disk = Service
+                .fuzzy(root.path.clone(), query, limit, &token)
+                .unwrap();
+            let (handle, snapshots) = Service
+                .start(
+                    root.path.clone(),
+                    PathSearchOptions::default()
+                        .with_result_limit(NonZeroUsize::new(limit).unwrap()),
+                )
+                .unwrap();
+            handle.update_query(query);
+            let streamed =
+                wait_for_snapshot(&snapshots, query, |snapshot| snapshot.search_complete);
+            let end = limit.min(all.matches.len());
+            assert_eq!(disk.matches, all.matches[..end], "{query}");
+            assert_eq!(streamed.matches, disk.matches, "{query}");
+            assert_eq!(streamed.scanned_file_count, disk.scanned_file_count);
+            assert_eq!(streamed.total_match_count, disk.total_match_count);
+        }
+    }
+    assert_eq!(
+        Service
+            .fuzzy(root.path.clone(), "", 1, &token)
+            .unwrap()
+            .matches[0]
+            .path,
+        Path::new("aa.rs")
+    );
+}
+
+#[test]
+fn disk_query_validates_input_and_cancellation_before_discovery() {
+    let token = ash_async_utils::CancellationSource::new().token();
+    for (query, limit) in [("query", 0), ("query", 5001), ("\0", 1)] {
+        assert!(matches!(
+            Service.fuzzy(PathBuf::from("missing-directory"), query, limit, &token),
+            Err(Error::InvalidInput(_))
+        ));
+    }
+    let cancel = ash_async_utils::CancellationSource::new();
+    cancel.cancel();
+    assert!(matches!(
+        Service.fuzzy(
+            PathBuf::from("missing-directory"),
+            "query",
+            1,
+            &cancel.token()
+        ),
+        Err(Error::Cancelled(_))
+    ));
+}
+
+#[test]
+fn disk_and_streaming_walks_apply_gitignore_outside_a_repository() {
+    let root = TestWorkspace::new();
+    root.write("source.rs");
+    root.write("ignored.rs");
+    fs::write(root.path.join(".gitignore"), "ignored.rs\n").unwrap();
+    let token = ash_async_utils::CancellationSource::new().token();
+    let disk = Service.fuzzy(root.path.clone(), "rs", 100, &token).unwrap();
+    let (handle, snapshots) = Service
+        .start(root.path.clone(), PathSearchOptions::default())
+        .unwrap();
+    handle.update_query("rs");
+    let streamed = wait_for_snapshot(&snapshots, "rs", |snapshot| snapshot.search_complete);
+    assert_eq!(disk.matches, streamed.matches);
+    assert_eq!(
+        disk.matches
+            .iter()
+            .map(|matched| matched.path.as_path())
+            .collect::<Vec<_>>(),
+        [Path::new("source.rs")]
+    );
+}

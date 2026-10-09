@@ -1440,6 +1440,7 @@ dependencies = [
  "clap",
  "ignore",
  "nucleo",
+ "nucleo-matcher",
  "serde_json",
  "tempfile",
 ]
@@ -1593,6 +1594,7 @@ dependencies = [
  "ash-shell-command",
  "ash-state",
  "ash-tgrep",
+ "dunce",
  "globset",
  "regex",
  "serde_json",
@@ -2771,6 +2773,7 @@ name = "ash-tgrep"
 version = "0.1.0"
 dependencies = [
  "ash-async-utils",
+ "ash-file-search",
  "ash-install-context",
  "ash-process-hardening",
  "dunce",
