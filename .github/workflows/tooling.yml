@@ -17,6 +17,7 @@ on:
       - "rust-toolchain.toml"
       - "justfile"
       - ".github/workflows/tooling.yml"
+      - ".github/workflows/rusty-v8-release.yml"
   pull_request:
     paths:
       - "build/**"
@@ -32,6 +33,7 @@ on:
       - "rust-toolchain.toml"
       - "justfile"
       - ".github/workflows/tooling.yml"
+      - ".github/workflows/rusty-v8-release.yml"
   workflow_dispatch:
 
 permissions:

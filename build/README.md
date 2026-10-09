@@ -235,6 +235,11 @@ digest failure cleanup:
 python3 -B scripts/test-python.py
 ```
 
+Package fixtures own their protocol sources, generated artifacts and fingerprints
+in temporary directories. They exercise the production freshness checks without
+depending on the workspace's `.build/protocol` cache. Dependency exclusion and
+hard-link rejection run on every host; symbolic-link cases run on POSIX hosts.
+
 Development target selection, locked runtime selection, and package reuse are covered by:
 
 ```sh

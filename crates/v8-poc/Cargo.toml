@@ -20,5 +20,7 @@ v8 = { workspace = true }
 [dev-dependencies]
 pretty_assertions = { workspace = true }
 
-[lints]
-workspace = true
+[lints.rust]
+# The linked-library configuration probe needs one upstream test-only FFI call.
+# Keep unsafe denied elsewhere; the single probe test documents its exception.
+unsafe_code = "deny"

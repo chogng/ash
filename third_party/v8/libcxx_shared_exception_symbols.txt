@@ -1,0 +1,12 @@
+# These exception entry points stay in std:: across Linux libc++ ABI namespaces.
+# Let Bazel's C++ runtime supply them; keep std::__Cr::string overloads strong.
+_ZNSt11logic_errorC1EPKc
+_ZNSt11logic_errorC1ERKS_
+_ZNSt11logic_errorC2EPKc
+_ZNSt11logic_errorC2ERKS_
+_ZNSt11logic_erroraSERKS_
+_ZNSt13runtime_errorC1EPKc
+_ZNSt13runtime_errorC1ERKS_
+_ZNSt13runtime_errorC2EPKc
+_ZNSt13runtime_errorC2ERKS_
+_ZNSt13runtime_erroraSERKS_

@@ -38,6 +38,7 @@ from build.lib.node import (
 from build.lib.ripgrep import load_lock, resolve_ripgrep
 from build.lib.executable import ExecutableResolution
 from build.lib.version import read_workspace_version
+from build.lib.package_test_support import create_package_sources
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
@@ -48,6 +49,12 @@ PRODUCTION_BUBBLEWRAP_SOURCE = REPOSITORY_ROOT / "crates" / "vendor" / "bubblewr
 
 
 class PackageTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        temporary = tempfile.TemporaryDirectory(prefix="ash package sources ")
+        cls.addClassCleanup(temporary.cleanup)
+        cls.package_sources = create_package_sources(Path(temporary.name))
+
     def setUp(self) -> None:
         boundary = patch("build.app_server.generate_protocol", return_value=False)
         boundary.start()
@@ -126,6 +133,11 @@ class PackageTests(unittest.TestCase):
                 return subprocess.CompletedProcess(command, 0, "\n".join(artifacts))
 
             with (
+                patch("build.app_server.REPOSITORY_ROOT", self.package_sources),
+                patch(
+                    "build.app_server.resolve_tgrep",
+                    return_value=test_tgrep_resolution(root),
+                ),
                 patch("build.lib.package_binaries.cargo_environment", return_value={}),
                 patch(
                     "build.app_server.resolve_livekit",
@@ -331,7 +343,7 @@ class PackageTests(unittest.TestCase):
 
             build_package_directory(
                 runtime_output,
-                REPOSITORY_ROOT,
+                self.package_sources,
                 read_workspace_version(REPOSITORY_ROOT / "Cargo.toml"),
                 spec,
                 server_binary,
@@ -489,7 +501,7 @@ class PackageTests(unittest.TestCase):
             self.assertEqual("local-override", metadata["components"]["node"]["source"])
             self.assertRegex(metadata["buildId"], r"^sha256:[a-f0-9]{64}$")
             self.assertEqual(
-                load_protocol_metadata(REPOSITORY_ROOT),
+                load_protocol_metadata(self.package_sources),
                 metadata["protocol"],
             )
             self.assertEqual(
@@ -526,14 +538,14 @@ class PackageTests(unittest.TestCase):
                 build_code_package(runtime_output, output, cli_binary, "11" * 32)
 
     def test_host_provided_runtime_package_omits_standalone_node(self) -> None:
-        generated_protocol = load_protocol_metadata(REPOSITORY_ROOT)
+        generated_protocol = load_protocol_metadata(self.package_sources)
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             spec = TARGETS["aarch64-apple-darwin"]
             output = root / "package"
             build_package_directory(
                 output,
-                REPOSITORY_ROOT,
+                self.package_sources,
                 read_workspace_version(REPOSITORY_ROOT / "Cargo.toml"),
                 spec,
                 executable_file(root / "ash-source", b"ash-app-server"),
@@ -702,9 +714,10 @@ class PackageTests(unittest.TestCase):
             )
             dependencies = package / "node_modules"
             dependencies.mkdir()
-            (dependencies / "markdown-library").symlink_to(
-                package, target_is_directory=True
-            )
+            # A dependency directory covers exclusion on Windows without
+            # symlink privileges; linked-asset rejection is checked separately.
+            (dependencies / "markdown-library").mkdir()
+            (dependencies / "markdown-library/index.js").write_text("dependency")
             output = root / "packaged-extensions"
 
             copy_builtin_extensions(root, output)
@@ -713,9 +726,26 @@ class PackageTests(unittest.TestCase):
                 ["extension.js", "package.json"],
                 sorted(path.name for path in (output / "markdown").iterdir()),
             )
-            (package / "linked.js").symlink_to(package / "extension.js")
+            # Hard links also violate the regular-unlinked file contract and
+            # work without enabling Windows developer mode for the test host.
+            (package / "linked.js").hardlink_to(package / "extension.js")
             with self.assertRaisesRegex(RuntimeError, "not a regular unlinked file"):
                 copy_builtin_extensions(root, root / "rejected-extensions")
+
+    @unittest.skipIf(os.name == "nt", "symbolic links require Windows privileges")
+    def test_builtin_extension_packaging_excludes_symlinks_inside_dependencies(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package = root / "extensions/markdown"
+            dependencies = package / "node_modules"
+            dependencies.mkdir(parents=True)
+            (package / "package.json").write_text('{"name":"markdown"}')
+            (dependencies / "cycle").symlink_to(package, target_is_directory=True)
+            copy_builtin_extensions(root, root / "output")
+            self.assertFalse((root / "output/markdown/node_modules").exists())
+            (package / "linked.js").symlink_to(package / "package.json")
+            with self.assertRaisesRegex(RuntimeError, "not a regular unlinked file"):
+                copy_builtin_extensions(root, root / "rejected")
 
     def test_linux_package_contains_built_sandbox_resource_contract(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -749,7 +779,7 @@ class PackageTests(unittest.TestCase):
 
             build_package_directory(
                 output,
-                REPOSITORY_ROOT,
+                self.package_sources,
                 "0.1.0",
                 spec,
                 server_binary,
@@ -818,7 +848,7 @@ class PackageTests(unittest.TestCase):
 
             build_package_directory(
                 output,
-                REPOSITORY_ROOT,
+                self.package_sources,
                 "0.1.0",
                 spec,
                 server_binary,

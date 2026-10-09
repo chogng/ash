@@ -63,8 +63,20 @@ mod tests {
     }
 
     #[test]
-    fn reports_the_selected_sandbox_feature() {
-        assert_eq!(sandbox_feature_enabled(), cfg!(feature = "sandbox"));
+    #[expect(
+        unsafe_code,
+        reason = "verify the linked V8 archive through its upstream test binding"
+    )]
+    fn sandbox_feature_matches_linked_v8() {
+        unsafe extern "C" {
+            fn v8__V8__IsSandboxEnabled() -> bool;
+        }
+
+        // SAFETY: The pinned upstream binding takes no arguments and returns a
+        // boolean build setting; it needs no initialized isolate or pointers.
+        // Comparing only Rust cfg flags would miss a mismatched archive.
+        let linked_sandbox_enabled = unsafe { v8__V8__IsSandboxEnabled() };
+        assert_eq!(linked_sandbox_enabled, sandbox_feature_enabled());
     }
 
     #[test]
