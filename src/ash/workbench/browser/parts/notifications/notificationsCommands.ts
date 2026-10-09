@@ -4,14 +4,30 @@ import { Keybinding, logicalKey } from "../../../../base/common/keybindings.js";
 import { localize2 } from "../../../../nls.js";
 import { Action2, registerAction2 } from "../../../../platform/actions/common/actions.js";
 import type { ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
-import { INotificationService } from "../../../../platform/notification/common/notification.js";
+import { INotificationService, type NotificationAction } from "../../../../platform/notification/common/notification.js";
 import { INotificationsCenter } from "./notificationsCenter.js";
 import "./notificationAccessibleView.js";
 
 /** One window's error boundary for notification actions in both presentations. */
 export class NotificationActionRunner extends ActionRunner {
+	private readonly pendingActions = new WeakMap<NotificationAction, Promise<void>>();
+
 	constructor(@INotificationService private readonly notificationService: INotificationService) {
 		super();
+	}
+
+	runNotificationAction(action: NotificationAction): Promise<void> {
+		if (this.isDisposed) return Promise.resolve();
+		const pending = this.pendingActions.get(action);
+		if (pending) return pending;
+		// Both surfaces reference the model's same action. Gate before deferring so
+		// repeated input cannot start a second task during the presentation transition.
+		const completion = Promise.resolve().then(() => this.run({
+			id: action.id, label: action.label, tooltip: '', enabled: true,
+			run: () => action.run(),
+		})).finally(() => this.pendingActions.delete(action));
+		this.pendingActions.set(action, completion);
+		return completion;
 	}
 
 	protected override async runAction(action: IAction, context?: unknown): Promise<void> {

@@ -2321,6 +2321,67 @@ test("EditorPart rejects an open superseded by ordinary content", async () => {
 	dom.window.close();
 });
 
+for (const target of ['activeGroup', 'modalGroup'] as const) {
+	for (const replacement of ['open', 'close'] as const) {
+		test(`editor service completes superseded ${target} navigation after ${replacement} without taking focus`, async () => {
+			const dom = new JSDOM('<!doctype html><body><button>Origin</button></body>');
+			dom.window.HTMLElement.prototype.scrollTo = () => undefined;
+			using registry = new EditorPaneRegistry();
+			const pending = deferred<void>();
+			const started = deferred<void>();
+			registry.registerEditorPane(descriptor('test.slow', '.slow', () => {
+				const pane = new TestEditorPane('test.slow');
+				pane.inputPromise = pending.promise;
+				started.resolve(undefined);
+				return pane;
+			}));
+			registry.registerEditorPane(descriptor('test.ready', '.ready', () => new TestEditorPane('test.ready')));
+			try {
+				using editor = createEditorPart(dom.window.document.body, { registry });
+				dom.window.document.body.append(editor.domNode);
+				using service = new BrowserEditorService(editor);
+				await service.openEditor(input('C:/project/previous.ready'), undefined, target);
+				const opening = service.openEditor({ resource: URI.parse('ash-agent-trace:/import.slow') }, undefined, target);
+				// Observe the old result immediately so a deliberately rejected regression
+				// does not become an unrelated unhandled rejection while replacing it.
+				const result = opening.then(() => undefined, error => error);
+				await started.promise;
+				if (replacement === 'open') await service.openEditor(input('C:/project/new.ready'), undefined, target);
+				else if (target === 'modalGroup') editor.dispose();
+				else await editor.setContent(h(dom.window.document, 'div'));
+				const origin = dom.window.document.querySelector<HTMLButtonElement>(target === 'modalGroup' && replacement === 'open' ? '.ash-modal-editor button' : 'body > button')!;
+				origin.focus();
+				pending.resolve(undefined);
+				assert.equal(await result, undefined);
+				assert.equal(dom.window.document.activeElement, origin);
+				assert.equal(editor.domNode.querySelector('.ash-editor-open-error'), null);
+			} finally { pending.resolve(undefined); dom.window.close(); }
+		});
+	}
+}
+
+test('editor service keeps real failures and explicitly requested cancellation failures with its caller', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using registry = new EditorPaneRegistry();
+	const failure = new Error('Real open failure');
+	const cancellation = new CancellationError();
+	for (const [extension, error] of [['bad', failure], ['cancelled', cancellation]] as const) {
+		registry.registerEditorPane(descriptor(`test.${extension}`, `.${extension}`, () => {
+			const pane = new TestEditorPane(`test.${extension}`);
+			pane.inputError = error;
+			return pane;
+		}));
+	}
+	try {
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		using service = new BrowserEditorService(editor);
+		await assert.rejects(service.openEditor(input('C:/project/document.bad'), { ignoreError: true }), error => error === failure);
+		await assert.rejects(service.openEditor(input('C:/project/document.cancelled'), { ignoreError: true }), error => error === cancellation);
+		await service.openEditor(input('C:/project/document.cancelled'));
+		assert.equal(editor.activeGroup.inputs.length, 0);
+	} finally { dom.window.close(); }
+});
+
 test("EditorParts moves an editor to an auxiliary window without changing its instance identity", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>", { url: 'http://localhost' });
 	const registry = new EditorPaneRegistry();

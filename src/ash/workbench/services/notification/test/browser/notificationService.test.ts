@@ -39,6 +39,37 @@ import { ElectronContextMenuService } from '../../../contextmenu/electron-browse
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { ConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
+import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
+import chineseMessages from '../../../../../../../localization/zh-CN/editor.json' with { type: 'json' };
+
+test('duplicate action IDs reject the entire notification before publishing a record', () => {
+	using service = new NotificationService();
+	const action = { id: 'duplicate', label: 'Action', run() { } };
+	assert.throws(() => service.info('Invalid actions', [action, action]), /Duplicate notification action ID: duplicate/);
+	assert.deepEqual(service.getNotifications(), []);
+});
+
+test('Chinese notification severity, message and removal labels agree between toast and center', () => {
+	setNlsMessages('zh-CN', chineseMessages);
+	try {
+		using fixture = new NotificationsFixture();
+		const text = '导入失败时应保留可诊断的信息。'.repeat(20);
+		const labels = ['信息', '警告', '错误'];
+		for (const severity of [NotificationSeverity.Info, NotificationSeverity.Warning, NotificationSeverity.Error]) fixture.service.notify({ severity, message: text, source: '执行跟踪' });
+		const inspect = (selector: string) => [...fixture.document.querySelectorAll<HTMLElement>(selector)].map(row => ({
+			label: row.getAttribute('aria-label'),
+			message: row.querySelector('.ash-notification-message')?.textContent,
+			source: row.querySelector('.ash-notification-source')?.textContent,
+			icon: row.querySelector('.ash-notification-severity svg')?.getAttribute('data-ash-icon-id'),
+			close: row.querySelector('button')?.getAttribute('aria-label'),
+			quiet: row.querySelector('button')?.classList.contains('ash-button-quiet'),
+		}));
+		const expected = labels.map((label, index) => ({ label: `${label}: ${text}`, message: text, source: '执行跟踪', icon: ['info', 'warning', 'error'][index], close: '移除通知', quiet: true }));
+		assert.deepEqual(inspect('.ash-notification'), expected);
+		fixture.center.show();
+		assert.deepEqual(inspect('.ash-notifications-row'), [...expected].reverse());
+	} finally { resetNlsResolver(); }
+});
 
 test("clearing a toast removes only its shared record from the notification center", async () => {
 	const browser = new JSDOM("<!doctype html><body><main></main></body>");
@@ -51,11 +82,13 @@ test("clearing a toast removes only its shared record from the notification cent
 		const toggle = root.querySelector<HTMLButtonElement>(".ash-notifications-toggle")!;
 		assert.equal(toggle.textContent, "Notifications");
 		assert.equal(toggle.hidden, true);
+		assert.equal(toggle.classList.contains('hidden'), true);
 		let actionRuns = 0;
 		const removed: number[] = [];
 		service.onDidRemove(item => removed.push(item.id));
 		const handle = service.notify({ severity: NotificationSeverity.Warning, message: "Workspace needs attention", source: "fixture", actions: [{ id: "open", label: "Open", run: () => { actionRuns++; } }] });
 		assert.equal(toggle.hidden, false);
+		assert.equal(toggle.classList.contains('hidden'), false);
 		assert.equal(root.querySelectorAll(".ash-notification").length, 1);
 		const completed = new Promise<void>(resolve => runner.onDidRun(() => resolve()));
 		root.querySelector<HTMLButtonElement>(".ash-notification-action")!.click();
@@ -893,6 +926,63 @@ test('notification center creation retains startup history and the three-toast l
 test("notification actions require the window notification service", () => {
 	using services = new InstantiationService();
 	assert.throws(() => services.createInstance(NotificationActionRunner), /Unknown service: notificationService/u);
+});
+
+for (const useCenter of [false, true]) {
+	for (const change of ['remove', 'dispose'] as const) {
+		test(`${useCenter ? 'center' : 'toast'} ${change} releases stale action controls and queued callbacks`, async () => {
+			using fixture = new NotificationsFixture();
+			let calls = 0;
+			const handle = fixture.service.info('Task', [{ id: 'task', label: 'Run task', run() { calls++; } }]);
+			if (useCenter) fixture.center.show();
+			const button = fixture.document.querySelector<HTMLButtonElement>(`${useCenter ? '.ash-notifications-center' : '.ash-notification-host'} .ash-notification-action`)!;
+			button.click();
+			if (change === 'remove') handle.close();
+			else fixture.center.dispose();
+			button.click();
+			await new Promise<void>(resolve => setImmediate(resolve));
+			assert.equal(calls, 0);
+		});
+	}
+
+	test(`${useCenter ? 'center' : 'toast'} repeated actions and a center transition start the shared task once`, async () => {
+		using fixture = new NotificationsFixture();
+		const started = promiseWithResolvers<void>();
+		const completion = promiseWithResolvers<void>();
+		let calls = 0;
+		fixture.service.info('Pending task', [{ id: 'pending', label: 'Start', async run() { calls++; started.resolve(); await completion.promise; } }]);
+		if (useCenter) fixture.center.show();
+		const button = fixture.document.querySelector<HTMLButtonElement>(`${useCenter ? '.ash-notifications-center' : '.ash-notification-host'} .ash-notification-action`)!;
+		try {
+			button.click();
+			button.click();
+			await started.promise;
+			fixture.center.show();
+			fixture.service.info('Background arrival');
+			fixture.panel.querySelector<HTMLButtonElement>('.ash-notification-action')!.click();
+			await new Promise<void>(resolve => setImmediate(resolve));
+			assert.equal(calls, 1);
+		} finally { completion.resolve(); }
+	});
+}
+
+test('center arrivals retain the focused action control', () => {
+	using fixture = new NotificationsFixture();
+	fixture.service.info('Retained task', [{ id: 'task', label: 'Run', run() { } }]);
+	fixture.center.show();
+	const button = fixture.panel.querySelector<HTMLButtonElement>('.ash-notification-action')!;
+	button.focus();
+	fixture.service.info('Another record');
+	assert.equal(fixture.document.activeElement, button);
+});
+
+test('a shared action can be retried after one failed attempt without duplicate error records', async () => {
+	using fixture = new NotificationsFixture();
+	let calls = 0;
+	const action: NotificationAction = { id: 'retry', label: 'Retry', async run() { calls++; if (calls === 1) throw new Error('First attempt failed'); } };
+	await Promise.all([fixture.runner.runNotificationAction(action), fixture.runner.runNotificationAction(action)]);
+	await fixture.runner.runNotificationAction(action);
+	assert.deepEqual({ calls, messages: fixture.service.getNotifications().map(item => item.message) }, { calls: 2, messages: ['First attempt failed'] });
 });
 
 for (const asynchronous of [false, true]) {

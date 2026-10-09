@@ -1,6 +1,7 @@
 import type { IResourceEditorInput } from '../../../common/editor.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
+import { isCancellationError } from '../../../../base/common/errors.js';
 import type { IEditorPart } from "../../../browser/parts/editor/editorPart.js";
 import type { EditorOpenOptions, EditorOpenTarget, IEditorService } from "../common/editorService.js";
 import type { IEditorGroup, IEditorGroupsService, IFindGroupScope } from '../common/editorGroupsService.js';
@@ -72,7 +73,14 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 	}
 
 	async openEditor(input: IResourceEditorInput, options?: EditorOpenOptions, target?: EditorOpenTarget): Promise<void> {
-		await this.editorPart.openEditor(input, options, target);
+		try {
+			await this.editorPart.openEditor(input, options, target);
+		} catch (error) {
+			// Resource navigation can be replaced or closed while its pane loads.
+			// The part retains its rejection contract; UI callers need no error or focus change.
+			if (isCancellationError(error) && !options?.ignoreError) return;
+			throw error;
+		}
 		if (options?.preserveFocus !== true) this.editorPart.focus();
 	}
 

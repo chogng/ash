@@ -10,6 +10,31 @@ import { expect, test } from '../../../automation/test.js';
 import { Menus } from '../../../automation/menus.js';
 import { waitForElectronWindowState } from '../../../automation/electronDriver.js';
 
+test('notification dismiss chrome stays quiet with visible keyboard focus in all themes', async ({ workbench, application }, testInfo) => {
+	const page = workbench.page;
+	await workbench.quickaccess.runCommand('notifications.clearAll');
+	await workbench.quickaccess.runCommand('ash.agentTrace.open');
+	await expect(page.locator('.ash-agent-trace')).toBeVisible();
+	for (const theme of ['Ash Light', 'Ash Dark', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
+		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
+		await workbench.quickaccess.select(theme);
+		await workbench.quickaccess.runCommand('showEditorScreenReaderNotification');
+		const toast = page.locator('.ash-notification').last();
+		const close = toast.getByRole('button', { name: 'Remove notification', exact: true });
+		await expect(close).toBeVisible();
+		await testInfo.attach(`${theme}-toast`, { body: await page.screenshot(), contentType: 'image/png' });
+		const environment = await page.evaluate(() => ({ userAgent: navigator.userAgent, theme: document.querySelector('[data-color-theme]')?.getAttribute('data-color-theme'), devicePixelRatio, width: innerWidth, height: innerHeight }));
+		const zoom = 'windows' in application ? await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.getZoomFactor()) : 1;
+		await testInfo.attach(`${theme}-environment`, { body: JSON.stringify({ ...environment, zoom, platform: process.platform }), contentType: 'application/json' });
+		expect(await close.evaluate(element => getComputedStyle(element).backgroundColor)).toBe('rgba(0, 0, 0, 0)');
+		await close.focus();
+		expect(await close.evaluate(element => { const style = getComputedStyle(element); return style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0; })).toBe(true);
+		await expect(toast.locator('.ash-notification-severity svg')).toHaveCount(1);
+		await close.press('Enter');
+		await expect(toast).toHaveCount(0);
+	}
+});
+
 async function notificationClipboard(application: PlaywrightApplication, page: Page): Promise<{ read(): Promise<string>; }> {
 	// Start with a fixture value; never read or retain the user's previous clipboard.
 	const marker = 'ash-notification-copy-fixture';
