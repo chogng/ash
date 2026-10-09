@@ -61,11 +61,17 @@ export enum FileSystemProviderCapabilities {
 	FileOpenReadWriteClose = 1 << 2,
 	FileFolderCopy = 1 << 3,
 	FileReadStream = 1 << 4,
+	FileWriteElevated = 1 << 5,
+	FileWriteUnlock = 1 << 6,
 	Readonly = 1 << 11,
 }
 
 /** Selects creation or replacement and optionally checks the stored content revision. */
 export interface IFileWriteOptions {
+	/** Explicit user retry; providers must reject it unless they own system elevation. */
+	readonly writeElevated?: boolean;
+	/** Explicit retry that makes an existing file writable without system elevation. */
+	readonly unlock?: boolean;
 	readonly create: boolean;
 	readonly overwrite: boolean;
 	readonly expectedRevision?: string;
@@ -173,7 +179,7 @@ export interface IFileSystemProvider {
 	readDirectory(resource: URI): Promise<readonly IFileEntry[]>;
 	/** Reads exact stored bytes; the revision continues to identify those bytes across text decoding. */
 	readFile(resource: URI): Promise<IFileBytes>;
-	writeFile(resource: URI, content: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult>;
+	writeFile(resource: URI, content: Uint8Array, options: IFileWriteOptions, signal?: AbortSignal): Promise<IFileWriteResult>;
 	createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat>;
 	createDirectory(resource: URI): Promise<IFileStat>;
 	/** Copies one file or directory, failing if the target exists. */
@@ -193,8 +199,8 @@ export interface IFileService {
 	readFileBytes(resource: URI): Promise<IFileBytes>;
 	readFileStream(resource: URI, options?: IReadFileStreamOptions, token?: CancellationToken): Promise<IFileStreamContent>;
 	writeFile(request: IFileWriteRequest): Promise<IFileWriteResult>;
-	/** Imports exact bytes and rejects any existing file, including an empty one. */
-	writeFileBytes(resource: URI, bytes: Uint8Array): Promise<IFileWriteResult>;
+	/** Writes exact bytes; default import options reject existing files, including empty ones. */
+	writeFileBytes(resource: URI, bytes: Uint8Array, options?: IFileWriteOptions, signal?: AbortSignal): Promise<IFileWriteResult>;
 	createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat>;
 	createDirectory(resource: URI): Promise<IFileStat>;
 	copy(source: URI, target: URI): Promise<void>;

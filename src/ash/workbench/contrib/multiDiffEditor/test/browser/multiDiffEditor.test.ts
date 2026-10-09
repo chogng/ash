@@ -25,7 +25,8 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 
 import { IEditorPartsService } from '../../../../browser/parts/editor/editorParts.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
-import { TextFileContentSource, type ITextFileService, type ResolvedTextFileContent, type TextFileResolveRequest } from '../../../../services/textfile/common/textFileService.js';
+import { TextFileContentSource, type ResolvedTextFileContent, type TextFileResolveRequest } from '../../../../services/textfile/common/textFileService.js';
+import { type ITextFileService } from '../../../../services/textfile/common/textfiles.js';
 import { VIEW_ID } from '../../../files/common/files.js';
 import type { IEditorService } from '../../../../services/editor/common/editorService.js';
 import type { GitStatus, IGitService } from '../../../../contrib/git/common/gitService.js';

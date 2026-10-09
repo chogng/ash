@@ -10,6 +10,7 @@ name = "arg0"
 doctest = false
 
 [dependencies]
+ash-file-system = { workspace = true }
 mxc-sandbox = { workspace = true }
 
 [lints]

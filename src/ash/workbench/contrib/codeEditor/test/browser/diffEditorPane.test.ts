@@ -25,7 +25,8 @@ import { DefaultLinesDiffComputer } from "../../../../../editor/common/diff/defa
 import { type ITextModel } from '../../../../../editor/common/model.js';
 
 import { EditorPaneSelectionChangeReason, type IResourceEditorInput } from '../../../../common/editor.js';
-import { TextFileContentSource, type ITextFileService, type ResolvedTextFileContent, type TextFileResolveRequest } from "../../../../services/textfile/common/textFileService.js";
+import { TextFileContentSource, type ResolvedTextFileContent, type TextFileResolveRequest } from "../../../../services/textfile/common/textFileService.js";
+import { type ITextFileService } from "../../../../services/textfile/common/textfiles.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({

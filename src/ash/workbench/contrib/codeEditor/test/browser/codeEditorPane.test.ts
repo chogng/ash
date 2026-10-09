@@ -14,7 +14,8 @@ import { Range } from "../../../../../editor/common/core/range.js";
 import { TextEditorSelectionSource } from '../../../../../platform/editor/common/editor.js';
 
 import { EditorPaneSelectionChangeReason } from '../../../../common/editor.js';
-import { TextFileContentSource, type ITextFileService, type ResolvedTextFileContent, type TextFileResolveRequest } from "../../../../services/textfile/common/textFileService.js";
+import { TextFileContentSource, type ResolvedTextFileContent, type TextFileResolveRequest } from "../../../../services/textfile/common/textFileService.js";
+import { type ITextFileService } from "../../../../services/textfile/common/textfiles.js";
 import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';
 import { LanguageService } from '../../../../../editor/common/services/languageService.js';
 import { toDisposable } from "../../../../../base/common/lifecycle.js";

@@ -208,7 +208,8 @@ import { IPaneCompositePartService } from "../services/panecomposite/browser/pan
 import { WorkbenchWindow } from "./window.js";
 import { BrowserAuxiliaryWindowService, IAuxiliaryWindowService } from "../services/auxiliaryWindow/browser/auxiliaryWindowService.js";
 import { ITerminalProcessService } from "../../platform/terminal/common/terminal.js";
-import { ITextFileService, TextFileService } from "../services/textfile/common/textFileService.js";
+import { ITextFileService } from "../services/textfile/common/textfiles.js";
+import { TextFileService } from "../services/textfile/browser/textFileService.js";
 import { ITextMateService } from "../services/textMate/common/textMateService.js";
 import { BrowserTextMateService } from "../services/textMate/browser/browserTextMateService.js";
 import { AppServerExtensionService } from "../services/extensions/browser/appServerExtensionService.js";
@@ -636,7 +637,7 @@ export class Workbench extends Disposable {
 		this.configurationService = configuration;
 		services.registerInstance(IConfigurationService, configuration);
 		services.registerInstance(IConfigurationResourceService, configuration);
-		const textFileService = this._register(services.createInstance(TextFileService, fileService));
+		const textFileService = this._register(services.createInstance(TextFileService));
 		services.registerInstance(ITextFileService, textFileService);
 		const workingCopyService = this._register(new BrowserWorkingCopyService());
 		services.registerInstance(IWorkingCopyService, workingCopyService);
@@ -994,7 +995,7 @@ export class Workbench extends Disposable {
 			beforeCloseEditor: async resource => {
 				try { await textModelService.waitForSaveRecovery(resource); return true; }
 				catch (error) {
-					await new TextFileSaveErrorHandler(dialogService).onSaveError(error, resource);
+					await services.createInstance(TextFileSaveErrorHandler).onSaveError(error, resource);
 					return false;
 				}
 			},

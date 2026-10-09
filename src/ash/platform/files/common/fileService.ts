@@ -27,6 +27,7 @@ import {
 	type IFileSystemProvider,
 	type IFileStat,
 	type IFileWriteRequest,
+	type IFileWriteOptions,
 	type IFileWriteResult,
 	type IWatchOptions,
 } from './files.js';
@@ -186,8 +187,15 @@ export class FileService extends Disposable implements IFileService {
 		return this.writableProvider(request.resource, 'writeFile').writeFile(request.resource, new TextEncoder().encode(request.content), { create: true, overwrite: true, expectedRevision: request.expectedRevision });
 	}
 
-	public writeFileBytes(resource: URI, bytes: Uint8Array): Promise<IFileWriteResult> {
-		return this.writableProvider(resource, 'writeFile').writeFile(resource, bytes, { create: true, overwrite: false });
+	public writeFileBytes(resource: URI, bytes: Uint8Array, options: IFileWriteOptions = { create: true, overwrite: false }, signal?: AbortSignal): Promise<IFileWriteResult> {
+		const provider = this.writableProvider(resource, 'writeFile');
+		if (options.writeElevated && !(provider.capabilities & FileSystemProviderCapabilities.FileWriteElevated)) {
+			throw new FileOperationNotSupportedError(resource, 'writeFileElevated');
+		}
+		if (options.unlock && !(provider.capabilities & FileSystemProviderCapabilities.FileWriteUnlock)) {
+			throw new FileOperationNotSupportedError(resource, 'unlock');
+		}
+		return provider.writeFile(resource, bytes, options, signal);
 	}
 
 	public createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat> {

@@ -1,3 +1,5 @@
+import { ElectronElevatedFileService } from './services/files/electron-browser/elevatedFileService.js';
+import { IElevatedFileService } from './services/files/common/elevatedFileService.js';
 /**
  * Electron renderer Workbench registrations.
  *
@@ -24,3 +26,5 @@ import "./contrib/update/electron-browser/update.contribution.js";
 registerSingleton(IHostService, NativeHostService, InstantiationType.Delayed);
 registerSingleton(ILanguagePackStore, ElectronLanguagePackStore, InstantiationType.Delayed);
 registerSingleton(IIntegrityService, IntegrityService, InstantiationType.Delayed);
+
+registerSingleton(IElevatedFileService, ElectronElevatedFileService, InstantiationType.Delayed);

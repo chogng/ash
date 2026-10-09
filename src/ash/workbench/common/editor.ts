@@ -56,6 +56,9 @@ export enum SaveReason {
 }
 
 export interface ISaveOptions {
+	readonly writeElevated?: boolean;
+	/** Explicit retry that makes an existing file writable without system elevation. */
+	readonly unlock?: boolean;
 	readonly reason?: SaveReason;
 	readonly skipSaveParticipants?: boolean;
 }

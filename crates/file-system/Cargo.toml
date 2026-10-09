@@ -15,6 +15,11 @@ ash-async-utils = { workspace = true }
 ec4rs = { workspace = true }
 cap-std = { workspace = true }
 sha2 = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+rand = { workspace = true }
+tempfile = { workspace = true }
+tracing = { workspace = true }
 ash-file-access = { workspace = true }
 ash-file-identity = { workspace = true }
 
@@ -26,11 +31,13 @@ wl-clipboard-rs = { workspace = true }
 x11rb = { workspace = true }
 url = { workspace = true }
 
+[target.'cfg(unix)'.dependencies]
+rustix = { workspace = true, features = ["fs", "process"] }
+
 [target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
 clipboard-win = { workspace = true, features = ["std"] }
 
-[dev-dependencies]
-tempfile = { workspace = true }
-
-[lints]
-workspace = true
+[lints.rust]
+# Windows replacement preserves the target ACL through a narrowly scoped Win32 call.
+unsafe_code = "deny"

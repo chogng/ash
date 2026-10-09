@@ -11,7 +11,7 @@ import type { URI } from "../../../../base/common/uri.js";
 import { EditorOpenSource, TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
 import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
-import type { ITextFileService } from "../../../services/textfile/common/textFileService.js";
+import type { ITextFileService } from "../../../services/textfile/common/textfiles.js";
 import type { IFileService } from "../../../../platform/files/common/files.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
 import type { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";

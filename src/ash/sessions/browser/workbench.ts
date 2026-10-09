@@ -125,7 +125,8 @@ import { ILabelService, LabelService } from '../../platform/label/common/labelSe
 import { IResourceIconRenderer, IResourceLabelService, ResourceLabelService } from '../../workbench/browser/labels.js';
 import { IDecorationsService } from '../../workbench/services/decorations/common/decorations.js';
 import { DecorationsService } from '../../workbench/services/decorations/browser/decorationsService.js';
-import { ITextFileService, TextFileService } from '../../workbench/services/textfile/common/textFileService.js';
+import { ITextFileService } from '../../workbench/services/textfile/common/textfiles.js';
+import { TextFileService } from '../../workbench/services/textfile/browser/textFileService.js';
 import { IWorkingCopyService } from '../../workbench/services/workingCopy/common/workingCopyService.js';
 import { BrowserWorkingCopyService } from '../../workbench/services/workingCopy/browser/browserWorkingCopyService.js';
 import { IUntitledTextEditorService, UntitledTextEditorService } from '../../workbench/services/untitled/common/untitledTextEditorService.js';
@@ -357,7 +358,7 @@ export abstract class Workbench extends Disposable {
 		services.registerSingleton(IResourceLabelService, () => services.createInstance(ResourceLabelService));
 		services.registerSingleton(IUntitledTextEditorService, () => services.createInstance(UntitledTextEditorService));
 		if (!services.has(IClipboardService)) services.registerInstance(IClipboardService, new BrowserClipboardService(ownerWindow.navigator.clipboard));
-		const textFiles = this._register(services.createInstance(TextFileService, fileService));
+		const textFiles = this._register(services.createInstance(TextFileService));
 		services.registerInstance(ITextFileService, textFiles);
 		const workingCopies = this._register(new BrowserWorkingCopyService());
 		services.registerInstance(IWorkingCopyService, workingCopies);

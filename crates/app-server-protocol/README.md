@@ -24,6 +24,20 @@
 冲突返回 `FileSystemRevisionConflict`，不更改原文件。省略 `options` 的旧调用仍采用粘贴规则：
 只允许写入不存在或已有空文件的目标。返回 metadata 和原始字节的 revision，文本保存也可使用该契约。
 
+`options.unlock: true` 是产品宿主或已认证 Web 会话的显式普通覆盖操作，要求已有目标及 `expectedRevision`，
+拒绝 `create` 模式，不接受普通 RPC 或 Agent 连接调用。它仍持有 `WriteFiles` 授权，只请求当前用户的文件权限。
+
+`fs/writeFileElevated` 接收连接内唯一 `operationId`、已授权的 `dirId` 或 `sessionDirectory`、
+相对路径、原字节 base64 和可选 `expectedRevision`，上限同为 50 MiB。已有文件必须提供
+revision；缺少 revision 只允许创建。仅 ProductHost 连接可请求或取消；LocalFileSystem 执行 OS 提权，仍要求 `WriteFiles`。
+`fs/writeFileElevated/cancel` 携带同一 operationId 和目录选择，保证执行环境路由一致；
+取消仅属于当前连接，取消回执不替代原写入终态。系统授权等待不占用全局串行作用域。
+提交前取消返回 `RequestCancelled`，提交后保留成功结果；断线、超时或回执丢失不自动重发。
+OS 权限拒绝为 `FileSystemPermissionDenied`，文件只读为 `FileSystemWriteLocked`，两者均与 Ash 目录授权拒绝区分。
+管理员拒绝、能力不可用、授权超时、授权程序失败和无法确认写入结果分别为
+`FileSystemElevationDenied`、`FileSystemElevationUnavailable`、`FileSystemElevationTimedOut`、
+`FileSystemElevationFailed` 和 `FileSystemWriteOutcomeUnknown`。版本冲突仍使用 `FileSystemRevisionConflict`。
+
 `github/session/issues` 列出会话根 Thread 保存的 Issue 身份；
 `github/session/issue/attach` 与 `github/session/issue/detach` 接收 `sessionId`、
 `reference.repository`（host、owner、name）和正整数 `reference.number`。

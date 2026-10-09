@@ -3,7 +3,7 @@ import { Composite } from '../../composite.js';
 import type { IBulkEditOptions } from '../../../../editor/browser/services/bulkEditService.js';
 import type { IDimension } from "../../../../base/browser/dom.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
-import { type ITextFileService } from "../../../services/textfile/common/textFileService.js";
+import { type ITextFileService } from "../../../services/textfile/common/textfiles.js";
 import type { IFileService } from "../../../../platform/files/common/files.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
 import type { IDiffService } from "../../../services/diff/common/diffService.js";

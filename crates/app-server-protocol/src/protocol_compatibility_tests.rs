@@ -189,3 +189,22 @@ fn optional_contracts_keep_their_independent_version_and_availability_checks() {
         Err(ProtocolCompatibilityError::MissingCapability { name: "github" })
     );
 }
+
+#[test]
+fn explicit_unlock_options_preserve_existing_byte_write_requests() {
+    use crate::protocol::fs::FsFileWriteOptions;
+    let legacy = serde_json::json!({"mode":"replace", "expectedRevision":"revision"});
+    let decoded: FsFileWriteOptions = serde_json::from_value(legacy.clone()).unwrap();
+    assert_eq!(decoded.unlock, None);
+    assert_eq!(serde_json::to_value(decoded).unwrap(), legacy);
+    let unlock =
+        serde_json::json!({"mode":"replace", "expectedRevision":"revision", "unlock":true});
+    let decoded: FsFileWriteOptions = serde_json::from_value(unlock.clone()).unwrap();
+    assert_eq!(serde_json::to_value(decoded).unwrap(), unlock);
+    assert!(
+        serde_json::from_value::<FsFileWriteOptions>(
+            serde_json::json!({"mode":"replace", "unlock":"yes"})
+        )
+        .is_err()
+    );
+}

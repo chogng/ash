@@ -6,10 +6,19 @@ use std::ffi::OsString;
 /// `None` leaves ordinary arguments to the product; a recognized role returns its final result.
 /// Arguments exclude the executable name. Malformed helper invocations fail before execution.
 pub fn dispatch(arguments: impl IntoIterator<Item = OsString>) -> Option<Result<(), String>> {
+    let mut arguments = arguments.into_iter();
+    let role = arguments.next();
+    if role.as_deref()
+        == Some(std::ffi::OsStr::new(
+            ash_file_system::ELEVATED_FILE_WRITE_ARGUMENT,
+        ))
+    {
+        return Some(
+            ash_file_system::run_elevated_file_helper(arguments).map_err(|error| error.to_string()),
+        );
+    }
     #[cfg(windows)]
     {
-        let mut arguments = arguments.into_iter();
-        let role = arguments.next();
         if role.as_deref() == Some(std::ffi::OsStr::new(mxc_sandbox::PTY_HELPER_ARGUMENT)) {
             if arguments.next().is_some() {
                 return Some(Err("PTY helper accepts no arguments".into()));
@@ -17,8 +26,6 @@ pub fn dispatch(arguments: impl IntoIterator<Item = OsString>) -> Option<Result<
             return Some(mxc_sandbox::run_pty_helper().map(|code| std::process::exit(code)));
         }
     }
-    #[cfg(not(windows))]
-    let _ = arguments;
     None
 }
 

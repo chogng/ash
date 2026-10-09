@@ -6,6 +6,14 @@ canonical in [`docs/editor-architecture.md`](../../../../../docs/editor-architec
 
 ## Current contract
 
+`common/textfiles.ts` owns `ITextFileService` and its service identifier.
+`browser/textFileService.ts` owns the single `TextFileService` implementation used
+by Workbench and Sessions. `common/textFileService.ts` retains Ash's resource
+requests, content results and classified errors; it contains no service implementation
+or forwarding exports. Rust filesystem transport remains in
+`platform/agentHost/browser/appServerFileSystemProvider.ts` and
+`platform/files/{common,browser}/fileApi.ts`.
+
 | Concern                                                               | Owner                                                     | Status                                                    |
 | --------------------------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------- |
 | Workspace resource reads and atomic writes                            | `IFileService`                                            | ✅                                                        |
@@ -45,11 +53,13 @@ Semantic tokens and language-server features continue independently.
 
 ## Ownership and failure semantics
 
-`Workbench` constructs `TextFileService` after `AppServerFileSystemProvider`, registers
-it as `ITextFileService`, and injects it through `EditorPaneCreationOptions`.
+`Workbench` and Sessions construct `TextFileService` through their service containers
+after registering `IFileService`. Its constructor injects that router and
+`IFilesConfigurationService` and `IElevatedFileService`; missing registrations fail at creation. Both hosts
+register the instance as `ITextFileService` and inject it through `EditorPaneCreationOptions`.
 Stanza text and document contributions reject construction when that service is absent.
 
-Cancellation before resolution or save, or while awaiting the underlying I/O, rejects without publishing a result. File-service errors pass through unchanged. `TextFileBinaryError` and `TextFileTooLargeError` are editor-facing classification failures: the open-error pane may offer the registered Binary Editor, but the bytes never enter a text model.
+Cancellation before resolution or an ordinary save, or while awaiting ordinary I/O, rejects without publishing a result. File-service errors pass through unchanged. `TextFileBinaryError` and `TextFileTooLargeError` are editor-facing classification failures: the open-error pane may offer the registered Binary Editor, but the bytes never enter a text model.
 
 Adding model caches, backup persistence, or conflict policy directly to
 `ExplorerView` would signal architectural drift. Dirty state and conflict
@@ -146,3 +156,42 @@ rollback, hunk review, user-edit preservation, file-operation review and retaine
 closed models. The editor smoke tests exercise the production services in Web and
 Electron Workbench and Agents windows; the backend suite drives an actual RPC
 Agent Turn through read, search, edit, write and a command that reads the saved file.
+
+Read-only file failures offer an ordinary Overwrite first. It carries the existing byte revision,
+adds only owner-write permission and uses the same save queue without repeating save participants.
+A permission failure then offers an explicit elevated retry on supported Electron local resources.
+Save As and Revert are available through the existing working-copy operations; cancelling leaves edits open.
+Closing or switching the editor cancels a pending retry before backend publication. `TextFileEditor` retries the same working copy through its existing save queue,
+skipping already-run save participants. `TextFileService` encodes the queued snapshot once,
+including its BOM, and delegates to `IElevatedFileService`; the service owns no model cache.
+The model advances its saved baseline only after the write acknowledgement, so edits made
+during authorization remain dirty. Cancellation before backend commit discards staging;
+after commit the response remains authoritative. A lost acknowledgement keeps the editor dirty.
+Workspace policy denial and configured read-only policy never offer an elevated retry.
+
+`../files/test/browser/elevatedFileService.test.ts` covers the real provider/service/model chain,
+exact bytes, revisions, cancellation, concurrent edits and conflicts. The localized save-error
+handler tests cover explicit retry and declined or unsupported choices.
+`test/smoke/areas/editor/elevated-save.spec.ts` covers real Desktop/Web permission failure,
+retained edits, restored input focus, and recovery through an ordinary Overwrite, including Windows.
+It also covers a protected-directory permission failure on Unix.
+
+Real system authorization acceptance is opt-in and requires an interactive desktop. Run the same
+Electron spec with `ASH_TEST_SYSTEM_AUTHORIZATION=approve` or `cancel` and select the matching
+`real system authorization` test. The test restricts a disposable workspace directory (Unix mode
+or Windows ACL), requests the real OS authorization, and checks saved bytes, dirty state and
+preserved ownership/mode or ACL. Respond only in the OS window; no password enters the test
+runner. The directory permissions are restored in `finally`. These tests are skipped in ordinary CI.
+
+```sh
+ASH_TEST_SYSTEM_AUTHORIZATION=approve pnpm run smoketest test/smoke/areas/editor/elevated-save.spec.ts --grep "real system authorization approve"
+ASH_TEST_SYSTEM_AUTHORIZATION=cancel pnpm run smoketest-no-compile test/smoke/areas/editor/elevated-save.spec.ts --grep "real system authorization cancel"
+```
+
+On Windows PowerShell, set `$env:ASH_TEST_SYSTEM_AUTHORIZATION` before running the same
+commands without the shell assignment prefix, then remove the variable afterwards. Use a
+standard-user session with UAC enabled to check credential elevation to another administrator.
+An already elevated test process cannot establish the ordinary permission-failure precondition.
+
+For the Windows interactive checklist and PowerShell commands, see
+[Windows UAC 实测 TODO](../../../../../docs/windows-system-authorization-todo.md).

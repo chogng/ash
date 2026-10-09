@@ -800,6 +800,7 @@
     "skills.selectFile": "选择要打开的技能文件",
     "skills.manageEnablement": "管理技能启停…",
     "skills.discoveryFailed": "无法加载技能文件。请尝试刷新目录。",
-    "skills.openFailed": "无法打开技能 {0}。请刷新目录后重试。"
+    "skills.openFailed": "无法打开技能 {0}。请刷新目录后重试。",
+    "accessibility.editorSaveRecovery": "保存失败时，对话框提供恢复操作。用 Tab 选择可用的覆盖、使用管理员权限重试、另存为或还原，按 Enter 执行。Escape 取消并保留未保存的修改。覆盖使只读文件可写；还原放弃未保存的修改。"
   }
 }

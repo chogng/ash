@@ -11,7 +11,7 @@ import { Registry } from '../../../../platform/registry/common/platform.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { ResourceGlobMatcher } from '../../../common/resources.js';
 import { ILifecycleService } from '../../lifecycle/common/lifecycle.js';
-import { ITextFileService } from '../../textfile/common/textFileService.js';
+import { ITextFileService } from '../../textfile/common/textfiles.js';
 import { IWorkingCopyHistoryService } from './workingCopyHistory.js';
 import '../../filesConfiguration/common/filesConfigurationService.js';
 

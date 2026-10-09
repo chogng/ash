@@ -3,7 +3,7 @@ import { AbstractDisposable, Disposable, DisposableMap } from "../../../../base/
 import { extUri } from '../../../../base/common/resources.js';
 import { TextModel } from "../../../../editor/common/model/textModel.js";
 import type { TextModelBlockInput, TextModelWorkingCopyReference } from "../../textmodelResolver/common/textModelResourceService.js";
-import { ITextFileService } from "../../textfile/common/textFileService.js";
+import { ITextFileService } from "../../textfile/common/textfiles.js";
 import { IWorkingCopyService } from "../../workingCopy/common/workingCopyService.js";
 import type { IDocumentEditorTextModelService } from '../common/documentTypes.js';
 import { DocumentWorkingCopy } from "./documentWorkingCopy.js";

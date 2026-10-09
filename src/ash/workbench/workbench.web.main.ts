@@ -1,3 +1,5 @@
+import { BrowserElevatedFileService } from './services/files/browser/elevatedFileService.js';
+import { IElevatedFileService } from './services/files/common/elevatedFileService.js';
 /**
  * Browser-hosted Workbench registrations.
  *
@@ -14,3 +16,5 @@ import { BrowserLanguagePackStore } from '../platform/languagePacks/browser/lang
 
 registerSingleton(IHostService, BrowserHostService, InstantiationType.Delayed);
 registerSingleton(ILanguagePackStore, BrowserLanguagePackStore, InstantiationType.Delayed);
+
+registerSingleton(IElevatedFileService, BrowserElevatedFileService, InstantiationType.Delayed);

@@ -5,6 +5,7 @@ use super::decode;
 use super::operations::resource_rpc_error;
 use super::result;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
+use ash_app_server_protocol::protocol::fs::FsCancelElevatedWriteParams;
 use ash_app_server_protocol::protocol::fs::FsCopyParams;
 use ash_app_server_protocol::protocol::fs::FsCreateDirectoryParams;
 use ash_app_server_protocol::protocol::fs::FsCreateFileParams;
@@ -26,9 +27,11 @@ use ash_app_server_protocol::protocol::fs::FsReadFileParams;
 use ash_app_server_protocol::protocol::fs::FsReadFileResult;
 use ash_app_server_protocol::protocol::fs::FsRenameParams;
 use ash_app_server_protocol::protocol::fs::FsWriteBinaryFileParams;
+use ash_app_server_protocol::protocol::fs::FsWriteFileElevatedParams;
 use ash_app_server_protocol::protocol::fs::FsWriteFileParams;
 use ash_app_server_protocol::protocol::fs::FsWriteFileResult;
 use ash_app_server_protocol::protocol::resources::ResourceMetadataResult;
+use ash_async_utils::CancellationToken;
 use ash_file_access::Permission;
 use ash_file_system::ExistingTargetBehavior;
 use ash_file_system::FileDeleteMode;
@@ -37,6 +40,7 @@ use ash_file_system::FileSystemError;
 use ash_file_system::FileType;
 use ash_file_system::FileWriteCondition;
 use ash_file_system::FileWriteMode;
+use ash_file_system::LocalFileSystem;
 use ash_file_system::MissingTargetBehavior;
 use ash_file_system::SystemFileTransferOperation;
 use ash_file_system::file_revision;
@@ -161,7 +165,78 @@ impl AppServer {
         })
     }
 
-    pub(super) fn fs_write_binary_file(&self, params: &Value) -> Result<Value, RpcError> {
+    pub(super) fn fs_write_file_elevated(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
+        // OS authorization is an explicit editor action, not an Agent or general RPC capability.
+        if !connection.allows_product_host_capabilities() {
+            return Err(RpcError::new(
+                -32073,
+                AppServerErrorName::PermissionRequired,
+            ));
+        }
+        let params: FsWriteFileElevatedParams = decode(params)?;
+        if params.operation_id.is_empty()
+            || params.operation_id.len() > 128
+            || params.data_base64.len() > MAX_EDITOR_FILE_BYTES * 4 / 3 + 4
+        {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(&params.data_base64)
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        let files = self.file_system_for_request(
+            params.dir_id.as_deref(),
+            params.session_directory.as_ref(),
+            Permission::WriteFiles,
+        )?;
+        let files = files
+            .as_any()
+            .downcast_ref::<LocalFileSystem>()
+            .ok_or_else(|| file_system_error(FileSystemError::ElevationUnavailable))?;
+        let metadata = files
+            .write_file_elevated(
+                &params.path,
+                &bytes,
+                params.expected_revision.as_deref(),
+                cancellation,
+            )
+            .map_err(file_system_error)?;
+        result(&FsWriteFileResult {
+            metadata: metadata_result(metadata),
+            revision: file_revision(&bytes),
+        })
+    }
+
+    pub(super) fn fs_cancel_elevated_write(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        if !connection.allows_product_host_capabilities() {
+            return Err(RpcError::new(
+                -32073,
+                AppServerErrorName::PermissionRequired,
+            ));
+        }
+        let params: FsCancelElevatedWriteParams = decode(params)?;
+        if params.operation_id.is_empty() || params.operation_id.len() > 128 {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        self.request_cancellations
+            .cancel_operation(connection.connection_id, params.operation_id);
+        self.request_scheduler.cancel_waiting_requests();
+        result(&())
+    }
+
+    pub(super) fn fs_write_binary_file(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
         let params: FsWriteBinaryFileParams = decode(params)?;
         if params.data_base64.len() > (MAX_EDITOR_FILE_BYTES * 4 / 3 + 4) {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
@@ -170,6 +245,22 @@ impl AppServer {
             .decode(&params.data_base64)
             .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
         let condition = match params.options {
+            Some(options) if options.unlock == Some(true) => {
+                if !connection.allows_file_unlock() {
+                    return Err(RpcError::new(
+                        -32073,
+                        AppServerErrorName::PermissionRequired,
+                    ));
+                }
+                if options.mode == FsFileWriteMode::Create {
+                    return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+                }
+                FileWriteCondition::UnlockAndReplace {
+                    expected_revision: options
+                        .expected_revision
+                        .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))?,
+                }
+            }
             Some(options) => FileWriteCondition::Options {
                 mode: match options.mode {
                     FsFileWriteMode::Create => FileWriteMode::Create,
@@ -385,6 +476,28 @@ fn file_system_error(error: FileSystemError) -> RpcError {
         FileSystemError::RevisionConflict(_) => {
             RpcError::new(-32042, AppServerErrorName::FileSystemRevisionConflict)
         }
+        FileSystemError::ReadOnly(_) => {
+            RpcError::new(-32050, AppServerErrorName::FileSystemWriteLocked)
+        }
+        FileSystemError::OsPermissionDenied(_) => {
+            RpcError::new(-32044, AppServerErrorName::FileSystemPermissionDenied)
+        }
+        FileSystemError::ElevationDenied => {
+            RpcError::new(-32045, AppServerErrorName::FileSystemElevationDenied)
+        }
+        FileSystemError::ElevationUnavailable => {
+            RpcError::new(-32046, AppServerErrorName::FileSystemElevationUnavailable)
+        }
+        FileSystemError::ElevationTimedOut => {
+            RpcError::new(-32048, AppServerErrorName::FileSystemElevationTimedOut)
+        }
+        FileSystemError::ElevationFailed => {
+            RpcError::new(-32049, AppServerErrorName::FileSystemElevationFailed)
+        }
+        FileSystemError::WriteOutcomeUnknown => {
+            RpcError::new(-32047, AppServerErrorName::FileSystemWriteOutcomeUnknown)
+        }
+        FileSystemError::Cancelled => RpcError::new(-32800, AppServerErrorName::RequestCancelled),
         _ => RpcError::new(-32041, AppServerErrorName::FileSystemOperationFailed),
     }
 }

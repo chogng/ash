@@ -2,9 +2,16 @@ use std::fmt;
 use std::path::PathBuf;
 
 /// Failure returned by a directory-scoped filesystem implementation.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum FileSystemError {
     PermissionDenied(String),
+    OsPermissionDenied(String),
+    ElevationDenied,
+    ElevationUnavailable,
+    ElevationTimedOut,
+    ElevationFailed,
+    Cancelled,
+    WriteOutcomeUnknown,
     InvalidPath(PathBuf),
     NotFile(PathBuf),
     NotDirectory(PathBuf),
@@ -61,7 +68,13 @@ impl fmt::Display for FileSystemError {
             Self::NotFound(path) => {
                 write!(formatter, "path does not exist: {}", path.display())
             }
-            Self::PermissionDenied(message) | Self::Io(message) => formatter.write_str(message),
+            Self::ElevationDenied => formatter.write_str("system authorization was declined"),
+            Self::ElevationUnavailable => formatter.write_str("system elevation is unavailable"),
+            Self::ElevationTimedOut => formatter.write_str("system authorization timed out"),
+            Self::ElevationFailed => formatter.write_str("system authorization or the file helper failed"),
+            Self::Cancelled => formatter.write_str("file write was cancelled before publication"),
+            Self::WriteOutcomeUnknown => formatter.write_str("the elevated write outcome could not be confirmed; reload the file before retrying"),
+            Self::PermissionDenied(message) | Self::OsPermissionDenied(message) | Self::Io(message) => formatter.write_str(message),
         }
     }
 }

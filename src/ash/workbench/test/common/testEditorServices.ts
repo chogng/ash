@@ -2,6 +2,8 @@ import { BrowserPathService } from '../../services/path/browser/pathService.js';
 import { IPathService } from '../../../platform/path/common/pathService.js';
 import { IRendererHostService } from '../../../platform/renderer/common/rendererHost.js';
 import { createDisconnectedRendererApi } from '../../../platform/agentHost/browser/rendererApi.js';
+import { IElevatedFileService } from '../../services/files/common/elevatedFileService.js';
+import { BrowserElevatedFileService } from '../../services/files/browser/elevatedFileService.js';
 import { FileService } from '../../../platform/files/common/fileService.js';
 import { Schemas } from '../../../base/common/network.js';
 import { ITextModelService } from '../../../editor/common/services/resolverService.js';
@@ -39,7 +41,7 @@ import { IWorkbenchEnvironmentService } from '../../services/environment/common/
 import { BrowserWorkbenchEnvironmentService } from '../../services/environment/browser/environmentService.js';
 import { mainWindow } from '../../../base/browser/window.js';
 import { FilesConfigurationService, IFilesConfigurationService } from '../../services/filesConfiguration/common/filesConfigurationService.js';
-import { TextFileService } from '../../services/textfile/common/textFileService.js';
+import { TextFileService } from '../../services/textfile/browser/textFileService.js';
 import { IWebviewService } from '../../contrib/webview/browser/webview.js';
 import { WebviewService } from '../../contrib/webview/browser/webviewService.js';
 
@@ -71,7 +73,7 @@ class TestTextFileService extends TextFileService {
 		let files: IFileService;
 		if ('registerProvider' in provider) files = provider;
 		else files = ownedFiles = createTestFileService(provider);
-		super(files, policy);
+		super(files, policy, new BrowserElevatedFileService());
 		if (ownedFiles) this._register(ownedFiles);
 		this._register(configuration);
 		this._register(workspace);
@@ -89,6 +91,7 @@ export function createTestComponentServices(storage?: IStorageService, parent?: 
 }
 
 export function registerTestComponentServices(services: InstantiationService, document: Document = globalThis.document): InstantiationService {
+	if (!services.has(IElevatedFileService)) { services.registerInstance(IElevatedFileService, new BrowserElevatedFileService()); }
 	if (!services.has(IWorkbenchEnvironmentService)) {
 		const location = document.defaultView!.location;
 		services.registerInstance(IWorkbenchEnvironmentService, new BrowserWorkbenchEnvironmentService(location, `http://{{uuid}}.localhost${location.port ? `:${location.port}` : ''}`));

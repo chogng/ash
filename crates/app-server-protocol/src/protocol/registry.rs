@@ -849,6 +849,8 @@ use crate::protocol::extensions::ExtensionResourceOpenParams;
 use crate::protocol::extensions::ExtensionResourceOpenResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extensions::ExtensionSourceKindDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::fs::FsCancelElevatedWriteParams;
 use crate::protocol::fs::FsChanged;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsCopyParams;
@@ -894,6 +896,8 @@ use crate::protocol::fs::FsReadFileResult;
 use crate::protocol::fs::FsRenameParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsWriteBinaryFileParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::fs::FsWriteFileElevatedParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsWriteFileParams;
 #[cfg(any(test, feature = "export"))]
@@ -4343,6 +4347,18 @@ client_methods! {
         response: FsWriteFileResult,
         serialization: GlobalExclusive,
     },
+    FsWriteFileElevated => "fs/writeFileElevated" {
+        params: FsWriteFileElevatedParams,
+        response: FsWriteFileResult,
+        // The filesystem owner locks only final publication; OS authorization must not hold global admission.
+        serialization: None,
+        cancellation: "operationId" => PreserveOutcome,
+    },
+    FsCancelElevatedWrite => "fs/writeFileElevated/cancel" {
+        params: FsCancelElevatedWriteParams,
+        response: (),
+        serialization: None,
+    },
     FsWriteBinaryFile => "fs/writeBinaryFile" {
         params: FsWriteBinaryFileParams,
         response: FsWriteFileResult,
@@ -6300,6 +6316,8 @@ typescript_bindings! {
     LanguageCodeActionsResult,
     LanguageResolveCodeActionParams,
     FsWriteFileParams,
+    FsWriteFileElevatedParams,
+    FsCancelElevatedWriteParams,
     FsWriteBinaryFileParams,
     FsWriteFileResult,
     FsExistingTargetBehavior,

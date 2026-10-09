@@ -7,7 +7,8 @@ import { Position } from '../../../../../editor/common/core/position.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import { getBrowserTextResourceStore } from '../../../codeEditor/browser/browserTextResourceStore.js';
 import { getBrowserTextModelService } from '../../../../services/textmodelResolver/browser/browserTextModelService.js';
-import { TextFileContentSource, type ITextFileService } from '../../../../services/textfile/common/textFileService.js';
+import { TextFileContentSource } from '../../../../services/textfile/common/textFileService.js';
+import { type ITextFileService } from '../../../../services/textfile/common/textfiles.js';
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 import { TextFileEditorTracker } from '../../browser/editors/textFileEditorTracker.js';
 

@@ -1,3 +1,5 @@
+import { IElevatedFileService } from '../../../files/common/elevatedFileService.js';
+import { BrowserElevatedFileService } from '../../../files/browser/elevatedFileService.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { URI } from '../../../../../base/common/uri.js';
@@ -7,10 +9,10 @@ import { InMemoryConfigurationService } from '../../../../../platform/configurat
 import { FileKind } from '../../../../../platform/files/common/files.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
-import { FilesConfigurationService } from '../../common/filesConfigurationService.js';
+import { FilesConfigurationService, IFilesConfigurationService } from '../../common/filesConfigurationService.js';
 import { WorkspaceContextService } from '../../../workspaces/browser/workspaceContextService.js';
-import { TextFileService } from '../../../textfile/common/textFileService.js';
-import type { IFileService } from '../../../../../platform/files/common/files.js';
+import { TextFileService } from '../../../textfile/browser/textFileService.js';
+import { IFileService } from '../../../../../platform/files/common/files.js';
 import { Event } from '../../../../../base/common/event.js';
 import { builtinLanguagePackCatalogs } from '../../../localization/common/localizationCatalogs.js';
 
@@ -49,7 +51,14 @@ suite('Configured file policies', () => {
 		const resource = URI.file('/root/main.ts');
 		let writes = 0;
 		const files = { onDidChangeFiles: Event.None, readFile: async () => undefined, writeFile: async () => { writes++; return { revision: 'saved' }; } } as unknown as IFileService;
-		using textFiles = new TextFileService(files, policy);
+		using services = new InstantiationService();
+		assert.throws(() => services.createInstance(TextFileService), /Unknown service: fileService/);
+		services.registerInstance(IFileService, files);
+		assert.throws(() => services.createInstance(TextFileService), /Unknown service: filesConfigurationService/);
+		services.registerInstance(IFilesConfigurationService, policy);
+		assert.throws(() => services.createInstance(TextFileService), /Unknown service: elevatedFileService/);
+		services.registerInstance(IElevatedFileService, new BrowserElevatedFileService());
+		using textFiles = services.createInstance(TextFileService);
 		const saved: string[] = [];
 		using listener = textFiles.onDidSave(event => saved.push(event.content));
 		await configuration.updateValue('files.readonlyInclude', { '**/*.ts': true });

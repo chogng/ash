@@ -91,7 +91,7 @@ registerEditorPane({
 				loop: configuration.getValue(CodeEditorConfiguration.findLoop),
 			} : undefined,
 			onSave: options.onSave,
-			onSaveError: saveErrorHandler ? (error, resource) => saveErrorHandler.onSaveError(error, resource) : undefined,
+			onSaveError: saveErrorHandler ? async (error, resource) => { await saveErrorHandler.onSaveError(error, resource); } : undefined,
 			onOpenLocation: options.onOpenLocation,
 			onApplyWorkspaceEdit: options.onApplyWorkspaceEdit,
 		} satisfies EditorPaneOptions);

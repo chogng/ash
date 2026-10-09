@@ -38,7 +38,7 @@ pub(super) fn read_workspace_file(
         .map_err(|error| {
             // Do not forward host paths or platform I/O details to the extension.
             let (code, message) = match error {
-                FileSystemError::PermissionDenied(_) => (
+                FileSystemError::PermissionDenied(_) | FileSystemError::OsPermissionDenied(_) => (
                     HostErrorCode::PermissionDenied,
                     "workspace read permission denied",
                 ),
@@ -63,6 +63,12 @@ pub(super) fn read_workspace_file(
                 | FileSystemError::RevisionConflict(_)
                 | FileSystemError::ReadOnly(_)
                 | FileSystemError::AlreadyExists(_)
+                | FileSystemError::ElevationDenied
+                | FileSystemError::ElevationUnavailable
+                | FileSystemError::ElevationTimedOut
+                | FileSystemError::ElevationFailed
+                | FileSystemError::Cancelled
+                | FileSystemError::WriteOutcomeUnknown
                 | FileSystemError::Io(_) => (HostErrorCode::Internal, "workspace read failed"),
             };
             failure(code, message)

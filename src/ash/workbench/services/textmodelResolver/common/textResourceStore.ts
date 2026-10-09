@@ -19,6 +19,10 @@ export interface TextResourceContent {
 
 /** Resource-content write requested by a text model service. */
 export interface TextResourceSaveRequest {
+	/** Only set after an explicit user choice to request system authorization. */
+	readonly writeElevated?: boolean;
+	/** Explicit retry that makes an existing file writable without system elevation. */
+	readonly unlock?: boolean;
 	readonly resource: URI;
 	readonly text: string;
 	/** Persistence format; absent for resources without a UTF-8 file encoding. */

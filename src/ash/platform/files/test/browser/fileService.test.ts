@@ -117,6 +117,7 @@ test("AppServerFileSystemProvider maps wire entries back to resource URIs", asyn
 				};
 			},
 			writeFile: async () => { throw new Error('Provider writes must use the binary endpoint'); },
+			writeFileElevated: async () => { throw new Error('Unexpected elevated write'); },
 			writeBinaryFile: async ({ path, dataBase64, options }) => {
 				if (path === 'src/main.ts') {
 					assert.equal(Buffer.from(dataBase64, 'base64').toString('utf8'), 'export const saved = true;');
@@ -249,6 +250,7 @@ test("AppServerFileSystemProvider maps App Server revision conflicts to the file
 			readFile: async () => { throw new Error("unavailable"); },
 			readBinaryFile: async () => { throw new Error("unavailable"); },
 			writeFile: async () => { throw new Error('unavailable'); },
+			writeFileElevated: async () => { throw new Error('Unexpected elevated write'); },
 			writeBinaryFile: async () => { throw new AppServerRemoteError(-32000, "Revision conflict", { kind: "FileSystemRevisionConflict" }); },
 			createFile: async () => { throw new Error("unavailable"); },
 			createDirectory: async () => { throw new Error('unavailable'); },
@@ -300,6 +302,7 @@ test("AppServerFileSystemProvider reads connection-owned binary resources in bou
 				revision: "revision-large",
 			}),
 			writeFile: async () => { throw new Error("not used"); },
+			writeFileElevated: async () => { throw new Error('Unexpected elevated write'); },
 			writeBinaryFile: async () => { throw new Error('not used'); },
 			createFile: async () => { throw new Error("not used"); },
 			createDirectory: async () => { throw new Error('not used'); },
@@ -399,6 +402,7 @@ function unavailableFileApi() {
 		readFile: async () => { throw new Error("unavailable"); },
 		readBinaryFile: async () => { throw new Error("unavailable"); },
 		writeFile: async () => { throw new Error("unavailable"); },
+		writeFileElevated: async () => { throw new Error('Unexpected elevated write'); },
 		writeBinaryFile: async () => { throw new Error('unavailable'); },
 		createFile: async () => { throw new Error("unavailable"); },
 		createDirectory: async () => { throw new Error('unavailable'); },
@@ -566,6 +570,21 @@ suite('FileService capability and watch ownership', () => {
 			{ resource: text, bytes: new TextEncoder().encode('\uFEFFsaved'), options: { create: true, overwrite: true, expectedRevision: 'previous' } },
 			{ resource: URI.file('/workspace/new.bin'), bytes: new Uint8Array([0, 255]), options: { create: true, overwrite: false } },
 		]);
+	});
+
+	test('ordinary unlock requires an explicit provider capability before forwarding the save', async () => {
+		using provider = new TestFileProvider('workspace');
+		using service = new FileService();
+		using registration = service.registerProvider('file', provider);
+		const resource = URI.file('/workspace/text.txt');
+		const bytes = new Uint8Array([42]);
+		const options = { create: false, overwrite: true, expectedRevision: 'previous', unlock: true };
+		provider.addFile(resource, new Uint8Array([1]));
+		assert.throws(() => service.writeFileBytes(resource, bytes, options), FileOperationNotSupportedError);
+		assert.deepEqual(provider.writeRequests, []);
+		provider.setCapabilities(provider.capabilities | FileSystemProviderCapabilities.FileWriteUnlock);
+		await service.writeFileBytes(resource, bytes, options);
+		assert.deepEqual(provider.writeRequests, [{ resource, bytes, options }]);
 	});
 
 	test('live capability changes invalidate metadata and prevent readonly mutations', async () => {

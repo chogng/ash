@@ -7,7 +7,7 @@ import { TextModel } from "../../../../editor/common/model/textModel.js";
 import { deserializeDocument, serializeDocument } from "../../../../editor/common/model/documentSerialization.js";
 import { createDefaultDocumentSchema, type DocumentSchema } from "../../../../editor/common/model/documentSchema.js";
 import { TextFileSaveConflictError } from "../../textfile/common/textFileService.js";
-import type { ITextFileService } from "../../textfile/common/textFileService.js";
+import type { ITextFileService } from "../../textfile/common/textfiles.js";
 import type { IWorkingCopy } from "../../workingCopy/common/workingCopyService.js";
 import type { IWorkingCopyService } from "../../workingCopy/common/workingCopyService.js";
 

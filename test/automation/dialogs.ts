@@ -21,19 +21,19 @@ interface DialogCaptureGlobal {
 export class Dialogs {
 	constructor(private readonly page: Page) { }
 
-	async expectMessage(application: PlaywrightApplication, title: string, open: () => Promise<unknown>): Promise<DialogMessage> {
-		return this.respond(application, title, open);
+	async expectMessage(application: PlaywrightApplication, title: string, open: () => Promise<unknown>, timeout?: number): Promise<DialogMessage> {
+		return this.respond(application, title, open, undefined, timeout);
 	}
 
 	async confirm(application: PlaywrightApplication, title: string, button: string, open: () => Promise<unknown>): Promise<DialogMessage> {
 		return this.respond(application, title, open, button);
 	}
 
-	private async respond(application: PlaywrightApplication, title: string, open: () => Promise<unknown>, button?: string): Promise<DialogMessage> {
+	private async respond(application: PlaywrightApplication, title: string, open: () => Promise<unknown>, button?: string, timeout?: number): Promise<DialogMessage> {
 		if (!('windows' in application)) {
 			await open();
 			const dialog = this.page.getByRole('dialog', { name: title, exact: true });
-			await expect(dialog).toBeVisible();
+			await expect(dialog).toBeVisible({ timeout });
 			const message = await dialog.evaluate(element => ({
 				title: element.querySelector('.ash-dialog-title')!.textContent!,
 				message: element.querySelector('.ash-dialog-message')!.textContent!,
@@ -65,7 +65,7 @@ export class Dialogs {
 		let response: number | undefined;
 		try {
 			await open();
-			await expect.poll(() => application.evaluate(() => (globalThis as DialogCaptureGlobal).ashTestMessage?.options?.title)).toBe(title);
+			await expect.poll(() => application.evaluate(() => (globalThis as DialogCaptureGlobal).ashTestMessage?.options?.title), { timeout }).toBe(title);
 			const message = await application.evaluate(() => {
 				const options = (globalThis as DialogCaptureGlobal).ashTestMessage!.options!;
 				return { title: options.title!, message: options.message, detail: options.detail ?? '', buttons: options.buttons ?? [] };

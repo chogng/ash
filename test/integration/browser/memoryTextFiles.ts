@@ -3,7 +3,7 @@ import type { URI } from "../../../src/ash/base/common/uri.js";
 import type { IFileChangeEvent } from "../../../src/ash/platform/files/common/files.js";
 import { TextFileContentSource } from "../../../src/ash/workbench/services/textfile/common/textFileService.js";
 import { TextFileSaveConflictError } from "../../../src/ash/workbench/services/textfile/common/textFileService.js";
-import type { ITextFileService } from "../../../src/ash/workbench/services/textfile/common/textFileService.js";
+import type { ITextFileService } from "../../../src/ash/workbench/services/textfile/common/textfiles.js";
 import type { ResolvedTextFileContent } from "../../../src/ash/workbench/services/textfile/common/textFileService.js";
 import type { TextFileResolveRequest } from "../../../src/ash/workbench/services/textfile/common/textFileService.js";
 import type { TextFileSaveRequest } from "../../../src/ash/workbench/services/textfile/common/textFileService.js";

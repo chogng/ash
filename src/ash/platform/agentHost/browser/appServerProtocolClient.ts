@@ -154,9 +154,9 @@ export class AppServerProtocolClient {
 		return !this.disposed && this._generation === generation && this._state === state;
 	}
 
-	request<M extends AppServerMethod>(definition: AppServerMethodDefinition<M>, params: MethodParams<M>): Promise<MethodResult<M>> {
+	request<M extends AppServerMethod>(definition: AppServerMethodDefinition<M>, params: MethodParams<M>, options?: { readonly timeoutMs: number; }): Promise<MethodResult<M>> {
 		if (this._state !== "ready") return Promise.reject(new Error(`App Server is not ready: ${this._state}`));
-		return this.requestRaw(definition, params, this.options.requestTimeoutMs);
+		return this.requestRaw(definition, params, options ? positiveInteger(options.timeoutMs, this.options.requestTimeoutMs, "timeoutMs") : this.options.requestTimeoutMs);
 	}
 
 	onStateChange(listener: (state: AppServerConnectionState) => void): IDisposable {

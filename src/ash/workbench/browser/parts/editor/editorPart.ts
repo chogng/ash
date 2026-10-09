@@ -26,7 +26,8 @@ import type { IKeybindingService } from "../../../../platform/keybinding/common/
 import type { IKeyboardLayoutService } from "../../../../platform/keyboardLayout/common/keyboardLayout.js";
 import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { ConfirmResult, DialogSeverity, type IDialogService, type IFileDialogService } from "../../../../platform/dialogs/common/dialogs.js";
-import { TextFileBinaryError, TextFileTooLargeError, type ITextFileService } from "../../../services/textfile/common/textFileService.js";
+import { TextFileBinaryError, TextFileTooLargeError } from "../../../services/textfile/common/textFileService.js";
+import { type ITextFileService } from "../../../services/textfile/common/textfiles.js";
 import { FileNotFoundError, type IFileService } from "../../../../platform/files/common/files.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
 import type { IDiffService } from "../../../services/diff/common/diffService.js";

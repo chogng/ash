@@ -4,7 +4,8 @@ import { StandaloneCommandService } from '../../../src/ash/editor/standalone/bro
 import { IDocumentEditorTextModelService } from '../../../src/ash/workbench/services/documentEditor/common/documentTypes.js';
 import { DocumentEditorTextModelService } from '../../../src/ash/workbench/services/documentEditor/browser/documentEditorTextModelService.js';
 import { BrowserWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/browser/browserWorkingCopyService.js';
-import type { ITextFileService, TextFileResolveRequest, TextFileSaveRequest } from '../../../src/ash/workbench/services/textfile/common/textFileService.js';
+import type { ITextFileService } from '../../../src/ash/workbench/services/textfile/common/textfiles.js';
+import type { TextFileResolveRequest, TextFileSaveRequest } from '../../../src/ash/workbench/services/textfile/common/textFileService.js';
 import { URI } from "../../../src/ash/base/common/uri.js";
 import { Emitter, Event } from "../../../src/ash/base/common/event.js";
 import { Disposable, DisposableStore } from "../../../src/ash/base/common/lifecycle.js";

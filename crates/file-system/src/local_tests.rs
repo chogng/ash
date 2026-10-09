@@ -938,3 +938,101 @@ fn mutation_batches_serialize_with_ordinary_conditional_writes() {
         1
     );
 }
+
+#[test]
+fn explicit_unlock_saves_readonly_files_and_rejects_stale_revisions_before_chmod() {
+    let dir = TestDir::new();
+    let path = Path::new("readonly.txt");
+    let target = dir.path.join(path);
+    fs::write(&target, b"old").unwrap();
+    let mut permissions = fs::metadata(&target).unwrap().permissions();
+    permissions.set_readonly(true);
+    fs::set_permissions(&target, permissions).unwrap();
+    let files = dir.file_system();
+    assert_eq!(
+        files.write_file_with_condition(
+            path,
+            b"new",
+            1024,
+            &FileWriteCondition::UnlockAndReplace {
+                expected_revision: file_revision(b"stale")
+            }
+        ),
+        Err(FileSystemError::RevisionConflict(path.into()))
+    );
+    assert!(fs::metadata(&target).unwrap().permissions().readonly());
+    files
+        .write_file_with_condition(
+            path,
+            b"new",
+            1024,
+            &FileWriteCondition::UnlockAndReplace {
+                expected_revision: file_revision(b"old"),
+            },
+        )
+        .unwrap();
+    assert_eq!(fs::read(&target).unwrap(), b"new");
+    assert!(!fs::metadata(&target).unwrap().permissions().readonly());
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            fs::metadata(&target).unwrap().permissions().mode() & 0o022,
+            0
+        );
+    }
+}
+
+#[test]
+fn explicit_unlock_cannot_change_permissions_through_a_hard_link() {
+    let dir = TestDir::new();
+    let outside = TestDir::new();
+    let target = outside.path.join("outside.txt");
+    fs::write(&target, b"old").unwrap();
+    fs::hard_link(&target, dir.path.join("linked.txt")).unwrap();
+    let permissions = fs::metadata(&target).unwrap().permissions();
+    assert!(matches!(
+        dir.file_system().write_file_with_condition(
+            Path::new("linked.txt"),
+            b"new",
+            1024,
+            &FileWriteCondition::UnlockAndReplace {
+                expected_revision: file_revision(b"old")
+            }
+        ),
+        Err(FileSystemError::InvalidPath(_))
+    ));
+    assert_eq!(fs::metadata(&target).unwrap().permissions(), permissions);
+    assert_eq!(fs::read(&target).unwrap(), b"old");
+}
+
+#[cfg(unix)]
+#[test]
+fn explicit_unlock_restores_readonly_mode_when_publication_is_denied() {
+    use std::os::unix::fs::MetadataExt;
+    use std::os::unix::fs::PermissionsExt;
+    if rustix::process::geteuid().is_root() {
+        return;
+    }
+    let dir = TestDir::new();
+    let target = dir.path.join("readonly.txt");
+    fs::write(&target, b"old").unwrap();
+    fs::set_permissions(&target, fs::Permissions::from_mode(0o444)).unwrap();
+    let files = dir.file_system();
+    fs::set_permissions(&dir.path, fs::Permissions::from_mode(0o555)).unwrap();
+    let result = files.write_file_with_condition(
+        Path::new("readonly.txt"),
+        b"new",
+        1024,
+        &FileWriteCondition::UnlockAndReplace {
+            expected_revision: file_revision(b"old"),
+        },
+    );
+    fs::set_permissions(&dir.path, fs::Permissions::from_mode(0o755)).unwrap();
+    assert!(matches!(
+        result,
+        Err(FileSystemError::OsPermissionDenied(_))
+    ));
+    assert_eq!(fs::metadata(&target).unwrap().mode() & 0o777, 0o444);
+    assert_eq!(fs::read(&target).unwrap(), b"old");
+}

@@ -1,6 +1,7 @@
-import type { FsCopyParams, FsCreateDirectoryParams, FsCreateFileParams, FsDeleteParams, FsGetMetadataParams, FsGetMetadataResult, FsPasteSystemFilesParams, FsReadBinaryFileParams, FsReadBinaryFileResult, FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult, FsRenameParams, FsWriteBinaryFileParams, FsWriteFileParams, FsWriteFileResult } from "../../../../../.build/protocol/typescript/index.js";
+import type { FsCopyParams, FsCreateDirectoryParams, FsCreateFileParams, FsDeleteParams, FsGetMetadataParams, FsGetMetadataResult, FsPasteSystemFilesParams, FsReadBinaryFileParams, FsReadBinaryFileResult, FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult, FsRenameParams, FsWriteBinaryFileParams, FsWriteFileElevatedParams, FsWriteFileParams, FsWriteFileResult } from "../../../../../.build/protocol/typescript/index.js";
 
 export interface IFileApi {
+	writeFileElevated(params: FsWriteFileElevatedParams, signal?: AbortSignal): Promise<FsWriteFileResult>;
 	getMetadata(params: FsGetMetadataParams): Promise<FsGetMetadataResult>;
 	readDirectory(params: FsReadDirectoryParams): Promise<FsReadDirectoryResult>;
 	readFile(params: FsReadFileParams): Promise<FsReadFileResult>;

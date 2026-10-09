@@ -1,3 +1,6 @@
+import { localize } from '../../../nls.js';
+import { generateUuid } from '../../../base/common/uuid.js';
+import { createFileSystemProviderError, FileSystemProviderErrorCode } from '../../files/common/files.js';
 import type { FsFileType, FsFileWriteMode, FsReadBinaryFileResult, FsReadDirectoryResult, ResourceMetadataResult, ResourceReadResult } from "../../../../../.build/protocol/typescript/index.js";
 import type { FsChanged } from "../../../../../.build/protocol/typescript/index.js";
 import type { IResourceApi } from "../common/appServerApi.js";
@@ -44,7 +47,7 @@ export interface AppServerFileSystemProviderOptions {
  * Maps workspace resource URIs to the App Server's root-relative filesystem protocol.
  */
 export class AppServerFileSystemProvider extends Disposable implements IFileSystemProviderWithFileReadStreamCapability, ISystemFileTransferService {
-	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy | FileSystemProviderCapabilities.FileReadStream;
+	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy | FileSystemProviderCapabilities.FileReadStream | FileSystemProviderCapabilities.FileWriteElevated | FileSystemProviderCapabilities.FileWriteUnlock;
 	public readonly onDidChangeCapabilities = Event.None;
 	private readonly api: IFileApi;
 	private readonly resourceApi: IResourceApi;
@@ -138,17 +141,24 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 		return stream;
 	}
 
-	async writeFile(resource: URI, content: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {
+	async writeFile(resource: URI, content: Uint8Array, options: IFileWriteOptions, signal?: AbortSignal): Promise<IFileWriteResult> {
 		let mode: FsFileWriteMode;
 		if (options.create) mode = options.overwrite ? 'createOrReplace' : 'create';
 		else if (options.overwrite) mode = 'replace';
 		else throw new FileOperationNotSupportedError(resource, 'writeFile');
+		// The privileged contract binds replacement to a revision and creation to absence.
+		// Other provider modes need their own backend conditions before they can be exposed.
+		if (options.writeElevated && mode !== 'createOrReplace') {
+			throw new FileOperationNotSupportedError(resource, 'writeFileElevated');
+		}
 		try {
-			const result = await this.api.writeBinaryFile({
-				...this.fileTarget(resource),
-				dataBase64: encodeBinaryFile(content),
-				options: { mode, ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) },
-			});
+			const result = options.writeElevated
+				? await this.api.writeFileElevated({ ...this.fileTarget(resource), operationId: generateUuid(), dataBase64: encodeBinaryFile(content), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) }, signal)
+				: await this.api.writeBinaryFile({
+					...this.fileTarget(resource),
+					dataBase64: encodeBinaryFile(content),
+					options: { mode, ...(options.unlock ? { unlock: true } : {}), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) },
+				});
 			return Object.freeze({
 				stat: {
 					resource,
@@ -161,7 +171,20 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 			});
 		} catch (error) {
 			if (isRevisionConflict(error)) throw new FileRevisionConflictError(resource);
+			if (error instanceof AppServerRemoteError && error.errorName === 'FileSystemWriteLocked') {
+				throw createFileSystemProviderError(localize('files.osWriteLocked', 'The file is read-only. Overwrite to make it writable and save.'), FileSystemProviderErrorCode.FileWriteLocked);
+			}
+			if (error instanceof AppServerRemoteError && error.errorName === 'FileSystemPermissionDenied') {
+				throw createFileSystemProviderError(localize('files.osPermissionDenied', 'The operating system denied file write access.'), FileSystemProviderErrorCode.NoPermissions);
+			}
 			if (isFileNotFound(error)) throw new FileNotFoundError(resource);
+			if (error instanceof AppServerRemoteError) {
+				if (error.errorName === 'FileSystemElevationDenied') { throw createFileSystemProviderError(localize('files.elevationDenied', 'System authorization was declined. Your changes remain unsaved.'), FileSystemProviderErrorCode.NoPermissions); }
+				if (error.errorName === 'FileSystemElevationTimedOut') { throw createFileSystemProviderError(localize('files.elevationTimedOut', 'System authorization timed out. Your changes remain unsaved.'), FileSystemProviderErrorCode.Unavailable); }
+				if (error.errorName === 'FileSystemElevationFailed') { throw createFileSystemProviderError(localize('files.elevationFailed', 'System authorization or the save helper failed. Check the App Server log. Your changes remain unsaved.'), FileSystemProviderErrorCode.Unavailable); }
+				if (error.errorName === 'FileSystemElevationUnavailable') { throw createFileSystemProviderError(localize('files.elevationUnavailable', 'System authorization is unavailable on this host.'), FileSystemProviderErrorCode.Unavailable); }
+				if (error.errorName === 'FileSystemWriteOutcomeUnknown') { throw createFileSystemProviderError(localize('files.elevationOutcomeUnknown', 'The save result could not be confirmed. Reload the file before retrying.'), FileSystemProviderErrorCode.Unavailable); }
+			}
 			throw error;
 		}
 	}

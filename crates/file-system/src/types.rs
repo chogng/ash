@@ -1,5 +1,5 @@
 /// Stable entry kind shared across local and future remote filesystems.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum FileType {
     Directory,
     File,
@@ -8,7 +8,7 @@ pub enum FileType {
 }
 
 /// Metadata for one existing directory path.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct FileMetadata {
     pub file_type: FileType,
     pub size_bytes: u64,
@@ -75,6 +75,10 @@ use crate::FileSystemError;
 pub enum FileWriteCondition {
     Unconditional,
     ExpectedRevision(String),
+    /// Explicit editor retry that makes an existing file owner-writable before saving.
+    UnlockAndReplace {
+        expected_revision: String,
+    },
     /// Publish only to a missing or empty file without replacing an intervening writer's bytes.
     MissingOrEmpty,
     /// Combines publication policy and revision validation under the storage publication lock.

@@ -423,12 +423,12 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 			for (const hook of [...this.beforeSaveHooks]) await hook();
 			await this.workingCopy?.save(new AbortController().signal);
 		} catch (error) {
-			await this.handleSaveError(error);
+			if (await this.handleSaveError(error)) { return; }
 			throw error;
 		}
 	}
 
-	protected handleSaveError(error: unknown): void | Promise<void> {
+	protected handleSaveError(error: unknown): void | boolean | Promise<void | boolean> {
 		return (this.options.onSaveError ?? reportSaveError)(error, this.workingCopy?.resource);
 	}
 

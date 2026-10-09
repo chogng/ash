@@ -74,6 +74,20 @@ impl LocalFileSystem {
         })
     }
 
+    /// Performs one explicitly requested OS-authorized save under the existing directory grant.
+    /// Cancellation stops authorization/preparation; publication retains its actual outcome.
+    pub fn write_file_elevated(
+        &self,
+        path: &Path,
+        content: &[u8],
+        expected_revision: Option<&str>,
+        cancellation: &ash_async_utils::CancellationToken,
+    ) -> Result<FileMetadata, FileSystemError> {
+        self.execute(Permission::WriteFiles, |files| {
+            crate::elevated::write(&files.dir, path, content, expected_revision, cancellation)
+        })
+    }
+
     fn execute<T>(
         &self,
         permission: Permission,
@@ -1182,6 +1196,9 @@ impl ScopedFiles {
             .map_err(|_| FileSystemError::Io("directory write lock is poisoned".into()))?;
         let publication = match condition {
             FileWriteCondition::Unconditional => WritePublication::Replace,
+            FileWriteCondition::UnlockAndReplace { expected_revision } => {
+                return self.write_file_unlocked(path, content, maximum_bytes, expected_revision);
+            }
             FileWriteCondition::ExpectedRevision(expected) => {
                 let current = self.read_file(path, maximum_bytes)?;
                 if file_revision(&current) != *expected {
@@ -1214,6 +1231,68 @@ impl ScopedFiles {
             }
         };
         self.write_file_inner(path, content, maximum_bytes, publication)
+    }
+
+    fn write_file_unlocked(
+        &self,
+        path: &Path,
+        content: &[u8],
+        maximum_bytes: usize,
+        expected_revision: &str,
+    ) -> Result<FileMetadata, FileSystemError> {
+        if content.len() > maximum_bytes {
+            return Err(FileSystemError::WriteLimitExceeded { maximum_bytes });
+        }
+        let resolved = self.resolve_existing(path)?;
+        if !self
+            .handle()
+            .symlink_metadata(path)
+            .map_err(io_error)?
+            .is_file()
+        {
+            return Err(FileSystemError::NotFile(path.into()));
+        }
+        #[cfg(not(windows))]
+        let file = self.handle().open(&resolved).map_err(io_error)?;
+        #[cfg(windows)]
+        let file = {
+            use cap_std::fs::OpenOptionsExt;
+            use windows_sys::Win32::Storage::FileSystem::FILE_READ_ATTRIBUTES;
+            use windows_sys::Win32::Storage::FileSystem::FILE_WRITE_ATTRIBUTES;
+            self.handle()
+                .open_with(
+                    &resolved,
+                    OpenOptions::new().access_mode(FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES),
+                )
+                .map_err(io_error)?
+        };
+        if FileInformation::from_file(&file.try_clone().map_err(io_error)?.into_std())
+            .map_err(io_error)?
+            .has_multiple_links()
+        {
+            // Changing mode affects every alias, including links outside this directory grant.
+            return Err(FileSystemError::InvalidPath(path.into()));
+        }
+        if file_revision(&self.read_file(path, maximum_bytes)?) != expected_revision {
+            return Err(FileSystemError::RevisionConflict(path.into()));
+        }
+        let original = file.metadata().map_err(io_error)?.permissions();
+        let mut writable = original.clone();
+        #[cfg(unix)]
+        {
+            use cap_std::fs::PermissionsExt;
+            // Only the owner-write bit changes; other users receive no additional access.
+            writable.set_mode(writable.mode() | 0o200);
+        }
+        #[cfg(not(unix))]
+        writable.set_readonly(false);
+        file.set_permissions(writable).map_err(io_error)?;
+        let saved = self.write_file_inner(path, content, maximum_bytes, WritePublication::Replace);
+        if saved.is_err() {
+            // Restore through the open object, not a path that another process could replace.
+            file.set_permissions(original).map_err(io_error)?;
+        }
+        saved
     }
 
     fn get_metadata(&self, path: &Path) -> Result<FileMetadata, FileSystemError> {
@@ -1443,7 +1522,21 @@ impl<'a> PreparedWrite<'a> {
                 std::process::id(),
                 SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
             );
-            match parent.open_with(&name, OpenOptions::new().write(true).create_new(true)) {
+            let mut options = OpenOptions::new();
+            options.write(true).create_new(true);
+            #[cfg(unix)]
+            {
+                use cap_std::fs::OpenOptionsExt;
+                use cap_std::fs::PermissionsExt;
+                // Apply restrictive permissions at creation, before any content is visible.
+                options.mode(
+                    permissions
+                        .as_ref()
+                        .map(|value| value.mode())
+                        .unwrap_or(0o666),
+                );
+            }
+            match parent.open_with(&name, &options) {
                 Ok(file) => break (name, file),
                 Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
                 Err(error) => return Err(error),
@@ -1522,6 +1615,272 @@ impl Drop for PreparedWrite<'_> {
     }
 }
 
+/// Owns a pinned destination directory and a staged file until the parent authorizes publication.
+pub(super) struct PreparedElevatedWrite<'a> {
+    write: PreparedWrite<'a>,
+    expected_revision: Option<String>,
+    original: Option<FileInformation>,
+}
+
+pub(super) fn prepare_elevated_write<'a>(
+    dir: &Dir,
+    path: &Path,
+    content: &'a [u8],
+    expected_revision: Option<&str>,
+    #[cfg(unix)] creator: [u32; 2],
+) -> Result<PreparedElevatedWrite<'a>, FileSystemError> {
+    let files = ScopedFiles::new(dir.clone());
+    let target = files.resolve_for_write(path)?;
+    // Elevated writes reject symlinks; a changed path must never redirect privileged I/O.
+    let existing = match files.handle().symlink_metadata(path) {
+        Ok(metadata) if metadata.is_file() => Some(metadata),
+        Ok(_) => return Err(FileSystemError::NotFile(path.into())),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => return Err(io_error(error)),
+    };
+    let original = if existing.is_some() {
+        let file = files.handle().open(&target).map_err(io_error)?;
+        Some(FileInformation::from_file(&file.into_std()).map_err(io_error)?)
+    } else {
+        None
+    };
+    #[cfg(unix)]
+    let staging_permissions = {
+        use cap_std::fs::PermissionsExt;
+        Some(cap_std::fs::Permissions::from_mode(0o600))
+    };
+    #[cfg(not(unix))]
+    let staging_permissions = None;
+    let write = PreparedWrite::new(files.handle(), &target, content, staging_permissions)
+        .map_err(io_error)?;
+    #[cfg(unix)]
+    {
+        use cap_std::fs::MetadataExt;
+        let owner = existing
+            .as_ref()
+            .map(|metadata| [metadata.uid(), metadata.gid()])
+            .unwrap_or(creator);
+        let file = write
+            .parent
+            .open_with(&write.temporary, OpenOptions::new().write(true))
+            .map_err(io_error)?;
+        rustix::fs::fchown(
+            &file,
+            Some(rustix::fs::Uid::from_raw(owner[0])),
+            Some(rustix::fs::Gid::from_raw(owner[1])),
+        )
+        .map_err(|error| io_error(error.into()))?;
+        if let Some(metadata) = &existing {
+            file.set_permissions(metadata.permissions())
+                .map_err(io_error)?;
+        }
+        file.sync_all().map_err(io_error)?;
+    }
+    let prepared = PreparedElevatedWrite {
+        write,
+        expected_revision: expected_revision.map(str::to_owned),
+        original,
+    };
+    prepared.check_revision()?;
+    Ok(prepared)
+}
+
+impl PreparedElevatedWrite<'_> {
+    fn check_revision(&self) -> Result<(), FileSystemError> {
+        let conflict = || FileSystemError::RevisionConflict(PathBuf::from(&self.write.target));
+        match (&self.original, &self.expected_revision) {
+            (Some(original), Some(expected)) => {
+                let metadata = self
+                    .write
+                    .parent
+                    .symlink_metadata(&self.write.target)
+                    .map_err(|_| conflict())?;
+                if !metadata.is_file() {
+                    return Err(conflict());
+                }
+                let mut file = self
+                    .write
+                    .parent
+                    .open(&self.write.target)
+                    .map_err(io_error)?;
+                if !original.same_file_as(
+                    FileInformation::from_file(&file.try_clone().map_err(io_error)?.into_std())
+                        .map_err(io_error)?,
+                ) {
+                    return Err(conflict());
+                }
+                let mut bytes = Vec::new();
+                Read::by_ref(&mut file)
+                    .take(50 * 1024 * 1024 + 1)
+                    .read_to_end(&mut bytes)
+                    .map_err(io_error)?;
+                if file_revision(&bytes) != *expected {
+                    return Err(conflict());
+                }
+            }
+            (None, None) => {
+                if self
+                    .write
+                    .parent
+                    .try_exists(&self.write.target)
+                    .map_err(io_error)?
+                {
+                    return Err(conflict());
+                }
+            }
+            (Some(_), None) | (None, Some(_)) => return Err(conflict()),
+        }
+        Ok(())
+    }
+
+    #[cfg_attr(windows, allow(unsafe_code))]
+    pub(super) fn publish(self) -> Result<FileMetadata, FileSystemError> {
+        // Recheck after the authorization wait and the final parent/child commit handshake.
+        self.check_revision()?;
+        let parent = self.write.parent.try_clone().map_err(io_error)?;
+        let target = self.write.target.clone();
+        #[cfg(windows)]
+        if self.original.is_some() {
+            use cap_std::fs::OpenOptionsExt;
+            use std::os::windows::ffi::OsStrExt;
+            use windows_sys::Win32::Storage::FileSystem::FILE_READ_ATTRIBUTES;
+            use windows_sys::Win32::Storage::FileSystem::FILE_WRITE_ATTRIBUTES;
+            use windows_sys::Win32::Storage::FileSystem::ReplaceFileW;
+            // ReplaceFile preserves the target's ACL and identity-related attributes.
+            let directory = parent.canonicalize(".").map_err(io_error)?;
+            // ReplaceFile takes absolute paths. Deny deletion of every ancestor until it
+            // returns, then verify the leaf still names our capability's pinned directory.
+            let _directories = pin_windows_directories(&parent, &directory)?;
+            self.check_revision()?;
+            let attribute_options = OpenOptions::new()
+                .access_mode(FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES)
+                .clone();
+            let original_file = parent
+                .open_with(&target, &attribute_options)
+                .map_err(io_error)?;
+            if !self
+                .original
+                .as_ref()
+                .expect("existing file was checked")
+                .same_file_as(
+                    FileInformation::from_file(
+                        &original_file.try_clone().map_err(io_error)?.into_std(),
+                    )
+                    .map_err(io_error)?,
+                )
+            {
+                return Err(FileSystemError::RevisionConflict(PathBuf::from(&target)));
+            }
+            let original_permissions = original_file.metadata().map_err(io_error)?.permissions();
+            let destination: Vec<u16> = directory
+                .join(&target)
+                .as_os_str()
+                .encode_wide()
+                .chain(Some(0))
+                .collect();
+            let source: Vec<u16> = directory
+                .join(&self.write.temporary)
+                .as_os_str()
+                .encode_wide()
+                .chain(Some(0))
+                .collect();
+            let staged = parent.open(&self.write.temporary).map_err(io_error)?;
+            let staged_identity =
+                FileInformation::from_file(&staged.into_std()).map_err(io_error)?;
+            if original_permissions.readonly() {
+                let mut writable = original_permissions.clone();
+                writable.set_readonly(false);
+                original_file.set_permissions(writable).map_err(io_error)?;
+            }
+            // SAFETY: both strings are terminated and remain alive for this synchronous call.
+            if unsafe {
+                ReplaceFileW(
+                    destination.as_ptr(),
+                    source.as_ptr(),
+                    std::ptr::null(),
+                    0,
+                    std::ptr::null(),
+                    std::ptr::null(),
+                )
+            } == 0
+            {
+                // A failed ReplaceFile may have moved one of its inputs. Keep the outcome
+                // conservative and restore attributes through the original file handle.
+                let _ = original_file.set_permissions(original_permissions);
+                return Err(FileSystemError::WriteOutcomeUnknown);
+            }
+            let mut write = self.write;
+            write.remove_temporary_on_drop = false;
+            // Existing hard links still refer to the replaced object.
+            original_file
+                .set_permissions(original_permissions.clone())
+                .map_err(|_| FileSystemError::WriteOutcomeUnknown)?;
+            let published = parent
+                .open_with(&target, &attribute_options)
+                .map_err(|_| FileSystemError::WriteOutcomeUnknown)?;
+            if !staged_identity.same_file_as(
+                FileInformation::from_file(
+                    &published
+                        .try_clone()
+                        .map_err(|_| FileSystemError::WriteOutcomeUnknown)?
+                        .into_std(),
+                )
+                .map_err(|_| FileSystemError::WriteOutcomeUnknown)?,
+            ) {
+                return Err(FileSystemError::WriteOutcomeUnknown);
+            }
+            published
+                .set_permissions(original_permissions)
+                .map_err(|_| FileSystemError::WriteOutcomeUnknown)?;
+            return metadata(&parent, Path::new(&target))
+                .map_err(|_| FileSystemError::WriteOutcomeUnknown);
+        }
+        let publication = if self.original.is_some() {
+            WritePublication::Replace
+        } else {
+            WritePublication::Create
+        };
+        self.write
+            .publish(publication)
+            .map_err(|_| FileSystemError::WriteOutcomeUnknown)?;
+        metadata(&parent, Path::new(&target)).map_err(|_| FileSystemError::WriteOutcomeUnknown)
+    }
+}
+
+#[cfg(windows)]
+fn pin_windows_directories(
+    parent: &Directory,
+    path: &Path,
+) -> Result<Vec<std::fs::File>, FileSystemError> {
+    use std::os::windows::fs::OpenOptionsExt;
+    use windows_sys::Win32::Storage::FileSystem::FILE_FLAG_BACKUP_SEMANTICS;
+    use windows_sys::Win32::Storage::FileSystem::FILE_READ_ATTRIBUTES;
+    use windows_sys::Win32::Storage::FileSystem::FILE_SHARE_READ;
+    use windows_sys::Win32::Storage::FileSystem::FILE_SHARE_WRITE;
+    let mut directories = Vec::new();
+    for ancestor in path.ancestors().filter(|path| path.is_absolute()) {
+        directories.push(
+            std::fs::OpenOptions::new()
+                .access_mode(FILE_READ_ATTRIBUTES)
+                .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
+                .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+                .open(ancestor)
+                .map_err(io_error)?,
+        );
+    }
+    let pinned = parent.try_clone().map_err(io_error)?.into_std_file();
+    let leaf = directories
+        .first()
+        .ok_or_else(|| FileSystemError::InvalidPath(path.into()))?;
+    if !FileInformation::from_file(&pinned)
+        .map_err(io_error)?
+        .same_file_as(FileInformation::from_file(leaf).map_err(io_error)?)
+    {
+        return Err(FileSystemError::InvalidPath(path.into()));
+    }
+    Ok(directories)
+}
+
 fn atomic_write(
     root: &Directory,
     target: &Path,
@@ -1559,6 +1918,9 @@ fn file_type(file_type: cap_std::fs::FileType) -> FileType {
 }
 
 fn io_error(error: std::io::Error) -> FileSystemError {
+    if error.kind() == std::io::ErrorKind::PermissionDenied {
+        return FileSystemError::OsPermissionDenied(error.to_string());
+    }
     FileSystemError::Io(error.to_string())
 }
 

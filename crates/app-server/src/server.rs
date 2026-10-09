@@ -394,6 +394,14 @@ impl ConnectionState {
         self.authority == ConnectionAuthority::ProductHost
     }
 
+    fn allows_file_unlock(&self) -> bool {
+        // Authenticated Web saves may change ordinary file attributes, but cannot elevate.
+        matches!(
+            self.authority,
+            ConnectionAuthority::ProductHost | ConnectionAuthority::Browser
+        )
+    }
+
     fn allows_team_capabilities(&self) -> bool {
         matches!(
             self.authority,
@@ -2858,7 +2866,15 @@ impl AppServer {
                 self.language_resolve_code_action(&request.params, cancellation)
             }
             Some(ClientMethod::FsWriteFile) => self.fs_write_file(&request.params),
-            Some(ClientMethod::FsWriteBinaryFile) => self.fs_write_binary_file(&request.params),
+            Some(ClientMethod::FsWriteFileElevated) => {
+                self.fs_write_file_elevated(connection, &request.params, cancellation)
+            }
+            Some(ClientMethod::FsCancelElevatedWrite) => {
+                self.fs_cancel_elevated_write(connection, &request.params)
+            }
+            Some(ClientMethod::FsWriteBinaryFile) => {
+                self.fs_write_binary_file(connection, &request.params)
+            }
             Some(ClientMethod::FsCreateFile) => self.fs_create_file(&request.params),
             Some(ClientMethod::FsCreateDirectory) => self.fs_create_directory(&request.params),
             Some(ClientMethod::FsCopy) => self.fs_copy(&request.params),

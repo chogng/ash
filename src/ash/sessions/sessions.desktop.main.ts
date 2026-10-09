@@ -1,3 +1,5 @@
+import { ElectronElevatedFileService } from '../workbench/services/files/electron-browser/elevatedFileService.js';
+import { IElevatedFileService } from '../workbench/services/files/common/elevatedFileService.js';
 import { localize2 } from '../nls.js';
 import '../workbench/electron-browser/desktop.contribution.js';
 import '../workbench/contrib/browserView/electron-browser/browserView.contribution.js';
@@ -26,3 +28,5 @@ MenusRegistry.appendMenuItem(Menus.MenubarFileMenu, {
 	group: '6_close',
 	order: 5,
 });
+
+registerSingleton(IElevatedFileService, ElectronElevatedFileService, InstantiationType.Delayed);

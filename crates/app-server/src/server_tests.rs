@@ -2,6 +2,8 @@
 mod app_tools_tests;
 #[path = "audio_tests.rs"]
 mod audio_tests;
+#[path = "file_elevation_tests.rs"]
+mod file_elevation_tests;
 
 use super::*;
 

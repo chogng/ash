@@ -1,3 +1,4 @@
+import { BrowserElevatedFileService } from '../../../files/browser/elevatedFileService.js';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -17,7 +18,8 @@ import { FileUserDataProvider } from '../../../../../platform/userData/common/fi
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { FilesConfigurationService } from '../../../filesConfiguration/common/filesConfigurationService.js';
 import { ILifecycleService, type IWillShutdownEvent } from '../../../lifecycle/common/lifecycle.js';
-import { ITextFileService, TextFileService } from '../../../textfile/common/textFileService.js';
+import { ITextFileService } from '../../../textfile/common/textfiles.js';
+import { TextFileService } from '../../../textfile/browser/textFileService.js';
 import { UserDataProfileService } from '../../../userDataProfile/browser/userDataProfileService.js';
 import { IUserDataProfileService } from '../../../userDataProfile/common/userDataProfile.js';
 import { WorkspaceContextService } from '../../../workspaces/browser/workspaceContextService.js';
@@ -36,7 +38,7 @@ test('local history captures successful saves, honors exclusion and retention, a
 		using configuration = new InMemoryConfigurationService();
 		using workspace = new WorkspaceContextService({ id: 'root', uri: URI.file(directory) });
 		using policy = new FilesConfigurationService(configuration, workspace);
-		using textFiles = new TextFileService(files, policy);
+		using textFiles = new TextFileService(files, policy, new BrowserElevatedFileService());
 		using shutdown = new Emitter<IWillShutdownEvent>();
 		using services = new InstantiationService();
 		services.registerInstance(IConfigurationService, configuration);

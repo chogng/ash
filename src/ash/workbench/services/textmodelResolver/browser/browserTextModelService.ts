@@ -312,6 +312,8 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 				let saved;
 				try {
 					saved = await this.resourceStore.save({
+						...(options.writeElevated ? { writeElevated: true } : {}),
+						...(options.unlock ? { unlock: true } : {}),
 						resource: entry.resource,
 						text: savedText,
 						...(encoding === undefined ? {} : { encoding }),
