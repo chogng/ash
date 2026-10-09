@@ -1,0 +1,263 @@
+name: rusty-v8-release
+
+on:
+  push:
+    tags: ["rusty-v8-v*.*.*"]
+  # Manual runs validate the source build without creating a release.
+  workflow_dispatch:
+  workflow_call:
+  pull_request:
+    paths:
+      - ".github/workflows/rusty-v8-release.yml"
+      - "build/v8/**"
+      - "third_party/v8/**"
+      - "crates/v8-poc/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "MODULE.bazel"
+      - "MODULE.bazel.lock"
+      - ".bazelversion"
+      - ".bazelrc"
+      - "defs.bzl"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rusty-v8-release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  metadata:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.metadata.outputs.version }}
+      source_revision: ${{ steps.metadata.outputs.source_revision }}
+      release_tag: ${{ steps.metadata.outputs.release_tag }}
+      matrix: ${{ steps.metadata.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.11"
+      - name: Resolve and validate the exact V8 pin
+        id: metadata
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          args=(metadata --github-output "$GITHUB_OUTPUT")
+          if [ "$EVENT_NAME" = push ]; then args+=(--tag "$REF_NAME"); fi
+          python3 -B build/v8/release.py "${args[@]}"
+
+  build:
+    name: Sandbox / ${{ matrix.target }}
+    needs: metadata
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.metadata.outputs.matrix) }}
+    env:
+      TARGET: ${{ matrix.target }}
+      SCCACHE_GHA_ENABLED: "true"
+      SCCACHE_IDLE_TIMEOUT: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Enable upstream Windows symlinks
+        if: runner.os == 'Windows'
+        run: git config --global core.symlinks true
+      - name: Check out matching rusty_v8 source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: denoland/rusty_v8
+          ref: ${{ needs.metadata.outputs.source_revision }}
+          path: upstream-rusty-v8
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.11"
+      - uses: taiki-e/install-action@a6b2e2dcd845ddd7f509ce4f3ed3d922b80cc5d9
+        with:
+          tool: just@1.46.0
+      - name: Set up compiler cache
+        uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba
+        with:
+          version: v0.16.0
+      - name: Resolve upstream build toolchain
+        id: upstream
+        run: python -B build/v8/release.py upstream-toolchain --upstream upstream-rusty-v8 --github-output "$GITHUB_OUTPUT"
+      - name: Install upstream toolchain and target
+        env:
+          UPSTREAM_TOOLCHAIN: ${{ steps.upstream.outputs.toolchain }}
+        run: |
+          rustup toolchain install "$UPSTREAM_TOOLCHAIN" --profile minimal --no-self-update
+          rustup target add --toolchain "$UPSTREAM_TOOLCHAIN" "$TARGET"
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          package_version="$(python -c 'from build.v8.release import source_lock; print(source_lock()["bindingCompiler"]["linux"]["packageVersion"])')"
+          sudo apt-get install --yes --no-install-recommends build-essential pkg-config \
+            "clang-19=$package_version" "libclang-19-dev=$package_version"
+          echo "BINDING_CLANG_BASE_PATH=/usr/lib/llvm-19" >> "$GITHUB_ENV"
+      - name: Install compatible macOS binding compiler
+        if: runner.os == 'macOS'
+        run: |
+          brew install llvm@19
+          echo "BINDING_CLANG_BASE_PATH=$(brew --prefix llvm@19)" >> "$GITHUB_ENV"
+      - name: Install compatible Windows binding compiler
+        if: runner.os == 'Windows'
+        run: |
+          version="$(python -c 'from build.v8.release import source_lock; print(source_lock()["bindingCompiler"]["win32"]["version"])')"
+          choco install llvm --version "$version" --allow-downgrade --force --yes --no-progress
+          echo "BINDING_CLANG_BASE_PATH=C:/Program Files/LLVM" >> "$GITHUB_ENV"
+      - name: Validate and prepare pinned compilers
+        id: compiler
+        run: python -B build/v8/release.py compiler --upstream upstream-rusty-v8 --binding-compiler "$BINDING_CLANG_BASE_PATH" --github-output "$GITHUB_OUTPUT"
+      - name: Prepare musl target sysroot
+        if: endsWith(matrix.target, '-linux-musl')
+        run: |
+          sysroot="$RUNNER_TEMP/musl-sysroot"
+          case "$TARGET" in
+            x86_64-*)
+              sudo apt-get install --yes --no-install-recommends musl-tools musl-dev
+              mkdir -p "$sysroot/usr/include" "$sysroot/usr/lib"
+              cp -a /usr/include/x86_64-linux-musl/. "$sysroot/usr/include/"
+              cp -a /usr/lib/x86_64-linux-musl/. "$sysroot/usr/lib/"
+              cp -a /usr/include/linux /usr/include/asm-generic /usr/include/x86_64-linux-gnu/asm "$sysroot/usr/include/"
+              ;;
+            aarch64-*)
+              # Extract ARM64 headers/libs on the x64 host; package scripts never run.
+              mkdir -p "$sysroot"
+              docker run --rm -v "$sysroot:/sysroot" alpine:3.21 sh -ec '
+                mkdir -p /sysroot/etc/apk
+                cp -a /etc/apk/keys /sysroot/etc/apk/keys
+                apk --arch aarch64 --root /sysroot --initdb --no-scripts \
+                  --repository https://dl-cdn.alpinelinux.org/alpine/v3.21/main \
+                  add musl-dev linux-headers
+              '
+              ;;
+          esac
+          echo "RUSTY_V8_MUSL_SYSROOT=$sysroot" >> "$GITHUB_ENV"
+          # The global malloc shim uses glibc-only headers; V8's sandbox remains enabled.
+          echo "GN_ARGS=use_allocator_shim=false" >> "$GITHUB_ENV"
+      - name: Prepare checksum-pinned GNU target sysroot
+        if: endsWith(matrix.target, '-linux-gnu')
+        run: python -B build/v8/release.py gnu-sysroot --target "$TARGET" --output "$RUNNER_TEMP/v8-gnu-sysroot" --github-env "$GITHUB_ENV"
+      - name: Build sandbox archive and binding from source
+        working-directory: upstream-rusty-v8
+        env:
+          UPSTREAM_TOOLCHAIN: ${{ steps.upstream.outputs.toolchain }}
+          V8_FROM_SOURCE: "1"
+          CLANG_BASE_PATH: ${{ steps.compiler.outputs.clang_base_path }}
+          LIBCLANG_PATH: ${{ steps.compiler.outputs.libclang_path }}
+          BINDGEN_EXTRA_CLANG_ARGS: ${{ steps.compiler.outputs.bindgen_extra_clang_args }}
+          # Keep upstream outputs separate from Ash's Cargo target directory.
+          CARGO_TARGET_DIR: ${{ github.workspace }}/upstream-rusty-v8/target
+        run: cargo "+$UPSTREAM_TOOLCHAIN" build --locked --release --target "$TARGET" --features v8_enable_sandbox
+      - name: Stage archive, binding and checksums
+        id: stage
+        run: python -B build/v8/release.py stage --upstream upstream-rusty-v8 --target "$TARGET" --output "dist/$TARGET" --github-output "$GITHUB_OUTPUT"
+      - name: Install Ash smoke-test target
+        run: rustup target add "$TARGET"
+      - name: Prepare checksum-pinned musl linker
+        if: endsWith(matrix.target, '-linux-musl')
+        run: python -B build/v8/smoke.py musl-linker --target "$TARGET" --output "$RUNNER_TEMP/v8-musl-linker" --github-env "$GITHUB_ENV"
+      - name: Test staged pair with Ash
+        env:
+          SMOKE: ${{ matrix.smoke }}
+          RUSTY_V8_ARCHIVE: ${{ steps.stage.outputs.archive }}
+          RUSTY_V8_SRC_BINDING_PATH: ${{ steps.stage.outputs.binding }}
+        run: |
+          args=(ash-v8-poc --locked --target "$TARGET" --features sandbox)
+          if [ "$SMOKE" = link ]; then
+            args+=(--no-run)
+          else
+            # Concurrent first isolates can race V8's process-wide sandbox pool setup.
+            args+=(-- --test-threads=1)
+          fi
+          just test "${args[@]}"
+      - name: Set up Bazel consumer validation
+        if: runner.os != 'Windows'
+        uses: bazel-contrib/setup-bazel@c5acdfb288317d0b5c0bbd7a396a3dc868bb0f86
+        with:
+          bazelisk-cache: true
+          disk-cache: v8-consumer-${{ matrix.target }}
+          repository-cache: true
+      - name: Verify staged pair through the Bazel consumer
+        if: runner.os != 'Windows'
+        env:
+          SMOKE: ${{ matrix.smoke }}
+        run: |
+          args=(bazel --target "$TARGET" --artifacts "dist/$TARGET" --output "$RUNNER_TEMP/v8-bazel-inputs")
+          if [ "$SMOKE" = link ]; then args+=(--link-only); fi
+          python -B build/v8/smoke.py "${args[@]}"
+      - name: Upload verified target outputs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rusty-v8-${{ needs.metadata.outputs.version }}-${{ matrix.target }}
+          path: dist/${{ matrix.target }}/*
+          if-no-files-found: error
+          compression-level: 0
+
+  verify:
+    needs: [metadata, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.11"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: rusty-v8-${{ needs.metadata.outputs.version }}-*
+          path: dist
+          merge-multiple: true
+      - name: Verify complete release and generate candidate lock
+        run: python3 -B build/v8/release.py verify --artifacts dist --repository "$GITHUB_REPOSITORY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rusty-v8-release-${{ needs.metadata.outputs.version }}
+          path: dist/*
+          if-no-files-found: error
+          compression-level: 0
+
+  publish:
+    needs: [metadata, verify]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/rusty-v8-v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: rusty-v8-release-${{ needs.metadata.outputs.version }}
+          path: dist
+      - name: Publish immutable V8 dependency release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.metadata.outputs.release_tag }}
+        run: |
+          # Existing releases are never replaced; a failed draft can be reviewed manually.
+          gh release create "$RELEASE_TAG" dist/* \
+            --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease \
+            --title "$RELEASE_TAG" \
+            --notes "Sandbox-enabled rusty_v8 archive/binding pairs for the pinned crate version. runtime-lock.json is a candidate consumer lock; adopt it together with the Bazel input checksums."

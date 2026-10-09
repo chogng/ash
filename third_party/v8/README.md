@@ -29,13 +29,65 @@ python3 -B scripts/cargo.py test -p ash-code-mode-runtime
 
 ## 更新约束
 
-升级 `v8` crate 时必须同步更新根 `Cargo.toml`、`Cargo.lock`、`runtime-lock.json`、`MODULE.bazel` 中的 Bazel 下载声明以及目标选择规则。每个 release checksum 文件必须精确覆盖 archive 和 binding 两项；不接受未校验下载，也不把预编译二进制提交到仓库。
+### 独立产物发布
+
+`.github/workflows/rusty-v8-release.yml` 从与 Cargo 锁定版本对应的
+`source-lock.json` 固定的 `denoland/rusty_v8` commit 递归检出源码，校验子模块、
+Rust、Chromium C++ 编译器和 Clang 19 绑定工具链版本后构建
+`ptrcomp_sandbox_release`，覆盖锁定文件中的全部 8 个目标。
+Ash 的 Bazel 目前只消费预编译输入，因此此流程直接使用上游 Cargo/GN
+构建入口，不依赖 Codex 的 Bazel 源码构建图。
+
+手动运行 workflow 只构建和验证；推送 `rusty-v8-v<crate-version>` tag
+才会在当前仓库创建独立的 prerelease，不覆盖已有 release。
+发布前验证 Cargo manifest、Cargo lock 和产物 lock 的版本一致，
+每个目标的 checksum 必须精确覆盖 archive 和 binding 两项。
+macOS、GNU Linux 和 Windows x64 使用 `ash-v8-poc` 链接并执行产物；
+执行探针时串行运行测试，避免多个首批 isolate 并发初始化进程级沙箱地址池。
+Windows ARM64 和 musl ARM64 验证交叉链接；musl x64 链接并执行探针。
+Clang 23 生成的匿名枚举常量名称不符合此版本 Rust crate 的约定，因此
+绑定使用单独固定版本的 Clang 19，并显式设置其内置头文件目录。
+绑定工具链由 Ubuntu/Homebrew/Chocolatey 安装，准备步骤校验精确版本。
+GNU 使用固定 SHA-256 的 Chromium Debian sysroot（glibc 2.27），避免
+宿主机头文件引入 Bazel glibc 2.28 不具备的 `__isoc23_*` 等符号。
+musl 的 Cargo 链接器使用固定版本和 SHA-256 的 Zig，并关闭 Rust 自带的
+链接 CRT，由 Zig 统一提供启动对象，避免重复定义 `_start`。构建 sysroot 来自
+Ubuntu/Alpine 软件包，系统 SDK 与 runner 镜像仍由 CI 环境提供。
+musl 关闭依赖 glibc 头文件的全局 allocator shim；V8 sandbox 保持启用。
+全部 macOS/Linux 目标还通过仓库现有 Bazel 消费图验证同一份新产物，
+ARM64 musl 只链接，其余目标执行测试。Windows 的 Bazel C++ 工具链目前使用
+GNU ABI，不能验证 MSVC archive，因此这两个目标使用 Cargo 验证。
+Linux 的 Bazel 消费规则会在派生 archive 中弱化两份 libc++ 共用的异常 ABI
+入口，避免重复符号；下载文件和发布摘要保持原样。
+ARM64 musl 的 Bazel 派生库还合入目标 compiler-rt builtins，补齐 Rust
+musl builtins 未提供的 `__clear_cache`；Cargo 的 Zig 链接器提供同一入口。
+musl 验证平台同时声明 LLVM 与 Rust 的 libc 约束，防止选择 GNU 输入。
+x64 静态探针使用明确的 Linux 测试执行工具链；ARM64 仅构建测试程序，
+不要求 x64 runner 具备 ARM64 测试执行平台。
+
+每次成功的验证会生成包含新摘要和当前仓库来源的候选 `runtime-lock.json`，
+与 archive、binding、每目标 checksum 和记录源码、编译器及 GN 参数的
+`build.json` 一同保存为 workflow artifact；tag 运行还会发布这些文件。
+workflow 不改写消费端锁定文件。首次转用 Ash 自有 release 时，
+先确认发布产物及 checksum，再将候选 lock 的来源和摘要同步到本目录与
+`MODULE.bazel`，运行下面的验证入口。
+
+发布工具的本地验证入口：
+
+```sh
+python3 -B build/v8/release.py metadata
+python3 -B -m unittest build.v8.test_release build.v8.test_smoke build.lib.test_v8
+```
+
+### 消费端版本升级
+
+升级 `v8` crate 时必须同步更新根 `Cargo.toml`、`Cargo.lock`、`runtime-lock.json`、`source-lock.json`、`MODULE.bazel` 中的 Bazel 下载声明以及目标选择规则。源码 pin 必须来自对应版本的上游 commit，并同步其 Rust 与 Chromium 编译器版本。每个 release checksum 文件必须精确覆盖 archive 和 binding 两项；不接受未校验下载，也不把预编译二进制提交到仓库。
 
 验证入口：
 
 ```sh
 python3 -B -m unittest build.lib.test_v8
 just test-python build
-python3 -B scripts/cargo.py test -p ash-v8-poc --features sandbox
-bazel test //ash-rs/v8-poc:v8-poc-unit-tests
+python3 -B scripts/cargo.py test -p ash-v8-poc --features sandbox -- --test-threads=1
+bazel test //crates/v8-poc:v8-poc-unit-tests --test_arg=--test-threads=1
 ```

@@ -1,5 +1,89 @@
 package(default_visibility = ["//visibility:public"])
 
+# LLVM and Rust use separate libc constraints. Inherit the C++ platform and
+# mark Rust as musl too, or its default glibc constraint selects GNU bindings.
+[
+    platform(
+        name = "linux_%s_musl" % arch,
+        constraint_values = [
+            "@rules_rs//rs/platforms/constraints:musl",
+            # Rust's musl target passes -no-pie; the C++ linker must agree.
+            "@llvm//constraints/pie:off",
+        ],
+        parents = ["@llvm//platforms:linux_%s_musl" % arch],
+    )
+    for arch in ["arm64", "amd64"]
+]
+
+# The statically linked x64 musl probe runs on the GNU Linux host kernel.
+# Select this only for the release smoke check, not for arbitrary musl tests.
+toolchain(
+    name = "musl_x64_tests_on_linux_host",
+    exec_compatible_with = [
+        "@platforms//cpu:x86_64",
+        "@platforms//os:linux",
+    ],
+    target_compatible_with = [
+        "@platforms//cpu:x86_64",
+        "@platforms//os:linux",
+        "@llvm//constraints/libc:musl",
+        "@rules_rs//rs/platforms/constraints:musl",
+    ],
+    toolchain = "@bazel_tools//tools/test:empty_toolchain",
+    toolchain_type = "@bazel_tools//tools/test:default_test_toolchain_type",
+)
+
+# V8 embeds Chromium's libc++, while Bazel links its own libc++. Their shared
+# exception ABI symbols collide even though ordinary symbols have namespaces.
+# Only the derived Bazel output changes; release files stay checksum-verified.
+[
+    genrule(
+        name = "rusty_v8_%s_%s_with_compatible_libcxx" % (arch, libc),
+        srcs = [
+            ":libcxx_shared_exception_symbols.txt",
+            "@ash_rusty_v8_%s_unknown_linux_%s_archive//file" % (arch, libc),
+        ],
+        outs = ["librusty_v8_%s_%s_with_compatible_libcxx.a" % (arch, libc)],
+        cmd = """
+            gzip -dc "$(location @ash_rusty_v8_%s_unknown_linux_%s_archive//file)" > "$@.unadjusted"
+            $(location @llvm//tools:llvm-objcopy) \
+                --weaken-symbols="$(location :libcxx_shared_exception_symbols.txt)" \
+                "$@.unadjusted" "$@"
+            rm "$@.unadjusted"
+        """ % (arch, libc),
+        tools = ["@llvm//tools:llvm-objcopy"],
+    )
+    for arch in ["aarch64", "x86_64"]
+    for libc in ["gnu", "musl"]
+]
+
+# AArch64 cache flushes call __clear_cache, which Rust's musl builtins omit.
+# Merge the matching compiler-rt runtime so the normal Rust linker can resolve it.
+genrule(
+    name = "rusty_v8_aarch64_musl_for_bazel",
+    srcs = [
+        ":rusty_v8_aarch64_musl_with_compatible_libcxx",
+        "@llvm//runtimes/compiler-rt:clang_rt.builtins.static",
+    ],
+    outs = ["librusty_v8_aarch64_musl_for_bazel.a"],
+    cmd = """
+        cat > "$@.mri" <<'EOF'
+create $@
+addlib $(location :rusty_v8_aarch64_musl_with_compatible_libcxx)
+addlib $(location @llvm//runtimes/compiler-rt:clang_rt.builtins.static)
+save
+end
+EOF
+        $(location @llvm//tools:llvm-ar) -M < "$@.mri"
+        $(location @llvm//tools:llvm-ranlib) "$@"
+        rm "$@.mri"
+    """,
+    tools = [
+        "@llvm//tools:llvm-ar",
+        "@llvm//tools:llvm-ranlib",
+    ],
+)
+
 config_setting(
     name = "platform_aarch64_unknown_linux_musl",
     constraint_values = [
@@ -23,12 +107,12 @@ alias(
     actual = select({
         "@rules_rs//rs/platforms/config:aarch64-apple-darwin": "@ash_rusty_v8_aarch64_apple_darwin_archive//file",
         "@rules_rs//rs/platforms/config:aarch64-pc-windows-msvc": "@ash_rusty_v8_aarch64_pc_windows_msvc_archive//file",
-        "@rules_rs//rs/platforms/config:aarch64-unknown-linux-gnu": "@ash_rusty_v8_aarch64_unknown_linux_gnu_archive//file",
-        ":platform_aarch64_unknown_linux_musl": "@ash_rusty_v8_aarch64_unknown_linux_musl_archive//file",
+        "@rules_rs//rs/platforms/config:aarch64-unknown-linux-gnu": ":rusty_v8_aarch64_gnu_with_compatible_libcxx",
+        ":platform_aarch64_unknown_linux_musl": ":rusty_v8_aarch64_musl_for_bazel",
         "@rules_rs//rs/platforms/config:x86_64-apple-darwin": "@ash_rusty_v8_x86_64_apple_darwin_archive//file",
         "@rules_rs//rs/platforms/config:x86_64-pc-windows-msvc": "@ash_rusty_v8_x86_64_pc_windows_msvc_archive//file",
-        "@rules_rs//rs/platforms/config:x86_64-unknown-linux-gnu": "@ash_rusty_v8_x86_64_unknown_linux_gnu_archive//file",
-        ":platform_x86_64_unknown_linux_musl": "@ash_rusty_v8_x86_64_unknown_linux_musl_archive//file",
+        "@rules_rs//rs/platforms/config:x86_64-unknown-linux-gnu": ":rusty_v8_x86_64_gnu_with_compatible_libcxx",
+        ":platform_x86_64_unknown_linux_musl": ":rusty_v8_x86_64_musl_with_compatible_libcxx",
     }),
 )
 

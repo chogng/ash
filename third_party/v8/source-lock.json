@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "version": "150.4.0",
+  "repository": "https://github.com/denoland/rusty_v8",
+  "revision": "5c15a6995c9bb4bacd3e341b59fff32c909c80bf",
+  "rustToolchain": "1.91.0",
+  "clangRevision": "llvmorg-23-init-10931-g20b6ec66-11",
+  "bindingCompiler": {
+    "linux": {"version": "19.1.1", "packageVersion": "1:19.1.1-1ubuntu1~24.04.2"},
+    "darwin": {"version": "19.1.7"},
+    "win32": {"version": "19.1.7"}
+  },
+  "gnuSysroots": {
+    "x86_64-unknown-linux-gnu": {
+      "glibcVersion": "2.27",
+      "url": "https://commondatastorage.googleapis.com/chrome-linux-sysroot/toolchain/e7c53f04bd88d29d075bfd1f62b073aeb69cbe09/debian_sid_amd64_sysroot.tar.xz",
+      "sha256": "6964fc4327837d4eab3799a29d843b9cdd6b68edfdce170e1a40ca723f4ad6c5",
+      "size": 62001608
+    },
+    "aarch64-unknown-linux-gnu": {
+      "glibcVersion": "2.27",
+      "url": "https://commondatastorage.googleapis.com/chrome-linux-sysroot/toolchain/953c2471bc7e71a788309f6c2d2003e8b703305d/debian_sid_arm64_sysroot.tar.xz",
+      "sha256": "bd4943c8d819a3be7a69f1af5031ae59f077b74133bc5ce9cfa10384ad919e4f",
+      "size": 55290648
+    }
+  },
+  "muslLinker": {
+    "version": "0.15.2",
+    "url": "https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz",
+    "sha256": "02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239"
+  }
+}

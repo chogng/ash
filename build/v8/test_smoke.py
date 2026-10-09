@@ -1,0 +1,128 @@
+"""Check staged pairs enter the real Bazel graph with the matching ABI."""
+
+import tempfile
+import tarfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+from build.download.artifacts import sha256
+from build.lib.v8 import load_v8_lock
+from build.v8.release import checksum_name, source_lock
+from build.v8.smoke import bazel_arguments, prepare_musl_linker
+
+
+class V8SmokeTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory(prefix="ash v8 smoke ")
+        self.addCleanup(self.temporary.cleanup)
+        self.directory = Path(self.temporary.name)
+        self.target = "x86_64-unknown-linux-gnu"
+        self.pair = load_v8_lock()[self.target]
+        self.paths = [
+            self.directory / item.name
+            for item in (self.pair.archive, self.pair.binding)
+        ]
+        for path in self.paths:
+            path.write_bytes(b"staged " + path.name.encode())
+        (self.directory / checksum_name(self.target)).write_text(
+            "".join(f"{sha256(path)}  {path.name}\n" for path in self.paths)
+        )
+
+    def test_bazel_tests_use_staged_inputs_and_serial_sandbox_execution(self):
+        arguments = bazel_arguments(
+            self.target, self.directory, self.directory / "repos", run=True
+        )
+        self.assertEqual("test", arguments[0])
+        self.assertIn("//crates/v8-poc:v8-poc-unit-tests", arguments)
+        self.assertIn("--test_arg=--test-threads=1", arguments)
+        overrides = [
+            item.split("=", 2)[2]
+            for item in arguments
+            if item.startswith("--override_repository=")
+        ]
+        self.assertEqual(2, len(overrides))
+        for directory, original in zip(overrides, self.paths, strict=True):
+            files = Path(directory) / "file"
+            self.assertEqual(
+                original.read_bytes(), (files / original.name).read_bytes()
+            )
+            self.assertIn('name = "file"', (files / "BUILD.bazel").read_text())
+        link_arguments = bazel_arguments(
+            self.target, self.directory, self.directory / "repos", run=False
+        )
+        self.assertEqual("build", link_arguments[0])
+        self.assertNotIn("--test_arg=--test-threads=1", link_arguments)
+        self.assertIn(
+            "--@bazel_tools//tools/test:incompatible_use_default_test_toolchain=false",
+            link_arguments,
+        )
+
+    def test_musl_uses_both_libc_constraints_and_only_x64_runs_on_linux_host(self):
+        for target, arch in (
+            ("aarch64-unknown-linux-musl", "arm64"),
+            ("x86_64-unknown-linux-musl", "amd64"),
+        ):
+            pair = load_v8_lock()[target]
+            paths = [
+                self.directory / item.name for item in (pair.archive, pair.binding)
+            ]
+            for path in paths:
+                path.write_bytes(b"staged " + path.name.encode())
+            (self.directory / checksum_name(target)).write_text(
+                "".join(f"{sha256(path)}  {path.name}\n" for path in paths)
+            )
+            arguments = bazel_arguments(
+                target, self.directory, self.directory / "repos", run=arch == "amd64"
+            )
+            self.assertIn(f"--platforms=//third_party/v8:linux_{arch}_musl", arguments)
+            self.assertEqual(
+                arch == "amd64",
+                "--extra_toolchains=//third_party/v8:musl_x64_tests_on_linux_host"
+                in arguments,
+            )
+
+    def test_bazel_rejects_corrupt_pairs_before_creating_overrides(self):
+        self.paths[0].write_bytes(b"corrupt")
+        output = self.directory / "repos"
+        with self.assertRaisesRegex(ValueError, "checksum validation"):
+            bazel_arguments(self.target, self.directory, output, run=True)
+        self.assertFalse(output.exists())
+
+    def test_musl_linker_uses_one_crt_provider(self):
+        output = self.directory / "linker"
+        output.mkdir()
+        pin = source_lock()
+        version = pin["muslLinker"]["version"]
+        payload = self.directory / "zig"
+        payload.write_bytes(b"fixture compiler")
+        archive = output / "zig.tar.xz"
+        with tarfile.open(archive, "w:xz") as contents:
+            contents.add(payload, arcname=f"zig-x86_64-linux-{version}/zig")
+        pin["muslLinker"]["sha256"] = sha256(archive)
+        with (
+            patch("build.v8.smoke.source_lock", return_value=pin),
+            patch(
+                "build.v8.smoke.subprocess.check_output", return_value=version + "\n"
+            ),
+        ):
+            values = prepare_musl_linker("aarch64-unknown-linux-musl", output)
+        prefix = "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL"
+        self.assertEqual("-C link-self-contained=no", values[prefix + "_RUSTFLAGS"])
+        wrapper = Path(values[prefix + "_LINKER"])
+        self.assertIn("cc -target aarch64-linux-musl", wrapper.read_text())
+
+    def test_msvc_cannot_enter_the_windows_gnu_toolchain(self):
+        with self.assertRaisesRegex(ValueError, "artifact ABI"):
+            bazel_arguments(
+                "x86_64-pc-windows-msvc",
+                self.directory,
+                self.directory / "repos",
+                run=True,
+            )
+        with self.assertRaisesRegex(ValueError, "musl target"):
+            prepare_musl_linker(self.target, self.directory)
+
+
+if __name__ == "__main__":
+    unittest.main()
