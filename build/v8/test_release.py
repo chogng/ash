@@ -91,7 +91,8 @@ class V8ReleaseTests(unittest.TestCase):
         (gn_out / "obj").mkdir(parents=True)
         (gn_out / "args.gn").write_text(
             "v8_enable_sandbox = true\nv8_enable_pointer_compression = true\n"
-            "v8_enable_external_code_space = true\nuse_custom_libcxx = true\nis_debug = false\n"
+            "v8_enable_external_code_space = true\nuse_custom_libcxx = true\n"
+            "v8_enable_partition_alloc = false\nis_debug = false\n"
         )
         if target.endswith("-linux-gnu"):
             sdk = self.root / "sysroots" / target
@@ -192,6 +193,13 @@ class V8ReleaseTests(unittest.TestCase):
             args.write_text(original.replace(f"{feature} = true", f"{feature} = false"))
             with self.assertRaisesRegex(ValueError, feature):
                 stage_pair(self.upstream, target, self.dist, self.root)
+        args.write_text(
+            original.replace(
+                "v8_enable_partition_alloc = false", "v8_enable_partition_alloc = true"
+            )
+        )
+        with self.assertRaisesRegex(ValueError, "v8_enable_partition_alloc"):
+            stage_pair(self.upstream, target, self.dist, self.root)
         args.write_text(original)
         binding = gn_out / "src_binding.rs"
         binding.write_bytes(b"")

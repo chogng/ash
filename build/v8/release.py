@@ -224,6 +224,7 @@ def validate_gn_args(gn_args: str) -> None:
         "v8_enable_pointer_compression": "true",
         "v8_enable_external_code_space": "true",
         "use_custom_libcxx": "true",
+        "v8_enable_partition_alloc": "false",
         "is_debug": "false",
     }
     for feature, value in flags.items():

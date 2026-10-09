@@ -57,6 +57,10 @@ musl 的 Cargo 链接器使用固定版本和 SHA-256 的 Zig，并关闭 Rust �
 链接 CRT，由 Zig 统一提供启动对象，避免重复定义 `_start`。构建 sysroot 来自
 Ubuntu/Alpine 软件包，系统 SDK 与 runner 镜像仍由 CI 环境提供。
 musl 关闭依赖 glibc 头文件的全局 allocator shim；V8 sandbox 保持启用。
+全部目标显式关闭用于模拟浏览器分配行为的 standalone PartitionAlloc，
+使用嵌入式 V8 的平台分配器；其 ARM IFUNC 代码依赖 musl/旧 GNU SDK
+没有的 `sys/ifunc.h`。这与 V8 sandbox、指针压缩开关互相独立，发布检查
+同时验证这些 GN 参数，防止混入不同配置的产物。
 全部 macOS/Linux 目标还通过仓库现有 Bazel 消费图验证同一份新产物，
 ARM64 musl 只链接，其余目标执行测试。Windows 的 Bazel C++ 工具链目前使用
 GNU ABI，不能验证 MSVC archive，因此这两个目标使用 Cargo 验证。

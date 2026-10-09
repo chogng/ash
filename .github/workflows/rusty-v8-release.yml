@@ -174,7 +174,11 @@ jobs:
           BINDGEN_EXTRA_CLANG_ARGS: ${{ steps.compiler.outputs.bindgen_extra_clang_args }}
           # Keep upstream outputs separate from Ash's Cargo target directory.
           CARGO_TARGET_DIR: ${{ github.workspace }}/upstream-rusty-v8/target
-        run: cargo "+$UPSTREAM_TOOLCHAIN" build --locked --release --target "$TARGET" --features v8_enable_sandbox
+        run: |
+          # Standalone PartitionAlloc assumes glibc's ARM IFUNC headers. Embedded
+          # V8 uses its platform allocator; pointer compression and sandbox stay on.
+          export GN_ARGS="${GN_ARGS:+$GN_ARGS }v8_enable_partition_alloc=false"
+          cargo "+$UPSTREAM_TOOLCHAIN" build --locked --release --target "$TARGET" --features v8_enable_sandbox
       - name: Stage archive, binding and checksums
         id: stage
         run: python -B build/v8/release.py stage --upstream upstream-rusty-v8 --target "$TARGET" --output "dist/$TARGET" --github-output "$GITHUB_OUTPUT"
