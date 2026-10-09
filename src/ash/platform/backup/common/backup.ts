@@ -28,11 +28,11 @@ export class BackupError extends Error {
 	}
 }
 
-/** Profile recovery content in the host-selected client namespace. */
+/** Profile recovery content in the host-selected client namespace, retained across connection closure. */
 export interface IBackupService {
 	getWorkspaces(): Promise<readonly IBackupWorkspace[]>;
 	list(workspaceId: string): Promise<readonly IBackupRecord[]>;
-	/** Undefined creates a record; updates require the last observed revision. */
+	/** Resolves after durable commit. Undefined creates a record; updates require the last observed revision. */
 	store(workspace: IBackupWorkspace, content: IBackupContent, expectedRevision?: string): Promise<IBackupRecord>;
 	discard(workspaceId: string, resource: URI, expectedRevision: string): Promise<void>;
 }

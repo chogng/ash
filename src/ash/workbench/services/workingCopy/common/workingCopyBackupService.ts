@@ -17,6 +17,7 @@ export interface IWorkingCopyBackupService extends IDisposable {
 	list(): Promise<readonly WorkingCopyBackup[]>;
 	store(backup: WorkingCopyBackup): Promise<void>;
 	delete(resource: URI): Promise<void>;
+	/** Selects a recovery scope without discarding the previous workspace's durable backups. */
 	switchWorkspace(workspaceId: string): void;
 }
 

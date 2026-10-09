@@ -1,4 +1,5 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
+import { CancellationError } from '../../../../base/common/errors.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { IBackupService, type IBackupContent, type IBackupRecord, type IBackupWorkspace } from '../../../../platform/backup/common/backup.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
@@ -11,6 +12,7 @@ const CONTENT_FORMAT = 'ash.working-copy.v1';
 /** The editor owns content serialization; Rust owns its durable version and workspace catalog. */
 export class WorkingCopyBackupService extends Disposable implements IWorkingCopyBackupService {
 	private workspaceId: string;
+	private workspaceGeneration = 0;
 	private readonly revisions = new Map<string, string>();
 	private readonly legacyConflicts = new Map<string, WorkingCopyBackup>();
 	private readonly legacy: IndexedDbWorkingCopyBackupService;
@@ -27,8 +29,12 @@ export class WorkingCopyBackupService extends Disposable implements IWorkingCopy
 	}
 
 	async list(): Promise<readonly WorkingCopyBackup[]> {
-		await this.prepare();
-		const records = await this.backups.list(this.workspaceId);
+		const generation = this.workspaceGeneration;
+		const workspaceId = this.workspaceId;
+		await this.prepare(generation);
+		this.assertCurrentWorkspace(generation);
+		const records = await this.backups.list(workspaceId);
+		this.assertCurrentWorkspace(generation);
 		const result: WorkingCopyBackup[] = [];
 		for (const record of records) {
 			try {
@@ -42,34 +48,52 @@ export class WorkingCopyBackupService extends Disposable implements IWorkingCopy
 	}
 
 	async store(backup: WorkingCopyBackup): Promise<void> {
-		await this.prepare();
+		const generation = this.workspaceGeneration;
+		const workspace = this.workspace();
+		await this.prepare(generation);
+		this.assertCurrentWorkspace(generation);
 		const key = backup.resource.toString();
-		const record = await this.backups.store(this.workspace(), serialize(backup), this.revisions.get(key));
+		const record = await this.backups.store(workspace, serialize(backup), this.revisions.get(key));
+		this.assertCurrentWorkspace(generation);
 		this.revisions.set(key, record.revision);
 	}
 
 	async delete(resource: URI): Promise<void> {
-		await this.prepare();
+		const generation = this.workspaceGeneration;
+		const workspaceId = this.workspaceId;
+		await this.prepare(generation);
+		this.assertCurrentWorkspace(generation);
 		const key = resource.toString();
 		const revision = this.revisions.get(key);
 		// Opening a clean editor before recovery must not remove an unobserved backup.
 		if (revision === undefined) return;
-		await this.backups.discard(this.workspaceId, resource, revision);
+		await this.backups.discard(workspaceId, resource, revision);
+		this.assertCurrentWorkspace(generation);
 		const legacy = this.legacyConflicts.get(key);
 		if (legacy) {
 			// Explicit save/revert also discards the observed older version, preventing its resurrection.
 			await this.legacy.deleteIfUnchanged(legacy);
+			this.assertCurrentWorkspace(generation);
 			this.legacyConflicts.delete(key);
 		}
 		this.revisions.delete(key);
 	}
 
 	switchWorkspace(workspaceId: string): void {
+		this.assertNotDisposed();
+		this.legacy.switchWorkspace(workspaceId);
 		this.workspaceId = workspaceId;
+		this.workspaceGeneration++;
 		this.revisions.clear();
 		this.legacyConflicts.clear();
 		this.preparation = undefined;
-		this.legacy.switchWorkspace(workspaceId);
+	}
+
+	private assertCurrentWorkspace(generation: number): void {
+		// An issued backend write can commit after replacement; its response must not update the new scope.
+		if (this.isDisposed || generation !== this.workspaceGeneration) {
+			throw new CancellationError();
+		}
 	}
 
 	private workspace(): IBackupWorkspace {
@@ -78,14 +102,24 @@ export class WorkingCopyBackupService extends Disposable implements IWorkingCopy
 		return { id: workspace.id, folders: workspace.folders.map(folder => folder.uri), ...(workspace.configuration ? { configuration: workspace.configuration } : {}), ...(workspace.remoteAuthority ? { remoteAuthority: workspace.remoteAuthority } : {}) };
 	}
 
-	private prepare(): Promise<void> {
-		return this.preparation ??= this.migrate().catch(error => { this.preparation = undefined; throw error; });
+	private prepare(generation: number): Promise<void> {
+		this.assertCurrentWorkspace(generation);
+		return this.preparation ??= this.migrate(generation).catch(error => {
+			if (generation === this.workspaceGeneration) {
+				this.preparation = undefined;
+			}
+			throw error;
+		});
 	}
 
-	private async migrate(): Promise<void> {
-		const records = await this.backups.list(this.workspaceId);
+	private async migrate(generation: number): Promise<void> {
+		const workspace = this.workspace();
+		const records = await this.backups.list(workspace.id);
+		this.assertCurrentWorkspace(generation);
 		const existing = new Map(records.map(record => [record.content.resource.toString(), record]));
-		for (const backup of await this.legacy.list()) {
+		const legacy = await this.legacy.list();
+		this.assertCurrentWorkspace(generation);
+		for (const backup of legacy) {
 			const content = serialize(backup);
 			const stored = existing.get(backup.resource.toString());
 			// A different durable backup belongs to a newer writer. Retain the old source for inspection.
@@ -93,9 +127,11 @@ export class WorkingCopyBackupService extends Disposable implements IWorkingCopy
 				this.legacyConflicts.set(backup.resource.toString(), backup);
 				continue;
 			}
-			const record = stored ?? await this.backups.store(this.workspace(), content);
+			const record = stored ?? await this.backups.store(workspace, content);
+			this.assertCurrentWorkspace(generation);
 			existing.set(backup.resource.toString(), record);
 			await this.legacy.deleteIfUnchanged(backup);
+			this.assertCurrentWorkspace(generation);
 			this.revisions.set(backup.resource.toString(), record.revision);
 		}
 	}

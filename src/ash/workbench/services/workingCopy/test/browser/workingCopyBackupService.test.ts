@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
+import { DeferredPromise } from '../../../../../base/common/async.js';
+import { CancellationError } from '../../../../../base/common/errors.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { BackupError, IBackupService, type IBackupContent, type IBackupRecord, type IBackupWorkspace } from '../../../../../platform/backup/common/backup.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
@@ -108,6 +110,95 @@ test('working-copy backup construction requires its registered backend', () => {
 	assert.throws(() => services.createInstance(WorkingCopyBackupService), /backupService/);
 });
 
+for (const operation of ['list', 'store', 'delete'] as const) {
+	test(`workspace replacement cancels ${operation} waiting for backup preparation`, async () => {
+		using services = new InstantiationService();
+		using context = new WorkspaceContextService({ id: 'one' });
+		const backend = new ControlledBackups();
+		using backups = assemble(services, backend, context);
+		const resource = URI.parse('untitled:/draft');
+		const held = backend.holdNext('list');
+		const operations = {
+			list: () => backups.list(),
+			store: () => backups.store({ resource, kind: 'text', content: 'old workspace', updatedAt: 1 }),
+			delete: () => backups.delete(resource),
+		};
+		const cancelled = assert.rejects(operations[operation](), CancellationError);
+		try {
+			await held.entered.p;
+			backups.switchWorkspace('two');
+			context.updateWorkspace({ id: 'two' });
+		} finally {
+			await held.release.complete();
+		}
+		await cancelled;
+		assert.deepEqual(await backend.getWorkspaces(), []);
+		await backups.store({ resource, kind: 'text', content: 'new workspace', updatedAt: 2 });
+		assert.equal((await backups.list())[0]?.content, 'new workspace');
+	});
+}
+
+for (const operation of ['list', 'store', 'discard'] as const) {
+	test(`late backend ${operation} cannot change revisions after leaving and returning to a workspace`, async () => {
+		using services = new InstantiationService();
+		using context = new WorkspaceContextService({ id: 'one' });
+		const backend = new ControlledBackups();
+		using backups = assemble(services, backend, context);
+		const backup: WorkingCopyBackup = { resource: URI.parse('untitled:/draft'), kind: 'text', content: 'first', updatedAt: 1 };
+		await backups.store(backup);
+		const held = backend.holdNext(operation);
+		const operations = {
+			list: () => backups.list(),
+			store: () => backups.store({ ...backup, content: 'in flight' }),
+			discard: () => backups.delete(backup.resource),
+		};
+		const cancelled = assert.rejects(operations[operation](), CancellationError);
+		try {
+			await held.entered.p;
+			backups.switchWorkspace('two');
+			context.updateWorkspace({ id: 'two' });
+			backups.switchWorkspace('one');
+			context.updateWorkspace({ id: 'one' });
+			await backups.list();
+			await backups.store({ ...backup, content: 'after returning' });
+		} finally {
+			await held.release.complete();
+		}
+		await cancelled;
+		await backups.store({ ...backup, content: 'latest' });
+		assert.equal((await backups.list())[0]?.content, 'latest');
+	});
+}
+
+test('disposing the backup service stops a write still waiting for preparation', async () => {
+	using services = new InstantiationService();
+	using context = new WorkspaceContextService({ id: 'one' });
+	const backend = new ControlledBackups();
+	using backups = assemble(services, backend, context);
+	const held = backend.holdNext('list');
+	const cancelled = assert.rejects(backups.store({ resource: URI.parse('untitled:/draft'), kind: 'text', content: 'disposed', updatedAt: 1 }), CancellationError);
+	try {
+		await held.entered.p;
+		backups.dispose();
+	} finally {
+		await held.release.complete();
+	}
+	await cancelled;
+	assert.deepEqual(await backend.getWorkspaces(), []);
+});
+
+test('invalid workspace replacement retains the current backup scope', async () => {
+	using services = new InstantiationService();
+	using context = new WorkspaceContextService({ id: 'one' });
+	const backend = new VersionedBackups();
+	using backups = assemble(services, backend, context);
+	const backup: WorkingCopyBackup = { resource: URI.parse('untitled:/draft'), kind: 'text', content: 'first', updatedAt: 1 };
+	await backups.store(backup);
+	assert.throws(() => backups.switchWorkspace(''), TypeError);
+	await backups.store({ ...backup, content: 'latest' });
+	assert.equal((await backups.list())[0]?.content, 'latest');
+});
+
 class VersionedBackups implements IBackupService {
 	private sequence = 0;
 	private readonly records = new Map<string, IBackupRecord>();
@@ -130,5 +221,42 @@ class VersionedBackups implements IBackupService {
 		if (current && current.revision !== expectedRevision) throw new BackupError('conflict');
 		this.records.delete(key);
 		if ((await this.list(id)).length === 0) this.workspaces.delete(id);
+	}
+}
+
+class ControlledBackups extends VersionedBackups {
+	private held: { operation: 'list' | 'store' | 'discard'; entered: DeferredPromise<void>; release: DeferredPromise<void>; } | undefined;
+
+	public holdNext(operation: 'list' | 'store' | 'discard'): { entered: DeferredPromise<void>; release: DeferredPromise<void>; } {
+		const held = { operation, entered: new DeferredPromise<void>(), release: new DeferredPromise<void>() };
+		this.held = held;
+		return held;
+	}
+
+	public override async list(workspaceId: string): Promise<readonly IBackupRecord[]> {
+		const result = await super.list(workspaceId);
+		await this.wait('list');
+		return result;
+	}
+
+	public override async store(workspace: IBackupWorkspace, content: IBackupContent, expectedRevision?: string): Promise<IBackupRecord> {
+		const result = await super.store(workspace, content, expectedRevision);
+		await this.wait('store');
+		return result;
+	}
+
+	public override async discard(workspaceId: string, resource: URI, expectedRevision: string): Promise<void> {
+		await super.discard(workspaceId, resource, expectedRevision);
+		await this.wait('discard');
+	}
+
+	private async wait(operation: 'list' | 'store' | 'discard'): Promise<void> {
+		const held = this.held;
+		if (!held || held.operation !== operation) {
+			return;
+		}
+		this.held = undefined;
+		await held.entered.complete();
+		await held.release.p;
 	}
 }
