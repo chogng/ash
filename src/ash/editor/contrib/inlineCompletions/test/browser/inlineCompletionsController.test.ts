@@ -1,4 +1,5 @@
 import '../../../../test/browser/testEditorDom.js';
+import { IAccessibilitySignalService } from '../../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import type { LanguageInlineCompletionsProvider } from '../../../../common/languages.js';
 import { createTestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
@@ -70,6 +71,8 @@ test('Registered editor commands retrigger inline completions after their edit',
 	const commandId = 'editor.test.inlineCompletionTrigger';
 	TriggerInlineEditCommandsRegistry.registerCommand(commandId);
 	using services = new InstantiationService();
+	const cues: string[] = [];
+	services.registerInstance(IAccessibilitySignalService, { playSignal: async signal => { cues.push(signal.settingsKey); }, playSignalLoop: () => { throw new Error('Unexpected loop'); } });
 	const telemetry = registerCompletionTelemetry(services);
 	using contexts = new ContextKeyService();
 	services.registerInstance(IContextKeyService, contexts);
@@ -88,6 +91,7 @@ test('Registered editor commands retrigger inline completions after their edit',
 	await ready;
 	await flushPromises();
 	assert.deepEqual(requests, ['automatic']);
+	assert.deepEqual(cues, ['accessibility.signals.inlineSuggestion']);
 	assert.equal(viewport.domNode.domNode.querySelector('.stanza-editor-inline-completion')?.textContent, ' completion');
 	selections.setSelections([Selection.fromPositions(new Position(1, 2))]);
 	assert.equal(viewport.domNode.domNode.querySelector<HTMLElement>('.stanza-editor-inline-completion')?.hidden, true);
@@ -120,6 +124,8 @@ test('inline completion acceptance applies additional edits and undoes atomicall
 	});
 	using service = new InlineCompletionsService();
 	using services = new InstantiationService();
+	const cues: string[] = [];
+	services.registerInstance(IAccessibilitySignalService, { playSignal: async signal => { cues.push(signal.settingsKey); }, playSignalLoop: () => { throw new Error('Unexpected loop'); } });
 	const telemetry = registerCompletionTelemetry(services);
 	services.registerInstance(IContextKeyService, new ContextKeyService());
 	assert.throws(() => services.createInstance(InlineCompletionsController, editorFor(model, selections), viewport, model, providers, undefined, (error: unknown) => { throw error; }), /Unknown service/);

@@ -22,6 +22,70 @@ import { FileKind, FileNotFoundError, type IFileBytes, IFileService, type IFileS
 import { IWorkspaceContextService } from "../../../../../platform/workspace/common/workspace.js";
 import { type ITerminalCommandStatusEvent, type ITerminalCreateOptions, type ITerminalDimensions, type ITerminalInstance, type ITerminalProfile, ITerminalService, type TerminalInstanceState } from "../../../../contrib/terminal/browser/terminal.js";
 import { TaskService } from "../../../../contrib/tasks/browser/taskService.js";
+import '../../../../contrib/accessibilitySignals/browser/accessibilitySignal.contribution.js';
+import { IAccessibilitySignalService } from '../../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
+import { ITaskService } from '../../common/taskService.js';
+import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../common/contributions.js';
+import { mock } from 'node:test';
+
+suite('Workspace task progress signals', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('shares a delayed cue across tasks and stops on completion, cancellation, and window disposal', async () => {
+		mock.timers.enable({ apis: ['setTimeout'] });
+		using resources = new DisposableStore();
+		try {
+			const root = URI.file('/project');
+			const workspace: IWorkspaceContextService = {
+				onDidChangeWorkspace: Event.None,
+				getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'project', index: 0 }] }),
+				getWorkbenchState: () => 2, getWorkspaceFolder: () => null,
+			};
+			const terminals = resources.add(new FakeTerminalService());
+			const services = taskServices(resources, new FakeFileService(root, {}), workspace, terminals);
+			const tasks = resources.add(services.createInstance(TaskService));
+			services.registerInstance(ITaskService, tasks);
+			const cues: string[] = [];
+			const results: string[] = [];
+			services.registerInstance(IAccessibilitySignalService, {
+				playSignal: async signal => { results.push(signal.settingsKey); },
+				playSignalLoop: () => { cues.push('started'); return toDisposable(() => cues.push('stopped')); },
+			});
+			using provider = tasks.registerTaskProvider({ id: 'progress-test', provideTasks: () => [{ id: 'watch', label: 'Watch', command: 'watch', group: 'build' }] });
+			await tasks.refresh();
+			using host = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['workbench.contrib.taskProgressAccessibility']);
+			host.advance(WorkbenchPhase.AfterRestored);
+			assert.deepEqual(cues, [], 'discovery is quiet');
+			const first = await tasks.run(tasks.tasks[0]);
+			mock.timers.tick(4999);
+			assert.deepEqual(cues, []);
+			const second = await tasks.run(tasks.tasks[0]);
+			mock.timers.tick(1);
+			assert.deepEqual(cues, ['started']);
+			terminals.instances[0].command({ commandId: 'first', status: 'running', exitCode: undefined });
+			terminals.instances[0].command({ commandId: 'first', status: 'succeeded', exitCode: 0 });
+			assert.equal(first.status, 'succeeded');
+			assert.deepEqual(results, ['accessibility.signals.taskCompleted']);
+			assert.deepEqual(cues, ['started'], 'the other task retains the cue');
+			await tasks.terminate(second);
+			assert.deepEqual(cues, ['started', 'stopped']);
+			const quick = await tasks.run(tasks.tasks[0]);
+			await tasks.terminate(quick);
+			mock.timers.tick(10000);
+			assert.deepEqual(cues, ['started', 'stopped'], 'short tasks never start a cue');
+			assert.deepEqual(results, ['accessibility.signals.taskCompleted'], 'cancellation does not announce success or failure');
+			await tasks.run(tasks.tasks[0]);
+			terminals.instances[3].command({ commandId: 'failed', status: 'running', exitCode: undefined });
+			terminals.instances[3].command({ commandId: 'failed', status: 'failed', exitCode: 1 });
+			assert.deepEqual(results, ['accessibility.signals.taskCompleted', 'accessibility.signals.taskFailed']);
+			await tasks.run(tasks.tasks[0]);
+			mock.timers.tick(5000);
+			host.dispose();
+			mock.timers.tick(10000);
+			assert.deepEqual(cues, ['started', 'stopped', 'started', 'stopped']);
+		} finally { mock.timers.reset(); }
+	});
+});
 
 test("TaskService discovers tasks, writes one terminal command, and tracks its exit", async () => {
 	const root = URI.file("C:\\project");

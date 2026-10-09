@@ -20,6 +20,7 @@ import { Color } from '../../../../../base/common/color.js';
 import { CancellationError } from '../../../../../base/common/errors.js';
 import { searchMatchBackground } from '../../../../../platform/theme/common/colors/searchColors.js';
 import { contrastBorder, focusBorder } from '../../../../../platform/theme/common/colors/baseColors.js';
+import { AccessibilitySignal, IAccessibilitySignalService } from '../../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 
 /** One persistent xterm renderer bound to exactly one Terminal instance. */
 export class XtermTerminal extends Disposable {
@@ -48,6 +49,7 @@ export class XtermTerminal extends Disposable {
 		@IThemeService private readonly themeService: IThemeService,
 		@IOpenerService private readonly openerService: IOpenerService,
 		@IQuickInputService private readonly quickInputService: IQuickInputService,
+		@IAccessibilitySignalService private readonly signals: IAccessibilitySignalService,
 	) {
 		super();
 		this.element = h(container.ownerDocument, "div");
@@ -130,6 +132,8 @@ export class XtermTerminal extends Disposable {
 		terminal.loadAddon(this.fitAddon);
 		terminal.loadAddon(new WebLinksAddon((_event, url) => { void this.openLink(url).catch(onUnexpectedError); }));
 		terminal.open(this.element);
+		const bell = terminal.onBell(() => { void this.signals.playSignal(AccessibilitySignal.terminalBell); });
+		this._register(toDisposable(() => bell.dispose()));
 		this.registerAlternateScrollMode(terminal);
 		this._register(this.themeService.onDidColorThemeChange(theme => {
 			terminal.options.theme = terminalTheme(theme);
@@ -166,7 +170,10 @@ export class XtermTerminal extends Disposable {
 	}
 
 	clearBuffer(): void {
-		this.writeWhenReady(terminal => terminal.clear());
+		this.writeWhenReady(terminal => {
+			terminal.clear();
+			void this.signals.playSignal(AccessibilitySignal.clear);
+		});
 	}
 
 	public findNext(term: string, searchOptions: ISearchOptions): Promise<boolean> {

@@ -111,6 +111,7 @@ fn allowed_environment_key(key: &str) -> bool {
             | "XDG_DATA_HOME"
             | "XDG_RUNTIME_DIR"
             | "XDG_STATE_HOME"
+            | "ZDOTDIR"
     ) || key.starts_with("LC_")
 }
 

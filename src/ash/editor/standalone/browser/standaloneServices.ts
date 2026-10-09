@@ -62,6 +62,7 @@ import { KeybindingResolver, KeybindingResolveKind } from '../../../platform/key
 import { INotificationService, NotificationSeverity, type NotificationAction, type NotificationHandle, type NotificationItem, type NotificationOptions } from '../../../platform/notification/common/notification.js';
 import { bindColorTheme } from '../../../platform/theme/browser/themeStyles.js';
 import { IAccessibilityService } from '../../../platform/accessibility/common/accessibility.js';
+import { AccessibilitySignalService, IAccessibilitySignalService } from '../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { AccessibilityService } from '../../../platform/accessibility/browser/accessibilityService.js';
 import '../../../base/browser/ui/contextview/contextview.css';
 import '../../../base/browser/ui/menu/menu.css';
@@ -195,6 +196,7 @@ export class StandaloneServiceCollection extends InstantiationService {
 		this.completionWorkerFactory = overrides.completionWorkerFactory;
 		const configurationService = this._register(new StandaloneConfigurationService());
 		this.registerInstance(IConfigurationService, configurationService);
+		this.registerSingleton(IAccessibilitySignalService, () => this.createInstance(AccessibilitySignalService));
 		this.registerSingleton(IAccessibilityService, accessor => new AccessibilityService({
 			root: document.body,
 			contextKeyService: accessor.get(IContextKeyService),

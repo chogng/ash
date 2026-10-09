@@ -1,8 +1,74 @@
 import { localize } from '../../../../nls.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
-import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
+import { AccessibilitySignal } from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
+
+for (const signal of AccessibilitySignal.allAccessibilitySignals) {
+	const hasAnnouncement = signal.announcementMessage !== undefined;
+	Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+		key: signal.settingsKey,
+		scope: ConfigurationScope.WINDOW,
+		defaultValue: hasAnnouncement ? { sound: 'auto', announcement: 'off' } : { sound: 'auto' },
+		parse(value: unknown): { sound: string; announcement?: string; } {
+			const invalid = (): TypeError => new TypeError(hasAnnouncement
+				? localize('accessibility.signals.policy.invalid', 'Signals require sound (auto, on, off) and announcement (auto, off).')
+				: localize('accessibility.signals.sound.invalid', 'This signal requires sound (auto, on, off).'));
+			if (typeof value !== 'object' || value === null || Array.isArray(value)) { throw invalid(); }
+			const policy = value as Record<string, unknown>;
+			if (Object.keys(policy).some(key => key !== 'sound' && (key !== 'announcement' || !hasAnnouncement))
+				|| typeof policy.sound !== 'string' || !['auto', 'on', 'off'].includes(policy.sound)
+				|| (hasAnnouncement && (typeof policy.announcement !== 'string' || !['auto', 'off'].includes(policy.announcement)))) {
+				throw invalid();
+			}
+			return hasAnnouncement ? { sound: policy.sound, announcement: policy.announcement as string } : { sound: policy.sound };
+		},
+		schema: {
+			type: 'object', additionalProperties: false, required: hasAnnouncement ? ['sound', 'announcement'] : ['sound'],
+			properties: {
+				sound: { type: 'string', enum: ['auto', 'on', 'off'] },
+				...(hasAnnouncement ? { announcement: { type: 'string', enum: ['auto', 'off'] } } : {}),
+			},
+		},
+		setting: {
+			valueType: 'stringMap',
+			get title() { return signal.name; },
+			get description() {
+				if (signal === AccessibilitySignal.progress) {
+					return localize('accessibility.signals.progress.description', 'Play a cue every five seconds while workspace tasks run, starting after five seconds. Sound accepts auto, on, off; announcement accepts auto, off. Auto follows screen reader optimization. Changes apply immediately.');
+				}
+				return hasAnnouncement
+					? localize('accessibility.signals.policy.description', 'Sound accepts auto, on, off; announcement accepts auto, off. Auto follows screen reader optimization. Changes apply immediately.')
+					: localize('accessibility.signals.sound.description', 'Sound accepts auto, on, off. Auto follows screen reader optimization. Changes apply immediately.');
+			},
+			get keyLabel() { return localize('accessibility.signals.progress.key', 'Modality'); },
+			get valueLabel() { return localize('accessibility.signals.progress.value', 'Mode'); },
+			get addLabel() { return localize('accessibility.signals.progress.add', 'Add modality'); },
+			get removeLabel() { return localize('accessibility.signals.progress.remove', 'Remove modality'); },
+			get incompleteMessage() { return localize('accessibility.signals.progress.incomplete', 'Enter a modality and mode.'); },
+			get duplicateMessage() { return localize('accessibility.signals.progress.duplicate', 'Each modality can appear only once.'); },
+		},
+	});
+}
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: 'accessibility.signalOptions.volume',
+	scope: ConfigurationScope.WINDOW,
+	defaultValue: 70,
+	parse(value: unknown): number {
+		if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 100) {
+			throw new TypeError(localize('accessibility.signals.volume.invalid', 'Signal volume must be between 0 and 100.'));
+		}
+		return value;
+	},
+	schema: { type: 'number', minimum: 0, maximum: 100 },
+	setting: {
+		valueType: 'number', minimum: 0, maximum: 100,
+		get title() { return localize('accessibility.signals.volume.title', 'Signal volume'); },
+		get description() { return localize('accessibility.signals.volume.description', 'Set the volume of accessibility sounds from 0 to 100 percent. Changes apply immediately.'); },
+	},
+});
 
 export const accessibilityHelpIsShown = new RawContextKey<boolean>('accessibilityHelpIsShown', false);
 export const accessibleViewIsShown = new RawContextKey<boolean>('accessibleViewIsShown', false);

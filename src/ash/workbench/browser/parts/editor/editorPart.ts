@@ -229,7 +229,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			workingCopyService: options.workingCopyService,
 			onWillCloseEditor: (group, input, pane, closingGroups) => this.confirmEditorClose(group, input, pane, closingGroups),
 			onOpenLocation: location => this.openEditor({ resource: location.resource }, { selection: location.selectionRange ?? location.range, selectionSource: TextEditorSelectionSource.JUMP }).then(() => undefined),
-			onApplyWorkspaceEdit: options.bulkEditService ? (edit, bulkOptions) => options.bulkEditService!.apply(edit, bulkOptions).then(() => undefined) : undefined,
+			onApplyWorkspaceEdit: options.bulkEditService ? (edit, bulkOptions) => options.bulkEditService!.apply(edit, bulkOptions).then(result => result.isApplied) : undefined,
 			titleActions: options.titleActions,
 			showBreadcrumbPicker: options.showBreadcrumbPicker,
 			breadcrumbsService: options.breadcrumbsService,
@@ -285,7 +285,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 				serverEvents: options.serverEvents,
 				workingCopyService: options.workingCopyService,
 				onOpenLocation: location => this.openEditor({ resource: location.resource }, { selection: location.selectionRange ?? location.range, selectionSource: TextEditorSelectionSource.JUMP }).then(() => undefined),
-				onApplyWorkspaceEdit: options.bulkEditService ? (edit, bulkOptions) => options.bulkEditService!.apply(edit, bulkOptions).then(() => undefined) : undefined,
+				onApplyWorkspaceEdit: options.bulkEditService ? (edit, bulkOptions) => options.bulkEditService!.apply(edit, bulkOptions).then(result => result.isApplied) : undefined,
 				...(options.titleActions ? {
 					actionServices: {
 						menuService: options.titleActions.menuService,

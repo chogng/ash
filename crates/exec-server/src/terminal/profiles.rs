@@ -1,5 +1,6 @@
 use crate::terminal::TerminalProfile;
 use crate::terminal::TerminalProfileSelection;
+use crate::terminal::command_status::CommandStatusMode;
 use crate::terminal::environment::TerminalEnvironment;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -78,22 +79,18 @@ impl TerminalProfileSpec {
             "powershell" | "windows-powershell" => vec![
                 "-NoExit".into(),
                 "-Command".into(),
-                powershell_integration_script().into(),
-            ],
-            "command-prompt" => vec![
-                "/Q".into(),
-                "/K".into(),
-                r"prompt $E]633;D$E\$E]633;A$E\$P$G$S".into(),
+                super::shell_integration::POWERSHELL.into(),
             ],
             _ => self.args.clone(),
         }
     }
 
-    pub(crate) fn command_status_enabled(&self) -> bool {
-        matches!(
-            self.profile_id.as_str(),
-            "powershell" | "windows-powershell" | "command-prompt"
-        )
+    pub(crate) fn command_status_mode(&self) -> CommandStatusMode {
+        match self.profile_id.as_str() {
+            "powershell" | "windows-powershell" => CommandStatusMode::ShellIntegration,
+            "zsh" | "bash" if !cfg!(windows) => CommandStatusMode::ShellIntegration,
+            _ => CommandStatusMode::Disabled,
+        }
     }
 
     fn command_args(&self, command: &str) -> Vec<String> {
@@ -111,10 +108,6 @@ impl TerminalProfileSpec {
             _ => vec!["-lc".into(), command.into()],
         }
     }
-}
-
-fn powershell_integration_script() -> &'static str {
-    r#"function global:prompt { $ashSuccess = $?; $ashExitCode = if ($ashSuccess) { 0 } elseif (($global:LASTEXITCODE -is [int]) -and $global:LASTEXITCODE -ne 0) { $global:LASTEXITCODE } else { 1 }; [Console]::Write("`e]633;D;$ashExitCode`a`e]633;A`a"); "PS $($executionContext.SessionState.Path.CurrentLocation)> " }"#
 }
 
 fn discover_profiles(environment: &HashMap<String, String>) -> Vec<TerminalProfileSpec> {

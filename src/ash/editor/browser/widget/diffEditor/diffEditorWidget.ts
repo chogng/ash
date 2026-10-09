@@ -24,6 +24,7 @@ import { DiffEditorDecorations } from './components/diffEditorDecorations.js';
 import { DiffEditorSash } from './components/diffEditorSash.js';
 import { DiffEditorViewZones } from './components/diffEditorViewZones/diffEditorViewZones.js';
 import { DiffEditorOptions, type DiffEditorWidgetOptions } from './diffEditorOptions.js';
+import { AccessibilitySignal, IAccessibilitySignalService } from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { OverviewRulerFeature } from './features/overviewRulerFeature.js';
 import { HideUnchangedRegionsFeature } from './features/hideUnchangedRegionsFeature.js';
 import { RevertButtonsFeature } from './features/revertButtonsFeature.js';
@@ -73,6 +74,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		@IInstantiationService instantiationService: IInstantiationService,
 		@ICodeEditorService private readonly codeEditorService: ICodeEditorService,
 		@IConfigurationService configuration: IConfigurationService,
+		@IAccessibilitySignalService private readonly signals: IAccessibilitySignalService,
 	) {
 		super();
 		this.diffOptions = instantiationService.createInstance(DiffEditorOptions, options);
@@ -468,6 +470,10 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		this.activeChangeRow = rowIndex;
 		this.diffDecorations.update(rows, this.activeChangeRow, this.showInlineChanges, this.diffOptions.renderIndicators);
 		const row = rows[rowIndex];
+		let signal = AccessibilitySignal.diffLineModified;
+		if (row.kind === LineDiffKind.Added) { signal = AccessibilitySignal.diffLineInserted; }
+		if (row.kind === LineDiffKind.Removed) { signal = AccessibilitySignal.diffLineDeleted; }
+		void this.signals.playSignal(signal);
 		if (row.modifiedLineIndex !== undefined) {
 			const lineNumber = row.modifiedLineIndex + 1;
 			const column = (row.modifiedChanges[0]?.startColumn ?? 0) + 1;

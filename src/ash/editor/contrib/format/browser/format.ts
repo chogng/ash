@@ -82,10 +82,10 @@ export async function formatEditor(
 	worker: IVersionedEditorWorkerClient,
 	kind: FormattingKind,
 	mode = FormattingMode.Explicit,
-): Promise<void> {
+): Promise<boolean> {
 	const model = editor.getModel();
 	if (!model || editor.getOption(EditorOption.readOnly)) {
-		return;
+		return false;
 	}
 	requests.get(editor)?.cancel();
 	const source = new EditorStateCancellationTokenSource(editor, CodeEditorStateFlag.Value | CodeEditorStateFlag.Position | CodeEditorStateFlag.Selection);
@@ -104,16 +104,19 @@ export async function formatEditor(
 	try {
 		const edits = await raceCancellationError(provideEdits(editor, model, features, kind, mode, model.getFormattingOptions(), source.token), source.token);
 		if (abort.signal.aborted || !edits?.length) {
-			return;
+			return false;
 		}
 		const minimalEdits = await worker.computeMoreMinimalEdits(edits, abort.signal);
 		if (!abort.signal.aborted && minimalEdits) {
 			FormattingEdit.execute(editor, [...minimalEdits], true);
+			return minimalEdits.length > 0;
 		}
+		return false;
 	} catch (error) {
 		if (!abort.signal.aborted) {
 			throw error;
 		}
+		return false;
 	} finally {
 		if (requests.get(editor) === source) {
 			requests.delete(editor);

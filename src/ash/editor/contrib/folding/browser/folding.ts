@@ -5,6 +5,8 @@ import { localize, localize2 } from '../../../../nls.js';
 import { isNumber, isObject } from '../../../../base/common/types.js';
 import type { ICommandMetadata } from '../../../../platform/commands/common/commands.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { RunOnceScheduler } from '../../../../base/common/async.js';
+import { AccessibilitySignal, IAccessibilitySignalService } from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { Emitter } from '../../../../base/common/event.js';
@@ -195,6 +197,7 @@ export class FoldingController extends Disposable {
 		viewport: View,
 		folding: EditorFoldingModel,
 		@IContextKeyService contextKeyService: IContextKeyService,
+		@IAccessibilitySignalService signals: IAccessibilitySignalService,
 	) {
 		super();
 		this.viewport = viewport;
@@ -213,6 +216,18 @@ export class FoldingController extends Disposable {
 			this._register(editor.onDidChangeConfiguration(event => {
 				if (event.hasChanged(EditorOption.folding)) updateEnabled();
 			}));
+			let previousFold: number | undefined;
+			const cue = this._register(new RunOnceScheduler(() => {
+				if (!editor.hasTextFocus()) { return; }
+				const line = editor.getPosition()?.lineNumber;
+				const folded = line !== undefined && folding.regions.some(region => region.collapsed && region.startLineIndex === line - 1);
+				if (folded && previousFold !== line) { void signals.playSignal(AccessibilitySignal.foldedArea); }
+				previousFold = folded ? line : undefined;
+			}, 250));
+			this._register(editor.onDidChangeCursorPosition(() => cue.schedule()));
+			this._register(folding.onDidChange(() => cue.schedule()));
+			this._register(editor.onDidFocusEditorText(() => cue.schedule()));
+			this._register(editor.onDidBlurEditorText(() => { cue.cancel(); previousFold = undefined; }));
 		} catch (error) {
 			this.dispose();
 			throw error;

@@ -70,7 +70,8 @@ export interface CodeEditorWidgetOptions extends IEditorConstructionOptions {
 	readonly onLanguageError?: (error: unknown) => void;
 	readonly onExecuteEditorCommand?: (id: string, args: readonly unknown[] | undefined) => void | Promise<void>;
 	readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
-	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | Promise<void>;
+	/** Return whether the edit was applied when the host can distinguish cancellation from success. */
+	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | boolean | Promise<void | boolean>;
 	readonly registerBeforeSave?: (hook: () => void | Promise<void>) => IDisposable;
 	readonly onContributionError?: (error: unknown) => void;
 	/** Omit to use the registered set; an array selects exactly those contributions. */

@@ -42,7 +42,7 @@ class RenameController extends Disposable {
 		private readonly editorInput: HTMLElement,
 		private readonly editor: ICodeEditor,
 		private readonly viewport: View,
-		private readonly applyWorkspaceEdit: ((edit: languages.LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | Promise<void>) | undefined,
+		private readonly applyWorkspaceEdit: ((edit: languages.LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | boolean | Promise<void | boolean>) | undefined,
 		private readonly onError: (error: unknown) => void,
 		private readonly executeCommand: EditorCommandExecutor,
 		@ILanguageFeaturesService private readonly languageFeaturesService: ILanguageFeaturesService,

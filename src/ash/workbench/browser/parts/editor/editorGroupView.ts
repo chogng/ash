@@ -79,7 +79,7 @@ export interface EditorGroupOptions {
 	readonly onSave?: (group: IEditorGroupView, input: IResourceEditorInput, pane: IEditorPane) => Promise<boolean>;
 	readonly onWillCloseEditor?: (group: IEditorGroupView, input: IResourceEditorInput, pane: IEditorPane, closingGroups?: readonly EditorGroupId[]) => Promise<boolean>;
 	readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
-	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | Promise<void>;
+	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | boolean | Promise<void | boolean>;
 	readonly titleActions?: EditorHeaderActions;
 	readonly showBreadcrumbPicker?: (element: FileElement, openFile: (resource: URI) => Promise<void>) => void;
 	readonly breadcrumbsService?: IBreadcrumbsService;
@@ -144,7 +144,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	private readonly onSave: ((group: IEditorGroupView, input: IResourceEditorInput, pane: IEditorPane) => Promise<boolean>) | undefined;
 	private readonly onWillCloseEditor: EditorGroupOptions['onWillCloseEditor'];
 	private readonly onOpenLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined;
-	private readonly onApplyWorkspaceEdit: ((edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | Promise<void>) | undefined;
+	private readonly onApplyWorkspaceEdit: ((edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | boolean | Promise<void | boolean>) | undefined;
 	private readonly titleActions: EditorHeaderActions | undefined;
 	private readonly resolveOpenError: EditorGroupOptions["resolveOpenError"];
 	private readonly onWillOpenEditor: EditorGroupOptions["onWillOpenEditor"];

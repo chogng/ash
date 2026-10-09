@@ -8,6 +8,7 @@ import { EditorContextKeys } from '../../../common/editorContextKeys.js';
 import { IVersionedEditorWorkerClient } from '../../../browser/services/editorWorkerService.js';
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { formatEditor, FormattingKind, FormattingMode } from './format.js';
+import { AccessibilitySignal, IAccessibilitySignalService } from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 
 class FormatDocumentAction extends EditorAction {
 	constructor() {
@@ -28,7 +29,9 @@ class FormatDocumentAction extends EditorAction {
 		if (!editor.getModel()) {
 			return;
 		}
-		await formatEditor(editor, accessor.get(ILanguageFeaturesService), accessor.get(IVersionedEditorWorkerClient), FormattingKind.File);
+		const signals = accessor.get(IAccessibilitySignalService);
+		const applied = await formatEditor(editor, accessor.get(ILanguageFeaturesService), accessor.get(IVersionedEditorWorkerClient), FormattingKind.File);
+		if (applied) { void signals.playSignal(AccessibilitySignal.format); }
 	}
 }
 
@@ -53,7 +56,9 @@ class FormatSelectionAction extends EditorAction {
 		if (!editor.getModel()) {
 			return;
 		}
-		await formatEditor(editor, accessor.get(ILanguageFeaturesService), accessor.get(IVersionedEditorWorkerClient), FormattingKind.Selection);
+		const signals = accessor.get(IAccessibilitySignalService);
+		const applied = await formatEditor(editor, accessor.get(ILanguageFeaturesService), accessor.get(IVersionedEditorWorkerClient), FormattingKind.Selection);
+		if (applied) { void signals.playSignal(AccessibilitySignal.format); }
 	}
 }
 
@@ -74,8 +79,8 @@ registerEditorContribution({
 		if (!context.options.formatOnSave || !context.registerBeforeSave) {
 			return;
 		}
-		context.register(context.registerBeforeSave(() => formatEditor(
-			context.editor, context.languageFeaturesService, context.editorWorker, FormattingKind.File, FormattingMode.Silent,
-		).catch(context.onLanguageError)));
+		context.register(context.registerBeforeSave(async () => {
+			await formatEditor(context.editor, context.languageFeaturesService, context.editorWorker, FormattingKind.File, FormattingMode.Silent).catch(context.onLanguageError);
+		}));
 	}
 });

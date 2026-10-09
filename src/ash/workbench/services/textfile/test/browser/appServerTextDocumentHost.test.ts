@@ -5,6 +5,7 @@ import { InMemoryConfigurationService } from '../../../../../platform/configurat
 import { TestDialogService } from '../../../../contrib/bulkEdit/test/browser/bulkEditTestServices.js';
 import { BulkEditService } from '../../../../contrib/bulkEdit/browser/bulkEditService.js';
 import { IBulkEditService } from '../../../../../editor/browser/services/bulkEditService.js';
+import { IAccessibilitySignalService } from '../../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import assert from 'node:assert/strict';
 import { mock } from 'node:test';
 import { test } from 'mocha';
@@ -157,13 +158,15 @@ async function fixture() {
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IWorkingCopyService, workingCopies);
 	services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
+	const cues: string[] = [];
+	services.registerInstance(IAccessibilitySignalService, { playSignal: async signal => { cues.push(signal.settingsKey); }, playSignalLoop: () => Disposable.None });
 	const editing = lifetime.add(services.createInstance(ChatEditingService));
 	const transport = new Transport();
 	const client = new AppServerProtocolClient(transport);
 	lifetime.add(toDisposable(() => client.dispose()));
 	lifetime.add(services.createInstance(AppServerTextDocumentHost, client, { applyEdits: editing.applyEdits.bind(editing), finishTurn: editing.finishTurn.bind(editing) }));
 	await client.connect();
-	return { files, models, workingCopies, services, transport, client, editing, bulk, configuration, ...toDisposable(() => lifetime.dispose()) };
+	return { files, models, workingCopies, services, transport, client, editing, bulk, configuration, cues, ...toDisposable(() => lifetime.dispose()) };
 }
 
 async function snapshot(transport: Transport, resource: URI): Promise<string> {
@@ -307,10 +310,12 @@ test('a failed rejection save keeps the review available for retry', async () =>
 	const save = host.files.writeFile.bind(host.files);
 	host.files.writeFile = async () => { throw new Error('Injected review save failure'); };
 	await assert.rejects(host.editing.rejectEntry(entry), /Injected review save failure/);
+	assert.deepEqual(host.cues, ['accessibility.signals.chatEditModifiedFile']);
 	assert.equal(host.editing.entries[0], entry);
 	assert.equal(entry.isBusy, false);
 	host.files.writeFile = save;
 	await host.editing.rejectEntry(entry);
+	assert.deepEqual(host.cues, ['accessibility.signals.chatEditModifiedFile', 'accessibility.signals.editsUndone']);
 	assert.equal(host.files.contents.get(resource.toString()), 'original');
 	assert.equal(host.editing.entries.length, 0);
 });

@@ -382,7 +382,6 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IFileTextModelService, textModels);
 		services.registerSingleton(IKeybindingEditingService, () => services.createInstance(KeybindingsEditingService));
 		services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
-		if (options.createTextDocumentHost) { this._register(options.createTextDocumentHost(services)); }
 		services.registerInstance(IChatService, chat);
 		const accountService = this._register(new AppServerAccountService(options.api.accounts, options.api.events));
 		services.registerInstance(IAccountService, accountService);
@@ -454,10 +453,12 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IAccessibilityService, this._register(options.nativeHostApi
 			? services.createInstance(NativeAccessibilityService, this.domNode)
 			: new AccessibilityService({
-			root: this.domNode,
-			contextKeyService: contextKeys,
-			configurationService,
-		})));
+				root: this.domNode,
+				contextKeyService: contextKeys,
+				configurationService,
+			})));
+		// Document hosts resolve Chat editing, whose signals use the window accessibility policy.
+		if (options.createTextDocumentHost) { this._register(options.createTextDocumentHost(services)); }
 		services.registerInstance(IGitHubConnectionService, this._register(services.createInstance(GitHubConnectionService)));
 		const notificationActionRunner = this._register(services.createInstance(NotificationActionRunner));
 		const keyboardLayoutService = this._register(new BrowserKeyboardLayoutService({

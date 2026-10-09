@@ -676,7 +676,6 @@ export class Workbench extends Disposable {
 		services.registerSingleton(IKeybindingEditingService, () => services.createInstance(KeybindingsEditingService));
 		services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
 		const bulkEditService = services.get(IBulkEditService);
-		if (createTextDocumentHost) { this._register(createTextDocumentHost(services)); }
 		this._register(services.createInstance(WorkbenchLanguageFeatures));
 		// Only the desktop host may inspect directory grants. Web language requests
 		// are authorized by the server for the authenticated workspace.
@@ -920,6 +919,8 @@ export class Workbench extends Disposable {
 				configurationService: configuration,
 			}));
 		services.registerInstance(IAccessibilityService, accessibilityService);
+		// Document hosts resolve Chat editing, whose signals use the window accessibility policy.
+		if (createTextDocumentHost) { this._register(createTextDocumentHost(services)); }
 		services.registerInstance(IGitHubConnectionService, this._register(services.createInstance(GitHubConnectionService)));
 		const viewDescriptors = this._register(services.createInstance(ViewDescriptorService, {}));
 		services.registerInstance(IViewDescriptorService, viewDescriptors);

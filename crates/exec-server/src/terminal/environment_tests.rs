@@ -53,6 +53,7 @@ fn environment_keeps_safe_values_and_excludes_secrets() {
         ("LANG".into(), "en_US.UTF-8".into()),
         ("LC_ALL".into(), "C.UTF-8".into()),
         ("PATH".into(), "/usr/bin".into()),
+        ("ZDOTDIR".into(), "/home/ash/zsh".into()),
         ("OPENAI_API_KEY".into(), "secret".into()),
         ("AWS_SECRET_ACCESS_KEY".into(), "secret".into()),
     ]);
@@ -66,6 +67,7 @@ fn environment_keeps_safe_values_and_excludes_secrets() {
         Some("C.UTF-8")
     );
     assert!(!environment.variables().contains_key("OPENAI_API_KEY"));
+    assert_eq!(environment.variables()["ZDOTDIR"], "/home/ash/zsh");
     assert!(
         !environment
             .variables()

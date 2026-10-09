@@ -1,5 +1,6 @@
 import '../../../../test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
+import { IAccessibilitySignalService } from '../../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Position } from '../../../../common/core/position.js';
@@ -122,7 +123,7 @@ test('Code actions without a resolver never use another provider resolver', asyn
 	dom.window.close();
 });
 
-for (const outcome of ['complete', 'error'] as const) {
+for (const outcome of ['complete', 'canceled', 'error'] as const) {
 	test(`a dispatched workspace edit can ${outcome} without closing a newer code action menu`, async () => {
 		const dom = new JSDOM('<!doctype html><body><main></main></body>');
 		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
@@ -139,7 +140,11 @@ for (const outcome of ['complete', 'error'] as const) {
 		const errors: unknown[] = [];
 		let calls = 0;
 		const container = dom.window.document.querySelector<HTMLElement>('main')!;
+		using services = new InstantiationService();
+		const cues: string[] = [];
+		services.registerInstance(IAccessibilitySignalService, { playSignal: async signal => { cues.push(signal.settingsKey); }, playSignalLoop: () => { throw new Error('Unexpected loop'); } });
 		using editor = createTestCodeEditor({
+			instantiationService: services,
 			container, model, ariaLabel: 'test.ts',
 			languageFeaturesService: features, dimension: { width: 320, height: 80 }, onLanguageError: error => errors.push(error),
 			onApplyWorkspaceEdit: async (_edit, options) => {
@@ -147,6 +152,7 @@ for (const outcome of ['complete', 'error'] as const) {
 				calls++;
 				await pending;
 				if (outcome === 'error') throw new Error('Workspace edit failed after dispatch');
+				return outcome === 'complete';
 			},
 		});
 		const input = container.querySelector<HTMLElement>('.stanza-editor-input')!;
@@ -168,6 +174,7 @@ for (const outcome of ['complete', 'error'] as const) {
 			await flushPromises();
 			assert.equal(dom.window.document.querySelector('.ash-action-widget'), replacement);
 			assert.deepEqual(errors.map(error => (error as Error).message), outcome === 'error' ? ['Workspace edit failed after dispatch'] : []);
+			assert.deepEqual(cues, ['accessibility.signals.codeActionTriggered', 'accessibility.signals.codeActionTriggered', ...(outcome === 'complete' ? ['accessibility.signals.codeActionApplied'] : [])]);
 		} finally {
 			release();
 			dom.window.close();

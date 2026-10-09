@@ -29,6 +29,7 @@ import { bindContextKey } from '../../../../../platform/observable/common/platfo
 import { InlineCompletionContextKeys } from './inlineCompletionContextKeys.js';
 import { DataChannelForwardingTelemetryService } from '../../../../../platform/dataChannel/browser/forwardingTelemetryService.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+import { AccessibilitySignal, IAccessibilitySignalService } from '../../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 
 type CompletionEndOfLife = { accepted: boolean; durationMs: number; };
 type CompletionEndOfLifeClassification = {
@@ -70,6 +71,7 @@ export class InlineCompletionsController extends Disposable {
 		@ILanguageFeatureDebounceService debounceService: ILanguageFeatureDebounceService,
 		@ILanguageConfigurationService private readonly languageConfigurationService: ILanguageConfigurationService,
 		@IInstantiationService instantiationService: IInstantiationService,
+		@IAccessibilitySignalService private readonly signals: IAccessibilitySignalService,
 	) {
 		super();
 		this.telemetry = instantiationService.createInstance(DataChannelForwardingTelemetryService);
@@ -157,6 +159,7 @@ export class InlineCompletionsController extends Disposable {
 				this.inlineCompletionsService.reportNewCompletion(`editor-inline-${++this.completionRequestId}`);
 			}
 			this.render();
+			if (this.item && !this.element.hidden) { void this.signals.playSignal(AccessibilitySignal.inlineSuggestion); }
 		} catch (error) {
 			if (!request.signal.aborted) this.onError(error);
 		} finally {

@@ -256,6 +256,39 @@ entries also select the Electron accessibility service, which reads initial
 system support and subscribes to changes for that window's lifetime. Web entries
 keep the browser accessibility service.
 
+Accessibility signals use the window-scoped `platform/accessibilitySignal/browser`
+service for audio and polite announcements. Existing feature owners emit signals
+after real state changes: task progress and outcomes, terminal command outcomes,
+bell and clear, successful saves and explicit formatting, debugger stops, cursor
+errors/warnings and breakpoints, collapsed regions, inline suggestions, diff
+navigation, Chat requests/responses and required actions, recording start/stop,
+Chat file edits and review decisions, and code action invocation/application.
+Code action application preserves the bulk-edit result, so dismissing a preview
+cannot announce success. Agents shares the Chat, recording and save contributions.
+
+TaskService remains the execution-state owner. Its contribution starts one shared
+cue after five seconds while any tasks are running, then repeats every five
+seconds. Completion, failure, cancellation, and window disposal stop the cue.
+Task terminals emit task outcomes without duplicating terminal command signals.
+Interactive command outcomes follow shell integration markers from Bash, Zsh,
+and PowerShell. Input newlines never imply command boundaries. Command Prompt
+uses its standard startup without command outcome detection. PowerShell without
+its console input hook and older Bash with a user DEBUG trap remain quiet.
+Bell and clear signals work independently of that capability.
+Restoring history and repeated streaming updates do not replay Chat cues.
+Window disposal releases listeners, timers and cached playback. Eleven bundled
+sounds are Ash-generated assets, loaded only when enabled playback is requested.
+
+Each `accessibility.signals.*` setting defaults to sound `auto` and, where
+supported, announcement `off`. Sound accepts `auto`, `on`, and `off`; announcement
+accepts `auto` and `off`. Sound-only signals expose only the sound modality.
+`auto` follows the existing screen-reader optimization policy.
+`accessibility.signalOptions.volume` defaults to 70 percent. These settings use
+the existing UI settings document and reload path; changes apply immediately,
+including during active playback. Embedded standalone editors remain quiet when
+their host has not registered signal preferences. Signal kinds for capabilities
+without a current Ash producer are not registered.
+
 ## Configuration architecture
 
 Configuration, application state, and Rust product intent have separate owners.

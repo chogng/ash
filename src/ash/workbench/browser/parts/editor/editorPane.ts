@@ -63,7 +63,7 @@ export interface EditorPaneCreationOptions {
 	readonly workingCopyService?: IWorkingCopyService;
 	readonly onSave?: () => Promise<void | boolean>;
 	readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
-	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | Promise<void>;
+	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | boolean | Promise<void | boolean>;
 }
 
 export enum EditorPaneMatch {

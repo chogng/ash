@@ -5,14 +5,21 @@ use std::collections::VecDeque;
 const OSC_633_PREFIX: &[u8] = b"\x1b]633;";
 const MAX_COMMAND_EVENTS: usize = 1_024;
 
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(crate) enum CommandStatusMode {
+    Disabled,
+    ShellIntegration,
+}
+
 pub(crate) enum ParsedTerminalOutput {
     Bytes(Vec<u8>),
+    CommandStarted,
     CommandFinished(Option<i32>),
 }
 
 /// Tracks shell command lifecycle independently of any renderer.
 pub(crate) struct TerminalCommandStatusTracker {
-    enabled: bool,
+    mode: CommandStatusMode,
     pending_output: Vec<u8>,
     events: VecDeque<TerminalCommandStatusEvent>,
     next_event_sequence: u64,
@@ -21,9 +28,9 @@ pub(crate) struct TerminalCommandStatusTracker {
 }
 
 impl TerminalCommandStatusTracker {
-    pub(crate) fn new(enabled: bool) -> Self {
+    pub(crate) fn new(mode: CommandStatusMode) -> Self {
         Self {
-            enabled,
+            mode,
             pending_output: Vec::new(),
             events: VecDeque::new(),
             next_event_sequence: 0,
@@ -32,11 +39,8 @@ impl TerminalCommandStatusTracker {
         }
     }
 
-    pub(crate) fn note_input(&mut self, data: &str, after_output_sequence: u64) {
-        if !self.enabled
-            || self.active_command_id.is_some()
-            || !data.bytes().any(|byte| matches!(byte, b'\r' | b'\n'))
-        {
+    pub(crate) fn start_active(&mut self, after_output_sequence: u64) {
+        if self.active_command_id.is_some() {
             return;
         }
         let command_id = format!("command-{:x}", self.next_command_id);
@@ -51,7 +55,7 @@ impl TerminalCommandStatusTracker {
     }
 
     pub(crate) fn parse_output(&mut self, bytes: Vec<u8>) -> Vec<ParsedTerminalOutput> {
-        if !self.enabled {
+        if self.mode == CommandStatusMode::Disabled {
             return vec![ParsedTerminalOutput::Bytes(bytes)];
         }
         self.pending_output.extend(bytes);
@@ -77,7 +81,9 @@ impl TerminalCommandStatusTracker {
                 break;
             };
             let payload = &self.pending_output[OSC_633_PREFIX.len()..payload_end];
-            if let Some(exit_code) = command_finished_payload(payload) {
+            if payload == b"C" {
+                parsed.push(ParsedTerminalOutput::CommandStarted);
+            } else if let Some(exit_code) = command_finished_payload(payload) {
                 parsed.push(ParsedTerminalOutput::CommandFinished(exit_code));
             }
             self.pending_output.drain(..payload_end + terminator_length);

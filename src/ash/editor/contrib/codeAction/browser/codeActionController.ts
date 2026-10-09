@@ -1,3 +1,4 @@
+import { AccessibilitySignal, IAccessibilitySignalService } from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { EditSources } from '../../../common/textModelEditSource.js';
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
@@ -38,11 +39,12 @@ export class CodeActionController extends Disposable {
 		private readonly editor: ICodeEditor,
 		private readonly viewport: View,
 		private readonly diagnostics: TextDecorationCollection<languages.LanguageDiagnostic>,
-		private readonly applyWorkspaceEdit: ((edit: languages.LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | Promise<void>) | undefined,
+		private readonly applyWorkspaceEdit: ((edit: languages.LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | boolean | Promise<void | boolean>) | undefined,
 		private readonly onError: (error: unknown) => void,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IActionWidgetService private readonly actionWidgetService: IActionWidgetService,
 		@IBulkEditService private readonly bulkEditService: IBulkEditService,
+		@IAccessibilitySignalService private readonly signals: IAccessibilitySignalService,
 	) {
 		super();
 		if (diagnostics.textModel !== viewport.textModel || editor.getModel() !== viewport.textModel) {
@@ -88,6 +90,7 @@ export class CodeActionController extends Disposable {
 			type: CodeActionTriggerType.Invoke, triggerAction, filter, autoApply,
 		});
 		if (!state) { return; }
+		void this.signals.playSignal(AccessibilitySignal.codeActionTriggered);
 		try {
 			const actions = await state.actions;
 			if (this.model.state !== state) { return; }
@@ -150,6 +153,7 @@ export class CodeActionController extends Disposable {
 		const context = this.context;
 		if (!entry || !context || !languages.isLanguageFeatureRequestCurrent(context) || entry.action.disabledReason !== undefined) return;
 		let editDispatched = false;
+		let applied = false;
 		try {
 			const resolved = entry.action.edit || !entry.provider.resolveCodeAction
 				? entry.action : (await entry.resolve(context)).action;
@@ -173,10 +177,10 @@ export class CodeActionController extends Disposable {
 				// Dismissing the menu hands focus to the preview without cancelling its version-bound request.
 				this.actionWidgetService.hide(false);
 				editDispatched = true;
-				await this.bulkEditService.apply(resolved.edit, { ...options, token: context.signal });
+				applied = (await this.bulkEditService.apply(resolved.edit, { ...options, token: context.signal })).isApplied;
 			} else if (this.applyWorkspaceEdit) {
 				editDispatched = true;
-				await this.applyWorkspaceEdit(resolved.edit, options);
+				applied = await this.applyWorkspaceEdit(resolved.edit, options) === true;
 			} else {
 				const documentEdit = resolved.edit.entries.find(edit => edit.kind === "textDocument" && edit.resource.toString() === context.resource.toString());
 				if (resolved.edit.entries.length !== 1 || !documentEdit || documentEdit.kind !== "textDocument") throw new Error("This editor host cannot apply a multi-resource code action");
@@ -186,10 +190,11 @@ export class CodeActionController extends Disposable {
 				if (documentEdit.edits.length > 0) {
 					editDispatched = true;
 					this.editor.pushUndoStop();
-					this.editor.executeEdits('editor.action.codeAction', [...documentEdit.edits]);
+					applied = this.editor.executeEdits('editor.action.codeAction', [...documentEdit.edits]);
 					this.editor.pushUndoStop();
 				}
 			}
+			if (applied && !this.isDisposed) { void this.signals.playSignal(AccessibilitySignal.codeActionApplied); }
 			if (this.context === context) this.close();
 		} catch (error) {
 			if (editDispatched || languages.isLanguageFeatureRequestCurrent(context)) this.onError(error);

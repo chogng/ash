@@ -1,6 +1,7 @@
 import '../testEditorDom.js';
 
 import { h, text } from '../../../../base/browser/dom.js';
+import { IAccessibilitySignalService } from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
@@ -1075,7 +1076,7 @@ test('selection formatting merges expanded edits repeatedly before one undoable 
 	});
 	using worker = new VersionedEditorWorkerClient(model, () => new EditorWorker());
 	editor.setSelections([new Selection(1, 1, 1, 6), new Selection(2, 1, 2, 5), new Selection(3, 1, 3, 6)]);
-	await formatEditor(editor, features, worker, FormattingKind.Selection);
+	assert.equal(await formatEditor(editor, features, worker, FormattingKind.Selection), true);
 	assert.equal(model.getValue(), 'ALPHA\nBETA\nGAMMA');
 	assert.deepEqual(queried, ['[1,1 -> 1,6]', '[2,1 -> 2,5]', '[1,1 -> 2,5]', '[3,1 -> 3,6]', '[1,1 -> 3,6]']);
 	model.undo();
@@ -1098,7 +1099,11 @@ test('format actions share the model worker and release the save hook on detach'
 		mode = selectedMode;
 		return providers[0];
 	});
+	using services = new InstantiationService();
+	const cues: string[] = [];
+	services.registerInstance(IAccessibilitySignalService, { playSignal: async signal => { cues.push(signal.settingsKey); }, playSignalLoop: () => { throw new Error('Unexpected loop'); } });
 	using editor = createTestCodeEditor({
+		instantiationService: services,
 		container: requiredElement(dom.window.document, 'main'), model,
 		formatOnSave: true,
 		onLanguageError: error => { throw error; },
@@ -1121,6 +1126,11 @@ test('format actions share the model worker and release the save hook on detach'
 	await saveHook();
 	assert.equal(model.getValue(), 'ALPHA');
 	assert.equal(mode, FormattingMode.Silent);
+	assert.deepEqual(cues, []);
+	model.undo();
+	await editor.getAction('editor.action.formatDocument')!.run();
+	assert.equal(model.getValue(), 'ALPHA');
+	assert.deepEqual(cues, ['accessibility.signals.format']);
 	editor.setModel(null);
 	assert.equal(saveHook, undefined);
 	assert.equal(worker?.isDisposed, true);

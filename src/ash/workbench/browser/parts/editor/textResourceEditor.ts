@@ -125,7 +125,7 @@ export interface EditorPaneOptions {
 	readonly textDirection?: EditorTextDirection;
 	readonly onExecuteEditorCommand?: CodeEditorWidgetOptions["onExecuteEditorCommand"];
 	readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
-	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | Promise<void>;
+	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | boolean | Promise<void | boolean>;
 	readonly placeholder?: string;
 	readonly showUnicodeHighlights?: boolean;
 	readonly onSave?: () => Promise<void | boolean>;

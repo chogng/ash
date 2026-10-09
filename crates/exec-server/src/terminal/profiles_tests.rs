@@ -17,7 +17,7 @@ fn discovered_profiles_have_one_default_and_unique_programs() {
 }
 
 #[test]
-fn tracked_windows_shells_launch_with_shell_integration_markers() {
+fn powershell_uses_host_markers_and_cmd_keeps_its_standard_launch() {
     let command_prompt = TerminalProfileSpec {
         profile_id: "command-prompt".into(),
         title: "Command Prompt".into(),
@@ -25,8 +25,8 @@ fn tracked_windows_shells_launch_with_shell_integration_markers() {
         args: Vec::new(),
         is_default: true,
     };
-    assert!(command_prompt.command_status_enabled());
-    assert!(command_prompt.launch_args().join(" ").contains("633;D"));
+    assert!(command_prompt.command_status_mode() == CommandStatusMode::Disabled);
+    assert!(command_prompt.launch_args().is_empty());
 
     let powershell = TerminalProfileSpec {
         profile_id: "powershell".into(),
@@ -35,8 +35,9 @@ fn tracked_windows_shells_launch_with_shell_integration_markers() {
         args: Vec::new(),
         is_default: false,
     };
-    assert!(powershell.command_status_enabled());
-    assert!(powershell.launch_args().join(" ").contains("633;A"));
+    assert!(powershell.command_status_mode() == CommandStatusMode::ShellIntegration);
+    assert!(powershell.launch_args().join(" ").contains("633;C"));
+    assert!(powershell.launch_args().join(" ").contains("633;D"));
     assert_eq!(
         powershell.command_args("Get-Location"),
         [

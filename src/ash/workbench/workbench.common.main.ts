@@ -19,6 +19,7 @@ import './contrib/localHistory/browser/localHistory.contribution.js';
  * before loading this bundle and keep Sessions composition outside Workbench.
  */
 import "./browser/workbench.contribution.js";
+import './contrib/accessibilitySignals/browser/accessibilitySignal.contribution.js';
 import './browser/actions/layoutActions.js';
 import "./contrib/modernUI/browser/modernUI.contribution.js";
 import './contrib/mediaPreview/browser/mediaPreview.contribution.js';

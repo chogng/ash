@@ -912,7 +912,14 @@ Terminal 服务要求已打开的 Workspace folder；多根窗口把选定 `dirI
 稳定 ID。连接离开 ready 后，本地 `connectionOwned` 实例进入 `disconnected`；用户可显式
 Relaunch，新 PTY 使用原 Profile，不重放未确认输入。SSH `reconnectable` 实例进入 `reconnecting`，
 Renderer 在同一后端的 30 秒租约内 attach 原 PTY，首次续读成功后才回到 `running`。后端已有
-命令状态检测，但尚未接入完整前端 shell integration capability、跨后端重启恢复或持久 scrollback。
+命令状态检测：Unix zsh/Bash 由 exec-server 注入临时启动脚本，保留用户配置及提示符钩子，
+通过 OSC 633 开始/结束标记和退出码发布实例命令事件；临时文件随 PTY 输出读取结束释放。
+Bash 4.4 以上使用 PS0，旧版使用 DEBUG 钩子；旧版已有用户 DEBUG trap 时保留该 trap，
+不推断命令结果。缺少退出码的完成事件不会触发成功信号。
+PowerShell 使用 PSConsoleHostReadLine 在完整输入被接受后上报开始，原有 prompt 上报管道结果，
+保留用户提示符；无该读取钩子或语言模式受限时不推断命令。cmd 使用标准启动，不注入伪命令标记。
+所有 Profile 均已移除基于输入换行的命令推断。
+尚未接入完整前端 shell integration capability、跨后端重启恢复或持久 scrollback。
 窗口服务按实例 ID 持有可释放资源，关闭完成后撤销该持有关系；窗口或实例释放会立即停止输入与读取。
 窗口释放后的创建结果、实例关闭后的重启结果仍拥有真实 PTY，必须关闭后才结束操作。
 同一实例的并发重启共享一次创建，并发 close 共享释放结果；close 也等待进行中的重启清理，避免遗留第二个 PTY。

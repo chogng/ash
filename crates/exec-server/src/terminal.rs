@@ -3,10 +3,13 @@
 mod command_status;
 mod environment;
 mod profiles;
+mod shell_integration;
 
+use crate::terminal::command_status::CommandStatusMode;
 use crate::terminal::command_status::ParsedTerminalOutput;
 use crate::terminal::command_status::TerminalCommandStatusTracker;
 use crate::terminal::profiles::TerminalProfileCatalog;
+use crate::terminal::shell_integration::ShellIntegration;
 use ash_file_access::Authorization;
 use ash_file_access::Permission;
 use ash_utils_pty::ProcessHandle;
@@ -136,13 +139,15 @@ impl TerminalService {
             return Err(TerminalError::Busy);
         }
         let dir_root = authorization.dir().canonical_path().to_path_buf();
+        let integration = ShellIntegration::prepare(profile, self.profiles.environment())
+            .map_err(|_| TerminalError::OperationFailed)?;
         let spawned = self
             .runtime
             .block_on(spawn_pty_process(
                 &profile.program,
-                &profile.launch_args(),
+                &integration.args,
                 &dir_root,
-                self.profiles.environment(),
+                &integration.environment,
                 &None,
                 TerminalSize {
                     rows: params.rows,
@@ -166,9 +171,9 @@ impl TerminalService {
             self.next_terminal_id.fetch_add(1, Ordering::Relaxed)
         );
         let state = Arc::new(Mutex::new(TerminalState::new(
-            profile.command_status_enabled(),
+            profile.command_status_mode(),
         )));
-        let process = spawn_output_drainers(&self.runtime, spawned, state.clone());
+        let process = spawn_output_drainers(&self.runtime, spawned, state.clone(), integration);
         sessions.insert(
             terminal_id.clone(),
             TerminalSession {
@@ -252,15 +257,7 @@ impl TerminalService {
             .get(&params.terminal_id)
             .expect("terminal ownership was just validated");
         let writer = session.process.writer_sender();
-        let state = session.state.clone();
         drop(sessions);
-        {
-            let mut state = state.lock().map_err(|_| TerminalError::Busy)?;
-            let after_output_sequence = state.next_sequence;
-            state
-                .command_status
-                .note_input(&params.data, after_output_sequence);
-        }
         self.runtime
             .block_on(writer.send(params.data.into_bytes()))
             .map_err(|_| TerminalError::OperationFailed)
@@ -517,12 +514,12 @@ struct TerminalState {
 }
 
 impl TerminalState {
-    fn new(command_status_enabled: bool) -> Self {
+    fn new(command_status_mode: CommandStatusMode) -> Self {
         Self {
             chunks: VecDeque::new(),
             next_sequence: 0,
             output_bytes: 0,
-            command_status: TerminalCommandStatusTracker::new(command_status_enabled),
+            command_status: TerminalCommandStatusTracker::new(command_status_mode),
             exited: false,
             output_closed: false,
             exit_code: None,
@@ -532,7 +529,7 @@ impl TerminalState {
 
 impl Default for TerminalState {
     fn default() -> Self {
-        Self::new(false)
+        Self::new(CommandStatusMode::Disabled)
     }
 }
 
@@ -545,6 +542,7 @@ fn spawn_output_drainers(
     runtime: &Runtime,
     spawned: SpawnedProcess,
     state: Arc<Mutex<TerminalState>>,
+    integration: ShellIntegration,
 ) -> Arc<ProcessHandle> {
     let SpawnedProcess {
         session,
@@ -560,6 +558,10 @@ fn spawn_output_drainers(
                 for item in state.command_status.parse_output(bytes) {
                     match item {
                         ParsedTerminalOutput::Bytes(bytes) => push_output(&mut state, bytes),
+                        ParsedTerminalOutput::CommandStarted => {
+                            let after_output_sequence = state.next_sequence;
+                            state.command_status.start_active(after_output_sequence);
+                        }
                         ParsedTerminalOutput::CommandFinished(exit_code) => {
                             let after_output_sequence = state.next_sequence;
                             state
@@ -575,19 +577,31 @@ fn spawn_output_drainers(
             push_output(&mut state, pending_output);
             state.output_closed = true;
             state.exited = state.exit_code.is_some();
+            if state.exited {
+                let after_output_sequence = state.next_sequence;
+                let exit_code = state.exit_code;
+                state
+                    .command_status
+                    .finish_active(exit_code, after_output_sequence);
+            }
         }
+        drop(integration);
     });
     let exit_session = session.clone();
     runtime.spawn(async move {
         let exit_code = exit_rx.await.unwrap_or(-1);
         exit_session.release_pty_handles_after_exit();
         if let Ok(mut state) = state.lock() {
-            let after_output_sequence = state.next_sequence;
-            state
-                .command_status
-                .finish_active(Some(exit_code), after_output_sequence);
+            // OSC command markers can still be queued when OS exit arrives.
+            // Finish the active command only after its output has been drained.
             state.exit_code = Some(exit_code);
             state.exited = state.output_closed;
+            if state.exited {
+                let after_output_sequence = state.next_sequence;
+                state
+                    .command_status
+                    .finish_active(Some(exit_code), after_output_sequence);
+            }
         }
     });
     session

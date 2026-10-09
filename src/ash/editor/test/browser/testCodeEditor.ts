@@ -15,7 +15,8 @@ import { IInlineCompletionsService, InlineCompletionsService } from '../../brows
 import { IDataChannelService, NullDataChannelService } from '../../../platform/dataChannel/common/dataChannel.js';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry.js';
 import { NullTelemetryService } from '../../../platform/telemetry/common/telemetryUtils.js';
-import { DisposableStore } from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore } from '../../../base/common/lifecycle.js';
+import { IAccessibilitySignalService } from '../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { setIconResolver } from '../../../base/browser/ui/lxicons/lxicon.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
@@ -70,6 +71,9 @@ export function createCodeEditorServices(disposables: Pick<DisposableStore, 'add
 
 /** Completes an existing test scope without replacing its explicit service overrides. */
 export function registerCodeEditorServices(services: InstantiationService): void {
+	if (!services.has(IAccessibilitySignalService)) {
+		services.registerInstance(IAccessibilitySignalService, { playSignal: async () => { }, playSignalLoop: () => Disposable.None });
+	}
 	if (!services.has(IDataChannelService)) {
 		services.registerInstance(IDataChannelService, new NullDataChannelService());
 	}

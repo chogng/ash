@@ -13,6 +13,7 @@ import { ChatEditingModifiedDocumentEntry } from './chatEditingModifiedDocumentE
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import type { ChatEditSource, ChatEditOutcome } from '../../../../services/chat/common/chatService.js';
 import { autoAcceptDelaySetting } from '../chat.shared.contribution.js';
+import { AccessibilitySignal, IAccessibilitySignalService } from '../../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 
 interface AutoAcceptReview {
 	readonly turns: Map<string, ChatEditOutcome | 'pending'>;
@@ -31,7 +32,7 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 	private readonly autoAccept = new Map<IModifiedFileEntry, AutoAcceptReview>();
 	private readonly countdown = this._register(new RunOnceScheduler(() => this.tick(), 1000));
 
-	constructor(@IBulkEditService private readonly bulkEdits: IBulkEditService, @ITextModelResourceService private readonly models: ITextModelResourceService, @IConfigurationService private readonly configuration: IConfigurationService) {
+	constructor(@IBulkEditService private readonly bulkEdits: IBulkEditService, @ITextModelResourceService private readonly models: ITextModelResourceService, @IConfigurationService private readonly configuration: IConfigurationService, @IAccessibilitySignalService private readonly signals: IAccessibilitySignalService) {
 		super();
 		this._register(toDisposable(() => { this.operations.clearPending(); this.autoAccept.clear(); }));
 		this._register(configuration.onDidChangeConfiguration(event => {
@@ -110,6 +111,7 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 				this.reviews.set(entry.id, entry);
 			}
 			if (result.isApplied) {
+				void this.signals.playSignal(AccessibilitySignal.chatEditModifiedFile);
 				for (const entry of this.entries) {
 					if (entry.resources.some(resource => resources.has(extUriBiasedIgnorePathCase.getComparisonKey(resource)))) {
 						const entryTurns = atomic ? new Map(turns) : new Map(this.autoAccept.get(entry)?.turns);
@@ -127,22 +129,32 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 
 	public acceptEntry(entry: IModifiedFileEntry, hunk?: IModifiedFileEntryChangeHunk): Promise<void> {
 		this.cancelAutoAccept(entry);
-		return this.operations.schedule(async () => { this.requireEntry(entry); await entry.accept(hunk); });
+		return this.operations.schedule(async () => { this.requireEntry(entry); await entry.accept(hunk); void this.signals.playSignal(AccessibilitySignal.editsKept); });
 	}
 
 	public rejectEntry(entry: IModifiedFileEntry, hunk?: IModifiedFileEntryChangeHunk): Promise<void> {
 		this.cancelAutoAccept(entry);
-		return this.operations.schedule(async () => { this.requireEntry(entry); await entry.reject(hunk); });
+		return this.operations.schedule(async () => { this.requireEntry(entry); await entry.reject(hunk); void this.signals.playSignal(AccessibilitySignal.editsUndone); });
 	}
 
 	public accept(...resources: URI[]): Promise<void> {
 		for (const entry of this.selected(resources)) { this.cancelAutoAccept(entry); }
-		return this.operations.schedule(async () => { this.assertNotDisposed(); for (const entry of this.selected(resources)) { await entry.accept(); } });
+		return this.operations.schedule(async () => {
+			this.assertNotDisposed();
+			const selected = this.selected(resources);
+			for (const entry of selected) { await entry.accept(); }
+			if (selected.length) { void this.signals.playSignal(AccessibilitySignal.editsKept); }
+		});
 	}
 
 	public reject(...resources: URI[]): Promise<void> {
 		for (const entry of this.selected(resources)) { this.cancelAutoAccept(entry); }
-		return this.operations.schedule(async () => { this.assertNotDisposed(); for (const entry of this.selected(resources)) { await entry.reject(); } });
+		return this.operations.schedule(async () => {
+			this.assertNotDisposed();
+			const selected = this.selected(resources);
+			for (const entry of selected) { await entry.reject(); }
+			if (selected.length) { void this.signals.playSignal(AccessibilitySignal.editsUndone); }
+		});
 	}
 
 	private requireEntry(entry: IModifiedFileEntry): void {
@@ -203,7 +215,10 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 				review.deadline = undefined;
 				// Recheck inside the edit queue: a newer tool write or cancellation wins over an expired timer.
 				void this.operations.scheduleSkipIfCleared(async () => {
-					if (this.autoAccept.get(entry) === review && review.revision === revision && !review.cancelled && [...review.turns.values()].every(outcome => outcome === 'completed')) { await entry.accept(); }
+					if (this.autoAccept.get(entry) === review && review.revision === revision && !review.cancelled && [...review.turns.values()].every(outcome => outcome === 'completed')) {
+						await entry.accept();
+						void this.signals.playSignal(AccessibilitySignal.editsKept);
+					}
 				}).catch(onUnexpectedError);
 			} else { this.autoAcceptChanged.fire(entry); }
 		}
