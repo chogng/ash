@@ -1,3 +1,4 @@
+import { ExtensionResourceLoaderService } from '../../../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
@@ -41,12 +42,12 @@ test('Built-in media declarations activate from the package catalog, localize, r
 	using service = new AppServerExtensionService({
 		api: {
 			list: async () => ({ generation, extensions: included ? [{ ...descriptor, sourceKind }] : [], diagnostics: [] }),
-			readResource: async request => {
+			resources: new ExtensionResourceLoaderService(async request => {
 				assert.equal(request.extensionId, descriptor.id);
 				assert.equal(request.generation, generation);
 				if (fail) { throw new Error('Editor labels unavailable'); }
 				return readFile('extensions/media-preview/' + request.path);
-			},
+			}),
 		},
 		textMateService: { grammars } as unknown as ITextMateService,
 	});

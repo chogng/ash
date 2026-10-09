@@ -151,6 +151,61 @@ struct LeaseRecord {
 }
 
 impl PluginsManager {
+    pub fn extension_gallery_resource_url_template(
+        &self,
+    ) -> Result<Option<String>, MarketplaceClientError> {
+        Ok(self
+            .providers
+            .extension_gallery()?
+            .map(|(_, _, template)| template))
+    }
+
+    /// Reads an inert resource from the configured gallery's checksum-verified package without installing it.
+    pub fn read_extension_gallery_resource(
+        &self,
+        publisher: &str,
+        name: &str,
+        version: &str,
+        path: &str,
+    ) -> Result<Vec<u8>, MarketplaceClientError> {
+        if path.is_empty()
+            || path.len() > 1024
+            || path.contains(['\\', ':', '\0'])
+            || path
+                .split('/')
+                .any(|part| part.is_empty() || part == "." || part == "..")
+        {
+            return Err(MarketplaceClientError::invalid_request(
+                "invalid extension resource path",
+            ));
+        }
+        let (marketplace, _, _) = self.providers.extension_gallery()?.ok_or_else(|| {
+            MarketplaceClientError::invalid_request("no extension resource gallery is configured")
+        })?;
+        let package_id =
+            ash_plugin::PluginId::new(format!("{publisher}.{name}"), marketplace.clone()).map_err(
+                |_| MarketplaceClientError::invalid_request("invalid extension identity"),
+            )?;
+        let downloaded = self.providers.download(DownloadPackageRequest {
+            package_id: package_id.to_string(),
+            version: Some(version.to_owned()),
+        })?;
+        let extension_id = format!("{publisher}.{name}");
+        let capability = downloaded
+            .capabilities()
+            .iter()
+            .find(|capability| {
+                capability.kind == CapabilityKind::EditorExtension && capability.id == extension_id
+            })
+            .ok_or_else(MarketplaceClientError::package_untrusted)?;
+        let relative = format!("{}/{path}", capability.path);
+        let artifact = self.store.materialize(downloaded.as_ref())?;
+        // Validate the complete artifact and containment before reading; no live package root is exposed.
+        self.store
+            .verified_package_path(&artifact.package, &relative)?;
+        self.store.read_package_file(&artifact.package, &relative)
+    }
+
     /// Pins an exact verified source for a trusted product consumer. This grants package
     /// retention only; executable admission is checked by that consumer's separate authority.
     pub fn acquire_local_source(

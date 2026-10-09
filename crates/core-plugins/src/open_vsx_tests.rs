@@ -156,6 +156,76 @@ fn search_uses_open_vsx_without_downloading_packages_and_preserves_named_source(
 }
 
 #[test]
+fn gallery_reads_verified_resources_without_installing_or_activating_the_package() {
+    let http = Arc::new(FixtureHttp::default());
+    release(&http, "1.0.0", vsix("1.0.0", None));
+    let root = tempfile::tempdir().unwrap();
+    let manager = crate::PluginsManager::open(
+        root.path(),
+        crate::PluginProviders::new([(
+            ash_plugin::MarketplaceName::new("custom-source").unwrap(),
+            client(Arc::clone(&http)) as Arc<dyn PluginProvider>,
+        )])
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        manager.extension_gallery_resource_url_template().unwrap(),
+        Some(
+            "https://registry.example/api/{publisher}/{name}/universal/{version}/file/{path}"
+                .into()
+        )
+    );
+    let manifest = manager
+        .read_extension_gallery_resource("publisher", "sample", "1.0.0", "package.json")
+        .unwrap();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&manifest).unwrap()["version"],
+        "1.0.0"
+    );
+    assert_eq!(
+        manager
+            .read_extension_gallery_resource("publisher", "sample", "1.0.0", "snippets/sample.json")
+            .unwrap(),
+        br#"{"sample":{"prefix":"sample","body":"value"}}"#
+    );
+    assert!(
+        manager
+            .list_installed(crate::ListInstalledRequest {})
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        manager
+            .local_capability_sources(CapabilityKind::EditorExtension)
+            .unwrap()
+            .is_empty()
+    );
+    let requests = http.requests.lock().unwrap().len();
+    for path in [
+        "../package.json",
+        "/package.json",
+        "a/../package.json",
+        "a\\file",
+        "a:stream",
+        "a//file",
+    ] {
+        assert!(
+            manager
+                .read_extension_gallery_resource("publisher", "sample", "1.0.0", path)
+                .is_err(),
+            "{path}"
+        );
+    }
+    assert_eq!(http.requests.lock().unwrap().len(), requests);
+    assert!(
+        manager
+            .read_extension_gallery_resource("publisher", "sample", "1.0.0", "missing.json")
+            .is_err()
+    );
+}
+
+#[test]
 fn install_update_reopen_and_uninstall_use_the_existing_manager_without_running_scripts() {
     let http = Arc::new(FixtureHttp::default());
     release(&http, "1.0.0", vsix("1.0.0", None));

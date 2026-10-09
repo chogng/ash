@@ -1,3 +1,4 @@
+import { ExtensionResourceLoaderService } from '../../../extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { InstantiationService } from '../../../instantiation/common/instantiationService.js';
@@ -43,7 +44,7 @@ function snapshot(generation: number, lifecycle: 'dormant' | 'ready'): Extension
 function browser(remote: RemoteHost): BrowserExtensionHostApi {
 	return new BrowserExtensionHostApi({
 		list: async () => ({ generation: 1, extensions: [], diagnostics: [] }),
-		readResource: async () => { throw new Error('Bundled resources are outside this fixture'); },
+		resources: new ExtensionResourceLoaderService(async () => { throw new Error('Bundled resources are outside this fixture'); }),
 	}, remote, remote.instantiation);
 }
 

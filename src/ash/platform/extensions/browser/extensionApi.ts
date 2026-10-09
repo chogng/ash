@@ -6,6 +6,7 @@ import type { IResourceApi } from "../../agentHost/common/appServerApi.js";
 import type { AppServerProtocolClient } from "../../agentHost/browser/appServerProtocolClient.js";
 import { appServerRequest } from "../../agentHost/browser/appServerRequest.js";
 import { localize } from '../../../nls.js';
+import { ExtensionResourceLoaderService } from '../../extensionResourceLoader/browser/extensionResourceLoaderService.js';
 
 /** Reads complete package snapshots prepared by the browser build, without server transport. */
 export function createBrowserExtensionApi(): IExtensionApi {
@@ -19,21 +20,31 @@ export function createBrowserExtensionApi(): IExtensionApi {
 	})();
 	return {
 		list: async () => (await load()).catalog,
-		readResource: async request => {
+		resources: new ExtensionResourceLoaderService(async request => {
 			const { catalog, resources } = await load();
 			const extension = resources[request.extensionId];
 			if (request.generation !== catalog.generation || !extension || !Object.hasOwn(extension, request.path)) {
 				throw new Error(localize('extensions.browser.resourceMissing', 'Browser extension resource is not in the current package: {0}/{1}', request.extensionId, request.path));
 			}
 			return decodeBase64(extension[request.path]).buffer;
-		},
+		}),
 	};
 }
 
 export function createAppServerExtensionApi(connection: AppServerProtocolClient, resourceApi: IResourceApi): IExtensionApi {
 	return {
 		list: async (reload: ExtensionCatalogReload) => normalizeExtensionCatalog(await appServerRequest(connection, "extensions/list", { reload })),
-		readResource: request => readExtensionResource(connection, resourceApi, request),
+		resources: new ExtensionResourceLoaderService(request => readExtensionResource(connection, resourceApi, request), {
+			template: async () => {
+				if (connection.capabilities?.contracts.extensionGalleryResources?.version !== 1) { return undefined; }
+				return (await appServerRequest(connection, 'extensions/gallery', {})).resourceUrlTemplate ?? undefined;
+			},
+			read: async request => {
+				const generation = resourceApi.connectionGeneration;
+				const opened = await appServerRequest(connection, 'extensions/gallery/resource/open', request);
+				return readAppServerResource(resourceApi, opened.resource, MAX_EXTENSION_RESOURCE_BYTES, undefined, generation);
+			},
+		}),
 	};
 }
 

@@ -102,6 +102,7 @@ import { NotificationService } from "../../workbench/services/notification/commo
 import { INotificationsCenter, NotificationsCenter } from "../../workbench/browser/parts/notifications/notificationsCenter.js";
 import { INotificationService } from "../../platform/notification/common/notification.js";
 import { IRendererHostService, type IRendererHost } from "../../platform/renderer/common/rendererHost.js";
+import { IExtensionResourceLoaderService } from '../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
 import { ITraceSettingsService } from '../../platform/trace/common/traceSettingsService.js';
 import type { INativeHostApi, IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
 import { IStorageService, WillSaveStateReason, StorageScope } from "../../platform/storage/common/storage.js";
@@ -321,6 +322,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IWorkbenchHostService, workbenchWindow);
 		services.registerInstance(AppServerApiId, options.api.appServer);
 		services.registerInstance(IRendererHostService, options.api);
+		services.registerInstance(IExtensionResourceLoaderService, options.api.extensions.resources);
 		services.registerInstance(ModelApiId, options.api.model);
 		services.registerInstance(ISessionApi, options.api.session);
 		services.registerInstance(IThreadApi, options.api.thread);

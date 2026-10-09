@@ -13,6 +13,14 @@ owns Workbench catalog types and decides which supported declarative contributio
 It never executes extension JavaScript or gives extensions editor DOM, model, Worker-port, or host
 filesystem access.
 
+`platform/extensionResourceLoader` owns resource URI interpretation, strict UTF-8 decoding and binary reads.
+`IExtensionApi.resources` is the same service registered in the window scope. Browser snapshots and
+App Server adapters bind its source callbacks; contribution loaders keep their candidate resource caches.
+Installed reads retain the catalog generation. Gallery reads use the configured Open VSX URL contract
+and Rust-verified VSIX contents without installing, enabling or executing the package. The backend
+returns a connection-owned resource handle; the existing bounded read path verifies and releases it.
+Only universal Open VSX packages are supported, matching the existing provider.
+
 The product direction is TS/JS extensions running in an isolated JS host, with a TS SDK delegating
 editor and UI operations to their TS services and backend operations to Rust. This declarative
 loader remains responsible for resources; it does not become the JS runtime. The Rust author SDK
@@ -31,7 +39,7 @@ Both static contribution loaders refresh on Marketplace changes, including remov
 | Area                                                             | Owner                                     | Current contract                                                                            |
 | ---------------------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------- |
 | Trusted roots, immutable package snapshot, digest and generation | `ash-extension-catalog::ExtensionCatalog` | Built-in first, profile second; direct child packages only                                  |
-| Renderer transport and exact-shape normalization                 | `platform/extensions/*`                   | `IExtensionApi.list` and generation-bound `readResource`                                    |
+| Renderer transport and exact-shape normalization                 | `platform/extensions/*`                   | `IExtensionApi.list` and its shared `IExtensionResourceLoaderService`                                    |
 | Workbench catalog/domain types                                   | `common/extensionService.ts`              | Does not expose generated DTO or manifest JSON                                              |
 | Supported manifest parsing                                       | `parseExtensionManifest`                  | Identity plus languages, grammars, snippets, color/icon themes, and debuggers               |
 | Workbench lifecycle                                              | `AppServerExtensionService`               | Serialized/coalesced refresh with full candidate preparation and one event-barrier commit   |
@@ -128,7 +136,7 @@ the same candidate generation. A synchronous commit failure discards buffered ca
 restores the previous generation.
 
 `ExtensionColorThemeService` loads color-theme contributions through the same generation-bound
-resource API and owns their Workbench registrations. Code and Sessions await its initial load
+resource loader and owns their Workbench registrations. Code and Sessions await its initial load
 before constructing their theme service. The UI-only transport serves a build-generated copy of
 `extensions/theme-defaults`; connected windows read the packaged extension resources. Both use
 the same manifest parser, `include` resolver, and registry. The metadata catalog above does not

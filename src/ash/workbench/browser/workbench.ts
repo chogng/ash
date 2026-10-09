@@ -72,6 +72,7 @@ import { ITestExecutionService } from '../../platform/testing/common/testExecuti
 import { IExtensionHostApi } from "../../platform/extensionHost/common/extensionHostApi.js";
 import { BrowserExtensionHostApi } from '../../platform/extensionHost/browser/extensionHostApi.js';
 import { createBrowserExtensionApi } from '../../platform/extensions/browser/extensionApi.js';
+import { IExtensionResourceLoaderService } from '../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
 import { ITelemetryService } from '../../platform/telemetry/common/telemetry.js';
 import { NullTelemetryService } from '../../platform/telemetry/common/telemetryUtils.js';
 import { ISyntaxApi } from "../../platform/syntax/common/syntaxApi.js";
@@ -522,6 +523,7 @@ export class Workbench extends Disposable {
 		this.registerErrorHandler(logService);
 		services.registerInstance(ILogService, logService);
 		services.registerInstance(IRendererHostService, api);
+		services.registerInstance(IExtensionResourceLoaderService, api.extensions.resources);
 		const workspaceContext = this._register(new WorkspaceContextService(workspace));
 		this.workspaceContext = workspaceContext;
 		services.registerInstance(IWorkspaceContextService, workspaceContext);

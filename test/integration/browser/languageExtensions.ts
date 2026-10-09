@@ -1,3 +1,4 @@
+import { ExtensionResourceLoaderService } from '../../../src/ash/platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import javascript from '../../../extensions/javascript/package.json' with { type: 'json' };
 import typescript from '../../../extensions/typescript-basics/package.json' with { type: 'json' };
 import json from '../../../extensions/json/package.json' with { type: 'json' };
@@ -55,7 +56,7 @@ export async function createLanguageExtensions(options: Omit<AppServerExtensionS
 		...options,
 		api: {
 			list: async () => ({ generation: 1, diagnostics: [], extensions: descriptors }),
-			readResource: async request => {
+			resources: new ExtensionResourceLoaderService(async request => {
 				const path = request.path.replace(/^\.\//u, '');
 				const url = resourceUrls[`../../../extensions/${directories.get(request.extensionId)}/${path}`];
 				if (!url) {
@@ -66,7 +67,7 @@ export async function createLanguageExtensions(options: Omit<AppServerExtensionS
 					throw new Error(`Extension fixture failed: ${path}`);
 				}
 				return new Uint8Array(await response.arrayBuffer());
-			},
+			}),
 		},
 	});
 }

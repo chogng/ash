@@ -1,3 +1,4 @@
+import { ExtensionResourceLoaderService } from '../../../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import { strict as assert } from "node:assert";
 import { createHash } from "node:crypto";
 import { test } from "mocha";
@@ -200,12 +201,12 @@ test("registers extension grammars transactionally and loads resources through t
 	});
 	const api: IExtensionApi = {
 		list: async () => catalog,
-		readResource: async request => {
+		resources: new ExtensionResourceLoaderService(async request => {
 			assert.equal(request.generation, 1);
 			assert.equal(request.extensionId, "ash.demo");
 			assert.equal(request.path, "syntaxes/demo.tmLanguage.json");
 			return new TextEncoder().encode('{"scopeName":"source.demo","patterns":[]}');
-		},
+		}),
 	};
 	const definitions: TextMateGrammarDefinition[] = [];
 	let disposed = 0;
@@ -256,7 +257,7 @@ test("fails before registering when TextMate candidate preparation is unavailabl
 			whenReady: async () => ({}),
 		},
 	} as unknown as ITextMateService;
-	const api: IExtensionApi = { list: async () => emptyCatalog(1), readResource: async () => new Uint8Array() };
+	const api: IExtensionApi = { list: async () => emptyCatalog(1), resources: new ExtensionResourceLoaderService(async () => new Uint8Array()) };
 
 	assert.throws(() => new AppServerExtensionService({ api, textMateService }), /requires a TextMate service/);
 	assert.equal(registrations, 0);
@@ -267,7 +268,7 @@ test("disposes a TextMate service-owned grammar registration without taking dupl
 	using installation = installDisposableTracker(tracker);
 	{
 		using grammars = new TextMateGrammarService();
-		using service = new AppServerExtensionService({ api: { list: async () => emptyCatalog(1), readResource: async () => new Uint8Array() }, textMateService: { grammars } as unknown as ITextMateService });
+		using service = new AppServerExtensionService({ api: { list: async () => emptyCatalog(1), resources: new ExtensionResourceLoaderService(async () => new Uint8Array()) }, textMateService: { grammars } as unknown as ITextMateService });
 	}
 	tracker.assertNoLeaks();
 });
@@ -287,7 +288,7 @@ test("reads each generation-scoped resource once while preparing one catalog", a
 	let reads = 0;
 	const api: IExtensionApi = {
 		list: async () => Object.freeze({ generation: 7, extensions: Object.freeze([themedDescriptor]), diagnostics: Object.freeze([]) }),
-		readResource: async () => { reads += 1; return new TextEncoder().encode('{"colors":{},"tokenColors":[]}'); },
+		resources: new ExtensionResourceLoaderService(async () => { reads += 1; return new TextEncoder().encode('{"colors":{},"tokenColors":[]}'); }),
 	};
 	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() });
 
@@ -309,10 +310,10 @@ test('loads an extension theme include through its package resources', async () 
 	const reads: string[] = [];
 	const api: IExtensionApi = {
 		list: async () => ({ generation: 1, extensions: [themedDescriptor], diagnostics: [] }),
-		readResource: async request => {
+		resources: new ExtensionResourceLoaderService(async request => {
 			reads.push(request.path);
 			return new TextEncoder().encode(resources.get(request.path)!);
-		},
+		}),
 	};
 	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() });
 	await service.start();
@@ -334,7 +335,7 @@ test('loads an extension theme with a TextMate tokenColors resource', async () =
 	]);
 	const api: IExtensionApi = {
 		list: async () => ({ generation: 1, extensions: [themedDescriptor], diagnostics: [] }),
-		readResource: async request => new TextEncoder().encode(resources.get(request.path)!),
+		resources: new ExtensionResourceLoaderService(async request => new TextEncoder().encode(resources.get(request.path)!)),
 	};
 	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() });
 	await service.start();
@@ -344,7 +345,7 @@ test('loads an extension theme with a TextMate tokenColors resource', async () =
 test("rejects a catalog whose canonical manifest digest does not match", async () => {
 	const api: IExtensionApi = {
 		list: async () => Object.freeze({ generation: 1, extensions: Object.freeze([Object.freeze({ ...descriptor, manifestSha256: `sha256:${"0".repeat(64)}` })]), diagnostics: Object.freeze([]) }),
-		readResource: async () => new Uint8Array(),
+		resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
 	};
 	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() });
 
@@ -360,7 +361,7 @@ test("coalesces concurrent reload requests into one queued follow-up refresh", a
 			listCalls += 1;
 			return listCalls === 1 ? first.promise : Promise.resolve(emptyCatalog(2));
 		},
-		readResource: async () => new Uint8Array(),
+		resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
 	};
 	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() });
 
@@ -389,7 +390,7 @@ test("reloads declarations for Plugin activation and Marketplace installation ch
 	};
 	const api: IExtensionApi = {
 		list: async () => emptyCatalog(++generation),
-		readResource: async () => new Uint8Array(),
+		resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
 	};
 	using service = new AppServerExtensionService({ api, eventApi, textMateService: emptyTextMateService() });
 	await service.start();
@@ -423,7 +424,7 @@ test("dispose suppresses a queued reload and ignores the in-flight result", asyn
 			listCalls += 1;
 			return first.promise;
 		},
-		readResource: async () => new Uint8Array(),
+		resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
 	};
 	const service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() });
 	const starting = service.start();
@@ -439,7 +440,7 @@ test("preserves the last active catalog when refreshed grammar materialization f
 	const catalogs = [catalogWithGeneration(1), catalogWithGeneration(2)];
 	const api: IExtensionApi = {
 		list: async () => catalogs.shift()!,
-		readResource: async request => new TextEncoder().encode(request.generation === 1 ? '{"scopeName":"source.demo","patterns":[]}' : "not a grammar"),
+		resources: new ExtensionResourceLoaderService(async request => new TextEncoder().encode(request.generation === 1 ? '{"scopeName":"source.demo","patterns":[]}' : "not a grammar")),
 	};
 	using grammars = new TextMateGrammarService();
 	const service = new AppServerExtensionService({ api, textMateService: { grammars } as unknown as ITextMateService });
@@ -470,7 +471,7 @@ test("publishes one coherent contribution generation to registry listeners", asy
 	});
 	const api: IExtensionApi = {
 		list: async () => catalog,
-		readResource: async () => new TextEncoder().encode('{"colors":{},"tokenColors":[]}'),
+		resources: new ExtensionResourceLoaderService(async () => new TextEncoder().encode('{"colors":{},"tokenColors":[]}')),
 	};
 	using languageService = new LanguageService();
 	using languages = new LanguageFeaturesService();
@@ -499,7 +500,7 @@ test("treats an in-flight load cancelled by disposal as normal shutdown", async 
 	let rejectList: ((error: Error) => void) | undefined;
 	const api: IExtensionApi = {
 		list: () => new Promise((_resolve, reject) => { rejectList = reject; }),
-		readResource: async () => new Uint8Array(),
+		resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
 	};
 	const textMateService = { grammars: { registerGrammars: () => ({ replace: () => { }, ...toDisposable(() => { }) }), prepareGrammars: async (registration: { replace(values: readonly TextMateGrammarDefinition[]): void; }, definitions: readonly TextMateGrammarDefinition[]) => ({ commit: () => { registration.replace(definitions); return {}; } }), whenReady: async () => ({}) } } as unknown as ITextMateService;
 	const service = new AppServerExtensionService({ api, textMateService });
@@ -526,12 +527,12 @@ test('loads icon manifests and fonts through generation-bound resources and revo
 	const requests: string[] = [];
 	const api: IExtensionApi = {
 		list: async () => ({ generation, extensions: [entry], diagnostics: [] }),
-		readResource: async request => {
+		resources: new ExtensionResourceLoaderService(async request => {
 			assert.equal(request.generation, generation);
 			requests.push(request.path);
 			if (fail && request.path.endsWith('.woff')) { throw new Error('Font unavailable'); }
 			return readFile('extensions/theme-seti/' + request.path);
-		},
+		}),
 	};
 	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() });
 	await service.start();
@@ -593,7 +594,7 @@ test('extension theme contributions activate together, retain the last valid cat
 			icons: { 'test-extension-alias': { description: 'Extension icon', default: 'add' } },
 		}
 	});
-	using service = new AppServerExtensionService({ api: { list: async () => ({ generation, extensions: contributed ? [manifest()] : [], diagnostics: [] }), readResource: async () => { throw new Error('Unexpected resource'); } }, textMateService: emptyTextMateService() });
+	using service = new AppServerExtensionService({ api: { list: async () => ({ generation, extensions: contributed ? [manifest()] : [], diagnostics: [] }), resources: new ExtensionResourceLoaderService(async () => { throw new Error('Unexpected resource'); }) }, textMateService: emptyTextMateService() });
 	await service.start();
 	for (const [type, expected] of [['hcDark', '#fedcba'], ['hcLight', '#aabbcc']]) {
 		const contrast = parseUserColorTheme(JSON.stringify({ name: 'Extension contrast', type, colors: {} }));
@@ -627,7 +628,7 @@ test('the packaged browser catalog activates Markdown grammar and configuration 
 	const bundle = JSON.parse(await readFile('src/ash/platform/extensions/common/generated/browser.json', 'utf8'));
 	using languages = new LanguageFeaturesService();
 	using languageService = new LanguageService();
-	using service = new AppServerExtensionService({ api: { list: async () => bundle.catalog, readResource: async request => Uint8Array.from(Buffer.from(bundle.resources[request.extensionId][request.path], 'base64')) }, textMateService: emptyTextMateService(), languageService, languageConfigurationService: languages.languageConfigurationService, languageFeaturesService: languages });
+	using service = new AppServerExtensionService({ api: { list: async () => bundle.catalog, resources: new ExtensionResourceLoaderService(async request => Uint8Array.from(Buffer.from(bundle.resources[request.extensionId][request.path], 'base64'))) }, textMateService: emptyTextMateService(), languageService, languageConfigurationService: languages.languageConfigurationService, languageFeaturesService: languages });
 	await service.start();
 	assert.equal(languageService.guessLanguageIdByFilepathOrFirstLine(URI.file('/notes/draft.md')), 'markdown');
 	assert.equal(languageService.createByMimeType('text/markdown').languageId, 'markdown');

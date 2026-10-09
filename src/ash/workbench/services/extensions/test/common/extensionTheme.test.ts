@@ -1,3 +1,4 @@
+import { ExtensionResourceLoaderService } from '../../../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import { createHash } from 'node:crypto';
@@ -65,11 +66,11 @@ test('dedicated renderer loads extension themes and retains the last valid regis
 				packageSha256: `sha256:${'a'.repeat(64)}`,
 			}] : []
 		}),
-		readResource: async ({ generation: requestedGeneration, path }) => {
+		resources: new ExtensionResourceLoaderService(async ({ generation: requestedGeneration, path }) => {
 			assert.equal(requestedGeneration, generation);
 			assert.equal(path, 'themes/example.json');
 			return new TextEncoder().encode(themeDocument);
-		},
+		}),
 	};
 	let listener: Parameters<IServerEventApi['subscribe']>[0] | undefined;
 	const events: IServerEventApi = { subscribe: callback => { listener = callback; return { dispose: () => { listener = undefined; } }; } };

@@ -70,7 +70,7 @@ export class ExtensionColorThemeService extends Disposable {
 					const key = `${extension.id}\0${path}`;
 					let bytes = resources.get(key);
 					if (!bytes) {
-						bytes = this.api.readResource({ generation: catalog.generation, extensionId: extension.id, path });
+						bytes = this.api.resources.readExtensionResourceBytes({ generation: catalog.generation, extensionId: extension.id, path });
 						resources.set(key, bytes);
 					}
 					return bytes;

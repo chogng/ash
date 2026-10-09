@@ -1,3 +1,5 @@
+import type { IExtensionResourceLoaderService } from '../../extensionResourceLoader/common/extensionResourceLoader.js';
+
 export type ExtensionCatalogReload = "cached" | "refresh";
 export type ExtensionSourceKind = "builtIn" | "plugin" | "marketplace" | "user";
 export type ExtensionDiagnosticCode = "sourceUnavailable" | "invalidManifest" | "duplicateExtension" | "pathEscapesRoot" | "resourceNotFound" | "resourceTooLarge";
@@ -38,7 +40,7 @@ export const MAX_EXTENSION_RESOURCE_BYTES = 16 * 1024 * 1024;
 /** Renderer-facing capability for reading static, Rust-validated extension resources. */
 export interface IExtensionApi {
 	list(reload: ExtensionCatalogReload): Promise<ExtensionCatalog>;
-	readResource(request: ExtensionResourceRequest): Promise<Uint8Array>;
+	readonly resources: IExtensionResourceLoaderService;
 }
 
 export function normalizeExtensionCatalog(value: unknown): ExtensionCatalog {

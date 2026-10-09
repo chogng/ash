@@ -9,6 +9,7 @@
     "src/ash/editor/test/common/languagesRegistry.test.ts",
     "src/ash/platform/commands/test/common/commands.test.ts",
     "src/ash/platform/extensions/**/*.ts",
+    "src/ash/platform/extensionResourceLoader/**/*.ts",
     "src/ash/platform/extensionHost/common/**/*.ts",
     "src/ash/platform/extensionHost/test/**/*.ts",
     "src/ash/platform/instantiation/common/**/*.ts",

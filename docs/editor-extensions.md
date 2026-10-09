@@ -56,7 +56,7 @@ JS 专用 launcher，启用且授权的本地 SDK 包和兼容的 Open VSX 包�
 
 Web 和 Electron 的工作台共用可信浏览器扩展入口：`build/resources/extensions.ts` 将内置包及显式配置的
 `ASH_WEB_EXTENSION_PATHS` 冻结为 Browser catalog 和资源快照。`platform/extensions/browser/extensionApi.ts`
-提供同一目录与资源契约；`platform/extensionHost/browser/extensionHostApi.ts` 持有每个可执行包的 Worker，
+提供目录与 `IExtensionResourceLoaderService` 资源契约；`platform/extensionHost/browser/extensionHostApi.ts` 持有每个可执行包的 Worker，
 `extensionHostWorker.ts` 在 Worker 内导入 package 的单文件 ESM `browser` 入口，调用
 `activate({ register, executeCommand, clientRequest, createWebviewResource, language })`。注册与调用使用 Ash 的有界扩展契约，不提供完整的 `vscode` 模块或 Node API。
 Worker 持有调用的取消信号；到达截止时间后终止 Worker 并撤销该 incarnation 的注册。

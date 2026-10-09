@@ -257,6 +257,10 @@ impl ServerCapabilities {
         }
         if self.marketplace {
             self.contracts.insert(
+                "extensionGalleryResources".into(),
+                CapabilityContract { version: 1 },
+            );
+            self.contracts.insert(
                 "marketplaceSearch".into(),
                 CapabilityContract { version: 1 },
             );

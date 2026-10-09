@@ -2,13 +2,17 @@ use super::AppServer;
 use super::ConnectionState;
 use super::RpcError;
 use super::decode;
+use super::marketplace_operations::marketplace_error;
 use super::operations::resource_rpc_error;
 use super::result;
+use ash_app_server_protocol::protocol::common::EmptyParams;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::extensions::ExtensionCatalogReloadDto;
 use ash_app_server_protocol::protocol::extensions::ExtensionDiagnosticCodeDto;
 use ash_app_server_protocol::protocol::extensions::ExtensionDiagnosticDto;
 use ash_app_server_protocol::protocol::extensions::ExtensionDto;
+use ash_app_server_protocol::protocol::extensions::ExtensionGalleryResourceOpenParams;
+use ash_app_server_protocol::protocol::extensions::ExtensionGalleryResult;
 use ash_app_server_protocol::protocol::extensions::ExtensionListParams;
 use ash_app_server_protocol::protocol::extensions::ExtensionListResult;
 use ash_app_server_protocol::protocol::extensions::ExtensionResourceOpenParams;
@@ -25,6 +29,67 @@ use serde_json::Value;
 use std::time::Duration;
 
 impl AppServer {
+    pub(super) fn extension_gallery(&self, params: &Value) -> Result<Value, RpcError> {
+        let _: EmptyParams = decode(params)?;
+        let template = self
+            .plugins_manager
+            .as_ref()
+            .map(|manager| manager.extension_gallery_resource_url_template())
+            .transpose()
+            .map_err(marketplace_error)?
+            .flatten();
+        result(&ExtensionGalleryResult {
+            resource_url_template: template,
+        })
+    }
+
+    pub(super) fn extension_gallery_resource_open(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: ExtensionGalleryResourceOpenParams = decode(params)?;
+        let manager = self
+            .plugins_manager
+            .as_ref()
+            .ok_or_else(|| RpcError::new(-32040, AppServerErrorName::PluginsUnavailable))?;
+        if manager
+            .extension_gallery_resource_url_template()
+            .map_err(marketplace_error)?
+            .as_deref()
+            != Some(params.resource_url_template.as_str())
+        {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let bytes = manager
+            .read_extension_gallery_resource(
+                &params.publisher,
+                &params.name,
+                &params.version,
+                &params.path,
+            )
+            .map_err(marketplace_error)?;
+        let metadata = self
+            .resources
+            .lock()
+            .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?
+            .create(
+                connection.connection_id,
+                "application/octet-stream".into(),
+                bytes,
+                Duration::from_secs(300),
+            )
+            .map_err(resource_rpc_error)?;
+        result(&ExtensionResourceOpenResult {
+            resource: ResourceMetadataResult {
+                resource_id: metadata.resource_id,
+                mime_type: metadata.mime_type,
+                size: metadata.size,
+                sha256: metadata.sha256,
+            },
+        })
+    }
+
     pub(super) fn extension_list(&self, params: &Value) -> Result<Value, RpcError> {
         let params: ExtensionListParams = decode(params)?;
         let reload = match params.reload {

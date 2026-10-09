@@ -1,3 +1,4 @@
+import { ExtensionResourceLoaderService } from '../../../src/ash/platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import { addDisposableListener } from '../../../src/ash/base/browser/dom.js';
 import { IndexedDB, DBClosedError } from '../../../src/ash/base/browser/indexedDB.js';
 import { streamToBuffer } from '../../../src/ash/base/common/buffer.js';
@@ -229,10 +230,10 @@ const integration = {
 					manifestJson: JSON.stringify({ browser: 'main.js' }), manifestSha256: `sha256:${'a'.repeat(64)}`, packageSha256: `sha256:${'b'.repeat(64)}`,
 				}]
 			}),
-			readResource: async () => new TextEncoder().encode(`export function activate(api) {
+			resources: new ExtensionResourceLoaderService(async () => new TextEncoder().encode(`export function activate(api) {
 				api.register({ kind: 'command', registrationId: 'folders', command: 'folders', title: 'Folders' },
 					() => api.clientRequest({ operation: 'workspaceFolders' }));
-			}`),
+			}`)),
 		}, createDisconnectedExtensionHostApi(operation => { throw new Error(`Unexpected remote operation ${operation}`); }), services));
 		const runtime = (await host.reconcile('refresh')).extensions[0]!;
 		if (runtime.lifecycle !== 'ready') throw new Error(`Extension activation failed: ${JSON.stringify(runtime.failure)}`);

@@ -399,7 +399,7 @@ fn require_owned_lease(connection: &ConnectionState, lease_id: &str) -> Result<(
     }
 }
 
-fn marketplace_error(error: MarketplaceClientError) -> RpcError {
+pub(super) fn marketplace_error(error: MarketplaceClientError) -> RpcError {
     let name = match error.kind() {
         MarketplaceClientErrorKind::Unavailable => AppServerErrorName::MarketplaceUnavailable,
         MarketplaceClientErrorKind::Protocol => AppServerErrorName::MarketplaceOperationFailed,

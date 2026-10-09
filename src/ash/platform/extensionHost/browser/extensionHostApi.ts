@@ -131,7 +131,7 @@ export class BrowserExtensionHostApi extends Disposable implements IExtensionHos
 			let worker: BrowserExtensionWorker | undefined;
 			try {
 				const path = manifest.browser.replace(/^\.\//, '');
-				const source = await this.extensions.readResource({ generation: catalog.generation, extensionId: extension.id, path });
+				const source = await this.extensions.resources.readExtensionResourceBytes({ generation: catalog.generation, extensionId: extension.id, path });
 				this.assertNotDisposed();
 				worker = this.instantiation.createInstance(BrowserExtensionWorker, source, async (operation: ExtensionClientOperation, signal: AbortSignal) => {
 					if (!this.clientHandler) throw new Error('No extension client handler is registered');

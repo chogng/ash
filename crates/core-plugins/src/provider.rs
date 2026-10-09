@@ -43,6 +43,11 @@ pub trait PluginPackagePayload: Send {
 /// and activation remain the Manager's responsibility. Package IDs here are unqualified plugin
 /// names; the provider translates its own package format and must never activate contributions.
 pub trait PluginProvider: Send + Sync {
+    /// Resource URL contract for a provider whose verified packages contain editor extensions.
+    fn extension_gallery_resource_url_template(&self) -> Option<String> {
+        None
+    }
+
     fn search(
         &self,
         request: SearchPackagesRequest,
@@ -65,6 +70,24 @@ pub struct PluginProviders {
 }
 
 impl PluginProviders {
+    pub(crate) fn extension_gallery(
+        &self,
+    ) -> Result<Option<(&MarketplaceName, &dyn PluginProvider, String)>, MarketplaceClientError>
+    {
+        let mut galleries = self.providers.iter().filter_map(|(name, provider)| {
+            provider
+                .extension_gallery_resource_url_template()
+                .map(|template| (name, provider.as_ref(), template))
+        });
+        let gallery = galleries.next();
+        if galleries.next().is_some() {
+            return Err(MarketplaceClientError::invalid_request(
+                "multiple extension resource galleries are configured",
+            ));
+        }
+        Ok(gallery)
+    }
+
     pub fn new(
         providers: impl IntoIterator<Item = (MarketplaceName, Arc<dyn PluginProvider>)>,
     ) -> Result<Self, MarketplaceClientError> {

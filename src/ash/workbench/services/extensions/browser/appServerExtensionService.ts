@@ -113,7 +113,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			this.dispose();
 			throw new TypeError("App Server extension service options are required");
 		}
-		if (!options.api || typeof options.api.list !== "function" || typeof options.api.readResource !== "function") {
+		if (!options.api || typeof options.api.list !== "function" || typeof options.api.resources?.readExtensionResourceBytes !== "function") {
 			this.dispose();
 			throw new TypeError("App Server extension service requires an extension API");
 		}
@@ -473,7 +473,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		const key = `${extensionId}\0${path}`;
 		const cached = resources.get(key);
 		if (cached) return cached;
-		const loading = this.options.api.readResource({ generation, extensionId, path });
+		const loading = this.options.api.resources.readExtensionResourceBytes({ generation, extensionId, path });
 		resources.set(key, loading);
 		return loading;
 	}

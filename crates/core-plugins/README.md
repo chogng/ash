@@ -11,3 +11,7 @@ Mutations require the observed revision; stale writes fail. A changed host autho
 old consent. The runtime subscribes to committed changes and retires revoked callbacks before the
 policy RPC returns. `Manager::acquire_local_source` pins verified package storage only; it grants no
 execution permission and cannot replace the independent runtime admission check.
+
+Open VSX gallery resource reads reuse the configured provider and the Manager's verified artifact store.
+They select an exact universal release and an extension-relative path without adding an installation or
+execution grant. App Server exposes bytes through connection-owned resource handles, never host paths.

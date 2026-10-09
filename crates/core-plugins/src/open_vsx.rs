@@ -229,6 +229,13 @@ impl OpenVsxClient {
 }
 
 impl PluginProvider for OpenVsxClient {
+    fn extension_gallery_resource_url_template(&self) -> Option<String> {
+        Some(format!(
+            "{}{{publisher}}/{{name}}/universal/{{version}}/file/{{path}}",
+            self.config.api_url
+        ))
+    }
+
     fn search(
         &self,
         request: SearchPackagesRequest,

@@ -529,6 +529,10 @@ fn marketplace_search_supports_capabilities_and_exact_language_routes() {
     };
     capabilities.advertise_contracts();
     assert_eq!(capabilities.contracts["marketplaceSearch"].version, 1);
+    assert_eq!(
+        capabilities.contracts["extensionGalleryResources"].version,
+        1
+    );
     let wire = serde_json::json!({
         "query": "tsx",
         "packageType": null,
@@ -548,6 +552,20 @@ fn marketplace_search_supports_capabilities_and_exact_language_routes() {
         }))
         .is_err()
     );
+}
+
+#[test]
+fn gallery_resource_requests_bind_the_configured_source_and_reject_extra_fields() {
+    use super::super::extensions::ExtensionGalleryResourceOpenParams;
+    let wire = serde_json::json!({
+        "resourceUrlTemplate":"https://registry.example/api/{publisher}/{name}/universal/{version}/file/{path}",
+        "publisher":"publisher","name":"sample","version":"1.0.0","path":"themes/theme.json"
+    });
+    let params: ExtensionGalleryResourceOpenParams = serde_json::from_value(wire.clone()).unwrap();
+    assert_eq!(serde_json::to_value(params).unwrap(), wire);
+    let mut forged = wire;
+    forged["hostPath"] = serde_json::json!("/private/package.json");
+    assert!(serde_json::from_value::<ExtensionGalleryResourceOpenParams>(forged).is_err());
 }
 
 #[test]

@@ -1,3 +1,4 @@
+import { ExtensionResourceLoaderService } from '../../../src/ash/platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import { ExtensionColorThemeService } from '../../../src/ash/workbench/services/extensions/browser/extensionColorThemeService.js';
 import { createBrowserExtensionApi } from '../../../src/ash/platform/extensions/browser/extensionApi.js';
 import '../../../src/ash/workbench/browser/parts/notifications/media/notifications.css';
@@ -185,7 +186,7 @@ const extensions = resources.add(new AppServerExtensionService({
 				displayName: manifest.displayName, sourceKind: 'builtIn', manifestJson, manifestSha256: hash, packageSha256: hash,
 			}]
 		}),
-		readResource: async request => {
+		resources: new ExtensionResourceLoaderService(async request => {
 			if (request.path === 'icons/font-product.json') {
 				return new TextEncoder().encode(JSON.stringify({ fonts: [{ id: 'seti', weight: '700', style: 'italic', src: [{ path: 'seti.woff', format: 'woff' }] }], iconDefinitions: { add: { fontCharacter: '\\E001', fontId: 'seti' } } }));
 			}
@@ -193,7 +194,7 @@ const extensions = resources.add(new AppServerExtensionService({
 			const response = await fetch(urls[request.path]!);
 			if (!response.ok) { throw new Error('Icon resource failed'); }
 			return new Uint8Array(await response.arrayBuffer());
-		},
+		}),
 	},
 	textMateService: { grammars } as unknown as ITextMateService,
 }));
