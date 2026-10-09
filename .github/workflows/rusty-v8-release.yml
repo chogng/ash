@@ -187,6 +187,17 @@ jobs:
       - name: Stage archive, binding and checksums
         id: stage
         run: python -B build/v8/release.py stage --upstream upstream-rusty-v8 --target "$TARGET" --output "dist/$TARGET" --github-output "$GITHUB_OUTPUT"
+      # Preserve the exact source inputs even when a consumer fails. Release
+      # aggregation still requires this job's later consumer checks to pass.
+      - name: Upload staged target inputs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rusty-v8-${{ needs.metadata.outputs.version }}-${{ matrix.target }}
+          path: dist/${{ matrix.target }}/*
+          if-no-files-found: error
+          compression-level: 0
+          # A retried job replaces only its validation inputs in this run.
+          overwrite: true
       - name: Install Ash smoke-test target
         run: rustup target add "$TARGET"
       - name: Prepare checksum-pinned musl linker
@@ -221,13 +232,6 @@ jobs:
           args=(bazel --target "$TARGET" --artifacts "dist/$TARGET" --output "$RUNNER_TEMP/v8-bazel-inputs")
           if [ "$SMOKE" = link ]; then args+=(--link-only); fi
           python -B build/v8/smoke.py "${args[@]}"
-      - name: Upload verified target outputs
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: rusty-v8-${{ needs.metadata.outputs.version }}-${{ matrix.target }}
-          path: dist/${{ matrix.target }}/*
-          if-no-files-found: error
-          compression-level: 0
 
   test-arm-gnu:
     name: Execute sandbox / aarch64-unknown-linux-gnu
@@ -287,6 +291,7 @@ jobs:
           path: dist/*
           if-no-files-found: error
           compression-level: 0
+          overwrite: true
 
   publish:
     needs: [metadata, verify]

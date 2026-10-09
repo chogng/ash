@@ -78,6 +78,8 @@ musl 验证平台同时声明 LLVM 与 Rust 的 libc 约束，防止选择 GNU �
 x64 静态探针使用明确的 Linux 测试执行工具链；musl ARM64 仅构建测试程序，
 不要求 x64 runner 具备 ARM64 测试执行平台。
 
+各目标先保存源码 archive/binding 和构建记录，消费测试失败时仍可检查该配对。
+候选锁生成和发布依赖全部目标的消费测试以及 GNU ARM64 的实际执行通过。
 每次成功的验证会生成包含新摘要和当前仓库来源的候选 `runtime-lock.json`，
 与 archive、binding、每目标 checksum 和记录源码、编译器及 GN 参数的
 `build.json` 一同保存为 workflow artifact；tag 运行还会发布这些文件。
