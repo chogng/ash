@@ -764,64 +764,75 @@ fn socket_initialization_does_not_wait_for_unrelated_domain_mutations() {
 
 #[test]
 fn request_byte_saturation_rejects_work_but_keeps_control_and_releases_on_completion() {
-    use crate::server::message_queue::MessageBudget;
-    let server = Arc::new(server());
-    let mut connection = server.product_host_connection();
-    let initialize = json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"bytes-test","version":"1"},"capabilities":{}}});
-    assert!(
-        serde_json::from_str::<Value>(
-            &server.handle_json(&mut connection, &initialize.to_string())
-        )
-        .unwrap()["result"]
-            .is_object()
-    );
-    let ordinary = json!({"jsonrpc":"2.0","id":2,"method":"session/list","params":{}}).to_string();
-    let control = json!({"jsonrpc":"2.0","id":4,"method":"language/cancel","params":{"operationId":"not-started"}}).to_string();
-    let budget = MessageBudget::new(ordinary.len());
-    let held = server
-        .request_scheduler
-        .acquire(
-            connection.connection_id,
-            RequestSerializationScope::Global {
-                access: SerializationAccess::Exclusive,
-            },
-        )
-        .unwrap();
-    thread::scope(|scope| {
-        let mut dispatch = RequestDispatcher::start(scope).unwrap();
-        dispatch.handle.budgets.ordinary = budget.clone();
-        dispatch.handle.budgets.control = MessageBudget::new(control.len());
-        let (responses, received) = mpsc::channel();
-        for raw in [
-            ordinary.clone(),
-            ordinary.replace("\"id\":2", "\"id\":3"),
-            control,
-        ] {
-            let responses = responses.clone();
-            dispatch
-                .dispatch(Arc::clone(&server), &connection, raw, move |response| {
-                    responses
-                        .send(serde_json::from_str::<Value>(&response).unwrap())
-                        .unwrap();
-                    Ok(())
-                })
-                .unwrap();
-        }
-        let rejected = received.recv_timeout(Duration::from_secs(3)).unwrap();
-        assert_eq!(rejected["id"], 3);
-        assert_eq!(rejected["error"]["message"], "ServerOverloaded");
-        let stopped = received.recv_timeout(Duration::from_secs(3)).unwrap();
-        assert_eq!(stopped["id"], 4);
-        assert!(stopped["result"].is_object());
-        assert!(budget.try_reserve(1).is_none());
-        drop(held);
-        assert_eq!(
-            received.recv_timeout(Duration::from_secs(3)).unwrap()["id"],
-            2
+    for (cancel_method, expected_result) in [
+        ("language/cancel", json!({"status":"requested"})),
+        ("fs/writeFileElevated/cancel", Value::Null),
+        ("file/search/fuzzy/cancel", Value::Null),
+    ] {
+        use crate::server::message_queue::MessageBudget;
+        let server = Arc::new(server());
+        let mut connection = server.product_host_connection();
+        let initialize = json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"bytes-test","version":"1"},"capabilities":{}}});
+        assert!(
+            serde_json::from_str::<Value>(
+                &server.handle_json(&mut connection, &initialize.to_string())
+            )
+            .unwrap()["result"]
+                .is_object()
         );
-        dispatch.finish().unwrap();
-    });
-    assert!(budget.try_reserve(ordinary.len()).is_some());
+        let ordinary =
+            json!({"jsonrpc":"2.0","id":2,"method":"session/list","params":{}}).to_string();
+        let control = json!({"jsonrpc":"2.0","id":4,"method":cancel_method,"params":{"operationId":"not-started"}}).to_string();
+        let budget = MessageBudget::new(ordinary.len());
+        let held = server
+            .request_scheduler
+            .acquire(
+                connection.connection_id,
+                RequestSerializationScope::Global {
+                    access: SerializationAccess::Exclusive,
+                },
+            )
+            .unwrap();
+        thread::scope(|scope| {
+            let mut dispatch = RequestDispatcher::start(scope).unwrap();
+            dispatch.handle.budgets.ordinary = budget.clone();
+            dispatch.handle.budgets.control = MessageBudget::new(control.len());
+            let (responses, received) = mpsc::channel();
+            for raw in [
+                ordinary.clone(),
+                ordinary.replace("\"id\":2", "\"id\":3"),
+                control,
+            ] {
+                let responses = responses.clone();
+                dispatch
+                    .dispatch(Arc::clone(&server), &connection, raw, move |response| {
+                        responses
+                            .send(serde_json::from_str::<Value>(&response).unwrap())
+                            .unwrap();
+                        Ok(())
+                    })
+                    .unwrap();
+            }
+            let rejected = received.recv_timeout(Duration::from_secs(3)).unwrap();
+            assert_eq!(rejected["id"], 3);
+            assert_eq!(rejected["error"]["message"], "ServerOverloaded");
+            let stopped = received.recv_timeout(Duration::from_secs(3)).unwrap();
+            assert_eq!(stopped["id"], 4);
+            assert_eq!(
+                stopped,
+                json!({"jsonrpc":"2.0","id":4,"result":expected_result}),
+                "{cancel_method}"
+            );
+            assert!(budget.try_reserve(1).is_none());
+            drop(held);
+            assert_eq!(
+                received.recv_timeout(Duration::from_secs(3)).unwrap()["id"],
+                2
+            );
+            dispatch.finish().unwrap();
+        });
+        assert!(budget.try_reserve(ordinary.len()).is_some());
+    }
 }
 
 #[test]
