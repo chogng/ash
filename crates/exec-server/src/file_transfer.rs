@@ -198,9 +198,10 @@ impl FileTransfers {
                             },
                             // The filesystem contract can fail while reading metadata after
                             // publication. An IO error therefore cannot prove the file was unchanged.
-                            Err(ash_file_system::FileSystemError::Io(_)) => {
-                                FileWriteState::OutcomeUnknown
-                            }
+                            Err(
+                                ash_file_system::FileSystemError::Io(_)
+                                | ash_file_system::FileSystemError::WriteOutcomeUnknown,
+                            ) => FileWriteState::OutcomeUnknown,
                             Err(error) => FileWriteState::Rejected {
                                 error: file_error(error),
                             },
@@ -411,6 +412,8 @@ pub(super) fn file_error(error: ash_file_system::FileSystemError) -> ExecError {
     // Host paths and platform diagnostics stay on the execution host; callers use stable categories.
     match error {
         ash_file_system::FileSystemError::PermissionDenied(_)
+        | ash_file_system::FileSystemError::OsPermissionDenied(_)
+        | ash_file_system::FileSystemError::ElevationDenied
         | ash_file_system::FileSystemError::ReadOnly(_) => ExecError::PermissionDenied,
         ash_file_system::FileSystemError::InvalidPath(_)
         | ash_file_system::FileSystemError::NotFile(_)
@@ -418,9 +421,14 @@ pub(super) fn file_error(error: ash_file_system::FileSystemError) -> ExecError {
         | ash_file_system::FileSystemError::ReadLimitExceeded { .. }
         | ash_file_system::FileSystemError::WriteLimitExceeded { .. } => ExecError::InvalidInput,
         ash_file_system::FileSystemError::RevisionConflict(_)
+        | ash_file_system::FileSystemError::Cancelled
         | ash_file_system::FileSystemError::AlreadyExists(_) => ExecError::Conflict,
         ash_file_system::FileSystemError::NotFound(_) => ExecError::NotFound,
-        ash_file_system::FileSystemError::Io(_) => ExecError::Io,
+        ash_file_system::FileSystemError::ElevationUnavailable
+        | ash_file_system::FileSystemError::ElevationTimedOut
+        | ash_file_system::FileSystemError::ElevationFailed
+        | ash_file_system::FileSystemError::WriteOutcomeUnknown
+        | ash_file_system::FileSystemError::Io(_) => ExecError::Io,
     }
 }
 

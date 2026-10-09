@@ -6,6 +6,30 @@ use ash_file_access::GrantSource;
 use ash_file_access::Permissions;
 use std::cell::Cell;
 
+#[test]
+fn filesystem_authorization_failures_keep_host_details_out_of_the_protocol() {
+    use ash_file_system::FileSystemError;
+
+    for (error, expected) in [
+        (
+            FileSystemError::OsPermissionDenied("private host path".into()),
+            ExecError::PermissionDenied,
+        ),
+        (
+            FileSystemError::ElevationDenied,
+            ExecError::PermissionDenied,
+        ),
+        (FileSystemError::ElevationUnavailable, ExecError::Io),
+        (FileSystemError::ElevationTimedOut, ExecError::Io),
+        (FileSystemError::ElevationFailed, ExecError::Io),
+        // This protocol has no cancellation error; a cancelled write did not publish.
+        (FileSystemError::Cancelled, ExecError::Conflict),
+        (FileSystemError::WriteOutcomeUnknown, ExecError::Io),
+    ] {
+        assert_eq!(file_error(error), expected);
+    }
+}
+
 struct Fixture {
     root: tempfile::TempDir,
     files: LocalFileSystem,
