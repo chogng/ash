@@ -23,7 +23,7 @@ import { GitHubService } from '../../../src/ash/sessions/contrib/github/browser/
 import { SessionChatInputToolbar } from '../../../src/ash/sessions/contrib/chat/browser/sessionChatInputToolbar.js';
 import { SessionsList } from '../../../src/ash/sessions/browser/parts/sidebar/sessionsList.js';
 import { QuickInputController } from '../../../src/ash/platform/quickinput/browser/quickInputController.js';
-import type { GitHubPullRequestReference } from '../../../src/ash/platform/github/common/githubService.js';
+import type { GitHubPullRequestReference, GitHubIssueReference } from '../../../src/ash/platform/github/common/githubService.js';
 
 interface Request { readonly id: number; readonly method: string; readonly params: Record<string, unknown>; }
 type State = 'open' | 'draft' | 'closed' | 'merged';
@@ -32,6 +32,8 @@ class Transport implements AppServerTransport {
 	private readonly listeners = new Map<string, Set<(payload: unknown) => void>>();
 	public readonly requests: Request[] = [];
 	public readonly states = new Map<number, State>([[7, 'open'], [8, 'draft']]);
+	public readonly issueStates = new Map<number, { state: string; stateReason?: string; }>([[11, { state: 'open' }], [12, { state: 'closed', stateReason: 'completed' }]]);
+	private issueReferences: GitHubIssueReference[] = JSON.parse(sessionStorage.getItem('test-backend-issue-references') ?? '[]');
 	public failingChecks = false;
 	public unresolvedComments = false;
 	public mergeable: boolean | null = null;
@@ -71,6 +73,29 @@ class Transport implements AppServerTransport {
 				this.persistReferences(request);
 				break;
 			}
+			case 'github/session/issues': this.reply(request, { references: this.issueReferences }); break;
+			case 'github/session/issue/attach': {
+				const reference = request.params.reference as GitHubIssueReference;
+				if (!this.issueReferences.some(item => JSON.stringify(item) === JSON.stringify(reference))) { this.issueReferences.push(reference); }
+				this.persistIssues(request);
+				break;
+			}
+			case 'github/session/issue/detach': {
+				const reference = request.params.reference as GitHubIssueReference;
+				this.issueReferences = this.issueReferences.filter(item => JSON.stringify(item) !== JSON.stringify(reference));
+				this.persistIssues(request);
+				break;
+			}
+			case 'github/issue/read': {
+				const number = Number(request.params.number);
+				const state = this.issueStates.get(number);
+				if (!state) {
+					this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: request.id, error: { code: -32070, message: 'GitHubNotFound', data: { kind: 'GitHubNotFound' } } }) });
+				} else {
+					this.reply(request, { issue: { number, url: `https://github.com/team/one/issues/${number}`, title: `Issue ${number} ${'long title '.repeat(12)}`, ...state, updatedAt: '2026-10-08', labels: [], assignees: [] }, body: '', comments: [] });
+				}
+				break;
+			}
 			case 'initialize': this.reply(request, createTestInitializeResult()); break;
 			case 'github/account/list': this.reply(request, { accounts: this.signedIn ? [{ id: 'account', host: 'github.com', login: 'User', status: 'ready', credentialRevision: '1' }] : [] }); break;
 			case 'github/pullRequest/list': this.reply(request, { pullRequests: request.params.state === pr.state ? [pr] : [], nextPage: null }); break;
@@ -80,6 +105,16 @@ class Transport implements AppServerTransport {
 			case 'github/cancel': this.reply(request, {}); break;
 			default: throw new Error(`Unexpected session PR request: ${request.method}`);
 		}
+	}
+	public changeIssue(number: number, state: string, stateReason?: string): void {
+		if (state === 'unavailable') { this.issueStates.delete(number); }
+		else { this.issueStates.set(number, { state, stateReason }); }
+		this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', method: 'session/changed', params: { sessionId: 'session', agentTreeChanged: false } }) });
+	}
+	private persistIssues(request: Request): void {
+		sessionStorage.setItem('test-backend-issue-references', JSON.stringify(this.issueReferences));
+		this.reply(request, null);
+		this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', method: 'session/changed', params: { sessionId: request.params.sessionId, agentTreeChanged: false } }) });
 	}
 	private persistReferences(request: Request): void {
 		sessionStorage.setItem('test-backend-pr-references', JSON.stringify(this.references));
@@ -128,6 +163,7 @@ github.initialize();
 
 window.ashSessionGitHub = {
 	opened, requests: transport.requests,
+	setIssueState: (number: number, state: string, reason?: string) => transport.changeIssue(number, state, reason),
 	setState: (state: State) => { transport.states.set(7, state); statusChanged.fire(gitStatus('one')); },
 	setAttention: (attention: 'comments' | 'checks' | 'conflicts' | 'none') => {
 		transport.unresolvedComments = attention === 'comments';
@@ -142,4 +178,4 @@ window.ashSessionGitHub = {
 	dispose: () => { resources.dispose(); list.domNode.remove(); },
 };
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
-declare global { interface Window { ashSessionGitHub: { opened: string[]; requests: Request[]; setState(state: State): void; setAttention(attention: 'comments' | 'checks' | 'conflicts' | 'none'): void; changeBranch(): void; signOut(): void; selectDraft(): void; theme(name: string): void; dispose(): void; }; } }
+declare global { interface Window { ashSessionGitHub: { opened: string[]; requests: Request[]; setIssueState(number: number, state: string, reason?: string): void; setState(state: State): void; setAttention(attention: 'comments' | 'checks' | 'conflicts' | 'none'): void; changeBranch(): void; signOut(): void; selectDraft(): void; theme(name: string): void; dispose(): void; }; } }

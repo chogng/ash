@@ -158,7 +158,7 @@ for (const chatSurface of ['code', 'cowork'] as const) {
 				const selection = selections[3];
 				services.registerInstance(ISessionsManagementService, { sessions: [], state: 'ready' });
 				services.registerInstance(ISessionsService, { onDidChange: changes.event, visibleSelections: selections, activeSelection: selection, openNewSession: () => opened.push('new'), openUntitledSession: (id: string) => opened.push(id) });
-				services.registerInstance(IGitHubService, { onDidChange: Event.None, getSessionPullRequests: () => [] });
+				services.registerInstance(IGitHubService, { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [] });
 				services.registerInstance(ISessionGroupsService, { onDidChange: Event.None, groups: [] });
 				scope.add(registerSessionsNavigation(async () => []));
 				const descriptor = SessionsViewRegistry.getViews(SESSIONS_NAVIGATION_CONTAINER_ID)[0]!.ctorDescriptor!;

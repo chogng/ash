@@ -42,6 +42,18 @@ action. Remove detaches the saved reference without closing the PR or removing a
 association still supplied by the current branch. Session deletion clears its
 references, and history transfer carries them with the root Thread.
 
+In Code’s composer, Attach issue verifies a GitHub.com or Enterprise Issue URL before saving its
+identity through `github/session/issue/attach`. The input toolbar reads
+`github/session/issues`, shows open, closed and unavailable counts, and expands
+into links with complete status labels and individual Remove actions. Issue reads
+refresh independently of PR discovery. Any open or unresolved Issue keeps the
+summary active; collections of closed Issues distinguish completed from entirely
+discarded results. Account changes cancel reads and clear private titles; saved
+identities remain removable without a connected account. Removal uses
+`github/session/issue/detach` and does not close the Issue. These references share
+the root Thread's deletion, restoration, history-transfer and cross-window
+notification rules, while live titles and status remain in the Sessions service.
+
 Discovery and periodic refresh follow the selected Session. Other Sessions retain
 their last result for the current window and refresh when selected again; Sessions
 that have not been selected have no resolved association yet. PR artifacts produced

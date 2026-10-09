@@ -16,6 +16,7 @@ fn page(number: u64) -> IssuePage {
             created_at: String::new(),
             updated_at: "now".into(),
             state: "open".into(),
+            state_reason: Some("reopened".into()),
             pull_request: None,
         }],
         next_page: Some(2),
@@ -146,6 +147,10 @@ fn issue_cache_survives_restart_and_isolates_repository_state_query_and_page() {
     let result = store.read(&key, now + 1).unwrap().unwrap();
     assert_eq!(result.page.issues[0].number, 3);
     assert_eq!(result.page.issues[0].body, None);
+    assert_eq!(
+        result.page.issues[0].state_reason.as_deref(),
+        Some("reopened")
+    );
     assert_eq!(result.fetched_at, now);
     assert_eq!(
         store

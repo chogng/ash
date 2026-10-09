@@ -243,7 +243,9 @@
     "timeline.localHistory.invalidEntry": "Local history entry requires a resource and entry ID.",
     "timeline.localHistory.compareLabel": "{0} (Local History)",
     "tree.find": "Find in Tree",
-    "tree.closeFind": "Close Find"
+    "tree.closeFind": "Close Find",
+    "github.status.notPlanned": "Closed as not planned",
+    "github.status.duplicate": "Closed as duplicate"
   },
   "ash.views": {
     "explorer": "Explorer",

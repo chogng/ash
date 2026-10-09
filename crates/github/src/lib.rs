@@ -147,6 +147,9 @@ pub struct Issue {
     pub created_at: String,
     pub updated_at: String,
     pub state: String,
+    /// Preserve GitHub's reason vocabulary, including values added by the server.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub state_reason: Option<String>,
     #[serde(default)]
     pub pull_request: Option<serde_json::Value>,
 }

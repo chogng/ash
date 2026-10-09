@@ -1,6 +1,6 @@
 import type { URI } from '../../../../base/common/uri.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
-import type { GitHubPullRequestReference } from '../../../../platform/github/common/githubService.js';
+import type { GitHubPullRequestReference, GitHubIssueReference, GitHubIssue } from '../../../../platform/github/common/githubService.js';
 import type { ChatPullRequestState, IPullRequestIconStatus } from '../../../../workbench/common/chatPullRequest.js';
 import { localize } from '../../../../nls.js';
 
@@ -41,4 +41,27 @@ export function getPullRequestLabel(request: IResolvedSessionPullRequest): strin
 		labels.push(localize('sessions.github.comments', 'Unresolved review comments'));
 	}
 	return labels.join(' · ');
+}
+
+/** The saved identity stays removable when GitHub cannot supply its live status. */
+export interface IResolvedSessionIssue {
+	readonly reference: GitHubIssueReference;
+	readonly uri: URI;
+	readonly issue: Pick<GitHubIssue, 'title' | 'state' | 'stateReason'> | undefined;
+}
+
+export function getIssueLabel(entry: IResolvedSessionIssue): string {
+	const { repository, number } = entry.reference;
+	let state = localize('sessions.github.unavailable', 'Status unavailable');
+	if (entry.issue?.state === 'open') {
+		state = localize('github.status.open', 'Open');
+	} else if (entry.issue?.state === 'closed') {
+		state = localize('sessions.github.issueCompleted', 'Completed');
+		if (entry.issue.stateReason === 'not_planned') {
+			state = localize('sessions.github.issueNotPlanned', 'Not planned');
+		} else if (entry.issue.stateReason === 'duplicate') {
+			state = localize('sessions.github.issueDuplicate', 'Duplicate');
+		}
+	}
+	return [`${repository.host}/${repository.owner}/${repository.name} #${number}`, entry.issue?.title, state].filter(Boolean).join(' · ');
 }

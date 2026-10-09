@@ -24,7 +24,7 @@ use std::io::Write;
 
 const MAX_FRAME: usize = 32 * 1024 * 1024;
 const MAX_ARCHIVE: u64 = 8 * 1024 * 1024 * 1024;
-const VERSION: u32 = 2;
+const VERSION: u32 = 3;
 
 // Column order is part of this versioned data contract. SQL identifiers only come from this
 // list, so a remote archive cannot add a table, execute SQL, or import account credentials.
@@ -79,6 +79,8 @@ const TABLES: &[(&str, &str)] = &[
         "turn_change_commands",
         "command_id,fingerprint,response_json",
     ),
+    // Append tables to preserve the indexes of version 2 archives.
+    ("thread_issues", "thread_id,host,owner,repository,number"),
 ];
 
 #[derive(Serialize, Deserialize)]
@@ -374,13 +376,16 @@ impl SqliteThreadStore {
         let mut hash = Sha256::new();
         let mut total = 0;
         let Frame::Header {
-            version: VERSION,
+            version,
             source,
             receiver,
         } = read_frame(&mut input, &mut hash, &mut total)?
         else {
             return Err(error("invalid history archive header"));
         };
+        if !matches!(version, 2 | VERSION) {
+            return Err(error("unsupported history archive version"));
+        }
         let source = ContentDigest::new(source).map_err(error)?;
         if source == identity || receiver != identity.as_str() {
             return Err(error("history archive belongs to a different receiver"));

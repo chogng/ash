@@ -1,5 +1,48 @@
 import { expect, test } from '@playwright/test';
 
+for (const [state, reason, icon, color, label] of [
+	['open', '', 'issue-opened', 'charts-green', 'Open'],
+	['closed', 'completed', 'issue-closed', 'charts-purple', 'Closed'],
+	['closed', 'not_planned', 'issue-closed', 'description-foreground', 'Closed as not planned'],
+	['closed', 'duplicate', 'issue-closed', 'description-foreground', 'Closed as duplicate'],
+	['closed', '', 'issue-closed', 'charts-purple', 'Closed'],
+] as const) {
+	test(`Issue ${state} ${reason || 'without reason'} renders a decorative themed status through the GitHub protocol`, async ({ page }) => {
+		await page.goto(`/github.html?issueState=${state}&issueReason=${reason}`);
+		const issue = page.locator('main a[href="https://github.com/team/repo/issues/7"]');
+		await expect(issue).toContainText(state === 'open' ? 'Open' : 'Closed');
+		await issue.focus();
+		await page.keyboard.press('F2');
+		const card = page.locator('.ash-github-resource-hover');
+		const glyph = card.locator('svg');
+		await expect(card.locator('.ash-github-hover-metadata')).toHaveText(label);
+		expect(await page.evaluate(() => window.ashGitHubIntegration.accessibleContent('view' as import('../../../src/ash/platform/accessibility/browser/accessibleView.js').AccessibleViewType))).toContain(label);
+		await expect(glyph).toHaveAttribute('data-ash-icon-id', icon);
+		await expect(glyph).toHaveAttribute('aria-hidden', 'true');
+		expect(await glyph.evaluate(element => element.style.color)).toBe(`var(--ash-${color})`);
+		for (const theme of ['light', 'highContrast'] as const) {
+			await page.evaluate(name => window.ashGitHubIntegration.theme(name), theme);
+			expect(await glyph.evaluate(element => getComputedStyle(element).color)).not.toBe('rgba(0, 0, 0, 0)');
+			await expect(card.getByRole('link', { name: 'team/repo', exact: true })).toBeFocused();
+		}
+		await page.keyboard.press('Escape');
+		await expect(issue).toBeFocused();
+		await expect(card).toHaveCount(0);
+	});
+}
+
+test('Issue closure reasons are readable in Chinese in links, details and the accessible view', async ({ page }) => {
+	for (const [reason, label] of [['not_planned', '已关闭：不计划处理'], ['duplicate', '已关闭：重复问题']] as const) {
+		await page.goto(`/github.html?issueState=closed&issueReason=${reason}&locale=zh-CN`);
+		const issue = page.locator('main a[href="https://github.com/team/repo/issues/7"]');
+		await expect(issue).toContainText(label);
+		await issue.focus();
+		await page.keyboard.press('F2');
+		await expect(page.locator('.ash-github-resource-hover .ash-github-hover-metadata')).toHaveText(label);
+		expect(await page.evaluate(() => window.ashGitHubIntegration.accessibleContent('view' as import('../../../src/ash/platform/accessibility/browser/accessibleView.js').AccessibleViewType))).toContain(label);
+	}
+});
+
 test('loading chat links own a decorative spinner until resolution and respect reduced motion', async ({ page }) => {
 	await page.goto('/github.html');
 	await page.evaluate(() => window.ashGitHubIntegration.render('[Waiting](https://github.com/team/repo/issues/9)'));

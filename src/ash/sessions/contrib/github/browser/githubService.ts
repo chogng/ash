@@ -1,13 +1,14 @@
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../../base/common/cancellation.js';
-import { Emitter, type Event } from '../../../../base/common/event.js';
-import { isCancellationError } from '../../../../base/common/errors.js';
-import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Emitter, Event } from '../../../../base/common/event.js';
+import { CancellationError, isCancellationError } from '../../../../base/common/errors.js';
+import { Disposable, DisposableMap, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
+import { observableValue, type IReader } from '../../../../base/common/observable.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { IAccountService } from '../../../../platform/accounts/common/accountService.js';
-import { GitHubIssueState, IGitHubService as IGitHubApi, type GitHubRepository, type GitHubPullRequest, type GitHubPullRequestReference, type GitHubAccount } from '../../../../platform/github/common/githubService.js';
+import { GitHubIssueState, IGitHubService as IGitHubApi, type GitHubRepository, type GitHubPullRequest, type GitHubPullRequestReference, type GitHubAccount, type GitHubIssueReference } from '../../../../platform/github/common/githubService.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { createSshRemoteWorkspaceUri } from '../../../../platform/remote/common/remote.js';
@@ -17,11 +18,14 @@ import { getPullRequestChecksStatus, getPullRequestResourceStatus } from '../../
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import type { ISession, SessionId } from '../../../services/sessions/common/session.js';
-import type { IResolvedSessionPullRequest } from '../common/types.js';
+import type { IResolvedSessionPullRequest, IResolvedSessionIssue } from '../common/types.js';
 
 export interface IGitHubService {
 	readonly onDidChange: Event<void>;
 	getSessionPullRequests(sessionId: SessionId): readonly IResolvedSessionPullRequest[];
+	getSessionIssues(sessionId: SessionId, reader?: IReader): readonly IResolvedSessionIssue[];
+	attachIssue(sessionId: SessionId, url: string): Promise<void>;
+	detachIssue(sessionId: SessionId, reference: GitHubIssueReference): Promise<void>;
 	initialize(): void;
 	attachPullRequest(sessionId: SessionId, url: string): Promise<void>;
 	detachPullRequest(sessionId: SessionId, reference: GitHubPullRequestReference): Promise<void>;
@@ -29,11 +33,14 @@ export interface IGitHubService {
 
 export const IGitHubService = createServiceIdentifier<IGitHubService>('sessionsGitHubService');
 
-/** Resolves live PR state from durable references and execution-directory branches without changing canonical Session data. */
+/** Resolves live Issue and PR state from durable references and execution-directory branches. */
 export class GitHubService extends Disposable implements IGitHubService {
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
 	private readonly requests = new Map<SessionId, { readonly directory: string; readonly values: readonly IResolvedSessionPullRequest[]; }>();
+	private readonly issues = observableValue<ReadonlyMap<SessionId, readonly IResolvedSessionIssue[]>>(this, new Map());
+	private accountGeneration = 0;
+	private readonly issueAttachments = this._register(new DisposableMap<CancellationTokenSource, CancellationTokenSource>());
 	private readonly branches = new Map<SessionId, ReadonlyMap<string, string>>();
 	private readonly operation = new MutableDisposable<CancellationTokenSource>();
 	private readonly refresh = this._register(new RunOnceScheduler(() => { void this.resolveSelection(); }, 60_000));
@@ -50,9 +57,12 @@ export class GitHubService extends Disposable implements IGitHubService {
 		super();
 		this._register(this.operation);
 		// Disposal runs in reverse order: notify pending readers before releasing their token source.
-		this._register(toDisposable(() => this.operation.value?.cancel()));
+		this._register(toDisposable(() => {
+			this.operation.value?.cancel();
+			for (const [source] of this.issueAttachments) { source.cancel(); }
+		}));
 		this._register(sessions.onDidChange(() => this.updateSelection()));
-		this._register(github.onDidChangeSessionPullRequests(sessionId => {
+		this._register(Event.any(github.onDidChangeSessionPullRequests, github.onDidChangeSessionIssues)(sessionId => {
 			if (this.sessions.activeSelection?.kind === 'session' && this.sessions.activeSelection.active.session.sessionId === sessionId) {
 				this.operation.value?.cancel();
 				this.refresh.schedule(0);
@@ -62,6 +72,9 @@ export class GitHubService extends Disposable implements IGitHubService {
 		this._register(git.onDidChangeRepositoryStatus(status => this.handleStatus(status)));
 		this._register(accounts.onDidChangeAccounts(() => {
 			this.operation.value?.cancel();
+			this.accountGeneration++;
+			for (const [source] of this.issueAttachments) { source.cancel(); }
+			this.issues.set(new Map(), undefined);
 			this.requests.clear();
 			this.branches.clear();
 			this.changed.fire();
@@ -92,6 +105,37 @@ export class GitHubService extends Disposable implements IGitHubService {
 		return this.requests.get(sessionId)?.values ?? [];
 	}
 
+	public getSessionIssues(sessionId: SessionId, reader?: IReader): readonly IResolvedSessionIssue[] {
+		return this.issues.read(reader).get(sessionId) ?? [];
+	}
+
+	public async attachIssue(sessionId: SessionId, url: string): Promise<void> {
+		const reference = parseIssueReference(url);
+		const generation = this.accountGeneration;
+		const source = new CancellationTokenSource();
+		this.issueAttachments.set(source, source);
+		try {
+			const accounts = await this.github.listAccounts(source.token);
+			const account = accounts.find(account => account.status === 'ready' && account.host.toLowerCase() === reference.repository.host);
+			if (!account) {
+				throw new Error(localize('sessions.github.connectIssueHost', 'Connect a GitHub account for {0} before attaching this issue.', reference.repository.host));
+			}
+			await this.github.readIssue({ ...reference.repository, accountId: account.id }, reference.number, source.token);
+			if (generation !== this.accountGeneration || this.isDisposed || source.token.isCancellationRequested) {
+				throw new CancellationError();
+			}
+			await this.github.attachSessionIssue(sessionId, reference);
+			if (!this.isDisposed) { this.operation.value?.cancel(); this.refresh.schedule(0); }
+		} finally {
+			this.issueAttachments.deleteAndDispose(source);
+		}
+	}
+
+	public async detachIssue(sessionId: SessionId, reference: GitHubIssueReference): Promise<void> {
+		await this.github.detachSessionIssue(sessionId, reference);
+		if (!this.isDisposed) { this.operation.value?.cancel(); this.refresh.schedule(0); }
+	}
+
 	private updateSelection(): void {
 		for (const [sessionId, entry] of this.requests) {
 			const session = this.management.sessions.find(candidate => candidate.sessionId === sessionId);
@@ -100,6 +144,16 @@ export class GitHubService extends Disposable implements IGitHubService {
 				this.branches.delete(sessionId);
 				this.changed.fire();
 			}
+		}
+		const retainedIssues = new Map(this.issues.get());
+		for (const sessionId of retainedIssues.keys()) {
+			if (!this.management.sessions.some(session => session.sessionId === sessionId)) {
+				retainedIssues.delete(sessionId);
+			}
+		}
+		if (retainedIssues.size !== this.issues.get().size) {
+			this.issues.set(retainedIssues, undefined);
+			this.changed.fire();
 		}
 		const selected = this.sessions.activeSelection;
 		const key = selected?.kind === 'session' ? `${selected.active.session.sessionId}:${directoryKey(selected.active.session)}` : undefined;
@@ -156,9 +210,11 @@ export class GitHubService extends Disposable implements IGitHubService {
 		this.operation.value?.cancel();
 		this.operation.value = cancellation;
 		const token = cancellation.token;
+		const accountsPromise = this.github.listAccounts(token);
+		const issueResolution = this.resolveSessionIssues(session.sessionId, accountsPromise, token);
 		try {
 			const branches = new Map<string, string>();
-			const [accounts, references] = await Promise.all([this.github.listAccounts(token), this.github.listSessionPullRequests(session.sessionId)]);
+			const [accounts, references] = await Promise.all([accountsPromise, this.github.listSessionPullRequests(session.sessionId)]);
 			const hosts = new Set(accounts.filter(account => account.status === 'ready').map(account => account.host.toLowerCase()));
 			const repositories = root ? this.git.repositories.filter(repository => extUriBiasedIgnorePathCase.isEqualOrParent(repository.root, root) || extUriBiasedIgnorePathCase.isEqualOrParent(root, repository.root)) : [];
 			const recorded = await Promise.all(references.map(reference => this.resolveReference(reference, accounts, token)));
@@ -192,6 +248,7 @@ export class GitHubService extends Disposable implements IGitHubService {
 				this.log.error('sessions.github', 'Unable to resolve session pull requests', error);
 			}
 		} finally {
+			await issueResolution;
 			if (this.operation.value === cancellation && !this.isDisposed && !token.isCancellationRequested) {
 				this.refresh.schedule();
 			}
@@ -231,6 +288,40 @@ export class GitHubService extends Disposable implements IGitHubService {
 			return undefined;
 		}
 		return this.readPullRequest(repository, match.number, token);
+	}
+
+	private async resolveSessionIssues(sessionId: SessionId, accountsPromise: Promise<readonly GitHubAccount[]>, token: CancellationToken): Promise<void> {
+		let values: readonly IResolvedSessionIssue[];
+		try {
+			const [accounts, references] = await Promise.all([accountsPromise, this.github.listSessionIssues(sessionId)]);
+			values = await Promise.all(references.map(reference => this.resolveIssue(reference, accounts, token)));
+		} catch (error) {
+			if (token.isCancellationRequested || isCancellationError(error)) { return; }
+			this.log.error('sessions.github', 'Unable to refresh session issues', error);
+			// A failed collection read must not leave an old completed status looking current.
+			values = this.getSessionIssues(sessionId).map(entry => ({ ...entry, issue: undefined }));
+		}
+		if (token.isCancellationRequested || this.isDisposed) { return; }
+		const state = new Map(this.issues.get());
+		state.set(sessionId, values);
+		this.issues.set(state, undefined);
+	}
+
+	private async resolveIssue(reference: GitHubIssueReference, accounts: readonly GitHubAccount[], token: CancellationToken): Promise<IResolvedSessionIssue> {
+		const uri = URI.from({ scheme: 'https', authority: reference.repository.host, path: `/${reference.repository.owner}/${reference.repository.name}/issues/${reference.number}` });
+		const unresolved: IResolvedSessionIssue = { reference, uri, issue: undefined };
+		const account = accounts.find(account => account.status === 'ready' && account.host.toLowerCase() === reference.repository.host.toLowerCase());
+		if (!account || token.isCancellationRequested) { return unresolved; }
+		try {
+			const issue = await this.github.readIssue({ ...reference.repository, accountId: account.id }, reference.number, token);
+			if (token.isCancellationRequested) { return unresolved; }
+			return { reference, uri, issue: { title: issue.title, state: issue.state, stateReason: issue.stateReason } };
+		} catch (error) {
+			if (!token.isCancellationRequested && !isCancellationError(error)) {
+				this.log.error('sessions.github', 'Unable to read an attached issue', error);
+			}
+			return unresolved;
+		}
 	}
 
 	private async resolveReference(reference: GitHubPullRequestReference, accounts: readonly GitHubAccount[], token: CancellationToken): Promise<IResolvedSessionPullRequest | undefined> {
@@ -311,6 +402,17 @@ function parsePullRequestReference(value: string): GitHubPullRequestReference {
 	const match = /^\/([\w.-]+)\/([\w.-]+)\/pull\/([1-9]\d*)\/?$/.exec(url.pathname);
 	if (url.protocol !== 'https:' || url.username || url.password || url.port || !match || !Number.isSafeInteger(Number(match[3]))) {
 		throw new Error(localize('sessions.github.invalidUrl', 'Enter an HTTPS pull request URL, such as https://github.com/owner/repo/pull/123.'));
+	}
+	return { repository: { host: url.hostname.toLowerCase(), owner: match[1].toLowerCase(), name: match[2].toLowerCase() }, number: Number(match[3]) };
+}
+
+function parseIssueReference(value: string): GitHubIssueReference {
+	const invalid = () => new Error(localize('sessions.github.invalidIssueUrl', 'Enter an HTTPS issue URL, such as https://github.com/owner/repo/issues/123.'));
+	let url: URL;
+	try { url = new URL(value.trim()); } catch { throw invalid(); }
+	const match = /^\/([\w.-]+)\/([\w.-]+)\/issues\/([1-9]\d*)\/?$/.exec(url.pathname);
+	if (url.protocol !== 'https:' || url.username || url.password || url.port || !match || !Number.isSafeInteger(Number(match[3]))) {
+		throw invalid();
 	}
 	return { repository: { host: url.hostname.toLowerCase(), owner: match[1].toLowerCase(), name: match[2].toLowerCase() }, number: Number(match[3]) };
 }

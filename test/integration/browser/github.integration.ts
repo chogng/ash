@@ -55,7 +55,10 @@ class GitHubTransport implements AppServerTransport {
 			case 'github/repository/read': this.respond(request, { fullName: 'team/repo', defaultBranch: 'main', allowMergeCommit: true, allowSquashMerge: true, allowRebaseMerge: true, allowAutoMerge: false }); break;
 			case 'github/issue/read':
 				if (request.params.number === 9) { this.heldIssue = request; }
-				else { this.respond(request, { issue: { number: 7, url: 'https://github.com/team/repo/issues/7', title: '<img src=x onerror=alert(1)>', state: 'open', labels: [], assignees: [], updatedAt: '2026-10-04T12:00:00Z' }, body: `**Issue details** ${'Long description '.repeat(30)}`, comments: [] }); }
+				else {
+					const query = new URL(location.href).searchParams;
+					this.respond(request, { issue: { number: 7, url: 'https://github.com/team/repo/issues/7', title: '<img src=x onerror=alert(1)>', state: query.get('issueState') ?? 'open', stateReason: query.get('issueReason') || undefined, labels: [], assignees: [], updatedAt: '2026-10-04T12:00:00Z' }, body: `**Issue details** ${'Long description '.repeat(30)}`, comments: [] });
+				}
 				break;
 			case 'github/pullRequest/read': {
 				const query = new URL(location.href).searchParams;

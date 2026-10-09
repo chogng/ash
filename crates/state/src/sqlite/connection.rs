@@ -11,7 +11,7 @@ use std::path::Path;
 use crate::SqliteDurability;
 use crate::open_sqlite_database;
 
-const STORAGE_SQLITE_SCHEMA_VERSION: u32 = 13;
+const STORAGE_SQLITE_SCHEMA_VERSION: u32 = 14;
 
 pub(super) fn open(path: &Path) -> Result<Connection, String> {
     let mut connection = open_sqlite_database(path, SqliteDurability::Durable)?;
@@ -149,6 +149,7 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
         | Some(10)
         | Some(11)
         | Some(12)
+        | Some(13)
         | Some(STORAGE_SQLITE_SCHEMA_VERSION) => {}
         Some(version) => {
             return Err(format!(
@@ -303,10 +304,16 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
              host TEXT NOT NULL, owner TEXT NOT NULL, repository TEXT NOT NULL,
              number INTEGER NOT NULL CHECK(number > 0),
              PRIMARY KEY(thread_id, host, owner, repository, number)
+         );
+         CREATE TABLE IF NOT EXISTS thread_issues (
+             thread_id TEXT NOT NULL REFERENCES thread_streams(thread_id) ON DELETE CASCADE,
+             host TEXT NOT NULL, owner TEXT NOT NULL, repository TEXT NOT NULL,
+             number INTEGER NOT NULL CHECK(number > 0),
+             PRIMARY KEY(thread_id, host, owner, repository, number)
          );",
         )
         .map_err(sql_error)?;
-    if locked_version.is_none_or(|version| version < 12) {
+    if locked_version.is_none_or(|version| version < 14) {
         super::handoff::create_schema(&transaction)?;
     }
     if locked_version.is_some_and(|version| version < 13) {

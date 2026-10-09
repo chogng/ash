@@ -226,6 +226,7 @@ pub(super) fn summary(issue: github::Issue) -> IssueSummary {
         url: issue.html_url,
         updated_at: issue.updated_at,
         state: issue.state,
+        state_reason: issue.state_reason,
     }
 }
 

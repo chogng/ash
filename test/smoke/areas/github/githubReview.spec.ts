@@ -1,3 +1,5 @@
+import { APP_SERVER_METHODS } from '../../../../.build/protocol/typescript/index.js';
+import { connectProfile } from '../sessions/sessionProfileFixture.js';
 import type { Page } from '@playwright/test';
 import { Menus } from '../../../automation/menus.js';
 import type { PlaywrightApplication } from '../../../automation/playwrightDriver.js';
@@ -63,4 +65,43 @@ test('GitHub settings share the Preferences renderer in Workbench and Sessions a
 	await sessionsRefresh.focus(); await sessionsPage.keyboard.press('Alt+F1');
 	await expect(sessionsPage.getByRole('dialog', { name: 'Accessibility Help', exact: true }).getByRole('textbox')).toHaveValue(/Request Codex review posts @codex review/);
 	await sessionsPage.keyboard.press('Escape'); await expect(sessionsRefresh).toBeFocused();
+});
+
+test('Session Issue associations persist through reopen and expose keyboard actions and accessible state', async ({ workbench, target, application, webAppServer, testWorkspace }) => {
+	test.skip(target.appServerMode !== 'required', 'Requires the real profile App Server.');
+	// Keep the fixture transport alive while the product's Web page navigates and reloads.
+	const source = webAppServer ? await workbench.page.context().newPage() : workbench.page;
+	if (webAppServer) { await source.goto(workbench.page.url(), { waitUntil: 'domcontentloaded' }); }
+	const connection = await connectProfile(application, webAppServer, testWorkspace.directory, source);
+	try {
+		const created = await connection.client.request(APP_SERVER_METHODS['session/create'], { commandId: 'issue-session', title: 'Issue associations', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
+		const sessionId = created.session.sessionId;
+		for (const number of [11, 12, 11]) {
+			await connection.client.request(APP_SERVER_METHODS['github/session/issue/attach'], { sessionId, reference: { repository: { host: 'github.com', owner: 'ash-fixture', name: 'issues' }, number } });
+		}
+		let page = await workbench.openAgentsWindow(target.kind);
+		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
+		await page.locator('.ash-sessions-list-item').filter({ hasText: 'Issue associations' }).click();
+		let summary = page.locator('.ash-session-chat-input-issue-summary');
+		await expect(summary).toHaveAccessibleName('2 issues · 0 open · 0 closed · 2 unavailable');
+		await summary.focus(); await page.keyboard.press('Alt+F1');
+		await expect(page.getByRole('dialog', { name: 'Accessibility Help' }).getByRole('textbox')).toHaveValue(/Use Attach issue/);
+		await page.keyboard.press('Escape'); await expect(summary).toBeFocused();
+		await page.keyboard.press('Alt+F2');
+		await expect(page.getByRole('dialog', { name: 'Accessible View' }).getByRole('textbox')).toHaveValue(/ash-fixture\/issues #11 · Status unavailable/);
+		await page.keyboard.press('Escape'); await expect(summary).toBeFocused();
+		page = await workbench.reopenAgentsWindow(application, page);
+		summary = page.locator('.ash-session-chat-input-issue-summary');
+		await expect(summary).toHaveAccessibleName('2 issues · 0 open · 0 closed · 2 unavailable');
+		await summary.focus(); await page.keyboard.press('Enter');
+		const remove = page.getByRole('button', { name: 'Remove attached issue github.com/ash-fixture/issues #11', exact: true });
+		await remove.focus(); await page.keyboard.press('Enter');
+		await expect(summary).toHaveAccessibleName('1 issues · 0 open · 0 closed · 1 unavailable');
+		await expect(page.getByRole('button', { name: 'Attach issue', exact: true })).toBeFocused();
+		const saved = await connection.client.request(APP_SERVER_METHODS['github/session/issues'], { sessionId });
+		expect(saved.references.map(reference => reference.number)).toEqual([12]);
+	} finally {
+		await connection.close();
+		if (webAppServer) { await source.close(); }
+	}
 });

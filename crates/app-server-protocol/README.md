@@ -24,6 +24,14 @@
 冲突返回 `FileSystemRevisionConflict`，不更改原文件。省略 `options` 的旧调用仍采用粘贴规则：
 只允许写入不存在或已有空文件的目标。返回 metadata 和原始字节的 revision，文本保存也可使用该契约。
 
+`github/session/issues` 列出会话根 Thread 保存的 Issue 身份；
+`github/session/issue/attach` 与 `github/session/issue/detach` 接收 `sessionId`、
+`reference.repository`（host、owner、name）和正整数 `reference.number`。
+主机与仓库名规范化后按身份去重，重复添加和移除幂等，实际变化通过 `session/changed`
+通知订阅窗口。不存在的会话拒绝写入；服务不存标题、状态或账号凭据。客户端添加前通过
+`github/issue/read` 验证访问，实时状态仍按当前账号读取。移除只取消关联，不向 GitHub
+提交关闭或删除操作。关联随根 Thread 删除、恢复和历史迁移；不依赖工作区目录。
+
 ## 编译与导出
 
 - 队列、通话、协作和任务交付使用各自的 `*-contract` crate；服务端启用执行 feature 时也不改变协议依赖。协议构建不编译这些领域的执行器、SQLite、工具执行、剪贴板或图片处理；默认与服务端 feature 合并后的依赖边界由 `tests/dependency_boundary.rs` 验证。

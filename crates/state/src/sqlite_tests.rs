@@ -87,6 +87,68 @@ fn manual_pull_requests_survive_reopen_and_follow_session_deletion() {
     );
 }
 
+#[test]
+fn manual_issues_survive_reopen_and_follow_session_deletion() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("state.sqlite3");
+    let session = SessionId::new("session").unwrap();
+    let root = ThreadId::new("session").unwrap();
+    let other_session = SessionId::new("other").unwrap();
+    let other = ThreadId::new("other").unwrap();
+    let repository =
+        github::Repository::new("GitHub.com".into(), "TEAM".into(), "Repo".into()).unwrap();
+    let normalized =
+        github::Repository::new("github.com".into(), "team".into(), "repo".into()).unwrap();
+    {
+        let store = SqliteThreadStore::open(&path).unwrap();
+        append_created_thread(&store, &session, &root, 1);
+        append_created_thread(&store, &other_session, &other, 2);
+        assert!(store.attach_issue(&root, &repository, 7).unwrap());
+        assert!(!store.attach_issue(&root, &normalized, 7).unwrap());
+        store.attach_issue(&other, &normalized, 8).unwrap();
+        assert!(store.attach_issue(&root, &repository, 0).is_err());
+    }
+    let store = SqliteThreadStore::open(&path).unwrap();
+    assert_eq!(
+        store.list_issues(&root).unwrap(),
+        vec![(normalized.clone(), 7)]
+    );
+    assert!(store.detach_issue(&root, &repository, 7).unwrap());
+    assert!(!store.detach_issue(&root, &repository, 7).unwrap());
+    store.attach_issue(&root, &repository, 9).unwrap();
+    store.delete_session(&session).unwrap();
+    assert!(store.list_issues(&root).unwrap().is_empty());
+    assert_eq!(store.list_issues(&other).unwrap(), vec![(normalized, 8)]);
+}
+
+#[test]
+fn schema_13_upgrade_keeps_prs_and_adds_issue_references_with_freeze_triggers() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("state.sqlite3");
+    let session = SessionId::new("upgrade").unwrap();
+    let root = ThreadId::new("upgrade").unwrap();
+    let repository =
+        github::Repository::new("github.com".into(), "team".into(), "repo".into()).unwrap();
+    {
+        let store = SqliteThreadStore::open(&path).unwrap();
+        append_created_thread(&store, &session, &root, 1);
+        store.attach_pull_request(&root, &repository, 7).unwrap();
+    }
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    connection.execute_batch("DROP TABLE thread_issues; UPDATE ash_schema_migrations SET version = 13 WHERE component = 'event-store';").unwrap();
+    drop(connection);
+    let store = SqliteThreadStore::open(&path).unwrap();
+    assert_eq!(
+        store.list_pull_requests(&root).unwrap(),
+        vec![(repository.clone(), 7)]
+    );
+    assert!(store.attach_issue(&root, &repository, 7).unwrap());
+    assert_eq!(store.list_issues(&root).unwrap(), vec![(repository, 7)]);
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    let triggers: u32 = connection.query_row("SELECT COUNT(*) FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'thread_issues'", [], |row| row.get(0)).unwrap();
+    assert_eq!(triggers, 3);
+}
+
 fn open_change_set(thread_id: ThreadId) -> TurnChangeSet {
     TurnChangeSet::open(TurnChangeSetDraft {
         change_set_id: ChangeSetId::new("changes-1").unwrap(),

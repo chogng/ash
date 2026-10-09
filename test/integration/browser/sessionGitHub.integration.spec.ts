@@ -55,7 +55,7 @@ test('signing out clears private PR labels in both surfaces', async ({ page }) =
 
 test('Chinese attention labels reach the composer and session list', async ({ page }) => {
 	await page.goto('/sessionGitHub.html?locale=zh-CN');
-	await expect(page.getByRole('group', { name: '会话拉取请求' })).toBeVisible();
+	await expect(page.getByRole('group', { name: '会话 GitHub 关联' })).toBeVisible();
 	const pr = page.locator('.ash-session-chat-input-pr').filter({ hasText: 'one #7' });
 	for (const [attention, label] of [['comments', '未解决的审查评论'], ['checks', '检查未通过'], ['conflicts', '合并冲突']] as const) {
 		await page.evaluate(attention => window.ashSessionGitHub.setAttention(attention), attention);
@@ -130,4 +130,81 @@ test('Session PR review opens the shared editor without posting a review', async
 	await expect(review).toBeVisible(); await review.click();
 	expect(await page.evaluate(() => window.ashSessionGitHub.opened)).toContain('ash-github://github.com/team/one/pull/7');
 	expect(await page.evaluate(() => window.ashSessionGitHub.requests.some(request => request.method === 'github/comment/create'))).toBe(false);
+});
+
+async function attachIssue(page: import('@playwright/test').Page, number: number): Promise<void> {
+	await page.getByRole('button', { name: 'Attach issue', exact: true }).click();
+	await page.getByRole('dialog', { name: 'Attach an issue to this session' }).getByRole('textbox').fill(`https://github.com/TEAM/one/issues/${number}`);
+	await page.keyboard.press('Enter');
+	await expect(page.getByRole('dialog')).toHaveCount(0);
+}
+
+test('multiple issues restore, deduplicate, aggregate live states and retain keyboard focus', async ({ page }) => {
+	await page.goto('/sessionGitHub.html?noWorkspace');
+	await attachIssue(page, 11);
+	await attachIssue(page, 12);
+	await attachIssue(page, 11);
+	const summary = page.locator('.ash-session-chat-input-issue-summary');
+	await expect(summary).toHaveAccessibleName('2 issues · 1 open · 1 closed · 0 unavailable');
+	await expect(summary.locator('svg[data-ash-icon-id="issue-opened"]')).toHaveCount(1);
+	await page.reload();
+	await expect(summary).toHaveAccessibleName('2 issues · 1 open · 1 closed · 0 unavailable');
+	await summary.focus(); await page.keyboard.press('Enter');
+	await expect(summary).toHaveAttribute('aria-expanded', 'true');
+	const issue = page.locator('.ash-session-chat-input-issue[href$="/11"]');
+	await issue.focus(); await page.keyboard.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.ashSessionGitHub.opened)).toContain('https://github.com/team/one/issues/11');
+	await page.evaluate(() => window.ashSessionGitHub.setIssueState(11, 'closed', 'completed'));
+	await expect(summary).toHaveAccessibleName('2 issues · 0 open · 2 closed · 0 unavailable');
+	await expect(summary.locator('svg[data-ash-icon-id="issue-closed"]')).toHaveCount(1);
+	await expect(issue).toBeFocused();
+	await expect(issue).toHaveAccessibleName(/Completed$/);
+	await page.evaluate(() => window.ashSessionGitHub.setIssueState(11, 'closed', 'not_planned'));
+	await page.evaluate(() => window.ashSessionGitHub.setIssueState(12, 'closed', 'duplicate'));
+	await expect(summary.locator('span').first()).toHaveCSS('color', 'rgb(184, 184, 184)');
+	await page.evaluate(() => window.ashSessionGitHub.setIssueState(11, 'future'));
+	await expect(summary).toHaveAccessibleName('2 issues · 0 open · 1 closed · 1 unavailable');
+	await expect(issue.locator('svg[data-ash-icon-id="issue-opened"]')).toHaveCount(1);
+	await expect(issue).toHaveAccessibleName(/Status unavailable$/);
+	await page.evaluate(() => window.ashSessionGitHub.setIssueState(11, 'unavailable'));
+	await expect(summary).toHaveAccessibleName('2 issues · 0 open · 1 closed · 1 unavailable');
+	await expect(summary.locator('svg[data-ash-icon-id="issue-opened"]')).toHaveCount(1);
+	await expect(issue).toHaveAccessibleName(/Status unavailable$/);
+	await expect(issue).toBeFocused();
+	await page.keyboard.press('Escape'); await expect(summary).toBeFocused();
+	await expect(summary).toHaveAttribute('aria-expanded', 'false');
+	await page.keyboard.press('Space');
+	const remove = page.getByRole('button', { name: 'Remove attached issue github.com/team/one #11', exact: true });
+	await remove.focus(); await page.keyboard.press('Enter');
+	await expect(summary).toHaveAccessibleName('1 issues · 0 open · 1 closed · 0 unavailable');
+	await expect(page.getByRole('button', { name: 'Attach issue', exact: true })).toBeFocused();
+	await page.reload();
+	await expect(summary).toHaveAccessibleName('1 issues · 0 open · 1 closed · 0 unavailable');
+	expect(await page.evaluate(() => window.ashSessionGitHub.requests.some(request => request.method === 'github/issue/update'))).toBe(false);
+});
+
+test('Issue labels translate and survive narrow layout, theme changes and account invalidation', async ({ page }) => {
+	await page.goto('/sessionGitHub.html?noWorkspace');
+	await attachIssue(page, 11);
+	await page.goto('/sessionGitHub.html?noWorkspace&locale=zh-CN');
+	const summary = page.locator('.ash-session-chat-input-issue-summary');
+	await expect(summary).toHaveAccessibleName('1 个 Issue · 1 个开放 · 0 个关闭 · 0 个状态不可用');
+	await summary.click();
+	const issue = page.locator('.ash-session-chat-input-issue');
+	await expect(issue).toHaveAccessibleName(/打开$/);
+	await page.evaluate(() => window.ashSessionGitHub.theme('light'));
+	await expect(summary.locator('span').first()).toHaveCSS('color', 'rgb(16, 124, 16)');
+	await page.evaluate(() => window.ashSessionGitHub.theme('hc'));
+	await summary.focus(); await page.keyboard.press('Tab');
+	await expect(issue).toBeFocused(); await expect(issue).toHaveCSS('outline-style', 'solid');
+	expect(await issue.evaluate(element => element.getBoundingClientRect().right <= element.parentElement!.getBoundingClientRect().right)).toBe(true);
+	await page.evaluate(() => window.ashSessionGitHub.signOut());
+	await expect(issue).toHaveAccessibleName(/状态不可用$/);
+	await expect(issue).not.toHaveAccessibleName(/long title/);
+	const attach = page.getByRole('button', { name: '附加 Issue', exact: true });
+	await attach.focus(); await page.keyboard.press('Enter');
+	await expect(page.getByRole('dialog', { name: '将 Issue 附加到此会话' })).toBeVisible();
+	await page.keyboard.press('Escape'); await expect(attach).toBeFocused();
+	await page.evaluate(() => window.ashSessionGitHub.dispose());
+	await expect(page.locator('.ash-session-chat-input-issues')).toHaveCount(0);
 });

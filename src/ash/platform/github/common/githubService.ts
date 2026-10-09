@@ -33,6 +33,11 @@ export interface GitHubPullRequestReference {
 	readonly repository: { readonly host: string; readonly owner: string; readonly name: string; };
 	readonly number: number;
 }
+/** Durable association without account credentials or cached remote status. */
+export interface GitHubIssueReference {
+	readonly repository: { readonly host: string; readonly owner: string; readonly name: string; };
+	readonly number: number;
+}
 export enum GitHubNotificationFilter { Unread = 'unread', All = 'all', Participating = 'participating' }
 export enum GitHubForkBranches { All = 'all', Default = 'default' }
 export interface GitHubNotification { readonly id: string; readonly title: string; readonly subjectType: string; readonly reason: string; readonly unread: boolean; readonly updatedAt: string; readonly repository: GitHubRepository; readonly url: string; }
@@ -58,6 +63,7 @@ export interface GitHubIssueSummary {
 	readonly url: string;
 	readonly updatedAt: string;
 	readonly state: string;
+	readonly stateReason?: string;
 	readonly labels: readonly string[];
 	readonly assignees: readonly string[];
 }
@@ -138,6 +144,10 @@ export interface IGitHubService {
 	listSessionPullRequests(sessionId: string): Promise<readonly GitHubPullRequestReference[]>;
 	attachSessionPullRequest(sessionId: string, reference: GitHubPullRequestReference): Promise<void>;
 	detachSessionPullRequest(sessionId: string, reference: GitHubPullRequestReference): Promise<void>;
+	readonly onDidChangeSessionIssues: Event<string>;
+	listSessionIssues(sessionId: string): Promise<readonly GitHubIssueReference[]>;
+	attachSessionIssue(sessionId: string, reference: GitHubIssueReference): Promise<void>;
+	detachSessionIssue(sessionId: string, reference: GitHubIssueReference): Promise<void>;
 	/** Primary grant first; explicit selection does not change other consumers' primary grant. */
 	listAccounts(token?: CancellationToken): Promise<readonly GitHubAccount[]>;
 	connectToken(host: string, accessToken: string, token?: CancellationToken): Promise<GitHubAccount>;

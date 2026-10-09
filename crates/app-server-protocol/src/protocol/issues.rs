@@ -38,6 +38,10 @@ pub struct IssueSummary {
     pub url: String,
     pub updated_at: String,
     pub state: String,
+    /// Absent for older GitHub responses and cached pages; consumers retain the closed state.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub state_reason: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

@@ -7,6 +7,7 @@ import { localize } from '../../../../nls.js';
 import type { ILinkPresentation, ILinkPresentationStatus } from '../../../../platform/dataChannel/common/dataChannel.js';
 import type { GitHubChecks, GitHubCommit, GitHubIssueDetails, GitHubPullRequest, GitHubRepositoryInfo } from '../../../../platform/github/common/githubService.js';
 import { colorCssVariable } from '../../../../platform/theme/common/colorUtils.js';
+import { computeIssueIcon } from '../../../common/chatIssue.js';
 import { computePullRequestIcon, type ChatPullRequestState } from '../../../common/chatPullRequest.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
 
@@ -75,7 +76,12 @@ export function createRepositoryResourceHover(data: ResourceHoverData & { readon
 }
 
 export function createIssueResourceHover(data: IIssueResourceHoverData): IGitHubResourceHover {
-	return resourceHover(data, data.issue.title, `#${data.number}`, getIssueResourceStatus(data.issue).label, data.issue.body);
+	const card = resourceHover(data, data.issue.title, `#${data.number}`, getIssueResourceStatus(data.issue).label, data.issue.body);
+	const icon = computeIssueIcon(data.issue.state, data.issue.stateReason);
+	const status = card.element.querySelector<HTMLElement>('.ash-github-hover-metadata')!;
+	const glyph = appendIcon(icon, status);
+	glyph.style.color = `var(${colorCssVariable(icon.color!.id)})`;
+	return card;
 }
 
 export function createPullRequestResourceHover(data: IPullRequestResourceHoverData): IGitHubResourceHover {
@@ -112,9 +118,16 @@ export function createCommitResourceHover(data: ICommitResourceHoverData): IGitH
 }
 
 export function getIssueResourceStatus(issue: GitHubIssueDetails): ILinkPresentationStatus {
-	return issue.state === 'open'
-		? { kind: 'open', label: localize('github.status.open', 'Open') }
-		: { kind: 'closed', label: localize('github.status.closed', 'Closed') };
+	if (issue.state === 'open') {
+		return { kind: 'open', label: localize('github.status.open', 'Open') };
+	}
+	if (issue.stateReason === 'not_planned') {
+		return { kind: 'closed', label: localize('github.status.notPlanned', 'Closed as not planned') };
+	}
+	if (issue.stateReason === 'duplicate') {
+		return { kind: 'closed', label: localize('github.status.duplicate', 'Closed as duplicate') };
+	}
+	return { kind: 'closed', label: localize('github.status.closed', 'Closed') };
 }
 
 export function getPullRequestResourceStatus(pullRequest: GitHubPullRequest): ILinkPresentationStatus & { readonly kind: ChatPullRequestState; } {

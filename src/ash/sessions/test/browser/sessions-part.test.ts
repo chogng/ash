@@ -218,7 +218,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(ISessionsGitHubService, {
 		onDidChange: Event.None,
-		getSessionPullRequests: () => [],
+		getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { },
 		initialize() { },
 		attachPullRequest: async () => { throw new Error('Unexpected PR attachment'); },
 		detachPullRequest: async () => { throw new Error('Unexpected PR removal'); },

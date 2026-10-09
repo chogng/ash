@@ -108,6 +108,7 @@ fn issue_rpc_reads_only_the_current_accounts_cache_and_rejects_revoked_credentia
                         created_at: String::new(),
                         updated_at: "now".into(),
                         state: "open".into(),
+                        state_reason: Some("reopened".into()),
                         pull_request: None,
                     }],
                     next_page: None,
@@ -123,6 +124,7 @@ fn issue_rpc_reads_only_the_current_accounts_cache_and_rejects_revoked_credentia
     let initial = call(&server, &mut connection, request.clone());
     assert_eq!(initial["result"]["issues"][0]["number"], 1);
     assert_eq!(initial["result"]["cached"], true);
+    assert_eq!(initial["result"]["issues"][0]["stateReason"], "reopened");
     *credentials.0.lock().unwrap() = Some(second);
     request["id"] = serde_json::json!(3);
     request["params"]["operationId"] = serde_json::json!("issue-operation-3");
@@ -706,6 +708,42 @@ fn github_repository_rpc_supports_issue_and_pr_management_without_a_local_checko
         serde_json::from_slice::<serde_json::Value>(merge.body()).unwrap(),
         json!({"sha":commit,"merge_method":"squash"})
     );
+}
+
+#[test]
+fn github_issue_reads_preserve_optional_state_reasons() {
+    use serde_json::json;
+    let http = Arc::new(RepositoryHttp::default());
+    let server = server()
+        .with_github_credentials(repository_credentials(), http.clone())
+        .unwrap();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    for (index, reason) in [
+        None,
+        Some("completed"),
+        Some("not_planned"),
+        Some("duplicate"),
+        Some("future_reason"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        http.reply(200, json!({"number":7,"title":"Issue","body":"Body","html_url":"https://github.com/team/repo/issues/7","updated_at":"now","state":"closed","state_reason":reason}));
+        http.reply(200, json!([]));
+        let response = repository_request(
+            &server,
+            &mut connection,
+            index as u32 + 2,
+            "github/issue/read",
+            json!({"number":7}),
+        );
+        assert_eq!(response["result"]["issue"]["state"], "closed", "{response}");
+        assert_eq!(
+            response["result"]["issue"].get("stateReason"),
+            reason.map(|value| json!(value)).as_ref()
+        );
+    }
 }
 
 #[test]

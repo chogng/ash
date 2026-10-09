@@ -136,7 +136,10 @@ fn every_registered_github_network_method_has_execution() {
             // Session PR references belong to the local thread store, not GitHub HTTP.
             | ClientMethod::GitHubSessionPullRequests
             | ClientMethod::GitHubSessionPullRequestAttach
-            | ClientMethod::GitHubSessionPullRequestDetach => {}
+            | ClientMethod::GitHubSessionPullRequestDetach
+            | ClientMethod::GitHubSessionIssues
+            | ClientMethod::GitHubSessionIssueAttach
+            | ClientMethod::GitHubSessionIssueDetach => {}
             method => assert!(
                 GitHubRequestProcessor::handles(method),
                 "{} has no network execution",

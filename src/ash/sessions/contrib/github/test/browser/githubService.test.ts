@@ -27,7 +27,7 @@ function fixture(overrides: Partial<IGitHubService> = {}, gitOverrides: Partial<
 	const repository: GitRepository = { id: 'repo', label: 'repo', path: '', root: URI.file('/work') };
 	const status: GitStatus = { repositoryId: 'repo', streamInstanceId: 'stream', revision: 1, workspacePath: '/work', head: { type: 'branch', name: 'feature', objectId: 'a'.repeat(40), upstream: undefined }, changes: [] };
 	const github = {
-		onDidChangeSessionPullRequests: Event.None, listSessionPullRequests: async () => [],
+		onDidChangeSessionPullRequests: Event.None, onDidChangeSessionIssues: Event.None, listSessionIssues: async () => [], listSessionPullRequests: async () => [],
 		listAccounts: async () => [{ id: 'account', host: 'github.com', login: 'user', status: 'ready', credentialRevision: 1n }],
 		listPullRequests: async (_repository, state) => ({ items: state === GitHubIssueState.Open ? [pullRequest] : [], nextPage: null }),
 		readPullRequest: async () => pullRequest,
@@ -62,6 +62,76 @@ function fixture(overrides: Partial<IGitHubService> = {}, gitOverrides: Partial<
 }
 
 suite('Session GitHub associations', () => {
+	test('Issue references verify access, reject other resource URLs, and normalize Enterprise identities', async () => {
+		const writes: unknown[] = [];
+		using context = fixture({
+			listAccounts: async () => [{ id: 'enterprise', host: 'ghe.example', login: 'user', status: 'ready', credentialRevision: 1n }],
+			readIssue: async (repository, number) => { assert.deepEqual(repository, { accountId: 'enterprise', host: 'ghe.example', owner: 'team', name: 'repo' }); return { number } as never; },
+			attachSessionIssue: async (sessionId, reference) => { writes.push({ sessionId, reference }); },
+		});
+		for (const url of ['https://ghe.example/team/repo/pull/7', 'http://ghe.example/team/repo/issues/7', 'https://user:secret@ghe.example/team/repo/issues/7', 'https://ghe.example/team/repo/issues/9007199254740992']) {
+			await assert.rejects(context.service.attachIssue('session', url));
+		}
+		assert.deepEqual(writes, []);
+		await context.service.attachIssue('session', 'https://GHE.example/TEAM/Repo/issues/7?view=all#comment');
+		assert.deepEqual(writes, [{ sessionId: 'session', reference: { repository: { host: 'ghe.example', owner: 'team', name: 'repo' }, number: 7 } }]);
+	});
+
+	test('Issue associations remain removable without an account and never invent closed status', async () => {
+		const reference = { repository: { host: 'github.com', owner: 'team', name: 'repo' }, number: 11 };
+		const removals: unknown[] = [];
+		using context = fixture({
+			listAccounts: async () => [], listSessionIssues: async () => [reference],
+			detachSessionIssue: async (sessionId, reference) => { removals.push({ sessionId, reference }); },
+		});
+		await context.load();
+		assert.deepEqual(context.service.getSessionIssues('session').map(entry => ({ reference: entry.reference, url: entry.uri.toString(), issue: entry.issue })), [{ reference, url: 'https://github.com/team/repo/issues/11', issue: undefined }]);
+		await context.service.detachIssue('session', reference);
+		assert.deepEqual(removals, [{ sessionId: 'session', reference }]);
+	});
+
+	test('one unavailable Issue cannot hide another Issue or an existing PR', async () => {
+		const repository = { host: 'github.com', owner: 'team', name: 'repo' };
+		using context = fixture({
+			listSessionIssues: async () => [11, 12].map(number => ({ repository, number })),
+			readIssue: async (_repository, number) => {
+				if (number === 11) { throw new Error('Access removed'); }
+				return { title: 'Completed work', state: 'closed', stateReason: 'completed' } as never;
+			},
+		});
+		const requests = await context.load();
+		assert.equal(requests[0].number, 7);
+		assert.deepEqual(context.service.getSessionIssues('session').map(entry => entry.issue?.state), [undefined, 'closed']);
+	});
+
+	test('an unavailable Issue collection leaves PR discovery working', async () => {
+		using context = fixture({ listSessionIssues: async () => { throw new Error('Method unavailable'); } });
+		const requests = await context.load();
+		assert.equal(requests[0].number, 7);
+		assert.deepEqual(context.service.getSessionIssues('session'), []);
+	});
+
+	test('a late Issue response cannot restore private state after an account switch', async () => {
+		const reference = { repository: { host: 'github.com', owner: 'team', name: 'repo' }, number: 11 };
+		const started = new DeferredPromise<CancellationToken>();
+		const pending = new DeferredPromise<Awaited<ReturnType<IGitHubService['readIssue']>>>();
+		let signedIn = true;
+		using context = fixture({
+			listSessionIssues: async () => [reference],
+			listAccounts: async () => signedIn ? [{ id: 'account', host: 'github.com', login: 'user', status: 'ready', credentialRevision: 1n }] : [],
+			readIssue: async (_repository, _number, token) => { await started.complete(token!); return pending.p; },
+		});
+		context.service.initialize();
+		const token = await started.p;
+		signedIn = false;
+		context.accountChanged.fire({ revision: 2n, accounts: [] });
+		assert.equal(token.isCancellationRequested, true);
+		const refreshed = context.nextChange();
+		await pending.complete({ title: 'Private title', state: 'closed' } as never);
+		await refreshed;
+		assert.deepEqual(context.service.getSessionIssues('session').map(entry => entry.issue), [undefined]);
+	});
+
 	test('a recorded PR with unavailable remote state remains removable without an invented PR state', async () => {
 		const reference = { repository: { host: 'github.com', owner: 'team', name: 'repo' }, number: 7 };
 		using context = fixture({ listSessionPullRequests: async () => [reference], listPullRequests: async () => ({ items: [], nextPage: null }), readPullRequest: async () => { throw new Error('Access removed'); } });

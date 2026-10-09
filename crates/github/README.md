@@ -22,6 +22,8 @@ GitHub 是 Ash 内置的后端领域能力。Workbench 界面通过领域接口�
 
 前端 `platform/github/common/githubService.ts` 定义 `IGitHubService` 和领域类型，`browser/appServerGitHubService.ts` 封装生成的协议、取消与错误分类。Web 和 Electron 都从现有 Renderer Host 获得该服务，Workbench 注册同一个实例；产品调用不经过 `workbench/api`。
 
+Issue 列表、详情和缓存保留 GitHub 的可选 `state_reason`，App Server 以 `stateReason` 传给前端。旧响应或缓存缺少该字段时仍按已关闭处理；未知原因原样保留。聊天链接卡片通过 `workbench/common/chatIssue.ts` 选择状态图标与主题色：开放为绿色，完成为紫色，不计划处理或重复为弱化文本色，状态文字仍供无障碍读取。
+
 PR 列表支持 `head`（`owner:branch`）筛选，会话分支关联使用此条件查询，避免遍历仓库历史。PR 详情保留 GitHub 返回的 `mergeable`：`false` 表示无法合并，`null` 表示仍在计算，不能把未知结果显示为合并冲突。会话输入区和列表共享分支关联结果，并结合检查与审查线程显示需要处理的状态。
 
 会话还可手动附加 GitHub.com 或 Enterprise PR。`github/session/pullRequests` 读取引用，`github/session/pullRequest/attach` 和 `github/session/pullRequest/detach` 按仓库身份及编号增删引用；这三个方法只访问 `ash-state` 的 Session 根 Thread 存储，按 Session 串行执行，不携带账号或 `operationId`。实际变化发布 `session/changed`，重复操作不产生重复引用。标题与实时状态仍通过 GitHub API 读取，分支关联和手动引用合并去重。移除引用不关闭 PR，当前分支的自动关联仍保留；读取失败时显示状态不可用并保留移除入口。

@@ -94,12 +94,16 @@ impl super::AppServer {
         self
     }
 
-    pub(super) fn session_pull_requests(
+    pub(super) fn session_github_references(
         &self,
         method: ClientMethod,
         params: &Value,
     ) -> Result<Value, RpcError> {
+        use ash_app_server_protocol::protocol::github::GitHubIssueReference;
         use ash_app_server_protocol::protocol::github::GitHubPullRequestReference;
+        use ash_app_server_protocol::protocol::github::GitHubSessionIssueParams;
+        use ash_app_server_protocol::protocol::github::GitHubSessionIssuesParams;
+        use ash_app_server_protocol::protocol::github::GitHubSessionIssuesResult;
         use ash_app_server_protocol::protocol::github::GitHubSessionPullRequestParams;
         use ash_app_server_protocol::protocol::github::GitHubSessionPullRequestsParams;
         use ash_app_server_protocol::protocol::github::GitHubSessionPullRequestsResult;
@@ -108,12 +112,26 @@ impl super::AppServer {
                 let p: GitHubSessionPullRequestsParams = decode(params)?;
                 (p.session_id, None)
             }
+            ClientMethod::GitHubSessionIssues => {
+                let p: GitHubSessionIssuesParams = decode(params)?;
+                (p.session_id, None)
+            }
             ClientMethod::GitHubSessionPullRequestAttach
             | ClientMethod::GitHubSessionPullRequestDetach => {
                 let p: GitHubSessionPullRequestParams = decode(params)?;
-                (p.session_id, Some(p.reference))
+                (
+                    p.session_id,
+                    Some((p.reference.repository, p.reference.number)),
+                )
             }
-            _ => unreachable!("only Session PR reference methods are dispatched here"),
+            ClientMethod::GitHubSessionIssueAttach | ClientMethod::GitHubSessionIssueDetach => {
+                let p: GitHubSessionIssueParams = decode(params)?;
+                (
+                    p.session_id,
+                    Some((p.reference.repository, p.reference.number)),
+                )
+            }
+            _ => unreachable!("only Session GitHub reference methods are dispatched here"),
         };
         if self
             .agent_runtime()
@@ -131,60 +149,80 @@ impl super::AppServer {
             .thread_pull_requests
             .as_ref()
             .ok_or_else(|| RpcError::new(-32070, AppServerErrorName::GitHubUnavailable))?;
+        let storage_error = |error: thread_store::ThreadStoreError| {
+            RpcError::with_details(
+                -32070,
+                AppServerErrorName::GitHubOperationFailed,
+                error.to_string(),
+            )
+        };
+        let repository_view = |repository: github::Repository| {
+            ash_app_server_protocol::protocol::issues::IssueRepository {
+                host: repository.host,
+                owner: repository.owner,
+                name: repository.name,
+            }
+        };
         match method {
             ClientMethod::GitHubSessionPullRequests => {
-                let references = store.list_pull_requests(&thread_id).map_err(|error| {
-                    RpcError::with_details(
-                        -32070,
-                        AppServerErrorName::GitHubOperationFailed,
-                        error.to_string(),
-                    )
-                })?;
+                let references = store
+                    .list_pull_requests(&thread_id)
+                    .map_err(storage_error)?;
                 result(&GitHubSessionPullRequestsResult {
                     references: references
                         .into_iter()
                         .map(|(repository, number)| GitHubPullRequestReference {
-                            repository:
-                                ash_app_server_protocol::protocol::issues::IssueRepository {
-                                    host: repository.host,
-                                    owner: repository.owner,
-                                    name: repository.name,
-                                },
+                            repository: repository_view(repository),
+                            number,
+                        })
+                        .collect(),
+                })
+            }
+            ClientMethod::GitHubSessionIssues => {
+                let references = store.list_issues(&thread_id).map_err(storage_error)?;
+                result(&GitHubSessionIssuesResult {
+                    references: references
+                        .into_iter()
+                        .map(|(repository, number)| GitHubIssueReference {
+                            repository: repository_view(repository),
                             number,
                         })
                         .collect(),
                 })
             }
             ClientMethod::GitHubSessionPullRequestAttach
-            | ClientMethod::GitHubSessionPullRequestDetach => {
-                let reference = reference.expect("mutation params include a PR reference");
-                let repository = github::Repository::new(
-                    reference.repository.host,
-                    reference.repository.owner,
-                    reference.repository.name,
-                )
-                .map_err(github_error)?;
-                if reference.number == 0 || reference.number > 9_007_199_254_740_991 {
+            | ClientMethod::GitHubSessionPullRequestDetach
+            | ClientMethod::GitHubSessionIssueAttach
+            | ClientMethod::GitHubSessionIssueDetach => {
+                let (repository, number) = reference.expect("mutation params include a reference");
+                let repository =
+                    github::Repository::new(repository.host, repository.owner, repository.name)
+                        .map_err(github_error)?;
+                if number == 0 || number > 9_007_199_254_740_991 {
                     return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
                 }
-                let changed = if method == ClientMethod::GitHubSessionPullRequestAttach {
-                    store.attach_pull_request(&thread_id, &repository, reference.number)
-                } else {
-                    store.detach_pull_request(&thread_id, &repository, reference.number)
+                let changed = match method {
+                    ClientMethod::GitHubSessionPullRequestAttach => {
+                        store.attach_pull_request(&thread_id, &repository, number)
+                    }
+                    ClientMethod::GitHubSessionPullRequestDetach => {
+                        store.detach_pull_request(&thread_id, &repository, number)
+                    }
+                    ClientMethod::GitHubSessionIssueAttach => {
+                        store.attach_issue(&thread_id, &repository, number)
+                    }
+                    ClientMethod::GitHubSessionIssueDetach => {
+                        store.detach_issue(&thread_id, &repository, number)
+                    }
+                    _ => unreachable!("only mutations are dispatched here"),
                 }
-                .map_err(|error| {
-                    RpcError::with_details(
-                        -32070,
-                        AppServerErrorName::GitHubOperationFailed,
-                        error.to_string(),
-                    )
-                })?;
+                .map_err(storage_error)?;
                 if changed {
                     self.updates.publish_session_changed(&session_id);
                 }
                 result(&())
             }
-            _ => unreachable!("only Session PR reference methods are dispatched here"),
+            _ => unreachable!("only Session GitHub reference methods are dispatched here"),
         }
     }
 }

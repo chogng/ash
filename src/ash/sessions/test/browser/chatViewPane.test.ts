@@ -769,7 +769,7 @@ test('sending from one session preserves a later draft during first-session crea
 	editorServices.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { assert.fail('Unexpected editor navigation'); }, focusActiveEditor: () => { } });
 	editorServices.registerInstance(ISessionsGitHubService, {
 		onDidChange: Event.None,
-		getSessionPullRequests: () => [],
+		getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { },
 		initialize() { },
 		attachPullRequest: async () => { throw new Error('Unexpected PR attachment'); },
 		detachPullRequest: async () => { throw new Error('Unexpected PR removal'); },

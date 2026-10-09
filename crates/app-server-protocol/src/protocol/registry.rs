@@ -1210,6 +1210,12 @@ use crate::protocol::github::GitHubReviewThreadsResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubReviewersChangeParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubSessionIssueParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubSessionIssuesParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubSessionIssuesResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubSessionPullRequestParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubSessionPullRequestsParams;
@@ -4397,6 +4403,9 @@ client_methods! {
     GitHubSessionPullRequests => "github/session/pullRequests" { params: GitHubSessionPullRequestsParams, response: GitHubSessionPullRequestsResult, serialization: SessionExclusive, },
     GitHubSessionPullRequestAttach => "github/session/pullRequest/attach" { params: GitHubSessionPullRequestParams, response: (), serialization: SessionExclusive, },
     GitHubSessionPullRequestDetach => "github/session/pullRequest/detach" { params: GitHubSessionPullRequestParams, response: (), serialization: SessionExclusive, },
+    GitHubSessionIssues => "github/session/issues" { params: GitHubSessionIssuesParams, response: GitHubSessionIssuesResult, serialization: SessionExclusive, },
+    GitHubSessionIssueAttach => "github/session/issue/attach" { params: GitHubSessionIssueParams, response: (), serialization: SessionExclusive, },
+    GitHubSessionIssueDetach => "github/session/issue/detach" { params: GitHubSessionIssueParams, response: (), serialization: SessionExclusive, },
     GitHubAccountConnect => "github/account/connect" { params: GitHubAccountConnectParams, response: GitHubAccount, serialization: GlobalExclusive, cancellation: "operationId" => PreserveOutcome, },
     GitHubReviewCommentEdit => "github/pullRequest/comment/update" { params: GitHubReviewCommentEditParams, response: GitHubReviewComment, serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
     GitHubReviewCommentDelete => "github/pullRequest/comment/delete" { params: GitHubReviewCommentDeleteParams, response: (), serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
@@ -5169,8 +5178,12 @@ typescript_bindings! {
     crate::protocol::github::GitHubAccountListParams,
     crate::protocol::github::GitHubPullRequestReference,
     crate::protocol::github::GitHubSessionPullRequestsParams,
+    crate::protocol::github::GitHubIssueReference,
+    crate::protocol::github::GitHubSessionIssuesParams,
     crate::protocol::github::GitHubSessionPullRequestParams,
+    crate::protocol::github::GitHubSessionIssueParams,
     crate::protocol::github::GitHubSessionPullRequestsResult,
+    crate::protocol::github::GitHubSessionIssuesResult,
     crate::protocol::github::GitHubReviewCommentEditParams,
     crate::protocol::github::GitHubReviewCommentDeleteParams,
     crate::protocol::github::GitHubReviewerChange,

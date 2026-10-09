@@ -2,7 +2,7 @@ import { CancellationToken } from '../../../base/common/cancellation.js';
 import { CancellationError, onUnexpectedError } from '../../../base/common/errors.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { Event } from '../../../base/common/event.js';
-import type { GitHubPullRequestReference } from '../common/githubService.js';
+import type { GitHubIssueReference, GitHubPullRequestReference } from '../common/githubService.js';
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { appServerRequest } from '../../agentHost/browser/appServerRequest.js';
 import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
@@ -15,6 +15,9 @@ enum RequestKind { Read, Write }
 
 export class AppServerGitHubService implements IGitHubService {
 	public readonly onDidChangeSessionPullRequests: Event<string> = listener => this.connection.onNotification(notification => {
+		if (notification.method === 'session/changed') { listener(notification.params.sessionId); }
+	});
+	public readonly onDidChangeSessionIssues: Event<string> = listener => this.connection.onNotification(notification => {
 		if (notification.method === 'session/changed') { listener(notification.params.sessionId); }
 	});
 	constructor(private readonly connection: AppServerProtocolClient) { }
@@ -30,12 +33,23 @@ export class AppServerGitHubService implements IGitHubService {
 		await this.referenceRequest('github/session/pullRequest/detach', { sessionId, reference });
 	}
 
+	public async listSessionIssues(sessionId: string): Promise<readonly GitHubIssueReference[]> {
+		const result = await this.referenceRequest('github/session/issues', { sessionId });
+		return result.references.map(reference => ({ repository: { ...reference.repository }, number: reference.number }));
+	}
+	public async attachSessionIssue(sessionId: string, reference: GitHubIssueReference): Promise<void> {
+		await this.referenceRequest('github/session/issue/attach', { sessionId, reference });
+	}
+	public async detachSessionIssue(sessionId: string, reference: GitHubIssueReference): Promise<void> {
+		await this.referenceRequest('github/session/issue/detach', { sessionId, reference });
+	}
+
 	private async referenceRequest<M extends Extract<AppServerMethod, `github/session/${string}`>>(method: M, params: MethodParams<M>): Promise<MethodResult<M>> {
 		try {
 			return await appServerRequest(this.connection, method, params);
 		} catch (error) {
 			if (error instanceof AppServerRemoteError) { throw githubError(error); }
-			throw new GitHubError(method === 'github/session/pullRequests' ? GitHubErrorCode.Unavailable : GitHubErrorCode.SubmissionUncertain);
+			throw new GitHubError((method === 'github/session/pullRequests' || method === 'github/session/issues') ? GitHubErrorCode.Unavailable : GitHubErrorCode.SubmissionUncertain);
 		}
 	}
 
@@ -204,6 +218,7 @@ export class AppServerGitHubService implements IGitHubService {
 export function createDisconnectedGitHubService(): IGitHubService {
 	const unavailable = async (): Promise<never> => { throw new GitHubError(GitHubErrorCode.Unavailable); };
 	return {
+		onDidChangeSessionIssues: Event.None, listSessionIssues: unavailable, attachSessionIssue: unavailable, detachSessionIssue: unavailable,
 		onDidChangeSessionPullRequests: Event.None, listSessionPullRequests: unavailable, attachSessionPullRequest: unavailable, detachSessionPullRequest: unavailable,
 		listAccounts: unavailable, listNotifications: unavailable, markNotificationRead: unavailable, markNotificationsRead: unavailable, createFork: unavailable, connectToken: unavailable, requestedReviewers: unavailable, changeReviewers: unavailable, updateReviewComment: unavailable, deleteReviewComment: unavailable,
 		readCommit: unavailable,

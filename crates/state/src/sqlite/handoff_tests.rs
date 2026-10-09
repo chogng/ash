@@ -134,6 +134,9 @@ fn import_preserves_old_event_bytes_ids_and_excludes_configuration() {
     source
         .attach_pull_request(&root.thread_id, &repository, 12)
         .unwrap();
+    source
+        .attach_issue(&root.thread_id, &repository, 13)
+        .unwrap();
     let connection = Connection::open(source.path()).unwrap();
     connection.execute_batch("CREATE TABLE credentials (value TEXT); INSERT INTO credentials VALUES ('outside-secret');").unwrap();
     let mut record = source.load(&root.thread_id).unwrap().remove(0);
@@ -179,6 +182,15 @@ fn import_preserves_old_event_bytes_ids_and_excludes_configuration() {
     assert_eq!(
         target.list_pull_requests(&root.thread_id).unwrap(),
         vec![(repository.clone(), 12)]
+    );
+    assert_eq!(
+        target.list_issues(&root.thread_id).unwrap(),
+        vec![(repository.clone(), 13)]
+    );
+    assert!(
+        source
+            .detach_issue(&root.thread_id, &repository, 13)
+            .is_err()
     );
     assert!(
         source
@@ -480,6 +492,35 @@ fn archive_with_valid_transport_digest_and_invalid_agent_binding_is_rejected_ato
             )
             .is_ok()
     );
+}
+
+#[test]
+fn version_2_archives_restore_existing_prs_without_issue_rows() {
+    let from = tempfile::tempdir().unwrap();
+    let to = tempfile::tempdir().unwrap();
+    let source = store(from.path());
+    let target = store(to.path());
+    let controller = ThreadController::with_store(source.clone());
+    let root = thread(&controller, "legacy-root", None);
+    source
+        .attach_pull_request(
+            &root.thread_id,
+            &github::Repository::new("github.com".into(), "team".into(), "repo".into()).unwrap(),
+            7,
+        )
+        .unwrap();
+    let attachments = MemoryAttachmentStore::default();
+    let archive = export(&source, &target, &attachments);
+    let legacy = rewrite_archive(&archive, |frame| {
+        if let Frame::Header { version, .. } = frame {
+            *version = 2;
+        }
+    });
+    target
+        .import_history("build-host", &attachments, legacy.as_slice())
+        .unwrap();
+    assert_eq!(target.list_pull_requests(&root.thread_id).unwrap().len(), 1);
+    assert!(target.list_issues(&root.thread_id).unwrap().is_empty());
 }
 
 fn rewrite_archive(archive: &[u8], mut mutate: impl FnMut(&mut Frame)) -> Vec<u8> {

@@ -132,6 +132,8 @@ const iconHomeFilled = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"n
 const iconImage = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"#000\" d=\"M4.432 5.383a.932.932 0 1 1 0 1.863.932.932 0 0 1 0-1.863Z\"/><path stroke=\"#000\" stroke-linecap=\"round\" d=\"M12.5 3h-9a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Z\"/><path stroke=\"#000\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"m14.5 9-3-3.5L7 10 6 9l-3.5 3.5\"/></svg>";
 const iconImageFilled = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path fill=\"#000\" stroke=\"#000\" d=\"M4.432 5.383a.932.932 0 1 1 0 1.863.932.932 0 0 1 0-1.863Z\"/><path stroke=\"#000\" stroke-linecap=\"round\" d=\"M12.5 3h-9a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Z\"/><path fill=\"#000\" fill-rule=\"evenodd\" d=\"M11.52 5a.5.5 0 0 1 .36.174l2.518 2.939c.389.453.602 1.03.602 1.627V11a2.5 2.5 0 0 1-2.5 2.5h-9a2.5 2.5 0 0 1-1.5-.504V12.5a.5.5 0 0 1 .146-.354l3.5-3.5.079-.064a.5.5 0 0 1 .629.064L7 9.293l4.147-4.147.08-.065A.5.5 0 0 1 11.52 5\" clip-rule=\"evenodd\"/></svg>";
 const iconInfo = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><circle cx=\"8\" cy=\"8\" r=\"6.5\" stroke=\"#000\"/><path stroke=\"#000\" stroke-linecap=\"round\" d=\"M8 7.5v4\"/><path fill=\"#000\" d=\"M8.74 5a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0\"/></svg>";
+const iconIssueClosed = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><circle cx=\"8\" cy=\"8\" r=\"6\" stroke=\"#000\"/><path stroke=\"#000\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M4.8 8.3 7 10.2l4.2-4.4\"/></svg>";
+const iconIssueOpened = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><circle cx=\"8\" cy=\"8\" r=\"6\" stroke=\"#000\"/><circle cx=\"8\" cy=\"8\" r=\"1.25\" fill=\"#000\"/></svg>";
 const iconItalics = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"#000\" stroke-linecap=\"round\" d=\"m10 2.5-4 11m4-11H7m3 0h3m-7 11H3m3 0h3\"/></svg>";
 const iconKebabVertical = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path fill=\"#000\" d=\"M8 11a1 1 0 1 1 0 2 1 1 0 0 1 0-2\"/><circle cx=\"8\" cy=\"8\" r=\"1\" fill=\"#000\" transform=\"rotate(-90 8 8)\"/><path fill=\"#000\" d=\"M8 3a1 1 0 1 1 0 2 1 1 0 0 1 0-2\"/></svg>";
 const iconKeyboardTab = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"#000\" stroke-linecap=\"round\" d=\"M14.5 3.5V12\"/><path stroke=\"#000\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"m8.5 3.5 4 4-4 4m4-4H3\"/></svg>";
@@ -381,6 +383,8 @@ export function createProductIconLibrary<T>(register: (id: string, definition: P
     image: register("image", iconImage),
     imageFilled: register("image-filled", iconImageFilled),
     info: register("info", iconInfo),
+    issueClosed: register("issue-closed", iconIssueClosed),
+    issueOpened: register("issue-opened", iconIssueOpened),
     italics: register("italics", iconItalics),
     kebabVertical: register("kebab-vertical", iconKebabVertical),
     keyboardTab: register("keyboard-tab", iconKeyboardTab),

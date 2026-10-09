@@ -2312,8 +2312,11 @@ impl AppServer {
             Some(
                 method @ (ClientMethod::GitHubSessionPullRequests
                 | ClientMethod::GitHubSessionPullRequestAttach
-                | ClientMethod::GitHubSessionPullRequestDetach),
-            ) => self.session_pull_requests(method, &request.params),
+                | ClientMethod::GitHubSessionPullRequestDetach
+                | ClientMethod::GitHubSessionIssues
+                | ClientMethod::GitHubSessionIssueAttach
+                | ClientMethod::GitHubSessionIssueDetach),
+            ) => self.session_github_references(method, &request.params),
             Some(ClientMethod::GitHubCancel) => github_processor::cancel(
                 &self.request_scheduler,
                 &self.request_cancellations,

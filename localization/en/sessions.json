@@ -37,6 +37,20 @@
     "sessions.settings.apiConnections": "API connections",
     "sessions.settings.saveApiKey": "Save API key",
     "sessions.settings.searchModels": "Search models and APIs",
-    "sessions.settings.noMatchingModels": "No matching models or APIs."
+    "sessions.settings.noMatchingModels": "No matching models or APIs.",
+    "sessions.github.references": "Session GitHub references",
+    "sessions.github.issues": "Session issues",
+    "sessions.github.attachIssue": "Attach issue",
+    "sessions.github.attachIssueTitle": "Attach an issue to this session",
+    "sessions.github.issueAttached": "Issue attached.",
+    "sessions.github.issueDetached": "Issue attachment removed.",
+    "sessions.github.removeIssueLabel": "Remove attached issue {0}/{1}/{2} #{3}",
+    "sessions.github.issueSummary": "{0} issues · {1} open · {2} closed · {3} unavailable",
+    "sessions.github.issueCompleted": "Completed",
+    "sessions.github.issueNotPlanned": "Not planned",
+    "sessions.github.issueDuplicate": "Duplicate",
+    "sessions.github.connectIssueHost": "Connect a GitHub account for {0} before attaching this issue.",
+    "sessions.github.invalidIssueUrl": "Enter an HTTPS issue URL, such as https://github.com/owner/repo/issues/123.",
+    "sessions.github.issueHelp": "Use Attach issue to enter an HTTPS GitHub issue URL. The issues summary shows open, closed and unavailable counts. Press Enter or Space on the summary to expand its links, then use Tab to open or remove an issue. Each link includes its full title and state. Open Accessible View to read all issue states as text. Escape collapses the list and returns focus to the summary. Remove detaches the saved association without closing the issue on GitHub. Unavailable issues remain removable and are not counted as completed."
   }
 }
