@@ -24,11 +24,12 @@ from build.lib.v8 import LockedFile, load_v8_lock  # noqa: E402
 
 
 PROFILE = "ptrcomp_sandbox_release"
-# musl uses the upstream x64-host cross-build path. Windows ARM64 is link-only.
+# Linux ARM64 uses upstream's x64 build tools; GNU artifacts also run on ARM64
+# in a separate workflow job. Windows ARM64 and musl ARM64 are link-only here.
 BUILD_TARGETS = {
     "aarch64-apple-darwin": ("macos-26", "run"),
     "x86_64-apple-darwin": ("macos-26-intel", "run"),
-    "aarch64-unknown-linux-gnu": ("ubuntu-24.04-arm", "run"),
+    "aarch64-unknown-linux-gnu": ("ubuntu-24.04", "link"),
     "x86_64-unknown-linux-gnu": ("ubuntu-24.04", "run"),
     "aarch64-unknown-linux-musl": ("ubuntu-24.04", "link"),
     "x86_64-unknown-linux-musl": ("ubuntu-24.04", "run"),
@@ -169,7 +170,10 @@ def prepare_gnu_sysroot(target: str, output: Path, root: Path = ROOT) -> dict[st
     artifact = LockedFile(archive.name, pin["sha256"], pin["url"], pin["size"])
     if not archive.is_file() or sha256(archive) != artifact.sha256:
         download_and_verify(artifact, archive, timeout=120)
+    cross_arm = target == "aarch64-unknown-linux-gnu"
     sdk = output / "sdk"
+    if cross_arm:
+        sdk = sdk / "debian_bullseye_arm64-sysroot"
     sdk.mkdir(parents=True, exist_ok=True)
     with tarfile.open(archive, "r:xz") as contents:
         contents.extractall(sdk, filter="data")
@@ -181,15 +185,33 @@ def prepare_gnu_sysroot(target: str, output: Path, root: Path = ROOT) -> dict[st
     if version != pin["glibcVersion"]:
         raise ValueError("GNU sysroot libc version differs from source lock")
     (sdk / ".ash-source-lock-sha256").write_text(artifact.sha256, encoding="utf-8")
-    # Use the explicit sysroot argument: upstream's target_sysroot is musl-only.
+    if cross_arm:
+        prepare_gnu_sysroot("x86_64-unknown-linux-gnu", output / "host", root)
+        host_sdk = (output / "host/sdk").resolve()
+        host_link = sdk.parent / "debian_bullseye_amd64-sysroot"
+        if not host_link.exists():
+            host_link.symlink_to(host_sdk, target_is_directory=True)
+        # GN selects a sysroot per toolchain CPU. A global ARM sysroot would
+        # also apply to the x64 torque/mksnapshot tools and prevent them linking.
+        return {
+            "GN_ARGS": f"target_sysroot_dir={json.dumps(str(sdk.parent.resolve()))} use_sysroot=true"
+        }
+    # Upstream's target_sysroot is musl-only; an explicit sysroot is safe for x64.
     return {"GN_ARGS": f"sysroot={json.dumps(str(sdk.resolve()))} use_sysroot=true"}
 
 
-def gnu_sysroot_path(gn_args: str) -> Path:
-    match = re.search(r'(?m)^\s*sysroot\s*=\s*("(?:[^"\\]|\\.)*")\s*$', gn_args)
-    if not match or not re.search(r"(?m)^\s*use_sysroot\s*=\s*true\s*$", gn_args):
+def gnu_sysroot_path(gn_args: str, target: str) -> Path:
+    if not re.search(r"(?m)^\s*use_sysroot\s*=\s*true\s*$", gn_args):
         raise ValueError("GNU source build must use its pinned sysroot")
-    return Path(json.loads(match[1]))
+    match = re.search(r'(?m)^\s*sysroot\s*=\s*("(?:[^"\\]|\\.)*")\s*$', gn_args)
+    if match:
+        return Path(json.loads(match[1]))
+    directory = re.search(
+        r'(?m)^\s*target_sysroot_dir\s*=\s*("(?:[^"\\]|\\.)*")\s*$', gn_args
+    )
+    if target != "aarch64-unknown-linux-gnu" or not directory:
+        raise ValueError("GNU source build must use its pinned sysroot")
+    return Path(json.loads(directory[1])) / "debian_bullseye_arm64-sysroot"
 
 
 def provenance_name(target: str) -> str:
@@ -220,7 +242,7 @@ def stage_pair(
     validate_gn_args(gn_args)
     pin = source_lock(root)
     if target.endswith("-linux-gnu"):
-        sdk = gnu_sysroot_path(gn_args)
+        sdk = gnu_sysroot_path(gn_args, target)
         if (sdk / ".ash-source-lock-sha256").read_text().strip() != pin["gnuSysroots"][
             target
         ]["sha256"]:
@@ -347,7 +369,7 @@ def verify_release(artifacts: Path, repository: str, root: Path = ROOT) -> Path:
             raise ValueError(f"Invalid source provenance for {target}")
         validate_gn_args(provenance["gnArgs"])
         if target.endswith("-linux-gnu"):
-            gnu_sysroot_path(provenance["gnArgs"])
+            gnu_sysroot_path(provenance["gnArgs"], target)
         for kind, path in zip(("archive", "binding"), paths, strict=True):
             lock["artifacts"][target][kind]["sha256"] = sha256(path)
     lock["source"] = {

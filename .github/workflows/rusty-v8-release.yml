@@ -25,7 +25,8 @@ permissions:
 
 concurrency:
   group: rusty-v8-release-${{ github.ref }}
-  cancel-in-progress: false
+  # Only the latest PR revision needs validation; tagged releases run to completion.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_NET_GIT_FETCH_WITH_CLI: "true"
@@ -114,6 +115,10 @@ jobs:
           sudo apt-get install --yes --no-install-recommends build-essential pkg-config \
             "clang-19=$package_version" "libclang-19-dev=$package_version"
           echo "BINDING_CLANG_BASE_PATH=/usr/lib/llvm-19" >> "$GITHUB_ENV"
+          if [ "$TARGET" = aarch64-unknown-linux-gnu ]; then
+            sudo apt-get install --yes --no-install-recommends gcc-aarch64-linux-gnu
+            echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
+          fi
       - name: Install compatible macOS binding compiler
         if: runner.os == 'macOS'
         run: |
@@ -144,8 +149,9 @@ jobs:
               # Extract ARM64 headers/libs on the x64 host; package scripts never run.
               mkdir -p "$sysroot"
               docker run --rm -v "$sysroot:/sysroot" alpine:3.21 sh -ec '
-                mkdir -p /sysroot/etc/apk
-                cp -a /etc/apk/keys /sysroot/etc/apk/keys
+                mkdir -p /sysroot/etc/apk/keys
+                # The host /etc key set covers x64; use the packaged ARM keys.
+                cp -L /usr/share/apk/keys/aarch64/*.pub /sysroot/etc/apk/keys/
                 apk --arch aarch64 --root /sysroot --initdb --no-scripts \
                   --repository https://dl-cdn.alpinelinux.org/alpine/v3.21/main \
                   add musl-dev linux-headers
@@ -214,8 +220,42 @@ jobs:
           if-no-files-found: error
           compression-level: 0
 
-  verify:
+  test-arm-gnu:
+    name: Execute sandbox / aarch64-unknown-linux-gnu
+    # Chromium ships x64 Linux build tools. Execute the cross-built pair on ARM64.
     needs: [metadata, build]
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    env:
+      TARGET: aarch64-unknown-linux-gnu
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.11"
+      - uses: taiki-e/install-action@a6b2e2dcd845ddd7f509ce4f3ed3d922b80cc5d9
+        with:
+          tool: just@1.46.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: rusty-v8-${{ needs.metadata.outputs.version }}-aarch64-unknown-linux-gnu
+          path: dist/aarch64-unknown-linux-gnu
+      - name: Validate downloaded pair and select Cargo inputs
+        run: python -B build/v8/smoke.py pair --target "$TARGET" --artifacts "dist/$TARGET" --github-env "$GITHUB_ENV"
+      - name: Execute staged pair with Ash on ARM64
+        run: just test ash-v8-poc --locked --target "$TARGET" --features sandbox -- --test-threads=1
+      - uses: bazel-contrib/setup-bazel@c5acdfb288317d0b5c0bbd7a396a3dc868bb0f86
+        with:
+          bazelisk-cache: true
+          disk-cache: v8-consumer-aarch64-gnu-execution
+          repository-cache: true
+      - name: Execute staged pair through Bazel on ARM64
+        run: python -B build/v8/smoke.py bazel --target "$TARGET" --artifacts "dist/$TARGET" --output "$RUNNER_TEMP/v8-bazel-inputs"
+
+  verify:
+    needs: [metadata, build, test-arm-gnu]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

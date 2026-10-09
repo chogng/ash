@@ -9,7 +9,7 @@ from unittest.mock import patch
 from build.download.artifacts import sha256
 from build.lib.v8 import load_v8_lock
 from build.v8.release import checksum_name, source_lock
-from build.v8.smoke import bazel_arguments, prepare_musl_linker
+from build.v8.smoke import bazel_arguments, pair_environment, prepare_musl_linker
 
 
 class V8SmokeTests(unittest.TestCase):
@@ -88,6 +88,19 @@ class V8SmokeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "checksum validation"):
             bazel_arguments(self.target, self.directory, output, run=True)
         self.assertFalse(output.exists())
+
+    def test_downloaded_pair_is_checked_before_exporting_cargo_inputs(self):
+        values = pair_environment(self.target, self.directory)
+        self.assertEqual(
+            {
+                "RUSTY_V8_ARCHIVE": str(self.paths[0].resolve()),
+                "RUSTY_V8_SRC_BINDING_PATH": str(self.paths[1].resolve()),
+            },
+            values,
+        )
+        self.paths[1].write_bytes(b"corrupt")
+        with self.assertRaisesRegex(ValueError, "checksum validation"):
+            pair_environment(self.target, self.directory)
 
     def test_musl_linker_uses_one_crt_provider(self):
         output = self.directory / "linker"

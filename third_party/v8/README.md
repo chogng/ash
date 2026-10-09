@@ -45,11 +45,14 @@ Ash 的 Bazel 目前只消费预编译输入，因此此流程直接使用上游
 macOS、GNU Linux 和 Windows x64 使用 `ash-v8-poc` 链接并执行产物；
 执行探针时串行运行测试，避免多个首批 isolate 并发初始化进程级沙箱地址池。
 Windows ARM64 和 musl ARM64 验证交叉链接；musl x64 链接并执行探针。
+GNU ARM64 使用上游 x64 构建工具交叉编译，并在单独的 ARM64 runner
+对同一份新产物执行 Cargo 与 Bazel 测试；发布汇总依赖该运行验证通过。
 Clang 23 生成的匿名枚举常量名称不符合此版本 Rust crate 的约定，因此
 绑定使用单独固定版本的 Clang 19，并显式设置其内置头文件目录。
 绑定工具链由 Ubuntu/Homebrew/Chocolatey 安装，准备步骤校验精确版本。
 GNU 使用固定 SHA-256 的 Chromium Debian sysroot（glibc 2.27），避免
 宿主机头文件引入 Bazel glibc 2.28 不具备的 `__isoc23_*` 等符号。
+ARM64 交叉构建为目标与 x64 构建工具分别选择匹配 CPU 的固定 GNU sysroot。
 musl 的 Cargo 链接器使用固定版本和 SHA-256 的 Zig，并关闭 Rust 自带的
 链接 CRT，由 Zig 统一提供启动对象，避免重复定义 `_start`。构建 sysroot 来自
 Ubuntu/Alpine 软件包，系统 SDK 与 runner 镜像仍由 CI 环境提供。
@@ -62,7 +65,7 @@ Linux 的 Bazel 消费规则会在派生 archive 中弱化两份 libc++ 共用�
 ARM64 musl 的 Bazel 派生库还合入目标 compiler-rt builtins，补齐 Rust
 musl builtins 未提供的 `__clear_cache`；Cargo 的 Zig 链接器提供同一入口。
 musl 验证平台同时声明 LLVM 与 Rust 的 libc 约束，防止选择 GNU 输入。
-x64 静态探针使用明确的 Linux 测试执行工具链；ARM64 仅构建测试程序，
+x64 静态探针使用明确的 Linux 测试执行工具链；musl ARM64 仅构建测试程序，
 不要求 x64 runner 具备 ARM64 测试执行平台。
 
 每次成功的验证会生成包含新摘要和当前仓库来源的候选 `runtime-lock.json`，

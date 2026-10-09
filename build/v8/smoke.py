@@ -70,19 +70,27 @@ def prepare_musl_linker(target: str, output: Path, root: Path = ROOT) -> dict[st
     }
 
 
+def pair_environment(target: str, artifacts: Path, root: Path = ROOT) -> dict[str, str]:
+    pair = load_v8_lock(root / "third_party/v8/runtime-lock.json")[target]
+    paths = [(artifacts / item.name).resolve() for item in (pair.archive, pair.binding)]
+    expected = "".join(f"{sha256(path)}  {path.name}\n" for path in paths)
+    if (artifacts / checksum_name(target)).read_text() != expected:
+        raise ValueError("Staged pair failed checksum validation before consumption")
+    return {
+        "RUSTY_V8_ARCHIVE": str(paths[0]),
+        "RUSTY_V8_SRC_BINDING_PATH": str(paths[1]),
+    }
+
+
 def bazel_arguments(
     target: str, artifacts: Path, output: Path, *, run: bool, root: Path = ROOT
 ) -> list[str]:
     if target not in BAZEL_PLATFORMS:
         # MSVC archives cannot be linked by the registered Windows GNU C++ toolchain.
         raise ValueError("No matching Bazel C++ toolchain for this V8 artifact ABI")
-    pair = load_v8_lock(root / "third_party/v8/runtime-lock.json")[target]
-    paths = [artifacts / pair.archive.name, artifacts / pair.binding.name]
-    expected = "".join(f"{sha256(path)}  {path.name}\n" for path in paths)
-    if (artifacts / checksum_name(target)).read_text() != expected:
-        raise ValueError(
-            "Staged pair failed checksum validation before Bazel consumption"
-        )
+    paths = [
+        Path(value) for value in pair_environment(target, artifacts, root).values()
+    ]
     arguments = [
         "test" if run else "build",
         "//crates/v8-poc:v8-poc-unit-tests",
@@ -125,6 +133,10 @@ def main() -> None:
     linker.add_argument("--target", required=True)
     linker.add_argument("--output", type=Path, required=True)
     linker.add_argument("--github-env", type=Path)
+    pair = commands.add_parser("pair")
+    pair.add_argument("--target", choices=load_v8_lock(), required=True)
+    pair.add_argument("--artifacts", type=Path, required=True)
+    pair.add_argument("--github-env", type=Path)
     bazel = commands.add_parser("bazel")
     bazel.add_argument("--target", choices=BAZEL_PLATFORMS, required=True)
     bazel.add_argument("--artifacts", type=Path, required=True)
@@ -132,8 +144,12 @@ def main() -> None:
     bazel.add_argument("--link-only", action="store_true")
     bazel.add_argument("--bazel", default="bazel")
     args = parser.parse_args()
-    if args.command == "musl-linker":
-        values = prepare_musl_linker(args.target, args.output)
+    if args.command in ("musl-linker", "pair"):
+        values = (
+            prepare_musl_linker(args.target, args.output)
+            if args.command == "musl-linker"
+            else pair_environment(args.target, args.artifacts)
+        )
         print(json.dumps(values))
         if args.github_env:
             with args.github_env.open("a", encoding="utf-8", newline="\n") as stream:

@@ -95,12 +95,21 @@ class V8ReleaseTests(unittest.TestCase):
         )
         if target.endswith("-linux-gnu"):
             sdk = self.root / "sysroots" / target
+            if target == "aarch64-unknown-linux-gnu":
+                sdk = sdk / "debian_bullseye_arm64-sysroot"
             sdk.mkdir(parents=True, exist_ok=True)
             (sdk / ".ash-source-lock-sha256").write_text(
                 source["gnuSysroots"][target]["sha256"]
             )
             with (gn_out / "args.gn").open("a") as args:
-                args.write(f"sysroot = {json.dumps(str(sdk))}\nuse_sysroot = true\n")
+                if target == "aarch64-unknown-linux-gnu":
+                    args.write(
+                        f"target_sysroot_dir = {json.dumps(str(sdk.parent))}\nuse_sysroot = true\n"
+                    )
+                else:
+                    args.write(
+                        f"sysroot = {json.dumps(str(sdk))}\nuse_sysroot = true\n"
+                    )
         library = "rusty_v8.lib" if target.endswith("msvc") else "librusty_v8.a"
         (gn_out / "obj" / library).write_bytes(b"archive for " + target.encode())
         (gn_out / "src_binding.rs").write_text("pub const V8_VALUE: u32 = 1;\n")
@@ -116,6 +125,11 @@ class V8ReleaseTests(unittest.TestCase):
         matrix = json.loads(metadata["matrix"])["include"]
         self.assertEqual(set(load_v8_lock()), {row["target"] for row in matrix})
         self.assertEqual(8, len(matrix))
+        arm_gnu = next(
+            row for row in matrix if row["target"] == "aarch64-unknown-linux-gnu"
+        )
+        self.assertEqual("ubuntu-24.04", arm_gnu["runner"])
+        self.assertEqual("link", arm_gnu["smoke"])
         with self.assertRaisesRegex(ValueError, "does not match"):
             release_metadata(self.root, "v1.0.0")
         manifest = self.root / "Cargo.toml"
