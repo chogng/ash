@@ -1,5 +1,6 @@
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uriIdentity.js';
+import { URI } from '../../../../base/common/uri.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import { CancellationError, isCancellationError } from '../../../../base/common/errors.js';
 import { EditorOpenSource } from '../../../../platform/editor/common/editor.js';
@@ -11,7 +12,7 @@ import { Dimension, type IDimension } from '../../../../base/browser/dom.js';
 import { observeElementSize } from '../../../../base/browser/observer.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
-import { DisposableMap, Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableMap, Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { basename } from '../../../../base/common/resources.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import type { EditorOpenOptions } from '../../../services/editor/common/editorService.js';
@@ -127,7 +128,11 @@ export class ModalEditorPart extends Disposable {
 	public async openEditor(input: IResourceEditorInput, openOptions: EditorOpenOptions = {}): Promise<IEditorPane> {
 		const sequence = ++this.openSequence;
 		this.cancelPendingOpen();
+		using identityLifetime = this.uriIdentity.retainUri(input.resource);
 		try {
+			const identity = this.uriIdentity.resolveCanonicalUri(input.resource);
+			if (!(identity instanceof URI)) await identity;
+			this.assertNotDisposed();
 			const confirmation = this.options.onWillOpenEditor?.(input);
 			if (confirmation) await confirmation;
 			if (sequence !== this.openSequence) throw new EditorOpenSupersededError(input);
@@ -141,7 +146,7 @@ export class ModalEditorPart extends Disposable {
 				() => this.openEditor(input, { ...openOptions, source: EditorOpenSource.USER }),
 				async () => this.closeEditor(input),
 			);
-			const instance = new ModalEditorPaneInstance(this.contentDomNode, pane);
+			const instance = new ModalEditorPaneInstance(this.contentDomNode, pane, this.uriIdentity.retainUri(input.resource));
 			pane.create(instance.domNode);
 			void pane.setInput(input, instance.signal);
 			this.active.value?.setVisible(false);
@@ -174,7 +179,7 @@ export class ModalEditorPart extends Disposable {
 			pane.dispose();
 			throw new TypeError(`Editor pane factory '${descriptor.id}' created '${pane.id}'`);
 		}
-		const instance = new ModalEditorPaneInstance(this.contentDomNode, pane);
+		const instance = new ModalEditorPaneInstance(this.contentDomNode, pane, this.uriIdentity.retainUri(input.resource));
 		this.pending.set(sequence, instance);
 		try {
 			pane.create(instance.domNode);
@@ -279,8 +284,9 @@ class ModalEditorPaneInstance extends Disposable {
 	public readonly domNode: HTMLDivElement;
 	public readonly signal: AbortSignal;
 
-	constructor(container: HTMLElement, public readonly pane: IEditorPane) {
+	constructor(container: HTMLElement, public readonly pane: IEditorPane, identityLifetime: IDisposable) {
 		super();
+		this._register(identityLifetime);
 		const ownerDocument = container.ownerDocument;
 		const AbortControllerConstructor = ownerDocument.defaultView?.AbortController ?? AbortController;
 		const abortController = new AbortControllerConstructor();

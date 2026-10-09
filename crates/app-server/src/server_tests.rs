@@ -6225,6 +6225,25 @@ fn filesystem_rpc_lists_and_describes_paths() {
             "params":{"path":"src"}
         }),
     );
+
+    let casing = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0", "id":200, "method":"fs/readPathCaseSensitivity", "params":{"path":"src/missing/new.txt"}}),
+    );
+    let scopes = casing["result"]["scopes"].as_array().unwrap();
+    assert_eq!(
+        scopes
+            .iter()
+            .map(|scope| scope["path"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        vec![".", "src"]
+    );
+    assert!(scopes.iter().all(|scope| matches!(
+        scope["sensitivity"].as_str(),
+        Some("sensitive" | "insensitive" | "unknown")
+    )));
+    assert!(!root.join("src/missing").exists());
     let metadata = call(
         &server,
         &mut connection,
@@ -8067,6 +8086,12 @@ fn filesystem_rpc_enforces_file_permissions_and_revocation() {
                 3,
                 "fs/readDirectory",
                 serde_json::json!({"path":""}),
+                ash_file_access::Permission::BrowseFiles,
+            ),
+            (
+                7,
+                "fs/readPathCaseSensitivity",
+                serde_json::json!({"path":"file"}),
                 ash_file_access::Permission::BrowseFiles,
             ),
             (

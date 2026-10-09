@@ -26,7 +26,7 @@ and remote providers can create an `ExtUri` matching their own semantics.
 
 File-backed frontend owners use `IUriIdentityService` from
 `platform/uriIdentity/common/uriIdentity.ts`. It selects comparison semantics
-from the registered provider's `PathCaseSensitive` capability and establishes
+from the registered provider's `PathCaseSensitive` capability or directory-scoped facts and establishes
 canonical document URIs while retaining query and the caller's fragment.
 Providers without a registered scheme retain case-sensitive comparison.
 Canonicalization normalizes encoded path segments without resolving symlinks
@@ -40,8 +40,40 @@ edited documents are never silently merged.
 
 Local disk providers use the host's default casing policy; IndexedDB, browser
 folder handles and settings resources preserve case. App Server filesystem
-providers currently preserve case because their protocol does not advertise
-filesystem casing. Remote identity must not be inferred from the renderer OS.
+providers query `fs/readPathCaseSensitivity` with the owning directory ID (or
+Session directory) and relative path before opening editors or acquiring file
+models. Rust owns the filesystem observations and BrowseFiles authorization;
+TypeScript owns URI comparisons, canonical spelling, tabs and model lifetimes.
+
+The response lists existing directory ancestors in order, starting at `.`.
+Each scope's `sensitive`, `insensitive` or `unknown` rule applies only to its
+direct children. A sensitive parent remains distinct even when both child
+directories are insensitive. Missing destinations are allowed; unconfirmed
+components preserve their spelling. Confirmed insensitive scopes fold ASCII
+letters; Unicode case variants remain distinct because sensitivity alone does
+not specify the filesystem's folding table. Queries use granted directory handles and
+never create probe files; the spelling of ancestors outside that grant is
+preserved. macOS uses `fpathconf`, Windows queries
+`FileCaseSensitiveInfo`, and Linux checks directory casefold flags on supported
+filesystems. Unsupported filesystem observations return `unknown`.
+
+Each granted root retains at most 4096 transient directory rules and 4096
+memoized requests. Models, editor tabs, working copies, save recovery and retained
+undo histories hold explicit identity references; their required ancestor rules
+remain available until those owners release them. Transient cache eviction cannot
+change an active resource's comparison rules.
+
+Connection changes and workspace replacement discard observations and requests;
+late responses from an old lifetime are cancelled. File events retire earlier
+queries for the affected root while retaining facts until explicit preparation
+refreshes them. A shorter response removes rules below the first unconfirmed
+component, and changed parent rules invalidate dependent descendant keys. Unknown
+rules continue to preserve spelling. Identity notifications invalidate canonical
+spelling without publishing file-content changes or reloading unrelated models.
+Cancelling an acquisition stops that caller's wait; the shared read-only query may finish.
+Same-product schema compatibility remains enforced by initialization, so an
+incompatible server is rejected rather than treated as an unknown filesystem.
+Remote identity must not be inferred from the renderer OS.
 
 `ExtUri.isEqualOrParent(base, parentCandidate)` checks directory boundaries
 under the same path casing policy. Scheme, authority, query, and fragment must

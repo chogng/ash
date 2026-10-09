@@ -4,6 +4,88 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 static NEXT_DIR: AtomicU64 = AtomicU64::new(1);
 
+#[test]
+fn path_casing_queries_existing_ancestors_without_creating_missing_paths() {
+    let directory = TestDir::new();
+    fs::create_dir_all(directory.path.join("Parent/Child")).unwrap();
+    fs::write(directory.path.join("Parent/Child/File"), "content").unwrap();
+    let files = directory.file_system();
+    let scopes = files
+        .read_path_case_sensitivity(Path::new("Parent/Child/Missing/new.txt"))
+        .unwrap();
+    assert_eq!(
+        scopes
+            .iter()
+            .map(|scope| scope.path.as_path())
+            .collect::<Vec<_>>(),
+        vec![
+            Path::new("."),
+            Path::new("Parent"),
+            Path::new("Parent/Child")
+        ]
+    );
+    assert!(!directory.path.join("Parent/Child/Missing").exists());
+    let file_scopes = files
+        .read_path_case_sensitivity(Path::new("Parent/Child/File"))
+        .unwrap();
+    assert_eq!(file_scopes, scopes);
+    match scopes[2].sensitivity {
+        crate::PathCaseSensitivity::Sensitive => {
+            assert!(!directory.path.join("Parent/Child/FILE").exists())
+        }
+        crate::PathCaseSensitivity::Insensitive => {
+            assert!(directory.path.join("Parent/Child/FILE").exists())
+        }
+        crate::PathCaseSensitivity::Unknown => {}
+    }
+    assert_eq!(
+        files.read_path_case_sensitivity(Path::new(".")).unwrap(),
+        scopes[..1]
+    );
+    assert!(matches!(
+        files.read_path_case_sensitivity(Path::new("../outside")),
+        Err(FileSystemError::InvalidPath(_))
+    ));
+}
+
+#[test]
+fn path_casing_requires_browse_authorization_and_obeys_revocation() {
+    let directory = TestDir::new();
+    let grant = Grant::for_environment(
+        Dir::open_local(&directory.path).unwrap(),
+        ash_file_access::GrantSource::ExplicitUser,
+        ash_file_access::Permissions::new([Permission::BrowseFiles, Permission::ReadFiles]),
+    );
+    let files =
+        LocalFileSystem::from_authorization(grant.authorize(Permission::ReadFiles).unwrap());
+    assert!(matches!(
+        files.read_path_case_sensitivity(Path::new(".")),
+        Err(FileSystemError::PermissionDenied(_))
+    ));
+    let files =
+        LocalFileSystem::from_authorization(grant.authorize(Permission::BrowseFiles).unwrap());
+    assert!(files.read_path_case_sensitivity(Path::new(".")).is_ok());
+    grant.revoke();
+    assert!(matches!(
+        files.read_path_case_sensitivity(Path::new(".")),
+        Err(FileSystemError::PermissionDenied(_))
+    ));
+}
+
+#[cfg(unix)]
+#[test]
+fn path_casing_rejects_symlinks_outside_the_granted_directory() {
+    let directory = TestDir::new();
+    let outside = TestDir::new();
+    std::os::unix::fs::symlink(&outside.path, directory.path.join("escape")).unwrap();
+    assert!(
+        directory
+            .file_system()
+            .read_path_case_sensitivity(Path::new("escape/missing.txt"))
+            .is_err()
+    );
+}
+
 #[cfg(target_os = "linux")]
 #[path = "local_x11_clipboard_tests.rs"]
 mod x11_clipboard_tests;

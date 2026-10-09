@@ -41,6 +41,24 @@ fn generated_typescript() -> String {
 }
 
 #[test]
+fn filesystem_casing_preserves_directory_scopes_and_rejects_invalid_rules() {
+    use crate::protocol::fs::FsReadPathCaseSensitivityParams;
+    use crate::protocol::fs::FsReadPathCaseSensitivityResult;
+    let request = serde_json::json!({"dirId":"workspace", "path":"Parent/missing.txt"});
+    let parsed: FsReadPathCaseSensitivityParams = serde_json::from_value(request.clone()).unwrap();
+    assert_eq!(serde_json::to_value(parsed).unwrap(), request);
+    let result = serde_json::json!({"scopes":[{"path":".","sensitivity":"sensitive"},{"path":"Parent","sensitivity":"insensitive"},{"path":"Parent/nested","sensitivity":"unknown"}]});
+    let parsed: FsReadPathCaseSensitivityResult = serde_json::from_value(result.clone()).unwrap();
+    assert_eq!(serde_json::to_value(parsed).unwrap(), result);
+    assert!(
+        serde_json::from_value::<FsReadPathCaseSensitivityResult>(
+            serde_json::json!({"scopes":[{"path":".","sensitivity":"guess"}]})
+        )
+        .is_err()
+    );
+}
+
+#[test]
 fn skill_enablement_preserves_optional_session_lookup_scope() {
     use crate::protocol::skills::SkillSetEnablementParams;
     let legacy = serde_json::json!({

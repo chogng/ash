@@ -1,8 +1,9 @@
 import { localize } from '../../../nls.js';
 import { generateUuid } from '../../../base/common/uuid.js';
+import { posix } from '../../../base/common/path.js';
 import { createFileSystemProviderError, FileSystemProviderErrorCode } from '../../files/common/files.js';
 import type { FsFileType, FsFileWriteMode, FsReadBinaryFileResult, FsReadDirectoryResult, ResourceMetadataResult, ResourceReadResult } from "../../../../../.build/protocol/typescript/index.js";
-import type { FsChanged } from "../../../../../.build/protocol/typescript/index.js";
+import type { FsChanged, FsPathCaseSensitivity } from "../../../../../.build/protocol/typescript/index.js";
 import type { IResourceApi } from "../common/appServerApi.js";
 import { AppServerRemoteError } from "../common/appServerError.js";
 import { decodeBase64 } from "../../../base/common/buffer.js";
@@ -23,6 +24,8 @@ import {
 	type FileExistingTargetBehavior,
 	type FileMissingTargetBehavior,
 	type IFileBytes,
+	type IFilePathIdentity,
+	type IFileSystemProviderWithPathIdentity,
 	type IFileChangeEvent,
 	type IFileEntry,
 	type IFileSystemProviderWithFileReadStreamCapability,
@@ -32,7 +35,7 @@ import {
 	type IFileWriteResult,
 	type IWatchOptions,
 } from "../../files/common/files.js";
-import { workspaceRelativePath, workspaceResourceFromPath, type IWorkspaceContextService } from "../../workspace/common/workspace.js";
+import { workspaceRelativePath, workspaceResourceFromPath, type IWorkspaceContextService, type IWorkspaceFolder } from "../../workspace/common/workspace.js";
 import type { IFileApi } from '../../files/common/fileApi.js';
 import type { ISystemFileTransferService } from '../../files/common/systemFileTransferService.js';
 
@@ -43,13 +46,27 @@ export interface AppServerFileSystemProviderOptions {
 	readonly onDidChange?: Event<FsChanged>;
 }
 
+interface PathIdentityState {
+	readonly folder: IWorkspaceFolder;
+	readonly rules: Map<string, FsPathCaseSensitivity>;
+	readonly requests: Map<string, Promise<void>>;
+	readonly retained: Map<string, { readonly resource: URI; users: number; }>;
+	epoch: number;
+}
+
+const MAX_TRANSIENT_PATH_RULES = 4096;
+
 /**
  * Maps workspace resource URIs to the App Server's root-relative filesystem protocol.
  */
-export class AppServerFileSystemProvider extends Disposable implements IFileSystemProviderWithFileReadStreamCapability, ISystemFileTransferService {
-	// The transport does not advertise host filesystem casing; preserve distinct paths rather than infer it from the renderer OS.
+export class AppServerFileSystemProvider extends Disposable implements IFileSystemProviderWithFileReadStreamCapability, IFileSystemProviderWithPathIdentity, ISystemFileTransferService {
+	// Unknown rules preserve spelling; confirmed rules are applied per directory below.
 	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy | FileSystemProviderCapabilities.FileReadStream | FileSystemProviderCapabilities.FileWriteElevated | FileSystemProviderCapabilities.FileWriteUnlock | FileSystemProviderCapabilities.PathCaseSensitive;
-	public readonly onDidChangeCapabilities = Event.None;
+	private readonly capabilityChanges = this._register(new Emitter<void>());
+	public readonly onDidChangeCapabilities = this.capabilityChanges.event;
+	private readonly identityChanges = this._register(new Emitter<void>());
+	public readonly onDidChangePathIdentity = this.identityChanges.event;
+	private readonly pathIdentities = new Map<string, PathIdentityState>();
 	private readonly api: IFileApi;
 	private readonly resourceApi: IResourceApi;
 	private readonly workspaceContextService: IWorkspaceContextService;
@@ -63,7 +80,212 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 		this.api = options.api;
 		this.resourceApi = options.resourceApi;
 		this.workspaceContextService = options.workspaceContextService;
+		this._register(this.api.onDidChangeConnection(() => this.clearPathIdentity()));
+		this._register(this.workspaceContextService.onDidChangeWorkspace(() => this.clearPathIdentity()));
+		this._register(toDisposable(() => { this.resetPathIdentities(); this.pathIdentities.clear(); }));
 		if (options.onDidChange) this._register(options.onDidChange(change => this.acceptFileChange(change)));
+	}
+
+	public getPathIdentity(resource: URI): IFilePathIdentity {
+		const folder = this.workspaceContextService.getWorkspaceFolder(resource);
+		return folder ? this.pathIdentity(resource, this.pathIdentityState(folder)) : { comparisonResource: resource };
+	}
+
+	public retainPathIdentity(resource: URI): IDisposable {
+		this.assertNotDisposed();
+		const folder = this.workspaceContextService.getWorkspaceFolder(resource);
+		if (!folder) {
+			return Disposable.None;
+		}
+		const state = this.pathIdentityState(folder);
+		const key = resource.with({ query: null, fragment: null }).toString();
+		let retained = state.retained.get(key);
+		if (!retained) {
+			retained = { resource, users: 0 };
+			state.retained.set(key, retained);
+		}
+		retained.users++;
+		return toDisposable(() => {
+			if (--retained.users === 0) {
+				state.retained.delete(key);
+			}
+			if (!this.isDisposed && this.trimPathRules(state)) {
+				this.identityChanges.fire();
+			}
+		});
+	}
+
+	public async resolvePathIdentity(resource: URI): Promise<void> {
+		this.assertNotDisposed();
+		const target = this.fileTarget(resource);
+		const state = this.pathIdentityState(this.workspaceContextService.getWorkspaceFolder(resource)!);
+		const existing = state.requests.get(target.path);
+		if (existing) {
+			return existing;
+		}
+		const epoch = state.epoch;
+		const generation = this.api.connectionGeneration;
+		const pending = (async (): Promise<void> => {
+			const result = await this.api.readPathCaseSensitivity(target);
+			if (this.isDisposed || epoch !== state.epoch || generation !== this.api.connectionGeneration) {
+				throw canceled();
+			}
+			const components = target.path === '.' ? [] : target.path.split('/');
+			// Validate the complete observation before changing shared comparison facts.
+			const observed = result.scopes.map((scope, index) => {
+				const directory = scope.path === '.' ? state.folder.uri : workspaceResourceFromPath(state.folder.uri, scope.path);
+				const path = directory ? workspaceRelativePath(state.folder.uri, directory) : undefined;
+				const expected = index === 0 ? '.' : components.slice(0, index).join('/');
+				if (!directory || path !== expected || index > components.length) {
+					throw new Error('Filesystem casing scope is outside the workspace');
+				}
+				return { scope, directory, path };
+			});
+			if (observed.length === 0) {
+				throw new Error('Filesystem casing scope is outside the workspace');
+			}
+			let changed = false;
+			let invalidated = false;
+			let covered = '.';
+			for (const { scope, directory, path } of observed) {
+				const rulePath = this.relativeComparisonPath(directory, state);
+				if (state.rules.get(rulePath) !== scope.sensitivity) {
+					if (state.rules.has(rulePath)) {
+						invalidated = true;
+					}
+					// Descendant keys depend on their parents' lookup rules and cannot survive a changed parent.
+					for (const path of state.rules.keys()) {
+						if (path.startsWith(`${rulePath}/`)) {
+							state.rules.delete(path);
+							invalidated = true;
+						}
+					}
+					changed = true;
+				}
+				state.rules.delete(rulePath);
+				state.rules.set(rulePath, scope.sensitivity);
+				covered = path;
+			}
+			// The first unconfirmed component also covers every former directory below it.
+			const coveredLength = covered === '.' ? 0 : covered.split('/').length;
+			if (coveredLength < components.length) {
+				const unconfirmed = workspaceResourceFromPath(state.folder.uri, components.slice(0, coveredLength + 1).join('/'));
+				if (!unconfirmed) {
+					throw new Error('Filesystem casing scope is outside the workspace');
+				}
+				const prefix = this.relativeComparisonPath(unconfirmed, state);
+				for (const path of state.rules.keys()) {
+					if (path === prefix || path.startsWith(`${prefix}/`)) {
+						state.rules.delete(path);
+						invalidated = true;
+						changed = true;
+					}
+				}
+			}
+			if (invalidated) {
+				state.requests.clear();
+			}
+			if (this.trimPathRules(state)) {
+				changed = true;
+			}
+			if (changed) {
+				this.identityChanges.fire();
+			}
+		})();
+		state.requests.set(target.path, pending);
+		if (state.requests.size > MAX_TRANSIENT_PATH_RULES) {
+			state.requests.delete(state.requests.keys().next().value!);
+		}
+		try {
+			await pending;
+		} catch (error) {
+			if (state.requests.get(target.path) === pending) {
+				state.requests.delete(target.path);
+			}
+			throw error;
+		}
+	}
+
+	private pathIdentityState(folder: IWorkspaceFolder): PathIdentityState {
+		const key = JSON.stringify([folder.id, folder.uri.toString()]);
+		let state = this.pathIdentities.get(key);
+		if (!state) {
+			state = { folder, rules: new Map(), requests: new Map(), retained: new Map(), epoch: 0 };
+			this.pathIdentities.set(key, state);
+		}
+		return state;
+	}
+
+	private pathIdentity(resource: URI, state: PathIdentityState): IFilePathIdentity & { readonly rulePaths: readonly string[]; } {
+		const root = state.folder.uri.toEncodedComponents().path.replace(/\/+$/u, '');
+		const path = posix.normalize(resource.toEncodedComponents().path);
+		const rootLength = root.split('/').filter(Boolean).length;
+		const components = path.split('/').filter(Boolean);
+		// A grant observes its children, not the spelling rules of ungranted ancestors.
+		const prefix = rootLength ? `/${components.slice(0, rootLength).join('/')}` : '';
+		const rulePaths: string[] = [];
+		let compared = '';
+		for (const segment of components.slice(rootLength)) {
+			rulePaths.push(compared);
+			const sensitivity = state.rules.get(compared);
+			const name = decodeURIComponent(segment);
+			// Sensitivity alone does not identify the filesystem's Unicode folding table.
+			const folded = sensitivity === 'insensitive' ? name.replace(/[A-Z]/gu, letter => letter.toLowerCase()) : name;
+			compared += `/${encodeURIComponent(folded)}`;
+		}
+		return { comparisonResource: resource.withEncodedPath(prefix + compared || '/'), rulePaths };
+	}
+
+	private relativeComparisonPath(resource: URI, state: PathIdentityState): string {
+		const root = state.folder.uri.toEncodedComponents().path.replace(/\/+$/u, '');
+		return this.pathIdentity(resource, state).comparisonResource.toEncodedComponents().path.slice(root.length);
+	}
+
+	private trimPathRules(state: PathIdentityState): boolean {
+		if (state.rules.size <= MAX_TRANSIENT_PATH_RULES) {
+			return false;
+		}
+		const retainedPaths = new Set<string>();
+		for (const { resource } of state.retained.values()) {
+			for (const path of this.pathIdentity(resource, state).rulePaths) {
+				retainedPaths.add(path);
+			}
+		}
+		let transientCount = [...state.rules.keys()].filter(path => !retainedPaths.has(path)).length;
+		let changed = false;
+		for (const path of state.rules.keys()) {
+			if (transientCount <= MAX_TRANSIENT_PATH_RULES) {
+				break;
+			}
+			if (!retainedPaths.has(path)) {
+				state.rules.delete(path);
+				transientCount--;
+				changed = true;
+			}
+		}
+		if (changed) {
+			state.requests.clear();
+		}
+		return changed;
+	}
+
+	private resetPathIdentities(): void {
+		for (const state of this.pathIdentities.values()) {
+			state.epoch++;
+			state.requests.clear();
+			state.rules.clear();
+		}
+	}
+
+	private clearPathIdentity(): void {
+		this.resetPathIdentities();
+		const folders = new Set(this.workspaceContextService.getWorkspace().folders.map(folder => JSON.stringify([folder.id, folder.uri.toString()])));
+		for (const key of this.pathIdentities.keys()) {
+			if (!folders.has(key)) {
+				this.pathIdentities.delete(key);
+			}
+		}
+		this.identityChanges.fire();
 	}
 
 	public watch(resource: URI, _options: IWatchOptions): IDisposable {
@@ -272,6 +494,14 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 	}
 
 	private acceptFileChange(change: FsChanged): void {
+		// File events retire earlier observations without discarding facts held by open documents.
+		const knownRoot = this.workspaceContextService.getWorkspace().folders.some(folder => folder.id === change.dirId);
+		for (const state of this.pathIdentities.values()) {
+			if (!knownRoot || state.folder.id === change.dirId) {
+				state.epoch++;
+				state.requests.clear();
+			}
+		}
 		if (change.type === "rescanRequired") {
 			this.fileChanges.fire(Object.freeze({ resources: undefined }));
 			return;

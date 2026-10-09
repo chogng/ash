@@ -452,7 +452,7 @@ test("Editor tabs support modifier selection and close the selected set", async 
 	await page.keyboard.press("F1");
 	const picker = page.locator(".ash-quick-pick");
 	const search = picker.getByRole("combobox");
-	await search.fill("Close Editor");
+	await search.fill(">Close Editor");
 	await expect(picker.locator(".ash-quick-pick-row-label", { hasText: "Close Editor" })).toBeVisible();
 	await search.press("Enter");
 	await expect(group.tabs).toHaveCount(0);

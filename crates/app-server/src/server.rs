@@ -2765,7 +2765,9 @@ impl AppServer {
                 self.attachment_import_remote(&request.params)
             }
             Some(ClientMethod::FsGetMetadata) => self.fs_get_metadata(&request.params),
-            Some(ClientMethod::FsReadPathCaseSensitivity) => self.fs_read_path_case_sensitivity(&request.params),
+            Some(ClientMethod::FsReadPathCaseSensitivity) => {
+                self.fs_read_path_case_sensitivity(&request.params)
+            }
             Some(ClientMethod::FsReadDirectory) => self.fs_read_directory(&request.params),
             Some(ClientMethod::FsReadFile) => self.fs_read_file(&request.params),
             Some(ClientMethod::BackupWorkspaces) => {

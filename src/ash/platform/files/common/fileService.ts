@@ -1,7 +1,7 @@
 import { Emitter } from '../../../base/common/event.js';
 import { bufferToStream, VSBuffer, type VSBufferReadableStream } from '../../../base/common/buffer.js';
 import { raceCancellationError } from '../../../base/common/async.js';
-import { CancellationToken, CancellationTokenSource } from '../../../base/common/cancellation.js';
+import { CancellationToken, CancellationTokenSource, throwIfCancelled } from '../../../base/common/cancellation.js';
 import { canceled } from '../../../base/common/errors.js';
 import { transform } from '../../../base/common/stream.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
@@ -14,6 +14,8 @@ import {
 	FileOperationNotSupportedError,
 	FileSystemProviderCapabilities,
 	hasFileReadStreamCapability,
+	hasPathIdentityCapability,
+	type IFilePathIdentity,
 	type FileDeleteMode,
 	type FileExistingTargetBehavior,
 	type FileMissingTargetBehavior,
@@ -27,6 +29,7 @@ import {
 	type IFileSystemProvider,
 	type IFileSystemProviderRegistrationEvent,
 	type IFileSystemProviderCapabilitiesChangeEvent,
+	type IFileSystemProviderPathIdentityChangeEvent,
 	type IFileStat,
 	type IFileWriteRequest,
 	type IFileWriteOptions,
@@ -48,6 +51,7 @@ export class FileService extends Disposable implements IFileService {
 	private readonly changeEmitter = this._register(new Emitter<IFileChangeEvent>());
 	private readonly registrationEmitter = this._register(new Emitter<IFileSystemProviderRegistrationEvent>());
 	private readonly capabilitiesEmitter = this._register(new Emitter<IFileSystemProviderCapabilitiesChangeEvent>());
+	private readonly pathIdentityEmitter = this._register(new Emitter<IFileSystemProviderPathIdentityChangeEvent>());
 	private readonly providers = new Map<string, ProviderRegistration>();
 	private readonly providerListeners = this._register(new DisposableMap<IFileSystemProvider>());
 	private readonly watches = this._register(new DisposableMap<string, WatchRegistration>());
@@ -56,6 +60,7 @@ export class FileService extends Disposable implements IFileService {
 	public readonly onDidChangeFiles = this.changeEmitter.event;
 	public readonly onDidChangeFileSystemProviderRegistrations = this.registrationEmitter.event;
 	public readonly onDidChangeFileSystemProviderCapabilities = this.capabilitiesEmitter.event;
+	public readonly onDidChangeFileSystemProviderPathIdentity = this.pathIdentityEmitter.event;
 
 	constructor() {
 		super();
@@ -84,6 +89,15 @@ export class FileService extends Disposable implements IFileService {
 				}
 				this.acceptProviderChange(provider, { resources: undefined });
 			}));
+			if (hasPathIdentityCapability(provider)) {
+				listeners.add(provider.onDidChangePathIdentity(() => {
+					for (const [scheme, registration] of this.providers) {
+						if (registration.provider === provider) {
+							this.pathIdentityEmitter.fire({ scheme, provider });
+						}
+					}
+				}));
+			}
 		}
 		const registration = { provider };
 		this.providers.set(scheme, registration);
@@ -105,6 +119,33 @@ export class FileService extends Disposable implements IFileService {
 
 	public hasProvider(resource: URI): boolean {
 		return this.providers.has(resource.scheme);
+	}
+
+	public resolvePathIdentity(resource: URI, signal?: AbortSignal): Promise<void> | undefined {
+		this.assertNotDisposed();
+		if (signal) throwIfCancelled(signal);
+		const registration = this.providers.get(resource.scheme);
+		const provider = registration?.provider;
+		if (provider && hasPathIdentityCapability(provider)) {
+			const pending = provider.resolvePathIdentity(resource).then(() => {
+				if (this.isDisposed || this.providers.get(resource.scheme) !== registration) {
+					throw canceled();
+				}
+			});
+			return signal ? raceCancellationError(pending, signal) : pending;
+		}
+		return undefined;
+	}
+
+	public retainPathIdentity(resource: URI): IDisposable {
+		this.assertNotDisposed();
+		const provider = this.providers.get(resource.scheme)?.provider;
+		return provider && hasPathIdentityCapability(provider) ? provider.retainPathIdentity(resource) : Disposable.None;
+	}
+
+	public getPathIdentity(resource: URI): IFilePathIdentity | undefined {
+		const provider = this.providers.get(resource.scheme)?.provider;
+		return provider && hasPathIdentityCapability(provider) ? provider.getPathIdentity(resource) : undefined;
 	}
 
 	public hasCapability(resource: URI, capability: FileSystemProviderCapabilities): boolean {

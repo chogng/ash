@@ -1,4 +1,4 @@
-import { AbstractDisposable } from '../../../../base/common/lifecycle.js';
+import { AbstractDisposable, Disposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../base/common/uri.js';
 import type { TextModel, TextModelUndoRedoSnapshot } from '../../../../editor/common/model/textModel.js';
 
@@ -8,6 +8,7 @@ export interface RetainedModelUndoRedoHistoryOptions {
 }
 
 interface RetainedModelUndoRedo {
+	readonly identityLifetime: IDisposable;
 	readonly snapshot: TextModelUndoRedoSnapshot;
 	readonly textUnits: number;
 }
@@ -22,7 +23,7 @@ export class RetainedModelUndoRedoHistory extends AbstractDisposable {
 	private readonly maxTextUnits: number;
 	private retainedTextUnits = 0;
 
-	constructor(options: RetainedModelUndoRedoHistoryOptions = {}, private readonly resourceKey: (resource: URI) => string = resource => resource.toString()) {
+	constructor(options: RetainedModelUndoRedoHistoryOptions = {}, private readonly resourceKey: (resource: URI) => string = resource => resource.toString(), private readonly retainResource: (resource: URI) => IDisposable = () => Disposable.None) {
 		super();
 		this.maxEntries = readLimit(options.maxEntries, DEFAULT_MAX_ENTRIES, 'maxEntries');
 		this.maxTextUnits = readLimit(options.maxTextUnits, DEFAULT_MAX_TEXT_UNITS, 'maxTextUnits');
@@ -36,7 +37,7 @@ export class RetainedModelUndoRedoHistory extends AbstractDisposable {
 		if (!snapshot) return;
 		const textUnits = snapshot.contentLength + snapshot.history.textUnits;
 		if (textUnits > this.maxTextUnits) return;
-		this.retained.set(key, Object.freeze({ snapshot, textUnits }));
+		this.retained.set(key, Object.freeze({ snapshot, textUnits, identityLifetime: this.retainResource(resource) }));
 		this.retainedTextUnits += textUnits;
 		this.trim();
 	}
@@ -56,6 +57,7 @@ export class RetainedModelUndoRedoHistory extends AbstractDisposable {
 	}
 
 	protected disposeCore(): void {
+		for (const entry of this.retained.values()) entry.identityLifetime.dispose();
 		this.retained.clear();
 		this.retainedTextUnits = 0;
 	}
@@ -73,6 +75,7 @@ export class RetainedModelUndoRedoHistory extends AbstractDisposable {
 		if (!entry) return;
 		this.retained.delete(key);
 		this.retainedTextUnits -= entry.textUnits;
+		entry.identityLifetime.dispose();
 	}
 }
 

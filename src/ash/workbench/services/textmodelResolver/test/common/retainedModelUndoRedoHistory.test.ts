@@ -1,3 +1,4 @@
+import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { URI } from "../../../../../base/common/uri.js";
@@ -47,3 +48,28 @@ function editedModel(text: string): TextModel {
 	model.pushEditOperations(null, [{ range: Range.fromPositions(model.positionAt(model.length)), text: "!" }], () => null);
 	return model;
 }
+
+
+test('retained histories release identity references on eviction, restoration, forgetting and disposal', () => {
+	let retained = 0;
+	using histories = new RetainedModelUndoRedoHistory({ maxEntries: 1 }, resource => resource.toString(), () => {
+		retained++;
+		return toDisposable(() => { retained--; });
+	});
+	const firstResource = URI.file('/workspace/first');
+	const secondResource = URI.file('/workspace/second');
+	using first = editedModel('first');
+	using second = editedModel('second');
+	histories.remember(firstResource, first);
+	histories.remember(secondResource, second);
+	assert.equal(retained, 1);
+	using reopened = new TextModel(second.getText());
+	assert.equal(histories.restore(secondResource, reopened), true);
+	assert.equal(retained, 0);
+	histories.remember(firstResource, first);
+	histories.forget(firstResource);
+	assert.equal(retained, 0);
+	histories.remember(secondResource, second);
+	histories.dispose();
+	assert.equal(retained, 0);
+});

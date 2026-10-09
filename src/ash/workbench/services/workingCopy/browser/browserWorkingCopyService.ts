@@ -1,5 +1,5 @@
 import { Emitter } from "../../../../base/common/event.js";
-import { DisposableMap, Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { DisposableMap, Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { getOrSet } from "../../../../base/common/map.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { type IWorkingCopy, type IWorkingCopyService } from "../common/workingCopyService.js";
@@ -29,7 +29,10 @@ export class BrowserWorkingCopyService extends Disposable implements IWorkingCop
 		if (this.dirtySubscriptions.has(workingCopy)) throw new Error(`Working copy is already registered: ${key}`);
 		const copies = getOrSet(this.copies, key, new Set<IWorkingCopy>());
 		copies.add(workingCopy);
-		this.dirtySubscriptions.set(workingCopy, workingCopy.onDidChangeDirty(() => this._onDidChangeDirty.fire()));
+		const lifetime = new DisposableStore();
+		lifetime.add(this.uriIdentity.retainUri(workingCopy.resource));
+		lifetime.add(workingCopy.onDidChangeDirty(() => this._onDidChangeDirty.fire()));
+		this.dirtySubscriptions.set(workingCopy, lifetime);
 		this._onDidRegister.fire(workingCopy);
 		if (workingCopy.isDirty) this._onDidChangeDirty.fire();
 		let registered = true;

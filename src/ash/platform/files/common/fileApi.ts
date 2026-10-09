@@ -1,6 +1,10 @@
-import type { FsCopyParams, FsCreateDirectoryParams, FsCreateFileParams, FsDeleteParams, FsGetMetadataParams, FsGetMetadataResult, FsPasteSystemFilesParams, FsReadBinaryFileParams, FsReadBinaryFileResult, FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult, FsRenameParams, FsWriteBinaryFileParams, FsWriteFileElevatedParams, FsWriteFileParams, FsWriteFileResult } from "../../../../../.build/protocol/typescript/index.js";
+import type { FsCopyParams, FsCreateDirectoryParams, FsCreateFileParams, FsDeleteParams, FsGetMetadataParams, FsGetMetadataResult, FsPasteSystemFilesParams, FsReadBinaryFileParams, FsReadBinaryFileResult, FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult, FsRenameParams, FsWriteBinaryFileParams, FsWriteFileElevatedParams, FsWriteFileParams, FsWriteFileResult, FsReadPathCaseSensitivityParams, FsReadPathCaseSensitivityResult } from "../../../../../.build/protocol/typescript/index.js";
+import type { Event } from '../../../base/common/event.js';
 
 export interface IFileApi {
+	readonly connectionGeneration: number;
+	readonly onDidChangeConnection: Event<void>;
+	readPathCaseSensitivity(params: FsReadPathCaseSensitivityParams): Promise<FsReadPathCaseSensitivityResult>;
 	writeFileElevated(params: FsWriteFileElevatedParams, signal?: AbortSignal): Promise<FsWriteFileResult>;
 	getMetadata(params: FsGetMetadataParams): Promise<FsGetMetadataResult>;
 	readDirectory(params: FsReadDirectoryParams): Promise<FsReadDirectoryResult>;

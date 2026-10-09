@@ -37,6 +37,7 @@ test('Session files preserve their original directory through selection, directo
 		const fileHost: IRendererHost = {
 			...host, fileSearch: { glob: async (directory, query, signal) => { calls.push({ target: directory.target, query, aborted: signal?.aborted }); return { matches: [], totalMatches: 0 }; } }, fs: {
 				...host.fs,
+				readPathCaseSensitivity: async params => { calls.push(params); return { scopes: [{ path: '.', sensitivity: 'insensitive' }] }; },
 				readBinaryFile: async params => { calls.push(params); return { resource: { resourceId: 'file', mimeType: 'text/plain', size: 8, sha256: 'sha256:file' }, revision: 'rev-1' }; },
 				writeBinaryFile: async params => { calls.push(params); return { revision: 'rev-2', metadata: { fileType: 'file', readonly: false, sizeBytes: 7, modifiedAtMillis: null } }; },
 				copy: async params => { calls.push(params); },
@@ -51,6 +52,7 @@ test('Session files preserve their original directory through selection, directo
 		using files = services.createInstance(SessionFileService, fileHost);
 		const originalFolder = workspace.getWorkspace().folders[0]!;
 		const first = URI.file('C:/sessions/first/main.ts');
+		await files.resolvePathIdentity(first);
 		await files.readFile(first);
 		sessions.openSession('second', 'second-thread');
 		assert.equal(workspace.getWorkspace().folders[0]!.uri.toString(), URI.file('C:/sessions/second').toString());
@@ -65,6 +67,7 @@ test('Session files preserve their original directory through selection, directo
 		await files.glob({ resource: originalFolder.uri, target: { type: 'workspace', dirId: originalFolder.id } }, { includePatterns: ['**/*.ts'], excludePatterns: [], maxResults: 100 }, controller.signal);
 		const owner = { sessionId: 'first', path: 'C:/sessions/first' };
 		assert.deepEqual(calls, [
+			{ sessionDirectory: owner, path: 'main.ts' },
 			{ sessionDirectory: owner, path: 'main.ts' },
 			{ sessionDirectory: owner, path: 'main.ts', dataBase64: 'dXBkYXRlZA==', options: { mode: 'createOrReplace', expectedRevision: 'rev-1' } },
 			{ sessionDirectory: owner, source: 'main.ts', target: 'copy.ts' },

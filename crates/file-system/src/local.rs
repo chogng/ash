@@ -275,7 +275,12 @@ impl FileSystem for LocalFileSystem {
                     Err(FileSystemError::NotFound(_)) => break,
                     Err(error) => return Err(error),
                 };
-                if !files.handle().metadata(&resolved).map_err(io_error)?.is_dir() {
+                if !files
+                    .handle()
+                    .metadata(&resolved)
+                    .map_err(io_error)?
+                    .is_dir()
+                {
                     break;
                 }
                 let directory = files.handle().open_dir(resolved).map_err(io_error)?;

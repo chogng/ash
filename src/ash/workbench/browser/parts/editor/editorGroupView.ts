@@ -7,7 +7,7 @@ import { Emitter, type Event } from "../../../../base/common/event.js";
 import { validateJsonValue } from "../../../../base/common/jsonValue.js";
 import { Disposable, DisposableMap, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { localize } from "../../../../nls.js";
-import type { URI } from "../../../../base/common/uri.js";
+import { URI } from "../../../../base/common/uri.js";
 import { EditorOpenSource, TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
 import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
@@ -98,8 +98,9 @@ class EditorGroupEntry extends Disposable implements EditorTabDescriptor {
 	public readonly labelListener = this._register(new MutableDisposable<IDisposable>());
 	public readonly statusListener = this._register(new MutableDisposable<IDisposable>());
 
-	constructor(public readonly state: IEditorGroupModelEntry, public readonly paneInstance: EditorPaneInstance) {
+	constructor(public readonly state: IEditorGroupModelEntry, public readonly paneInstance: EditorPaneInstance, identityLifetime: IDisposable) {
 		super();
+		this._register(identityLifetime);
 	}
 
 	public get input(): IResourceEditorInput { return this.state.input; }
@@ -170,7 +171,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	private titleVisible = true;
 	private openSequence = 0;
 
-	constructor(container: HTMLElement, options: EditorGroupOptions, @IInstantiationService instantiationService: IInstantiationService, @IUriIdentityService uriIdentity: IUriIdentityService) {
+	constructor(container: HTMLElement, options: EditorGroupOptions, @IInstantiationService instantiationService: IInstantiationService, @IUriIdentityService private readonly uriIdentity: IUriIdentityService) {
 		super();
 		this.model = new EditorGroupModel(options.id, options.editorLimit, uriIdentity.extUri);
 		this.id = this.model.id;
@@ -438,6 +439,11 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		}
 		const sequence = ++this.openSequence;
 		this.cancelPendingOpen();
+		using identityLifetime = this.uriIdentity.retainUri(input.resource);
+		const identity = this.uriIdentity.resolveCanonicalUri(input.resource);
+		if (!(identity instanceof URI)) await identity;
+		this.assertNotDisposed();
+		if (sequence !== this.openSequence) throw new EditorOpenSupersededError(input);
 		const existing = this.entry(input);
 		if (!existing && this.model.editorLimit === 1 && this.activeInput && !await this.confirmCloseEditor(this.activeInput)) {
 			throw new CancellationError('Replacing the editor was cancelled');
@@ -578,7 +584,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			this.paneEntries.deleteAndDispose(replaced.instanceId);
 			this.panes.disposePane(replaced.paneInstance);
 		}
-		const entry = new EditorGroupEntry(state, paneInstance);
+		const entry = new EditorGroupEntry(state, paneInstance, this.uriIdentity.retainUri(input.resource));
 		this.paneEntries.set(entry.instanceId, entry);
 		if (closedState) {
 			this.editorChangeEmitter.fire(Object.freeze({ kind: "editorClosed", editor: closedState, reason: existing || this.model.editorLimit === 1 ? "replace" : "previewReplace" }));

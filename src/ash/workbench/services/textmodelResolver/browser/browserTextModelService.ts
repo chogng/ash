@@ -24,6 +24,7 @@ import type { IInstantiationService } from '../../../../platform/instantiation/c
 import { localize } from '../../../../nls.js';
 
 interface TextModelEntry {
+	readonly identityLifetime: IDisposable;
 	readonly resource: URI;
 	readonly model: TextModel;
 	readonly dirtyEmitter: Emitter<void>;
@@ -45,6 +46,7 @@ interface TextModelEntry {
 }
 
 interface SaveRecoveryState {
+	readonly identityLifetime: IDisposable;
 	readonly resource: URI;
 	pending: number;
 	latest: Promise<void> | undefined;
@@ -69,7 +71,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 	private readonly saveRecovery = new Map<string, SaveRecoveryState>();
 	private readonly saveParticipants = new Set<ITextModelSaveParticipant>();
 	private readonly saveCompletionParticipants = new Set<ITextModelSaveCompletionParticipant>();
-	private readonly undoRedoParticipant = this._register(new RetainedModelUndoRedoHistory({}, resource => this.uriIdentity.extUri.getComparisonKey(resource)));
+	private readonly undoRedoParticipant = this._register(new RetainedModelUndoRedoHistory({}, resource => this.uriIdentity.extUri.getComparisonKey(resource), resource => this.uriIdentity.retainUri(resource)));
 	private readonly modelAdded = this._register(new Emitter<TextModel>());
 	private readonly modelRemoved = this._register(new Emitter<TextModel>());
 	private readonly modelLanguageChanged = this._register(new Emitter<{ readonly model: TextModel; readonly oldLanguageId: string; }>());
@@ -131,7 +133,10 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		this.ensureAlive();
 		validateInput(input);
 		throwIfCancelled(signal, "Text model acquisition was cancelled");
-		input = { ...input, resource: this.uriIdentity.asCanonicalUri(input.resource) };
+		using identityLifetime = this.uriIdentity.retainUri(input.resource);
+		input = { ...input, resource: await this.uriIdentity.resolveCanonicalUri(input.resource, signal) };
+		throwIfCancelled(signal, "Text model acquisition was cancelled");
+		this.ensureAlive();
 		const key = input.resource.toString();
 		const current = this.findEntry(input.resource);
 		if (current) return this.acquireReference(current[0], current[1], signal);
@@ -171,6 +176,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		const dirtyEmitter = new Emitter<void>();
 		const externalChangeEmitter = new Emitter<void>();
 		const entry: TextModelEntry = {
+			identityLifetime: this.uriIdentity.retainUri(input.resource),
 			resource: input.resource,
 			model,
 			dirtyEmitter,
@@ -203,6 +209,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 	protected override disposeCore(): void {
 		this.saveParticipants.clear();
 		this.saveCompletionParticipants.clear();
+		for (const recovery of this.saveRecovery.values()) recovery.identityLifetime.dispose();
 		this.saveRecovery.clear();
 		// Remove identities before notifying observers so they cannot resolve a closed model.
 		for (const [key, entry] of this.entries) {
@@ -279,7 +286,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		const recoveryKey = existingRecovery?.[0] ?? key;
 		let recovery = existingRecovery?.[1];
 		if (!recovery) {
-			recovery = { resource: entry.resource, pending: 0, latest: undefined, unresolved: false, error: undefined };
+			recovery = { identityLifetime: this.uriIdentity.retainUri(entry.resource), resource: entry.resource, pending: 0, latest: undefined, unresolved: false, error: undefined };
 			this.saveRecovery.set(recoveryKey, recovery);
 		}
 		const state = recovery;
@@ -362,7 +369,10 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 				throw error;
 			} finally {
 				state.pending--;
-				if (state.pending === 0 && !state.unresolved) this.saveRecovery.delete(recoveryKey);
+				if (state.pending === 0 && !state.unresolved) {
+					this.saveRecovery.delete(recoveryKey);
+					state.identityLifetime.dispose();
+				}
 				entry.completingSave = false;
 				if (!entry.disposed) this.refreshDirty(entry);
 			}
@@ -487,6 +497,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 	private disposeEntry(entry: TextModelEntry): void {
 		entry.disposed = true;
 		this.undoRedoParticipant.remember(entry.resource, entry.model);
+		entry.identityLifetime.dispose();
 		entry.modelChangeListener.dispose();
 		entry.languageChangeListener.dispose();
 		entry.fileChangeListener.dispose();

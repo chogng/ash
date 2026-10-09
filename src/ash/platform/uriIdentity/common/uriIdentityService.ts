@@ -1,6 +1,6 @@
-import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { posix } from '../../../base/common/path.js';
-import { ExtUri, ResourcePathCasing } from '../../../base/common/resources.js';
+import { ExtUri, extUri, ResourcePathCasing } from '../../../base/common/resources.js';
 import { URI } from '../../../base/common/uri.js';
 import { FileSystemProviderCapabilities, IFileService } from '../../files/common/files.js';
 import { InstantiationType, registerSingleton } from '../../instantiation/common/extensions.js';
@@ -14,7 +14,7 @@ export class UriIdentityService extends Disposable implements IUriIdentityServic
 
 	constructor(@IFileService private readonly files: IFileService) {
 		super();
-		this.extUri = new ExtUri(uri => files.hasProvider(uri) && !files.hasCapability(uri, FileSystemProviderCapabilities.PathCaseSensitive) ? ResourcePathCasing.Insensitive : ResourcePathCasing.Sensitive);
+		this.extUri = new ProviderExtUri(files);
 		this._register(toDisposable(() => this.canonicalUris.clear()));
 		const invalidate = ({ scheme }: { readonly scheme: string; }): void => {
 			for (const [key, uri] of this.canonicalUris) {
@@ -23,6 +23,33 @@ export class UriIdentityService extends Disposable implements IUriIdentityServic
 		};
 		this._register(files.onDidChangeFileSystemProviderRegistrations(invalidate));
 		this._register(files.onDidChangeFileSystemProviderCapabilities(invalidate));
+		this._register(files.onDidChangeFileSystemProviderPathIdentity(invalidate));
+	}
+
+	public retainUri(uri: URI): IDisposable {
+		this.assertNotDisposed();
+		return this.files.retainPathIdentity(uri);
+	}
+
+	public resolveCanonicalUri(uri: URI, signal?: AbortSignal): URI | Promise<URI> {
+		this.assertNotDisposed();
+		if (!this.files.hasProvider(uri)) return uri;
+		const encoded = uri.toEncodedComponents();
+		const normalized = encoded.path ? uri.withEncodedPath(posix.normalize(encoded.path)) : uri;
+		const lifetime = this.retainUri(normalized);
+		try {
+			const pending = this.files.resolvePathIdentity(normalized, signal);
+			// Uniform and virtual providers preserve the editor's synchronous open/cancel ordering.
+			if (pending) {
+				return pending.then(() => this.asCanonicalUri(normalized)).finally(() => lifetime.dispose());
+			}
+			const canonical = this.asCanonicalUri(normalized);
+			lifetime.dispose();
+			return canonical;
+		} catch (error) {
+			lifetime.dispose();
+			throw error;
+		}
 	}
 
 	public asCanonicalUri(uri: URI): URI {
@@ -44,6 +71,27 @@ export class UriIdentityService extends Disposable implements IUriIdentityServic
 		// Bound transient identities. Consumers must keep their own open resources alive independently of this cache.
 		if (this.canonicalUris.size > 4096) this.canonicalUris.delete(this.canonicalUris.keys().next().value!);
 		return normalized;
+	}
+}
+
+class ProviderExtUri extends ExtUri {
+	constructor(private readonly files: IFileService) {
+		super(uri => files.hasProvider(uri) && !files.hasCapability(uri, FileSystemProviderCapabilities.PathCaseSensitive) ? ResourcePathCasing.Insensitive : ResourcePathCasing.Sensitive);
+	}
+
+	public override getComparisonKey(uri: URI): string {
+		const identity = this.files.getPathIdentity(uri);
+		return identity ? extUri.getComparisonKey(identity.comparisonResource) : super.getComparisonKey(uri);
+	}
+
+	public override getComparisonKeyIgnoringFragment(uri: URI): string {
+		const identity = this.files.getPathIdentity(uri);
+		return identity ? extUri.getComparisonKeyIgnoringFragment(identity.comparisonResource) : super.getComparisonKeyIgnoringFragment(uri);
+	}
+
+	public override isEqualOrParent(base: URI, parent: URI, ignoreFragment = false): boolean {
+		const identity = this.files.getPathIdentity(base);
+		return identity ? extUri.isEqualOrParent(identity.comparisonResource, this.files.getPathIdentity(parent)?.comparisonResource ?? parent, ignoreFragment) : super.isEqualOrParent(base, parent, ignoreFragment);
 	}
 }
 

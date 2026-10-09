@@ -42,9 +42,11 @@ import { URI } from '../../../src/ash/base/common/uri.js';
 import type { IEditorPane } from '../../../src/ash/workbench/common/editor.js';
 import { SessionGridLayout } from '../../../src/ash/sessions/browser/parts/sessions/sessionGridLayout.js';
 import type { IView } from '../../../src/ash/base/browser/ui/grid/grid.js';
-import { IFileService, FileSystemProviderCapabilities } from '../../../src/ash/platform/files/common/files.js';
+import { IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { IUriIdentityService } from '../../../src/ash/platform/uriIdentity/common/uriIdentity.js';
-import { MemoryFileService } from '../../../src/ash/workbench/contrib/bulkEdit/test/browser/bulkEditTestServices.js';
+import { AppServerFileSystemProvider } from '../../../src/ash/platform/agentHost/browser/appServerFileSystemProvider.js';
+import { createDisconnectedFileApi } from '../../../src/ash/platform/files/browser/fileApi.js';
+import { WorkspaceContextService } from '../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js';
 import { FileEditorInput } from '../../../src/ash/workbench/contrib/files/browser/editors/fileEditorInput.js';
 import { StandaloneServices } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
 import { CodeEditorWidget } from '../../../src/ash/editor/browser/widget/codeEditor/codeEditorWidget.js';
@@ -191,15 +193,26 @@ window.ashCompositeIntegration = {
 	partEvents,
 	openEditor,
 	openFileAliases: async target => {
-		const provider = new class extends MemoryFileService {
-			public override readonly capabilities = FileSystemProviderCapabilities.FileReadWrite;
-		}([]);
+		const workspace = resources.add(new WorkspaceContextService({ id: 'composite', uri: URI.file('/composite') }));
+		const unavailable = (): never => { throw new Error('Unexpected file operation in editor identity fixture'); };
+		const provider = resources.add(new AppServerFileSystemProvider({
+			workspaceContextService: workspace,
+			api: {
+				...createDisconnectedFileApi(unavailable), readPathCaseSensitivity: async params => {
+					if (params.dirId !== 'composite') throw new Error('Wrong directory owner');
+					await Promise.resolve();
+					return { scopes: [{ path: '.', sensitivity: 'sensitive' }, ...(params.path.includes('/') ? [{ path: params.path.split('/')[0], sensitivity: params.path.startsWith('Original/') ? 'insensitive' as const : 'sensitive' as const }] : [])] };
+				}
+			}, resourceApi: { connectionGeneration: 0, metadata: unavailable, read: unavailable, release: unavailable },
+		}));
 		resources.add(uriIdentityServices.get(IFileService).registerProvider('file', provider));
-		const lower = { resource: URI.file('/composite/Alias.txt'), initialText: 'original content' };
+		const lower = { resource: URI.file('/composite/Original/Alias.txt'), initialText: 'original content' };
 		const firstPane = await editor.openEditor(lower, { pinned: true }, target);
 		const firstModel = models.getModel(lower.resource)!;
 		firstModel.setValue('unsaved content');
-		const alias = resources.add(new FileEditorInput(URI.file('/composite/ALIAS.txt')));
+		const identity = uriIdentityServices.get(IUriIdentityService);
+		for (let index = 0; index < 4097; index++) await identity.resolveCanonicalUri(URI.file(`/composite/transient${index}/File`));
+		const alias = resources.add(new FileEditorInput(URI.file('/composite/Original/ALIAS.txt')));
 		const secondPane = await editor.openEditor(alias, { pinned: true }, target);
 		return { tabs: editor.activeGroup.inputs.length, models: models.getModels().length, retained: firstPane === secondPane && firstModel === models.getModel(alias.resource), text: firstModel.getText() };
 	},

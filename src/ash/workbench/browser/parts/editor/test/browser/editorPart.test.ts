@@ -35,6 +35,10 @@ import {
 import { Disposable, DisposableStore, toDisposable, type IDisposable } from "../../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../../base/common/uri.js";
 import { DeferredPromise } from '../../../../../../base/common/async.js';
+import { FileService } from '../../../../../../platform/files/common/fileService.js';
+import { AppServerFileSystemProvider } from '../../../../../../platform/agentHost/browser/appServerFileSystemProvider.js';
+import { createDisconnectedRendererApi } from '../../../../../../platform/agentHost/browser/rendererApi.js';
+import type { FsReadPathCaseSensitivityResult } from '../../../../../../../../.build/protocol/typescript/index.js';
 import { BrowserTextModelService } from '../../../../../services/textmodelResolver/browser/browserTextModelService.js';
 import { TextModelSaveCompletionError, type TextModelReference } from '../../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { TextResourceConflictError, type ITextResourceStore, type TextResourceResolveRequest, type TextResourceSaveRequest } from '../../../../../services/textmodelResolver/common/textResourceStore.js';
@@ -2323,6 +2327,39 @@ test("EditorPart rejects an open superseded by ordinary content", async () => {
 
 	editor.dispose();
 	dom.window.close();
+});
+
+test('slow directory identity cannot replace a newer editor or ordinary content', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
+		const host = createDisconnectedRendererApi();
+		const delayed = new Map<string, DeferredPromise<FsReadPathCaseSensitivityResult>>();
+		const old = new DeferredPromise<FsReadPathCaseSensitivityResult>();
+		const replacement = new DeferredPromise<FsReadPathCaseSensitivityResult>();
+		delayed.set('old.ts', old);
+		delayed.set('replacement.ts', replacement);
+		using provider = new AppServerFileSystemProvider({ workspaceContextService: workspace, resourceApi: host.resource, api: { ...host.fs, readPathCaseSensitivity: async params => delayed.get(params.path)?.p ?? { scopes: [{ path: '.', sensitivity: 'unknown' }] } } });
+		using files = new FileService();
+		using registration = files.registerProvider('file', provider);
+		using parent = new TestUriIdentityServices(files);
+		const registry = new EditorPaneRegistry();
+		using paneRegistration = registry.registerEditorPane(descriptor('stanza.editor.code', '.ts', () => new TestEditorPane('stanza.editor.code')));
+		using editor = createEditorPart(dom.window.document.body, { registry }, parent);
+		const first = assert.rejects(editor.openEditor(input('/project/old.ts')), EditorOpenSupersededError);
+		const latest = input('/project/latest.ts');
+		await editor.openEditor(latest, {}, { groupId: editor.activeGroup.id });
+		await first;
+		await old.complete({ scopes: [{ path: '.', sensitivity: 'unknown' }] });
+		assert.equal(editor.activeInput, latest);
+		const pending = assert.rejects(editor.openEditor(input('/project/replacement.ts')), EditorOpenSupersededError);
+		const content = h(dom.window.document, 'div');
+		content.textContent = 'Replacement';
+		await editor.setContent(content);
+		await pending;
+		await replacement.complete({ scopes: [{ path: '.', sensitivity: 'unknown' }] });
+		assert.deepEqual([editor.activePane, editor.domNode.textContent], [undefined, 'Replacement']);
+	} finally { dom.window.close(); }
 });
 
 test("EditorParts moves an editor to an auxiliary window without changing its instance identity", async () => {

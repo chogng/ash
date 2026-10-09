@@ -9,14 +9,14 @@ import "./media/editorpart.css";
 import { isNonEmptyArray } from "../../../../base/common/arrays.js";
 import { basename } from "../../../../base/common/resources.js";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
-import type { URI } from "../../../../base/common/uri.js";
+import { URI } from "../../../../base/common/uri.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { CancellationError } from "../../../../base/common/errors.js";
 import { validateJsonValue } from "../../../../base/common/jsonValue.js";
 import { computeScreenAwareSize, Dimension, type IDimension } from "../../../../base/browser/dom.js";
 import { type IPositionedRectangle } from "../../../../base/browser/geometry.js";
 import { Direction, SerializableGrid, Sizing, type Direction as GridDirection, type GridDescriptor, type ISerializableView as ISerializableGridView } from "../../../../base/browser/ui/grid/grid.js";
-import { DisposableMap, Disposable, MutableDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { DisposableMap, Disposable, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { rot } from "../../../../base/common/numbers.js";
 import { Schemas } from "../../../../base/common/network.js";
 import type { IMenuService } from "../../../../platform/actions/common/actions.js";
@@ -37,7 +37,7 @@ import type { IAccessibilityService } from "../../../../platform/accessibility/c
 import type { IDocumentCollaborationApi } from "../../../../platform/collaboration/common/documentCollaborationApi.js";
 import type { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
 import { Part } from "../../part.js";
-import { EditorGroupView, type EditorGroupOptions } from "./editorGroupView.js";
+import { EditorGroupView, EditorOpenSupersededError, type EditorGroupOptions } from "./editorGroupView.js";
 import type { IEditorGroupView } from "./editor.js";
 import { AutoLockGroupsConfiguration, DefaultBinaryEditorConfiguration, EditorLargeFileConfirmationConfiguration, EditorOpenErrorDialogConfiguration, type AutoLockGroups } from "./editorConfiguration.js";
 import type { FileElement } from "./breadcrumbsModel.js";
@@ -189,6 +189,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	private readonly fileDialogService: IFileDialogService | undefined;
 	private readonly beforeCloseEditor: IEditorPartOptions['beforeCloseEditor'];
 	private readonly editorsObserver: EditorsObserver;
+	private readonly openingIdentities = new Map<string, AbortController>();
 
 	override get minimumWidth(): number { return Math.max(120, this.editorGrid.minimumWidth); }
 	override get minimumHeight(): number { return 119; }
@@ -205,6 +206,10 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			borderWidth: () => this.getFloatingBorderWidth() * 2,
 		});
 		const ownerDocument = container.ownerDocument;
+		this._register(toDisposable(() => {
+			for (const controller of this.openingIdentities.values()) controller.abort();
+			this.openingIdentities.clear();
+		}));
 		this.beforeCloseEditor = options.beforeCloseEditor;
 		this.titleDomNode.remove();
 		this.domNode.setAttribute("aria-label", "Editor");
@@ -453,6 +458,21 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	async openEditor(input: IResourceEditorInput, options: EditorOpenOptions = {}, target?: EditorOpenTarget): Promise<IEditorPane> {
+		const destination = typeof target === 'object' ? target.groupId : target === 'modalGroup' ? 'modalGroup' : target === 'sideGroup' ? `sideGroup:${this._activeGroup.id}` : this._activeGroup.id;
+		const controller = new AbortController();
+		this.openingIdentities.get(destination)?.abort();
+		this.openingIdentities.set(destination, controller);
+		try {
+			const identity = this.uriIdentity.resolveCanonicalUri(input.resource, controller.signal);
+			if (!(identity instanceof URI)) await identity;
+			if (controller.signal.aborted) throw new EditorOpenSupersededError(input);
+		} catch (error) {
+			if (controller.signal.aborted) throw new EditorOpenSupersededError(input);
+			throw error;
+		} finally {
+			if (this.openingIdentities.get(destination) === controller) this.openingIdentities.delete(destination);
+		}
+		this.assertNotDisposed();
 		if (target === "modalGroup") {
 			const modalInput = this.modalEditor.activeInput;
 			if (modalInput && !this.isSameEditor(modalInput, input) && !await this.closeEditor(modalInput)) {
@@ -672,6 +692,8 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	async setContent(content: Element): Promise<void> {
+		this.openingIdentities.get(this._activeGroup.id)?.abort();
+		this.openingIdentities.get('modalGroup')?.abort();
 		if (!await this.closeActiveModalEditor() || !await this._activeGroup.setContent(content)) {
 			throw new CancellationError("Replacing editor content was cancelled");
 		}

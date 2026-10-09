@@ -16,12 +16,10 @@ use ash_app_server_protocol::protocol::fs::FsFileType;
 use ash_app_server_protocol::protocol::fs::FsFileWriteMode;
 use ash_app_server_protocol::protocol::fs::FsGetMetadataParams;
 use ash_app_server_protocol::protocol::fs::FsGetMetadataResult;
-use ash_app_server_protocol::protocol::fs::FsPathCaseSensitivity;
-use ash_app_server_protocol::protocol::fs::FsPathCaseSensitivityScope;
-use ash_app_server_protocol::protocol::fs::FsReadPathCaseSensitivityParams;
-use ash_app_server_protocol::protocol::fs::FsReadPathCaseSensitivityResult;
 use ash_app_server_protocol::protocol::fs::FsMissingTargetBehavior;
 use ash_app_server_protocol::protocol::fs::FsPasteSystemFilesParams;
+use ash_app_server_protocol::protocol::fs::FsPathCaseSensitivity;
+use ash_app_server_protocol::protocol::fs::FsPathCaseSensitivityScope;
 use ash_app_server_protocol::protocol::fs::FsReadBinaryFileParams;
 use ash_app_server_protocol::protocol::fs::FsReadBinaryFileResult;
 use ash_app_server_protocol::protocol::fs::FsReadDirectoryEntry;
@@ -29,6 +27,8 @@ use ash_app_server_protocol::protocol::fs::FsReadDirectoryParams;
 use ash_app_server_protocol::protocol::fs::FsReadDirectoryResult;
 use ash_app_server_protocol::protocol::fs::FsReadFileParams;
 use ash_app_server_protocol::protocol::fs::FsReadFileResult;
+use ash_app_server_protocol::protocol::fs::FsReadPathCaseSensitivityParams;
+use ash_app_server_protocol::protocol::fs::FsReadPathCaseSensitivityResult;
 use ash_app_server_protocol::protocol::fs::FsRenameParams;
 use ash_app_server_protocol::protocol::fs::FsWriteBinaryFileParams;
 use ash_app_server_protocol::protocol::fs::FsWriteFileElevatedParams;
@@ -72,9 +72,15 @@ impl AppServer {
                 .map(|scope| FsPathCaseSensitivityScope {
                     path: scope.path,
                     sensitivity: match scope.sensitivity {
-                        ash_file_system::PathCaseSensitivity::Sensitive => FsPathCaseSensitivity::Sensitive,
-                        ash_file_system::PathCaseSensitivity::Insensitive => FsPathCaseSensitivity::Insensitive,
-                        ash_file_system::PathCaseSensitivity::Unknown => FsPathCaseSensitivity::Unknown,
+                        ash_file_system::PathCaseSensitivity::Sensitive => {
+                            FsPathCaseSensitivity::Sensitive
+                        }
+                        ash_file_system::PathCaseSensitivity::Insensitive => {
+                            FsPathCaseSensitivity::Insensitive
+                        }
+                        ash_file_system::PathCaseSensitivity::Unknown => {
+                            FsPathCaseSensitivity::Unknown
+                        }
                     },
                 })
                 .collect(),

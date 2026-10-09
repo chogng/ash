@@ -18,6 +18,9 @@ export class SessionFileService extends AppServerFileSystemProvider implements I
 			return { ...rest, sessionDirectory: sessionDirectoryFor(dirId) };
 		};
 		const api: IFileApi = {
+			get connectionGeneration() { return host.fs.connectionGeneration; },
+			onDidChangeConnection: host.fs.onDidChangeConnection,
+			readPathCaseSensitivity: params => host.fs.readPathCaseSensitivity(target(params)),
 			writeFileElevated: (params, signal) => host.fs.writeFileElevated(target(params), signal),
 			getMetadata: params => host.fs.getMetadata(target(params)),
 			readDirectory: params => host.fs.readDirectory(target(params)),

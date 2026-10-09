@@ -1,4 +1,5 @@
 import { throwIfCancelled } from '../../../base/common/cancellation.js';
+import { Event } from '../../../base/common/event.js';
 import { CancellationError } from '../../../base/common/errors.js';
 import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
 import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
@@ -9,6 +10,9 @@ import type { IFileApi } from "../common/fileApi.js";
 
 export function createDisconnectedFileApi(unavailable: UnavailableOperation): IFileApi {
 	return {
+		connectionGeneration: 0,
+		onDidChangeConnection: Event.None,
+		readPathCaseSensitivity: () => unavailable('fs.readPathCaseSensitivity'),
 		writeFileElevated: () => unavailable("fs.writeFileElevated"),
 		getMetadata: () => unavailable("fs.getMetadata"),
 		readDirectory: () => unavailable("fs.readDirectory"),
@@ -27,6 +31,9 @@ export function createDisconnectedFileApi(unavailable: UnavailableOperation): IF
 
 export function createAppServerFileApi(connection: AppServerProtocolClient): IFileApi {
 	return {
+		get connectionGeneration() { return connection.generation; },
+		onDidChangeConnection: listener => connection.onStateChange(() => listener()),
+		readPathCaseSensitivity: params => appServerRequest(connection, 'fs/readPathCaseSensitivity', params),
 		writeFileElevated: async (params, signal) => {
 			if (signal) { throwIfCancelled(signal, 'Elevated file save was cancelled'); }
 			const result = connection.request(APP_SERVER_METHODS['fs/writeFileElevated'], params, { timeoutMs: 240_000 });

@@ -90,6 +90,7 @@ test("AppServerFileSystemProvider maps wire entries back to resource URIs", asyn
 	const service = new AppServerFileSystemProvider({
 		workspaceContextService,
 		api: {
+			...unavailableFileApi(),
 			getMetadata: async ({ path }) => {
 				assert.equal(path, ".");
 				return {
@@ -245,6 +246,7 @@ test("AppServerFileSystemProvider maps App Server revision conflicts to the file
 		workspaceContextService,
 		resourceApi: unavailableResourceApi(),
 		api: {
+			...unavailableFileApi(),
 			getMetadata: async () => { throw new Error("unavailable"); },
 			readDirectory: async () => { throw new Error("unavailable"); },
 			readFile: async () => { throw new Error("unavailable"); },
@@ -294,6 +296,7 @@ test("AppServerFileSystemProvider reads connection-owned binary resources in bou
 	const service = new AppServerFileSystemProvider({
 		workspaceContextService,
 		api: {
+			...unavailableFileApi(),
 			getMetadata: async () => { throw new Error("not used"); },
 			readDirectory: async () => { throw new Error("not used"); },
 			readFile: async () => { throw new Error("not used"); },
@@ -397,6 +400,9 @@ test("AppServerFileSystemProvider routes nested multi-root resources by Workspac
 
 function unavailableFileApi() {
 	return {
+		connectionGeneration: 0,
+		onDidChangeConnection: Event.None,
+		readPathCaseSensitivity: async () => { throw new Error('unavailable'); },
 		getMetadata: async () => { throw new Error("unavailable"); },
 		readDirectory: async () => { throw new Error("unavailable"); },
 		readFile: async () => { throw new Error("unavailable"); },

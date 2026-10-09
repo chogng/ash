@@ -170,6 +170,25 @@ export interface IFileChangeEvent {
 	readonly resources: readonly URI[] | undefined;
 }
 
+/** Provider-owned comparison facts, separate from the resource used for storage and display. */
+export interface IFilePathIdentity {
+	/** Comparison-only spelling, with casing applied separately for each directory's direct children. */
+	readonly comparisonResource: URI;
+}
+
+/** Providers whose path rules vary by directory prepare facts before synchronous resource comparisons. */
+export interface IFileSystemProviderWithPathIdentity extends IFileSystemProvider {
+	readonly onDidChangePathIdentity: Event<void>;
+	/** Keeps comparison facts available until the consuming resource lifetime ends. */
+	retainPathIdentity(resource: URI): IDisposable;
+	resolvePathIdentity(resource: URI): Promise<void>;
+	getPathIdentity(resource: URI): IFilePathIdentity;
+}
+
+export function hasPathIdentityCapability(provider: IFileSystemProvider): provider is IFileSystemProviderWithPathIdentity {
+	return 'resolvePathIdentity' in provider && 'getPathIdentity' in provider && 'retainPathIdentity' in provider && 'onDidChangePathIdentity' in provider;
+}
+
 /** Storage operations implemented by a runtime or virtual resource provider. */
 export interface IFileSystemProvider {
 	readonly capabilities: FileSystemProviderCapabilities;
@@ -191,8 +210,14 @@ export interface IFileSystemProvider {
 
 /** Routes file operations through explicitly registered resource schemes. */
 export interface IFileService {
+	retainPathIdentity(resource: URI): IDisposable;
+	/** Uniform providers need no asynchronous preparation. */
+	resolvePathIdentity(resource: URI, signal?: AbortSignal): Promise<void> | undefined;
+	getPathIdentity(resource: URI): IFilePathIdentity | undefined;
 	readonly onDidChangeFileSystemProviderRegistrations: Event<IFileSystemProviderRegistrationEvent>;
 	readonly onDidChangeFileSystemProviderCapabilities: Event<IFileSystemProviderCapabilitiesChangeEvent>;
+	/** Comparison facts changed without implying a change to stored file contents. */
+	readonly onDidChangeFileSystemProviderPathIdentity: Event<IFileSystemProviderPathIdentityChangeEvent>;
 	readonly onDidChangeFiles: Event<IFileChangeEvent>;
 	/** Releases this caller's watch; equivalent requests may share storage resources. */
 	watch(resource: URI, options?: IWatchOptions): IDisposable;
@@ -225,6 +250,11 @@ export interface IFileSystemProviderRegistrationEvent {
 export interface IFileSystemProviderCapabilitiesChangeEvent {
 	readonly scheme: string;
 	readonly provider: IFileSystemProvider;
+}
+
+export interface IFileSystemProviderPathIdentityChangeEvent {
+	readonly scheme: string;
+	readonly provider: IFileSystemProviderWithPathIdentity;
 }
 
 export class FileNotFoundError extends FileSystemProviderError {
