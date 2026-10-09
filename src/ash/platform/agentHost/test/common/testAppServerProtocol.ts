@@ -6,7 +6,7 @@ import {
 /** A complete handshake: protocol additions must update this typed fixture once. */
 export function createTestInitializeResult(): InitializeResult {
 	return {
-		serverInfo: { name: 'ash-app-server', version: '0.1.0' },
+		serverInfo: { name: 'ash-app-server', version: '0.1.0', operatingSystem: 'linux', userHome: '/home/test' },
 		protocolVersion: { major: APP_SERVER_PROTOCOL_MAJOR },
 		schemaHash: APP_SERVER_SCHEMA_HASH,
 		slashCommands: [],

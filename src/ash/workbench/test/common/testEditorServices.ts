@@ -1,3 +1,7 @@
+import { BrowserPathService } from '../../services/path/browser/pathService.js';
+import { IPathService } from '../../../platform/path/common/pathService.js';
+import { IRendererHostService } from '../../../platform/renderer/common/rendererHost.js';
+import { createDisconnectedRendererApi } from '../../../platform/agentHost/browser/rendererApi.js';
 import { FileService } from '../../../platform/files/common/fileService.js';
 import { Schemas } from '../../../base/common/network.js';
 import { ITextModelService } from '../../../editor/common/services/resolverService.js';
@@ -147,7 +151,9 @@ export function createTestEditorServices(configuration?: IConfigurationService, 
 	services.registerSingleton(IWorkspaceContextService, () => new WorkspaceContextService({ id: 'test-editor', folders: [] }));
 	if (!services.has(IFilesConfigurationService)) services.registerSingleton(IFilesConfigurationService, () => services.createInstance(FilesConfigurationService));
 	if (!services.has(IResourceIconRenderer)) services.registerInstance(IResourceIconRenderer, { onDidChangeResourceIcons: Event.None, getFileIconTheme: () => noFileIconTheme, renderFileIcon() { } });
-	if (!services.has(ILabelService)) services.registerSingleton(ILabelService, () => new LabelService(services.get(IWorkspaceContextService)));
+	if (!services.has(IRendererHostService)) services.registerInstance(IRendererHostService, createDisconnectedRendererApi());
+	if (!services.has(IPathService)) services.registerSingleton(IPathService, () => services.createInstance(BrowserPathService));
+	if (!services.has(ILabelService)) services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
 	if (!services.has(IWorkingCopyService)) services.registerSingleton(IWorkingCopyService, () => new BrowserWorkingCopyService());
 	if (!services.has(IUntitledTextEditorService)) services.registerSingleton(IUntitledTextEditorService, () => services.createInstance(UntitledTextEditorService));
 	if (!services.has(ILogService)) services.registerInstance(ILogService, new NullLoggerService());

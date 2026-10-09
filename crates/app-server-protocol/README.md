@@ -32,6 +32,19 @@
 `github/issue/read` 验证访问，实时状态仍按当前账号读取。移除只取消关联，不向 GitHub
 提交关闭或删除操作。关联随根 Thread 删除、恢复和历史迁移；不依赖工作区目录。
 
+`initialize.serverInfo.operatingSystem` 返回当前 App Server 进程的路径平台（`windows`、`mac` 或
+`linux`）。未知平台省略该字段。它不表示客户端平台或另行选择的执行环境。Renderer 协议客户端
+随连接初始化更新该事实，断线时清除；文件名校验从当前连接读取，不单独缓存。SSH 资源仍遵循
+已有 POSIX 路径契约，浏览器文件句柄遵循自身的名称限制。前端 Path Service 接入文件名校验、
+资源 OS 查询及服务器绝对路径转 URI；服务器文件夹选择与工作区授权按目标 OS 往返路径，保留 POSIX
+文件名中的反斜杠，正确处理 Windows 盘符与 UNC。旧服务器未提供 OS 时，仅按明确的盘符或
+UNC 语法转换 Windows 路径，文件夹选择不发送客户端推断的默认路径。
+`initialize.serverInfo.userHome` 提供 App Server 所在机器的 OS 用户主目录，无法取得时省略。
+它与 `ASH_HOME` 数据根独立；客户端不得通过数据根父目录推算用户主目录。连接关闭时清除该事实。
+Path Service 使用目标 OS 解释绝对路径与 `~` 输入，路径标签和服务器目录选择消费当前连接的 home。
+Electron 单独提供本机 OS home；Web 文件句柄不推断主机目录，SSH 资源保持已有 POSIX 契约。
+Path Service 的资源路径 provider 注册仍没有生产调用方，未扩展该契约。
+
 ## 编译与导出
 
 - 队列、通话、协作和任务交付使用各自的 `*-contract` crate；服务端启用执行 feature 时也不改变协议依赖。协议构建不编译这些领域的执行器、SQLite、工具执行、剪贴板或图片处理；默认与服务端 feature 合并后的依赖边界由 `tests/dependency_boundary.rs` 验证。

@@ -2,6 +2,7 @@ import { createServiceIdentifier } from '../../instantiation/common/instantiatio
 import type { ServerNotification, SlashCommandDefinition } from "../../../../../.build/protocol/typescript/index.js";
 import type { Event } from '../../../base/common/event.js';
 import type { DisposableHandle } from "../../ipc/common/ipc.js";
+import type { OperatingSystem } from '../../../base/common/platform.js';
 
 export type AppServerConnectionState = "stopped" | "starting" | "initializing" | "ready" | "stopping" | "crashed" | "restarting";
 
@@ -9,6 +10,10 @@ export type AppServerConnectionState = "stopped" | "starting" | "initializing" |
 export interface IAppServerApi {
 	/** Changes when the protocol client starts a replacement connection. */
 	readonly connectionGeneration: number;
+	/** Initialized server process OS; absent before readiness and after connection closure. */
+	readonly operatingSystem?: OperatingSystem;
+	/** Absolute OS user directory of the initialized server; unrelated to ASH_HOME. */
+	readonly userHome?: string;
 	getConnectionState(): Promise<AppServerConnectionState>;
 	getSlashCommands(): Promise<readonly SlashCommandDefinition[]>;
 	onConnectionState(listener: (state: AppServerConnectionState) => void): DisposableHandle;

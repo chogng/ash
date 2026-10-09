@@ -1,3 +1,6 @@
+import { operatingSystem, OperatingSystem } from '../../../../../../base/common/platform.js';
+import { BrowserPathService } from '../../../../../services/path/browser/pathService.js';
+import { createDisconnectedRendererApi } from '../../../../../../platform/agentHost/browser/rendererApi.js';
 import type { IResourceEditorInput } from '../../../../../common/editor.js';
 import { isWindows } from '../../../../../../base/common/platform.js';
 import { Registry } from '../../../../../../platform/registry/common/platform.js';
@@ -42,7 +45,7 @@ function createContext(resources: DisposableStore): TestContext {
 	const services = resources.add(new InstantiationService());
 	const workspace = resources.add(new WorkspaceContextService({ id: 'test', folders: [] }));
 	const workingCopies = resources.add(new BrowserWorkingCopyService());
-	const labels = resources.add(new LabelService(workspace));
+	const labels = resources.add(createTestLabelService(workspace));
 	const editors = resources.add(new TestEditorService());
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IWorkingCopyService, workingCopies);
@@ -221,4 +224,10 @@ class TestWorkingCopy extends Disposable implements IWorkingCopy {
 	public async save(_signal: AbortSignal): Promise<void> { this.setDirty(false); }
 	public async saveAs(_resource: URI, _signal: AbortSignal): Promise<void> { }
 	public async revert(_signal: AbortSignal): Promise<void> { this.setDirty(false); }
+}
+
+function createTestLabelService(workspace: ConstructorParameters<typeof LabelService>[0], os: OperatingSystem = operatingSystem): LabelService {
+	const api = createDisconnectedRendererApi();
+	const host = { ...api, hasAppServer: true, appServer: { ...api.appServer, operatingSystem: os } };
+	return new LabelService(workspace, new BrowserPathService(host, workspace), host);
 }

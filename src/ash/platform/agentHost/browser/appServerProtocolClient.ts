@@ -11,6 +11,7 @@ import { validateAppServerInitializeResult } from "../common/appServerProtocolCo
 import type { AppServerServerRequestDefinition, AppServerServerRequestMethod, ClientCapabilities, JsonRpcId, ServerRequestParams, ServerRequestResult } from '../../../../../.build/protocol/typescript/index.js';
 import { decodeAppServerServerRequestResult } from '../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import { type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { OperatingSystem } from '../../../base/common/platform.js';
 
 
 const DEFAULT_CONNECT_TIMEOUT = 10_000;
@@ -57,6 +58,8 @@ export class AppServerProtocolClient {
 	private _state: AppServerConnectionState = "stopped";
 	private _slashCommands: readonly InitializeResult["slashCommands"][number][] = [];
 	private _capabilities: ServerCapabilities | undefined;
+	private _operatingSystem: OperatingSystem | undefined;
+	private _userHome: string | undefined;
 	private metadata: AppServerConnectionMetadata | undefined;
 	private connectResolve: ((metadata: AppServerConnectionMetadata) => void) | undefined;
 	private connectReject: ((error: Error) => void) | undefined;
@@ -90,6 +93,14 @@ export class AppServerProtocolClient {
 
 	get capabilities(): ServerCapabilities | undefined {
 		return this._capabilities;
+	}
+
+	public get operatingSystem(): OperatingSystem | undefined {
+		return this._operatingSystem;
+	}
+
+	public get userHome(): string | undefined {
+		return this._userHome;
 	}
 
 	public disconnect(): void {
@@ -128,6 +139,8 @@ export class AppServerProtocolClient {
 			const initialization = validateInitializeResult(initialized);
 			this._slashCommands = initialization.slashCommands;
 			this._capabilities = initialization.capabilities;
+			this._operatingSystem = initialization.operatingSystem;
+			this._userHome = initialization.userHome;
 			this.setState("ready");
 			if (!this.isCurrentConnection(generation, 'ready')) { throw canceled(); }
 			return metadata;
@@ -336,6 +349,8 @@ export class AppServerProtocolClient {
 	}
 
 	private shutdown(error: Error, state: AppServerConnectionState): void {
+		this._operatingSystem = undefined;
+		this._userHome = undefined;
 		this.clearConnectTimeout();
 		const reject = this.connectReject;
 		this.connectResolve = undefined;
@@ -380,9 +395,21 @@ function validateFramePayload(payload: unknown): string {
 	return payload.frame;
 }
 
-function validateInitializeResult(value: InitializeResult): Pick<InitializeResult, "capabilities" | "slashCommands"> {
+function validateInitializeResult(value: InitializeResult): Pick<InitializeResult, "capabilities" | "slashCommands"> & { operatingSystem: OperatingSystem | undefined; userHome: string | undefined; } {
 	const initialized = validateAppServerInitializeResult(value, { expectedServerName: "ash-app-server" });
-	return { capabilities: initialized.capabilities, slashCommands: initialized.slashCommands };
+	let operatingSystem: OperatingSystem | undefined;
+	switch (initialized.serverInfo.operatingSystem) {
+		case 'windows': operatingSystem = OperatingSystem.Windows; break;
+		case 'mac': operatingSystem = OperatingSystem.Macintosh; break;
+		case 'linux': operatingSystem = OperatingSystem.Linux; break;
+	}
+	const userHome = initialized.serverInfo.userHome;
+	if (userHome !== undefined && (userHome.includes('\0') || !(operatingSystem === OperatingSystem.Windows
+		? /^(?:[a-z]:[\\/]|[\\/]{2}[^\\/]+[\\/][^\\/]+)/i.test(userHome)
+		: userHome.startsWith('/')))) {
+		throw new TypeError('App Server user home must be an absolute directory');
+	}
+	return { capabilities: initialized.capabilities, slashCommands: initialized.slashCommands, operatingSystem, userHome };
 }
 
 function disposable(dispose: () => void): IDisposable { return toDisposable(dispose); }

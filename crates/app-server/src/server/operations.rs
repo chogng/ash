@@ -7,6 +7,7 @@ use super::result;
 use ash_app_server_protocol::protocol::agent::AgentCapabilitiesReadResult;
 use ash_app_server_protocol::protocol::common::SchemaHash;
 use ash_app_server_protocol::protocol::common::ServerInfo;
+use ash_app_server_protocol::protocol::common::ServerOperatingSystem;
 use ash_app_server_protocol::protocol::document::TypstCompileParams;
 use ash_app_server_protocol::protocol::document::TypstCompileResult;
 use ash_app_server_protocol::protocol::document::TypstDiagnosticDto;
@@ -473,6 +474,18 @@ impl AppServer {
             server_info: ServerInfo {
                 name: "ash-app-server".into(),
                 version: build_info::VERSION.into(),
+                user_home: dirs::home_dir()
+                    .filter(|path| path.is_absolute())
+                    .and_then(|path| path.into_os_string().into_string().ok()),
+                operating_system: if cfg!(windows) {
+                    Some(ServerOperatingSystem::Windows)
+                } else if cfg!(target_os = "macos") {
+                    Some(ServerOperatingSystem::Mac)
+                } else if cfg!(target_os = "linux") {
+                    Some(ServerOperatingSystem::Linux)
+                } else {
+                    None
+                },
             },
             protocol_version: ProtocolVersion::current(),
             schema_hash: SchemaHash(schema_hash()),

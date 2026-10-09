@@ -87,15 +87,16 @@ export class ExtUri implements IExtUri {
 	}
 
 	dirname(uri: URI): URI {
-		if (isWindows && uri.scheme === 'file') {
-			return URI.joinPath(uri, '..');
-		}
 		const path = uri.toEncodedComponents().path.replace(/\/+$/u, '');
 		if (!path) {
 			return uri;
 		}
+		if (uri.scheme === 'file' && !uri.authority && /^\/[a-z]:$/i.test(path)) {
+			return uri.withEncodedPath(`${path}/`);
+		}
 		const separator = path.lastIndexOf('/');
-		return uri.withEncodedPath(separator <= 0 ? '/' : path.slice(0, separator));
+		const parent = separator <= 0 ? '/' : path.slice(0, separator);
+		return uri.withEncodedPath(uri.scheme === 'file' && !uri.authority && /^\/[a-z]:$/i.test(parent) ? `${parent}/` : parent);
 	}
 
 	getComparisonKey(uri: URI): string {

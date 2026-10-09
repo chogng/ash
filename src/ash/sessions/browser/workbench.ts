@@ -351,7 +351,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IFileService, fileService);
 		services.registerInstance(IFileSearchService, options.api.hasAppServer ? files : services.createInstance(BrowserFileSearchService));
 		services.registerInstance(ISystemFileTransferService, files);
-		services.registerInstance(ILabelService, this._register(new LabelService(workspace)));
+		services.registerInstance(ILabelService, this._register(services.createInstance(LabelService)));
 		services.registerInstance(IResourceIconRenderer, themeService);
 		services.registerInstance(IDecorationsService, this._register(services.createInstance(DecorationsService, ownerDocument)));
 		services.registerSingleton(IResourceLabelService, () => services.createInstance(ResourceLabelService));

@@ -25,7 +25,7 @@ test('desktop file transport preserves resources, revisions, and root boundaries
 	using outgoing = new Emitter<VSBuffer>();
 	using server = new IPCClient({ onMessage: incoming.event, send: value => outgoing.fire(value) }, 'window:1');
 	using peer = new IPCClient({ onMessage: outgoing.event, send: value => incoming.fire(value) }, 'window:1');
-	using channel = new DiskFileSystemProviderChannel(provider, URI.file(directory));
+	using channel = new DiskFileSystemProviderChannel(provider, URI.file(directory), URI.file(tmpdir()));
 	server.registerChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME, channel);
 	using client = new DiskFileSystemProviderClient(peer.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME));
 	try {
@@ -70,6 +70,9 @@ test('desktop file transport preserves resources, revisions, and root boundaries
 		await assert.rejects(peer.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME).call('writeFile', { resource: resource.toString(), bytes: 'broken', options: { create: true, overwrite: true } }), /Invalid file write/);
 		await assert.rejects(peer.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME).call('rename', { resource: resource.toString(), target: URI.parse('https://example.test/file').toString(), existing: 'error' }), /local file resource/);
 		assert.equal(await peer.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME).call('userDataHome'), URI.file(directory).toString());
+		assert.equal(await peer.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME).call('userHome'), URI.file(tmpdir()).toString());
+		await assert.rejects(peer.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME).call('userHome', {}), /No arguments expected/);
+		await assert.rejects(client.readDirectory(URI.file(tmpdir())), /outside the granted roots/);
 	} finally { await rm(directory, { recursive: true, force: true }); }
 });
 
@@ -104,7 +107,7 @@ test('desktop stream cancellation and owner disposal close the server descriptor
 		using outgoing = new Emitter<VSBuffer>();
 		using server = new IPCClient({ onMessage: incoming.event, send: value => outgoing.fire(value) }, 'window:1');
 		using peer = new IPCClient({ onMessage: outgoing.event, send: value => incoming.fire(value) }, 'window:1');
-		using channel = new DiskFileSystemProviderChannel(provider, URI.file(directory));
+		using channel = new DiskFileSystemProviderChannel(provider, URI.file(directory), URI.file(tmpdir()));
 		server.registerChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME, channel);
 		using client = new DiskFileSystemProviderClient(peer.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME));
 		using cancellation = new CancellationTokenSource();

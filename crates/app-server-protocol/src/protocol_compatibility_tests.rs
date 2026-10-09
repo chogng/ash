@@ -1,5 +1,6 @@
 use crate::protocol::common::SchemaHash;
 use crate::protocol::common::ServerInfo;
+use crate::protocol::common::ServerOperatingSystem;
 use crate::protocol::git::GitCommitParams;
 use crate::protocol::initialize::APP_SERVER_PROTOCOL_MAJOR;
 use crate::protocol::initialize::CapabilityContract;
@@ -57,6 +58,8 @@ fn initialization() -> InitializeResult {
         server_info: ServerInfo {
             name: "ash-app-server".into(),
             version: "test".into(),
+            operating_system: None,
+            user_home: None,
         },
         protocol_version: ProtocolVersion::current(),
         schema_hash: SchemaHash(crate::schema_hash()),
@@ -68,6 +71,40 @@ fn initialization() -> InitializeResult {
         },
         slash_commands: Vec::new(),
     }
+}
+
+#[test]
+fn server_path_platform_round_trips_and_rejects_unknown_values() {
+    for (os, wire) in [
+        (ServerOperatingSystem::Windows, "windows"),
+        (ServerOperatingSystem::Mac, "mac"),
+        (ServerOperatingSystem::Linux, "linux"),
+    ] {
+        let value =
+            serde_json::json!({"name":"ash-app-server","version":"test","operatingSystem":wire});
+        let decoded: ServerInfo = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(decoded.operating_system, Some(os));
+        assert_eq!(serde_json::to_value(decoded).unwrap(), value);
+    }
+    let legacy = serde_json::json!({"name":"ash-app-server","version":"test"});
+    let decoded: ServerInfo = serde_json::from_value(legacy.clone()).unwrap();
+    assert_eq!(decoded.operating_system, None);
+    assert_eq!(serde_json::to_value(decoded).unwrap(), legacy);
+    assert!(serde_json::from_value::<ServerInfo>(serde_json::json!({"name":"ash-app-server","version":"test","operatingSystem":"unknown"})).is_err());
+}
+
+#[test]
+fn server_user_home_round_trips_independently_of_the_data_root() {
+    let value = serde_json::json!({"name":"ash-app-server","version":"test","operatingSystem":"windows","userHome":"C:\\Users\\ash"});
+    let decoded: ServerInfo = serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(decoded.user_home.as_deref(), Some("C:\\Users\\ash"));
+    assert_eq!(serde_json::to_value(decoded).unwrap(), value);
+    assert!(
+        serde_json::from_value::<ServerInfo>(
+            serde_json::json!({"name":"ash-app-server","version":"test","userHome":42})
+        )
+        .is_err()
+    );
 }
 
 #[test]

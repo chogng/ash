@@ -86,6 +86,15 @@ test('dirname keeps an escaped slash inside its filename', () => {
 	assert.equal(dirname(URI.parse('ash://workspace/project/')).toString(), 'ash://workspace/');
 });
 
+test('dirname preserves POSIX filename backslashes and Windows drive roots on every renderer OS', () => {
+	assert.deepEqual([
+		dirname(URI.parse('file:///work/part%5Cname.txt')).toString(),
+		dirname(URI.parse('file:///C:/part.txt')).toString(),
+		dirname(URI.parse('file:///C:/')).toString(),
+		dirname(URI.parse('file:///C:/folder/part.txt')).toString(),
+	], ['file:///work', 'file:///C:/', 'file:///C:/', 'file:///C:/folder']);
+});
+
 test('basename decodes the final path segment after finding its boundary', () => {
 	assert.equal(basename(URI.parse('ash://workspace/project/a%2Fb.txt')), 'a/b.txt');
 	assert.equal(basename(URI.parse('ash://workspace/project/a%20b.txt/')), 'a b.txt');

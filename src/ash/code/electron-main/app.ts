@@ -396,7 +396,7 @@ export class AshApplication extends Disposable {
 		const profileFiles = this._register(new DiskFileSystemProvider([URI.file(this.profileRoot)]));
 		this._register(profileFiles.onDidWatchError(error => this.logService.error('files', 'Failed to watch user profile files', error)));
 		this._register(profileFiles.watch(URI.file(this.profileRoot), { recursive: true, excludes: ['**/*.tmp'] }));
-		this.mainProcessIpcServer.registerChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME, this._register(new DiskFileSystemProviderChannel(profileFiles, URI.file(this.profileRoot))));
+		this.mainProcessIpcServer.registerChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME, this._register(new DiskFileSystemProviderChannel(profileFiles, URI.file(this.profileRoot), URI.file(app.getPath('home')))));
 		this.mainProcessIpcServer.registerChannel('keyboardLayout', keyboardLayoutChannel(this.nativeKeyboardLayout));
 		this.mainProcessIpcServer.registerChannel('userKeyboardLayout', userKeyboardLayoutChannel(this.services.userKeyboardLayout));
 		this.mainProcessIpcServer.registerChannel('update', new UpdateChannel(this.updateMainService));

@@ -100,6 +100,22 @@ pub struct DirPermissionsHostCapability {
 pub struct ServerInfo {
     pub name: String,
     pub version: String,
+    /// OS of this App Server process, not the client or a selected execution environment.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub operating_system: Option<ServerOperatingSystem>,
+    /// OS user directory of this App Server process, independent of the Ash data root.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub user_home: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ServerOperatingSystem {
+    Windows,
+    Mac,
+    Linux,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]

@@ -168,6 +168,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			hooks: { ...backend.hooks, userConfigurationEditor: () => invoke<void>(EDIT_USER_HOOKS_CONFIGURATION_CHANNEL) },
 			localFiles: resources.add(new DiskFileSystemProviderClient(mainProcessService.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME))),
 			userDataHome: URI.parse(await mainProcessService.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME).call<string>('userDataHome')),
+			localUserHome: URI.parse(await mainProcessService.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME).call<string>('userHome')),
 			workspace: createWorkspaceContextApi(),
 		};
 	} catch (error) { resources.dispose(); throw error; }

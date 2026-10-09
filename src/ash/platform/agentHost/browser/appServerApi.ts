@@ -32,6 +32,8 @@ export function createDisconnectedServerEventApi(): IServerEventApi {
 export function createAppServerAppServerApi(connection: AppServerProtocolClient): IAppServerApi {
 	return {
 		get connectionGeneration() { return connection.generation; },
+		get operatingSystem() { return connection.operatingSystem; },
+		get userHome() { return connection.userHome; },
 		getConnectionState: () => Promise.resolve(connection.state),
 		getSlashCommands: () => Promise.resolve(connection.slashCommands),
 		onConnectionState: (listener) => connection.onStateChange(listener),

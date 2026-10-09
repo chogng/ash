@@ -2,8 +2,10 @@ import type {
 	INativeHostApi,
 } from "../../../../platform/native/common/nativeHost.js";
 import { URI } from '../../../../base/common/uri.js';
+import { OperatingSystem } from '../../../../base/common/platform.js';
 import { localize } from '../../../../nls.js';
-import { DialogSeverity, type IDialogService, type IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { DialogSeverity, type IDialogService, IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { IPathService } from '../../../../platform/path/common/pathService.js';
 import type { HTMLFileSystemProvider } from '../../../../platform/files/browser/htmlFileSystemProvider.js';
 import { workspaceFromIdentifier, type IWorkspace } from '../../../../platform/workspace/common/workspace.js';
 import {
@@ -40,9 +42,10 @@ export class WebWorkspaceOpenService implements IWorkspaceOpenService {
 
 	constructor(
 		private readonly client: IWebWorkspaceClient,
-		private readonly fileDialogs: IFileDialogService,
 		private readonly dialogs: () => IDialogService,
 		private readonly prepareSwitch: () => Promise<boolean>,
+		@IFileDialogService private readonly fileDialogs: IFileDialogService,
+		@IPathService private readonly paths: IPathService,
 	) { }
 
 	async openFolder(): Promise<void> {
@@ -64,7 +67,12 @@ export class WebWorkspaceOpenService implements IWorkspaceOpenService {
 	}
 
 	async pickFolder(): Promise<string | undefined> {
-		return (await this.fileDialogs.showOpenDialog({ canSelectFiles: false, canSelectFolders: true }))?.[0]?.fsPath;
+		const resource = (await this.fileDialogs.showOpenDialog({ canSelectFiles: false, canSelectFolders: true }))?.[0];
+		if (!resource) return undefined;
+		const path = resource.authority ? `//${resource.authority}${resource.path}` : resource.path;
+		return await this.paths.getOperatingSystem(resource) === OperatingSystem.Windows
+			? path.replace(/^\/(?=[a-z]:\/)/i, '').replaceAll('/', '\\')
+			: path;
 	}
 }
 

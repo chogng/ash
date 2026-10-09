@@ -1,3 +1,5 @@
+import { OperatingSystem } from '../../../../base/common/platform.js';
+import { createAppServerAppServerApi } from '../../browser/appServerApi.js';
 import { URI } from '../../../../base/common/uri.js';
 import { createTestInitializeResult } from '../common/testAppServerProtocol.js';
 import { strict as assert } from "node:assert";
@@ -489,6 +491,40 @@ test('review environment adapter preserves scope, provenance, cancellation, and 
 	const disabled = await connectWebRendererApi(disabledTransport, connectorHostServices);
 	using disabledCleanup = toDisposable(() => disabled.dispose());
 	assert.equal(disabled.api.approvalEnvironment, undefined);
+});
+
+test('server path platform belongs to the initialized connection and clears on disconnect', async () => {
+	let targetOS: 'windows' | 'mac' = 'windows';
+	const transport = new FakeTransport(value => ({ ...value, serverInfo: { ...value.serverInfo, operatingSystem: targetOS, userHome: targetOS === 'windows' ? 'C:\\Users\\test' : '/Users/test' } }));
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	const api = createAppServerAppServerApi(client);
+	const readyPlatforms: (OperatingSystem | undefined)[] = [];
+	using listener = client.onStateChange(state => { if (state === 'ready') readyPlatforms.push(api.operatingSystem); });
+	assert.equal(api.operatingSystem, undefined);
+	await client.connect();
+	assert.equal(api.operatingSystem, OperatingSystem.Windows);
+	assert.equal(api.userHome, 'C:\\Users\\test');
+	client.disconnect();
+	assert.equal(api.operatingSystem, undefined);
+	assert.equal(api.userHome, undefined);
+	targetOS = 'mac';
+	await client.connect();
+	assert.deepEqual(readyPlatforms, [OperatingSystem.Windows, OperatingSystem.Macintosh]);
+	assert.equal(api.userHome, '/Users/test');
+	client.dispose();
+	assert.equal(api.operatingSystem, undefined);
+	assert.equal(api.userHome, undefined);
+});
+
+test('server user home rejects relative paths at initialization', async () => {
+	for (const userHome of ['', 'relative/home', '/home/test\0other']) {
+		const transport = new FakeTransport(value => ({ ...value, serverInfo: { ...value.serverInfo, userHome } }));
+		const client = new AppServerProtocolClient(transport);
+		using cleanup = toDisposable(() => client.dispose());
+		await assert.rejects(client.connect(), /user home must be an absolute directory/);
+		assert.equal(client.userHome, undefined);
+	}
 });
 
 class FakeTransport implements AppServerTransport {

@@ -521,6 +521,9 @@ export class Workbench extends Disposable {
 		this.registerErrorHandler(logService);
 		services.registerInstance(ILogService, logService);
 		services.registerInstance(IRendererHostService, api);
+		const workspaceContext = this._register(new WorkspaceContextService(workspace));
+		this.workspaceContext = workspaceContext;
+		services.registerInstance(IWorkspaceContextService, workspaceContext);
 		AppServerAvailableContext.bindTo(contextKeys).set(api.hasAppServer);
 		services.registerInstance(IDictationService, api.dictation);
 		services.registerInstance(ILocalTranscriptionService, api.localTranscription ?? this._register(new NullLocalTranscriptionService()));
@@ -559,16 +562,16 @@ export class Workbench extends Disposable {
 		}
 		if (browserFileSystemProvider) this._register(browserFileSystemProvider);
 		if (browserFileSystemProvider) {
-			services.registerInstance(IFileDialogService, new BrowserFileDialogService({
+			services.registerInstance(IFileDialogService, services.createInstance(BrowserFileDialogService, {
 				kind: 'local',
 				provider: browserFileSystemProvider,
-				pickDirectory: startIn => (window as unknown as { showDirectoryPicker: (options?: { startIn?: FileSystemDirectoryHandle; }) => Promise<FileSystemDirectoryHandle>; }).showDirectoryPicker(startIn ? { startIn } : undefined),
+				pickDirectory: (startIn: FileSystemDirectoryHandle | undefined) => (window as unknown as { showDirectoryPicker: (options?: { startIn?: FileSystemDirectoryHandle; }) => Promise<FileSystemDirectoryHandle>; }).showDirectoryPicker(startIn ? { startIn } : undefined),
 				quickInput: () => services.get(IQuickInputService),
 				fileService: () => services.get(IFileService),
 				workspaceRoot: () => services.get(IWorkspaceContextService).getWorkspace().folders[0]?.uri,
 			}, () => services.get(IDialogService)));
 		} else if (webWorkspaceClient) {
-			services.registerInstance(IFileDialogService, new BrowserFileDialogService({
+			services.registerInstance(IFileDialogService, services.createInstance(BrowserFileDialogService, {
 				kind: 'server',
 				client: webWorkspaceClient,
 				quickInput: () => services.get(IQuickInputService),
@@ -583,9 +586,8 @@ export class Workbench extends Disposable {
 				services.get(IFileDialogService),
 			)
 			: webWorkspaceClient
-				? new WebWorkspaceOpenService(
+				? services.createInstance(WebWorkspaceOpenService,
 					webWorkspaceClient,
-					services.get(IFileDialogService),
 					() => services.get(IDialogService),
 					async () => {
 						await this.workingCopyBackupTracker.flush();
@@ -597,10 +599,7 @@ export class Workbench extends Disposable {
 				)
 				: new WorkspaceOpenService(nativeHostApi, services.getOptional(IFileDialogService), () => services.get(IDialogService));
 		services.registerInstance(IWorkspaceOpenService, workspaceOpenService);
-		const workspaceContext = this._register(new WorkspaceContextService(workspace));
-		this.workspaceContext = workspaceContext;
-		services.registerInstance(IWorkspaceContextService, workspaceContext);
-		const labelService = this._register(new LabelService(workspaceContext));
+		const labelService = this._register(services.createInstance(LabelService));
 		services.registerInstance(ILabelService, labelService);
 		services.registerInstance(IDecorationsService, this._register(services.createInstance(DecorationsService, workbenchRoot.ownerDocument)));
 		const dirPermissionsService = this._register(new AppServerDirPermissionsService(api.dirPermissions, api.events));

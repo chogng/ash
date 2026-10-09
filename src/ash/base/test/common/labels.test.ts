@@ -38,6 +38,22 @@ test('tildify is case-sensitive on Linux and case-insensitive on macOS', () => {
 	assert.equal(tildify('/users/ash', '/users/ash', OperatingSystem.Linux), '/users/ash');
 });
 
+test('POSIX labels preserve backslashes in absolute, relative, and home paths', () => {
+	const root = URI.parse('file:///workspace');
+	const resource = root.joinPathSegment('part\\name.txt');
+	const relative: IRelativePathProvider = {
+		getWorkspace: () => ({ folders: [{ uri: root }] }),
+		getWorkspaceFolder: () => ({ uri: root }),
+	};
+	for (const os of [OperatingSystem.Linux, OperatingSystem.Macintosh]) {
+		assert.deepEqual([
+			getPathLabel(resource, { os }),
+			getPathLabel(resource, { os, relative }),
+			tildify('/home/ash\\/part\\name.txt', '/home/ash\\', os),
+		], ['/workspace/part\\name.txt', 'part\\name.txt', '~/part\\name.txt']);
+	}
+});
+
 test('shorten retains root context and distinguishes common suffixes', () => {
 	assert.deepEqual(shorten(['a/b', 'a/c'], '/'), ['…/b', '…/c']);
 	assert.deepEqual(shorten(['/a/b', '/a/c'], '/'), ['/a/b', '/a/c']);

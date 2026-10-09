@@ -1,3 +1,5 @@
+import { BrowserPathService } from '../../services/path/browser/pathService.js';
+import { createDisconnectedRendererApi } from '../../../platform/agentHost/browser/rendererApi.js';
 import { createTestEditorServices } from '../common/testEditorServices.js';
 import { IUntitledTextEditorService } from '../../services/untitled/common/untitledTextEditorService.js';
 import { Lxicon } from '../../../base/common/lxicons.js';
@@ -10,7 +12,7 @@ import { URI } from '../../../base/common/uri.js';
 import { FileKind } from '../../../platform/files/common/files.js';
 import { NullLoggerService } from '../../../platform/log/common/log.js';
 import type { IDecorationData } from '../../services/decorations/common/decorations.js';
-import { OperatingSystem } from '../../../base/common/platform.js';
+import { operatingSystem, OperatingSystem } from '../../../base/common/platform.js';
 import { LabelService } from '../../../platform/label/common/labelService.js';
 import { WorkspaceContextService } from '../../services/workspaces/browser/workspaceContextService.js';
 import { DecorationsService } from '../../services/decorations/browser/decorationsService.js';
@@ -25,7 +27,7 @@ test('ResourceLabels formats files and reacts to icon and decoration changes', (
 	using decorationUpdates = new Emitter<readonly URI[]>();
 	let decorationData: IDecorationData | undefined;
 	using provider = decorations.registerDecorationsProvider({ label: 'Test', onDidChange: decorationUpdates.event, provideDecorations: () => decorationData });
-	using labelService = new LabelService(workspace, OperatingSystem.Linux);
+	using labelService = createTestLabelService(workspace, OperatingSystem.Linux);
 	using iconThemeChange = new Emitter<void>();
 	const resourceIconRenderer: IResourceIconRenderer = {
 		onDidChangeResourceIcons: iconThemeChange.event,
@@ -93,7 +95,7 @@ test('Workspace labels use the closest folder for nested resources', () => {
 			{ id: 'nested', uri: nested, name: 'src', index: 1 },
 		],
 	});
-	using labels = new LabelService(workspace, OperatingSystem.Linux);
+	using labels = createTestLabelService(workspace, OperatingSystem.Linux);
 	const resource = URI.file('/project/src/main.ts').with({ query: 'preview' });
 
 	assert.equal(workspace.getWorkspaceFolder(resource)?.id, 'nested');
@@ -156,3 +158,9 @@ test('untitled resource labels follow the draft name and keep the resource ident
 		}, { name: 'Scratch', resource: 'untitled:/Untitled-1', accessibleLabel: 'Scratch • /Untitled-1' });
 	} finally { dom.window.close(); }
 });
+
+function createTestLabelService(workspace: ConstructorParameters<typeof LabelService>[0], os: OperatingSystem = operatingSystem): LabelService {
+	const api = createDisconnectedRendererApi();
+	const host = { ...api, hasAppServer: true, appServer: { ...api.appServer, operatingSystem: os } };
+	return new LabelService(workspace, new BrowserPathService(host, workspace), host);
+}

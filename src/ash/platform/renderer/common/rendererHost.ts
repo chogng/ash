@@ -48,6 +48,7 @@ import type { ITurnChangesApi } from "../../turnChanges/common/turnChangesApi.js
 import type { IAutomationService } from '../../automation/common/automationService.js';
 import type { ITeamApi } from '../../teams/common/teamApi.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
+import type { URI } from '../../../base/common/uri.js';
 import type { ITestExecutionService } from '../../testing/common/testExecutionService.js';
 
 /** Optional product capabilities contributed by a statically selected host bundle. */
@@ -73,6 +74,8 @@ export function mergeRendererHostCapabilities(capabilities: readonly RendererHos
 export interface IRendererHost extends RendererHostCapabilities {
 	/** Host support is stable for the window; connection state describes temporary availability. */
 	readonly hasAppServer: boolean;
+	/** Actual local OS user directory when supplied by the desktop host. */
+	readonly localUserHome?: URI;
 	/** Available when the host supplies profile-backed recovery storage. */
 	readonly backup?: IBackupService;
 	readonly assets: IAssetService;

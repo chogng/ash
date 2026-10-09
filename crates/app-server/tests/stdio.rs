@@ -27,6 +27,10 @@ fn app_server_serves_an_explicit_dir_over_stdio() {
     .unwrap();
     let mut client = session.client();
 
+    assert_eq!(
+        client.initialization().unwrap().server_info.user_home,
+        dirs::home_dir().and_then(|path| path.into_os_string().into_string().ok())
+    );
     assert!(client.list_sessions().unwrap().sessions.is_empty());
     session.shutdown().unwrap();
 }

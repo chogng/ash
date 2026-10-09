@@ -1,3 +1,6 @@
+import { operatingSystem, OperatingSystem } from '../../../src/ash/base/common/platform.js';
+import { BrowserPathService } from '../../../src/ash/workbench/services/path/browser/pathService.js';
+import { createDisconnectedRendererApi } from '../../../src/ash/platform/agentHost/browser/rendererApi.js';
 import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import type { IAction } from '../../../src/ash/base/common/actions.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
@@ -122,7 +125,7 @@ const workspace = store.add(new WorkspaceContextService({
 	]
 }));
 instantiation.registerInstance(IWorkspaceContextService, workspace);
-instantiation.registerInstance(ILabelService, store.add(new LabelService(workspace)));
+instantiation.registerInstance(ILabelService, store.add(createTestLabelService(workspace)));
 instantiation.registerInstance(IClipboardService, new BrowserClipboardService({
 	writeText: async value => {
 		if (clipboardFailure) { throw new Error('Clipboard permission denied'); }
@@ -287,4 +290,10 @@ declare global {
 			setWidth(width: number): void;
 		};
 	}
+}
+
+function createTestLabelService(workspace: ConstructorParameters<typeof LabelService>[0], os: OperatingSystem = operatingSystem): LabelService {
+	const api = createDisconnectedRendererApi();
+	const host = { ...api, hasAppServer: true, appServer: { ...api.appServer, operatingSystem: os } };
+	return new LabelService(workspace, new BrowserPathService(host, workspace), host);
 }

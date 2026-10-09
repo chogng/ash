@@ -10,8 +10,8 @@ import { AnythingQuickAccessProvider } from '../../search/browser/anythingQuickA
 
 QuickAccessRegistry.register({
 	prefix: '',
-	get placeholder() { return localize('quickAccess.searchFiles', 'Search files by name'); },
-	get helpLabel() { return localize('quickAccess.files', 'Files'); },
+	get placeholder() { return localize('quickAccess.searchFiles', 'Search files by name or enter an absolute path or ~/path'); },
+	get helpLabel() { return localize('quickAccess.files', 'Files by name, absolute path or ~/path'); },
 	ctor: AnythingQuickAccessProvider,
 });
 QuickAccessRegistry.register({

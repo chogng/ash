@@ -4,6 +4,7 @@ import '../workbench/contrib/commands/common/commands.contribution.js';
 import '../workbench/contrib/preferences/browser/preferencesActions.js';
 import '../workbench/contrib/chat/browser/chat.contribution.js';
 import '../workbench/services/dialogs/common/dialogService.js';
+import '../workbench/services/path/browser/pathService.js';
 import '../workbench/services/dataChannel/browser/dataChannelService.js';
 import '../workbench/api/browser/mainThreadDataChannels.contribution.js';
 import '../workbench/api/browser/mainThreadUriOpeners.js';

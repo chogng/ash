@@ -57,8 +57,11 @@ function getRelativePathLabel(resource: URI, provider: IRelativePathProvider, os
 }
 
 function resourcePath(resource: URI, os: OperatingSystem): string {
-	const path = resource.scheme === "file" ? resource.fsPath : resource.path;
-	return os === OperatingSystem.Windows ? path.replaceAll("/", "\\") : path.replaceAll("\\", "/");
+	let path = resource.authority && resource.scheme === 'file' ? `//${resource.authority}${resource.path}` : resource.path;
+	if (resource.scheme === 'file' && !resource.authority && /^\/[a-z]:/i.test(path)) {
+		path = `${path[1].toLowerCase()}${path.slice(2)}`;
+	}
+	return os === OperatingSystem.Windows ? path.replaceAll('/', '\\') : path;
 }
 
 function relativePath(folder: string, resource: string, os: OperatingSystem): string | undefined {
@@ -271,7 +274,7 @@ function pathSeparator(os: OperatingSystem): "\\" | "/" {
 
 function normalizePath(path: string, os: OperatingSystem): string {
 	const separator = pathSeparator(os);
-	const normalized = os === OperatingSystem.Windows ? path.replaceAll("/", "\\") : path.replaceAll("\\", "/");
+	const normalized = os === OperatingSystem.Windows ? path.replaceAll("/", "\\") : path;
 	const drive = os === OperatingSystem.Windows ? /^([A-Za-z]:)([\\/]?)/u.exec(normalized) : undefined;
 	const unc = os === OperatingSystem.Windows && normalized.startsWith("\\\\");
 	const absolute = normalized.startsWith(separator) || Boolean(drive) || unc;
@@ -292,5 +295,5 @@ function normalizePath(path: string, os: OperatingSystem): string {
 }
 
 function trimTrailingSeparators(path: string): string {
-	return path.length > 1 ? path.replace(/[\\/]+$/u, "") : path;
+	return path.length > 1 ? path.replace(/\/+$/u, "") : path;
 }

@@ -1,6 +1,7 @@
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
-import { dirname, extUri } from '../../../../base/common/resources.js';
+import { basename, dirname, extUri } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
+import { OperatingSystem } from '../../../../base/common/platform.js';
 import { localize } from '../../../../nls.js';
 import {
 	DialogSeverity,
@@ -13,6 +14,7 @@ import {
 import type { HTMLFileSystemProvider } from '../../../../platform/files/browser/htmlFileSystemProvider.js';
 import { FileKind, FileNotFoundError, type IFileService } from '../../../../platform/files/common/files.js';
 import type { IQuickInputService, IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
+import { IPathService } from '../../../../platform/path/common/pathService.js';
 import type { IWebWorkspaceClient, IWebWorkspaceDirectoryList } from '../../workspaces/browser/workspaceOpenService.js';
 import { AbstractFileDialogService } from './abstractFileDialogService.js';
 
@@ -49,7 +51,7 @@ type WorkspaceFileItem = IQuickPickItem & (
 
 /** Selects folders and Save As targets for a browser Workbench. */
 export class FileDialogService extends AbstractFileDialogService implements IFileDialogService {
-	constructor(private readonly host: FileDialogHost, dialogs: () => IDialogService) {
+	constructor(private readonly host: FileDialogHost, dialogs: () => IDialogService, @IPathService private readonly paths: IPathService) {
 		super(dialogs);
 	}
 
@@ -63,7 +65,7 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 		}
 		if (this.host.kind === 'server') {
 			const paths = await this.pickServerDirectories(this.host, options);
-			return paths?.map(path => URI.file(path));
+			return paths && Promise.all(paths.map(path => this.paths.fileURI(path)));
 		}
 		let startIn = options.defaultUri?.path.startsWith('/@browser/')
 			? await this.host.provider.getDirectoryHandle(options.defaultUri)
@@ -122,7 +124,7 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 			: defaultDirectory ?? workspaceRoot;
 		if (!directory) return undefined;
 		const defaultName = options.defaultUri && !extUri.isEqual(defaultDirectory, options.defaultUri)
-			? options.defaultUri.fsPath.split(/[\\/]/).at(-1) ?? ''
+			? basename(options.defaultUri)
 			: '';
 		for (; ;) {
 			const result = await this.dialogs().input({
@@ -132,8 +134,8 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 				primaryButton: options.saveLabel,
 			});
 			if (!result.confirmed) return undefined;
-			const name = result.values?.[0]?.trim() ?? '';
-			if (name && name !== '.' && name !== '..' && !/[\\/]/.test(name)) {
+			const name = result.values?.[0] ?? '';
+			if (await this.paths.hasValidBasename(directory, name)) {
 				if (filter && !matchesFileFilters(name, [filter])) {
 					await this.dialogs().showMessage({ severity: DialogSeverity.Error, message: localize('dialog.fileTypeMismatch', 'Choose a file name matching the selected file types.') });
 					continue;
@@ -161,7 +163,7 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 			}
 			await this.dialogs().showMessage({
 				severity: DialogSeverity.Error,
-				message: localize('dialog.invalidFileName', 'Enter a file name without a path separator.'),
+				message: localize('dialog.invalidFileName', 'Enter a valid file name for the target file system.'),
 			});
 		}
 	}
@@ -288,7 +290,17 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 	}
 
 	private async pickServerDirectories(host: Extract<FileDialogHost, { kind: 'server'; }>, options: IOpenDialogOptions): Promise<readonly string[] | undefined> {
-		let path = options.defaultUri?.fsPath ?? '';
+		let path = '';
+		const initial = options.defaultUri ?? (this.paths.resolvedUserHome ? await this.paths.userHome() : undefined);
+		if (initial) {
+			const os = await this.paths.getOperatingSystem(initial);
+			if (os !== undefined) {
+				path = initial.authority ? `//${initial.authority}${initial.path}` : initial.path;
+				if (os === OperatingSystem.Windows) {
+					path = path.replace(/^\/(?=[a-z]:\/)/i, '').replaceAll('/', '\\');
+				}
+			}
+		}
 		const selected = new Set<string>();
 		for (; ;) {
 			const listing = await host.client.list(path);

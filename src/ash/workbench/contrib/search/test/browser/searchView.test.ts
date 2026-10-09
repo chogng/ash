@@ -1,3 +1,5 @@
+import { BrowserPathService } from '../../../../services/path/browser/pathService.js';
+import { createDisconnectedRendererApi } from '../../../../../platform/agentHost/browser/rendererApi.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -39,7 +41,7 @@ import { SEARCH_VIEW_ID, SearchCommandIds } from "../../common/constants.js";
 import { IClipboardService } from "../../../../../platform/clipboard/common/clipboardService.js";
 import { BrowserClipboardService } from "../../../../../platform/clipboard/browser/clipboardService.js";
 import { ILabelService, LabelService } from "../../../../../platform/label/common/labelService.js";
-import { isWindows, OperatingSystem } from "../../../../../base/common/platform.js";
+import { isWindows, operatingSystem, OperatingSystem } from "../../../../../base/common/platform.js";
 import type { IContextMenuDelegate } from "../../../../../base/browser/contextmenu.js";
 import { MenuId } from "../../../../../platform/actions/common/actions.js";
 import { MenuService } from "../../../../../platform/actions/common/menuService.js";
@@ -737,7 +739,7 @@ function createServices(store: DisposableStore, browser: JSDOM, search: IContent
 	services.registerInstance(IContextMenuService, menus);
 	services.registerInstance(IHoverService, store.add(new HoverService(configuration, contextView, menus)));
 	services.registerInstance(IWorkspaceContextService, workspace ?? store.add(new WorkspaceContextService({ id: "workspace", uri: URI.file("/workspace") })));
-	services.registerInstance(ILabelService, store.add(new LabelService(services.get(IWorkspaceContextService), OperatingSystem.Linux)));
+	services.registerInstance(ILabelService, store.add(createTestLabelService(services.get(IWorkspaceContextService), OperatingSystem.Linux)));
 	services.registerInstance(IEditorService, { onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [], openEditor: async () => { }, focusActiveEditor() { } });
 	services.registerInstance(IStorageService, store.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: "workspace", flushInterval: 0 })));
 	services.registerInstance(ISearchHistoryService, store.add(services.createInstance(SearchHistoryService)));
@@ -1569,3 +1571,9 @@ test('Expand All palette follows late batches, preserves hidden retained state a
 		for (const name of globals) { Reflect.deleteProperty(globalThis, name); }
 	}
 });
+
+function createTestLabelService(workspace: ConstructorParameters<typeof LabelService>[0], os: OperatingSystem = operatingSystem): LabelService {
+	const api = createDisconnectedRendererApi();
+	const host = { ...api, hasAppServer: true, appServer: { ...api.appServer, operatingSystem: os } };
+	return new LabelService(workspace, new BrowserPathService(host, workspace), host);
+}

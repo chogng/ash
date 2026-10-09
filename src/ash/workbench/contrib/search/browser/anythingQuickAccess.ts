@@ -16,6 +16,10 @@ import { IEditorService } from '../../../services/editor/common/editorService.js
 import { IEditorGroupsService } from '../../../services/editor/common/editorGroupsService.js';
 import { IHistoryService } from '../../../services/history/common/history.js';
 
+import { IPathService } from '../../../../platform/path/common/pathService.js';
+import { untildify } from '../../../../base/common/labels.js';
+import { Schemas } from '../../../../base/common/network.js';
+
 export interface IAnythingQuickPickItem extends IQuickPickItem {
 	readonly resource: URI;
 	readonly kind: FileKind;
@@ -33,6 +37,7 @@ export class AnythingQuickAccessProvider implements IQuickAccessProvider {
 		@IEditorGroupsService private readonly groups: IEditorGroupsService,
 		@IHistoryService private readonly history: IHistoryService,
 		@INotificationService private readonly notifications: INotificationService,
+		@IPathService private readonly paths: IPathService,
 	) { }
 
 	public provide(picker: IQuickPick<IQuickPickItem>, prefix: string, signal: AbortSignal, options: AnythingQuickAccessProviderRunOptions = {}): DisposableStore {
@@ -71,9 +76,33 @@ export class AnythingQuickAccessProvider implements IQuickAccessProvider {
 			if (!query && !options.includeFolders) { picker.busy = false; return; }
 			picker.busy = true;
 			try {
+				const isGlob = /[*?{[]/.test(query);
+				const absoluteCandidates: IAnythingQuickPickItem[] = [];
+				const folder = folders[0]?.uri;
+				const target = query.startsWith('/@browser/') ? URI.from({ scheme: Schemas.file, path: query }) : folder ?? URI.from({ scheme: Schemas.file, path: '/' });
+				const resolvedHome = this.paths.resolvedUserHome;
+				// An SSH or browser workspace must not expand ~ against the App Server's OS home.
+				const home = target.scheme === resolvedHome?.scheme && target.authority === resolvedHome.authority && !target.path.startsWith('/@browser/') ? resolvedHome : undefined;
+				const path = await this.paths.getPath(target);
+				if (signal.aborted || controller.signal.aborted) return;
+				const homePath = query === '~' || query.startsWith('~/') || path?.sep === '\\' && query.startsWith('~\\');
+				const expanded = home && homePath ? untildify(query, home.authority ? `//${home.authority}${home.path}` : home.path.replace(/^\/(?=[a-z]:[\\/])/i, '')) : query;
+				const absolute = !isGlob && path?.isAbsolute(expanded);
+				if (absolute && path) {
+					const normalized = path.normalize(expanded);
+					const resource = target?.scheme === Schemas.ashRemote || normalized.startsWith('/@browser/')
+						? (target ?? URI.from({ scheme: Schemas.file, path: '/' })).with({ path: normalized })
+						: await this.paths.fileURI(normalized);
+					try {
+						const stat = await this.files.stat(resource);
+						if (stat.kind === FileKind.File || options.includeFolders && stat.kind === FileKind.Directory) absoluteCandidates.push(itemFor(resource, stat.kind));
+					} catch {
+						// Absolute-path candidates may not exist or may be outside authorized file roots.
+					}
+				}
 				// Subsequence globs search beyond the result limit without a separate frontend file index.
 				const pattern = /[*?{[]/.test(query) ? query : `**/*${[...query].map(character => character.replace(/[\\*?{}[\]]/g, '\\$&')).join('*')}*`;
-				const results = await Promise.all(folders.map(async folder => {
+				const results = absolute ? [absoluteCandidates] : await Promise.all(folders.map(async folder => {
 					const candidates: IAnythingQuickPickItem[] = [];
 					if (options.includeFolders) {
 						candidates.push(itemFor(folder.uri, FileKind.Directory));
@@ -98,7 +127,7 @@ export class AnythingQuickAccessProvider implements IQuickAccessProvider {
 				}));
 				if (signal.aborted || controller.signal.aborted) return;
 				const candidates = results.flat().filter(item => {
-					if (item.kind !== FileKind.Directory || !query) return true;
+					if (absolute || item.kind !== FileKind.Directory || !query) return true;
 					return /[*?{[]/.test(query) ? match(query, item.resource.path) : filterQuickPickItems([item], query).length > 0;
 				}).filter(eligible);
 				picker.items = [...picks, ...(candidates.length ? [{ type: 'separator' as const, label: localize('quickAccess.workspaceResources', 'Workspace') }, ...candidates] : [])];

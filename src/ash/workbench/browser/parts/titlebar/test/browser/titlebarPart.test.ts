@@ -1,3 +1,6 @@
+import { operatingSystem, OperatingSystem } from '../../../../../../base/common/platform.js';
+import { BrowserPathService } from '../../../../../services/path/browser/pathService.js';
+import { createDisconnectedRendererApi } from '../../../../../../platform/agentHost/browser/rendererApi.js';
 import { registerTestComponentServices } from '../../../../../test/common/testEditorServices.js';
 import type { IEditorGroup, IEditorGroupsContainer } from '../../../../../services/editor/common/editorGroupsService.js';
 import assert from "node:assert/strict";
@@ -158,7 +161,7 @@ test('title service shares the resolved title with its registered part and relea
 	services.registerInstance(IEditorService, editors);
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IWorkingCopyService, resources.add(new BrowserWorkingCopyService()));
-	services.registerInstance(ILabelService, resources.add(new LabelService(workspace)));
+	services.registerInstance(ILabelService, resources.add(createTestLabelService(workspace)));
 	services.registerInstance(IConfigurationService, resources.add(new InMemoryConfigurationService()));
 	services.registerInstance(IContextKeyService, contextKeys);
 	const titleService = resources.add(registerTestComponentServices(services).createInstance(BrowserTitleService, ownerDocument.body, 'Ash Code', createBrowserTitlebarPart, groups));
@@ -551,3 +554,9 @@ test("browser titlebar hosts the application menu in an ActionBar", () => {
 		[applicationMenuLabel, 'Toggle sidebar', 'Back'],
 	);
 });
+
+function createTestLabelService(workspace: ConstructorParameters<typeof LabelService>[0], os: OperatingSystem = operatingSystem): import('../../../../../../platform/label/common/labelService.js').LabelService {
+	const api = createDisconnectedRendererApi();
+	const host = { ...api, hasAppServer: true, appServer: { ...api.appServer, operatingSystem: os } };
+	return new LabelService(workspace, new BrowserPathService(host, workspace), host);
+}

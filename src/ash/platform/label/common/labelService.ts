@@ -1,11 +1,14 @@
 import { Emitter, type Event } from '../../../base/common/event.js';
 import { getPathLabel, type IPathLabelFormatting, type IRelativePathProvider, type IUserHomeProvider } from '../../../base/common/labels.js';
-import { operatingSystem, type OperatingSystem } from '../../../base/common/platform.js';
+import { operatingSystem, OperatingSystem } from '../../../base/common/platform.js';
+import { Schemas } from '../../../base/common/network.js';
 import { basename } from '../../../base/common/resources.js';
 import type { URI } from '../../../base/common/uri.js';
-import { Disposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
-import type { IWorkspaceContextService } from '../../workspace/common/workspace.js';
+import { IWorkspaceContextService } from '../../workspace/common/workspace.js';
+import { IPathService } from '../../path/common/pathService.js';
+import { IRendererHostService, type IRendererHost } from '../../renderer/common/rendererHost.js';
 
 export interface ILabelFormatter {
 	readonly scheme: string;
@@ -43,11 +46,13 @@ export class LabelService extends Disposable implements ILabelService {
 	readonly onDidChangeFormatters = this.formatterChangeEmitter.event;
 
 	constructor(
-		private readonly workspaceContextService: IWorkspaceContextService,
-		private readonly os: OperatingSystem = operatingSystem,
-		private readonly userHome?: URI,
+		@IWorkspaceContextService private readonly workspaceContextService: IWorkspaceContextService,
+		@IPathService private readonly paths: IPathService,
+		@IRendererHostService private readonly host: IRendererHost,
 	) {
 		super();
+		const subscription = host.appServer.onConnectionState(() => this.formatterChangeEmitter.fire({ scheme: Schemas.file }));
+		this._register(toDisposable(() => subscription.dispose()));
 	}
 
 	getUriLabel(resource: URI, options: IUriLabelOptions = {}): string {
@@ -62,10 +67,12 @@ export class LabelService extends Disposable implements ILabelService {
 				getWorkspaceFolder: candidate => this.workspaceContextService.getWorkspaceFolder(candidate),
 			}
 			: undefined;
+		const home = this.paths.resolvedUserHome;
+		const userHome = home?.scheme === resource.scheme && home.authority === resource.authority && !resource.path.startsWith('/@browser/') ? home : undefined;
 		const formatting: IPathLabelFormatting = {
-			os: this.os,
+			os: this.resourceOperatingSystem(resource),
 			...(relative ? { relative } : {}),
-			...(this.userHome ? { tildify: { userHome: this.userHome } satisfies IUserHomeProvider } : {}),
+			...(userHome ? { tildify: { userHome } satisfies IUserHomeProvider } : {}),
 		};
 		const label = getPathLabel(resource, formatting);
 		return options.separator ? replaceSeparators(label, options.separator) : label;
@@ -75,8 +82,15 @@ export class LabelService extends Disposable implements ILabelService {
 		return basename(resource) || resource.authority || resource.toString();
 	}
 
-	getSeparator(_resource?: URI): string {
-		return this.os === 'windows' ? '\\' : '/';
+	getSeparator(resource?: URI): string {
+		return this.resourceOperatingSystem(resource) === OperatingSystem.Windows ? '\\' : '/';
+	}
+
+	private resourceOperatingSystem(resource?: URI): OperatingSystem {
+		if (resource && (resource.scheme !== Schemas.file || resource.path.startsWith('/@browser/'))) {
+			return OperatingSystem.Linux;
+		}
+		return this.host.hasAppServer ? this.host.appServer.operatingSystem ?? OperatingSystem.Linux : operatingSystem;
 	}
 
 	registerFormatter(formatter: ILabelFormatter): IDisposable {
