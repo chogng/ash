@@ -89,4 +89,14 @@ fn effective_javascript_package_launches_product_host_with_exact_identity_and_re
     );
     assert!(deployment.workspace_read == WorkspaceReadAccess::Read);
     assert!(deployment.authority.authorizes());
+    assert!(deployment.scope == super::EditorExtensionScope::Profile);
+    // Remote JS activation is package-granted; workspace reads still use each invocation's filesystem.
+    assert!(
+        super::super::authority::prepare_extension(
+            None,
+            deployment,
+            std::num::NonZeroU64::new(1).unwrap()
+        )
+        .is_ok()
+    );
 }

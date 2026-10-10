@@ -2,7 +2,7 @@ import { ExecutionSettingsModel } from './executionSettingsModel.js';
 import { AgentCapabilitiesSettings } from '../../../../workbench/contrib/preferences/browser/agentCapabilitiesSettings.js';
 import { IAgentCapabilitiesService } from '../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { IDirPermissionsService } from '../../../../platform/dirPermissions/common/dirPermissionsService.js';
-import { IRemoteAgentService } from '../../../../workbench/services/remote/common/remoteAgentService.js';
+import { IAppServerRemoteAgentService } from '../../../../workbench/services/remote/common/appServerRemoteAgentService.js';
 import { ILocalizationService } from '../../../../workbench/services/localization/common/localizationService.js';
 import { GitHubSettingsModel } from '../../../../workbench/contrib/github/browser/githubSettingsModel.js';
 import { TraceSettingsModel } from '../../../../workbench/contrib/trace/browser/traceSettingsModel.js';
@@ -99,7 +99,7 @@ export class SessionsPreferences extends Disposable {
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IAgentCapabilitiesService private readonly capabilities: IAgentCapabilitiesService,
 		@IDirPermissionsService private readonly permissions: IDirPermissionsService,
-		@IRemoteAgentService private readonly remote: IRemoteAgentService,
+		@IAppServerRemoteAgentService private readonly remote: IAppServerRemoteAgentService,
 		@ILocalizationService private readonly localization: ILocalizationService,
 	) {
 		super();

@@ -9,7 +9,7 @@ import { IQuickInputService } from "../../../../platform/quickinput/common/quick
 import type { IQuickPickItem } from "../../../../platform/quickinput/common/quickInput.js";
 import { IRemoteConnectionService } from "../../../../platform/remote/common/remoteConnectionService.js";
 import type { RemoteConnectionDefinition } from "../../../../platform/remote/common/remoteConnectionService.js";
-import { IRemoteAgentService } from "../../../services/remote/common/remoteAgentService.js";
+import { IAppServerRemoteAgentService } from "../../../services/remote/common/appServerRemoteAgentService.js";
 import { RemoteConnectionKindContext } from "./remoteContextKeys.js";
 import { RemoteConnectionStateContext } from "./remoteContextKeys.js";
 import { RemoteConnectionsAvailableContext } from "./remoteContextKeys.js";
@@ -54,7 +54,7 @@ registerAction2(class RollbackRemoteRuntimeAction extends Action2 {
 	}
 
 	override run(accessor: ServicesAccessor): Promise<void> {
-		return accessor.get(IRemoteAgentService).rollbackRuntime().then(() => undefined);
+		return accessor.get(IAppServerRemoteAgentService).rollbackRuntime().then(() => undefined);
 	}
 });
 
@@ -70,7 +70,7 @@ registerAction2(class ReconnectRemoteAction extends Action2 {
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
 		try {
-			await accessor.get(IRemoteAgentService).reconnect();
+			await accessor.get(IAppServerRemoteAgentService).reconnect();
 		} catch (error) {
 			await showConnectionError(accessor.get(IDialogService), "Could not reconnect to the Remote Workspace", error);
 		}
@@ -137,6 +137,12 @@ export async function showRemoteConnectionPicker(
 }
 
 async function connectToRemote(connection: RemoteConnectionDefinition, connections: IRemoteConnectionService, dialogs: IDialogService): Promise<void> {
+	try {
+		connection = await connections.resolveConnection(`ssh+${connection.name}`, new AbortController().signal);
+	} catch (error) {
+		await showConnectionError(dialogs, "Could not connect to the Remote Workspace", error);
+		return;
+	}
 	const confirmed = await dialogs.confirm({
 		title: "Open Remote Window",
 		message: `Open a new Ash window for '${connection.name}'?`,
@@ -145,7 +151,7 @@ async function connectToRemote(connection: RemoteConnectionDefinition, connectio
 	});
 	if (!confirmed.confirmed) return;
 	try {
-		await connections.connect(connection.name);
+		await connections.connect(connection.name, connection);
 	} catch (error) {
 		await showConnectionError(dialogs, "Could not connect to the Remote Workspace", error);
 	}

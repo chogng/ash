@@ -2098,6 +2098,89 @@ fn shared_profile_runtime_reuses_one_durable_secret_store_across_env_hosts() {
 }
 
 #[test]
+fn shared_profile_hosts_observe_plugin_activation_and_revocation_commits() {
+    let profile = tempfile::tempdir().unwrap();
+    let directory = tempfile::tempdir().unwrap();
+    let source = tempfile::tempdir().unwrap();
+    let runtime = Arc::new(LocalProfileRuntime::open(profile.path()).unwrap());
+    let empty = open_app_server(
+        AppServerOptions::new(profile.path())
+            .with_profile_runtime(Arc::clone(&runtime))
+            .without_built_in_skills(),
+    )
+    .unwrap();
+    let sibling = open_app_server(
+        AppServerOptions::new(profile.path())
+            .with_profile_runtime(Arc::clone(&runtime))
+            .with_dir_root(directory.path())
+            .without_built_in_skills(),
+    )
+    .unwrap();
+    let mut connections = [empty.connection(), sibling.connection()];
+    for (server, connection) in [&empty, &sibling].into_iter().zip(&mut connections) {
+        local_call(
+            server,
+            connection,
+            serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"plugin-owner-test","version":"1"},"capabilities":{}}}),
+        );
+    }
+    let authority = &runtime.plugin_authority;
+    let package = authority
+        .install_local(
+            PluginAuthorityCommandId::new("install-shared").unwrap(),
+            0,
+            &connector_plugin(source.path()),
+        )
+        .unwrap()
+        .package;
+    for command in [
+        PluginAuthorityCommand::Enable {
+            package: package.clone(),
+        },
+        PluginAuthorityCommand::Grant {
+            package: package.clone(),
+        },
+    ] {
+        authority
+            .apply(plugin_request(
+                authority,
+                &format!("activate-{}", authority.snapshot().revision()),
+                command,
+            ))
+            .unwrap();
+    }
+    for (server, connection) in [&empty, &sibling].into_iter().zip(&mut connections) {
+        let response = local_call(
+            server,
+            connection,
+            serde_json::json!({"jsonrpc":"2.0","id":2,"method":"plugin/list","params":{}}),
+        );
+        assert_eq!(
+            response["result"]["packages"][0]["effective"], true,
+            "{response}"
+        );
+    }
+    authority
+        .apply(plugin_request(
+            authority,
+            "revoke-shared",
+            PluginAuthorityCommand::RevokeGrant { package },
+        ))
+        .unwrap();
+    for (server, connection) in [&empty, &sibling].into_iter().zip(&mut connections) {
+        let response = local_call(
+            server,
+            connection,
+            serde_json::json!({"jsonrpc":"2.0","id":3,"method":"plugin/list","params":{}}),
+        );
+        assert_eq!(
+            response["result"]["packages"][0]["effective"], false,
+            "{response}"
+        );
+    }
+}
+
+#[test]
 fn shared_profile_runtime_rejects_a_second_secret_store_authority() {
     let profile = tempfile::tempdir().unwrap();
     let runtime = Arc::new(LocalProfileRuntime::open(profile.path()).unwrap());

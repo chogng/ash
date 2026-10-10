@@ -96,6 +96,23 @@ fn abandoned_terminal_sessions_are_reaped_before_reusing_quota() {
 
 #[test]
 fn invocation_operations_are_brokered_by_registration_kind() {
+    let remote = RegistrationKind::RemoteConnectionResolver {
+        authority_prefix: "team".into(),
+    };
+    assert!(registration_allows_operation(&remote, "resolveConnection"));
+    assert!(!registration_allows_operation(&remote, "execute"));
+    let endpoint = RegistrationKind::RemoteAuthorityResolver {
+        authority_prefix: "team".into(),
+    };
+    assert!(registration_allows_operation(&endpoint, "resolveAuthority"));
+    assert!(registration_allows_operation(&endpoint, "getCanonicalURI"));
+    assert!(!registration_allows_operation(&remote, "getCanonicalURI"));
+    assert!(registration_allows_operation(&endpoint, "remoteConnect"));
+    assert!(!registration_allows_operation(
+        &endpoint,
+        "resolveConnection"
+    ));
+    assert!(!registration_allows_operation(&remote, "remoteWrite"));
     let opener = RegistrationKind::ExternalUriOpener {
         schemes: vec![ash_editor_extension_host::ExternalUriScheme::Https],
         label: "Acme browser".into(),
@@ -171,6 +188,58 @@ impl ash_editor_extension_host::ExtensionHostLauncher for CountingLauncher {
 }
 
 #[test]
+fn product_ssh_is_available_without_a_directory_and_is_rebound_after_unbind() {
+    use ash_editor_extension_host::ExtensionHostLimits;
+    use ash_editor_extension_host::RestartPolicy;
+    use ash_file_access::Dir;
+    use ash_file_access::Grant;
+    use ash_file_access::GrantSource;
+    use ash_file_access::Permission;
+    use ash_file_access::Permissions;
+    use std::sync::Arc;
+    use std::sync::atomic::Ordering;
+    let launcher = Arc::new(CountingLauncher(std::sync::atomic::AtomicUsize::new(0)));
+    let runtime = super::ExtensionHostRuntime::start(
+        super::source::BuiltInEditorExtensions::Product,
+        None,
+        None,
+        None,
+        launcher.clone(),
+        ExtensionHostLimits::default(),
+        RestartPolicy::default(),
+        Arc::new(super::super::update_broker::UpdateBroker::default()),
+        Arc::new(crate::client_host::ClientHost::default()),
+        Default::default(),
+    )
+    .unwrap();
+    let initial = runtime.inner.snapshot();
+    assert_eq!(initial.extensions[0].id, "ash.remote-ssh");
+    assert_eq!(
+        initial.extensions[0].failure.as_ref().unwrap().code,
+        ExtensionHostFailureKind::CrashLoop
+    );
+    let attempts = RestartPolicy::default().maximum_restarts + 1;
+    assert_eq!(launcher.0.load(Ordering::SeqCst), attempts);
+    let directory = tempfile::tempdir().unwrap();
+    let grant = Grant::for_environment(
+        Dir::open_local(directory.path()).unwrap(),
+        GrantSource::ExplicitUser,
+        Permissions::new([Permission::DiscoverPlugins]),
+    );
+    runtime
+        .bind_dir(grant.authorize(Permission::DiscoverPlugins).unwrap())
+        .unwrap();
+    runtime.unbind_dir();
+    let after = runtime.inner.snapshot();
+    assert_eq!(after.extensions.len(), 1);
+    assert_eq!(after.extensions[0].id, "ash.remote-ssh");
+    assert!(
+        after.extensions[0].activation_generation > initial.extensions[0].activation_generation
+    );
+    assert_eq!(launcher.0.load(Ordering::SeqCst), 3 * attempts);
+}
+
+#[test]
 fn lazy_activation_checks_generation_and_event_and_health_never_launches_dormant_entries() {
     use ash_editor_extension_host::{
         ExtensionHostLimits, ExtensionHostSupervisor, ExtensionLaunchCommand, RestartPolicy,
@@ -186,6 +255,7 @@ fn lazy_activation_checks_generation_and_event_and_health_never_launches_dormant
     let authorization = grant.authorize(Permission::DiscoverPlugins).unwrap();
     let launcher = Arc::new(CountingLauncher(std::sync::atomic::AtomicUsize::new(0)));
     let runtime = super::ExtensionHostRuntime::start(
+        super::source::BuiltInEditorExtensions::Omitted,
         None,
         None,
         None,
@@ -194,6 +264,7 @@ fn lazy_activation_checks_generation_and_event_and_health_never_launches_dormant
         RestartPolicy::default(),
         Arc::new(super::super::update_broker::UpdateBroker::default()),
         Arc::new(crate::client_host::ClientHost::default()),
+        Default::default(),
     )
     .unwrap();
     runtime.bind_dir(authorization).unwrap();
@@ -354,6 +425,7 @@ fn directory_changes_do_not_reuse_extension_activation_generations() {
     let first = tempfile::tempdir().unwrap();
     let second = tempfile::tempdir().unwrap();
     let runtime = super::ExtensionHostRuntime::start(
+        super::source::BuiltInEditorExtensions::Omitted,
         None,
         None,
         None,
@@ -362,6 +434,7 @@ fn directory_changes_do_not_reuse_extension_activation_generations() {
         RestartPolicy::default(),
         Arc::new(super::super::update_broker::UpdateBroker::default()),
         Arc::new(crate::client_host::ClientHost::default()),
+        Default::default(),
     )
     .unwrap();
     let bind = |path| {
@@ -390,4 +463,96 @@ fn directory_changes_do_not_reuse_extension_activation_generations() {
     ));
     first_grant.revoke();
     second_grant.revoke();
+}
+
+#[test]
+fn remote_extension_start_is_connection_owned_and_close_retires_only_its_fleet() {
+    use std::sync::Arc;
+    let mut server = crate::tests::server();
+    server.extension_hosts = Some(
+        super::ExtensionHostRuntime::start(
+            super::source::BuiltInEditorExtensions::Product,
+            None,
+            None,
+            None,
+            Arc::new(CountingLauncher(std::sync::atomic::AtomicUsize::new(0))),
+            ash_editor_extension_host::ExtensionHostLimits::default(),
+            ash_editor_extension_host::RestartPolicy::default(),
+            Arc::clone(&server.updates),
+            Arc::clone(&server.client_host),
+            Default::default(),
+        )
+        .unwrap(),
+    );
+    let first = server.browser_connection();
+    let second = server.browser_connection();
+    let untrusted = server.connection();
+    assert!(
+        server
+            .extension_host_start(&untrusted, &json!({"environment":{"SET":"one"}}))
+            .is_err()
+    );
+    assert!(
+        server
+            .extension_host_start(&first, &json!({"environment":{"bad-name":"one"}}))
+            .is_err()
+    );
+    assert!(
+        super::super::connection_state(&first)
+            .extension_hosts
+            .is_none()
+    );
+    server
+        .extension_host_start(&first, &json!({"environment":{"SET":"one","REMOVE":null}}))
+        .unwrap();
+    server
+        .extension_host_start(&second, &json!({"environment":{"SET":"two"}}))
+        .unwrap();
+    assert!(
+        server
+            .extension_host_start(&first, &json!({"environment":{}}))
+            .is_err()
+    );
+    let one = super::super::connection_state(&first)
+        .extension_hosts
+        .clone()
+        .unwrap();
+    let two = super::super::connection_state(&second)
+        .extension_hosts
+        .clone()
+        .unwrap();
+    assert_eq!(
+        one.inner.environment.as_ref().unwrap(),
+        &std::collections::BTreeMap::from([
+            ("SET".into(), Some("one".into())),
+            ("REMOVE".into(), None)
+        ])
+    );
+    assert_eq!(
+        two.inner.environment.as_ref().unwrap(),
+        &std::collections::BTreeMap::from([("SET".into(), Some("two".into()))])
+    );
+    assert!(
+        server
+            .extension_hosts
+            .as_ref()
+            .unwrap()
+            .inner
+            .environment
+            .is_none()
+    );
+    server.close_connection(first);
+    assert!(one.snapshot().extensions.is_empty());
+    assert!(!two.snapshot().extensions.is_empty());
+    server.close_connection(second);
+    assert!(two.snapshot().extensions.is_empty());
+    assert!(
+        !server
+            .extension_hosts
+            .as_ref()
+            .unwrap()
+            .snapshot()
+            .extensions
+            .is_empty()
+    );
 }

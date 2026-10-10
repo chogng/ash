@@ -1,3 +1,9 @@
+import { IHostService } from '../../../host/browser/host.js';
+import { readFileSync } from 'node:fs';
+import { setNlsMessages, resetNlsResolver } from '../../../../../nls.js';
+import { IRemoteConnectionApi, IRemoteConnectionService, RemoteConnectionService, UnavailableRemoteConnectionApi } from '../../../../../platform/remote/common/remoteConnectionService.js';
+import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { Event } from '../../../../../base/common/event.js';
 import { workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import assert from "node:assert/strict";
@@ -557,6 +563,7 @@ test('extension API resets output for a new process and ignores stale output eve
 class FixtureLifecycleService extends AbstractLifecycleService { }
 
 class FakeExtensionHostApi implements IExtensionHostApi {
+	async start(): Promise<ExtensionHostFleetSnapshot> { throw new Error('Startup is outside this fixture'); }
 	public clientHandler: Parameters<IExtensionHostApi['registerClientHandler']>[0] | undefined;
 	public registerClientHandler(handler: Parameters<IExtensionHostApi['registerClientHandler']>[0]): { dispose(): void; } {
 		this.clientHandler = handler;
@@ -595,6 +602,7 @@ class FakeExtensionHostApi implements IExtensionHostApi {
 		this.invocationSignals.push(signal);
 		if (this.invocationResult) return this.invocationResult;
 		if (request.operation === 'documentEvent') return null;
+		if (request.operation === 'resolveConnection') return { connectionName: 'build' };
 		if (request.operation === "execute") return Object.freeze({ executed: true });
 		if (request.operation === "provideTasks") return Object.freeze({ tasks: Object.freeze([{ id: "unit", label: "Unit", command: "pnpm test", group: "test" }]) });
 		if (request.operation === "provideTestProfiles") return Object.freeze({ profiles: Object.freeze([{ id: "unit", label: "Unit", taskProviderRegistrationId: "tasks", taskId: "unit" }]) });
@@ -670,9 +678,22 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 	throw new Error("Timed out waiting for Extension Host state");
 }
 
-function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesService, tasks: ProviderSink<TaskProvider>, tests: ProviderSink<TestProfileProvider>, output?: IOutputService): InstantiationService {
+function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesService, tasks: ProviderSink<TaskProvider>, tests: ProviderSink<TestProfileProvider>, output?: IOutputService, remote?: { connections: IRemoteConnectionApi; confirm: IDialogService['confirm']; }): InstantiationService {
 	const services = workbenchInstantiationService(undefined, undefined, { languageFeatures: languages, output });
 	services.registerInstance(IExtensionHostApi, api);
+	services.registerInstance(IHostService, {
+		hasFocus: true, onDidChangeFocus: Event.None, openWindow: async () => assert.fail('Unexpected window'),
+		restart: async () => assert.fail('Unexpected restart'), getScreenshot: async () => undefined,
+	});
+	services.registerInstance(IRemoteConnectionApi, remote?.connections ?? UnavailableRemoteConnectionApi);
+	services.registerSingleton(IRemoteConnectionService, () => services.createInstance(RemoteConnectionService));
+	services.registerInstance(IDialogService, {
+		onWillShowDialog: Event.None, onDidShowDialog: Event.None,
+		confirm: remote?.confirm ?? (() => assert.fail('Unexpected Remote confirmation')),
+		showMessage: () => assert.fail('Unexpected dialog'),
+		info: () => assert.fail('Unexpected dialog'), warn: () => assert.fail('Unexpected dialog'), error: () => assert.fail('Unexpected dialog'),
+		about: () => assert.fail('Unexpected dialog'), prompt: () => assert.fail('Unexpected dialog'), input: () => assert.fail('Unexpected dialog'),
+	});
 	services.registerSingleton(IMarkerService, () => services.createInstance(MarkerService));
 	services.registerInstance(ILogService, new NullLoggerService());
 	services.registerSingleton(ILifecycleService, () => services.createInstance(FixtureLifecycleService, undefined));
@@ -806,4 +827,57 @@ test('startupFinished waits for window restoration and ignores replies after sto
 	await new Promise(resolve => setTimeout(resolve, 0));
 	assert.equal(service.state, 'stopped');
 	assert.equal(service.currentSnapshot.extensions.length, 0);
+});
+
+
+test('Remote extension resolves a saved target and connects only after host confirmation', async () => {
+	const api = new FakeExtensionHostApi(snapshot(1, 'acme.run', [{ kind: 'remoteConnectionResolver', registrationId: 'remote:team', authorityPrefix: 'team' }]));
+	using languages = new LanguageFeaturesService();
+	const connected: string[] = [];
+	const confirmations: unknown[] = [];
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>(), undefined, {
+		connections: {
+			...UnavailableRemoteConnectionApi, available: true,
+			list: async () => [{ name: 'build', host: 'build-linux', workspace: '/srv/project' }],
+			connect: async name => { connected.push(name); },
+		},
+		confirm: async options => { confirmations.push(options); return { confirmed: true }; },
+	});
+	using service = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	await service.start();
+	setNlsMessages('zh-CN', JSON.parse(readFileSync('localization/zh-CN/workbench.json', 'utf8')));
+	using restoreLocale = toDisposable(resetNlsResolver);
+	const result = await api.clientHandler!({ operation: 'openRemoteConnection', authority: 'team+linux' }, new AbortController().signal, { extensionId: 'acme.demo', incarnation: 3, activationGeneration: 11 });
+	assert.deepEqual(result, { result: 'done' });
+	assert.deepEqual(connected, ['build']);
+	assert.deepEqual(api.invocations.map(request => [request.registrationId, request.operation, request.payload, request.incarnation, request.activationGeneration]), [['remote:team', 'resolveConnection', { authority: 'team+linux' }, 3, 11]]);
+	assert.match(JSON.stringify(confirmations), /build-linux:\/srv\/project/);
+	assert.match(JSON.stringify(confirmations), /acme.demo/);
+	assert.match(JSON.stringify(confirmations), /扩展.*请求打开/);
+	assert.match(JSON.stringify(confirmations), /打开远程窗口/);
+});
+
+test('Remote extension cancellation and revocation cannot open a window', async () => {
+	const api = new FakeExtensionHostApi(snapshot(1, 'acme.run', [{ kind: 'remoteConnectionResolver', registrationId: 'remote:team', authorityPrefix: 'team' }]));
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>(), undefined, {
+		connections: {
+			...UnavailableRemoteConnectionApi, available: true,
+			list: async () => [{ name: 'build', host: 'build-linux', workspace: '/srv/project' }],
+			connect: async () => assert.fail('Cancelled connection opened a window'),
+		},
+		confirm: async () => ({ confirmed: false }),
+	});
+	using service = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	await service.start();
+	const source = { extensionId: 'acme.demo', incarnation: 3, activationGeneration: 11 };
+	await assert.rejects(api.clientHandler!({ operation: 'openRemoteConnection', authority: 'team+linux' }, new AbortController().signal, source), /[Cc]ancel/);
+	const pendingResult = deferred<JsonValue>();
+	api.invocationResult = pendingResult.promise;
+	const pending = api.clientHandler!({ operation: 'openRemoteConnection', authority: 'team+linux' }, new AbortController().signal, source);
+	api.emitConnection('restarting');
+	assert.equal(api.invocationSignals.at(-1)!.aborted, true);
+	pendingResult.resolve({ connectionName: 'build' });
+	await assert.rejects(pending);
+	await assert.rejects(api.clientHandler!({ operation: 'openRemoteConnection', authority: 'ssh+build' }, new AbortController().signal, source), /revoked/);
 });

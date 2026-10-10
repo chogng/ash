@@ -3,7 +3,7 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { ITraceSettingsService, type TraceSettingsSnapshot } from '../../../../platform/trace/common/traceSettingsService.js';
-import { IRemoteAgentService } from '../../../services/remote/common/remoteAgentService.js';
+import { IAppServerRemoteAgentService } from '../../../services/remote/common/appServerRemoteAgentService.js';
 import type { SettingsSectionField, SettingsSectionModel } from '../../preferences/browser/settingsTreeModels.js';
 
 /** Keeps only an unsaved draft; the connected backend owns configuration and recording state. */
@@ -26,7 +26,7 @@ export class TraceSettingsModel extends Disposable implements SettingsSectionMod
 
 	constructor(
 		@ITraceSettingsService private readonly trace: ITraceSettingsService,
-		@IRemoteAgentService private readonly remote: IRemoteAgentService,
+		@IAppServerRemoteAgentService private readonly remote: IAppServerRemoteAgentService,
 		@IFileDialogService private readonly dialogs: IFileDialogService,
 	) {
 		super();

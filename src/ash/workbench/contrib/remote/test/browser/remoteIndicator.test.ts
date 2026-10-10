@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { setNlsMessages, resetNlsResolver } from '../../../../../nls.js';
+import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import { Emitter } from "../../../../../base/common/event.js";
@@ -8,7 +11,7 @@ import type { RemoteAgentConnection } from "../../../../../platform/remote/commo
 import { RemoteStatusIndicator } from "../../browser/remoteIndicator.js";
 import { ConnectToRemoteCommandId } from "../../browser/remoteActions.js";
 import { ReconnectRemoteCommandId } from "../../browser/remoteActions.js";
-import type { IRemoteAgentService } from "../../../../services/remote/common/remoteAgentService.js";
+import type { IAppServerRemoteAgentService } from "../../../../services/remote/common/appServerRemoteAgentService.js";
 import { StatusbarAlignment, StatusbarService } from "../../../../services/statusbar/browser/statusbar.js";
 
 test("remote indicator owns the leading clickable left status entry", async () => {
@@ -58,7 +61,7 @@ function commandRunner(commands: string[]): (id: string) => void {
 	};
 }
 
-class TestRemoteAgentService extends Disposable implements IRemoteAgentService {
+class TestRemoteAgentService extends Disposable implements IAppServerRemoteAgentService {
 	private readonly stateEmitter = this._register(new Emitter<RemoteConnectionState>());
 	private readonly connectionEmitter = this._register(new Emitter<RemoteAgentConnection>());
 	readonly onDidChangeConnectionState = this.stateEmitter.event;
@@ -79,3 +82,14 @@ class TestRemoteAgentService extends Disposable implements IRemoteAgentService {
 		this.connectionEmitter.fire(connection);
 	}
 }
+
+
+test('a standard remote endpoint has a localized identity and accessible ready state', () => {
+	setNlsMessages('zh-CN', JSON.parse(readFileSync('localization/zh-CN/workbench.json', 'utf8')));
+	using restore = toDisposable(resetNlsResolver);
+	using remoteAgentService = new TestRemoteAgentService('connected');
+	remoteAgentService.emitConnection({ kind: 'remote', generation: 1, authority: 'fixture+backend' });
+	using statusbarService = new StatusbarService();
+	using indicator = new RemoteStatusIndicator({ remoteAgentService, statusbarService, runCommand: () => undefined });
+	assert.deepEqual(statusbarService.getEntries(StatusbarAlignment.Left).map(item => ({ kind: item.entry.kind, aria: item.entry.ariaLabel, tooltip: item.entry.tooltip })), [{ kind: 'remote', aria: '与 远程主机 fixture+backend 的远程连接已就绪', tooltip: '已连接到 远程主机 fixture+backend' }]);
+});

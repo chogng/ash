@@ -29,7 +29,7 @@ import { Registry } from '../../../../platform/registry/common/platform.js';
 import { DESKTOP_UPDATE_POLICY_SETTING, type DesktopUpdatePolicy } from '../../../../platform/update/common/updateService.js';
 import { localize } from '../../../../nls.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
-import { IRemoteAgentService } from '../../../services/remote/common/remoteAgentService.js';
+import { IAppServerRemoteAgentService } from '../../../services/remote/common/appServerRemoteAgentService.js';
 import { GitConfiguration, type GitAutofetch } from '../../git/common/gitConfiguration.js';
 import { IGitService } from '../../git/common/gitService.js';
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
@@ -96,7 +96,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		@ILanguagePackService private readonly languagePackService: ILanguagePackService,
 		@IGitService gitService: IGitService,
 		@IAgentCapabilitiesService private readonly agentCapabilitiesService: IAgentCapabilitiesService,
-		@IRemoteAgentService private readonly remoteAgentService: IRemoteAgentService,
+		@IAppServerRemoteAgentService private readonly remoteAgentService: IAppServerRemoteAgentService,
 		@IDirPermissionsService private readonly dirPermissionsService: IDirPermissionsService,
 		@IPreferencesService private readonly preferencesService: IPreferencesService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,

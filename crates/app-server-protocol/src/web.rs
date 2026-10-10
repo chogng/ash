@@ -23,6 +23,16 @@ pub struct WebListenInfo {
     pub pid: u32,
 }
 
+/// Private inbound-host helper record; the relay listener is reachable only through SSH.
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(rename_all = "camelCase")]
+pub struct RemoteTunnelHostInfo {
+    pub relay_host: String,
+    pub relay_port: u16,
+    pub web: WebListenInfo,
+}
+
 /// Authenticated browser session and its server-selected workspace.
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

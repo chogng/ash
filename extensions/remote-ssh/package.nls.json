@@ -1,0 +1,4 @@
+{
+  "displayName": "SSH Remote Connections",
+  "description": "Resolves saved SSH targets for a new Ash window."
+}

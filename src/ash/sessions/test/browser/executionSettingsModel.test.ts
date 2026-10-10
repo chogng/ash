@@ -6,7 +6,7 @@ import type { IDirPermissionsService, DirPermission } from '../../../platform/di
 import type { IExecutionSettingsService, ExecutionSettings } from '../../../platform/execution/common/executionSettingsService.js';
 import type { IAgentCapabilitiesService } from '../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import type { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
-import type { IRemoteAgentService } from '../../../workbench/services/remote/common/remoteAgentService.js';
+import type { IAppServerRemoteAgentService } from '../../../workbench/services/remote/common/appServerRemoteAgentService.js';
 import { ExecutionSettingsModel } from '../../contrib/preferences/browser/executionSettingsModel.js';
 
 function field(model: ExecutionSettingsModel, id: string) { return model.fields.find(field => field.id === id)!; }
@@ -33,7 +33,7 @@ test('execution settings preserve an unsaved default while saving an aliased dir
 		forget: async dir => { assert.equal(dir, 'same-directory'); forgotten = true; return { revision: 3, generation: 3, disposition: 'updated' }; },
 	};
 	const capabilities: IAgentCapabilitiesService = { isAvailable: true, read: async () => ({ directoryGrantsReadable: true, tools: [], toolSets: [], sandboxBackends: [], sandboxDiagnostics: [], localProcessSandboxConfigured: true }) };
-	const remote = { connectionState: 'connected', onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None } as IRemoteAgentService;
+	const remote = { connectionState: 'connected', onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None } as IAppServerRemoteAgentService;
 	using model = new ExecutionSettingsModel(execution, directories, capabilities, remote, {} as IDialogService, { translate: (_bundle, _key, fallback) => fallback } as ILocalizationService);
 	const initialized = ready(model); model.setVisible(true); await initialized;
 	const approval = field(model, 'approval'); assert.equal(approval.kind, 'select'); if (approval.kind === 'select') approval.setValue('auto');

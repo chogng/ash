@@ -5,7 +5,7 @@ import { test } from 'mocha';
 import { BrowserSessionPermissions } from '../../electron-main/browserSessionPermissions.js';
 import { BrowserSession } from '../../electron-main/browserSession.js';
 import { BrowserViewStorageScope, type BrowserViewEvent } from '../../common/browserView.js';
-import { SshRemoteTunnelService } from '../../../remote/electron-main/sshRemoteTunnelService.js';
+import { SshPortForwardingService } from '../../../remote/electron-main/sshPortForwardingService.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();
@@ -103,7 +103,7 @@ test('website grants bind both origins, reset removes decisions and closing canc
 
 test('a remote session retains one SOCKS policy until its last page closes and never clears it to direct mode', async () => {
 	const child = Object.assign(new EventEmitter(), { exitCode: null, stderr: new EventEmitter(), kill: () => { child.emit('exit', 0); return true; } });
-	using tunnels = new SshRemoteTunnelService({
+	using tunnels = new SshPortForwardingService({
 		getWorkspace: () => ({ id: 'remote', remoteAuthority: 'ssh+test-host' }),
 		sshExecutable: 'ssh', localEnvironment: {}, reserveLocalPort: async () => 12345,
 		spawnProcess: (_executable, args) => {

@@ -34,8 +34,51 @@ fn activation() -> ActivateParams {
 }
 
 #[test]
+fn reserved_ssh_registration_requires_product_authority() {
+    let mut params = activation();
+    params.capabilities = vec![ExtensionCapability::RemoteAuthorityResolver];
+    let mut request = ExtensionHostRequest {
+        context: RequestContext::new(1, 2, 3),
+        request: HostRequestKind::Activate(params),
+    };
+    let response = ExtensionHostResponse {
+        context: request.context,
+        response: HostResponseKind::Success(HostSuccess::Activated(ActivateResult {
+            registrations: vec![RegistrationDescriptor {
+                registration_id: "remote:ssh".into(),
+                kind: RegistrationKind::RemoteConnectionResolver {
+                    authority_prefix: "ssh".into(),
+                },
+            }],
+        })),
+    };
+    assert!(
+        response
+            .validate_for(&request, &ProtocolLimits::default())
+            .is_err()
+    );
+    if let HostRequestKind::Activate(params) = &mut request.request {
+        params
+            .capabilities
+            .push(ExtensionCapability::ProductRemoteAuthorityResolver);
+    }
+    response
+        .validate_for(&request, &ProtocolLimits::default())
+        .unwrap();
+    let decoded: ExtensionHostRequest =
+        serde_json::from_value(serde_json::to_value(&request).unwrap()).unwrap();
+    assert_eq!(decoded, request);
+}
+
+#[test]
 fn channel_and_link_registrations_require_their_declared_capabilities() {
     let registrations = [
+        (
+            ExtensionCapability::RemoteAuthorityResolver,
+            RegistrationKind::RemoteConnectionResolver {
+                authority_prefix: "team".into(),
+            },
+        ),
         (
             ExtensionCapability::ExternalUriOpener,
             RegistrationKind::ExternalUriOpener {
@@ -592,4 +635,34 @@ fn completion_triggers_round_trip_and_require_unique_single_characters() {
             );
         }
     }
+}
+
+#[test]
+fn remote_authorities_are_bounded_and_credentials_are_not_part_of_the_request() {
+    for authority in ["ssh+build", "team+linux"] {
+        let request = crate::ExtensionClientRequest {
+            context: RequestContext::new(1, 2, 3),
+            call_id: 1,
+            operation: crate::ExtensionClientOperation::OpenRemoteConnection {
+                authority: authority.into(),
+            },
+        };
+        request.validate(&ProtocolLimits::default()).unwrap();
+    }
+    for authority in ["ssh+", "SSH+build", "team", "team+build\n"] {
+        let request = crate::ExtensionClientRequest {
+            context: RequestContext::new(1, 2, 3),
+            call_id: 1,
+            operation: crate::ExtensionClientOperation::OpenRemoteConnection {
+                authority: authority.into(),
+            },
+        };
+        assert!(request.validate(&ProtocolLimits::default()).is_err());
+    }
+    assert!(
+        serde_json::from_value::<crate::ExtensionClientOperation>(json!({
+            "operation":"openRemoteConnection", "authority":"ssh+build", "credentials":"token"
+        }))
+        .is_err()
+    );
 }

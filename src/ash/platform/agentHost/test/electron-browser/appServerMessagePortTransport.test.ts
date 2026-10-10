@@ -4,7 +4,7 @@ import { JSDOM } from 'jsdom';
 import { setup, suite, suiteSetup, suiteTeardown, teardown, test } from 'mocha';
 import { DisposableTracker, installDisposableTracker } from '../../../../base/common/lifecycle.js';
 import type { ISandboxGlobals } from '../../../../base/parts/sandbox/electron-browser/sandboxTypes.js';
-import { WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT } from '../../common/appServerTransport.js';
+import { VSBuffer } from '../../../../base/common/buffer.js';
 
 suite('App Server MessagePort transport', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
@@ -60,7 +60,7 @@ suite('App Server MessagePort transport', () => {
 		const rejected = assert.rejects(ready, { name: 'CancellationError' });
 		transport.dispose();
 		await rejected;
-		requests[0].resolve({ enabled: true });
+		requests[0].resolve({ enabled: true, byteStream: true });
 		await Promise.resolve();
 	});
 
@@ -77,7 +77,7 @@ suite('App Server MessagePort transport', () => {
 				ports: [channel.port1 as unknown as MessagePort],
 			}));
 			transport.dispose();
-			requests[0].resolve({ enabled: true });
+			requests[0].resolve({ enabled: true, byteStream: true });
 			await rejected;
 			await closed;
 		} finally {
@@ -95,7 +95,7 @@ suite('App Server MessagePort transport', () => {
 		await cancelled;
 		const channel = new MessageChannel();
 		try {
-			const metadata = { enabled: true, protocolVersion: 1, workspaceId: 'current' };
+			const metadata = { enabled: true, byteStream: true, protocolVersion: 1, workspaceId: 'current' };
 			requests[1].resolve(metadata);
 			dom.window.dispatchEvent(new dom.window.MessageEvent('message', {
 				source: dom.window as unknown as Window,
@@ -103,12 +103,55 @@ suite('App Server MessagePort transport', () => {
 				ports: [channel.port1 as unknown as MessagePort],
 			}));
 			assert.equal(await second, true);
-			requests[0].resolve({ enabled: true, workspaceId: 'old' });
+			requests[0].resolve({ enabled: true, byteStream: true, workspaceId: 'old' });
 			await Promise.resolve();
-			let connected: unknown;
-			transport.on(WEB_APP_SERVER_CONNECTED_EVENT, value => { connected = value; });
-			transport.send(WEB_APP_SERVER_CONNECT_EVENT);
-			assert.deepEqual(connected, metadata);
+			assert.deepEqual(transport.connectionMetadata, metadata);
+			assert.ok(transport.socket);
 		} finally { channel.port1.close(); channel.port2.close(); }
 	});
+
+	test('byte writes drain only after peer acknowledgements and retirement rejects pending drains', async () => {
+		using transport = new Transport(() => { });
+		const ready = transport.acquire();
+		const channel = new MessageChannel();
+		try {
+			requests[0].resolve({ enabled: true, byteStream: true });
+			dom.window.dispatchEvent(new dom.window.MessageEvent('message', { source: dom.window as unknown as Window, data: { nonce: requests[0].nonce }, ports: [channel.port1 as unknown as MessagePort] }));
+			await ready;
+			const socket = transport.socket;
+			const received = new Promise<unknown>(resolve => channel.port2.once('message', resolve));
+			socket.write(VSBuffer.fromString('你好\n'));
+			assert.deepEqual(await received, { data: new TextEncoder().encode('你好\n') });
+			let drained = false;
+			const drain = socket.drain().then(() => { drained = true; });
+			await Promise.resolve();
+			assert.equal(drained, false);
+			channel.port2.postMessage({ ack: true });
+			await drain;
+			socket.write(VSBuffer.fromString('{}\n'));
+			const rejected = assert.rejects(socket.drain(), /socket is closed/);
+			transport.dispose();
+			await rejected;
+			assert.throws(() => socket.write(VSBuffer.fromString('old')), /socket is closed/);
+		} finally { channel.port1.close(); channel.port2.close(); }
+	});
+
+
+	test('exceeding the write queue closes the carrier and rejects drain instead of dropping bytes', async () => {
+		using transport = new Transport(() => { });
+		const ready = transport.acquire();
+		const channel = new MessageChannel();
+		try {
+			requests[0].resolve({ enabled: true, byteStream: true });
+			dom.window.dispatchEvent(new dom.window.MessageEvent('message', { source: dom.window as unknown as Window, data: { nonce: requests[0].nonce }, ports: [channel.port1 as unknown as MessagePort] }));
+			await ready;
+			const socket = transport.socket;
+			for (let index = 0; index < 128; index++) { socket.write(VSBuffer.fromString('{}\n')); }
+			const rejected = assert.rejects(socket.drain(), /capacity exceeded/);
+			assert.throws(() => socket.write(VSBuffer.fromString('{}\n')), /capacity exceeded/);
+			await rejected;
+			assert.throws(() => transport.socket, /was closed/);
+		} finally { channel.port1.close(); channel.port2.close(); }
+	});
+
 });

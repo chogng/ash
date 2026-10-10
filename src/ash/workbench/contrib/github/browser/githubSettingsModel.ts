@@ -8,7 +8,7 @@ import { IGitHubService } from '../../../../platform/github/common/githubService
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IGitHubConnectionService } from '../../../services/accounts/common/gitHubConnectionService.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
-import { IRemoteAgentService } from '../../../services/remote/common/remoteAgentService.js';
+import { IAppServerRemoteAgentService } from '../../../services/remote/common/appServerRemoteAgentService.js';
 import type { SettingsSectionField, SettingsSectionModel } from '../../preferences/browser/settingsTreeModels.js';
 import { IGitHubReviewModel } from './githubReviewModel.js';
 
@@ -37,7 +37,7 @@ export class GitHubSettingsModel extends Disposable implements SettingsSectionMo
 		@IGitHubConnectionService private readonly connection: IGitHubConnectionService,
 		@IEditorService private readonly editors: IEditorService,
 		@IOpenerService private readonly opener: IOpenerService,
-		@IRemoteAgentService remote: IRemoteAgentService,
+		@IAppServerRemoteAgentService remote: IAppServerRemoteAgentService,
 	) {
 		super();
 		this.readOperation = this._register(new MutableDisposable<CancellationTokenSource>());

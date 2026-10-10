@@ -47,6 +47,15 @@ User-installed extensions are a separate profile-level root. Marketplace package
 
 ## Bundled packages
 
+`remote-ssh` registers the product's `ssh` authority resolver through the TS SDK in the Rust V8
+host. Its `main` entry and SDK are compiled into the executable; App Server verifies their release
+binding. It selects a saved connection name; the Remote service validates the target and the
+connection host owns confirmation-bound execution, credentials, processes and new-window lifetime.
+Product authority admits only this compiled module and grants no workspace file access, so it can
+start without a workspace. Installed packages use the same SDK and host with their existing
+workspace authorization; they cannot request the product authority. Browser Workers cannot
+register `ssh`, and there is no core resolver fallback.
+
 `markdown-language-features` ships the Markdown preview browser extension. `media-preview`
 declares the image (PNG/JPEG/WebP), audio (MP3/WAV/OGG/OGA), and video (MP4/WebM) editors.
 The Rust catalog owns the media package snapshot and resources; the same package is included

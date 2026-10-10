@@ -1,6 +1,13 @@
-load("//:defs.bzl", "ash_rust_crate")
+load("//:defs.bzl", "ash_rust_binary", "ash_rust_crate")
 
 ash_rust_crate(
     name = "remote-host",
     crate_name = "ash_remote_host",
+)
+
+ash_rust_binary(
+    name = "ash-remote-host",
+    crate_name = "ash_remote_host_bin",
+    crate_root = "src/main.rs",
+    deps = [":remote-host"],
 )

@@ -1,0 +1,11 @@
+{
+  "name": "remote-ssh",
+  "publisher": "ash",
+  "version": "1.0.0",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "engines": {
+    "vscode": "*"
+  },
+  "main": "./src/extension.js"
+}

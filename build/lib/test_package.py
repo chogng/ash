@@ -111,6 +111,7 @@ class PackageTests(unittest.TestCase):
                 "ash-voice-host",
                 "ash-collaboration-server",
                 "ash-remote",
+                "ash-remote-host",
                 "ash-remote-server",
                 "ash-exec-server",
             )
@@ -244,6 +245,7 @@ class PackageTests(unittest.TestCase):
         "markdown-language-features",
         "media-preview",
         "python",
+        "remote-ssh",
         "rust",
         "shellscript",
         "sql",
@@ -358,6 +360,9 @@ class PackageTests(unittest.TestCase):
                 ripgrep,
                 test_tgrep_resolution(root),
                 node,
+                remote_host_binary=executable_file(
+                    root / "remote-host", b"remote-host"
+                ),
                 voice_host_binary=executable_file(root / "voice", b"voice"),
                 collaboration_server_binary=executable_file(
                     root / "collaboration", b"collaboration"
@@ -566,6 +571,9 @@ class PackageTests(unittest.TestCase):
                 test_tgrep_resolution(root),
                 None,
                 protocol_metadata=generated_protocol,
+                remote_host_binary=executable_file(
+                    root / "remote-host", b"remote-host"
+                ),
                 voice_host_binary=executable_file(root / "voice", b"voice"),
                 collaboration_server_binary=executable_file(
                     root / "collaboration", b"collaboration"
@@ -795,6 +803,9 @@ class PackageTests(unittest.TestCase):
                 test_tgrep_resolution(root),
                 node,
                 bubblewrap,
+                remote_host_binary=executable_file(
+                    root / "remote-host", b"remote-host"
+                ),
                 voice_host_binary=executable_file(root / "voice", b"voice"),
                 collaboration_server_binary=executable_file(
                     root / "collaboration", b"collaboration"
@@ -868,6 +879,9 @@ class PackageTests(unittest.TestCase):
                 ),
                 windows_sandbox_service_binary=executable_file(
                     root / "sandbox-service-source.exe", b"sandbox-service"
+                ),
+                remote_host_binary=executable_file(
+                    root / "remote-host", b"remote-host"
                 ),
                 voice_host_binary=executable_file(root / "voice", b"voice"),
                 collaboration_server_binary=executable_file(

@@ -6,7 +6,7 @@ export class ExtensionError extends Error {
 	constructor(code: string, message: string);
 }
 export interface Disposable { dispose(): void; }
-export type JsonValue = null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue };
+export type JsonValue = null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue; };
 export interface TextDocument {
 	readonly uri: string | undefined;
 	readonly version: number;
@@ -18,7 +18,7 @@ export interface TextDocument {
 export interface Position { readonly line: number; readonly character: number; }
 export interface Range { readonly start: Position; readonly end: Position; }
 export interface Hover {
-	readonly contents: readonly (string | { readonly value: string; readonly language?: string })[];
+	readonly contents: readonly (string | { readonly value: string; readonly language?: string; })[];
 	readonly range?: Range;
 }
 export interface HoverProvider {
@@ -67,6 +67,8 @@ export interface InvocationContext {
 		setDiagnostics(collection: string, entries: readonly DiagnosticEntry[]): Promise<void>;
 	};
 	readonly workspace: {
+		/** Requests a confirmed connection through the registered resolver; requires remoteAuthorityResolver. */
+		openRemoteConnection(authority: string): Promise<void>;
 		/** Reads the editor's current text, including unsaved changes. */
 		openTextDocument(uri: string): Promise<TextDocument>;
 		/** Reads UTF-8 disk content beneath the invocation's granted workspace; maximum 256 KiB. */
@@ -79,6 +81,64 @@ export interface InvocationContext {
 		showErrorMessage(message: string): Promise<void>;
 		showQuickPick(items: readonly string[], placeholder: string): Promise<string | undefined>;
 	};
+}
+/** Ash saved-target selector, distinct from VS Code’s transport endpoint resolver. */
+export interface RemoteConnectionResolver {
+	resolve(context: InvocationContext, authority: string): { readonly connectionName: string; } | Promise<{ readonly connectionName: string; }>;
+}
+export class ResolvedAuthority {
+	readonly host: string;
+	readonly port: number;
+	readonly connectionToken: string | undefined;
+	constructor(host: string, port: number, connectionToken?: string);
+}
+export interface ManagedMessagePassing {
+	readonly onDidReceiveMessage: (listener: (data: Uint8Array) => void) => Disposable;
+	readonly onDidClose: (listener: (error: Error | undefined) => void) => Disposable;
+	readonly onDidEnd: (listener: () => void) => Disposable;
+	send(data: Uint8Array): void;
+	end(): void;
+	drain?(): Promise<void>;
+}
+export class ManagedResolvedAuthority {
+	readonly makeConnection: () => Promise<ManagedMessagePassing>;
+	readonly connectionToken: string | undefined;
+	constructor(makeConnection: () => Promise<ManagedMessagePassing>, connectionToken?: string);
+}
+export interface RemoteAuthorityResolverContext { readonly resolveAttempt: number; }
+export interface AuthenticationSession {
+	readonly id: string;
+	readonly accessToken: string;
+	readonly account: { readonly id: string; readonly label: string; };
+	readonly scopes: readonly string[];
+}
+export interface ResolvedOptions {
+	extensionHostEnv?: { [key: string]: string | null; };
+	isTrusted?: boolean;
+	authenticationSessionForInitializingExtensions?: AuthenticationSession & { providerId: string; };
+}
+export type ResolverResult = (ResolvedAuthority | ManagedResolvedAuthority) & ResolvedOptions;
+/** Decoded resource identity passed to resolver callbacks; it grants no filesystem access. */
+export class Uri {
+	private constructor();
+	readonly scheme: string;
+	readonly authority: string;
+	readonly path: string;
+	readonly query: string;
+	readonly fragment: string;
+	static from(components: { scheme: string; authority?: string; path?: string; query?: string; fragment?: string; }): Uri;
+	with(change: { scheme?: string; authority?: string | null; path?: string | null; query?: string | null; fragment?: string | null; }): Uri;
+	toString(): string;
+	toJSON(): { scheme: string; authority: string; path: string; query: string; fragment: string; external: string; };
+}
+export interface RemoteAuthorityResolver {
+	resolve(authority: string, context: RemoteAuthorityResolverContext): ResolverResult | Promise<ResolverResult>;
+	getCanonicalURI?(uri: Uri): Uri | null | undefined | Promise<Uri | null | undefined>;
+}
+export class RemoteAuthorityResolverError extends Error {
+	constructor(message?: string);
+	static NotAvailable(message?: string, handled?: boolean): RemoteAuthorityResolverError;
+	static TemporarilyNotAvailable(message?: string): RemoteAuthorityResolverError;
 }
 export interface ExtensionContext {
 	readonly extensionId: string;
@@ -108,6 +168,10 @@ export const languages: {
 	registerCompletionProvider(registrationId: string, languageIds: readonly string[], provider: CompletionProvider, triggerCharacters?: readonly string[]): Disposable;
 };
 export const workspace: {
+	/** Resolves in the local host before connecting the remote window. Requires remoteAuthorityResolver. */
+	registerRemoteAuthorityResolver(authorityPrefix: string, resolver: RemoteAuthorityResolver): Disposable;
+	/** Ash saved-target API. Requires remoteAuthorityResolver; ssh belongs to the built-in selector. */
+	registerRemoteConnectionResolver(authorityPrefix: string, resolver: RemoteConnectionResolver): Disposable;
 	/** Ordered callbacks, beginning with open events for existing models after activation. */
 	registerTextDocumentEvents(registrationId: string, listener: (context: InvocationContext, event: TextDocumentEvent) => void | Promise<void>): Disposable;
 };

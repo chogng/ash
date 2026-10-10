@@ -1,18 +1,18 @@
 import { Emitter } from "../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import type { AppServerConnectionState, IAppServerApi } from "../../../../platform/agentHost/common/appServerApi.js";
+import { IAppServerApi, type AppServerConnectionState } from "../../../../platform/agentHost/common/appServerApi.js";
 import type { RemoteConnectionState } from "../../../../platform/remote/common/remote.js";
 import type { IRemoteAgentApi, RemoteAgentConnection, RemoteAgentReconnectResult, RemoteRuntimeRollbackResult } from "../../../../platform/remote/common/remoteAgentApi.js";
-import type { IRemoteAgentService } from "../common/remoteAgentService.js";
+import type { IAppServerRemoteAgentService } from "../common/appServerRemoteAgentService.js";
 
 export interface AppServerRemoteAgentServiceOptions {
-	readonly api: IAppServerApi;
+	/** The current window host supplies SSH operations; Web windows have no SSH host. */
 	readonly remoteApi?: IRemoteAgentApi;
 	readonly onReadError?: (error: unknown) => void;
 }
 
-/** Adapts the App Server supervisor state into the Workbench remote-agent contract. */
-export class AppServerRemoteAgentService extends Disposable implements IRemoteAgentService {
+/** Adapts the App Server supervisor state and the window host’s SSH recovery operations. */
+export class AppServerRemoteAgentService extends Disposable implements IAppServerRemoteAgentService {
 	private readonly connectionStateEmitter = this._register(new Emitter<RemoteConnectionState>());
 	private readonly connectionEmitter = this._register(new Emitter<RemoteAgentConnection>());
 	private revision = 0;
@@ -24,10 +24,10 @@ export class AppServerRemoteAgentService extends Disposable implements IRemoteAg
 	readonly onDidChangeConnectionState = this.connectionStateEmitter.event;
 	readonly onDidChangeConnection = this.connectionEmitter.event;
 
-	constructor(options: AppServerRemoteAgentServiceOptions) {
+	constructor(options: AppServerRemoteAgentServiceOptions, @IAppServerApi api: IAppServerApi) {
 		super();
 		this.remoteApi = options.remoteApi;
-		const subscription = options.api.onConnectionState(state => {
+		const subscription = api.onConnectionState(state => {
 			if (this.isDisposed) return;
 			this.revision += 1;
 			this.acceptState(state);
@@ -36,7 +36,7 @@ export class AppServerRemoteAgentService extends Disposable implements IRemoteAg
 		if (options.remoteApi) this.observeConnection(options.remoteApi);
 		const readRevision = this.revision;
 		void Promise.resolve()
-			.then(() => this.isDisposed ? undefined : options.api.getConnectionState())
+			.then(() => this.isDisposed ? undefined : api.getConnectionState())
 			.then(state => {
 				if (!this.isDisposed && state !== undefined && this.revision === readRevision) this.acceptState(state);
 			}, error => {

@@ -1,3 +1,9 @@
+import type { IExtensionHostApi } from '../../extensionHost/common/extensionHostApi.js';
+import { createAppServerExtensionHostApi } from '../../extensionHost/browser/extensionHostApi.js';
+import type { IAddress } from '../../remote/common/remoteAgentConnection.js';
+import { AppServerSocketTransport } from '../../agentHost/browser/appServerSocketTransport.js';
+import { IRemoteSocketFactoryService, RemoteSocketFactoryService } from '../../remote/common/remoteSocketFactoryService.js';
+import { ManagedRemoteConnection, RemoteConnectionType } from '../../remote/common/remoteAuthorityResolver.js';
 import { AppServerSymphonyService } from '../../symphony/browser/appServerSymphonyService.js';
 import { EDIT_USER_HOOKS_CONFIGURATION_CHANNEL } from '../../hooks/common/hooksIpc.js';
 import { AppServerBackupService } from '../../backup/browser/appServerBackupService.js';
@@ -15,7 +21,7 @@ import { createDisconnectedRendererApi } from '../../agentHost/browser/rendererA
 import { AppServerAutomationService } from '../../automation/browser/appServerAutomationService.js';
 import { registerAppServerBrowserHost } from '../../agentHost/electron-browser/appServerBrowserHost.js';
 import { registerAppServerWorkspaceHost, initializeWorkspace } from '../../workspaces/electron-browser/appServerWorkspaceHost.js';
-import { DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import type { IRendererHost } from '../../renderer/common/rendererHost.js';
 import { invoke } from '../../ipc/electron-browser/rendererIpc.js';
 import { subscribe } from '../../ipc/electron-browser/rendererIpc.js';
@@ -38,7 +44,6 @@ import type { IAppServerApi } from "../../agentHost/common/appServerApi.js";
 import type { RendererHostCapabilities } from "../../renderer/common/rendererHost.js";
 import { createRemoteAgentApi } from "../../remote/electron-browser/remoteAgentApi.js";
 import { createRemoteConnectionApi } from "../../remote/electron-browser/remoteConnectionApi.js";
-import { createRemoteTunnelApi } from "../../remote/electron-browser/remoteTunnelApi.js";
 import type { IWorkspaceTrustRequestService } from '../../workspace/common/workspaceTrust.js';
 import { ILocalTranscriptionService } from '../../localTranscription/common/localTranscription.js';
 import { InstantiationService } from '../../instantiation/common/instantiationService.js';
@@ -46,27 +51,56 @@ import { InstantiationService } from '../../instantiation/common/instantiationSe
 export type ElectronRendererCapabilityContribution = RendererCapabilityContribution;
 
 /** Composes Electron renderer capabilities from domain-owned IPC adapters. */
-export async function createElectronRendererApi(contributions: readonly ElectronRendererCapabilityContribution[], hostCapabilities: { readonly browser: boolean; readonly textDocuments?: boolean; readonly appTools?: boolean; }, workspaceTrust: IWorkspaceTrustRequestService, mainProcessService: IMainProcessService): Promise<AshElectronRendererApi & IDisposable> {
+export async function createElectronRendererApi(contributions: readonly ElectronRendererCapabilityContribution[], hostCapabilities: { readonly browser: boolean; readonly textDocuments?: boolean; readonly appTools?: boolean; }, workspaceTrust: IWorkspaceTrustRequestService, mainProcessService: IMainProcessService, resolveRemoteAuthority?: (api: IExtensionHostApi, factories: IRemoteSocketFactoryService, authority: string, attempt: number) => Promise<IAddress>, initializeRemoteExtensions?: (api: IExtensionHostApi, authority: string) => Promise<IExtensionHostApi>): Promise<AshElectronRendererApi & IDisposable> {
 	performance.mark('ash.rendererApi.start');
 	const resources = new DisposableStore();
+	const remoteConnection = await createRemoteAgentApi().getConnection();
 	let connecting: Promise<void> = Promise.resolve();
-	const transport = resources.add(new AppServerMessagePortTransport(() => {
+	const carrier = resources.add(new AppServerMessagePortTransport(() => {
 		connecting = reconnect();
 		void connecting.catch(error => console.error('App Server reconnect failed', error));
 	}));
+	const connectionServices = resources.add(new InstantiationService());
+	connectionServices.registerSingleton(IRemoteSocketFactoryService, () => connectionServices.createInstance(RemoteSocketFactoryService));
+	const factories = connectionServices.get(IRemoteSocketFactoryService);
+	const factoryRegistration = resources.add(new MutableDisposable<IDisposable>());
+	let connectionId = 0;
+	const acquire = async (): Promise<boolean> => {
+		factoryRegistration.clear();
+		const enabled = await carrier.acquire();
+		if (enabled) {
+			const id = ++connectionId;
+			const socket = carrier.socket;
+			let leased = false;
+			factoryRegistration.value = factories.register(RemoteConnectionType.Managed, {
+				supports: connection => connection.id === id,
+				connect: async (_connection, path, query) => {
+					if (leased || path || query || carrier.socket !== socket) { throw new Error('App Server connection endpoint was superseded'); }
+					// One acquired port backs one protocol client; another lease needs a new acquisition.
+					leased = true;
+					return socket;
+				},
+			});
+		}
+		return enabled;
+	};
+	const transport = resources.add(connectionServices.createInstance(AppServerSocketTransport, {
+		getAddress: async () => ({ connectTo: new ManagedRemoteConnection(connectionId), connectionToken: undefined }), getMetadata: () => carrier.connectionMetadata,
+	}));
 	// Initialization includes the local daemon's cold start, which can take 15 seconds.
-	const client = new AppServerProtocolClient(transport, { clientName: 'ash-desktop', initializeTimeoutMs: 30_000, capabilities: { ...(hostCapabilities.browser ? { browser: { version: 3, observe: true, input: true } } : {}), ...(hostCapabilities.textDocuments ? { textDocuments: { version: 2 } } : {}), ...(hostCapabilities.appTools ? { appTools: { version: 1, agents: true, desktop: true } } : {}), dirPermissionsHost: { version: 1 } } });
-	resources.add(toDisposable(() => client.dispose()));
-	if (hostCapabilities.browser) { resources.add(registerAppServerBrowserHost(client)); }
-	resources.add(registerAppServerWorkspaceHost(client, () => connecting, workspaceTrust));
+	const localClient = new AppServerProtocolClient(transport, { clientName: 'ash-desktop', initializeTimeoutMs: 30_000, capabilities: { ...(hostCapabilities.browser ? { browser: { version: 3, observe: true, input: true } } : {}), ...(hostCapabilities.textDocuments ? { textDocuments: { version: 2 } } : {}), ...(hostCapabilities.appTools ? { appTools: { version: 1, agents: true, desktop: true } } : {}), dirPermissionsHost: { version: 1 } } });
+	resources.add(toDisposable(() => localClient.dispose()));
+	let client = localClient;
+	let localExtensions: IExtensionHostApi | undefined;
+	let windowExtensions: IExtensionHostApi | undefined;
 	const initialize = async (): Promise<void> => {
-		try { await client.connect(); }
+		try { await localClient.connect(); }
 		catch (error) {
 			if (!(error instanceof AppServerProtocolIncompatibleError) || await invoke('ash:app-server:recover-runtime', error.incompatibility) !== true) { throw error; }
-			await transport.acquire();
-			await client.connect();
+			await acquire();
+			await localClient.connect();
 		}
-		await transport.initialized();
+		await carrier.initialized();
 	};
 	let reconnectTask: Promise<void> | undefined;
 	let attempts = 0;
@@ -79,8 +113,15 @@ export async function createElectronRendererApi(contributions: readonly Electron
 		if (retryTimer !== undefined) { clearTimeout(retryTimer); retryTimer = undefined; }
 		const operation = (async () => {
 			client.disconnect();
-			await transport.acquire();
-			await initialize();
+			if (client === localClient || localClient.state !== 'ready') {
+				localClient.disconnect();
+				await acquire();
+				await initialize();
+			}
+			if (client !== localClient) {
+				await client.connect();
+				if (remoteConnection.kind === 'remote') { windowExtensions = await initializeRemoteExtensions!(createAppServerExtensionHostApi(client), remoteConnection.authority); }
+			}
 		})();
 		reconnectTask = operation.finally(() => { reconnectTask = undefined; });
 		return reconnectTask;
@@ -98,15 +139,32 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			});
 		}, [100, 500, 2000][attempts]);
 	};
-	resources.add(client.onStateChange(state => { if (state === 'crashed') { scheduleRecovery(); } }));
+
 	try {
 		performance.mark('ash.rendererApi.acquire-start');
-		const enabled = await transport.acquire();
+		const enabled = await acquire();
 		performance.mark('ash.rendererApi.acquired');
 		let backend: IRendererHost;
 		if (enabled) {
 			await initialize();
 			performance.mark('ash.rendererApi.initialized');
+			if (remoteConnection.kind === 'remote') {
+				if (!resolveRemoteAuthority || !initializeRemoteExtensions) { throw new Error('This window does not provide a local Remote resolver'); }
+				localExtensions = createAppServerExtensionHostApi(localClient);
+				let attempt = 0;
+				const remoteTransport = resources.add(connectionServices.createInstance(AppServerSocketTransport, {
+					getAddress: () => resolveRemoteAuthority(localExtensions!, factories, remoteConnection.authority, ++attempt),
+					getMetadata: () => carrier.connectionMetadata,
+				}));
+				// An extension endpoint does not inherit the local stdio host's directory-grant authority.
+				client = new AppServerProtocolClient(remoteTransport, { clientName: 'ash-desktop-remote', initializeTimeoutMs: 30_000, capabilities: { ...(hostCapabilities.browser ? { browser: { version: 3, observe: true, input: true } } : {}), ...(hostCapabilities.textDocuments ? { textDocuments: { version: 2 } } : {}) } });
+				resources.add(toDisposable(() => client.dispose()));
+				await client.connect();
+				windowExtensions = await initializeRemoteExtensions(createAppServerExtensionHostApi(client), remoteConnection.authority);
+			}
+			resources.add(client.onStateChange(state => { if (state === 'crashed') { scheduleRecovery(); } }));
+			if (hostCapabilities.browser) { resources.add(registerAppServerBrowserHost(client)); }
+			resources.add(registerAppServerWorkspaceHost(client, () => connecting, workspaceTrust));
 			backend = createRendererHost(client, {
 				externalOpener: { openExternal: target => invoke<boolean>('ash:host:openExternal', target) },
 				callbackHost: {
@@ -116,12 +174,11 @@ export async function createElectronRendererApi(contributions: readonly Electron
 				},
 				clipboardService: new ElectronRendererClipboardService(),
 			}, contributions);
-			backend = { ...backend, backup: new AppServerBackupService(client, 'ash-editor') };
+			backend = { ...backend, backup: new AppServerBackupService(localExtensions ? localClient : client, 'ash-editor'), ...(windowExtensions ? { extensionHost: windowExtensions } : {}) };
 			if (client.capabilities?.memories) { backend = { ...backend, memories: resources.add(new AppServerMemoriesService(client)) }; }
 			if (client.capabilities?.contracts.memoryDiagnostics?.version === 1) { backend = { ...backend, memoryDiagnostics: resources.add(new AppServerMemoryDiagnosticsService(client, 'electron', () => invoke<MemoryObservation[]>('ash:memory:collect'))) }; }
 			if (client.capabilities?.contracts.calls?.version === 1) { backend = { ...backend, calls: resources.add(new AppServerCallService(client)) }; }
-			const remoteConnection = await createRemoteAgentApi().getConnection();
-			if (remoteConnection.kind !== 'ssh') {
+			if (remoteConnection.kind === 'local') {
 				const services = resources.add(new InstantiationService());
 				if (!backend.localTranscription) { throw new Error('Local transcription service was not contributed by the renderer entry'); }
 				services.registerInstance(ILocalTranscriptionService, backend.localTranscription);
@@ -157,7 +214,6 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			},
 			remote: createRemoteAgentApi(),
 			remoteConnections: createRemoteConnectionApi(),
-			remoteTunnels: createRemoteTunnelApi(),
 			browserView: createBrowserViewService(client),
 			configuration: createConfigurationApi(mainProcessService),
 			keyboardLayout: createNativeKeyboardLayoutApi(mainProcessService),

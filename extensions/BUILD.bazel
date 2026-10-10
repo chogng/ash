@@ -1,3 +1,8 @@
+exports_files(
+    ["remote-ssh/src/extension.js", "remote-ssh/package.json"],
+    visibility = ["//crates/app-server:__pkg__", "//crates/js-extension-host:__pkg__"],
+)
+
 filegroup(
     name = "artifacts",
     srcs = glob(["**"]),

@@ -7,7 +7,11 @@ through `ash-v8-runtime`; execution state and permissions remain separate.
 
 The product packages the executable next to App Server. Plugin contributions explicitly select
 `runtime: javascript`; an existing `hostRpc` contribution runs its own protocol program.
-The JS host receives the admitted extension ID, absolute package root and relative JS entrypoint.
+Installed extensions supply the admitted extension ID, absolute package root and relative JS entrypoint.
+The product's `--builtin remote-ssh` entry instead loads its module and SDK compiled into the executable;
+activation must match the release binding sent by App Server. It uses the same SDK and invocation
+lifecycle, but product authority requires no workspace grant and permits no workspace file reads.
+Installed packages cannot obtain this authority or register the reserved `ssh` prefix.
 Only package-relative ESM imports and the product-provided SDK are available. Node, Electron,
 filesystem, network, DOM and raw backend connections are absent from the JS context.
 
@@ -33,7 +37,9 @@ the child attests the launch restrictions, disables Win32k calls, lowers integri
 permanently releases startup authority. Package read grants and the AppContainer profile
 are owned by the process handle and removed after termination. The product install directory
 is not modified; no administrator privileges or account provisioning are required.
-Unsupported systems refuse production execution. The trusted development launcher is for trusted tests.
+Unsupported systems refuse installed-package execution. The immutable compiled product module
+can run there with the same V8 budgets and deadlines, without loading external sources. Supported
+systems also confine the product module. The trusted development launcher is for trusted tests.
 
 The default JS budgets are 64 MiB heap and 64 MiB external fixed-length backing stores. Tiny inline
 TypedArrays use the heap instead. The heap callback has a bounded 4 MiB termination allowance.

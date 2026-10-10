@@ -1,3 +1,4 @@
+import { validateRemoteConnectionResolverPrefix } from '../../remote/common/remoteConnectionService.js';
 import { VSBuffer } from "../../../base/common/buffer.js";
 import { throwIfCancelled } from "../../../base/common/cancellation.js";
 import { CancellationError } from "../../../base/common/errors.js";
@@ -114,9 +115,19 @@ export interface ExtensionHostExternalUriOpenerRegistration extends ExtensionHos
 	readonly label: string;
 }
 
-export type ExtensionHostRegistration = ExtensionHostStatusBarRegistration | ExtensionHostDocumentEventsRegistration | ExtensionHostCustomEditorRegistration | ExtensionHostExternalUriOpenerRegistration | ExtensionHostCommandRegistration | ExtensionHostLanguageRegistration | ExtensionHostDebugAdapterRegistration | ExtensionHostTaskProviderRegistration | ExtensionHostTestProfileProviderRegistration | ExtensionHostDataChannelRegistration | ExtensionHostLinkPresentationRegistration;
+export interface ExtensionHostRemoteAuthorityResolverRegistration extends ExtensionHostRegistrationBase {
+	readonly kind: 'remoteAuthorityResolver';
+	readonly authorityPrefix: string;
+}
 
-export type ExtensionHostActivationEvent = { readonly type: 'command'; readonly command: string; } | { readonly type: 'language'; readonly languageId: string; } | { readonly type: 'startupFinished'; };
+export interface ExtensionHostRemoteConnectionResolverRegistration extends ExtensionHostRegistrationBase {
+	readonly kind: 'remoteConnectionResolver';
+	readonly authorityPrefix: string;
+}
+
+export type ExtensionHostRegistration = ExtensionHostRemoteConnectionResolverRegistration | ExtensionHostRemoteAuthorityResolverRegistration | ExtensionHostStatusBarRegistration | ExtensionHostDocumentEventsRegistration | ExtensionHostCustomEditorRegistration | ExtensionHostExternalUriOpenerRegistration | ExtensionHostCommandRegistration | ExtensionHostLanguageRegistration | ExtensionHostDebugAdapterRegistration | ExtensionHostTaskProviderRegistration | ExtensionHostTestProfileProviderRegistration | ExtensionHostDataChannelRegistration | ExtensionHostLinkPresentationRegistration;
+
+export type ExtensionHostActivationEvent = { readonly type: 'command'; readonly command: string; } | { readonly type: 'language'; readonly languageId: string; } | { readonly type: 'startupFinished'; } | { readonly type: 'resolveAuthority'; readonly authorityPrefix: string; };
 export interface ExtensionHostActivationRequest {
 	readonly extensionId: string;
 	readonly activationGeneration: number;
@@ -162,6 +173,8 @@ export interface ExtensionHostInvocationRequest {
 export interface IExtensionHostApi {
 	registerClientHandler(handler: ExtensionClientHandler): DisposableHandle;
 	isAvailable(): Promise<boolean>;
+	/** Starts a connection-owned fleet before extension activation; values never alter the shared backend process. */
+	start(environment: Readonly<Record<string, string | null>>): Promise<ExtensionHostFleetSnapshot>;
 	list(): Promise<ExtensionHostFleetSnapshot>;
 	reconcile(mode: ExtensionHostReconcileMode): Promise<ExtensionHostFleetSnapshot>;
 	/** Asks Rust to match editor intent against one exact authorized package generation. */
@@ -187,6 +200,7 @@ export interface ExtensionDocumentEdit {
 
 /** Window services available during a connection-owned extension invocation. */
 export type ExtensionClientOperation =
+	| { operation: 'openRemoteConnection'; authority: string; }
 	| { operation: 'setStatusBarEntries'; registrationId: string; revision: number; entries: readonly ExtensionStatusBarEntry[]; }
 	| { operation: 'setDiagnostics'; collection: string; entries: ExtensionDiagnosticEntry[]; }
 	| { operation: 'executeCommand'; command: string; arguments: JsonValue[]; }
@@ -444,6 +458,11 @@ function normalizeRegistration(value: unknown): ExtensionHostRegistration {
 	const input = record(value, "Extension Host registration");
 	const kind = input.kind;
 	const registrationId = boundedText(input.registrationId, "Extension Host registration ID", 256);
+	if (kind === 'remoteAuthorityResolver' || kind === 'remoteConnectionResolver') {
+		exactKeys(input, 'Remote resolver registration', ['kind', 'registrationId', 'authorityPrefix']);
+		const authorityPrefix = validateRemoteConnectionResolverPrefix(boundedText(input.authorityPrefix, 'Remote prefix', 64));
+		return Object.freeze({ kind, registrationId, authorityPrefix });
+	}
 	if (kind === 'statusBar') {
 		exactKeys(input, 'Extension status bar registration', ['kind', 'registrationId', 'revision', 'entries']);
 		return Object.freeze({ kind, registrationId: statusBarIdentifier(registrationId), revision: positiveSafeInteger(input.revision, 'Status bar revision'), entries: normalizeExtensionStatusBarEntries(input.entries) });

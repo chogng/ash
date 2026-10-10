@@ -4,9 +4,9 @@ import { type IContextKeyService } from "../../../../platform/contextkey/browser
 import type { RemoteConnectionState } from "../../../../platform/remote/common/remote.js";
 import type { IRemoteConnectionService } from "../../../../platform/remote/common/remoteConnectionService.js";
 import type { IWorkbenchContribution } from "../../../common/contributions.js";
-import type { IRemoteAgentService } from "../../../services/remote/common/remoteAgentService.js";
+import type { IAppServerRemoteAgentService } from "../../../services/remote/common/appServerRemoteAgentService.js";
 
-export type RemoteConnectionKind = "unknown" | "local" | "ssh";
+export type RemoteConnectionKind = "unknown" | "local" | "ssh" | "remote";
 
 export const RemoteConnectionKindContext = new RawContextKey<RemoteConnectionKind>("remoteConnectionKind", "unknown");
 export const RemoteConnectionStateContext = new RawContextKey<RemoteConnectionState | "unknown">("remoteConnectionState", "unknown");
@@ -14,7 +14,7 @@ export const RemoteConnectionsAvailableContext = new RawContextKey<boolean>("rem
 
 export interface RemoteContextKeysOptions {
 	readonly contextKeyService: IContextKeyService;
-	readonly remoteAgentService: IRemoteAgentService;
+	readonly remoteAgentService: IAppServerRemoteAgentService;
 	readonly remoteConnectionService: IRemoteConnectionService;
 }
 

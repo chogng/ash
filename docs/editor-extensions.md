@@ -168,6 +168,27 @@ macOS 产品宿主先读取包快照并初始化 V8，再通过 Seatbelt 禁止�
 真实子进程测试覆盖 SDK→前端文档调用、SDK→Rust 磁盘读取、错误、取消、新运行实例和停用释放；
 当前不是完整 VS Code API，也尚未向公共 npm registry 发布 SDK。
 
+Remote 的可安装入口属于 TS/JS 扩展：它可在激活时注册
+`workspace.registerRemoteConnectionResolver(prefix, resolver)`，声明 `remoteAuthorityResolver`
+capability，并在命令回调中通过 `call.workspace.openRemoteConnection(authority)` 请求打开连接。
+扩展负责解析用户意图和组织流程；返回值仅包含已保存的 `connectionName`。Rust 宿主校验注册能力、
+调用身份与生命周期，Workbench 校验目标并展示确认，连接 host 执行现有 SSH 路径。连接目录和
+凭据不会成为扩展自己的状态。具体格式与示例见 [SDK](../extension-sdk/README.md)。
+
+此处接通的是已保存 SSH 目标的连接意图接口。`extensions/remote-ssh` 使用同一 TS/JS SDK，
+源码与 SDK 编译进产品 V8 宿主，通过 `--builtin remote-ssh` 加载；App Server 同时校验包含
+manifest、模块和 SDK 的源码摘要，防止混用不同发布版本。普通 SSH 选择器经同一 resolver
+registry 调用它。此 registry 属于 `platform/remote/common/remoteConnectionService.ts`，
+只选择后端已保存目标，使用独立的 `remoteConnectionResolver` 注册和 `resolveConnection` 调用。
+标准端点解析由 `registerRemoteAuthorityResolver` 提供，不能把连接名作为端点结果。核心没有内置解析回退，也没有 SSH Worker 执行入口。
+
+内置模块以产品授权启动，不依赖工作区目录 grant，也不能读取工作区文件；因此首页可以解析
+连接名称。安装包仍需明确启用、权限授权和平台隔离；声明 remote resolver 能力的 JS 包按 profile 执行，
+其他可执行包继续要求工作区授权。保留的 `ssh` 前缀仅允许后端选中的编译模块
+注册，用户 manifest 不能请求内部产品授权。两者共享 V8、注册、调用、取消和进程监管路径；
+停用和重启使旧 incarnation 的注册及调用失效。其他可信 Worker 扩展尚未迁移。本地与远端
+扩展宿主的放置策略、完整 VS Code resolver 兼容和 Tunnels 托管尚未完成。
+
 ### 0.2 GitHub 的具体分工
 
 GitHub 扩展仍用 TS 编写和运行。它负责“什么时候查询 PR、如何组织列表、用户点击后做什么”；
@@ -467,6 +488,7 @@ request ID、无效 Output 操作、超限 frame/Output 队列或未声明 capab
 
 | Registration kind          | Runtime v1 ceiling                                             | 产品接入状态                                                                                                                                         |
 | -------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Remote Connection Resolver | authority prefix + saved connection reference                  | 已接入；声明 capability，按实例解析并确认目标；内置 SSH、贡献解析器共用目录与启动入口                                                                |
 | Command                    | command ID、title 与 brokered invocation                       | 已接入；按 registration、incarnation 与 activation generation 调用                                                                                   |
 | Language Provider          | language IDs + operation set                                   | Runtime vocabulary 已实现；Frontend v1 已投影 completion、Parameter Hints、hover、formatting、Inlay Hints、Linked Editing；其余 operation 仍部分接入 |
 | Debug Adapter              | debugger type                                                  | Runtime contract 已实现；Frontend 当前只保留 snapshot 并报告 unsupported bridge，不启动 DAP session                                                  |
@@ -674,3 +696,10 @@ ASH_PLAYWRIGHT_OPEN_VSX=1 pnpm run test:smoke:desktop test/smoke/areas/chat/mark
 
 该 Electron 测试下载 Dracula，检查安装后主题可选、使用同一 profile 重新打开进程后安装仍在、
 卸载后贡献移除；JavaScript 场景检查原包命令、独立授权、重启恢复和撤销。浏览器集成测试覆盖英文和中文的市场筛选、安装确认、启用、授权、撤销、停用与卸载。
+
+标准 resolver 使用 `ResolvedAuthority(host, port, token)` 或 `ManagedResolvedAuthority(makeConnection, token)`。
+Desktop 的 `NativeExtensionService` 在远端 Workbench 启动前选择本地扩展，`ExtensionHostManager`
+执行当前 incarnation 的解析，平台 `RemoteAuthorityResolverService` 保存地址与错误，
+`MainThreadManagedSockets` 绑定受管工厂。Rust 在私有调用边界注入 backend connection owner；
+SDK 按此身份隔离工厂与 socket，连接关闭时由 Rust 发送 `remoteReleaseOwner`。断线重连重新解析，
+旧结果不能恢复已退役端点。公开声明、调用顺序与当前支持限制见 [SDK](../extension-sdk/README.md)。

@@ -52,7 +52,7 @@ export function validateOpenEmptyWindowOptions(value: unknown): IOpenEmptyWindow
 	const options = value as Record<string, unknown>;
 	if (Object.keys(options).some(key => key !== 'forceReuseWindow' && key !== 'remoteAuthority') || options.forceReuseWindow !== undefined && typeof options.forceReuseWindow !== 'boolean') throw new TypeError('Invalid empty window options');
 	if (options.remoteAuthority !== undefined) {
-		if (typeof options.remoteAuthority !== 'string' || !options.remoteAuthority.startsWith('ssh+') || createSshRemoteAuthority(options.remoteAuthority.slice(4)).authority !== options.remoteAuthority) throw new TypeError('Invalid Remote authority');
+		if (typeof options.remoteAuthority !== 'string' || !/^[a-z][a-z0-9-]{0,63}\+[^\s\u0000-\u001f\u007f]{1,1983}$/u.test(options.remoteAuthority) || options.remoteAuthority.startsWith('ssh+') && createSshRemoteAuthority(options.remoteAuthority.slice(4)).authority !== options.remoteAuthority) throw new TypeError('Invalid Remote authority');
 	}
 	return options as IOpenEmptyWindowOptions;
 }

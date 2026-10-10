@@ -1,5 +1,8 @@
 {
   "ash": {
+    "tunnel.invalidPort": "Remote port must be an integer from 1 to 65535.",
+    "tunnel.unsupportedOptions": "SSH forwarding supports private loopback ports with an automatically assigned local port.",
+    "extensionHost.browser.productSsh": "The product SSH extension must execute in the V8 host",
     "tasks.configurationChanged": "Task configuration changed while preparing the task. The task was not started. Run the task again.",
     "tasks.unsupportedExecution": "Task '{0}' was not started because Ash does not yet support: {1}. Update .vscode/tasks.json and run the task again.",
     "files.saveBackupFailedTitle": "File saved; recovery backup incomplete",
@@ -263,7 +266,15 @@
     "files.saveElevatedTitle": "Save with administrator permission",
     "files.saveElevatedMessage": "The operating system prevented saving '{0}'. Request administrator permission to retry?",
     "files.saveElevatedDetail": "The system will ask for authorization. Your unsaved changes remain open if you cancel or the save fails.",
-    "files.saveElevatedRetry": "Retry with administrator permission"
+    "files.saveElevatedRetry": "Retry with administrator permission",
+    "remote.extension.openTitle": "Open Remote Window",
+    "remote.extension.openMessage": "Extension '{0}' wants to open '{1}'.",
+    "remote.extension.openButton": "Open Remote Window",
+    "remote.connection.targetChanged": "Remote target changed after confirmation; select it again",
+    "remote.resolver.missing": "No Remote resolver for '{0}'",
+    "remote.authorityResolver.missing": "No enabled local extension can resolve '{0}'.",
+    "remote.resolver.targetMissing": "Remote connection '{0}' no longer exists",
+    "remote.resolver.duplicate": "More than one extension resolves '{0}'. Disable the duplicate resolver."
   },
   "ash.views": {
     "explorer": "Explorer",
@@ -307,6 +318,23 @@
     "editorShortcuts": "Editor shortcuts"
   },
   "ash.workbench": {
+    "remoteTunnel.localWorkspace": "Open a local folder before enabling remote tunnel access.",
+    "remoteTunnel.turnOn": "Remote Tunnels: Turn On Remote Tunnel Access",
+    "remoteTunnel.turnOff": "Remote Tunnels: Turn Off Remote Tunnel Access",
+    "remoteTunnel.manage": "Remote Tunnels: Show Remote Tunnel Access",
+    "remoteTunnel.copy": "Remote Tunnels: Copy Connection Instructions",
+    "remoteTunnel.relayTitle": "SSH relay for this local workspace",
+    "remoteTunnel.relayPlaceholder": "OpenSSH host alias, for example ash-relay",
+    "remoteTunnel.invalidRelay": "Enter an OpenSSH host alias using letters, numbers, dots, underscores or hyphens.",
+    "remoteTunnel.starting": "Starting remote tunnel access.",
+    "remoteTunnel.failed": "Could not start remote tunnel access. Check your SSH alias, key authentication and relay forwarding permissions.",
+    "remoteTunnel.unavailable": "Remote tunnel access requires one local folder and an available Ash backend.",
+    "remoteTunnel.stopped": "Remote tunnel access is off.",
+    "remoteTunnel.copied": "Remote tunnel connection instructions copied.",
+    "remoteTunnel.connected": "Remote tunnel access is on",
+    "remoteTunnel.copyButton": "Copy Connection Instructions",
+    "remoteTunnel.close": "Close",
+    "remoteTunnel.instructions": "On the other device, run:\n{0}\n\nThen open:\n{1}\n\nUse the same SSH relay alias on both devices. This address has a single-use ticket. Turn on access again to issue a new ticket. Access ends when Ash quits or you turn it off.",
     "browser.accessibilityHelp": "Use Tab to move through browser controls. Enter in the address field navigates and focuses the webpage. Ctrl+Shift+P (Command+Shift+P on macOS) opens the Command Palette from the webpage. Ctrl+L (Command+L on macOS) or F6 in the webpage returns to the address field. Back and Forward navigate page history. Close the editor tab to close its webpage. Set workbench.externalUriOpeners to ash.browser.open for websites you want to open here. Webpages use the browser’s accessibility tree. The More Actions menu contains sharing, website permission reset and download cancellation. Share with Agent allows a chosen conversation to observe this page. Agent input and navigation require an isolated Agent page. Revoke all access ends that grant. Website permission dialogs name the requesting site. Reset all website permissions removes its decisions. Downloads ask for a save location; Cancel downloads stops active transfers.",
     "browser.accessibilityHelpTitle": "Browser accessibility help",
     "browser.address": "Browser address",
@@ -321,6 +349,23 @@
     "browser.processGone": "Page stopped: {0}",
     "browser.reload": "Reload",
     "browser.stop": "Stop",
-    "browser.webpage": "Webpage. Press F6 to return to the address field."
+    "browser.webpage": "Webpage. Press F6 to return to the address field.",
+    "remote.indicator.ready": "Remote connection to {0} is ready",
+    "remote.indicator.connected": "Connected to {0}",
+    "remote.indicator.connecting": "Remote connection to {0} is connecting",
+    "remote.indicator.connectingTooltip": "Connecting to {0}",
+    "remote.indicator.reconnecting": "Remote connection to {0} is reconnecting",
+    "remote.indicator.reconnectingTooltip": "Reconnecting to {0}",
+    "remote.indicator.disconnecting": "Remote connection to {0} is disconnecting",
+    "remote.indicator.disconnectingTooltip": "Disconnecting from {0}",
+    "remote.indicator.disconnected": "Remote connection to {0} is disconnected",
+    "remote.indicator.disconnectedTooltip": "{0} is disconnected",
+    "remote.indicator.connectingText": "Connecting…",
+    "remote.indicator.reconnectingText": "Reconnecting…",
+    "remote.indicator.disconnectingText": "Disconnecting…",
+    "remote.indicator.disconnectedText": "Disconnected",
+    "remote.indicator.local": "local backend",
+    "remote.indicator.ssh": "SSH host {0}",
+    "remote.indicator.remote": "Remote host {0}"
   }
 }

@@ -38,6 +38,10 @@ pub enum ExtensionHostActivationEventDto {
     },
     // A struct variant preserves the closed wire shape; Serde unit variants ignore extra fields.
     StartupFinished {},
+    ResolveAuthority {
+        #[schemars(length(min = 1, max = 64))]
+        authority_prefix: String,
+    },
 }
 
 /// Activates one exact admitted package generation when its declaration matches the event.
@@ -70,6 +74,14 @@ pub struct ExtensionHostActivationDto {
     pub events: Vec<String>,
     #[schemars(length(max = 2048))]
     pub commands: Vec<ExtensionHostCommandContributionDto>,
+}
+
+/// Starts a connection-owned extension fleet with explicit environment overrides.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExtensionHostStartParams {
+    #[schemars(length(max = 128))]
+    pub environment: std::collections::BTreeMap<String, Option<String>>,
 }
 
 /// Requests a complete reconciliation of the executable Editor Extension fleet.
@@ -301,6 +313,14 @@ impl<'de> Deserialize<'de> for ExtensionHostRegistrationDescriptorDto {
     deny_unknown_fields
 )]
 pub enum ExtensionHostRegistrationKindDto {
+    RemoteConnectionResolver {
+        #[schemars(length(min = 1, max = 64))]
+        authority_prefix: String,
+    },
+    RemoteAuthorityResolver {
+        #[schemars(length(min = 1, max = 64))]
+        authority_prefix: String,
+    },
     StatusBar {
         #[ts(type = "number")]
         revision: u64,

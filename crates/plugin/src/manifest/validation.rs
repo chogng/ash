@@ -212,13 +212,14 @@ fn validate_editor_extension(extension: &EditorExtensionContribution) -> Result<
         if extension.capabilities.iter().any(|capability| {
             !matches!(
                 capability,
-                super::EditorExtensionCapability::Command
+                super::EditorExtensionCapability::RemoteAuthorityResolver
+                    | super::EditorExtensionCapability::Command
                     | super::EditorExtensionCapability::LanguageProvider
                     | super::EditorExtensionCapability::StatusBar
             )
         }) {
             return invalid(
-                "JavaScript SDK v1 supports only command, language provider and status bar registrations",
+                "JavaScript SDK v1 supports only command, language provider, status bar and Remote resolver registrations",
             );
         }
     }

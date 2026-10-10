@@ -5,16 +5,14 @@ import { acquirePort } from '../../../base/parts/ipc/electron-browser/ipc.mp.js'
 import { isRecord } from '../../../base/common/types.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { invoke, subscribe } from '../../ipc/electron-browser/rendererIpc.js';
-import type { AppServerTransport } from '../common/appServerTransport.js';
-import { WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT } from '../common/appServerTransport.js';
+import { VSBuffer } from '../../../base/common/buffer.js';
+import { Emitter } from '../../../base/common/event.js';
+import { SocketCloseEventType, type ISocket, type SocketCloseEvent, type SocketDiagnosticsEventType } from '../../../base/parts/ipc/common/ipc.net.js';
 
 /** Acquires and owns a renderer-exclusive MessagePort without interpreting protocol messages. */
-export class AppServerMessagePortTransport extends Disposable implements AppServerTransport {
-	private readonly listeners = new Map<string, Set<(value: unknown) => void>>();
-	private port: MessagePort | undefined;
+export class AppServerMessagePortTransport extends Disposable {
+	private readonly socketOwner = this._register(new MutableDisposable<MessagePortSocket>());
 	private nonce: string | undefined;
-	private readonly pending: number[] = [];
-	private pendingBytes = 0;
 	private metadata: unknown;
 	private enabled: boolean | undefined;
 	private readonly acquisition = this._register(new MutableDisposable<IDisposable>());
@@ -26,13 +24,17 @@ export class AppServerMessagePortTransport extends Disposable implements AppServ
 		this._register(toDisposable(() => subscription.dispose()));
 	}
 
-	public on(event: string, listener: (payload: unknown) => void): void {
-		let listeners = this.listeners.get(event);
-		if (!listeners) { listeners = new Set(); this.listeners.set(event, listeners); }
-		listeners.add(listener);
+	public get connectionMetadata(): unknown {
+		return this.metadata;
 	}
 
-	public off(event: string, listener: (payload: unknown) => void): void { this.listeners.get(event)?.delete(listener); }
+	public get socket(): ISocket {
+		const socket = this.socketOwner.value;
+		if (!socket || socket.isClosed) {
+			throw new Error('App Server port was not acquired or was closed');
+		}
+		return socket;
+	}
 
 	public async acquire(): Promise<boolean> {
 		this.assertNotDisposed();
@@ -47,7 +49,7 @@ export class AppServerMessagePortTransport extends Disposable implements AppServ
 				value.close();
 				throw new CancellationError();
 			}
-			this.attach(value);
+			this.socketOwner.value = new MessagePortSocket(value);
 		}, error => { if (enabled !== false) { throw error; } });
 		let timeout: ReturnType<typeof setTimeout>;
 		const timedOut = new Promise<never>((_resolve, reject) => {
@@ -55,12 +57,12 @@ export class AppServerMessagePortTransport extends Disposable implements AppServ
 				const error = new Error('App Server port acquisition timed out');
 				// Reject with the timeout before closing cancels the pending port acquisition.
 				reject(error);
-				if (this.nonce === nonce) { this.fail(error.message); }
+				if (this.nonce === nonce) { this.close(); }
 			}, 10_000);
 		});
 		const acquisition = invoke<unknown>('ash:app-server:acquire', { nonce }).then(result => {
 			if (this.nonce !== nonce) { throw new CancellationError(); }
-			if (!isRecord(result) || typeof result.enabled !== 'boolean') { throw new Error('Invalid connection acquisition response'); }
+			if (!isRecord(result) || typeof result.enabled !== 'boolean' || (result.enabled && result.byteStream !== true)) { throw new Error('Invalid connection acquisition response'); }
 			this.enabled = enabled = result.enabled;
 			this.metadata = result;
 			if (!result.enabled) { port.cancel(); }
@@ -77,47 +79,139 @@ export class AppServerMessagePortTransport extends Disposable implements AppServ
 		}
 	}
 
-	public async initialized(): Promise<void> { await invoke('ash:app-server:initialized', { nonce: this.nonce }); }
-
-	public send(event: string, payload?: unknown): void {
-		if (event === WEB_APP_SERVER_DISCONNECT_EVENT) { this.close(); return; }
-		if (event === WEB_APP_SERVER_CONNECT_EVENT) {
-			if (!this.enabled || !this.port) { throw new Error('App Server port was not acquired'); }
-			this.emit(WEB_APP_SERVER_CONNECTED_EVENT, this.metadata);
-			return;
-		}
-		if (event !== WEB_APP_SERVER_FRAME_EVENT || !this.port || !isRecord(payload) || typeof payload.frame !== 'string') { throw new Error('Invalid App Server transport frame'); }
-		const size = new TextEncoder().encode(payload.frame).length;
-		if (this.pending.length >= 128 || this.pendingBytes + size > 320 * 1024 * 1024) { throw new Error('App Server transport capacity exceeded'); }
-		this.pending.push(size);
-		this.pendingBytes += size;
-		this.port.postMessage({ frame: payload.frame });
+	public async initialized(): Promise<void> {
+		await invoke('ash:app-server:initialized', { nonce: this.nonce });
 	}
 
-	private attach(port: MessagePort): void {
-		this.port = port;
+	private close(): void {
+		this.acquisition.clear();
+		this.socketOwner.clear();
+		this.nonce = undefined;
+	}
+}
+
+/** One acquired port owns one byte socket; an older socket never writes to its replacement. */
+class MessagePortSocket extends Disposable implements ISocket {
+	private readonly dataEmitter = this._register(new Emitter<VSBuffer>());
+	private readonly closeEmitter = this._register(new Emitter<SocketCloseEvent>());
+	private readonly endEmitter = this._register(new Emitter<void>());
+	public readonly onData = this.dataEmitter.event;
+	public readonly onClose = this.closeEmitter.event;
+	public readonly onEnd = this.endEmitter.event;
+	private readonly pending: number[] = [];
+	private pendingBytes = 0;
+	private readonly drainWaiters = new Set<{ resolve(): void; reject(error: Error): void; }>();
+	private closed = false;
+	private ending = false;
+	private failure: Error | undefined;
+	public get isClosed(): boolean {
+		return this.closed;
+	}
+
+	constructor(private readonly port: MessagePort) {
+		super();
+		this._register(toDisposable(() => this.finish()));
 		port.onmessage = event => {
-			if (this.port !== port) { return; }
-			const value: unknown = event.data;
-			if (!isRecord(value)) { this.fail('Invalid transport message'); return; }
-			if (value.ack === true && this.pending.length > 0) { this.pendingBytes -= this.pending.shift()!; return; }
-			if (typeof value.frame === 'string') {
-				this.emit(WEB_APP_SERVER_FRAME_EVENT, value);
-				if (this.port === port) { port.postMessage({ ack: true }); }
+			if (this.closed) {
 				return;
 			}
-			if (value.intentional === true) { this.close(); this.emit(WEB_APP_SERVER_CLOSED_EVENT, { intentional: true }); return; }
-			this.fail(typeof value.closed === 'string' ? value.closed : 'App Server connection closed');
+			const value: unknown = event.data;
+			if (!isRecord(value)) {
+				this.finish(new Error('Invalid transport message'));
+				return;
+			}
+			if (value.ack === true) {
+				if (!this.pending.length) {
+					this.finish(new Error('Unexpected transport write acknowledgement'));
+					return;
+				}
+				this.pendingBytes -= this.pending.shift()!;
+				if (!this.pending.length) {
+					for (const waiter of this.drainWaiters) {
+						waiter.resolve();
+					}
+					this.drainWaiters.clear();
+				}
+				return;
+			}
+			if (value.data instanceof Uint8Array && value.data.byteLength <= 320 * 1024 * 1024) {
+				this.dataEmitter.fire(VSBuffer.wrap(new Uint8Array(value.data)));
+				if (!this.closed) {
+					port.postMessage({ ack: true });
+				}
+				return;
+			}
+			if (value.intentional === true) {
+				this.finish();
+				return;
+			}
+			this.finish(new Error(typeof value.closed === 'string' ? value.closed : 'App Server connection closed'));
 		};
-		port.onmessageerror = () => { if (this.port === port) { this.fail('App Server port message could not be decoded'); } };
+		port.onmessageerror = () => this.finish(new Error('App Server port message could not be decoded'));
 		port.start();
 	}
 
-	private fail(message: string): void {
-		this.close();
-		this.emit(WEB_APP_SERVER_CLOSED_EVENT, { message });
+	public write(buffer: VSBuffer): void {
+		if (this.closed || this.ending) {
+			throw this.failure ?? new Error('App Server socket is closed');
+		}
+		if (this.pending.length >= 128 || this.pendingBytes + buffer.byteLength > 320 * 1024 * 1024) {
+			const error = new Error('App Server transport capacity exceeded');
+			this.finish(error);
+			throw error;
+		}
+		this.pending.push(buffer.byteLength);
+		this.pendingBytes += buffer.byteLength;
+		try {
+			this.port.postMessage({ data: buffer.buffer });
+		} catch (error) {
+			this.finish(error instanceof Error ? error : new Error('App Server byte write failed'));
+			throw error;
+		}
 	}
 
-	private close(): void { this.acquisition.clear(); this.port?.close(); this.port = undefined; this.nonce = undefined; this.pending.length = 0; this.pendingBytes = 0; }
-	private emit(event: string, payload: unknown): void { for (const listener of this.listeners.get(event) ?? []) { listener(payload); } }
+	public drain(): Promise<void> {
+		if (this.closed) {
+			return Promise.reject(this.failure ?? new Error('App Server socket is closed'));
+		}
+		if (!this.pending.length) {
+			return Promise.resolve();
+		}
+		return new Promise((resolve, reject) => this.drainWaiters.add({ resolve, reject }));
+	}
+
+	public end(): void {
+		if (this.closed || this.ending) {
+			return;
+		}
+		this.ending = true;
+		void this.drain().then(() => this.finish(), error => this.finish(error));
+	}
+
+	public traceSocketEvent(type: SocketDiagnosticsEventType, data?: unknown): void {
+		// Diagnostics report sizes, never protocol contents or credentials.
+		console.debug('App Server MessagePort socket', type, data instanceof VSBuffer ? data.byteLength : undefined);
+	}
+
+	private finish(error?: Error): void {
+		if (this.closed) {
+			return;
+		}
+		this.closed = true;
+		this.failure = error;
+		this.port.onmessage = null;
+		this.port.onmessageerror = null;
+		this.port.close();
+		const closed = error ?? new Error('App Server socket is closed');
+		for (const waiter of this.drainWaiters) {
+			waiter.reject(closed);
+		}
+		this.drainWaiters.clear();
+		this.pending.length = 0;
+		this.pendingBytes = 0;
+		if (!error) {
+			this.endEmitter.fire();
+		}
+		this.closeEmitter.fire({ type: SocketCloseEventType.NodeSocketCloseEvent, hadError: !!error, error });
+	}
 }

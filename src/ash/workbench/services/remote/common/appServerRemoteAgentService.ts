@@ -5,8 +5,8 @@ import type { RemoteAgentConnection } from "../../../../platform/remote/common/r
 import type { RemoteAgentReconnectResult } from "../../../../platform/remote/common/remoteAgentApi.js";
 import type { RemoteRuntimeRollbackResult } from "../../../../platform/remote/common/remoteAgentApi.js";
 
-/** Exposes the active remote agent without leaking the backend transport API. */
-export interface IRemoteAgentService {
+/** Owns the window view of App Server connection state and SSH recovery operations. */
+export interface IAppServerRemoteAgentService {
 	readonly connectionState: RemoteConnectionState | undefined;
 	readonly connection: RemoteAgentConnection | undefined;
 	readonly onDidChangeConnectionState: Event<RemoteConnectionState>;
@@ -15,4 +15,4 @@ export interface IRemoteAgentService {
 	rollbackRuntime(): Promise<RemoteRuntimeRollbackResult>;
 }
 
-export const IRemoteAgentService = createServiceIdentifier<IRemoteAgentService>("remoteAgentService");
+export const IAppServerRemoteAgentService = createServiceIdentifier<IAppServerRemoteAgentService>("appServerRemoteAgentService");

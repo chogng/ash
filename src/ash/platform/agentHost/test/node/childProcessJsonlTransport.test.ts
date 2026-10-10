@@ -115,3 +115,38 @@ test("close is asynchronous and idempotent", async () => {
 	await first;
 	assert.equal(child.signalCode, "SIGTERM");
 });
+
+
+test('byte carrier preserves split UTF-8 writes without adding framing and owns queued buffers', async () => {
+	const child = new FakeChildProcess();
+	const chunks: Buffer[] = [];
+	child.stdin = new Writable({ write(chunk: Buffer, _encoding, callback) { chunks.push(Buffer.from(chunk)); setImmediate(callback); } });
+	const jsonl = transport(child);
+	try {
+		const bytes = Buffer.from('你好\n', 'utf8');
+		const first = jsonl.sendBytes(bytes.subarray(0, 2));
+		const second = jsonl.sendBytes(bytes.subarray(2));
+		bytes.fill(0);
+		await Promise.all([first, second]);
+		assert.equal(Buffer.concat(chunks).toString('utf8'), '你好\n');
+	} finally { await jsonl.close(); }
+});
+
+test('byte output forwards unterminated and invalid UTF-8 chunks without JSONL decoding', async () => {
+	const child = new FakeChildProcess();
+	const carrier = transport(child, { stdoutMode: 'bytes' });
+	const chunks: Buffer[] = [];
+	using data = carrier.onData(chunk => chunks.push(Buffer.from(chunk)));
+	try {
+		assert.throws(() => carrier.onFrame(() => { }), /does not expose JSONL/);
+		child.stdout.write(Buffer.from([0xe4, 0xbd]));
+		child.stdout.write(Buffer.from([0xa0, 0xff]));
+		assert.deepEqual(chunks, [Buffer.from([0xe4, 0xbd]), Buffer.from([0xa0, 0xff])]);
+		const failure = new Promise<Error>(resolve => carrier.onClose(resolve));
+		child.stdout.end();
+		assert.match((await failure).message, /stdout ended/);
+		assert.equal(child.signalCode, 'SIGTERM');
+	} finally {
+		await carrier.close();
+	}
+});

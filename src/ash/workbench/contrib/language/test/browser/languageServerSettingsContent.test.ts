@@ -22,7 +22,7 @@ import { IEditorService } from '../../../../services/editor/common/editorService
 import { builtinLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { ILocalizationService } from '../../../../services/localization/common/localizationService.js';
 import { createSettingsEditorInput } from '../../../../services/preferences/common/settingsEditorInput.js';
-import { IRemoteAgentService } from '../../../../services/remote/common/remoteAgentService.js';
+import { IAppServerRemoteAgentService } from '../../../../services/remote/common/appServerRemoteAgentService.js';
 import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
 import { SettingsSearchQuery } from '../../../preferences/browser/settingsSearch.js';
 import { LanguageServerSettingsContent, LanguageServerSettingsTarget } from '../../browser/languageServerSettingsContent.js';
@@ -71,7 +71,7 @@ class SettingsFixture extends DisposableStore {
 				return (catalog.bundles[bundle]?.[key] ?? text).replace(/\{(\d+)\}/gu, (match, index: string) => String(parameters?.[index] ?? match));
 			},
 		});
-		this.services.registerInstance(IRemoteAgentService, { onDidChangeConnection: Event.None, onDidChangeConnectionState: this.connection.event } as IRemoteAgentService);
+		this.services.registerInstance(IAppServerRemoteAgentService, { onDidChangeConnection: Event.None, onDidChangeConnectionState: this.connection.event } as IAppServerRemoteAgentService);
 		this.services.registerInstance(IContextViewService, this.add(new BrowserContextViewService(this.root)));
 		this.services.registerInstance(IContextKeyService, this.add(new ContextKeyService()));
 		this.services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });

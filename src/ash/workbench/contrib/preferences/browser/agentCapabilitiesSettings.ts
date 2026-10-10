@@ -4,7 +4,7 @@ import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { AgentCapabilitiesSnapshot, AgentToolCapability, IAgentCapabilitiesService } from '../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { dirPermissionNames, type DirPermissionsEntry, type IDirPermissionsService } from '../../../../platform/dirPermissions/common/dirPermissionsService.js';
 import type { ILocalizationService } from '../../../services/localization/common/localizationService.js';
-import type { IRemoteAgentService } from '../../../services/remote/common/remoteAgentService.js';
+import type { IAppServerRemoteAgentService } from '../../../services/remote/common/appServerRemoteAgentService.js';
 
 type View = 'tools' | 'sandbox';
 
@@ -18,7 +18,7 @@ export class AgentCapabilitiesSettings extends Disposable {
 	private directories: readonly DirPermissionsEntry[] = [];
 	private loadVersion = 0;
 
-	constructor(container: HTMLElement, private readonly capabilities: IAgentCapabilitiesService, remoteAgentService: IRemoteAgentService, private readonly dirPermissions: IDirPermissionsService, private readonly localization: ILocalizationService) {
+	constructor(container: HTMLElement, private readonly capabilities: IAgentCapabilitiesService, remoteAgentService: IAppServerRemoteAgentService, private readonly dirPermissions: IDirPermissionsService, private readonly localization: ILocalizationService) {
 		super();
 		const document = container.ownerDocument;
 		this.domNode = h(document, 'section');

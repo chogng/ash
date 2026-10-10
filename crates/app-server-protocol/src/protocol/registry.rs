@@ -830,6 +830,8 @@ use crate::protocol::extension_host::ExtensionHostRegistrationKindDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_host::ExtensionHostSnapshotDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_host::ExtensionHostStartParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_items::ExtensionItemsParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_items::ExtensionItemsResult;
@@ -3986,6 +3988,11 @@ client_methods! {
         response: ExtensionResourceOpenResult,
         serialization: GlobalSharedRead,
     },
+    ExtensionHostStart => "extensionHost/start" {
+        params: ExtensionHostStartParams,
+        response: ExtensionHostSnapshotDto,
+        serialization: GlobalExclusive,
+    },
     ExtensionHostList => "extensionHost/list" {
         params: EmptyParams,
         response: ExtensionHostSnapshotDto,
@@ -5723,6 +5730,7 @@ typescript_bindings! {
     ExtensionGalleryResourceOpenParams,
     ExtensionHostReconcileModeDto,
     ExtensionHostReconcileParams,
+    ExtensionHostStartParams,
     ExtensionHostActivateParams,
     ExtensionHostActivationEventDto,
     ExtensionHostActivationDto,

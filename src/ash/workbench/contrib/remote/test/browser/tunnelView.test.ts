@@ -5,19 +5,19 @@ import { Emitter } from "../../../../../base/common/event.js";
 import { Disposable } from "../../../../../base/common/lifecycle.js";
 import type { RemoteConnectionState } from "../../../../../platform/remote/common/remote.js";
 import type { RemoteAgentConnection } from "../../../../../platform/remote/common/remoteAgentApi.js";
-import type { IRemoteTunnelService } from "../../../../../platform/remote/common/remoteTunnelService.js";
-import type { RemoteTunnel } from "../../../../../platform/remote/common/remoteTunnelService.js";
-import type { RemoteTunnelChange } from "../../../../../platform/remote/common/remoteTunnelService.js";
-import type { IRemoteAgentService } from "../../../../services/remote/common/remoteAgentService.js";
+import { TunnelPrivacyId, type ITunnelService, type RemoteTunnel } from "../../../../../platform/tunnel/common/tunnel.js";
+import type { IAddressProvider } from "../../../../../platform/remote/common/remoteAgentConnection.js";
+import type { IAppServerRemoteAgentService } from "../../../../services/remote/common/appServerRemoteAgentService.js";
 
-test("Remote Ports renders Main-owned tunnel state changes", async () => {
+test("Remote Ports renders tunnel service state changes", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
-	using tunnels = new TestRemoteTunnelService([tunnel("one", 4100, 3000, "open")]);
+	using tunnels = new TestTunnelService([tunnel("one", 4100, 3000, "open")]);
+	const tunnelService = tunnels;
 	using remoteAgent = new TestRemoteAgentService({ kind: "ssh", generation: 1, authority: "ssh+work-server", host: "work-server" }, "connected");
 	try {
-		const { RemotePortsViewPane } = await import("../../browser/remotePortsViewPane.js");
-		using pane = new RemotePortsViewPane(browser.window.document.body, { id: "ash.ports.test", title: "Ports" }, tunnels, remoteAgent);
+		const { TunnelPanel } = await import("../../browser/tunnelView.js");
+		using pane = new TunnelPanel(browser.window.document.body, { id: "ash.ports.test", title: "Ports" }, tunnelService, remoteAgent);
 		browser.window.document.body.append(pane.element);
 		const titleActions = pane.partTitleProjection?.actions;
 		assert.ok(titleActions);
@@ -53,16 +53,17 @@ test("Remote Ports renders Main-owned tunnel state changes", async () => {
 test("Remote Ports forwards and stops ports through the tunnel service", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
-	using tunnels = new TestRemoteTunnelService();
+	using tunnels = new TestTunnelService();
+	const tunnelService = tunnels;
 	using remoteAgent = new TestRemoteAgentService({ kind: "ssh", generation: 1, authority: "ssh+work-server", host: "work-server" }, "connected");
 	try {
-		const { RemotePortsViewPane } = await import("../../browser/remotePortsViewPane.js");
-		using pane = new RemotePortsViewPane(browser.window.document.body, { id: "ash.ports.actions.test", title: "Ports" }, tunnels, remoteAgent);
+		const { TunnelPanel } = await import("../../browser/tunnelView.js");
+		using pane = new TunnelPanel(browser.window.document.body, { id: "ash.ports.actions.test", title: "Ports" }, tunnelService, remoteAgent);
 		browser.window.document.body.append(pane.element);
 		const input = pane.element.querySelector<HTMLInputElement>(".ash-remote-ports-input")!;
 		input.value = "3000";
 		input.form!.dispatchEvent(new browser.window.Event("submit", { bubbles: true, cancelable: true }));
-		await waitFor(() => pane.element.querySelectorAll(".ash-remote-port").length === 1);
+		await waitFor(() => pane.element.querySelectorAll(".ash-remote-port").length === 1 && input.value === "");
 
 		assert.deepEqual(tunnels.openedPorts, [3000]);
 		assert.equal(input.value, "");
@@ -74,7 +75,7 @@ test("Remote Ports forwards and stops ports through the tunnel service", async (
 		tunnels.upsert(tunnel("two", 4200, 3002, "open"));
 		pane.element.querySelector<HTMLButtonElement>(".ash-remote-ports-stop-all")!.click();
 		await waitFor(() => pane.element.querySelectorAll(".ash-remote-port").length === 0);
-		assert.equal(tunnels.closeAllCount, 1);
+		assert.deepEqual(tunnels.closedIds, ["tunnel-3000", "one", "two"]);
 	} finally {
 		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
 		browser.window.close();
@@ -84,11 +85,12 @@ test("Remote Ports forwards and stops ports through the tunnel service", async (
 test("Remote Ports enables forwarding only for a connected SSH workspace", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
-	using tunnels = new TestRemoteTunnelService();
+	using tunnels = new TestTunnelService();
+	const tunnelService = tunnels;
 	using remoteAgent = new TestRemoteAgentService({ kind: "local", generation: 1 }, "connected");
 	try {
-		const { RemotePortsViewPane } = await import("../../browser/remotePortsViewPane.js");
-		using pane = new RemotePortsViewPane(browser.window.document.body, { id: "ash.ports.connection.test", title: "Ports" }, tunnels, remoteAgent);
+		const { TunnelPanel } = await import("../../browser/tunnelView.js");
+		using pane = new TunnelPanel(browser.window.document.body, { id: "ash.ports.connection.test", title: "Ports" }, tunnelService, remoteAgent);
 		browser.window.document.body.append(pane.element);
 		assert.equal(pane.element.querySelector<HTMLInputElement>(".ash-remote-ports-input")?.disabled, true);
 		assert.match(pane.element.querySelector(".ash-remote-ports-status")?.textContent ?? "", /SSH Remote Workspace/);
@@ -109,11 +111,12 @@ test("Remote Ports does not let an initial list overwrite a newer tunnel event",
 	const installedGlobals = installDomGlobals(browser);
 	let resolveInitialList!: (tunnels: readonly RemoteTunnel[]) => void;
 	const initialList = new Promise<readonly RemoteTunnel[]>(resolve => { resolveInitialList = resolve; });
-	using tunnels = new TestRemoteTunnelService([], initialList);
+	using tunnels = new TestTunnelService([], initialList);
+	const tunnelService = tunnels;
 	using remoteAgent = new TestRemoteAgentService({ kind: "ssh", generation: 1, authority: "ssh+work-server", host: "work-server" }, "connected");
 	try {
-		const { RemotePortsViewPane } = await import("../../browser/remotePortsViewPane.js");
-		using pane = new RemotePortsViewPane(browser.window.document.body, { id: "ash.ports.race.test", title: "Ports" }, tunnels, remoteAgent);
+		const { TunnelPanel } = await import("../../browser/tunnelView.js");
+		using pane = new TunnelPanel(browser.window.document.body, { id: "ash.ports.race.test", title: "Ports" }, tunnelService, remoteAgent);
 		browser.window.document.body.append(pane.element);
 		tunnels.upsert(tunnel("new", 4300, 3003, "open"));
 		resolveInitialList([]);
@@ -126,58 +129,96 @@ test("Remote Ports does not let an initial list overwrite a newer tunnel event",
 	}
 });
 
-class TestRemoteTunnelService extends Disposable implements IRemoteTunnelService {
-	private readonly changeEmitter = this._register(new Emitter<RemoteTunnelChange>());
-	private readonly tunnels = new Map<string, RemoteTunnel>();
-	private initialList: Promise<readonly RemoteTunnel[]> | undefined;
-	readonly openedPorts: number[] = [];
-	readonly closedIds: string[] = [];
-	closeAllCount = 0;
-	listCount = 0;
-	readonly onDidChange = this.changeEmitter.event;
+test("Remote Ports releases an open result from a retired connection generation", async () => {
+	const browser = new JSDOM("<!doctype html><body></body>");
+	const installedGlobals = installDomGlobals(browser);
+	using tunnels = new TestTunnelService();
+	const tunnelService = tunnels;
+	using remoteAgent = new TestRemoteAgentService({ kind: "ssh", generation: 1, authority: "ssh+work-server", host: "work-server" }, "connected");
+	let finish!: () => void;
+	tunnels.pendingOpen = new Promise(resolve => { finish = resolve; });
+	try {
+		const { TunnelPanel } = await import("../../browser/tunnelView.js");
+		using pane = new TunnelPanel(browser.window.document.body, { id: "ash.ports.retired.test", title: "Ports" }, tunnelService, remoteAgent);
+		browser.window.document.body.append(pane.element);
+		const input = pane.element.querySelector<HTMLInputElement>(".ash-remote-ports-input")!;
+		input.value = "3000";
+		input.form!.dispatchEvent(new browser.window.Event("submit", { bubbles: true, cancelable: true }));
+		await waitFor(() => tunnels.openedPorts.length === 1);
+		remoteAgent.emitConnection({ kind: "ssh", generation: 2, authority: "ssh+work-server", host: "work-server" });
+		finish();
+		await waitFor(() => tunnels.closedIds.length === 1 && pane.element.querySelectorAll(".ash-remote-port").length === 0);
+		assert.deepEqual(tunnels.closedIds, ["tunnel-3000"]);
+	} finally {
+		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
+		browser.window.close();
+	}
+});
 
-	constructor(initial: readonly RemoteTunnel[] = [], initialList?: Promise<readonly RemoteTunnel[]>) {
+interface TestTunnel extends RemoteTunnel {
+	readonly id: string;
+}
+
+class TestTunnelService extends Disposable implements ITunnelService {
+	declare public readonly _serviceBrand: undefined;
+	private readonly opened = this._register(new Emitter<RemoteTunnel>());
+	private readonly closed = this._register(new Emitter<{ host: string; port: number; }>());
+	private readonly entries = new Map<string, TestTunnel>();
+	private initialList: Promise<readonly RemoteTunnel[]> | undefined;
+	public readonly openedPorts: number[] = [];
+	public readonly closedIds: string[] = [];
+	public listCount = 0;
+	public pendingOpen: Promise<void> | undefined;
+	public readonly onTunnelOpened = this.opened.event;
+	public readonly onTunnelClosed = this.closed.event;
+
+	constructor(initial: readonly TestTunnel[] = [], initialList?: Promise<readonly RemoteTunnel[]>) {
 		super();
-		for (const entry of initial) this.tunnels.set(entry.id, entry);
+		for (const entry of initial) {
+			this.entries.set(entry.id, entry);
+		}
 		this.initialList = initialList;
 	}
 
-	list(): Promise<readonly RemoteTunnel[]> {
+	public get tunnels(): Promise<readonly RemoteTunnel[]> {
 		this.listCount += 1;
 		const initialList = this.initialList;
 		this.initialList = undefined;
-		return initialList ?? Promise.resolve(Object.freeze([...this.tunnels.values()]));
+		return initialList ?? Promise.resolve([...this.entries.values()]);
 	}
 
-	async open(request: { readonly remotePort: number; }): Promise<RemoteTunnel> {
-		this.openedPorts.push(request.remotePort);
-		const opened = tunnel(`tunnel-${request.remotePort}`, request.remotePort + 10_000, request.remotePort, "open");
-		this.upsert(opened);
-		return opened;
+	public async openTunnel(_addressProvider: IAddressProvider | undefined, _remoteHost: string | undefined, remotePort: number): Promise<RemoteTunnel> {
+		this.openedPorts.push(remotePort);
+		await this.pendingOpen;
+		const opened = tunnel(`tunnel-${remotePort}`, remotePort + 10_000, remotePort, 'open');
+		const handle = { ...opened, dispose: async () => { this.closedIds.push(opened.id); this.remove(opened.id); } };
+		this.upsert(handle);
+		return handle;
 	}
 
-	async close(id: string): Promise<void> {
-		this.closedIds.push(id);
-		this.remove(id);
+	public async closeTunnel(remoteHost: string, remotePort: number): Promise<void> {
+		const entry = [...this.entries.values()].find(entry => entry.tunnelRemoteHost === remoteHost && entry.tunnelRemotePort === remotePort);
+		if (entry) {
+			this.closedIds.push(entry.id);
+			this.remove(entry.id);
+		}
 	}
 
-	async closeAll(): Promise<void> {
-		this.closeAllCount += 1;
-		for (const id of [...this.tunnels.keys()]) this.remove(id);
+	public upsert(entry: TestTunnel): void {
+		this.entries.set(entry.id, entry);
+		this.opened.fire(entry);
 	}
 
-	upsert(entry: RemoteTunnel): void {
-		this.tunnels.set(entry.id, entry);
-		this.changeEmitter.fire({ kind: "upsert", tunnel: entry });
-	}
-
-	remove(id: string): void {
-		this.tunnels.delete(id);
-		this.changeEmitter.fire({ kind: "removed", id });
+	public remove(id: string): void {
+		const entry = this.entries.get(id);
+		this.entries.delete(id);
+		if (entry) {
+			this.closed.fire({ host: entry.tunnelRemoteHost, port: entry.tunnelRemotePort });
+		}
 	}
 }
 
-class TestRemoteAgentService extends Disposable implements IRemoteAgentService {
+class TestRemoteAgentService extends Disposable implements IAppServerRemoteAgentService {
 	private readonly stateEmitter = this._register(new Emitter<RemoteConnectionState>());
 	private readonly connectionEmitter = this._register(new Emitter<RemoteAgentConnection>());
 	readonly onDidChangeConnectionState = this.stateEmitter.event;
@@ -199,8 +240,8 @@ class TestRemoteAgentService extends Disposable implements IRemoteAgentService {
 	}
 }
 
-function tunnel(id: string, localPort: number, remotePort: number, state: RemoteTunnel["state"]): RemoteTunnel {
-	return Object.freeze({ id, localPort, remoteHost: "127.0.0.1", remotePort, state });
+function tunnel(id: string, localPort: number, remotePort: number, state: RemoteTunnel['state']): TestTunnel {
+	return Object.freeze({ id, tunnelLocalPort: localPort, tunnelRemoteHost: '127.0.0.1', tunnelRemotePort: remotePort, localAddress: `127.0.0.1:${localPort}`, privacy: TunnelPrivacyId.ConstantPrivate, state, dispose: async () => { } });
 }
 
 async function waitFor(predicate: () => boolean): Promise<void> {

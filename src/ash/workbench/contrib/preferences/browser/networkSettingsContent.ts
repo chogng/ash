@@ -17,7 +17,7 @@ import { INetworkDiagnosticsService, type HttpCompatibilityMode, type NetworkDia
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import type { ISetting } from '../../../services/preferences/common/preferences.js';
-import { IRemoteAgentService } from '../../../services/remote/common/remoteAgentService.js';
+import { IAppServerRemoteAgentService } from '../../../services/remote/common/appServerRemoteAgentService.js';
 import type { SettingsContent, SettingsContentItem, SettingsTreeNode } from './settingsTreeModels.js';
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
@@ -62,7 +62,7 @@ export class NetworkSettingsContent extends Disposable implements SettingsConten
 	constructor(container: HTMLElement,
 		@INetworkDiagnosticsService private readonly network: INetworkDiagnosticsService,
 		@IClipboardService private readonly clipboard: IClipboardService,
-		@IRemoteAgentService remote: IRemoteAgentService,
+		@IAppServerRemoteAgentService remote: IAppServerRemoteAgentService,
 		@ILocalizationService localization: ILocalizationService,
 		@IConfigurationService configuration: IConfigurationService,
 		@IContextKeyService contextKeys: IContextKeyService,

@@ -3,7 +3,7 @@ import type { Session } from 'electron/main';
 import { BrowserViewStorageScope } from '../common/browserView.js';
 import { BrowserSessionPermissions } from './browserSessionPermissions.js';
 import { BrowserSessionRemote } from './browserSessionRemote.js';
-import type { SshRemoteTunnelService } from '../../remote/electron-main/sshRemoteTunnelService.js';
+import type { SshPortForwardingService } from '../../remote/electron-main/sshPortForwardingService.js';
 import { toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { randomUUID } from 'node:crypto';
 import type { WebContents } from 'electron/main';
@@ -81,7 +81,7 @@ export class BrowserSession {
 		return operation;
 	}
 
-	public async acquireRemote(tunnels: SshRemoteTunnelService, signal: AbortSignal): Promise<IDisposable> {
+	public async acquireRemote(tunnels: SshPortForwardingService, signal: AbortSignal): Promise<IDisposable> {
 		this.networkUsers++;
 		if (!this.remote) {
 			this.remote = new BrowserSessionRemote(this.electronSession);

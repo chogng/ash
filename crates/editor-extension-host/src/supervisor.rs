@@ -412,6 +412,7 @@ impl ExtensionHostSupervisor {
             HostRequestKind::Initialize(InitializeParams {
                 extension_id: self.inner.activation.params().extension_id.clone(),
                 runtime_api_version: self.inner.activation.params().runtime_api_version,
+                environment: self.inner.command.extension_environment().clone(),
             }),
         )?;
         let response = initialize

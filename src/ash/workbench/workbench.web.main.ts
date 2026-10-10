@@ -1,3 +1,5 @@
+import { IRemoteTunnelService } from '../platform/remoteTunnel/common/remoteTunnel.js';
+import { BrowserRemoteTunnelService } from '../platform/remoteTunnel/browser/remoteTunnelService.js';
 import { BrowserElevatedFileService } from './services/files/browser/elevatedFileService.js';
 import { IElevatedFileService } from './services/files/common/elevatedFileService.js';
 /**
@@ -13,8 +15,18 @@ import { IHostService } from './services/host/browser/host.js';
 import { InstantiationType, registerSingleton } from '../platform/instantiation/common/extensions.js';
 import { ILanguagePackStore } from '../platform/languagePacks/common/languagePackStore.js';
 import { BrowserLanguagePackStore } from '../platform/languagePacks/browser/languagePackStore.js';
+import { IRemoteAuthorityResolverService } from '../platform/remote/common/remoteAuthorityResolver.js';
+import { RemoteAuthorityResolverService } from '../platform/remote/browser/remoteAuthorityResolverService.js';
+
+import { ITunnelService } from '../platform/tunnel/common/tunnel.js';
+import { TunnelService } from './services/tunnel/browser/tunnelService.js';
 
 registerSingleton(IHostService, BrowserHostService, InstantiationType.Delayed);
 registerSingleton(ILanguagePackStore, BrowserLanguagePackStore, InstantiationType.Delayed);
 
 registerSingleton(IElevatedFileService, BrowserElevatedFileService, InstantiationType.Delayed);
+
+registerSingleton(ITunnelService, TunnelService, InstantiationType.Delayed);
+registerSingleton(IRemoteAuthorityResolverService, RemoteAuthorityResolverService, InstantiationType.Delayed);
+
+registerSingleton(IRemoteTunnelService, BrowserRemoteTunnelService, InstantiationType.Delayed);

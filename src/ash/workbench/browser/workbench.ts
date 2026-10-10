@@ -84,10 +84,8 @@ import { NullLocalTranscriptionService } from '../services/localTranscription/br
 import { IAgentCapabilitiesService } from '../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { ITraceSettingsService } from '../../platform/trace/common/traceSettingsService.js';
 import { IBrowserViewService } from '../../platform/browserView/common/browserView.js';
-import { IRemoteConnectionService } from "../../platform/remote/common/remoteConnectionService.js";
-import { UnavailableRemoteConnectionService } from "../../platform/remote/common/remoteConnectionService.js";
-import { IRemoteTunnelService } from "../../platform/remote/common/remoteTunnelService.js";
-import { UnavailableRemoteTunnelService } from "../../platform/remote/common/remoteTunnelService.js";
+import { IRemoteConnectionApi, IRemoteConnectionService, RemoteConnectionService } from "../../platform/remote/common/remoteConnectionService.js";
+import { UnavailableRemoteConnectionApi } from "../../platform/remote/common/remoteConnectionService.js";
 import type {
 	INativeHostApi,
 } from "../../platform/native/common/nativeHost.js";
@@ -218,7 +216,7 @@ import { BrowserTextMateService } from "../services/textMate/browser/browserText
 import { AppServerExtensionService } from "../services/extensions/browser/appServerExtensionService.js";
 import { IExtensionService } from "../services/extensions/common/extensionService.js";
 import { AppServerRemoteAgentService } from "../services/remote/browser/appServerRemoteAgentService.js";
-import { IRemoteAgentService } from "../services/remote/common/remoteAgentService.js";
+import { IAppServerRemoteAgentService } from "../services/remote/common/appServerRemoteAgentService.js";
 import { ILanguageFeaturesService } from '../../editor/common/services/languageFeatures.js';
 import { DefaultDropProvidersFeature, DefaultPasteProvidersFeature } from '../../editor/contrib/dropOrPasteInto/browser/defaultProviders.js';
 import { ICodeEditorService } from '../../editor/browser/services/codeEditorService.js';
@@ -555,10 +553,11 @@ export class Workbench extends Disposable {
 		if (api.automation) {
 			services.registerInstance(IAutomationService, api.automation);
 		}
-		const remoteAgentService = this._register(new AppServerRemoteAgentService({ api: api.appServer, remoteApi: api.remote }));
-		services.registerInstance(IRemoteAgentService, remoteAgentService);
-		services.registerInstance(IRemoteConnectionService, api.remoteConnections ?? UnavailableRemoteConnectionService);
-		services.registerInstance(IRemoteTunnelService, api.remoteTunnels ?? UnavailableRemoteTunnelService);
+		services.registerInstance(AppServerApiId, api.appServer);
+		const remoteAgentService = this._register(services.createInstance(AppServerRemoteAgentService, { remoteApi: api.remote }));
+		services.registerInstance(IAppServerRemoteAgentService, remoteAgentService);
+		services.registerInstance(IRemoteConnectionApi, api.remoteConnections ?? UnavailableRemoteConnectionApi);
+		services.registerSingleton(IRemoteConnectionService, () => services.createInstance(RemoteConnectionService));
 		const dialogService = services.get(IDialogService) as DialogService;
 		services.registerInstance(IDialogsModel, dialogService.model);
 		if (nativeHostApi) {
@@ -779,7 +778,6 @@ export class Workbench extends Disposable {
 		services.registerSingleton(ITraceService, () => services.createInstance(AppServerTraceService));
 		services.registerInstance(ITurnApi, api.turn);
 		services.registerInstance(ITurnChangesApi, api.turnChanges);
-		services.registerInstance(AppServerApiId, api.appServer);
 		services.registerInstance(ServerEventApiId, api.events);
 		const chatService = this._register(services.createInstance(ChatService));
 		services.registerInstance(IChatService, chatService);

@@ -11,6 +11,7 @@ export const DEFAULT_MAX_STDERR_BYTES = 65_536;
 export const DEFAULT_MAX_PENDING_WRITES = 128;
 
 export interface ChildProcessJsonlTransportOptions {
+	stdoutMode?: 'jsonl' | 'bytes';
 	maxFrameBytes?: number;
 	maxStderrBytes?: number;
 	maxPendingWrites?: number;
@@ -18,19 +19,23 @@ export interface ChildProcessJsonlTransportOptions {
 }
 
 type FrameListener = (frame: string) => void;
+type DataListener = (data: Uint8Array) => void;
 type CloseListener = (error: Error) => void;
 
 /**
- * Owns bounded JSONL framing and stream lifecycle for one spawned App Server process.
+ * Owns stream lifecycle for one spawned App Server process. JSONL consumers use the
+ * default framing mode; Desktop selects byte delivery and frames in its Renderer.
  *
  * This transport deliberately has no knowledge of JSON-RPC methods or request identifiers.
  */
 export class ChildProcessJsonlTransport implements IDisposable {
+	private readonly stdoutMode: 'jsonl' | 'bytes';
 	private readonly maxFrameBytes: number;
 	private readonly maxStderrBytes: number;
 	private readonly maxPendingWrites: number;
 	private readonly closeTimeoutMs: number;
 	private readonly frameListeners = new Set<FrameListener>();
+	private readonly dataListeners = new Set<DataListener>();
 	private readonly closeListeners = new Set<CloseListener>();
 	private readonly writeRejectors = new Set<(error: Error) => void>();
 	private frameParts: Buffer[] = [];
@@ -45,6 +50,7 @@ export class ChildProcessJsonlTransport implements IDisposable {
 		readonly process: ChildProcessWithoutNullStreams,
 		options: ChildProcessJsonlTransportOptions = {},
 	) {
+		this.stdoutMode = options.stdoutMode ?? 'jsonl';
 		this.maxFrameBytes = positiveInteger(
 			options.maxFrameBytes,
 			DEFAULT_MAX_JSONL_FRAME_BYTES,
@@ -74,8 +80,19 @@ export class ChildProcessJsonlTransport implements IDisposable {
 	}
 
 	onFrame(listener: FrameListener): IDisposable {
+		if (this.stdoutMode !== 'jsonl') {
+			throw new Error('Byte output does not expose JSONL frames');
+		}
 		this.frameListeners.add(listener);
 		return toDisposable(() => this.frameListeners.delete(listener));
+	}
+
+	onData(listener: DataListener): IDisposable {
+		if (this.stdoutMode !== 'bytes') {
+			throw new Error('JSONL output does not expose byte chunks');
+		}
+		this.dataListeners.add(listener);
+		return toDisposable(() => this.dataListeners.delete(listener));
 	}
 
 	onClose(listener: CloseListener): IDisposable {
@@ -101,12 +118,24 @@ export class ChildProcessJsonlTransport implements IDisposable {
 		if (Buffer.byteLength(frame, "utf8") > this.maxFrameBytes) {
 			return Promise.reject(new Error(`JSONL frame exceeds ${this.maxFrameBytes} bytes`));
 		}
-		if (this.pendingWrites >= this.maxPendingWrites) {
-			return Promise.reject(new Error("JSONL transport write queue is full"));
-		}
+		return this.sendBytes(Buffer.from(`${frame}\n`, 'utf8'));
+	}
 
+	/** Carries already framed peer bytes; no newline or JSON interpretation is added here. */
+	sendBytes(bytes: Uint8Array): Promise<void> {
+		if (this.terminalError) {
+			return Promise.reject(this.terminalError);
+		}
+		if (bytes.byteLength > this.maxFrameBytes + 1) {
+			return Promise.reject(new Error('App Server byte chunk exceeds transport capacity'));
+		}
+		if (this.pendingWrites >= this.maxPendingWrites) {
+			return Promise.reject(new Error('JSONL transport write queue is full'));
+		}
+		// Own the queued bytes: a caller can reuse its buffer before the stream accepts the write.
+		const owned = Buffer.from(bytes);
 		this.pendingWrites += 1;
-		const write = this.writeTail.then(() => this.writeFrame(`${frame}\n`));
+		const write = this.writeTail.then(() => this.writeFrame(owned));
 		this.writeTail = write.catch(() => { });
 		return write.finally(() => {
 			this.pendingWrites -= 1;
@@ -158,6 +187,24 @@ export class ChildProcessJsonlTransport implements IDisposable {
 	private readonly onStdoutData = (chunk: Buffer | string): void => {
 		if (this.terminalError) return;
 		const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, "utf8");
+		if (this.stdoutMode === 'bytes') {
+			if (bytes.byteLength > this.maxFrameBytes) {
+				this.fail(new Error('App Server byte chunk exceeds transport capacity'));
+				return;
+			}
+			for (const listener of this.dataListeners) {
+				try {
+					listener(bytes);
+				} catch (error) {
+					this.fail(error instanceof Error ? error : new Error('App Server byte listener failed'));
+					return;
+				}
+				if (this.terminalError) {
+					return;
+				}
+			}
+			return;
+		}
 		let start = 0;
 		for (let index = 0; index < bytes.length; index += 1) {
 			if (bytes[index] !== 0x0a) continue;
@@ -261,7 +308,7 @@ export class ChildProcessJsonlTransport implements IDisposable {
 		}
 	}
 
-	private writeFrame(frame: string): Promise<void> {
+	private writeFrame(frame: Buffer): Promise<void> {
 		if (this.terminalError) return Promise.reject(this.terminalError);
 		return new Promise<void>((resolve, reject) => {
 			let callbackComplete = false;
@@ -335,6 +382,7 @@ export class ChildProcessJsonlTransport implements IDisposable {
 			}
 		}
 		this.frameListeners.clear();
+		this.dataListeners.clear();
 		this.closeListeners.clear();
 		markAsDisposed(this);
 	}

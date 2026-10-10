@@ -182,6 +182,7 @@ pub(crate) fn deployments(
         )
         .map_err(|error| error.to_string())?;
         result.push(EditorExtensionDeployment {
+            scope: crate::server::extension_host_runtime::source::EditorExtensionScope::Workspace,
             activation,
             activation_failure,
             id: extension_id.clone(),
@@ -251,6 +252,7 @@ fn deployment(
         source: source.clone(),
     });
     Ok(EditorExtensionDeployment {
+        scope: crate::server::extension_host_runtime::source::EditorExtensionScope::Workspace,
         activation: None,
         activation_failure: None,
         id: extension_id.clone(),

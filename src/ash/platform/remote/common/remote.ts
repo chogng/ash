@@ -1,5 +1,6 @@
 import { URI } from "../../../base/common/uri.js";
 import { Schemas } from '../../../base/common/network.js';
+import { getRemoteAuthority as getResourceRemoteAuthority } from './remoteHosts.js';
 
 export const ASH_REMOTE_SCHEME = Schemas.ashRemote;
 const SSH_AUTHORITY_PREFIX = "ssh+";
@@ -45,11 +46,16 @@ export function getRemoteAuthority(resource: URI): RemoteAuthority | undefined {
 
 /** Returns the absolute POSIX folder path represented by a Remote resource URI. */
 export function getRemoteWorkspacePath(resource: URI): string {
-	const authority = getRemoteAuthority(resource);
+	const authority = getResourceRemoteAuthority(resource);
 	if (!authority) throw new Error("Resource is not a Remote workspace URI");
 	if (resource.query || resource.fragment) throw new Error("Remote workspace URI must not contain a query or fragment");
 	const path = normalizeRemoteWorkspacePath(resource.path);
-	if (createSshRemoteWorkspaceUri(authority.host, path).toString() !== resource.toString()) {
+	// Provider-independent resource paths must also work for extension-resolved hosts.
+	// SSH identities still pass through the stricter credential-free alias validator.
+	const canonical = authority.startsWith(SSH_AUTHORITY_PREFIX)
+		? createSshRemoteWorkspaceUri(authority.slice(SSH_AUTHORITY_PREFIX.length), path)
+		: URI.from({ scheme: ASH_REMOTE_SCHEME, authority, path });
+	if (canonical.toString() !== resource.toString()) {
 		throw new Error("Remote workspace URI must use its canonical resource identity");
 	}
 	return path;

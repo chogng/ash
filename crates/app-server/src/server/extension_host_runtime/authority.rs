@@ -9,6 +9,7 @@ use ash_editor_extension_host::ExtensionLaunchCommand;
 use ash_file_access::Authorization;
 
 use super::source::EditorExtensionDeployment;
+use super::source::EditorExtensionScope;
 
 pub(super) struct PreparedExtension {
     pub(super) command: ExtensionLaunchCommand,
@@ -16,20 +17,28 @@ pub(super) struct PreparedExtension {
 }
 
 pub(super) fn prepare_extension(
-    authorization: &Authorization,
+    authorization: Option<&Authorization>,
     deployment: &EditorExtensionDeployment,
     activation_generation: NonZeroU64,
 ) -> Result<PreparedExtension, ExtensionHostError> {
-    authorization
-        .ensure_active()
-        .map_err(|_| ExtensionHostError::AuthorityDenied)?;
     if !deployment.authority.authorizes() {
         return Err(ExtensionHostError::AuthorityDenied);
     }
-    let authority: Arc<dyn ActivationAuthority> = Arc::new(DirActivationAuthority {
-        source: Arc::clone(&deployment.authority),
-        authorization: authorization.clone(),
-    });
+    let authority: Arc<dyn ActivationAuthority> = match deployment.scope {
+        EditorExtensionScope::Product | EditorExtensionScope::Profile => {
+            Arc::clone(&deployment.authority)
+        }
+        EditorExtensionScope::Workspace => {
+            let authorization = authorization.ok_or(ExtensionHostError::AuthorityDenied)?;
+            authorization
+                .ensure_active()
+                .map_err(|_| ExtensionHostError::AuthorityDenied)?;
+            Arc::new(DirActivationAuthority {
+                source: Arc::clone(&deployment.authority),
+                authorization: authorization.clone(),
+            })
+        }
+    };
     Ok(PreparedExtension {
         command: deployment.command.clone(),
         activation: ExtensionActivationSpec::new(

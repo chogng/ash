@@ -25,6 +25,25 @@ impl ExtensionClientRequest {
             ));
         }
         validate_encoded_size(&self.operation, limits.maximum_payload_bytes)?;
+        if let ExtensionClientOperation::OpenRemoteConnection { authority } = &self.operation {
+            let valid = authority.split_once('+').is_some_and(|(prefix, target)| {
+                !prefix.is_empty()
+                    && prefix.len() <= 64
+                    && prefix.as_bytes()[0].is_ascii_lowercase()
+                    && prefix.bytes().all(|byte| {
+                        byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-'
+                    })
+                    && !target.is_empty()
+            });
+            if !valid
+                || authority.len() > 2048
+                || authority.bytes().any(|byte| byte <= 32 || byte == 127)
+            {
+                return Err(ProtocolError::InvalidProtocol(
+                    "invalid Remote connection authority".into(),
+                ));
+            }
+        }
         if let ExtensionClientOperation::SetStatusBarEntries {
             registration_id,
             revision,
@@ -87,6 +106,10 @@ impl ExtensionClientRequest {
     deny_unknown_fields
 )]
 pub enum ExtensionClientOperation {
+    /// The initiating client confirms the saved target before handing it to the connection host.
+    OpenRemoteConnection {
+        authority: String,
+    },
     SetStatusBarEntries {
         registration_id: String,
         #[cfg_attr(feature = "export", ts(type = "number"))]

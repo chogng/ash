@@ -71,6 +71,7 @@ def build_package_directory(
     build_profile: str = "release",
     windows_sandbox_binary: Optional[Path] = None,
     windows_sandbox_service_binary: Optional[Path] = None,
+    remote_host_binary: Optional[Path] = None,
     voice_host_binary: Optional[Path] = None,
     collaboration_server_binary: Optional[Path] = None,
     livekit: Optional[Dict[str, str]] = None,
@@ -82,6 +83,10 @@ def build_package_directory(
     ):
         raise RuntimeError(
             "Windows packages require both sandbox executables; other targets must omit them"
+        )
+    if remote_host_binary is None:
+        raise RuntimeError(
+            "Inbound tunnel host executable is required in product packages"
         )
     if (
         voice_host_binary is None
@@ -107,6 +112,7 @@ def build_package_directory(
         executables = {
             "appServer": str(server_binary),
             "remote": str(remote_binary),
+            "remoteHost": str(remote_host_binary),
             "remoteServer": str(remote_server_binary),
             "execServer": str(exec_server_binary),
             "appServerDaemon": str(app_server_daemon_binary),
@@ -662,6 +668,7 @@ def system_signing_artifacts(package: Path, spec: TargetSpec) -> Dict[str, Path]
         "tgrep": package / "ash-resources/tgrep" / ("tgrep" + spec.executable_suffix),
         "appServer": package / "bin" / spec.server_name,
         "remote": package / "bin" / spec.remote_name,
+        "remoteHost": package / "bin" / ("ash-remote-host" + spec.executable_suffix),
         "remoteServer": package / "bin" / spec.remote_server_name,
         "execServer": package / "bin" / spec.exec_server_name,
     }
@@ -729,6 +736,7 @@ def record_system_signing(
             "tgrep",
             "appServer",
             "remote",
+            "remoteHost",
             "remoteServer",
             "execServer",
             "windowsSandbox",

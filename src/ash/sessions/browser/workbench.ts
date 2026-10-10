@@ -44,7 +44,7 @@ import { IHooksService } from '../../platform/hooks/common/hooksService.js';
 import { IAppServerSkillApi } from '../../platform/agentHost/common/appServerApi.js';
 import { IMarketplaceService, OPEN_MARKETPLACE_COMMAND_ID, OPEN_PLUGINS_COMMAND_ID, type MarketplaceOpenOptions } from '../../platform/marketplace/common/marketplaceService.js';
 import { AppServerMarketplaceService } from '../../workbench/services/marketplace/browser/appServerMarketplaceService.js';
-import { IRemoteAgentService } from '../../workbench/services/remote/common/remoteAgentService.js';
+import { IAppServerRemoteAgentService } from '../../workbench/services/remote/common/appServerRemoteAgentService.js';
 import { AppServerRemoteAgentService } from '../../workbench/services/remote/browser/appServerRemoteAgentService.js';
 import { IChatSessionNavigationService } from '../../workbench/services/chat/common/chatSessionNavigationService.js';
 import '../../workbench/contrib/chat/browser/actions/chatSpeechToTextActions.js';
@@ -404,7 +404,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(ILanguagePackService, languagePacks);
 		const localization = this._register(new WorkbenchLocalizationService());
 		services.registerInstance(ILocalizationService, localization);
-		services.registerInstance(IRemoteAgentService, this._register(new AppServerRemoteAgentService({ api: options.api.appServer, remoteApi: options.api.remote })));
+		services.registerInstance(IAppServerRemoteAgentService, this._register(services.createInstance(AppServerRemoteAgentService, { remoteApi: options.api.remote })));
 		services.registerInstance(IGitHubService, options.api.github);
 		const sessionGitHub = this._register(services.createInstance(SessionsGitHubService));
 		services.registerInstance(ISessionsGitHubService, sessionGitHub);

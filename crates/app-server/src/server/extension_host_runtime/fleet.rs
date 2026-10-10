@@ -34,17 +34,36 @@ impl RuntimeInner {
             .map_err(|_| ExtensionHostRuntimeError::Internal)?
             .authorization
             .clone();
-        let Some(authorization) = authorization else {
-            return Ok(self.snapshot());
-        };
-        authorization
-            .ensure_active()
-            .map_err(|_| ExtensionHostRuntimeError::Host(ExtensionHostError::AuthorityDenied))?;
-        let source_snapshot = source::combined_deployments(
+        if let Some(authorization) = &authorization {
+            authorization.ensure_active().map_err(|_| {
+                ExtensionHostRuntimeError::Host(ExtensionHostError::AuthorityDenied)
+            })?;
+        }
+        // A granted local JS resolver must run before a remote window has any directory.
+        // Reading admitted package metadata does not grant execution to workspace sources.
+        let mut source_snapshot = source::combined_deployments(
             self.plugin_authority.as_ref(),
             self.plugins_manager.as_ref(),
             self.marketplace_admission.as_ref(),
         )?;
+        if authorization.is_none() {
+            source_snapshot
+                .deployments
+                .retain(|deployment| deployment.scope != source::EditorExtensionScope::Workspace);
+        }
+        source_snapshot
+            .deployments
+            .extend(source::built_in_deployments(self.built_in_extensions)?);
+        source_snapshot
+            .deployments
+            .sort_by(|left, right| left.id.cmp(&right.id));
+        if source_snapshot
+            .deployments
+            .windows(2)
+            .any(|pair| pair[0].id == pair[1].id)
+        {
+            return Err(ExtensionHostRuntimeError::Internal);
+        }
         if !force
             && self
                 .state
@@ -72,7 +91,7 @@ impl RuntimeInner {
         self.retire_current(CancelReason::AuthorityRevoked)?;
         let mut entries = BTreeMap::new();
         for deployment in &source_snapshot.deployments {
-            let entry = self.build_entry(&authorization, deployment, generation);
+            let entry = self.build_entry(authorization.as_ref(), deployment, generation);
             if entries.insert(entry.fallback.id.clone(), entry).is_some() {
                 return Err(ExtensionHostRuntimeError::Internal);
             }
@@ -93,7 +112,7 @@ impl RuntimeInner {
 
     fn build_entry(
         &self,
-        authorization: &Authorization,
+        authorization: Option<&Authorization>,
         deployment: &EditorExtensionDeployment,
         generation: NonZeroU64,
     ) -> RuntimeEntry {
@@ -146,7 +165,12 @@ impl RuntimeInner {
             }
             ExtensionHostSupervisor::new(
                 Arc::clone(&self.launcher),
-                prepared.command,
+                match &self.environment {
+                    Some(environment) => prepared
+                        .command
+                        .with_extension_environment(environment.clone())?,
+                    None => prepared.command,
+                },
                 prepared.activation,
                 limits,
                 self.restart_policy,

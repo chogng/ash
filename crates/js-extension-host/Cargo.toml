@@ -13,6 +13,7 @@ path = "src/main.rs"
 extension-protocol.workspace = true
 serde_json.workspace = true
 serde.workspace = true
+sha2.workspace = true
 v8-runtime.workspace = true
 v8 = { workspace = true, features = ["v8_enable_sandbox"] }
 

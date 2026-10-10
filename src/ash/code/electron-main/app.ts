@@ -84,10 +84,11 @@ import { RemoteRuntimeInstaller, remoteRuntimeArtifactFromEnvironment } from "..
 import { RemoteRuntimeProvisioner } from "../../platform/remote/electron-main/remoteRuntimeProvisioner.js";
 import { RemoteConnectionProfiles } from "../../platform/remote/electron-main/remoteConnectionProfiles.js";
 import { RemoteConnections } from "../../platform/remote/electron-main/remoteConnections.js";
-import { UnavailableRemoteConnectionService, type IRemoteConnectionService } from "../../platform/remote/common/remoteConnectionService.js";
+import { UnavailableRemoteConnectionApi, type IRemoteConnectionApi } from "../../platform/remote/common/remoteConnectionService.js";
 import type { RemoteConnectionDefinition } from "../../platform/remote/common/remoteConnectionService.js";
 import { createSshRemoteAuthority, getRemoteAuthority, isRemoteResource } from "../../platform/remote/common/remote.js";
-import { SshRemoteTunnelService } from "../../platform/remote/electron-main/sshRemoteTunnelService.js";
+import { remotePortForwardingChannel } from '../../platform/remote/electron-main/remotePortForwardingIpc.js';
+import { SshPortForwardingService } from "../../platform/remote/electron-main/sshPortForwardingService.js";
 import { createRemoteRuntimeInstallProgressLogger } from "../../platform/remote/electron-main/remoteRuntimeBootstrapMainService.js";
 import { RemoteRuntimeBootstrapMainService } from "../../platform/remote/electron-main/remoteRuntimeBootstrapMainService.js";
 import { RemoteAppServerProcessLauncher } from "../../platform/remote/electron-main/remoteAppServerProcessLauncher.js";
@@ -107,6 +108,9 @@ import { disposableTimeout } from '../../base/common/async.js';
 import { WorkspaceOpenTargetKind } from '../../platform/environment/common/argv.js';
 import { parseLaunchArguments, parseMainProcessArgv, windowsCommandLine } from '../../platform/environment/node/argvHelper.js';
 import { LaunchMainService, parseWindowLaunch, type IStartArguments } from '../../platform/launch/electron-main/launchMainService.js';
+import { RemoteTunnelService } from '../../platform/remoteTunnel/node/remoteTunnelService.js';
+import { ITunnelProcessCoordinator, TunnelProcessCoordinator } from '../../platform/remoteTunnel/node/tunnelProcessCoordinator.js';
+import { ILogService } from '../../platform/log/common/log.js';
 import { InstantiationService } from '../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
 import { SyncDescriptor } from '../../platform/instantiation/common/descriptors.js';
@@ -148,7 +152,7 @@ interface WorkbenchWindowRecord {
 	readonly workspaceContext: WorkspaceContextMainService;
 	readonly supervisor: AppServerConnectionRelay;
 	readonly resources: DisposableStore;
-	readonly remoteConnections: IRemoteConnectionService;
+	readonly remoteConnections: IRemoteConnectionApi;
 	windowsStateHandler: WindowsStateHandler;
 	windowStateTracking: IDisposable;
 	openWorkspace?: (root: string) => Promise<void>;
@@ -157,12 +161,12 @@ interface WorkbenchWindowRecord {
 
 class SessionsWindowRecord extends Disposable {
 	readonly workspaceContext: WorkspaceContextMainService;
-	readonly remoteConnections: IRemoteConnectionService;
+	readonly remoteConnections: IRemoteConnectionApi;
 	readonly runtimeResources = this._register(new MutableDisposable<DisposableStore>());
 	supervisor: AppServerConnectionRelay | undefined;
 	windowState: { readonly window: BrowserWindow; readonly handler: WindowsStateHandler; readonly tracking: IDisposable; } | undefined;
 
-	constructor(workspaceContext: WorkspaceContextMainService, remoteConnections: IRemoteConnectionService) {
+	constructor(workspaceContext: WorkspaceContextMainService, remoteConnections: IRemoteConnectionApi) {
 		super();
 		this.workspaceContext = this._register(workspaceContext);
 		this.remoteConnections = remoteConnections;
@@ -186,6 +190,8 @@ export class AshApplication extends Disposable {
 	private readonly tracking: globalThis.Disposable | undefined;
 	private readonly trustedIpcRouter: TrustedIpcRouter;
 	private readonly mainProcessIpcServer = this._register(new MainProcessIPCServer());
+	private readonly remoteTunnel = this._register(new MutableDisposable<RemoteTunnelService>());
+	private readonly windowPortForwarding = new Map<string, SshPortForwardingService>();
 	private readonly sharedProcess = this._register(new UtilityProcess({
 		name: 'Ash Browser Automation',
 		entryPoint: fileURLToPath(new URL('../electron-utility/sharedProcess/sharedProcessMain.js', import.meta.url)),
@@ -391,6 +397,32 @@ export class AshApplication extends Disposable {
 		await this.createPersistentServices(token);
 		throwIfCancelled(token);
 		this.mainProcessIpcServer.registerChannel('configuration', configurationChannel(this.services.configuration));
+		this.mainProcessIpcServer.registerChannel('remotePortForwarding', remotePortForwardingChannel(context => {
+			const service = this.windowPortForwarding.get(context);
+			if (!service || service.isDisposed) {
+				throw new Error('Remote port-forwarding window is unavailable');
+			}
+			return service;
+		}));
+		const remoteExecutable = remoteExecutablePath({ appPath: app.getAppPath(), isPackaged: app.isPackaged, platform: process.platform, resourcesPath: process.resourcesPath });
+		const tunnelServices = this._register(this.windowServices.createChild(new ServiceCollection([ILogService, this.logService])));
+		const coordinator = this._register(tunnelServices.createInstance(TunnelProcessCoordinator, {
+			executable: join(dirname(remoteExecutable), process.platform === 'win32' ? 'ash-remote-host.exe' : 'ash-remote-host'),
+			backendExecutable: join(dirname(remoteExecutable), process.platform === 'win32' ? 'ash-app-server.exe' : 'ash-app-server'),
+			sshExecutable: process.env.ASH_SSH_PATH ?? 'ssh',
+			assets: this.rendererRoot,
+			environment: { ...process.env, ASH_HOME: this.profileRoot },
+		}));
+		tunnelServices.registerInstance(ITunnelProcessCoordinator, coordinator);
+		const remoteTunnel = tunnelServices.createInstance(RemoteTunnelService);
+		this.remoteTunnel.value = remoteTunnel;
+		this.mainProcessIpcServer.registerChannel('remoteTunnel', remoteTunnel.createChannel(context => {
+			const record = [...this.workbenchWindowData.values()].find(candidate => `window:${candidate.id}` === context);
+			if (!record || record.window.isDestroyed()) { throw new Error('Remote tunnel window is unavailable'); }
+			const workspace = record.workspaceContext.getResolvedWorkspace();
+			if (this.appServerStartupMode === 'disabled' || getWorkspaceRemoteAuthority(record.workspaceContext.getWorkspace()) || workspace.folders.length !== 1 || workspace.folders[0].uri.scheme !== 'file') { return undefined; }
+			return workspace.folders[0].uri.fsPath;
+		}));
 		await mkdir(join(this.profileRoot, 'themes'), { recursive: true });
 		throwIfCancelled(token);
 		const profileFiles = this._register(new DiskFileSystemProvider([URI.file(this.profileRoot)]));
@@ -933,7 +965,7 @@ export class AshApplication extends Disposable {
 		if (this.appServerStartupMode === "disabled") {
 			return existing ?? new AppServerConnectionRelay({ enabled: false });
 		}
-		const remote = role === 'workbench' && getWorkspaceRemoteAuthority(workspace) !== undefined;
+		const remote = role === 'workbench' && getWorkspaceRemoteAuthority(workspace)?.startsWith('ssh+') === true;
 		const connection = createAppServerDaemonLauncher({
 			packageLocation: { appPath: app.getAppPath(), expectedVersion: app.getVersion(), isPackaged: app.isPackaged, platform: process.platform, resourcesPath: process.resourcesPath },
 			sourceEnvironment: process.env,
@@ -1110,12 +1142,12 @@ export class AshApplication extends Disposable {
 		this.configureWindowNavigation(window, windowDisposables);
 		const workspaceHost = windowDisposables.add(new RendererWorkspaceHost(window.webContents));
 		windowDisposables.add(record.windowStateTracking);
-		const remoteTunnelService = new SshRemoteTunnelService({
+		const remotePortForwardingService = new SshPortForwardingService({
 			getWorkspace: () => workspaceContext.getWorkspace(),
 			sshExecutable: process.env.ASH_SSH_PATH ?? "ssh",
 			localEnvironment: process.env,
 		});
-		const browserServices = this.createBrowserServices(window, workspaceContext, remoteTunnelService, windowDisposables);
+		const browserServices = this.createBrowserServices(window, workspaceContext, remotePortForwardingService, windowDisposables);
 		const browserViewMainService = browserServices.get(IBrowserViewMainService);
 		const browserGroups = windowDisposables.add(browserServices.createInstance(BrowserViewGroupMainService));
 		const browserPort = this.sharedProcess.connect(`window:${window.id}`);
@@ -1156,7 +1188,7 @@ export class AshApplication extends Disposable {
 			supervisor,
 			workspaceContext,
 			connections: record.remoteConnections,
-			tunnels: remoteTunnelService,
+			tunnels: remotePortForwardingService,
 			host: electronRemoteWindowMainHost(window, this.dialogs),
 			prepareForRuntimeReplacement: () => window.webContents.send("ash:terminal:prepareReplacement"),
 		}));
@@ -1304,9 +1336,9 @@ export class AshApplication extends Disposable {
 		}
 	}
 
-	private createRemoteConnections(workspaces: WorkspacesManagementMainService): IRemoteConnectionService {
+	private createRemoteConnections(workspaces: WorkspacesManagementMainService): IRemoteConnectionApi {
 		return this.appServerStartupMode === "disabled"
-			? UnavailableRemoteConnectionService
+			? UnavailableRemoteConnectionApi
 			: new RemoteConnections({
 				remoteExecutable: remoteExecutablePath({ appPath: app.getAppPath(), isPackaged: app.isPackaged, platform: process.platform, resourcesPath: process.resourcesPath }),
 				environment: { ...process.env, ASH_HOME: this.profileRoot },
@@ -1370,14 +1402,21 @@ export class AshApplication extends Disposable {
 		windowDisposables.add(toDisposable(() => webContents.off('did-create-window', onDidCreateWindow)));
 	}
 
-	private createBrowserServices(window: BrowserWindow, workspaceContext: WorkspaceContextMainService, remoteTunnelService: SshRemoteTunnelService, windowDisposables: DisposableStore): InstantiationService {
+	private createBrowserServices(window: BrowserWindow, workspaceContext: WorkspaceContextMainService, remotePortForwardingService: SshPortForwardingService, windowDisposables: DisposableStore): InstantiationService {
+		const context = `window:${window.id}`;
+		this.windowPortForwarding.set(context, remotePortForwardingService);
+		windowDisposables.add(toDisposable(() => {
+			if (this.windowPortForwarding.get(context) === remotePortForwardingService) {
+				this.windowPortForwarding.delete(context);
+			}
+		}));
 		const browserServices = windowDisposables.add(this.windowServices.createChild(new ServiceCollection()));
 		const browserViewMainService = windowDisposables.add(browserServices.createInstance(BrowserViewMainService, {
 			window,
 			getWorkspaceId: () => workspaceContext.getWorkspace().id,
 			getRemoteNetwork: () => {
 				const authority = getWorkspaceRemoteAuthority(workspaceContext.getWorkspace());
-				return authority ? { authority, tunnels: remoteTunnelService } : undefined;
+				return authority ? { authority, tunnels: remotePortForwardingService } : undefined;
 			},
 			createSession: (partition: string) => electronSession.fromPartition(partition),
 			createView: (session: Electron.Session) => new WebContentsView({
@@ -1473,17 +1512,17 @@ export class AshApplication extends Disposable {
 					}
 					session.supervisor = sessionsRelay;
 					session.runtimeResources.value = runtimeResources;
-					const remoteTunnelService = new SshRemoteTunnelService({
+					const remotePortForwardingService = new SshPortForwardingService({
 						getWorkspace: () => session.workspaceContext.getWorkspace(),
 						sshExecutable: process.env.ASH_SSH_PATH ?? "ssh",
 						localEnvironment: process.env,
 					});
-					const browserServices = this.createBrowserServices(window, session.workspaceContext, remoteTunnelService, windowDisposables);
+					const browserServices = this.createBrowserServices(window, session.workspaceContext, remotePortForwardingService, windowDisposables);
 					const remoteWindowContext = windowDisposables.add(new RemoteWindowMainContext({
 						supervisor: sessionsRelay,
 						workspaceContext: session.workspaceContext,
 						connections: session.remoteConnections,
-						tunnels: remoteTunnelService,
+						tunnels: remotePortForwardingService,
 						host: electronRemoteWindowMainHost(window, this.dialogs),
 						prepareForRuntimeReplacement: () => window.webContents.send("ash:terminal:prepareReplacement"),
 					}));
@@ -1784,6 +1823,7 @@ export class AshApplication extends Disposable {
 		this.maintenance.clear();
 		const services = this.persistentServices;
 		this.closePersistentServicesPromise ??= Promise.all([
+			this.remoteTunnel.value?.stopTunnel(),
 			this.storageMainService?.close(),
 			this.stateService.close(),
 			...(services ? [

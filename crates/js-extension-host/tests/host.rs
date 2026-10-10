@@ -20,6 +20,7 @@ use host::ExtensionHostLimits;
 use host::ExtensionHostStatus;
 use host::ExtensionHostSupervisor;
 use host::ExtensionInvocation;
+use host::ExtensionInvocationTarget;
 use host::ExtensionLaunchCommand;
 use host::HostErrorCode;
 use host::PackageBinding;
@@ -28,6 +29,8 @@ use host::RestartPolicy;
 use host::TrustedDevelopmentLauncher;
 use serde_json::Value;
 use serde_json::json;
+use sha2::Digest;
+use sha2::Sha256;
 
 struct Authority(AtomicBool);
 struct Lease;
@@ -119,6 +122,24 @@ fn start_with_api(
     launcher: Arc<dyn host::ExtensionHostLauncher>,
     api: TestApi,
 ) -> Result<Running, ExtensionHostError> {
+    start_with_environment(
+        source,
+        capabilities,
+        isolation,
+        launcher,
+        api,
+        Default::default(),
+    )
+}
+
+fn start_with_environment(
+    source: &str,
+    capabilities: Vec<ExtensionCapability>,
+    isolation: ProcessIsolationPolicy,
+    launcher: Arc<dyn host::ExtensionHostLauncher>,
+    api: TestApi,
+    environment: Option<std::collections::BTreeMap<String, Option<String>>>,
+) -> Result<Running, ExtensionHostError> {
     let package = tempfile::tempdir().unwrap();
     std::fs::write(package.path().join("main.js"), source).unwrap();
     std::fs::write(
@@ -156,6 +177,10 @@ fn start_with_api(
         package.path(),
     )
     .unwrap();
+    let command = match environment {
+        Some(environment) => command.with_extension_environment(environment).unwrap(),
+        None => command,
+    };
     let authority = Arc::new(Authority(AtomicBool::new(true)));
     let activation = ExtensionActivationSpec::new(
         ActivateParams {
@@ -200,6 +225,120 @@ fn invocation(id: &str, arguments: Value, timeout: Duration) -> ExtensionInvocat
         payload: json!({"arguments": arguments}),
         deadline_unix_millis: NonZeroU64::new(deadline).unwrap(),
     }
+}
+
+fn product_params() -> ActivateParams {
+    let manifest = include_str!("../../../extensions/remote-ssh/package.json");
+    let source = include_str!("../../../extensions/remote-ssh/src/extension.js");
+    let sdk = include_str!("../../../extension-sdk/index.js");
+    ActivateParams {
+        extension_id: "ash.remote-ssh".into(),
+        package: PackageBinding {
+            package_id: "ash.remote-ssh@1.0.0".into(),
+            package_digest: format!(
+                "sha256:{:x}",
+                Sha256::digest(format!("{manifest}\0{source}\0{sdk}"))
+            ),
+            entrypoint: "src/extension.js".into(),
+        },
+        runtime_api_version: 1,
+        activation_events: vec!["startup".into()],
+        capabilities: vec![
+            ExtensionCapability::RemoteAuthorityResolver,
+            ExtensionCapability::ProductRemoteAuthorityResolver,
+        ],
+    }
+}
+
+fn start_product(params: ActivateParams) -> Result<Running, ExtensionHostError> {
+    // The product loader must work without a package directory or workspace grant.
+    let directory = tempfile::tempdir().unwrap();
+    let executable = PathBuf::from(env!("CARGO_BIN_EXE_ash-js-extension-host"));
+    let authority = Arc::new(Authority(AtomicBool::new(true)));
+    let running = Running {
+        supervisor: ExtensionHostSupervisor::new(
+            Arc::new(host::ProductJavaScriptLauncher::new(executable.clone())),
+            ExtensionLaunchCommand::product_javascript(executable, "remote-ssh", directory.path())
+                .unwrap(),
+            ExtensionActivationSpec::new(params, NonZeroU64::new(1).unwrap(), authority.clone()),
+            ExtensionHostLimits {
+                isolation: ProcessIsolationPolicy::RequireJavaScriptEnforcement(
+                    host::JavaScriptMemoryLimits::default(),
+                ),
+                ..ExtensionHostLimits::default()
+            },
+            RestartPolicy::default(),
+        )?,
+        authority,
+        _package: directory,
+    };
+    running.supervisor.start()?;
+    Ok(running)
+}
+
+fn ssh_invocation() -> ExtensionInvocation {
+    ExtensionInvocation {
+        registration_id: "remote:ssh".into(),
+        operation: "resolveConnection".into(),
+        payload: json!({"authority": "ssh+build"}),
+        deadline_unix_millis: invocation("unused", json!(null), Duration::from_secs(5))
+            .deadline_unix_millis,
+    }
+}
+
+#[test]
+fn compiled_ssh_uses_the_sdk_and_fences_old_incarnations_after_restart() {
+    let running = start_product(product_params()).unwrap();
+    let initial = running.supervisor.snapshot();
+    assert_eq!(initial.registrations.len(), 1);
+    assert_eq!(
+        running.supervisor.invoke(ssh_invocation()).unwrap().payload,
+        json!({"connectionName": "build"})
+    );
+    running.supervisor.shutdown().unwrap();
+    assert!(running.supervisor.snapshot().registrations.is_empty());
+    let restarted = running.supervisor.start().unwrap();
+    assert!(restarted.incarnation > initial.incarnation);
+    assert!(matches!(
+        running.supervisor.begin_fenced_invoke(
+            ExtensionInvocationTarget {
+                incarnation: NonZeroU64::new(initial.incarnation).unwrap(),
+                activation_generation: NonZeroU64::new(1).unwrap(),
+            },
+            ssh_invocation()
+        ),
+        Err(ExtensionHostError::RegistrationNotFound)
+    ));
+    assert_eq!(
+        running.supervisor.invoke(ssh_invocation()).unwrap().payload,
+        json!({"connectionName": "build"})
+    );
+}
+
+#[test]
+fn compiled_ssh_rejects_a_stale_release_binding() {
+    let mut params = product_params();
+    params.package.package_digest = format!("sha256:{}", "a".repeat(64));
+    assert!(start_product(params).is_err());
+}
+
+#[test]
+fn installed_sdk_packages_cannot_acquire_the_product_ssh_authority() {
+    let source = "import { workspace } from '@ash/extension'; export function activate(context) { context.subscriptions.push(workspace.registerRemoteConnectionResolver('ssh', { resolve() { return { connectionName: 'build' }; } })); }";
+    assert!(
+        start_with_capabilities(source, vec![ExtensionCapability::RemoteAuthorityResolver])
+            .is_err()
+    );
+    assert!(
+        start_with_capabilities(
+            source,
+            vec![
+                ExtensionCapability::RemoteAuthorityResolver,
+                ExtensionCapability::ProductRemoteAuthorityResolver
+            ]
+        )
+        .is_err()
+    );
 }
 fn run(running: &Running, id: &str, arguments: Value) -> Result<Value, ExtensionHostError> {
     running
@@ -1216,5 +1355,502 @@ fn product_js_process_recovers_after_execution_deadline() {
     assert_eq!(
         run(&running, "echo", json!(["after timeout"])).unwrap(),
         json!("after timeout")
+    );
+}
+
+#[test]
+fn remote_resolver_runs_in_javascript_and_connection_intent_uses_the_invocation_broker() {
+    let source = r#"
+        import { commands, workspace } from '@ash/extension';
+        export function activate(context) {
+            context.subscriptions.push(workspace.registerRemoteConnectionResolver('team', {
+                resolve(_call, authority) { if (authority !== 'team+linux') throw Error('Wrong authority'); return { connectionName: 'build' }; }
+            }));
+            context.subscriptions.push(commands.registerCommand('example.connect', 'Connect', async call => {
+                await call.workspace.openRemoteConnection('team+linux'); return 'requested';
+            }));
+        }
+    "#;
+    assert!(
+        start(source).is_err(),
+        "registration requires its declared capability"
+    );
+    let running = start_with_capabilities(
+        source,
+        vec![
+            ExtensionCapability::Command,
+            ExtensionCapability::RemoteAuthorityResolver,
+        ],
+    )
+    .unwrap();
+    let mut resolve = invocation("unused", json!([]), Duration::from_secs(5));
+    resolve.registration_id = "remote:team".into();
+    resolve.operation = "resolveConnection".into();
+    resolve.payload = json!({"authority":"team+linux"});
+    assert_eq!(
+        running.supervisor.invoke(resolve).unwrap().payload,
+        json!({"connectionName":"build"})
+    );
+    let mut calls = Vec::new();
+    let result = running
+        .supervisor
+        .begin_invoke(invocation("connect", json!([]), Duration::from_secs(5)))
+        .unwrap()
+        .wait_with_client(|operation, _, _| {
+            calls.push(operation);
+            Ok(ExtensionClientResult::Done)
+        })
+        .unwrap();
+    assert_eq!(result.payload, json!("requested"));
+    assert_eq!(
+        calls,
+        vec![ExtensionClientOperation::OpenRemoteConnection {
+            authority: "team+linux".into()
+        }]
+    );
+}
+
+#[test]
+fn remote_connection_calls_without_an_active_resolver_do_not_reach_the_client() {
+    let running = start(r#"
+        import { commands } from '@ash/extension';
+        export function activate(context) {
+            context.subscriptions.push(commands.registerCommand('example.connect', 'Connect', async call => {
+                try { await call.workspace.openRemoteConnection('ssh+build'); }
+                catch (error) { return error.code; }
+                throw Error('Expected refusal');
+            }));
+        }
+    "#).unwrap();
+    let result = running
+        .supervisor
+        .begin_invoke(invocation("connect", json!([]), Duration::from_secs(5)))
+        .unwrap()
+        .wait_with_client(|_, _, _| panic!("Unauthorized request reached the client"))
+        .unwrap();
+    assert_eq!(result.payload, json!("permissionDenied"));
+}
+
+#[test]
+fn standard_authority_resolution_preserves_endpoints_attempts_and_error_categories() {
+    let source = r#"
+        import { workspace, ResolvedAuthority, RemoteAuthorityResolverError } from '@ash/extension';
+        export function activate(context) {
+            context.subscriptions.push(workspace.registerRemoteAuthorityResolver('test', {
+                resolve(authority, context) {
+                    if (authority === 'test+offline') throw RemoteAuthorityResolverError.NotAvailable('Offline', true);
+                    return new ResolvedAuthority('127.0.0.1', 4000 + context.resolveAttempt, 'capability');
+                }
+            }));
+        }
+    "#;
+    let running =
+        start_with_capabilities(source, vec![ExtensionCapability::RemoteAuthorityResolver])
+            .unwrap();
+    let request = |authority| {
+        let mut request = invocation("unused", json!([]), Duration::from_secs(5));
+        request.registration_id = "remote-authority:test".into();
+        request.operation = "resolveAuthority".into();
+        request.payload = json!({"authority":authority,"resolveAttempt":2,"__connectionOwner":"7"});
+        request
+    };
+    assert_eq!(
+        running
+            .supervisor
+            .invoke(request("test+target"))
+            .unwrap()
+            .payload,
+        json!({"type":"webSocket","host":"127.0.0.1","port":4002,"connectionToken":"capability"})
+    );
+    assert_eq!(
+        running
+            .supervisor
+            .invoke(request("test+offline"))
+            .unwrap()
+            .payload,
+        json!({"error":{"code":"NotAvailable","message":"Offline","handled":true}})
+    );
+    assert!(running.supervisor.invoke(request("other+target")).is_err());
+}
+
+#[test]
+fn canonical_uri_and_resolver_options_cross_the_sdk_boundary_without_session_tokens() {
+    let source = r#"
+        import { workspace, ResolvedAuthority } from '@ash/extension';
+        export function activate(context) {
+            context.subscriptions.push(workspace.registerRemoteAuthorityResolver('test', {
+                resolve(authority) {
+                    return Object.assign(new ResolvedAuthority('localhost', 5000), {
+                        isTrusted: authority === 'test+invalid' ? 'yes' : false,
+                        extensionHostEnv: { SET: 'value', REMOVE: null },
+                        authenticationSessionForInitializingExtensions: {
+                            id: 'session', providerId: 'provider', accessToken: 'secret',
+                            account: { id: 'account', label: 'Account' }, scopes: []
+                        }
+                    });
+                },
+                getCanonicalURI(uri) {
+                    if (uri.path === '/identity') return undefined;
+                    if (uri.path === '/invalid') return { scheme: 'file' };
+                    return uri.with({ fragment: 'canonical' });
+                }
+            }));
+            context.subscriptions.push(workspace.registerRemoteAuthorityResolver('identity', {
+                resolve() { return new ResolvedAuthority('localhost', 5000); }
+            }));
+        }
+    "#;
+    let running =
+        start_with_capabilities(source, vec![ExtensionCapability::RemoteAuthorityResolver])
+            .unwrap();
+    let request = |registration: &str, operation: &str, payload| {
+        let mut request = invocation("unused", json!([]), Duration::from_secs(5));
+        request.registration_id = registration.into();
+        request.operation = operation.into();
+        request.payload = payload;
+        request
+    };
+    let resolved = running
+        .supervisor
+        .invoke(request(
+            "remote-authority:test",
+            "resolveAuthority",
+            json!({"authority":"test+target","resolveAttempt":1,"__connectionOwner":"7"}),
+        ))
+        .unwrap()
+        .payload;
+    assert_eq!(
+        resolved,
+        json!({
+            "type":"webSocket","host":"localhost","port":5000,"connectionToken":null,
+            "options":{"isTrusted":false,"extensionHostEnv":{"SET":"value","REMOVE":null},
+                "authenticationSession":{"id":"session","providerId":"provider"}}
+        })
+    );
+    assert!(!resolved.to_string().contains("secret"));
+    let canonical_request = |prefix: &str, path: &str, external: &str| {
+        request(
+            &format!("remote-authority:{prefix}"),
+            "getCanonicalURI",
+            json!({
+                "authority":format!("{prefix}+target"),"__connectionOwner":"7",
+                "uri":{"scheme":"ash-remote","authority":format!("{prefix}+target"),
+                    "path":path,"query":"q=1","fragment":"old","external":external}
+            }),
+        )
+    };
+    assert_eq!(
+        running
+            .supervisor
+            .invoke(canonical_request(
+                "test",
+                "/alias/child/文件",
+                "ash-remote://test+target/alias%2Fchild/%E6%96%87%E4%BB%B6?q=1#old"
+            ))
+            .unwrap()
+            .payload,
+        json!({
+            "scheme":"ash-remote","authority":"test+target","path":"/alias/child/文件",
+            "query":"q=1","fragment":"canonical",
+            "external":"ash-remote://test+target/alias%2Fchild/%E6%96%87%E4%BB%B6?q=1#canonical"
+        })
+    );
+    for (prefix, path) in [("test", "/identity"), ("identity", "/any")] {
+        assert_eq!(
+            running
+                .supervisor
+                .invoke(canonical_request(
+                    prefix,
+                    path,
+                    &format!("ash-remote://{prefix}+target{path}?q=1#old")
+                ))
+                .unwrap()
+                .payload,
+            json!(null)
+        );
+    }
+    assert!(
+        running
+            .supervisor
+            .invoke(canonical_request(
+                "test",
+                "/invalid",
+                "ash-remote://test+target/invalid?q=1#old"
+            ))
+            .is_err()
+    );
+    assert!(
+        running
+            .supervisor
+            .invoke(canonical_request(
+                "test",
+                "/identity",
+                "ash-remote://test+target/another-path?q=1#old"
+            ))
+            .is_err()
+    );
+    assert!(
+        running
+            .supervisor
+            .invoke(request(
+                "remote-authority:test",
+                "resolveAuthority",
+                json!({"authority":"test+invalid","resolveAttempt":1,"__connectionOwner":"7"})
+            ))
+            .is_err()
+    );
+}
+
+#[test]
+fn managed_authority_sockets_preserve_bytes_and_retire_on_resolution_and_restart() {
+    let source = r#"
+        import { workspace, ManagedResolvedAuthority } from '@ash/extension';
+        export function activate(context) {
+            context.subscriptions.push(workspace.registerRemoteAuthorityResolver('test', {
+                resolve() {
+                    return new ManagedResolvedAuthority(async () => {
+                        const data = new Set(), closed = new Set(), ended = new Set();
+                        const event = listeners => callback => { listeners.add(callback); return { dispose() { listeners.delete(callback); } }; };
+                        return { onDidReceiveMessage: event(data), onDidClose: event(closed), onDidEnd: event(ended),
+                            send(bytes) { for (const callback of data) callback(bytes); },
+                            end() { for (const callback of closed) callback(); }, async drain() {} };
+                    });
+                }
+            }));
+        }
+    "#;
+    let running =
+        start_with_capabilities(source, vec![ExtensionCapability::RemoteAuthorityResolver])
+            .unwrap();
+    let request = |operation: &str, payload: Value| {
+        let mut request = invocation("unused", json!([]), Duration::from_secs(5));
+        request.registration_id = "remote-authority:test".into();
+        request.operation = operation.into();
+        request.payload = payload;
+        request
+            .payload
+            .as_object_mut()
+            .unwrap()
+            .insert("__connectionOwner".into(), json!("7"));
+        request
+    };
+    let resolved = running
+        .supervisor
+        .invoke(request(
+            "resolveAuthority",
+            json!({"authority":"test+target","resolveAttempt":1}),
+        ))
+        .unwrap()
+        .payload;
+    let id = resolved["id"].as_u64().unwrap();
+    let connected = running
+        .supervisor
+        .invoke(request("remoteConnect", json!({"id":id})))
+        .unwrap()
+        .payload;
+    let socket = connected["id"].as_u64().unwrap();
+    running
+        .supervisor
+        .invoke(request(
+            "remoteWrite",
+            json!({"id":socket,"data":"00f09f9880ff"}),
+        ))
+        .unwrap();
+    running
+        .supervisor
+        .invoke(request("remoteDrain", json!({"id":socket})))
+        .unwrap();
+    assert_eq!(
+        running
+            .supervisor
+            .invoke(request("remoteRead", json!({"id":socket})))
+            .unwrap()
+            .payload,
+        json!({"data":"00f09f9880ff","closed":false,"ended":false,"error":null})
+    );
+    let owner_request = |owner: &str, operation: &str, payload: Value| {
+        let mut invocation = request(operation, payload);
+        invocation
+            .payload
+            .as_object_mut()
+            .unwrap()
+            .insert("__connectionOwner".into(), json!(owner));
+        invocation
+    };
+    let second = running
+        .supervisor
+        .invoke(owner_request(
+            "8",
+            "resolveAuthority",
+            json!({"authority":"test+other","resolveAttempt":1}),
+        ))
+        .unwrap()
+        .payload;
+    let second_socket = running
+        .supervisor
+        .invoke(owner_request(
+            "8",
+            "remoteConnect",
+            json!({"id":second["id"]}),
+        ))
+        .unwrap()
+        .payload["id"]
+        .as_u64()
+        .unwrap();
+    assert!(
+        running
+            .supervisor
+            .invoke(owner_request("8", "remoteRead", json!({"id":socket})))
+            .is_err()
+    );
+    assert!(
+        running
+            .supervisor
+            .invoke(request("remoteRead", json!({"id":socket})))
+            .is_ok()
+    );
+    running
+        .supervisor
+        .invoke(owner_request("7", "remoteReleaseOwner", json!({})))
+        .unwrap();
+    assert!(
+        running
+            .supervisor
+            .invoke(request("remoteRead", json!({"id":socket})))
+            .is_err()
+    );
+    assert!(
+        running
+            .supervisor
+            .invoke(owner_request(
+                "8",
+                "remoteRead",
+                json!({"id":second_socket})
+            ))
+            .is_ok()
+    );
+    running
+        .supervisor
+        .invoke(request(
+            "resolveAuthority",
+            json!({"authority":"test+target","resolveAttempt":2}),
+        ))
+        .unwrap();
+    assert!(
+        running
+            .supervisor
+            .invoke(owner_request(
+                "8",
+                "remoteRead",
+                json!({"id":second_socket})
+            ))
+            .is_ok()
+    );
+    assert!(
+        running
+            .supervisor
+            .invoke(request("remoteRead", json!({"id":socket})))
+            .is_err()
+    );
+    assert!(
+        running
+            .supervisor
+            .invoke(request("remoteConnect", json!({"id":id})))
+            .is_err()
+    );
+    let old = NonZeroU64::new(running.supervisor.snapshot().incarnation).unwrap();
+    running.supervisor.shutdown().unwrap();
+    running.supervisor.start().unwrap();
+    assert!(
+        running
+            .supervisor
+            .begin_fenced_invoke(
+                ExtensionInvocationTarget {
+                    activation_generation: NonZeroU64::new(1).unwrap(),
+                    incarnation: old
+                },
+                request("remoteConnect", json!({"id":id}))
+            )
+            .is_err()
+    );
+}
+
+#[test]
+fn extension_environment_is_available_during_module_loading_and_isolated_per_process() {
+    let source = r#"
+        import { commands } from '@ash/extension';
+        if (process.exit !== undefined || process.dlopen !== undefined || process.binding !== undefined || process.cwd !== undefined) throw new Error('Unexpected Node capability');
+        const loaded = { set: process.env.SET ?? null, removed: process.env.REMOVE ?? null, prototype: process.env.__proto__ ?? null };
+        export function activate(context) {
+            context.subscriptions.push(commands.registerCommand('example.env', 'Env', () => loaded));
+        }
+    "#;
+    let launch = |value: &str| {
+        start_with_environment(
+            source,
+            vec![ExtensionCapability::Command],
+            ProcessIsolationPolicy::TrustedDevelopment,
+            Arc::new(TrustedDevelopmentLauncher),
+            TestApi::Ash,
+            Some(
+                [
+                    ("SET".into(), Some(value.into())),
+                    ("REMOVE".into(), None),
+                    ("__proto__".into(), Some("exact key".into())),
+                ]
+                .into(),
+            ),
+        )
+        .unwrap()
+    };
+    let first = launch("one");
+    let second = launch("two");
+    for (runtime, expected) in [(&first, "one"), (&second, "two"), (&first, "one")] {
+        assert_eq!(
+            runtime
+                .supervisor
+                .invoke(invocation("env", json!([]), Duration::from_secs(5)))
+                .unwrap()
+                .payload,
+            json!({"set": expected, "removed": null, "prototype": "exact key"})
+        );
+    }
+    first.supervisor.shutdown().unwrap();
+    first.supervisor.start().unwrap();
+    assert_eq!(
+        first
+            .supervisor
+            .invoke(invocation("env", json!([]), Duration::from_secs(5)))
+            .unwrap()
+            .payload,
+        json!({"set":"one", "removed":null, "prototype":"exact key"})
+    );
+    let empty = start_with_environment(
+        source,
+        vec![ExtensionCapability::Command],
+        ProcessIsolationPolicy::TrustedDevelopment,
+        Arc::new(TrustedDevelopmentLauncher),
+        TestApi::Ash,
+        Some(Default::default()),
+    )
+    .unwrap();
+    assert_eq!(
+        empty
+            .supervisor
+            .invoke(invocation("env", json!([]), Duration::from_secs(5)))
+            .unwrap()
+            .payload,
+        json!({"set":null, "removed":null, "prototype":null})
+    );
+    // Match the SDK's JavaScript string limit for non-ASCII values as well.
+    let value = "界".repeat(8192);
+    let unicode = launch(&value);
+    assert_eq!(
+        unicode
+            .supervisor
+            .invoke(invocation("env", json!([]), Duration::from_secs(5)))
+            .unwrap()
+            .payload["set"],
+        json!(value)
     );
 }

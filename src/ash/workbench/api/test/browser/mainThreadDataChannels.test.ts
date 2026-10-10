@@ -22,6 +22,7 @@ class ExtensionHost extends Disposable implements IExtensionHostApi {
 	public readonly requests: ExtensionHostInvocationRequest[] = [];
 	public readonly signals: AbortSignal[] = [];
 	public invokeResult: (request: ExtensionHostInvocationRequest) => Promise<JsonValue> = async request => request.operation === 'provideLinkPresentation' ? { kind: 'issue', title: 'Issue one', status: { kind: 'open', label: 'Open' } } : null;
+	public start(): Promise<ExtensionHostFleetSnapshot> { throw new Error('Startup is outside this fixture'); }
 	public isAvailable(): Promise<boolean> { return Promise.resolve(true); }
 	public list(): Promise<ExtensionHostFleetSnapshot> { return Promise.resolve(this.current); }
 	public reconcile(): Promise<ExtensionHostFleetSnapshot> { return this.list(); }

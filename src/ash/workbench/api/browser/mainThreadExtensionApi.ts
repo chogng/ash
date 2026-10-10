@@ -1,3 +1,7 @@
+import { IHostService } from '../../services/host/browser/host.js';
+import { getRemoteAuthorityPrefix } from '../../../platform/remote/common/remoteAuthorityResolver.js';
+import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
+import { IRemoteConnectionService, type RemoteConnectionResolver, type RemoteConnectionResolverRegistration } from '../../../platform/remote/common/remoteConnectionService.js';
 import { localize } from '../../../nls.js';
 import { MainThreadStatusBar } from './mainThreadStatusBar.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
@@ -43,6 +47,7 @@ interface ContributionSet {
 	readonly languages: Required<LanguageProviderBatch>;
 	readonly tasks: readonly TaskProvider[];
 	readonly tests: readonly TestProfileProvider[];
+	readonly remoteResolvers: readonly RemoteConnectionResolver[];
 	readonly issues: readonly ExtensionApiIssue[];
 	readonly controller: AbortController;
 }
@@ -67,6 +72,7 @@ export class MainThreadExtensionApi extends Disposable {
 	private readonly languageRegistration: LanguageProviderBatchRegistration;
 	private readonly taskRegistration: TaskProviderRegistration;
 	private readonly testRegistration: TestProfileProviderRegistration;
+	private readonly remoteRegistration: RemoteConnectionResolverRegistration;
 	private activeContributions: ContributionSet | undefined;
 	private contributionIdentity: string | undefined;
 	private activationController = new AbortController();
@@ -78,6 +84,7 @@ export class MainThreadExtensionApi extends Disposable {
 	private readonly documents: MainThreadDocuments;
 	private readonly diagnostics: MainThreadDiagnostics;
 	private readonly statusbar: MainThreadStatusBar;
+	private readonly remoteSources = new Map<string, ExtensionHostRuntime>();
 
 	constructor(
 		commands: CommandRegistry,
@@ -96,6 +103,9 @@ export class MainThreadExtensionApi extends Disposable {
 		@IBulkEditService private readonly bulkEdits: IBulkEditService,
 		@INotificationService private readonly notifications: INotificationService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
+		@IRemoteConnectionService private readonly remoteConnections: IRemoteConnectionService,
+		@IDialogService private readonly dialogs: IDialogService,
+		@IHostService private readonly host: IHostService,
 	) {
 		super();
 		const clientHandler = this.api.registerClientHandler((operation, signal, source) => this.handleClientOperation(operation, signal, source));
@@ -108,10 +118,12 @@ export class MainThreadExtensionApi extends Disposable {
 		this.languageRegistration = this._register(languageFeatures.registerProviderBatch({}));
 		this.taskRegistration = this._register(tasks.registerTaskProviders([]));
 		this.testRegistration = this._register(testing.registerTestProfileProviders([]));
+		this.remoteRegistration = this._register(this.remoteConnections.registerResolvers([]));
 		this._register(toDisposable(() => {
 			this.activationController.abort('Extension API was disposed');
 			this.activeContributions?.controller.abort('Extension API was disposed');
 			this.activeContributions = undefined;
+			this.remoteSources.clear();
 			this.outputCursors.clear();
 			this.namedOutputCursors.clear();
 		}));
@@ -125,6 +137,26 @@ export class MainThreadExtensionApi extends Disposable {
 		this.assertNotDisposed();
 		throwIfCancelled(signal);
 		switch (operation.operation) {
+			case 'openRemoteConnection': {
+				const runtime = this.remoteSources.get(source.extensionId);
+				if (!runtime || runtime.incarnation !== source.incarnation || runtime.activationGeneration !== source.activationGeneration) { throw new Error('Remote extension authority was revoked'); }
+				const isStandard = runtime.registrations.some(entry => entry.kind === 'remoteAuthorityResolver' && entry.authorityPrefix === getRemoteAuthorityPrefix(operation.authority));
+				const connection = isStandard ? undefined : await this.remoteConnections.resolveConnection(operation.authority, signal);
+				throwIfCancelled(signal);
+				const result = await this.dialogs.confirm({
+					title: localize('remote.extension.openTitle', 'Open Remote Window'),
+					message: localize('remote.extension.openMessage', "Extension '{0}' wants to open '{1}'.", source.extensionId, connection?.name ?? operation.authority),
+					detail: connection ? `${connection.host}:${connection.workspace}` : operation.authority,
+					primaryButton: localize('remote.extension.openButton', 'Open Remote Window'),
+				});
+				throwIfCancelled(signal);
+				if (this.remoteSources.get(source.extensionId)?.incarnation !== runtime.incarnation || this.remoteSources.get(source.extensionId)?.activationGeneration !== runtime.activationGeneration) { throw new Error('Remote extension authority was revoked'); }
+				if (!result.confirmed) { throw new CancellationError(); }
+				// Acceptance hands the window lifetime to the host; retiring the callback does not close it.
+				if (connection) { await this.remoteConnections.connect(connection.name, connection); }
+				else { await this.host.openWindow({ remoteAuthority: operation.authority }); }
+				return { result: 'done' };
+			}
 			case 'setStatusBarEntries':
 				this.statusbar.set(source, operation.registrationId, operation.revision, operation.entries);
 				return { result: 'done' };
@@ -212,6 +244,10 @@ export class MainThreadExtensionApi extends Disposable {
 			}
 			this.contributionIdentity = identity;
 		}
+		this.remoteSources.clear();
+		for (const runtime of snapshot.extensions) {
+			if (runtime.lifecycle === 'ready' && runtime.registrations.some(registration => (registration.kind === 'remoteConnectionResolver' || registration.kind === 'remoteAuthorityResolver'))) { this.remoteSources.set(runtime.id, runtime); }
+		}
 		this.projectOutput(snapshot);
 		this.customEditors.update(snapshot);
 		this.diagnostics.update(snapshot);
@@ -243,6 +279,7 @@ export class MainThreadExtensionApi extends Disposable {
 		const languages = mutableLanguageBatch();
 		const tasks: TaskProvider[] = [];
 		const tests: TestProfileProvider[] = [];
+		const remoteResolvers: RemoteConnectionResolver[] = [];
 		const issues: ExtensionApiIssue[] = [];
 		const taskProviders = new Map<string, Map<string, string>>();
 		for (const runtime of snapshot.extensions) {
@@ -273,10 +310,20 @@ export class MainThreadExtensionApi extends Disposable {
 			}
 			if (runtime.lifecycle !== "ready" || runtime.incarnation === undefined) continue;
 			for (const registration of runtime.registrations) {
-				if (registration.kind === 'statusBar' || registration.kind === 'textDocumentEvents' || registration.kind === 'customTextEditor' || registration.kind === 'dataChannel' || registration.kind === 'linkPresentationProvider' || registration.kind === 'externalUriOpener') {
+				if (registration.kind === 'remoteAuthorityResolver' || registration.kind === 'statusBar' || registration.kind === 'textDocumentEvents' || registration.kind === 'customTextEditor' || registration.kind === 'dataChannel' || registration.kind === 'linkPresentationProvider' || registration.kind === 'externalUriOpener') {
 					continue;
 				}
 				const invoke = this.registrationInvoker(runtime, registration, controller.signal);
+				if (registration.kind === 'remoteConnectionResolver') {
+					remoteResolvers.push({
+						authorityPrefix: registration.authorityPrefix, resolve: async (authority, signal) => {
+							const result = await invoke('resolveConnection', { authority }, signal);
+							if (!result || typeof result !== 'object' || Array.isArray(result) || !('connectionName' in result) || Object.keys(result).join(',') !== 'connectionName' || typeof result.connectionName !== 'string') { throw new TypeError('Invalid Remote resolver result'); }
+							return { connectionName: result.connectionName };
+						}
+					});
+					continue;
+				}
 				if (registration.kind === "command") {
 					commands.push(Object.freeze({
 						id: registration.command, metadata: { description: registration.title }, handler: (accessor: ServicesAccessor, ...args: readonly unknown[]) => {
@@ -337,7 +384,7 @@ export class MainThreadExtensionApi extends Disposable {
 				issues.push({ extensionId: runtime.id, registrationId: registration.registrationId, message: `Debug Adapter registration '${registration.debuggerType}' is active, but this Workbench has no asynchronous Host-broker DAP session seam` });
 			}
 		}
-		return Object.freeze({ menus: Object.freeze(menus), commands: Object.freeze(commands), languages: freezeLanguageBatch(languages), tasks: Object.freeze(tasks), tests: Object.freeze(tests), issues: Object.freeze(issues), controller });
+		return Object.freeze({ menus: Object.freeze(menus), commands: Object.freeze(commands), languages: freezeLanguageBatch(languages), tasks: Object.freeze(tasks), tests: Object.freeze(tests), remoteResolvers: Object.freeze(remoteResolvers), issues: Object.freeze(issues), controller });
 	}
 
 	private registrationInvoker(runtime: ExtensionHostRuntime, registration: ExtensionHostRegistration, generationSignal: AbortSignal): ExtensionHostProviderInvoker {
@@ -374,12 +421,14 @@ export class MainThreadExtensionApi extends Disposable {
 			this.languageRegistration.replace(next.languages);
 			this.taskRegistration.replace(next.tasks);
 			this.testRegistration.replace(next.tests);
+			this.remoteRegistration.replace(next.remoteResolvers);
 		} catch (error) {
 			try {
 				this.commandRegistration.replace(previous?.commands ?? []);
 				this.languageRegistration.replace(previous?.languages ?? {});
 				this.taskRegistration.replace(previous?.tasks ?? []);
 				this.testRegistration.replace(previous?.tests ?? []);
+				this.remoteRegistration.replace(previous?.remoteResolvers ?? []);
 				this.activeContributions = previous;
 			} catch (rollbackError) {
 				this.commandRegistration.replace([]);
@@ -387,6 +436,7 @@ export class MainThreadExtensionApi extends Disposable {
 				this.languageRegistration.replace({});
 				this.taskRegistration.replace([]);
 				this.testRegistration.replace([]);
+				this.remoteRegistration.replace([]);
 				this.activeContributions = undefined;
 				previous?.controller.abort(rollbackError);
 				throw new AggregateError([error, rollbackError], "Extension Host contribution commit and rollback both failed");
@@ -411,6 +461,8 @@ export class MainThreadExtensionApi extends Disposable {
 		this.languageRegistration.replace({});
 		this.taskRegistration.replace([]);
 		this.testRegistration.replace([]);
+		this.remoteRegistration.replace([]);
+		this.remoteSources.clear();
 		active?.controller.abort("Extension Host authority was revoked");
 	}
 

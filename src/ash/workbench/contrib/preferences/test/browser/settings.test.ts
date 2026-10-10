@@ -37,7 +37,7 @@ import type { IContextMenuService as ContextMenuService } from '../../../../../p
 import type { ILocalizationService } from '../../../../services/localization/common/localizationService.js';
 import type { IGitService } from '../../../git/common/gitService.js';
 import type { IChatService } from '../../../../services/chat/common/chatService.js';
-import type { IRemoteAgentService } from '../../../../services/remote/common/remoteAgentService.js';
+import type { IAppServerRemoteAgentService } from '../../../../services/remote/common/appServerRemoteAgentService.js';
 import type { RemoteAgentConnection } from '../../../../../platform/remote/common/remoteAgentApi.js';
 import type { RemoteConnectionState } from '../../../../../platform/remote/common/remote.js';
 import type { IDirPermissionsService } from '../../../../../platform/dirPermissions/common/dirPermissionsService.js';
@@ -115,7 +115,7 @@ const { INetworkDiagnosticsService } = await import('../../../../../platform/net
 const { IAgentCapabilitiesService } = await import('../../../../../platform/agentCapabilities/common/agentCapabilitiesService.js');
 const { ITraceSettingsService } = await import('../../../../../platform/trace/common/traceSettingsService.js');
 const { IFileDialogService } = await import('../../../../../platform/dialogs/common/dialogs.js');
-const { IRemoteAgentService: RemoteAgentServiceId } = await import('../../../../services/remote/common/remoteAgentService.js');
+const { IAppServerRemoteAgentService: RemoteAgentServiceId } = await import('../../../../services/remote/common/appServerRemoteAgentService.js');
 const { IDirPermissionsService: DirPermissionsServiceId } = await import('../../../../../platform/dirPermissions/common/dirPermissionsService.js');
 const configurationRegistry = Registry.as<InstanceType<typeof ConfigurationRegistry>>(ConfigurationExtensions.Configuration);
 const { EditorPart } = await import('../../../../browser/parts/editor/editorPart.js');
@@ -162,7 +162,7 @@ test('Sandbox diagnostics render Chinese readiness and preserve backend reasons 
 			toolSets: [], tools: [], localProcessSandboxConfigured: true, sandboxBackends: ['mxc'], directoryGrantsReadable: false,
 			sandboxDiagnostics: [{ backend: 'mxc', network: 'managed', readiness: { type: 'unsupported', reason: '<script>diagnostic</script>' } }]
 		}),
-	}, { onDidChangeConnectionState: Event.None } as IRemoteAgentService,
+	}, { onDidChangeConnectionState: Event.None } as IAppServerRemoteAgentService,
 		{ onDidChangePermissions: Event.None } as IDirPermissionsService, {
 		whenReady: Promise.resolve(), translate: (bundle, key, fallback) => chinese.bundles[bundle]?.[key] ?? fallback,
 	});

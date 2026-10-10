@@ -4,6 +4,6 @@ ash_v8_host(
     name = "ash-js-extension-host",
     crate_name = "ash_js_extension_host",
     crate_root = "src/main.rs",
-    data = ["//extension-sdk:index.js", "src/fixed_buffers.js", "src/vscode.js"],
+    data = ["//extension-sdk:index.js", "//extensions:remote-ssh/src/extension.js", "//extensions:remote-ssh/package.json", "src/fixed_buffers.js", "src/vscode.js"],
     deps = [],
 )

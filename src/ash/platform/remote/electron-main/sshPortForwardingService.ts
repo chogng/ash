@@ -7,7 +7,23 @@ import { Disposable, type IDisposable, toDisposable } from "../../../base/common
 import type { IAnyWorkspaceIdentifier } from "../../workspace/common/workspace.js";
 import { getWorkspaceRemoteAuthority } from "../../workspace/common/workspace.js";
 import { createSshRemoteAuthority } from "../common/remote.js";
-import { type IRemoteTunnelService, type RemoteTunnel, type RemoteTunnelChange, type RemoteTunnelOpenRequest } from "../common/remoteTunnelService.js";
+
+/** Data returned by the Main-owned SSH process; no process handle crosses IPC. */
+export interface SshPortForward {
+	readonly id: string;
+	readonly localPort: number;
+	readonly remoteHost: '127.0.0.1';
+	readonly remotePort: number;
+	readonly state: 'open' | 'recovering' | 'failed';
+}
+
+export interface SshPortForwardOpenRequest {
+	readonly remotePort: number;
+}
+
+export type SshPortForwardChange =
+	| { readonly kind: 'upsert'; readonly tunnel: SshPortForward; }
+	| { readonly kind: 'removed'; readonly id: string; };
 
 const DEFAULT_CONNECT_TIMEOUT_SECONDS = 10;
 const DEFAULT_STARTUP_TIMEOUT_MS = 12_000;
@@ -32,13 +48,13 @@ export type LoopbackListenerReadiness = "pending" | "ready";
 export type ProbeLoopbackListener = (localPort: number, signal?: AbortSignal) => Promise<LoopbackListenerReadiness>;
 
 /** Bounded retry timing owned by the Electron Main Tunnel coordinator. */
-export interface SshRemoteTunnelRecoveryPolicy {
+export interface SshPortForwardingRecoveryPolicy {
 	readonly windowMs: number;
 	readonly initialDelayMs: number;
 	readonly maxDelayMs: number;
 }
 
-export interface SshRemoteTunnelServiceOptions {
+export interface SshPortForwardingServiceOptions {
 	readonly getWorkspace: () => IAnyWorkspaceIdentifier;
 	readonly sshExecutable: string;
 	readonly localEnvironment: NodeJS.ProcessEnv;
@@ -46,13 +62,13 @@ export interface SshRemoteTunnelServiceOptions {
 	readonly reserveLocalPort?: () => Promise<number>;
 	readonly probeLoopbackListener?: ProbeLoopbackListener;
 	readonly startupTimeoutMs?: number;
-	readonly recoveryPolicy?: SshRemoteTunnelRecoveryPolicy;
+	readonly recoveryPolicy?: SshPortForwardingRecoveryPolicy;
 	readonly now?: () => number;
 	readonly wait?: (milliseconds: number, signal?: AbortSignal) => Promise<void>;
 }
 
 interface TunnelRecord {
-	tunnel: RemoteTunnel;
+	tunnel: SshPortForward;
 	readonly host: string;
 	readonly cancellation: AbortController;
 	child?: ChildProcess;
@@ -61,21 +77,23 @@ interface TunnelRecord {
 }
 
 /** Owns SSH local forwards for one Remote window and never exposes the child to Renderer code. */
-export class SshRemoteTunnelService extends Disposable implements IRemoteTunnelService {
-	private readonly changes = this._register(new Emitter<RemoteTunnelChange>());
+export class SshPortForwardingService extends Disposable {
+	private readonly changes = this._register(new Emitter<SshPortForwardChange>());
 	private readonly tunnels = new Map<string, TunnelRecord>();
 	private readonly cancellation = new AbortController();
+	private readonly pendingStarts = new Set<AbortController>();
+	private workspaceRevision = 0;
 	private readonly spawnProcess: SpawnSshTunnel;
 	private readonly reserveLocalPort: () => Promise<number>;
 	private readonly probeLoopbackListener: ProbeLoopbackListener;
-	private readonly recoveryPolicy: SshRemoteTunnelRecoveryPolicy;
+	private readonly recoveryPolicy: SshPortForwardingRecoveryPolicy;
 	private readonly now: () => number;
 	private readonly wait: (milliseconds: number, signal?: AbortSignal) => Promise<void>;
 	private readonly startupTimeoutMs: number;
 	private nextId = 1;
 	private readonly proxies = new Map<ChildProcess, AbortController>();
 
-	constructor(readonly options: SshRemoteTunnelServiceOptions) {
+	constructor(readonly options: SshPortForwardingServiceOptions) {
 		super();
 		if (options.sshExecutable.trim().length === 0 || hasControlCharacter(options.sshExecutable)) {
 			throw new Error("SSH executable must be non-empty and contain no control characters");
@@ -97,6 +115,9 @@ export class SshRemoteTunnelService extends Disposable implements IRemoteTunnelS
 		this.wait = options.wait ?? wait;
 		this._register(toDisposable(() => {
 			this.cancellation.abort();
+			for (const startup of this.pendingStarts) {
+				startup.abort();
+			}
 			for (const record of this.tunnels.values()) {
 				record.cancellation.abort();
 				record.child?.kill();
@@ -108,7 +129,7 @@ export class SshRemoteTunnelService extends Disposable implements IRemoteTunnelS
 		}));
 	}
 
-	list(): Promise<readonly RemoteTunnel[]> {
+	list(): Promise<readonly SshPortForward[]> {
 		return Promise.resolve([...this.tunnels.values()].map(record => record.tunnel));
 	}
 
@@ -137,22 +158,37 @@ export class SshRemoteTunnelService extends Disposable implements IRemoteTunnelS
 		} catch (error) { resource.dispose(); throw error; }
 	}
 
-	async open(request: RemoteTunnelOpenRequest): Promise<RemoteTunnel> {
+	async open(request: SshPortForwardOpenRequest): Promise<SshPortForward> {
+		this.assertNotDisposed();
 		validatePort(request.remotePort, "remotePort");
+		const revision = this.workspaceRevision;
 		const authority = this.remoteAuthority();
 		const localPort = await this.reserveLocalPort();
 		validatePort(localPort, "localPort");
-		if (this.isDisposed) throw new Error("Remote tunnel service was disposed during startup");
-		const child = this.spawnTunnel(authority.host, localPort, request.remotePort);
+		if (this.isDisposed || revision !== this.workspaceRevision) {
+			throw new CancellationError("SSH tunnel startup was cancelled");
+		}
+		const startup = new AbortController();
+		this.pendingStarts.add(startup);
+		const signal = AbortSignal.any([this.cancellation.signal, startup.signal]);
+		let child: ChildProcess;
 		try {
-			await waitForStartup(child, localPort, this.startupTimeoutMs, this.probeLoopbackListener, this.wait, this.now, this.cancellation.signal);
+			child = this.spawnTunnel(authority.host, localPort, request.remotePort);
+		} catch (error) {
+			this.pendingStarts.delete(startup);
+			throw error;
+		}
+		try {
+			await waitForStartup(child, localPort, this.startupTimeoutMs, this.probeLoopbackListener, this.wait, this.now, signal);
 		} catch (error) {
 			await stopChild(child);
 			throw error instanceof Error ? error : new Error("SSH tunnel failed to start");
+		} finally {
+			this.pendingStarts.delete(startup);
 		}
-		if (this.isDisposed) {
+		if (this.isDisposed || revision !== this.workspaceRevision) {
 			await stopChild(child);
-			throw new Error("Remote tunnel service was disposed during startup");
+			throw new CancellationError("SSH tunnel startup was cancelled");
 		}
 
 		const record: TunnelRecord = {
@@ -191,17 +227,22 @@ export class SshRemoteTunnelService extends Disposable implements IRemoteTunnelS
 	}
 
 	async closeAll(): Promise<void> {
+		// A Workspace change retires starts before they can enter the visible catalog.
+		this.workspaceRevision++;
+		for (const startup of this.pendingStarts) {
+			startup.abort();
+		}
 		await Promise.all([...this.tunnels.keys()].map(id => this.close(id)));
 	}
 
-	onDidChange(listener: (change: RemoteTunnelChange) => void): IDisposable {
+	onDidChange(listener: (change: SshPortForwardChange) => void): IDisposable {
 		return this.changes.event(listener);
 	}
 
 	private remoteAuthority(): { readonly host: string; } {
 		const workspace = this.options.getWorkspace();
 		const remoteAuthority = getWorkspaceRemoteAuthority(workspace);
-		if (!remoteAuthority) {
+		if (!remoteAuthority?.startsWith('ssh+')) {
 			throw new Error("Remote tunnels require an SSH Remote Workspace");
 		}
 		const authority = createSshRemoteAuthority(remoteAuthority.slice(4));
@@ -287,7 +328,7 @@ export class SshRemoteTunnelService extends Disposable implements IRemoteTunnelS
 		console.error(`SSH tunnel ${record.tunnel.id} did not recover within ${this.recoveryPolicy.windowMs}ms after ${attempts} attempts: ${failure}`);
 	}
 
-	private publish(record: TunnelRecord, state: RemoteTunnel["state"]): void {
+	private publish(record: TunnelRecord, state: SshPortForward["state"]): void {
 		if (!this.isCurrent(record)) return;
 		record.tunnel = Object.freeze({ ...record.tunnel, state });
 		this.changes.fire({ kind: "upsert", tunnel: record.tunnel });
@@ -432,7 +473,7 @@ function validatePort(value: number, name: string): void {
 	if (!Number.isSafeInteger(value) || value < 1 || value > 65_535) throw new Error(`${name} must be an integer from 1 to 65535`);
 }
 
-function validateRecoveryPolicy(policy: SshRemoteTunnelRecoveryPolicy): void {
+function validateRecoveryPolicy(policy: SshPortForwardingRecoveryPolicy): void {
 	validatePositiveSafeInteger(policy.windowMs, "recoveryPolicy.windowMs");
 	validatePositiveSafeInteger(policy.initialDelayMs, "recoveryPolicy.initialDelayMs");
 	validatePositiveSafeInteger(policy.maxDelayMs, "recoveryPolicy.maxDelayMs");
@@ -445,7 +486,7 @@ function validatePositiveSafeInteger(value: number, name: string): void {
 	if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`${name} must be a positive safe integer`);
 }
 
-function recoveryDelayWithinWindow(policy: SshRemoteTunnelRecoveryPolicy, elapsed: number, attempt: number): number | undefined {
+function recoveryDelayWithinWindow(policy: SshPortForwardingRecoveryPolicy, elapsed: number, attempt: number): number | undefined {
 	const remaining = policy.windowMs - elapsed;
 	const delay = Math.min(policy.initialDelayMs * (2 ** Math.min(attempt, 31)), policy.maxDelayMs);
 	return delay <= remaining ? delay : undefined;

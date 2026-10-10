@@ -63,6 +63,7 @@ fn initialize(id: u64, runtime_api_version: u16) -> ExtensionHostRequest {
         request: HostRequestKind::Initialize(InitializeParams {
             extension_id: "example.commands".into(),
             runtime_api_version,
+            environment: Default::default(),
         }),
     }
 }

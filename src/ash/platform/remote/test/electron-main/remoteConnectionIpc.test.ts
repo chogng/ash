@@ -5,13 +5,14 @@ import { REMOTE_CONNECTION_LIST_CHANNEL } from "../../../../platform/remote/comm
 import { REMOTE_CONNECTION_REMOVE_CHANNEL } from "../../../../platform/remote/common/remoteConnectionIpc.js";
 import { REMOTE_CONNECTION_SAVE_CHANNEL } from "../../../../platform/remote/common/remoteConnectionIpc.js";
 import { REMOTE_CONNECTION_UPDATE_CHANNEL } from "../../../../platform/remote/common/remoteConnectionIpc.js";
-import type { IRemoteConnectionService } from "../../../../platform/remote/common/remoteConnectionService.js";
+import type { RemoteConnectionDefinition } from "../../../../platform/remote/common/remoteConnectionService.js";
+import type { IRemoteConnectionApi } from "../../../../platform/remote/common/remoteConnectionService.js";
 import { remoteConnectionIpcRoutes } from "../../../../platform/remote/electron-main/remoteConnectionIpc.js";
 
 test("Remote connection IPC exposes only credential-free canonical catalog operations", async () => {
 	const calls: unknown[] = [];
 	const build = { name: "build", host: "build-linux", workspace: "/srv/project" };
-	const service: IRemoteConnectionService = {
+	const service: IRemoteConnectionApi = {
 		available: true,
 		list: async () => [build],
 		save: async connection => { calls.push(["save", connection]); return connection; },
@@ -58,7 +59,7 @@ function route(routes: readonly { readonly channel: string; readonly validate: (
 	return routes.find(candidate => candidate.channel === channel)!;
 }
 
-function testService(): IRemoteConnectionService {
+function testService(): IRemoteConnectionApi {
 	return {
 		available: true,
 		list: async () => [],
@@ -68,3 +69,14 @@ function testService(): IRemoteConnectionService {
 		connect: async () => { },
 	};
 }
+
+
+test('Remote connection IPC pins the confirmation to the exact canonical target', async () => {
+	const target = { name: 'build', host: 'build-linux', workspace: '/srv/project' };
+	let expected: RemoteConnectionDefinition | undefined;
+	const connect = route(remoteConnectionIpcRoutes({ ...testService(), connect: async (_name, connection) => { expected = connection; } }), REMOTE_CONNECTION_CONNECT_CHANNEL);
+	await connect.invoke(connect.validate({ name: 'build', expectedConnection: target }));
+	assert.deepEqual(expected, target);
+	assert.throws(() => connect.validate({ name: 'build', expectedConnection: { ...target, name: 'other' } }), /same saved target/);
+	assert.throws(() => connect.validate({ name: 'build', expectedConnection: { ...target, identityFile: '/tmp/key' } }), /exactly required keys/);
+});

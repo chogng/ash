@@ -246,6 +246,7 @@ pub struct AppServer {
     pub(super) mcp_oauth: Option<Arc<ash_mcp_extension::McpOAuthService>>,
     pub(super) plugins: Option<ash_core_plugins::PluginActivationAuthority>,
     extension_hosts: Option<extension_host_runtime::ExtensionHostRuntime>,
+    built_in_editor_extensions: extension_host_runtime::source::BuiltInEditorExtensions,
     pub(super) plugin_package_service: Option<Arc<dyn ash_core_plugins::PluginPackageService>>,
     plugins_manager: Option<Arc<ash_core_plugins::PluginsManager>>,
     marketplace_editor_extension_admission:
@@ -356,6 +357,7 @@ enum ConnectionAuthority {
 
 #[derive(Debug, Default)]
 struct ConnectionMutableState {
+    extension_hosts: Option<extension_host_runtime::ExtensionHostRuntime>,
     closed: bool,
     initialized: bool,
     request_ids: BTreeSet<u64>,
@@ -625,6 +627,8 @@ impl AppServer {
             mcp_oauth: None,
             plugins: None,
             extension_hosts: None,
+            built_in_editor_extensions:
+                extension_host_runtime::source::BuiltInEditorExtensions::Omitted,
             plugin_package_service: None,
             plugins_manager: None,
             marketplace_editor_extension_admission: None,
@@ -1049,6 +1053,11 @@ impl AppServer {
         for debug_adapters in self.configured_debug_adapter_services() {
             debug_adapters.close_owner(connection.connection_id);
         }
+        let connection_extensions = connection_state(&connection).extension_hosts.take();
+        if let Some(extension_hosts) = connection_extensions {
+            extension_hosts.close_owner(connection.connection_id);
+            extension_hosts.shutdown();
+        }
         if let Some(extension_hosts) = &self.extension_hosts {
             extension_hosts.close_owner(connection.connection_id);
         }
@@ -1339,8 +1348,8 @@ impl AppServer {
 
     /// Enables executable Editor Extensions over one explicitly injected process launcher.
     ///
-    /// At least one executable Extension source must be installed first: legacy Plugin authority,
-    /// or a local Marketplace Manager paired with product admission policy. Without this opt-in,
+    /// Requires product modules, Plugin authority, or Marketplace Manager paired with admission policy.
+    /// Without this opt-in,
     /// App Server advertises no executable Extension Host capability and never starts package code.
     pub fn with_extension_host_runtime(
         mut self,
@@ -1350,13 +1359,18 @@ impl AppServer {
     ) -> Result<Self, String> {
         let marketplace_source =
             self.plugins_manager.is_some() && self.marketplace_editor_extension_admission.is_some();
-        if self.plugins.is_none() && !marketplace_source {
+        if self.plugins.is_none()
+            && !marketplace_source
+            && self.built_in_editor_extensions
+                == extension_host_runtime::source::BuiltInEditorExtensions::Omitted
+        {
             return Err(
                 "Plugin authority or Marketplace Editor Extension admission must be installed before Extension Host runtime"
                     .to_string(),
             );
         }
         let runtime = extension_host_runtime::ExtensionHostRuntime::start(
+            self.built_in_editor_extensions,
             self.plugins.clone(),
             self.plugins_manager.clone(),
             self.marketplace_editor_extension_admission.clone(),
@@ -1365,6 +1379,7 @@ impl AppServer {
             restart_policy,
             Arc::clone(&self.updates),
             Arc::clone(&self.client_host),
+            Default::default(),
         )
         .map_err(|error| error.to_string())?;
         if let Some(authorization) = self.extension_dir_authorization() {
@@ -1374,6 +1389,13 @@ impl AppServer {
         }
         self.extension_hosts = Some(runtime);
         Ok(self)
+    }
+
+    /// Admits only modules compiled into the product JS host, without installing or granting user packages.
+    pub fn with_built_in_editor_extensions(mut self) -> Self {
+        self.built_in_editor_extensions =
+            extension_host_runtime::source::BuiltInEditorExtensions::Product;
+        self
     }
 
     /// Installs product-local enable and grant authority for Marketplace Editor Extensions.
@@ -2698,9 +2720,12 @@ impl AppServer {
             Some(ClientMethod::ExtensionHostActivate) => {
                 self.extension_host_activate(connection, &request.params)
             }
-            Some(ClientMethod::ExtensionHostList) => self.extension_host_list(),
+            Some(ClientMethod::ExtensionHostStart) => {
+                self.extension_host_start(connection, &request.params)
+            }
+            Some(ClientMethod::ExtensionHostList) => self.extension_host_list(connection),
             Some(ClientMethod::ExtensionHostReconcile) => {
-                self.extension_host_reconcile(&request.params)
+                self.extension_host_reconcile(connection, &request.params)
             }
             Some(ClientMethod::ExtensionHostInvokeStart) => {
                 self.extension_host_invoke_start(connection, &request.params)

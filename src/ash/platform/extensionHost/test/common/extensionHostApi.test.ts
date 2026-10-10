@@ -27,6 +27,7 @@ test("normalizes one exact isolated Extension Host fleet snapshot", () => {
 				{ registrationId: "language", kind: "languageProvider", languageIds: ["typescript"], operations: ["completion", "hover"], completionTriggerCharacters: ['.', '😀'] },
 				{ registrationId: "tests", kind: "testProfileProvider", providerId: "acme.tests", label: "Acme Tests" },
 				{ registrationId: 'documents', kind: 'textDocumentEvents' },
+				{ registrationId: 'remote:team', kind: 'remoteConnectionResolver', authorityPrefix: 'team' },
 			],
 		}],
 	});
@@ -38,6 +39,7 @@ test("normalizes one exact isolated Extension Host fleet snapshot", () => {
 	assert.equal(snapshot.extensions[0]?.outputEvents[1]?.operation.operation, "append");
 	assert.equal(Object.isFrozen(snapshot.extensions[0]?.registrations), true);
 	assert.deepEqual(snapshot.extensions[0]?.registrations[3], { registrationId: 'documents', kind: 'textDocumentEvents' });
+	assert.deepEqual(snapshot.extensions[0]?.registrations[4], { registrationId: 'remote:team', kind: 'remoteConnectionResolver', authorityPrefix: 'team' });
 	const language = snapshot.extensions[0]!.registrations[1]!;
 	assert.ok(language.kind === 'languageProvider');
 	assert.deepEqual(language.completionTriggerCharacters, ['.', '😀']);

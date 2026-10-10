@@ -1,6 +1,6 @@
 import type { Session } from 'electron/main';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
-import type { SshRemoteTunnelService } from '../../remote/electron-main/sshRemoteTunnelService.js';
+import type { SshPortForwardingService } from '../../remote/electron-main/sshPortForwardingService.js';
 
 /** A remote storage session keeps its proxy policy until its last page releases the network owner. */
 export class BrowserSessionRemote extends Disposable {
@@ -10,7 +10,7 @@ export class BrowserSessionRemote extends Disposable {
 		super();
 		this._register(toDisposable(() => this.cancellation.abort()));
 	}
-	public async initialize(tunnels: SshRemoteTunnelService): Promise<void> {
+	public async initialize(tunnels: SshPortForwardingService): Promise<void> {
 		const proxy = await tunnels.openProxy(this.cancellation.signal);
 		if (this.isDisposed) { proxy.dispose(); this.cancellation.signal.throwIfAborted(); }
 		this._register(proxy);

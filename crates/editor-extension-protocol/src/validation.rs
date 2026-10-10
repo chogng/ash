@@ -66,6 +66,7 @@ pub(super) fn validate_registrations(
     }
     let mut ids = BTreeSet::new();
     let mut commands = BTreeSet::new();
+    let mut remote_prefixes = BTreeSet::new();
     let mut debugger_types = BTreeSet::new();
     let mut task_types = BTreeSet::new();
     let mut test_profile_providers = BTreeSet::new();
@@ -75,6 +76,29 @@ pub(super) fn validate_registrations(
             return Err(protocol_error("registration IDs must be unique"));
         }
         let required = match &registration.kind {
+            RegistrationKind::RemoteAuthorityResolver { authority_prefix }
+            | RegistrationKind::RemoteConnectionResolver { authority_prefix } => {
+                if authority_prefix.is_empty()
+                    || authority_prefix.len() > 64
+                    || !authority_prefix.as_bytes()[0].is_ascii_lowercase()
+                    || !authority_prefix.bytes().all(|byte| {
+                        byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-'
+                    })
+                    || authority_prefix == "ssh"
+                        && !capabilities
+                            .contains(&ExtensionCapability::ProductRemoteAuthorityResolver)
+                {
+                    return Err(protocol_error(
+                        "invalid or reserved Remote authority prefix",
+                    ));
+                }
+                require_unique(
+                    &mut remote_prefixes,
+                    authority_prefix,
+                    "Remote authority prefixes",
+                )?;
+                ExtensionCapability::RemoteAuthorityResolver
+            }
             RegistrationKind::TextDocumentEvents {} => ExtensionCapability::LanguageProvider,
             RegistrationKind::ExternalUriOpener { schemes, label } => {
                 if schemes.is_empty()

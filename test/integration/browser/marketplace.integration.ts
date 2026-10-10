@@ -25,7 +25,7 @@ import { IAppServerSkillApi } from '../../../src/ash/platform/agentHost/common/a
 import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { ILocalizationService } from '../../../src/ash/workbench/services/localization/common/localizationService.js';
-import { IRemoteAgentService } from '../../../src/ash/workbench/services/remote/common/remoteAgentService.js';
+import { IAppServerRemoteAgentService } from '../../../src/ash/workbench/services/remote/common/appServerRemoteAgentService.js';
 import { createSettingsEditorInput } from '../../../src/ash/workbench/services/preferences/common/settingsEditorInput.js';
 import { CLOSE_EDITOR_COMMAND_ID } from '../../../src/ash/workbench/browser/parts/editor/editorCommands.js';
 import { AppServerMarketplaceService } from '../../../src/ash/workbench/services/marketplace/browser/appServerMarketplaceService.js';
@@ -176,7 +176,7 @@ const pluginApi: IPluginApi = {
 services.registerInstance(IPluginService, disposables.add(new AppServerPluginService(pluginApi, { subscribe: () => ({ dispose() { } }) })));
 services.registerInstance(IContextViewService, disposables.add(new BrowserContextViewService(document.body)));
 services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, text, parameters) => text.replace(/\{(\d+)\}/gu, (match, index: string) => String(parameters?.[index] ?? match)) });
-services.registerInstance(IRemoteAgentService, { onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None } as IRemoteAgentService);
+services.registerInstance(IAppServerRemoteAgentService, { onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None } as IAppServerRemoteAgentService);
 services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
 services.registerInstance(ICodeEditorService, { getActiveCodeEditor: () => ({ getModel: () => ({ getLanguageId: () => 'typescriptreact' }) }) } as unknown as ICodeEditorService);
 services.registerInstance(IEditorService, { onDidActiveEditorChange: Event.None } as IEditorService);

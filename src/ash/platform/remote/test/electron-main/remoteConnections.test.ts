@@ -12,9 +12,9 @@ test("Electron Main lists and resolves named targets through the shared Rust cat
 		runCommand: async (_executable, args) => {
 			calls.push([...args]);
 			if (args.includes("list")) {
-				return { exitCode: 0, stdout: '[{"name":"build","host":"build-linux","workspace":"/srv/project"}]\n', stderr: "" };
+				return { exitCode: 0, stdout: '[{"name":"build","host":"build-linux","dir":"/srv/project"}]\n', stderr: "" };
 			}
-			return { exitCode: 0, stdout: '{"name":"build","host":"build-linux","workspace":"/srv/project"}\n', stderr: "" };
+			return { exitCode: 0, stdout: '{"name":"build","host":"build-linux","dir":"/srv/project"}\n', stderr: "" };
 		},
 		scheduleConnect: connection => { scheduled.push(connection); },
 	});
@@ -31,9 +31,9 @@ test("Electron Main lists and resolves named targets through the shared Rust cat
 test("Electron Main creates, atomically updates, and removes targets through the Rust CLI", async () => {
 	const calls: string[][] = [];
 	const outputs = [
-		'{"name":"build","host":"build-linux","workspace":"/srv/project"}\n',
-		'{"name":"production","host":"production-linux","workspace":"/srv/production"}\n',
-		'{"name":"production","host":"production-linux","workspace":"/srv/production"}\n',
+		'{"name":"build","host":"build-linux","dir":"/srv/project"}\n',
+		'{"name":"production","host":"production-linux","dir":"/srv/production"}\n',
+		'{"name":"production","host":"production-linux","dir":"/srv/production"}\n',
 	];
 	const service = new RemoteConnections({
 		remoteExecutable: "ash-remote",
@@ -49,8 +49,8 @@ test("Electron Main creates, atomically updates, and removes targets through the
 	assert.deepEqual(await service.update("BUILD", { name: "Production", host: "PRODUCTION-LINUX", workspace: "/srv/production" }), { name: "production", host: "production-linux", workspace: "/srv/production" });
 	assert.deepEqual(await service.remove("PRODUCTION"), { name: "production", host: "production-linux", workspace: "/srv/production" });
 	assert.deepEqual(calls, [
-		["connections", "save", "--name", "build", "--host", "build-linux", "--workspace", "/srv/project", "--mode", "create"],
-		["connections", "update", "--name", "build", "--new-name", "production", "--host", "production-linux", "--workspace", "/srv/production"],
+		["connections", "save", "--name", "build", "--host", "build-linux", "--dir", "/srv/project", "--mode", "create"],
+		["connections", "update", "--name", "build", "--new-name", "production", "--host", "production-linux", "--dir", "/srv/production"],
 		["connections", "remove", "--name", "production"],
 	]);
 });
@@ -59,7 +59,7 @@ test("named Remote connection paths preserve POSIX backslashes", async () => {
 	const service = new RemoteConnections({
 		remoteExecutable: "ash-remote",
 		environment: {},
-		runCommand: async () => ({ exitCode: 0, stdout: '[{"name":"build","host":"build","workspace":"/srv/project\\\\archive"}]', stderr: "" }),
+		runCommand: async () => ({ exitCode: 0, stdout: '[{"name":"build","host":"build","dir":"/srv/project\\\\archive"}]', stderr: "" }),
 		scheduleConnect: () => { },
 	});
 
@@ -70,7 +70,7 @@ test("named Remote connection mutations require the CLI to return the exact requ
 	const service = new RemoteConnections({
 		remoteExecutable: "ash-remote",
 		environment: {},
-		runCommand: async () => ({ exitCode: 0, stdout: '{"name":"other","host":"other","workspace":"/srv/other"}', stderr: "" }),
+		runCommand: async () => ({ exitCode: 0, stdout: '{"name":"other","host":"other","dir":"/srv/other"}', stderr: "" }),
 		scheduleConnect: () => { },
 	});
 
@@ -81,8 +81,8 @@ test("named Remote connection mutations require the CLI to return the exact requ
 test("named Remote connections fail closed on missing, non-canonical, or expanded records", async () => {
 	const outputs = [
 		"null\n",
-		'{"name":"build","host":"Build-Linux","workspace":"/srv/project"}\n',
-		'{"name":"build","host":"build-linux","workspace":"/srv/project","password":"secret"}\n',
+		'{"name":"build","host":"Build-Linux","dir":"/srv/project"}\n',
+		'{"name":"build","host":"build-linux","dir":"/srv/project","password":"secret"}\n',
 	];
 	const service = new RemoteConnections({
 		remoteExecutable: "ash-remote",
@@ -102,7 +102,7 @@ test("named Remote connection lists require sorted unique canonical records", as
 		environment: {},
 		runCommand: async () => ({
 			exitCode: 0,
-			stdout: '[{"name":"zulu","host":"zulu","workspace":"/srv/z"},{"name":"alpha","host":"alpha","workspace":"/srv/a"}]',
+			stdout: '[{"name":"zulu","host":"zulu","dir":"/srv/z"},{"name":"alpha","host":"alpha","dir":"/srv/a"}]',
 			stderr: "",
 		}),
 		scheduleConnect: () => { },
@@ -115,7 +115,7 @@ test("named Remote connection scheduling is reusable after one window open settl
 	const service = new RemoteConnections({
 		remoteExecutable: "ash-remote",
 		environment: {},
-		runCommand: async () => ({ exitCode: 0, stdout: '{"name":"build","host":"build","workspace":"/"}', stderr: "" }),
+		runCommand: async () => ({ exitCode: 0, stdout: '{"name":"build","host":"build","dir":"/"}', stderr: "" }),
 		scheduleConnect: () => { schedules += 1; },
 	});
 
@@ -137,7 +137,7 @@ test("concurrent named Remote connection requests cannot both cross the catalog 
 
 	const first = service.connect("build");
 	await assert.rejects(() => service.connect("build"), /window is already being opened/);
-	finishLookup({ exitCode: 0, stdout: '{"name":"build","host":"build","workspace":"/srv/project"}', stderr: "" });
+	finishLookup({ exitCode: 0, stdout: '{"name":"build","host":"build","dir":"/srv/project"}', stderr: "" });
 	await first;
 	assert.equal(schedules, 1);
 });
@@ -149,7 +149,7 @@ test("named Remote connection remains fenced until asynchronous window creation 
 	const service = new RemoteConnections({
 		remoteExecutable: "ash-remote",
 		environment: {},
-		runCommand: async () => ({ exitCode: 0, stdout: '{"name":"build","host":"build","workspace":"/srv/project"}', stderr: "" }),
+		runCommand: async () => ({ exitCode: 0, stdout: '{"name":"build","host":"build","dir":"/srv/project"}', stderr: "" }),
 		scheduleConnect: async () => {
 			schedules += 1;
 			await windowOpen;
@@ -163,4 +163,22 @@ test("named Remote connection remains fenced until asynchronous window creation 
 	await first;
 	await service.connect("build");
 	assert.equal(schedules, 2);
+});
+
+
+test('confirmed Remote targets cannot be redirected by a catalog edit before window creation', async () => {
+	const original = { name: 'build', host: 'build-linux', workspace: '/srv/project' };
+	let current = original;
+	const scheduled: RemoteConnectionDefinition[] = [];
+	const service = new RemoteConnections({
+		remoteExecutable: 'ash-remote', environment: {},
+		runCommand: async () => ({ exitCode: 0, stdout: JSON.stringify({ name: current.name, host: current.host, dir: current.workspace }), stderr: '' }),
+		scheduleConnect: connection => { scheduled.push(connection); },
+	});
+	current = { ...original, host: 'different-host' };
+	await assert.rejects(service.connect('build', original), /changed after confirmation/);
+	assert.deepEqual(scheduled, []);
+	current = original;
+	await service.connect('build', original);
+	assert.deepEqual(scheduled, [original]);
 });

@@ -1797,6 +1797,7 @@ dependencies = [
  "ash-windows-sandbox",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tempfile",
  "v8",
  "windows-sys 0.61.2",
@@ -2347,9 +2348,14 @@ dependencies = [
 name = "ash-remote-host"
 version = "0.1.0"
 dependencies = [
+ "ash-app-server-protocol",
+ "ash-package-store",
+ "ash-process-hardening",
  "ash-remote",
  "ash-remote-connections",
+ "serde_json",
  "tempfile",
+ "url",
 ]
 
 [[package]]

@@ -28,7 +28,7 @@ import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { IHooksService } from '../../../platform/hooks/common/hooksService.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { WorkspaceContextService } from '../../../workbench/services/workspaces/browser/workspaceContextService.js';
-import { IRemoteAgentService } from '../../../workbench/services/remote/common/remoteAgentService.js';
+import { IAppServerRemoteAgentService } from '../../../workbench/services/remote/common/appServerRemoteAgentService.js';
 import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
 import { IFileService } from '../../../platform/files/common/files.js';
@@ -170,7 +170,7 @@ test('Sessions Models switches control the model picker visibility preference', 
 	services.registerInstance(IHooksService, { onDidChange: Event.None, userConfigurationEditor: undefined, read: async () => [] });
 	using workspace = new WorkspaceContextService({ id: 'sessions-preferences', folders: [] });
 	services.registerInstance(IWorkspaceContextService, workspace);
-	services.registerInstance(IRemoteAgentService, { connectionState: 'connected', connection: { kind: 'local', generation: 1 }, onDidChangeConnectionState: Event.None, onDidChangeConnection: Event.None, reconnect: async () => ({ kind: 'alreadyConnected' }), rollbackRuntime: async () => ({ kind: 'cancelled' }) });
+	services.registerInstance(IAppServerRemoteAgentService, { connectionState: 'connected', connection: { kind: 'local', generation: 1 }, onDidChangeConnectionState: Event.None, onDidChangeConnection: Event.None, reconnect: async () => ({ kind: 'alreadyConnected' }), rollbackRuntime: async () => ({ kind: 'cancelled' }) });
 	services.registerInstance(ITraceSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, configured: null, recording: { type: 'disabled' } }), configure: async () => { } });
 	services.registerInstance(IFileDialogService, { showOpenDialog: async () => undefined, showSaveDialog: async () => undefined, pickFileToSave: async () => undefined, showSaveConfirm: async () => 2 });
 	services.registerInstance(IChatSessionNavigationService, { getActiveConversation: () => undefined, getConversations: () => [], captureActiveDraft: async () => undefined, openConversation: async () => { }, appendToActiveDraft: () => { } });

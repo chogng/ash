@@ -132,6 +132,9 @@ pub struct PackageBinding {
 pub struct InitializeParams {
     pub extension_id: String,
     pub runtime_api_version: u16,
+    /// Per-incarnation extension environment, delivered after the executable is confined.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub environment: Option<std::collections::BTreeMap<String, Option<String>>>,
 }
 
 /// Successful handshake returned only by the requested process incarnation.
@@ -157,6 +160,9 @@ pub struct ActivateParams {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ExtensionCapability {
+    RemoteAuthorityResolver,
+    /// Product release authority only; installed manifests cannot request the reserved ssh prefix.
+    ProductRemoteAuthorityResolver,
     StatusBar,
     Command,
     LanguageProvider,
@@ -233,6 +239,13 @@ impl<'de> Deserialize<'de> for RegistrationDescriptor {
     deny_unknown_fields
 )]
 pub enum RegistrationKind {
+    /// Selects an existing saved target; distinct from a transport endpoint resolver.
+    RemoteConnectionResolver {
+        authority_prefix: String,
+    },
+    RemoteAuthorityResolver {
+        authority_prefix: String,
+    },
     StatusBar {
         revision: u64,
         entries: Vec<ExtensionStatusBarEntry>,
@@ -352,6 +365,9 @@ impl ExtensionHostRequest {
         match &self.request {
             HostRequestKind::Initialize(params) => {
                 validate_identifier(&params.extension_id)?;
+                if let Some(environment) = &params.environment {
+                    validate_environment(environment)?;
+                }
                 if params.runtime_api_version == 0 {
                     return Err(protocol_error("runtime API version must be non-zero"));
                 }
@@ -485,3 +501,26 @@ impl ExtensionHostResponse {
 #[cfg(test)]
 #[path = "protocol_tests.rs"]
 mod tests;
+
+/// Validates values delivered in the handshake, without changing the executable's environment.
+pub fn validate_environment(
+    environment: &std::collections::BTreeMap<String, Option<String>>,
+) -> Result<(), ProtocolError> {
+    if environment.len() > 128 {
+        return Err(ProtocolError::QuotaExceeded("environment entries"));
+    }
+    for (key, value) in environment {
+        if key.is_empty()
+            || key.len() > 128
+            || !key.bytes().enumerate().all(|(index, byte)| {
+                byte.is_ascii_alphabetic() || byte == b'_' || index > 0 && byte.is_ascii_digit()
+            })
+            || value
+                .as_ref()
+                .is_some_and(|value| value.encode_utf16().count() > 8192 || value.contains('\0'))
+        {
+            return Err(protocol_error("invalid extension environment"));
+        }
+    }
+    Ok(())
+}

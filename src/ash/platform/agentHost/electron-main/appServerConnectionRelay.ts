@@ -74,7 +74,7 @@ export class AppServerConnectionRelay extends Disposable {
 			if (token.isCancellationRequested) { throw new CancellationError(); }
 			// An acquisition or another start may already own the new connection generation.
 			if (!this.transport.value) {
-				this.transport.value = new ChildProcessJsonlTransport(this.options.processLauncher.launch());
+				this.transport.value = new ChildProcessJsonlTransport(this.options.processLauncher.launch(), { stdoutMode: 'bytes' });
 				this.setState('starting');
 			}
 			if (this.state === 'ready') { return; }
@@ -153,11 +153,11 @@ export class AppServerConnectionRelay extends Disposable {
 						if (this.navigationGeneration !== navigationGeneration || processLauncher() !== launcher) { throw new CancellationError(); }
 						let transport = this.transport.value;
 						if (!transport) {
-							transport = new ChildProcessJsonlTransport(launcher.launch());
+							transport = new ChildProcessJsonlTransport(launcher.launch(), { stdoutMode: 'bytes' });
 							this.transport.value = transport;
 						}
 						this.attach(renderer, nonce as string, transport);
-						return { enabled: true, protocolVersion: 1, ...metadata() };
+						return { enabled: true, protocolVersion: 1, byteStream: true, ...metadata() };
 					});
 				} finally {
 					this.pendingAcquisitions--;
@@ -202,7 +202,7 @@ export class AppServerConnectionRelay extends Disposable {
 		const close = (): void => {
 			if (closed) { return; }
 			closed = true;
-			frames.dispose();
+			data.dispose();
 			ended.dispose();
 			const intentional = this.state === 'stopping' || this.isDisposed;
 			// Delayed port/process events own only this attachment, never its replacement.
@@ -219,12 +219,12 @@ export class AppServerConnectionRelay extends Disposable {
 			port1.close();
 			transport.dispose();
 		};
-		const frames = transport.onFrame(frame => {
-			const size = Buffer.byteLength(frame);
+		const data = transport.onData(chunk => {
+			const size = chunk.byteLength;
 			if (sent.length >= 128 || bytes + size > DEFAULT_MAX_JSONL_FRAME_BYTES) { close(); return; }
 			sent.push(size);
 			bytes += size;
-			port1.postMessage({ frame });
+			port1.postMessage({ data: new Uint8Array(chunk) });
 			if (sent.length >= 4) { transport.process.stdout.pause(); }
 		});
 		const ended = transport.onClose(error => {
@@ -243,12 +243,12 @@ export class AppServerConnectionRelay extends Disposable {
 				if (sent.length < 4) { transport.process.stdout.resume(); }
 				return;
 			}
-			if (typeof value.frame !== 'string' || writes >= 128) { close(); return; }
-			const size = Buffer.byteLength(value.frame);
+			if (!(value.data instanceof Uint8Array) || writes >= 128) { close(); return; }
+			const size = value.data.byteLength;
 			if (writeBytes + size > DEFAULT_MAX_JSONL_FRAME_BYTES) { close(); return; }
 			writeBytes += size;
 			writes++;
-			void transport.send(value.frame).then(() => { if (!closed) { port1.postMessage({ ack: true }); } }, close).finally(() => { writes--; writeBytes -= size; });
+			void transport.sendBytes(value.data).then(() => { if (!closed) { port1.postMessage({ ack: true }); } }, close).finally(() => { writes--; writeBytes -= size; });
 		});
 		port1.on('close', close);
 		port1.start();

@@ -8,6 +8,7 @@ export const REMOTE_AGENT_RUNTIME_ROLLBACK_CHANNEL = "ash:remote:runtime:rollbac
 /** Sanitized identity of the App Server connection currently owned by the native host. */
 export type RemoteAgentConnection =
 	| { readonly kind: "local"; readonly generation: number; }
+	| { readonly kind: "remote"; readonly generation: number; readonly authority: string; }
 	| { readonly kind: "ssh"; readonly generation: number; readonly authority: string; readonly host: string; };
 
 /** Result of a Main-owned rollback interaction without exposing runtime paths to Renderer code. */

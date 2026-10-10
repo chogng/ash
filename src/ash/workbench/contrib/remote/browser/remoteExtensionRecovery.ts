@@ -1,11 +1,11 @@
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import type { IWorkbenchContribution } from "../../../common/contributions.js";
 import type { IExtensionService } from "../../../services/extensions/common/extensionService.js";
-import type { IRemoteAgentService } from "../../../services/remote/common/remoteAgentService.js";
+import type { IAppServerRemoteAgentService } from "../../../services/remote/common/appServerRemoteAgentService.js";
 
 export interface RemoteExtensionRecoveryContributionOptions {
 	readonly extensionService: IExtensionService;
-	readonly remoteAgentService: IRemoteAgentService;
+	readonly remoteAgentService: IAppServerRemoteAgentService;
 }
 
 /** Refreshes backend-provided extension contributions after a remote reconnection. */

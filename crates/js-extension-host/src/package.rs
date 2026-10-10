@@ -1,3 +1,5 @@
+use sha2::Digest;
+use sha2::Sha256;
 use std::collections::BTreeMap;
 use std::path::Component;
 use std::path::Path;
@@ -13,8 +15,16 @@ pub(crate) enum ApiContract {
     Vscode,
 }
 
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(crate) enum PackageOrigin {
+    Installed,
+    Product,
+}
+
 /// Immutable ESM bytes captured before extension code runs. Resolution never reads host files.
 pub(crate) struct Package {
+    pub(crate) origin: PackageOrigin,
+    pub(crate) binding: Option<extension_protocol::PackageBinding>,
     pub(crate) api: ApiContract,
     pub(crate) extension_id: String,
     pub(crate) entry: String,
@@ -22,6 +32,34 @@ pub(crate) struct Package {
 }
 
 impl Package {
+    pub(crate) fn product(name: &str) -> Result<Self, String> {
+        if name != "remote-ssh" {
+            return Err("unknown product extension".into());
+        }
+        let manifest = include_str!("../../../extensions/remote-ssh/package.json");
+        let source = include_str!("../../../extensions/remote-ssh/src/extension.js");
+        let sdk = include_str!("../../../extension-sdk/index.js");
+        let digest = format!(
+            "sha256:{:x}",
+            Sha256::digest(format!("{manifest}\0{source}\0{sdk}"))
+        );
+        Ok(Self {
+            origin: PackageOrigin::Product,
+            binding: Some(extension_protocol::PackageBinding {
+                package_id: "ash.remote-ssh@1.0.0".into(),
+                package_digest: digest,
+                entrypoint: "src/extension.js".into(),
+            }),
+            api: ApiContract::Ash,
+            extension_id: "ash.remote-ssh".into(),
+            entry: "src/extension.js".into(),
+            sources: BTreeMap::from([
+                ("src/extension.js".into(), source.into()),
+                ("@ash/extension".into(), sdk.into()),
+            ]),
+        })
+    }
+
     pub(crate) fn read_vscode(
         extension_id: String,
         root: PathBuf,
@@ -84,6 +122,8 @@ impl Package {
             include_str!("../../../extension-sdk/index.js").into(),
         );
         Ok(Self {
+            origin: PackageOrigin::Installed,
+            binding: None,
             api: ApiContract::Ash,
             extension_id,
             entry,

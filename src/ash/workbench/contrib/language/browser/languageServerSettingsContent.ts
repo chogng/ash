@@ -22,7 +22,7 @@ import { Registry } from '../../../../platform/registry/common/platform.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { CLOSE_EDITOR_COMMAND_ID } from '../../../browser/parts/editor/editorCommands.js';
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
-import { IRemoteAgentService } from '../../../services/remote/common/remoteAgentService.js';
+import { IAppServerRemoteAgentService } from '../../../services/remote/common/appServerRemoteAgentService.js';
 import { SettingsSearchQuery } from '../../preferences/browser/settingsSearch.js';
 import type { SettingsContent, SettingsContentItem, SettingsTreeNode } from '../../preferences/browser/settingsTreeModels.js';
 
@@ -77,7 +77,7 @@ export class LanguageServerSettingsContent extends Disposable implements Setting
 		@ICodeEditorService private readonly editors: ICodeEditorService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@ILocalizationService private readonly localization: ILocalizationService,
-		@IRemoteAgentService remote: IRemoteAgentService,
+		@IAppServerRemoteAgentService remote: IAppServerRemoteAgentService,
 		@IContextViewService contextView: IContextViewService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IAccessibleViewService private readonly accessibleView: IAccessibleViewService,

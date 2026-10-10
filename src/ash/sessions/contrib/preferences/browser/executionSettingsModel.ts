@@ -7,7 +7,7 @@ import { IDirPermissionsService, dirPermissionNames, type DirPermission, type Di
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IExecutionSettingsService, type ExecutionSettings, type ExecutionSettingsSnapshot } from '../../../../platform/execution/common/executionSettingsService.js';
 import { approvalModeDefinition, approvalModeDefinitions } from '../../../../platform/sessions/common/approvalModes.js';
-import { IRemoteAgentService } from '../../../../workbench/services/remote/common/remoteAgentService.js';
+import { IAppServerRemoteAgentService } from '../../../../workbench/services/remote/common/appServerRemoteAgentService.js';
 import type { SettingsSectionField, SettingsSectionModel } from '../../../../workbench/contrib/preferences/browser/settingsTreeModels.js';
 
 const readPermissions: readonly DirPermission[] = ['readFiles', 'watchFiles', 'browseFiles', 'searchFiles', 'inspectRepository'];
@@ -40,7 +40,7 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 		@IExecutionSettingsService private readonly execution: IExecutionSettingsService,
 		@IDirPermissionsService private readonly permissions: IDirPermissionsService,
 		@IAgentCapabilitiesService private readonly capabilities: IAgentCapabilitiesService,
-		@IRemoteAgentService private readonly remote: IRemoteAgentService,
+		@IAppServerRemoteAgentService private readonly remote: IAppServerRemoteAgentService,
 		@IDialogService private readonly dialogs: IDialogService,
 		@ILocalizationService private readonly localization: ILocalizationService,
 	) {

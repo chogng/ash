@@ -6,7 +6,7 @@ import { createServiceIdentifier, IInstantiationService } from '../../instantiat
 import { BrowserViewStorageScope, type IBrowserViewService, type BrowserViewEvent, type IBrowserViewBounds, type IBrowserViewCreateOptions, type IBrowserViewInfo, normalizeBrowserViewUrl } from '../common/browserView.js';
 import { BrowserView } from './browserView.js';
 import { BrowserSession } from './browserSession.js';
-import type { SshRemoteTunnelService } from '../../remote/electron-main/sshRemoteTunnelService.js';
+import type { SshPortForwardingService } from '../../remote/electron-main/sshPortForwardingService.js';
 
 export const IBrowserViewMainService = createServiceIdentifier<IBrowserViewMainService>('browserViewMainService');
 export interface IBrowserViewMainService extends IBrowserViewService {
@@ -22,7 +22,7 @@ export interface BrowserViewMainServiceOptions {
 	readonly getWorkspaceId: () => string;
 	readonly createSession: (partition: string) => Session;
 	readonly createView: (session: Session) => WebContentsView;
-	readonly getRemoteNetwork: () => { readonly authority: string; readonly tunnels: SshRemoteTunnelService; } | undefined;
+	readonly getRemoteNetwork: () => { readonly authority: string; readonly tunnels: SshPortForwardingService; } | undefined;
 }
 /** The window manager is the sole table of live pages; each page owns its own disposal. */
 export class BrowserViewMainService extends Disposable implements IBrowserViewMainService {

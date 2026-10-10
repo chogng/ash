@@ -81,7 +81,7 @@ export default defineConfig(({ mode, command }) => {
 		root: sourceRoot,
 		publicDir: resolve(repositoryRoot, "resources/server"),
 		define: {
-			__ASH_WEB_APP_SERVER__: JSON.stringify(webAppServerEnabled),
+			__ASH_WEB_APP_SERVER__: JSON.stringify(webAppServerEnabled || command === "build" && !webOnly),
 			'import.meta.env.ASH_SESSIONS_PROFILE': JSON.stringify(codeSessionsProfile),
 		},
 		plugins: [

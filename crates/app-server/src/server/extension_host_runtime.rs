@@ -51,7 +51,17 @@ pub(super) struct ExtensionHostRuntime {
     inner: Arc<RuntimeInner>,
 }
 
+impl std::fmt::Debug for ExtensionHostRuntime {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("ExtensionHostRuntime")
+            .finish_non_exhaustive()
+    }
+}
+
 struct RuntimeInner {
+    environment: Option<BTreeMap<String, Option<String>>>,
+    built_in_extensions: source::BuiltInEditorExtensions,
     plugin_authority: Option<PluginActivationAuthority>,
     plugins_manager: Option<Arc<PluginsManager>>,
     marketplace_admission: Option<Arc<dyn crate::MarketplaceEditorExtensionAdmission>>,
@@ -125,6 +135,7 @@ pub(super) enum ExtensionHostRuntimeError {
 
 impl ExtensionHostRuntime {
     pub(super) fn start(
+        built_in_extensions: source::BuiltInEditorExtensions,
         plugin_authority: Option<PluginActivationAuthority>,
         plugins_manager: Option<Arc<PluginsManager>>,
         marketplace_admission: Option<Arc<dyn crate::MarketplaceEditorExtensionAdmission>>,
@@ -133,7 +144,12 @@ impl ExtensionHostRuntime {
         restart_policy: RestartPolicy,
         updates: Arc<UpdateBroker>,
         client_host: Arc<crate::client_host::ClientHost>,
+        environment: Option<BTreeMap<String, Option<String>>>,
     ) -> Result<Self, ExtensionHostError> {
+        if let Some(environment) = &environment {
+            extension_protocol::validate_environment(environment)
+                .map_err(|error| ExtensionHostError::InvalidProtocol(error.to_string()))?;
+        }
         limits.validate()?;
         restart_policy.validate()?;
         let plugin_changes = plugin_authority
@@ -147,6 +163,8 @@ impl ExtensionHostRuntime {
             .and_then(|admission| admission.subscribe());
         let (shutdown, shutdown_receiver) = std::sync::mpsc::channel();
         let inner = Arc::new(RuntimeInner {
+            environment,
+            built_in_extensions,
             plugin_authority,
             plugins_manager,
             marketplace_admission,
@@ -172,6 +190,9 @@ impl ExtensionHostRuntime {
             shutdown: Mutex::new(Some(shutdown)),
             worker: Mutex::new(None),
         });
+        inner
+            .reconcile_authority_locked(true)
+            .map_err(|_| ExtensionHostError::SpawnFailed)?;
         let weak = Arc::downgrade(&inner);
         let worker = std::thread::Builder::new()
             .name("ash-editor-extension-hosts".into())
@@ -190,6 +211,62 @@ impl ExtensionHostRuntime {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(worker);
         Ok(Self { inner })
+    }
+
+    /// A remote window has its own extension processes but shares installation and grant owners.
+    pub(super) fn fork(
+        &self,
+        environment: BTreeMap<String, Option<String>>,
+    ) -> Result<Self, ExtensionHostError> {
+        let runtime = Self::start(
+            self.inner.built_in_extensions,
+            self.inner.plugin_authority.clone(),
+            self.inner.plugins_manager.clone(),
+            self.inner.marketplace_admission.clone(),
+            Arc::clone(&self.inner.launcher),
+            self.inner.limits.clone(),
+            self.inner.restart_policy,
+            Arc::clone(&self.inner.updates),
+            Arc::clone(&self.inner.client_host),
+            Some(environment),
+        )?;
+        let authorization = self
+            .inner
+            .state
+            .lock()
+            .map_err(|_| ExtensionHostError::HostExited)?
+            .authorization
+            .clone();
+        if let Some(authorization) = authorization {
+            runtime
+                .bind_dir(authorization)
+                .map_err(|_| ExtensionHostError::AuthorityDenied)?;
+        }
+        Ok(runtime)
+    }
+
+    pub(super) fn shutdown(&self) {
+        if let Some(shutdown) = self
+            .inner
+            .shutdown
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
+        {
+            let _ = shutdown.send(());
+        }
+        if let Some(worker) = self
+            .inner
+            .worker
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
+        {
+            let _ = worker.join();
+        }
+        if let Ok(_gate) = self.inner.reconcile_gate.lock() {
+            let _ = self.inner.retire_current(CancelReason::Shutdown);
+        }
     }
 
     pub(super) fn bind_dir(
@@ -222,7 +299,7 @@ impl ExtensionHostRuntime {
             return;
         };
         let _ = self.inner.retire_current(CancelReason::AuthorityRevoked);
-        let generation = {
+        {
             let Ok(mut state) = self.inner.state.lock() else {
                 return;
             };
@@ -230,12 +307,8 @@ impl ExtensionHostRuntime {
             // Package fences remain monotonic across directory changes: a delayed editor
             // event must never acquire the same generation in a different directory.
             state.source_revision = source::EditorExtensionSourceRevision::default();
-            self.inner
-                .refresh_generation_locked(&mut state)
-                .ok()
-                .flatten()
-        };
-        self.inner.publish(generation);
+        }
+        let _ = self.inner.reconcile_authority_locked(true);
     }
 
     pub(super) fn reconcile(
@@ -363,6 +436,78 @@ impl ExtensionHostRuntime {
             .map(|mut sessions| sessions.detach_owner(owner, CancelReason::Shutdown))
             .unwrap_or_default();
         cancel_handles(handles, CancelReason::Shutdown);
+        let resolvers = self
+            .inner
+            .state
+            .lock()
+            .map(|state| {
+                state
+                    .entries
+                    .values()
+                    .filter_map(|entry| entry.supervisor.as_ref())
+                    .flat_map(|supervisor| {
+                        let snapshot = supervisor.snapshot();
+                        snapshot
+                            .registrations
+                            .into_iter()
+                            .filter_map(move |registration| {
+                                if snapshot.status != ExtensionHostStatus::Ready
+                                    || !matches!(
+                                        registration.kind,
+                                        RegistrationKind::RemoteAuthorityResolver { .. }
+                                    )
+                                {
+                                    return None;
+                                }
+                                Some((
+                                    supervisor.clone(),
+                                    registration.registration_id,
+                                    snapshot.incarnation,
+                                    snapshot.activation_generation,
+                                ))
+                            })
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        if resolvers.is_empty() {
+            return;
+        }
+        // Socket resources outlive individual invocations, but never their owning connection.
+        // Cleanup stays in the SDK owner and cannot issue client requests after disconnect.
+        let _ = std::thread::Builder::new()
+            .name("ash-extension-connection-cleanup".into())
+            .spawn(move || {
+                for (supervisor, registration_id, incarnation, activation_generation) in resolvers {
+                    let (Some(incarnation), Some(activation_generation)) = (
+                        NonZeroU64::new(incarnation),
+                        NonZeroU64::new(activation_generation),
+                    ) else {
+                        continue;
+                    };
+                    let deadline = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_millis() as u64
+                        + 10_000;
+                    let request = ExtensionInvocation {
+                        registration_id,
+                        operation: "remoteReleaseOwner".into(),
+                        payload: serde_json::json!({"__connectionOwner": owner.to_string()}),
+                        deadline_unix_millis: NonZeroU64::new(deadline)
+                            .expect("cleanup deadline is positive"),
+                    };
+                    if let Ok(handle) = supervisor.begin_fenced_invoke(
+                        ExtensionInvocationTarget {
+                            incarnation,
+                            activation_generation,
+                        },
+                        request,
+                    ) {
+                        let _ = handle.wait();
+                    }
+                }
+            });
     }
 }
 
@@ -370,7 +515,7 @@ impl RuntimeInner {
     fn start_invocation(
         self: &Arc<Self>,
         owner: u64,
-        request: ExtensionHostInvocationRequest,
+        mut request: ExtensionHostInvocationRequest,
         files: Result<Arc<dyn ash_file_system::FileSystem>, ash_editor_extension_host::HostFailure>,
     ) -> Result<String, ExtensionHostRuntimeError> {
         let _gate = self
@@ -404,6 +549,16 @@ impl RuntimeInner {
             let registration = registration.ok_or(ExtensionHostRuntimeError::Stale)?;
             if !registration_allows_operation(&registration.kind, &request.operation) {
                 return Err(ExtensionHostRuntimeError::Stale);
+            }
+            if matches!(
+                registration.kind,
+                RegistrationKind::RemoteAuthorityResolver { .. }
+            ) {
+                let payload = request
+                    .payload
+                    .as_object_mut()
+                    .ok_or(ExtensionHostRuntimeError::Stale)?;
+                payload.insert("__connectionOwner".into(), Value::String(owner.to_string()));
             }
             (supervisor, entry.workspace_read)
         };
@@ -550,6 +705,18 @@ impl Drop for RuntimeInner {
 
 fn registration_allows_operation(registration: &RegistrationKind, operation: &str) -> bool {
     match registration {
+        RegistrationKind::RemoteConnectionResolver { .. } => operation == "resolveConnection",
+        RegistrationKind::RemoteAuthorityResolver { .. } => matches!(
+            operation,
+            "resolveAuthority"
+                | "getCanonicalURI"
+                | "remoteConnect"
+                | "remoteRead"
+                | "remoteWrite"
+                | "remoteDrain"
+                | "remoteEnd"
+                | "remoteRelease"
+        ),
         RegistrationKind::StatusBar { .. } => false,
         RegistrationKind::TextDocumentEvents {} => operation == "documentEvent",
         RegistrationKind::ExternalUriOpener { .. } => {

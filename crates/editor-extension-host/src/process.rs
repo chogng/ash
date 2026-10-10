@@ -21,19 +21,31 @@ use stdio::StdioExtensionHostProcess;
 ///
 /// The executable and working directory must already have been resolved from the immutable package
 /// selected by installation authority. This process-local value is never serialized to the child.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct ExtensionLaunchCommand {
     executable: PathBuf,
     arguments: Vec<OsString>,
     working_directory: PathBuf,
     environment: BTreeMap<OsString, OsString>,
     runtime: LaunchRuntime,
+    extension_environment: Option<BTreeMap<String, Option<String>>>,
+}
+
+impl std::fmt::Debug for ExtensionLaunchCommand {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("ExtensionLaunchCommand")
+            .field("executable", &self.executable)
+            .field("runtime", &self.runtime)
+            .finish_non_exhaustive()
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum LaunchRuntime {
     Executable,
     JavaScript,
+    ProductJavaScript,
 }
 
 impl ExtensionLaunchCommand {
@@ -48,6 +60,7 @@ impl ExtensionLaunchCommand {
             arguments: arguments.into_iter().map(Into::into).collect(),
             working_directory: working_directory.into(),
             environment,
+            extension_environment: None,
             runtime: LaunchRuntime::Executable,
         };
         if !command.executable.is_absolute() || !command.working_directory.is_absolute() {
@@ -69,8 +82,42 @@ impl ExtensionLaunchCommand {
         Ok(command)
     }
 
+    /// These values reach extension code during handshake, never the OS loader or host process.
+    pub fn with_extension_environment(
+        mut self,
+        environment: BTreeMap<String, Option<String>>,
+    ) -> Result<Self, ExtensionHostError> {
+        extension_protocol::validate_environment(&environment)
+            .map_err(|error| ExtensionHostError::InvalidProtocol(error.to_string()))?;
+        self.extension_environment = Some(environment);
+        Ok(self)
+    }
+
+    pub(crate) fn extension_environment(&self) -> &Option<BTreeMap<String, Option<String>>> {
+        &self.extension_environment
+    }
+
     pub fn is_javascript(&self) -> bool {
-        self.runtime == LaunchRuntime::JavaScript
+        matches!(
+            self.runtime,
+            LaunchRuntime::JavaScript | LaunchRuntime::ProductJavaScript
+        )
+    }
+
+    /// Executes only modules compiled into the product host, without a side-loaded package root.
+    pub fn product_javascript(
+        executable: impl Into<PathBuf>,
+        name: &str,
+        working_directory: impl Into<PathBuf>,
+    ) -> Result<Self, ExtensionHostError> {
+        let mut command = Self::new(
+            executable,
+            ["--builtin", name],
+            working_directory,
+            BTreeMap::new(),
+        )?;
+        command.runtime = LaunchRuntime::ProductJavaScript;
+        Ok(command)
     }
 
     pub fn executable(&self) -> &Path {
@@ -272,16 +319,21 @@ impl ExtensionHostLauncher for ProductJavaScriptLauncher {
         let ProcessIsolationPolicy::RequireJavaScriptEnforcement(memory) = limits.isolation else {
             return Err(ExtensionHostError::IsolationUnavailable);
         };
-        if !Self::supports_platform()
+        if (!Self::supports_platform() && command.runtime != LaunchRuntime::ProductJavaScript)
             || !command.is_javascript()
             || command.executable() != self.executable
         {
             return Err(ExtensionHostError::IsolationUnavailable);
         }
         let mut command = command.clone();
+        let isolation = if command.runtime == LaunchRuntime::ProductJavaScript {
+            "product-javascript"
+        } else {
+            "javascript"
+        };
         command.arguments.extend([
             "--isolation".into(),
-            "javascript".into(),
+            isolation.into(),
             "--heap-bytes".into(),
             memory.heap_bytes.to_string().into(),
             "--array-buffer-bytes".into(),

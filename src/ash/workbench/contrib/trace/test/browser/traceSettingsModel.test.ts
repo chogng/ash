@@ -6,7 +6,7 @@ import { URI } from '../../../../../base/common/uri.js';
 import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ITraceSettingsService, type TraceSettings, type TraceSettingsSnapshot } from '../../../../../platform/trace/common/traceSettingsService.js';
-import { IRemoteAgentService } from '../../../../services/remote/common/remoteAgentService.js';
+import { IAppServerRemoteAgentService } from '../../../../services/remote/common/appServerRemoteAgentService.js';
 import { TraceSettingsModel } from '../../browser/traceSettingsModel.js';
 
 function field(model: TraceSettingsModel, id: string) {
@@ -31,7 +31,7 @@ function set(model: TraceSettingsModel, id: string, value: string | boolean): vo
 function services(trace: ITraceSettingsService): InstantiationService {
 	const result = new InstantiationService();
 	result.registerInstance(ITraceSettingsService, trace);
-	result.registerInstance(IRemoteAgentService, { connectionState: 'connected', connection: { kind: 'local', generation: 1 }, onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None, reconnect: async () => ({ kind: 'alreadyConnected' }), rollbackRuntime: async () => ({ kind: 'cancelled' }) });
+	result.registerInstance(IAppServerRemoteAgentService, { connectionState: 'connected', connection: { kind: 'local', generation: 1 }, onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None, reconnect: async () => ({ kind: 'alreadyConnected' }), rollbackRuntime: async () => ({ kind: 'cancelled' }) });
 	result.registerInstance(IFileDialogService, { showOpenDialog: async () => [URI.file('/recordings')], showSaveDialog: async () => undefined, pickFileToSave: async () => undefined, showSaveConfirm: async () => 2 });
 	return result;
 }

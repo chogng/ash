@@ -16,7 +16,7 @@ import { IContextViewService } from '../../../../platform/contextview/browser/co
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { IContentSearchConfigurationService, type ContentSearchConfiguration, type ContentSearchEngine } from '../../../../platform/search/common/search.js';
 import type { ISetting } from '../../../services/preferences/common/preferences.js';
-import { IRemoteAgentService } from '../../../services/remote/common/remoteAgentService.js';
+import { IAppServerRemoteAgentService } from '../../../services/remote/common/appServerRemoteAgentService.js';
 import type { SettingsContent, SettingsContentItem, SettingsTreeNode } from '../../preferences/browser/settingsTreeModels.js';
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
@@ -55,7 +55,7 @@ export class SearchSettingsContent extends Disposable implements SettingsContent
 	constructor(container: HTMLElement,
 		@IContentSearchConfigurationService private readonly search: IContentSearchConfigurationService,
 		@IContextViewService contextView: IContextViewService,
-		@IRemoteAgentService remote: IRemoteAgentService,
+		@IAppServerRemoteAgentService remote: IAppServerRemoteAgentService,
 		@IConfigurationService configuration: IConfigurationService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IAccessibleViewService accessibleView: IAccessibleViewService,

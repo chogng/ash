@@ -72,3 +72,19 @@ fn workspace_selection_requires_explicit_approval_and_strict_fields() {
     injected["dirPermissionsHost"] = json!(true);
     assert!(serde_json::from_value::<WebWorkspaceOpenRequest>(injected).is_err());
 }
+
+#[test]
+fn inbound_host_record_is_strict_and_keeps_the_web_ticket_private() {
+    let value = json!({
+        "relayHost": "ash-relay", "relayPort": 43123,
+        "web": { "endpoint": "http://127.0.0.1:5174/", "ticket": "b".repeat(64), "pid": 42 }
+    });
+    let info = serde_json::from_value::<RemoteTunnelHostInfo>(value.clone()).unwrap();
+    assert_eq!(serde_json::to_value(info).unwrap(), value);
+    for injected in [
+        json!({ "relayHost": "ash-relay", "relayPort": 65536, "web": value["web"] }),
+        json!({ "relayHost": "ash-relay", "relayPort": 43123, "web": value["web"], "profileRoot": "/other" }),
+    ] {
+        assert!(serde_json::from_value::<RemoteTunnelHostInfo>(injected).is_err());
+    }
+}

@@ -1,6 +1,7 @@
+import { localize } from '../../../nls.js';
 import { canonicalRemoteConnectionDefinition } from "../common/remoteConnectionService.js";
 import { canonicalRemoteConnectionName } from "../common/remoteConnectionService.js";
-import type { IRemoteConnectionService } from "../common/remoteConnectionService.js";
+import type { IRemoteConnectionApi } from "../common/remoteConnectionService.js";
 import type { RemoteConnectionDefinition } from "../common/remoteConnectionService.js";
 import type { RunRemoteCommand } from "./remoteCommand.js";
 import { runRemoteCommand } from "./remoteCommand.js";
@@ -16,7 +17,7 @@ export interface RemoteConnectionsOptions {
 }
 
 /** Uses the shared Rust catalog while keeping connection startup in Electron Main. */
-export class RemoteConnections implements IRemoteConnectionService {
+export class RemoteConnections implements IRemoteConnectionApi {
 	readonly available = true;
 	private readonly runCommand: RunRemoteCommand;
 	private connectScheduled = false;
@@ -40,7 +41,7 @@ export class RemoteConnections implements IRemoteConnectionService {
 			expected.name,
 			"--host",
 			expected.host,
-			"--workspace",
+			"--dir",
 			expected.workspace,
 			"--mode",
 			"create",
@@ -60,7 +61,7 @@ export class RemoteConnections implements IRemoteConnectionService {
 			expected.name,
 			"--host",
 			expected.host,
-			"--workspace",
+			"--dir",
 			expected.workspace,
 		]);
 		return exactMutationResult(output, expected);
@@ -74,7 +75,7 @@ export class RemoteConnections implements IRemoteConnectionService {
 		return removed;
 	}
 
-	async connect(name: string): Promise<void> {
+	async connect(name: string, expectedConnection?: RemoteConnectionDefinition): Promise<void> {
 		if (this.connectScheduled) throw new Error("A Remote connection window is already being opened");
 		this.connectScheduled = true;
 		try {
@@ -83,6 +84,10 @@ export class RemoteConnections implements IRemoteConnectionService {
 			const connection = parseConnection(output);
 			if (!connection) throw new Error(`Remote connection '${normalizedName}' no longer exists`);
 			if (connection.name !== normalizedName) throw new Error("Remote connection lookup returned a different named target");
+			if (expectedConnection) {
+				const expected = canonicalRemoteConnectionDefinition(expectedConnection);
+				if (expected.name !== connection.name || expected.host !== connection.host || expected.workspace !== connection.workspace) throw new Error(localize('remote.connection.targetChanged', 'Remote target changed after confirmation; select it again'));
+			}
 			await this.options.scheduleConnect(connection);
 		} finally {
 			this.connectScheduled = false;
@@ -117,12 +122,13 @@ function parseConnection(output: string): RemoteConnectionDefinition | undefined
 function connectionRecord(value: unknown): RemoteConnectionDefinition {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error("Remote connection catalog command returned an invalid record");
 	const record = value as Record<string, unknown>;
-	if (Object.keys(record).sort().join(",") !== "host,name,workspace") throw new Error("Remote connection catalog command returned an invalid record");
-	if (typeof record.name !== "string" || typeof record.host !== "string" || typeof record.workspace !== "string") {
+	if (Object.keys(record).sort().join(",") !== "dir,host,name") throw new Error("Remote connection catalog command returned an invalid record");
+	if (typeof record.name !== "string" || typeof record.host !== "string" || typeof record.dir !== "string") {
 		throw new Error("Remote connection catalog command returned an invalid record");
 	}
-	const connection = canonicalRemoteConnectionDefinition({ name: record.name, host: record.host, workspace: record.workspace });
-	if (connection.name !== record.name || connection.host !== record.host || connection.workspace !== record.workspace) {
+	// Rust's directory field is a transport fact; the frontend contract identifies a remote workspace.
+	const connection = canonicalRemoteConnectionDefinition({ name: record.name, host: record.host, workspace: record.dir });
+	if (connection.name !== record.name || connection.host !== record.host || connection.workspace !== record.dir) {
 		throw new Error("Remote connection catalog command returned a non-canonical record");
 	}
 	return connection;

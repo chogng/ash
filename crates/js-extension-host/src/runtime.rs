@@ -469,6 +469,23 @@ fn run_engine(
                         {
                             return Err("invalid JavaScript host initialization".into());
                         }
+                        // Supply only the explicit extension environment. This cannot change the
+                        // product executable's loader, confinement, or protocol transport.
+                        if let Some(environment) = &params.environment {
+                            let values: std::collections::BTreeMap<_, _> = environment
+                                .iter()
+                                .filter_map(|(key, value)| value.as_ref().map(|value| (key, value)))
+                                .collect();
+                            let environment = serde_json::to_string(&values)
+                                .map_err(|error| error.to_string())?;
+                            let literal = serde_json::to_string(&environment)
+                                .map_err(|error| error.to_string())?;
+                            let source = v8::String::new(scope, &format!("globalThis.process = Object.freeze({{ env: Object.assign(Object.create(null), JSON.parse({literal})) }});"))
+                            .ok_or("cannot allocate extension environment")?;
+                            v8::Script::compile(scope, source, None)
+                                .and_then(|script| script.run(scope))
+                                .ok_or("cannot initialize extension environment")?;
+                        }
                         fence = Some(binding);
                         phase = Phase::Initialized;
                         respond(
@@ -487,6 +504,9 @@ fn run_engine(
                             || runtime.is_some()
                             || params.extension_id != package.extension_id
                             || params.package.entrypoint != package.entry
+                            || package.binding.as_ref().is_some_and(|binding| binding != &params.package)
+                            || params.capabilities.contains(&extension_protocol::ExtensionCapability::ProductRemoteAuthorityResolver)
+                                != (package.origin == crate::package::PackageOrigin::Product)
                         {
                             return Err("invalid JavaScript package activation".into());
                         }
@@ -530,7 +550,20 @@ fn run_engine(
                             || params.extension_id != package.extension_id
                             || !matches!(
                                 params.operation.as_str(),
-                                "execute" | "hover" | "completion" | "documentEvent"
+                                "execute"
+                                    | "hover"
+                                    | "completion"
+                                    | "documentEvent"
+                                    | "resolveConnection"
+                                    | "resolveAuthority"
+                                    | "getCanonicalURI"
+                                    | "remoteConnect"
+                                    | "remoteRead"
+                                    | "remoteWrite"
+                                    | "remoteDrain"
+                                    | "remoteEnd"
+                                    | "remoteRelease"
+                                    | "remoteReleaseOwner"
                             )
                             || jobs.len() >= MAX_INVOCATIONS
                             || jobs.contains_key(&request.context.request_id)
@@ -813,7 +846,8 @@ fn dispatch_client(
     // and editor writes remain unavailable even if extension code forges the request JSON.
     if !matches!(
         operation,
-        ExtensionClientOperation::ReadDocument { .. }
+        ExtensionClientOperation::OpenRemoteConnection { .. }
+            | ExtensionClientOperation::ReadDocument { .. }
             | ExtensionClientOperation::ReadWorkspaceFile { .. }
             | ExtensionClientOperation::ShowMessage { .. }
             | ExtensionClientOperation::ShowQuickPick { .. }

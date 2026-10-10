@@ -6,7 +6,7 @@ import type { RemoteConnectionState } from "../../../../../platform/remote/commo
 import type { RemoteAgentConnection } from "../../../../../platform/remote/common/remoteAgentApi.js";
 import { RemoteExtensionRecoveryContribution } from "../../browser/remoteExtensionRecovery.js";
 import type { IExtensionService } from "../../../../services/extensions/common/extensionService.js";
-import type { IRemoteAgentService } from "../../../../services/remote/common/remoteAgentService.js";
+import type { IAppServerRemoteAgentService } from "../../../../services/remote/common/appServerRemoteAgentService.js";
 
 test("remote extension recovery reloads only after a known non-connected state", async () => {
 	using remoteAgentService = new TestRemoteAgentService();
@@ -23,7 +23,7 @@ test("remote extension recovery reloads only after a known non-connected state",
 	assert.equal(reloads, 1);
 });
 
-class TestRemoteAgentService extends Disposable implements IRemoteAgentService {
+class TestRemoteAgentService extends Disposable implements IAppServerRemoteAgentService {
 	private readonly stateEmitter = this._register(new Emitter<RemoteConnectionState>());
 	private readonly connectionEmitter = this._register(new Emitter<RemoteAgentConnection>());
 	connectionState: RemoteConnectionState | undefined;

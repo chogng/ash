@@ -1,3 +1,4 @@
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import { Emitter } from "../../../../../base/common/event.js";
@@ -5,16 +6,19 @@ import { Disposable } from "../../../../../base/common/lifecycle.js";
 import { isMenuItem, MenuId, MenusRegistry } from "../../../../../platform/actions/common/actions.js";
 import type { RemoteConnectionState } from "../../../../../platform/remote/common/remote.js";
 import type { RemoteAgentConnection } from "../../../../../platform/remote/common/remoteAgentApi.js";
-import type { IRemoteConnectionService } from "../../../../../platform/remote/common/remoteConnectionService.js";
+import { IRemoteConnectionApi, RemoteConnectionService } from "../../../../../platform/remote/common/remoteConnectionService.js";
 import { ContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
 import { ConnectToRemoteCommandId, ManageRemoteConnectionsCommandId, ReconnectRemoteCommandId, RollbackRemoteRuntimeCommandId } from "../../browser/remoteActions.js";
 import { RemoteConnectionKindContext, RemoteConnectionsAvailableContext, RemoteConnectionStateContext, RemoteContextKeys } from "../../browser/remoteContextKeys.js";
-import type { IRemoteAgentService } from "../../../../services/remote/common/remoteAgentService.js";
+import type { IAppServerRemoteAgentService } from "../../../../services/remote/common/appServerRemoteAgentService.js";
 
 test("Remote context keys track sanitized connection kind and lifecycle", () => {
 	using contextKeyService = new ContextKeyService();
 	using remoteAgentService = new TestRemoteAgentService();
-	using contribution = new RemoteContextKeys({ contextKeyService, remoteAgentService, remoteConnectionService: TestRemoteConnectionService });
+	using services = new InstantiationService();
+	services.registerInstance(IRemoteConnectionApi, TestRemoteConnectionApi);
+	using remoteConnectionService = services.createInstance(RemoteConnectionService);
+	using contribution = new RemoteContextKeys({ contextKeyService, remoteAgentService, remoteConnectionService });
 
 	assert.equal(contextKeyService.contextMatchesRules(RemoteConnectionKindContext.isEqualTo("ssh")), false);
 	remoteAgentService.emit({ kind: "ssh", generation: 4, authority: "ssh+work-server", host: "work-server" });
@@ -69,7 +73,7 @@ test("Remote runtime rollback appears in the Command Palette only for SSH contex
 	assert.equal(contextKeyService.contextMatchesRules(item.when), true);
 });
 
-class TestRemoteAgentService extends Disposable implements IRemoteAgentService {
+class TestRemoteAgentService extends Disposable implements IAppServerRemoteAgentService {
 	private readonly stateEmitter = this._register(new Emitter<RemoteConnectionState>());
 	private readonly connectionEmitter = this._register(new Emitter<RemoteAgentConnection>());
 	connectionState: RemoteConnectionState | undefined;
@@ -91,7 +95,7 @@ class TestRemoteAgentService extends Disposable implements IRemoteAgentService {
 	}
 }
 
-const TestRemoteConnectionService: IRemoteConnectionService = {
+const TestRemoteConnectionApi: IRemoteConnectionApi = {
 	available: true,
 	list: async () => [],
 	save: async connection => connection,

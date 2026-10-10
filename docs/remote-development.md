@@ -43,6 +43,81 @@ Main 仍负责 runtime 准备与窗口生命周期，业务协议帧透明转发
 调用迁移，已有用户历史未被修改。迁移完成的远端 profile 重启后只开启执行服务，不恢复旧 Agent、
 Queue 或 Automation，也不接受旧 Agent 写入入口。
 
+Desktop 的 App Server 连接已使用标准 `ISocket` 与 `IRemoteSocketFactoryService` 字节契约。
+每次取得 MessagePort 都注册本次端口的 managed 句柄，重新取得端口时注销旧注册；窗口代次
+仅用于状态校验。`AppServerSocketTransport` 在字节通道之上独占 JSONL 解码，Main 不读取
+JSON-RPC method。写入确认来自 stdin 完成回调和背压解除，`drain()` 等待这些确认；端口
+退役会拒绝在途 drain 并禁止旧句柄写入。底层继续使用现有 Rust daemon/SSH carrier 与
+JSON-RPC，未切换成 VS Code 的 PersistentProtocol。Web 的鉴权 WebSocket 连接保持原有路径。
+
+## 扩展连接入口
+
+可安装 Remote 扩展用 TS 编写、以 JS 在隔离扩展宿主执行。它负责解析目标、组织流程和调用
+工作台交互；受授权的连接执行、凭据和资源生命周期由核心 host 管理。Rust 扩展宿主运行 JS
+不改变扩展作者接口的语言，也不把 SSH 子进程变成扩展自己的资源。
+
+`@ash/extension` 的 `workspace.registerRemoteConnectionResolver(prefix, resolver)` 需要 manifest
+声明 `remoteAuthorityResolver`。核心将 `prefix+target` 交给当前有效实例，扩展返回已保存连接的
+`connectionName`；`call.workspace.openRemoteConnection(authority)` 再通过同一注册链请求连接。
+Workbench 读取权威目录，展示扩展身份、实际主机和目录，确认后交给原有命名连接入口。Main
+重新读取目标，核对其与确认值一致，发生编辑或删除时拒绝启动。普通 SSH 选择器也通过这个
+`remoteConnectionService` 解析 `ssh+连接名称`；它只持有窗口内的注册及取消状态，
+目录、凭据与 SSH 进程继续由后端管理。这是 Ash 的已保存连接选择接口，与 VS Code 返回
+WebSocket 或 managed transport 端点的 resolver 职责不同，也与远端资源里的 `ssh+host` 含义不同。
+manifest capability 保留原有名称；已保存连接使用 `remoteConnectionResolver` / `resolveConnection`，
+标准端点解析使用 `registerRemoteAuthorityResolver` / `resolveAuthority`。
+
+解析器重复前缀会使整批注册替换失败，不能按加载顺序覆盖。取消、断开、停用或重启会退役旧
+实例及在途解析；确认后已交给 host 的新窗口有独立生命周期。`ssh` 前缀保留给产品内置解析器。
+已保存连接选择器不接受凭据、SSH 参数、任意命令或 socket。标准 resolver 可返回连接端点或
+受管消息通道，token 只用于其授权连接。用法见 [SDK](../extension-sdk/README.md)。
+
+内置 `extensions/remote-ssh` 通过同一 SDK 在 Rust V8 宿主注册 `ssh`，模块与 SDK 随产品
+编译分发，核心不直接解析这个前缀。App Server 的产品授权仅选择固定编译模块，宿主核对
+发布源码摘要；安装包和 Browser Worker 均不能取得该前缀。产品模块不读取工作区文件，
+可以在未打开工作区的首页激活。可安装 SDK 扩展仍要求启用、权限授权和平台隔离；声明 remote resolver 能力的 JS 包按
+profile 执行，其他可执行扩展继续要求工作区授权；两者共用
+V8 执行、注册和生命周期。远端扩展宿主部署与完整 VS Code resolver 兼容尚未实现；
+本机入站 Tunnels 已通过应用级服务和自有 SSH 中继托管，职责与限制见下文。
+
+标准端点窗口先建立本地扩展控制连接，在本地 V8 扩展解析 authority 后，再通过
+`IRemoteSocketFactoryService` 建立远端 App Server 连接；远端初始化成功后才启动 Workbench。
+`workbench/services/extensions/electron-browser/nativeExtensionService.ts` 协调解析与重试，
+`common/extensionHostManager.ts` 执行扩展调用，`platform/remote/electron-browser/remoteAuthorityResolverService.ts`
+保存解析结果，`workbench/api/browser/mainThreadManagedSockets.ts` 绑定受管 socket。Main 继续只
+启动本地 relay 与 SSH carrier，不解析端点协议；通用 authority 不再误走 SSH launcher。
+WebSocket 使用 Ash 的鉴权 JSON frame，受管连接使用现有 JSONL 字节协议。Rust 按可信连接
+owner 发起释放，避免一个窗口的重连销毁另一窗口的受管资源。
+本地 `LocalProfileRuntime` 持有唯一的扩展安装、启用与授权状态，目录窗口和空远端窗口共享
+这个 owner；在一个窗口安装、授权或撤销扩展后，另一个窗口的解析会读取当前状态。
+
+canonical URI 沿同一本地扩展实例调用链执行：`ExtensionHostManager.getCanonicalURI` 调用 SDK
+resolver 的可选回调，`NativeExtensionService` 注册 provider，平台 resolver 合并相同 URI 的查询并
+缓存结果。省略回调或返回 null/undefined 保留原 URI。重连、provider 替换、扩展实例退役和窗口
+关闭清除旧缓存及在途查询；Web 的对应平台实现默认保留 URI。
+`workbench/services/workspaces/common/workspaceTrust.ts` 使用同一主机的 canonical 目录身份查询
+Rust 权限，不允许 canonical URI 将目录授权改向其他主机或本机文件系统。
+通用 Remote URI 的 authority 由 `platform/remote/common/remoteHosts.ts` 读取，不限定 resolver 前缀；
+`team+` 等扩展端点的文件夹与 SSH 文件夹共用 canonical POSIX 路径及权限检查。OpenSSH host alias
+校验只在 SSH 身份与执行入口生效，不参与其他 provider 的资源身份解析。
+
+`ResolvedOptions` 随端点一起发布、重连一起清除；`isTrusted=false` 限制 UI 信任视图，true 不能
+替代 Rust 目录能力授权。空远端窗口先核对 canonical 远端命名空间仍指向当前主机，再使用
+resolver 的信任提示；不会读取或授权文件系统根目录。SDK 的
+`authenticationSessionForInitializingExtensions` 只转换成 `{ id, providerId }`，不传递 access token、
+账户信息或 scopes。`workbench/services/extensions/common/remoteExtensionHost.ts` 在远端连接就绪后、
+Workbench 扩展启动前读取 `extensionHostEnv`，通过既有 Rust 协议启动连接专属的扩展进程。
+环境在 V8 加载模块前进入 `process.env`；字符串设置值，null 删除值。隔离宿主只提供显式环境，
+不继承共享 App Server 的环境或提供其他 Node process API，也不会影响可执行文件加载器。
+每次重连重新读取 resolver options；连接关闭取消调用、停止该连接的扩展进程，其他窗口继续运行。
+`NativeExtensionService` 管理本地 resolver 与远端扩展的路由，进程标识包含连接代次，旧调用不能进入新宿主。
+运行的包仍必须通过远端安装、启用、包授权及目录发现权限；初始化不复制或自动授权本机扩展。
+认证引用保留标准契约，但账户同步扩展清单尚无 owner，本轮未实现账户初始化或自动安装。
+
+当前还未支持递归 ExecServer、自动远端扩展宿主部署或 VS Code Server 线上协议。
+通用 authority 当前启动空远端窗口，文件夹映射和端口
+转发仍走既有 SSH 路径。Web 启动保留原有鉴权入口；本机入站 Tunnels 托管仍待实现。
+
 ## 快速理解
 
 跨机器验收可以通过 Agent 的任务投递工具创建独立的目标 Session，携带当前 Thread 的 Git 快照和
@@ -56,7 +131,7 @@ Terminal、Search、Codebase 和语言协议。前端不会为每个领域复制
 
 | 用户场景                                   | 当前行为                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | 用户需要做什么                                                                                                                                                                                                                                                                              |
 | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 打开 SSH Remote 文件夹                     | Desktop 可用 `Remote: Manage Saved SSH Hosts` 新增、编辑/改名或删除共享命名连接，再从 `Remote: Connect to Saved SSH Host` 选择；连接时 Renderer 只提交名称，Main 精确复核记录并新建绑定该 SSH Workspace 的 Workbench 窗口。每个窗口拥有独立 supervisor、Browser Automation、Remote context 和 Tunnel。启动后优先读取 host/Workspace 上次验证的精确 runtime；缺失或 schema 不兼容时，从签名产品包绑定的本地或网络 catalog 选择、下载、安装、重新握手并持久激活                                                                                                     | 在命令面板管理 OpenSSH host alias 和绝对远端路径；也可再次启动 Desktop 并传入目标参数。准备窗口可取消下载/安装，不影响其他窗口                                                                                                                                                              |
+| 打开 SSH Remote 文件夹                     | Desktop 可用 `Remote: Manage Saved SSH Hosts` 新增、编辑/改名或删除共享命名连接，再从 `Remote: Connect to Saved SSH Host` 选择；连接时 Renderer 提交名称和确认时的目标，Main 精确复核记录并新建绑定该 SSH Workspace 的 Workbench 窗口。每个窗口拥有独立 supervisor、Browser Automation、Remote context 和 Tunnel。启动后优先读取 host/Workspace 上次验证的精确 runtime；缺失或 schema 不兼容时，从签名产品包绑定的本地或网络 catalog 选择、下载、安装、重新握手并持久激活                                                                                         | 在命令面板管理 OpenSSH host alias 和绝对远端路径；也可再次启动 Desktop 并传入目标参数。准备窗口可取消下载/安装，不影响其他窗口                                                                                                                                                              |
 | 用 `ash code` 打开 SSH TUI                 | CLI host 从共享命名 catalog 或直接 host/Workspace 构造 target，优先使用显式 runtime、已验证 active runtime 或远端 `ash`；managed runtime 缺失或 schema 不兼容时，从签名产品 metadata 绑定或显式 catalog+摘要选择、下载/校验、安装并重试一次。完成 executable probe 和 initialize/schema handshake 后才持久激活精确路径，并把已连接的 App Server session 交给原有 TUI                                                                                                                                                                                              | `ash remote connect --name work`，或传 `--host`/`--workspace`；开发态可传本地 catalog+SHA-256；诊断可追加 `--check` 只验证完整链路而不打开 TUI                                                                                                                                              |
 | 用 `app` 打开 SSH Workspace                | Native host 可在图形管理面板新增、编辑、删除无凭据 target；从现有窗口连接时，面板监督新进程并展示检查、下载、校验、平台探测、上传、提交和失败状态。新进程仍独立读取已验证 runtime，完成 availability + initialize/schema preflight，并在需要时物化、安装和激活新一代                                                                                                                                                                                                                                                                                              | 点击底部 `Local/Remote` 打开 Native picker；等待期间关闭面板可取消，失败后可直接重试；也可使用 `app remote save/connect` 或直接传 `--remote/--workspace`；需要回退时追加 `--rollback-runtime`                                                                                               |
 | 浏览、编辑、语言功能、搜索和运行终端       | 请求由远端 App Server 在受限 Workspace root 内执行；`app` 的诊断、Hover、Completion 和位置跳转使用独立 language connection，远端路径不会交给本机 LSP                                                                                                                                                                                                                                                                                                                                                                                                              | 无需配置领域专属 Remote provider                                                                                                                                                                                                                                                            |
@@ -64,7 +139,7 @@ Terminal、Search、Codebase 和语言协议。前端不会为每个领域复制
 | 回退 Desktop Remote runtime                | 命令面板的 `Remote: Roll Back Remote Runtime` 请求 Main 验证 previous runtime；验证成功并原子切换 profile 后，Main 通知 Renderer 关闭或放弃旧后端 lease，再替换 Remote backend，不会把必然失败的 attach 重试到 30 秒超时。Renderer 将这些终端标成可 Relaunch 的 error                                                                                                                                                                                                                                                                                             | 确认回滚；验证失败时现有连接和终端保持不变，成功后按需 Relaunch 原终端实例                                                                                                                                                                                                                  |
 | 从 Remote 窗口打开本地文件夹               | 当前 Remote 窗口保持原 Workspace，Main 为本地文件夹打开独立窗口；目标已打开时聚焦已有窗口                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | 使用普通 Open Folder 动作，无需重启产品                                                                                                                                                                                                                                                     |
 | 在 Desktop Remote Browser 打开远端本机服务 | Browser 与 App Server Browser Automation 仍接收 `http(s)://localhost/127.0.0.1/[::1]:port`；Electron Main 自动为该远端端口建立 Tunnel，只把分配后的本机 URL 交给 WebContents，并继续向 Renderer/Agent 报告用户请求的原 URL                                                                                                                                                                                                                                                                                                                                        | 照常输入远端服务的 loopback URL；同一 Browser target 的同源导航和历史记录复用 lease，关闭 target 后自动关闭其 Tunnel                                                                                                                                                                        |
-| 端口转发                                   | `ash-remote-host` 提供可复用的 loopback-only Tunnel 生命周期、稳定 listener gate、同端口有界恢复和 typed events；Electron Main 与 app Native Host 各自把它接入窗口级 coordinator。Desktop 的 Ports 面板直接投影 Main-owned Tunnel catalog，可新增、Stop、Stop All 并显示 Open/Recovering/Failed；Remote app 窗口可从 location picker 或可绑定命令 `workbench.action.manageRemoteTunnels` 打开管理面板；`app remote tunnel <name> --remote-port <port>` 仍提供前台 CLI                                                                                             | 图形入口可关闭面板而保留 Tunnel，再次打开可查看或 Stop；首次启动失败立即报告，CLI 需保持前台运行。readiness 只证明本地 forward，不证明远端应用协议已 ready；Debug stdio adapter 已直接在 Remote App Server 执行而不需要 Tunnel，socket/server adapter 与统一 Remote Explorer 连接树仍未接入 |
+| 端口转发                                   | `ash-remote-host` 提供可复用的 loopback-only Tunnel 生命周期、稳定 listener gate、同端口有界恢复和 typed events；app Native Host 使用该 Rust 层；Electron Main 使用窗口级 TypeScript SSH 转发服务。Desktop 的 Ports 面板直接投影 Main-owned Tunnel catalog，可新增、Stop、Stop All 并显示 Open/Recovering/Failed；Remote app 窗口可从 location picker 或可绑定命令 `workbench.action.manageRemoteTunnels` 打开管理面板；`app remote tunnel <name> --remote-port <port>` 仍提供前台 CLI                                                                            | 图形入口可关闭面板而保留 Tunnel，再次打开可查看或 Stop；首次启动失败立即报告，CLI 需保持前台运行。readiness 只证明本地 forward，不证明远端应用协议已 ready；Debug stdio adapter 已直接在 Remote App Server 执行而不需要 Tunnel，socket/server adapter 与统一 Remote Explorer 连接树仍未接入 |
 | 远程多根 Workspace                         | 尚未完成                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | 等待后续独立能力                                                                                                                                                                                                                                                                            |
 
 启动参数使用 OpenSSH 配置中的 host 名称，而不是包含密码或私钥的连接串：
@@ -146,7 +221,7 @@ flowchart LR
     BROKER --> SERVER["shared remote profile App Server"]
     SERVER --> DOMAIN["Files / Git / Terminal / Search / LSP"]
     MAIN --> IPC["Sanitized state + generation IPC"]
-    IPC --> SERVICE["IRemoteAgentService"]
+    IPC --> SERVICE["IAppServerRemoteAgentService"]
     SERVICE --> UI["Remote contribution"]
     MAIN --> TUNNEL["SSH -N loopback Tunnel coordinator"]
     TUNNEL --> LOCAL["127.0.0.1:localPort"]
@@ -168,24 +243,56 @@ flowchart LR
 
 ## 所有权
 
-| 层                                       | 负责                                                                                                                                                                                                                                                                                                | 不负责                                                                                                                               |
-| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| 远端 Remote Server / App Server          | 按用户 profile 共享进程；每条连接独立授权目录，运行文件、Git、PTY、搜索、索引、语言服务和扩展；PTY lease 与过期回收。选择新的 runtime 后端更换整个 profile 代次                                                                                                                                     | Desktop/app 状态栏和本机 SSH 凭证                                                                                                    |
-| Desktop 本地共享 Rust 后端               | 校验连接的 SSH host、可选目录和精确 runtime，持有每条连接的 SSH 子进程；健康检查与远端可用性分离，连接关闭只释放对应 carrier                                                                                                                                                                        | text model、dirty buffer、窗口 UI                                                                                                    |
-| Electron Main / app 产品宿主             | Desktop 启动本地 connector 并透明转发；app 继续持有自身 SSH 连接。各自负责 runtime 准备与窗口连接生命周期；Desktop 消费签名产品包 catalog binding                                                                                                                                                   | 编辑器展示状态、Desktop Terminal token；SSH 凭据不进入 Renderer                                                                      |
-| Desktop Renderer 终端进程适配层          | 宿主直接选择完整 SSH 进程适配器；复用 Renderer protocol client，保存并旋转 Remote Terminal lease、按连接代次 attach 原 PTY，转换原始输出字节与前端退出码                                                                                                                                            | SSH 凭据、连接建立、后端进程与屏幕网格                                                                                               |
-| `ash code` CLI host                      | `ash remote connect` 的 target 解析、OpenSSH child、产品包 catalog binding 选择、managed runtime 自动准备、schema gate、profile activation、TUI session composition，以及运行中 transport loss 的 30 秒精确 runtime 重连                                                                            | TUI transport ownership、远端凭据存储、替换显式 `--runtime`、回放不确定请求、把 runtime/schema/server rejection 当作可重试 transport |
-| Electron Main named-connection adapter   | 通过本机 `ash remote connections list/get/save/update/remove` 消费共享 Rust catalog；管理时严格校验无凭据 name/host/Workspace，连接时只接受 Renderer 选择的规范名称并重新读取记录，再请求窗口 registry 打开或聚焦目标                                                                               | SSH 凭据、任意 SSH options、Renderer 直接读写 catalog 文件                                                                           |
-| Electron Main Remote runtime coordinator | 通过本机 `ash remote profile` 读取/激活共享 profile；探测远端 target，从签名产品 binding 选择本地 catalog 或调用 `ash remote fetch-runtime`；只对 runtime 缺失或 typed schema mismatch 安装，消费下载/安装结构化进度、复核精确路径并重新握手；显式回滚先验证 previous，再替换 App Server connection | 发布频道/签名策略、Renderer 文件路径、静默降级                                                                                       |
-| Electron Main 安装准备窗口               | 每个 Remote 窗口启动门禁持有自己的安装 operation、`AbortSignal` 和无凭据状态；独立 sandboxed Renderer 只能读取 host/phase、订阅变化或请求取消。关闭/取消只终止该窗口的本机安装命令，完成后仍等待精确 runtime 复核再打开 Workbench                                                                   | artifact 路径、SSH option、凭据、安装决策或普通 Workbench IPC                                                                        |
-| Desktop Workbench 窗口 registry          | 合并同一 Workspace 的并发打开；为每个不同目标建立独立 Workspace context、supervisor、Browser Automation、IPC 与 Remote context；保存多个窗口的位置并按最近活动顺序聚焦                                                                                                                              | 跨窗口共享 supervisor、把 Remote authority 热切换进已有窗口                                                                          |
-| Electron Main Remote 窗口上下文          | `RemoteWindowMainContext` 将一个窗口的 Agent、命名连接、Tunnel、手动重连、回滚路由和状态事件绑定到同一个 `AppServerSupervisor` 与 Workspace context；重连和回滚共用串行恢复门；Workspace 变化时关闭该窗口的全部 Tunnel，窗口销毁时再释放监听器和 Tunnel coordinator                                 | 创建应用窗口、在多个窗口之间共享 supervisor、保存 SSH 凭据                                                                           |
-| Electron Main Remote Tunnel coordinator  | 调用 `ash-remote-host` 管理 `ssh -N`、本地/远端 loopback 绑定和同端口有界恢复；自己拥有窗口/Workspace Tunnel lease、catalog 和销毁适配                                                                                                                                                              | 公开监听、反向转发或领域协议                                                                                                         |
-| Electron Main Remote Browser adapter     | 识别当前窗口是否为 Remote Workspace；把 Browser 的 loopback HTTP/HTTPS 顶层导航映射为 Tunnel load URL；按 requested/loaded origin 反向投影地址、保留历史 lease，并在 target 关闭、Tunnel 失败或 Workspace 变化时停止复用                                                                            | Browser DOM、通用导航策略、SSH child、非 loopback 公网 URL 或任意子资源代理                                                          |
-| app Native Tunnel host                   | 从当前 Remote 窗口复用 host 与 OpenSSH executable；通过 `ash-remote-host` 后台监督 `ssh -N`、自动本地端口和同端口有界恢复，自己负责 `WorkbenchEvent`、可访问管理状态、Stop 和窗口级销毁                                                                                                             | Local 窗口任意选择 host、公开监听、反向转发、凭据输入或 Remote Server endpoint discovery                                             |
-| `platform/remote`                        | Remote URI、authority、原生连接元数据和 IPC 契约                                                                                                                                                                                                                                                    | 各领域业务状态                                                                                                                       |
-| `workbench/services/remote`              | 后端状态的只读 Workbench 投影                                                                                                                                                                                                                                                                       | 启动 SSH 或决定重连                                                                                                                  |
-| `workbench/contrib/remote`               | 状态栏、saved-host 选择/管理 Quick Pick 和 Remote 恢复协调                                                                                                                                                                                                                                          | 连接事实源、catalog 文件解析或 SSH 启动                                                                                              |
+Ports 面板消费 [`ITunnelService`](../src/ash/platform/tunnel/common/tunnel.ts)，
+Desktop 由 [`TunnelService`](../src/ash/workbench/services/tunnel/electron-browser/tunnelService.ts)
+拥有隧道句柄引用、事件转换和 IPC 数据校验，通过注入的 `IMainProcessService` 访问 `remotePortForwarding` channel。
+Main 根据已认证的窗口上下文选择该窗口唯一的 `SshPortForwardingService`；Renderer 不能指定窗口、SSH host 或凭据。
+进程、转发 catalog 和 SSH 凭据由 Electron Main 持有；Workspace 变化时关闭已登记转发并取消正在启动的转发，窗口销毁时释放进程和监听器。
+Web 的 [`TunnelService`](../src/ash/workbench/services/tunnel/browser/tunnelService.ts) 当前没有 Tunnel provider，枚举返回空列表，打开返回 `undefined`；两个运行环境分别在对应 Workbench 入口注册服务。
+当前 Tunnel 服务提供 Ports 实际使用的枚举、打开、关闭和句柄释放接口；SSH 隧道的可选 `state`
+是 Ash 扩展，用于保留恢复和失败状态。扩展 Tunnel provider、环境隧道、权限提升、可选本地端口和
+隐私/协议切换尚未接入，不将它们表示成已支持的空 API。
+本机入站托管由 [`IRemoteTunnelService`](../src/ash/platform/remoteTunnel/common/remoteTunnel.ts) 承接，
+标准路径 `platform/remoteTunnel/{common,node,electron-browser,browser}` 分别负责公开契约、应用 helper 生命周期、桌面 IPC facade 和 Web 不托管实现。
+[`remoteTunnel.contribution.ts`](../src/ash/workbench/contrib/remoteTunnel/electron-browser/remoteTunnel.contribution.ts) 提供启用、关闭、查看和复制连接说明命令。
+它与出站 `ITunnelService` 使用不同的 `remoteTunnel` / `remotePortForwarding` channel。
+
+托管使用自有 SSH 中继，在命令面板选择 OpenSSH alias；密钥和 known-hosts 由 OpenSSH 配置/agent 管理，不经过 renderer。
+应用从发起窗口的已认证上下文取得当前单一本地目录；renderer 不能指定目录、backend binary 或转发地址。
+内部 `ash-remote-host` helper 由 Rust `remote-host` crate 持有，取得现有共享 App Server 的 Web launch lease，
+通过 OpenSSH private ControlMaster 和 `-O forward -R 127.0.0.1:0:127.0.0.1:PORT` 请求中继端口。
+只有 Web listener 和 SSH 端口分配均成功，标准服务才发布 `connected`；启动失败清理全部子进程，断线发布 `disconnected`，再次启用会建立新租约。
+
+使用前在两台设备配置相同的 SSH alias，并确认密钥认证和反向转发权限。中继的 sshd 应配置
+`AllowTcpForwarding yes` 和 `GatewayPorts no`（或保留请求的 `127.0.0.1` 绑定的 `clientspecified`）；
+可用 `PermitListen` 限制回环监听。托管不会部署或管理中继，也不使用 Microsoft Dev Tunnels。
+在命令面板执行 **Remote Tunnels: Turn On Remote Tunnel Access**，输入中继 alias，复制连接说明。
+另一台设备按说明启动 SSH 本地转发并打开 Browser Workbench 地址。客户端必须保留说明中的本地端口，
+才能符合 Web listener 的精确 Host/Origin 校验；本地端口被占用时 OpenSSH 会失败，需要释放端口后重试。
+URL 票据只存在 fragment，需与 SSH 访问权限一同使用；票据只能兑换一次，后续同一浏览器会话可以刷新，
+新设备需要再次启用以签发新票据。托管期间所有窗口观察同一状态，窗口刷新不会停止访问；显式关闭或应用退出
+先终止反向 SSH listener，再关闭 Web lease，撤销该会话及连接。启动中关闭也会取消后端资源取得。
+当前实现随应用运行，不支持 `asService` 系统服务安装或账户同步；Web 端只消费托管会话，不创建进程。
+此入口开放所选工作区；客户端切换到另一个目录产生的新 Web listener 尚未纳入同一反向转发。
+
+| 层                                        | 负责                                                                                                                                                                                                                                                                                                | 不负责                                                                                                                               |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| 远端 Remote Server / App Server           | 按用户 profile 共享进程；每条连接独立授权目录，运行文件、Git、PTY、搜索、索引、语言服务和扩展；PTY lease 与过期回收。选择新的 runtime 后端更换整个 profile 代次                                                                                                                                     | Desktop/app 状态栏和本机 SSH 凭证                                                                                                    |
+| Desktop 本地共享 Rust 后端                | 校验连接的 SSH host、可选目录和精确 runtime，持有每条连接的 SSH 子进程；健康检查与远端可用性分离，连接关闭只释放对应 carrier                                                                                                                                                                        | text model、dirty buffer、窗口 UI                                                                                                    |
+| Electron Main / app 产品宿主              | Desktop 启动本地 connector 并透明转发；app 继续持有自身 SSH 连接。各自负责 runtime 准备与窗口连接生命周期；Desktop 消费签名产品包 catalog binding                                                                                                                                                   | 编辑器展示状态、Desktop Terminal token；SSH 凭据不进入 Renderer                                                                      |
+| Desktop Renderer 终端进程适配层           | 宿主直接选择完整 SSH 进程适配器；复用 Renderer protocol client，保存并旋转 Remote Terminal lease、按连接代次 attach 原 PTY，转换原始输出字节与前端退出码                                                                                                                                            | SSH 凭据、连接建立、后端进程与屏幕网格                                                                                               |
+| `ash code` CLI host                       | `ash remote connect` 的 target 解析、OpenSSH child、产品包 catalog binding 选择、managed runtime 自动准备、schema gate、profile activation、TUI session composition，以及运行中 transport loss 的 30 秒精确 runtime 重连                                                                            | TUI transport ownership、远端凭据存储、替换显式 `--runtime`、回放不确定请求、把 runtime/schema/server rejection 当作可重试 transport |
+| Electron Main named-connection adapter    | 通过本机 `ash remote connections list/get/save/update/remove` 消费共享 Rust catalog；管理时严格校验无凭据 name/host/Workspace，连接时只接受 Renderer 选择的规范名称并重新读取记录，再请求窗口 registry 打开或聚焦目标                                                                               | SSH 凭据、任意 SSH options、Renderer 直接读写 catalog 文件                                                                           |
+| Electron Main Remote runtime coordinator  | 通过本机 `ash remote profile` 读取/激活共享 profile；探测远端 target，从签名产品 binding 选择本地 catalog 或调用 `ash remote fetch-runtime`；只对 runtime 缺失或 typed schema mismatch 安装，消费下载/安装结构化进度、复核精确路径并重新握手；显式回滚先验证 previous，再替换 App Server connection | 发布频道/签名策略、Renderer 文件路径、静默降级                                                                                       |
+| Electron Main 安装准备窗口                | 每个 Remote 窗口启动门禁持有自己的安装 operation、`AbortSignal` 和无凭据状态；独立 sandboxed Renderer 只能读取 host/phase、订阅变化或请求取消。关闭/取消只终止该窗口的本机安装命令，完成后仍等待精确 runtime 复核再打开 Workbench                                                                   | artifact 路径、SSH option、凭据、安装决策或普通 Workbench IPC                                                                        |
+| Desktop Workbench 窗口 registry           | 合并同一 Workspace 的并发打开；为每个不同目标建立独立 Workspace context、supervisor、Browser Automation、IPC 与 Remote context；保存多个窗口的位置并按最近活动顺序聚焦                                                                                                                              | 跨窗口共享 supervisor、把 Remote authority 热切换进已有窗口                                                                          |
+| Electron Main Remote 窗口上下文           | `RemoteWindowMainContext` 将一个窗口的 Agent、命名连接、手动重连、回滚路由和状态事件绑定到同一个 `AppServerSupervisor` 与 Workspace context；重连和回滚共用串行恢复门；Workspace 变化时关闭该窗口的全部 Tunnel，窗口销毁时再释放监听器和 Tunnel coordinator                                         | 创建应用窗口、在多个窗口之间共享 supervisor、保存 SSH 凭据                                                                           |
+| Electron Main SSH port-forwarding service | `SshPortForwardingService` 直接管理 OpenSSH 子进程、本地/远端 loopback 绑定和同端口有界恢复；自己拥有窗口/Workspace Tunnel lease、catalog 和销毁适配                                                                                                                                                | 公开监听、反向转发或领域协议                                                                                                         |
+| Electron Main Remote Browser adapter      | 识别当前窗口是否为 Remote Workspace；把 Browser 的 loopback HTTP/HTTPS 顶层导航映射为 Tunnel load URL；按 requested/loaded origin 反向投影地址、保留历史 lease，并在 target 关闭、Tunnel 失败或 Workspace 变化时停止复用                                                                            | Browser DOM、通用导航策略、SSH child、非 loopback 公网 URL 或任意子资源代理                                                          |
+| app Native Tunnel host                    | 从当前 Remote 窗口复用 host 与 OpenSSH executable；通过 `ash-remote-host` 后台监督 `ssh -N`、自动本地端口和同端口有界恢复，自己负责 `WorkbenchEvent`、可访问管理状态、Stop 和窗口级销毁                                                                                                             | Local 窗口任意选择 host、公开监听、反向转发、凭据输入或 Remote Server endpoint discovery                                             |
+| `platform/remote`                         | Remote URI、authority、原生连接元数据和 IPC 契约                                                                                                                                                                                                                                                    | 各领域业务状态                                                                                                                       |
+| `workbench/services/remote`               | 后端状态的只读 Workbench 投影                                                                                                                                                                                                                                                                       | 启动 SSH 或决定重连                                                                                                                  |
+| `workbench/contrib/remote`                | 状态栏、saved-host 选择/管理 Quick Pick 和 Remote 恢复协调                                                                                                                                                                                                                                          | 连接事实源、catalog 文件解析或 SSH 启动                                                                                              |
 
 ## Workspace 与安全边界
 
@@ -501,3 +608,21 @@ content-addressed cache/远端旧 generation GC，并让统一 Remote Explorer �
 loopback，公开监听和反向转发必须经过独立授权。
 远程多根 Workspace 需要先定义每个 folder 的 authority 一致性规则，不能让一个 App Server session
 隐式跨越多个主机。
+
+## Remote 路径与职责边界
+
+Ports 面板由 `workbench/contrib/remote/browser/tunnelView.ts` 的 `TunnelPanel` 与
+`media/tunnelView.css` 负责；`ITunnelService` 执行转发，Electron Main 拥有 SSH 进程和
+端口目录。面板只持有当前窗口显示状态，连接代际变化后释放迟到的转发结果。
+
+`workbench/services/remote/common/appServerRemoteAgentService.ts` 声明 Ash 专属的
+`IAppServerRemoteAgentService`，其 browser 实现通过 DI 接收 `IAppServerApi`，读取
+Rust supervisor 状态，并使用窗口宿主提供的 SSH 重连、runtime 回滚操作。Workbench
+和 Sessions 共用这一适配器。它不承担 VS Code `IRemoteAgentService` 的远端环境、
+IPC channel、diagnostics 或 telemetry 职责。
+
+现有 Rust/OpenSSH、saved-host catalog、runtime 安装和窗口适配文件保留其 Ash
+专属归属。WSL、远端扩展 scanner、远端文件 IPC provider、共享进程 tunnel proxy、
+候选端口自动发现、统一 Remote Explorer 和 Microsoft Dev Tunnels CLI 尚未接入；
+文件与扩展操作继续使用现有 Rust 领域 API，入站 Tunnel 使用已选定的自有 SSH 中继。
+账户同步扩展初始化仍按当前范围暂缓。

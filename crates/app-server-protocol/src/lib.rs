@@ -7,6 +7,7 @@ mod export;
 mod listen_info;
 mod schema;
 mod web;
+pub use web::RemoteTunnelHostInfo;
 pub use web::WebLaunchOptions;
 pub use web::WebListenInfo;
 pub use web::WebSessionInfo;

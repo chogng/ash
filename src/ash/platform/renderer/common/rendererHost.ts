@@ -35,8 +35,7 @@ import type { IDebugAdapterProcessService } from "../../debug/common/debugAdapte
 import type { IExtensionHostApi } from "../../extensionHost/common/extensionHostApi.js";
 import type { ICodebaseSymbolsApi } from "../../codebaseSymbols/common/codebaseSymbolsApi.js";
 import type { IRemoteAgentApi } from "../../remote/common/remoteAgentApi.js";
-import type { IRemoteConnectionService } from "../../remote/common/remoteConnectionService.js";
-import type { IRemoteTunnelService } from "../../remote/common/remoteTunnelService.js";
+import type { IRemoteConnectionApi } from "../../remote/common/remoteConnectionService.js";
 import type { IMarketplaceApi } from "../../marketplace/common/marketplaceApi.js";
 import type { IDirPermissionsApi } from "../../dirPermissions/common/dirPermissionsApi.js";
 import type { IHooksService } from '../../hooks/common/hooksService.js';
@@ -91,9 +90,7 @@ export interface IRendererHost extends RendererHostCapabilities {
 	readonly accounts: IAccountApi;
 	readonly remote?: IRemoteAgentApi;
 	/** Optional because web hosts cannot restart into a host-owned SSH connection. */
-	readonly remoteConnections?: IRemoteConnectionService;
-	/** Optional because web and disconnected hosts cannot own an SSH process. */
-	readonly remoteTunnels?: IRemoteTunnelService;
+	readonly remoteConnections?: IRemoteConnectionApi;
 	readonly session: ISessionApi;
 	readonly teams: ITeamApi;
 	readonly model: IModelApi;

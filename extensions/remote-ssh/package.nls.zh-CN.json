@@ -1,0 +1,4 @@
+{
+  "displayName": "SSH 远程连接",
+  "description": "解析保存的 SSH 目标，以便在新的 Ash 窗口中打开。"
+}

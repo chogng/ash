@@ -47,6 +47,7 @@ class ExtensionHost extends Disposable implements IExtensionHostApi {
 	public readonly signals: AbortSignal[] = [];
 	public result: JsonValue = ExternalUriOpenerPriority.Preferred;
 	public pending: Promise<JsonValue> | undefined;
+	public start(): Promise<ExtensionHostFleetSnapshot> { throw new Error('Startup is outside this fixture'); }
 	public isAvailable(): Promise<boolean> { return Promise.resolve(true); }
 	public list(): Promise<ExtensionHostFleetSnapshot> { return Promise.resolve(this.current); }
 	public reconcile(): Promise<ExtensionHostFleetSnapshot> { return this.list(); }

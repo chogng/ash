@@ -9,13 +9,13 @@ import { REMOTE_CONNECTION_SAVE_CHANNEL } from "../common/remoteConnectionIpc.js
 import { REMOTE_CONNECTION_UPDATE_CHANNEL } from "../common/remoteConnectionIpc.js";
 import { canonicalRemoteConnectionDefinition } from "../common/remoteConnectionService.js";
 import { canonicalRemoteConnectionName } from "../common/remoteConnectionService.js";
-import type { IRemoteConnectionService } from "../common/remoteConnectionService.js";
+import type { IRemoteConnectionApi } from "../common/remoteConnectionService.js";
 import type { RemoteConnectionDefinition } from "../common/remoteConnectionService.js";
 
 const MAX_WORKSPACE_INPUT_BYTES = 1024 * 1024;
 
 /** Trusted IPC routes for managing and selecting named targets without accepting SSH options. */
-export function remoteConnectionIpcRoutes(service: IRemoteConnectionService): readonly IpcRoute<unknown, unknown>[] {
+export function remoteConnectionIpcRoutes(service: IRemoteConnectionApi): readonly IpcRoute<unknown, unknown>[] {
 	return [
 		{
 			channel: REMOTE_CONNECTION_LIST_CHANNEL,
@@ -24,8 +24,11 @@ export function remoteConnectionIpcRoutes(service: IRemoteConnectionService): re
 		},
 		{
 			channel: REMOTE_CONNECTION_CONNECT_CHANNEL,
-			validate: namedParams,
-			invoke: params => service.connect((params as { readonly name: string; }).name),
+			validate: connectParams,
+			invoke: params => {
+				const request = params as { readonly name: string; readonly expectedConnection?: RemoteConnectionDefinition; };
+				return service.connect(request.name, request.expectedConnection);
+			},
 		},
 		{
 			channel: REMOTE_CONNECTION_SAVE_CHANNEL,
@@ -56,6 +59,16 @@ function emptyParams(value: unknown): undefined {
 function namedParams(value: unknown): { readonly name: string; } {
 	const params = record(value, ["name"]);
 	return { name: canonicalRemoteConnectionName(boundedString(params.name, "name", 64)) };
+}
+
+function connectParams(value: unknown): { readonly name: string; readonly expectedConnection?: RemoteConnectionDefinition; } {
+	const hasExpected = typeof value === 'object' && value !== null && Object.hasOwn(value, 'expectedConnection');
+	const params = record(value, hasExpected ? ['name', 'expectedConnection'] : ['name']);
+	const name = canonicalRemoteConnectionName(boundedString(params.name, 'name', 64));
+	if (!hasExpected) return { name };
+	const expectedConnection = connectionDefinition(params.expectedConnection);
+	if (expectedConnection.name !== name) throw new Error('Remote confirmation must refer to the same saved target');
+	return { name, expectedConnection };
 }
 
 function saveParams(value: unknown): { readonly connection: RemoteConnectionDefinition; } {

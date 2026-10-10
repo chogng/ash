@@ -14,7 +14,11 @@ path = "src/lib.rs"
 ash-remote = { workspace = true }
 ash-remote-connections = { workspace = true }
 
-[dev-dependencies]
+ash-app-server-protocol = { workspace = true }
+serde_json = { workspace = true }
+url = { workspace = true }
+process-hardening = { workspace = true }
+ash-package-store = { workspace = true }
 tempfile = { workspace = true }
 
 [lints]

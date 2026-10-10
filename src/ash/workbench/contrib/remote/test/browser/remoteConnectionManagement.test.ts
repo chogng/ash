@@ -1,3 +1,4 @@
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import { Emitter, Event } from "../../../../../base/common/event.js";
@@ -7,7 +8,7 @@ import type { IMessageDialogOptions } from "../../../../../platform/dialogs/comm
 import type { IQuickInputService } from "../../../../../platform/quickinput/common/quickInput.js";
 import type { IQuickPick } from "../../../../../platform/quickinput/common/quickInput.js";
 import type { IQuickPickItem } from "../../../../../platform/quickinput/common/quickInput.js";
-import type { IRemoteConnectionService } from "../../../../../platform/remote/common/remoteConnectionService.js";
+import { IRemoteConnectionApi, RemoteConnectionService } from "../../../../../platform/remote/common/remoteConnectionService.js";
 import type { RemoteConnectionDefinition } from "../../../../../platform/remote/common/remoteConnectionService.js";
 import { showRemoteConnectionManager } from "../../browser/remoteConnectionManagement.js";
 
@@ -17,7 +18,10 @@ test("Remote connection manager adds a credential-free target", async () => {
 	const quickInput = new TestQuickInputService();
 	const dialogs = new TestDialogService();
 	const connections = new TestRemoteConnectionService([]);
-	const operation = showRemoteConnectionManager(connections, quickInput, dialogs);
+	using services = new InstantiationService();
+	services.registerInstance(IRemoteConnectionApi, connections);
+	using service = services.createInstance(RemoteConnectionService);
+	const operation = showRemoteConnectionManager(service, quickInput, dialogs);
 
 	await acceptPicker(quickInput, 0);
 	await enterText(quickInput, 1, "build");
@@ -33,7 +37,10 @@ test("Remote connection manager atomically edits and renames one observed target
 	const quickInput = new TestQuickInputService();
 	const dialogs = new TestDialogService();
 	const connections = new TestRemoteConnectionService([BuildConnection]);
-	const operation = showRemoteConnectionManager(connections, quickInput, dialogs);
+	using services = new InstantiationService();
+	services.registerInstance(IRemoteConnectionApi, connections);
+	using service = services.createInstance(RemoteConnectionService);
+	const operation = showRemoteConnectionManager(service, quickInput, dialogs);
 
 	await acceptPicker(quickInput, 0, 1);
 	await acceptPicker(quickInput, 1);
@@ -50,7 +57,10 @@ test("Remote connection manager removes only after confirmation", async () => {
 	const quickInput = new TestQuickInputService();
 	const dialogs = new TestDialogService();
 	const connections = new TestRemoteConnectionService([BuildConnection]);
-	const operation = showRemoteConnectionManager(connections, quickInput, dialogs);
+	using services = new InstantiationService();
+	services.registerInstance(IRemoteConnectionApi, connections);
+	using service = services.createInstance(RemoteConnectionService);
+	const operation = showRemoteConnectionManager(service, quickInput, dialogs);
 
 	await acceptPicker(quickInput, 0, 2);
 	await acceptPicker(quickInput, 1);
@@ -66,7 +76,10 @@ test("Remote connection manager leaves the catalog unchanged when removal is can
 	const dialogs = new TestDialogService();
 	dialogs.confirmResult = false;
 	const connections = new TestRemoteConnectionService([BuildConnection]);
-	const operation = showRemoteConnectionManager(connections, quickInput, dialogs);
+	using services = new InstantiationService();
+	services.registerInstance(IRemoteConnectionApi, connections);
+	using service = services.createInstance(RemoteConnectionService);
+	const operation = showRemoteConnectionManager(service, quickInput, dialogs);
 
 	await acceptPicker(quickInput, 0, 2);
 	await acceptPicker(quickInput, 1);
@@ -80,7 +93,10 @@ test("Remote connection manager cancellation performs no catalog mutation", asyn
 	const quickInput = new TestQuickInputService();
 	const dialogs = new TestDialogService();
 	const connections = new TestRemoteConnectionService([]);
-	const operation = showRemoteConnectionManager(connections, quickInput, dialogs);
+	using services = new InstantiationService();
+	services.registerInstance(IRemoteConnectionApi, connections);
+	using service = services.createInstance(RemoteConnectionService);
+	const operation = showRemoteConnectionManager(service, quickInput, dialogs);
 
 	await acceptPicker(quickInput, 0);
 	const namePicker = await pickerAt(quickInput, 1);
@@ -96,7 +112,10 @@ test("Remote connection manager reports catalog mutation failures", async () => 
 	const dialogs = new TestDialogService();
 	const connections = new TestRemoteConnectionService([]);
 	connections.saveError = new Error("connection already exists");
-	const operation = showRemoteConnectionManager(connections, quickInput, dialogs);
+	using services = new InstantiationService();
+	services.registerInstance(IRemoteConnectionApi, connections);
+	using service = services.createInstance(RemoteConnectionService);
+	const operation = showRemoteConnectionManager(service, quickInput, dialogs);
 
 	await acceptPicker(quickInput, 0);
 	await enterText(quickInput, 1, "build");
@@ -107,7 +126,7 @@ test("Remote connection manager reports catalog mutation failures", async () => 
 	assert.equal(dialogs.messages.at(-1)?.detail, "connection already exists");
 });
 
-class TestRemoteConnectionService implements IRemoteConnectionService {
+class TestRemoteConnectionService implements IRemoteConnectionApi {
 	readonly available = true;
 	readonly saved: RemoteConnectionDefinition[] = [];
 	readonly updated: [string, RemoteConnectionDefinition][] = [];

@@ -1,3 +1,9 @@
+import { NativeExtensionService } from '../services/extensions/electron-browser/nativeExtensionService.js';
+import { IRemoteAuthorityResolverService } from '../../platform/remote/common/remoteAuthorityResolver.js';
+import { RemoteAuthorityResolverService } from '../../platform/remote/electron-browser/remoteAuthorityResolverService.js';
+import { IRemoteSocketFactoryService } from '../../platform/remote/common/remoteSocketFactoryService.js';
+import { IExtensionHostApi } from '../../platform/extensionHost/common/extensionHostApi.js';
+import { MutableDisposable, DisposableStore } from '../../base/common/lifecycle.js';
 import { FileUserDataProvider } from '../../platform/userData/common/fileUserDataProvider.js';
 import { RelayURLService } from '../services/url/electron-browser/urlService.js';
 import { IBackupService } from '../../platform/backup/common/backup.js';
@@ -67,12 +73,27 @@ export class DesktopMain extends Disposable {
 			const mainProcessService = this._register(profileServices.createInstance(ElectronIPCMainProcessService, windowId as number));
 			profileServices.registerInstance(IMainProcessService, mainProcessService);
 			const logger = profileServices.createInstance(LoggerChannelClient);
+			const resolver = this._register(profileServices.createInstance(RemoteAuthorityResolverService));
+			profileServices.registerInstance(IRemoteAuthorityResolverService, resolver);
+			const resolverScope = this._register(new MutableDisposable<DisposableStore>());
 			let documentClient: AppServerProtocolClient | undefined;
+			let localResolver: NativeExtensionService | undefined;
 			const api = this._register(await createElectronRendererApi([
 				client => { documentClient = client; return {}; },
 				...this.rendererCapabilities,
 				client => registerLocalTranscriptionService(transcriptionServices, client),
-			], { browser: true, textDocuments: true }, permissionDialog, mainProcessService));
+			], { browser: true, textDocuments: true }, permissionDialog, mainProcessService, async (localApi, factories, authority, attempt) => {
+				if (!resolverScope.value) {
+					const scope = new DisposableStore();
+					resolverScope.value = scope;
+					const services = scope.add(profileServices.createChild(new ServiceCollection([IExtensionHostApi, localApi], [IRemoteSocketFactoryService, factories])));
+					localResolver = scope.add(services.createInstance(NativeExtensionService));
+				}
+				await localResolver!.resolveAuthority(authority, attempt);
+				const address = resolver.getConnectionData(authority);
+				if (!address) { throw new Error('Remote address was retired before connecting'); }
+				return address;
+			}, async (remoteApi, authority) => localResolver!.startRemoteExtensionHost(remoteApi, authority)));
 			performance.mark('ash.desktop.api-ready');
 			const profileFiles = this._register(profileServices.createInstance(FileService));
 			this._register(profileFiles.registerProvider(api.userDataHome.scheme, api.localFiles));
@@ -89,7 +110,7 @@ export class DesktopMain extends Disposable {
 			performance.mark('ash.desktop.workbench-start');
 			const workbench = this._register(await startWorkbench({
 				...this.options,
-				serviceCollection: new ServiceCollection([IMainProcessService, mainProcessService]),
+				serviceCollection: new ServiceCollection([IMainProcessService, mainProcessService], [IRemoteAuthorityResolverService, resolver]),
 				environmentService: new ElectronWorkbenchEnvironmentService(),
 				createURLService: services => {
 					return services.createInstance(RelayURLService, windowId as number);

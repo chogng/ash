@@ -14,7 +14,7 @@
 
 .ash-remote-ports-label {
 	color: var(--ash-description-foreground);
-	font-size: 12px;
+	font-size: var(--ash-fontSize-label1);
 }
 
 .ash-remote-ports-input {
@@ -65,7 +65,7 @@
 	min-height: 18px;
 	padding: 6px 2px;
 	color: var(--ash-description-foreground);
-	font-size: 12px;
+	font-size: var(--ash-fontSize-label1);
 }
 
 .ash-remote-ports-status.error,
@@ -110,7 +110,7 @@
 }
 
 .ash-remote-port-state {
-	font-size: 12px;
+	font-size: var(--ash-fontSize-label1);
 }
 
 .ash-remote-port.recovering .ash-remote-port-state {

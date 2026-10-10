@@ -20,6 +20,8 @@ import { getNLSLanguage, localize } from '../../../nls.js';
 import { ICommandService } from '../../commands/common/commands.js';
 import { normalizeExtensionStatusBarUpdate, normalizeExtensionHostInvocationRequest, normalizeExtensionHostPayload, type ExtensionHostFleetSnapshot, type ExtensionHostRuntime, type JsonValue } from '../common/extensionHostApi.js';
 
+const BUILT_IN_SSH_EXTENSION_ID = 'ash.remote-ssh';
+
 export type BrowserExtensionHostRequest =
 	| { readonly id: number; readonly type: 'activate'; readonly entryPoint: string; readonly language: string; }
 	| { readonly id: number; readonly type: 'invoke'; readonly request: Parameters<IExtensionHostApi['invoke']>[0]; }
@@ -59,6 +61,7 @@ export class BrowserExtensionHostApi extends Disposable implements IExtensionHos
 	}
 	private snapshotGeneration = 1;
 
+	public start(environment: Readonly<Record<string, string | null>>): Promise<ExtensionHostFleetSnapshot> { return this.remote.start(environment); }
 	public async isAvailable(): Promise<boolean> { return true; }
 	public async getConnectionState(): Promise<'ready'> { return 'ready'; }
 	public onDidChange(listener: (generation: number) => void): ReturnType<IExtensionHostApi['onDidChange']> { return this.changes.event(listener); }
@@ -78,6 +81,9 @@ export class BrowserExtensionHostApi extends Disposable implements IExtensionHos
 
 	private acceptRemoteSnapshot(snapshot: ExtensionHostFleetSnapshot): void {
 		if (snapshot.generation < this.remoteSnapshot.generation) { return; }
+		for (const runtime of snapshot.extensions) {
+			assertRemoteResolverOwnership(runtime, runtime.id === BUILT_IN_SSH_EXTENSION_ID);
+		}
 		const localIds = new Set(this.snapshot.extensions.map(runtime => runtime.id));
 		if (snapshot.extensions.some(runtime => localIds.has(runtime.id))) throw new Error('An extension cannot be active in two hosts');
 		this.remoteSnapshot = snapshot;
@@ -130,10 +136,11 @@ export class BrowserExtensionHostApi extends Disposable implements IExtensionHos
 			if (typeof manifest.browser !== 'string') { continue; }
 			let worker: BrowserExtensionWorker | undefined;
 			try {
+				if (extension.id === BUILT_IN_SSH_EXTENSION_ID) { throw new TypeError(localize('extensionHost.browser.productSsh', 'The product SSH extension must execute in the V8 host')); }
 				const path = manifest.browser.replace(/^\.\//, '');
 				const source = await this.extensions.resources.readExtensionResourceBytes({ generation: catalog.generation, extensionId: extension.id, path });
 				this.assertNotDisposed();
-				worker = this.instantiation.createInstance(BrowserExtensionWorker, source, async (operation: ExtensionClientOperation, signal: AbortSignal) => {
+				worker = this.instantiation.createInstance(BrowserExtensionWorker, extension.id, source, async (operation: ExtensionClientOperation, signal: AbortSignal) => {
 					if (!this.clientHandler) throw new Error('No extension client handler is registered');
 					const result = await this.clientHandler(operation, signal, { extensionId: extension.id, activationGeneration: generation, incarnation: generation });
 					if (operation.operation === 'setStatusBarEntries' && result.result === 'done' && !signal.aborted) {
@@ -154,6 +161,7 @@ export class BrowserExtensionHostApi extends Disposable implements IExtensionHos
 				const registrations = await worker.request({ type: 'activate', entryPoint: worker.entryPoint, language: getNLSLanguage() }, Date.now() + 30_000);
 				this.assertNotDisposed();
 				const runtime = normalizeExtensionHostSnapshot({ generation, extensions: [{ ...runtimeIdentity(extension, generation), lifecycle: 'ready', failure: null, registrations }] }).extensions[0];
+				assertRemoteResolverOwnership(runtime, false);
 				worker.onDidFail(error => this.retire(extension.id, generation, error));
 				runtimes.push(runtime);
 			} catch (error) {
@@ -192,7 +200,7 @@ class BrowserExtensionWorker extends Disposable {
 	private nextId = 1;
 	private readonly pending = new Map<number, { resolve(value: JsonValue): void; reject(error: Error): void; }>();
 
-	constructor(source: Uint8Array, clientHandler: (operation: ExtensionClientOperation, signal: AbortSignal) => ReturnType<ExtensionClientHandler>,
+	constructor(extensionId: string, source: Uint8Array, clientHandler: (operation: ExtensionClientOperation, signal: AbortSignal) => ReturnType<ExtensionClientHandler>,
 		@ICommandService commandService: ICommandService,
 		@IFileService files: IFileService,
 		@IWorkspaceContextService workspace: IWorkspaceContextService,
@@ -203,7 +211,7 @@ class BrowserExtensionWorker extends Disposable {
 		this._register(toDisposable(() => { lifetime.abort(); for (const client of clients.values()) client.abort(); clients.clear(); }));
 		this.entryPoint = URL.createObjectURL(new Blob([Uint8Array.from(source)], { type: 'text/javascript' }));
 		this._register(toDisposable(() => URL.revokeObjectURL(this.entryPoint)));
-		this.worker = new Worker(new URL('./extensionHostWorker.ts', import.meta.url), { type: 'module', name: 'Ash Web Extension Host' });
+		this.worker = new Worker(new URL('./extensionHostWorker.ts', import.meta.url), { type: 'module', name: `Ash Web Extension Host: ${extensionId}` });
 		this._register(toDisposable(() => {
 			this.worker.terminate();
 			for (const pending of this.pending.values()) { pending.reject(new Error(localize('extensionHost.browser.stopped', 'Browser extension Worker stopped'))); }
@@ -319,6 +327,14 @@ class BrowserExtensionWorker extends Disposable {
 	}
 }
 
+function assertRemoteResolverOwnership(runtime: ExtensionHostRuntime, builtInSsh: boolean): void {
+	// The backend admits this identity only from its compiled product module. Worker packages
+	// cannot acquire the reserved prefix, even if their catalog provenance is built-in.
+	if (!builtInSsh && runtime.registrations.some(registration => (registration.kind === 'remoteAuthorityResolver' || registration.kind === 'remoteConnectionResolver') && registration.authorityPrefix === 'ssh')) {
+		throw new TypeError('Remote ssh prefix belongs to the built-in SSH extension');
+	}
+}
+
 function runtimeIdentity(extension: ExtensionDescriptor, generation: number): Omit<ExtensionHostRuntime, 'lifecycle' | 'failure' | 'registrations'> {
 	return { id: extension.id, version: extension.version, packageDigest: extension.packageSha256, runtimeApiVersion: 1, activationGeneration: generation, incarnation: generation, stderr: '', outputEvents: [] };
 }
@@ -326,6 +342,7 @@ function runtimeIdentity(extension: ExtensionDescriptor, generation: number): Om
 export function createDisconnectedExtensionHostApi(unavailable: UnavailableOperation): IExtensionHostApi {
 	return {
 		registerClientHandler: () => inertSubscription(),
+		start: () => unavailable("extensionHost.start"),
 		isAvailable: () => Promise.resolve(false),
 		list: () => unavailable("extensionHost.list"),
 		reconcile: () => unavailable("extensionHost.reconcile"),
@@ -361,6 +378,7 @@ export function createAppServerExtensionHostApi(connection: AppServerProtocolCli
 				default: return result;
 			}
 		}),
+		start: async environment => normalizeExtensionHostSnapshot(await appServerRequest(connection, "extensionHost/start", { environment: { ...environment } })),
 		isAvailable: () => Promise.resolve(connection.capabilities?.extensionHost === true),
 		list: async () => normalizeExtensionHostSnapshot(await appServerRequest(connection, "extensionHost/list", {})),
 		reconcile: async mode => normalizeExtensionHostSnapshot(await appServerRequest(connection, "extensionHost/reconcile", { mode })),

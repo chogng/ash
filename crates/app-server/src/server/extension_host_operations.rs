@@ -50,8 +50,42 @@ use super::extension_host_runtime::ExtensionHostRuntimeFailure;
 use super::result;
 
 impl AppServer {
-    pub(super) fn extension_host_list(&self) -> Result<Value, RpcError> {
-        let runtime = self.extension_host_runtime()?;
+    pub(super) fn extension_host_start(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        if !matches!(
+            connection.authority,
+            super::ConnectionAuthority::ProductHost | super::ConnectionAuthority::Browser
+        ) {
+            return Err(RpcError::new(-32000, AppServerErrorName::ResourceNotOwner));
+        }
+        let params: ash_app_server_protocol::protocol::extension_host::ExtensionHostStartParams =
+            decode(params)?;
+        extension_protocol::validate_environment(&params.environment)
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        let mut state = super::connection_state(connection);
+        if state.closed || state.extension_hosts.is_some() {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let source = self
+            .extension_hosts
+            .as_ref()
+            .ok_or_else(|| RpcError::new(-32070, AppServerErrorName::ExtensionHostUnavailable))?;
+        let runtime = source
+            .fork(params.environment)
+            .map_err(|error| runtime_rpc_error(ExtensionHostRuntimeError::Host(error)))?;
+        let response = result(&fleet_dto(runtime.snapshot()))?;
+        state.extension_hosts = Some(runtime);
+        Ok(response)
+    }
+
+    pub(super) fn extension_host_list(
+        &self,
+        connection: &ConnectionState,
+    ) -> Result<Value, RpcError> {
+        let runtime = self.extension_host_runtime(connection)?;
         result(&fleet_dto(runtime.snapshot()))
     }
 
@@ -63,7 +97,11 @@ impl AppServer {
         use super::extension_host_runtime::source::ActivationEvent;
         use ash_app_server_protocol::protocol::extension_host::ExtensionHostActivateParams;
         use ash_app_server_protocol::protocol::extension_host::ExtensionHostActivationEventDto;
-        if !connection.allows_product_host_capabilities() {
+        if !connection.allows_product_host_capabilities()
+            && super::connection_state(connection)
+                .extension_hosts
+                .is_none()
+        {
             return Err(RpcError::new(-32000, AppServerErrorName::ResourceNotOwner));
         }
         let params: ExtensionHostActivateParams = decode(params)?;
@@ -76,6 +114,9 @@ impl AppServer {
                 valid_text(language_id, 128)
             }
             ExtensionHostActivationEventDto::StartupFinished {} => true,
+            ExtensionHostActivationEventDto::ResolveAuthority { authority_prefix } => {
+                valid_text(authority_prefix, 64)
+            }
         };
         if !valid_text(&params.extension_id, 256)
             || params.activation_generation == 0
@@ -91,15 +132,22 @@ impl AppServer {
                 ActivationEvent::Language(language_id)
             }
             ExtensionHostActivationEventDto::StartupFinished {} => ActivationEvent::StartupFinished,
+            ExtensionHostActivationEventDto::ResolveAuthority { authority_prefix } => {
+                ActivationEvent::ResolveAuthority(authority_prefix)
+            }
         };
         result(&fleet_dto(
-            self.extension_host_runtime()?
+            self.extension_host_runtime(connection)?
                 .activate_by_event(&params.extension_id, params.activation_generation, event)
                 .map_err(runtime_rpc_error)?,
         ))
     }
 
-    pub(super) fn extension_host_reconcile(&self, params: &Value) -> Result<Value, RpcError> {
+    pub(super) fn extension_host_reconcile(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
         let params: ExtensionHostReconcileParams = decode(params)?;
         let mode = match params.mode {
             ExtensionHostReconcileModeDto::Refresh => ExtensionHostReconcileMode::Refresh,
@@ -108,7 +156,7 @@ impl AppServer {
             }
         };
         let snapshot = self
-            .extension_host_runtime()?
+            .extension_host_runtime(connection)?
             .reconcile(mode)
             .map_err(runtime_rpc_error)?;
         result(&fleet_dto(snapshot))
@@ -121,7 +169,7 @@ impl AppServer {
     ) -> Result<Value, RpcError> {
         let params: ExtensionHostInvokeStartParams = decode(params)?;
         let invocation_id = self
-            .extension_host_runtime()?
+            .extension_host_runtime(connection)?
             .start_invocation(
                 connection.connection_id,
                 ExtensionHostInvocationRequest {
@@ -153,7 +201,7 @@ impl AppServer {
     ) -> Result<Value, RpcError> {
         let params: ExtensionHostInvokeReadParams = decode(params)?;
         let read = self
-            .extension_host_runtime()?
+            .extension_host_runtime(connection)?
             .read_invocation(connection.connection_id, &params.invocation_id)
             .map_err(runtime_rpc_error)?;
         result(&match read {
@@ -180,7 +228,7 @@ impl AppServer {
     ) -> Result<Value, RpcError> {
         let params: ExtensionHostInvokeCancelParams = decode(params)?;
         let disposition = self
-            .extension_host_runtime()?
+            .extension_host_runtime(connection)?
             .cancel_invocation(connection.connection_id, &params.invocation_id)
             .map_err(runtime_rpc_error)?;
         result(&ExtensionHostInvokeCancelResult {
@@ -197,9 +245,14 @@ impl AppServer {
 
     fn extension_host_runtime(
         &self,
-    ) -> Result<&super::extension_host_runtime::ExtensionHostRuntime, RpcError> {
+        connection: &ConnectionState,
+    ) -> Result<super::extension_host_runtime::ExtensionHostRuntime, RpcError> {
+        if let Some(runtime) = &super::connection_state(connection).extension_hosts {
+            return Ok(runtime.clone());
+        }
         self.extension_hosts
             .as_ref()
+            .cloned()
             .ok_or_else(|| RpcError::new(-32070, AppServerErrorName::ExtensionHostUnavailable))
     }
 }
@@ -357,6 +410,12 @@ fn registration_dto(
     ExtensionHostRegistrationDescriptorDto {
         registration_id: registration.registration_id,
         kind: match registration.kind {
+            RegistrationKind::RemoteConnectionResolver { authority_prefix } => {
+                ExtensionHostRegistrationKindDto::RemoteConnectionResolver { authority_prefix }
+            }
+            RegistrationKind::RemoteAuthorityResolver { authority_prefix } => {
+                ExtensionHostRegistrationKindDto::RemoteAuthorityResolver { authority_prefix }
+            }
             RegistrationKind::StatusBar { revision, entries } => {
                 ExtensionHostRegistrationKindDto::StatusBar { revision, entries }
             }

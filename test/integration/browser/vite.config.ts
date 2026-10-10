@@ -29,6 +29,7 @@ export default defineConfig({
 				chatInput: resolve(import.meta.dirname, "chatInput.html"),
 				dataChannel: resolve(import.meta.dirname, 'dataChannel.html'),
 				extensionHost: resolve(import.meta.dirname, 'extensionHost.html'),
+				remoteAuthorityResolver: resolve(import.meta.dirname, 'remoteAuthorityResolver.html'),
 				github: resolve(import.meta.dirname, 'github.html'),
 				githubReview: resolve(import.meta.dirname, 'githubReview.html'),
 				sessionGitHub: resolve(import.meta.dirname, 'sessionGitHub.html'),

@@ -11,18 +11,11 @@ import { REMOTE_AGENT_CONNECTION_READ_CHANNEL } from "../../../../platform/remot
 import { REMOTE_AGENT_RECONNECT_CHANNEL } from "../../../../platform/remote/common/remoteAgentApi.js";
 import { REMOTE_AGENT_RUNTIME_ROLLBACK_CHANNEL } from "../../../../platform/remote/common/remoteAgentApi.js";
 import { REMOTE_CONNECTION_CONNECT_CHANNEL } from "../../../../platform/remote/common/remoteConnectionIpc.js";
-import type { IRemoteConnectionService } from "../../../../platform/remote/common/remoteConnectionService.js";
+import type { IRemoteConnectionApi } from "../../../../platform/remote/common/remoteConnectionService.js";
 import { REMOTE_CONNECTION_LIST_CHANNEL } from "../../../../platform/remote/common/remoteConnectionIpc.js";
 import { REMOTE_CONNECTION_REMOVE_CHANNEL } from "../../../../platform/remote/common/remoteConnectionIpc.js";
 import { REMOTE_CONNECTION_SAVE_CHANNEL } from "../../../../platform/remote/common/remoteConnectionIpc.js";
 import { REMOTE_CONNECTION_UPDATE_CHANNEL } from "../../../../platform/remote/common/remoteConnectionIpc.js";
-import { REMOTE_TUNNEL_CLOSE_ALL_CHANNEL } from "../../../../platform/remote/common/remoteTunnelService.js";
-import { REMOTE_TUNNEL_CLOSE_CHANNEL } from "../../../../platform/remote/common/remoteTunnelService.js";
-import { REMOTE_TUNNEL_CHANGED_CHANNEL } from "../../../../platform/remote/common/remoteTunnelService.js";
-import { REMOTE_TUNNEL_LIST_CHANNEL } from "../../../../platform/remote/common/remoteTunnelService.js";
-import { REMOTE_TUNNEL_OPEN_CHANNEL } from "../../../../platform/remote/common/remoteTunnelService.js";
-import type { IRemoteTunnelService } from "../../../../platform/remote/common/remoteTunnelService.js";
-import type { RemoteTunnelChange } from "../../../../platform/remote/common/remoteTunnelService.js";
 import { RemoteWindowMainContext } from "../../../../platform/remote/electron-main/remoteWindowMainContext.js";
 import { RemoteAppServerProcessLauncher } from "../../../../platform/remote/electron-main/remoteAppServerProcessLauncher.js";
 import { WorkspaceContextMainService } from "../../../../platform/window/electron-main/window.js";
@@ -41,7 +34,7 @@ test("Remote window context owns routes, projections, and Workspace tunnel clean
 		id: "remote-one",
 		uri: URI.parse("ash-remote://ssh+build-linux/workspace/one"),
 	});
-	const connections: IRemoteConnectionService = {
+	const connections: IRemoteConnectionApi = {
 		available: true,
 		list: async () => [],
 		save: async connection => connection,
@@ -49,18 +42,10 @@ test("Remote window context owns routes, projections, and Workspace tunnel clean
 		remove: async () => undefined,
 		connect: async () => { },
 	};
-	const tunnelListeners = new Set<(change: RemoteTunnelChange) => void>();
 	let tunnelCloseAllCalls = 0;
 	let tunnelsDisposed = false;
-	const tunnels: IRemoteTunnelService & IDisposable = {
-		list: async () => [],
-		open: async () => { throw new Error("not used"); },
-		close: async () => { },
+	const tunnels: Pick<import("../../electron-main/sshPortForwardingService.js").SshPortForwardingService, "closeAll"> & IDisposable = {
 		closeAll: async () => { tunnelCloseAllCalls += 1; },
-		onDidChange: listener => {
-			tunnelListeners.add(listener);
-			return toDisposable(() => tunnelListeners.delete(listener));
-		},
 		dispose: () => { tunnelsDisposed = true; },
 		[Symbol.dispose]: () => { tunnelsDisposed = true; },
 	};
@@ -86,17 +71,10 @@ test("Remote window context owns routes, projections, and Workspace tunnel clean
 			REMOTE_CONNECTION_SAVE_CHANNEL,
 			REMOTE_CONNECTION_UPDATE_CHANNEL,
 			REMOTE_CONNECTION_REMOVE_CHANNEL,
-			REMOTE_TUNNEL_LIST_CHANNEL,
-			REMOTE_TUNNEL_OPEN_CHANNEL,
-			REMOTE_TUNNEL_CLOSE_CHANNEL,
-			REMOTE_TUNNEL_CLOSE_ALL_CHANNEL,
 		]);
 
-		const change: RemoteTunnelChange = { kind: "removed", id: "remote-tunnel-1" };
-		for (const listener of tunnelListeners) listener(change);
 		for (const listener of stateListeners) listener("ready");
 		assert.deepEqual(events, [
-			{ channel: REMOTE_TUNNEL_CHANGED_CHANNEL, payload: change },
 			{
 				channel: REMOTE_AGENT_CONNECTION_CHANGED_CHANNEL,
 				payload: { kind: "ssh", generation: 4, authority: "ssh+build-linux", host: "build-linux" },
@@ -112,7 +90,6 @@ test("Remote window context owns routes, projections, and Workspace tunnel clean
 	}
 	assert.equal(tunnelsDisposed, true);
 	assert.equal(stateListeners.size, 0);
-	assert.equal(tunnelListeners.size, 0);
 });
 
 test("Remote window context scopes verified rollback to its own supervisor", async () => {
@@ -142,12 +119,8 @@ test("Remote window context scopes verified rollback to its own supervisor", asy
 		start: async () => { calls.push("start"); },
 	} as unknown as AppServerConnectionRelay;
 	const workspaceContext = new WorkspaceContextMainService({ id: "remote-one", uri: workspace });
-	const tunnels: IRemoteTunnelService & IDisposable = {
-		list: async () => [],
-		open: async () => { throw new Error("not used"); },
-		close: async () => { },
+	const tunnels: Pick<import("../../electron-main/sshPortForwardingService.js").SshPortForwardingService, "closeAll"> & IDisposable = {
 		closeAll: async () => { },
-		onDidChange: () => toDisposable(() => { }),
 		dispose: () => { },
 		[Symbol.dispose]: () => { },
 	};

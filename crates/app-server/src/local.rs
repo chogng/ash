@@ -791,6 +791,7 @@ pub struct LocalProfileRuntime {
     config: Arc<ConfigStore>,
     network_policy: OutboundNetworkPolicy,
     secrets: Arc<dyn SecretStore>,
+    plugin_authority: PluginActivationAuthority,
     updates: Arc<UpdateBroker>,
     update_scopes: Mutex<BTreeMap<ProfileUpdateScopeKey, Arc<UpdateBroker>>>,
     marketplace: Mutex<Option<ProfileMarketplaceAuthority>>,
@@ -891,6 +892,8 @@ impl LocalProfileRuntime {
         );
         let diagnostics = diagnostics::Diagnostics::default();
         let telemetry = ash_otel::Telemetry::new(diagnostics.clone());
+        let plugin_authority = PluginActivationAuthority::open(profile_root.join("plugins"))
+            .map_err(|error| OpenAppServerError(error.to_string()))?;
         Ok(Self {
             diagnostics,
             telemetry,
@@ -908,6 +911,7 @@ impl LocalProfileRuntime {
             config,
             network_policy,
             secrets,
+            plugin_authority,
             updates: Arc::new(UpdateBroker::default()),
             update_scopes: Mutex::new(BTreeMap::new()),
             marketplace: Mutex::new(None),
@@ -1254,9 +1258,12 @@ pub fn open_app_server_with_codebase_providers(
     let mut connector_runtime = match options.connector_runtime.take() {
         Some(runtime) => Some(runtime),
         None => {
-            let plugin_authority =
-                PluginActivationAuthority::open(options.profile_root.join("plugins"))
-                    .map_err(|error| OpenAppServerError(error.to_string()))?;
+            // Directory and empty-window hosts observe the same enable/grant/revocation commits.
+            let plugin_authority = match &profile_runtime {
+                Some(runtime) => runtime.plugin_authority.clone(),
+                None => PluginActivationAuthority::open(options.profile_root.join("plugins"))
+                    .map_err(|error| OpenAppServerError(error.to_string()))?,
+            };
             Some(LocalConnectorRuntime::from_plugin_authority(
                 &state_runtime,
                 plugin_authority,
@@ -1818,7 +1825,6 @@ pub fn open_app_server_with_codebase_providers(
             .with_marketplace_language_runtime(runtime)
             .map_err(OpenAppServerError)?;
     }
-    let has_editor_policy = plugins_manager.is_some();
     if let Some(manager) = plugins_manager {
         server = if profile_runtime.is_some() {
             server.with_profile_plugins_manager(manager)
@@ -1883,10 +1889,6 @@ pub fn open_app_server_with_codebase_providers(
             server = server.with_connector_device_oauth_service(Arc::clone(oauth));
         }
     }
-    if has_editor_policy
-        || connector_runtime
-            .as_ref()
-            .is_some_and(|runtime| runtime.plugin_authority.is_some())
     {
         let executable =
             std::env::current_exe().map_err(|error| OpenAppServerError(error.to_string()))?;
@@ -1894,6 +1896,7 @@ pub fn open_app_server_with_codebase_providers(
             .parent()
             .ok_or_else(|| OpenAppServerError("missing product executable directory".into()))?;
         server = server
+            .with_built_in_editor_extensions()
             .with_extension_host_runtime(
                 Arc::new(ash_editor_extension_host::ProductJavaScriptLauncher::new(
                     directory.join(format!(

@@ -7,6 +7,7 @@ import {
 	createServiceIdentifier,
 } from "../../instantiation/common/instantiation.js";
 import { createSshRemoteAuthority, getRemoteWorkspacePath, isRemoteResource } from "../../remote/common/remote.js";
+import { getRemoteAuthority } from '../../remote/common/remoteHosts.js';
 
 /** Describes whether a workbench contains no project, one folder, or a workspace. */
 export const enum WorkbenchState {
@@ -169,8 +170,11 @@ export function isRemoteWorkspaceIdentifier(value: unknown): value is ISingleFol
 
 /** Connection identity survives closing the folder in an SSH window. */
 export function getWorkspaceRemoteAuthority(workspace: IAnyWorkspaceIdentifier | IWorkspace): string | undefined {
-	if (isRemoteWorkspaceIdentifier(workspace)) return workspace.uri.authority;
-	if ('folders' in workspace) return workspace.remoteAuthority ?? workspace.folders.find(folder => isRemoteResource(folder.uri))?.uri.authority;
+	if (isSingleFolderWorkspaceIdentifier(workspace)) return getRemoteAuthority(workspace.uri);
+	if ('folders' in workspace) {
+		const folder = workspace.folders.find(folder => isRemoteResource(folder.uri));
+		return workspace.remoteAuthority ?? (folder ? getRemoteAuthority(folder.uri) : undefined);
+	}
 	return isEmptyWorkspaceIdentifier(workspace) ? workspace.remoteAuthority : undefined;
 }
 
@@ -385,7 +389,7 @@ function resourceName(resource: URI): string {
 
 function parseRemoteAuthority(value: unknown): string {
 	const authority = nonEmptyString(value, 'Remote authority');
-	if (!authority.startsWith('ssh+') || createSshRemoteAuthority(authority.slice(4)).authority !== authority) throw new Error('Invalid Remote authority');
+	if (!/^[a-z][a-z0-9-]{0,63}\+[^\s\u0000-\u001f\u007f]{1,1983}$/u.test(authority) || authority.startsWith('ssh+') && createSshRemoteAuthority(authority.slice(4)).authority !== authority) throw new Error('Invalid Remote authority');
 	return authority;
 }
 

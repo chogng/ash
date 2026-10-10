@@ -14,6 +14,7 @@ export interface IRemoteAgentRecoveryMainService {
 export function remoteAgentConnection(supervisor: AppServerConnectionRelay, workspace: IAnyWorkspaceIdentifier): RemoteAgentConnection {
 	const remoteAuthority = getWorkspaceRemoteAuthority(workspace);
 	if (!remoteAuthority) return Object.freeze({ kind: "local", generation: supervisor.generation });
+	if (!remoteAuthority.startsWith("ssh+")) return Object.freeze({ kind: "remote", generation: supervisor.generation, authority: remoteAuthority });
 	const authority = createSshRemoteAuthority(remoteAuthority.slice(4));
 	return Object.freeze({ kind: "ssh", generation: supervisor.generation, authority: authority.authority, host: authority.host });
 }

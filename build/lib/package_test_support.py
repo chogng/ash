@@ -124,6 +124,7 @@ def create_runtime_package(root: Path, target: str) -> Path:
         windows_sandbox_service_binary=executable("ash-windows-sandbox-service")
         if spec.is_windows
         else None,
+        remote_host_binary=executable("ash-remote-host"),
         voice_host_binary=executable("ash-voice-host"),
         collaboration_server_binary=executable("ash-collaboration-server"),
         livekit={"executable": str(executable("livekit-server"))},

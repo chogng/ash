@@ -1,4 +1,7 @@
+use sha2::Digest;
+use sha2::Sha256;
 use std::collections::BTreeMap;
+use std::path::Path;
 use std::sync::Arc;
 
 use ash_core_plugins::PluginActivationAuthority;
@@ -38,8 +41,23 @@ pub(crate) enum WorkspaceReadAccess {
     Read,
 }
 
+#[derive(Clone, Copy, Default, Eq, PartialEq)]
+pub(crate) enum BuiltInEditorExtensions {
+    #[default]
+    Omitted,
+    Product,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(crate) enum EditorExtensionScope {
+    Workspace,
+    Profile,
+    Product,
+}
+
 #[derive(Clone)]
 pub(crate) struct EditorExtensionDeployment {
+    pub(crate) scope: EditorExtensionScope,
     pub(crate) id: String,
     pub(crate) version: String,
     pub(crate) package_digest: String,
@@ -49,6 +67,79 @@ pub(crate) struct EditorExtensionDeployment {
     pub(crate) authority: Arc<dyn ActivationAuthority>,
     pub(crate) activation: Option<ActivationPlan>,
     pub(crate) activation_failure: Option<String>,
+}
+
+pub(super) fn built_in_deployments(
+    selection: BuiltInEditorExtensions,
+) -> Result<Vec<EditorExtensionDeployment>, ExtensionHostRuntimeError> {
+    if selection == BuiltInEditorExtensions::Omitted {
+        return Ok(Vec::new());
+    }
+    let executable = std::env::current_exe().map_err(|_| ExtensionHostRuntimeError::Internal)?;
+    let directory = executable
+        .parent()
+        .ok_or(ExtensionHostRuntimeError::Internal)?;
+    product_ssh_deployment(directory).map(|deployment| vec![deployment])
+}
+
+fn product_ssh_deployment(
+    directory: &Path,
+) -> Result<EditorExtensionDeployment, ExtensionHostRuntimeError> {
+    let source = include_str!("../../../../../extensions/remote-ssh/src/extension.js");
+    let manifest = include_str!("../../../../../extensions/remote-ssh/package.json");
+    let sdk = include_str!("../../../../../extension-sdk/index.js");
+    let digest = format!(
+        "sha256:{:x}",
+        Sha256::digest(format!("{manifest}\0{source}\0{sdk}"))
+    );
+    let id = "ash.remote-ssh".to_string();
+    Ok(EditorExtensionDeployment {
+        scope: EditorExtensionScope::Product,
+        id: id.clone(),
+        version: "1.0.0".into(),
+        package_digest: digest.clone(),
+        command: ExtensionLaunchCommand::product_javascript(
+            directory.join(format!(
+                "ash-js-extension-host{}",
+                std::env::consts::EXE_SUFFIX
+            )),
+            "remote-ssh",
+            directory,
+        )
+        .map_err(ExtensionHostRuntimeError::Host)?,
+        workspace_read: WorkspaceReadAccess::Denied,
+        params: ActivateParams {
+            extension_id: id,
+            package: PackageBinding {
+                package_id: "ash.remote-ssh@1.0.0".into(),
+                package_digest: digest,
+                entrypoint: "src/extension.js".into(),
+            },
+            runtime_api_version: 1,
+            activation_events: vec!["startup".into()],
+            capabilities: vec![
+                ExtensionCapability::RemoteAuthorityResolver,
+                ExtensionCapability::ProductRemoteAuthorityResolver,
+            ],
+        },
+        authority: Arc::new(ProductAuthority),
+        activation: None,
+        activation_failure: None,
+    })
+}
+
+// This authority admits only the module compiled into the product executable. Fleet retirement
+// owns process cancellation; a release update replaces the bytes on the next backend start.
+struct ProductAuthority;
+struct ProductLease;
+impl ActivationLease for ProductLease {}
+impl ActivationAuthority for ProductAuthority {
+    fn authorizes(&self) -> bool {
+        true
+    }
+    fn acquire(&self) -> Option<Box<dyn ActivationLease>> {
+        Some(Box::new(ProductLease))
+    }
 }
 
 /// Manifest facts are distinct from process-owned registrations. Waiting never holds a process lease.
@@ -63,6 +154,7 @@ pub(in crate::server) enum ActivationEvent {
     Command(String),
     Language(String),
     StartupFinished,
+    ResolveAuthority(String),
 }
 
 impl ActivationPlan {
@@ -76,6 +168,10 @@ impl ActivationPlan {
                 .events
                 .iter()
                 .any(|event| event == "onLanguage" || event == &format!("onLanguage:{language}")),
+            ActivationEvent::ResolveAuthority(prefix) => self.events.iter().any(|event| {
+                event == "onDemand:remoteAuthorityResolver"
+                    || event == &format!("onResolveRemoteAuthority:{prefix}")
+            }),
             ActivationEvent::StartupFinished => {
                 self.events.iter().any(|event| event == "onStartupFinished")
             }
@@ -146,6 +242,15 @@ pub(super) fn plugin_deployments(
             }
             .map_err(ExtensionHostRuntimeError::Host)?;
             deployments.push(EditorExtensionDeployment {
+                scope: if contribution.runtime == ash_plugin::EditorExtensionRuntime::JavaScript
+                    && contribution
+                        .capabilities
+                        .contains(&EditorExtensionCapability::RemoteAuthorityResolver)
+                {
+                    EditorExtensionScope::Profile
+                } else {
+                    EditorExtensionScope::Workspace
+                },
                 id: id.clone(),
                 version: package.manifest().version.to_string(),
                 package_digest: package.package_digest().as_str().to_string(),
@@ -266,6 +371,9 @@ fn activation_event(event: &EditorExtensionActivationEvent) -> String {
 
 fn extension_capability(capability: EditorExtensionCapability) -> ExtensionCapability {
     match capability {
+        EditorExtensionCapability::RemoteAuthorityResolver => {
+            ExtensionCapability::RemoteAuthorityResolver
+        }
         EditorExtensionCapability::StatusBar => ExtensionCapability::StatusBar,
         EditorExtensionCapability::Command => ExtensionCapability::Command,
         EditorExtensionCapability::LanguageProvider => ExtensionCapability::LanguageProvider,
@@ -282,6 +390,7 @@ fn extension_capability(capability: EditorExtensionCapability) -> ExtensionCapab
 
 fn capability_name(capability: EditorExtensionCapability) -> &'static str {
     match capability {
+        EditorExtensionCapability::RemoteAuthorityResolver => "remoteAuthorityResolver",
         EditorExtensionCapability::StatusBar => "statusBar",
         EditorExtensionCapability::Command => "command",
         EditorExtensionCapability::LanguageProvider => "languageProvider",

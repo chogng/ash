@@ -24,6 +24,7 @@ class PrepareTests(unittest.TestCase):
             root = Path(temporary)
             for relative in (
                 "Cargo.toml",
+                "extension-sdk/index.js",
                 "build/source-layout.json",
                 "build/download/artifacts.py",
                 "build/prepare.py",
@@ -49,6 +50,14 @@ class PrepareTests(unittest.TestCase):
             (root / "build/lib/package-layout.json").write_text("updated layout")
             self.assertNotEqual(
                 first, prepare.package_input_digest(prepare.package_sources(root), {})
+            )
+            after_layout = prepare.package_input_digest(
+                prepare.package_sources(root), {}
+            )
+            (root / "extension-sdk/index.js").write_text("updated embedded SDK")
+            self.assertNotEqual(
+                after_layout,
+                prepare.package_input_digest(prepare.package_sources(root), {}),
             )
 
     def test_development_modes_and_remote_catalog_are_explicit(self) -> None:
@@ -300,6 +309,7 @@ class PrepareTests(unittest.TestCase):
                 "ash-package-store",
                 "ash-app-server",
                 "ash-remote",
+                "ash-remote-host",
                 "ash-remote-server",
                 "ash-exec-server",
                 "ash-app-server-daemon",

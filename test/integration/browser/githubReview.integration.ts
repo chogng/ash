@@ -4,7 +4,7 @@ import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.j
 import { GitHubSettingsModel } from '../../../src/ash/workbench/contrib/github/browser/githubSettingsModel.js';
 import { SettingsSectionRenderer } from '../../../src/ash/workbench/contrib/preferences/browser/settingsSectionRenderer.js';
 import { AccessibleViewProviderId, AccessibilityVerbositySettingId } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
-import { IRemoteAgentService } from '../../../src/ash/workbench/services/remote/common/remoteAgentService.js';
+import { IAppServerRemoteAgentService } from '../../../src/ash/workbench/services/remote/common/appServerRemoteAgentService.js';
 import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
 import type { EditorPane } from '../../../src/ash/workbench/browser/parts/editor/editorPane.js';
 import '../../../src/ash/platform/theme/common/sizes/baseSizes.js';
@@ -147,7 +147,7 @@ const accounts = resources.add(new Emitter<AccountState>());
 const loggedOut: { provider: string; accountId?: string; }[] = [];
 const browserHosts: (string | undefined)[] = [];
 const initialAccount: AccountState = { revision: 1n, accounts: [{ provider: 'github', accountId: 'alice', credentialRevision: 1n, status: 'ready' }, { provider: 'chatgpt-subscription', accountId: 'codex', displayName: 'Existing Codex account', credentialRevision: 1n, status: 'ready' }] };
-services.registerInstance(IRemoteAgentService, { connectionState: 'connected', connection: { kind: 'local', generation: 1 }, onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None, reconnect: async () => ({ kind: 'alreadyConnected' }), rollbackRuntime: async () => ({ kind: 'cancelled' }) });
+services.registerInstance(IAppServerRemoteAgentService, { connectionState: 'connected', connection: { kind: 'local', generation: 1 }, onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None, reconnect: async () => ({ kind: 'alreadyConnected' }), rollbackRuntime: async () => ({ kind: 'cancelled' }) });
 services.registerInstance(IAccountService, { onDidChangeAccounts: accounts.event, onDidCompleteLogin: Event.None, read: async () => initialAccount, startLogin: async () => { throw new Error('Not used'); }, cancelLogin: async () => { }, logout: async (provider, accountId) => { loggedOut.push({ provider, accountId }); transport.accountCatalog = transport.accountCatalog.filter(account => account.id !== accountId); accounts.fire({ revision: 2n, accounts: transport.accountCatalog.map(account => ({ provider: 'github', accountId: account.id, credentialRevision: BigInt(account.credentialRevision), status: 'ready' })) }); } });
 services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async host => { browserHosts.push(host); }, cancel: async () => { } });
 services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });

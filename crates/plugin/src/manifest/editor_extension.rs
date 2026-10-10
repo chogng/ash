@@ -116,6 +116,7 @@ impl EditorExtensionActivationEvent {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum EditorExtensionCapability {
+    RemoteAuthorityResolver,
     StatusBar,
     Command,
     LanguageProvider,

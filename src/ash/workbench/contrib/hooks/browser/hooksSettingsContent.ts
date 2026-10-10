@@ -22,7 +22,7 @@ import { IWorkspaceContextService } from '../../../../platform/workspace/common/
 import { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
-import { IRemoteAgentService } from '../../../services/remote/common/remoteAgentService.js';
+import { IAppServerRemoteAgentService } from '../../../services/remote/common/appServerRemoteAgentService.js';
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.HooksSettings,
@@ -85,7 +85,7 @@ export class HooksSettingsContent extends Disposable implements SettingsContent 
 		container: HTMLElement,
 		private readonly prepareChat: () => Promise<void>,
 		@IHooksService private readonly hooks: IHooksService,
-		@IRemoteAgentService private readonly remote: IRemoteAgentService,
+		@IAppServerRemoteAgentService private readonly remote: IAppServerRemoteAgentService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IChatSessionNavigationService private readonly chats: IChatSessionNavigationService,
 		@IEditorService private readonly editors: IEditorService,

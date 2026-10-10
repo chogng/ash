@@ -2,15 +2,18 @@ import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import { Emitter } from "../../../../../base/common/event.js";
 import { Disposable } from "../../../../../base/common/lifecycle.js";
-import type { AppServerConnectionState, IAppServerApi } from "../../../../../platform/agentHost/common/appServerApi.js";
+import { IAppServerApi, type AppServerConnectionState } from "../../../../../platform/agentHost/common/appServerApi.js";
 import type { RemoteConnectionState } from "../../../../../platform/remote/common/remote.js";
 import type { IRemoteAgentApi, RemoteAgentConnection } from "../../../../../platform/remote/common/remoteAgentApi.js";
+import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
 import { AppServerRemoteAgentService } from "../../browser/appServerRemoteAgentService.js";
 
 test("remote agent events supersede a stale initial App Server read", async () => {
 	using api = new TestAppServerApi();
+	using services = new InstantiationService();
+	services.registerInstance(IAppServerApi, api);
 	const states: RemoteConnectionState[] = [];
-	using service = new AppServerRemoteAgentService({ api, onReadError: error => { throw error; } });
+	using service = services.createInstance(AppServerRemoteAgentService, { onReadError: (error: unknown) => { throw error; } });
 	service.onDidChangeConnectionState(state => states.push(state));
 
 	api.emit("restarting");
@@ -24,8 +27,10 @@ test("remote agent events supersede a stale initial App Server read", async () =
 
 test("remote agent collapses backend states into the frontend connection lifecycle", async () => {
 	using api = new TestAppServerApi();
+	using services = new InstantiationService();
+	services.registerInstance(IAppServerApi, api);
 	const states: RemoteConnectionState[] = [];
-	using service = new AppServerRemoteAgentService({ api, onReadError: error => { throw error; } });
+	using service = services.createInstance(AppServerRemoteAgentService, { onReadError: (error: unknown) => { throw error; } });
 	service.onDidChangeConnectionState(state => states.push(state));
 
 	api.resolveInitial("starting");
@@ -40,8 +45,10 @@ test("remote agent collapses backend states into the frontend connection lifecyc
 
 test("remote agent suppresses pending reads and events after disposal", async () => {
 	using api = new TestAppServerApi();
+	using services = new InstantiationService();
+	services.registerInstance(IAppServerApi, api);
 	const states: RemoteConnectionState[] = [];
-	const service = new AppServerRemoteAgentService({ api, onReadError: error => { throw error; } });
+	const service = services.createInstance(AppServerRemoteAgentService, { onReadError: (error: unknown) => { throw error; } });
 	service.onDidChangeConnectionState(state => states.push(state));
 
 	await Promise.resolve();
@@ -56,8 +63,10 @@ test("remote agent suppresses pending reads and events after disposal", async ()
 
 test("remote agent metadata events supersede a stale connection read", async () => {
 	using api = new TestAppServerApi();
+	using services = new InstantiationService();
+	services.registerInstance(IAppServerApi, api);
 	using remoteApi = new TestRemoteAgentApi();
-	using service = new AppServerRemoteAgentService({ api, remoteApi, onReadError: error => { throw error; } });
+	using service = services.createInstance(AppServerRemoteAgentService, { remoteApi, onReadError: (error: unknown) => { throw error; } });
 	const connections: RemoteAgentConnection[] = [];
 	service.onDidChangeConnection(connection => connections.push(connection));
 
@@ -71,8 +80,10 @@ test("remote agent metadata events supersede a stale connection read", async () 
 
 test("remote agent delegates path-free runtime rollback only for SSH connections", async () => {
 	using api = new TestAppServerApi();
+	using services = new InstantiationService();
+	services.registerInstance(IAppServerApi, api);
 	using remoteApi = new TestRemoteAgentApi();
-	using service = new AppServerRemoteAgentService({ api, remoteApi, onReadError: error => { throw error; } });
+	using service = services.createInstance(AppServerRemoteAgentService, { remoteApi, onReadError: (error: unknown) => { throw error; } });
 	remoteApi.emit({ kind: "ssh", generation: 2, authority: "ssh+work-server", host: "work-server" });
 
 	assert.deepEqual(await service.reconnect(), { kind: "reconnected" });
@@ -125,3 +136,8 @@ async function settlePromises(): Promise<void> {
 	await Promise.resolve();
 	await Promise.resolve();
 }
+
+test("remote status construction rejects a missing App Server registration", () => {
+	using services = new InstantiationService();
+	assert.throws(() => services.createInstance(AppServerRemoteAgentService, {}), /Unknown service: AppServerApi/);
+});

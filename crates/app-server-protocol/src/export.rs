@@ -54,6 +54,7 @@ pub const GENERATED_TYPESCRIPT_HEADER: &str =
 struct ProtocolSchema {
     listen_info: AppServerListenInfo,
     web_listen_info: crate::WebListenInfo,
+    remote_tunnel_host_info: crate::RemoteTunnelHostInfo,
     web_session_info: crate::WebSessionInfo,
     web_workspace_list_request: crate::WebWorkspaceListRequest,
     web_workspace_list_result: crate::WebWorkspaceListResult,
@@ -296,6 +297,13 @@ pub fn typescript_files() -> Vec<(PathBuf, String)> {
         ));
     }
     files.push((
+        PathBuf::from("RemoteTunnelHostInfo.ts"),
+        format!(
+            "{GENERATED_TYPESCRIPT_HEADER}import type {{ WebListenInfo }} from './WebListenInfo.js';\nexport {}\n",
+            <crate::RemoteTunnelHostInfo as ts_rs::TS>::decl(&ts_rs::Config::default())
+        ),
+    ));
+    files.push((
         PathBuf::from("WebListenInfo.ts"),
         format!(
             "{GENERATED_TYPESCRIPT_HEADER}export {}\n",
@@ -387,6 +395,7 @@ fn generated_index() -> String {
          export {{ APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH }} from './protocol.js';\n\
          export type {{ JsonRpcError, JsonRpcFailure, JsonRpcId, JsonRpcNotification, JsonRpcRequest, JsonRpcResponse, JsonRpcSuccess, JsonRpcVersion }} from './protocol.js';\n\
          export type {{ AppServerListenInfo }} from './AppServerListenInfo.js';\n\
+         export type {{ RemoteTunnelHostInfo }} from './RemoteTunnelHostInfo.js';\n\
          export type {{ WebListenInfo }} from './WebListenInfo.js';\n\
          export type {{ WebSessionInfo }} from './WebSessionInfo.js';\n\
          export type {{ WebWorkspaceDirectory }} from './WebWorkspaceDirectory.js';\n\

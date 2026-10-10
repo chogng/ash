@@ -81,6 +81,7 @@ class RemotePackageTests(unittest.TestCase):
                     "ash-app-server",
                     "ash-app-server-daemon",
                     "ash-remote",
+                    "ash-remote-host",
                     "ash-remote-server",
                     "ash-exec-server",
                     "ash-code-mode-host",

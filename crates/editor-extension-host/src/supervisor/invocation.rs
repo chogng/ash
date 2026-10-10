@@ -230,6 +230,18 @@ impl ExtensionInvocationHandle {
                     break Ok(Some(response));
                 }
                 Ok(Some(crate::process::PendingMessage::ClientRequest(request))) => {
+                    let remote_authorized = !matches!(
+                        request.operation,
+                        extension_protocol::ExtensionClientOperation::OpenRemoteConnection { .. }
+                    ) || {
+                        let state = self
+                            .supervisor
+                            .inner
+                            .state
+                            .lock()
+                            .map_err(|_| ExtensionHostError::HostExited)?;
+                        state.incarnation == self.incarnation && state.registrations.iter().any(|registration| matches!(registration.kind, extension_protocol::RegistrationKind::RemoteAuthorityResolver { .. } | extension_protocol::RegistrationKind::RemoteConnectionResolver { .. }))
+                    };
                     let status_update = match &request.operation {
                         extension_protocol::ExtensionClientOperation::SetStatusBarEntries {
                             registration_id,
@@ -262,7 +274,9 @@ impl ExtensionInvocationHandle {
                         }
                         _ => StatusBarUpdate::Unchanged,
                     };
-                    let outcome = if matches!(status_update, StatusBarUpdate::Rejected) {
+                    let outcome = if !remote_authorized {
+                        Err(crate::HostFailure { code: crate::HostErrorCode::PermissionDenied, message: "Remote connection requests require an active Remote resolver registration".into() })
+                    } else if matches!(status_update, StatusBarUpdate::Rejected) {
                         Err(crate::HostFailure {
                             code: crate::HostErrorCode::RegistrationNotFound,
                             message: "status bar registration is not owned by this incarnation"

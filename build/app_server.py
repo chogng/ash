@@ -186,6 +186,7 @@ def build_package(args: argparse.Namespace) -> int:
         "ash-code-mode-host": args.code_mode_host_bin,
         "ash-js-extension-host": args.js_extension_host_bin,
         "ash-remote": args.remote_bin,
+        "ash-remote-host": None,
         "ash-remote-server": args.remote_server_bin,
         "ash-exec-server": args.exec_server_bin,
     }
@@ -254,6 +255,7 @@ def build_package(args: argparse.Namespace) -> int:
         node,
         bubblewrap,
         livekit=livekit,
+        remote_host_binary=binaries["ash-remote-host"],
         voice_host_binary=binaries["ash-voice-host"],
         collaboration_server_binary=binaries["ash-collaboration-server"],
         protocol_metadata=protocol_metadata,

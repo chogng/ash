@@ -42,6 +42,30 @@ immutable document snapshot and UTF-16 position, plus the invocation, trigger-ch
 context. Return `{ isIncomplete, items }`; item ranges use `line`/`character`, and insertion text can be plain
 text or a snippet. The existing editor suggestion list owns filtering, display and insertion.
 
+`workspace.registerRemoteConnectionResolver(prefix, resolver)` requires the `remoteAuthorityResolver`
+manifest capability and runs during activation. This is Ash’s saved-connection API; the manifest
+capability keeps its existing name; registrations use `remoteConnectionResolver` and invoke `resolveConnection`. Its `resolve(call, authority)` callback returns
+`{ connectionName }`, referencing an existing saved connection. The `ssh` prefix belongs to the
+built-in `extensions/remote-ssh` package. Both it and installable SDK extensions execute
+through the Rust V8 host and this SDK. Contributed prefixes are lowercase letters, digits and hyphens,
+start with a letter, and contain at most 64 characters. A connection intent uses `prefix+target`.
+This is distinct from an opened workspace's `ash-remote://ssh+host/path` identity.
+Duplicate prefixes reject the entire replacement rather than selecting a handler by load order.
+
+`call.workspace.openRemoteConnection(authority)` resolves the target and asks the initiating
+window to confirm the extension identity, SSH host and folder before opening a new window.
+The host rereads the saved catalog and rejects a target changed after confirmation. Cancellation,
+disconnect, stop and restart invalidate pending resolution; an accepted window belongs to the
+connection host and survives the initiating callback. Extensions receive neither SSH options,
+credentials, sockets nor permission to spawn processes. The example command connects through
+`saved+build`; first save a connection named `build` through Remote connection management.
+
+The saved selector supports SSH targets. Separately, the SDK provides the endpoint resolver contract described below. It does not implement VS Code's full proposed resolver API,
+a remote extension-host placement policy, or inbound Tunnels hosting. The built-in SSH package
+is compiled into the product host and starts without a workspace grant or workspace file access.
+Installed packages retain their workspace authorization and platform isolation requirements; they
+cannot request the internal product authority that admits the reserved `ssh` registration.
+
 `workspace.registerTextDocumentEvents(id, listener)` requires `languageProvider`. After activation the
 window sends open events for existing models, then ordered open/change/close events. Change ranges and
 offsets are UTF-16 and refer to the previous text; the accompanying snapshot contains the committed version.
@@ -72,12 +96,62 @@ package and grant its declared permissions separately. Installation records the 
 never enables or grants the package. Changes persist across restart; revoke, disable and uninstall
 retire running callbacks. A revision conflict requires reopening management with the latest state.
 
-The product JS process applies Seatbelt before extension code runs. It denies direct file access,
+On macOS, the product JS process applies Seatbelt before extension code runs. It denies direct file access,
 networking and child processes. Each instance has a 64 MiB V8 heap budget (with a bounded 4 MiB
 termination allowance) and a separate 64 MiB budget for external fixed-length ArrayBuffers. Small
 inline TypedArrays count against the heap. Cumulative external-buffer exhaustion retires the process;
 recovery creates a fresh authorized instance. Shared/resizable buffers and WebAssembly are unavailable.
-These are JavaScript storage budgets, not a whole-process OS memory limit. Other operating systems
-currently refuse product JS execution. Compatible Open VSX bundles have separate explicit execution
+These are JavaScript storage budgets, not a whole-process OS memory limit. Installed packages require
+OS confinement on macOS or 64-bit Windows. The immutable compiled SSH module also runs on other
+systems with the same V8 budgets and execution deadlines; it cannot load external package code. Compatible Open VSX bundles have separate explicit execution
 consent, documented in [the extension system](../docs/editor-extensions.md#06-已支持的-vs-code-javascript-接口).
 Independent executables do not gain JS admission. The trusted development launcher remains for explicitly trusted local verification.
+
+`workspace.registerRemoteAuthorityResolver(prefix, resolver)` registers a standard endpoint resolver.
+Its `resolve(authority, { resolveAttempt })` returns `new ResolvedAuthority(host, port, connectionToken)`
+or `new ManagedResolvedAuthority(makeConnection, connectionToken)`. This uses the same manifest capability,
+but a separate `remoteAuthorityResolver` registration and `resolveAuthority` invocation. The reserved
+`ssh` prefix remains with the saved selector.
+
+A Desktop window requested by `call.workspace.openRemoteConnection(authority)` starts a local extension
+control connection first, resolves the endpoint there, then initializes its remote App Server connection
+before starting Workbench services. The local V8 host remains available for managed connections and local
+extension calls. Each retry resolves again with a new attempt. Managed factories and sockets belong to the
+trusted local backend connection; replacing an address, closing that connection, or retiring its extension
+releases its resources without closing another window's sockets. Each owner may have four sockets, with
+1 MiB receive/write buffering per socket; the host caps managed factories and sockets at 128 each.
+
+`RemoteAuthorityResolverError.NotAvailable(message, handled)` and `.TemporarilyNotAvailable(message)`
+preserve their categories. A WebSocket endpoint speaks Ash's authenticated `/ash/app-server` JSON protocol;
+the token becomes the `ash-session` subprotocol. A managed factory supplies already authorized message
+passing and transports JSONL bytes; no Node/network capability is added to the V8 sandbox. A managed token
+is retained in connection data; the factory remains responsible for its carrier authentication.
+
+Resolvers may implement `getCanonicalURI(uri)`, receiving an immutable `Uri` with decoded components,
+`with`, `toString` and `toJSON`. Return a `Uri`, or `null`/`undefined` to retain the input identity; omitting
+the callback also retains identity. Desktop deduplicates queries per URI. Re-resolution, provider
+replacement, extension retirement and window disposal invalidate cached identities and pending queries.
+Workspace trust reads canonical remote folder paths on the same host; a canonical result cannot redirect
+directory authorization to another host or the local filesystem. Rust remains the directory-grant owner.
+
+Attach `ResolvedOptions` directly to the returned authority (for example with `Object.assign`). The
+platform resolver stores `extensionHostEnv`, `isTrusted` and the `{ id, providerId }` reference derived
+from `authenticationSessionForInitializingExtensions`. Access tokens, account details and scopes are
+not sent to the platform cache. Environment entries accept strings or `null` (removal), with at most
+128 entries, 128-character names and 8,192-character values. A negative trust hint restricts the UI
+trust view; a positive hint cannot grant directory capabilities. Empty remote windows can show a
+resolver-provided trust state after checking the canonical remote namespace still identifies that host;
+this never reads or grants the filesystem root. Desktop applies environment overrides before loading
+remote JS extension modules, exposing explicit values through `process.env`. Null entries remove values;
+the confined runtime inherits no shared backend environment and exposes no other Node process APIs.
+Each remote connection owns separate extension processes, reapplies options on reconnect, and stops
+those processes on close. The local resolver stays in the local host. Execution still requires packages
+installed, enabled and granted on the remote backend, plus applicable directory discovery permissions.
+Authentication references remain metadata: account-based extension synchronization and automatic
+installation are not implemented.
+
+This slice does not provide recursive `ExecServer`, remote extension-host deployment,
+or VS Code Server wire compatibility. Web keeps its existing
+launcher-authenticated connection flow. Inbound Tunnels hosting still needs a separate implementation.
+
+Granted local JS packages declaring `remoteAuthorityResolver` execute at profile scope so an empty remote window can resolve its endpoint. Other executables keep their workspace discovery gate. This does not grant disk or network access: every file read still requires the invoking connection's current directory authorization.
