@@ -29,7 +29,7 @@ export class Debugger {
 		const { name, type, request, debugAdapter, preLaunchTask, postDebugTask, ...args } = execution;
 		// Substitution crosses into a process boundary. A command result must not turn
 		// a previously valid executable into an empty or malformed process argument.
-		if (debugAdapter && !debugAdapter.connection && !debugAdapter.inline && (!debugAdapter.program.trim() || [debugAdapter.program, ...debugAdapter.arguments].some(value => value.includes('\0')))) {
+		if (debugAdapter && debugAdapter.connection === undefined && debugAdapter.inline === undefined && (!debugAdapter.program.trim() || [debugAdapter.program, ...debugAdapter.arguments].some(value => value.includes('\0')))) {
 			throw new Error(localize('debug.invalidResolvedAdapter', 'The resolved debug adapter executable is empty or contains an invalid process argument.'));
 		}
 		return {

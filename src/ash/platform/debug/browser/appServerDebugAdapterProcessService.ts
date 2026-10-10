@@ -10,7 +10,7 @@ export class AppServerDebugAdapterProcessService implements IDebugAdapterProcess
 	constructor(private readonly connection: AppServerProtocolClient, private readonly appServer: IAppServerApi) { }
 
 	async start(options: IDebugAdapterProcessStartOptions): Promise<string> {
-		return (await appServerRequest(this.connection, "debug/adapter/start", { program: options.program, arguments: [...options.arguments] })).sessionId;
+		return (await appServerRequest(this.connection, "debug/adapter/start", { ...options, arguments: [...options.arguments] })).sessionId;
 	}
 
 	send(sessionId: string, message: unknown): Promise<void> {

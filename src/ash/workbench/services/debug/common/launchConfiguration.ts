@@ -45,7 +45,10 @@ function parseConfiguration(value: unknown, index: number, resolveAdapter: Debug
 	const postDebugTask = optionalBoundedString(input.postDebugTask, `configurations[${index}].postDebugTask`, 256);
 	const launchArguments = Object.fromEntries(Object.entries(input).filter(([key]) => !["name", "type", "request", "debugAdapter", "preLaunchTask", "postDebugTask"].includes(key)));
 	ensureJsonCompatible(launchArguments, `configurations[${index}]`, 0);
-	return Object.freeze({ id: `launch:${index}:${stableId(name)}`, name, type, request, adapterExplicit: input.debugAdapter !== undefined || input.debugServer !== undefined, ...(adapter ? { adapter: adapter.connection || adapter.inline ? adapter : Object.freeze({ ...adapter, arguments: Object.freeze([...adapter.arguments]), ...(adapter.env === undefined ? {} : { env: Object.freeze({ ...adapter.env }) }) }) } : {}), arguments: Object.freeze(launchArguments), ...(preLaunchTask ? { preLaunchTask } : {}), ...(postDebugTask ? { postDebugTask } : {}) });
+	const frozenAdapter = adapter && adapter.connection === undefined && adapter.inline === undefined
+		? Object.freeze({ ...adapter, arguments: Object.freeze([...adapter.arguments]), ...(adapter.env === undefined ? {} : { env: Object.freeze({ ...adapter.env }) }) })
+		: adapter;
+	return Object.freeze({ id: `launch:${index}:${stableId(name)}`, name, type, request, adapterExplicit: input.debugAdapter !== undefined || input.debugServer !== undefined, ...(frozenAdapter ? { adapter: frozenAdapter } : {}), arguments: Object.freeze(launchArguments), ...(preLaunchTask ? { preLaunchTask } : {}), ...(postDebugTask ? { postDebugTask } : {}) });
 }
 
 function parseAdapter(value: unknown, index: number): IResolvedDebugConfiguration["adapter"] {

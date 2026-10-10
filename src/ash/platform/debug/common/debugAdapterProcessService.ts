@@ -2,11 +2,29 @@ import { type IDisposable } from "../../../base/common/lifecycle.js";
 import { type AppServerConnectionState } from "../../agentHost/common/appServerApi.js";
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
 
-export interface IDebugAdapterProcessStartOptions {
+export type DebugAdapterConnection = {
+	readonly type: 'server';
+	readonly port: number;
+	readonly host?: string;
+} | {
+	readonly type: 'namedPipe';
+	readonly path: string;
+};
+
+export type IDebugAdapterProcessStartOptions = {
 	readonly dirId?: string;
-	readonly program: string;
 	readonly arguments: readonly string[];
-}
+} & ({
+	readonly program: string;
+	readonly connection?: never;
+	readonly cwd?: string;
+	readonly env?: Readonly<Record<string, string | null>>;
+} | {
+	readonly connection: DebugAdapterConnection;
+	readonly program?: never;
+	readonly cwd?: never;
+	readonly env?: never;
+});
 
 export interface IDebugAdapterProcessMessage {
 	readonly sequence: number;
