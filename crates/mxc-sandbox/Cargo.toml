@@ -33,8 +33,13 @@ ash-async-utils = { workspace = true }
 network-proxy = { workspace = true, features = ["server"] }
 tempfile = { workspace = true }
 
-[lints]
-workspace = true
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+libc = { workspace = true }
+
+# The library forbids unsafe code. Only the macOS test binary's syscall module
+# may override this deny to exercise the platform ABI directly.
+[lints.rust]
+unsafe_code = "deny"
 
 [[test]]
 name = "pty"

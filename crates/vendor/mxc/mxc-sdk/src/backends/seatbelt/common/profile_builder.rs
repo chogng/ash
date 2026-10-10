@@ -132,6 +132,7 @@ const BASELINE_ALLOW: &str = "\
     (global-name \"com.apple.system.logger\")
     (global-name \"com.apple.distributed_notifications@Uv3\")
     (global-name \"com.apple.CoreServices.coreservicesd\")
+    (global-name \"com.apple.lsd.mapdb\")
     (global-name \"com.apple.FSEvents\"))
 ";
 
