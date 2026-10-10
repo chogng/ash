@@ -783,6 +783,19 @@ print('fcntl probes completed')
     #[test]
     fn restricted_filesystems_deny_mutating_fcntls_through_readonly_descriptors() {
         use std::os::macos::fs::MetadataExt;
+        // /usr/bin/python3 is an Xcode launcher. Its SDK-cache lookup can
+        // block inside Seatbelt before Python reaches the syscall probe.
+        // Resolve outside the sandbox and use the same interpreter for the
+        // positive control and all restricted executions.
+        let selected = std::process::Command::new("/usr/bin/xcrun")
+            .args(["--find", "python3"])
+            .output()
+            .unwrap();
+        assert!(selected.status.success(), "{selected:?}");
+        let python = String::from_utf8(selected.stdout).unwrap();
+        let python = python.trim();
+        assert!(std::path::Path::new(python).is_absolute(), "{python:?}");
+        assert_ne!(python, "/usr/bin/python3", "xcrun returned the launcher");
         #[derive(Debug, PartialEq, Eq)]
         struct Snapshot {
             bytes: Vec<u8>,
@@ -824,7 +837,7 @@ print('fcntl probes completed')
             // Retain the file until after verification so closing the helper
             // does not release its unused preallocation beyond EOF.
             let donor = fs::File::create(temp.path().join("work/donor")).unwrap();
-            let prepared = std::process::Command::new("/usr/bin/python3")
+            let prepared = std::process::Command::new(python)
                 .args(["-c", FCNTL_PROBE, "prepare"])
                 .current_dir(temp.path().join("work"))
                 .output()
@@ -835,7 +848,7 @@ print('fcntl probes completed')
             let arguments = ["-c".into(), FCNTL_PROBE.into()];
             let (status, stdout, stderr) = match access {
                 None => {
-                    let output = std::process::Command::new("/usr/bin/python3")
+                    let output = std::process::Command::new(python)
                         .args(&arguments)
                         .current_dir(temp.path().join("work"))
                         .output()
@@ -871,12 +884,15 @@ print('fcntl probes completed')
                         let dir = Dir::open_local(temp.path().join("work")).unwrap();
                         (SandboxScope::single(dir), arguments)
                     };
+                    eprintln!("fcntl probe starting: {access:?}, {python}");
+                    let started = Instant::now();
                     let output = run(
                         &scope,
                         SandboxPolicy::new(access, NetworkAccess::Denied),
-                        "/usr/bin/python3",
+                        python,
                         &arguments,
                     );
+                    eprintln!("fcntl probe completed: {access:?}, {:?}", started.elapsed());
                     (output.exit_code, output.stdout, output.stderr)
                 }
             };
