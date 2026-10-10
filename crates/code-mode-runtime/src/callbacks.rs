@@ -9,7 +9,7 @@ pub(super) fn tool_callback(
     args: v8::FunctionCallbackArguments,
     mut retval: v8::ReturnValue<v8::Value>,
 ) {
-    let Ok(index) = args.data().to_rust_string_lossy(scope).parse::<usize>() else {
+    let Ok(index) = v8::Local::<v8::Uint32>::try_from(args.data()) else {
         throw_type_error(scope, "invalid tool callback data");
         return;
     };
@@ -48,7 +48,7 @@ pub(super) fn tool_callback(
             throw_type_error(scope, "Code Mode nested tool call limit exceeded");
             return;
         }
-        let Some(tool) = state.enabled_tools.get(index) else {
+        let Some(tool) = state.enabled_tools.get(index.value() as usize) else {
             throw_type_error(scope, "tool callback data is out of range");
             return;
         };
@@ -123,7 +123,7 @@ pub(super) fn text_callback(
         throw_type_error(scope, &error);
         return;
     }
-    retval.set(v8::undefined(scope).into());
+    retval.set_undefined();
 }
 
 pub(super) fn image_callback(
@@ -162,7 +162,7 @@ pub(super) fn image_callback(
         throw_type_error(scope, &error);
         return;
     }
-    retval.set(v8::undefined(scope).into());
+    retval.set_undefined();
 }
 
 pub(super) fn store_callback(
@@ -239,7 +239,7 @@ pub(super) fn load_callback(
         .and_then(|state| state.stored_values.get(&key))
         .cloned();
     let Some(value) = value else {
-        retval.set(v8::undefined(scope).into());
+        retval.set_undefined();
         return;
     };
     match json_to_v8(scope, &value) {
@@ -297,7 +297,7 @@ pub(super) fn notify_callback(
         throw_type_error(scope, &error);
         return;
     }
-    retval.set(v8::undefined(scope).into());
+    retval.set_undefined();
 }
 
 pub(super) fn yield_callback(
@@ -340,17 +340,4 @@ pub(super) fn exit_callback(
     {
         let _ = script.run(scope);
     }
-}
-
-pub(super) fn helper_function<'s, F>(
-    scope: &mut v8::PinScope<'s, '_>,
-    callback: F,
-) -> Result<v8::Local<'s, v8::Function>, String>
-where
-    F: v8::MapFnTo<v8::FunctionCallback>,
-{
-    v8::FunctionTemplate::builder(callback)
-        .build(scope)
-        .get_function(scope)
-        .ok_or_else(|| "failed to create Code Mode helper function".into())
 }

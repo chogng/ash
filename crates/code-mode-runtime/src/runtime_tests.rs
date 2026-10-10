@@ -168,6 +168,141 @@ fn invokes_only_projected_tools() {
     assert_eq!(calls[0].input, serde_json::json!({"input": true}));
 }
 
+#[test]
+fn all_tools_preserves_metadata_and_object_properties() {
+    let invoker = std::sync::Arc::new(RecordingInvoker::default());
+    let (runtime, session_id) = runtime(&invoker);
+    let mut exec = request(
+        &session_id,
+        r#"
+        if (!Array.isArray(ALL_TOOLS)) throw Error('metadata must be an array');
+        for (const tool of ALL_TOOLS) {
+            if (Object.getPrototypeOf(tool) !== Object.prototype) {
+                throw Error('metadata must be an ordinary object');
+            }
+            if (Object.keys(tool).join(',') !== 'name,toolName,description,inputSchema') {
+                throw Error('metadata fields or order changed');
+            }
+            for (const key of Object.keys(tool)) {
+                const descriptor = Object.getOwnPropertyDescriptor(tool, key);
+                if (!descriptor.writable || !descriptor.enumerable || !descriptor.configurable) {
+                    throw Error('metadata field attributes changed');
+                }
+            }
+        }
+        const schema = ALL_TOOLS[0].inputSchema;
+        if (!Object.hasOwn(schema, '__proto__') || Object.getPrototypeOf(schema) !== Object.prototype) {
+            throw Error('schema keys must remain data');
+        }
+        text(ALL_TOOLS);
+        "#,
+    );
+    exec.enabled_tools[0].description = "工具\"\n\0🦀".into();
+    exec.enabled_tools[0].input_schema = serde_json::json!({
+        "type": "object",
+        "__proto__": {"unexpected": true},
+        "properties": {"value": {"enum": [null, true, 42, "文本\"\n\0"]}},
+    });
+    exec.enabled_tools.push(EnabledTool {
+        global_name: "other".into(),
+        tool_name: "other_tool".into(),
+        description: "Second tool".into(),
+        kind: CodeModeToolKind::Function,
+        input_schema: serde_json::json!({"type": "string"}),
+    });
+    let expected = serde_json::json!([
+        {
+            "name": "echo",
+            "toolName": "echo_tool",
+            "description": exec.enabled_tools[0].description,
+            "inputSchema": exec.enabled_tools[0].input_schema,
+        },
+        {
+            "name": "other",
+            "toolName": "other_tool",
+            "description": "Second tool",
+            "inputSchema": {"type": "string"},
+        },
+    ]);
+    let started = runtime.execute(exec).unwrap();
+    let RuntimeResponse::Result {
+        content_items,
+        error_text,
+        ..
+    } = wait_for_result(&runtime, started.cell_id)
+    else {
+        panic!("expected result");
+    };
+    assert_eq!(error_text, None);
+    let [OutputItem::Text { text }] = content_items.as_slice() else {
+        panic!("expected metadata output");
+    };
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(text).unwrap(),
+        expected
+    );
+}
+
+#[test]
+fn all_tools_is_an_empty_array_when_no_tools_are_enabled() {
+    let invoker = std::sync::Arc::new(RecordingInvoker::default());
+    let (runtime, session_id) = runtime(&invoker);
+    let mut exec = request(&session_id, "text(ALL_TOOLS);");
+    exec.enabled_tools.clear();
+    let started = runtime.execute(exec).unwrap();
+    let RuntimeResponse::Result {
+        content_items,
+        error_text,
+        ..
+    } = wait_for_result(&runtime, started.cell_id)
+    else {
+        panic!("expected result");
+    };
+    assert_eq!(error_text, None);
+    assert_eq!(content_items, vec![OutputItem::Text { text: "[]".into() }]);
+}
+
+#[test]
+fn tools_keep_their_binding_when_called_with_another_receiver() {
+    let invoker = std::sync::Arc::new(RecordingInvoker::default());
+    let (runtime, session_id) = runtime(&invoker);
+    let mut exec = request(
+        &session_id,
+        r#"
+        if (Object.getPrototypeOf(tools) !== null || 'hasOwnProperty' in tools) {
+            throw Error('tool namespace must not inherit Object properties');
+        }
+        const echo = tools.echo;
+        const other = tools.toString;
+        await other.call(tools.echo, {input: 2});
+        await echo.call(tools.toString, {input: 1});
+        "#,
+    );
+    exec.enabled_tools.push(EnabledTool {
+        global_name: "toString".into(),
+        tool_name: "other_tool".into(),
+        description: "Another tool".into(),
+        kind: CodeModeToolKind::Function,
+        input_schema: serde_json::json!({"type": "object"}),
+    });
+    let started = runtime.execute(exec).unwrap();
+    assert!(matches!(
+        wait_for_result(&runtime, started.cell_id),
+        RuntimeResponse::Result {
+            error_text: None,
+            ..
+        }
+    ));
+    let calls = invoker.calls.lock().unwrap();
+    assert_eq!(calls.len(), 2);
+    assert_eq!(calls[0].global_name, "toString");
+    assert_eq!(calls[0].tool_name.as_str(), "other_tool");
+    assert_eq!(calls[0].input, serde_json::json!({"input": 2}));
+    assert_eq!(calls[1].global_name, "echo");
+    assert_eq!(calls[1].tool_name.as_str(), "echo_tool");
+    assert_eq!(calls[1].input, serde_json::json!({"input": 1}));
+}
+
 struct ConcurrentInvoker {
     active: AtomicUsize,
     maximum_active: AtomicUsize,

@@ -1,91 +1,91 @@
 {
   "schemaVersion": 1,
   "runtime": "rusty-v8",
-  "version": "150.4.0",
+  "version": "152.2.0",
   "profile": "ptrcomp_sandbox_release",
   "source": {
     "repository": "https://github.com/openai/codex",
-    "release": "rusty-v8-v150.4.0"
+    "release": "rusty-v8-v152.2.0"
   },
   "artifacts": {
     "aarch64-apple-darwin": {
       "archive": {
         "name": "librusty_v8_ptrcomp_sandbox_release_aarch64-apple-darwin.a.gz",
-        "sha256": "00adbb48798848c77550441c68673a5e8529b8e1b73eabcdee232cb39b40f4a1"
+        "sha256": "feab9ae0384bebaa99c1d000654462c9d42123d587185c7876aaeef7d76ff749"
       },
       "binding": {
         "name": "src_binding_ptrcomp_sandbox_release_aarch64-apple-darwin.rs",
-        "sha256": "ca5adf0cf89c9a70ad460ae73648b2fe89b74aa113b3cb7f757b6a02b758394f"
+        "sha256": "b9d5652ebca515eb2bf4c2ee4a6551b2567117b5aa720f430d2032616dd7e3b5"
       }
     },
     "x86_64-apple-darwin": {
       "archive": {
         "name": "librusty_v8_ptrcomp_sandbox_release_x86_64-apple-darwin.a.gz",
-        "sha256": "e0d9bb64e8b3a034c2930c83972f3f35760211148342fa0407b38250ef330856"
+        "sha256": "bfe19d9b633b61d99780ece89690427fef4b985c6b4196536eaf94571166fc24"
       },
       "binding": {
         "name": "src_binding_ptrcomp_sandbox_release_x86_64-apple-darwin.rs",
-        "sha256": "ca5adf0cf89c9a70ad460ae73648b2fe89b74aa113b3cb7f757b6a02b758394f"
+        "sha256": "b9d5652ebca515eb2bf4c2ee4a6551b2567117b5aa720f430d2032616dd7e3b5"
       }
     },
     "aarch64-unknown-linux-gnu": {
       "archive": {
         "name": "librusty_v8_ptrcomp_sandbox_release_aarch64-unknown-linux-gnu.a.gz",
-        "sha256": "d1517eed405468537029b005d5fe997ec74d5c8d351f916b3a6df20b7d2811ba"
+        "sha256": "1054464a623006cdf5e25ae20877002bf3edb9a2c2f3e64f44a8714742b15e87"
       },
       "binding": {
         "name": "src_binding_ptrcomp_sandbox_release_aarch64-unknown-linux-gnu.rs",
-        "sha256": "7727826ae479bdb645e807239fb12d1f8e2e23de7a6cf16f5ee592690d1d8506"
+        "sha256": "3e4d5fecdbe0f98a6017e69d7ca82519a77fb032c5eb5e4cdbecdd3e2ec519d5"
       }
     },
     "x86_64-unknown-linux-gnu": {
       "archive": {
         "name": "librusty_v8_ptrcomp_sandbox_release_x86_64-unknown-linux-gnu.a.gz",
-        "sha256": "a35c75d1f26e6a983885a45b33490a4ebe54f05050568b32b89cfb421b30b583"
+        "sha256": "b3b490f2aa809eda7f6ac727f851fb00ce8355be72827577cfaac28c7137dbcd"
       },
       "binding": {
         "name": "src_binding_ptrcomp_sandbox_release_x86_64-unknown-linux-gnu.rs",
-        "sha256": "7727826ae479bdb645e807239fb12d1f8e2e23de7a6cf16f5ee592690d1d8506"
+        "sha256": "3e4d5fecdbe0f98a6017e69d7ca82519a77fb032c5eb5e4cdbecdd3e2ec519d5"
       }
     },
     "aarch64-unknown-linux-musl": {
       "archive": {
         "name": "librusty_v8_ptrcomp_sandbox_release_aarch64-unknown-linux-musl.a.gz",
-        "sha256": "d258efd9c17b67077013f110302ff148fd11428cc4804fcb5c9ad05e3e634cb4"
+        "sha256": "1a60f36a3dd8778802e6980668c4d65a3c7305d85a5d2debf466d9aa0daadd75"
       },
       "binding": {
         "name": "src_binding_ptrcomp_sandbox_release_aarch64-unknown-linux-musl.rs",
-        "sha256": "7727826ae479bdb645e807239fb12d1f8e2e23de7a6cf16f5ee592690d1d8506"
+        "sha256": "3e4d5fecdbe0f98a6017e69d7ca82519a77fb032c5eb5e4cdbecdd3e2ec519d5"
       }
     },
     "x86_64-unknown-linux-musl": {
       "archive": {
         "name": "librusty_v8_ptrcomp_sandbox_release_x86_64-unknown-linux-musl.a.gz",
-        "sha256": "d06e08bcbf45a90cfeac8a4d322c7288775cb5e3609ca703ea312b155174e46a"
+        "sha256": "2f2679773a12576dc6b89b0f7d70e8190e5aea8a57f8f6364efaffdd1497d0e7"
       },
       "binding": {
         "name": "src_binding_ptrcomp_sandbox_release_x86_64-unknown-linux-musl.rs",
-        "sha256": "7727826ae479bdb645e807239fb12d1f8e2e23de7a6cf16f5ee592690d1d8506"
+        "sha256": "3e4d5fecdbe0f98a6017e69d7ca82519a77fb032c5eb5e4cdbecdd3e2ec519d5"
       }
     },
     "aarch64-pc-windows-msvc": {
       "archive": {
         "name": "rusty_v8_ptrcomp_sandbox_release_aarch64-pc-windows-msvc.lib.gz",
-        "sha256": "54722842af36b74248c403ff531254efac6ff65d281198bab0c6350fc1188ad4"
+        "sha256": "daf327876f7753a94b3b05d6d64776258def3ae67503ac75db9c35c6deaa28a5"
       },
       "binding": {
         "name": "src_binding_ptrcomp_sandbox_release_aarch64-pc-windows-msvc.rs",
-        "sha256": "dabf78ba1faac127660db9862b1d0354175c71b8db2d4fcb5bacbd9c93576b16"
+        "sha256": "572ed16ff09bb7944f4b35c659ff62dcd3faf43a0351e3f94f011e01b2f92a62"
       }
     },
     "x86_64-pc-windows-msvc": {
       "archive": {
         "name": "rusty_v8_ptrcomp_sandbox_release_x86_64-pc-windows-msvc.lib.gz",
-        "sha256": "732ec5da4243aa166799780c8519a5eea6f32f6e47657a323342794dc3c239d6"
+        "sha256": "cd829415695b30ad61b306b23a381e11276f14bb0b46815ac5ed8b96711d002d"
       },
       "binding": {
         "name": "src_binding_ptrcomp_sandbox_release_x86_64-pc-windows-msvc.rs",
-        "sha256": "dabf78ba1faac127660db9862b1d0354175c71b8db2d4fcb5bacbd9c93576b16"
+        "sha256": "572ed16ff09bb7944f4b35c659ff62dcd3faf43a0351e3f94f011e01b2f92a62"
       }
     }
   }

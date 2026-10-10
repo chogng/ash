@@ -18,6 +18,11 @@ class SourceRunnerTests(unittest.TestCase):
         boundary = patch("build.code.build.generate_protocol", return_value=False)
         boundary.start()
         self.addCleanup(boundary.stop)
+        packages = patch(
+            "build.code.build.cargo_command_packages", return_value={"sherpa-onnx-sys"}
+        )
+        self.packages = packages.start()
+        self.addCleanup(packages.stop)
         cache = patch(
             "build.code.build.leased_cache",
             side_effect=lambda _root, **_options: nullcontext(),
@@ -268,6 +273,27 @@ class SourceRunnerTests(unittest.TestCase):
 
             self.assertEqual(build.build_binaries(["ash"], {}), (101, {}))
             self.assertEqual(stderr.getvalue(), "compile failed\n")
+
+    def test_cli_only_build_prepares_speech_without_v8(self):
+        self.packages.return_value = {"sherpa-onnx-sys"}
+        with (
+            patch.object(build, "default_target", return_value="aarch64-apple-darwin"),
+            patch.object(build, "resolve_v8_cargo_env") as v8,
+            patch.object(
+                build,
+                "resolve_sherpa_cargo_env",
+                return_value={"SHERPA_ONNX_LIB_DIR": "speech"},
+            ) as speech,
+            patch.object(build.subprocess, "Popen") as popen,
+        ):
+            process = popen.return_value.__enter__.return_value
+            process.stdout = iter([])
+            process.wait.return_value = 101
+            self.assertEqual((101, {}), build.build_binaries(["ash"], {}))
+        v8.assert_not_called()
+        speech.assert_called_once()
+        self.assertEqual("speech", popen.call_args.kwargs["env"]["SHERPA_ONNX_LIB_DIR"])
+        self.packages.assert_called_once()
 
     def test_development_binaries_include_platform_children(self) -> None:
         self.assertNotIn(

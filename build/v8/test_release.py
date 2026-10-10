@@ -1,8 +1,10 @@
 """Exercise producer outputs, version gates and complete-release verification."""
 
 import gzip
+import hashlib
 import json
 import os
+import base64
 import subprocess
 import sys
 import tempfile
@@ -18,8 +20,8 @@ from build.v8.release import (
     SOURCE_RELEASE_PAIR,
     bazel_provenance,
     checksum_name,
-    prepare_compiler,
     provenance_name,
+    prepare_windows_tools,
     release_metadata,
     stage_bazel_pair,
     stage_outputs,
@@ -72,9 +74,34 @@ class V8ReleaseTests(unittest.TestCase):
         (self.upstream / "rust-toolchain.toml").write_text(
             '[toolchain]\nchannel = "1.91.0"\n'
         )
+        source_path = self.root / "third_party/v8/source-lock.json"
+        source = json.loads(source_path.read_text())
+        update = self.upstream / "tools/clang/scripts/update.py"
+        update.parent.mkdir(parents=True)
+        update.write_text(f"PACKAGE_VERSION = {source['clangRevision']!r}\n")
+        patch_name = "v8_array_sort_elements_kind.patch"
+        patch = self.root / "third_party/v8/patches" / patch_name
+        patch.parent.mkdir(parents=True)
+        patch.write_text(
+            "--- a/orig/v8/base.txt\n+++ b/mod/v8/base.txt\n@@ -1 +1 @@\n-before\n+after\n",
+            newline="\n",
+        )
+        source["patches"] = {patch_name: hashlib.sha256(patch.read_bytes()).hexdigest()}
+        (self.upstream / "v8").mkdir()
+        (self.upstream / "v8/base.txt").write_text("after\n")
+        (self.upstream / ".gitmodules").write_text(
+            '[submodule "tools/win"]\npath = tools/win\n'
+            "url = https://example.invalid/tools/win\nupdate = none\n"
+        )
         for arguments in (
             ["init", "--quiet"],
             ["add", "."],
+            [
+                "update-index",
+                "--add",
+                "--cacheinfo",
+                f"160000,{source['windowsTools']['revision']},tools/win",
+            ],
             [
                 "-c",
                 "user.name=V8 test",
@@ -87,55 +114,70 @@ class V8ReleaseTests(unittest.TestCase):
             ],
         ):
             subprocess.run(["git", "-C", str(self.upstream), *arguments], check=True)
-        source_path = self.root / "third_party/v8/source-lock.json"
-        source = json.loads(source_path.read_text())
         source["revision"] = subprocess.check_output(
             ["git", "-C", str(self.upstream), "rev-parse", "HEAD"], text=True
         ).strip()
+        for name in source["windowsTools"]["files"]:
+            path = self.upstream / "tools/win" / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(f"fixture {name}".encode())
+            source["windowsTools"]["files"][name]["sha256"] = hashlib.sha256(
+                path.read_bytes()
+            ).hexdigest()
         source_path.write_text(json.dumps(source))
-        compiler = self.upstream / "third_party/llvm-build/Release+Asserts"
-        compiler.mkdir(parents=True)
-        for stamp in ("cr_build_revision",):
-            (compiler / stamp).write_text(source["clangRevision"])
         self.dist = self.root / "dist"
+
+    def test_skipped_windows_submodule_uses_verified_visualizer_inputs(self):
+        source_path = self.root / "third_party/v8/source-lock.json"
+        source = json.loads(source_path.read_text())
+        pin = source["windowsTools"]
+        cache = self.root / "third_party/.cache/v8/windows-tools" / pin["revision"]
+        cache.mkdir(parents=True)
+        for name, entry in pin["files"].items():
+            path = self.upstream / "tools/win" / name
+            encoded = base64.b64encode(path.read_bytes())
+            (cache / (Path(name).name + ".base64")).write_bytes(encoded)
+            entry["base64Sha256"] = hashlib.sha256(encoded).hexdigest()
+            path.unlink()
+        source_path.write_text(json.dumps(source))
+        with self.assertRaisesRegex(ValueError, "visualizers"):
+            upstream_toolchain(self.upstream, self.version, self.root)
+        prepare_windows_tools(self.upstream, self.root)
+        self.assertEqual(
+            "1.91.0", upstream_toolchain(self.upstream, self.version, self.root)
+        )
+        # A cached transport blob cannot authorize different decoded content.
+        pin["files"]["DebugVisualizers/absl.natvis"]["sha256"] = "0" * 64
+        source_path.write_text(json.dumps(source))
+        with self.assertRaisesRegex(ValueError, "content differs"):
+            prepare_windows_tools(self.upstream, self.root)
+        pin["files"]["DebugVisualizers/absl.natvis"]["sha256"] = hashlib.sha256(
+            (self.upstream / "tools/win/DebugVisualizers/absl.natvis").read_bytes()
+        ).hexdigest()
+        source_path.write_text(json.dumps(source))
+        (self.upstream / "tools/win/DebugVisualizers/absl.natvis").write_text("corrupt")
+        with self.assertRaisesRegex(ValueError, "visualizers"):
+            upstream_toolchain(self.upstream, self.version, self.root)
+        pin["revision"] = "0" * 40
+        source_path.write_text(json.dumps(source))
+        with self.assertRaisesRegex(ValueError, "submodules"):
+            upstream_toolchain(self.upstream, self.version, self.root)
 
     def write_source_output(self, target):
         source = json.loads((self.root / "third_party/v8/source-lock.json").read_text())
-        platform = (
-            "win32"
-            if target.endswith("msvc")
-            else "darwin"
-            if target.endswith("darwin")
-            else "linux"
-        )
-        (
-            self.upstream
-            / "third_party/llvm-build/Release+Asserts/ash_binding_compiler_version"
-        ).write_text(source["bindingCompiler"][platform]["version"])
         gn_out = self.upstream / "target" / target / "release" / "gn_out"
+        compiler = gn_out.parent / "clang"
+        (compiler / "bin").mkdir(parents=True)
+        for stamp in ("cr_build_revision", "libclang_revision"):
+            (compiler / stamp).write_text(source["clangRevision"])
+        (compiler / "bin/libclang.dll").write_bytes(b"fixture library")
         (gn_out / "obj").mkdir(parents=True)
         (gn_out / "args.gn").write_text(
             "v8_enable_sandbox = true\nv8_enable_pointer_compression = true\n"
             "v8_enable_external_code_space = true\nuse_custom_libcxx = true\n"
             "v8_enable_partition_alloc = false\nis_debug = false\n"
+            f"clang_base_path = {json.dumps(str(compiler))}\n"
         )
-        if target.endswith("-linux-gnu"):
-            sdk = self.root / "sysroots" / target
-            if target == "aarch64-unknown-linux-gnu":
-                sdk = sdk / "debian_bullseye_arm64-sysroot"
-            sdk.mkdir(parents=True, exist_ok=True)
-            (sdk / ".ash-source-lock-sha256").write_text(
-                source["gnuSysroots"][target]["sha256"]
-            )
-            with (gn_out / "args.gn").open("a") as args:
-                if target == "aarch64-unknown-linux-gnu":
-                    args.write(
-                        f"target_sysroot_dir = {json.dumps(str(sdk.parent))}\nuse_sysroot = true\n"
-                    )
-                else:
-                    args.write(
-                        f"sysroot = {json.dumps(str(sdk))}\nuse_sysroot = true\n"
-                    )
         library = "rusty_v8.lib" if target.endswith("msvc") else "librusty_v8.a"
         (gn_out / "obj" / library).write_bytes(b"archive for " + target.encode())
         (gn_out / "src_binding.rs").write_text("pub const V8_VALUE: u32 = 1;\n")
@@ -335,6 +377,8 @@ class V8ReleaseTests(unittest.TestCase):
 
     def test_stage_matches_consumer_names_and_produces_stable_compressed_bytes(self):
         for target, pair in load_v8_lock().items():
+            if target in BAZEL_PLATFORMS:
+                continue
             with self.subTest(target=target):
                 self.write_source_output(target)
                 outputs = stage_pair(self.upstream, target, self.dist, self.root)
@@ -532,77 +576,48 @@ class V8ReleaseTests(unittest.TestCase):
             verify_release(self.dist, "chogng/ash", self.root)
         self.assertFalse((self.dist / "runtime-lock.json").exists())
 
-    def test_stage_rejects_a_different_binding_compiler(self):
-        target = "x86_64-unknown-linux-gnu"
-        self.write_source_output(target)
-        stamp = (
-            self.upstream
-            / "third_party/llvm-build/Release+Asserts/ash_binding_compiler_version"
-        )
-        stamp.write_text("23.0.0")
-        with self.assertRaisesRegex(ValueError, "pinned binding compiler"):
+    def test_stage_rejects_mismatched_compiler_and_libclang(self):
+        target = "x86_64-pc-windows-msvc"
+        gn_out = self.write_source_output(target)
+        compiler = gn_out.parent / "clang"
+        for stamp, message in (
+            ("cr_build_revision", r"pinned C\+\+ compiler"),
+            ("libclang_revision", "matching pinned libclang"),
+        ):
+            path = compiler / stamp
+            original = path.read_text()
+            path.write_text("wrong revision")
+            with self.assertRaisesRegex(ValueError, message):
+                stage_pair(self.upstream, target, self.dist, self.root)
+            path.write_text(original)
+        (compiler / "bin/libclang.dll").unlink()
+        with self.assertRaisesRegex(ValueError, "matching pinned libclang"):
             stage_pair(self.upstream, target, self.dist, self.root)
         self.assertFalse(self.dist.exists())
 
-    def test_compiler_bootstraps_a_clean_relative_checkout(self):
-        source = json.loads((self.root / "third_party/v8/source-lock.json").read_text())
-        stamp = (
-            self.upstream / "third_party/llvm-build/Release+Asserts/cr_build_revision"
-        )
-        stamp.unlink()
+    def test_upstream_requires_the_source_pinned_compiler_and_backport(self):
         update = self.upstream / "tools/clang/scripts/update.py"
-        update.parent.mkdir(parents=True)
-        update.write_text(
-            "from pathlib import Path\nimport sys\n"
-            f"PACKAGE_VERSION = {source['clangRevision']!r}\n"
-            "if __name__ == '__main__':\n"
-            "    stamp = Path(__file__).resolve().parents[3] / 'third_party/llvm-build/Release+Asserts/cr_build_revision'\n"
-            "    if '--print-revision' in sys.argv:\n"
-            "        if not stamp.exists(): sys.exit(1)\n"
-            "        print(stamp.read_text())\n"
-            "    else:\n"
-            "        stamp.write_text(PACKAGE_VERSION)\n"
-        )
-        binding_compiler = self.root / "binding compiler"
-        library = binding_compiler / "lib" / "libclang.so"
-        library.parent.mkdir(parents=True)
-        library.write_bytes(b"fixture library")
-        expected = source["bindingCompiler"][sys.platform]["version"]
-        check_output = subprocess.check_output
+        original = update.read_text()
+        update.write_text("PACKAGE_VERSION = 'wrong revision'\n")
+        with self.assertRaisesRegex(ValueError, "Chromium compiler differs"):
+            upstream_toolchain(self.upstream, self.version, self.root)
+        update.write_text(original)
+        (self.upstream / "v8/base.txt").write_text("before\n")
+        with self.assertRaises(subprocess.CalledProcessError):
+            upstream_toolchain(self.upstream, self.version, self.root)
+        (self.upstream / "v8/base.txt").write_text("after\n")
+        patch = self.root / "third_party/v8/patches/v8_array_sort_elements_kind.patch"
+        patch.write_text(patch.read_text() + "\n")
+        with self.assertRaisesRegex(ValueError, "patch differs from source lock"):
+            upstream_toolchain(self.upstream, self.version, self.root)
 
-        def query(command, **kwargs):
-            if Path(command[0]).name in {"clang", "clang.exe"}:
-                return (
-                    f"clang version {expected}\n"
-                    if "--version" in command
-                    else str(binding_compiler / "lib/clang/19") + "\n"
-                )
-            return check_output(command, **kwargs)
-
-        previous = Path.cwd()
-        try:
-            os.chdir(self.root)
-            with patch("build.v8.release.subprocess.check_output", side_effect=query):
-                values = prepare_compiler(Path("upstream"), binding_compiler, self.root)
-        finally:
-            os.chdir(previous)
-        self.assertEqual(source["clangRevision"], stamp.read_text())
-        self.assertEqual(str(stamp.parent.resolve()), values["clang_base_path"])
-        self.assertEqual(str(library.parent.resolve()), values["libclang_path"])
-
-    def test_stage_rejects_an_unpinned_gnu_sysroot(self):
-        target = "x86_64-unknown-linux-gnu"
-        gn_out = self.write_source_output(target)
-        stamp = self.root / "sysroots" / target / ".ash-source-lock-sha256"
-        stamp.write_text("0" * 64)
-        with self.assertRaisesRegex(ValueError, "sysroot differs from source lock"):
-            stage_pair(self.upstream, target, self.dist, self.root)
-        args = gn_out / "args.gn"
-        args.write_text(
-            args.read_text().replace("use_sysroot = true", "use_sysroot = false")
-        )
-        with self.assertRaisesRegex(ValueError, "must use its pinned sysroot"):
-            stage_pair(self.upstream, target, self.dist, self.root)
+    def test_gn_cannot_stage_unix_releases(self):
+        for target in BAZEL_PLATFORMS:
+            with (
+                self.subTest(target=target),
+                self.assertRaisesRegex(ValueError, "must use the Bazel producer"),
+            ):
+                stage_pair(self.upstream, target, self.dist, self.root)
         self.assertFalse(self.dist.exists())
 
     def test_metadata_cli_writes_real_github_outputs(self):

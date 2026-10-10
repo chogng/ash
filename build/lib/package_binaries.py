@@ -15,7 +15,7 @@ from build.lib.cargo_cache import leased_cache
 from build.lib.sherpa import resolve_sherpa_cargo_env
 from build.lib.targets import TargetSpec
 from build.lib.v8 import resolve_v8_cargo_env
-from build.lib.cargo_selection import cargo_command_uses_package
+from build.lib.cargo_selection import cargo_command_packages
 from build.protocol.generate import generate_protocol
 
 
@@ -42,10 +42,12 @@ _BINARIES = {
 }
 
 
-def cargo_environment(spec: TargetSpec) -> dict[str, str]:
+def cargo_environment(spec: TargetSpec, packages: set[str]) -> dict[str, str]:
     environment = os.environ.copy()
-    environment.update(resolve_v8_cargo_env(spec, environ=environment))
-    environment.update(resolve_sherpa_cargo_env(spec, environ=environment))
+    if "v8" in packages:
+        environment.update(resolve_v8_cargo_env(spec, environ=environment))
+    if "sherpa-onnx-sys" in packages:
+        environment.update(resolve_sherpa_cargo_env(spec, environ=environment))
     return environment
 
 
@@ -87,30 +89,29 @@ def build_binaries(
         str(resolve_cargo_target_directory(repository_root)),
         "--message-format=json-render-diagnostics",
     ]
-    if not host_build:
+    # Windows packages use MSVC, including their standalone V8 hosts. An
+    # implicit host build can inherit a caller's GNU Cargo target and mismatch
+    # the locked V8 archive; keep compilation and the cache lease explicit.
+    target = spec.target if not host_build or spec.is_windows else None
+    if target is not None:
         command.extend(["--target", spec.target])
     for name in missing:
         command.extend(["--package", _BINARIES[name][0], "--bin", name])
     if "ash-voice-host" in missing:
         command.extend(["--features", "ash-voice-host/host"])
-    if cargo_command_uses_package(
-        cargo, command[1:], repository_root, "ash-app-server-protocol"
-    ):
+    packages = cargo_command_packages(cargo, command[1:], repository_root)
+    if "ash-app-server-protocol" in packages:
         generate_protocol(root=repository_root, cargo=cargo)
+    environment = cargo_environment(spec, packages)
     with leased_cache(
         repository_root,
         profile="debug" if cargo_profile == "dev" else cargo_profile,
-        target_triple=None if host_build else spec.target,
+        target_triple=target,
     ):
         result = subprocess.run(
             command,
             cwd=repository_root,
-            env=cargo_environment(spec)
-            if any(
-                name not in {"ash-windows-sandbox", "ash-windows-sandbox-service"}
-                for name in missing
-            )
-            else None,
+            env=environment,
             stdout=subprocess.PIPE,
             text=True,
             check=False,
@@ -148,24 +149,6 @@ def validate_input_binary(
     if not is_windows_target and not is_executable(resolved):
         raise RuntimeError("{} is not executable: {}".format(description, resolved))
     return resolved
-
-
-def resolve_windows_sandbox_binary(
-    repository_root: Path,
-    spec: TargetSpec,
-    explicit_binary: Optional[Path],
-    cargo: str,
-    cargo_profile: str,
-) -> Optional[Path]:
-    if not spec.is_windows and explicit_binary is None:
-        return None
-    return build_binaries(
-        repository_root,
-        spec,
-        {"ash-windows-sandbox": explicit_binary},
-        cargo=cargo,
-        cargo_profile=cargo_profile,
-    )["ash-windows-sandbox"]
 
 
 def is_executable(path: Path) -> bool:

@@ -1,6 +1,6 @@
 package(default_visibility = ["//visibility:public"])
 
-exports_files(["v8_bazel_build_dir.patch"])
+exports_files(["v8_bazel_build_dir.patch", "rules_cc_windows_build_tools.patch"])
 
 # On a native Windows/MSVC host, let Bazel run tests whose target ABI is
 # Windows gnullvm. This is the same host/target bridge used by Codex.

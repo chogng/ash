@@ -64,7 +64,7 @@ def ash_rust_crate(name, crate_name, data = [], crate_features = [], extra_alias
         rustc_env_files = ["//:workspace-version-env"],
     )
 
-def ash_rust_binary(name, crate_name, crate_root, deps, data = [], extra_aliases = {}):
+def ash_rust_binary(name, crate_name, crate_root, deps, data = [], extra_aliases = {}, rustc_flags = [], platform = None):
     """Defines a Cargo binary using the lockfile-derived dependency graph.
 
     Callers provide the package library in `deps` when the binary imports it.
@@ -78,7 +78,28 @@ def ash_rust_binary(name, crate_name, crate_root, deps, data = [], extra_aliases
         crate_root = crate_root,
         deps = all_crate_deps() + deps,
         edition = "2024",
+        rustc_flags = rustc_flags,
+        platform = platform,
         rustc_env_files = ["//:workspace-version-env"],
         srcs = native.glob(["src/**/*.rs"]),
         visibility = ["//visibility:public"],
+    )
+
+def ash_v8_host(name, **kwargs):
+    """Uses the upstream binary transition for standalone Windows V8 hosts."""
+    ash_rust_binary(
+        name = name,
+        platform = select({
+            "@rules_rs//rs/platforms/config:x86_64-pc-windows-gnullvm": "//:windows_x86_64_msvc",
+            "@rules_rs//rs/platforms/config:aarch64-pc-windows-gnullvm": "//:windows_aarch64_msvc",
+            "@rules_rs//rs/platforms/config:x86_64-pc-windows-msvc": "//:windows_x86_64_msvc",
+            "@rules_rs//rs/platforms/config:aarch64-pc-windows-msvc": "//:windows_aarch64_msvc",
+            "//conditions:default": None,
+        }),
+        # Match Cargo's standalone Windows packaging: no VC runtime DLL payload.
+        rustc_flags = select({
+            "@platforms//os:windows": ["-Ctarget-feature=+crt-static", "-Clink-arg=/STACK:8388608"],
+            "//conditions:default": [],
+        }),
+        **kwargs
     )

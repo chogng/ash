@@ -67,6 +67,16 @@ It collects all missing first-party executables into one locked Cargo build, inc
 the Code Mode Host, Rust/V8 JavaScript extension host, Remote programs, and Windows sandbox when required. Prebuilt inputs
 are validated before the build and are not rebuilt. Executable paths come from Cargo's
 JSON artifact messages; a successful build without a requested artifact is rejected.
+Windows builds explicitly select the package's MSVC target, including development
+host builds, so an inherited GNU Cargo default cannot select a V8 source build.
+The two standalone V8 hosts may also be supplied from Bazel's
+`//:v8_host_binaries` via `--code-mode-host-bin` and `--js-extension-host-bin`.
+Those targets select MSVC for the complete host closure while the surrounding
+Bazel product can keep its GNU ABI; the package communicates with them over IPC.
+The upstream Rust rule produces the canonical `.exe` names directly. Resolve
+files with `bazel cquery //:v8_host_binaries --output=files` relative to
+`bazel info execution_root`; an incoming platform transition can place them in
+a configuration-specific output directory.
 `lib/ripgrep.py`
 maps the package target through `third_party/ripgrep/runtime-lock.json`,
 validates archive size and SHA-256 on every use, extracts only the locked

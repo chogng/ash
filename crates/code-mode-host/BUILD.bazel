@@ -1,8 +1,37 @@
-load("//:defs.bzl", "ash_rust_binary")
+load("//:defs.bzl", "ash_v8_host")
+load("@rules_rust//rust:defs.bzl", "rust_test")
 
-ash_rust_binary(
+ash_v8_host(
     name = "ash-code-mode-host",
     crate_name = "ash_code_mode_host",
     crate_root = "src/main.rs",
     deps = [],
 )
+
+# These clients stay on the caller's ABI and exercise the standalone host over
+# its real IPC transport. Keep the V8 runtime out of the test's link closure.
+[
+    rust_test(
+        name = name + "-tests",
+        crate_name = name + "_tests",
+        srcs = ["tests/" + name + ".rs"],
+        crate_root = "tests/" + name + ".rs",
+        data = [":ash-code-mode-host"],
+        deps = [
+            "//crates/code-mode:code-mode",
+            "//crates/code-mode-protocol:code-mode-protocol",
+            "//crates/utils/cargo-bin:cargo-bin",
+            "@crates//:serde_json",
+        ],
+        aliases = {
+            "//crates/code-mode:code-mode": "ash_code_mode",
+            "//crates/code-mode-protocol:code-mode-protocol": "ash_code_mode_protocol",
+        },
+        rustc_env = {
+            "CARGO_BIN_EXE_ash-code-mode-host": "$(rlocationpath :ash-code-mode-host)",
+        },
+        edition = "2024",
+        size = "small",
+    )
+    for name in ["session", "client"]
+]

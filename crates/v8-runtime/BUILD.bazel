@@ -6,7 +6,16 @@ cc_library(
     srcs = ["src/bounded_allocator.cc"],
     deps = ["@ash_v8_headers//:headers"],
     defines = ["V8_COMPRESS_POINTERS", "V8_COMPRESS_POINTERS_IN_SHARED_CAGE", "V8_ENABLE_SANDBOX"],
-    copts = select({"@platforms//os:windows": ["/std:c++20"], "//conditions:default": ["-std=c++20"]}),
+    # V8 checks __cplusplus; MSVC needs both the language flag and its value.
+    features = ["-default_cpp_std"] + select({
+        "@platforms//os:windows": ["static_link_msvcrt"],
+        "//conditions:default": [],
+    }),
+    copts = select({
+        "@rules_rs//rs/platforms/config:aarch64-pc-windows-msvc": ["/std:c++20", "/Zc:__cplusplus"],
+        "@rules_rs//rs/platforms/config:x86_64-pc-windows-msvc": ["/std:c++20", "/Zc:__cplusplus"],
+        "//conditions:default": ["-std=c++20"],
+    }),
 )
 
 ash_rust_crate(name = "v8-runtime", crate_name = "v8_runtime", extra_deps = [":bounded-allocator"])

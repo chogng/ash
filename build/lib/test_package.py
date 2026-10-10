@@ -60,7 +60,7 @@ class PackageTests(unittest.TestCase):
         boundary.start()
         self.addCleanup(boundary.stop)
         boundary = patch(
-            "build.lib.package_binaries.cargo_command_uses_package", return_value=False
+            "build.lib.package_binaries.cargo_command_packages", return_value=set()
         )
         boundary.start()
         self.addCleanup(boundary.stop)

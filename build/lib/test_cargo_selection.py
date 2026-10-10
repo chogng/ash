@@ -7,7 +7,7 @@ from unittest.mock import patch
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from build.lib.cargo_selection import cargo_command_uses_v8  # noqa: E402
+from build.lib.cargo_selection import cargo_command_packages  # noqa: E402
 from build.lib.cargo_selection import (  # noqa: E402
     cargo_tree_selection_arguments,
 )
@@ -46,11 +46,11 @@ class CargoSelectionTests(unittest.TestCase):
             args=[], returncode=0, stdout="ash-protocol v0.0.0\nserde v1.0.0\n"
         )
 
-        self.assertFalse(
-            cargo_command_uses_v8(
-                "cargo", ["test", "-p", "ash-protocol"], Path("/repository")
-            )
+        packages = cargo_command_packages(
+            "cargo", ["test", "-p", "ash-protocol"], Path("/repository")
         )
+        self.assertEqual({"ash-protocol", "serde"}, packages)
+        self.assertNotIn("v8", packages)
         self.assertIn("normal,build,dev", run.call_args.args[0])
         self.assertEqual(Path("/repository"), run.call_args.kwargs["cwd"])
 
@@ -62,16 +62,17 @@ class CargoSelectionTests(unittest.TestCase):
             stdout="app v0.0.0\nash-code-mode-runtime v0.0.0\nv8 v150.4.0\n",
         )
 
-        self.assertTrue(
-            cargo_command_uses_v8(
-                "cargo", ["check", "--package=app"], Path("/repository")
-            )
+        packages = cargo_command_packages(
+            "cargo", ["check", "--package=app"], Path("/repository")
         )
+        self.assertIn("v8", packages)
+        self.assertIn("ash-code-mode-runtime", packages)
+        run.assert_called_once()
 
     @patch("build.lib.cargo_selection.subprocess.run")
     def test_non_dependency_command_does_not_inspect_the_graph(self, run) -> None:
         self.assertFalse(
-            cargo_command_uses_v8(
+            cargo_command_packages(
                 "cargo", ["clean", "-p", "ash-protocol"], Path("/repository")
             )
         )

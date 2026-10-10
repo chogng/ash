@@ -29,7 +29,7 @@ impl Drop for Host {
 
 impl Host {
     fn new() -> Self {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_ash-code-mode-host"))
+        let mut child = Command::new(cargo_bin::cargo_bin!("ash-code-mode-host").unwrap())
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())

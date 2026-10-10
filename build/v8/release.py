@@ -3,17 +3,16 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import gzip
 import json
 import os
 import platform
 import re
 import runpy
-import shlex
 import shutil
 import subprocess
 import sys
-import tarfile
 import tempfile
 import tomllib
 from pathlib import Path
@@ -22,8 +21,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from build.download.artifacts import download_and_verify, sha256  # noqa: E402
-from build.lib.v8 import LockedFile, load_v8_lock  # noqa: E402
+from build.download.artifacts import publish, sha256, temporary_file  # noqa: E402
+from build.lib.v8 import LockedFile, load_v8_lock, materialize  # noqa: E402
 
 
 PROFILE = "ptrcomp_sandbox_release"
@@ -132,6 +131,24 @@ def source_lock(root: Path = ROOT) -> dict:
         or not re.fullmatch(r"llvmorg-[A-Za-z0-9.-]+", lock.get("clangRevision", ""))
     ):
         raise ValueError("Expected an exact rusty_v8 source revision and toolchain")
+    tools = lock.get("windowsTools", {})
+    files = tools.get("files", {})
+    if (
+        not re.fullmatch(r"[0-9a-f]{40}", tools.get("revision", ""))
+        or set(files)
+        != {
+            "DebugVisualizers/BUILD.gn",
+            "DebugVisualizers/absl.natvis",
+            "DebugVisualizers/blink.natvis",
+            "DebugVisualizers/chrome.natvis",
+        }
+        or any(
+            not re.fullmatch(r"[0-9a-f]{64}", entry.get(key, ""))
+            for entry in files.values()
+            for key in ("sha256", "base64Sha256")
+        )
+    ):
+        raise ValueError("Expected pinned Windows visualizer inputs")
     return lock
 
 
@@ -179,6 +196,28 @@ def release_metadata(root: Path = ROOT, tag: str | None = None) -> dict[str, str
     }
 
 
+def prepare_windows_tools(upstream: Path, root: Path = ROOT) -> None:
+    pin = source_lock(root)["windowsTools"]
+    # Gitiles tar archives embed the request time, so an archive hash cannot
+    # be pinned. Its TEXT responses are stable base64-encoded Git blobs.
+    for name, entry in pin["files"].items():
+        encoded = materialize(
+            LockedFile(
+                Path(name).name + ".base64",
+                entry["base64Sha256"],
+                "https://chromium.googlesource.com/chromium/src/tools/win/"
+                f"+/{pin['revision']}/{name}?format=TEXT",
+            ),
+            root / "third_party/.cache/v8/windows-tools" / pin["revision"],
+        )
+        destination = upstream / "tools/win" / name
+        with temporary_file(destination) as temporary:
+            temporary.write_bytes(base64.b64decode(encoded.read_bytes(), validate=True))
+            if sha256(temporary) != entry["sha256"]:
+                raise ValueError("Windows visualizer content differs from source lock")
+            publish(temporary, destination, entry["sha256"])
+
+
 def upstream_toolchain(upstream: Path, version: str, root: Path = ROOT) -> str:
     manifest = tomllib.loads((upstream / "Cargo.toml").read_text())
     if manifest["package"]["name"] != "v8" or manifest["package"]["version"] != version:
@@ -198,115 +237,54 @@ def upstream_toolchain(upstream: Path, version: str, root: Path = ROOT) -> str:
     status = subprocess.check_output(
         ["git", "-C", str(upstream), "submodule", "status", "--recursive"], text=True
     )
-    if any(line.startswith(("-", "+", "U")) for line in status.splitlines()):
-        raise ValueError("Upstream submodules must match the pinned source checkout")
-    return lock["rustToolchain"]
-
-
-def prepare_compiler(
-    upstream: Path, binding_compiler: Path, root: Path = ROOT
-) -> dict[str, str]:
-    upstream = upstream.resolve()
-    upstream_toolchain(upstream, release_metadata(root)["version"], root)
-    update = upstream / "tools/clang/scripts/update.py"
-    # --print-revision requires an installed compiler. Read the source pin before
-    # downloading, then ask the updater to verify the installed version afterward.
-    revision = runpy.run_path(str(update))["PACKAGE_VERSION"]
-    if revision != source_lock(root)["clangRevision"]:
+    windows_tools = lock["windowsTools"]
+    for line in status.splitlines():
+        # tools/win has update=none upstream; its archive replaces checkout.
+        if line.split()[:2] == [f"-{windows_tools['revision']}", "tools/win"]:
+            continue
+        if line.startswith(("-", "+", "U")):
+            raise ValueError(
+                "Upstream submodules must match the pinned source checkout"
+            )
+    gitlink = subprocess.check_output(
+        ["git", "-C", str(upstream), "ls-tree", "HEAD", "tools/win"], text=True
+    ).split()
+    if gitlink != ["160000", "commit", windows_tools["revision"], "tools/win"]:
+        raise ValueError("Windows tools revision differs from source lock")
+    for name, entry in windows_tools["files"].items():
+        path = upstream / "tools/win" / name
+        if not path.is_file() or sha256(path) != entry["sha256"]:
+            raise ValueError("Windows visualizers must match the pinned source")
+    if (
+        runpy.run_path(str(upstream / "tools/clang/scripts/update.py"))[
+            "PACKAGE_VERSION"
+        ]
+        != lock["clangRevision"]
+    ):
         raise ValueError("Upstream Chromium compiler differs from source lock")
-    subprocess.run(
-        [sys.executable, str(update), "--package", "clang"], check=True, cwd=upstream
-    )
-    installed = subprocess.check_output(
-        [sys.executable, str(update), "--print-revision"], text=True
-    ).strip()
-    if installed != revision:
-        raise ValueError("Installed Chromium compiler differs from source lock")
-    compiler = upstream / "third_party/llvm-build/Release+Asserts"
-    clang = (
-        binding_compiler / "bin" / ("clang.exe" if sys.platform == "win32" else "clang")
-    )
-    version = subprocess.check_output([str(clang), "--version"], text=True)
-    expected = source_lock(root)["bindingCompiler"][sys.platform]["version"]
-    if not re.search(rf"\bversion {re.escape(expected)}\b", version):
-        raise ValueError("Binding compiler version differs from source lock")
-    libraries = [
-        path
-        for path in binding_compiler.rglob("*clang*")
-        if path.name in {"libclang.so", "libclang.dylib", "libclang.dll"}
-    ]
-    if len(libraries) != 1:
-        raise ValueError("Expected one pinned libclang shared library")
-    resources = subprocess.check_output(
-        [str(clang), "--print-resource-dir"], text=True
-    ).strip()
-    # Binding names from Clang 23 differ from the crate's expected enum names.
-    # Keep its compatible Clang 19 separate from V8's source-pinned C++ compiler.
-    (compiler / "ash_binding_compiler_version").write_text(expected, encoding="utf-8")
-    return {
-        "clang_base_path": str(compiler.resolve()),
-        "libclang_path": str(libraries[0].parent.resolve()),
-        "bindgen_extra_clang_args": shlex.quote(f"-resource-dir={resources}"),
-    }
+    for name, digest in lock["patches"].items():
+        patch = root / "third_party/v8/patches" / name
+        if sha256(patch) != digest:
+            raise ValueError("V8 source patch differs from source lock")
+        # A clean submodule revision alone misses the release's source backport.
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(upstream / "v8"),
+                "apply",
+                "--reverse",
+                "--check",
+                "-p3",
+                str(patch.resolve()),
+            ],
+            check=True,
+        )
+    return lock["rustToolchain"]
 
 
 def checksum_name(target: str) -> str:
     return f"rusty_v8_{PROFILE}_{target}.sha256"
-
-
-def prepare_gnu_sysroot(target: str, output: Path, root: Path = ROOT) -> dict[str, str]:
-    pin = source_lock(root)["gnuSysroots"][target]
-    output.mkdir(parents=True, exist_ok=True)
-    archive = output / "sysroot.tar.xz"
-    artifact = LockedFile(archive.name, pin["sha256"], pin["url"], pin["size"])
-    if not archive.is_file() or sha256(archive) != artifact.sha256:
-        download_and_verify(artifact, archive, timeout=120)
-    cross_arm = target == "aarch64-unknown-linux-gnu"
-    sdk = output / "sdk"
-    if cross_arm:
-        sdk = sdk / "debian_bullseye_arm64-sysroot"
-    sdk.mkdir(parents=True, exist_ok=True)
-    with tarfile.open(archive, "r:xz") as contents:
-        contents.extractall(sdk, filter="data")
-    features = (sdk / "usr/include/features.h").read_text()
-    version = ".".join(
-        re.search(rf"(?m)^#define\s+{macro}\s+(\d+)\s*$", features)[1]
-        for macro in ("__GLIBC__", "__GLIBC_MINOR__")
-    )
-    if version != pin["glibcVersion"]:
-        raise ValueError("GNU sysroot libc version differs from source lock")
-    (sdk / ".ash-source-lock-sha256").write_text(artifact.sha256, encoding="utf-8")
-    if cross_arm:
-        prepare_gnu_sysroot("x86_64-unknown-linux-gnu", output / "host", root)
-        host_sdk = (output / "host/sdk").resolve()
-        host_link = sdk.parent / "debian_bullseye_amd64-sysroot"
-        if not host_link.exists():
-            host_link.symlink_to(host_sdk, target_is_directory=True)
-        # GN selects a sysroot per toolchain CPU. A global ARM sysroot would
-        # also apply to the x64 torque/mksnapshot tools and prevent them linking.
-        return {
-            "GN_ARGS": f"target_sysroot_dir={json.dumps(str(sdk.parent.resolve()))} use_sysroot=true",
-            "RUSTY_V8_GNU_SYSROOT": str(sdk.resolve()),
-        }
-    # Upstream's target_sysroot is musl-only; an explicit sysroot is safe for x64.
-    return {
-        "GN_ARGS": f"sysroot={json.dumps(str(sdk.resolve()))} use_sysroot=true",
-        "RUSTY_V8_GNU_SYSROOT": str(sdk.resolve()),
-    }
-
-
-def gnu_sysroot_path(gn_args: str, target: str) -> Path:
-    if not re.search(r"(?m)^\s*use_sysroot\s*=\s*true\s*$", gn_args):
-        raise ValueError("GNU source build must use its pinned sysroot")
-    match = re.search(r'(?m)^\s*sysroot\s*=\s*("(?:[^"\\]|\\.)*")\s*$', gn_args)
-    if match:
-        return Path(json.loads(match[1]))
-    directory = re.search(
-        r'(?m)^\s*target_sysroot_dir\s*=\s*("(?:[^"\\]|\\.)*")\s*$', gn_args
-    )
-    if target != "aarch64-unknown-linux-gnu" or not directory:
-        raise ValueError("GNU source build must use its pinned sysroot")
-    return Path(json.loads(directory[1])) / "debian_bullseye_arm64-sysroot"
 
 
 def provenance_name(target: str) -> str:
@@ -336,32 +314,32 @@ def stage_pair(
     pigz: str | None = None,
     compression_jobs: int = 8,
 ) -> dict[str, str]:
+    if target in BAZEL_PLATFORMS:
+        raise ValueError("Linux/macOS source releases must use the Bazel producer")
     metadata = release_metadata(root)
     upstream_toolchain(upstream, metadata["version"], root)
     gn_out = upstream / "target" / target / "release" / "gn_out"
     gn_args = (gn_out / "args.gn").read_text()
     validate_gn_args(gn_args)
     pin = source_lock(root)
-    if target.endswith("-linux-gnu"):
-        sdk = gnu_sysroot_path(gn_args, target)
-        if (sdk / ".ash-source-lock-sha256").read_text().strip() != pin["gnuSysroots"][
-            target
-        ]["sha256"]:
-            raise ValueError("GNU source build sysroot differs from source lock")
-    compiler = upstream / "third_party/llvm-build/Release+Asserts"
-    if (compiler / "cr_build_revision").read_text().strip() != pin["clangRevision"]:
-        raise ValueError("Source build must use the pinned C++ compiler")
-    platform = (
-        "win32"
-        if target.endswith("msvc")
-        else "darwin"
-        if target.endswith("darwin")
-        else "linux"
+    compiler = gn_out.parent / "clang"
+    compiler_arg = re.search(
+        r'(?m)^\s*clang_base_path\s*=\s*("(?:[^"\\]|\\.)*")\s*$', gn_args
     )
-    if (compiler / "ash_binding_compiler_version").read_text().strip() != pin[
-        "bindingCompiler"
-    ][platform]["version"]:
-        raise ValueError("Source build must use the pinned binding compiler")
+    if (
+        not compiler_arg
+        or Path(json.loads(compiler_arg[1])).resolve() != compiler.resolve()
+    ):
+        raise ValueError("Source build must use upstream's downloaded compiler")
+    if (compiler / "cr_build_revision").read_text().strip().split(",")[0] != pin[
+        "clangRevision"
+    ]:
+        raise ValueError("Source build must use the pinned C++ compiler")
+    if target.endswith("msvc") and (
+        (compiler / "libclang_revision").read_text().strip() != pin["clangRevision"]
+        or not (compiler / "bin/libclang.dll").is_file()
+    ):
+        raise ValueError("Source build must use the matching pinned libclang")
     library = (
         gn_out
         / "obj"
@@ -385,8 +363,8 @@ def stage_pair(
                     "revision",
                     "rustToolchain",
                     "clangRevision",
-                    "bindingCompiler",
-                    "gnuSysroots",
+                    "windowsTools",
+                    "patches",
                 )
             },
             "gnArgs": gn_args,
@@ -635,8 +613,8 @@ def validate_upstream_provenance(provenance: dict, target: str, root: Path) -> N
                 "revision",
                 "rustToolchain",
                 "clangRevision",
-                "bindingCompiler",
-                "gnuSysroots",
+                "windowsTools",
+                "patches",
             )
         }
     ):
@@ -661,16 +639,8 @@ def main() -> None:
     upstream = commands.add_parser("upstream-toolchain")
     upstream.add_argument("--upstream", type=Path, required=True)
     upstream.add_argument("--github-output", type=Path)
-    compiler = commands.add_parser("compiler")
-    compiler.add_argument("--upstream", type=Path, required=True)
-    compiler.add_argument("--binding-compiler", type=Path, required=True)
-    compiler.add_argument("--github-output", type=Path)
-    sysroot = commands.add_parser("gnu-sysroot")
-    sysroot.add_argument(
-        "--target", choices=source_lock()["gnuSysroots"], required=True
-    )
-    sysroot.add_argument("--output", type=Path, required=True)
-    sysroot.add_argument("--github-env", type=Path)
+    windows_tools = commands.add_parser("windows-tools")
+    windows_tools.add_argument("--upstream", type=Path, required=True)
     stage = commands.add_parser("stage")
     stage.add_argument("--upstream", type=Path, required=True)
     stage.add_argument("--target", choices=BUILD_TARGETS, required=True)
@@ -693,6 +663,8 @@ def main() -> None:
     args = parser.parse_args()
     if args.command == "metadata":
         write_outputs(release_metadata(tag=args.tag), args.github_output)
+    elif args.command == "windows-tools":
+        prepare_windows_tools(args.upstream)
     elif args.command == "upstream-toolchain":
         write_outputs(
             {
@@ -731,17 +703,6 @@ def main() -> None:
             ),
             args.github_output,
         )
-    elif args.command == "compiler":
-        write_outputs(
-            prepare_compiler(args.upstream, args.binding_compiler), args.github_output
-        )
-    elif args.command == "gnu-sysroot":
-        values = prepare_gnu_sysroot(args.target, args.output)
-        print(json.dumps(values))
-        if args.github_env:
-            with args.github_env.open("a", encoding="utf-8", newline="\n") as stream:
-                for key, value in values.items():
-                    stream.write(f"{key}={value}\n")
     else:
         print(verify_release(args.artifacts, args.repository))
 

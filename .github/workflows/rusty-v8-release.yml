@@ -85,10 +85,18 @@ jobs:
         uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba
         with:
           version: v0.16.0
+      - name: Apply pinned V8 source backport
+        if: runner.os == 'Windows'
+        run: |
+          patch="$GITHUB_WORKSPACE/third_party/v8/patches/v8_array_sort_elements_kind.patch"
+          git -C upstream-rusty-v8/v8 apply --check -p3 "$patch"
+          git -C upstream-rusty-v8/v8 apply -p3 "$patch"
       - name: Resolve upstream build toolchain
         if: runner.os == 'Windows'
         id: upstream
-        run: python -B build/v8/release.py upstream-toolchain --upstream upstream-rusty-v8 --github-output "$GITHUB_OUTPUT"
+        run: |
+          python -B build/v8/release.py windows-tools --upstream upstream-rusty-v8
+          python -B build/v8/release.py upstream-toolchain --upstream upstream-rusty-v8 --github-output "$GITHUB_OUTPUT"
       - name: Install upstream toolchain and target
         if: runner.os == 'Windows'
         env:
@@ -105,28 +113,17 @@ jobs:
             sudo apt-get install --yes --no-install-recommends gcc-aarch64-linux-gnu libc6-dev-arm64-cross
             echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
           fi
-      - name: Install compatible Windows binding compiler
-        if: runner.os == 'Windows'
-        run: |
-          version="$(python -c 'from build.v8.release import source_lock; print(source_lock()["bindingCompiler"]["win32"]["version"])')"
-          choco install llvm --version "$version" --allow-downgrade --force --yes --no-progress
-          echo "BINDING_CLANG_BASE_PATH=C:/Program Files/LLVM" >> "$GITHUB_ENV"
-      - name: Validate and prepare pinned compilers
-        if: runner.os == 'Windows'
-        id: compiler
-        run: python -B build/v8/release.py compiler --upstream upstream-rusty-v8 --binding-compiler "$BINDING_CLANG_BASE_PATH" --github-output "$GITHUB_OUTPUT"
       - name: Build Windows sandbox archive and binding from source
         if: runner.os == 'Windows'
         working-directory: upstream-rusty-v8
         env:
           UPSTREAM_TOOLCHAIN: ${{ steps.upstream.outputs.toolchain }}
           V8_FROM_SOURCE: "1"
-          CLANG_BASE_PATH: ${{ steps.compiler.outputs.clang_base_path }}
-          LIBCLANG_PATH: ${{ steps.compiler.outputs.libclang_path }}
-          BINDGEN_EXTRA_CLANG_ARGS: ${{ steps.compiler.outputs.bindgen_extra_clang_args }}
           # Keep upstream outputs separate from Ash's Cargo target directory.
           CARGO_TARGET_DIR: ${{ github.workspace }}/upstream-rusty-v8/target
         run: |
+          # Let rusty_v8 fetch its source-pinned compiler and matching libclang.
+          unset CLANG_BASE_PATH LIBCLANG_PATH BINDGEN_EXTRA_CLANG_ARGS DISABLE_CLANG
           export GN_ARGS="v8_enable_partition_alloc=false"
           cargo "+$UPSTREAM_TOOLCHAIN" build --locked --release --target "$TARGET" --features v8_enable_sandbox
       - name: Set up Bazel source producer and consumer

@@ -3,20 +3,21 @@
 # Scope: Bazel BUILD/defs/BUILD.icu integration only, including dependency
 # wiring, generated sources, and visibility; no standalone V8 source patching.
 
-diff --git a/orig/v8-15.0.245.2/bazel/defs.bzl b/mod/v8-15.0.245.2/bazel/defs.bzl
+diff --git a/orig/v8-15.2.124.1/bazel/defs.bzl b/mod/v8-15.2.124.1/bazel/defs.bzl
 index bbe1495..6673518 100644
---- a/orig/v8-15.0.245.2/bazel/defs.bzl
-+++ b/mod/v8-15.0.245.2/bazel/defs.bzl
-@@ -33,9 +33,25 @@ _create_option_int = rule(
+--- a/orig/v8-15.2.124.1/bazel/defs.bzl
++++ b/mod/v8-15.2.124.1/bazel/defs.bzl
+@@ -42,9 +42,22 @@ _create_option_int = rule(
  )
  
  def v8_flag(name, default = False):
--    _create_option_flag(name = name, build_setting_default = default)
+-    _create_option_flag(name = name, build_setting_default = default, scope = "universal")
 -    native.config_setting(name = "is_" + name, flag_values = {name: "True"})
 -    native.config_setting(name = "is_not_" + name, flag_values = {name: "False"})
 +    _create_option_flag(
 +        name = name,
 +        build_setting_default = default,
++        scope = "universal",
 +        visibility = ["//visibility:public"],
 +    )
 +    native.config_setting(
@@ -30,14 +31,8 @@ index bbe1495..6673518 100644
 +        visibility = ["//visibility:public"],
 +    )
  
--def v8_string(name, default = ""):
--    _create_option_string(name = name, build_setting_default = default)
-+def v8_string(name, default = "", visibility = None):
-+    _create_option_string(
-+        name = name,
-+        build_setting_default = default,
-+        visibility = visibility,
-+    )
+ def v8_string(name, default = ""):
+     _create_option_string(name = name, build_setting_default = default, scope = "universal")
 @@ -97,7 +109,13 @@ v8_config = rule(
  
  def _default_args():
@@ -160,10 +155,10 @@ index bbe1495..6673518 100644
          suffix = suffix,
          target_os = select({
              "@v8//bazel/config:is_macos": "mac",
-diff --git a/orig/v8-15.0.245.2/BUILD.bazel b/mod/v8-15.0.245.2/BUILD.bazel
+diff --git a/orig/v8-15.2.124.1/BUILD.bazel b/mod/v8-15.2.124.1/BUILD.bazel
 index b432f86..28c567b 100644
---- a/orig/v8-15.0.245.2/BUILD.bazel
-+++ b/mod/v8-15.0.245.2/BUILD.bazel
+--- a/orig/v8-15.2.124.1/BUILD.bazel
++++ b/mod/v8-15.2.124.1/BUILD.bazel
 @@ -148,6 +148,10 @@ v8_flag(name = "v8_enable_trace_maps")
  
  v8_flag(name = "v8_enable_v8_checks")
@@ -175,13 +170,12 @@ index b432f86..28c567b 100644
  v8_flag(name = "v8_enable_verify_csa")
  
  v8_flag(name = "v8_enable_verify_heap")
-@@ -313,7 +317,8 @@ v8_int(
+@@ -313,7 +317,7 @@ v8_int(
  # If no explicit value for v8_enable_pointer_compression, we set it to 'none'.
  v8_string(
      name = "v8_enable_pointer_compression",
 -    default = "none",
 +    default = "False",
-+    visibility = ["//visibility:public"],
  )
  
  # Default setting for v8_enable_pointer_compression.
@@ -249,15 +243,14 @@ index b432f86..28c567b 100644
      ],
      outs = [
          "include/inspector/Debugger.h",
-@@ -4462,15 +4467,19 @@ genrule(
+@@ -4462,15 +4467,16 @@ genrule(
          "src/inspector/protocol/Schema.cpp",
          "src/inspector/protocol/Schema.h",
      ],
 -    cmd = "$(location :code_generator) --jinja_dir . \
 -           --inspector_protocol_dir third_party/inspector_protocol \
 +    cmd = "INSPECTOR_PROTOCOL_DIR=$$(dirname $(execpath third_party/inspector_protocol/code_generator.py)); \
-+           PYTHONPATH=$$INSPECTOR_PROTOCOL_DIR:external/rules_python++pip+v8_python_deps_312_jinja2/site-packages:external/rules_python++pip+v8_python_deps_312_markupsafe/site-packages:$${PYTHONPATH-} \
-+           $(execpath @rules_python//python/bin:python) $(execpath third_party/inspector_protocol/code_generator.py) --jinja_dir . \
++           $(execpath :code_generator) --jinja_dir . \
 +           --inspector_protocol_dir $$INSPECTOR_PROTOCOL_DIR \
             --config $(location :src/inspector/inspector_protocol_config.json) \
             --config_value protocol.path=$(location :include/js_protocol.pdl) \
@@ -266,10 +259,7 @@ index b432f86..28c567b 100644
 -    local = 1,
      message = "Generating inspector files",
      tools = [
--        ":code_generator",
-+        "@rules_python//python/bin:python",
-+        requirement("jinja2"),
-+        requirement("markupsafe"),
+         ":code_generator",
      ],
  )
  
@@ -405,10 +395,10 @@ index b432f86..28c567b 100644
      }),
      noicu_deps = [":v8_libshared_noicu"],
      noicu_srcs = [
-diff --git a/orig/v8-15.0.245.2/bazel/BUILD.icu b/mod/v8-15.0.245.2/bazel/BUILD.icu
+diff --git a/orig/v8-15.2.124.1/bazel/BUILD.icu b/mod/v8-15.2.124.1/bazel/BUILD.icu
 index 5fda2f4..8c3c372 100644
---- a/orig/v8-15.0.245.2/bazel/BUILD.icu
-+++ b/mod/v8-15.0.245.2/bazel/BUILD.icu
+--- a/orig/v8-15.2.124.1/bazel/BUILD.icu
++++ b/mod/v8-15.2.124.1/bazel/BUILD.icu
 @@ -1,3 +1,24 @@
 +load("@rules_cc//cc:defs.bzl", "cc_library")
 +

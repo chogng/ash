@@ -42,7 +42,7 @@ impl ToolInvoker for Invoker {
 }
 
 fn host() -> CodeModeHost {
-    CodeModeHost::with_program(env!("CARGO_BIN_EXE_ash-code-mode-host").into())
+    CodeModeHost::with_program(cargo_bin::cargo_bin!("ash-code-mode-host").unwrap())
 }
 
 fn request(id: &CodeModeSessionId, source: &str) -> ExecuteRequest {

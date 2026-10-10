@@ -22,9 +22,9 @@ common --xcode_version_config=//:disable_xcode
 common:linux --host_platform=//:local_linux
 common:windows --host_platform=//:local_windows
 
-# Use the hermetic LLVM toolchain registered in MODULE.bazel instead of
-# discovering a machine-specific Apple C++ toolchain.
-common --repo_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1
+# LLVM stays the default. Standalone Windows V8 hosts explicitly select the
+# MSVC toolchain discovered by rules_cc from Visual Studio Build Tools.
+# Keep Apple's toolchain discovery disabled; its SDK remains hermetic.
 common --repo_env=BAZEL_NO_APPLE_CPP_TOOLCHAIN=1
 
 # Local source builds share Bazel's action cache and expose each compile action.

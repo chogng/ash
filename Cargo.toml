@@ -330,7 +330,7 @@ cc = "1"
 clap = "4"
 core-graphics = "0.23.2"
 dirs = "6.0"
-deno_core_icudata = "0.77.0"
+deno_core_icudata = "0.78.0"
 dunce = "1"
 ed25519-dalek = "3.0.0"
 ec4rs = "1.2.0"
@@ -395,7 +395,7 @@ typst = "=0.15.1"
 typst-assets = { version = "=0.15.1", features = ["fonts"] }
 typst-pdf = "=0.15.1"
 tokio = { version = "1", features = ["net", "rt", "time"] }
-v8 = "=150.4.0"
+v8 = "=152.2.0"
 tokio-rustls = { version = "0.26.4", default-features = false, features = ["logging", "tls12"] }
 tokio-tungstenite = { version = "0.28.0", default-features = false, features = ["handshake"] }
 thiserror = "2"

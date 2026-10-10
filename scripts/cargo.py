@@ -12,7 +12,7 @@ from pathlib import Path
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from build.lib.cargo_selection import cargo_command_uses_package, cargo_command_uses_v8  # noqa: E402
+from build.lib.cargo_selection import cargo_command_packages  # noqa: E402
 from build.lib.cargo import (  # noqa: E402
     cargo_artifact_executable,
     cargo_rendered_diagnostic,
@@ -251,9 +251,8 @@ def main(arguments: list[str] | None = None) -> int:
     if target not in TARGETS:
         parser.error(f"unsupported V8 target: {target}")
     environment = os.environ.copy()
-    if cargo_command_uses_package(
-        args.cargo, cargo_arguments, REPOSITORY_ROOT, "ash-app-server-protocol"
-    ):
+    packages = cargo_command_packages(args.cargo, cargo_arguments, REPOSITORY_ROOT)
+    if "ash-app-server-protocol" in packages:
         # Prepare outside Cargo's build lock; the exporter bootstraps without metadata.
         generate_protocol(root=REPOSITORY_ROOT, cargo=args.cargo)
     if args.deny_warnings:
@@ -264,13 +263,9 @@ def main(arguments: list[str] | None = None) -> int:
         cargo_arguments[0] == "test"
         and "--no-run" not in cargo_arguments
         and "ASH_CODE_MODE_HOST_BIN" not in environment
-        and cargo_command_uses_package(
-            args.cargo, cargo_arguments, REPOSITORY_ROOT, "ash-code-mode"
-        )
+        and "ash-code-mode" in packages
     )
-    if needs_code_mode_host or cargo_command_uses_v8(
-        args.cargo, cargo_arguments, REPOSITORY_ROOT
-    ):
+    if needs_code_mode_host or "v8" in packages:
         environment.update(
             resolve_v8_cargo_env(
                 TARGETS[target],
@@ -279,9 +274,7 @@ def main(arguments: list[str] | None = None) -> int:
                 cache_root=args.v8_cache_root.expanduser().resolve(),
             )
         )
-    if cargo_command_uses_package(
-        args.cargo, cargo_arguments, REPOSITORY_ROOT, "sherpa-onnx-sys"
-    ):
+    if "sherpa-onnx-sys" in packages:
         environment.update(
             resolve_sherpa_cargo_env(TARGETS[target], environ=environment)
         )
@@ -289,14 +282,10 @@ def main(arguments: list[str] | None = None) -> int:
         cargo_arguments[0] in {"test", "run"}
         and "ASH_TGREP_PATH" not in environment
         and (
-            cargo_command_uses_package(
-                args.cargo, cargo_arguments, REPOSITORY_ROOT, "ash-tgrep"
-            )
+            "ash-tgrep" in packages
             # The CLI starts a sibling App Server; its runtime inputs no longer appear in
             # the CLI's Cargo dependency graph.
-            or cargo_command_uses_package(
-                args.cargo, cargo_arguments, REPOSITORY_ROOT, "ash-cli"
-            )
+            or "ash-cli" in packages
         )
     ):
         from build.lib.tgrep import resolve_tgrep
@@ -320,9 +309,7 @@ def main(arguments: list[str] | None = None) -> int:
             cargo_arguments[0] == "test"
             and "--no-run" not in cargo_arguments
             and "ASH_APP_SERVER_PATH" not in environment
-            and cargo_command_uses_package(
-                args.cargo, cargo_arguments, REPOSITORY_ROOT, "ash-remote-server"
-            )
+            and "ash-remote-server" in packages
         ):
             environment["ASH_APP_SERVER_PATH"] = prepare_test_executable(
                 args.cargo, cargo_arguments, environment, "ash-app-server"

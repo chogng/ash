@@ -29,15 +29,72 @@ class CodeModeHostTests(unittest.TestCase):
         target.start()
         self.addCleanup(target.stop)
 
+    @patch.dict("scripts.cargo.os.environ", {}, clear=True)
+    @patch(
+        "scripts.cargo.resolve_v8_cargo_env", return_value={"RUSTY_V8_ARCHIVE": "v8"}
+    )
+    @patch(
+        "scripts.cargo.resolve_sherpa_cargo_env",
+        return_value={"SHERPA_ONNX_LIB_DIR": "speech"},
+    )
     @patch("scripts.cargo.subprocess.run")
-    @patch("scripts.cargo.cargo_command_uses_v8", return_value=False)
-    @patch("scripts.cargo.cargo_command_uses_package")
-    def test_protocol_preparation_precedes_compilation_and_failures_stop_cargo(
-        self, uses_package, uses_v8, run
-    ):
-        uses_package.side_effect = lambda _cargo, _args, _root, package: (
-            package == "ash-app-server-protocol"
+    def test_one_graph_query_prepares_all_selected_inputs(self, run, speech, v8):
+        run.side_effect = [
+            subprocess.CompletedProcess(
+                [],
+                0,
+                "app v1\nash-app-server-protocol v1\nv8 v152.2.0\nsherpa-onnx-sys v1\n",
+            ),
+            subprocess.CompletedProcess([], 0),
+        ]
+        self.assertEqual(main(["check", "-p", "app"]), 0)
+        self.assertEqual(2, run.call_count)
+        query, compile = run.call_args_list
+        self.assertEqual(["cargo", "tree"], query.args[0][:2])
+        self.assertEqual(["cargo", "check", "-p", "app"], compile.args[0])
+        self.assertEqual(
+            {"RUSTY_V8_ARCHIVE": "v8", "SHERPA_ONNX_LIB_DIR": "speech"},
+            compile.kwargs["env"],
         )
+        self.protocol.assert_called_once()
+        v8.assert_called_once()
+        speech.assert_called_once()
+
+    @patch.dict("scripts.cargo.os.environ", {}, clear=True)
+    @patch("scripts.cargo.cargo_command_packages", return_value={"v8"})
+    @patch("scripts.cargo.subprocess.run")
+    @patch("build.lib.v8.load_v8_lock", side_effect=AssertionError)
+    def test_explicit_v8_inputs_reach_cargo_without_default_pair_preparation(
+        self, lock, run, packages
+    ):
+        run.return_value = subprocess.CompletedProcess([], 0)
+        for environment in (
+            {"RUSTY_V8_ARCHIVE": "/artifact-directory"},
+            {
+                "RUSTY_V8_ARCHIVE": "/archive",
+                "RUSTY_V8_ARCHIVE_SHA256": "a" * 64,
+                "RUSTY_V8_SRC_BINDING_URL": "/binding",
+            },
+            {
+                "RUSTY_V8_MIRROR": "https://example.invalid/{tag}/{file}",
+                "RUSTY_V8_MIRROR_TAG": "custom-tag",
+                "RUSTY_V8_MIRROR_FALLBACK": "1",
+            },
+        ):
+            with (
+                self.subTest(environment=environment),
+                patch.dict("scripts.cargo.os.environ", environment, clear=True),
+            ):
+                self.assertEqual(main(["check", "-p", "ash-v8-poc"]), 0)
+                self.assertEqual(run.call_args.kwargs["env"], environment)
+        lock.assert_not_called()
+
+    @patch("scripts.cargo.subprocess.run")
+    @patch("scripts.cargo.cargo_command_packages")
+    def test_protocol_preparation_precedes_compilation_and_failures_stop_cargo(
+        self, packages, run
+    ):
+        packages.return_value = {"ash-app-server-protocol"}
         run.return_value = subprocess.CompletedProcess([], 0)
         self.assertEqual(main(["check", "-p", "ash-app-server-protocol"]), 0)
         self.protocol.assert_called_once()
@@ -53,11 +110,8 @@ class CodeModeHostTests(unittest.TestCase):
         clear=True,
     )
     @patch("scripts.cargo.subprocess.run")
-    @patch("scripts.cargo.cargo_command_uses_v8", return_value=False)
-    @patch("scripts.cargo.cargo_command_uses_package", return_value=False)
-    def test_warning_gate_preserves_the_compiler_artifact_identity(
-        self, uses_package, uses_v8, run
-    ):
+    @patch("scripts.cargo.cargo_command_packages", return_value=set())
+    def test_warning_gate_preserves_the_compiler_artifact_identity(self, packages, run):
         run.return_value = subprocess.CompletedProcess([], 0)
         self.assertEqual(
             main(["--deny-warnings", "check", "-p", "ash-package-store"]), 0
@@ -73,22 +127,19 @@ class CodeModeHostTests(unittest.TestCase):
         "scripts.cargo.resolve_sherpa_cargo_env",
         return_value={"SHERPA_ONNX_LIB_DIR": "/locked/libs"},
     )
-    @patch("scripts.cargo.cargo_command_uses_v8", return_value=False)
-    @patch("scripts.cargo.cargo_command_uses_package")
+    @patch("scripts.cargo.cargo_command_packages")
     def test_speech_resources_are_prepared_only_for_the_selected_graph(
-        self, uses_package, uses_v8, speech, run
+        self, packages, speech, run
     ) -> None:
         run.return_value = subprocess.CompletedProcess([], 0)
-        uses_package.side_effect = lambda _cargo, _args, _root, package: (
-            package == "sherpa-onnx-sys"
-        )
+        packages.return_value = {"sherpa-onnx-sys"}
         self.assertEqual(main(["check", "-p", "ash-tui"]), 0)
         self.assertEqual(
             run.call_args.kwargs["env"]["SHERPA_ONNX_LIB_DIR"], "/locked/libs"
         )
         speech.assert_called_once()
         speech.reset_mock()
-        uses_package.side_effect = lambda *_args: False
+        packages.return_value = set()
         self.assertEqual(main(["check", "-p", "ash-build-info"]), 0)
         speech.assert_not_called()
         self.assertNotIn("SHERPA_ONNX_LIB_DIR", run.call_args.kwargs["env"])
@@ -100,14 +151,11 @@ class CodeModeHostTests(unittest.TestCase):
         "scripts.cargo.resolve_v8_cargo_env",
         return_value={"RUSTY_V8_ARCHIVE": "locked"},
     )
-    @patch("scripts.cargo.cargo_command_uses_v8", return_value=True)
-    @patch("scripts.cargo.cargo_command_uses_package")
+    @patch("scripts.cargo.cargo_command_packages")
     def test_remote_tests_prepare_the_shared_backend(
-        self, uses_package, uses_v8, resolve_v8, prepare, run
+        self, packages, resolve_v8, prepare, run
     ) -> None:
-        uses_package.side_effect = lambda _cargo, _args, _root, package: (
-            package == "ash-remote-server"
-        )
+        packages.return_value = {"ash-remote-server", "v8"}
         run.return_value = subprocess.CompletedProcess([], 0)
         arguments = ["test", "-p", "ash-remote-server", "--test", "stdio"]
         self.assertEqual(main(arguments), 0)
@@ -122,14 +170,11 @@ class CodeModeHostTests(unittest.TestCase):
     @patch("scripts.cargo.subprocess.run")
     @patch("scripts.cargo.prepare_test_executable")
     @patch("scripts.cargo.resolve_v8_cargo_env", return_value={})
-    @patch("scripts.cargo.cargo_command_uses_v8", return_value=False)
-    @patch("scripts.cargo.cargo_command_uses_package")
+    @patch("scripts.cargo.cargo_command_packages")
     def test_remote_compile_only_and_explicit_backend_do_not_prepare(
-        self, uses_package, uses_v8, resolve_v8, prepare, run
+        self, packages, resolve_v8, prepare, run
     ) -> None:
-        uses_package.side_effect = lambda _cargo, _args, _root, package: (
-            package == "ash-remote-server"
-        )
+        packages.return_value = {"ash-remote-server"}
         run.return_value = subprocess.CompletedProcess([], 0)
         for environment, extra in [
             ({}, ["--no-run"]),
@@ -245,19 +290,18 @@ class CodeModeHostTests(unittest.TestCase):
         "scripts.cargo.resolve_v8_cargo_env",
         return_value={"RUSTY_V8_ARCHIVE": "locked"},
     )
-    @patch("scripts.cargo.cargo_command_uses_v8", return_value=False)
-    @patch("scripts.cargo.cargo_command_uses_package")
+    @patch("scripts.cargo.cargo_command_packages")
     def test_library_tests_prepare_the_separate_host_with_locked_v8(
-        self, uses_package, uses_v8, resolve_v8, prepare, run
+        self, packages, resolve_v8, prepare, run
     ) -> None:
-        uses_package.side_effect = lambda _cargo, _args, _root, package: (
-            package == "ash-code-mode"
-        )
+        packages.return_value = {"ash-code-mode"}
         run.return_value = subprocess.CompletedProcess([], 0)
         arguments = ["test", "-p", "ash-app-server", "--lib"]
         self.assertEqual(main(arguments), 0)
         resolve_v8.assert_called_once()
-        uses_v8.assert_not_called()
+        packages.assert_called_once_with(
+            "cargo", arguments, Path(__file__).resolve().parents[1]
+        )
         self.assertEqual(prepare.call_args.args[1], arguments)
         self.assertEqual(prepare.call_args.args[2]["RUSTY_V8_ARCHIVE"], "locked")
         self.assertEqual(
@@ -267,10 +311,9 @@ class CodeModeHostTests(unittest.TestCase):
     @patch("scripts.cargo.subprocess.run")
     @patch("scripts.cargo.prepare_test_executable")
     @patch("scripts.cargo.resolve_v8_cargo_env")
-    @patch("scripts.cargo.cargo_command_uses_v8", return_value=False)
-    @patch("scripts.cargo.cargo_command_uses_package", return_value=False)
+    @patch("scripts.cargo.cargo_command_packages", return_value=set())
     def test_compile_only_and_explicit_host_do_not_prepare_a_host(
-        self, uses_package, uses_v8, resolve_v8, prepare, run
+        self, packages, resolve_v8, prepare, run
     ) -> None:
         run.return_value = subprocess.CompletedProcess([], 0)
         for environment, extra in [
@@ -388,10 +431,10 @@ class ProcessTestRunnerTests(unittest.TestCase):
                 )
                 self.assertEqual(run.call_count, calls)
 
-    @patch("scripts.cargo.cargo_command_uses_package")
+    @patch("scripts.cargo.cargo_command_packages")
     @patch("scripts.cargo.sys.stderr")
     def test_rejects_target_selection_that_would_omit_unit_or_documentation_tests(
-        self, stderr, uses_package
+        self, stderr, packages
     ):
         for options in [
             [],
@@ -412,7 +455,7 @@ class ProcessTestRunnerTests(unittest.TestCase):
                     ]
                 )
             self.assertEqual(error.exception.code, 2)
-        uses_package.assert_not_called()
+        packages.assert_not_called()
 
 
 if __name__ == "__main__":

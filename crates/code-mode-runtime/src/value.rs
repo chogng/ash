@@ -45,8 +45,8 @@ pub(super) fn v8_value_to_json(
 }
 
 pub(super) fn json_to_v8<'s>(
-    scope: &mut v8::PinScope<'s, '_>,
-    value: &JsonValue,
+    scope: &v8::PinScope<'s, '_>,
+    value: &impl serde::Serialize,
 ) -> Result<v8::Local<'s, v8::Value>, String> {
     let json = serde_json::to_string(value).map_err(|error| error.to_string())?;
     let json = v8::String::new(scope, &json)

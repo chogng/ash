@@ -2,20 +2,61 @@
 
 本目录拥有 Code Mode 使用的 `rusty_v8` 输入锁定规则和可选 Bazel 源码构建图，不拥有 JavaScript 执行语义、工具审批或运行时生命周期。运行时实现由 `ash-code-mode-runtime` crate 负责。
 
-产品通过独立的 `ash-code-mode-host` 执行 V8。App Server 只依赖 Host 客户端与共享会话接口，不链接 V8，避免与 WebRTC 所带的 Abseil 静态符号冲突。
+产品通过独立的 `ash-code-mode-host` 和 `ash-js-extension-host` 执行 V8。App Server 只依赖 Host 客户端与共享会话接口，不链接 V8，避免与 WebRTC 所带的 Abseil 静态符号冲突。
 
 ## 构建和打包行为
 
-`runtime-lock.json` 为每个 Ash 发布目标锁定一份启用 V8 沙箱的静态库压缩包和对应 Rust binding，并记录 SHA-256。当前文件来自 OpenAI Codex 的 `rusty-v8-v150.4.0` release，因为 `rusty_v8` 上游没有发布这一版本的沙箱组合产物。
+`runtime-lock.json` 为每个 Ash 发布目标锁定一份启用 V8 沙箱的静态库压缩包和对应 Rust binding，并记录 SHA-256。当前文件来自 OpenAI Codex 的 `rusty-v8-v152.2.0` release，因为 `rusty_v8` 上游没有发布这一版本的沙箱组合产物。
 
 | 场景 | 下载位置 | 最终产品里有什么 |
 | --- | --- | --- |
 | Desktop 本地调试 | `third_party/.cache/v8/v<version>/` | V8 静态链接进本地可执行文件；缓存文件不进 Git |
 | 直接运行 Cargo | `.cargo/config.toml` 将同一目录配置为 `rusty_v8` 本地镜像 | V8 静态链接进构建结果；已有缓存不会访问上游 |
 | Python 发布构建 | `third_party/.cache/v8/v<version>/`，可用参数覆盖缓存根目录 | V8 静态链接进发布可执行文件；不会额外复制 archive 或 binding 到安装包 |
-| Bazel | Bazel repository cache | V8 静态链接进 Bazel 产物 |
+| Bazel | 预编译输入使用 Bazel repository cache；Windows 宿主固定使用 MSVC 配对 | V8 静态链接进 Bazel 产物 |
 
-下载器先校验已有缓存；缓存缺失或摘要不匹配时重新下载，并在原子替换前再次校验。`RUSTY_V8_ARCHIVE` 和 `RUSTY_V8_SRC_BINDING_PATH` 只允许同时覆盖；`V8_FROM_SOURCE=1` 明确选择源码构建并跳过预编译产物解析。
+下载器先校验已有缓存；缓存缺失或摘要不匹配时重新下载，并在原子替换前再次校验。默认包装入口显式传递已校验的 archive、binding 路径和 `RUSTY_V8_ARCHIVE_SHA256`，让上游再次验证静态库，并避免 Cargo 恢复缓存时误用旧 binding。`V8_FROM_SOURCE=1` 明确选择源码构建并跳过预编译产物解析。
+
+显式设置 `RUSTY_V8_ARCHIVE`、`RUSTY_V8_SRC_BINDING_PATH`、`RUSTY_V8_SRC_BINDING_URL`、`RUSTY_V8_MIRROR` 或 `RUSTY_V8_MIRROR_TAG` 时，包装入口直接使用 [rusty_v8 上游的输入选择规则](https://github.com/denoland/rusty_v8/blob/v152.2.0/README.md#the-rusty_v8_archive-environment-variable)，不下载默认配对或改写这些设置。`RUSTY_V8_ARCHIVE` 可以单独指向包含 archive 和 binding 的目录；指定 binding 路径优先于 binding URL，镜像模板、tag 和 fallback 由上游处理。调用方负责提供匹配目标、版本和功能配置的输入，以及需要的 `RUSTY_V8_ARCHIVE_SHA256`。
+
+Windows 的两个 V8 宿主始终作为独立 MSVC 可执行文件构建，复用 Codex 的
+checksum-pinned archive/binding。外围 Bazel 产品仍可使用 gnullvm；进程之间
+走现有 IPC，不把 MSVC Rust/C++ 库链接到 GNU 可执行文件。没有 Windows GNU
+源码回退，也不使用 Linux binding 代替 Windows binding。
+
+`ash_v8_host` 直接使用上游 `rust_binary(platform=...)`，由 Bazel 的
+`platform.flags` 声明 MSVC 平台对应的 exec 配置、C++ 工具链和 Rust 链接器。
+设置覆盖整个宿主依赖闭包，避免 `rules_rust` 在过程宏分析时选择 GNU V8 输入。
+无需内部配置转换、软链接包装或手工转发 runfiles；产物直接使用规范 `.exe` 名称。
+Rust 编译器通过上游 `rules_rust.repository_set` 准备；C++ 使用上游
+`rules_cc` 发现的 Visual Studio Build Tools 和 Windows SDK，Rust 链接使用
+工具链自带的 LLD，以支持 Bazel execroot 的长路径。配置在下一条 Bazel 命令
+生效，外围默认工具链保持不变。MSVC 平台需要 Windows 构建宿主，并安装对应
+CPU 的 C++ Build Tools 与 SDK；其 C++ 工具链设置在该闭包内优先于调用方的
+extra toolchains。
+
+```powershell
+bazel build //:v8_host_binaries
+bazel cquery //:v8_host_binaries --output=files
+bazel info execution_root
+```
+
+若 Bazel 无法自动识别 Visual Studio 安装，使用上游的
+`--repo_env=BAZEL_VC=<Visual Studio 安装目录>/VC`。ARM64 目标需要 ARM64
+工具组件。上述文件集合仅包含两个宿主，查询路径相对于 Bazel 的 execution root；
+incoming platform 转换的输出可能位于带配置后缀的目录，不能拼接旧 wrapper 路径。
+将查询到的文件分别传给 `build/app_server.py`
+的 `--code-mode-host-bin`、`--js-extension-host-bin`。打包器保留这两个独立
+可执行文件及其规范名称，不复制 V8 archive/binding。Windows Cargo 开发打包
+也显式选择 MSVC 目标，避免继承调用者的 `CARGO_BUILD_TARGET=gnullvm`。
+
+Inspector 文件生成继续复用 V8 的 `py_binary` 和 `rules_python` 的解释器、
+依赖与 runfiles，不手工拼接 Python 搜索路径。
+
+Bazel 的输出目录补丁复用 Codex 的 archive 输入判断：设置
+`RUSTY_V8_ARCHIVE` 时，仅把静态库目录放进声明的 `OUT_DIR`，保留上游
+`build_dir()` 的源码构建布局。无需额外环境开关。当前 `rusty_v8` 上游仍把
+静态库放进 Cargo 的父目录，因此这部分适配仍需保留。
 
 ## 本地 Cargo 入口
 
@@ -26,6 +67,18 @@ python3 -B scripts/cargo.py test -p ash-code-mode-runtime
 ```
 
 包装脚本会读取 Cargo 参数中的 `--target`；没有指定时使用当前主机目标。它把锁定文件写入 `rusty_v8` 自己识别的本地镜像布局。缓存存在后，普通 `cargo test`、`cargo check` 和 `cargo build` 会通过 `.cargo/config.toml` 直接读取同一份文件，不需要包装脚本或手工环境变量。`just app`、`just app-check`、`just app-test`、共享开发包的 `prepare.py` 和发布构建负责在缓存缺失时下载并校验文件。
+
+Cargo 包装、开发构建和发布打包入口各查询一次所选包的依赖图，按同一结果准备协议、V8 和语音输入。打包时只查询需要编译的缺失程序；全部 V8 消费者均已提供可执行文件时，其他缺失程序不会触发 V8 下载。源码选择与上游一致：`V8_FROM_SOURCE` 仅接受 `1`、`true`、`yes`；大写值仍走预编译路径。
+
+只做类型检查时，可显式设置 `RUSTY_V8_SKIP_DOWNLOAD=1`；包装入口只下载并校验 binding，跳过静态库。PowerShell 示例：
+
+```powershell
+$env:RUSTY_V8_SKIP_DOWNLOAD = '1'
+python -B scripts/cargo.py check -p ash-v8-runtime
+Remove-Item Env:RUSTY_V8_SKIP_DOWNLOAD
+```
+
+恢复普通构建前必须取消该变量。此模式可能产生上游 build-script warning，不能用来替代需要链接静态库的构建、测试或 `just rust-warnings`。
 
 ## 更新约束
 
@@ -46,7 +99,7 @@ V8、ICU、Chromium libc++/libc++abi、Rust C++ binding、torque、mksnapshot
 
 ```sh
 bazel cquery //third_party/v8:rusty_v8_source_pair --config=v8-source --platforms=@llvm//platforms:linux_amd64_gnu.2.28
-bazel aquery 'mnemonic("CppCompile", filter("v8_150_4_0_binding", deps(//third_party/v8:rusty_v8_source_archive)))' --config=v8-source --platforms=@llvm//platforms:linux_amd64_gnu.2.28 --include_artifacts=false
+bazel aquery 'mnemonic("CppCompile", filter("v8_152_2_0_binding", deps(//third_party/v8:rusty_v8_source_archive)))' --config=v8-source --platforms=@llvm//platforms:linux_amd64_gnu.2.28 --include_artifacts=false
 bazel build //third_party/v8:rusty_v8_source_pair --config=v8-source --platforms=@llvm//platforms:linux_amd64_gnu.2.28
 bazel test //crates/v8-poc:v8-poc-unit-tests --config=v8-source --platforms=@llvm//platforms:linux_amd64_gnu.2.28 --test_arg=--test-threads=1
 ```
@@ -67,9 +120,9 @@ musl 和 macOS 的目标选择；交叉构建时选 `--config=v8-source-arm64` �
 不能把 GNU C++ 工具链与 MSVC archive 混用。本机的验证范围见实际执行结果，
 这些规则的存在不表示全部平台已经验证通过。
 
-源码规则和补丁基于本地 Codex commit
-`2351d9e1b608e6f9d9a3699b71d7eb39ee41cfa4`，对应 V8 `15.0.245.2`、
-crate `150.4.0` 和固定的 Chromium 运行库 revision。`MODULE.bazel` 锁定下载
+源码规则和补丁采用 Codex
+`rusty-v8-v152.2.0` tag 的固定源码输入，对应 V8 `15.2.124.1`、
+crate `152.2.0` 和固定的 Chromium 运行库 revision。`MODULE.bazel` 锁定下载
 与 patch；`BUILD.bazel` 中的配对选择保留源码与预编译两条入口。
 Python 模板依赖和生成器路径统一使用 Ash 的 Python 3.12 工具链；
 构建选择精确版本，不根据宿主机碰巧安装的 `>=3.10` 解释器改变 wheel 配对。
@@ -81,14 +134,14 @@ Python 模板依赖和生成器路径统一使用 Ash 的 Python 3.12 工具链�
 
 ### 独立产物发布
 
-与上述 Codex commit 的源码生产方式对比如下。入口对齐不等于全部平台已经验证：
+与上述 Codex tag 的源码生产方式对比如下。入口对齐不等于全部平台已经验证：
 
 | 环节 | Codex | Ash 当前状态 |
 | --- | --- | --- |
 | Linux/macOS 产物生产 | Bazel 源码配对目标 | 发布复用本地 Bazel 源码图，保存原始 archive |
 | Linux/macOS binding | 使用固定 crate 的 release binding | 相同；不在发布时运行 bindgen |
 | 本地源码反馈 | Bazel 跟踪各个 C++ 动作 | 相同依赖闭包；Linux GNU/musl x64 源码、Cargo 与 Bazel 消费探针已通过 |
-| Windows MSVC | 上游 Cargo/GN | 保留同一构建路线，Bazel GNU 工具链不能消费 MSVC archive |
+| Windows MSVC | 上游 Cargo/GN | 源码生产保留同一路线；Bazel 独立 MSVC 宿主消费预编译 archive，GNU 客户端通过 IPC 调用 |
 | C++ 配置范围 | 发布命令统一配置 Chromium libc++ | Ash 只在 V8 archive 依赖闭包启用，避免影响外围 Rust 构建工具 |
 | Python | workflow 使用 3.12，V8 模板依赖补丁使用 3.11 | workflow、Bazel 解释器与模板依赖统一为精确 3.12 |
 | 沙箱探针 | 调用所链接库的 `v8__V8__IsSandboxEnabled()` | 已使用相同检查，验证静态库配置与 Rust feature 一致 |
@@ -101,7 +154,7 @@ Linux/macOS 使用 `build/v8/release.py bazel-stage` 构建原始配对目标，
 V8、ICU、Chromium 运行库、LLVM SDK 和 crate binding 由 `MODULE.bazel`
 及源码补丁锁定，不再准备 GN 编译器、Clang 19 bindgen 或系统 musl/GNU SDK。
 Windows 从 `source-lock.json` 固定的 `denoland/rusty_v8` commit 递归检出，
-校验子模块、Rust、Chromium C++ 编译器和 Clang 19 后使用 Cargo/GN 构建，
+校验子模块、Rust、源码补丁和 Chromium 编译器 pin 后使用 Cargo/GN 构建，
 保持 archive 的 MSVC ABI。当前不自动运行跨平台源码矩阵。
 
 手动运行 workflow 只构建和验证；推送 `rusty-v8-v<crate-version>` tag
@@ -117,9 +170,11 @@ Rust feature；archive 与 feature 不匹配必须使测试失败。
 Windows ARM64 和 musl ARM64 验证交叉链接；musl x64 链接并执行探针。
 GNU ARM64 使用 Bazel exec 配置中的 x64 生成工具交叉编译，并在单独的 ARM64 runner
 对同一份新产物执行 Cargo 与 Bazel 测试；发布汇总依赖该运行验证通过。
-Windows 的 Clang 23 生成的匿名枚举常量名称不符合此版本 Rust crate 的约定，因此
-绑定使用单独固定版本的 Clang 19，并显式设置其内置头文件目录。
-Windows 绑定工具链由 Chocolatey 安装，准备步骤校验精确版本。
+Windows 使用 `152.2.0` 的上游 Cargo build script 下载固定的 Chromium Clang
+与同 revision 的 libclang，并自动为 bindgen 设置编译器和内置头文件目录。
+不再通过 Chocolatey 安装另一份 Clang 或手工传递 bindgen 参数。产物打包时
+验证 GN 实际选择的编译器路径、Clang/libclang revision 与 libclang.dll；
+源码生产应用与 Codex 相同的 Array.sort 回补，Bazel 和 Windows GN 都必须包含它。
 GNU 源码生产和 Bazel 消费统一选择 LLVM 的 glibc 2.28 平台；musl 使用同时
 声明 LLVM 与 Rust libc 约束的目标平台。宿主生成工具与目标库分别解析工具链。
 musl 的 Cargo 链接器使用固定版本和 SHA-256 的 Zig。x64 使用 `zig cc`，
@@ -133,8 +188,8 @@ ARM64 Cargo 所需的 `__clear_cache` 单独从该固定 Zig 包的 compiler-rt 
 配置转换拥有，汇总核对源码图摘要、平台、CPU 配置和 Bazel 版本，拒绝混入
 GN 生成的 Linux/macOS 产物。
 全部 macOS/Linux 目标还通过仓库现有 Bazel 消费图验证同一份新产物，
-ARM64 musl 只链接，其余目标执行测试。Windows 的 Bazel C++ 工具链目前使用
-GNU ABI，不能验证 MSVC archive，因此这两个目标使用 Cargo 验证。
+ARM64 musl 只链接，其余目标执行测试。Windows MSVC 发布产物仍使用 Cargo 验证；
+Windows 独立宿主的 Bazel MSVC 消费另行验证，不生产 Windows GNU V8 archive。
 Linux 的 Bazel 消费规则会在派生 archive 中弱化两份 libc++ 共用的异常 ABI
 入口，避免重复符号；下载文件和发布摘要保持原样。
 ARM64 Linux 的 Bazel 派生库还合入目标 compiler-rt builtins，补齐 Rust
@@ -155,6 +210,11 @@ pin 的变更在下一次准备命令生效，正在运行的消费者继续使�
 与 archive、binding、每目标 checksum 和 `build.json` 一同保存为 workflow artifact；
 tag 运行还会发布这些文件。构建记录使用 schema 2：Bazel 记录固定输入图摘要、
 工具版本、平台与 CPU 配置，Windows GN 记录上游源码、编译器及 GN 参数。
+Windows 在构建前通过 `release.py windows-tools` 准备上游跳过的 `tools/win`：
+只下载 GN 使用的四个 DebugVisualizers 文件，校验固定 revision 的响应和文件摘要。
+Gitiles 压缩包含请求时间，不能锁定整个包的摘要，因此使用内容稳定的 TEXT 响应。
+工具链校验允许该子模块保持未初始化，但检查其 Git revision 与文件摘要；
+这些输入由 `source-lock.json` 锁定，并写入 Windows 构建记录。
 压缩默认与 Codex 一致，使用 gzip 等级 6 并省略文件名和时间戳。
 本地可显式添加 `--pigz /path/to/pigz --compression-jobs 12` 使用 pigz 2.8
 并行压缩；不根据 PATH 自动切换压缩器。构建记录保存压缩工具、等级及

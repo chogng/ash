@@ -11,15 +11,14 @@ from unittest.mock import patch
 
 from build.lib.targets import TARGETS
 from build.lib.package_binaries import build_binaries, cargo_environment
-from build.lib.package_binaries import resolve_windows_sandbox_binary
 
 
 class CargoBuildTests(unittest.TestCase):
     def setUp(self) -> None:
         boundary = patch(
-            "build.lib.package_binaries.cargo_command_uses_package", return_value=False
+            "build.lib.package_binaries.cargo_command_packages", return_value=set()
         )
-        boundary.start()
+        self.packages = boundary.start()
         self.addCleanup(boundary.stop)
         cache = patch(
             "build.lib.package_binaries.leased_cache",
@@ -51,7 +50,7 @@ class CargoBuildTests(unittest.TestCase):
     )
     def test_shared_runtime_prepares_locked_speech_inputs(self, speech, v8) -> None:
         self.assertEqual(
-            cargo_environment(self.spec),
+            cargo_environment(self.spec, {"v8", "sherpa-onnx-sys"}),
             {
                 "CARGO_BUILD_JOBS": "4",
                 "RUSTY_V8_ARCHIVE": "/locked/v8",
@@ -72,6 +71,94 @@ class CargoBuildTests(unittest.TestCase):
         self.assertEqual(inputs, result)
         run.assert_not_called()
         environment.assert_not_called()
+
+    @patch.dict("os.environ", {"CARGO_BUILD_TARGET": "x86_64-pc-windows-gnullvm"})
+    def test_windows_development_hosts_select_msvc_and_matching_cache(self) -> None:
+        spec = TARGETS["x86_64-pc-windows-msvc"]
+        names = ("ash-code-mode-host", "ash-js-extension-host")
+        executables = {name: self.executable(name + ".exe") for name in names}
+        messages = "\n".join(
+            json.dumps(
+                {
+                    "reason": "compiler-artifact",
+                    "target": {"kind": ["bin"], "name": name},
+                    "executable": str(path),
+                }
+            )
+            for name, path in executables.items()
+        )
+        self.packages.return_value = {"v8"}
+        with (
+            patch(
+                "build.lib.package_binaries.subprocess.run",
+                return_value=subprocess.CompletedProcess([], 0, messages),
+            ) as run,
+            patch(
+                "build.lib.package_binaries.resolve_v8_cargo_env", return_value={}
+            ) as v8,
+            patch(
+                "build.lib.package_binaries.leased_cache", return_value=nullcontext()
+            ) as cache,
+        ):
+            result = build_binaries(
+                self.root,
+                spec,
+                dict.fromkeys(names),
+                cargo="cargo",
+                cargo_profile="dev-small",
+                host_build=True,
+            )
+        self.assertEqual(executables, result)
+        command = run.call_args.args[0]
+        self.assertEqual(spec.target, command[command.index("--target") + 1])
+        self.assertEqual(spec, v8.call_args.args[0])
+        self.assertEqual(spec.target, cache.call_args.kwargs["target_triple"])
+
+    @patch.dict("build.lib.package_binaries.os.environ", {}, clear=True)
+    def test_only_missing_binary_dependencies_prepare_external_inputs(self):
+        cases = (
+            ("ash-package-store", set()),
+            ("ash-code-mode-host", {"v8"}),
+            ("ash-voice-host", {"sherpa-onnx-sys"}),
+        )
+        for name, packages in cases:
+            with self.subTest(name=name):
+                self.packages.return_value = packages
+                reported = self.executable(name)
+                artifact = {
+                    "reason": "compiler-artifact",
+                    "target": {"kind": ["bin"], "name": name},
+                    "executable": str(reported),
+                }
+                with (
+                    patch(
+                        "build.lib.package_binaries.subprocess.run",
+                        return_value=subprocess.CompletedProcess(
+                            [], 0, json.dumps(artifact)
+                        ),
+                    ) as run,
+                    patch(
+                        "build.lib.package_binaries.resolve_v8_cargo_env",
+                        return_value={"RUSTY_V8_ARCHIVE": "v8"},
+                    ) as v8,
+                    patch(
+                        "build.lib.package_binaries.resolve_sherpa_cargo_env",
+                        return_value={"SHERPA_ONNX_LIB_DIR": "speech"},
+                    ) as speech,
+                ):
+                    # A supplied V8 consumer must not cause a download when
+                    # only the other binary is being compiled.
+                    prebuilt = self.executable("prebuilt-js-host")
+                    build_binaries(
+                        self.root,
+                        self.spec,
+                        {"ash-js-extension-host": prebuilt, name: None},
+                        cargo="cargo",
+                        cargo_profile="release",
+                    )
+                self.assertEqual(int("v8" in packages), v8.call_count)
+                self.assertEqual(int("sherpa-onnx-sys" in packages), speech.call_count)
+                self.assertEqual(bool(packages), bool(run.call_args.kwargs["env"]))
 
     def test_mixed_inputs_build_only_missing_binaries_in_one_call(self) -> None:
         prebuilt = self.executable("prebuilt")
@@ -108,7 +195,7 @@ class CargoBuildTests(unittest.TestCase):
         )
         self.assertEqual(self.spec.target, command[command.index("--target") + 1])
         self.assertEqual({"V8": "locked"}, run.call_args.kwargs["env"])
-        environment.assert_called_once_with(self.spec)
+        environment.assert_called_once_with(self.spec, set())
 
     def test_success_without_reported_executable_rejects_stale_output(self) -> None:
         stale = self.root / ".build/cargo" / self.spec.target / "release/ash-app-server"
@@ -162,8 +249,12 @@ class CargoBuildTests(unittest.TestCase):
             patch("build.lib.package_binaries.subprocess.run") as run,
             self.assertRaisesRegex(RuntimeError, "requires a Windows target"),
         ):
-            resolve_windows_sandbox_binary(
-                self.root, self.spec, self.executable("sandbox"), "cargo", "release"
+            build_binaries(
+                self.root,
+                self.spec,
+                {"ash-windows-sandbox": self.executable("sandbox")},
+                cargo="cargo",
+                cargo_profile="release",
             )
         run.assert_not_called()
 
@@ -181,13 +272,19 @@ class CargoBuildTests(unittest.TestCase):
                     ["cargo"], 0, json.dumps(artifact)
                 ),
             ),
-            patch("build.lib.package_binaries.cargo_environment") as environment,
+            patch("build.lib.package_binaries.resolve_v8_cargo_env") as v8,
+            patch("build.lib.package_binaries.resolve_sherpa_cargo_env") as speech,
         ):
-            result = resolve_windows_sandbox_binary(
-                self.root, TARGETS["x86_64-pc-windows-msvc"], None, "cargo", "release"
+            result = build_binaries(
+                self.root,
+                TARGETS["x86_64-pc-windows-msvc"],
+                {"ash-windows-sandbox": None},
+                cargo="cargo",
+                cargo_profile="release",
             )
-        self.assertEqual(executable, result)
-        environment.assert_not_called()
+        self.assertEqual({"ash-windows-sandbox": executable}, result)
+        v8.assert_not_called()
+        speech.assert_not_called()
 
     def test_windows_service_rejects_other_targets_before_building(self) -> None:
         with (
@@ -221,7 +318,8 @@ class CargoBuildTests(unittest.TestCase):
                 "build.lib.package_binaries.subprocess.run",
                 return_value=subprocess.CompletedProcess(["cargo"], 0, artifacts),
             ) as run,
-            patch("build.lib.package_binaries.cargo_environment") as environment,
+            patch("build.lib.package_binaries.resolve_v8_cargo_env") as v8,
+            patch("build.lib.package_binaries.resolve_sherpa_cargo_env") as speech,
         ):
             result = build_binaries(
                 self.root,
@@ -231,7 +329,8 @@ class CargoBuildTests(unittest.TestCase):
                 cargo_profile="release",
             )
         self.assertEqual(executables, result)
-        environment.assert_not_called()
+        v8.assert_not_called()
+        speech.assert_not_called()
         run.assert_called_once()
         command = run.call_args.args[0]
         self.assertEqual(

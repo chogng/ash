@@ -12,7 +12,6 @@ pub enum V8JitMode {
 }
 
 struct V8Initialization {
-    _platform: v8::SharedRef<v8::Platform>,
     allocator: v8::SharedRef<v8::Allocator>,
     jit_mode: V8JitMode,
 }
@@ -70,19 +69,19 @@ fn initialize_v8_with_mode(jit_mode: V8JitMode) -> Result<V8Initialization, Stri
     if !linked_v8_sandbox_enabled() {
         return Err("JavaScript hosts must link against sandbox-enabled V8".into());
     }
-    v8::icu::set_common_data_77(deno_core_icudata::ICU_DATA)
+    v8::icu::set_common_data_78(deno_core_icudata::ICU_DATA)
         .map_err(|error| format!("failed to initialize ICU data: {error}"))?;
     if jit_mode == V8JitMode::Disabled {
         v8::V8::set_flags_from_string("--jitless");
     }
     let platform = v8::new_default_platform(0, false).make_shared();
-    v8::V8::initialize_platform(platform.clone());
+    // rusty_v8 retains the shared platform until engine shutdown.
+    v8::V8::initialize_platform(platform);
     v8::V8::initialize();
     // V8's sandbox allocator lazily initializes PartitionAlloc's process-wide pool
     // without a lock. Create it inside the OnceLock and share it across cell threads.
     let allocator = v8::new_default_allocator().make_shared();
     Ok(V8Initialization {
-        _platform: platform,
         allocator,
         jit_mode,
     })

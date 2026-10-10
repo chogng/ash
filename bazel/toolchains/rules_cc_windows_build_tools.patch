@@ -1,0 +1,7 @@
+# Include standalone Build Tools in vswhere discovery instead of depending on
+# the year-specific fallback paths. Remove when rules_cc includes all products.
+--- a/cc/private/toolchain/windows_cc_configure.bzl
++++ b/cc/private/toolchain/windows_cc_configure.bzl
+@@ -178,1 +178,1 @@
+-        result = repository_ctx.execute([vswhere_binary, "-requires", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64", "-property", "installationPath", "-latest"])
++        result = repository_ctx.execute([vswhere_binary, "-products", "*", "-requires", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64", "-property", "installationPath", "-latest"])

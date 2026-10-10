@@ -16,6 +16,7 @@ from build.lib.cargo import cargo_rendered_diagnostic  # noqa: E402
 from build.lib.cargo import parse_cargo_message  # noqa: E402
 from build.lib.cargo import resolve_cargo_target_directory  # noqa: E402
 from build.lib.cargo_cache import leased_cache  # noqa: E402
+from build.lib.cargo_selection import cargo_command_packages  # noqa: E402
 from build.lib.sherpa import resolve_sherpa_cargo_env  # noqa: E402
 from build.lib.targets import TARGETS  # noqa: E402
 from build.lib.targets import default_target  # noqa: E402
@@ -46,13 +47,8 @@ def development_binaries(*, platform_name: str | None = None) -> list[str]:
 def build_binaries(
     binaries: list[str], environment: dict[str, str]
 ) -> tuple[int, dict[str, Path]]:
-    generate_protocol(root=REPOSITORY_ROOT)
     target = TARGETS[default_target()]
     cargo_environment = environment.copy()
-    cargo_environment.update(resolve_v8_cargo_env(target, environ=cargo_environment))
-    cargo_environment.update(
-        resolve_sherpa_cargo_env(target, environ=cargo_environment)
-    )
     if target.target == "x86_64-pc-windows-msvc":
         cargo_environment.setdefault(
             "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER", "rust-lld"
@@ -71,6 +67,17 @@ def build_binaries(
         command.extend(["--package", BINARY_PACKAGES[binary], "--bin", binary])
     if "ash-voice-host" in binaries:
         command.extend(["--features", "ash-voice-host/host"])
+    packages = cargo_command_packages("cargo", command[1:], REPOSITORY_ROOT)
+    if "ash-app-server-protocol" in packages:
+        generate_protocol(root=REPOSITORY_ROOT)
+    if "v8" in packages:
+        cargo_environment.update(
+            resolve_v8_cargo_env(target, environ=cargo_environment)
+        )
+    if "sherpa-onnx-sys" in packages:
+        cargo_environment.update(
+            resolve_sherpa_cargo_env(target, environ=cargo_environment)
+        )
     executables: dict[str, Path] = {}
     # Cargo writes build progress to stderr; keep it on the terminal while
     # reading JSON diagnostics and executable paths from stdout as they arrive.

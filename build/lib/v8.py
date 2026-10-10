@@ -35,12 +35,6 @@ class V8ArtifactPair:
     version: str
 
 
-@dataclass(frozen=True)
-class ResolvedV8ArtifactPair:
-    archive: Path
-    binding: Path
-
-
 def load_v8_lock(path: Path = DEFAULT_LOCK) -> dict[str, V8ArtifactPair]:
     document = json.loads(path.read_text(encoding="utf-8"))
     if document.get("schemaVersion") != 1 or document.get("runtime") != "rusty-v8":
@@ -109,36 +103,40 @@ def resolve_v8_cargo_env(
     cache_root: Path = DEFAULT_CACHE,
 ) -> dict[str, str]:
     environment = os.environ if environ is None else environ
-    if environment.get("V8_FROM_SOURCE", "").lower() in {"1", "true", "yes"}:
+    if environment.get("V8_FROM_SOURCE") in {"1", "true", "yes"}:
         return {}
 
-    archive_override = environment.get("RUSTY_V8_ARCHIVE")
-    binding_override = environment.get("RUSTY_V8_SRC_BINDING_PATH")
-    if archive_override and binding_override:
-        return {}
-    if archive_override or binding_override:
-        raise RuntimeError(
-            "RUSTY_V8_ARCHIVE and RUSTY_V8_SRC_BINDING_PATH must be set together"
+    # Upstream owns explicit source selection, including archive directories,
+    # binding URLs and mirror tags. Do not replace them with our default pair.
+    if any(
+        environment.get(name)
+        for name in (
+            "RUSTY_V8_ARCHIVE",
+            "RUSTY_V8_SRC_BINDING_PATH",
+            "RUSTY_V8_SRC_BINDING_URL",
+            "RUSTY_V8_MIRROR",
+            "RUSTY_V8_MIRROR_TAG",
         )
-    if environment.get("RUSTY_V8_MIRROR"):
+    ):
         return {}
 
-    resolve_v8_artifacts(spec, lock_path=lock_path, cache_root=cache_root)
-    return {"RUSTY_V8_MIRROR": str(cache_root)}
-
-
-def resolve_v8_artifacts(
-    spec: TargetSpec,
-    *,
-    lock_path: Path = DEFAULT_LOCK,
-    cache_root: Path = DEFAULT_CACHE,
-) -> ResolvedV8ArtifactPair:
     pair = load_v8_lock(lock_path)[spec.target]
     cache_directory = cache_root / f"v{pair.version}"
-    return ResolvedV8ArtifactPair(
-        archive=materialize(pair.archive, cache_directory),
-        binding=materialize(pair.binding, cache_directory),
-    )
+    # Bindgen's cached output can outlive Cargo's restored build outputs. Select
+    # the verified pair explicitly rather than letting a stale binding win.
+    result = {
+        "RUSTY_V8_SRC_BINDING_PATH": str(
+            materialize(pair.binding, cache_directory).resolve()
+        ),
+    }
+    # Match upstream's opt-in check mode: no static library is needed until
+    # linking. Do not enable it automatically for tests or executable builds.
+    if environment.get("RUSTY_V8_SKIP_DOWNLOAD") not in {"1", "true", "yes"}:
+        result.update(
+            RUSTY_V8_ARCHIVE=str(materialize(pair.archive, cache_directory).resolve()),
+            RUSTY_V8_ARCHIVE_SHA256=pair.archive.sha256,
+        )
+    return result
 
 
 def materialize(artifact: LockedFile, cache_directory: Path) -> Path:

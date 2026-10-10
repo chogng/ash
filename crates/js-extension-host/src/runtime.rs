@@ -770,7 +770,7 @@ fn current_invocation(
     } else if args.get(0).is_boolean() && !args.get(0).boolean_value(scope) {
         // Cached document reads and local disposal can run outside a callback. They only query
         // identity; service calls still require the strict form and a live Rust request context.
-        result.set(v8::null(scope).into());
+        result.set_null();
     } else {
         throw(scope, "VS Code service call has no active invocation");
     }

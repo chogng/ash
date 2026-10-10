@@ -13,34 +13,14 @@
      "aarch64-apple-darwin",
  ]
 ===================================================================
---- a/rs/private/cargo_repository.bzl
-+++ b/rs/private/cargo_repository.bzl
-@@ -5,4 +5,10 @@
- def _cargo_repository_impl(rctx):
-     exec_triple = triple(rctx.attr.triple)
-     download_and_extract(rctx, "cargo", "cargo", exec_triple)
-+    # The gnullvm Cargo binary dynamically loads libunwind.dll from the Rust
-+    # toolchain bin directory. rules_rs normally splits Cargo and rustc into
-+    # separate repositories, so merge the matching rustc component into the
-+    # Cargo repository to reproduce rustup's executable layout.
-+    if exec_triple.system == "windows" and exec_triple.abi == "gnullvm":
-+        download_and_extract(rctx, "rustc", "rustc", exec_triple, sha256 = rctx.attr.rustc_sha256)
-     rctx.file("BUILD.bazel", BUILD_for_cargo(exec_triple))
-@@ -12,4 +18,7 @@
-+_CARGO_REPOSITORY_ATTRS = dict(RUST_REPOSITORY_COMMON_ATTR)
-+_CARGO_REPOSITORY_ATTRS["rustc_sha256"] = attr.string()
-+
- cargo_repository = repository_rule(
-     implementation = _cargo_repository_impl,
--    attrs = RUST_REPOSITORY_COMMON_ATTR,
-+    attrs = _CARGO_REPOSITORY_ATTRS,
- )
-===================================================================
---- a/rs/toolchains/module_extension.bzl
-+++ b/rs/toolchains/module_extension.bzl
-@@ -323,4 +323,5 @@
-                     version = base_version,
-                     iso_date = iso_date,
-                     sha256 = _sha_for("cargo", base_version, iso_date, exec_triple),
-+                    rustc_sha256 = _sha_for("rustc", base_version, iso_date, exec_triple),
-                 )
+--- a/rs/toolchains/declare_rustc_toolchains.bzl
++++ b/rs/toolchains/declare_rustc_toolchains.bzl
+@@ -207,7 +207,7 @@
+                 exec_compatible_with = [
+                     "@platforms//os:" + exec_triple.system,
+                     "@platforms//cpu:" + exec_triple.arch,
+-                ],
++                ] + (["@llvm//constraints/windows/abi:gnullvm"] if exec_triple.system == "windows" else []),
+                 target_settings = [
+                     "@rules_rs//rs/toolchains:bpf_targets" if is_bpf else "@rules_rs//rs/toolchains:non_bpf_targets",
+                     bootstrap_setting,
