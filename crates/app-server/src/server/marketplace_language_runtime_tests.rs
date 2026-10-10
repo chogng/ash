@@ -22,16 +22,16 @@ use ash_core_plugins::PluginProvider;
 use ash_core_plugins::PluginsManager;
 use ash_core_plugins::SearchPackagesRequest;
 use ash_core_plugins::SearchPackagesResult;
+use ash_external_ext::packages::DynamicExtensionSourceProvider;
+use ash_external_ext::packages::ExtensionPackages;
+use ash_external_ext::packages::ExtensionPackagesReload;
+use ash_external_ext::packages::ExtensionRootKind;
+use ash_external_ext::packages::ExtensionSourceKind;
 use ash_lsp_server_provider::LspServerLaunch;
 use ash_lsp_server_provider::LspServerProviders;
 use ash_lsp_server_provider::ManagedNodeRuntime;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
-use extension_catalog::DynamicExtensionSourceProvider;
-use extension_catalog::ExtensionCatalog;
-use extension_catalog::ExtensionCatalogReload;
-use extension_catalog::ExtensionRootKind;
-use extension_catalog::ExtensionSourceKind;
 use sha2::Digest;
 use sha2::Sha256;
 
@@ -75,10 +75,10 @@ fn vsix_declarations_enter_the_catalog_and_disappear_after_uninstall() {
             version: Some("1.0.0".into()),
         })
         .unwrap();
-    let mut catalog = ExtensionCatalog::new(Vec::new()).with_dynamic_sources(Arc::new(
+    let mut catalog = ExtensionPackages::new(Vec::new()).with_dynamic_sources(Arc::new(
         MarketplaceExtensionSourceProvider::new(manager.clone()),
     ));
-    let snapshot = catalog.list(ExtensionCatalogReload::Refresh);
+    let snapshot = catalog.list(ExtensionPackagesReload::Refresh);
     assert!(
         snapshot.diagnostics.is_empty(),
         "{:?}",
@@ -109,7 +109,7 @@ fn vsix_declarations_enter_the_catalog_and_disappear_after_uninstall() {
         .unwrap();
     assert!(
         catalog
-            .list(ExtensionCatalogReload::Refresh)
+            .list(ExtensionPackagesReload::Refresh)
             .extensions
             .is_empty()
     );
@@ -184,10 +184,10 @@ fn installed_language_package_projects_assets_and_packaged_server() {
             .is_file()
     );
 
-    let mut catalog = ExtensionCatalog::new(Vec::new()).with_dynamic_sources(Arc::new(
+    let mut catalog = ExtensionPackages::new(Vec::new()).with_dynamic_sources(Arc::new(
         MarketplaceExtensionSourceProvider::new(manager.clone()),
     ));
-    let catalog = catalog.list(ExtensionCatalogReload::Refresh);
+    let catalog = catalog.list(ExtensionPackagesReload::Refresh);
     assert!(catalog.diagnostics.is_empty(), "{:?}", catalog.diagnostics);
     assert_eq!(catalog.extensions.len(), 1);
 
@@ -283,8 +283,8 @@ fn installed_theme_enters_the_shared_declarative_extension_catalog() {
     let provider: Arc<dyn DynamicExtensionSourceProvider> = Arc::new(
         MarketplaceExtensionSourceProvider::new(Arc::clone(&manager)),
     );
-    let mut catalog = ExtensionCatalog::new(Vec::new()).with_dynamic_sources(provider);
-    let snapshot = catalog.list(ExtensionCatalogReload::Refresh);
+    let mut catalog = ExtensionPackages::new(Vec::new()).with_dynamic_sources(provider);
+    let snapshot = catalog.list(ExtensionPackagesReload::Refresh);
     assert_eq!(snapshot.extensions.len(), 1);
     assert_eq!(snapshot.extensions[0].id, "test.example.demo-theme");
     assert_eq!(
@@ -293,17 +293,14 @@ fn installed_theme_enters_the_shared_declarative_extension_catalog() {
     );
     let normalized_manifest: serde_json::Value =
         serde_json::from_str(&snapshot.extensions[0].manifest_json).unwrap();
-    assert_eq!(
-        normalized_manifest["contributes"]["themes"][0]["uiTheme"],
-        "vs-dark"
-    );
+    assert_eq!(normalized_manifest["themes"][0]["appearance"], "dark");
     manager
         .install(InstallPackageRequest {
             package_id: "example.demo-theme@vendor".into(),
             version: Some("1.0.0".into()),
         })
         .unwrap();
-    let snapshot = catalog.list(ExtensionCatalogReload::Refresh);
+    let snapshot = catalog.list(ExtensionPackagesReload::Refresh);
     assert_eq!(
         snapshot
             .extensions
@@ -337,6 +334,44 @@ fn installed_theme_enters_the_shared_declarative_extension_catalog() {
         STANDARD.decode(content.data_base64).unwrap(),
         THEME_MANIFEST
     );
+}
+
+#[test]
+fn a_corrupt_theme_does_not_remove_healthy_marketplace_languages() {
+    let root = tempfile::tempdir().unwrap();
+    let manager =
+        Arc::new(PluginsManager::open(root.path(), providers(Arc::new(LanguageRegistry))).unwrap());
+    for package_id in ["example.demo-theme@test", "example.demo-language@test"] {
+        manager
+            .install(InstallPackageRequest {
+                package_id: package_id.into(),
+                version: Some("1.0.0".into()),
+            })
+            .unwrap();
+    }
+    let theme = manager
+        .local_capability_sources(CapabilityKind::Theme)
+        .unwrap()
+        .remove(0);
+    // A corrupt immutable artifact is retired without removing other capability families.
+    fs::write(theme.host_path().join("package.json"), "invalid JSON").unwrap();
+    let provider = Arc::new(MarketplaceExtensionSourceProvider::new(manager));
+    let mut packages = ExtensionPackages::new(Vec::new()).with_dynamic_sources(provider);
+    let snapshot = packages.list(ExtensionPackagesReload::Refresh);
+    assert_eq!(
+        snapshot
+            .extensions
+            .iter()
+            .map(|extension| extension.id.as_str())
+            .collect::<Vec<_>>(),
+        ["test.example.demo-language"]
+    );
+    assert_eq!(snapshot.diagnostics.len(), 1);
+    assert_eq!(
+        snapshot.diagnostics[0].code,
+        ash_external_ext::packages::ExtensionDiagnosticCode::SourceUnavailable
+    );
+    assert_eq!(packages.list(ExtensionPackagesReload::Cached), snapshot);
 }
 
 struct LanguageRegistry;

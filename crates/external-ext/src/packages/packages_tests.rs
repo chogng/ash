@@ -34,8 +34,8 @@ fn discovers_manifest_and_reads_a_grammar_resource() {
     )
     .expect("grammar");
 
-    let mut catalog = ExtensionCatalog::new(vec![ExtensionRoot::user(root.path())]);
-    let snapshot = catalog.list(ExtensionCatalogReload::Refresh);
+    let mut catalog = ExtensionPackages::new(vec![ExtensionRoot::user(root.path())]);
+    let snapshot = catalog.list(ExtensionPackagesReload::Refresh);
 
     assert_eq!(snapshot.extensions.len(), 1);
     assert_eq!(snapshot.extensions[0].id, "ash.demo");
@@ -72,8 +72,8 @@ fn reports_invalid_manifests_without_registering_them() {
     fs::create_dir_all(&package).expect("package directory");
     fs::write(package.join("package.json"), r#"{"name":"demo"}"#).expect("manifest");
 
-    let mut catalog = ExtensionCatalog::new(vec![ExtensionRoot::user(root.path())]);
-    let snapshot = catalog.list(ExtensionCatalogReload::Refresh);
+    let mut catalog = ExtensionPackages::new(vec![ExtensionRoot::user(root.path())]);
+    let snapshot = catalog.list(ExtensionPackagesReload::Refresh);
 
     assert!(snapshot.extensions.is_empty());
     assert_eq!(snapshot.diagnostics.len(), 1);
@@ -94,12 +94,12 @@ fn rejects_paths_that_escape_the_package() {
     )
     .expect("manifest");
 
-    let mut catalog = ExtensionCatalog::new(vec![ExtensionRoot::user(root.path())]);
-    let snapshot = catalog.list(ExtensionCatalogReload::Refresh);
+    let mut catalog = ExtensionPackages::new(vec![ExtensionRoot::user(root.path())]);
+    let snapshot = catalog.list(ExtensionPackagesReload::Refresh);
 
     assert_eq!(
         catalog.open_resource(snapshot.generation, "ash.demo", "../package.json"),
-        Err(ExtensionCatalogError::InvalidPath)
+        Err(ExtensionPackagesError::InvalidPath)
     );
 }
 
@@ -109,10 +109,10 @@ fn repeated_startup_refreshes_keep_in_flight_resource_reads_valid() {
     let package = write_package(root.path(), "1.0.0");
     fs::write(package.join("theme.json"), b"{}").expect("theme resource");
     fs::write(package.join("grammar.json"), b"[]").expect("grammar resource");
-    let mut catalog = ExtensionCatalog::new(vec![ExtensionRoot::user(root.path())]);
+    let mut catalog = ExtensionPackages::new(vec![ExtensionRoot::user(root.path())]);
 
-    let themes = catalog.list(ExtensionCatalogReload::Refresh);
-    let grammars = catalog.list(ExtensionCatalogReload::Refresh);
+    let themes = catalog.list(ExtensionPackagesReload::Refresh);
+    let grammars = catalog.list(ExtensionPackagesReload::Refresh);
 
     assert_eq!(themes, grammars);
     assert_eq!(
@@ -133,29 +133,29 @@ fn repeated_startup_refreshes_keep_in_flight_resource_reads_valid() {
 
 #[test]
 fn unchanged_empty_catalog_keeps_its_generation() {
-    let mut catalog = ExtensionCatalog::new(Vec::new());
-    let first = catalog.list(ExtensionCatalogReload::Cached);
+    let mut catalog = ExtensionPackages::new(Vec::new());
+    let first = catalog.list(ExtensionPackagesReload::Cached);
 
     assert!(first.generation > 0);
-    assert_eq!(catalog.list(ExtensionCatalogReload::Refresh), first);
-    assert_eq!(catalog.list(ExtensionCatalogReload::Cached), first);
+    assert_eq!(catalog.list(ExtensionPackagesReload::Refresh), first);
+    assert_eq!(catalog.list(ExtensionPackagesReload::Cached), first);
 }
 
 #[test]
 fn diagnostic_changes_advance_the_catalog_generation() {
     let root = tempfile::tempdir().expect("extension root");
-    let mut catalog = ExtensionCatalog::new(vec![ExtensionRoot::user(root.path())]);
-    let first = catalog.list(ExtensionCatalogReload::Refresh);
+    let mut catalog = ExtensionPackages::new(vec![ExtensionRoot::user(root.path())]);
+    let first = catalog.list(ExtensionPackagesReload::Refresh);
     let broken = root.path().join("broken");
     fs::create_dir_all(&broken).expect("broken package directory");
     fs::write(broken.join("package.json"), b"{}").expect("invalid manifest");
 
-    let changed = catalog.list(ExtensionCatalogReload::Refresh);
+    let changed = catalog.list(ExtensionPackagesReload::Refresh);
 
     assert_eq!(changed.extensions, first.extensions);
     assert!(changed.generation > first.generation);
     assert_eq!(changed.diagnostics.len(), 1);
-    assert_eq!(catalog.list(ExtensionCatalogReload::Refresh), changed);
+    assert_eq!(catalog.list(ExtensionPackagesReload::Refresh), changed);
 }
 
 #[test]
@@ -170,10 +170,10 @@ fn rejects_resource_reads_from_a_stale_catalog_generation() {
     .expect("manifest");
     fs::write(package.join("resource.json"), b"{}").expect("resource");
 
-    let mut catalog = ExtensionCatalog::new(vec![ExtensionRoot::user(root.path())]);
-    let stale = catalog.list(ExtensionCatalogReload::Refresh);
+    let mut catalog = ExtensionPackages::new(vec![ExtensionRoot::user(root.path())]);
+    let stale = catalog.list(ExtensionPackagesReload::Refresh);
     fs::write(package.join("resource.json"), b"[]").expect("changed resource");
-    let current = catalog.list(ExtensionCatalogReload::Refresh);
+    let current = catalog.list(ExtensionPackagesReload::Refresh);
 
     assert!(current.generation > stale.generation);
     assert_eq!(
@@ -186,7 +186,7 @@ fn rejects_resource_reads_from_a_stale_catalog_generation() {
     );
     assert_eq!(
         catalog.open_resource(stale.generation, "ash.demo", "resource.json"),
-        Err(ExtensionCatalogError::GenerationConflict)
+        Err(ExtensionPackagesError::GenerationConflict)
     );
     assert_eq!(
         catalog
@@ -204,10 +204,10 @@ fn freezes_package_resources_and_digest_until_refresh() {
     let resource_path = package.join("resource.json");
     fs::write(&resource_path, br#"{"value":"old"}"#).expect("old resource");
 
-    let mut catalog = ExtensionCatalog::new(vec![ExtensionRoot::user(root.path())]);
-    let first = catalog.list(ExtensionCatalogReload::Refresh);
+    let mut catalog = ExtensionPackages::new(vec![ExtensionRoot::user(root.path())]);
+    let first = catalog.list(ExtensionPackagesReload::Refresh);
     let first_digest = first.extensions[0].package_sha256.clone();
-    let unchanged = catalog.list(ExtensionCatalogReload::Refresh);
+    let unchanged = catalog.list(ExtensionPackagesReload::Refresh);
     assert_eq!(unchanged.generation, first.generation);
     assert_eq!(unchanged.extensions[0].package_sha256, first_digest);
     write_manifest(&package, "2.0.0");
@@ -225,7 +225,7 @@ fn freezes_package_resources_and_digest_until_refresh() {
         .expect("frozen resource");
     assert_eq!(frozen.bytes, br#"{"value":"old"}"#);
 
-    let second = catalog.list(ExtensionCatalogReload::Refresh);
+    let second = catalog.list(ExtensionPackagesReload::Refresh);
     assert_eq!(second.extensions[0].version, "2.0.0");
     assert_ne!(second.extensions[0].package_sha256, first_digest);
     let refreshed = catalog
@@ -234,7 +234,7 @@ fn freezes_package_resources_and_digest_until_refresh() {
     assert_eq!(refreshed.bytes, br#"{"value":"new"}"#);
     assert_eq!(
         catalog.open_resource(unchanged.generation, "ash.demo", "resource.json"),
-        Err(ExtensionCatalogError::GenerationConflict)
+        Err(ExtensionPackagesError::GenerationConflict)
     );
 }
 
@@ -243,11 +243,11 @@ fn rejects_a_package_with_an_oversized_file() {
     let root = tempfile::tempdir().expect("extension root");
     let package = write_package(root.path(), "1.0.0");
     let file = File::create(package.join("oversized.bin")).expect("oversized resource");
-    file.set_len(crate::package::MAX_PACKAGE_FILE_BYTES as u64 + 1)
+    file.set_len(super::package::MAX_PACKAGE_FILE_BYTES as u64 + 1)
         .expect("oversized resource length");
 
-    let mut catalog = ExtensionCatalog::new(vec![ExtensionRoot::user(root.path())]);
-    let snapshot = catalog.list(ExtensionCatalogReload::Refresh);
+    let mut catalog = ExtensionPackages::new(vec![ExtensionRoot::user(root.path())]);
+    let snapshot = catalog.list(ExtensionPackagesReload::Refresh);
 
     assert!(snapshot.extensions.is_empty());
     assert_eq!(snapshot.diagnostics.len(), 1);
@@ -274,8 +274,8 @@ fn rejects_a_package_with_a_symbolic_link() {
         panic!("resource symlink: {error}");
     }
 
-    let mut catalog = ExtensionCatalog::new(vec![ExtensionRoot::user(root.path())]);
-    let snapshot = catalog.list(ExtensionCatalogReload::Refresh);
+    let mut catalog = ExtensionPackages::new(vec![ExtensionRoot::user(root.path())]);
+    let snapshot = catalog.list(ExtensionPackagesReload::Refresh);
 
     assert!(snapshot.extensions.is_empty());
     assert_eq!(snapshot.diagnostics.len(), 1);
@@ -292,11 +292,11 @@ fn keeps_the_first_root_when_extension_ids_conflict() {
     let _ = write_package(built_in.path(), "1.0.0");
     let _ = write_package(user.path(), "2.0.0");
 
-    let mut catalog = ExtensionCatalog::new(vec![
+    let mut catalog = ExtensionPackages::new(vec![
         ExtensionRoot::built_in(built_in.path()),
         ExtensionRoot::user(user.path()),
     ]);
-    let snapshot = catalog.list(ExtensionCatalogReload::Refresh);
+    let snapshot = catalog.list(ExtensionPackagesReload::Refresh);
 
     assert_eq!(snapshot.extensions.len(), 1);
     assert_eq!(snapshot.extensions[0].version, "1.0.0");
@@ -321,15 +321,15 @@ fn authority_generation_changes_preserve_unchanged_extension_contents() {
         package,
     )];
     let provider = Arc::new(TestDynamicSourceProvider::new(1, sources.clone()));
-    let mut catalog = ExtensionCatalog::new(Vec::new()).with_dynamic_sources(provider.clone());
-    let first = catalog.list(ExtensionCatalogReload::Cached);
+    let mut catalog = ExtensionPackages::new(Vec::new()).with_dynamic_sources(provider.clone());
+    let first = catalog.list(ExtensionPackagesReload::Cached);
 
     provider.replace(2, sources);
-    let unchanged = catalog.list(ExtensionCatalogReload::Cached);
+    let unchanged = catalog.list(ExtensionPackagesReload::Cached);
 
     assert_eq!(unchanged, first);
     write_manifest(&root.path().join("ash.demo"), "2.0.0");
-    assert_eq!(catalog.list(ExtensionCatalogReload::Cached), first);
+    assert_eq!(catalog.list(ExtensionPackagesReload::Cached), first);
     assert_eq!(
         catalog
             .open_resource(first.generation, "ash.demo", "resource.json")
@@ -352,10 +352,10 @@ fn plugin_authority_packages_precede_user_roots_and_refresh_on_generation_change
             plugin_package,
         )],
     ));
-    let mut catalog = ExtensionCatalog::new(vec![ExtensionRoot::user(user_root.path())])
+    let mut catalog = ExtensionPackages::new(vec![ExtensionRoot::user(user_root.path())])
         .with_dynamic_sources(provider.clone());
 
-    let plugin_snapshot = catalog.list(ExtensionCatalogReload::Cached);
+    let plugin_snapshot = catalog.list(ExtensionPackagesReload::Cached);
 
     assert_eq!(plugin_snapshot.extensions.len(), 1);
     assert_eq!(plugin_snapshot.extensions[0].version, "2.0.0");
@@ -366,7 +366,7 @@ fn plugin_authority_packages_precede_user_roots_and_refresh_on_generation_change
     assert_eq!(plugin_snapshot.diagnostics.len(), 1);
 
     provider.replace(2, Vec::new());
-    let user_snapshot = catalog.list(ExtensionCatalogReload::Cached);
+    let user_snapshot = catalog.list(ExtensionPackagesReload::Cached);
 
     assert!(user_snapshot.generation > plugin_snapshot.generation);
     assert_eq!(user_snapshot.extensions[0].version, "3.0.0");
@@ -387,6 +387,7 @@ impl TestDynamicSourceProvider {
             snapshot: Mutex::new(DynamicExtensionSourceSnapshot {
                 generation,
                 packages,
+                diagnostics: Vec::new(),
             }),
         }
     }
@@ -395,6 +396,7 @@ impl TestDynamicSourceProvider {
         *self.snapshot.lock().unwrap() = DynamicExtensionSourceSnapshot {
             generation,
             packages,
+            diagnostics: Vec::new(),
         };
     }
 }

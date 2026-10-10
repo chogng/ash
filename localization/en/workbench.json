@@ -1,5 +1,9 @@
 {
   "ash": {
+    "extensions.themes.invalidPortableManifest": "The Marketplace theme manifest is invalid.",
+    "extensions.browser.resourceTooLarge": "Browser extension resource exceeds its byte limit.",
+    "extensions.resources.retired": "Extension resource generation has retired.",
+    "extensions.resources.duplicate": "Extension ID is already provided by the product.",
     "appServer.shuttingDown": "App Server is stopping. Wait for it to finish, then reconnect.",
     "debug.saveBeforeStartAll": "Save files and the active untitled editor",
     "debug.saveBeforeStartFiles": "Save files",

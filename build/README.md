@@ -96,7 +96,7 @@ existing output directory. Repository-owned declarative Editor Extensions come f
 unlinked-tree restriction. Their canonical upstream license copy is
 `third_party/vscode/LICENSE.txt` (mirrored from the sibling VS Code source checkout) and is copied
 once to `ash-resources/licenses/vscode/LICENSE.txt`. Runtime discovery and contribution semantics remain owned by
-[`ash-extension-catalog`](../crates/extension-catalog/README.md) and
+[`ash-external-ext::packages`](../crates/external-ext/src/packages/README.md) and
 [`docs/editor-extensions.md`](../docs/editor-extensions.md), not by the package builder.
 Product service inputs come from `resources/product-services/`; the shared assembler copies the regular
 tree and validates the schema-v2 source list, unique names, the official pin, and every source's

@@ -3,7 +3,7 @@
 > This README owns the repository package-set and distribution contract. The cross-layer runtime,
 > trust, refresh, and evolution contract is maintained in
 > [`docs/editor-extensions.md`](../docs/editor-extensions.md); the Rust catalog implementation is
-> documented in [`crates/extension-catalog/README.md`](../crates/extension-catalog/README.md).
+> documented in [`crates/external-ext/src/packages/README.md`](../crates/external-ext/src/packages/README.md).
 
 This directory contains extension package sources and declarative resources shipped with Ash. Packaging
 places the same directory under `ash-resources/extensions/`.
@@ -26,9 +26,8 @@ for the two extension categories and current compatibility paths.
 
 This directory is a runtime input, not a download endpoint. Built-in packages committed here are
 copied into `ash-resources/extensions/` during development and production packaging. Rust source
-packages also build an independent executable in `bin/`; the runtime does not compile their sources. Ash reads
-that trusted package directory through `ash-extension-catalog`; App is only a future consumer extension
-point. A running application does not authenticate to a Git repository to load built-in extensions.
+packages also build an independent executable in `bin/`; the runtime does not compile their sources. TS builds and loads the built-in editor assets directly. App Server validates installed external
+package resources through `ash-external-ext::packages`. A running application does not authenticate to a Git repository to load built-in extensions.
 
 Marketplace language packages are maintained in the separate `ash-marketplace` repository. That
 repository owns versioned sources, server entrypoints, dependency locks, build recipes, licenses,
@@ -60,8 +59,7 @@ register `ssh`, and there is no core resolver fallback.
 
 `markdown-language-features` ships the Markdown preview browser extension. `media-preview`
 declares the image (PNG/JPEG/WebP), audio (MP3/WAV/OGG/OGA), and video (MP4/WebM) editors.
-The Rust catalog owns the media package snapshot and resources; the same package is included
-in the offline browser catalog. Its `customEditors` declarations select product-owned TS
+TS packages and loads its metadata and resources in both Web and Electron. Its `customEditors` declarations select product-owned TS
 renderers, so it has no executable extension entry. File selectors and optional MIME types
 live in the manifest, and editor labels in its English and Chinese NLS resources. Playback
 and codec support belong to the browser/Electron media engine.
@@ -103,7 +101,7 @@ Supported declarative fields are deliberately narrower than a VS Code extension 
 | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------- |
 | `languages`, file/first-line associations, `language-configuration.json` | ✅ loaded and registered                                                                                                 | Editor language registry/configuration                   |
 | `snippets`                                                               | ✅ 有 prefix 的 snippet 注册为 completion；file template 可通过 `New File from Template` 创建 untitled editor            | Editor language completion / extension template registry |
-| `grammars`                                                               | ✅ loaded through Rust resource APIs and TextMate catalog snapshots                                                      | Workbench TextMate service                               |
+| `grammars`                                                               | ✅ loaded through client built-in assets or validated external resources and TextMate snapshots                          | Workbench TextMate service                               |
 | `embeddedLanguages`, `tokenTypes`, bracket scope metadata                | ✅ validated, transported, and projected to Stanza token language/type/bracket metadata                                  | TextMate adapter                                         |
 | `iconThemes`                                                             | Loaded from package resources; supports font and SVG/PNG file icons, light variants, and `workbench.iconTheme` selection | Workbench theme service                                  |
 | `themes`                                                                 | ✅ 严格解析、版本化 catalog、Workbench theme registration 和 active TextMate token projection                            | Extension/theme/TextMate services                        |

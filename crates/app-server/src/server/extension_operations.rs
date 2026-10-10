@@ -19,12 +19,12 @@ use ash_app_server_protocol::protocol::extensions::ExtensionResourceOpenParams;
 use ash_app_server_protocol::protocol::extensions::ExtensionResourceOpenResult;
 use ash_app_server_protocol::protocol::extensions::ExtensionSourceKindDto;
 use ash_app_server_protocol::protocol::resources::ResourceMetadataResult;
-use extension_catalog::ExtensionCatalogError;
-use extension_catalog::ExtensionCatalogReload;
-use extension_catalog::ExtensionDescriptor;
-use extension_catalog::ExtensionDiagnostic;
-use extension_catalog::ExtensionDiagnosticCode;
-use extension_catalog::ExtensionSourceKind;
+use ash_external_ext::packages::ExtensionDescriptor;
+use ash_external_ext::packages::ExtensionDiagnostic;
+use ash_external_ext::packages::ExtensionDiagnosticCode;
+use ash_external_ext::packages::ExtensionPackagesError;
+use ash_external_ext::packages::ExtensionPackagesReload;
+use ash_external_ext::packages::ExtensionSourceKind;
 use serde_json::Value;
 use std::time::Duration;
 
@@ -93,8 +93,8 @@ impl AppServer {
     pub(super) fn extension_list(&self, params: &Value) -> Result<Value, RpcError> {
         let params: ExtensionListParams = decode(params)?;
         let reload = match params.reload {
-            ExtensionCatalogReloadDto::Cached => ExtensionCatalogReload::Cached,
-            ExtensionCatalogReloadDto::Refresh => ExtensionCatalogReload::Refresh,
+            ExtensionCatalogReloadDto::Cached => ExtensionPackagesReload::Cached,
+            ExtensionCatalogReloadDto::Refresh => ExtensionPackagesReload::Refresh,
         };
         let snapshot = self
             .extensions
@@ -211,16 +211,16 @@ fn extension_diagnostic(value: ExtensionDiagnostic) -> ExtensionDiagnosticDto {
     }
 }
 
-fn extension_catalog_error(error: ExtensionCatalogError) -> RpcError {
+fn extension_catalog_error(error: ExtensionPackagesError) -> RpcError {
     let message = match error {
-        ExtensionCatalogError::GenerationConflict => {
+        ExtensionPackagesError::GenerationConflict => {
             AppServerErrorName::ExtensionGenerationConflict
         }
-        ExtensionCatalogError::NotFound => AppServerErrorName::ExtensionNotFound,
-        ExtensionCatalogError::InvalidPath => AppServerErrorName::ExtensionResourceInvalidPath,
-        ExtensionCatalogError::ResourceNotFound => AppServerErrorName::ExtensionResourceNotFound,
-        ExtensionCatalogError::ResourceTooLarge => AppServerErrorName::ExtensionOperationFailed,
-        ExtensionCatalogError::OperationFailed => AppServerErrorName::ExtensionOperationFailed,
+        ExtensionPackagesError::NotFound => AppServerErrorName::ExtensionNotFound,
+        ExtensionPackagesError::InvalidPath => AppServerErrorName::ExtensionResourceInvalidPath,
+        ExtensionPackagesError::ResourceNotFound => AppServerErrorName::ExtensionResourceNotFound,
+        ExtensionPackagesError::ResourceTooLarge => AppServerErrorName::ExtensionOperationFailed,
+        ExtensionPackagesError::OperationFailed => AppServerErrorName::ExtensionOperationFailed,
     };
     RpcError::new(-32040, message)
 }

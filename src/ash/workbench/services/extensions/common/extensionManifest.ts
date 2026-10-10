@@ -117,6 +117,9 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
 		? boundedText(manifest.displayName, "displayName", 256)
 		: descriptor.displayName ?? name;
 	const contributes = manifest.contributes === undefined ? {} : record(manifest.contributes, "Extension contributes");
+	let themes: readonly ExtensionThemeContribution[] = [];
+	if (manifest.themes !== undefined) { themes = parsePortableThemes(manifest); }
+	else if (contributes.themes !== undefined) { themes = parseThemes(contributes.themes, descriptor.id); }
 	return Object.freeze({
 		name,
 		publisher,
@@ -127,7 +130,7 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
 			languages: Object.freeze(contributes.languages === undefined ? [] : parseLanguages(contributes.languages, descriptor.id)),
 			grammars: Object.freeze(contributes.grammars === undefined ? [] : parseGrammars(contributes.grammars, descriptor.id)),
 			snippets: Object.freeze(contributes.snippets === undefined ? [] : parseSnippets(contributes.snippets, descriptor.id)),
-			themes: Object.freeze(contributes.themes === undefined ? [] : parseThemes(contributes.themes, descriptor.id)),
+			themes: Object.freeze(themes),
 			iconThemes: Object.freeze(contributes.iconThemes === undefined ? [] : parseThemes(contributes.iconThemes, descriptor.id)),
 			productIconThemes: Object.freeze(contributes.productIconThemes === undefined ? [] : parseThemes(contributes.productIconThemes, descriptor.id)),
 			colors: parseColors(contributes.colors, descriptor.id),
@@ -270,6 +273,24 @@ function parseSnippets(value: unknown, extensionId: string): readonly ExtensionS
 			language: Object.freeze(languages.map((value, languageIndex) => languageId(value, `Extension '${extensionId}' snippet ${index} language ${languageIndex}`))),
 			path: normalizeResourcePath(snippet.path, `Extension '${extensionId}' snippet ${index} path`),
 		});
+	});
+}
+
+/** Portable Marketplace themes share the same renderer-owned theme registration path. */
+function parsePortableThemes(manifest: Record<string, unknown>): readonly ExtensionThemeContribution[] {
+	const invalid = (): TypeError => new TypeError(localize('extensions.themes.invalidPortableManifest', 'The Marketplace theme manifest is invalid.'));
+	if (manifest.schemaVersion !== 1 || manifest.contributes !== undefined || !Array.isArray(manifest.themes) || !manifest.themes.length || manifest.themes.length > 128 || Object.keys(manifest).some(key => !['schemaVersion', 'themes', 'name', 'publisher', 'version', 'displayName'].includes(key))) { throw invalid(); }
+	const ids = new Set<string>();
+	const paths = new Set<string>();
+	return manifest.themes.map((candidate, index) => {
+		const theme = record(candidate, `Marketplace theme ${index}`);
+		const id = requiredString(theme.id, 'Theme ID', 256);
+		const label = requiredString(theme.displayName, 'Theme display name', 256);
+		const path = normalizeResourcePath(theme.path, 'Theme path');
+		if (!path.startsWith('themes/') || ids.has(id) || paths.has(path) || (theme.appearance !== 'dark' && theme.appearance !== 'light') || Object.keys(theme).some(key => !['id', 'displayName', 'appearance', 'path'].includes(key))) { throw invalid(); }
+		ids.add(id);
+		paths.add(path);
+		return Object.freeze({ id, label, path, uiTheme: theme.appearance === 'dark' ? 'vs-dark' : 'vs' });
 	});
 }
 

@@ -80,7 +80,7 @@ use core_api::CoreError;
 use core_api::ModelSelection;
 use core_api::ModelService;
 use core_api::ModelStreamSink as CoreModelStreamSink;
-use extension_catalog::ExtensionRoot;
+use ash_external_ext::packages::ExtensionRoot;
 use model_provider_info::ModelProviderConfig;
 use model_provider_info::ProviderAccessMode;
 use model_provider_info::ProviderConfigRegistry;
@@ -2391,20 +2391,8 @@ fn resolve_built_in_skill_root(selection: BuiltInSkillRoot) -> BuiltInSkillSourc
 }
 
 fn resolve_extension_roots(profile_root: &std::path::Path) -> Vec<ExtensionRoot> {
-    let mut roots = Vec::new();
-    if let Some(root) = InstallContext::current()
-        .bundled_resource_directory("extensions")
-        .or_else(development_extension_root)
-    {
-        roots.push(ExtensionRoot::built_in(root));
-    }
-    roots.push(ExtensionRoot::user(profile_root.join("extensions")));
-    roots
-}
-
-fn development_extension_root() -> Option<PathBuf> {
-    let candidate = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../extensions");
-    candidate.is_dir().then_some(candidate)
+    // Built-in editor resources are bundled and loaded by the TypeScript client.
+    vec![ExtensionRoot::user(profile_root.join("extensions"))]
 }
 
 fn development_built_in_skill_root() -> Option<PathBuf> {

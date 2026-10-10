@@ -29,7 +29,7 @@ use ash_core_plugins::UninstallMode;
 use ash_core_plugins::UninstallPackageRequest;
 use ash_core_plugins::UpdatePackageRequest;
 use ash_skills_extension::SkillCatalogReload;
-use extension_catalog::ExtensionCatalogReload;
+use ash_external_ext::packages::ExtensionPackagesReload;
 use serde_json::Value;
 
 use super::AppServer;
@@ -370,7 +370,7 @@ impl AppServer {
             log::error!("failed to reconcile Marketplace Skills: {error}");
         }
         if let Ok(mut extensions) = self.extensions.lock() {
-            extensions.list(ExtensionCatalogReload::Refresh);
+            extensions.list(ExtensionPackagesReload::Refresh);
         }
         if let Some(runtime) = &self.marketplace_language_runtime {
             match runtime.providers() {

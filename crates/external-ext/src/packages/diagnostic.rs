@@ -1,7 +1,7 @@
-use crate::ExtensionDiagnostic;
-use crate::ExtensionDiagnosticCode;
-use crate::ExtensionRoot;
-use crate::ExtensionRootKind;
+use super::ExtensionDiagnostic;
+use super::ExtensionDiagnosticCode;
+use super::ExtensionRoot;
+use super::ExtensionRootKind;
 
 pub(crate) fn diagnostic(
     root: &ExtensionRoot,

@@ -7,28 +7,28 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::catalog_budget::CatalogBudget;
-use crate::catalog_budget::CatalogLimit;
-use crate::diagnostic::diagnostic;
-use crate::package::ExtensionPackageSnapshot;
-use crate::package::MAX_MANIFEST_BYTES;
-use crate::package::PackageSnapshotError;
-use crate::package::PackageSnapshotLimits;
-use crate::resource::is_within;
-use crate::resource::mime_type;
-use crate::resource::validate_relative_path;
-use crate::source::DynamicExtensionPackageSource;
-use crate::source::DynamicExtensionSourceProvider;
-use crate::source::DynamicExtensionSourceSnapshot;
-use crate::source::ExtensionRoot;
-use crate::source::ExtensionRootKind;
+use super::budget::PackageBudget;
+use super::budget::PackageLimit;
+use super::diagnostic::diagnostic;
+use super::package::ExtensionPackageSnapshot;
+use super::package::MAX_MANIFEST_BYTES;
+use super::package::PackageSnapshotError;
+use super::package::PackageSnapshotLimits;
+use super::resource::is_within;
+use super::resource::mime_type;
+use super::resource::validate_relative_path;
+use super::source::DynamicExtensionPackageSource;
+use super::source::DynamicExtensionSourceProvider;
+use super::source::DynamicExtensionSourceSnapshot;
+use super::source::ExtensionRoot;
+use super::source::ExtensionRootKind;
 
 const MAX_EXTENSION_ID_LENGTH: usize = 160;
 const MAX_MANIFEST_FIELD_LENGTH: usize = 256;
 
 /// Selects whether a catalog query may reuse its previous discovery snapshot.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ExtensionCatalogReload {
+pub enum ExtensionPackagesReload {
     /// Return the previous snapshot, scanning only when no snapshot exists yet.
     Cached,
     /// Rescan all configured roots, publishing a new generation only when contents change.
@@ -105,7 +105,7 @@ pub struct ExtensionDiagnostic {
 
 /// Immutable result of one extension catalog generation.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ExtensionCatalogSnapshot {
+pub struct ExtensionPackagesSnapshot {
     /// Monotonically increasing generation of the catalog contents.
     pub generation: u64,
     /// Successfully discovered extensions in deterministic order.
@@ -125,7 +125,7 @@ pub struct ExtensionResource {
 
 /// Failure returned when a host requests an extension or package resource.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ExtensionCatalogError {
+pub enum ExtensionPackagesError {
     /// The caller requested a resource from a catalog generation that is no longer current.
     GenerationConflict,
     /// The extension ID is not in the latest discovered catalog.
@@ -141,12 +141,12 @@ pub enum ExtensionCatalogError {
 }
 
 #[derive(Default)]
-pub struct ExtensionCatalog {
+pub struct ExtensionPackages {
     roots: Vec<ExtensionRoot>,
     dynamic_sources: Option<Arc<dyn DynamicExtensionSourceProvider>>,
     dynamic_generation: Option<u64>,
     generation: u64,
-    snapshot: Option<ExtensionCatalogSnapshot>,
+    snapshot: Option<ExtensionPackagesSnapshot>,
     discovered: BTreeMap<String, DiscoveredExtension>,
 }
 
@@ -155,7 +155,7 @@ struct DiscoveredExtension {
     descriptor: ExtensionDescriptor,
 }
 
-impl ExtensionCatalog {
+impl ExtensionPackages {
     /// Creates a catalog from trusted built-in and user roots.
     pub fn new(roots: Vec<ExtensionRoot>) -> Self {
         Self {
@@ -187,7 +187,7 @@ impl ExtensionCatalog {
     }
 
     /// Lists extensions, rescanning roots when requested or when no snapshot exists.
-    pub fn list(&mut self, reload: ExtensionCatalogReload) -> ExtensionCatalogSnapshot {
+    pub fn list(&mut self, reload: ExtensionPackagesReload) -> ExtensionPackagesSnapshot {
         let dynamic = self
             .dynamic_sources
             .as_ref()
@@ -197,7 +197,7 @@ impl ExtensionCatalog {
             Some(Ok(snapshot)) => self.dynamic_generation == Some(snapshot.generation),
             Some(Err(_)) => false,
         };
-        if reload == ExtensionCatalogReload::Cached
+        if reload == ExtensionPackagesReload::Cached
             && dynamic_unchanged
             && let Some(snapshot) = &self.snapshot
         {
@@ -222,7 +222,7 @@ impl ExtensionCatalog {
             .checked_add(1)
             .expect("extension catalog generation overflow");
         self.discovered = discovered;
-        let snapshot = ExtensionCatalogSnapshot {
+        let snapshot = ExtensionPackagesSnapshot {
             generation: self.generation,
             extensions,
             diagnostics,
@@ -237,17 +237,17 @@ impl ExtensionCatalog {
         generation: u64,
         extension_id: &str,
         path: &str,
-    ) -> Result<ExtensionResource, ExtensionCatalogError> {
+    ) -> Result<ExtensionResource, ExtensionPackagesError> {
         if self.snapshot.is_none() {
-            let _ = self.list(ExtensionCatalogReload::Cached);
+            let _ = self.list(ExtensionPackagesReload::Cached);
         }
         if generation != self.generation {
-            return Err(ExtensionCatalogError::GenerationConflict);
+            return Err(ExtensionPackagesError::GenerationConflict);
         }
         let extension = self
             .discovered
             .get(extension_id)
-            .ok_or(ExtensionCatalogError::NotFound)?;
+            .ok_or(ExtensionPackagesError::NotFound)?;
         let relative_path = validate_relative_path(path)?;
         let key = relative_path
             .iter()
@@ -257,7 +257,7 @@ impl ExtensionCatalog {
         let bytes = extension
             .package
             .file(&key)
-            .ok_or(ExtensionCatalogError::ResourceNotFound)?
+            .ok_or(ExtensionPackagesError::ResourceNotFound)?
             .to_vec();
         Ok(ExtensionResource {
             mime_type: mime_type(&relative_path),
@@ -277,7 +277,7 @@ impl ExtensionCatalog {
         let mut extensions = Vec::new();
         let mut diagnostics = Vec::new();
         let mut discovered = BTreeMap::new();
-        let mut budget = CatalogBudget::default();
+        let mut budget = PackageBudget::default();
         for root in self
             .roots
             .iter()
@@ -305,6 +305,9 @@ impl ExtensionCatalog {
                 },
             );
         } else if let Some(dynamic) = dynamic {
+            for diagnostic in &dynamic.diagnostics {
+                budget.push_diagnostic(&mut diagnostics, diagnostic.clone());
+            }
             scan_dynamic_packages(
                 &dynamic.packages,
                 &mut extensions,
@@ -344,7 +347,7 @@ fn scan_root(
     extensions: &mut Vec<ExtensionDescriptor>,
     diagnostics: &mut Vec<ExtensionDiagnostic>,
     discovered: &mut BTreeMap<String, DiscoveredExtension>,
-    budget: &mut CatalogBudget,
+    budget: &mut PackageBudget,
 ) -> CatalogScanControl {
     let canonical_root = match fs::canonicalize(&root.path) {
         Ok(path) => path,
@@ -448,7 +451,7 @@ fn scan_dynamic_packages(
     extensions: &mut Vec<ExtensionDescriptor>,
     diagnostics: &mut Vec<ExtensionDiagnostic>,
     discovered: &mut BTreeMap<String, DiscoveredExtension>,
-    budget: &mut CatalogBudget,
+    budget: &mut PackageBudget,
 ) {
     let mut sources = sources.to_vec();
     sources.sort_by(|left, right| {
@@ -517,7 +520,7 @@ fn publish_package(
     extensions: &mut Vec<ExtensionDescriptor>,
     diagnostics: &mut Vec<ExtensionDiagnostic>,
     discovered: &mut BTreeMap<String, DiscoveredExtension>,
-    budget: &mut CatalogBudget,
+    budget: &mut PackageBudget,
 ) {
     match discover_package(
         root,
@@ -563,12 +566,12 @@ fn publish_package(
 fn catalog_limit_diagnostic(
     root: &ExtensionRoot,
     subject: Option<String>,
-    limit: CatalogLimit,
+    limit: PackageLimit,
 ) -> ExtensionDiagnostic {
     let message = match limit {
-        CatalogLimit::PackageCandidates => "extension catalog contains too many packages",
-        CatalogLimit::SnapshotBytes => "extension catalog snapshot exceeds its total byte limit",
-        CatalogLimit::ManifestResponseBytes => {
+        PackageLimit::PackageCandidates => "extension catalog contains too many packages",
+        PackageLimit::SnapshotBytes => "extension catalog snapshot exceeds its total byte limit",
+        PackageLimit::ManifestResponseBytes => {
             "extension catalog manifest response exceeds its total byte limit"
         }
     };
@@ -725,7 +728,7 @@ fn package_snapshot_error(error: PackageSnapshotError) -> (ExtensionDiagnosticCo
             ExtensionDiagnosticCode::ResourceTooLarge,
             "extension package exceeds its total size limit",
         ),
-        PackageSnapshotError::CatalogTooLarge => (
+        PackageSnapshotError::PackageSetTooLarge => (
             ExtensionDiagnosticCode::ResourceTooLarge,
             "extension catalog snapshot exceeds its total byte limit",
         ),

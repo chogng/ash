@@ -1,8 +1,8 @@
 use ash_core_plugins::PluginActivationAuthority;
+use ash_external_ext::packages::DynamicExtensionPackageSource;
+use ash_external_ext::packages::DynamicExtensionSourceProvider;
+use ash_external_ext::packages::DynamicExtensionSourceSnapshot;
 use ash_plugin::EditorExtensionApi;
-use extension_catalog::DynamicExtensionPackageSource;
-use extension_catalog::DynamicExtensionSourceProvider;
-use extension_catalog::DynamicExtensionSourceSnapshot;
 
 /// Selects declarative and standard API package manifests from the same effective Plugin snapshot.
 pub(super) struct PluginExtensionSourceProvider {
@@ -47,6 +47,7 @@ impl DynamicExtensionSourceProvider for PluginExtensionSourceProvider {
         Ok(DynamicExtensionSourceSnapshot {
             generation: activation.generation(),
             packages,
+            diagnostics: Vec::new(),
         })
     }
 }

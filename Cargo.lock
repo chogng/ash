@@ -445,7 +445,6 @@ dependencies = [
  "ash-exec-server-protocol",
  "ash-execpolicy",
  "ash-extension-api",
- "ash-extension-catalog",
  "ash-external-ext",
  "ash-external-ext-protocol",
  "ash-features",
@@ -1325,16 +1324,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ash-extension-catalog"
-version = "0.1.0"
-dependencies = [
- "ash-file-identity",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
-]
-
-[[package]]
 name = "ash-extension-items"
 version = "0.1.0"
 dependencies = [
@@ -1349,10 +1338,13 @@ version = "0.1.0"
 dependencies = [
  "ash-async-utils",
  "ash-external-ext-protocol",
+ "ash-file-identity",
  "ash-sandboxing",
  "ash-windows-sandbox",
  "getrandom 0.2.17",
  "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
  "thiserror 2.0.19",
 ]
 

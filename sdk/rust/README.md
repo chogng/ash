@@ -15,15 +15,15 @@
 
 `data_channels.rs` 复用现有 DataChannel 注册和 `receiveData` 调用，要求闭合的请求／响应类型。`services.rs` 复用有界反向请求，绑定 profile activation 的 incarnation／generation；Host 逐 Provider 授予秘密命名空间与 HTTP 端点，不开放完整后端连接。现有 `client.rs` 的窗口编辑器调用仍需按各自能力独立验证。
 
-| 现有部分                                  | 当前职责                               | 目标处理                                                       |
-| ----------------------------------------- | -------------------------------------- | -------------------------------------------------------------- |
-| `src/lib.rs`、`languages.rs`、`window.rs` | Rust 回调、注册与 Output 接口          | 能力注册用于 Rust Provider；编辑器模型与 UI 保持客户端所有权             |
-| `runtime.rs`、`cancellation.rs`           | Rust 程序的 stdio 分发、并发回调与取消 | 独立 Rust 程序 runtime 已供产品 Provider 复用；进程监管与权限由共享宿主拥有  |
-| `client.rs`                               | 绑定发起窗口的编辑器服务调用           | 按公开能力接口补验证；不开放 App Server 私有方法或完整后端连接 |
-| `ash-external-ext-protocol`           | 现有可执行 Host v1 的共享 wire 定义    | 按生产调用方清理；目标业务协议继续由 Rust owner 生成           |
+| 现有部分                                  | 当前职责                               | 目标处理                                                                    |
+| ----------------------------------------- | -------------------------------------- | --------------------------------------------------------------------------- |
+| `src/lib.rs`、`languages.rs`、`window.rs` | Rust 回调、注册与 Output 接口          | 能力注册用于 Rust Provider；编辑器模型与 UI 保持客户端所有权                |
+| `runtime.rs`、`cancellation.rs`           | Rust 程序的 stdio 分发、并发回调与取消 | 独立 Rust 程序 runtime 已供产品 Provider 复用；进程监管与权限由共享宿主拥有 |
+| `client.rs`                               | 绑定发起窗口的编辑器服务调用           | 按公开能力接口补验证；不开放 App Server 私有方法或完整后端连接              |
+| `ash-external-ext-protocol`               | 现有可执行 Host v1 的共享 wire 定义    | 按生产调用方清理；目标业务协议继续由 Rust owner 生成                        |
 
 包安装、授权记录和资源目录继续由共享基础设施拥有。GitHub 认证已进入产品 Rust 扩展，API 业务拆分仍是后续工作；通用 Git、存储、SecretStore 和最终授权仍由共享服务拥有。静态目录实现属于
-[`ash-extension-catalog`](../../crates/extension-catalog/README.md)；现有进程 Host 的记录属于
+[`ash-external-ext::packages`](../../crates/external-ext/src/packages/README.md)；现有进程 Host 的记录属于
 [`ash-external-ext`](../../crates/external-ext/README.md)。
 
 ## 迁移与验证要求

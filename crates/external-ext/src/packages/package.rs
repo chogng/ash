@@ -6,8 +6,8 @@ use std::fs;
 use std::io::Read;
 use std::path::Path;
 
-use crate::resource::is_within;
-use crate::resource::validate_relative_path;
+use super::resource::is_within;
+use super::resource::validate_relative_path;
 
 pub(crate) const MAX_MANIFEST_BYTES: usize = 4 * 1024 * 1024;
 pub(crate) const MAX_PACKAGE_FILE_BYTES: usize = 16 * 1024 * 1024;
@@ -39,7 +39,7 @@ impl ExtensionPackageSnapshot {
         let mut total_entries = 0usize;
         let max_total_bytes = limits.max_total_bytes.min(MAX_PACKAGE_BYTES);
         if max_total_bytes == 0 {
-            return Err(PackageSnapshotError::CatalogTooLarge);
+            return Err(PackageSnapshotError::PackageSetTooLarge);
         }
         scan_directory(
             root,
@@ -79,7 +79,7 @@ pub(crate) enum PackageSnapshotError {
     TooManyFiles,
     FileTooLarge,
     PackageTooLarge,
-    CatalogTooLarge,
+    PackageSetTooLarge,
 }
 
 fn scan_directory(
@@ -138,7 +138,7 @@ fn scan_directory(
             return Err(if max_total_bytes == MAX_PACKAGE_BYTES {
                 PackageSnapshotError::PackageTooLarge
             } else {
-                PackageSnapshotError::CatalogTooLarge
+                PackageSnapshotError::PackageSetTooLarge
             });
         }
         let bytes = read_bounded_file(root, &path, metadata.len())?;
@@ -149,7 +149,7 @@ fn scan_directory(
             return Err(if max_total_bytes == MAX_PACKAGE_BYTES {
                 PackageSnapshotError::PackageTooLarge
             } else {
-                PackageSnapshotError::CatalogTooLarge
+                PackageSnapshotError::PackageSetTooLarge
             });
         }
         *total_bytes = next_total_bytes;

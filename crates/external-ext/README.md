@@ -1,6 +1,6 @@
 # `ash-external-ext`
 
-本 crate 位于 `crates/external-ext`，包名为 `ash-external-ext`，Rust 导入名为 `ash_external_ext`，共用 TS/JS 与 Rust 扩展的进程监管语义；语言执行与作者 SDK 分开，进程协议独立保留。重命名保留原有接口与执行行为，App Server 运行管理提取和来源解耦尚未实施。完整命名和来源边界见[共享接入与语言适配的 crate 边界](../../docs/editor-extensions.md#共享接入与语言适配的-crate-边界)。
+本 crate 位于 `crates/external-ext`，包名为 `ash-external-ext`，Rust 导入名为 `ash_external_ext`，共用 TS/JS 与 Rust 扩展的进程监管语义；语言执行与作者 SDK 分开，进程协议独立保留。重命名保留原有接口与执行行为，外部包校验与资源快照已归入 `packages`；内置编辑器资源由 TS 构建和加载。App Server 运行管理提取仍未实施。完整命名和来源边界见[共享接入与语言适配的 crate 边界](../../docs/editor-extensions.md#共享接入与语言适配的-crate-边界)。
 
 > 本 README 记录当前可执行 Editor Extension Host v1 的进程、RPC、授权门禁、取消与故障恢复。
 > 作者使用 [`TS SDK`](../../sdk/typescript/README.md)，JS 由独立的
@@ -12,8 +12,7 @@
 
 `ash-external-ext` 监管一个已经由上层解析和授权的扩展程序。每个
 `ExtensionHostSupervisor` 最多拥有一个扩展的一个活动进程 incarnation，通过有界 JSONL Host RPC v1
-完成握手、激活、调用、取消、停用和关闭，并在授权仍有效时按有界策略恢复崩溃进程。它不发现或
-安装 package，不选择 activation event，不实现 Workbench provider，不实现 VS Code Extension API；该 API 属于产品 JS 宿主。
+完成握手、激活、调用、取消、停用和关闭，并在授权仍有效时按有界策略恢复崩溃进程。包资源由 [`packages`](src/packages/README.md) 校验和冻结，上游 authority 仍选择来源和授权。它不安装 package，不选择 activation event，不实现 Workbench provider，不实现 VS Code Extension API；该 API 属于产品 JS 宿主。
 
 当前 Rust 后端仍提供授权、GitHub、Git、存储等能力；目标核心保留通用机制，GitHub 认证与 API 由可选 TS/JS 或 Rust Provider 拥有。这个 supervisor 共用两类扩展的进程监管；语言 API 兼容和作者 SDK 保持独立，建议的 crate 分工见[共享接入与语言适配的 crate 边界](../../docs/editor-extensions.md#共享接入与语言适配的-crate-边界)。它不拥有具体业务和会话，也不能用旧 Host RPC 示例证明新认证能力可用。JS 入口和回调目前在独立 V8 或 Node 进程执行，
 作者无需实现传输协议。标准 Node 的激活和后台客户端请求由 `supervisor/client.rs` 的有界并发 pump 处理，
@@ -46,23 +45,23 @@ GitHub 认证试点已复用本 Host 的独立进程监管与 Host RPC v1。`Pro
 | Provider invocation  | 路由到精确 registration、deadline、并发取消和结果校验                                    | Command、Language、Debug、Tasks、Testing、DataChannel、LinkPresentation 定义 payload 与消费结果 |
 | Diagnostics / Output | 返回 typed `ExtensionHostError`，保留有界 stderr，并接收受配额约束的扩展命名 Output 事件 | App Server 清洗故障并把 Output 事件投影到 Workbench Output 服务                                 |
 
-出现以下代码表示 ownership 漂移：本 crate 扫描 Marketplace/Plugin 目录、持久化 enable/grant、解释
-`package.json`、注册 Workbench provider、决定工作区信任，或自行把一个普通 Node/WASM 脚本当成
+出现以下代码表示 ownership 漂移：本 crate 扫描 Marketplace/Plugin registry、持久化 enable/grant、解释
+编辑器贡献、注册 Workbench provider、决定工作区信任，或自行把一个普通 Node/WASM 脚本当成
 entrypoint 加载。
 
 ## 2. 文件与公共契约
 
-| 文件                                         | 关键公共契约                                                              | 约束                                                                                   |
-| -------------------------------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| 文件                                     | 关键公共契约                                                              | 约束                                                                                   |
+| ---------------------------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
 | `../external-ext-protocol/src/lib.rs`    | `ExtensionHostRequest`、`ExtensionHostResponse`、`RegistrationDescriptor` | Host 与 SDK 共用的 Host RPC v1 wire shape；严格校验 request/response correlation       |
 | `../external-ext-protocol/src/output.rs` | `ExtensionHostOutputEvent`、`HostOutputOperation`                         | 扩展发起的命名 Output 事件；按 incarnation/generation fencing，不属于静态 registration |
-| `authority.rs`                               | `ActivationAuthority`、`ActivationLease`、`ExtensionActivationSpec`       | 授权是 live gate，不是 activation 时的一次布尔判断                                     |
-| `limits.rs`                                  | `ExtensionHostLimits`、`ProcessIsolationPolicy`                           | 默认要求平台强制隔离；所有 byte/count/deadline limit 必须非零且一致                    |
-| `process.rs`                                 | `ExtensionHostLauncher`、`ExtensionHostProcess`、`ExtensionLaunchCommand` | launcher 在 entrypoint 执行前实施选定策略并应用明确的进程环境                          |
-| `supervisor.rs`                              | `ExtensionHostSupervisor`、`ExtensionHostSnapshot`                        | 一扩展一监管器；注册仅在完整 activation 成功后发布                                     |
-| `supervisor/invocation.rs`                   | `ExtensionInvocation`、`ExtensionInvocationHandle`                        | wait 与 cancel 可由不同线程并发调用；lease 持续到 terminal handling                    |
-| `restart.rs`                                 | `RestartPolicy`、`RestartTracker`                                         | 滑动窗口、指数退避和 terminal `CrashLoop`                                              |
-| `error.rs`                                   | `ExtensionHostError`                                                      | 区分拒绝、配额、协议、退出、超时和 unknown outcome                                     |
+| `authority.rs`                           | `ActivationAuthority`、`ActivationLease`、`ExtensionActivationSpec`       | 授权是 live gate，不是 activation 时的一次布尔判断                                     |
+| `limits.rs`                              | `ExtensionHostLimits`、`ProcessIsolationPolicy`                           | 默认要求平台强制隔离；所有 byte/count/deadline limit 必须非零且一致                    |
+| `process.rs`                             | `ExtensionHostLauncher`、`ExtensionHostProcess`、`ExtensionLaunchCommand` | launcher 在 entrypoint 执行前实施选定策略并应用明确的进程环境                          |
+| `supervisor.rs`                          | `ExtensionHostSupervisor`、`ExtensionHostSnapshot`                        | 一扩展一监管器；注册仅在完整 activation 成功后发布                                     |
+| `supervisor/invocation.rs`               | `ExtensionInvocation`、`ExtensionInvocationHandle`                        | wait 与 cancel 可由不同线程并发调用；lease 持续到 terminal handling                    |
+| `restart.rs`                             | `RestartPolicy`、`RestartTracker`                                         | 滑动窗口、指数退避和 terminal `CrashLoop`                                              |
+| `error.rs`                               | `ExtensionHostError`                                                      | 区分拒绝、配额、协议、退出、超时和 unknown outcome                                     |
 
 `ExtensionHostLauncher` 和 `ActivationAuthority` 是 host adapter 必须实现的两个端口。前者拥有物理
 隔离，后者拥有“当前是否仍可运行”的 live decision；不能用一个启动时缓存的 `true` 替代后者。
@@ -76,7 +75,7 @@ entrypoint 加载。
 | `ExtensionHostSupervisor::context`             | 分配非零且不复用的 request ID，并绑定 incarnation 与 activation generation                                                     | 跨进程持久 ID                           | exhaustion/correlation tests                            |
 | `reserve_pending`                              | 在写 stdin 前预留 waiter，分别约束普通请求和 control request，并拒绝 request ID 重用                                           | provider-level scheduling               | concurrent cancel、quota、duplicate-ID tests            |
 | `spawn_stdout_reader`                          | 有界读取 frame，区分 correlated response、client request 与 Output event；前者匹配 pending request，后者严格校验并进入有界队列 | Workbench channel registry 或无限缓冲   | malformed/oversized/correlation/Output quota tests      |
-| `external_ext_protocol::read_frame`               | 在分配增长前校验 frame byte ceiling，并要求换行终止                                                                            | JSON semantic validation                | exact-boundary tests                                    |
+| `external_ext_protocol::read_frame`            | 在分配增长前校验 frame byte ceiling，并要求换行终止                                                                            | JSON semantic validation                | exact-boundary tests                                    |
 | `ExtensionInvocationHandle::wait`              | 轮询 terminal response，观察 caller/deadline cancellation，执行 grace 后 unknown-outcome recovery                              | 把超时当成确认失败                      | cancel/deadline/indeterminate/restart tests             |
 | `ExtensionHostSupervisor::recover_locked`      | 清除旧注册和 leases、终止旧进程、消费 restart budget、重新握手和激活                                                           | 无限重启或跨授权恢复                    | crash-window/backoff/authority-revoked tests            |
 | `validate_registrations`                       | 检查注册数量、ID 唯一性、字段限制和 manifest capability ceiling                                                                | 实现 provider 业务语义                  | protocol capability/duplicate/size tests                |

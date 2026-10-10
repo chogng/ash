@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use super::ExtensionDiagnostic;
+
 /// Identifies the provenance of a static extension package.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ExtensionRootKind {
@@ -99,6 +101,8 @@ pub struct DynamicExtensionSourceSnapshot {
     pub generation: u64,
     /// Exact package directories in stable authority order.
     pub packages: Vec<DynamicExtensionPackageSource>,
+    /// Failures isolated to one authority or package; healthy sources remain available.
+    pub diagnostics: Vec<ExtensionDiagnostic>,
 }
 
 /// Supplies exact extension package directories without transferring lifecycle ownership.

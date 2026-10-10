@@ -4,8 +4,8 @@ use ash_core_plugins::PluginAuthorityCommand;
 use ash_core_plugins::PluginAuthorityCommandId;
 use ash_core_plugins::PluginAuthorityCommandRequest;
 use ash_core_plugins::PluginPackageStore;
+use ash_external_ext::packages::DynamicExtensionSourceProvider;
 use ash_plugin::LocalPluginPackage;
-use extension_catalog::DynamicExtensionSourceProvider;
 use std::fs;
 use std::sync::Arc;
 
@@ -41,11 +41,11 @@ fn standard_package_declarations_share_runtime_enablement_and_revocation() {
         .unwrap()
         .package;
     let provider = Arc::new(PluginExtensionSourceProvider::new(authority.clone()));
-    let mut catalog =
-        extension_catalog::ExtensionCatalog::new(vec![]).with_dynamic_sources(provider.clone());
+    let mut catalog = ash_external_ext::packages::ExtensionPackages::new(vec![])
+        .with_dynamic_sources(provider.clone());
     assert!(
         catalog
-            .list(extension_catalog::ExtensionCatalogReload::Cached)
+            .list(ash_external_ext::packages::ExtensionPackagesReload::Cached)
             .extensions
             .is_empty()
     );
@@ -69,7 +69,7 @@ fn standard_package_declarations_share_runtime_enablement_and_revocation() {
     let sources = provider.snapshot().unwrap();
     assert_eq!(sources.packages.len(), 1);
     assert_eq!(sources.packages[0].subject, "acme/standard:tasks");
-    let snapshot = catalog.list(extension_catalog::ExtensionCatalogReload::Cached);
+    let snapshot = catalog.list(ash_external_ext::packages::ExtensionPackagesReload::Cached);
     assert!(
         snapshot.diagnostics.is_empty(),
         "{:?}",
@@ -94,7 +94,7 @@ fn standard_package_declarations_share_runtime_enablement_and_revocation() {
         "revoke",
         PluginAuthorityCommand::RevokeGrant { package: installed },
     );
-    let retired = catalog.list(extension_catalog::ExtensionCatalogReload::Cached);
+    let retired = catalog.list(ash_external_ext::packages::ExtensionPackagesReload::Cached);
     assert!(retired.generation > snapshot.generation);
     assert!(retired.extensions.is_empty());
     assert!(
@@ -186,4 +186,58 @@ fn write_plugin(root: &std::path::Path) {
     )
     .unwrap();
     fs::write(root.join("extensions/theme/themes/theme.json"), "{}").unwrap();
+}
+
+#[test]
+fn one_failed_authority_does_not_remove_other_external_packages() {
+    use super::super::marketplace_extension_sources::CombinedExtensionSourceProvider;
+    use ash_external_ext::packages::DynamicExtensionPackageSource;
+    use ash_external_ext::packages::DynamicExtensionSourceSnapshot;
+    use ash_external_ext::packages::ExtensionDiagnosticCode;
+    use ash_external_ext::packages::ExtensionPackages;
+    use ash_external_ext::packages::ExtensionPackagesReload;
+
+    struct FailedSource;
+    impl DynamicExtensionSourceProvider for FailedSource {
+        fn snapshot(&self) -> Result<DynamicExtensionSourceSnapshot, String> {
+            Err("source unavailable".into())
+        }
+    }
+    struct HealthySource(std::path::PathBuf);
+    impl DynamicExtensionSourceProvider for HealthySource {
+        fn snapshot(&self) -> Result<DynamicExtensionSourceSnapshot, String> {
+            Ok(DynamicExtensionSourceSnapshot {
+                generation: 1,
+                packages: vec![DynamicExtensionPackageSource::plugin("healthy", &self.0)],
+                diagnostics: Vec::new(),
+            })
+        }
+    }
+    let root = tempfile::tempdir().unwrap();
+    fs::write(
+        root.path().join("package.json"),
+        r#"{"name":"healthy","publisher":"test","version":"1.0.0"}"#,
+    )
+    .unwrap();
+    fs::write(root.path().join("resource.txt"), "healthy resource").unwrap();
+    let combined = CombinedExtensionSourceProvider::new(vec![
+        Arc::new(FailedSource),
+        Arc::new(HealthySource(root.path().to_path_buf())),
+    ]);
+    let mut packages = ExtensionPackages::new(Vec::new()).with_dynamic_sources(Arc::new(combined));
+    let snapshot = packages.list(ExtensionPackagesReload::Refresh);
+    assert_eq!(snapshot.extensions[0].id, "test.healthy");
+    assert_eq!(snapshot.diagnostics.len(), 1);
+    assert_eq!(
+        snapshot.diagnostics[0].code,
+        ExtensionDiagnosticCode::SourceUnavailable
+    );
+    assert_eq!(
+        packages
+            .open_resource(snapshot.generation, "test.healthy", "resource.txt")
+            .unwrap()
+            .bytes,
+        b"healthy resource"
+    );
+    assert_eq!(packages.list(ExtensionPackagesReload::Cached), snapshot);
 }

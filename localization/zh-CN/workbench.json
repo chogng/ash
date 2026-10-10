@@ -1,5 +1,9 @@
 {
   "ash": {
+    "extensions.themes.invalidPortableManifest": "Marketplace 主题清单无效。",
+    "extensions.browser.resourceTooLarge": "浏览器扩展资源超过大小限制。",
+    "extensions.resources.retired": "扩展资源版本已失效。",
+    "extensions.resources.duplicate": "产品已提供同名扩展。",
     "appServer.shuttingDown": "App Server 正在停止。请等待停止完成后重新连接。",
     "debug.saveBeforeStartAll": "保存文件和活动的无标题编辑器",
     "debug.saveBeforeStartFiles": "保存文件",

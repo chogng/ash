@@ -40,7 +40,7 @@ export interface ExtensionResourceRequest {
 
 export const MAX_EXTENSION_RESOURCE_BYTES = 16 * 1024 * 1024;
 
-/** Renderer-facing capability for reading static, Rust-validated extension resources. */
+/** Client package metadata and resources, with host validation for installed external packages. */
 export interface IExtensionApi {
 	list(reload: ExtensionCatalogReload): Promise<ExtensionCatalog>;
 	readonly resources: IExtensionResourceLoaderService;

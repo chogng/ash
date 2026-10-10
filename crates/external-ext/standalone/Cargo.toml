@@ -9,10 +9,16 @@ doctest = false
 path = "../src/lib.rs"
 
 [dependencies]
+ash-file-identity = { path = "../../file-identity" }
+sha2 = "0.10"
+getrandom = "0.2"
 ash-async-utils = { path = "../../async-utils" }
 ash-sandboxing = { path = "../../sandboxing" }
 external-ext-protocol = { package = "ash-external-ext-protocol", path = "../../external-ext-protocol" }
 serde_json = "1"
 thiserror = "2"
+
+[dev-dependencies]
+tempfile = "3"
 
 [workspace]

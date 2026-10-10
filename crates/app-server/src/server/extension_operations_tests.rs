@@ -1,6 +1,6 @@
 use super::extension_catalog_error;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
-use extension_catalog::ExtensionCatalogError;
+use ash_external_ext::packages::ExtensionPackagesError;
 
 #[test]
 fn an_unconfigured_gallery_is_reported_without_exposing_a_resource() {
@@ -115,7 +115,7 @@ impl ash_core_plugins::PluginProvider for GalleryWithoutIo {
 
 #[test]
 fn stale_extension_generations_have_a_distinct_rpc_error() {
-    let error = extension_catalog_error(ExtensionCatalogError::GenerationConflict);
+    let error = extension_catalog_error(ExtensionPackagesError::GenerationConflict);
 
     assert_eq!(error.code, -32040);
     assert_eq!(
@@ -130,8 +130,8 @@ fn extension_catalog_exposes_its_authorized_package_location_and_execution_platf
     use crate::server::AppServer;
     use ash_core::InMemoryThreadStore;
     use ash_core::ThreadController;
+    use ash_external_ext::packages::ExtensionRoot;
     use ash_model_provider::EchoModel;
-    use extension_catalog::ExtensionRoot;
     use std::sync::Arc;
     let root = tempfile::tempdir().unwrap();
     let package = root.path().join("package with spaces");

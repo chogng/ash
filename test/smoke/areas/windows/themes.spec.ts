@@ -153,6 +153,10 @@ test.describe('Workbench shell colors', () => {
 		const commandCenter = titleBar.locator('.ash-titlebar-command-center-button');
 		const welcome = workbench.editors.groupAt(0).welcome;
 
+		// An empty window starts with the sidebar hidden, so select a view before asserting its selected colors.
+		await activityBar.getByRole('tab', { name: 'Explorer', exact: true }).click();
+		await expect(activityBar.getByRole('tab', { name: 'Explorer', exact: true })).toHaveAttribute('aria-selected', 'true');
+
 		await workbench.setAppearance(application, 'dark');
 		await expect(workbench.element).toHaveAttribute('data-color-theme', 'ash-dark');
 		await expect(welcome).toHaveCSS('background-color', 'rgb(30, 30, 30)');

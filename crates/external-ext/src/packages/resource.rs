@@ -1,21 +1,21 @@
 use std::path::Path;
 use std::path::PathBuf;
 
-use crate::ExtensionCatalogError;
+use super::ExtensionPackagesError;
 
-pub(crate) fn validate_relative_path(path: &str) -> Result<PathBuf, ExtensionCatalogError> {
+pub(crate) fn validate_relative_path(path: &str) -> Result<PathBuf, ExtensionPackagesError> {
     if path.is_empty()
         || path.len() > 1024
         || path.starts_with('/')
         || path.contains('\\')
         || path.contains(':')
     {
-        return Err(ExtensionCatalogError::InvalidPath);
+        return Err(ExtensionPackagesError::InvalidPath);
     }
     let mut relative = PathBuf::new();
     for segment in path.split('/') {
         if segment.is_empty() || segment == "." || segment == ".." || segment.contains('\0') {
-            return Err(ExtensionCatalogError::InvalidPath);
+            return Err(ExtensionPackagesError::InvalidPath);
         }
         relative.push(segment);
     }

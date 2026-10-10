@@ -4,11 +4,11 @@
 > preparation, and registration lifecycle. The cross-layer product behavior and trust model are
 > canonical in [`docs/editor-extensions.md`](../../../../../docs/editor-extensions.md); Rust
 > filesystem catalog details are in
-> [`crates/extension-catalog/README.md`](../../../../../crates/extension-catalog/README.md).
+> [`crates/external-ext/src/packages/README.md`](../../../../../crates/external-ext/src/packages/README.md).
 
-This service is the Workbench composition boundary for static extension packages. Rust owns
-server-backed discovery and immutable resource authority; `build/resources/extensions.ts` prepares
-the packaged browser catalog used by offline windows. Runtime adapters convert transport DTOs; this service
+This service is the Workbench composition boundary for static extension packages. TS builds and loads built-in editor resources for Web and Electron.
+`ash-external-ext::packages` validates only host-selected external package resources. The TS adapter
+combines both sources with built-in precedence and maps resource generations to their owners. Runtime adapters convert transport DTOs; this service
 owns Workbench catalog types and decides which supported declarative contributions become active.
 It never executes extension JavaScript or gives extensions editor DOM, model, Worker-port, or host
 filesystem access.
@@ -23,8 +23,7 @@ Only universal Open VSX packages are supported, matching the existing provider.
 
 The product direction is TS/JS extensions running in an isolated JS host, with a TS SDK delegating
 editor and UI operations to their TS services and backend operations to Rust. This declarative
-loader remains responsible for resources; it does not become the JS runtime. The Rust author SDK
-and executable Editor Extension Host are no longer the target extension entry points. Source
+loader remains responsible for resources; it does not become the JS runtime. The TS and Rust author SDKs expose public extension contracts; runtime ownership remains separate. Source
 retirement, the complete TS SDK, and per-extension authorization are not complete; see the
 [direction and current status](../../../../../docs/editor-extensions.md#0-确定的产品方向).
 
@@ -36,31 +35,31 @@ Both static contribution loaders refresh on Marketplace changes, including remov
 
 ## Ownership
 
-| Area                                                             | Owner                                     | Current contract                                                                            |
-| ---------------------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Trusted roots, immutable package snapshot, digest and generation | `ash-extension-catalog::ExtensionCatalog` | Built-in first, profile second; direct child packages only                                  |
-| Renderer transport and exact-shape normalization                 | `platform/extensions/*`                   | `IExtensionApi.list` and its shared `IExtensionResourceLoaderService`                                    |
-| Workbench catalog/domain types                                   | `common/extensionService.ts`              | Does not expose generated DTO or manifest JSON                                              |
-| Supported manifest parsing                                       | `parseExtensionManifest`                  | Identity plus languages, grammars, snippets, color/icon themes, and debuggers               |
-| Workbench lifecycle                                              | `AppServerExtensionService`               | Serialized/coalesced refresh with full candidate preparation and one event-barrier commit   |
-| Selectable color themes                                          | `ExtensionColorThemeService`              | Manifest/resource loading, replaceable Workbench registrations, and renderer-owned lifetime |
-| Grammar/Worker materialization                                   | `workbench/services/textMate`             | Latest complete catalog and independent failure event                                       |
-| Language/configuration/completion                                | Stanza language services                  | Caller-owned disposable registrations                                                       |
-| Declarative Debug Adapter lookup                                 | `ExtensionDebugAdapterRegistry`           | Unique debugger type to bounded command descriptor                                          |
+| Area                                                             | Owner                                           | Current contract                                                                                |
+| ---------------------------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Trusted roots, immutable package snapshot, digest and generation | `ash-external-ext::packages::ExtensionPackages` | External authority packages before profile roots; built-ins are client assets                   |
+| Renderer transport and exact-shape normalization                 | `platform/extensions/*`                         | `IExtensionApi.list` and its shared `IExtensionResourceLoaderService`                           |
+| Workbench catalog/domain types                                   | `common/extensionService.ts`                    | Does not expose generated DTO or manifest JSON                                                  |
+| Supported manifest parsing                                       | `parseExtensionManifest`                        | Identity plus languages, grammars, snippets, color/icon themes, and debuggers                   |
+| Workbench lifecycle                                              | `AppServerExtensionService`                     | Serialized/coalesced refresh with full candidate preparation and one event-barrier commit       |
+| Selectable color themes                                          | `ExtensionColorThemeService`                    | Portable/standard manifests, resource loading, replaceable registrations, and renderer lifetime |
+| Grammar/Worker materialization                                   | `workbench/services/textMate`                   | Latest complete catalog and independent failure event                                           |
+| Language/configuration/completion                                | Stanza language services                        | Caller-owned disposable registrations                                                           |
+| Declarative Debug Adapter lookup                                 | `ExtensionDebugAdapterRegistry`                 | Unique debugger type to bounded command descriptor                                              |
 
 ## Supported contribution projection
 
-| Contribution             | Projection                                                                                                  | Current limitation                                                                                                           |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `languages`              | Language identity, file/MIME/first-line associations                                                        | No manifest localization                                                                                                     |
-| language `configuration` | Parsed JSONC to Stanza language configuration                                                               | Only the existing Stanza configuration vocabulary                                                                            |
-| `snippets`               | Prefix-bearing snippets become completion providers; file templates power `New File from Template`          | Template bodies create language-tagged untitled editors                                                                      |
-| `grammars`               | Root/injection loader plus advanced embedded/token/bracket metadata                                         | TextMate service owns later materialization                                                                                  |
-| `themes`                 | Parsed metadata catalog; `ExtensionColorThemeService` independently owns selectable color themes            | Package-relative JSON `include` is resolved before registration; manifest NLS placeholders use deterministic fallback labels |
-| `iconThemes`             | Package-relative fonts and SVG/PNG file icons; selectable through `workbench.iconTheme`                     | File associations and light variants; folder-specific associations are not consumed by the current file label contract       |
-| `productIconThemes`      | Package-relative SVG artwork for semantic product icon IDs; selectable through `workbench.productIconTheme` | Unspecified IDs keep Ash's built-in SVG artwork                                                                              |
-| `problemMatchers` / `problemPatterns` | Bounded named patterns, matcher inheritance and background declarations enter the task matcher registry | Search-based file locations remain incomplete |
-| `debuggers`              | Unique type, label, adapter program, and args                                                               | Discovery only; no VS Code Debug Extension API                                                                               |
+| Contribution                          | Projection                                                                                                  | Current limitation                                                                                                           |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `languages`                           | Language identity, file/MIME/first-line associations                                                        | No manifest localization                                                                                                     |
+| language `configuration`              | Parsed JSONC to Stanza language configuration                                                               | Only the existing Stanza configuration vocabulary                                                                            |
+| `snippets`                            | Prefix-bearing snippets become completion providers; file templates power `New File from Template`          | Template bodies create language-tagged untitled editors                                                                      |
+| `grammars`                            | Root/injection loader plus advanced embedded/token/bracket metadata                                         | TextMate service owns later materialization                                                                                  |
+| `themes`                              | Parsed metadata catalog; `ExtensionColorThemeService` independently owns selectable color themes            | Package-relative JSON `include` is resolved before registration; manifest NLS placeholders use deterministic fallback labels |
+| `iconThemes`                          | Package-relative fonts and SVG/PNG file icons; selectable through `workbench.iconTheme`                     | File associations and light variants; folder-specific associations are not consumed by the current file label contract       |
+| `productIconThemes`                   | Package-relative SVG artwork for semantic product icon IDs; selectable through `workbench.productIconTheme` | Unspecified IDs keep Ash's built-in SVG artwork                                                                              |
+| `problemMatchers` / `problemPatterns` | Bounded named patterns, matcher inheritance and background declarations enter the task matcher registry     | Search-based file locations remain incomplete                                                                                |
+| `debuggers`                           | Unique type, label, adapter program, and args                                                               | Discovery only; no VS Code Debug Extension API                                                                               |
 
 `configurationDefaults`, `semanticTokenScopes`, extension JavaScript, LSP declarations, and dynamic
 UI are not activated by this loader.

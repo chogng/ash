@@ -103,3 +103,45 @@ test('dedicated renderer loads extension themes and retains the last valid regis
 	assert.equal(WorkbenchThemesRegistry.getColorTheme(themeId), undefined);
 	assert.equal(listener, undefined);
 });
+
+
+test('the renderer loads a portable Marketplace theme and rejects invalid declarations before replacing it', async () => {
+	const portable = { schemaVersion: 1, themes: [{ id: 'portable', displayName: 'Portable', appearance: 'dark', path: 'themes/portable.json' }] };
+	let contents: unknown = portable;
+	let generation = 1;
+	const descriptor = { id: 'marketplace.example', name: 'example', publisher: 'marketplace', version: '1.0.0', displayName: 'Example', sourceKind: 'marketplace' as const, packageSha256: `sha256:${'a'.repeat(64)}` };
+	const api: IExtensionApi = {
+		list: async () => {
+			const manifestJson = JSON.stringify({ ...contents as object, name: descriptor.name, publisher: descriptor.publisher, version: descriptor.version });
+			return { generation, diagnostics: [], extensions: [{ ...descriptor, manifestJson, manifestSha256: `sha256:${createHash('sha256').update(manifestJson).digest('hex')}` }] };
+		},
+		resources: new ExtensionResourceLoaderService(async request => {
+			assert.equal(request.path, 'themes/portable.json');
+			return new TextEncoder().encode('{"colors":{"editor.background":"#123456"}}');
+		}),
+	};
+	const themeId = 'extension-marketplace-example-portable';
+	{
+		using service = new ExtensionColorThemeService(api, { subscribe: () => ({ dispose() { } }) });
+		await service.start();
+		assert.equal(WorkbenchThemesRegistry.getColorTheme(themeId)?.getColorCss(editorBackground), '#123456');
+		for (const invalid of [
+			{ ...portable, schemaVersion: 2 },
+			{ ...portable, themes: [] },
+			{ ...portable, themes: [...portable.themes, ...portable.themes] },
+			{ ...portable, themes: [{ ...portable.themes[0], path: '../outside.json' }] },
+			{ ...portable, themes: [{ ...portable.themes[0], appearance: 'unknown' }] },
+			{ ...portable, themes: [{ ...portable.themes[0], appearance: ['dark'] }] },
+		]) {
+			contents = invalid;
+			generation++;
+			await assert.rejects(service.reload());
+			assert.equal(WorkbenchThemesRegistry.getColorTheme(themeId)?.getColorCss(editorBackground), '#123456');
+		}
+		contents = { ...portable, themes: [{ ...portable.themes[0], appearance: 'light' }] };
+		generation++;
+		await service.reload();
+		assert.equal(WorkbenchThemesRegistry.getColorTheme(themeId)?.colorScheme, ColorScheme.Light);
+	}
+	assert.equal(WorkbenchThemesRegistry.getColorTheme(themeId), undefined);
+});

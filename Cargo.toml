@@ -98,7 +98,6 @@ members = [
     "crates/diff",
     "crates/debug-adapter",
     "crates/testing",
-    "crates/extension-catalog",
     "crates/external-ext",
     "crates/external-ext-protocol",
     "sdk/rust",
@@ -477,7 +476,6 @@ ash-web-search-extension = { path = "crates/ext/web-search" }
 ash-exec = { path = "crates/exec" }
 ash-execpolicy = { path = "crates/execpolicy" }
 ash-tool-executor = { path = "crates/tool-executor" }
-extension-catalog = { package = "ash-extension-catalog", path = "crates/extension-catalog" }
 ash-external-ext = { path = "crates/external-ext" }
 external-ext-protocol = { package = "ash-external-ext-protocol", path = "crates/external-ext-protocol" }
 ash-file-identity = { path = "crates/file-identity" }

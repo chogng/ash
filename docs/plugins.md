@@ -82,7 +82,7 @@ flowchart TD
     C -->|"connected"| B["Ready MCP binding"]
     R -->|"standalone activation"| T["Tool Registry / Core"]
     E --> H["ash-external-ext supervisor"]
-    D --> X["ash-extension-catalog immutable snapshot"]
+    D --> X["ash-external-ext::packages immutable snapshot"]
     B --> R
 ```
 
@@ -93,7 +93,7 @@ Skill、Connector、MCP 和 Resource consumer 分别拥有自己的运行时语�
 
 静态 Editor Extension 保持另一套内容边界：它读取自己的 `package.json` 和声明式
 language/TextMate/snippet/theme/debugger 资源。Plugin v1 现在可用 `declarativeExtensions[]` 指向包内
-静态 Extension 目录；只有 effective exact Plugin package 会被 App Server 投影到 `ash-extension-catalog`。
+静态 Extension 目录；只有 effective exact Plugin package 会被 App Server 投影到 `ash-external-ext::packages`。
 这共享 install/enable/grant/revocation lifecycle，但不合并两种 manifest，也不把静态内容变成可执行
 runtime。其 canonical 文档是 [`editor-extensions.md`](editor-extensions.md)。
 

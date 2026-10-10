@@ -67,6 +67,6 @@ fn applies_the_remaining_catalog_byte_budget_before_reading() {
             PackageSnapshotLimits { max_total_bytes: 1 },
         )
         .map(|_| ()),
-        Err(PackageSnapshotError::CatalogTooLarge)
+        Err(PackageSnapshotError::PackageSetTooLarge)
     );
 }

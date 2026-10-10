@@ -42,8 +42,8 @@ use core_api::AgentRuntime;
 use core_api::CoreError;
 use core_api::ModelService;
 use core_api::ThreadUpdateSink;
-use extension_catalog::ExtensionCatalog;
-use extension_catalog::ExtensionRoot;
+use ash_external_ext::packages::ExtensionPackages;
+use ash_external_ext::packages::ExtensionRoot;
 pub(crate) use network_operations::http_transport_mode;
 use serde::Deserialize;
 use serde_json::Value;
@@ -234,7 +234,7 @@ pub struct AppServer {
     dictation_models: realtime_voice::DictationModelManager,
     microphone_gate: Mutex<()>,
     pub(super) collaboration: Mutex<collaboration_runtime::DocumentCollaborationStore>,
-    pub(super) extensions: Mutex<ExtensionCatalog>,
+    pub(super) extensions: Mutex<ExtensionPackages>,
     pub(super) config: Option<Arc<ConfigStore>>,
     home: Option<Arc<ash_home::AshHome>>,
     pub(super) provider_credentials: Option<Arc<ProviderCredentialService>>,
@@ -255,9 +255,9 @@ pub struct AppServer {
     marketplace_language_runtime: Option<marketplace_language_runtime::MarketplaceLanguageRuntime>,
     plugin_skill_sources: Option<Arc<dyn ash_skills_extension::DynamicSkillSourceProvider>>,
     marketplace_skill_sources: Option<Arc<dyn ash_skills_extension::DynamicSkillSourceProvider>>,
-    plugin_extension_sources: Option<Arc<dyn extension_catalog::DynamicExtensionSourceProvider>>,
+    plugin_extension_sources: Option<Arc<dyn ash_external_ext::packages::DynamicExtensionSourceProvider>>,
     marketplace_extension_sources:
-        Option<Arc<dyn extension_catalog::DynamicExtensionSourceProvider>>,
+        Option<Arc<dyn ash_external_ext::packages::DynamicExtensionSourceProvider>>,
     pub(super) mcp_runtime_intents: McpRuntimeIntents,
     pub(super) mcp_status: Arc<RwLock<ash_mcp_extension::McpRuntimeStatusSnapshot>>,
     language: Mutex<language_runtime::AppServerLanguageRuntime>,
@@ -624,7 +624,7 @@ impl AppServer {
             dictation_models: realtime_voice::DictationModelManager::default(),
             microphone_gate: Mutex::new(()),
             collaboration: Mutex::new(collaboration_runtime::DocumentCollaborationStore::default()),
-            extensions: Mutex::new(ExtensionCatalog::default()),
+            extensions: Mutex::new(ExtensionPackages::default()),
             config: None,
             home: None,
             provider_credentials: None,
@@ -968,7 +968,7 @@ impl AppServer {
             marketplace_skill_sources::MarketplaceSkillSourceProvider::new(Arc::clone(&manager)),
         );
         self.marketplace_skill_sources = Some(source);
-        let extension_source: Arc<dyn extension_catalog::DynamicExtensionSourceProvider> = Arc::new(
+        let extension_source: Arc<dyn ash_external_ext::packages::DynamicExtensionSourceProvider> = Arc::new(
             marketplace_extension_sources::MarketplaceExtensionSourceProvider::new(Arc::clone(
                 &manager,
             )),
@@ -1306,7 +1306,7 @@ impl AppServer {
         );
         self.plugin_skill_sources = Some(skill_sources);
         self.rebind_dynamic_skill_sources();
-        let extension_sources: Arc<dyn extension_catalog::DynamicExtensionSourceProvider> =
+        let extension_sources: Arc<dyn ash_external_ext::packages::DynamicExtensionSourceProvider> =
             Arc::new(plugin_extension_sources::PluginExtensionSourceProvider::new(plugins.clone()));
         self.plugin_extension_sources = Some(extension_sources);
         self.rebind_dynamic_extension_sources();
@@ -1353,7 +1353,7 @@ impl AppServer {
 
     fn combined_dynamic_extension_sources(
         &self,
-    ) -> Option<Arc<dyn extension_catalog::DynamicExtensionSourceProvider>> {
+    ) -> Option<Arc<dyn ash_external_ext::packages::DynamicExtensionSourceProvider>> {
         let providers = [
             self.plugin_extension_sources.clone(),
             self.marketplace_extension_sources.clone(),
@@ -1363,7 +1363,7 @@ impl AppServer {
         .collect::<Vec<_>>();
         (!providers.is_empty()).then(|| {
             Arc::new(marketplace_extension_sources::CombinedExtensionSourceProvider::new(providers))
-                as Arc<dyn extension_catalog::DynamicExtensionSourceProvider>
+                as Arc<dyn ash_external_ext::packages::DynamicExtensionSourceProvider>
         })
     }
 
@@ -1584,7 +1584,7 @@ impl AppServer {
     }
 
     pub fn with_extension_roots(mut self, roots: Vec<ExtensionRoot>) -> Self {
-        let mut catalog = ExtensionCatalog::new(roots);
+        let mut catalog = ExtensionPackages::new(roots);
         if let Some(provider) = self.combined_dynamic_extension_sources() {
             catalog.bind_dynamic_sources(provider);
         }

@@ -2,7 +2,10 @@
 //!
 //! This crate consumes the shared extension protocol and owns the activation authority gate, bounded restart
 //! policy, and process supervisor. It does not implement the VS Code Extension API and it does not
-//! discover, install, grant, or select extension packages.
+//! install or grant extension packages. Its packages module validates and freezes host-selected
+//! package roots; source authorities continue to own installation, enablement and authorization.
+
+pub mod packages;
 
 mod authority;
 mod error;

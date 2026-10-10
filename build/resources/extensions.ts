@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
 import { delimiter, dirname, relative, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
@@ -21,20 +21,34 @@ export async function prepareBrowserExtensions(): Promise<void> {
 	}
 	const builtInCount = packages.length;
 	packages.push(...browserExtensionRoots.slice(1));
+	if (packages.length > 4096) { throw new RangeError('Too many browser extension packages'); }
+	let snapshotBytes = 0;
 	const extensions = [];
 	const bundledResources: Record<string, Record<string, string>> = {};
 	for (const [index, packageRoot] of packages.entries()) {
+		if ((await stat(resolve(packageRoot, 'package.json'))).size > 4 * 1024 * 1024) { throw new RangeError('Browser extension manifest exceeds its byte limit'); }
 		const manifestJson = await readFile(resolve(packageRoot, 'package.json'), 'utf8');
 		const manifest = JSON.parse(manifestJson);
 		const id = `${manifest.publisher}.${manifest.name}`;
 		if (Object.hasOwn(bundledResources, id)) { throw new Error(`Duplicate browser extension: ${id}`); }
 		const packageResources: Record<string, string> = {};
+		let packageBytes = 0;
+		let fileCount = 0;
+		async function readPackageFile(path: string): Promise<Buffer> {
+			const size = (await stat(path)).size;
+			if (++fileCount > 4096 || size > 16 * 1024 * 1024 || packageBytes + size > 64 * 1024 * 1024 || snapshotBytes + size > 256 * 1024 * 1024) { throw new RangeError(`Browser extension '${id}' exceeds its resource budget`); }
+			const bytes = await readFile(path);
+			if (bytes.byteLength !== size) { throw new Error(`Browser extension '${id}' changed while packaging`); }
+			packageBytes += size;
+			snapshotBytes += size;
+			return bytes;
+		}
 		async function collect(resourceDirectory: string): Promise<void> {
 			for (const entry of (await readdir(resourceDirectory, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
 				if (entry.name.startsWith('.') || ['node_modules', 'test'].includes(entry.name)) { continue; }
 				const path = resolve(resourceDirectory, entry.name);
 				if (entry.isDirectory()) { await collect(path); }
-				else if (entry.isFile()) { packageResources[relative(packageRoot, path).replaceAll('\\', '/')] = (await readFile(path)).toString('base64'); }
+				else if (entry.isFile()) { packageResources[relative(packageRoot, path).replaceAll('\\', '/')] = (await readPackageFile(path)).toString('base64'); }
 			}
 		}
 		await collect(packageRoot);
@@ -75,7 +89,13 @@ export async function prepareBrowserExtensions(): Promise<void> {
 			const outputs = Array.isArray(result) ? result.flatMap(output => output.output) : 'output' in result ? result.output : [];
 			const chunks = outputs.filter(output => output.type === 'chunk');
 			if (chunks.length !== 1) throw new Error(`Browser extension '${id}' must produce one ES module`);
-			packageResources[entry] = Buffer.from(chunks[0].code).toString('base64');
+			const module = Buffer.from(chunks[0].code);
+			const previousSize = Buffer.from(packageResources[entry] ?? '', 'base64').byteLength;
+			const difference = module.byteLength - previousSize;
+			if (module.byteLength > 16 * 1024 * 1024 || packageBytes + difference > 64 * 1024 * 1024 || snapshotBytes + difference > 256 * 1024 * 1024) { throw new RangeError(`Browser extension '${id}' exceeds its resource budget`); }
+			packageBytes += difference;
+			snapshotBytes += difference;
+			packageResources[entry] = module.toString('base64');
 		}
 		bundledResources[id] = packageResources;
 		extensions.push({ id, name: manifest.name, publisher: manifest.publisher, version: manifest.version, displayName: manifest.name, sourceKind: index < builtInCount ? 'builtIn' : 'user', manifestJson, manifestSha256: digest(manifestJson), packageSha256: digest(JSON.stringify(packageResources)) });
