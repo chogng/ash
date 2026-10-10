@@ -50,6 +50,14 @@ Linux 网络提供进程退出时，SDK 监控终止工作负载并报告网络�
 
 SDK 的 Seatbelt 策略固定可写根以及只读、拒绝路径的祖先目录，防止目录移动改变权限路径。受限文件策略拒绝 `F_MAKECOMPRESSED` 和 `F_TRANSFEREXTENTS`，因为这两种 `fcntl` 可以通过只读描述符修改文件；Ash 的持续路径限制也安装同一防护，包括带有 glob 限制的 `FullAccess`。
 
+`tests/macos.rs` 的 `fcntl` 回归复用自身测试可执行文件的子进程入口，直接调用 Darwin syscall，分别检查普通进程对照及只读、目录写入、持续只读路径限制。生产库仍禁止 `unsafe`；只有该测试目标中的 syscall 模块允许经过注释说明的 FFI。测试不依赖 Python 或 Xcode 启动器。
+
+同一目标另直接运行 `/usr/bin/python3`、`/usr/bin/git` 和 `/usr/bin/xcrun`，验证关闭的标准输入、Python 输入数据、退出码和预期输出，不提前替换启动器路径。每个受限执行保留 5 秒预算；慢进程在沙箱外采样文件描述符及调用栈，诊断不增加子进程权限。此目标已接入双架构 CI，结果以实际作业为准。
+
+```sh
+just test ash-mxc-sandbox --test macos --locked -- --test-threads=1 --nocapture
+```
+
 持续规则由 [Seatbelt 编译器](src/seatbelt.rs) 使用后端已有的 `globset` 语法解析，支持 `*`、`**`、`?`、花括号备选和 ASCII 字符类，统一将反斜杠视为路径分隔符。中文等 Unicode 字面量可用；Seatbelt 无法保持后端字节字符类的非 ASCII 语义，因此拒绝此类规则。持续模式不用于新增写授权。持续拒绝规则在准备阶段拒绝已命中的符号链接与多重或无法确认的硬链接；别名及外部进程改变链接关系仍未完成对象级隔离验收。
 
 精确路径和持续 glob 的禁读规则均显式拒绝 `file-read-metadata`。Seatbelt 基础策略允许元数据读取以支持路径解析，单独的 `file-read*` 拒绝无法覆盖这个显式允许；禁读对象的大小和时间戳也属于保护范围。
