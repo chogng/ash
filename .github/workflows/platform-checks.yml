@@ -9,6 +9,28 @@ permissions:
   contents: read
 
 jobs:
+  sandbox-macos:
+    name: macOS sandbox (${{ matrix.target }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-26
+            target: aarch64-apple-darwin
+          - runner: macos-26-intel
+            target: x86_64-apple-darwin
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up the pinned Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
+        with:
+          override: false
+          rustflags: ""
+      - name: Test macOS sandbox and PTY boundaries
+        run: python3 -B scripts/cargo.py test -p ash-mxc-sandbox --lib --test pty --locked --target "${{ matrix.target }}"
+
   sanity:
     # Both platform checks and release builds must pass before verifying uploaded packages.
     needs: [check, build-windows]
@@ -154,13 +176,6 @@ jobs:
           export ASH_NETWORK_PROBE="$GITHUB_WORKSPACE/.build/cargo/${{ matrix.target }}/debug/examples/probe"
           ${{ matrix.python }} -B scripts/cargo.py test -p ash-mxc-sandbox --lib --target "${{ matrix.target }}"
           ${{ matrix.python }} -B scripts/cargo.py test -p ash-mxc-sandbox --test linux --target "${{ matrix.target }}" -- --ignored
-
-      - name: Test macOS denied-file metadata boundary
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          ${{ matrix.python }} -B scripts/cargo.py test -p ash-mxc-sandbox --lib tests::execution::exact_denied_paths_hide_metadata_and_keep_allowed_files_readable --locked --target "${{ matrix.target }}" -- --exact
-          ${{ matrix.python }} -B scripts/cargo.py test -p ash-mxc-sandbox --lib tests::execution::general_continuous_globs_cover_late_files_and_pin_matching_ancestors --locked --target "${{ matrix.target }}" -- --exact
 
       - name: Test Windows account execution and cleanup
         if: runner.os == 'Windows'
