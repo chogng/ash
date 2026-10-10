@@ -6,6 +6,7 @@ const handlers = new Map<string, Handler>();
 const invocations = new Map<number, AbortController>();
 const commands = new Map<number, { resolve(value: JsonValue): void; reject(error: Error): void; }>();
 let nextCommand = 1;
+let deactivate: (() => void | Promise<void>) | undefined;
 const scope = globalThis as unknown as { onmessage: (event: MessageEvent<BrowserExtensionHostRequest>) => void; postMessage(value: unknown): void; };
 
 scope.onmessage = event => {
@@ -25,7 +26,10 @@ async function dispatch(message: Exclude<BrowserExtensionHostRequest, { type: 'c
 		const registrations: ExtensionHostRegistration[] = [];
 		// Packages supply a bundled ES module; no module executes in the renderer's JavaScript realm.
 		const extension = await import(/* @vite-ignore */ message.entryPoint);
+		deactivate = extension.deactivate;
 		await extension.activate({
+			apiVersion: 1,
+			extensionId: message.extensionId,
 			language: message.language,
 			createWebviewResource(content: string, mediaType: 'text/javascript' | 'text/css'): string {
 				if (typeof content !== 'string' || content.length > 16 * 1024 * 1024 || !['text/javascript', 'text/css'].includes(mediaType)) {
@@ -35,6 +39,9 @@ async function dispatch(message: Exclude<BrowserExtensionHostRequest, { type: 'c
 				// The window owns revocation, including abrupt Worker retirement.
 				scope.postMessage({ type: 'webviewResource', url });
 				return url;
+			},
+			releaseWebviewResource(url: string): void {
+				scope.postMessage({ type: 'releaseWebviewResource', url });
 			},
 			clientRequest(request: JsonValue, signal?: AbortSignal): Promise<JsonValue> {
 				signal?.throwIfAborted();
@@ -60,6 +67,14 @@ async function dispatch(message: Exclude<BrowserExtensionHostRequest, { type: 'c
 			},
 		});
 		return registrations as unknown as JsonValue;
+	}
+	if (message.type === 'deactivate') {
+		// Retire public callbacks before author cleanup can release their resources.
+		for (const invocation of invocations.values()) invocation.abort();
+		handlers.clear();
+		await deactivate?.();
+		deactivate = undefined;
+		return null;
 	}
 	const handler = handlers.get(message.request.registrationId);
 	if (!handler) { throw new Error('Browser extension registration does not exist'); }

@@ -56,8 +56,12 @@ SDK V8 的第三方系统隔离在 macOS 与 64 位 Windows 实现；标准 Node
 Web 和 Electron 的工作台共用可信浏览器扩展入口：`build/resources/extensions.ts` 将内置包及显式配置的
 `ASH_WEB_EXTENSION_PATHS` 冻结为 Browser catalog 和资源快照。`platform/extensions/browser/extensionApi.ts`
 提供目录与 `IExtensionResourceLoaderService` 资源契约；`platform/extensionHost/browser/extensionHostApi.ts` 持有每个可执行包的 Worker，
-`extensionHostWorker.ts` 在 Worker 内导入 package 的单文件 ESM `browser` 入口，调用
-`activate({ register, executeCommand, clientRequest, createWebviewResource, language })`。注册与调用使用 Ash 的有界扩展契约，不提供完整的 `vscode` 模块或 Node API。
+`extensionHostWorker.ts` 在 Worker 内导入 package 的单文件 ESM `browser` 入口。
+Markdown 从公共 `@ash/extension/browser` 导入 `defineBrowserExtension`、命令、语言 Provider 和文本自定义编辑器接口；
+SDK adapter 封装私有 Worker 消息，并复用共享 SDK 的注册、调用、取消和停用 owner。
+作者回调通过具名文档、配置、目录和命令服务消费发起窗口的状态，不发送任意协议请求或导入产品内部模块。
+语言位置统一使用 SDK 的零起始 UTF-16 `line`/`character`，adapter 转换为宿主格式。
+激活入口协商 SDK API 版本并由宿主绑定扩展身份。注册与调用仍使用 Ash 的有界扩展契约，不提供完整的 `vscode` 模块或 Node API。
 Worker 持有调用的取消信号；到达截止时间后终止 Worker 并撤销该 incarnation 的注册。
 刷新、替换和关闭页面释放 Worker 与入口 Blob URL。Vite 监听开发包文件并重新生成快照、刷新页面。
 依赖编译进入浏览器资源，后端内置包目录不复制 `node_modules`。
@@ -84,7 +88,7 @@ Workspace edit 的 `entries` 按顺序执行：`kind: textDocument` 带 `resourc
 切换文档和关闭视图后，旧请求不会向新页面发送结果。
 富文本视图只保留当前显示内容，编辑必须带上共享模型的版本；撤销、重做、保存和关闭确认均由同一文档状态决定。
 版本冲突保留视图中的草稿，并提供重新载入操作。库资源由 Worker 创建、工作台在沙箱内加载，
-不占用文档编辑消息的 JSON 限额；Worker 退出时释放资源 URL。
+不占用文档编辑消息的 JSON 限额；SDK 资源句柄可显式释放，Worker 退出时宿主释放剩余 URL。
 “打开富文本编辑器”（`markdown.showRichEditor`）保留源码标签；“重新打开为富文本”替换当前视图。
 源码、预览与富文本标签可以同时打开。此入口没有扩大第三方扩展的生产执行许可。
 

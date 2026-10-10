@@ -6,7 +6,11 @@ import { Emitter } from '../../../../base/common/event.js';
 import { DeferredPromise } from '../../../../base/common/async.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { AppServerConnectionState } from '../../../agentHost/common/appServerApi.js';
-import { BrowserExtensionHostApi } from '../../browser/extensionHostApi.js';
+import { BrowserExtensionHostApi, type BrowserExtensionHostRequest } from '../../browser/extensionHostApi.js';
+import { ICommandService } from '../../../commands/common/commands.js';
+import { IFileService } from '../../../files/common/files.js';
+import { IWorkspaceContextService } from '../../../workspace/common/workspace.js';
+import { IAppServerApi } from '../../../agentHost/common/appServerApi.js';
 import { normalizeExtensionHostSnapshot, type ExtensionHostFleetSnapshot, type ExtensionHostInvocationRequest, type IExtensionHostApi, type JsonValue } from '../../common/extensionHostApi.js';
 
 class RemoteHost extends Disposable implements IExtensionHostApi {
@@ -50,6 +54,61 @@ function browser(remote: RemoteHost): BrowserExtensionHostApi {
 }
 
 const request = { extensionId: 'lazy', activationGeneration: 7, event: { type: 'command' as const, command: 'lazy.run' } };
+
+test('browser refresh acknowledges SDK cleanup before retiring the Worker and its resources', async () => {
+	const originalWorker = Object.getOwnPropertyDescriptor(globalThis, 'Worker');
+	const order: string[] = [];
+	const urls: string[] = [];
+	class WorkerFixture extends EventTarget {
+		postMessage(message: BrowserExtensionHostRequest): void {
+			queueMicrotask(() => {
+				if (message.type === 'activate') {
+					order.push('activate');
+					const url = URL.createObjectURL(new Blob(['style']));
+					urls.push(url);
+					this.dispatchEvent(new MessageEvent('message', { data: { type: 'webviewResource', url } }));
+					this.dispatchEvent(new MessageEvent('message', { data: { id: message.id, success: true, result: [] } }));
+				} else if (message.type === 'deactivate') {
+					order.push('deactivate');
+					this.dispatchEvent(new MessageEvent('message', { data: { type: 'releaseWebviewResource', url: urls.at(-1) } }));
+					this.dispatchEvent(new MessageEvent('message', { data: { id: message.id, success: true, result: null } }));
+				} else assert.fail(`Unexpected Worker request: ${message.type}`);
+			});
+		}
+		terminate(): void { order.push('terminate'); }
+	}
+	Object.defineProperty(globalThis, 'Worker', { configurable: true, value: WorkerFixture });
+	try {
+		using remote = new RemoteHost();
+		remote.reconcile = remote.list = async () => ({ generation: 1, extensions: [] });
+		// No callback requests a service in this lifecycle fixture.
+		remote.instantiation.registerInstance(ICommandService, {} as ICommandService);
+		remote.instantiation.registerInstance(IFileService, {} as IFileService);
+		remote.instantiation.registerInstance(IWorkspaceContextService, {} as IWorkspaceContextService);
+		remote.instantiation.registerInstance(IAppServerApi, {} as IAppServerApi);
+		using api = new BrowserExtensionHostApi({
+			list: async () => ({
+				generation: 1, diagnostics: [], extensions: [{
+					id: 'browser', name: 'browser', publisher: 'test', version: '1', displayName: 'Browser', sourceKind: 'builtIn',
+					manifestJson: JSON.stringify({ browser: './browser.js' }), manifestSha256: `sha256:${'a'.repeat(64)}`, packageSha256: `sha256:${'a'.repeat(64)}`,
+				}]
+			}),
+			resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
+		}, remote, remote.instantiation);
+		assert.equal((await api.reconcile('refresh')).extensions[0]?.lifecycle, 'ready');
+		assert.equal(await (await fetch(urls[0]!)).text(), 'style');
+		assert.equal((await api.reconcile('refresh')).extensions[0]?.lifecycle, 'ready');
+		assert.deepEqual(order, ['activate', 'deactivate', 'terminate', 'activate']);
+		await assert.rejects(fetch(urls[0]!));
+		api.dispose();
+		await assert.rejects(fetch(urls[1]!));
+		assert.deepEqual(order, ['activate', 'deactivate', 'terminate', 'activate', 'terminate']);
+	} finally {
+		if (originalWorker) Object.defineProperty(globalThis, 'Worker', originalWorker);
+		else Reflect.deleteProperty(globalThis, 'Worker');
+		for (const url of urls) URL.revokeObjectURL(url);
+	}
+});
 
 test('first-use activation returns ready even while a notification refresh is pending', async () => {
 	using remote = new RemoteHost();

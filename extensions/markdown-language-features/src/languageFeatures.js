@@ -1,12 +1,13 @@
 import * as l10n from '@vscode/l10n';
 import chinese from '../l10n/bundle.l10n.zh-cn.json';
-import { match } from '../../../src/ash/base/common/glob.js';
+import { languages, noEvent, throwIfCancelled } from '@ash/extension/browser';
+import picomatch from 'picomatch';
 import MarkdownIt from 'markdown-it';
 import { createLanguageService, githubSlugifier } from 'vscode-markdown-languageservice';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { URI, Utils } from 'vscode-uri';
-import { Event } from '../../../src/ash/base/common/event.js';
 
+const match = (pattern, path) => picomatch.isMatch(path, pattern, { dot: true });
 const markdownExtensions = /\.(md|markdown|mdown|mkd|mkdn|mdwn|markdn|mdtxt|mdtext|mdc)$/iu;
 const parser = new MarkdownIt({ html: true });
 const diagnosticOptions = {
@@ -18,47 +19,34 @@ const diagnosticOptions = {
 	validateDuplicateLinkDefinitions: 'warning',
 	ignoreLinks: [],
 };
-const point = (value) => ({ line: value.lineIndex, character: value.columnIndex });
-const position = (value) => ({ lineIndex: value.line, columnIndex: value.character });
+const position = (value) => ({ line: value.line, character: value.character });
 const range = (value) => ({ start: position(value.start), end: position(value.end) });
 
 /** Each invocation owns immutable snapshots and parser caches; dirty buffers precede disk reads. */
 export async function registerLanguageFeatures(context) {
 	l10n.config({ contents: context.language === 'zh-CN' ? chinese : {} });
-	context.register(
-		{
-			kind: 'languageProvider',
-			registrationId: 'markdown.languageFeatures',
-			languageIds: ['markdown'],
-			completionTriggerCharacters: ['.', '/', '#', '[', '('],
-			operations: [
-				'completion',
-				'definition',
-				'references',
-				'rename',
-				'documentSymbols',
-				'foldingRanges',
-				'documentLinks',
-				'hover',
-				'codeAction',
-				'diagnostics',
-				'selectionRanges',
-				'workspaceSymbols',
-				'documentHighlights',
-			],
-		},
-		async (operation, request, signal) => {
-			const clientRequest = (request) => context.clientRequest(request, signal);
+	context.subscriptions.push(languages.registerLanguageProvider('markdown.languageFeatures', ['markdown'], {
+		operations: [
+			'completion',
+			'definition',
+			'references',
+			'rename',
+			'documentSymbols',
+			'foldingRanges',
+			'documentLinks',
+			'hover',
+			'codeAction',
+			'diagnostics',
+			'selectionRanges',
+			'workspaceSymbols',
+			'documentHighlights',
+		],
+		async provideLanguageFeatures(call, request) {
+			const operation = request.operation;
+			const token = call.cancellationToken;
 			const documents = new Map();
-			const open = (await clientRequest({ operation: 'listDocuments' })).documents;
-			const configuration =
-				(
-					await clientRequest({
-						operation: 'readConfiguration',
-						section: 'markdown',
-						resource: request.resource ?? null,
-					})
-				).value ?? {};
+			const open = await call.workspace.getTextDocuments();
+			const configuration = await call.workspace.getConfiguration('markdown', request.document?.uri ?? null) ?? {};
 			const validation = configuration.validate ?? {};
 			const options = { ...diagnosticOptions };
 			for (const [setting, key] of [
@@ -82,13 +70,13 @@ export async function registerLanguageFeatures(context) {
 			options.ignoreLinks = validation.ignoredLinks ?? [];
 			if (!Array.isArray(options.ignoreLinks) || options.ignoreLinks.some((value) => typeof value !== 'string')) { throw new TypeError('Invalid Markdown ignored links'); }
 			if (validation.enabled !== undefined && typeof validation.enabled !== 'boolean') { throw new TypeError('Invalid Markdown validation switch'); }
-			const folders = (await clientRequest({ operation: 'workspaceFolders' })).map((value) => URI.parse(value));
+			const folders = (await call.workspace.getWorkspaceFolders()).map((value) => URI.parse(value));
 			const readDirectory = (resource) =>
-				clientRequest({ operation: 'readDirectory', resource: resource.toString() });
+				call.workspace.readDirectory(resource.toString());
 			// An unsaved document exists in the editor even when it has no filesystem entry.
 			const stat = resource => documents.has(resource.toString()) || open.some(document => document.uri === resource.toString())
 				? Promise.resolve({ isDirectory: false })
-				: clientRequest({ operation: 'stat', resource: resource.toString() });
+				: call.workspace.stat(resource.toString());
 			const remember = (snapshot) => {
 				const previous = documents.get(snapshot.uri);
 				if (previous?.getText() === snapshot.text && previous.version === snapshot.version) { return previous; }
@@ -109,14 +97,14 @@ export async function registerLanguageFeatures(context) {
 				if (snapshot) { return remember(snapshot); }
 				if (!(await stat(resource))) { return undefined; }
 				return remember(
-					(await clientRequest({ operation: 'readDocument', uri: resource.toString() })).document,
+					await call.workspace.openTextDocument(resource.toString()),
 				);
 			};
 			const allDocuments = async () => {
 				const result = new Map(documents);
 				async function visit(directory, prefix, exclusions) {
 					for (const [name, metadata] of await readDirectory(directory)) {
-						signal.throwIfAborted();
+						throwIfCancelled(token);
 						const relative = prefix + name;
 						if (
 							exclusions.some(
@@ -137,14 +125,7 @@ export async function registerLanguageFeatures(context) {
 				for (const folder of folders) {
 					const exclusions = [];
 					for (const section of ['files.exclude', 'search.exclude']) {
-						const value =
-							(
-								await clientRequest({
-									operation: 'readConfiguration',
-									section,
-									resource: folder.toString(),
-								})
-							).value ?? {};
+						const value = await call.workspace.getConfiguration(section, folder.toString()) ?? {};
 						exclusions.push(
 							...Object.entries(value)
 								.filter(([, enabled]) => enabled === true)
@@ -165,9 +146,9 @@ export async function registerLanguageFeatures(context) {
 				},
 				workspace: {
 					workspaceFolders: folders,
-					onDidChangeMarkdownDocument: Event.None,
-					onDidCreateMarkdownDocument: Event.None,
-					onDidDeleteMarkdownDocument: Event.None,
+					onDidChangeMarkdownDocument: noEvent,
+					onDidCreateMarkdownDocument: noEvent,
+					onDidDeleteMarkdownDocument: noEvent,
 					getAllMarkdownDocuments: allDocuments,
 					hasMarkdownDocument: (resource) => documents.has(resource.toString()),
 					openMarkdownDocument: openDocument,
@@ -203,27 +184,17 @@ export async function registerLanguageFeatures(context) {
 					}
 					return { entries };
 				}
-				signal.throwIfAborted();
-				const token = {
-					get isCancellationRequested() {
-						return signal.aborted;
-					},
-					onCancellationRequested: (listener) => {
-						const cancel = () => listener();
-						signal.addEventListener('abort', cancel, { once: true });
-						return { dispose: () => signal.removeEventListener('abort', cancel) };
-					},
-				};
+				throwIfCancelled(token);
 				const document =
 					operation === 'workspaceSymbols'
 						? undefined
 						: remember({
-							uri: request.resource,
+							uri: request.document.uri,
 							languageId: 'markdown',
-							version: request.version,
-							text: request.text,
+							version: request.document.version,
+							text: request.document.text,
 						});
-				const location = request.position && point(request.position);
+				const location = request.position;
 				let result;
 				switch (operation) {
 					case 'documentHighlights':
@@ -244,7 +215,7 @@ export async function registerLanguageFeatures(context) {
 						result = [];
 						for (let selection of (await service.getSelectionRanges(
 							document,
-							request.positions.map(point),
+							request.positions,
 							token,
 						)) ?? []) {
 							while (selection) {
@@ -283,8 +254,8 @@ export async function registerLanguageFeatures(context) {
 					}
 					case 'foldingRanges':
 						result = (await service.getFoldingRanges(document, token)).map((value) => ({
-							startLineIndex: value.startLine,
-							endLineIndex: value.endLine,
+							startLine: value.startLine,
+							endLine: value.endLine,
 							...(value.kind ? { kind: value.kind } : {}),
 						}));
 						break;
@@ -368,6 +339,7 @@ export async function registerLanguageFeatures(context) {
 								label: value.label,
 								kind: value.kind === 19 ? 'folder' : value.kind === 17 ? 'file' : 'reference',
 								insertText: value.textEdit?.newText ?? value.insertText ?? value.label,
+								insertTextFormat: 'plainText',
 								range: range(value.textEdit?.range ?? { start: location, end: location }),
 								...(value.detail ? { detail: value.detail } : {}),
 							})),
@@ -390,7 +362,7 @@ export async function registerLanguageFeatures(context) {
 						const diagnostics = await service.computeDiagnostics(document, options, token);
 						const actions = await service.getCodeActions(
 							document,
-							{ start: point(request.range.start), end: point(request.range.end) },
+							request.range,
 							{ diagnostics, ...(request.only.length ? { only: request.only } : {}) },
 							token,
 						);
@@ -429,11 +401,11 @@ export async function registerLanguageFeatures(context) {
 					default:
 						throw new Error(`Unsupported Markdown operation: ${operation}`);
 				}
-				signal.throwIfAborted();
+				throwIfCancelled(token);
 				return result;
 			} finally {
 				service.dispose();
 			}
 		},
-	);
+	}, ['.', '/', '#', '[', '(']));
 }

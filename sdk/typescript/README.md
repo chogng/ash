@@ -2,11 +2,33 @@
 
 This README describes the TypeScript author SDK under root `sdk/typescript`, alongside the Rust SDK in `sdk/rust`. Ash supports both TS/JS and independent Rust extensions: Desktop targets Electron reuse, and the backend targets Rust/V8 without a standalone Node dependency. This move preserves the existing SDK API and runtime behavior; compatibility migration remains separate work. VS Code/Node compatibility and engine execution belong to the product runtime, not the author SDK, and existing VS Code extensions do not have to adopt this SDK. The agreed boundaries are maintained in [the extension architecture](../../docs/editor-extensions.md#共享接入与语言适配的-crate-边界).
 
-Authors import `@ash/extension`, export `activate`, and compile their entry to an ES module.
+Backend authors import `@ash/extension`, export `activate`, and compile their entry to an ES module.
 A Rust V8 host executes the JavaScript without Node. Editor operations use the initiating
 client; `readTextFile` uses the Rust filesystem service and its current directory grant.
 The cross-layer direction and installation boundary are documented in
 [`docs/editor-extensions.md`](../../docs/editor-extensions.md).
+
+Trusted browser packages import `@ash/extension/browser` and export the `activate` and
+`deactivate` functions returned by `defineBrowserExtension`. This entry bundles with the
+package and joins the same SDK registration, invocation, cancellation and disposal lifecycle
+to the product Worker bridge. It provides command metadata and originating-editor references,
+snapshot language providers, custom text editor content and disposable Webview resources.
+Language positions use the shared SDK's zero-based UTF-16 `line`/`character` convention.
+
+Each browser callback receives invocation-scoped document, configuration, directory and command
+services. The window owns unsaved text, authorization, undo and persistence. Workspace folders
+include only roots currently accessible to its file services, so Markdown continues to work
+without a backend connection. Retaining a callback context does not extend service authority.
+Disposal revokes callbacks; cancellation stops their child requests. Webview resources are
+created during activation, released explicitly or when the Worker retires, and never copied
+into document edit messages. Extension refresh cancels callbacks and runs SDK deactivation
+before replacing the Worker, with a one-second cleanup deadline. Window disposal and Worker
+failure terminate it directly; the window still releases all tracked Webview resources.
+The existing trusted-package boundary remains in effect; this
+entry does not enable browser execution of Marketplace packages or add custom editors to V8.
+The private Worker messages are SDK/host adapters, not an author API.
+
+Run `pnpm --dir sdk/typescript test` for browser SDK contract and lifecycle tests.
 
 API v1 supports commands, hover and completion providers, ordered document events, diagnostics, immutable editor document snapshots, bounded UTF-8 workspace file
 reads, notifications, Quick Pick, Task providers, Debug configuration providers, executable/server/pipe descriptors and adapter tracker factories. Register commands and providers during activation and put their disposables
@@ -73,7 +95,8 @@ The latter emits `.build/sdk/typescript/example/extension.js` and `.build/sdk/ty
 The manifest uses `runtime: javascript`, API version 1 and a `directory: read` permission.
 Granting that package does not replace the workspace's `ReadFiles` authorization.
 The SDK is currently repository-local; use a local package dependency and leave `@ash/extension`
-external when bundling. Do not ship another copy of the runtime module in the extension bundle.
+external when bundling backend packages. Browser packages bundle `@ash/extension/browser` and
+its shared SDK module once, as illustrated by `extensions/markdown-language-features`.
 `ExtensionError.code` preserves Rust service failure categories.
 Activation registers contributions without service calls; top-level module initialization and deactivation
 must finish without waiting for external services. Dynamic import and CommonJS are unsupported.

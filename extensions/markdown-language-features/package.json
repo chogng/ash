@@ -141,10 +141,13 @@
   },
   "private": true,
   "dependencies": {
+    "@ash/extension": "workspace:*",
     "@vscode/l10n": "^0.0.18",
     "@vscode/markdown-editor": "0.0.2-107",
     "@vscode/observables": "0.1.1-0",
     "markdown-it": "^15.0.2",
+    "marked": "18.0.14",
+    "picomatch": "^4.0.5",
     "vscode-languageserver-textdocument": "^1.0.15",
     "vscode-markdown-languageservice": "^0.5.0",
     "vscode-uri": "^3.2.0"

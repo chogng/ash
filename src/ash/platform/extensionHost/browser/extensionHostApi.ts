@@ -23,8 +23,9 @@ import { normalizeExtensionStatusBarUpdate, normalizeExtensionHostInvocationRequ
 const BUILT_IN_SSH_EXTENSION_ID = 'ash.remote-ssh';
 
 export type BrowserExtensionHostRequest =
-	| { readonly id: number; readonly type: 'activate'; readonly entryPoint: string; readonly language: string; }
+	| { readonly id: number; readonly type: 'activate'; readonly entryPoint: string; readonly language: string; readonly extensionId: string; }
 	| { readonly id: number; readonly type: 'invoke'; readonly request: Parameters<IExtensionHostApi['invoke']>[0]; }
+	| { readonly id: number; readonly type: 'deactivate'; }
 	| { readonly id: number; readonly type: 'cancel'; readonly invocationId: number; }
 	| { readonly id: number; readonly type: 'commandResult'; readonly success: true; readonly result: JsonValue; }
 	| { readonly id: number; readonly type: 'commandResult'; readonly success: false; readonly error: string; };
@@ -126,7 +127,11 @@ export class BrowserExtensionHostApi extends Disposable implements IExtensionHos
 
 	private async activate(mode: ExtensionHostReconcileMode): Promise<ExtensionHostFleetSnapshot> {
 		const generation = ++this.generation;
-		if (mode === 'refresh') { this.workers.clearAndDisposeAll(); }
+		if (mode === 'refresh') {
+			await Promise.all([...this.workers].map(([, worker]) => worker.close()));
+			this.workers.clearAndDisposeAll();
+			this.assertNotDisposed();
+		}
 		const catalog = await this.extensions.list('refresh');
 		const runtimes: ExtensionHostRuntime[] = [];
 		for (const extension of catalog.extensions) {
@@ -158,7 +163,7 @@ export class BrowserExtensionHostApi extends Disposable implements IExtensionHos
 					return result;
 				});
 				this.workers.set(extension.id, worker);
-				const registrations = await worker.request({ type: 'activate', entryPoint: worker.entryPoint, language: getNLSLanguage() }, Date.now() + 30_000);
+				const registrations = await worker.request({ type: 'activate', entryPoint: worker.entryPoint, language: getNLSLanguage(), extensionId: extension.id }, Date.now() + 30_000);
 				this.assertNotDisposed();
 				const runtime = normalizeExtensionHostSnapshot({ generation, extensions: [{ ...runtimeIdentity(extension, generation), lifecycle: 'ready', failure: null, registrations }] }).extensions[0];
 				assertRemoteResolverOwnership(runtime, false);
@@ -190,7 +195,7 @@ export class BrowserExtensionHostApi extends Disposable implements IExtensionHos
 	}
 }
 
-type WorkerRequest = Omit<Extract<BrowserExtensionHostRequest, { type: 'activate'; }>, 'id'> | Omit<Extract<BrowserExtensionHostRequest, { type: 'invoke'; }>, 'id'>;
+type WorkerRequest = Omit<Extract<BrowserExtensionHostRequest, { type: 'activate'; }>, 'id'> | Omit<Extract<BrowserExtensionHostRequest, { type: 'invoke'; }>, 'id'> | Omit<Extract<BrowserExtensionHostRequest, { type: 'deactivate'; }>, 'id'>;
 
 class BrowserExtensionWorker extends Disposable {
 	private readonly failures = this._register(new Emitter<Error>());
@@ -207,6 +212,7 @@ class BrowserExtensionWorker extends Disposable {
 		@IAppServerApi appServer: IAppServerApi) {
 		super();
 		const clients = new Map<number, AbortController>();
+		const webviewResources = this._register(new DisposableMap<string>());
 		const lifetime = new AbortController();
 		this._register(toDisposable(() => { lifetime.abort(); for (const client of clients.values()) client.abort(); clients.clear(); }));
 		this.entryPoint = URL.createObjectURL(new Blob([Uint8Array.from(source)], { type: 'text/javascript' }));
@@ -225,7 +231,15 @@ class BrowserExtensionWorker extends Disposable {
 					return;
 				}
 				const url = message.url;
-				this._register(toDisposable(() => URL.revokeObjectURL(url)));
+				webviewResources.set(url, toDisposable(() => URL.revokeObjectURL(url)));
+				return;
+			}
+			if (message?.type === 'releaseWebviewResource') {
+				if (typeof message.url !== 'string' || !webviewResources.has(message.url)) {
+					this.fail(new TypeError('Unknown extension webview resource URL'));
+					return;
+				}
+				webviewResources.deleteAndDispose(message.url);
 				return;
 			}
 			if (message?.type === 'clientCancel') { clients.get(message.id)?.abort(); return; }
@@ -241,6 +255,10 @@ class BrowserExtensionWorker extends Disposable {
 					if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new TypeError('Invalid browser extension client request');
 					const value = payload as Record<string, JsonValue>;
 					if (typeof value.operation !== 'string') throw new TypeError('Invalid browser extension client request');
+					if (value.operation === 'executeCommand') {
+						if (typeof value.command !== 'string' || !Array.isArray(value.arguments)) throw new TypeError('Expected a command and arguments');
+						return await commandService.executeCommand(value.command, ...value.arguments) ?? null;
+					}
 					if (value.operation === 'workspaceFolders') {
 						const connected = await appServer.getConnectionState() === 'ready';
 						const folders = workspace.getWorkspace().folders;
@@ -303,6 +321,14 @@ class BrowserExtensionWorker extends Disposable {
 		this.worker.addEventListener('message', onMessage);
 		this.worker.addEventListener('error', onError);
 		this._register(toDisposable(() => { this.worker.removeEventListener('message', onMessage); this.worker.removeEventListener('error', onError); }));
+	}
+
+	public async close(): Promise<void> {
+		if (this.isDisposed) return;
+		// Refresh allows SDK cleanup; a blocked callback cannot keep the old Worker alive.
+		try { await this.request({ type: 'deactivate' }, Date.now() + 1_000); }
+		catch (error) { console.error('Browser extension cleanup failed', error); }
+		finally { this.dispose(); }
 	}
 
 	public request(request: WorkerRequest, deadline: number, signal?: AbortSignal): Promise<JsonValue> {

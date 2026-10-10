@@ -634,7 +634,11 @@ export const __runtime = Object.freeze({
 	sealActivation() {
 		if (phase !== 'activating') { throw new Error('Extension is not activating'); }
 		phase = 'active';
-		return JSON.stringify([...registrations.values()].map(({ callback, operation, dispatch, disposeResources, ...descriptor }) => descriptor));
+		return JSON.stringify([...registrations.values()].map(({ callback, operation, dispatch, disposeResources, invokePayload, ...descriptor }) => descriptor));
+	},
+	// Browser contributions reuse the same registration and cancellation owner.
+	registerContribution(descriptor, operation, callback) {
+		return register({ ...descriptor, operation, callback, invokePayload: true });
 	},
 	async invoke(registrationId, payloadJson, requestId, operation) {
 		if (phase !== 'active') { throw new Error('Extension is not active'); }
@@ -649,7 +653,7 @@ export const __runtime = Object.freeze({
 			let result;
 			if (registration.dispatch) {
 				result = await registration.dispatch(payload, operation);
-			} else if (operation === 'execute') {
+			} else if (operation === 'execute' && !registration.invokePayload) {
 				if (!Array.isArray(payload.arguments)) { throw new TypeError('Command arguments must be an array'); }
 				result = await registration.callback(context, ...payload.arguments);
 			} else {
@@ -675,6 +679,9 @@ export const __runtime = Object.freeze({
 	async dispose() {
 		phase = 'disposed';
 		let failure;
+		for (const source of invocations.values()) {
+			try { source.cancel(); } catch (error) { failure ??= error; }
+		}
 		for (const registration of registrations.values()) {
 			try { registration.disposeResources?.(); } catch (error) { failure ??= error; }
 		}

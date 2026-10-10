@@ -9,5 +9,10 @@
     "types": [],
     "lib": ["ES2024"]
   },
-  "include": ["index.d.ts", "example/extension.ts"]
+  "include": [
+    "index.d.ts",
+    "browser.d.ts",
+    "example/extension.ts",
+    "example/browser.ts"
+  ]
 }

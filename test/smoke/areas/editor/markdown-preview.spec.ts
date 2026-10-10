@@ -185,11 +185,12 @@ test('Markdown rich editor follows theme colors and shows keyboard focus in ever
 	const editor = frame.getByLabel('Markdown rich text editor', { exact: true });
 	const bold = frame.getByRole('button', { name: 'Bold', exact: true });
 	await expect(editor).toBeVisible();
-	for (const theme of ['Ash Light', 'Ash Dark', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
+	for (const [theme, id] of [['Ash Light', 'ash-light'], ['Ash Dark', 'ash-dark'], ['Ash High Contrast Dark', 'ash-high-contrast-dark'], ['Ash High Contrast Light', 'ash-high-contrast-light']]) {
 		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
 		await workbench.quickaccess.search(theme);
 		await workbench.quickaccess.input.press('Enter');
 		await expect(workbench.quickaccess.element).toHaveCount(0);
+		await expect(workbench.element).toHaveAttribute('data-color-theme', id);
 		const palette = await workbench.element.evaluate(element => {
 			const probe = document.createElement('span');
 			element.appendChild(probe);
@@ -216,7 +217,8 @@ test('Markdown rich editor follows theme colors and shows keyboard focus in ever
 				probe.remove();
 			}
 		})).toEqual([palette['editorCursor-foreground'], palette['editor-lineHighlightBackground'], palette['description-foreground']]);
-		await page.mouse.move(0, 0);
+		await editor.hover();
+		await expect.poll(() => bold.evaluate(element => element.matches(':hover'))).toBe(false);
 		await expect(bold).toHaveCSS('color', palette['button-foreground']!);
 		await expect(bold).toHaveCSS('background-color', palette['button-secondaryBackground']!);
 		await expect(frame.getByRole('toolbar')).toHaveCSS('border-bottom-color', palette['border']!);
