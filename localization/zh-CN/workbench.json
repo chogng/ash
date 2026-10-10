@@ -1350,6 +1350,7 @@
     "command.OpenCodeSessionsAction": "打开 Code 会话",
     "command.ToggleDiffLayoutAction": "切换行内差异视图",
     "command.NextChangeAction": "转到下一个更改",
+    "compare.openSide": "打开当前比较侧",
     "command.PreviousChangeAction": "转到上一个更改",
     "command.MoveEditorToNewWindowAction": "将编辑器移至新窗口",
     "command.CompareBinaryEditorsAction": "将当前文件作为二进制文件比较…",

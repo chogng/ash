@@ -21,6 +21,9 @@ import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.j
 import { IExtensionService } from '../../../src/ash/workbench/services/extensions/common/extensionService.js';
 import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
+import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
+import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
+import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
 import { darkColorTheme, highContrastDarkColorTheme, lightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { IGitHubConnectionService } from '../../../src/ash/workbench/services/accounts/common/gitHubConnectionService.js';
@@ -81,6 +84,7 @@ class ReporterTransport implements AppServerTransport {
 if (new URL(location.href).searchParams.get('locale') === 'zh-CN') { setNlsMessages('zh-CN', messages); }
 const resources = new DisposableStore();
 const services = resources.add(new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors())));
+services.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'issue-reporter', flushInterval: 0 })));
 const transport = new ReporterTransport();
 const client = new AppServerProtocolClient(transport);
 resources.add(toDisposable(() => client.dispose()));
@@ -112,7 +116,7 @@ services.registerInstance(IEditorService, {
 	openEditor: async input => {
 		if (pane) { pane.dispose(); }
 		const descriptor = EditorPanes.getEditorPane(input)!;
-		const createdPane = descriptor.create({ instantiationService: services });
+		const createdPane = await descriptor.create({ instantiationService: services });
 		pane = createdPane;
 		createdPane.create(document.getElementById('reporter')!);
 		createdPane.layout({ width: innerWidth, height: innerHeight }); await createdPane.setInput(input, new AbortController().signal); createdPane.focus();
@@ -120,6 +124,7 @@ services.registerInstance(IEditorService, {
 	focusActiveEditor: () => pane!.focus(),
 });
 const theme = resources.add(new TestThemeService(darkColorTheme));
+services.registerInstance(IThemeService, theme);
 resources.add(bindColorTheme(theme, document.body));
 const commands = resources.add(new CommandService(services));
 window.ashIssueReporterIntegration = {

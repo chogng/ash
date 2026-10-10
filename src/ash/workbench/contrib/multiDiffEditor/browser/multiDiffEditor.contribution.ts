@@ -1,5 +1,7 @@
 import { getBrowserTextModelService } from '../../../services/textmodelResolver/browser/browserTextModelService.js';
-import { registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { ToggleCollapseUnchangedRegions } from '../../../../editor/browser/widget/diffEditor/commands.js';
+import { ActiveEditorContext } from '../../../common/contextkeys.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { registerEditorPane } from '../../../browser/editor.js';
 import { getBrowserTextResourceStore } from '../../codeEditor/browser/browserTextResourceStore.js';
@@ -21,6 +23,12 @@ registerAction2(MultiDiffCollapseAllAction);
 registerAction2(MultiDiffExpandAllAction);
 registerAction2(MultiDiffGoToFileAction);
 registerAction2(OpenScmMultiDiffEditorAction);
+
+MenusRegistry.appendMenuItem(MenuId.EditorTitle, {
+	command: new ToggleCollapseUnchangedRegions().desc,
+	when: ActiveEditorContext.isEqualTo(MULTI_DIFF_EDITOR_ID),
+	group: 'navigation', order: 21,
+});
 
 registerEditorPane({
 	id: MULTI_DIFF_EDITOR_ID,

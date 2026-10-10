@@ -1,6 +1,6 @@
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
-import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { formatNlsMessage, localize } from '../../../../nls.js';
 import { type CodeEditorViewState } from '../codeEditor/codeEditorWidget.js';
@@ -30,9 +30,11 @@ export class DiffEditorItemTemplate extends Disposable {
 	private readonly bodyDomNode: HTMLDivElement;
 	private readonly incompleteStatusDomNode: HTMLSpanElement;
 	private readonly editorSlot = this._register(new MutableDisposable<DiffEditorWidget>());
+	private readonly editorListeners = this._register(new DisposableStore());
 	private originalState: CodeEditorViewState | null = null;
 	private modifiedState: CodeEditorViewState | null = null;
 	private editorHeight = 0;
+	private layingOutEditor = false;
 
 	constructor(
 		container: HTMLElement,
@@ -40,6 +42,7 @@ export class DiffEditorItemTemplate extends Disposable {
 		toggle: () => void,
 		activate: () => void,
 		workbenchUIElementFactory: IWorkbenchUIElementFactory | undefined,
+		private readonly onLayoutChange?: () => void,
 	) {
 		super();
 		const ownerDocument = container.ownerDocument;
@@ -114,13 +117,40 @@ export class DiffEditorItemTemplate extends Disposable {
 	}
 
 	public layoutEditor(width: number): void {
-		this.editor?.layout({ width: Math.max(0, width - MULTI_DIFF_HORIZONTAL_INSET), height: this.editorHeight });
+		this.layingOutEditor = true;
+		try {
+			this.editor?.layout({ width: Math.max(0, width - MULTI_DIFF_HORIZONTAL_INSET), height: this.editorHeight });
+		} finally {
+			this.layingOutEditor = false;
+		}
 	}
 
 	public mount(editor: DiffEditorWidget): void {
+		this.editorListeners.clear();
 		this.editorSlot.value = editor;
-		editor.originalEditor.restoreViewState(this.originalState);
-		editor.modifiedEditor.restoreViewState(this.modifiedState);
+		if (this.onLayoutChange) {
+			// Hidden-region reveal controls change content height without changing the file model.
+			let originalHeight = editor.originalEditor.getContentHeight();
+			let modifiedHeight = editor.modifiedEditor.getContentHeight();
+			const updateContentHeight = () => {
+				const nextOriginalHeight = editor.originalEditor.getContentHeight();
+				const nextModifiedHeight = editor.modifiedEditor.getContentHeight();
+				const changed = originalHeight !== nextOriginalHeight || modifiedHeight !== nextModifiedHeight;
+				originalHeight = nextOriginalHeight;
+				modifiedHeight = nextModifiedHeight;
+				// The outer viewport owns editor dimensions; its own layout must not schedule another pass.
+				if (changed && !this.layingOutEditor) this.onLayoutChange?.();
+			};
+			this.editorListeners.add(editor.originalEditor.onDidLayoutChange(updateContentHeight));
+			this.editorListeners.add(editor.modifiedEditor.onDidLayoutChange(updateContentHeight));
+		}
+		// Resetting to the default cursor would reveal a hidden leading region on every mount.
+		if (this.originalState) {
+			editor.originalEditor.restoreViewState(this.originalState);
+		}
+		if (this.modifiedState) {
+			editor.modifiedEditor.restoreViewState(this.modifiedState);
+		}
 	}
 
 	public unmount(): void {
@@ -128,6 +158,7 @@ export class DiffEditorItemTemplate extends Disposable {
 		if (!editor) return;
 		this.originalState = editor.originalEditor.saveViewState();
 		this.modifiedState = editor.modifiedEditor.saveViewState();
+		this.editorListeners.clear();
 		this.editorSlot.clear();
 	}
 

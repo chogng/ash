@@ -64,6 +64,8 @@ const { BrowserTextResourceStore } = await import('../../../codeEditor/browser/b
 const { createMultiDiffEditorInput } = await import('../../browser/multiDiffEditorInput.js');
 const { MultiDiffEditor } = await import('../../browser/multiDiffEditor.js');
 await import('../../../codeEditor/browser/toggleWordWrap.js');
+await import('../../../../../editor/browser/widget/diffEditor/commands.js');
+await import('../../../../../editor/contrib/diffEditorBreadcrumbs/browser/contribution.js');
 const { createGitMultiDiffEditorInput } = await import('../../browser/scmMultiDiffAction.js');
 
 function registerDialogs(services: InstantiationService, sourceResolver?: IMultiDiffSourceResolver): void {
@@ -203,7 +205,8 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 	assert.equal(parent.querySelectorAll('.stanza-multi-diff-editor-pane').length, 1);
 	assert.equal(parent.querySelectorAll('.stanza-multi-diff-editor-session.pending').length, 0);
 	assert.equal(parent.querySelectorAll('.stanza-multi-diff-editor-section').length, 2);
-	assert.equal(pane.getControl(), undefined);
+	assert.equal(pane.getActiveDiffItem()?.label, 'src/first.ts');
+	assert.ok(pane.getControl());
 	pane.focus();
 	const activeControl = pane.getControl();
 	assert.equal(activeControl?.modifiedEditor.getModel()?.getValue(), 'new');
@@ -436,6 +439,52 @@ for (const cancellation of ['signal', 'clear'] as const) {
 		dom.window.close();
 	});
 }
+
+test('Multi-diff collapse command updates mounted and remounted comparisons and preserves the active file', async () => {
+	const dom = createTestDom();
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
+	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
+	using resources = new DisposableStore();
+	const services = createCodeEditorServices(resources);
+	registerDialogs(services);
+	const configuration = services.get(IConfigurationService);
+	await configuration.updateValue(CodeEditorConfiguration.diffHideUnchangedRegionsEnabled, true);
+	using pane = registerTestComponentServices(services).createInstance(MultiDiffEditor, {
+		modelService: models,
+		createComputationService: () => new PaneTestDiffComputationService(),
+	});
+	pane.create(parent);
+	pane.layout({ width: 1000, height: 900 });
+	const lines = Array.from({ length: 36 }, (_, index) => `shared ${index + 1}`);
+	await pane.setInput(createMultiDiffEditorInput(URI.parse('ash-multi-diff:/hidden'), ['first', 'second'].map(name => ({
+		label: `${name}.ts`,
+		original: { resource: URI.parse(`git-change:/${name}/original`), initialText: lines.join('\n') },
+		modified: { resource: URI.parse(`git-change:/${name}/modified`), initialText: [...lines.slice(0, -1), 'changed'].join('\n') },
+	})), 'Hidden regions'), new AbortController().signal);
+	await pane.nextChange();
+	const regions = () => parent.querySelectorAll('.ash-diff-hidden-region');
+	assert.equal(regions().length, 4);
+	await configuration.updateValue(CodeEditorConfiguration.diffHideUnchangedRegionsMinimumLineCount, 100);
+	assert.equal(regions().length, 0);
+	await configuration.updateValue(CodeEditorConfiguration.diffHideUnchangedRegionsMinimumLineCount, 3);
+	assert.equal(regions().length, 4);
+	pane.collapseAll();
+	assert.equal(regions().length, 0);
+	pane.expandAll();
+	assert.equal(regions().length, 4);
+	assert.equal(pane.getActiveDiffItem()?.label, 'second.ts');
+	pane.collapseAll();
+	assert.equal(pane.getActiveDiffItem()?.label, 'second.ts');
+	await services.get(ICommandService).executeCommand('diffEditor.toggleCollapseUnchangedRegions');
+	pane.expandAll();
+	assert.equal(regions().length, 0);
+	await services.get(ICommandService).executeCommand('diffEditor.toggleCollapseUnchangedRegions');
+	assert.equal(regions().length, 4);
+	pane.dispose();
+	dom.window.close();
+});
 
 test('Multi-diff pane inherits word wrap and routes the toggle command to its view', async () => {
 	const dom = createTestDom();

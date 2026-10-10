@@ -483,6 +483,16 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			return pane;
 		}
 		if (!await this.closeActiveModalEditor()) throw new CancellationError("Opening the editor was cancelled");
+		if (target === undefined && options.revealIfOpened) {
+			const group = [this._activeGroup, ...this._groups.map(({ group }) => group)].find(group => group.inputs.some(candidate => this.isSameEditor(candidate, input)));
+			if (group) {
+				const pane = await group.openEditor(input, options);
+				if (!options.preserveFocus) {
+					this.setActiveGroup(group);
+				}
+				return pane;
+			}
+		}
 		if (typeof target === 'object') {
 			const group = this.groupHosts.get(target.groupId)!.group;
 			const pane = await group.openEditor(input, options);

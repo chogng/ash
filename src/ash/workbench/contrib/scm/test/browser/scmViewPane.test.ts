@@ -170,6 +170,48 @@ test("SCM diff inputs open live files and keep deleted files on the readable sid
 	assert.equal(deleted.goToFile, deleted.original);
 });
 
+test('SCM Open File actions open editable working files from each group and skip deleted files', async () => {
+	const status: GitStatus = {
+		repositoryId: 'repo-1', streamInstanceId: 'open-file-stream', revision: 1,
+		workspacePath: '/workspace/nested',
+		head: { type: 'branch', name: 'main', objectId: '1234567890', upstream: undefined },
+		changes: [
+			change('staged.ts', 'modified', 'unmodified'),
+			{ ...change('new.ts', 'renamed', 'modified'), originalPath: 'old.ts' },
+			{ ...change('conflict.ts', 'unmerged', 'unmerged'), conflicted: true },
+			change('deleted.ts', 'unmodified', 'deleted'),
+			change('staged-deleted.ts', 'deleted', 'unmodified'),
+			change('both-deleted.ts', 'modified', 'deleted'),
+		],
+	};
+	const repository = { id: status.repositoryId, label: 'nested', path: 'nested', root: URI.file(status.workspacePath) };
+	const gitService = {
+		status: async () => status,
+		onDidChangeRepositoryStatus: Event.None,
+		onDidBecomeReady: Event.None,
+	} as unknown as IGitService;
+	const opened: Array<{ readonly input: IResourceEditorInput; readonly options: EditorOpenOptions | undefined; readonly target?: EditorOpenTarget; }> = [];
+	using provider = new GitSCMProvider(gitService, repository, {} as GitHistoryProvider, testGitProviderServices({ editorService: testEditorService(opened) }));
+	await waitFor(() => provider.groups.length === 3);
+	for (const group of provider.groups) {
+		for (const resource of group.resources) {
+			const action = resource.actions.find(action => action.id === `scm.change.openFile.${resource.path}`);
+			if (resource.path.endsWith('deleted.ts')) {
+				assert.equal(action, undefined);
+				continue;
+			}
+			assert.ok(action);
+			const count = opened.length;
+			action.run();
+			await waitFor(() => !provider.isBusy && opened.length === count + 1);
+			assert.deepEqual(opened.at(-1), {
+				input: { resource: URI.file(`${status.workspacePath}/${resource.path}`) },
+				options: { pinned: false, revealIfOpened: true, preserveFocus: false }, target: undefined,
+			});
+		}
+	}
+});
+
 test("Git contribution registers Repositories before Changes and hides it for a single provider", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
@@ -1894,6 +1936,7 @@ test("ScmViewPane groups App Server Git status", async () => {
 	} as unknown as IGitService;
 
 	try {
+		await import("../../browser/scm.contribution.js");
 		const { ScmViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmViewPane.js");
 		const editorService = testEditorService(opened);
 		const services = new InstantiationService();

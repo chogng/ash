@@ -34,6 +34,43 @@ suiteTeardown(() => {
 });
 const diffOptions: IDocumentDiffProviderOptions = { ignoreTrimWhitespace: false, maxComputationTimeMs: 0, computeMoves: false };
 
+for (const restore of [false, true]) {
+	test(`MultiDiffEditorWidget ${restore ? 'preserves restored collapse state during' : 'reveals the first change without focus during'} initial navigation`, async () => {
+		const dom = new JSDOM('<!doctype html><body><main tabindex="0"></main></body>');
+		try {
+			dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+			using resources = new DisposableStore();
+			const services = createCodeEditorServices(resources);
+			const container = requiredElement<HTMLElement>(dom.window.document, 'main');
+			container.focus();
+			const original = Array.from({ length: 100 }, (_, index) => `shared ${index + 1}`);
+			const modified = [...original];
+			modified[59] = 'changed';
+			using before = new TextModel(original.join('\n'));
+			using after = new TextModel(modified.join('\n'));
+			using provider = new MultiDiffTestComputationService();
+			using model = new DiffModel({ original: before, modified: after, diffProvider: provider, diffOptions });
+			using item = new DocumentDiffItem({ id: 'first', label: 'first.ts' }, model);
+			using collection = new MultiDiffEditorModel([item]);
+			using editor = services.createInstance(MultiDiffEditorWidget, { container, model: collection, lineHeight: 20 });
+			editor.layout({ width: 800, height: 300 });
+			if (restore) editor.restoreViewState({ scrollTop: 0, collapsedItemIds: ['first'], itemViewStates: [] });
+			await editor.resolveVisible();
+			assert.equal(dom.window.document.activeElement, container);
+			if (restore) {
+				assert.equal(editor.currentChange, undefined);
+				assert.equal(container.querySelector('.stanza-multi-diff-editor-header-toggle')?.getAttribute('aria-expanded'), 'false');
+			} else {
+				assert.deepEqual(editor.currentChange, { itemId: 'first', rowIndex: 59 });
+				assert.equal(editor.getActiveControl()?.modifiedEditor.getPosition()?.lineNumber, 60);
+				assert.ok(editor.saveViewState().scrollTop > 0);
+			}
+		} finally {
+			dom.window.close();
+		}
+	});
+}
+
 test('MultiDiffEditorWidget presents ordered file sections with one outer viewport', async () => {
 	using resources = new DisposableStore();
 	const services = createCodeEditorServices(resources);

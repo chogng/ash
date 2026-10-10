@@ -7,6 +7,13 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import { CancellationError } from '../../../../../base/common/errors.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
+import { Range } from '../../../../../editor/common/core/range.js';
+import { TextEditorSelectionSource } from '../../../../../platform/editor/common/editor.js';
+import { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
+import { createDiffEditorInput, DIFF_EDITOR_ID } from '../../../../common/editor/diffEditorInput.js';
+import { ActiveEditorContext, ResourceContext, ResourceSchemeContext } from '../../../../common/contextkeys.js';
+import type { EditorOpenOptions } from '../../../../services/editor/common/editorService.js';
+import { resolveGitChangeInputs } from '../../browser/gitChangeEditorInput.js';
 import { AppServerRemoteError } from '../../../../../platform/agentHost/common/appServerError.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
@@ -85,6 +92,53 @@ function registerGraphServices(services: InstantiationService, git: Partial<IGit
 }
 
 ensureNoDisposablesAreLeakedInTestSuite();
+
+test('Git diff title Open File opens the renamed working resource at the current selection and skips deleted files', async () => {
+	using services = new InstantiationService();
+	using contexts = new ContextKeyService();
+	using commands = new CommandService(services);
+	const menus = new MenuService(commands, contexts);
+	const status: GitStatus = {
+		repositoryId: 'nested-repo', streamInstanceId: 'file-title-stream', revision: 4,
+		workspacePath: '/workspace/nested', head: { type: 'branch', name: 'main', objectId: firstParent, upstream: undefined }, changes: [],
+	};
+	const git = { changeFile: async () => ({ original: { kind: 'text', text: 'before' }, modified: { kind: 'text', text: 'after' } }) } as unknown as IGitService;
+	const selection = new Range(7, 3, 7, 5);
+	const opened: Array<{ input: IResourceEditorInput; options: EditorOpenOptions | undefined; }> = [];
+	services.registerInstance(IEditorService, { openEditor: async (input, options) => { opened.push({ input, options }); } } as IEditorService);
+	const activated: string[] = [];
+	const part = {
+		activeInput: undefined as IResourceEditorInput | undefined,
+		activePane: { getSelection: () => selection, restoreSelection() { }, onDidChangeSelection: Event.None },
+		activateGroup: (id: string) => activated.push(id),
+	};
+	services.registerInstance(IEditorPart, part as unknown as IEditorPart);
+	for (const deleted of [false, true]) {
+		const inputs = await resolveGitChangeInputs(git, status, {
+			path: 'new name.ts', originalPath: 'old name.ts', indexStatus: 'renamed', worktreeStatus: deleted ? 'deleted' : 'unmodified', conflicted: false,
+			submodule: { isSubmodule: false, commitChanged: false, trackedChanges: false, untrackedChanges: false },
+		}, 'staged');
+		using input = createDiffEditorInput(inputs.original!, inputs.modified!);
+		part.activeInput = input;
+		contexts.setContext(ActiveEditorContext.key, DIFF_EDITOR_ID);
+		contexts.setContext(ResourceSchemeContext.key, input.modified.resource.scheme);
+		contexts.setContext(ResourceContext.key, input.modified.resource.toString());
+		const fileActions = menus.getMenuActions(MenuId.EditorTitle, { arg: { groupId: 'review-group' } }).flatMap(([, actions]) => actions).filter(action => action.id === 'git.openFile');
+		assert.equal(fileActions.length, deleted ? 0 : 1);
+		if (deleted) {
+			await commands.executeCommand('git.openFile');
+			assert.equal(opened.length, 1);
+		} else {
+			await fileActions[0]!.run();
+			assert.deepEqual(activated, ['review-group']);
+			assert.deepEqual(opened, [{
+				input: { resource: URI.file('/workspace/nested/new name.ts') }, options: {
+					pinned: false, revealIfOpened: true, selection, selectionSource: TextEditorSelectionSource.JUMP,
+				}
+			}]);
+		}
+	}
+});
 
 function commitFixture(overrides: Partial<IGitService> = {}, confirm: () => Promise<{ confirmed: boolean; }> = async () => ({ confirmed: true }), quickInput: IQuickInputService = inputSelecting(0)): { provider: GitSCMProvider; commands: CommandService; requests: unknown[][]; status: GitStatus; views: SCMViewService; scm: SCMService;[Symbol.dispose](): void; } {
 	const lifetime = new DisposableStore();

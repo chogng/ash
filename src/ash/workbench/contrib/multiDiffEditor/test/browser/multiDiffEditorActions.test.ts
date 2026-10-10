@@ -104,7 +104,7 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 		assert.deepEqual(
 			menus.getMenuActions(MenuId.EditorTitle).map(([group, actions]) => [group, actions.map((action) => action.id)]),
 			[
-				['navigation', [MultiDiffGoToPreviousChangeCommandId, MultiDiffGoToNextChangeCommandId]],
+				['navigation', [MultiDiffGoToPreviousChangeCommandId, MultiDiffGoToNextChangeCommandId, MultiDiffGoToFileCommandId]],
 				['4_collapse', [MultiDiffCollapseAllCommandId, MultiDiffExpandAllCommandId]],
 			],
 		);

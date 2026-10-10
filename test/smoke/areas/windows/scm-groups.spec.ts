@@ -376,7 +376,7 @@ test.describe('SCM editor groups', () => {
 		await expect(diff.locator('.original .stanza-diff-line-removed')).toHaveCount(4);
 	});
 
-	test('SCM filenames keep priority over long directories when the sidebar resizes', async ({ testWorkspace, workbench }) => {
+	test('SCM filenames keep full row width under overlay actions when the sidebar resizes', async ({ testWorkspace, workbench }) => {
 		const page = workbench.page;
 		const directory = 'src/ash/workbench/contrib/scm/browser';
 		const path = `${directory}/details.ts`;
@@ -388,6 +388,9 @@ test.describe('SCM editor groups', () => {
 		await expect(open.locator('.ash-icon-label-text')).toHaveText('details.ts');
 		await expect(open.locator('.ash-icon-label-description')).toHaveText(directory);
 		const sidebar = page.locator('[data-part="sidebar"]');
+		const row = open.locator('xpath=..');
+		const actions = row.locator('.ash-scm-change-actions');
+		const badge = row.locator('.ash-scm-change-status');
 		const sash = sidebar.locator('xpath=../../..').locator(':scope > .ash-sash').first();
 		const geometry = async () => open.evaluate(element => {
 			const name = element.querySelector('.ash-icon-label-text')!;
@@ -405,11 +408,195 @@ test.describe('SCM editor groups', () => {
 			await page.mouse.up();
 			await expect.poll(async () => (await sidebar.boundingBox())!.width).toBeCloseTo(width, 0);
 			await expect.poll(geometry).toEqual({ nameFits: true, directoryFits: false });
+			await expect(actions).toBeHidden();
+			const resting = await open.boundingBox();
+			const status = (await badge.boundingBox())!;
+			expect(resting!.x + resting!.width).toBeCloseTo(status.x - 4, 1);
+			await open.hover();
+			await expect(actions).toBeVisible();
+			expect(await open.boundingBox()).toEqual(resting);
+			expect(await badge.boundingBox()).toEqual(status);
+			const overlay = (await actions.boundingBox())!;
+			expect(overlay.x).toBeLessThan(resting!.x + resting!.width);
+			expect(overlay.x + overlay.width).toBeCloseTo(status.x - 4, 1);
 		}
 		await open.hover();
 		await expect(page.locator('.ash-hover')).toContainText(path);
+		const stage = actions.getByRole('button', { name: `Stage ${path}`, exact: true });
+		await stage.hover();
+		await expect(page.locator('.ash-hover')).toContainText('Stage');
+		await open.focus();
+		await page.mouse.move(0, 0);
+		await expect(actions).toBeVisible();
+		await open.press('Tab');
+		await expect(actions.locator(':focus')).toHaveCount(1);
+		await expect(badge).toHaveText('U');
 		await open.click();
 		await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'details.ts' })).toHaveCount(1);
+	});
+
+	for (const locale of ['en', 'zh-CN']) {
+		test(`SCM inline Open File opens the editable working file from staged changes in ${locale}`, async ({ testWorkspace, workbench, restartWorkbench }) => {
+			await run('git', ['add', '--', 'main.ts'], { cwd: testWorkspace.directory });
+			await writeFile(testWorkspace.file, 'const value = 3;\n');
+			if (locale === 'zh-CN') {
+				await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+				const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
+				await picker.getByRole('combobox').fill('简体中文');
+				await picker.getByRole('combobox').press('Enter');
+				({ workbench } = await restartWorkbench());
+			}
+			const page = workbench.page;
+			await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+			const tree = page.getByRole('tree', { name: locale === 'zh-CN' ? '源代码管理更改' : 'Source control changes', exact: true });
+			const staged = tree.getByRole('button', { name: 'Open staged changes for main.ts', exact: true });
+			await staged.click();
+			await expect(page.locator('.stanza-diff-editor')).toBeVisible();
+			const tabCount = await workbench.editors.groupAt(0).tabs.count();
+			await tree.focus();
+			await tree.press('Alt+F1');
+			await expect(page.getByRole('dialog').getByRole('textbox')).toHaveValue(locale === 'zh-CN' ? /行内“打开文件”/u : /inline Open File/u);
+			await page.keyboard.press('Escape');
+			await staged.hover();
+			const openFile = staged.locator('xpath=..').getByRole('button', { name: locale === 'zh-CN' ? '打开文件：main.ts' : 'Open File: main.ts', exact: true });
+			await openFile.hover();
+			await expect(page.locator('.ash-hover')).toContainText(locale === 'zh-CN' ? '打开文件：main.ts' : 'Open File: main.ts');
+			if (locale === 'zh-CN') {
+				await staged.focus();
+				await staged.press('Tab');
+				await expect(openFile).toBeFocused();
+				await openFile.press('Enter');
+			} else {
+				await openFile.click();
+			}
+			await expect(page.locator('.stanza-diff-editor')).toBeHidden();
+			await expect(workbench.editors.groupAt(0).tabs).toHaveCount(tabCount);
+			const editor = workbench.editors.groupAt(0).editor;
+			await editor.waitForEditorContents(content => content === 'const value = 3;\n');
+			await editor.waitForEditorFocus();
+			await editor.input.press('ControlOrMeta+A');
+			await page.keyboard.insertText('const value = 4;\n');
+			await workbench.quickaccess.runCommand('workbench.action.files.save');
+			await expect.poll(() => readFile(testWorkspace.file, 'utf8')).toBe('const value = 4;\n');
+			expect((await run('git', ['show', ':main.ts'], { cwd: testWorkspace.directory })).stdout).toBe('const value = 2;\n');
+		});
+	}
+
+	for (const locale of ['en', 'zh-CN']) {
+		test(`SCM diff title actions navigate changes and reuse file preview tabs in ${locale}`, async ({ testWorkspace, workbench, restartWorkbench }) => {
+			const original = Array.from({ length: 24 }, (_, index) => `const line${index + 1} = ${index + 1};`);
+			await writeFile(testWorkspace.file, `${original.join('\n')}\n`);
+			await run('git', ['add', '--', 'main.ts'], { cwd: testWorkspace.directory });
+			await run('git', ['commit', '-m', 'Prepare separated changes'], { cwd: testWorkspace.directory });
+			const modified = [...original];
+			modified[1] = 'const line2 = 200;';
+			modified[19] = 'const line20 = 2000;';
+			await writeFile(testWorkspace.file, `${modified.join('\n')}\n`);
+			await writeFile(join(testWorkspace.directory, 'other.ts'), 'export const other = 1;\n');
+			if (locale === 'zh-CN') {
+				await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+				const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
+				await picker.getByRole('combobox').fill('简体中文');
+				await picker.getByRole('combobox').press('Enter');
+				({ workbench } = await restartWorkbench());
+			}
+			const page = workbench.page;
+			await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+			const tree = page.getByRole('tree', { name: locale === 'zh-CN' ? '源代码管理更改' : 'Source control changes', exact: true });
+			await tree.getByRole('button', { name: 'Open changes for main.ts', exact: true }).click();
+			const group = workbench.editors.groupAt(0);
+			const diff = group.content.locator('.stanza-diff-editor:visible');
+			await expect(diff).toBeVisible();
+			const next = group.title.getByRole('button', { name: locale === 'zh-CN' ? '转到下一个更改' : 'Go to Next Change', exact: true });
+			const previous = group.title.getByRole('button', { name: locale === 'zh-CN' ? '转到上一个更改' : 'Go to Previous Change', exact: true });
+			const location = diff.locator('.stanza-diff-editor-accessibility-status');
+			const collapse = group.title.getByRole('button', { name: locale === 'zh-CN' ? '切换折叠未变更区域' : 'Toggle Collapse Unchanged Regions', exact: true });
+			await expect(collapse.locator('svg')).toHaveAttribute('data-ash-icon-id', 'map');
+			await expect(collapse).toHaveAttribute('aria-pressed', 'false');
+			await expect(diff.locator('.ash-diff-hidden-region')).toHaveCount(0);
+			await collapse.hover();
+			await expect(page.locator('.ash-hover')).toContainText(locale === 'zh-CN' ? '切换折叠未变更区域' : 'Toggle Collapse Unchanged Regions');
+			await collapse.click();
+			await expect(collapse).toHaveAttribute('aria-pressed', 'true');
+			await expect.poll(() => diff.locator('.ash-diff-hidden-region').count()).toBeGreaterThan(0);
+			await group.title.getByRole('button', { name: locale === 'zh-CN' ? '打开文件' : 'Open File', exact: true }).click();
+			await group.editor.waitForEditorContents(content => content.includes('const line2 = 200;'));
+			await tree.getByRole('button', { name: 'Open changes for main.ts', exact: true }).click();
+			await expect(collapse).toHaveAttribute('aria-pressed', 'true');
+			await expect.poll(() => diff.locator('.ash-diff-hidden-region').count()).toBeGreaterThan(0);
+			await collapse.focus();
+			await collapse.press('Space');
+			await expect(collapse).toHaveAttribute('aria-pressed', 'false');
+			await expect(diff.locator('.ash-diff-hidden-region')).toHaveCount(0);
+			await expect(location).toContainText(locale === 'zh-CN' ? '第 1 处差异' : 'Change 1 of');
+			await next.click();
+			await expect(location).toContainText(locale === 'zh-CN' ? '第 2 处差异' : 'Change 2 of');
+			await previous.focus();
+			await previous.press('Enter');
+			await expect(location).toContainText(locale === 'zh-CN' ? '第 1 处差异' : 'Change 1 of');
+			const tabCount = await group.tabs.count();
+			const openFile = group.title.getByRole('button', { name: locale === 'zh-CN' ? '打开文件' : 'Open File', exact: true });
+			await expect(openFile.locator('svg')).toHaveAttribute('data-ash-icon-id', 'go-to-file');
+			await openFile.hover();
+			await expect(page.locator('.ash-hover')).toContainText(locale === 'zh-CN' ? '打开文件' : 'Open File');
+			await openFile.click();
+			await group.editor.waitForEditorContents(content => content.includes('const line2 = 200;') && content.includes('const line20 = 2000;'));
+			await expect(group.tabs).toHaveCount(tabCount);
+			await expect(next).toHaveCount(0);
+			await expect(collapse).toHaveCount(0);
+			const openWorkingFile = async (path: string): Promise<void> => {
+				const row = tree.getByRole('button', { name: `Open changes for ${path}`, exact: true });
+				await row.hover();
+				await row.locator('xpath=..').getByRole('button', { name: locale === 'zh-CN' ? `打开文件：${path}` : `Open File: ${path}`, exact: true }).click();
+			};
+			await openWorkingFile('other.ts');
+			await group.editor.waitForEditorContents(content => content === 'export const other = 1;\n');
+			await expect(group.tabs).toHaveCount(tabCount);
+			await openWorkingFile('main.ts');
+			await group.editor.waitForEditorFocus();
+			await group.editor.input.press('ControlOrMeta+End');
+			await page.keyboard.insertText('// unsaved edit');
+			await expect(group.tabs.filter({ hasText: 'main.ts' })).toHaveAttribute('aria-label', locale === 'zh-CN' ? /未保存的更改/u : /unsaved changes/u);
+			await openWorkingFile('other.ts');
+			await expect(group.tabs).toHaveCount(tabCount + 1);
+			await openWorkingFile('main.ts');
+			await group.editor.waitForEditorContents(content => content.includes('// unsaved edit'));
+			await expect(group.tabs).toHaveCount(tabCount + 1);
+			expect(await readFile(testWorkspace.file, 'utf8')).not.toContain('// unsaved edit');
+		});
+	}
+
+	test('SCM Open File reveals an existing file in another editor group', async ({ testWorkspace, workbench }) => {
+		await writeFile(join(testWorkspace.directory, 'other.ts'), 'export const other = 1;\n');
+		const page = workbench.page;
+		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		const tree = page.getByRole('tree', { name: 'Source control changes', exact: true });
+		const openFile = async (path: string): Promise<void> => {
+			const row = tree.getByRole('button', { name: `Open changes for ${path}`, exact: true });
+			await row.hover();
+			await row.locator('xpath=..').getByRole('button', { name: `Open File: ${path}`, exact: true }).click();
+		};
+		await openFile('main.ts');
+		await workbench.editors.groupAt(0).editor.waitForEditorContents(content => content === 'const value = 2;\n');
+		await expect(workbench.editors.groupAt(0).editor.input).toBeFocused();
+		await workbench.quickaccess.runCommand('workbench.action.keepEditor');
+		await openFile('other.ts');
+		await workbench.editors.groupAt(0).editor.waitForEditorContents(content => content === 'export const other = 1;\n');
+		await expect(workbench.editors.groupAt(0).editor.input).toBeFocused();
+		await workbench.quickaccess.runCommand('workbench.action.splitEditorHorizontal');
+		await expect(workbench.editors.groups).toHaveCount(2);
+		const first = workbench.editors.groupAt(0);
+		const second = workbench.editors.groupAt(1);
+		const otherTab = first.tabs.filter({ hasText: 'other.ts' });
+		await otherTab.hover();
+		await otherTab.locator('xpath=..').locator('.ash-tab-close-action button').click();
+		await second.tabs.filter({ hasText: 'other.ts' }).click();
+		const count = await first.tabs.count() + await second.tabs.count();
+		await openFile('main.ts');
+		await expect(first.tabs.filter({ hasText: 'main.ts' })).toHaveAttribute('aria-selected', 'true');
+		await expect(second.tabs.filter({ hasText: 'main.ts' })).toHaveCount(0);
+		await expect(first.editor.input).toBeFocused();
+		expect(await first.tabs.count() + await second.tabs.count()).toBe(count);
 	});
 
 	test('SCM and Files share tree indentation and update arrow spacing with file icons', async ({ application, target, testWorkspace, workbench }) => {
@@ -539,6 +726,154 @@ test.describe('SCM editor groups', () => {
 		await expect(original.tabs.filter({ hasText: 'main.ts' })).toHaveCount(1);
 		await expect(original.content.locator('.stanza-diff-editor')).toHaveCount(0);
 	});
+
+	for (const locale of ['en', 'zh-CN']) {
+		test(`SCM Multi Diff shares diff title actions and unchanged-region settings in ${locale}`, async ({ testWorkspace, workbench, restartWorkbench, reloadWorkbench }) => {
+			const otherFile = join(testWorkspace.directory, 'other.ts');
+			const original = Array.from({ length: 40 }, (_, index) => `const line${index + 1} = ${index + 1};`);
+			await writeFile(testWorkspace.file, `${original.join('\n')}\n`);
+			await writeFile(otherFile, `${original.join('\n')}\n`);
+			await run('git', ['add', '--', 'main.ts', 'other.ts'], { cwd: testWorkspace.directory });
+			await run('git', ['commit', '-m', 'Prepare multi diff hidden regions'], { cwd: testWorkspace.directory });
+			const modified = [...original];
+			modified[1] = 'const line2 = 200;';
+			modified[31] = 'const line32 = 3200;';
+			await writeFile(testWorkspace.file, `${modified.join('\n')}\n`);
+			await writeFile(otherFile, `${modified.join('\n')}\n`);
+			if (locale === 'zh-CN') {
+				await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+				const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
+				await picker.getByRole('combobox').fill('简体中文');
+				await picker.getByRole('combobox').press('Enter');
+				({ workbench } = await restartWorkbench());
+			} else {
+				// Start from the completed Git fixture rather than its intermediate commit statuses.
+				({ workbench } = await reloadWorkbench());
+			}
+			const page = workbench.page;
+			await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+			await page.getByRole('button', { name: 'View All Changes', exact: true }).click();
+			const group = workbench.editors.groupAt(0);
+			const multi = group.content.locator('.stanza-multi-diff-editor');
+			await expect(multi).toBeVisible();
+			const multiTabId = await group.title.locator('[role="tab"][aria-selected="true"]').getAttribute('id');
+			const collapse = group.title.getByRole('button', { name: locale === 'zh-CN' ? '切换折叠未变更区域' : 'Toggle Collapse Unchanged Regions', exact: true });
+			const next = group.title.getByRole('button', { name: locale === 'zh-CN' ? '转到下一个更改' : 'Go to Next Change', exact: true });
+			const previous = group.title.getByRole('button', { name: locale === 'zh-CN' ? '转到上一个更改' : 'Go to Previous Change', exact: true });
+			const openFile = group.title.getByRole('button', { name: locale === 'zh-CN' ? '打开文件' : 'Open File', exact: true });
+			await expect(collapse.locator('svg')).toHaveAttribute('data-ash-icon-id', 'map');
+			await expect(openFile.locator('svg')).toHaveAttribute('data-ash-icon-id', 'go-to-file');
+			const positions = await Promise.all([previous, next, collapse, openFile].map(button => button.boundingBox()));
+			expect(positions.every((box, index) => box && (index === 0 || box.x > positions[index - 1]!.x))).toBe(true);
+			await expect(collapse).toHaveAttribute('aria-pressed', 'false');
+			await collapse.hover();
+			await expect(page.locator('.ash-hover')).toContainText(locale === 'zh-CN' ? '切换折叠未变更区域' : 'Toggle Collapse Unchanged Regions');
+			await collapse.click();
+			await expect(collapse).toHaveAttribute('aria-pressed', 'true');
+			await expect.poll(() => multi.locator('.ash-diff-hidden-region').count()).toBeGreaterThan(0);
+			const location = multi.locator('.stanza-multi-diff-editor-accessibility-status');
+			await expect(location).toContainText('main.ts');
+			await next.click();
+			await expect(location).toContainText(locale === 'zh-CN' ? '第 2 处差异' : 'Change 2 of');
+			const changedLine = multi.locator('.stanza-editor-line-text').filter({ hasText: /const line32\s*=\s*3200;/u }).first();
+			await expect.poll(async () => {
+				const line = await changedLine.boundingBox();
+				const viewport = await multi.boundingBox();
+				return Boolean(line && viewport && line.y >= viewport.y && line.y + line.height <= viewport.y + viewport.height);
+			}).toBe(true);
+			await next.click();
+			await expect(location).toContainText('other.ts');
+			await expect(multi.locator('.stanza-multi-diff-editor-section.active')).toContainText('other.ts');
+			await expect.poll(() => multi.locator('.stanza-multi-diff-editor-section.active .ash-diff-hidden-region').count()).toBeGreaterThan(0);
+			const count = await group.tabs.count();
+			await openFile.click();
+			await expect(group.tabs.filter({ hasText: 'other.ts' })).toHaveAttribute('aria-selected', 'true');
+			await expect(group.content.locator('.stanza-editor:visible')).toHaveCount(1);
+			await group.editor.waitForEditorContents(content => content.includes('const line2 = 200;'));
+			await expect(group.tabs).toHaveCount(count + 1);
+			const tree = page.getByRole('tree', { name: locale === 'zh-CN' ? '源代码管理更改' : 'Source control changes', exact: true });
+			await tree.getByRole('button', { name: 'Open changes for other.ts', exact: true }).click();
+			await expect(collapse).toHaveAttribute('aria-pressed', 'true');
+			await expect.poll(() => group.content.locator('.ash-diff-hidden-region').count()).toBeGreaterThan(0);
+			await collapse.focus();
+			await collapse.press('Space');
+			await expect(collapse).toHaveAttribute('aria-pressed', 'false');
+			await expect(group.content.locator('.ash-diff-hidden-region')).toHaveCount(0);
+			await page.locator(`[id="${multiTabId}"]`).click();
+			await expect(multi).toBeVisible();
+			await expect(collapse).toHaveAttribute('aria-pressed', 'false');
+			await expect(multi.locator('.ash-diff-hidden-region')).toHaveCount(0);
+		});
+	}
+
+	test('SCM diff synchronizes both sides and keeps its scroll when leaving inline view', async ({ testWorkspace, workbench, reloadWorkbench, runningApplication }) => {
+		const lines = Array.from({ length: 120 }, (_, index) => `const line${index + 1} = ${index + 1};`);
+		await writeFile(testWorkspace.file, `${lines.slice(0, 8).join('\n')}\n`);
+		await run('git', ['add', '--', 'main.ts'], { cwd: testWorkspace.directory });
+		await run('git', ['commit', '-m', 'Prepare diff scroll synchronization'], { cwd: testWorkspace.directory });
+		await writeFile(testWorkspace.file, `${lines.join('\n')}\n`);
+		({ workbench } = await reloadWorkbench());
+		const page = workbench.page;
+		await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+		await page.getByRole('button', { name: 'Open changes for main.ts', exact: true }).click();
+		await runningApplication.driver.setWindowSize({ width: 1600, height: 1000 });
+		await workbench.quickaccess.runCommand('workbench.action.toggleSideBar');
+		const diff = workbench.editors.groupAt(0).content.locator('.stanza-diff-editor:visible');
+		await expect(diff).not.toHaveClass(/inline-view/u);
+		await workbench.quickaccess.runCommand('toggle.diff.renderSideBySide');
+		await expect(diff).toHaveClass(/inline-view/u);
+		const viewport = (side: string) => diff.locator(`.stanza-diff-editor-side.${side} .stanza-editor > .ash-smooth-scrollable`);
+		await viewport('modified').evaluate(element => { element.scrollTop = 1000; element.dispatchEvent(new Event('scroll')); });
+		await expect.poll(() => viewport('modified').evaluate(element => element.scrollTop)).toBe(1000);
+		await workbench.quickaccess.runCommand('toggle.diff.renderSideBySide');
+		await expect(diff).not.toHaveClass(/inline-view/u);
+		await expect.poll(async () => Promise.all(['original', 'modified'].map(side => viewport(side).evaluate(element => element.scrollTop)))).toEqual([1000, 1000]);
+		for (const [side, top] of [['original', 600], ['modified', 900]] as const) {
+			await viewport(side).evaluate((element, top) => { element.scrollTop = top; element.dispatchEvent(new Event('scroll')); }, top);
+			await expect.poll(async () => Promise.all(['original', 'modified'].map(side => viewport(side).evaluate(element => element.scrollTop)))).toEqual([top, top]);
+		}
+	});
+
+	for (const multiDiff of [false, true]) {
+		test(`SCM ${multiDiff ? 'multi diff' : 'diff'} initially reveals the first change and keeps its position across tab switches`, async ({ testWorkspace, workbench, reloadWorkbench, runningApplication }) => {
+			const original = Array.from({ length: 120 }, (_, index) => `const line${index + 1} = ${index + 1};`);
+			await writeFile(testWorkspace.file, `${original.join('\n')}\n`);
+			await run('git', ['add', '--', 'main.ts'], { cwd: testWorkspace.directory });
+			await run('git', ['commit', '-m', 'Prepare initial diff navigation'], { cwd: testWorkspace.directory });
+			const modified = [...original];
+			modified[59] = 'const line60 = 6000;';
+			modified[99] = 'const line100 = 10000;';
+			await writeFile(testWorkspace.file, `${modified.join('\n')}\n`);
+			({ workbench } = await reloadWorkbench());
+			const page = workbench.page;
+			await page.getByRole('tab', { name: /^Git(?:,|$)/u }).click();
+			await page.getByRole('button', { name: multiDiff ? 'View All Changes' : 'Open changes for main.ts', exact: true }).click();
+			await runningApplication.driver.setWindowSize({ width: 1600, height: 1000 });
+			await workbench.quickaccess.runCommand('workbench.action.toggleSideBar');
+			const group = workbench.editors.groupAt(0);
+			const comparison = group.content.locator(multiDiff ? '.stanza-multi-diff-editor' : '.stanza-diff-editor:visible');
+			const location = comparison.locator(multiDiff ? '.stanza-multi-diff-editor-accessibility-status' : '.stanza-diff-editor-accessibility-status');
+			await expect(location).toContainText('Change 1 of');
+			const tabId = await group.title.locator('[role="tab"][aria-selected="true"]').getAttribute('id');
+			if (!multiDiff) {
+				await workbench.quickaccess.runCommand('workbench.action.keepEditor');
+			}
+			const lineIsVisible = async (lineNumber: number): Promise<boolean> => {
+				const lines = await Promise.all(['original', 'modified'].map(side => comparison.locator(`.stanza-diff-editor-side.${side} .stanza-editor-line-text`).filter({ hasText: new RegExp(`const line${lineNumber}\\s*=`, 'u') }).first().boundingBox()));
+				const viewport = await comparison.boundingBox();
+				return Boolean(viewport && lines.every(line => line && line.y >= viewport.y && line.y + line.height <= viewport.y + viewport.height) && Math.abs(lines[0]!.y - lines[1]!.y) < 1);
+			};
+			await expect.poll(() => lineIsVisible(60)).toBe(true);
+			await group.title.getByRole('button', { name: 'Go to Next Change', exact: true }).click();
+			await expect(location).toContainText('Change 2 of');
+			await expect.poll(() => lineIsVisible(100)).toBe(true);
+			await group.title.getByRole('button', { name: 'Open File', exact: true }).click();
+			await expect(group.content.locator('.stanza-diff-editor:visible')).toHaveCount(0);
+			await page.locator(`[id="${tabId}"]`).click();
+			await expect(location).toContainText('Change 2 of');
+			await expect.poll(() => lineIsVisible(100)).toBe(true);
+		});
+	}
 
 	test('SCM Multi Diff splits keep collapse state and closing independent', async ({ workbench }) => {
 		const page = workbench.page;

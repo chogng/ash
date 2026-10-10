@@ -533,8 +533,50 @@
 
 .ash-scm-section-actions,
 .ash-scm-change-actions {
-	/* Reserve the action width so labels and status markers stay put on hover. */
 	visibility: hidden;
+}
+
+.ash-scm-change-actions {
+	/* Actions cover the label on intent; only the status marker reserves row width. */
+	position: absolute;
+	top: 0;
+	right: var(--ash-spacing-size240);
+	bottom: 0;
+	display: flex;
+	align-items: center;
+	padding-left: var(--ash-spacing-size40);
+	background: var(--ash-sideBar-background);
+	pointer-events: none;
+}
+
+.ash-scm-changes .ash-tree-row:hover:not(.focused) .ash-scm-change-actions {
+	background:
+		linear-gradient(
+			var(--ash-list-hoverBackground),
+			var(--ash-list-hoverBackground)
+		),
+		var(--ash-sideBar-background);
+}
+
+.ash-scm-changes .ash-tree-row.selected .ash-scm-change-actions {
+	background:
+		linear-gradient(
+			var(--ash-list-inactiveSelectionBackground),
+			var(--ash-list-inactiveSelectionBackground)
+		),
+		var(--ash-sideBar-background);
+}
+
+.ash-scm-changes
+	.ash-tree:focus
+	.ash-tree-row.selected
+	.ash-scm-change-actions {
+	background:
+		linear-gradient(
+			var(--ash-list-activeSelectionBackground),
+			var(--ash-list-activeSelectionBackground)
+		),
+		var(--ash-sideBar-background);
 }
 
 .ash-scm-changes .ash-tree-row:hover .ash-scm-section-actions,
@@ -545,6 +587,11 @@
 .ash-scm-change:hover > .ash-scm-change-actions,
 .ash-scm-change:focus-within > .ash-scm-change-actions {
 	visibility: visible;
+	pointer-events: auto;
+}
+
+.ash-scm-change {
+	position: relative;
 }
 
 .ash-scm-change,

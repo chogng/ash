@@ -1,9 +1,28 @@
 import { localize2 } from '../../../../nls.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { ICodeEditorService } from '../../services/codeEditorService.js';
 import { DiffEditorWidget } from './diffEditorWidget.js';
+
+export class ToggleCollapseUnchangedRegions extends Action2 {
+	constructor() {
+		super({
+			id: 'diffEditor.toggleCollapseUnchangedRegions',
+			title: localize2('toggleCollapseUnchangedRegions', 'Toggle Collapse Unchanged Regions'),
+			icon: Lxicon.map,
+			toggled: ContextKeyExpr.has('config.diffEditor.hideUnchangedRegions.enabled'),
+		});
+	}
+
+	public override run(accessor: ServicesAccessor): Promise<void> {
+		const configuration = accessor.get(IConfigurationService);
+		return configuration.updateValue('diffEditor.hideUnchangedRegions.enabled', !configuration.getValue<boolean>('diffEditor.hideUnchangedRegions.enabled'));
+	}
+}
 
 export class AccessibleDiffViewerNext extends Action2 {
 	public static readonly id = 'editor.action.accessibleDiffViewer.next';
@@ -37,3 +56,4 @@ export function findFocusedDiffEditor(accessor: ServicesAccessor): DiffEditorWid
 
 registerAction2(AccessibleDiffViewerNext);
 registerAction2(AccessibleDiffViewerPrev);
+registerAction2(ToggleCollapseUnchangedRegions);

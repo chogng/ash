@@ -9,6 +9,7 @@ import { ActiveEditorContext } from '../../../common/contextkeys.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { MULTI_DIFF_EDITOR_ID } from './multiDiffEditorInput.js';
 import { MultiDiffEditor } from './multiDiffEditor.js';
+import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
 
 export const MultiDiffGoToNextChangeCommandId = 'multiDiffEditor.goToNextChange';
 export const MultiDiffGoToPreviousChangeCommandId = 'multiDiffEditor.goToPreviousChange';
@@ -23,16 +24,26 @@ export class MultiDiffGoToFileAction extends Action2 {
 		super({
 			id: MultiDiffGoToFileCommandId,
 			title: localize2({ bundle: 'ash.workbench', key: 'command.MultiDiffGoToFileAction' }, 'Open File'),
-			tooltip: 'Open File',
-			icon: Lxicon.linkExternal,
+			icon: Lxicon.goToFile,
 			precondition: MultiDiffEditorActive,
-			menu: { id: MenuId.MultiDiffEditorFileToolbar, when: MultiDiffEditorActive, group: 'navigation', order: 22 },
+			menu: [MenuId.MultiDiffEditorFileToolbar, MenuId.EditorTitle].map(id => ({ id, when: MultiDiffEditorActive, group: 'navigation', order: 22 })),
 		});
 	}
 
 	public override run(accessor: ServicesAccessor, rawInput: unknown): Promise<void> {
-		if (!isEditorInput(rawInput)) throw new TypeError('Open File requires a multi-diff item resource');
-		return accessor.get(IEditorService).openEditor(rawInput);
+		if (isEditorInput(rawInput)) {
+			return accessor.get(IEditorService).openEditor(rawInput, { pinned: false, revealIfOpened: true });
+		}
+		const pane = activeMultiDiffPane(accessor, rawInput);
+		const item = pane?.getActiveDiffItem();
+		if (!item) {
+			return Promise.resolve();
+		}
+		const selection = pane?.getControl()?.modifiedEditor.getSelection();
+		return accessor.get(IEditorService).openEditor(item.goToFile ?? item.modified, {
+			pinned: false, revealIfOpened: true,
+			...(selection ? { selection, selectionSource: TextEditorSelectionSource.JUMP } : {}),
+		});
 	}
 }
 
@@ -41,7 +52,6 @@ export class MultiDiffGoToNextChangeAction extends Action2 {
 		super({
 			id: MultiDiffGoToNextChangeCommandId,
 			title: localize2({ bundle: 'ash.workbench', key: 'command.NextChangeAction' }, 'Go to Next Change'),
-			tooltip: 'Go to Next Change',
 			icon: Lxicon.arrowDown,
 			precondition: MultiDiffEditorActive,
 			menu: { id: MenuId.EditorTitle, when: MultiDiffEditorActive, group: 'navigation', order: 11 },
@@ -50,8 +60,8 @@ export class MultiDiffGoToNextChangeAction extends Action2 {
 		});
 	}
 
-	public override run(accessor: ServicesAccessor): Promise<unknown> | undefined {
-		return activeMultiDiffPane(accessor)?.nextChange();
+	public override run(accessor: ServicesAccessor, context?: unknown): Promise<unknown> | undefined {
+		return activeMultiDiffPane(accessor, context)?.nextChange();
 	}
 }
 
@@ -60,7 +70,6 @@ export class MultiDiffGoToPreviousChangeAction extends Action2 {
 		super({
 			id: MultiDiffGoToPreviousChangeCommandId,
 			title: localize2({ bundle: 'ash.workbench', key: 'command.PreviousChangeAction' }, 'Go to Previous Change'),
-			tooltip: 'Go to Previous Change',
 			icon: Lxicon.arrowUp,
 			precondition: MultiDiffEditorActive,
 			menu: { id: MenuId.EditorTitle, when: MultiDiffEditorActive, group: 'navigation', order: 10 },
@@ -69,8 +78,8 @@ export class MultiDiffGoToPreviousChangeAction extends Action2 {
 		});
 	}
 
-	public override run(accessor: ServicesAccessor): Promise<unknown> | undefined {
-		return activeMultiDiffPane(accessor)?.previousChange();
+	public override run(accessor: ServicesAccessor, context?: unknown): Promise<unknown> | undefined {
+		return activeMultiDiffPane(accessor, context)?.previousChange();
 	}
 }
 
@@ -86,8 +95,8 @@ export class MultiDiffCollapseAllAction extends Action2 {
 		});
 	}
 
-	public override run(accessor: ServicesAccessor): void {
-		activeMultiDiffPane(accessor)?.collapseAll();
+	public override run(accessor: ServicesAccessor, context?: unknown): void {
+		activeMultiDiffPane(accessor, context)?.collapseAll();
 	}
 }
 
@@ -103,13 +112,17 @@ export class MultiDiffExpandAllAction extends Action2 {
 		});
 	}
 
-	public override run(accessor: ServicesAccessor): void {
-		activeMultiDiffPane(accessor)?.expandAll();
+	public override run(accessor: ServicesAccessor, context?: unknown): void {
+		activeMultiDiffPane(accessor, context)?.expandAll();
 	}
 }
 
-function activeMultiDiffPane(accessor: ServicesAccessor): MultiDiffEditor | undefined {
-	const pane = accessor.get(IEditorPart).activePane;
+function activeMultiDiffPane(accessor: ServicesAccessor, context?: unknown): MultiDiffEditor | undefined {
+	const part = accessor.get(IEditorPart);
+	if (typeof context === 'object' && context !== null && 'groupId' in context && typeof context.groupId === 'string') {
+		part.activateGroup(context.groupId);
+	}
+	const pane = part.activePane;
 	return pane instanceof MultiDiffEditor ? pane : undefined;
 }
 

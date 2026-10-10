@@ -237,6 +237,18 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		this.scopedContextKeyService = options.contextKeyService
 			? this._register(options.contextKeyService.createScoped(this.domNode))
 			: undefined;
+		if (this.scopedContextKeyService && this.configurationService) {
+			const context = this.scopedContextKeyService;
+			const configuration = this.configurationService;
+			// The menu state follows configuration, including Settings and restored values.
+			const update = () => context.setContext('config.diffEditor.hideUnchangedRegions.enabled', configuration.getValue<boolean>('diffEditor.hideUnchangedRegions.enabled'));
+			update();
+			this._register(configuration.onDidChangeConfiguration(event => {
+				if (event.affectsConfiguration('diffEditor.hideUnchangedRegions.enabled')) {
+					update();
+				}
+			}));
+		}
 		this.titleControl = this._register(instantiationService.createInstance(EditorTitleControl,
 			this.domNode,
 			titleDelegate,

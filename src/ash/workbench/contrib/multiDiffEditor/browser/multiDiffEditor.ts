@@ -143,6 +143,10 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 		return this.session.value?.editor?.getActiveControl();
 	}
 
+	public getActiveDiffItem(): MultiDiffEditorInputItem | undefined {
+		return this.session.value?.getActiveDiffItem();
+	}
+
 	public saveViewState(): unknown {
 		return this.session.value?.editor?.saveViewState() ?? null;
 	}
@@ -189,7 +193,7 @@ class MultiDiffEditorSession extends Disposable {
 
 	constructor(
 		container: HTMLElement,
-		paneInput: MultiDiffEditorInput,
+		private readonly paneInput: MultiDiffEditorInput,
 		label: string,
 		options: MultiDiffEditorOptions,
 		initialSignal: AbortSignal,
@@ -337,8 +341,13 @@ class MultiDiffEditorSession extends Disposable {
 		this.editor?.focus();
 	}
 
+	public getActiveDiffItem(): MultiDiffEditorInputItem | undefined {
+		const item = this.editor?.getActiveItem();
+		return item ? this.paneInput.items.find(input => multiDiffEditorItemKey(input) === item.id) : undefined;
+	}
+
 	private createFileActions(container: HTMLElement, input: MultiDiffEditorInputItem, options: MultiDiffEditorOptions, contextMenuProvider: IContextMenuProvider, sourceInput?: MultiDiffEditorInput): WorkbenchToolBar {
-		const actions: IAction[] = [new PaneAction('multiDiff.openFile', 'Open File', 'Open File', Lxicon.linkExternal, true, item => options.editorService?.openEditor(item.goToFile ?? item.modified))];
+		const actions: IAction[] = [new PaneAction('multiDiff.openFile', 'Open File', 'Open File', Lxicon.goToFile, true, item => options.editorService?.openEditor(item.goToFile ?? item.modified, { pinned: false, revealIfOpened: true }))];
 		const change = input.gitChange;
 		if (change) {
 			actions.push(new PaneAction('multiDiff.discardFile', 'Discard Changes', 'Discard Changes', Lxicon.discard, change.hasWorktreeChanges, async item => {

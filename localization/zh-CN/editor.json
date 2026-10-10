@@ -358,6 +358,7 @@
     "diffEditor.revealSymbol": "跳转到 {0}",
     "diffEditor.revealedLines": "已显示 {0} 行未修改内容",
     "diffEditor.hideUnchanged.title": "隐藏未修改区域",
+    "toggleCollapseUnchangedRegions": "切换折叠未变更区域",
     "diffEditor.hideUnchanged.description": "折叠差异视图中较长的未修改区域。",
     "diffEditor.hideUnchanged.contextTitle": "上下文行数",
     "diffEditor.hideUnchanged.contextDescription": "在每处修改附近保留这些未修改的行。",

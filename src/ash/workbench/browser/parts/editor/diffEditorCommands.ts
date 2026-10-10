@@ -3,6 +3,7 @@ import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { FocusTextDiffEditorMode, IDiffEditorCommandsService, type DiffEditorViewMode } from './diffEditorCommandsService.js';
+import { IEditorPart } from './editorPart.js';
 
 export const TOGGLE_DIFF_SIDE_BY_SIDE = 'toggle.diff.renderSideBySide';
 export const SET_DIFF_VIEW_MODE_INLINE = 'diffEditor.setViewMode.inline';
@@ -48,7 +49,8 @@ export function registerDiffEditorCommands(): void {
 			});
 		}
 
-		override run(accessor: ServicesAccessor): void {
+		override run(accessor: ServicesAccessor, context?: unknown): void {
+			activateEditorGroup(accessor, context);
 			accessor.get(IDiffEditorCommandsService).navigateInDiffEditor(true);
 		}
 	});
@@ -63,7 +65,8 @@ export function registerDiffEditorCommands(): void {
 			});
 		}
 
-		override run(accessor: ServicesAccessor): void {
+		override run(accessor: ServicesAccessor, context?: unknown): void {
+			activateEditorGroup(accessor, context);
 			accessor.get(IDiffEditorCommandsService).navigateInDiffEditor(false);
 		}
 	});
@@ -82,15 +85,22 @@ export function registerDiffEditorCommands(): void {
 	}
 
 	for (const [id, title, operation] of [
-		[DIFF_OPEN_SIDE, 'Open Active Diff Side', (service: IDiffEditorCommandsService) => service.openActiveDiffSide()],
+		[DIFF_OPEN_SIDE, localize2({ bundle: 'ash.workbench', key: 'compare.openSide' }, 'Open Active Diff Side'), (service: IDiffEditorCommandsService) => service.openActiveDiffSide()],
 		[TOGGLE_DIFF_IGNORE_TRIM_WHITESPACE, 'Toggle Diff Ignore Trim Whitespace', (service: IDiffEditorCommandsService) => service.toggleDiffIgnoreTrimWhitespace()],
 		[DIFF_SWAP_SIDES, 'Swap Left and Right Editor Side', (service: IDiffEditorCommandsService) => service.swapDiffSides()],
 	] as const) {
 		registerAction2(class DiffOperationAction extends Action2 {
 			constructor() { super({ id, title, f1: true }); }
-			override run(accessor: ServicesAccessor): Promise<void> {
+			override run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
+				activateEditorGroup(accessor, context);
 				return operation(accessor.get(IDiffEditorCommandsService));
 			}
 		});
+	}
+}
+
+function activateEditorGroup(accessor: ServicesAccessor, context: unknown): void {
+	if (typeof context === 'object' && context !== null && 'groupId' in context && typeof context.groupId === 'string') {
+		accessor.get(IEditorPart).activateGroup(context.groupId);
 	}
 }

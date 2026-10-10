@@ -15,8 +15,10 @@ export async function resolveGitChangeInputs(gitService: IGitService, status: Gi
 	const [originalState, modifiedState] = comparison === 'staged'
 		? ['HEAD', 'Index'] as const
 		: ['Index', 'Working Tree'] as const;
-	const original = changeEditorInput(file.original, changeFileUri(status, comparison, originalPath, 'original'), `${basename(originalPath)} (${originalState})`);
-	const modified = changeEditorInput(file.modified, changeFileUri(status, comparison, change.path, 'modified'), `${basename(change.path)} (${modifiedState})`);
+	const workingResource = change.worktreeStatus !== 'deleted' && !(change.indexStatus === 'deleted' && change.worktreeStatus === 'unmodified')
+		? repositoryFileUri(status.workspacePath, change.path) : undefined;
+	const original = changeEditorInput(file.original, changeFileUri(status, comparison, originalPath, 'original', workingResource), `${basename(originalPath)} (${originalState})`);
+	const modified = changeEditorInput(file.modified, changeFileUri(status, comparison, change.path, 'modified', workingResource), `${basename(change.path)} (${modifiedState})`);
 	return {
 		original,
 		modified,
@@ -45,13 +47,16 @@ function changeEditorInput(content: GitCommitFileContent, resource: URI, label: 
 	};
 }
 
-function changeFileUri(status: GitStatus, comparison: GitChangeFileComparison, path: string, side: 'original' | 'modified'): URI {
+function changeFileUri(status: GitStatus, comparison: GitChangeFileComparison, path: string, side: 'original' | 'modified', workingResource: URI | undefined): URI {
 	const encodedPath = path.split('/').map(encodeURIComponent).join('/');
 	const query = new URLSearchParams({
 		side,
 		stream: status.streamInstanceId,
 		revision: String(status.revision),
 	});
+	if (workingResource) {
+		query.set('resource', workingResource.toString());
+	}
 	return URI.parse(`git-change:/${comparison}/${encodedPath}?${query}`);
 }
 

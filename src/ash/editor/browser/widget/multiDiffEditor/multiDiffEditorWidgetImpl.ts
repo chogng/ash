@@ -7,6 +7,8 @@ import { isFiniteNumber, isNonNegativeSafeInteger, rot } from '../../../../base/
 import { formatNlsMessage, localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import type { HideUnchangedRegionsOptions } from '../../../common/config/diffEditor.js';
 import { createBareFontInfoFromRawSettings } from '../../../common/config/fontInfoFromSettings.js';
 import { type FontInfo } from '../../../common/config/fontInfo.js';
 import { type IDimension } from '../../../common/core/2d/dimension.js';
@@ -70,6 +72,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 	private syncingEditorScroll = false;
 	private layoutRefreshScheduled = false;
 	private navigationGeneration = 0;
+	private initialNavigation: Promise<MultiDiffEditorLocation | undefined> | undefined;
 	private readonly workbenchUIElementFactory: IMultiDiffEditorWidgetOptions['workbenchUIElementFactory'];
 	private readonly logger: MultiDiffEditorLogger;
 	private readonly navigationAbortController = new AbortController();
@@ -79,6 +82,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		options: IMultiDiffEditorWidgetOptions,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@ILogService logService: ILogService,
+		@IConfigurationService private readonly configuration: IConfigurationService,
 	) {
 		super();
 		this.logger = new MultiDiffEditorLogger(logService);
@@ -115,7 +119,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 				const item = this.items[index]!;
 				const section = new DiffEditorItemTemplate(
 					contentDomNode, item, () => this.toggleItem(item.id),
-					() => this.activateItem(item.id), this.workbenchUIElementFactory,
+					() => this.activateItem(item.id), this.workbenchUIElementFactory, () => this.scheduleLayoutRefresh(),
 				);
 				section.setCollapsed(this.viewModel.isCollapsed(item.id));
 				section.domNode.classList.toggle('active', this.viewModel.activeItemId === item.id);
@@ -145,6 +149,16 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		this._register(addDisposableListener(this.domNode, 'scroll', event => this.handleScroll(event), true));
 		this._register(addDisposableListener(this.domNode, 'keydown', event => this.handleKeydown(event), true));
 		this.bindItems();
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if (['enabled', 'contextLineCount', 'minimumLineCount', 'revealLineCount'].some(name => event.affectsConfiguration(`diffEditor.hideUnchangedRegions.${name}`))) {
+				const options = this.getHideUnchangedRegionsOptions();
+				for (const section of this.sections.values()) {
+					section.editor?.setHideUnchangedRegionsOptions(options);
+				}
+				this.measuredHeights.clear();
+				this.refreshLayout();
+			}
+		}));
 		this._register(options.model.onDidChangeItems(items => {
 			this.logger.itemsChanged(items);
 			this.scrollView.resetItems();
@@ -186,6 +200,20 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		return this.sections.get(index)?.editor;
 	}
 
+	/** File identity remains available when its diff is collapsed or outside the viewport. */
+	public getActiveItem(): IDocumentDiffItem | undefined {
+		return this.items.find(item => item.id === this.viewModel.activeItemId) ?? this.items[0];
+	}
+
+	private getHideUnchangedRegionsOptions(): HideUnchangedRegionsOptions {
+		return {
+			enabled: this.configuration.getValue('diffEditor.hideUnchangedRegions.enabled'),
+			contextLineCount: this.configuration.getValue('diffEditor.hideUnchangedRegions.contextLineCount'),
+			minimumLineCount: this.configuration.getValue('diffEditor.hideUnchangedRegions.minimumLineCount'),
+			revealLineCount: this.configuration.getValue('diffEditor.hideUnchangedRegions.revealLineCount'),
+		};
+	}
+
 	public saveViewState(): MultiDiffEditorViewState {
 		for (const section of this.sections.values()) {
 			this.viewModel.saveItemViewState(section.item.id, section.saveViewState());
@@ -195,6 +223,8 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 
 	public restoreViewState(state: unknown): void {
 		const scrollTop = this.viewModel.restoreViewState(state);
+		// Restored state takes precedence over a first-change navigation still waiting for the diff.
+		this.navigationGeneration++;
 		for (const section of this.sections.values()) {
 			section.setCollapsed(this.viewModel.isCollapsed(section.item.id));
 			const itemState = this.viewModel.getItemViewState(section.item.id);
@@ -230,6 +260,10 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 			this.measuredHeights.clear();
 		}
 		this.refreshLayout();
+		if (this.viewportWidth > 0 && this.viewportHeight > 0 && this.navigationGeneration === 0) {
+			// A hidden pane has no useful scroll geometry; initialize only once its viewport exists.
+			this.initialNavigation = this.selectRelativeChange(1, false);
+		}
 	}
 
 	public toggleItem(itemId: string): boolean {
@@ -256,6 +290,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 			if (this.viewModel.isCollapsed(this.items[index]!.id)) return [];
 			return [this.items[index]!.resolve()];
 		}));
+		await this.initialNavigation;
 	}
 
 	public collapseAll(): void {
@@ -387,6 +422,8 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 						wordWrap: this.wordWrap,
 						...this.editorOptions,
 					}));
+					// Restore the file cursor before hiding regions so mounting does not expand them.
+					section.editor!.setHideUnchangedRegionsOptions(this.getHideUnchangedRegionsOptions());
 					section.layoutEditor(this.viewportWidth);
 				}
 				const editor = section.editor!;
@@ -421,7 +458,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		});
 	}
 
-	private async selectRelativeChange(delta: -1 | 1): Promise<MultiDiffEditorLocation | undefined> {
+	private async selectRelativeChange(delta: -1 | 1, focus = true): Promise<MultiDiffEditorLocation | undefined> {
 		if (this.items.length === 0) {
 			this.accessibilityStatusDomNode.textContent = localize('diffEditor.noChanges', 'No differences');
 			return undefined;
@@ -454,7 +491,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 			for (let rowIndex = firstRow; rowIndex >= 0 && rowIndex < rows.length; rowIndex += delta) {
 				if (rows[rowIndex]!.kind === LineDiffKind.Unchanged) continue;
 				const location = { itemId: item.id, rowIndex };
-				this.revealChange(location);
+				this.revealChange(location, focus);
 				this.announceChange(location);
 				return location;
 			}
@@ -500,7 +537,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		this.accessibilityStatusDomNode.textContent = formatNlsMessage(localize('multiDiffEditor.changeInFile', 'Change in {0}'), { 0: item.label });
 	}
 
-	private revealChange(location: MultiDiffEditorLocation): void {
+	private revealChange(location: MultiDiffEditorLocation, focus = true): void {
 		const itemIndex = this.items.findIndex(item => item.id === location.itemId);
 		if (itemIndex < 0) throw new RangeError(`Unknown multi-diff item '${location.itemId}'`);
 		const item = this.items[itemIndex]!;
@@ -515,9 +552,20 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 			this.refreshLayout();
 		}
 		this.viewModel.activeChange = Object.freeze({ ...location });
-		const layout = this.layouts[itemIndex]!;
-		const rowTop = layout.top + layout.rows.offsets[location.rowIndex]!;
-		const rowBottom = layout.top + layout.rows.offsets[location.rowIndex + 1]!;
+		this.activateItem(location.itemId);
+		let layout = this.layouts[itemIndex]!;
+		if (!this.sections.get(itemIndex)?.editor) {
+			this.scrollView.setLogicalScrollTop(layout.top);
+			this.project();
+			layout = this.layouts[itemIndex]!;
+		}
+		const control = this.sections.get(itemIndex)?.editor;
+		const row = model.diff.rows[location.rowIndex]!;
+		const codeEditor = row.modifiedLineIndex === undefined ? control?.originalEditor : control?.modifiedEditor;
+		const lineNumber = (row.modifiedLineIndex ?? row.originalLineIndex ?? 0) + 1;
+		// Full-file row offsets overestimate the position after unchanged lines are hidden.
+		const rowTop = layout.top + (codeEditor?.getTopForLineNumber(lineNumber) ?? layout.rows.offsets[location.rowIndex]!);
+		const rowBottom = layout.top + (codeEditor?.getBottomForLineNumber(lineNumber) ?? layout.rows.offsets[location.rowIndex + 1]!);
 		const editorViewportHeight = Math.max(1, this.viewportHeight - MULTI_DIFF_HEADER_HEIGHT);
 		const scrollTop = this.scrollView.getLogicalScrollTop();
 		if (rowTop < scrollTop) this.scrollView.setLogicalScrollTop(rowTop);
@@ -527,8 +575,13 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		if (editor) {
 			editor.revealChangeRow(location.rowIndex, false);
 			const row = model.diff.rows[location.rowIndex]!;
-			if (row.modifiedLineIndex !== undefined) editor.modifiedEditor.focus();
-			else editor.originalEditor.focus();
+			if (!focus) {
+				editor.modifiedEditor.setPosition({ lineNumber: Math.min(model.modified.lineCount, lineNumber), column: 1 });
+			}
+			if (focus) {
+				if (row.modifiedLineIndex !== undefined) editor.modifiedEditor.focus();
+				else editor.originalEditor.focus();
+			}
 		}
 	}
 

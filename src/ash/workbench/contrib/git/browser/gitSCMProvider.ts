@@ -237,6 +237,12 @@ export class GitSCMProvider extends Disposable implements ISCMProvider, IDecorat
 				...(isDiscardable(change) ? [this.pathAction(`scm.change.discard.${change.path}`, `Discard ${change.path}`, 'discard', [change.path])] : []),
 				this.pathAction(`scm.change.stage.${change.path}`, `Stage ${change.path}`, 'stage', changePaths(change)),
 			];
+		const hasWorkingFile = change.worktreeStatus !== 'deleted' && !(change.indexStatus === 'deleted' && change.worktreeStatus === 'unmodified');
+		if (hasWorkingFile) {
+			actions.unshift(this.action(`scm.change.openFile.${change.path}`, localize('git.openFile', 'Open File: {0}', change.path), Lxicon.goToFile, async () => {
+				await this.services.editorService.openEditor({ resource: repositoryFileUri(status.workspacePath, change.path) }, { pinned: false, revealIfOpened: true, preserveFocus: false });
+			}));
+		}
 		return {
 			sourceUri: repositoryFileUri(status.workspacePath, change.path),
 			path: change.path,

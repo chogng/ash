@@ -835,6 +835,66 @@ test('diff font changes update alignment and the removed lines in inline view', 
 	})).toBeLessThan(1);
 });
 
+test('diff change navigation and scrolling keep corresponding lines aligned on both sides', async ({ page }) => {
+	await openDiffPage(page);
+	const original = Array.from({ length: 120 }, (_, index) => `line ${index + 1}`);
+	const modified = [...original];
+	modified[59] = 'changed line 60';
+	modified[99] = 'changed line 100';
+	modified.splice(79, 3);
+	modified.splice(20, 0, 'inserted first', 'inserted second');
+	await page.evaluate(([left, right]) => {
+		window.ashDiffIntegration.setViewMode(true, false, 900);
+		window.ashDiffIntegration.setComparisonText(left, right);
+	}, [original.join('\n'), modified.join('\n')]);
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	const alignment = () => page.evaluate(() => {
+		const lines = window.ashDiffIntegration.linePositions(110, 109);
+		return {
+			scrollGap: lines.originalScrollTop - lines.modifiedScrollTop,
+			lineGap: lines.originalTop - lines.originalScrollTop - (lines.modifiedTop - lines.modifiedScrollTop),
+		};
+	});
+	await page.locator('#single .stanza-diff-editor').focus();
+	for (let change = 0; change < 7; change++) {
+		await page.keyboard.press('F7');
+		await expect.poll(alignment).toEqual({ scrollGap: 0, lineGap: 0 });
+	}
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.linePositions(110, 109).modifiedScrollTop)).toBeGreaterThan(0);
+	await page.keyboard.press('Escape');
+	for (const enabled of [true, false]) {
+		await page.evaluate(enabled => window.ashDiffIntegration.setHiddenRegions(enabled), enabled);
+		await expect.poll(alignment).toEqual({ scrollGap: 0, lineGap: 0 });
+	}
+	await page.evaluate(() => window.ashDiffIntegration.scrollModified(1200));
+	await expect.poll(alignment).toEqual({ scrollGap: 0, lineGap: 0 });
+	for (const side of ['original', 'modified']) {
+		const previousTop = await page.evaluate(() => window.ashDiffIntegration.linePositions(110, 109).modifiedScrollTop);
+		await page.locator(`#single .stanza-diff-editor-side.${side}`).hover();
+		await page.mouse.wheel(0, -320);
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.linePositions(110, 109).modifiedScrollTop)).toBeLessThan(previousTop);
+		await expect.poll(alignment).toEqual({ scrollGap: 0, lineGap: 0 });
+	}
+});
+
+test('diff restores synchronized vertical scrolling when switching from inline to side by side', async ({ page }) => {
+	await openDiffPage(page);
+	const original = Array.from({ length: 8 }, (_, index) => `line ${index + 1}`).join('\n');
+	const modified = Array.from({ length: 120 }, (_, index) => `line ${index + 1}`).join('\n');
+	await page.evaluate(([left, right]) => {
+		window.ashDiffIntegration.setViewMode(false, false, 900);
+		window.ashDiffIntegration.setComparisonText(left, right);
+	}, [original, modified]);
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	await page.evaluate(() => window.ashDiffIntegration.scrollModified(1800));
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.linePositions(8, 8).modifiedScrollTop)).toBe(1800);
+	await page.evaluate(() => window.ashDiffIntegration.setViewMode(true, false, 900));
+	await expect.poll(() => page.evaluate(() => {
+		const lines = window.ashDiffIntegration.linePositions(8, 8);
+		return { original: lines.originalScrollTop, modified: lines.modifiedScrollTop };
+	})).toEqual({ original: 1800, modified: 1800 });
+});
+
 test('wrapped and inserted lines stay aligned while the two editors scroll', async ({ page }) => {
 	await openDiffPage(page);
 	const tail = Array.from({ length: 100 }, (_, index) => `tail ${index}`).join('\n');

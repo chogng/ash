@@ -33,6 +33,7 @@ const uriIdentityServices = new TestUriIdentityServices();
 suiteTeardown(() => uriIdentityServices.dispose());
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+browserEnvironment.window.HTMLCanvasElement.prototype.getContext = () => null;
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
 	document: browserEnvironment.window.document,
@@ -79,10 +80,12 @@ test('Diff commands navigate and focus the active comparison through the Workben
 	await Promise.resolve();
 	const opened: unknown[] = [];
 	const closed: unknown[] = [];
+	const activatedGroups: string[] = [];
 	container.registerInstance(IEditorPart, {
 		activeInput: input,
 		activePane: pane,
 		closeEditor: async (editor: unknown) => { closed.push(editor); return true; },
+		activateGroup: (id: string) => activatedGroups.push(id),
 	} as never);
 	container.registerInstance(IEditorService, { openEditor: async (next: unknown) => { opened.push(next); } } as never);
 	container.registerSingleton(IDiffEditorCommandsService, () => container.createInstance(DiffEditorCommandsService));
@@ -103,8 +106,9 @@ test('Diff commands navigate and focus the active comparison through the Workben
 	})), Array(2).fill({ family: 'Arial', size: 18, lineHeight: 28, ligatures: '"liga" on, "calt" on' }));
 	await fontConfiguration.updateValue(CodeEditorConfiguration.fontSize, undefined);
 	await fontConfiguration.updateValue(CodeEditorConfiguration.lineHeight, undefined);
-	await commands.executeCommand(GOTO_NEXT_CHANGE);
+	await commands.executeCommand(GOTO_NEXT_CHANGE, { groupId: 'review-group' });
 	assert.ok(widget.currentChangeRow >= 0);
+	assert.deepEqual(activatedGroups, ['review-group']);
 	await commands.executeCommand(SET_DIFF_VIEW_MODE_INLINE);
 	assert.equal(widget.viewMode, 'inline');
 	assert.equal(parent.querySelector('.stanza-diff-inline-original-line')?.textContent, 'before');
@@ -263,41 +267,50 @@ test('Diff pane honors a readonly modified resource and preserves shared text wh
 	}
 });
 
-test('Diff pane releases both references when loading is cancelled after acquisition', async () => {
-	const dom = createTestDom();
-	try {
-		const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
-		using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
-		using services = new DisposableStore();
-		const container = registerTestComponentServices(createCodeEditorServices(services));
-		const cancellation = new AbortController();
-		const acquired: ITextModel[] = [];
-		using pane = container.createInstance(DiffEditorPane, resourceStore, {
-			modelService: {
-				acquire: async (input: IResourceEditorInput, signal: AbortSignal) => {
-					const reference = await models.acquire(input, signal);
-					acquired.push(reference.model);
-					if (acquired.length === 2) {
-						cancellation.abort();
-					}
-					return reference;
+for (const phase of ['acquisition', 'computation']) {
+	test(`Diff pane releases both references when loading is cancelled during ${phase}`, async () => {
+		const dom = createTestDom();
+		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+		try {
+			const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
+			using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
+			using services = new DisposableStore();
+			const container = registerTestComponentServices(createCodeEditorServices(services));
+			const cancellation = new AbortController();
+			const acquired: ITextModel[] = [];
+			using pane = container.createInstance(DiffEditorPane, resourceStore, {
+				modelService: {
+					acquire: async (input: IResourceEditorInput, signal: AbortSignal) => {
+						const reference = await models.acquire(input, signal);
+						acquired.push(reference.model);
+						if (acquired.length === 2 && phase === 'acquisition') {
+							cancellation.abort();
+						}
+						return reference;
+					},
+					dispose() { },
+					[Symbol.dispose]() { },
 				},
-				dispose() { },
-				[Symbol.dispose]() { },
-			},
-			createComputationService: () => new PaneTestDiffComputationService(),
-		});
-		pane.create(requiredElement<HTMLElement>(dom.window.document, 'main'));
-		await assert.rejects(pane.setInput(createDiffEditorInput(
-			{ resource: URI.file('/cancelled-before.ts'), initialText: 'before' },
-			{ resource: URI.file('/cancelled-after.ts'), initialText: 'after' },
-		), cancellation.signal), { name: 'CancellationError' });
-		assert.deepEqual(acquired.map(model => model.isDisposed()), [true, true]);
-		assert.equal(pane.getControl(), undefined);
-	} finally {
-		dom.window.close();
-	}
-});
+				createComputationService: () => phase === 'acquisition' ? new PaneTestDiffComputationService() : new class extends PaneTestDiffComputationService {
+					override async computeDiff(original: ITextModel, modified: ITextModel, options: IDocumentDiffProviderOptions, token: CancellationToken): Promise<IDocumentDiff> {
+						await Promise.resolve();
+						cancellation.abort();
+						return super.computeDiff(original, modified, options, token);
+					}
+				}(),
+			});
+			pane.create(requiredElement<HTMLElement>(dom.window.document, 'main'));
+			await assert.rejects(pane.setInput(createDiffEditorInput(
+				{ resource: URI.file('/cancelled-before.ts'), initialText: 'before' },
+				{ resource: URI.file('/cancelled-after.ts'), initialText: 'after' },
+			), cancellation.signal), { name: 'CancellationError' });
+			assert.deepEqual(acquired.map(model => model.isDisposed()), [true, true]);
+			assert.equal(pane.getControl(), undefined);
+		} finally {
+			dom.window.close();
+		}
+	});
+}
 
 test('Diff pane recomputes an open comparison when ignore-trim-whitespace changes', async () => {
 	const dom = createTestDom();
@@ -434,7 +447,49 @@ test('Diff pane follows configured word wrap and keeps its temporary toggle in t
 	dom.window.close();
 });
 
-test('Diff pane updates hidden unchanged regions when settings change', async () => {
+test('Diff pane reveals its first change after layout and keeps an explicit selection on later layouts', async () => {
+	const dom = createTestDom();
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	try {
+		const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
+		const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
+		using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
+		using resources = new DisposableStore();
+		const services = registerTestComponentServices(createCodeEditorServices(resources));
+		using pane = services.createInstance(DiffEditorPane, resourceStore, {
+			modelService: models,
+			createComputationService: () => new PaneTestDiffComputationService(),
+		});
+		pane.create(parent);
+		const lines = Array.from({ length: 100 }, (_, index) => `shared ${index + 1}`);
+		const modified = [...lines];
+		modified[59] = 'first change';
+		modified[89] = 'second change';
+		const input = createDiffEditorInput(
+			{ resource: URI.file('/initial-before.ts'), initialText: lines.join('\n') },
+			{ resource: URI.file('/initial-after.ts'), initialText: modified.join('\n') },
+		);
+		await pane.setInput(input, new AbortController().signal);
+		const editor = pane.getControl()!;
+		assert.equal(editor.currentChangeRow, -1);
+		pane.layout({ width: 800, height: 300 });
+		assert.equal(editor.modifiedEditor.getPosition()?.lineNumber, 60);
+		assert.ok(editor.modifiedEditor.getScrollTop() > 0);
+		assert.equal(editor.nextChange(), 89);
+		pane.restoreSelection(new Range(10, 1, 10, 1), TextEditorSelectionSource.JUMP);
+		pane.layout({ width: 900, height: 300 });
+		assert.equal(editor.modifiedEditor.getPosition()?.lineNumber, 10);
+		pane.layout({ width: 0, height: 0 });
+		await pane.setInput(input, new AbortController().signal);
+		pane.restoreSelection(new Range(20, 1, 20, 1), TextEditorSelectionSource.JUMP);
+		pane.layout({ width: 800, height: 300 });
+		assert.equal(pane.getControl()?.modifiedEditor.getPosition()?.lineNumber, 20);
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('Diff collapse command toggles hidden unchanged regions and follows settings changes', async () => {
 	const dom = createTestDom();
 	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
 	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
@@ -459,14 +514,16 @@ test('Diff pane updates hidden unchanged regions when settings change', async ()
 	await configuration.updateValue(CodeEditorConfiguration.diffHideUnchangedRegionsContextLineCount, 1);
 	await configuration.updateValue(CodeEditorConfiguration.diffHideUnchangedRegionsMinimumLineCount, 3);
 	await configuration.updateValue(CodeEditorConfiguration.diffHideUnchangedRegionsRevealLineCount, 2);
-	await configuration.updateValue(CodeEditorConfiguration.diffHideUnchangedRegionsEnabled, true);
+	await container.get(ICommandService).executeCommand('diffEditor.toggleCollapseUnchangedRegions');
+	assert.equal(configuration.getValue(CodeEditorConfiguration.diffHideUnchangedRegionsEnabled), true);
 	assert.equal(regions().length, 2);
 	assert.equal(regions()[0]?.querySelector('.ash-diff-hidden-region-count')?.textContent, '33 hidden lines');
 	await configuration.updateValue(CodeEditorConfiguration.diffHideUnchangedRegionsMinimumLineCount, 100);
 	assert.equal(regions().length, 0);
 	await configuration.updateValue(CodeEditorConfiguration.diffHideUnchangedRegionsMinimumLineCount, 3);
 	assert.equal(regions().length, 2);
-	await configuration.updateValue(CodeEditorConfiguration.diffHideUnchangedRegionsEnabled, false);
+	await container.get(ICommandService).executeCommand('diffEditor.toggleCollapseUnchangedRegions');
+	assert.equal(configuration.getValue(CodeEditorConfiguration.diffHideUnchangedRegionsEnabled), false);
 	assert.equal(regions().length, 0);
 	pane.dispose();
 	dom.window.close();

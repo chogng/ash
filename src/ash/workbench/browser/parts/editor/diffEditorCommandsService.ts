@@ -67,7 +67,7 @@ export class DiffEditorCommandsService implements IDiffEditorCommandsService {
 		const control = this.activeControl();
 		if (!input || !control || !isDiffEditorInput(input)) return;
 		const originalFocused = control.originalEditor.getDomNode().contains(control.originalEditor.getDomNode().ownerDocument.activeElement);
-		await this.editorService.openEditor(originalFocused ? input.original : input.modified);
+		await this.editorService.openEditor(originalFocused ? input.original : input.modified, { pinned: false, revealIfOpened: true });
 	}
 
 	async toggleDiffIgnoreTrimWhitespace(): Promise<void> {

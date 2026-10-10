@@ -5,7 +5,7 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import { isEditorPaneWithSelection } from '../../../common/editor.js';
-import { isDiffEditorInput } from '../../../common/editor/diffEditorInput.js';
+import { DIFF_EDITOR_ID, isDiffEditorInput } from '../../../common/editor/diffEditorInput.js';
 import type { GitCommand, GitChangeFileComparison, GitIndexSelection, GitIndexDiff } from '../common/gitService.js';
 import { gitErrorMessage } from '../common/gitError.js';
 import './gitClone.js';
@@ -18,6 +18,7 @@ import { CancellationError } from '../../../../base/common/errors.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
+import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
 
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
@@ -44,7 +45,7 @@ import { GitQuickDiffProvider } from './gitQuickDiffProvider.js';
 import { GitSCMContribution, GitSCMProvider } from './gitSCMProvider.js';
 import { ViewsRegistry } from '../../../common/views.js';
 import { VIEW_PANE_ID } from '../../scm/common/scm.js';
-import { AppServerAvailableContext, BrowserLocalFolderSupportContext, OpenFolderWorkspaceSupportContext, WorkspaceFolderCountContext } from '../../../common/contextkeys.js';
+import { ActiveEditorContext, AppServerAvailableContext, BrowserLocalFolderSupportContext, OpenFolderWorkspaceSupportContext, ResourceContext, ResourceSchemeContext, WorkspaceFolderCountContext } from '../../../common/contextkeys.js';
 import { IsNativeContext } from '../../../../platform/contextkey/common/contextkeys.js';
 import { IOutputService } from '../../../services/output/common/output.js';
 import { GitCloneCommandId } from '../common/gitCommands.js';
@@ -262,6 +263,40 @@ for (const entry of gitTitleCommands) {
 		}, group: entry.group, order: entry.order, when: gitTitleWhen
 	});
 }
+
+registerAction2(class GitOpenFileAction extends Action2 {
+	constructor() {
+		super({
+			id: 'git.openFile',
+			title: localize2('git.openFileCommand', 'Open File'),
+			icon: Lxicon.goToFile,
+			menu: {
+				id: MenuId.EditorTitle, group: 'navigation', order: 22,
+				when: ContextKeyExpr.and(ActiveEditorContext.isEqualTo(DIFF_EDITOR_ID), ResourceSchemeContext.isEqualTo('git-change'), ContextKeyExpr.regex(ResourceContext.key, /[?&]resource=/u)),
+			},
+		});
+	}
+
+	public override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
+		const part = accessor.get(IEditorPart);
+		if (typeof context === 'object' && context !== null && 'groupId' in context && typeof context.groupId === 'string') {
+			part.activateGroup(context.groupId);
+		}
+		const input = part.activeInput;
+		if (!input || !isDiffEditorInput(input) || input.modified.resource.scheme !== 'git-change') {
+			return;
+		}
+		const target = new URLSearchParams(input.modified.resource.query).get('resource');
+		if (!target) {
+			return;
+		}
+		const selection = isEditorPaneWithSelection(part.activePane) ? part.activePane.getSelection() : undefined;
+		await accessor.get(IEditorService).openEditor({ resource: URI.parse(target) }, {
+			pinned: false, revealIfOpened: true,
+			...(selection ? { selection, selectionSource: TextEditorSelectionSource.JUMP } : {}),
+		});
+	}
+});
 
 const providerActions = [
 	{ id: 'git.commit', title: localize2('git.commitCommand', 'Git: Commit'), run: (provider: GitSCMProvider) => provider.input.accept() },

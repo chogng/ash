@@ -405,6 +405,7 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		}
 		this.viewportWidth = size.width;
 		this.viewportHeight = size.height;
+		const scrollTop = this.modifiedEditor.getScrollTop();
 		const inlineView = this.diffOptions.isInlineView(size.width);
 		if (inlineView !== this.inlineView) {
 			this.inlineView = inlineView;
@@ -429,9 +430,19 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 		this.element.style.setProperty('--ash-diff-center-width', `${centerWidth}px`);
 		this.element.style.setProperty('--ash-diff-overview-width', `${this.overviewRuler.width}px`);
 		this.element.style.setProperty('--ash-diff-header-height', `${headerHeight}px`);
-		this.originalEditor.layout({ width: inlineView ? contentWidth : originalWidth, height: editorHeight });
-		this.modifiedEditor.layout({ width: inlineView ? contentWidth : contentWidth - originalWidth, height: editorHeight });
-		this.diffViewZones.update(this.inlineView, this.wordWrap, this.displayedDiff?.rows ?? [], this.diffOptions.renderIndicators, this.comparedRange);
+		// One side can temporarily clamp its scroll before the paired alignment zones exist.
+		// Commit both layouts before allowing either side to drive the comparison's position.
+		const wasSyncingScroll = this.syncingScroll;
+		this.syncingScroll = true;
+		try {
+			this.originalEditor.layout({ width: inlineView ? contentWidth : originalWidth, height: editorHeight });
+			this.modifiedEditor.layout({ width: inlineView ? contentWidth : contentWidth - originalWidth, height: editorHeight });
+			this.diffViewZones.update(this.inlineView, this.wordWrap, this.displayedDiff?.rows ?? [], this.diffOptions.renderIndicators, this.comparedRange);
+			this.modifiedEditor.setScrollTop(scrollTop, ScrollType.Immediate);
+		} finally {
+			this.syncingScroll = wasSyncingScroll;
+		}
+		this.synchronizeScroll(this.modifiedEditor, this.originalEditor);
 		this.gutter.layout(inlineView ? 0 : originalWidth, editorHeight);
 		this.movedBlocks.layout(originalWidth + this.gutter.width, editorHeight);
 		this.overviewRuler.layout({ width: size.width, height: editorHeight });
@@ -452,6 +463,20 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 
 	public previousChange(): number | undefined {
 		return this.selectRelativeChange(-1);
+	}
+
+	/** Reveals the first change in the resolved comparison without taking keyboard focus. */
+	public revealFirstDiff(): void {
+		const rows = this.model.diff?.rows;
+		const first = rows?.findIndex(row => row.kind !== LineDiffKind.Unchanged) ?? -1;
+		if (!rows || first < 0) return;
+		this.revealChangeRow(first);
+		const row = rows[first]!;
+		const line = Math.min(this.model.modified.lineCount, (row.modifiedLineIndex ?? row.originalLineIndex ?? 0) + 1);
+		this.modifiedEditor.setPosition({ lineNumber: line, column: 1 });
+		if (row.modifiedLineIndex !== undefined) {
+			this.modifiedEditor.revealRangeInCenter(new Range(line, 1, line, 1), ScrollType.Immediate);
+		}
 	}
 
 	/** Selects one changed row in this comparison; the caller may announce collection-wide navigation. */
@@ -628,8 +653,10 @@ export class DiffEditorWidget extends Disposable implements IDiffEditor {
 
 	private synchronizeScroll(source: CodeEditorWidget, target: CodeEditorWidget): void {
 		if (this.syncingScroll) return;
+		// The hidden original has no inline alignment zones and cannot own the visible scroll position.
+		if (this.inlineView && source === this.originalEditor) return;
 		const top = source.getScrollTop();
-		if (target.getScrollTop() !== top) {
+		if (!this.inlineView && target.getScrollTop() !== top) {
 			this.syncingScroll = true;
 			try {
 				target.setScrollTop(top);

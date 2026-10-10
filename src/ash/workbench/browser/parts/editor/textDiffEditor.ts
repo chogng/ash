@@ -4,6 +4,7 @@ import { type IDimension } from "../../../../base/browser/dom.js";
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { Emitter } from '../../../../base/common/event.js';
+import { raceCancellationError } from '../../../../base/common/async.js';
 import type { Range } from '../../../../editor/common/core/range.js';
 import { ScrollType } from '../../../../editor/common/editorCommon.js';
 import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
@@ -61,9 +62,7 @@ export class TextDiffEditor extends EditorPane implements IEditorPaneWithSelecti
 	}
 
 	restoreSelection(selection: Range, source: TextEditorSelectionSource): void {
-		const editor = this.session.value?.editor.modifiedEditor;
-		if (!editor) return;
-		applyTextEditorOptions({ selection, selectionSource: source }, editor, ScrollType.Smooth);
+		this.session.value?.restoreSelection(selection, source);
 	}
 
 	constructor(
@@ -119,6 +118,7 @@ export class TextDiffEditor extends EditorPane implements IEditorPaneWithSelecti
 				DiffEditorPaneSession, container, original, modified,
 				input.original.label, input.modified.label, input.modified.readOnly === true, this.options,
 			);
+			await next.waitForDiff(signal);
 			throwIfCancelled(signal, "Diff editor input loading was cancelled");
 		} catch (error) {
 			next?.dispose();
@@ -182,6 +182,7 @@ export class TextDiffEditor extends EditorPane implements IEditorPaneWithSelecti
 class DiffEditorPaneSession extends Disposable {
 	readonly editor: DiffEditorWidget;
 	private readonly model: DiffModel;
+	private initialRevealPending = true;
 
 	constructor(
 		container: HTMLElement,
@@ -302,8 +303,28 @@ class DiffEditorPaneSession extends Disposable {
 		this.model.updateOptions(options);
 	}
 
+	async waitForDiff(signal: AbortSignal): Promise<void> {
+		if (this.model.state.kind !== 'loading') return;
+		using listeners = new DisposableStore();
+		await raceCancellationError(new Promise<void>(resolve => {
+			listeners.add(this.model.onDidChange(state => {
+				if (state.kind !== 'loading') resolve();
+			}));
+		}), signal, 'Diff editor input loading was cancelled');
+	}
+
+	restoreSelection(selection: Range, source: TextEditorSelectionSource): void {
+		this.initialRevealPending = false;
+		applyTextEditorOptions({ selection, selectionSource: source }, this.editor.modifiedEditor, ScrollType.Smooth);
+	}
+
 	layout(dimension: IDimension): void {
 		this.editor.layout(dimension);
+		// Pending panes have no viewport. Reveal after layout, before the host applies an explicit selection.
+		if (this.initialRevealPending && dimension.width > 0 && dimension.height > 0) {
+			this.initialRevealPending = false;
+			this.editor.revealFirstDiff();
+		}
 	}
 
 	focus(): void {

@@ -3,7 +3,6 @@ import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.j
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { ExternalUriOpenerPriority } from '../../../src/ash/editor/common/languages.js';
 import { MainThreadUriOpeners } from '../../../src/ash/workbench/api/browser/mainThreadUriOpeners.js';
-import { ExternalUriOpenerService, IExternalUriOpenerService } from '../../../src/ash/workbench/contrib/externalUriOpener/common/externalUriOpenerService.js';
 import '../../../src/ash/workbench/contrib/externalUriOpener/common/externalUriOpener.contribution.js';
 import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
 import { Emitter } from '../../../src/ash/base/common/event.js';
@@ -31,6 +30,7 @@ class ExtensionHost extends Disposable implements IExtensionHostApi {
 	public readonly delivery = document.createElement('output');
 	public readonly uriDelivery = document.createElement('output');
 	public isAvailable(): Promise<boolean> { return Promise.resolve(true); }
+	public start(): Promise<ExtensionHostFleetSnapshot> { throw new Error('Fleet startup is outside this preinitialized fixture'); }
 	public list(): Promise<ExtensionHostFleetSnapshot> {
 		return Promise.resolve(normalizeExtensionHostSnapshot({
 			generation: this.incarnation, extensions: [{
@@ -82,7 +82,6 @@ const bridge = resources.add(services.createInstance(MainThreadDataChannels, 1_0
 await bridge.start();
 const editorServices = createCodeEditorServices(resources, services);
 editorServices.registerInstance(IPreferencesService, { openSettings: async () => { }, openGlobalKeybindingSettings: async () => { }, openUserSettings: async () => { } });
-editorServices.registerInstance(IExternalUriOpenerService, resources.add(editorServices.createInstance(ExternalUriOpenerService)));
 const uriBridge = resources.add(editorServices.createInstance(MainThreadUriOpeners, 1_000));
 await uriBridge.start();
 await editorServices.get(IConfigurationService).updateValue('workbench.externalUriOpeners', { 'https://example.com': 'extension:test.links:browser' });

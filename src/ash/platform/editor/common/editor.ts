@@ -16,6 +16,8 @@ export function isResolvedEditorModel(model: IDisposable | undefined | null): mo
 export interface IEditorOptions {
 	/** Keeps the opened resource as a durable tab instead of a replaceable preview. */
 	readonly pinned?: boolean;
+	/** Reveals an existing tab in its group before opening another copy. */
+	readonly revealIfOpened?: boolean;
 	/** Leaves DOM focus with the navigation surface that requested the open. */
 	readonly preserveFocus?: boolean;
 	/** The caller owns reporting the failure; the editor must not display it. */

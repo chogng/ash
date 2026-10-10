@@ -163,7 +163,12 @@ services.registerInstance(IEditorPart, { get activePane() { return pane; } } as 
 services.registerInstance(IEditorService, {
 	onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [], openEditor: async input => {
 		if (pane) { pane.dispose(); }
-		pane = EditorPanes.getEditorPane(input)!.create({ instantiationService: services }); pane.create(document.getElementById('github')!); pane.layout({ width: innerWidth, height: innerHeight }); await pane.setInput(input, new AbortController().signal); pane.focus();
+		const createdPane = await EditorPanes.getEditorPane(input)!.create({ instantiationService: services });
+		pane = createdPane;
+		createdPane.create(document.getElementById('github')!);
+		createdPane.layout({ width: innerWidth, height: innerHeight });
+		await createdPane.setInput(input, new AbortController().signal);
+		createdPane.focus();
 	}, focusActiveEditor: () => pane!.focus()
 });
 function showSettings(): void {

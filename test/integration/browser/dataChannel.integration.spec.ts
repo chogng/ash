@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 test('extension channel delivery and Chat link updates retain keyboard navigation and targets', async ({ page }) => {
 	const errors: string[] = [];
-	page.on('pageerror', error => errors.push(error.message));
+	page.on('pageerror', error => { errors.push(error.message); console.error(error.stack); });
 	await page.goto('/dataChannel.html');
 	const link = page.locator('a[href="https://example.com/issues/1"]');
 	await expect(link).toHaveText('Issue one · #1 · Open · +2 −1');
