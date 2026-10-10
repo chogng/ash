@@ -127,7 +127,11 @@ const BASELINE_ALLOW: &str = "\
 (allow signal (target same-sandbox))
 (allow sysctl-read)
 (allow file-read-metadata)
+;; confstr's DARWIN_USER_CACHE_DIR needs dirhelper. Without it, Xcode
+;; rebuilds runtime discovery on every invocation instead of finding its cache.
+;; This lookup does not grant writes to the shared cache or temporary directory.
 (allow mach-lookup
+    (global-name \"com.apple.bsd.dirhelper\")
     (global-name \"com.apple.system.notification_center\")
     (global-name \"com.apple.system.logger\")
     (global-name \"com.apple.distributed_notifications@Uv3\")

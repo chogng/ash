@@ -1,6 +1,16 @@
 use super::*;
 
 #[test]
+fn directory_discovery_keeps_shared_cache_writes_and_launchservices_closed() {
+    let profile = build_profile_with_proxy(&ExecutionRequest::default(), None).unwrap();
+    assert!(profile.contains("(global-name \"com.apple.bsd.dirhelper\")"));
+    assert!(!profile.contains("(allow mach-lookup)"));
+    assert!(!profile.contains("com.apple.lsd"));
+    assert!(!profile.contains("(allow file-read* file-write* (subpath \"/private/var/folders\"))"));
+    assert!(!profile.contains("(allow file-read* file-write* (subpath \"/private/tmp\"))"));
+}
+
+#[test]
 fn protected_children_pin_ancestors_after_all_grants() {
     let mut request = ExecutionRequest::default();
     request.policy.readwrite_paths = vec!["/workspace".into(), "/destination".into()];

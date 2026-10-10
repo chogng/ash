@@ -1645,7 +1645,19 @@ diff --git a/src/mxc-sdk/src/backends/seatbelt/common/profile_builder.rs b/src/m
  
      Ok(out)
  }
-@@ -288,7 +312,7 @@
+@@ -103,7 +127,11 @@
+ (allow signal (target same-sandbox))
+ (allow sysctl-read)
+ (allow file-read-metadata)
++;; confstr's DARWIN_USER_CACHE_DIR needs dirhelper. Without it, Xcode
++;; rebuilds runtime discovery on every invocation instead of finding its cache.
++;; This lookup does not grant writes to the shared cache or temporary directory.
+ (allow mach-lookup
++    (global-name \"com.apple.bsd.dirhelper\")
+     (global-name \"com.apple.system.notification_center\")
+     (global-name \"com.apple.system.logger\")
+     (global-name \"com.apple.distributed_notifications@Uv3\")
+@@ -288,7 +316,7 @@
          let readonly = resolve_all(&policy.readonly_paths)?;
          let mut readwrite = resolve_all(&policy.readwrite_paths)?;
  
@@ -1654,7 +1666,7 @@ diff --git a/src/mxc-sdk/src/backends/seatbelt/common/profile_builder.rs b/src/m
          // dropping the path keeps the emitted profile an honest description of
          // the effective policy.
          let mut readonly: Vec<String> = readonly;
-@@ -318,8 +342,8 @@
+@@ -318,8 +346,8 @@
      // makes the *deepest* intent win at every path — a `readonlyPaths` entry
      // nested inside a broader `readwritePaths` subtree stays read-only rather
      // than inheriting the parent's write grant. `deniedPaths` is deliberately
@@ -1665,7 +1677,7 @@ diff --git a/src/mxc-sdk/src/backends/seatbelt/common/profile_builder.rs b/src/m
      out.push_str(";; --- policy.readonlyPaths / policy.readwritePaths (shallow-to-deep) ---\n");
      for mount in resolve_path_plan(&paths.readwrite, &paths.readonly, &[]) {
          let subpath = [mount.path.clone()];
-@@ -375,11 +399,64 @@
+@@ -375,11 +403,64 @@
          // that only reaches it through the wildcard. Without it a denied path
          // still answers `stat()` with its real size and timestamps.
          out.push_str(";; --- policy.deniedPaths (override broader allow rules) ---\n");
@@ -1733,7 +1745,7 @@ diff --git a/src/mxc-sdk/src/backends/seatbelt/common/profile_builder.rs b/src/m
      }
  }
  
-@@ -1423,6 +1500,24 @@
+@@ -1423,6 +1504,24 @@
      }
  
      #[test]
@@ -1758,7 +1770,7 @@ diff --git a/src/mxc-sdk/src/backends/seatbelt/common/profile_builder.rs b/src/m
      fn denied_paths_deny_outbound_under_default_allow() {
          // `egress.default: allow` emits a bare `(allow network-outbound)`, which
          // on its own grants AF_UNIX `connect()`. A denied subtree must still
-@@ -2061,7 +2156,7 @@
+@@ -2061,7 +2160,7 @@
      #[cfg(unix)]
      #[test]
      fn a_link_the_caller_controls_is_not_trusted() {
@@ -1767,7 +1779,7 @@ diff --git a/src/mxc-sdk/src/backends/seatbelt/common/profile_builder.rs b/src/m
  
          let dir = std::env::temp_dir().join(format!("mxc-devdir-trust-{}", std::process::id()));
          let _ = fs::remove_dir_all(&dir);
-@@ -2110,3 +2205,7 @@
+@@ -2110,3 +2209,7 @@
          assert!(p.contains(&format!("(subpath \"{}\")", granted.display())));
      }
  }
@@ -1779,8 +1791,18 @@ diff --git a/src/mxc-sdk/src/backends/seatbelt/common/profile_security_tests.rs 
 new file mode 100644
 --- /dev/null
 +++ b/src/mxc-sdk/src/backends/seatbelt/common/profile_security_tests.rs
-@@ -0,0 +1,40 @@
+@@ -0,0 +1,50 @@
 +use super::*;
++
++#[test]
++fn directory_discovery_keeps_shared_cache_writes_and_launchservices_closed() {
++    let profile = build_profile_with_proxy(&ExecutionRequest::default(), None).unwrap();
++    assert!(profile.contains("(global-name \"com.apple.bsd.dirhelper\")"));
++    assert!(!profile.contains("(allow mach-lookup)"));
++    assert!(!profile.contains("com.apple.lsd"));
++    assert!(!profile.contains("(allow file-read* file-write* (subpath \"/private/var/folders\"))"));
++    assert!(!profile.contains("(allow file-read* file-write* (subpath \"/private/tmp\"))"));
++}
 +
 +#[test]
 +fn protected_children_pin_ancestors_after_all_grants() {
