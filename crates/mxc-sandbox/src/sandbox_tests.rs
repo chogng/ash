@@ -667,6 +667,33 @@ mod execution {
     }
 
     #[test]
+    fn exact_denied_paths_hide_metadata_and_keep_allowed_files_readable() {
+        let temp = tempfile::tempdir().unwrap();
+        fs::write(temp.path().join("secret"), "private metadata").unwrap();
+        fs::write(temp.path().join("ordinary"), "public").unwrap();
+        let dir = Dir::open_local(temp.path()).unwrap();
+        let scope = SandboxScope::single(dir.clone())
+            .with_path_rules(vec![
+                SandboxPathRule::exact(
+                    dir.clone(),
+                    "secret",
+                    SandboxPathAccess::Denied,
+                    ash_sandboxing::MissingPathBehavior::Reject,
+                )
+                .unwrap(),
+            ])
+            .unwrap();
+        let output = run(
+            &scope,
+            SandboxPolicy::new(FileSystemAccess::ReadOnly, NetworkAccess::Denied),
+            "/bin/sh",
+            &["-c".into(), "if /usr/bin/stat -f '%z:%m' secret; then exit 1; fi; if cat secret; then exit 2; fi; /usr/bin/stat -f '%z' ordinary || exit 3; cat ordinary".into()],
+        );
+        assert_eq!(output.exit_code, Some(0), "{output:?}");
+        assert_eq!(output.stdout, "6\npublic", "{output:?}");
+    }
+
+    #[test]
     fn general_continuous_globs_cover_late_files_and_pin_matching_ancestors() {
         let temp = tempfile::tempdir().unwrap();
         fs::create_dir_all(temp.path().join("config/nested")).unwrap();
@@ -694,7 +721,7 @@ mod execution {
             fs::write(root.join("ready"), "ready").unwrap();
         });
         let output = run(&scope, SandboxPolicy::new(FileSystemAccess::DirectoryWrite, NetworkAccess::Denied), "/bin/sh", &["-c".into(),
-            "mv free free-renamed || exit 1; touch started; while [ ! -e ready ]; do sleep 0.05; done; if cat config/nested/late.key; then exit 2; fi; if mv config/nested moved; then exit 3; fi; if printf bad >config/new.pem; then exit 4; fi; printf allowed >config/nested/ordinary.txt".into()]);
+            "mv free free-renamed || exit 1; touch started; while [ ! -e ready ]; do sleep 0.05; done; if cat config/nested/late.key; then exit 2; fi; if mv config/nested moved; then exit 3; fi; if printf bad >config/new.pem; then exit 4; fi; if /usr/bin/stat -f '%z:%m' config/nested/late.key; then exit 5; fi; printf allowed >config/nested/ordinary.txt".into()]);
         writer.join().unwrap();
         assert_eq!(output.exit_code, Some(0), "{output:?}");
         assert!(!output.stdout.contains("secret"), "{output:?}");

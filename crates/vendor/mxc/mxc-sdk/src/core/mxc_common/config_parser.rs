@@ -1295,8 +1295,6 @@ fn normalize_common_request_ir(
     let present_backend_sections = present_backend_sections(&cfg);
 
     let source_contract = cfg.source_contract;
-    let network_enforcement_compatibility = cfg.network_enforcement_compatibility;
-    let default_env_compatibility = cfg.default_env_compatibility;
     let container_id = cfg.container_id.unwrap_or_default();
 
     // Process section: required for one-shot and state-aware exec; optional for
@@ -1544,42 +1542,18 @@ fn normalize_common_request_ir(
         }
         config.storage_path = cc.storage_path;
         if let Some(mappings) = cc.port_mappings {
-            let mut converted = Vec::with_capacity(mappings.len());
-            for (idx, m) in mappings.into_iter().enumerate() {
-                if m.windows_port == 0 {
-                    let msg = format!("wslc.portMappings[{idx}]: 'windowsPort' must be > 0");
-                    return Err(WxcError::ConfigParse(msg));
-                }
-                if m.container_port == 0 {
-                    let msg = format!("wslc.portMappings[{idx}]: 'containerPort' must be > 0");
-                    return Err(WxcError::ConfigParse(msg));
-                }
-                // Only TCP is representable in the wire model
-                // (TransportProtocol is tcp-only); a `udp` value is rejected
-                // at deserialize. The WSLC SDK runtime returns E_NOTIMPL for
-                // UDP, so only TCP is currently supported.
-                converted.push(PortMapping {
+            // Only TCP is representable in the wire model (TransportProtocol is
+            // tcp-only); a `udp` value is rejected at deserialize. The WSLC SDK
+            // runtime returns E_NOTIMPL for UDP.
+            let converted: Vec<PortMapping> = mappings
+                .into_iter()
+                .map(|m| PortMapping {
                     windows_port: m.windows_port,
                     container_port: m.container_port,
                     protocol: "tcp".to_string(),
-                });
-            }
-            // Reject duplicate (windowsPort, protocol) entries. Same host
-            // port on TCP+UDP would in principle be legal, but UDP is
-            // rejected at deserialize (the wire model is tcp-only); the
-            // second protocol dimension is retained in the dedupe key in
-            // case UDP support is enabled later.
-            let mut seen: std::collections::HashSet<(u16, &str)> = std::collections::HashSet::new();
-            for pm in &converted {
-                if !seen.insert((pm.windows_port, pm.protocol.as_str())) {
-                    let msg = format!(
-                        "wslc.portMappings: duplicate windowsPort {} \
-                         for protocol '{}'",
-                        pm.windows_port, pm.protocol
-                    );
-                    return Err(WxcError::ConfigParse(msg));
-                }
-            }
+                })
+                .collect();
+            crate::mxc_common::validator::validate_port_mappings("wslc.portMappings", &converted)?;
             config.port_mappings = converted;
         }
         Some(config)
@@ -1629,8 +1603,6 @@ fn normalize_common_request_ir(
     Ok(ExecutionRequest {
         bubblewrap_executable: None,
         source_contract: Some(source_contract),
-        network_enforcement_compatibility,
-        default_env_compatibility,
         container_id,
         env,
         inherit_default_env,
@@ -1648,7 +1620,6 @@ fn normalize_common_request_ir(
         windows_sandbox,
         hyperlight,
         experimental_enabled: false,
-        testing_features_enabled: false,
         dry_run: false,
     })
 }
@@ -1727,7 +1698,7 @@ mod tests {
     use super::*;
     use crate::mxc_common::encoding::base64_encode;
     use crate::mxc_common::logger::Mode;
-    use crate::mxc_common::models::{NetworkAction, NetworkPolicy, ProxyAddress};
+    use crate::mxc_common::models::{NetworkAction, ProxyAddress};
     use crate::mxc_common::mxc_error::MxcErrorCode;
     use std::path::{Path, PathBuf};
 
@@ -1746,16 +1717,11 @@ mod tests {
     fn assert_exact_contract_bridge(
         request: ExactOneShotContract,
         expected_contract: ContractVersion,
-        expected_compatibility: crate::mxc_common::models::NetworkEnforcementCompatibility,
     ) {
         let mut logger = test_logger();
         let execution = load_one_shot_request_from_contract(request, &mut logger).unwrap();
 
         assert_eq!(execution.source_contract, Some(expected_contract));
-        assert_eq!(
-            execution.network_enforcement_compatibility,
-            expected_compatibility
-        );
         assert_eq!(
             execution.source_contract_version(),
             expected_contract.as_str()
@@ -1783,7 +1749,6 @@ mod tests {
         address: Option<String>,
         port: Option<u16>,
         original_url: Option<String>,
-        builtin_test_server: bool,
     }
 
     #[derive(Debug, Clone, PartialEq)]
@@ -1806,7 +1771,6 @@ mod tests {
                     address: proxy.map(|address| address.address.clone()),
                     port: proxy.map(|address| address.port),
                     original_url: proxy.and_then(|address| address.original_url.clone()),
-                    builtin_test_server: request.policy.network_proxy.builtin_test_server,
                 },
                 // These are the complete set of ExecutionRequest model fields hidden by
                 // `#[serde(skip)]`; compare them explicitly so serialization cannot mask
@@ -2145,10 +2109,6 @@ mod tests {
         match parse_exact_for_test(json).unwrap() {
             MxcRequest::OneShot(request) => {
                 assert_eq!(request.source_contract, Some(ContractVersion::V1_1_0Alpha));
-                assert_eq!(
-                    request.network_enforcement_compatibility,
-                    crate::mxc_common::models::NetworkEnforcementCompatibility::Strict
-                );
                 assert_eq!(request.script_code, "echo dev");
             }
             MxcRequest::StateAware(_) => panic!("expected one-shot request"),
@@ -2775,7 +2735,6 @@ mod tests {
         assert_exact_contract_bridge(
             ExactOneShotContract::V0_9(Box::new(v0_9)),
             ContractVersion::V0_9_0Alpha,
-            crate::mxc_common::models::NetworkEnforcementCompatibility::Strict,
         );
 
         let v1_0 = serde_json::from_str::<crate::mxc_contract::published::v1_0_0::OneShotRequest>(
@@ -2788,7 +2747,6 @@ mod tests {
         assert_exact_contract_bridge(
             ExactOneShotContract::V1_0(Box::new(v1_0)),
             ContractVersion::V1_0_0,
-            crate::mxc_common::models::NetworkEnforcementCompatibility::Strict,
         );
 
         let dev = serde_json::from_str::<crate::mxc_contract::dev::OneShotRequest>(
@@ -2801,7 +2759,6 @@ mod tests {
         assert_exact_contract_bridge(
             ExactOneShotContract::Dev(Box::new(dev)),
             ContractVersion::V1_1_0Alpha,
-            crate::mxc_common::models::NetworkEnforcementCompatibility::Strict,
         );
     }
 
@@ -2938,8 +2895,8 @@ mod tests {
         };
         assert!(parsed.request().policy.network_proxy.is_enabled());
         assert!(!parsed.request().policy.network_mode_specified);
-        assert!(parsed.request().policy.allowed_hosts.is_empty());
-        assert!(parsed.request().policy.blocked_hosts.is_empty());
+        assert!(!parsed.request().policy.network_specified);
+        assert!(parsed.request().policy.runtime_network_proxy_specified);
     }
 
     fn load_mxc(json: &str) -> Result<MxcRequest, ParseError> {
@@ -2992,6 +2949,19 @@ mod tests {
                 StateAwareProvision::Wslc(Some(crate::mxc_common::models::WslcProvisionConfig {
                     image: Some("alpine:latest".into()),
                     image_tar_path: None,
+                    port_mappings: None,
+                })),
+            ),
+            (
+                "wslc_state_aware_provision_port_mappings.json",
+                StateAwareProvision::Wslc(Some(crate::mxc_common::models::WslcProvisionConfig {
+                    image: Some("python:3.12-alpine".into()),
+                    image_tar_path: None,
+                    port_mappings: Some(vec![crate::mxc_common::models::PortMapping {
+                        windows_port: 18081,
+                        container_port: 8080,
+                        protocol: "tcp".into(),
+                    }]),
                 })),
             ),
         ] {
@@ -3974,8 +3944,6 @@ mod tests {
             request.policy.network_ingress.expect("0.9 ingress").default,
             NetworkAction::Allow
         );
-        assert!(!request.policy.allow_local_network);
-        assert_eq!(request.policy.default_network_policy, NetworkPolicy::Block);
         assert!(request.policy.network_mode_specified);
     }
 

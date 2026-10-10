@@ -52,6 +52,8 @@ SDK 的 Seatbelt 策略固定可写根以及只读、拒绝路径的祖先目录
 
 持续规则由 [Seatbelt 编译器](src/seatbelt.rs) 使用后端已有的 `globset` 语法解析，支持 `*`、`**`、`?`、花括号备选和 ASCII 字符类，统一将反斜杠视为路径分隔符。中文等 Unicode 字面量可用；Seatbelt 无法保持后端字节字符类的非 ASCII 语义，因此拒绝此类规则。持续模式不用于新增写授权。持续拒绝规则在准备阶段拒绝已命中的符号链接与多重或无法确认的硬链接；别名及外部进程改变链接关系仍未完成对象级隔离验收。
 
+精确路径和持续 glob 的禁读规则均显式拒绝 `file-read-metadata`。Seatbelt 基础策略允许元数据读取以支持路径解析，单独的 `file-read*` 拒绝无法覆盖这个显式允许；禁读对象的大小和时间戳也属于保护范围。
+
 前端搜索与过滤保留本地 glob，权限解析和实施归后端；两端用共同语法案例检验结果，不通过前端生成的正则授权。前端的相邻文件 `when` 条件不属于沙箱规则。更完整的边界见 [文件权限契约](../../docs/sandboxing.md#文件权限目标)。Unix socket 的路径拒绝规则保留，文件身份快照绑定其所在目录，避免把 socket 当作普通文件打开。
 
 ## PTY 启动
@@ -64,15 +66,34 @@ SDK 的 Seatbelt 策略固定可写根以及只读、拒绝路径的祖先目录
 
 ## SDK 依赖
 
-固定 Microsoft MXC `c45e7d5a485036d88f469aa363efaa3c651564bc`，使用官方合并后的 `mxc-sdk 1.0.0` 单包。源码及可复核补丁保存在 [vendor/mxc](../vendor/mxc/README.md)，Cargo 与 Bazel 消费同一份源码。
+固定 Microsoft MXC `c6f301d53a1430c4c921a05c57af838f7392348f`，使用官方合并后的 `mxc-sdk 1.0.0` 单包。源码及可复核补丁保存在 [vendor/mxc](../vendor/mxc/README.md)，Cargo 与 Bazel 消费同一份源码。
 
 适配器使用 SDK 已提供的契约和平台运行器导出。公开的 `v1::spawn` 尚不能明确禁止 ACL 改动、锁定 PSEC 运行器或指定受信 Bubblewrap 路径，因此当前保留直接选择运行器的接入；不让 SDK 的实现选择改变 Ash 已确定的隔离要求。
 
 文件身份快照由 `sandboxing` 持有，使用 `file-identity` 的句柄检查；Windows ACL 授权范围由 `windows-sandbox` 持有。SDK 补丁只处理隔离边界、平台能力诊断和资源生命周期。Unix PTY 复用官方实现，补充前台作业中断接口。
 
-升级时固定 commit、对照上游复核补丁，再验证消费者及平台行为。该 pin 是源码快照，上游已移除早期预览说明；这不替代产品自己的隔离验收。[上游源码](https://github.com/microsoft/mxc/tree/c45e7d5a485036d88f469aa363efaa3c651564bc)
+终端交接从 SDK 的方向网络策略恢复 Ash 的 Allowed、Denied 或 Managed 模式，同时检查入站、宿主回环和出站例外。无法保留的组合拒绝序列化，不依据已删除的旧网络字段重建权限。
+
+升级时固定 commit、对照上游复核补丁，再验证消费者及平台行为。该 pin 是源码快照，上游已移除早期预览说明；这不替代产品自己的隔离验收。[上游源码](https://github.com/microsoft/mxc/tree/c6f301d53a1430c4c921a05c57af838f7392348f)
 
 ## 验证
+
+2026-10-10 升级至 `c6f301d5` 后，在 Windows 11 23H2 x64（build `22631.6199`）及 WSL2 `AshAcceptance` x64（kernel `6.18.40.1-microsoft-standard-WSL2`）执行以下验证：
+
+| 平台 | 命令或入口 | 结果 |
+| --- | --- | --- |
+| Windows x64 | `just test ash-mxc-sandbox --lib --test windows --test pty --locked` | 22 项通过，默认忽略 12 项需要指定平台能力的测试 |
+| Windows x64 | `just test ash-windows-sandbox --lib --locked` | 38 项通过，2 项已安装账户测试未运行 |
+| Windows x64 | `just test ash-exec-server --lib --test execution --locked -- --test-threads=1` | 46 项库测试通过，5 项 PSEC 集成用例默认未运行 |
+| Windows x64 | 显式运行适配器 `missing_psec_is_reported_before_execution` 和执行服务 `windows::rpc_strict_sandbox_refuses_missing_psec_before_execution`，使用 `--ignored --exact` | 两项均通过，确认缺少 PSEC 时不启动命令 |
+| Windows x64 | `just test mxc-sdk --manifest-path crates/vendor/mxc/Cargo.toml --lib base_container_runner --locked`；同入口的 `profile_builder` 组 | PSEC 策略及诊断 59 项、Seatbelt 策略生成 83 项通过 |
+| WSL2 Linux x64 | `just test ash-mxc-sandbox --lib --test linux --test pty --locked`；构建 `ash-network-proxy --example probe` 后显式运行 `--test linux -- --ignored` | 库 19 项、实际 PTY 6 项及受管代理 1 项通过 |
+| WSL2 Linux x64 | `just test ash-mxc-sandbox --test wsl --locked -- --ignored --test-threads=1`，分别使用 `/tmp` 和 Windows 挂载上的 `TMPDIR` | 每轮 3 项通过，覆盖文件权限、元数据、退出码、取消、后代回收及 Windows 互操作拒绝 |
+| WSL2 Linux x64 | `just test mxc-sdk --manifest-path crates/vendor/mxc/Cargo.toml --lib bwrap_runner --locked`；同入口的 `bwrap_command` 组 | 运行器 26 项、命令生成 56 项通过 |
+
+Windows 适配器、账户沙箱及执行服务的 all-targets warning 门禁通过，Linux 适配器的 tests check 与 warning 门禁通过。`scripts/cargo.py build -p ash-exec-server -p ash-windows-sandbox --locked` 的 Windows 普通构建、`bazel build //crates/mxc-sandbox:mxc-sandbox --lockfile_mode=error`、`just dependencies` 和当前 pin 的 vendor 补丁校验通过。SDK 命令生成组首次有 4 项旧断言失败：只读挂载应匹配 Ash 的 `--ro-bind-try`，代理绕过变量应各出现一次且值为空；同步断言后 56 项全部通过。Bazel 仍报告已有的 3 条辅助程序资源指令不受支持，本次库构建不验证这些辅助程序。
+
+`just check ash-mxc-sandbox --target aarch64-apple-darwin --tests --locked` 通过，仅代表编译。新增精确路径及执行期间新建 glob 匹配文件的元数据拒绝用例已接入 [Platform checks](../../.github/workflows/platform-checks.yml) 的 `macos-26` ARM64 和 `macos-26-intel` 执行步骤，尚未触发该工作流；本机不能验证 macOS 的实际 Seatbelt 行为。新 pin 的 PSEC 成功执行、ConPTY 及 RPC 用例仍需 [PSEC 工作流](../../.github/workflows/psec.yml) 的 `windows-11-arm` 或支持 PSEC 的自托管机器运行，10 月 7 日的结果不作为新 pin 的通过证据。
 
 2026-10-07 的 Codex 对照修改在 macOS ARM64 上通过适配器 34 项库测试和 7 项实际 PTY 测试，1 项需要显式局域网地址的用例未运行；执行服务库及 15 项执行集成回归串行通过，PowerShell 路径分类定向回归通过。两 crate 的 Windows ARM64/x64 全部测试目标通过编译及 warning 门禁。新 pin 在 Windows 11 25H2 ARM64 CI 实际通过 7 项 PSEC 适配器执行、3 项 ConPTY 和 4 项产品执行服务 RPC 用例；目录别名 fixture 修复后也通过原有只读与拒绝断言。两个 Server x64 的适配器与产品 RPC 缺能力拒绝用例通过；三个 PSEC 任务全部成功，具体提交、原始失败与覆盖范围见 [终端与 RPC 验收](../../docs/windows-sandbox-acceptance-runbook.md#2026-10-07-psec-终端与执行服务-rpc-验收)。
 

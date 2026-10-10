@@ -1,6 +1,6 @@
 {
   "repository": "https://github.com/microsoft/mxc",
-  "revision": "c45e7d5a485036d88f469aa363efaa3c651564bc",
+  "revision": "c6f301d53a1430c4c921a05c57af838f7392348f",
   "packages": {
     "mxc-sdk": "mxc-sdk"
   }

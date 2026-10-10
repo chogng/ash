@@ -111,7 +111,7 @@ macOS 策略固定可写根和受保护路径的祖先目录，防止移动目�
 
 ## MXC 接入边界
 
-- SDK 固定 `c45e7d5a485036d88f469aa363efaa3c651564bc`，采用官方合并后的 `mxc-sdk 1.0.0`，请求直接使用发布的 1.0 类型。文件身份快照、ACL 授权范围和 Windows PTY 交接格式由 Ash 持有；SDK 保留目录例外、隔离边界及进程生命周期修正。Linux 网络监控丢失提供进程时终止工作负载，进程树清理后才回收 PID。
+- SDK 固定 `c6f301d53a1430c4c921a05c57af838f7392348f`，采用官方合并后的 `mxc-sdk 1.0.0`，请求直接使用发布的 1.0 类型。文件身份快照、ACL 授权范围和 Windows PTY 交接格式由 Ash 持有；SDK 保留目录例外、隔离边界及进程生命周期修正。Linux 网络监控丢失提供进程时终止工作负载，进程树清理后才回收 PID。
 - Windows 的 Ash 请求要求 MXC 只使用 PSEC；内部其他 ProcessContainer 实现不能代替它。准备阶段必须区分确定的能力不足与运行故障，不能把任意探测错误转换成 `UnsupportedPolicy`。
 - 按运行时能力检查 PSEC，不能用“24H2 以上”代替检查。
 - Linux 与 macOS 继续通过同一适配器接入 Bubblewrap 和 Seatbelt。Bubblewrap 在启动时安装禁止 `AF_VSOCK` 的 seccomp 过滤器，阻止 WSL 互操作创建不受 Linux 命名空间约束的 Windows 进程；过滤器由后代继承。
@@ -119,7 +119,7 @@ macOS 策略固定可写根和受保护路径的祖先目录，防止移动目�
 
 补丁来源与校验见 [MXC 依赖](../crates/vendor/mxc/README.md)。原型源码与校验清单保存在本机 `.build/acceptance/mxc-local/prototype-source`，历史测试与系统清理结果保留在 [Windows 验收手册](windows-sandbox-acceptance-runbook.md)。
 
-固定版本的 [上游说明](https://github.com/microsoft/mxc/blob/c45e7d5a485036d88f469aa363efaa3c651564bc/README.md) 已移除早期预览声明。Ash 的隔离保证仍以所用策略、受审查补丁和对应平台实机证据为依据；不能仅凭 SDK 版本或后端名称宣布完成产品验收。
+固定版本的 [上游说明](https://github.com/microsoft/mxc/blob/c6f301d53a1430c4c921a05c57af838f7392348f/README.md) 已移除早期预览声明。Ash 的隔离保证仍以所用策略、受审查补丁和对应平台实机证据为依据；不能仅凭 SDK 版本或后端名称宣布完成产品验收。
 
 2026-09-12 另核对本地 MXC `567570084f1ebaca539b0a3186aeb68bca77788a` 的 SDK、平台及诊断文档。它用于发现接入限制和升级差异，不代表 Ash 已升级。文档中的 JSON、Rust SDK、命令行和设计提案分别核对，不能把某个入口的能力当作所有入口已实现；依据与失败原因见 [MXC 文档复核](../crates/docs/mxc-sandbox-windows-fallback.md#mxc-文档复核与接入纠正)。
 
@@ -136,7 +136,7 @@ Codex 的专用账户实现是行为参考。Ash 不直接注册其产品 crate�
 
 Codex 的 MXC 受管网络允许整个 IPv4/IPv6 宿主回环及其入站，因此要求 `allow_local_binding = true`；它没有提供 Ash 的“仅本次代理端点、禁止未授权入站”保证，不能复制该策略来解除 Ash 的严格 Managed 拒绝。具体策略见 [Codex 请求转换](https://github.com/openai/codex/blob/95ec468619386ebb93506ac2091a48e5a558d25c/codex-rs/mxc-sandbox/src/policy.rs)。Ash 保留完整请求能力检查，以及仅在明确不支持时检查下一候选的契约。
 
-本轮借鉴其 PowerShell Store 路径过滤、分块环境传输及终端/对象别名验收场景：自动 shell 发现归 `exec-server`，PTY 请求编解码归 `mxc-sandbox`，真实 PSEC 用例由 [验收脚本](../scripts/test-psec.ps1) 显式执行。Codex 使用 MXC `6cd3d58f` 的分包结构，Ash 继续使用较新的 `c45e7d5a` 单包及既有安全补丁；升级或移植须复核具体行为。Codex 不提升权限的限制令牌路径不能实施与专用账户相同的读限制，仍分别评价。接入范围包括执行器、安装程序和代理，仅复制命令运行器不能满足 Ash 的契约。
+本轮借鉴其 PowerShell Store 路径过滤、分块环境传输及终端/对象别名验收场景：自动 shell 发现归 `exec-server`，PTY 请求编解码归 `mxc-sandbox`，真实 PSEC 用例由 [验收脚本](../scripts/test-psec.ps1) 显式执行。Codex 使用 MXC `6cd3d58f` 的分包结构，Ash 当前使用 `c6f301d5` 单包及既有安全补丁；升级或移植须复核具体行为。Codex 不提升权限的限制令牌路径不能实施与专用账户相同的读限制，仍分别评价。接入范围包括执行器、安装程序和代理，仅复制命令运行器不能满足 Ash 的契约。
 
 | Codex 源码                                                                 | 已确认的行为                                                                     | Ash 接入要求                                                                                                  |
 | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |

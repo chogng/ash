@@ -5,11 +5,13 @@ use ash_sandboxing::SandboxError;
 use mxc_sdk::mxc_common::logger::Logger;
 use mxc_sdk::mxc_common::logger::Mode;
 use mxc_sdk::mxc_common::models::ExecutionRequest;
+use mxc_sdk::mxc_common::models::NetworkAction;
 use mxc_sdk::mxc_common::sandbox_process::SandboxBackend;
 use mxc_sdk::mxc_common::sandbox_process::SandboxProcess;
 use mxc_sdk::mxc_common::sandbox_process::StdioMode;
 use serde::Deserialize;
 use serde::Serialize;
+use serde::ser::Error as _;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -53,12 +55,33 @@ enum HandoffNetwork {
 
 impl Serialize for Request {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let network = match self.proxy_port {
-            Some(port) => HandoffNetwork::Managed(port),
-            None => match self.inner.policy.default_network_policy {
-                mxc_sdk::mxc_common::models::NetworkPolicy::Allow => HandoffNetwork::Allowed,
-                mxc_sdk::mxc_common::models::NetworkPolicy::Block => HandoffNetwork::Denied,
-            },
+        let policy = &self.inner.policy;
+        let egress = policy.network_egress.as_ref().ok_or_else(|| {
+            S::Error::custom("terminal handoff requires an explicit egress policy")
+        })?;
+        let ingress = policy.network_ingress.as_ref().ok_or_else(|| {
+            S::Error::custom("terminal handoff requires an explicit ingress policy")
+        })?;
+        // The handoff represents Ash's three network modes. Refuse any SDK
+        // refinement it cannot retain rather than broadening it in the helper.
+        if !egress.allow.is_empty()
+            || !egress.deny.is_empty()
+            || ingress.default != egress.default
+            || ingress.host_loopback != egress.default
+        {
+            return Err(S::Error::custom(
+                "terminal handoff cannot preserve the directional network policy",
+            ));
+        }
+        let network = match (self.proxy_port, egress.default) {
+            (Some(port), NetworkAction::Deny) => HandoffNetwork::Managed(port),
+            (None, NetworkAction::Allow) => HandoffNetwork::Allowed,
+            (None, NetworkAction::Deny) => HandoffNetwork::Denied,
+            (Some(_), NetworkAction::Allow) => {
+                return Err(S::Error::custom(
+                    "managed networking must deny direct egress",
+                ));
+            }
         };
         Handoff {
             command_line: self.inner.script_code.clone(),

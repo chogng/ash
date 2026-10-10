@@ -65,14 +65,6 @@ fn terminal_handoff_preserves_explicit_environment_and_filesystem_identity() {
         decoded.inner.source_contract,
         Some(mxc_sdk::mxc_contract::ContractVersion::V1_0_0)
     );
-    assert_eq!(
-        decoded.inner.network_enforcement_compatibility,
-        mxc_sdk::mxc_common::models::NetworkEnforcementCompatibility::Strict
-    );
-    assert_eq!(
-        decoded.inner.default_env_compatibility,
-        mxc_sdk::mxc_common::models::DefaultEnvCompatibility::DefaultBlock
-    );
     assert!(decoded.inner.lifecycle.destroy_on_exit);
     assert!(!decoded.inner.lifecycle.preserve_policy);
     assert_eq!(decoded.inner.script_code, prepared.inner.script_code);
@@ -192,11 +184,75 @@ fn terminal_handoff_keeps_managed_proxy_and_network_restrictions() {
     );
     assert!(decoded.inner.policy.runtime_network_proxy_specified);
     assert!(decoded.inner.policy.network_mode_specified);
-    assert!(matches!(
-        decoded.inner.policy.default_network_policy,
-        mxc_sdk::mxc_common::models::NetworkPolicy::Block
-    ));
-    assert!(!decoded.inner.policy.allow_local_network);
+    assert_eq!(
+        decoded.inner.policy.network_egress,
+        prepared.inner.policy.network_egress
+    );
+    assert_eq!(
+        decoded.inner.policy.network_ingress,
+        prepared.inner.policy.network_ingress
+    );
+}
+
+#[test]
+fn terminal_handoff_retains_both_network_directions() {
+    let temp = tempfile::tempdir().unwrap();
+    let dir = Dir::open_local(temp.path()).unwrap();
+    for network in [NetworkAccess::Allowed, NetworkAccess::Denied] {
+        let prepared = crate::policy::request(
+            &SandboxCommand::new("program", ["argument"], dir.canonical_path()),
+            SandboxPolicy::new(FileSystemAccess::ReadOnly, network),
+            &SandboxScope::single(dir.clone()).with_host_read(HostReadScope::Minimal),
+        )
+        .unwrap();
+        let decoded: Request =
+            serde_json::from_str(&serde_json::to_string(&prepared).unwrap()).unwrap();
+        assert_eq!(
+            decoded.inner.policy.network_egress,
+            prepared.inner.policy.network_egress
+        );
+        assert_eq!(
+            decoded.inner.policy.network_ingress,
+            prepared.inner.policy.network_ingress
+        );
+    }
+}
+
+#[test]
+fn terminal_handoff_refuses_network_rules_it_cannot_preserve() {
+    use mxc_sdk::mxc_common::models::NetworkAction;
+    use mxc_sdk::mxc_common::models::NetworkRule;
+    let temp = tempfile::tempdir().unwrap();
+    let dir = Dir::open_local(temp.path()).unwrap();
+    let mut prepared = request(&dir);
+    prepared
+        .inner
+        .policy
+        .network_ingress
+        .as_mut()
+        .unwrap()
+        .host_loopback = NetworkAction::Allow;
+    assert!(serde_json::to_string(&prepared).is_err());
+    let mut prepared = request(&dir);
+    prepared
+        .inner
+        .policy
+        .network_egress
+        .as_mut()
+        .unwrap()
+        .allow
+        .push(NetworkRule::default());
+    assert!(serde_json::to_string(&prepared).is_err());
+    let mut prepared = request(&dir);
+    prepared
+        .inner
+        .policy
+        .network_egress
+        .as_mut()
+        .unwrap()
+        .deny
+        .push(NetworkRule::default());
+    assert!(serde_json::to_string(&prepared).is_err());
 }
 
 #[cfg(unix)]

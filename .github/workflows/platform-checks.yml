@@ -155,6 +155,13 @@ jobs:
           ${{ matrix.python }} -B scripts/cargo.py test -p ash-mxc-sandbox --lib --target "${{ matrix.target }}"
           ${{ matrix.python }} -B scripts/cargo.py test -p ash-mxc-sandbox --test linux --target "${{ matrix.target }}" -- --ignored
 
+      - name: Test macOS denied-file metadata boundary
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          ${{ matrix.python }} -B scripts/cargo.py test -p ash-mxc-sandbox --lib tests::execution::exact_denied_paths_hide_metadata_and_keep_allowed_files_readable --locked --target "${{ matrix.target }}" -- --exact
+          ${{ matrix.python }} -B scripts/cargo.py test -p ash-mxc-sandbox --lib tests::execution::general_continuous_globs_cover_late_files_and_pin_matching_ancestors --locked --target "${{ matrix.target }}" -- --exact
+
       - name: Test Windows account execution and cleanup
         if: runner.os == 'Windows'
         shell: pwsh

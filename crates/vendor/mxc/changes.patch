@@ -1,3 +1,29 @@
+diff --git a/src/mxc-sdk/build/build_mxc_build_common.rs b/src/mxc-sdk/build/build_mxc_build_common.rs
+--- a/src/mxc-sdk/build/build_mxc_build_common.rs
++++ b/src/mxc-sdk/build/build_mxc_build_common.rs
+@@ -103,6 +103,10 @@
+     };
+     let output = compiler
+         .arg("/nologo")
++        // winresource writes UTF-8, including the copyright symbol. Neither
++        // the host ANSI codepage nor LLVM's default identifies that encoding.
++        .arg("/c")
++        .arg("65001")
+         .arg(format!("/fo{}", compiled_path.display()))
+         .arg(&resource_path)
+         .output()?;
+diff --git a/src/mxc-sdk/build.rs b/src/mxc-sdk/build.rs
+--- a/src/mxc-sdk/build.rs
++++ b/src/mxc-sdk/build.rs
+@@ -23,7 +23,7 @@
+ // The SDK build uses the release metadata subset. Runtime and executor modules
+ // include the remaining constants and stderr helpers.
+ #[allow(dead_code)]
+-#[path = "src/backends/nanvix/common/mod.rs"]
++#[path = "src/backends/nanvix/common.rs"]
+ mod nanvix_common;
+ 
+ fn main() -> Result<(), Box<dyn std::error::Error>> {
 diff --git a/src/mxc-sdk/Cargo.toml b/src/mxc-sdk/Cargo.toml
 --- a/src/mxc-sdk/Cargo.toml
 +++ b/src/mxc-sdk/Cargo.toml
@@ -119,53 +145,72 @@ diff --git a/src/mxc-sdk/Cargo.toml b/src/mxc-sdk/Cargo.toml
  
  [[example]]
  name = "isolation_session_console"
-diff --git a/src/mxc-sdk/build/build_mxc_build_common.rs b/src/mxc-sdk/build/build_mxc_build_common.rs
---- a/src/mxc-sdk/build/build_mxc_build_common.rs
-+++ b/src/mxc-sdk/build/build_mxc_build_common.rs
-@@ -103,6 +103,10 @@
-     };
-     let output = compiler
-         .arg("/nologo")
-+        // winresource writes UTF-8, including the copyright symbol. Neither
-+        // the host ANSI codepage nor LLVM's default identifies that encoding.
-+        .arg("/c")
-+        .arg("65001")
-         .arg(format!("/fo{}", compiled_path.display()))
-         .arg(&resource_path)
-         .output()?;
-diff --git a/src/mxc-sdk/build.rs b/src/mxc-sdk/build.rs
---- a/src/mxc-sdk/build.rs
-+++ b/src/mxc-sdk/build.rs
-@@ -23,7 +23,7 @@
- // The SDK build uses the release metadata subset. Runtime and executor modules
- // include the remaining constants and stderr helpers.
- #[allow(dead_code)]
--#[path = "src/backends/nanvix/common/mod.rs"]
-+#[path = "src/backends/nanvix/common.rs"]
- mod nanvix_common;
- 
- fn main() -> Result<(), Box<dyn std::error::Error>> {
 diff --git a/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_command.rs b/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_command.rs
 --- a/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_command.rs
 +++ b/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_command.rs
-@@ -14,7 +14,6 @@
-     ContainerPolicy, ExecutionRequest, NetworkAction, NetworkEnforcementCompatibility,
-     NetworkEnforcementMode, NetworkPolicy, ProxyAddress,
- };
+@@ -13,7 +13,6 @@
+ #[cfg(any(target_os = "linux", test))]
+ use crate::mxc_common::models::ContainerPolicy;
+ use crate::mxc_common::models::{ExecutionRequest, NetworkAction, ProxyAddress};
 -use crate::mxc_common::proxy_env::{is_managed_proxy_key, PROXY_SET_KEYS};
  
  /// The fixed prefix of the command bwrap is asked to run.
  ///
-@@ -630,7 +629,7 @@
+@@ -210,24 +209,21 @@
+ }
+ 
+ /// Rejection text for an inbound-accepting directional posture.
+-pub const BWRAP_INGRESS_DEFAULT_ALLOW: &str =
+-    "Bubblewrap: network.ingress.default='allow' is not supported. The sandbox runs in a \
++pub const BWRAP_INGRESS_DEFAULT_ALLOW: &str = "Bubblewrap: network.ingress.default='allow' is not supported. The sandbox runs in a \
+      private network namespace reached through slirp, which has no route in until a host \
+      port is forwarded to it, and the schema carries no port list to forward. A listener \
+      inside the sandbox is reachable from the sandbox only. Use \
+      network.ingress.default='deny'.";
+ 
+ /// Rejection text for an inbound-accepting host-loopback posture.
+-pub const BWRAP_HOST_LOOPBACK_ALLOW: &str =
+-    "Bubblewrap: network.ingress.hostLoopback='allow' is not supported. The sandbox's \
++pub const BWRAP_HOST_LOOPBACK_ALLOW: &str = "Bubblewrap: network.ingress.hostLoopback='allow' is not supported. The sandbox's \
+      loopback belongs to its own network namespace and is not the host's, so the host \
+      cannot dial a sandbox listener and nothing bridges the two. Use \
+      network.ingress.hostLoopback='deny'.";
+ 
+ /// Rejection text for a proxy combined with direct egress.
+ #[cfg(any(target_os = "linux", test))]
+-pub(crate) const BWRAP_PROXY_DIRECTIONAL_EGRESS: &str =
+-    "Bubblewrap: runtimeConfig.networkProxy cannot be combined with direct network.egress rules \
++pub(crate) const BWRAP_PROXY_DIRECTIONAL_EGRESS: &str = "Bubblewrap: runtimeConfig.networkProxy cannot be combined with direct network.egress rules \
+      or default='allow'. \
+      A proxy resolves to proxy-only egress, whose chain opens the proxy endpoint alone and \
+      never reads network.egress, so the rules would be dropped in silence. Use \
+@@ -379,8 +375,8 @@
+ ///   plus slirp-backed connectivity,
+ /// - strips any caller-supplied `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` /
+ ///   `FTP_PROXY` / `NO_PROXY` entries from `request.env`,
+-/// - emits `--setenv` for the proxy keys (all but `NO_PROXY`) pointing at the
+-///   proxy URL.
++/// - emits `--setenv` for the proxy keys pointing at the proxy URL and clears
++///   both `NO_PROXY` and `no_proxy` explicitly.
+ ///
+ /// `denied_files` is the set of `deniedPaths` entries the runner classified as
+ /// files (built by `symlink_metadata`-probing each denied path, so this function
+@@ -392,7 +388,13 @@
      denied_files: &HashSet<String>,
  ) -> Vec<String> {
      let network_mode = ResolvedNetworkMode::from_request(request, proxy_address.is_some());
 -    build_args_classified_with_mode(request, proxy_address, denied_files, network_mode)
-+    build_args_classified_with_mode(request, proxy_address, denied_files, network_mode, crate::mxc_common::sandbox_process::StdioMode::Pipes)
++    build_args_classified_with_mode(
++        request,
++        proxy_address,
++        denied_files,
++        network_mode,
++        crate::mxc_common::sandbox_process::StdioMode::Pipes,
++    )
  }
  
  /// Build Bubblewrap arguments using a previously resolved network mode.
-@@ -639,6 +638,7 @@
+@@ -401,6 +403,7 @@
      proxy_address: Option<&ProxyAddress>,
      denied_files: &HashSet<String>,
      network_mode: ResolvedNetworkMode,
@@ -173,7 +218,7 @@ diff --git a/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_command.rs b/src/m
  ) -> Vec<String> {
      // -- Namespace isolation (all unshared by default) ---------------------
      let mut args = Vec::new();
-@@ -713,7 +713,11 @@
+@@ -472,7 +475,11 @@
              // Read-only: already covered by the base ro-bind, but listed
              // explicitly so the intent is clear and it overrides any rw parent.
              FsIntent::ReadOnly => {
@@ -186,7 +231,7 @@ diff --git a/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_command.rs b/src/m
              }
              FsIntent::Denied => {
                  if denied_files.contains(&mount.path) {
-@@ -725,40 +729,51 @@
+@@ -484,37 +491,53 @@
          }
      }
  
@@ -240,7 +285,9 @@ diff --git a/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_command.rs b/src/m
 -            }
 +    let resolved = resolved_env(request);
 +    let env = match proxy_address {
-+        Some(address) => crate::mxc_common::proxy_env::apply_cooperative_proxy_env(&resolved, &address.to_url()),
++        Some(address) => {
++            crate::mxc_common::proxy_env::apply_cooperative_proxy_env(&resolved, &address.to_url())
++        }
 +        None => resolved,
 +    };
 +    for entry in env {
@@ -250,11 +297,8 @@ diff --git a/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_command.rs b/src/m
 -    }
 -
 -    // -- Network proxy env vars -------------------------------------------
--    // Cooperative env-var proxying: well-behaved tools (curl, requests,
--    // etc.) honor these and route through the proxy where allow / block
--    // enforcement happens. Tools that bypass these variables (raw sockets)
--    // are NOT enforced -- this is a documented limitation of the
--    // unprivileged proxy model.
+-    // Cooperating tools route through the externally managed proxy; raw
+-    // sockets cannot bypass the namespace-local default-DROP chain.
 -    //
 -    // We deliberately do NOT set NO_PROXY here. Exempting any destination
 -    // would let cooperating clients bypass the configured proxy policy.
@@ -265,10 +309,104 @@ diff --git a/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_command.rs b/src/m
          }
      }
  
+@@ -1110,11 +1133,10 @@
+         assert_eq!(args[rw_pos + 1], "/workspace");
+         assert_eq!(args[rw_pos + 2], "/workspace");
+ 
+-        // ro — baseline paths are emitted via --ro-bind-try, so a bare
+-        // --ro-bind must correspond to the user's readonlyPaths entry.
++        // Match the exact policy path because baseline mounts use the same flag.
+         args.windows(3)
+-            .position(|w| w[0] == "--ro-bind" && w[1] == "/data" && w[2] == "/data")
+-            .expect("readonly policy path /data should produce a --ro-bind mount");
++            .position(|w| w[0] == "--ro-bind-try" && w[1] == "/data" && w[2] == "/data")
++            .expect("readonly policy path /data should produce a --ro-bind-try mount");
+ 
+         // denied
+         let tmpfs_positions: Vec<_> = args
+@@ -1352,7 +1374,7 @@
+         };
+ 
+         assert_after("--bind", "/tmp/workspace");
+-        assert_after("--ro-bind", "/tmp/data");
++        assert_after("--ro-bind-try", "/tmp/data");
+         assert_after("--tmpfs", "/tmp/secrets");
+     }
+ 
+@@ -1409,11 +1431,14 @@
+         let addr = ProxyAddress::new("127.0.0.1".into(), 7777);
+         let args = build_args(&r, Some(&addr));
+ 
+-        assert!(
+-            !args.iter().any(|a| a == "NO_PROXY" || a == "no_proxy"),
+-            "proxy mode must not emit NO_PROXY/no_proxy --setenv pairs: {:?}",
+-            args,
+-        );
++        for key in ["NO_PROXY", "no_proxy"] {
++            let values = args
++                .windows(3)
++                .filter(|entry| entry[0] == "--setenv" && entry[1] == key)
++                .map(|entry| entry[2].as_str())
++                .collect::<Vec<_>>();
++            assert_eq!(values, vec![""], "proxy bypass must be cleared for {key}");
++        }
+     }
+ 
+     #[test]
+@@ -1427,6 +1452,7 @@
+             "FTP_PROXY=http://attacker.example:9999".into(),
+             "ftp_proxy=http://attacker.example:9999".into(),
+             "NO_PROXY=*".into(),
++            "no_proxy=localhost,127.0.0.1".into(),
+             "PATH=/usr/bin".into(),
+         ]);
+         let addr = ProxyAddress::new("127.0.0.1".into(), 9000);
+@@ -1456,13 +1482,14 @@
+             assert_eq!(args[pos + 1], "http://127.0.0.1:9000");
+         }
+ 
+-        // Bypass variables remain absent after clearing the caller's
+-        // environment.
++        // Neither a wildcard nor a loopback exception may survive the handoff.
+         for key in ["NO_PROXY", "no_proxy"] {
+-            assert!(
+-                !args.iter().any(|arg| arg == key),
+-                "proxy mode must not emit caller-controlled {key}: {args:?}"
+-            );
++            let values = args
++                .windows(3)
++                .filter(|entry| entry[0] == "--setenv" && entry[1] == key)
++                .map(|entry| entry[2].as_str())
++                .collect::<Vec<_>>();
++            assert_eq!(values, vec![""], "proxy bypass must be cleared for {key}");
+         }
+     }
+ 
 diff --git a/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_runner.rs b/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_runner.rs
 --- a/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_runner.rs
 +++ b/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_runner.rs
-@@ -180,7 +180,10 @@
+@@ -22,16 +22,16 @@
+ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+ use std::time::{Duration, Instant};
+ 
+-use crate::mxc_common::interruptible_reader::{wrap_pipe, InterruptibleReader, ReadCanceller};
++use crate::mxc_common::interruptible_reader::{InterruptibleReader, ReadCanceller, wrap_pipe};
+ use crate::mxc_common::logger::Logger;
+ use crate::mxc_common::models::{ExecutionRequest, ScriptResponse};
+ use crate::mxc_common::sandbox_process::{
++    NativeStdio, PtySize, SandboxBackend, SandboxProcess, StdioMode, StreamCloser, WaitError,
+     boxed_closer, cancel_and_join_discard, duplicate_and_take_native_stdio, group_kill,
+-    spawn_discard, take_boxed_read, take_boxed_write, wait_with_timeout, NativeStdio, PtySize,
+-    SandboxBackend, SandboxProcess, StdioMode, StreamCloser, WaitError,
++    spawn_discard, take_boxed_read, take_boxed_write, wait_with_timeout,
+ };
+ use crate::mxc_common::validator::{
+-    validate_common, validate_network_policy_support, NetworkPolicySupport,
++    NetworkPolicySupport, validate_common, validate_network_policy_support,
+ };
+ use crate::mxc_pty::{LivePty, PtySize as UnixPtySize};
+ 
+@@ -164,7 +164,10 @@
          // Execution validation deliberately bypasses the advisory success
          // cache: a prior platform-support query must not approve a different
          // executable after `PATH` or its contents change.
@@ -280,17 +418,19 @@ diff --git a/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_runner.rs b/src/mx
      }
  
      /// `validate_prepared` with an injectable environment probe.
-@@ -420,6 +423,9 @@
+@@ -404,6 +407,11 @@
          logger: &mut Logger,
          stdio: StdioMode,
      ) -> Result<BwrapChild, ScriptResponse> {
 +        let socket_filter = crate::bwrap_common::seccomp::SocketFilter::new().map_err(|error| {
-+            ScriptResponse::error(&format!("Bubblewrap: failed to create socket filter: {error}"))
++            ScriptResponse::error(&format!(
++                "Bubblewrap: failed to create socket filter: {error}"
++            ))
 +        })?;
-         // 1. Start the network proxy if configured. Must happen before
-         //    arg-building so the proxy's loopback address can be injected as
-         //    HTTP_PROXY / HTTPS_PROXY into the sandbox environment.
-@@ -533,6 +539,7 @@
+         // The caller manages the proxy; pass its address into the sandbox
+         // environment and restrict direct egress to that endpoint.
+         let configured_proxy = request.policy.network_proxy.address.as_ref();
+@@ -484,6 +492,7 @@
              proxy_address,
              denied_files,
              network_mode,
@@ -298,11 +438,13 @@ diff --git a/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_runner.rs b/src/mx
          );
          let mut network_startup = match proxy_network.as_ref() {
              Some(network) => match network.configure_bwrap(&mut args, logger) {
-@@ -589,7 +596,13 @@
-         };
+@@ -501,8 +510,14 @@
+             args.len()
+         );
  
-         // 4. Spawn `bwrap`.
+-        // 3. Spawn `bwrap`.
 -        let mut command = Command::new("bwrap");
++        // 3. Spawn `bwrap` with the host-selected executable and inherited filter.
 +        let mut command = Command::new(
 +            request
 +                .bubblewrap_executable
@@ -313,9 +455,9 @@ diff --git a/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_runner.rs b/src/mx
          command.args(&args);
          let pty = match stdio {
              StdioMode::Pipes => {
-@@ -752,8 +765,8 @@
+@@ -648,8 +663,8 @@
  /// A spawned `bwrap` sandbox: the child process, its parent-side pipe ends,
- /// and the per-run network proxy / iptables state torn down once it exits.
+ /// and the per-run private network state torn down once it exits.
  struct BwrapChild {
 -    /// The lock is what keeps [`ProviderMonitor`]'s thread from signalling a
 -    /// pid this side has already reaped.
@@ -324,7 +466,7 @@ diff --git a/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_runner.rs b/src/mx
      child: Arc<Mutex<Child>>,
      stdin: Option<ChildStdin>,
      stdout: Option<InterruptibleReader>,
-@@ -801,6 +814,7 @@
+@@ -692,6 +707,7 @@
  /// [`BwrapChild`] (child, pipes, and per-run network state), tearing the network
  /// state down once the child exits.
  struct BubblewrapSandboxProcess {
@@ -332,7 +474,7 @@ diff --git a/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_runner.rs b/src/mx
      inner: BwrapChild,
      teardown_done: bool,
  }
-@@ -809,6 +823,7 @@
+@@ -700,6 +716,7 @@
      fn new(child: BwrapChild) -> Self {
          Self {
              inner: child,
@@ -340,7 +482,7 @@ diff --git a/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_runner.rs b/src/mx
              teardown_done: false,
          }
      }
-@@ -834,6 +849,13 @@
+@@ -725,6 +742,13 @@
      fn await_outcome(&mut self) -> BwrapOutcome {
          const MIN_POLL: Duration = Duration::from_millis(1);
          const MAX_POLL: Duration = Duration::from_millis(50);
@@ -354,7 +496,7 @@ diff --git a/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_runner.rs b/src/mx
  
          let deadline = self
              .inner
-@@ -841,18 +863,35 @@
+@@ -732,18 +756,36 @@
              .map(|timeout| self.inner.started + timeout);
          let mut interval = MIN_POLL;
          loop {
@@ -363,7 +505,8 @@ diff --git a/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_runner.rs b/src/mx
 -                Err(error) => return BwrapOutcome::Io(error),
 -            };
 +            let exited =
-+                match crate::mxc_common::sandbox_process::poll_child_exit(&self.inner.lock_child()) {
++                match crate::mxc_common::sandbox_process::poll_child_exit(&self.inner.lock_child())
++                {
 +                    Ok(exited) => exited,
 +                    Err(error) => return BwrapOutcome::Io(error),
 +                };
@@ -396,25 +539,32 @@ diff --git a/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_runner.rs b/src/mx
              }
  
              let now = Instant::now();
-@@ -945,6 +984,10 @@
+@@ -836,6 +878,14 @@
              .as_ref()
              .ok_or_else(|| std::io::Error::other("Bubblewrap process has no PTY"))?
              .take_writer()
 +    }
 +
 +    fn pty_interrupt(&self) -> std::io::Result<()> {
-+        self.inner.pty.as_ref().ok_or_else(|| std::io::Error::other("process has no PTY"))?.interrupt()
++        self.inner
++            .pty
++            .as_ref()
++            .ok_or_else(|| std::io::Error::other("process has no PTY"))?
++            .interrupt()
      }
  
      fn pty_resize(&self, size: PtySize) -> std::io::Result<()> {
-@@ -1001,8 +1044,13 @@
+@@ -892,8 +942,16 @@
                  "Bubblewrap: script timed out",
              ));
          }
 -        if let Some(status) = self.inner.lock_child().try_wait()? {
 -            return Ok(Some(status.code().unwrap_or(-1)));
 +        let status = if self.reaped {
-+            self.inner.lock_child().try_wait()?.map(|status| status.code().unwrap_or(-1))
++            self.inner
++                .lock_child()
++                .try_wait()?
++                .map(|status| status.code().unwrap_or(-1))
 +        } else {
 +            crate::mxc_common::sandbox_process::poll_child_exit(&self.inner.lock_child())?
 +        };
@@ -423,7 +573,7 @@ diff --git a/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_runner.rs b/src/mx
          }
          if self
              .inner
-@@ -1034,10 +1082,10 @@
+@@ -925,10 +983,10 @@
          // No-op once the child has exited and been reaped: its pid/pgid can be
          // recycled, so signaling it could hit an unrelated process (group). A
          // reaped `Child` returns its cached status here without a syscall.
@@ -437,7 +587,7 @@ diff --git a/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_runner.rs b/src/mx
          if self.inner.group {
              // Pipes and PTY modes give bwrap its own process group.
              group_kill(&mut child)
-@@ -1148,6 +1196,7 @@
+@@ -1039,6 +1097,7 @@
              }
          };
  
@@ -445,7 +595,7 @@ diff --git a/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_runner.rs b/src/mx
          cancel_and_join_discard(stdout_thread, &self.inner.stdout_canceller);
          cancel_and_join_discard(stderr_thread, &self.inner.stderr_canceller);
          if let Some(pty) = self.inner.pty.as_ref() {
-@@ -1174,6 +1223,10 @@
+@@ -1065,6 +1124,10 @@
          self.run_teardown();
      }
  }
@@ -454,13 +604,22 @@ diff --git a/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_runner.rs b/src/mx
 +#[path = "bwrap_runner_tests.rs"]
 +mod lifecycle_tests;
  
- /// Build the iptables manager for a Bubblewrap sandbox.
+ /// Tear down the proxy network namespace against the caller's logger.
  ///
+@@ -1424,7 +1487,7 @@
+         };
+ 
+         use crate::bwrap_common::network_rules::{
+-            render_filter_payloads, EgressPlan, IngressPlan, RuleFamily,
++            EgressPlan, IngressPlan, RuleFamily, render_filter_payloads,
+         };
+ 
+         // A directional posture makes the gates that key off it fire. Both
 diff --git a/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_runner_tests.rs b/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_runner_tests.rs
 new file mode 100644
 --- /dev/null
 +++ b/src/mxc-sdk/src/backends/bubblewrap/common/bwrap_runner_tests.rs
-@@ -0,0 +1,46 @@
+@@ -0,0 +1,44 @@
 +// Copyright (c) Microsoft Corporation.
 +// Licensed under the MIT License.
 +
@@ -481,9 +640,7 @@ new file mode 100644
 +        stdout_canceller: None,
 +        stderr_canceller: None,
 +        group: true,
-+        proxy: UnixProxyCoordinator::new(),
 +        proxy_network: None,
-+        fw_manager: None,
 +        monitor: None,
 +        pty: None,
 +        started: Instant::now(),
@@ -948,7 +1105,7 @@ rename from src/mxc-sdk/src/backends/nanvix/runner/mod.rs
 rename to src/mxc-sdk/src/backends/nanvix/runner.rs
 --- a/src/mxc-sdk/src/backends/nanvix/runner/mod.rs
 +++ b/src/mxc-sdk/src/backends/nanvix/runner.rs
-@@ -1247,8 +1247,8 @@
+@@ -1057,8 +1057,8 @@
      #[test]
      fn public_directional_fixtures_enable_host_networking() {
          for source in [
@@ -962,34 +1119,98 @@ rename to src/mxc-sdk/src/backends/nanvix/runner.rs
 diff --git a/src/mxc-sdk/src/backends/process_container/common/base_container_runner.rs b/src/mxc-sdk/src/backends/process_container/common/base_container_runner.rs
 --- a/src/mxc-sdk/src/backends/process_container/common/base_container_runner.rs
 +++ b/src/mxc-sdk/src/backends/process_container/common/base_container_runner.rs
-@@ -15,6 +15,9 @@
+@@ -15,24 +15,25 @@
  
  use crate::learning_mode_core::DenialAnalyzer;
- use crate::learning_mode_windows::{EtlDenialAnalyzer, LEARNING_MODE_API_SET};
-+
-+use crate::learning_mode_windows::LearningModeError;
+ use crate::learning_mode_windows::{EtlDenialAnalyzer, LearningModeApi, LearningModeError};
++use crate::mxc_common::mxc_error::{ApiFailure, MxcError};
 +use windows::Win32::Foundation::ERROR_NOT_SUPPORTED;
  use windows::Win32::Foundation::{
-     CloseHandle, GetLastError, SetHandleInformation, ERROR_CALL_NOT_IMPLEMENTED, E_NOTIMPL, HANDLE,
-     HANDLE_FLAG_INHERIT, WAIT_OBJECT_0, WAIT_TIMEOUT,
-@@ -28,6 +31,7 @@
-     STARTF_USESTDHANDLES, STARTUPINFOW,
+-    CloseHandle, GetLastError, SetHandleInformation, ERROR_CALL_NOT_IMPLEMENTED, E_NOTIMPL, HANDLE,
+-    HANDLE_FLAG_INHERIT, WAIT_OBJECT_0, WAIT_TIMEOUT,
++    CloseHandle, E_NOTIMPL, ERROR_CALL_NOT_IMPLEMENTED, GetLastError, HANDLE, HANDLE_FLAG_INHERIT,
++    SetHandleInformation, WAIT_OBJECT_0, WAIT_TIMEOUT,
+ };
+ use windows::Win32::System::Console::{
+     GetStdHandle, STD_ERROR_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE,
+ };
+ use windows::Win32::System::Threading::{
+-    CreateProcessW, GetExitCodeProcess, TerminateProcess, WaitForSingleObject,
+-    EXTENDED_STARTUPINFO_PRESENT, PROCESS_CREATION_FLAGS, PROCESS_INFORMATION,
+-    STARTF_USESTDHANDLES, STARTUPINFOW,
++    CreateProcessW, EXTENDED_STARTUPINFO_PRESENT, GetExitCodeProcess, PROCESS_CREATION_FLAGS,
++    PROCESS_INFORMATION, STARTF_USESTDHANDLES, STARTUPINFOW, TerminateProcess, WaitForSingleObject,
  };
  use windows_core::{PCWSTR, PWSTR};
-+use crate::mxc_common::mxc_error::{ApiFailure, MxcError};
  
  use crate::mxc_common::api_set::is_api_set_implemented;
  use crate::mxc_common::audit::{
-@@ -69,7 +73,7 @@
+-    sanitize_identity, AuditEvent, AuditEventName, KillMethod, OperationStatus, TeardownSkipReason,
+-    TeardownStatus,
++    AuditEvent, AuditEventName, KillMethod, OperationStatus, TeardownSkipReason, TeardownStatus,
++    sanitize_identity,
+ };
+ use crate::mxc_common::error::WxcError;
+ use crate::mxc_common::log_symbols::EMOJI_SECTION;
+@@ -42,17 +43,17 @@
+     FailurePhase, SandboxOutputMetadata, ScriptResponse,
+ };
+ use crate::mxc_common::process_util::{
+-    create_std_pipes, InterruptiblePipeReader, OwnedHandle, PipeReadCanceller, PipeWriter,
+-    SendOwnedHandle,
++    InterruptiblePipeReader, OwnedHandle, PipeReadCanceller, PipeWriter, SendOwnedHandle,
++    create_std_pipes,
+ };
+ use crate::mxc_common::sandbox_process::{
+-    boxed_closer, cancel_and_join_discard, duplicate_and_take_native_stdio, spawn_discard,
+-    take_boxed_read, take_boxed_write, NativeStdio, SandboxBackend, SandboxProcess, StdioMode,
+-    StreamCloser,
++    NativeStdio, SandboxBackend, SandboxProcess, StdioMode, StreamCloser, boxed_closer,
++    cancel_and_join_discard, duplicate_and_take_native_stdio, spawn_discard, take_boxed_read,
++    take_boxed_write,
+ };
+ use crate::mxc_common::script_runner::get_timeout_milliseconds;
+ use crate::mxc_common::string_util;
+-use crate::mxc_common::validator::{validate_network_policy_support, NetworkPolicySupport};
++use crate::mxc_common::validator::{NetworkPolicySupport, validate_network_policy_support};
+ use crate::process_container_common::base_container_helpers::{
+     build_psec_v1_security_environment_spec, has_conflicting_proxy_identity,
+     unrestricted_host_loopback_allowed,
+@@ -70,13 +71,13 @@
  use crate::process_container_common::native_capture::CaptureSession;
  use crate::process_container_common::proxy_coordinator::ProxyCoordinator;
  use crate::process_container_common::secenv::{
 -    self, ProcessSecurityEnvironment, SecurityEnvironmentStartupInfo, SecurityEnvironmentSupport,
-+    self, ProcessSecurityEnvironment, SecurityEnvironmentApi, SecurityEnvironmentStartupInfo, SecurityEnvironmentSupport,
-     SecurityEnvironmentVersion, PROCESS_SECURITY_ENVIRONMENT_FLAG_NONE,
-     SECURITY_ENVIRONMENT_API_SET,
+-    SecurityEnvironmentVersion, PROCESS_SECURITY_ENVIRONMENT_FLAG_NONE,
+-    SECURITY_ENVIRONMENT_API_SET,
++    self, PROCESS_SECURITY_ENVIRONMENT_FLAG_NONE, ProcessSecurityEnvironment,
++    SECURITY_ENVIRONMENT_API_SET, SecurityEnvironmentApi, SecurityEnvironmentStartupInfo,
++    SecurityEnvironmentSupport, SecurityEnvironmentVersion,
  };
-@@ -163,6 +167,58 @@
+ 
+ use windows::Win32::System::Threading::{
+-    ResumeThread, CREATE_NO_WINDOW, CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT,
++    CREATE_NO_WINDOW, CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT, ResumeThread,
+ };
+ 
+ /// Build the environment block handed to the contained child.
+@@ -133,13 +134,11 @@
+ 
+ const CAPTURE_API_AVAILABLE_LOG: &str =
+     "captureDenials: learning-mode trace API available (processmodel.dll)";
+-const PSEC_ENUMERATE_PATHS_UNSUPPORTED_MSG: &str =
+-    "processContainer.filesystem.enumeratePaths requires Process Security Environment contract version 1.1 \
++const PSEC_ENUMERATE_PATHS_UNSUPPORTED_MSG: &str = "processContainer.filesystem.enumeratePaths requires Process Security Environment contract version 1.1 \
+      and QueryProcessSecurityEnvironmentSupport to advertise PSE_SUPPORT_FS_ENUMERATE; this OS \
+      build does not support that policy, and enumeration-only access cannot fall back to \
+      AppContainer enforcement";
+-const PSEC_INGRESS_UNSUPPORTED_MSG: &str =
+-    "network.ingress.hostLoopback='allow' requires Process Security Environment contract version \
++const PSEC_INGRESS_UNSUPPORTED_MSG: &str = "network.ingress.hostLoopback='allow' requires Process Security Environment contract version \
+      1.1 with ingress support";
+ const CREATE_PROCESS_IN_SECURITY_ENVIRONMENT_API: &str =
+     "CreateProcessW(PROC_THREAD_ATTRIBUTE_SECURITY_ENVIRONMENT)";
+@@ -184,6 +183,58 @@
      err == ERROR_CALL_NOT_IMPLEMENTED.0 || err == E_NOTIMPL.0 as u32
  }
  
@@ -1048,7 +1269,7 @@ diff --git a/src/mxc-sdk/src/backends/process_container/common/base_container_ru
  trait CaptureSessionOps {
      fn environment(&self) -> HANDLE;
      fn finish(
-@@ -243,6 +299,84 @@
+@@ -264,6 +315,90 @@
  }
  
  impl BaseContainerRunner {
@@ -1070,7 +1291,13 @@ diff --git a/src/mxc-sdk/src/backends/process_container/common/base_container_ru
 +        }
 +
 +        let api = SecurityEnvironmentApi::load().map_err(psec_probe_error)?;
-+        let version = Self::choose_min_required_psec_version_for_request(request);
++        let proxy_loopback_workaround =
++            Self::psec_1_0_proxy_loopback_workaround(request, |version| {
++                api.supports_version(u32::from(version.major), u32::from(version.minor))
++            })
++            .map_err(psec_probe_error)?;
++        let version =
++            Self::choose_min_required_psec_version_for_request(request, proxy_loopback_workaround);
 +        if !api
 +            .supports_version(u32::from(version.major), u32::from(version.minor))
 +            .map_err(psec_probe_error)?
@@ -1091,7 +1318,7 @@ diff --git a/src/mxc-sdk/src/backends/process_container/common/base_container_ru
 +                PSEC_ENUMERATE_PATHS_UNSUPPORTED_MSG,
 +            ),
 +            (
-+                unrestricted_host_loopback_allowed(&request.policy),
++                unrestricted_host_loopback_allowed(&request.policy) && !proxy_loopback_workaround,
 +                SecurityEnvironmentSupport::NetworkIngress,
 +                PSEC_INGRESS_UNSUPPORTED_MSG,
 +            ),
@@ -1133,7 +1360,165 @@ diff --git a/src/mxc-sdk/src/backends/process_container/common/base_container_ru
      pub fn new() -> Self {
          Self::default()
      }
-@@ -3316,3 +3450,7 @@
+@@ -670,19 +805,19 @@
+                 h_stdin = match unsafe { GetStdHandle(STD_INPUT_HANDLE) } {
+                     Ok(h) => h,
+                     Err(e) => {
+-                        return Err(ScriptResponse::error(&format!("GetStdHandle(STDIN): {e}")))
++                        return Err(ScriptResponse::error(&format!("GetStdHandle(STDIN): {e}")));
+                     }
+                 };
+                 h_stdout = match unsafe { GetStdHandle(STD_OUTPUT_HANDLE) } {
+                     Ok(h) => h,
+                     Err(e) => {
+-                        return Err(ScriptResponse::error(&format!("GetStdHandle(STDOUT): {e}")))
++                        return Err(ScriptResponse::error(&format!("GetStdHandle(STDOUT): {e}")));
+                     }
+                 };
+                 h_stderr = match unsafe { GetStdHandle(STD_ERROR_HANDLE) } {
+                     Ok(h) => h,
+                     Err(e) => {
+-                        return Err(ScriptResponse::error(&format!("GetStdHandle(STDERR): {e}")))
++                        return Err(ScriptResponse::error(&format!("GetStdHandle(STDERR): {e}")));
+                     }
+                 };
+ 
+@@ -874,50 +1009,48 @@
+                     .map(ProcessSecurityEnvironment::raw)
+             })
+             .expect("PSEC environment owner is initialized before launch");
+-        let extended_startup =
+-            match SecurityEnvironmentStartupInfo::new(si, environment_handle, &inherited_handles) {
+-                Ok(startup) => startup,
+-                Err(primary) => {
+-                    let cleanup_error = capture_session
+-                        .take()
+-                        .map(|session| session.finish(None))
+-                        .unwrap_or(Ok(()))
+-                        .err();
+-                    let mut msg =
+-                        format!("failed to attach the process security environment: {primary}");
+-                    if let Some(cleanup_error) = &cleanup_error {
+-                        let _ = write!(
++        let extended_startup = match SecurityEnvironmentStartupInfo::new(
++            si,
++            environment_handle,
++            &inherited_handles,
++        ) {
++            Ok(startup) => startup,
++            Err(primary) => {
++                let cleanup_error = capture_session
++                    .take()
++                    .map(|session| session.finish(None))
++                    .unwrap_or(Ok(()))
++                    .err();
++                let mut msg =
++                    format!("failed to attach the process security environment: {primary}");
++                if let Some(cleanup_error) = &cleanup_error {
++                    let _ = write!(
+                         msg,
+                         "; additionally failed to discard the learning-mode trace: {cleanup_error}"
+                     );
+-                    }
+-                    let _ = writeln!(logger, "Error: {msg}");
+-                    log_base_network_policy_audit(
+-                        request,
+-                        &identity,
+-                        OperationStatus::Failure,
+-                        logger,
+-                    );
+-                    let failure_phase = if primary.is_api_unavailable()
+-                        || cleanup_error.as_ref().is_some_and(
+-                            crate::learning_mode_windows::LearningModeError::is_api_unavailable,
+-                        ) {
+-                        FailurePhase::BackendUnavailable
+-                    } else {
+-                        FailurePhase::LaunchFailed
+-                    };
+-                    if capture_denials.is_some() {
+-                        self.cleanup_capture_begin_failure(logger);
+-                    }
+-                    return Err(ScriptResponse {
+-                        exit_code: -1,
+-                        error_message: msg.clone(),
+-                        standard_err: msg,
+-                        failure_phase,
+-                        ..Default::default()
+-                    });
+                 }
+-            };
++                let _ = writeln!(logger, "Error: {msg}");
++                log_base_network_policy_audit(request, &identity, OperationStatus::Failure, logger);
++                let failure_phase = if primary.is_api_unavailable()
++                    || cleanup_error.as_ref().is_some_and(
++                        crate::learning_mode_windows::LearningModeError::is_api_unavailable,
++                    ) {
++                    FailurePhase::BackendUnavailable
++                } else {
++                    FailurePhase::LaunchFailed
++                };
++                if capture_denials.is_some() {
++                    self.cleanup_capture_begin_failure(logger);
++                }
++                return Err(ScriptResponse {
++                    exit_code: -1,
++                    error_message: msg.clone(),
++                    standard_err: msg,
++                    failure_phase,
++                    ..Default::default()
++                });
++            }
++        };
+         let environment = (!current_env_ptr.is_null()).then_some(current_env_ptr);
+         let result = unsafe {
+             CreateProcessW(
+@@ -1069,8 +1202,7 @@
+                 }
+                 self.proxy_coordinator.stop(logger);
+ 
+-                const JOB_SETUP_FAILED_MSG: &str =
+-                    "BaseContainer sandbox could not be placed in a job object, so it \
++                const JOB_SETUP_FAILED_MSG: &str = "BaseContainer sandbox could not be placed in a job object, so it \
+                      could not be reliably terminated; the launch was rejected to \
+                      avoid running an uncontainable sandbox.";
+                 let mut extended_error = format!("BaseContainer job-object setup failed: {e}");
+@@ -3144,11 +3276,12 @@
+                 }
+                 _ => unreachable!(),
+             }
+-            assert!(!BaseContainerRunner::psec_1_0_proxy_loopback_workaround(
+-                &request,
+-                |_| panic!("ineligible policy must not query the OS"),
+-            )
+-            .unwrap());
++            assert!(
++                !BaseContainerRunner::psec_1_0_proxy_loopback_workaround(&request, |_| panic!(
++                    "ineligible policy must not query the OS"
++                ),)
++                .unwrap()
++            );
+         }
+     }
+ 
+@@ -3184,11 +3317,12 @@
+         let spec = psec_layout::root_as_process_security_environment(&bytes).unwrap();
+         let network = spec.network_policy().unwrap();
+         assert_eq!(spec.version().minor(), 0);
+-        assert!(spec
+-            .capabilities()
+-            .unwrap()
+-            .split(',')
+-            .any(|capability| capability == "networkLoopback"));
++        assert!(
++            spec.capabilities()
++                .unwrap()
++                .split(',')
++                .any(|capability| capability == "networkLoopback")
++        );
+         assert_eq!(
+             network.allowed_appcontainer_peer(),
+             Some(crate::process_container_common::base_container_helpers::LOOPBACK_NETWORK_PEER)
+@@ -3616,3 +3750,7 @@
      // BaseContainer native-PSEC exception) is exercised as a consolidated
      // matrix in `crate::guarded_capture`'s tests, so it is not duplicated here.
  }
@@ -1260,7 +1645,7 @@ diff --git a/src/mxc-sdk/src/backends/seatbelt/common/profile_builder.rs b/src/m
  
      Ok(out)
  }
-@@ -284,7 +308,7 @@
+@@ -288,7 +312,7 @@
          let readonly = resolve_all(&policy.readonly_paths)?;
          let mut readwrite = resolve_all(&policy.readwrite_paths)?;
  
@@ -1269,7 +1654,7 @@ diff --git a/src/mxc-sdk/src/backends/seatbelt/common/profile_builder.rs b/src/m
          // dropping the path keeps the emitted profile an honest description of
          // the effective policy.
          let mut readonly: Vec<String> = readonly;
-@@ -314,8 +338,8 @@
+@@ -318,8 +342,8 @@
      // makes the *deepest* intent win at every path — a `readonlyPaths` entry
      // nested inside a broader `readwritePaths` subtree stays read-only rather
      // than inheriting the parent's write grant. `deniedPaths` is deliberately
@@ -1280,9 +1665,9 @@ diff --git a/src/mxc-sdk/src/backends/seatbelt/common/profile_builder.rs b/src/m
      out.push_str(";; --- policy.readonlyPaths / policy.readwritePaths (shallow-to-deep) ---\n");
      for mount in resolve_path_plan(&paths.readwrite, &paths.readonly, &[]) {
          let subpath = [mount.path.clone()];
-@@ -366,11 +390,64 @@
-         // whatever listens there. A Docker / ssh-agent / gpg-agent socket is a
-         // control plane, so that would be an escape.
+@@ -375,11 +399,64 @@
+         // that only reaches it through the wildcard. Without it a denied path
+         // still answers `stat()` with its real size and timestamps.
          out.push_str(";; --- policy.deniedPaths (override broader allow rules) ---\n");
 -        write_path_rule(
 +        for hidden in &paths.denied {
@@ -1295,13 +1680,13 @@ diff --git a/src/mxc-sdk/src/backends/seatbelt/common/profile_builder.rs b/src/m
 +            if exceptions.is_empty() {
 +                write_path_rule(
 +                    out,
-+                    "deny file-read* file-write* network-bind network-outbound",
++                    "deny file-read* file-read-metadata file-write* network-bind network-outbound",
 +                    &[hidden.clone()],
 +                );
 +            } else {
 +                let _ = write!(
 +                    out,
-+                    "(deny file-read* file-write* network-bind network-outbound (require-all (subpath {})",
++                    "(deny file-read* file-read-metadata file-write* network-bind network-outbound (require-all (subpath {})",
 +                    quote_scheme(hidden)
 +                );
 +                for path in exceptions {
@@ -1331,7 +1716,7 @@ diff --git a/src/mxc-sdk/src/backends/seatbelt/common/profile_builder.rs b/src/m
 +    for path in anchors {
 +        let _ = writeln!(
              out,
--            "deny file-read* file-write* network-bind network-outbound",
+-            "deny file-read* file-read-metadata file-write* network-bind network-outbound",
 -            &paths.denied,
 +            "(deny file-write-unlink (require-all (vnode-type DIRECTORY) (literal {})))",
 +            quote_scheme(&path)
@@ -1348,7 +1733,7 @@ diff --git a/src/mxc-sdk/src/backends/seatbelt/common/profile_builder.rs b/src/m
      }
  }
  
-@@ -1476,6 +1553,24 @@
+@@ -1423,6 +1500,24 @@
      }
  
      #[test]
@@ -1371,9 +1756,9 @@ diff --git a/src/mxc-sdk/src/backends/seatbelt/common/profile_builder.rs b/src/m
 +
 +    #[test]
      fn denied_paths_deny_outbound_under_default_allow() {
-         // `defaultPolicy: allow` emits a bare `(allow network-outbound)`, which
+         // `egress.default: allow` emits a bare `(allow network-outbound)`, which
          // on its own grants AF_UNIX `connect()`. A denied subtree must still
-@@ -2097,7 +2192,7 @@
+@@ -2061,7 +2156,7 @@
      #[cfg(unix)]
      #[test]
      fn a_link_the_caller_controls_is_not_trusted() {
@@ -1382,7 +1767,7 @@ diff --git a/src/mxc-sdk/src/backends/seatbelt/common/profile_builder.rs b/src/m
  
          let dir = std::env::temp_dir().join(format!("mxc-devdir-trust-{}", std::process::id()));
          let _ = fs::remove_dir_all(&dir);
-@@ -2146,3 +2241,7 @@
+@@ -2110,3 +2205,7 @@
          assert!(p.contains(&format!("(subpath \"{}\")", granted.display())));
      }
  }
@@ -1438,16 +1823,35 @@ new file mode 100644
 diff --git a/src/mxc-sdk/src/backends/seatbelt/common/seatbelt_runner.rs b/src/mxc-sdk/src/backends/seatbelt/common/seatbelt_runner.rs
 --- a/src/mxc-sdk/src/backends/seatbelt/common/seatbelt_runner.rs
 +++ b/src/mxc-sdk/src/backends/seatbelt/common/seatbelt_runner.rs
-@@ -43,7 +43,7 @@
+@@ -29,22 +29,22 @@
+ use std::process::{Command, Stdio};
+ use std::time::{Duration, Instant};
+ 
+-use crate::mxc_common::interruptible_reader::{wrap_pipe, InterruptibleReader, ReadCanceller};
++use crate::mxc_common::interruptible_reader::{InterruptibleReader, ReadCanceller, wrap_pipe};
+ use crate::mxc_common::logger::Logger;
+ use crate::mxc_common::models::{ExecutionRequest, LaunchMethod, ProxyAddress, ScriptResponse};
+ use crate::mxc_common::sandbox_process::{
++    NativeStdio, PtySize, SandboxBackend, SandboxProcess, StdioMode, StreamCloser, WaitError,
+     boxed_closer, cancel_and_join_discard, duplicate_and_take_native_stdio, group_kill,
+-    spawn_discard, take_boxed_read, take_boxed_write, wait_with_timeout, NativeStdio, PtySize,
+-    SandboxBackend, SandboxProcess, StdioMode, StreamCloser, WaitError,
++    spawn_discard, take_boxed_read, take_boxed_write, wait_with_timeout,
+ };
+ use crate::mxc_common::validator::{
+-    validate_common, validate_network_policy_support, NetworkPolicySupport,
++    NetworkPolicySupport, validate_common, validate_network_policy_support,
  };
  use crate::mxc_pty::{LivePty, PtySize as UnixPtySize};
  
--use crate::seatbelt_common::default_env::{env_pairs, resolved_env, DEFAULT_SANDBOX_PATH};
-+use crate::seatbelt_common::default_env::{resolved_env, DEFAULT_SANDBOX_PATH};
+ #[cfg(test)]
+ use crate::seatbelt_common::default_env::DEFAULT_SANDBOX_PATH;
+-use crate::seatbelt_common::default_env::{env_pairs, resolved_env};
++use crate::seatbelt_common::default_env::resolved_env;
  use crate::seatbelt_common::profile_builder::build_profile_with_proxy;
  
  #[link(name = "proc")]
-@@ -77,26 +77,8 @@
+@@ -78,26 +78,8 @@
  
  const PROC_PID_UNIQUE_IDENTIFIER_INFO: libc::c_int = 17;
  
@@ -1475,7 +1879,7 @@ diff --git a/src/mxc-sdk/src/backends/seatbelt/common/seatbelt_runner.rs b/src/m
          Some(_) => Ok(()),
          None => child.kill(),
      };
-@@ -207,18 +189,6 @@
+@@ -208,18 +190,6 @@
      Ok(pids)
  }
  
@@ -1494,7 +1898,16 @@ diff --git a/src/mxc-sdk/src/backends/seatbelt/common/seatbelt_runner.rs b/src/m
  // ---------------------------------------------------------------------------
  // FFI declarations for Apple's sandbox API (libsandbox.dylib).
  //
-@@ -469,6 +439,7 @@
+@@ -395,7 +365,7 @@
+         Err(e) => {
+             return Err(error_response(format!(
+                 "failed to read the current directory to anchor the relative seatbelt working directory: {e}"
+-            )))
++            )));
+         }
+     };
+     let home_dir = resolved_cwd.as_ref().map(|_| cwd.as_str());
+@@ -460,6 +430,7 @@
      let session_id =
          (new_session || matches!(stdio, StdioMode::Pty(_))).then_some(child.id() as libc::pid_t);
      Ok(Box::new(SeatbeltSandboxProcess {
@@ -1502,7 +1915,7 @@ diff --git a/src/mxc-sdk/src/backends/seatbelt/common/seatbelt_runner.rs b/src/m
          child,
          stdin,
          stdout,
-@@ -627,6 +598,7 @@
+@@ -617,6 +588,7 @@
      // handle's `wait()` (or drop) runs.
      let started = Instant::now();
      Ok(Box::new(SeatbeltSandboxProcess {
@@ -1510,7 +1923,7 @@ diff --git a/src/mxc-sdk/src/backends/seatbelt/common/seatbelt_runner.rs b/src/m
          child,
          stdin: None,
          stdout: None,
-@@ -648,6 +620,7 @@
+@@ -637,6 +609,7 @@
  /// A running Seatbelt-sandboxed process: the child plus, for the pipes path,
  /// its parent-side pipe ends. See [`SandboxProcess`] for the contract.
  struct SeatbeltSandboxProcess {
@@ -1518,25 +1931,30 @@ diff --git a/src/mxc-sdk/src/backends/seatbelt/common/seatbelt_runner.rs b/src/m
      child: std::process::Child,
      /// Pipe ends — `Some` only for [`StdioMode::Pipes`]; `None` for inherited
      /// stdio / Open mode (the streams are the binary's own, or detached). The
-@@ -760,6 +733,10 @@
+@@ -738,6 +711,13 @@
              .take_writer()
      }
  
 +    fn pty_interrupt(&self) -> std::io::Result<()> {
-+        self.pty.as_ref().ok_or_else(|| std::io::Error::other("process has no PTY"))?.interrupt()
++        self.pty
++            .as_ref()
++            .ok_or_else(|| std::io::Error::other("process has no PTY"))?
++            .interrupt()
 +    }
 +
      fn pty_resize(&self, size: PtySize) -> std::io::Result<()> {
          self.pty
              .as_ref()
-@@ -812,8 +789,13 @@
+@@ -790,8 +770,15 @@
                  "Seatbelt: process timed out",
              ));
          }
 -        if let Some(status) = self.child.try_wait()? {
 -            return Ok(Some(status.code().unwrap_or(-1)));
 +        let status = if self.reaped {
-+            self.child.try_wait()?.map(|status| status.code().unwrap_or(-1))
++            self.child
++                .try_wait()?
++                .map(|status| status.code().unwrap_or(-1))
 +        } else {
 +            crate::mxc_common::sandbox_process::poll_child_exit(&self.child)?
 +        };
@@ -1545,7 +1963,7 @@ diff --git a/src/mxc-sdk/src/backends/seatbelt/common/seatbelt_runner.rs b/src/m
          }
          if self
              .timeout
-@@ -840,14 +822,11 @@
+@@ -818,14 +805,11 @@
      }
  
      fn kill(&mut self) -> std::io::Result<()> {
@@ -1563,7 +1981,7 @@ diff --git a/src/mxc-sdk/src/backends/seatbelt/common/seatbelt_runner.rs b/src/m
          }
          if self.group {
              // The child leads its own process group — signal the whole group so
-@@ -949,6 +928,7 @@
+@@ -927,6 +911,7 @@
              }
          };
  
@@ -1571,7 +1989,7 @@ diff --git a/src/mxc-sdk/src/backends/seatbelt/common/seatbelt_runner.rs b/src/m
          cancel_and_join_discard(stdout_thread, &self.stdout_canceller);
          cancel_and_join_discard(stderr_thread, &self.stderr_canceller);
          if let Some(pty) = self.pty.as_ref() {
-@@ -966,6 +946,10 @@
+@@ -944,6 +929,10 @@
          // the handle is dropped without `wait()`, but never block destruction
          // indefinitely when macOS does not make a signalled child reapable.
          const DROP_REAP_TIMEOUT: Duration = Duration::from_secs(5);
@@ -1582,7 +2000,7 @@ diff --git a/src/mxc-sdk/src/backends/seatbelt/common/seatbelt_runner.rs b/src/m
          if let Some(session_id) = self.session_id {
              let _ = terminate_session_and_reap(&mut self.child, session_id, DROP_REAP_TIMEOUT);
          } else {
-@@ -1269,19 +1253,20 @@
+@@ -1241,19 +1230,20 @@
      working_directory: Option<&str>,
  ) -> Vec<(String, String)> {
      let resolved = resolved_env(request, working_directory);
@@ -1615,6 +2033,21 @@ diff --git a/src/mxc-sdk/src/backends/seatbelt/common/seatbelt_runner.rs b/src/m
  }
  
  /// Write `content` to a temp file with a cryptographically random name and the
+@@ -1365,9 +1355,11 @@
+         let addr = ProxyAddress::new("127.0.0.1".into(), 8888);
+         let pairs = resolve_environment(&request, Some(&addr), None);
+ 
+-        assert!(pairs
+-            .iter()
+-            .any(|(k, v)| k == "PATH" && v == DEFAULT_SANDBOX_PATH));
++        assert!(
++            pairs
++                .iter()
++                .any(|(k, v)| k == "PATH" && v == DEFAULT_SANDBOX_PATH)
++        );
+         let proxies: Vec<_> = pairs
+             .iter()
+             .filter(|(k, _)| k == "HTTP_PROXY")
 diff --git a/src/mxc-sdk/src/backends/windows_sandbox/common/mod.rs b/src/mxc-sdk/src/backends/windows_sandbox/common.rs
 rename from src/mxc-sdk/src/backends/windows_sandbox/common/mod.rs
 rename to src/mxc-sdk/src/backends/windows_sandbox/common.rs
@@ -1654,14 +2087,14 @@ rename to src/mxc-sdk/src/core/learning_mode_core.rs
  
 +
  pub mod analyze;
+ pub(crate) mod capture_diagnostics;
  pub mod emit;
- pub mod model;
 diff --git a/src/mxc-sdk/src/core/learning_mode_windows/mod.rs b/src/mxc-sdk/src/core/learning_mode_windows.rs
 rename from src/mxc-sdk/src/core/learning_mode_windows/mod.rs
 rename to src/mxc-sdk/src/core/learning_mode_windows.rs
 --- a/src/mxc-sdk/src/core/learning_mode_windows/mod.rs
 +++ b/src/mxc-sdk/src/core/learning_mode_windows.rs
-@@ -27,6 +27,7 @@
+@@ -34,6 +34,7 @@
  //! types are exported only on Windows.
  
  use thiserror::Error;
@@ -1715,7 +2148,7 @@ rename to src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev.rs
 diff --git a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev/one_shot.rs b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev/one_shot.rs
 --- a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev/one_shot.rs
 +++ b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev/one_shot.rs
-@@ -336,5 +336,5 @@
+@@ -333,5 +333,5 @@
  }
  
  #[cfg(test)]
@@ -1743,7 +2176,7 @@ rename to src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev/one_shot_
 diff --git a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev/state_aware.rs b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev/state_aware.rs
 --- a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev/state_aware.rs
 +++ b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/dev/state_aware.rs
-@@ -253,5 +253,5 @@
+@@ -268,5 +268,5 @@
  }
  
  #[cfg(test)]
@@ -1804,7 +2237,7 @@ rename to src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9.rs
 diff --git a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9/one_shot.rs b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9/one_shot.rs
 --- a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9/one_shot.rs
 +++ b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9/one_shot.rs
-@@ -286,5 +286,5 @@
+@@ -283,5 +283,5 @@
  }
  
  #[cfg(test)]
@@ -1832,7 +2265,7 @@ rename to src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9/one_shot
 diff --git a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9/state_aware.rs b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9/state_aware.rs
 --- a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9/state_aware.rs
 +++ b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v0_9/state_aware.rs
-@@ -230,5 +230,5 @@
+@@ -222,5 +222,5 @@
  }
  
  #[cfg(test)]
@@ -1876,7 +2309,7 @@ rename to src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0.rs
 diff --git a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0/one_shot.rs b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0/one_shot.rs
 --- a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0/one_shot.rs
 +++ b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0/one_shot.rs
-@@ -286,5 +286,5 @@
+@@ -283,5 +283,5 @@
  }
  
  #[cfg(test)]
@@ -1904,7 +2337,7 @@ rename to src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0/one_shot
 diff --git a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0/state_aware.rs b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0/state_aware.rs
 --- a/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0/state_aware.rs
 +++ b/src/mxc-sdk/src/core/mxc_common/config_contract_adapters/v1_0/state_aware.rs
-@@ -230,5 +230,5 @@
+@@ -222,5 +222,5 @@
  }
  
  #[cfg(test)]
@@ -1945,15 +2378,15 @@ diff --git a/src/mxc-sdk/src/core/mxc_common/config_parser.rs b/src/mxc-sdk/src/
          profile_override,
          gui_access: gui_access.unwrap_or(false),
          launch_method: launch_method.map(Into::into).unwrap_or_default(),
-@@ -1625,6 +1627,7 @@
+@@ -1599,6 +1601,7 @@
      }
  
      Ok(ExecutionRequest {
 +        bubblewrap_executable: None,
          source_contract: Some(source_contract),
-         network_enforcement_compatibility,
-         default_env_compatibility,
-@@ -1737,11 +1740,7 @@
+         container_id,
+         env,
+@@ -1708,11 +1711,7 @@
      }
  
      fn repository_root() -> PathBuf {
@@ -1966,7 +2399,7 @@ diff --git a/src/mxc-sdk/src/core/mxc_common/config_parser.rs b/src/mxc-sdk/src/
      }
  
      fn assert_exact_contract_bridge(
-@@ -2996,9 +2995,7 @@
+@@ -2966,9 +2965,7 @@
                  })),
              ),
          ] {
@@ -2758,7 +3191,7 @@ diff --git a/src/mxc-sdk/src/core/mxc_common/models.rs b/src/mxc-sdk/src/core/mx
              profile_override: None,
              gui_access: false,
              launch_method: LaunchMethod::default(),
-@@ -1037,6 +1043,8 @@
+@@ -945,6 +951,8 @@
  
  #[derive(Debug, Clone, Default, Serialize)]
  pub struct ExecutionRequest {
@@ -2770,15 +3203,30 @@ diff --git a/src/mxc-sdk/src/core/mxc_common/models.rs b/src/mxc-sdk/src/core/mx
 diff --git a/src/mxc-sdk/src/core/mxc_common/policy_identity.rs b/src/mxc-sdk/src/core/mxc_common/policy_identity.rs
 --- a/src/mxc-sdk/src/core/mxc_common/policy_identity.rs
 +++ b/src/mxc-sdk/src/core/mxc_common/policy_identity.rs
-@@ -195,6 +195,8 @@
+@@ -207,6 +207,8 @@
+         // External contract provenance is diagnostics/telemetry attribution,
+         // not enforcement.
          source_contract: _excluded_source_contract,
-         network_enforcement_compatibility,
-         default_env_compatibility: _excluded_default_env_compatibility,
 +        // Host-resolved launcher location does not change sandbox policy.
 +        bubblewrap_executable: _excluded_bubblewrap_executable,
          container_id,
          working_directory,
          script_timeout,
+@@ -767,9 +769,11 @@
+                 "backend authorization must not change {} policy identity",
+                 changed.containment.wire_name()
+             );
+-            assert!(policy_projection(&changed)
+-                .get("experimentalEnabled")
+-                .is_none());
++            assert!(
++                policy_projection(&changed)
++                    .get("experimentalEnabled")
++                    .is_none()
++            );
+         }
+     }
+ 
 diff --git a/src/mxc-sdk/src/core/mxc_common/proxy_env.rs b/src/mxc-sdk/src/core/mxc_common/proxy_env.rs
 --- a/src/mxc-sdk/src/core/mxc_common/proxy_env.rs
 +++ b/src/mxc-sdk/src/core/mxc_common/proxy_env.rs
@@ -3189,7 +3637,7 @@ rename to src/mxc-sdk/src/core/process_security_environment_spec.rs
 diff --git a/src/mxc-sdk/src/lib.rs b/src/mxc-sdk/src/lib.rs
 --- a/src/mxc-sdk/src/lib.rs
 +++ b/src/mxc-sdk/src/lib.rs
-@@ -137,67 +137,65 @@
+@@ -139,67 +139,65 @@
  //! probing, execution, and backend implementations are doc-hidden compatibility
  //! exports for workspace consumers rather than supported SDK entry points.
  

@@ -1,10 +1,14 @@
 # `mxc-sdk`
 
+> **Audience:** MXC consumers and developers
+
 `mxc-sdk` is the Rust library for authoring MXC container requests and executing
 them in-process through the native engine. The versioned public API is under
 `mxc_sdk::v1`. `ContainerRequest` owns the command and shared filesystem,
 network, and UI restrictions; its typed containment value selects and
 configures the backend.
+
+See the [consumer glossary](https://github.com/microsoft/mxc/blob/main/docs/glossary.md) for terminology.
 
 ## Run to completion and spawn
 
@@ -44,7 +48,7 @@ to 24 rows by 80 columns.
 Set the request's typed `Containment` when a specific backend is required.
 Shared restrictions remain on `ContainerRequest`; backend-specific settings
 are carried by the selected containment variant. These types are documented in
-the [SDK API reference](https://github.com/microsoft/mxc/blob/main/docs/reference/README.md).
+the [SDK API reference](https://github.com/microsoft/mxc/blob/main/docs/api-reference/README.md).
 
 `UiPolicy.disable` defaults to `true`; clipboard and input-injection
 permissions are authored separately.
@@ -103,8 +107,8 @@ Use `v1::container::spawn_in_container` for live piped execution.
 terminal; PTY support is currently available for IsolationSession.
 Attached execution is not exposed by the Rust SDK. Lifecycle operations and
 existing-container execution are synchronous in Rust. Backend support and phase-specific requirements are described in the
-[IsolationSession](https://github.com/microsoft/mxc/blob/main/docs/isolation-session/state-aware-rust.md) and
-[WSLC](https://github.com/microsoft/mxc/blob/main/docs/wsl/wslc-state-aware.md) guides.
+[IsolationSession](https://github.com/microsoft/mxc/blob/main/docs/development/architecture/backends/isolation-session/state-aware-rust.md) and
+[WSLC](https://github.com/microsoft/mxc/blob/main/docs/backends/wslc/wslc-state-aware.md) guides.
 
 Lifecycle calls use distinct `ProvisionOptions`, `StartOptions`, `StopOptions`,
 and `DeprovisionOptions`. Existing-container execution uses
@@ -131,7 +135,7 @@ operation options and return no execution output.
 | Terminal process outcome | `v1::WaitResult` |
 
 `v1::spawn_with_pty` creates a container with a caller-controlled terminal.
-One-shot PTY support is available for IsolationSession on Windows, Bubblewrap
+Create-and-run PTY support is available for IsolationSession on Windows, Bubblewrap
 and LXC on Linux, and Seatbelt direct execution on macOS. LXC requires root.
 Seatbelt rejects PTY mode with `guiAccess` or legacy `launchMethod: "open"`.
 `wait()` requests canonical-mode terminal EOF for untaken input; raw-mode
@@ -142,7 +146,7 @@ For host discovery, use
 `mxc_sdk::v1::platform_support` and `mxc_sdk::v1::available_backends`. Errors are
 returned as `mxc_sdk::v1::Error` with an `ErrorCode`.
 Telemetry and policy helpers are also under `v1`. The
-[launch-choice table](../../../docs/reference/rust/v1/api.md#choosing-a-launch-operation)
+[launch-choice table](https://github.com/microsoft/mxc/blob/main/docs/api-reference/rust/v1/api.md#choosing-a-launch-operation)
 compares captured, piped, and terminal execution.
 
 ## Build features and backend support

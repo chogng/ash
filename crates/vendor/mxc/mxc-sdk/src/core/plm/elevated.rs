@@ -1941,7 +1941,7 @@ fn recovery_required_error(
         "{reason}; recovery marker: {}; refusing to stop or cancel unverified host-wide WPR \
          state. From an elevated terminal, inspect the recording, preserve or discard it, \
          confirm WPR is inactive, and only then delete the marker. See \"Recovering guarded-WPR \
-         state\" in docs/diagnostics.md",
+         state\" in docs/development/guides/diagnostics.md",
         marker_path.display()
     ))
 }
@@ -2139,7 +2139,7 @@ fn write_analysis_response(
     membership: &JobMembershipSnapshot,
 ) -> Result<()> {
     let analysis = EtlDenialAnalyzer
-        .analyze_for_job_membership(trace_path, membership)
+        .analyze_relogged_for_job_membership(trace_path, membership)
         .context("failed to decode guarded WPR trace for the sandbox process tree")?;
     write_serialized_analysis_response(pipe, &analysis)
 }
@@ -2846,7 +2846,7 @@ mod tests {
         assert!(message.contains("inspect the recording"));
         assert!(message.contains("confirm WPR is inactive"));
         assert!(message.contains("only then delete the marker"));
-        assert!(message.contains("docs/diagnostics.md"));
+        assert!(message.contains("docs/development/guides/diagnostics.md"));
         assert!(message.contains("wpr start diagnostic"));
     }
 

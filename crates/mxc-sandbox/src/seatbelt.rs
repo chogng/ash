@@ -42,7 +42,10 @@ pub(super) fn rules(
             continue;
         };
         let operations = match rule.access() {
-            SandboxPathAccess::Denied => "file-read* file-write* network-bind network-outbound",
+            // Seatbelt's explicit metadata allow outranks file-read* alone.
+            SandboxPathAccess::Denied => {
+                "file-read* file-read-metadata file-write* network-bind network-outbound"
+            }
             SandboxPathAccess::ReadOnly => "file-write* network-bind network-outbound",
             SandboxPathAccess::ReadWrite => {
                 return Err(SandboxError::UnsupportedPolicy(
