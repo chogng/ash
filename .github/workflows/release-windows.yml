@@ -15,10 +15,18 @@ jobs:
     name: Windows release - ${{ matrix.target }}
     runs-on: windows-latest
     timeout-minutes: 60
+    # The validation step fills these declared names through GITHUB_ENV before use.
     env:
       ASH_BUILD_COMMIT: ${{ github.sha }}
       ASH_BUILD_ID: release-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}-${{ matrix.target }}
       CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO: ${{ contains(matrix.target, 'apple-darwin') && 'packed' || 'off' }}
+      ASH_UPDATE_PUBLIC_KEY: ""
+      ASH_AZURE_CLIENT_ID: ""
+      ASH_AZURE_TENANT_ID: ""
+      ASH_AZURE_SUBSCRIPTION_ID: ""
+      ASH_WINDOWS_SIGNING_ENDPOINT: ""
+      ASH_WINDOWS_SIGNING_ACCOUNT: ""
+      ASH_WINDOWS_CERTIFICATE_PROFILE: ""
     strategy:
       fail-fast: false
       matrix:
@@ -34,6 +42,37 @@ jobs:
             update_format: tar-gz
 
     steps:
+      - name: Validate Windows release configuration
+        shell: pwsh
+        env:
+          # Repository variable names are unavailable to offline expression validation.
+          ASH_RELEASE_VARIABLES: ${{ toJSON(vars) }}
+        run: |
+          $variables = ConvertFrom-Json -AsHashtable $env:ASH_RELEASE_VARIABLES
+          $required = @(
+            'ASH_UPDATE_PUBLIC_KEY',
+            'ASH_AZURE_CLIENT_ID',
+            'ASH_AZURE_TENANT_ID',
+            'ASH_AZURE_SUBSCRIPTION_ID',
+            'ASH_WINDOWS_SIGNING_ENDPOINT',
+            'ASH_WINDOWS_SIGNING_ACCOUNT',
+            'ASH_WINDOWS_CERTIFICATE_PROFILE'
+          )
+          $releaseEnvironment = foreach ($name in $required) {
+            $value = $variables[$name]
+            if ([string]::IsNullOrWhiteSpace($value)) {
+              throw "Required repository variable $name is not configured"
+            }
+            if ($value -match '[\r\n]') {
+              throw "Repository variable $name must be a single-line value"
+            }
+            "${name}=$value"
+          }
+          if ($variables['ASH_UPDATE_PUBLIC_KEY'] -notmatch '\A[a-fA-F0-9]{64}\z') {
+            throw 'ASH_UPDATE_PUBLIC_KEY must be a 64-digit Ed25519 public key'
+          }
+          $releaseEnvironment | Add-Content -LiteralPath $env:GITHUB_ENV -Encoding utf8
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install LLVM symbol tools
         shell: pwsh
@@ -57,12 +96,9 @@ jobs:
 
       - name: Build Ash Code release package
         shell: bash
-        env:
-          ASH_UPDATE_PUBLIC_KEY: ${{ vars.ASH_UPDATE_PUBLIC_KEY }}
         run: |
           version="$(${{ matrix.python }} -c 'from build.lib.version import read_workspace_version; from pathlib import Path; print(read_workspace_version(Path("Cargo.toml")))')"
           test "${GITHUB_REF_NAME}" = "v${version}"
-          test "${#ASH_UPDATE_PUBLIC_KEY}" = 64
           ${{ matrix.python }} -B scripts/cargo.py build --package ash-cli --bin ash --profile release --target "${{ matrix.target }}"
           cli=".build/cargo/${{ matrix.target }}/release/ash.exe"
           runtime=".build/releases/runtime-${{ matrix.target }}"
@@ -89,16 +125,16 @@ jobs:
       - name: Sign in to Azure for Windows release signing
         uses: Azure/login@93381592711f247e165c389ebb30b596c84cdc48 # v3.0.0
         with:
-          client-id: ${{ vars.ASH_AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.ASH_AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.ASH_AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ env.ASH_AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.ASH_AZURE_TENANT_ID }}
+          subscription-id: ${{ env.ASH_AZURE_SUBSCRIPTION_ID }}
 
       - name: Sign Windows executables with Artifact Signing
         uses: Azure/artifact-signing-action@208f8af4bf26cf2af8597424e3cb5582801523ba # v2.0.0
         with:
-          endpoint: ${{ vars.ASH_WINDOWS_SIGNING_ENDPOINT }}
-          signing-account-name: ${{ vars.ASH_WINDOWS_SIGNING_ACCOUNT }}
-          certificate-profile-name: ${{ vars.ASH_WINDOWS_CERTIFICATE_PROFILE }}
+          endpoint: ${{ env.ASH_WINDOWS_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ env.ASH_WINDOWS_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ env.ASH_WINDOWS_CERTIFICATE_PROFILE }}
           files-folder: ${{ github.workspace }}\.build\releases\ash-code-${{ matrix.target }}
           files-folder-filter: exe
           files-folder-recurse: true
@@ -109,9 +145,9 @@ jobs:
       - name: Sign Windows App Server runtime executables
         uses: Azure/artifact-signing-action@208f8af4bf26cf2af8597424e3cb5582801523ba # v2.0.0
         with:
-          endpoint: ${{ vars.ASH_WINDOWS_SIGNING_ENDPOINT }}
-          signing-account-name: ${{ vars.ASH_WINDOWS_SIGNING_ACCOUNT }}
-          certificate-profile-name: ${{ vars.ASH_WINDOWS_CERTIFICATE_PROFILE }}
+          endpoint: ${{ env.ASH_WINDOWS_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ env.ASH_WINDOWS_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ env.ASH_WINDOWS_CERTIFICATE_PROFILE }}
           files-folder: ${{ github.workspace }}\.build\releases\runtime-${{ matrix.target }}
           files-folder-filter: exe
           files-folder-recurse: true
@@ -150,7 +186,6 @@ jobs:
       - name: Sign Code and App Server updates
         shell: bash
         env:
-          ASH_UPDATE_PUBLIC_KEY: ${{ vars.ASH_UPDATE_PUBLIC_KEY }}
           ASH_UPDATE_SIGNING_KEY: ${{ secrets.ASH_UPDATE_SIGNING_KEY }}
         run: |
           signer=".build/cargo/debug/ash-update-sign.exe"
@@ -198,17 +233,15 @@ jobs:
       - name: Package Windows Desktop bundle
         if: matrix.target == 'x86_64-pc-windows-msvc'
         shell: bash
-        env:
-          ASH_UPDATE_PUBLIC_KEY: ${{ vars.ASH_UPDATE_PUBLIC_KEY }}
         run: pnpm package:win32:bundle
 
       - name: Sign Windows Desktop executables
         if: matrix.target == 'x86_64-pc-windows-msvc'
         uses: Azure/artifact-signing-action@208f8af4bf26cf2af8597424e3cb5582801523ba # v2.0.0
         with:
-          endpoint: ${{ vars.ASH_WINDOWS_SIGNING_ENDPOINT }}
-          signing-account-name: ${{ vars.ASH_WINDOWS_SIGNING_ACCOUNT }}
-          certificate-profile-name: ${{ vars.ASH_WINDOWS_CERTIFICATE_PROFILE }}
+          endpoint: ${{ env.ASH_WINDOWS_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ env.ASH_WINDOWS_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ env.ASH_WINDOWS_CERTIFICATE_PROFILE }}
           files-folder: ${{ github.workspace }}\dist\Ash-win32-x64
           files-folder-filter: exe
           files-folder-recurse: true
@@ -220,9 +253,9 @@ jobs:
         if: matrix.target == 'x86_64-pc-windows-msvc'
         uses: Azure/artifact-signing-action@208f8af4bf26cf2af8597424e3cb5582801523ba # v2.0.0
         with:
-          endpoint: ${{ vars.ASH_WINDOWS_SIGNING_ENDPOINT }}
-          signing-account-name: ${{ vars.ASH_WINDOWS_SIGNING_ACCOUNT }}
-          certificate-profile-name: ${{ vars.ASH_WINDOWS_CERTIFICATE_PROFILE }}
+          endpoint: ${{ env.ASH_WINDOWS_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ env.ASH_WINDOWS_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ env.ASH_WINDOWS_CERTIFICATE_PROFILE }}
           files-folder: ${{ github.workspace }}\dist\Ash-win32-x64
           files-folder-filter: dll
           files-folder-recurse: true
@@ -234,9 +267,9 @@ jobs:
         if: matrix.target == 'x86_64-pc-windows-msvc'
         uses: Azure/artifact-signing-action@208f8af4bf26cf2af8597424e3cb5582801523ba # v2.0.0
         with:
-          endpoint: ${{ vars.ASH_WINDOWS_SIGNING_ENDPOINT }}
-          signing-account-name: ${{ vars.ASH_WINDOWS_SIGNING_ACCOUNT }}
-          certificate-profile-name: ${{ vars.ASH_WINDOWS_CERTIFICATE_PROFILE }}
+          endpoint: ${{ env.ASH_WINDOWS_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ env.ASH_WINDOWS_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ env.ASH_WINDOWS_CERTIFICATE_PROFILE }}
           files-folder: ${{ github.workspace }}\dist\Ash-win32-x64
           files-folder-filter: node
           files-folder-recurse: true
@@ -267,9 +300,9 @@ jobs:
         if: matrix.target == 'x86_64-pc-windows-msvc'
         uses: Azure/artifact-signing-action@208f8af4bf26cf2af8597424e3cb5582801523ba # v2.0.0
         with:
-          endpoint: ${{ vars.ASH_WINDOWS_SIGNING_ENDPOINT }}
-          signing-account-name: ${{ vars.ASH_WINDOWS_SIGNING_ACCOUNT }}
-          certificate-profile-name: ${{ vars.ASH_WINDOWS_CERTIFICATE_PROFILE }}
+          endpoint: ${{ env.ASH_WINDOWS_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ env.ASH_WINDOWS_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ env.ASH_WINDOWS_CERTIFICATE_PROFILE }}
           files-folder: ${{ github.workspace }}\dist
           files-folder-filter: exe
           files-folder-recurse: false
@@ -291,7 +324,6 @@ jobs:
         if: matrix.target == 'x86_64-pc-windows-msvc'
         shell: bash
         env:
-          ASH_UPDATE_PUBLIC_KEY: ${{ vars.ASH_UPDATE_PUBLIC_KEY }}
           ASH_UPDATE_SIGNING_KEY: ${{ secrets.ASH_UPDATE_SIGNING_KEY }}
         run: |
           archive="dist/AshSetup-${GITHUB_REF_NAME#v}-win32-x64.exe"

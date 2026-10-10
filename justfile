@@ -68,6 +68,10 @@ snapshot *args:
 dependencies *args:
     {{ python }} -B scripts/dependencies.py {{ recipe_args }}
 
+# Check vulnerabilities, third-party licenses, and approved dependency sources.
+dependency-security *args:
+    {{ python }} -B scripts/dependency_security.py {{ recipe_args }}
+
 # Measure a selected Cargo package in isolated build directories.
 bench-build *args:
     {{ python }} -B scripts/benchmark.py {{ recipe_args }}

@@ -1,33 +1,7 @@
 name: Rust checks and build performance
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "**/*.rs"
-      - "**/Cargo.toml"
-      - "Cargo.lock"
-      - ".cargo/**"
-      - "rust-toolchain.toml"
-      - "scripts/*.py"
-      - "build/**"
-      - "scripts/pyproject.toml"
-      - "scripts/uv.lock"
-      - "justfile"
-      - ".github/workflows/rust-build-health.yml"
-  pull_request:
-    paths:
-      - "**/*.rs"
-      - "**/Cargo.toml"
-      - "Cargo.lock"
-      - ".cargo/**"
-      - "rust-toolchain.toml"
-      - "scripts/*.py"
-      - "build/**"
-      - "scripts/pyproject.toml"
-      - "scripts/uv.lock"
-      - "justfile"
-      - ".github/workflows/rust-build-health.yml"
+  workflow_call:
   workflow_dispatch:
     inputs:
       package:
@@ -188,7 +162,9 @@ jobs:
           retention-days: 14
 
   benchmark:
-    if: github.event_name == 'workflow_dispatch'
+    # A manual parent CI run has no benchmark package; only this workflow's
+    # dedicated dispatch requests the expensive build measurements.
+    if: github.event_name == 'workflow_dispatch' && inputs.package != ''
     needs: dependencies
     runs-on: ubuntu-24.04
     timeout-minutes: 180

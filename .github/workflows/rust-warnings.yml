@@ -1,40 +1,12 @@
 name: Rust warnings
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "**/*.rs"
-      - "code/**/*.snap"
-      - "**/Cargo.toml"
-      - "Cargo.lock"
-      - "rust-toolchain.toml"
-      - "justfile"
-      - "scripts/cargo.py"
-      - "scripts/ci_impact.py"
-      - "build/lib/**"
-      - "build/lib/ripgrep.py"
-      - "third_party/ripgrep/runtime-lock.json"
-      - ".github/workflows/rust-warnings.yml"
-  pull_request:
-    paths:
-      - "**/*.rs"
-      - "code/**/*.snap"
-      - "**/Cargo.toml"
-      - "Cargo.lock"
-      - "rust-toolchain.toml"
-      - "justfile"
-      - "scripts/cargo.py"
-      - "scripts/ci_impact.py"
-      - "build/lib/**"
-      - "build/lib/ripgrep.py"
-      - "third_party/ripgrep/runtime-lock.json"
-      - ".github/workflows/rust-warnings.yml"
+  workflow_call:
   workflow_dispatch:
 
 concurrency:
   group: rust-warnings-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read
@@ -118,6 +90,92 @@ jobs:
         run: |
           ${{ matrix.python }} -B scripts/cargo.py test -p ash-mxc-sandbox workspace_git_runs_with_a_continuous_env_denial --locked
           ${{ matrix.python }} -B scripts/cargo.py test -p ash-app-server file_tools_read_a_large_workspace_without_scanning_every_entry --locked
+
+  stdio-lifecycle:
+    name: stdio and SSH lifecycle (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, macos-15]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          workspaces: ". -> .build/cargo"
+          shared-key: stdio-lifecycle-${{ matrix.runner }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: true
+
+      - name: Install Linux process and build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            build-essential clang libclang-dev cmake bubblewrap \
+            libcap-dev libdbus-1-dev libgtk-3-dev libssl-dev \
+            libwayland-dev libxkbcommon-dev pkg-config \
+            lsof openssh-client openssh-server
+          sudo install -d -m 0755 /run/sshd
+
+      - name: Require Unix lifecycle inspection and OpenSSH
+        run: |
+          test -x /usr/sbin/sshd
+          test -x /usr/bin/ssh
+          command -v ssh-keygen
+          command -v lsof
+
+      - name: Prepare locked ripgrep for lifecycle tests
+        run: |
+          python3 -B - <<'PY'
+          import os
+          import subprocess
+          from pathlib import Path
+          from build.lib.ripgrep import resolve_ripgrep
+          from build.lib.targets import TARGETS, default_target
+
+          root = Path.cwd()
+          ripgrep = resolve_ripgrep(
+              TARGETS[default_target()],
+              root / "third_party/ripgrep/runtime-lock.json",
+              root / "third_party/.cache/ripgrep",
+          ).executable
+          subprocess.run([ripgrep, "--version"], check=True)
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as output:
+              output.write(f"ASH_RG_PATH={ripgrep}\n")
+          PY
+
+      - name: Build matching CLI, server, remote runtime and JS host
+        run: >-
+          python3 -B scripts/cargo.py --deny-warnings build
+          -p ash-cli --bin ash
+          -p ash-app-server --bin ash-app-server
+          -p ash-remote-server --bin ash-remote-server
+          -p ash-js-extension-host --bin ash-js-extension-host
+          --profile ci-test --locked
+
+      - name: Compile stdio and connection library tests
+        run: |
+          python3 -B scripts/cargo.py --deny-warnings test \
+            -p ash-cli --test stdio --profile ci-test --locked --no-run
+          python3 -B scripts/cargo.py --deny-warnings test \
+            -p ash-app-server-client -p ash-remote-connections \
+            --lib --profile ci-test --locked --no-run
+
+      - name: Test real stdio, reconnect and OpenSSH process cleanup
+        timeout-minutes: 10
+        run: >-
+          python3 -B scripts/cargo.py --deny-warnings --process-tests test
+          -p ash-cli --test stdio --profile ci-test --locked
+
+      - name: Test client EOF cleanup and SSH compatibility rejection
+        timeout-minutes: 15
+        run: >-
+          python3 -B scripts/cargo.py --deny-warnings test
+          -p ash-app-server-client -p ash-remote-connections
+          --lib --profile ci-test --locked
 
   tui:
     name: TUI tests

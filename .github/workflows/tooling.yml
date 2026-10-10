@@ -1,39 +1,7 @@
 name: Build tooling
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "build/**"
-      - "scripts/**"
-      - "third_party/**"
-      - "resources/**"
-      - "extensions/**"
-      - "crates/skills/assets/**"
-      - "**/Cargo.toml"
-      - "Cargo.lock"
-      - "MODULE.bazel"
-      - ".nvmrc"
-      - "rust-toolchain.toml"
-      - "justfile"
-      - ".github/workflows/tooling.yml"
-      - ".github/workflows/rusty-v8-release.yml"
-  pull_request:
-    paths:
-      - "build/**"
-      - "scripts/**"
-      - "third_party/**"
-      - "resources/**"
-      - "extensions/**"
-      - "crates/skills/assets/**"
-      - "**/Cargo.toml"
-      - "Cargo.lock"
-      - "MODULE.bazel"
-      - ".nvmrc"
-      - "rust-toolchain.toml"
-      - "justfile"
-      - ".github/workflows/tooling.yml"
-      - ".github/workflows/rusty-v8-release.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:
@@ -41,7 +9,7 @@ permissions:
 
 concurrency:
   group: tooling-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   python:

@@ -1,0 +1,25 @@
+{
+  "max_bytes": 1048576,
+  "exceptions": {
+    "MODULE.bazel.lock": {
+      "max_bytes": 2097152,
+      "reason": "Bazel's generated dependency lock records the hermetic toolchains and platform dependencies."
+    },
+    "crates/vendor/mxc/mxc-sdk/build/wslc_common/Microsoft.WSL.Containers.2.9.9.nupkg": {
+      "max_bytes": 4194304,
+      "reason": "The vendored MXC SDK carries this fixed-version Microsoft WSL build dependency."
+    },
+    "docs/tools/CURSOR_ALL_TOOL_DEFINITIONS_2026-10-01.json": {
+      "max_bytes": 8388608,
+      "reason": "This dated reference preserves the captured tool definitions for source comparisons. New captures require their own review."
+    },
+    "src/ash/editor/api-alignment-status.md": {
+      "max_bytes": 2097152,
+      "reason": "The editor alignment inventory records the checked VS Code API surface and migration status."
+    },
+    "third_party/tgrep/source.tar.gz": {
+      "max_bytes": 2097152,
+      "reason": "The locked search program's vendored source archive supports reproducible packaging."
+    }
+  }
+}

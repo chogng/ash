@@ -1,0 +1,119 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  # Complete main acceptance; cancel superseded PR and merge-queue candidates.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  select:
+    name: Select affected checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      selection: ${{ steps.select.outputs.selection }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Select workflows from the complete Git diff
+        id: select
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+          FORCE_ALL: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          if [ "$FORCE_ALL" = true ]; then
+            python3 -B scripts/ci_workflows.py select --base "$BASE_SHA" --head "$HEAD_SHA" --all
+          else
+            python3 -B scripts/ci_workflows.py select --base "$BASE_SHA" --head "$HEAD_SHA"
+          fi
+
+  bazel:
+    needs: select
+    if: fromJSON(needs.select.outputs.selection).bazel
+    uses: ./.github/workflows/bazel.yml
+
+  blob-size-policy:
+    needs: select
+    if: fromJSON(needs.select.outputs.selection).blob-size-policy
+    uses: ./.github/workflows/blob-size-policy.yml
+
+  cargo-deny:
+    needs: select
+    if: fromJSON(needs.select.outputs.selection).cargo-deny
+    uses: ./.github/workflows/cargo-deny.yml
+
+  codespell:
+    needs: select
+    if: fromJSON(needs.select.outputs.selection).codespell
+    uses: ./.github/workflows/codespell.yml
+
+  format:
+    needs: select
+    if: fromJSON(needs.select.outputs.selection).format
+    uses: ./.github/workflows/format.yml
+
+  frontend:
+    needs: select
+    if: fromJSON(needs.select.outputs.selection).frontend
+    uses: ./.github/workflows/frontend.yml
+
+  media:
+    needs: select
+    if: fromJSON(needs.select.outputs.selection).media
+    uses: ./.github/workflows/media.yml
+
+  rust-build-health:
+    needs: select
+    if: fromJSON(needs.select.outputs.selection).rust-build-health
+    uses: ./.github/workflows/rust-build-health.yml
+
+  rust-warnings:
+    needs: select
+    if: fromJSON(needs.select.outputs.selection).rust-warnings
+    uses: ./.github/workflows/rust-warnings.yml
+
+  tooling:
+    needs: select
+    if: fromJSON(needs.select.outputs.selection).tooling
+    uses: ./.github/workflows/tooling.yml
+
+  required:
+    name: CI required
+    if: ${{ always() }}
+    needs:
+      - select
+      - bazel
+      - blob-size-policy
+      - cargo-deny
+      - codespell
+      - format
+      - frontend
+      - media
+      - rust-build-health
+      - rust-warnings
+      - tooling
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Require the selected checks to succeed
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+          CI_SELECTION_JSON: ${{ needs.select.outputs.selection }}
+        run: python3 -B scripts/ci_workflows.py require

@@ -1,50 +1,14 @@
-name: Bazel TUI scenarios
+name: Bazel
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "cli/**"
-      - "crates/**"
-      - "sdk/**"
-      - "build/**"
-      - "bazel/**"
-      - "third_party/tgrep/**"
-      - "third_party/ripgrep/**"
-      - "**/BUILD.bazel"
-      - "**/*.bzl"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "MODULE.bazel"
-      - "MODULE.bazel.lock"
-      - ".bazelrc"
-      - ".bazelversion"
-      - ".github/workflows/bazel-boundary.yml"
-  pull_request:
-    paths:
-      - "cli/**"
-      - "crates/**"
-      - "sdk/**"
-      - "build/**"
-      - "bazel/**"
-      - "third_party/tgrep/**"
-      - "third_party/ripgrep/**"
-      - "**/BUILD.bazel"
-      - "**/*.bzl"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "MODULE.bazel"
-      - "MODULE.bazel.lock"
-      - ".bazelrc"
-      - ".bazelversion"
-      - ".github/workflows/bazel-boundary.yml"
+  workflow_call:
   release:
     types: [published]
   workflow_dispatch:
 
 concurrency:
-  group: bazel-boundary-${{ github.ref }}
-  cancel-in-progress: true
+  group: bazel-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read

@@ -1,37 +1,7 @@
 name: Media integration
 
 on:
-  push:
-    branches: [main]
-    paths: &media-paths
-      - "crates/livekit-client/**"
-      - "crates/screen-capture/**"
-      - "third_party/livekit-rust-sdks/**"
-      - "crates/http-client/**"
-      - "crates/websocket-client/**"
-      - "crates/livekit-api/**"
-      - "crates/voice-agent/**"
-      - "crates/voice-host/**"
-      - "crates/app-server/src/server/call*"
-      - "build/lib/livekit.py"
-      - "third_party/livekit/**"
-      - "crates/call/**"
-      - "crates/collaboration-server/**"
-      - "crates/model-provider/**"
-      - "crates/model-provider-info/**"
-      - "crates/ash-api/**"
-      - "crates/websocket-client/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - ".cargo/**"
-      - "rust-toolchain.toml"
-      - "scripts/cargo.py"
-      - "build/lib/**"
-      - "build/download/**"
-      - "justfile"
-      - ".github/workflows/media.yml"
-  pull_request:
-    paths: *media-paths
+  workflow_call:
   workflow_dispatch:
 
 permissions:
@@ -39,7 +9,7 @@ permissions:
 
 concurrency:
   group: media-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   integration:

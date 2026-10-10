@@ -165,7 +165,7 @@ just test-tui actual_tui_process_interrupts_an_inflight_http_stream
 
 场景录屏需要带 `drawtext` 滤镜的 FFmpeg：macOS 使用 `ffmpeg-full` 并将其 `bin` 加入 PATH，Windows 可安装 `Gyan.FFmpeg`，Linux 可安装 `ffmpeg`。运行方法和证据目录见 [前端 UI 场景录屏](frontend.md#ui-场景录屏)。
 
-#### Bazel 边界与 TUI 场景测试
+#### Bazel TUI 场景测试
 
 运行迁移后的 CLI/TUI 场景：
 
@@ -394,9 +394,37 @@ WER 的行为与权限参考 [Microsoft 的本地 dump 文档](https://learn.mic
 ```sh
 cargo install cargo-shear --version 1.13.4 --locked
 just dependencies
+cargo install cargo-deny --version 0.20.2 --locked
+just dependency-security
 ```
 
 检查覆盖依赖声明、产品依赖方向、无用依赖和 [已审查的多版本集合](../.cargo/dependencies.toml)。集合变化时通过 `cargo tree --workspace --target all -i <package>` 审阅；误报需在所属包的 `package.metadata.cargo-shear` 中逐项说明。
+
+`dependency-security` 根据 [Ash 安全策略](../.cargo/deny.toml) 检查整个 workspace、全部 features 和所有目标平台的漏洞、停止维护及撤回版本、第三方许可证和来源。许可证集合与 Git 来源取自 Ash 实际依赖图；Git 依赖必须固定 revision。Ash 自身未发布的专有包不参与第三方 SPDX 许可证检查。重复版本和依赖方向仍由 `dependencies` 负责；安全例外需要逐项审查，不能用整体关闭检查来通过 CI。
+
+2026-10-10 安全修复将 rustls 的最低版本提高到 0.23.45，并将撤回的 chacha20 0.10.1 更新到 0.10.2。Typst 的间接依赖 citationberg 0.7.0 尚未发布 XML 修复，因此根 Cargo manifest 固定其 [上游修复提交](https://github.com/typst/citationberg/commit/06a591e2f237d25e1dfdedac3f3d1494c496c52d)，统一使用 quick-xml 0.41.0，修复 [重复属性检查的计算量问题](https://rustsec.org/advisories/RUSTSEC-2026-0194.html) 和 [命名空间分配无上限问题](https://rustsec.org/advisories/RUSTSEC-2026-0195.html)。该提交只升级 quick-xml，保持 citationberg 的版本与 API；发布兼容修复版本后移除 patch 及其 Git 来源许可。rustls 新版本要求升级 aws-lc-rs、aws-lc-sys 和 rustls-webpki，属于 TLS 修复的必要依赖变化。
+
+依赖整改优先采用兼容发布版或固定 revision 的上游修复，不为消除停止维护告警而复制整个依赖源码树。BM25、Syntect、Ratatui、tokenizers、V8、Typst 及其文献和 SVG/PDF 依赖继续使用发布版；Cargo 与 Bazel 由根 manifest 和 lockfile 选择相同来源。已撤掉 `third_party/rust` 的十二个副本及专用校验、源码准备器和 CI 路径规则。
+
+停止维护报告按具体 advisory ID 审查，原因和移除条件只维护在 [安全策略](../.cargo/deny.toml)；它们不豁免其他漏洞、撤回版本、许可证或来源检查。Typst 字体迁移等待兼容上游发布，避免维护字体引擎分叉；字体集合、复杂文字、数学排版、SVG/PDF、语法高亮及 XML 边界保留消费者验证。
+
+BM25 的同分候选由上游 HashSet 顺序决定。Ash 在自己的搜索入口按原始分数和工具名称排序，再截断候选并转换 reciprocal rank，保证重建索引、单条结果和排除项不会受到哈希遍历顺序影响；无需修改或复制 BM25 源码。
+
+2026-10-11 在 Windows 恢复发布版后，CLI 的 40 项、Code Mode runtime 的 19 项及 tokenizer 的 12 项库测试首轮通过；搜索同分排序修复后，`just test ash-tools -p ash-typst -p ash-v8-poc --features ash-v8-poc/sandbox --profile ci-test --lib` 通过 tools 的 39 项、Typst 的 11 项和 V8 sandbox 的 7 项测试。`just test-tui-unit render::highlight::tests` 的 4 项与 `just test-tui-unit app::marketplace_tests` 的 24 项通过，合计 156 项消费者测试。已移除随序列化补丁及字体回补一起撤掉的专用测试和资源，保留真实高亮、排版、搜索及 XML 边界覆盖。
+
+`just check ash-tools -p ash-model-tokenizer -p ash-typst -p ash-tui -p ash-v8-poc -p ash-code-mode-runtime --profile ci-test` 的正常编译检查通过；相同六个包加 `ash-cli` 的 `just rust-warnings ... --profile ci-test` 全部目标检查通过。`just dependencies`、使用锁定 cargo-deny 0.20.2 的 `just dependency-security` 通过；`just test-python scripts` 运行 161 项，7 项按平台条件跳过，其余通过。Bazel 的 `build @crates//:bm25 @crates//:syntect` 实际编译通过并更新 lockfile；改动文件的 Rust、Python、JSON/Markdown 格式及 `git diff --check` 通过。未运行完整 workspace 回归或 Web/Electron UI，本轮未修改 UI 行为；Linux/macOS 的消费者编译由 `rust-warnings.yml` 的对应 warnings 作业覆盖，本机无法执行这些系统上的运行验证。
+
+2026-10-10 的此前验证覆盖 Windows product-update 的 signing 构建与下载测试、daemon、http-client、Symphony；相应正常构建与 warning 检查通过。Symphony 的一个既有测试需要在独立测试子进程中设置 HOME。恢复发布版后的消费者验证需以本次实际运行结果为准，不能复用已撤掉源码补丁的验证结论。
+
+CLI commands 的七项 Windows 10060 超时已定位并修复：控制连接能及时返回，业务连接却在初始化内置 SSH 扩展时递归修改整个 Cargo 输出目录的 ACL，阻塞 `initialize` 响应。启动方现在显式区分安装包和内置模块；内置模块不需要磁盘包读取授权，保留相同的 AppContainer、限制令牌和 Job 隔离。账号夹具同时固定 `ZCODE_DATA_BASE_DIR`，避免宿主凭据覆盖临时 home。重建 App Server 后，`just test-processes ash-cli --profile ci-test --test commands` 的全部 10 项通过，0 项跳过，未放宽断言或延长超时。版本切换用例使用该入口在 Cargo 的 Windows Job 外运行，以验证 daemon 的独立生命周期。
+
+扩展宿主的 38 项进程测试、3 项 Windows 隔离测试及共用监管器的 19 项单测通过；新增回归用例在修复前失败，修复后验证内置模块不遍历无关目录。隔离探针同时验证内置模块不获得工作目录的临时读取权限、句柄存活时 ACL 不变，以及进程结束后的权限和 AppContainer 回收。App Server 和 JS 宿主正常构建通过；Windows sandbox、Editor Extension Host、JS Extension Host 和 CLI 的普通编译及全部目标 warning 检查通过，统一使用 `ci-test`。
+
+stdio 的两项 Windows 错误 32 也已修复。进程探针确认旧实现只杀掉并回收 CLI 转发进程，真正的 App Server 仍持有 `connectors.sqlite3`、`state.sqlite3` 及其 WAL/SHM 文件；取消 stdout 读取不能证明后代进程已退出。会话现在先 join 写入线程，关闭 stdin 触发服务端 EOF 清理，再等待转发命令退出和读取线程结束。显式 shutdown、stdio Drop 和初始化拒绝共用该清理路径，进程等待失败会返回错误；未添加延时、重试或测试豁免。`just test-processes ash-cli --profile ci-test --test stdio` 的原有两项及新增 Drop 用例全部通过（3/3，0 项跳过），保留立即删除 profile 的断言。`just test ash-app-server-client --profile ci-test --lib` 全部 45 项通过，包括四项子进程 EOF 清理回归；`just test ash-remote-connections --profile ci-test --lib` 在 Windows 可执行的 26 项通过。CLI 正常构建、`just check ash-app-server-client -p ash-cli --profile ci-test` 和 `just rust-warnings ash-app-server-client -p ash-cli --profile ci-test` 的全部目标检查通过。Linux/macOS 的完整 stdio 与 SSH 生命周期目标接入 [rust-warnings.yml](../.github/workflows/rust-warnings.yml) 的 `stdio-lifecycle` 作业（`ubuntu-24.04`、`macos-15`），由 blocking CI 汇总结果；缺少 OpenSSH 或 `lsof` 会失败。作业复用 Ash 的校验和锁定 ripgrep 准备器，同一 `ci-test` profile、`--locked` 和 warning 门禁构建实际 CLI、App Server、Remote Server、JS 宿主，并分别编译和运行测试。
+
+Linux WSL 的独立源码快照验证已通过：`scripts/cargo.py --deny-warnings --process-tests test -p ash-cli --test stdio --profile ci-test --locked` 全部 8 项通过；`scripts/cargo.py --deny-warnings test -p ash-app-server-client -p ash-remote-connections --lib --profile ci-test --locked` 分别 45/45 和 35/35 项通过，均无跳过。关闭前确认服务端持有 SQLite 文件并记录后代 PID，关闭后要求 CLI、实际服务端、SSH 传输及所记录的后代退出，`lsof` 没有目录文件占用，再立即删除夹具目录。真实 OpenSSH 回环覆盖 shutdown 和 Drop，独立后台跨连接保留后通过正式 stop 关闭；已移除两个 500ms 等待及终端 attach 重试。Linux 的四个正常可执行产物构建以及 CLI、客户端、远程连接库的全部目标 warning 检查通过；结束后的进程清点没有 Ash 运行时或夹具 sshd 遗留。Windows 客户端 45 项回归及同一组包的全部目标 warning 检查通过；并行夹具的时间戳目录冲突由唯一序号修复。macOS 本机不可用，新增 `stdio-lifecycle (macos-15)` 作业尚未触发，不能报告 macOS 运行通过。
+
+TLS 最低版本、撤回的 chacha20 更新、citationberg 的 quick-xml 修复和 Liquid 上游固定提交继续保留；它们不依赖本地 Rust 源码副本。停止维护告警的逐项例外不能代替消费者正常构建、行为测试和 warning 检查。Linux/macOS 运行及 Android loader 编译仍需在所属平台验证；V8 源码生产仍由 [rusty-v8-release.yml](../.github/workflows/rusty-v8-release.yml) 和 [V8 构建说明](../third_party/v8/README.md) 负责，本轮不声称完整 C++ 源码构建通过。
 
 ### 构建测量
 
@@ -419,11 +447,29 @@ just bench-build ash-cli --profile dev-small --jobs 4 --compare .build/build-hea
 
 ### CI 检查
 
+[blocking-ci.yml](../.github/workflows/blocking-ci.yml) 是常规检查的 PR、main 推送和 merge queue 入口。路径规则集中在 [ci-workflows.json](../.github/ci-workflows.json)，选择器读取完整 Git diff，不受 GitHub 路径过滤的文件数量限制；没有基线的新分支和手动运行检查全部常规工作流。子工作流保留独立手动入口，Bazel 的 release 入口和依赖安全的每周检查也保留。平台与发布工作流继续使用自己的入口。
+
+汇总检查名为 `CI required`。被选中的检查必须成功，只有选择器明确排除的检查才允许跳过；失败、取消、缺少结果或选择器失败都会阻断。GitHub 仓库 ruleset/分支保护需要将 `CI required` 设为必需检查；修改工作流文件不会自动修改仓库设置。
+
+Git blob 默认上限为 1 MiB，包括二进制文件。检查候选提交中新增或修改的对象；重命名按目标路径重新判断。已审查的大文件在 [blob-size-policy.json](../.github/blob-size-policy.json) 中使用精确路径、有限预算和原因，不能使用目录豁免。本地检查当前提交的完整树：
+
+```sh
+python -B scripts/check_blob_size.py --head HEAD
+```
+
+检查指定范围时加入 `--base <commit>`；检查器读取 Git 对象，未提交的工作区内容不计入。
+
 | 工作流                                                              | 覆盖                                                                     |
 | ------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| [blocking-ci.yml](../.github/workflows/blocking-ci.yml)             | 按变更选择检查，并汇总为 `CI required`                                   |
+| [blob-size-policy.yml](../.github/workflows/blob-size-policy.yml)   | Git 对象大小和已审查的精确路径预算                                       |
+| [cargo-deny.yml](../.github/workflows/cargo-deny.yml)               | Rust 依赖安全、许可证、来源；每周更新 advisory 检查                      |
+| [format.yml](../.github/workflows/format.yml)                       | TypeScript、Rust、配置、文档格式                                         |
+| [codespell.yml](../.github/workflows/codespell.yml)                 | 拼写检查                                                                 |
 | [frontend.yml](../.github/workflows/frontend.yml)                   | TypeScript 构建工具、编辑器、前端单测和 Browser/Electron UI Playwright   |
 | [tooling.yml](../.github/workflows/tooling.yml)                     | Python 检查及构建、包布局、签名契约测试                                  |
-| [bazel-boundary.yml](../.github/workflows/bazel-boundary.yml)       | App 边界、发布契约和 CLI/TUI PTY 场景                                    |
+| [media.yml](../.github/workflows/media.yml)                         | 媒体相关 Rust 检查和平台集成测试                                         |
+| [bazel.yml](../.github/workflows/bazel.yml)                         | Bazel 构建下的 Linux CLI/TUI PTY 场景                                    |
 | [platform-checks.yml](../.github/workflows/platform-checks.yml)     | 跨平台验证、Linux/macOS 发布构建，以及统一发布验证和上传                 |
 | [release-windows.yml](../.github/workflows/release-windows.yml)     | 由主流程调用，构建并签名 Windows Code/App Server 包及 x64 Desktop 安装器 |
 | [rust-warnings.yml](../.github/workflows/rust-warnings.yml)         | Rust warning 检查和 TUI 测试                                             |
