@@ -49,7 +49,9 @@ def resolve_tgrep(
             {
                 "source": lock["source"]["sha256"],
                 "patch": lock["patch"]["sha256"],
-                "shared_sources": {name: lock[name]["sha256"] for name in shared_sources},
+                "shared_sources": {
+                    name: lock[name]["sha256"] for name in shared_sources
+                },
                 "target": spec.target,
                 "toolchain": toolchain,
             },

@@ -44,7 +44,7 @@ python-format-check:
 spellcheck:
     {{ tools_python }} -B scripts/spellcheck.py
 
-# Install the exact Python tool wheels before lint, formatting, or spellcheck.
+# Sync the locked Python tools before lint, formatting, or spellcheck.
 install-python:
     {{ python }} -B scripts/install_python_tools.py
 

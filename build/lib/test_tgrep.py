@@ -247,16 +247,29 @@ class TgrepTests(unittest.TestCase):
 
                 with (
                     patch("build.lib.tgrep.subprocess.run", side_effect=run),
-                    patch("build.lib.tgrep.subprocess.check_output", return_value="toolchain"),
-                    patch("build.lib.tgrep.default_target", return_value="other-target"),
+                    patch(
+                        "build.lib.tgrep.subprocess.check_output",
+                        return_value="toolchain",
+                    ),
+                    patch(
+                        "build.lib.tgrep.default_target", return_value="other-target"
+                    ),
                 ):
-                    first = resolve_tgrep(TARGETS["aarch64-apple-darwin"], lock, root / "cache")
+                    first = resolve_tgrep(
+                        TARGETS["aarch64-apple-darwin"], lock, root / "cache"
+                    )
                     ranking.write_text("pub fn rank() { /* updated */ }\n")
                     with self.assertRaisesRegex(RuntimeError, "checksum mismatch"):
-                        resolve_tgrep(TARGETS["aarch64-apple-darwin"], lock, root / "cache")
-                    data[name]["sha256"] = hashlib.sha256(ranking.read_bytes()).hexdigest()
+                        resolve_tgrep(
+                            TARGETS["aarch64-apple-darwin"], lock, root / "cache"
+                        )
+                    data[name]["sha256"] = hashlib.sha256(
+                        ranking.read_bytes()
+                    ).hexdigest()
                     lock.write_text(json.dumps(data))
-                    second = resolve_tgrep(TARGETS["aarch64-apple-darwin"], lock, root / "cache")
+                    second = resolve_tgrep(
+                        TARGETS["aarch64-apple-darwin"], lock, root / "cache"
+                    )
                 self.assertNotEqual(first.executable, second.executable)
                 self.assertEqual(len(builds), 2)
                 self.assertEqual(second.executable.read_bytes(), ranking.read_bytes())

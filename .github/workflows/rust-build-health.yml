@@ -12,7 +12,7 @@ on:
       - "scripts/*.py"
       - "build/**"
       - "scripts/pyproject.toml"
-      - "scripts/requirements.txt"
+      - "scripts/uv.lock"
       - "justfile"
       - ".github/workflows/rust-build-health.yml"
   pull_request:
@@ -25,7 +25,7 @@ on:
       - "scripts/*.py"
       - "build/**"
       - "scripts/pyproject.toml"
-      - "scripts/requirements.txt"
+      - "scripts/uv.lock"
       - "justfile"
       - ".github/workflows/rust-build-health.yml"
   workflow_dispatch:

@@ -1,10 +1,11 @@
-"""Install the pinned repository Python tools into scripts/.venv."""
+"""Sync the locked repository Python tools into scripts/.venv."""
 
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
-import venv
+import sys
 from pathlib import Path
 
 
@@ -13,23 +14,26 @@ ENVIRONMENT = SCRIPTS / ".venv"
 
 
 def main() -> None:
-    python = ENVIRONMENT / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-    if not (ENVIRONMENT / "pyvenv.cfg").is_file():
-        venv.EnvBuilder(with_pip=False).create(ENVIRONMENT)
-    subprocess.run([str(python), "-m", "ensurepip", "--upgrade"], check=True)
+    uv = shutil.which("uv")
+    if uv is None:
+        raise SystemExit(
+            "Install the uv version required by scripts/pyproject.toml and add it to PATH."
+        )
+    # Keep the interpreter selected by Just/Node and their shared environment path.
+    # A stale lock must fail rather than changing dependency versions during setup.
     subprocess.run(
         [
-            str(python),
-            "-m",
-            "pip",
-            "--disable-pip-version-check",
-            "install",
-            "--require-hashes",
-            "--no-deps",
-            "--only-binary=:all:",
-            "-r",
-            str(SCRIPTS / "requirements.txt"),
+            uv,
+            "sync",
+            "--project",
+            str(SCRIPTS),
+            "--locked",
+            "--python",
+            sys.executable,
+            "--no-python-downloads",
+            "--no-build",
         ],
+        env={**os.environ, "UV_PROJECT_ENVIRONMENT": str(ENVIRONMENT)},
         check=True,
     )
 

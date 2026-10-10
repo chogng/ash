@@ -12,12 +12,13 @@
 | Node.js       | [`.nvmrc`](../.nvmrc)；pnpm 使用 [`package.json`](../package.json) 中的 `devEngines.runtime` 自动获取固定版本 |
 | pnpm          | 根 [`package.json`](../package.json) 的 `packageManager`，安装方法见[初始化](#初始化)                         |
 | Python        | [`scripts/pyproject.toml`](../scripts/pyproject.toml) 的 `requires-python`，建议 3.12                         |
+| uv            | [`scripts/pyproject.toml`](../scripts/pyproject.toml) 的 `tool.uv.required-version`                           |
 | Just          | 安装后确保 `just` 在 PATH 中                                                                                  |
 | Bazel（按需） | Bazelisk 读取 [`.bazelversion`](../.bazelversion)                                                             |
 
 ### macOS 与 Linux 开发环境
 
-安装 Rust、Just 和 Python 3.11 及以上版本。首次初始化使用 PATH 中的 `python3`；确认 `python3 -c 'import tomllib'` 成功。macOS 自带 Python 可能不满足要求，可用 `uv run --python 3.12 just install` 初始化；Apple Silicon 上的 Homebrew Python 3.12 也可将 `/opt/homebrew/opt/python@3.12/libexec/bin` 放在 PATH 前部。初始化后，Just 和前端构建入口优先复用 `scripts/.venv`，日常启动无需再包装 `uv run`。
+安装 Rust、Just、仓库要求的 uv 和 Python 3.11 及以上版本。首次初始化使用 PATH 中的 `python3`；确认 `python3 -c 'import tomllib'` 成功。macOS 自带 Python 可能不满足要求，可用 `uv run --python 3.12 just install` 初始化；Apple Silicon 上的 Homebrew Python 3.12 也可将 `/opt/homebrew/opt/python@3.12/libexec/bin` 放在 PATH 前部。初始化后，Just 和前端构建入口优先复用 `scripts/.venv`，日常启动无需再包装 `uv run`。
 
 准备完整后端包时，macOS 还需要 Go 1.26 和系统 C/C++ 工具链来构建 LiveKit Server，见 [LiveKit Server](../third_party/livekit/README.md)。Linux 的完整后端构建需要 ALSA 开发库；沙箱构建需要 C 编译器和 libcap，见 [共享包构建](../build/README.md)。
 
@@ -31,6 +32,7 @@
 | Visual Studio English 语言包 | 在 Installer 中补装，避免中文链接器进度被 Rust 误报为 warning                                |
 | PowerShell 7                 | 支持 `-CommandWithArgs`；`just install` 可通过 winget 安装缺失的工具                         |
 | Python                       | `python` 命令指向满足仓库要求的版本                                                          |
+| uv                           | 安装 `scripts/pyproject.toml` 要求的版本并加入 PATH                                          |
 | Git、ripgrep、CMake          | 安装并加入 PATH                                                                              |
 | LLVM/Clang                   | LLVM 的 `bin` 加入 PATH；自定义安装路径时，设置 `LIBCLANG_PATH` 指向含 `libclang.dll` 的目录 |
 | Bazelisk（按需）             | 运行 Bazel 测试前，将 `BAZEL_SH` 设为 Git Bash 路径                                          |
@@ -41,9 +43,11 @@
 
 1. 使用 [pnpm 独立安装方式](https://pnpm.io/installation/)，安装根 [`package.json`](../package.json) 的 `packageManager` 指定版本。仓库安装检查要求版本一致。
 2. 执行 `pnpm install`，安装 Node workspace 依赖。
-3. 执行 `just install`，获取 Cargo 依赖并创建含固定版本 Ruff 和 codespell 的 `scripts/.venv`。Windows 缺少 PowerShell 7 时，此步骤会安装它；随后重启终端和编辑器以更新 PATH。
+3. 执行 `just install`，获取 Cargo 依赖并通过 uv 同步 `scripts/uv.lock` 中固定的 Ruff 和 codespell 到 `scripts/.venv`。Windows 缺少 PowerShell 7 时，此步骤会安装它；随后重启终端和编辑器以更新 PATH。
 
 直接执行 `node` 时使用 `.nvmrc` 指定版本；pnpm 脚本使用仓库固定的 Node。Just 和 Node 启动的 Python 构建工具优先使用初始化创建的 `scripts/.venv`。Node 入口可用 `PYTHON` 显式指定解释器，Just 可用 `just --set python <解释器路径> <命令>` 覆盖；尚未初始化时，Just 使用 Windows 的 `python` 或其他平台的 `python3`。
+
+Python 工具依赖只在 [`scripts/pyproject.toml`](../scripts/pyproject.toml) 声明，解析结果及下载哈希由提交的 [`scripts/uv.lock`](../scripts/uv.lock) 保存。修改依赖后执行 `uv lock --project scripts`，再运行 `just install-python`。安装入口和 CI 都使用 `uv sync --locked`；声明与锁文件不一致时失败，不自动改写锁文件。同步复用选定的 Python，不下载其他解释器，也不从源码构建依赖。
 
 pnpm 根据 `devEngines.runtime` 下载并使用固定的 Node 版本，通常不需要单独安装 Node。`pnpm install` 可在 PowerShell 与 Bash 中执行。运行 Electron 或 Browser Workbench 前需要前端依赖；只开发 CLI/TUI 时按所需 Rust 工具和后端资源准备环境。
 
@@ -174,6 +178,8 @@ bazel test //cli:tui-real-scenarios --test_output=errors --test_env=PATH
 ### Dev Container：Linux Desktop、Web 与后端
 
 安装 Docker 和 VS Code Dev Containers 扩展，执行 **Dev Containers: Reopen in Container**。配置见 [`.devcontainer/`](../.devcontainer)，首次创建需联网安装工具、项目依赖、Chromium 和后端资源。
+
+当前容器镜像未预装 uv。若首次初始化提示缺少 uv，在容器中安装 `scripts/pyproject.toml` 要求的版本并加入 PATH，再执行 `sh .devcontainer/post-create.sh` 完成初始化。
 
 在容器终端执行 `just ash` 启动 Electron，在宿主机打开转发的 6080 端口，使用 VNC 密码 `vscode` 查看桌面。容器启用 `privileged` 并配置 Electron 沙箱权限；依赖和产物使用容器卷，与宿主机隔离。
 

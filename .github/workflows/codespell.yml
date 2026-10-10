@@ -25,7 +25,11 @@ jobs:
       - uses: taiki-e/install-action@a6b2e2dcd845ddd7f509ce4f3ed3d922b80cc5d9
         with:
           tool: just@1.46.0
-      - name: Install pinned Python tools
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version-file: scripts/pyproject.toml
+      - name: Sync locked Python tools
         run: just install-python
       - name: Check English spelling
         run: just spellcheck
