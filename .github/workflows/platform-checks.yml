@@ -34,7 +34,7 @@ jobs:
           override: false
           rustflags: ""
       - name: Test macOS sandbox and PTY boundaries
-        run: python3 -B scripts/cargo.py test -p ash-mxc-sandbox --lib --test pty --locked --target "${{ matrix.target }}" -- --test-threads=1 --nocapture
+        run: python3 -B scripts/cargo.py test -p ash-mxc-sandbox --lib --test macos --test pty --locked --target "${{ matrix.target }}" -- --test-threads=1 --nocapture
 
   sanity:
     # Both platform checks and release builds must pass before verifying uploaded packages.

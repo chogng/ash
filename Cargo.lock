@@ -2130,6 +2130,7 @@ dependencies = [
  "ash-utils-pty",
  "dunce",
  "globset",
+ "libc",
  "libtest-mimic",
  "log",
  "mxc-sdk",

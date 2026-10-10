@@ -1,4 +1,5 @@
 //! Converts Ash authority into Microsoft MXC SDK requests and adapts its process handles.
+#![forbid(unsafe_code)]
 mod policy;
 mod process;
 #[cfg(windows)]

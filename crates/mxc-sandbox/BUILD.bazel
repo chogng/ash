@@ -8,6 +8,17 @@ ash_rust_crate(
 )
 
 rust_test(
+    name = "macos-tests",
+    crate_name = "macos",
+    crate_root = "tests/macos.rs",
+    srcs = ["tests/macos.rs"] + glob(["tests/macos/*.rs"]),
+    edition = "2024",
+    tags = ["no-sandbox"],
+    target_compatible_with = ["@platforms//os:macos"],
+    deps = all_crate_deps(normal = True, normal_dev = True) + [":mxc-sandbox"],
+)
+
+rust_test(
     name = "pty-tests",
     crate_name = "pty",
     crate_root = "tests/pty.rs",
