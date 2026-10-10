@@ -4,6 +4,11 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      sandbox_only:
+        description: "Run only macOS sandbox acceptance"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -29,11 +34,11 @@ jobs:
           override: false
           rustflags: ""
       - name: Test macOS sandbox and PTY boundaries
-        run: python3 -B scripts/cargo.py test -p ash-mxc-sandbox --lib --test pty --locked --target "${{ matrix.target }}"
+        run: python3 -B scripts/cargo.py test -p ash-mxc-sandbox --lib --test pty --locked --target "${{ matrix.target }}" -- --test-threads=1
 
   sanity:
     # Both platform checks and release builds must pass before verifying uploaded packages.
-    needs: [check, build-windows]
+    needs: [check, sandbox-macos, build-windows]
     if: github.event_name == 'release'
     uses: ./.github/workflows/release-sanity.yml
     with:
@@ -70,6 +75,7 @@ jobs:
       ASH_UPDATE_SIGNING_KEY: ${{ secrets.ASH_UPDATE_SIGNING_KEY }}
 
   check:
+    if: github.event_name != 'workflow_dispatch' || !inputs.sandbox_only
     name: ${{ matrix.target }} (${{ matrix.runner }})
     permissions:
       contents: read
