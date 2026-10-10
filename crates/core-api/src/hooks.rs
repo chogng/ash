@@ -60,6 +60,20 @@ pub enum HookEventScope {
     },
 }
 
+/// Optional process evidence. Hosts retain it only under their diagnostic recording policy.
+#[derive(Clone, Debug)]
+pub struct HookRunEvidence {
+    pub program: String,
+    pub arguments: Vec<String>,
+    pub directory: std::path::PathBuf,
+    pub input: String,
+    pub stdout: String,
+    pub stderr: String,
+    pub exit_code: Option<i32>,
+    pub stdout_truncated: bool,
+    pub stderr_truncated: bool,
+}
+
 /// One Ash lifecycle event emitted by the owner of the corresponding state transition.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HookEventRequest {

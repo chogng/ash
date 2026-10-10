@@ -3,6 +3,26 @@ import { suite, test } from 'mocha';
 import { mergeAgentTrace, mergeAgentTraceDiagnostics, parseAgentTrace, parseAgentTracePage, parseAgentTraceDiagnostics, parseAgentTraceDiagnosticPage, parseAgentTraceGraph } from '../../common/agentTrace.js';
 
 suite('Agent trace artifact', () => {
+	test('validates versioned accounting receipts and pending evidence without changing V3 history', () => {
+		const event = { eventId: 'receipt', threadId: 'root', turnId: 'turn', sequence: 1, recordedAt: 1, event: { type: 'modelAttemptAccounted', attemptId: 'attempt', invocationId: 'committed', sourceThreadSequence: 4 } };
+		const capture = { formatVersion: 2, captureId: 'capture', recordingStatus: 'incomplete', droppedRecords: 0, pendingRecords: 3, events: [event] };
+		assert.equal(parseAgentTraceDiagnostics(capture).pendingRecords, 3);
+		assert.throws(() => parseAgentTraceDiagnostics({ ...capture, formatVersion: 1 }));
+		assert.throws(() => parseAgentTraceDiagnostics({ ...capture, pendingRecords: undefined }));
+		assert.throws(() => parseAgentTraceDiagnostics({ ...capture, pendingRecords: -1 }));
+		assert.throws(() => parseAgentTraceDiagnostics({ ...capture, events: [{ ...event, event: { ...event.event, invocationId: '' } }] }));
+		assert.throws(() => parseAgentTraceDiagnostics({ ...capture, events: [{ ...event, event: { ...event.event, sourceThreadSequence: 0 } }] }));
+		assert.deepEqual(parseAgentTrace({ formatVersion: 3, sessionId: 's', threads: [], historyPrefixes: [], diagnostics: capture }).diagnostics?.events, [event]);
+	});
+	test('accepts Session Hook evidence without a Turn and rejects incorrect evidence kinds', () => {
+		const event = { eventId: 'hook', threadId: 'root', turnId: null, sequence: 1, recordedAt: 1, event: { type: 'hookRunRecorded', runId: 'run', executionPayload: { payloadId: 'payload-1', kind: 'hookExecution', byteLength: 1, status: 'saved', digest: 'sha256:' + '0'.repeat(64) } } };
+		const capture = { formatVersion: 1, captureId: 'capture', recordingStatus: 'recording', droppedRecords: 0, events: [event] };
+		assert.deepEqual(parseAgentTraceDiagnostics(capture).events, [event]);
+		assert.throws(() => parseAgentTraceDiagnostics({ ...capture, events: [{ ...event, event: { ...event.event, runId: '' } }] }));
+		assert.throws(() => parseAgentTraceDiagnostics({ ...capture, events: [{ ...event, event: { ...event.event, executionPayload: { ...event.event.executionPayload, kind: 'modelResponse' } } }] }));
+		assert.throws(() => parseAgentTraceDiagnostics({ ...capture, events: [{ ...event, event: { type: 'modelAttemptFailed', attemptId: 'a' } }] }));
+	});
+
 	test('retains earlier prefix closure when later pages contain no prefix references', () => {
 		const trace = parseAgentTrace({ formatVersion: 3, sessionId: 's', threads: [], historyPrefixes: [{ digest: 'retained' }] });
 		assert.deepEqual(mergeAgentTrace(trace, { ...trace, historyPrefixes: [] }).historyPrefixes, trace.historyPrefixes);

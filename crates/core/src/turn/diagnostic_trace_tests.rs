@@ -3,19 +3,29 @@ use ash_rollout_trace::DiagnosticEventKind;
 use ash_rollout_trace::RecordingStatus;
 use ash_rollout_trace::TraceRecorder;
 
-fn recorded_turn(root: PathBuf) -> (Arc<ThreadController>, ThreadId, TurnId) {
+fn recorded_turn(
+    root: PathBuf,
+) -> (
+    Arc<ThreadController>,
+    ThreadId,
+    TurnId,
+    ash_rollout_trace::TraceReader,
+) {
     let (threads, thread, turn) = started_turn();
+    let recorder = Arc::new(TraceRecorder::new(Some(root)));
     let threads = Arc::try_unwrap(threads)
         .ok()
         .expect("unshared controller before execution")
-        .with_trace_recorder(Arc::new(TraceRecorder::new(Some(root))));
-    (Arc::new(threads), thread, turn)
+        .with_diagnostics(recorder.clone());
+    let threads = Arc::new(threads);
+    let trace = ash_rollout_trace::TraceReader::new(threads.clone(), recorder);
+    (threads, thread, turn, trace)
 }
 
 #[test]
 fn diagnostic_trace_records_each_failed_retry_and_actual_semantic_requests() {
     let root = tempfile::tempdir().unwrap();
-    let (threads, thread, turn) = recorded_turn(root.path().into());
+    let (threads, thread, turn, trace) = recorded_turn(root.path().into());
     let model = Arc::new(ScriptedModel::new([
         Err(CoreError::ModelTransient {
             failure: ash_protocol::StableTurnError::connection_failed(),
@@ -28,9 +38,18 @@ fn diagnostic_trace_records_each_failed_retry_and_actual_semantic_requests() {
         .execute(&thread, &turn, &CancellationSource::new().token())
         .unwrap();
     let session = threads.read_thread(&thread).unwrap().session_id;
-    let page = threads.read_trace_diagnostics(&session, 0, 500).unwrap();
+    let page = trace.read_trace_diagnostics(&session, 0, 500).unwrap();
     let events = &page.diagnostics.events;
-    assert_eq!(events.len(), 9);
+    assert_eq!(events.len(), 10);
+    let events = events
+        .iter()
+        .filter(|event| {
+            !matches!(
+                event.event,
+                DiagnosticEventKind::ModelAttemptAccounted { .. }
+            )
+        })
+        .collect::<Vec<_>>();
     let capture = page.diagnostics.capture_id.as_ref().unwrap();
     for (index, request) in model.requests().iter().enumerate() {
         let group = &events[index * 3..index * 3 + 3];
@@ -44,7 +63,7 @@ fn diagnostic_trace_records_each_failed_retry_and_actual_semantic_requests() {
         ));
         assert_eq!(group[0].event.attempt_id(), group[2].event.attempt_id());
         assert_eq!(
-            threads
+            trace
                 .read_trace_payload(
                     &session,
                     capture,
@@ -118,7 +137,7 @@ impl ModelService for CancelledPartialModel {
 #[test]
 fn diagnostic_trace_retains_partial_output_before_cancellation_rejects_the_stream() {
     let root = tempfile::tempdir().unwrap();
-    let (threads, thread, turn) = recorded_turn(root.path().into());
+    let (threads, thread, turn, trace) = recorded_turn(root.path().into());
     let cancellation = CancellationSource::new();
     let result = TurnExecutor::without_tools(
         threads.clone(),
@@ -131,7 +150,7 @@ fn diagnostic_trace_retains_partial_output_before_cancellation_rejects_the_strea
         snapshot.turns.last().unwrap().status,
         TurnStatus::Interrupted
     );
-    let page = threads
+    let page = trace
         .read_trace_diagnostics(&snapshot.session_id, 0, 500)
         .unwrap();
     let DiagnosticEventKind::ModelAttemptCancelled {
@@ -142,7 +161,7 @@ fn diagnostic_trace_retains_partial_output_before_cancellation_rejects_the_strea
         panic!("expected cancelled attempt");
     };
     assert_eq!(
-        threads
+        trace
             .read_trace_payload(
                 &snapshot.session_id,
                 page.diagnostics.capture_id.as_ref().unwrap(),
@@ -158,7 +177,7 @@ fn diagnostic_trace_storage_failure_cannot_change_a_successful_turn() {
     let root = tempfile::tempdir().unwrap();
     let blocked = root.path().join("not-a-directory");
     std::fs::write(&blocked, "file").unwrap();
-    let (threads, thread, turn) = recorded_turn(blocked);
+    let (threads, thread, turn, trace) = recorded_turn(blocked);
     let result = TurnExecutor::without_tools(
         threads.clone(),
         Arc::new(ScriptedModel::new([Ok(text_response("answer"))])),
@@ -167,7 +186,7 @@ fn diagnostic_trace_storage_failure_cannot_change_a_successful_turn() {
     assert!(matches!(result, Ok(TurnExecutionOutcome::Completed(_))));
     let session = threads.read_thread(&thread).unwrap().session_id;
     assert_eq!(
-        threads
+        trace
             .read_trace_diagnostics(&session, 0, 500)
             .unwrap()
             .diagnostics
@@ -175,7 +194,7 @@ fn diagnostic_trace_storage_failure_cannot_change_a_successful_turn() {
         RecordingStatus::Unavailable
     );
     assert!(
-        !threads.read_session_trace(&session).unwrap().threads[0]
+        !trace.read_session_trace(&session).unwrap().threads[0]
             .events
             .is_empty()
     );
@@ -232,7 +251,7 @@ impl ToolService for ConsultationTool {
 #[test]
 fn diagnostic_trace_records_tool_model_consultation_through_the_real_turn_mailbox() {
     let root = tempfile::tempdir().unwrap();
-    let (threads, thread, initial) = recorded_turn(root.path().into());
+    let (threads, thread, initial, trace) = recorded_turn(root.path().into());
     threads
         .complete_turn(&thread, &initial, "ready".into())
         .unwrap();
@@ -297,7 +316,7 @@ fn diagnostic_trace_records_tool_model_consultation_through_the_real_turn_mailbo
     assert_eq!(requests.len(), 3);
     assert!(requests[1].tools.is_empty());
     assert!(request_contains(&requests[1], "Does this answer the task?"));
-    let page = threads
+    let page = trace
         .read_trace_diagnostics(&snapshot.session_id, 0, 500)
         .unwrap();
     let purposes = page
@@ -317,13 +336,40 @@ fn diagnostic_trace_records_tool_model_consultation_through_the_real_turn_mailbo
             ash_rollout_trace::InferencePurpose::Agent,
         ]
     );
-    assert_eq!(page.diagnostics.events.len(), 9);
+    assert_eq!(page.diagnostics.events.len(), 12);
+    let history = trace.read_session_trace(&snapshot.session_id).unwrap();
+    let accounting = history
+        .threads
+        .iter()
+        .flat_map(|thread| &thread.events)
+        .filter_map(|event| match &event.event {
+            ash_protocol::ThreadEvent::ModelInvocationRecorded { record, .. } => Some(record),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let links = page
+        .diagnostics
+        .events
+        .iter()
+        .filter_map(|event| match &event.event {
+            DiagnosticEventKind::ModelAttemptAccounted { invocation_id, .. } => Some(invocation_id),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(links.len(), 3);
+    for invocation_id in links {
+        assert!(
+            accounting
+                .iter()
+                .any(|record| &record.invocation_id == invocation_id)
+        );
+    }
     assert_eq!(
-        threads
+        trace
             .read_trace_payload(
                 &snapshot.session_id,
                 page.diagnostics.capture_id.as_deref().unwrap(),
-                &page.diagnostics.events[4]
+                &page.diagnostics.events[5]
                     .event
                     .payload()
                     .unwrap()

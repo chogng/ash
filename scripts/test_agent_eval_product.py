@@ -13,24 +13,12 @@ import threading
 import unittest
 
 import agent_eval
+import agent_eval_review
 
 
 SOLUTIONS = {
-    "app.py": "def select_names(names, prefix):\n    return [name for name in names if name.casefold().startswith(prefix.casefold())]\n",
-    "document.py": 'import re\n\n\ndef line_count(text):\n    return len(re.split(r"\\r\\n|\\r|\\n", text))\n',
-    "settings.py": """import json
-
-
-class Settings:
-    def __init__(self):
-        self.current = {"name": "default", "enabled": False}
-
-    def reload(self, path):
-        candidate = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(candidate, dict) or set(candidate) != {"name", "enabled"} or not isinstance(candidate["name"], str) or not isinstance(candidate["enabled"], bool):
-            raise ValueError("invalid settings")
-        self.current = candidate
-""",
+    path.name: path.read_text(encoding="utf-8")
+    for path in (agent_eval.ROOT / "test/agent-eval/reference-solutions").rglob("*.py")
 }
 
 
@@ -59,6 +47,7 @@ class AgentEvalProductTests(unittest.TestCase):
                         self.rfile.read(int(self.headers["Content-Length"]))
                     )
                     requests.append(request)
+                    control_request = self.path == "/control/v1/chat/completions"
                     if behavior["name"] == "hang":
                         self.send_response(200)
                         self.send_header("Content-Type", "text/event-stream")
@@ -96,14 +85,22 @@ class AgentEvalProductTests(unittest.TestCase):
                         self.wfile.write(body)
                         return
                     if (
-                        self.path != "/v1/chat/completions"
+                        self.path
+                        not in {"/v1/chat/completions", "/control/v1/chat/completions"}
                         or request["model"] != "fixture-model"
                     ):
                         raise ValueError(
                             "expected the explicit custom model's chat completions route"
                         )
                     messages = request["messages"]
-                    if any(message.get("role") == "tool" for message in messages):
+                    if control_request:
+                        delta, finish = (
+                            {
+                                "content": "Fixture claimed completion without repairing the files."
+                            },
+                            "stop",
+                        )
+                    elif any(message.get("role") == "tool" for message in messages):
                         delta, finish = {"content": "Fixture repair completed."}, "stop"
                     else:
                         prompt = json.dumps(messages)
@@ -236,6 +233,56 @@ order = 0
                         "本次 Turn 使用的准确 provider/model 标识", help_result.stdout
                     )
                     self.assertIn("保存本次 Turn 的变更记录", help_result.stdout)
+                    audit = agent_eval_review.audit_suite(
+                        suite, output.parent / f"{output.name}-audit"
+                    )
+                    self.assertTrue(audit["passed"])
+                    control_template = root / "control-profile"
+                    shutil.copytree(template, control_template)
+                    control_config = (control_template / "config.toml").read_text()
+                    (control_template / "config.toml").write_text(
+                        control_config.replace('/v1"', '/control/v1"')
+                    )
+                    declaration = {
+                        "schemaVersion": 1,
+                        "id": "scripted-product-loop-contract",
+                        "variant": "control",
+                        "hypothesis": "The scripted candidate repairs independently checked files while the scripted control only claims completion. This validates the workflow, not real model quality.",
+                        "changedFactors": ["profile:/connections/custom-eval/baseUrl"],
+                    }
+                    control_manifest = root / "experiment.control.json"
+                    candidate_manifest = root / "experiment.candidate.json"
+                    agent_eval_review.write_json(control_manifest, declaration)
+                    agent_eval_review.write_json(
+                        candidate_manifest, {**declaration, "variant": "candidate"}
+                    )
+                    control_output = output.parent / f"{output.name}-control"
+                    self.assertEqual(
+                        agent_eval.main(
+                            [
+                                "--ash",
+                                str(executable),
+                                "--profile-template",
+                                str(control_template),
+                                "--model",
+                                "custom-eval/fixture-model",
+                                "--output",
+                                str(control_output),
+                                "--timeout-seconds",
+                                "30",
+                                "--approval",
+                                "bypassPermissions",
+                                "--experiment",
+                                str(control_manifest),
+                            ]
+                        ),
+                        1,
+                    )
+                    control_report = agent_eval_review.load_report(
+                        control_output / "report.json"
+                    )
+                    self.assertEqual(control_report["summary"]["executionCompleted"], 3)
+                    self.assertEqual(control_report["summary"]["passed"], 0)
                     exit_code = agent_eval.main(
                         [
                             "--ash",
@@ -250,6 +297,10 @@ order = 0
                             "30",
                             "--approval",
                             "bypassPermissions",
+                            "--baseline",
+                            str(control_output / "report.json"),
+                            "--experiment",
+                            str(candidate_manifest),
                         ]
                     )
                     report = json.loads((output / "report.json").read_text())
@@ -275,7 +326,88 @@ order = 0
                     }
                     self.assertEqual(exit_code, 0, json.dumps(diagnostics, indent=2))
                     self.assertEqual(report["summary"]["passed"], 3)
-                    self.assertEqual(len(requests), 6)
+                    self.assertEqual(len(requests), 9)
+                    comparison_output = output.parent / f"{output.name}-comparison"
+                    self.assertEqual(
+                        agent_eval_review.main(
+                            [
+                                "compare",
+                                "--baseline",
+                                str(control_output / "report.json"),
+                                "--current",
+                                str(output / "report.json"),
+                                "--output",
+                                str(comparison_output),
+                            ]
+                        ),
+                        0,
+                    )
+                    comparison = agent_eval_review.read_json(
+                        comparison_output / "comparison.json"
+                    )
+                    self.assertEqual(comparison["gate"]["recoveredTrials"], 3)
+                    self.assertEqual(comparison["gate"]["regressedTrials"], 0)
+                    review_output = output.parent / f"{output.name}-review"
+                    self.assertEqual(
+                        agent_eval_review.main(
+                            [
+                                "review",
+                                "--report",
+                                str(control_output / "report.json"),
+                                "--output",
+                                str(review_output),
+                            ]
+                        ),
+                        0,
+                    )
+                    finding = {
+                        "caseId": "prefix-filter",
+                        "repetition": 1,
+                        "component": "unknown",
+                        "observation": "The scripted control completed without file edits and failed the independent verifier.",
+                        "hypothesis": declaration["hypothesis"],
+                        "proposedChange": "Exercise the scripted repair candidate through the same Ash tools and retained-result contract.",
+                        "acceptance": "All three independent task checks recover; no trial regresses. This is contract coverage, not a real harness quality score.",
+                        "evidence": [],
+                    }
+                    for artifact in ("trace.json", "verifier.stderr", "changes.patch"):
+                        evidence = agent_eval_review.evidence_file(
+                            control_output / "report.json",
+                            control_report["runs"][0],
+                            artifact,
+                        )
+                        finding["evidence"].append(
+                            {"artifact": artifact, "sha256": evidence["sha256"]}
+                        )
+                    feedback = {
+                        "schemaVersion": 1,
+                        "reportSha256": agent_eval_review.source_identity(
+                            control_output / "report.json"
+                        )["sha256"],
+                        "findings": [finding],
+                    }
+                    feedback_path = review_output / "feedback.json"
+                    agent_eval_review.write_json(feedback_path, feedback)
+                    self.assertEqual(
+                        agent_eval_review.main(
+                            [
+                                "handoff",
+                                "--report",
+                                str(control_output / "report.json"),
+                                "--feedback",
+                                str(feedback_path),
+                                "--finding",
+                                "1",
+                                "--experiment-id",
+                                "reviewed-contract-fixture",
+                                "--factor",
+                                "profile:/connections/custom-eval/baseUrl",
+                                "--output",
+                                str(output.parent / f"{output.name}-handoff"),
+                            ]
+                        ),
+                        0,
+                    )
                     for run in report["runs"]:
                         trace = json.loads(
                             (
@@ -309,13 +441,49 @@ order = 0
                             )
                         )
                         self.assertTrue(run["trace"]["usageComplete"])
+                        self.assertEqual(run["trace"]["analysisVersion"], 2)
+                        self.assertTrue(run["trace"]["diagnosticEvidenceComplete"])
+                        self.assertTrue(run["trace"]["usageComparisonComplete"])
+                        self.assertGreaterEqual(run["trace"]["toolCalls"], 1)
+                        self.assertEqual(
+                            run["trace"]["toolResults"], run["trace"]["toolCalls"]
+                        )
+                        self.assertEqual(run["trace"]["failedToolResults"], 0)
+                        selection = run["trace"]["instructionSelections"][0]
+                        self.assertEqual(
+                            len(selection["instructions"]["snapshotDigest"]), 64
+                        )
+                        self.assertTrue(
+                            any(
+                                record["eventId"] == selection["source"]["eventId"]
+                                for thread in trace["threads"]
+                                for record in thread["events"]
+                            )
+                        )
                         self.assertEqual(run["trace"]["modelAttempts"], 2)
                         self.assertEqual(
                             run["trace"]["diagnosticRecordingStatus"], "recording"
                         )
                         diagnostic = trace["diagnostics"]
-                        self.assertEqual(len(diagnostic["events"]), 6)
+                        self.assertEqual(diagnostic["formatVersion"], 2)
+                        self.assertEqual(diagnostic["pendingRecords"], 0)
+                        self.assertEqual(len(diagnostic["events"]), 8)
                         self.assertEqual(len(diagnostic["payloads"]), 6)
+                        self.assertEqual(len(run["trace"]["accountingLinks"]), 2)
+                        for receipt in run["trace"]["accountingLinks"]:
+                            source = receipt["accountingSource"]
+                            self.assertIsNotNone(source)
+                            committed = next(
+                                record
+                                for thread in trace["threads"]
+                                if thread["threadId"] == source["threadId"]
+                                for record in thread["events"]
+                                if record["eventId"] == source["eventId"]
+                            )
+                            self.assertEqual(
+                                committed["event"]["record"]["invocationId"],
+                                receipt["invocationId"],
+                            )
                         for observation in diagnostic["events"]:
                             event = observation["event"]
                             for field in ["requestPayload", "responsePayload"]:
@@ -329,6 +497,13 @@ order = 0
                                 edge["kind"] == "requestsTool"
                                 for edge in trace["graph"]["edges"]
                             )
+                        )
+                        self.assertEqual(
+                            sum(
+                                edge["kind"] == "accountsFor"
+                                for edge in trace["graph"]["edges"]
+                            ),
+                            2,
                         )
                         self.assertNotIn("retainedProfile", run)
                     failure_suite = root / "failure-suite"
@@ -363,9 +538,10 @@ order = 0
                                     "bypassPermissions",
                                 ]
                             )
-                            failed = json.loads(
+                            failed_report = json.loads(
                                 (failed_output / "report.json").read_text()
-                            )["runs"][0]
+                            )
+                            failed = failed_report["runs"][0]
                             self.assertEqual(failed_exit, 0 if mode == "retry" else 1)
                             self.assertEqual(
                                 failed["executionStatus"],
@@ -390,9 +566,28 @@ order = 0
                             if mode in ["reject", "retry"]:
                                 self.assertIn("modelAttemptFailed", kinds)
                             if mode == "retry":
+                                self.assertFalse(
+                                    failed["trace"]["usageComparisonComplete"]
+                                )
+                                self.assertEqual(
+                                    failed_report["summary"]["processMetrics"][
+                                        "inputTokensReported"
+                                    ]["completeRuns"],
+                                    0,
+                                )
                                 self.assertEqual(failed["trace"]["modelAttempts"], 3)
                                 self.assertEqual(failed["trace"]["failedAttempts"], 1)
+                                evidence = next(
+                                    item
+                                    for item in failed["trace"]["observations"]
+                                    if item["kind"] == "modelAttemptFailed"
+                                )
+                                self.assertIn(
+                                    evidence["source"]["eventId"],
+                                    {record["eventId"] for record in observations},
+                                )
                             if mode == "hang":
+                                self.assertFalse(failed["trace"]["usageComplete"])
                                 self.assertIn("modelAttemptCancelled", kinds)
                                 ended = next(
                                     record["event"]

@@ -21,7 +21,6 @@ ash-async-utils = { workspace = true }
 ash-context-engine = { workspace = true }
 ash-protocol = { workspace = true }
 ash-thread-store = { workspace = true }
-ash-rollout-trace = { workspace = true }
 serde_json = { workspace = true }
 
 [lints]

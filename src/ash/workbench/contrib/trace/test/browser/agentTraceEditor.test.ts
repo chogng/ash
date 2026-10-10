@@ -1,3 +1,4 @@
+import { ITraceService } from '../../../../services/trace/common/traceService.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
@@ -11,7 +12,7 @@ import { InMemoryConfigurationService } from '../../../../../platform/configurat
 import { IContextKeyService, ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { IChatService, type ThreadSubscription, type ThreadUpdateEnvelope } from '../../../../services/chat/common/chatService.js';
-import type { AgentTracePage } from '../../../../services/chat/common/agentTrace.js';
+import type { AgentTracePage } from '../../../../services/trace/common/agentTrace.js';
 import { registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import { AgentTraceEditor } from '../../browser/agentTraceEditor.js';
 import { EditorOption } from '../../../../../editor/common/config/editorOptions.js';
@@ -48,6 +49,7 @@ suite('Execution Trace editor', () => {
 				readTraceDiagnostics: async () => ({ diagnostics: { formatVersion: 1, captureId: null, recordingStatus: 'disabled', droppedRecords: 0, events: [] }, cursor: 0, hasMore: false }),
 				subscribeThread: async () => ({ thread: { sequence: 3 } }), unsubscribeThread: async () => { },
 			} as unknown as IChatService);
+			services.registerInstance(ITraceService, services.get(IChatService) as unknown as ITraceService);
 			registerCodeEditorServices(services);
 			using pane = registerTestComponentServices(services).createInstance(AgentTraceEditor);
 			pane.create(dom.window.document.body);
@@ -111,6 +113,7 @@ suite('Execution Trace editor', () => {
 				},
 				unsubscribeThread: async (_session: string, threadId: string) => { released.push(threadId); },
 			} as unknown as IChatService);
+			services.registerInstance(ITraceService, services.get(IChatService) as unknown as ITraceService);
 			registerCodeEditorServices(services);
 			using pane = registerTestComponentServices(services).createInstance(AgentTraceEditor);
 			pane.create(dom.window.document.body);
@@ -153,6 +156,7 @@ suite('Execution Trace editor', () => {
 				readTracePayload: async (session: string, capture: string, payload: string) => { assert.deepEqual([session, capture, payload], ['s', 'capture', 'payload-1']); payloadReads++; void requested.complete(); return evidence.p; },
 				subscribeThread: async () => ({ thread: { sequence: 0 } }), unsubscribeThread: async () => { },
 			} as unknown as IChatService);
+			services.registerInstance(ITraceService, services.get(IChatService) as unknown as ITraceService);
 			registerCodeEditorServices(services);
 			using pane = registerTestComponentServices(services).createInstance(AgentTraceEditor);
 			pane.create(dom.window.document.body);
@@ -202,6 +206,7 @@ suite('Execution Trace editor', () => {
 				subscribeThread: async (_session: string, _thread: string, _after: number, owner: object) => { owners.push(owner); return { thread: { sequence: 2 } } as ThreadSubscription; },
 				unsubscribeThread: async (_session: string, threadId: string) => { released.push(threadId); },
 			} as unknown as IChatService);
+			services.registerInstance(ITraceService, services.get(IChatService) as unknown as ITraceService);
 			registerCodeEditorServices(services);
 			using pane = registerTestComponentServices(services).createInstance(AgentTraceEditor);
 			pane.create(dom.window.document.body);
@@ -250,6 +255,7 @@ suite('Execution Trace editor', () => {
 				subscribeThread: () => { void subscribing.complete(); return result.p; },
 				unsubscribeThread: async (_session: string, _thread: string, owner: object) => { released.add(owner); },
 			} as unknown as IChatService);
+			services.registerInstance(ITraceService, services.get(IChatService) as unknown as ITraceService);
 			registerCodeEditorServices(services);
 			using pane = registerTestComponentServices(services).createInstance(AgentTraceEditor);
 			pane.create(dom.window.document.body);
@@ -309,6 +315,7 @@ suite('Execution Trace editor', () => {
 					subscribeThread: async (_session: string, _thread: string, after: number) => ({ thread: { sequence: after } }),
 					unsubscribeThread: async (_session: string, thread: string) => { released.push(thread); },
 				} as unknown as IChatService);
+				services.registerInstance(ITraceService, services.get(IChatService) as unknown as ITraceService);
 				registerCodeEditorServices(services);
 				using pane = registerTestComponentServices(services).createInstance(AgentTraceEditor);
 				pane.create(dom.window.document.body);
@@ -373,6 +380,7 @@ suite('Execution Trace editor', () => {
 				services.registerInstance(IContextKeyService, context);
 				services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 				services.registerInstance(IChatService, { onDidChangeSession: Event.None, onDidUpdateThread: Event.None, onDidBecomeReady: Event.None } as unknown as IChatService);
+				services.registerInstance(ITraceService, services.get(IChatService) as unknown as ITraceService);
 				registerCodeEditorServices(services);
 				using pane = registerTestComponentServices(services).createInstance(AgentTraceEditor);
 				pane.create(dom.window.document.body);
@@ -470,6 +478,7 @@ suite('Execution Trace editor', () => {
 					readTraceGraph: async () => { graphReads++; return graph; },
 					subscribeThread: async (_session: string, _thread: string, after: number) => ({ thread: { sequence: after } }), unsubscribeThread: async () => { },
 				} as unknown as IChatService);
+				services.registerInstance(ITraceService, services.get(IChatService) as unknown as ITraceService);
 				registerCodeEditorServices(services);
 				using pane = registerTestComponentServices(services).createInstance(AgentTraceEditor);
 				pane.create(dom.window.document.body);
@@ -535,6 +544,7 @@ suite('Execution Trace editor', () => {
 				readTraceDiagnostics: async () => ({ diagnostics: { formatVersion: 1, captureId: null, recordingStatus: 'disabled', droppedRecords: 0, events: [] }, cursor: 0, hasMore: false }),
 				subscribeThread: async () => ({ thread: { sequence: 2000 } }), unsubscribeThread: async () => { },
 			} as unknown as IChatService);
+			services.registerInstance(ITraceService, services.get(IChatService) as unknown as ITraceService);
 			registerCodeEditorServices(services);
 			using pane = registerTestComponentServices(services).createInstance(AgentTraceEditor);
 			pane.create(dom.window.document.body);
@@ -558,6 +568,7 @@ suite('Execution Trace editor', () => {
 			services.registerInstance(IContextKeyService, new ContextKeyService());
 			services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 			services.registerInstance(IChatService, { onDidChangeSession: Event.None, onDidUpdateThread: Event.None, onDidBecomeReady: Event.None } as unknown as IChatService);
+			services.registerInstance(ITraceService, services.get(IChatService) as unknown as ITraceService);
 			registerCodeEditorServices(services);
 			using pane = registerTestComponentServices(services).createInstance(AgentTraceEditor);
 			pane.create(dom.window.document.body);
@@ -586,6 +597,7 @@ suite('Execution Trace editor', () => {
 				}),
 				subscribeThread: async () => ({ thread: { sequence: 1 } }), unsubscribeThread: async () => { },
 			} as unknown as IChatService);
+			services.registerInstance(ITraceService, services.get(IChatService) as unknown as ITraceService);
 			registerCodeEditorServices(services);
 			using pane = registerTestComponentServices(services).createInstance(AgentTraceEditor);
 			pane.create(dom.window.document.body); measureTreeViewport(dom.window.document);
@@ -613,6 +625,7 @@ suite('Execution Trace editor', () => {
 				readTraceDiagnostics: async () => ({ diagnostics: { formatVersion: 1, captureId: null, recordingStatus: 'disabled', droppedRecords: 0, events: [] }, cursor: 0, hasMore: false }),
 				subscribeThread: async () => ({ thread: { sequence: 1 } }), unsubscribeThread: async () => { },
 			} as unknown as IChatService);
+			services.registerInstance(ITraceService, services.get(IChatService) as unknown as ITraceService);
 			registerCodeEditorServices(services);
 			using pane = registerTestComponentServices(services).createInstance(AgentTraceEditor);
 			pane.create(dom.window.document.body); measureTreeViewport(dom.window.document);
@@ -661,6 +674,7 @@ suite('Execution Trace editor', () => {
 					readTracePayload: async () => { payloadReads++; return payloadReads === 1 ? first.p : second.p; },
 					subscribeThread: async () => ({ thread: { sequence: 0 } }), unsubscribeThread: async () => { },
 				} as unknown as IChatService);
+				services.registerInstance(ITraceService, services.get(IChatService) as unknown as ITraceService);
 				registerCodeEditorServices(services);
 				using pane = registerTestComponentServices(services).createInstance(AgentTraceEditor);
 				pane.create(dom.window.document.body); measureTreeViewport(dom.window.document);
@@ -705,6 +719,7 @@ suite('Execution Trace editor', () => {
 				readTracePayload: async (_session: string, _capture: string, id: string) => { reads.push(id); return id === 'payload-1' ? first.p : second.p; },
 				subscribeThread: async () => ({ thread: { sequence: 0 } }), unsubscribeThread: async () => { },
 			} as unknown as IChatService);
+			services.registerInstance(ITraceService, services.get(IChatService) as unknown as ITraceService);
 			registerCodeEditorServices(services);
 			using pane = registerTestComponentServices(services).createInstance(AgentTraceEditor);
 			pane.create(dom.window.document.body); measureTreeViewport(dom.window.document);

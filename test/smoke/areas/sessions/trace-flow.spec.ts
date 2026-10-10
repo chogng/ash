@@ -6,7 +6,7 @@ import { expect, test as base } from '../../../automation/test.js';
 import { Menus } from '../../../automation/menus.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { APP_SERVER_METHODS } from '../../../../.build/protocol/typescript/index.js';
-import { parseAgentTrace, parseAgentTraceDiagnostics, type AgentTraceEvent } from '../../../../src/ash/workbench/services/chat/common/agentTrace.js';
+import { parseAgentTrace, parseAgentTraceDiagnostics, type AgentTraceEvent } from '../../../../src/ash/workbench/services/trace/common/agentTrace.js';
 import { connectTraceAppServer } from './traceFixture.js';
 
 type FixtureRequest = { input: Array<Record<string, unknown>>; tools?: Array<{ name: string; }>; };
@@ -57,6 +57,10 @@ const test = base.extend<{ traceModelFixture: TraceModelFixture; }>({
 					return;
 				}
 				const results = body.input.filter(item => item.type === 'function_call_output');
+				if (prompt.includes('hook-trace-fixture')) {
+					respond(response, results.length ? message('hook-trace-fixture-final') : [call('fixture-hook-tool', 'shell-command', { program: process.execPath, arguments: ['-e', 'console.log("hook-trace-tool-executed")'], working_directory: '.' })]);
+					return;
+				}
 				if (results.length === 0) {
 					respond(response, [
 						call('fixture-shell', 'shell-command', { program: process.execPath, arguments: ['-e', 'console.log("trace-fixture-tool-result")'], working_directory: '.' }),
@@ -85,7 +89,7 @@ const test = base.extend<{ traceModelFixture: TraceModelFixture; }>({
 		finally { server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
 	},
 	backendConfiguration: async ({ testWorkspace, traceModelFixture }, use) => {
-		await use(`schemaVersion = 10\n[agent.trace]\nenabled = true\ndirectory = ${JSON.stringify(join(testWorkspace.directory, 'fixture-trace-recordings'))}\n[connections.custom-trace-fixture]\nprovider = "custom-trace-fixture"\nconnection = "custom-trace-fixture"\nbaseUrl = ${JSON.stringify(traceModelFixture.url)}\n[connections.custom-trace-fixture.custom]\nprotocol = "responses"\nname = "Controlled Trace fixture"\ncontextWindow = 272000\norder = 0\nmodel = "gpt-6.1-sol"\n`);
+		await use(`schemaVersion = 10\n[execPolicy]\nrules = [{id = "hook-trace", selector = {kind = "source", source = "user", source_id = "user:hook:trace-test"}, effect = {kind = "require_sandbox"}}]\n[agent.trace]\nenabled = true\ndirectory = ${JSON.stringify(join(testWorkspace.directory, 'fixture-trace-recordings'))}\n[connections.custom-trace-fixture]\nprovider = "custom-trace-fixture"\nconnection = "custom-trace-fixture"\nbaseUrl = ${JSON.stringify(traceModelFixture.url)}\n[connections.custom-trace-fixture.custom]\nprotocol = "responses"\nname = "Controlled Trace fixture"\ncontextWindow = 272000\norder = 0\nmodel = "gpt-6.1-sol"\n`);
 	},
 });
 
@@ -292,3 +296,61 @@ test('Execution Trace retains real model failure and cancellation during concurr
 		await expect(viewer.getByRole('tabpanel')).toContainText('modelAttemptCancelled');
 	} finally { await connection.close(); }
 });
+
+for (const outcome of ['continued', 'denied', 'failed', 'cancelled'] as const) {
+	test(`Hook results reach Chat and Execution Trace through real scripts and survive reopening (${outcome})`, async ({ target, application, workbench, testWorkspace }) => {
+		test.skip(target.appServerMode !== 'required', 'Needs the product App Server.');
+		const page = await workbench.openAgentsWindow(target.kind);
+		const connection = await connectTraceAppServer(application, page, testWorkspace.directory);
+		const { client } = connection;
+		try {
+			const script = outcome === 'continued' ? 'console.log(JSON.stringify({decision:"continue"}))' : outcome === 'denied' ? 'console.log(JSON.stringify({decision:"deny",reason:"hook-trace-denied"}))' : outcome === 'failed' ? 'console.error("hook-trace-stderr"); process.exit(7)' : 'setInterval(() => {}, 1000)';
+			const config = await client.request(APP_SERVER_METHODS['config/read'], {});
+			await client.request(APP_SERVER_METHODS['hook/upsert'], { commandId: `hook-config-${outcome}`, expectedRevision: config.revision, hook: { id: 'user:hook:trace-test', event: 'preToolUse', enablement: 'enabled', matcher: { toolNames: ['shell-command'] }, action: { type: 'process', program: process.execPath, args: ['-e', script] } } });
+			const created = await client.request(APP_SERVER_METHODS['session/create'], { commandId: `hook-session-${outcome}`, title: `Hook ${outcome}`, agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
+			const sessionId = created.session.sessionId;
+			const threadId = created.session.threads[0].threadId;
+			const thread = await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId });
+			await client.request(APP_SERVER_METHODS['session/request'], { commandId: `hook-start-${outcome}`, sessionId, request: { type: 'startTurn', threadId, expectedSequence: thread.thread.sequence, input: [{ type: 'text', text: 'hook-trace-fixture' }], model: { provider: 'custom-trace-fixture', model: 'gpt-6.1-sol' }, mode: 'agent', approvalMode: 'bypassPermissions', toolMode: 'direct' } });
+			await page.locator('.ash-sessions-list-item').filter({ hasText: `Hook ${outcome}` }).click();
+			if (outcome === 'cancelled') {
+				await expect.poll(async () => (await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })).thread.hookRuns.at(-1)?.status.type).toBe('running');
+				const running = await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId });
+				await client.request(APP_SERVER_METHODS['session/request'], { commandId: 'hook-interrupt', sessionId, request: { type: 'interruptTurn', threadId, turnId: running.thread.turns.at(-1)!.turnId, expectedSequence: running.thread.sequence } });
+			}
+			await expect.poll(async () => (await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })).thread.hookRuns.at(-1)?.status.type).toBe(outcome);
+			const completed = await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId });
+			const run = completed.thread.hookRuns.at(-1)!;
+			expect(run.toolCallId).toBe('fixture-hook-tool');
+			expect(run.turnId).toBe(completed.thread.turns.at(-1)!.turnId);
+			const feedback = page.locator('.ash-chat-hook');
+			if (outcome === 'continued') { await expect(feedback).toHaveCount(0); }
+			else {
+				await expect(feedback).toHaveCount(1);
+				const summary = feedback.locator('summary');
+				await summary.focus();
+				await summary.press('Enter');
+				await expect(feedback).toHaveAttribute('open', '');
+				expect(run.status.type).not.toBe('running');
+				await expect(feedback.locator('p')).toHaveText(run.status.type === 'failed' ? run.status.message : run.status.type === 'denied' || run.status.type === 'cancelled' ? run.status.reason : '');
+			}
+			await new QuickAccess(page).runCommand('sessions.trace.open');
+			const viewer = page.locator('.ash-agent-trace');
+			const capture = parseAgentTrace((await client.request(APP_SERVER_METHODS['session/trace/read'], { sessionId, after: {}, limit: 500 })).trace);
+			const event = capture.threads.flatMap(thread => thread.events).find(record => record.event.type === 'hookRunUpdated' && (record.event.run as { status: { type: string; }; }).status.type === outcome)!;
+			await selectRecord(viewer, event.eventId);
+			await viewer.getByRole('tab', { name: 'Overview', exact: true }).click();
+			await expect(viewer.getByRole('tabpanel')).toContainText(run.runId);
+			await expect(viewer.getByRole('tabpanel')).toContainText('shell-command');
+			await viewer.getByRole('tab', { name: 'Output', exact: true }).click();
+			await viewer.getByRole('button', { name: 'Saved body', exact: true }).click();
+			await expect(viewer.locator('.view-lines')).toContainText('exitCode');
+			if (outcome === 'failed') { await expect(viewer.locator('.view-lines')).toContainText('hook-trace-stderr'); }
+			await page.getByRole('button', { name: 'Close Execution Trace', exact: true }).click();
+			await new QuickAccess(page).runCommand('sessions.trace.open');
+			await selectRecord(viewer, event.eventId);
+			await expect(viewer.getByRole('tabpanel')).toContainText(run.runId);
+			await page.getByRole('button', { name: 'Close Execution Trace', exact: true }).click();
+		} finally { await connection.close(); }
+	});
+}

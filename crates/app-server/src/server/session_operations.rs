@@ -311,7 +311,7 @@ impl AppServer {
 
         let params: SessionTraceReadParams = decode(params)?;
         let page = self
-            .agent_runtime()
+            .trace_reader()
             .read_session_trace_page(&params.session_id, &params.after, params.limit as usize)
             .map_err(trace_error)?;
         result(&SessionTraceReadResult {
@@ -326,7 +326,7 @@ impl AppServer {
         use ash_app_server_protocol::protocol::session::SessionTraceDiagnosticsReadResult;
         let params: SessionTraceDiagnosticsReadParams = decode(params)?;
         let page = self
-            .agent_runtime()
+            .trace_reader()
             .read_trace_diagnostics(&params.session_id, params.after, params.limit as usize)
             .map_err(trace_error)?;
         result(&SessionTraceDiagnosticsReadResult {
@@ -342,7 +342,7 @@ impl AppServer {
         let params: SessionTracePayloadReadParams = decode(params)?;
         result(&SessionTracePayloadReadResult {
             payload: self
-                .agent_runtime()
+                .trace_reader()
                 .read_trace_payload(&params.session_id, &params.capture_id, &params.payload_id)
                 .map_err(trace_error)?,
         })
@@ -354,7 +354,7 @@ impl AppServer {
         result(&SessionTraceGraphReadResult {
             graph: result(
                 &self
-                    .agent_runtime()
+                    .trace_reader()
                     .read_trace_graph(&params.session_id)
                     .map_err(trace_error)?,
             )?,
@@ -539,6 +539,7 @@ impl AppServer {
         self.agent_runtime()
             .delete_session_threads(&session_id)
             .map_err(core_error)?;
+        self.trace_recorder.remove_session(&session_id);
         if let Some(runtime) = &self.git_turn_changes {
             if let Err(error) = self.collect_message_checkpoints(runtime.as_ref()) {
                 log::warn!("message checkpoint cleanup remains pending: {error}");

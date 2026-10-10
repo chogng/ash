@@ -1,7 +1,7 @@
 use crate::RolloutTraceError;
 use ash_history::StoredEvent;
 use ash_protocol::{SessionId, ThreadEvent, ThreadId};
-use ash_thread_store::ThreadStore;
+use ash_thread_store::ThreadHistoryReader;
 use serde::{Deserialize, Serialize};
 
 /// Version of the self-contained trace artifact format.
@@ -31,14 +31,15 @@ pub struct ThreadRolloutTrace {
 
 /// Captures the durable Thread histories grouped by one `session_id` without mutating the store.
 pub fn capture_session_trace(
-    thread_store: &dyn ThreadStore,
+    thread_store: &(impl ThreadHistoryReader + ?Sized),
     session_id: &SessionId,
 ) -> Result<RolloutTrace, RolloutTraceError> {
     let mut threads = Vec::new();
-    for thread_id in thread_store
-        .list_session_thread_ids(session_id)
+    for record in thread_store
+        .session_catalog(session_id)
         .map_err(RolloutTraceError::ThreadList)?
     {
+        let thread_id = record.thread.thread_id;
         let events =
             thread_store
                 .load(&thread_id)
@@ -76,7 +77,7 @@ pub fn capture_session_trace(
 }
 
 pub(crate) fn retained_prefixes(
-    thread_store: &dyn ThreadStore,
+    thread_store: &(impl ThreadHistoryReader + ?Sized),
     threads: &[ThreadRolloutTrace],
 ) -> Result<Vec<ash_history::HistoryPrefix>, RolloutTraceError> {
     let mut prefixes = std::collections::BTreeMap::new();

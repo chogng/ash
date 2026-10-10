@@ -1,7 +1,7 @@
 import { isRecord } from '../../../../base/common/types.js';
 import { localize } from '../../../../nls.js';
 import type { ObjectTreeElement } from '../../../../base/browser/ui/tree/objectTreeModel.js';
-import { diagnosticPayload, type AgentTrace, type AgentTraceEvent, type AgentTraceDiagnosticEvent, type AgentTraceNode, type AgentTracePayloadRef } from '../../../services/chat/common/agentTrace.js';
+import { diagnosticPayload, type AgentTrace, type AgentTraceEvent, type AgentTraceDiagnosticEvent, type AgentTraceNode, type AgentTracePayloadRef } from '../../../services/trace/common/agentTrace.js';
 
 export interface SavedTraceRelation {
 	readonly kind: string;
@@ -61,7 +61,7 @@ export class AgentTraceViewModel {
 		const add = (threadId: string, raw: AgentTraceEvent | AgentTraceDiagnosticEvent, diagnostic: boolean): void => {
 			let entry = this.records.get(raw);
 			if (!entry) {
-				const turnId = diagnostic ? (raw as AgentTraceDiagnosticEvent).turnId : typeof raw.event.turnId === 'string' ? raw.event.turnId : isRecord(raw.event.seed) && typeof raw.event.seed.parentTurnId === 'string' ? raw.event.seed.parentTurnId : undefined;
+				const turnId = diagnostic ? (raw as AgentTraceDiagnosticEvent).turnId ?? undefined : typeof raw.event.turnId === 'string' ? raw.event.turnId : isRecord(raw.event.run) && typeof raw.event.run.turnId === 'string' ? raw.event.run.turnId : isRecord(raw.event.seed) && typeof raw.event.seed.parentTurnId === 'string' ? raw.event.seed.parentTurnId : undefined;
 				const record: AgentTraceEvent = diagnostic ? { ...raw, event: { ...raw.event, threadId, turnId } } : raw as AgentTraceEvent;
 				entry = { id: JSON.stringify([diagnostic ? 'diagnostic' : 'durable', threadId, raw.sequence]), kind: 'event', threadId, turnId, key: diagnostic ? `diagnostic:${raw.sequence}` : `${threadId}:${raw.sequence}`, record, diagnostic: diagnostic ? raw as AgentTraceDiagnosticEvent : undefined, label: compactEventLabel(record), failed: eventIsError(record) };
 				this.records.set(raw, entry);
@@ -157,6 +157,10 @@ export class AgentTraceViewModel {
 		const received = new Map<string, TraceEntry[]>();
 		const joins = new Map<string, TraceEntry[]>();
 		const requests = new Map<string, TraceEntry[]>();
+		const invocations = new Map<string, TraceEntry[]>();
+		const attempts = new Map<string, TraceEntry[]>();
+		const receiptsByInvocation = new Map<string, TraceEntry[]>();
+		const receiptsByAttempt = new Map<string, TraceEntry[]>();
 		const key = (...parts: unknown[]): string => JSON.stringify(parts);
 		const index = (map: Map<string, TraceEntry[]>, identity: string, entry: TraceEntry): void => { const values = map.get(identity) ?? []; values.push(entry); map.set(identity, values); };
 		const unique = (values: TraceEntry[] | undefined): TraceEntry | undefined => values?.length === 1 ? values[0] : undefined;
@@ -169,6 +173,12 @@ export class AgentTraceViewModel {
 		};
 		for (const entry of records) {
 			const event = entry.record!.event;
+			if (!entry.diagnostic && event.type === 'modelInvocationRecorded' && isRecord(event.record) && typeof event.record.invocationId === 'string') { index(invocations, key(entry.threadId, entry.turnId, event.record.invocationId), entry); }
+			if (entry.diagnostic && event.type === 'modelAttemptStarted' && typeof event.attemptId === 'string') { index(attempts, key(entry.threadId, entry.turnId, event.attemptId), entry); }
+			if (entry.diagnostic && event.type === 'modelAttemptAccounted') {
+				index(receiptsByInvocation, key(entry.threadId, entry.turnId, event.invocationId), entry);
+				index(receiptsByAttempt, key(entry.threadId, entry.turnId, event.attemptId), entry);
+			}
 			const item = isRecord(event.item) ? event.item : undefined;
 			if (event.type === 'itemCompleted' && typeof item?.toolCallId === 'string') {
 				if (item.type === 'toolCall') { index(calls, key(entry.threadId, entry.turnId, item.toolCallId), entry); }
@@ -195,6 +205,10 @@ export class AgentTraceViewModel {
 		}
 		for (const entry of records) {
 			const event = entry.record!.event;
+			if (entry.diagnostic && event.type === 'modelAttemptAccounted') {
+				const target = unique(invocations.get(key(entry.threadId, entry.turnId, event.invocationId)));
+				if (unique(receiptsByInvocation.get(key(entry.threadId, entry.turnId, event.invocationId))) === entry && unique(receiptsByAttempt.get(key(entry.threadId, entry.turnId, event.attemptId))) === entry && target?.record?.sequence === event.sourceThreadSequence) { link(entry, target, 'accountsFor'); link(unique(attempts.get(key(entry.threadId, entry.turnId, event.attemptId))), target, 'accountsFor'); }
+			}
 			if (event.type === 'delegationStarted' && typeof event.delegationId === 'string' && typeof event.childThreadId === 'string') {
 				const child = this.entries.get(key('thread', event.childThreadId));
 				const origin = this.capture?.threads.find(thread => thread.threadId === event.childThreadId)?.events.find(record => record.event.type === 'threadCreated')?.event.origin;
@@ -226,6 +240,12 @@ export class AgentTraceViewModel {
 	}
 
 	payload(entry: TraceEntry, output: boolean): { ref?: AgentTracePayloadRef; record?: AgentTraceDiagnosticEvent; } {
+		const run = entry.record?.event.run;
+		const runId = isRecord(run) ? run.runId : entry.diagnostic?.event.type === 'hookRunRecorded' ? entry.diagnostic.event.runId : undefined;
+		if (typeof runId === 'string') {
+			const record = this.capture?.diagnostics?.events.find(record => record.threadId === entry.threadId && (record.turnId ?? undefined) === entry.turnId && record.event.type === 'hookRunRecorded' && record.event.runId === runId);
+			return { ref: record && diagnosticPayload(record), record };
+		}
 		const selected = entry.diagnostic;
 		if (!selected) { return {}; }
 		const candidates = this.capture?.diagnostics?.events.filter(record => record.threadId === selected.threadId && record.turnId === selected.turnId && record.event.attemptId === selected.event.attemptId) ?? [];
@@ -248,6 +268,7 @@ function compactEventLabel(record: AgentTraceEvent): string {
 
 function eventIsError(record: AgentTraceEvent): boolean {
 	const event = record.event;
+	if (event.type === 'hookRunUpdated' && isRecord(event.run) && isRecord(event.run.status)) { return event.run.status.type === 'denied' || event.run.status.type === 'failed'; }
 	return event.type === 'modelAttemptFailed' || event.type === 'modelAttemptAbandoned' || event.type === 'turnFailed' || (event.type === 'modelResponseEvaluated' && isRecord(event.decision) && event.decision.action === 'fail') || (event.type === 'turnInterrupted' && isRecord(event.error)) || (isRecord(event.item) && event.item.isError === true) || (isRecord(event.record) && event.record.outcome === 'failed');
 }
 
@@ -257,12 +278,20 @@ export function eventLabel(record: AgentTraceEvent): string {
 	const invocation = isRecord(event.record) ? event.record : undefined;
 	let detail: string;
 	switch (item?.type ?? event.type) {
+		case 'hookRunUpdated': {
+			const run = isRecord(event.run) ? event.run : undefined;
+			const status = isRecord(run?.status) ? run.status.type : undefined;
+			detail = localize('agentTrace.hookRun', 'Hook · {0} · {1} · {2} ms', String(run?.event ?? ''), hookStatusLabel(status), String(run?.durationMs ?? 0));
+			break;
+		}
+		case 'hookRunRecorded': detail = localize('agentTrace.hookEvidence', 'Hook execution evidence · {0}', String(event.runId)); break;
 		case 'modelAttemptStarted': detail = localize('agentTrace.attemptStarted', 'Model attempt started · {0}', String(event.attemptId)); break;
 		case 'modelRequestPrepared': detail = localize('agentTrace.requestPrepared', 'Model request prepared · {0}', String(event.attemptId)); break;
 		case 'modelAttemptCompleted': detail = localize('agentTrace.attemptCompleted', 'Model attempt completed · {0}', String(event.attemptId)); break;
 		case 'modelAttemptFailed': detail = localize('agentTrace.attemptFailed', 'Model attempt failed · {0}', String(event.error)); break;
 		case 'modelAttemptCancelled': detail = localize('agentTrace.attemptCancelled', 'Model attempt cancelled · {0}', String(event.reason)); break;
 		case 'modelAttemptAbandoned': detail = localize('agentTrace.attemptAbandoned', 'Model attempt abandoned'); break;
+		case 'modelAttemptAccounted': detail = localize('agentTrace.attemptAccounted', 'Model attempt linked to accounting · {0}', String(event.invocationId)); break;
 		case 'threadCreated': detail = localize('agentTrace.created', 'Thread created'); break;
 		case 'turnAccepted': detail = localize('agentTrace.accepted', 'Turn accepted · instructions and model selection'); break;
 		case 'turnStarted': detail = localize('agentTrace.started', 'Turn started'); break;
@@ -356,18 +385,30 @@ function stopReasonLabel(reason: unknown): string {
 export function recordingLabel(trace: AgentTrace): string {
 	switch (trace.diagnostics?.recordingStatus) {
 		case 'recording': return localize('agentTrace.recording', 'Local diagnostic evidence enabled.');
-		case 'incomplete': return localize('agentTrace.incomplete', 'Diagnostic evidence incomplete · {0} records omitted.', trace.diagnostics.droppedRecords);
+		case 'incomplete': return trace.diagnostics.pendingRecords === undefined ? localize('agentTrace.incomplete', 'Diagnostic evidence incomplete · {0} records omitted.', trace.diagnostics.droppedRecords) : localize('agentTrace.incompletePending', 'Diagnostic evidence incomplete · {0} records omitted · {1} records pending.', trace.diagnostics.droppedRecords, trace.diagnostics.pendingRecords);
 		case 'unavailable': return localize('agentTrace.unavailable', 'Diagnostic storage unavailable; execution history remains readable.');
 		case 'disabled': case undefined: return localize('agentTrace.disabled', 'Request evidence was not enabled. Enable detailed recording in Execution trace settings, then restart the owning App Server.');
 	}
 }
 export function evidenceLabel(kind: string): string {
 	switch (kind) {
+		case 'hookExecution': return localize('agentTrace.hookExecution', 'Hook command and bounded process input/output');
 		case 'coreRequest': return localize('agentTrace.coreRequest', 'Core semantic request · before attachment materialization');
 		case 'materializedRequest': return localize('agentTrace.materializedRequest', 'Model service semantic request · after attachment materialization');
 		case 'modelResponse': return localize('agentTrace.response', 'Model service response');
 		case 'partialOutput': return localize('agentTrace.partialOutput', 'Partial output received before termination');
 		default: return kind;
+	}
+}
+
+export function hookStatusLabel(status: unknown): string {
+	switch (status) {
+		case 'running': return localize('agentTrace.hookRunning', 'Running');
+		case 'continued': return localize('agentTrace.hookContinued', 'Continued');
+		case 'denied': return localize('agentTrace.hookDenied', 'Blocked');
+		case 'failed': return localize('agentTrace.hookFailed', 'Failed');
+		case 'cancelled': return localize('agentTrace.hookCancelled', 'Cancelled');
+		default: return String(status ?? '');
 	}
 }
 export function relationLabel(kind: string): string {
@@ -385,6 +426,7 @@ export function relationLabel(kind: string): string {
 		case 'startsDelegation': return localize('agentTrace.startsDelegation', 'Delegation started');
 		case 'satisfiesJoin': return localize('agentTrace.satisfiesJoin', 'Join satisfied');
 		case 'requestsTool': return localize('agentTrace.requestsTool', 'Model requested tool');
+		case 'accountsFor': return localize('agentTrace.accountsFor', 'Committed model accounting');
 		default: return kind;
 	}
 }

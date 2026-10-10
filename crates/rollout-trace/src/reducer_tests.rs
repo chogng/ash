@@ -7,6 +7,115 @@ use serde_json::json;
 use std::collections::BTreeMap;
 
 #[test]
+fn accounting_edges_require_the_committed_thread_turn_identity_and_sequence() {
+    let ledger: StoredEvent = serde_json::from_value(json!({
+        "schemaVersion": ash_history::CURRENT_STORED_EVENT_SCHEMA_VERSION,
+        "eventId": "committed-event", "sequence": 9, "threadId": "root", "recordedAt": 1,
+        "event": {"type": "modelInvocationRecorded", "threadId": "root", "turnId": "turn", "record": {
+            "invocationId": "committed", "threadId": "root", "turnId": "turn",
+            "startedAtUnixMs": 1, "completedAtUnixMs": 2, "outcome": "completed",
+            "referenceCost": {"type": "unpriced", "reason": {"type": "missingUsage"}}
+        }}
+    })).unwrap();
+    let trace = RolloutTrace {
+        format_version: 3,
+        session_id: SessionId::new("s").unwrap(),
+        threads: vec![ThreadRolloutTrace {
+            thread_id: ThreadId::new("root").unwrap(),
+            events: vec![ledger],
+        }],
+        history_prefixes: Vec::new(),
+        diagnostics: None,
+        graph: None,
+    };
+    let event = |sequence, event| DiagnosticEvent {
+        event_id: format!("diag-{sequence}"),
+        sequence,
+        recorded_at: 0,
+        thread_id: ThreadId::new("root").unwrap(),
+        turn_id: Some(TurnId::new("turn").unwrap()),
+        event,
+    };
+    let mut diagnostics = DiagnosticTrace {
+        format_version: 2,
+        capture_id: Some("capture".into()),
+        recording_status: RecordingStatus::Recording,
+        dropped_records: 0,
+        pending_records: 0,
+        payloads: BTreeMap::new(),
+        events: vec![
+            event(
+                1,
+                DiagnosticEventKind::ModelAttemptStarted {
+                    attempt_id: "attempt".into(),
+                    purpose: InferencePurpose::Agent,
+                    model: None,
+                    source_thread_sequence: 7,
+                    request_payload: PayloadRef {
+                        payload_id: "payload-1".into(),
+                        kind: PayloadKind::CoreRequest,
+                        byte_length: 0,
+                        status: PayloadStatus::Omitted,
+                        digest: None,
+                    },
+                },
+            ),
+            event(
+                2,
+                DiagnosticEventKind::ModelAttemptAccounted {
+                    attempt_id: "attempt".into(),
+                    invocation_id: ash_protocol::ModelInvocationId::new("committed").unwrap(),
+                    source_thread_sequence: 9,
+                },
+            ),
+        ],
+    };
+    let graph = reduce_trace(&trace, &diagnostics, |_| {
+        panic!("accounting links never need bodies")
+    });
+    assert!(graph.warnings.is_empty());
+    assert!(graph.edges.contains(&TraceEdge {
+        from: "attempt:root:turn:attempt".into(),
+        to: "invocation:root:turn:committed".into(),
+        kind: TraceEdgeKind::AccountsFor
+    }));
+    assert_eq!(
+        graph.nodes["invocation:root:turn:committed"]
+            .event_key
+            .as_deref(),
+        Some("root:9")
+    );
+    for record in &mut diagnostics.events {
+        record.turn_id = Some(TurnId::new("other").unwrap());
+    }
+    let graph = reduce_trace(&trace, &diagnostics, |_| panic!());
+    assert!(
+        !graph
+            .edges
+            .iter()
+            .any(|edge| edge.kind == TraceEdgeKind::AccountsFor)
+    );
+    assert_eq!(graph.warnings.len(), 1);
+    for record in &mut diagnostics.events {
+        record.turn_id = Some(TurnId::new("turn").unwrap());
+    }
+    if let DiagnosticEventKind::ModelAttemptAccounted {
+        source_thread_sequence,
+        ..
+    } = &mut diagnostics.events[1].event
+    {
+        *source_thread_sequence = 8;
+    }
+    let graph = reduce_trace(&trace, &diagnostics, |_| panic!());
+    assert!(
+        !graph
+            .edges
+            .iter()
+            .any(|edge| edge.kind == TraceEdgeKind::AccountsFor)
+    );
+}
+
+#[test]
 fn reducer_links_observed_model_calls_code_cells_commands_and_results_without_inventing_input() {
     let record = |sequence, item| -> StoredEvent {
         serde_json::from_value(json!({ "schemaVersion": ash_history::CURRENT_STORED_EVENT_SCHEMA_VERSION, "eventId": format!("event-{sequence}"), "sequence": sequence, "threadId": "root", "recordedAt": 1, "event": { "type": "itemCompleted", "threadId": "root", "turnId": "turn", "item": item } })).unwrap()
@@ -47,7 +156,7 @@ fn reducer_links_observed_model_calls_code_cells_commands_and_results_without_in
         sequence,
         recorded_at: 1,
         thread_id: ThreadId::new("root").unwrap(),
-        turn_id: TurnId::new("turn").unwrap(),
+        turn_id: Some(TurnId::new("turn").unwrap()),
         event,
     };
     let diagnostics = DiagnosticTrace {
@@ -55,6 +164,7 @@ fn reducer_links_observed_model_calls_code_cells_commands_and_results_without_in
         capture_id: Some("capture".into()),
         recording_status: RecordingStatus::Recording,
         dropped_records: 0,
+        pending_records: 0,
         payloads: BTreeMap::new(),
         events: vec![
             observation(
@@ -81,7 +191,7 @@ fn reducer_links_observed_model_calls_code_cells_commands_and_results_without_in
     });
     assert!(graph.warnings.is_empty());
     assert!(graph.edges.contains(&TraceEdge {
-        from: "attempt:attempt".into(),
+        from: "attempt:root:turn:attempt".into(),
         to: "tool:root:turn:parent".into(),
         kind: TraceEdgeKind::RequestsTool
     }));
@@ -195,6 +305,7 @@ fn reducer_links_message_delivery_and_delegation_using_saved_identities() {
         capture_id: None,
         recording_status: RecordingStatus::Disabled,
         dropped_records: 0,
+        pending_records: 0,
         events: Vec::new(),
         payloads: BTreeMap::new(),
     };

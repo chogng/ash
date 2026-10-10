@@ -41,7 +41,7 @@ pub struct ContextCompactionRequest {
     target_tokens: ContextTokenCount,
     generator_model: Option<ModelRef>,
     retention_prompt: Option<String>,
-    trace_context: Option<ash_rollout_trace::InferenceContext>,
+    trace_context: Option<core_api::InferenceContext>,
 }
 
 impl ContextCompactionRequest {
@@ -89,10 +89,7 @@ impl ContextCompactionRequest {
         self.source_thread_sequence
     }
 
-    pub(crate) fn with_trace_context(
-        mut self,
-        context: ash_rollout_trace::InferenceContext,
-    ) -> Self {
+    pub(crate) fn with_trace_context(mut self, context: core_api::InferenceContext) -> Self {
         self.trace_context = Some(context);
         self
     }
@@ -212,24 +209,24 @@ pub trait ContextCompactionService: Send + Sync {
         &self,
         request: &ContextCompactionRequest,
         cancellation: &CancellationToken,
-        record_model_usage: &mut dyn FnMut(Option<ModelUsage>) -> Result<(), CoreError>,
+        record_model_usage: &mut dyn FnMut(
+            Option<ModelUsage>,
+        )
+            -> Result<core_api::ModelInvocationReceipt, CoreError>,
     ) -> Result<ContextCompactionResult, CoreError>;
 }
 
 pub(crate) struct ModelContextCompactionService {
     model: Arc<dyn ModelService>,
-    trace_recorder: Arc<ash_rollout_trace::TraceRecorder>,
+    diagnostics: Option<Arc<dyn core_api::ExecutionDiagnostics>>,
 }
 
 impl ModelContextCompactionService {
     pub(crate) fn new(
         model: Arc<dyn ModelService>,
-        trace_recorder: Arc<ash_rollout_trace::TraceRecorder>,
+        diagnostics: Option<Arc<dyn core_api::ExecutionDiagnostics>>,
     ) -> Self {
-        Self {
-            model,
-            trace_recorder,
-        }
+        Self { model, diagnostics }
     }
 }
 
@@ -238,7 +235,10 @@ impl ContextCompactionService for ModelContextCompactionService {
         &self,
         request: &ContextCompactionRequest,
         cancellation: &CancellationToken,
-        record_model_usage: &mut dyn FnMut(Option<ModelUsage>) -> Result<(), CoreError>,
+        record_model_usage: &mut dyn FnMut(
+            Option<ModelUsage>,
+        )
+            -> Result<core_api::ModelInvocationReceipt, CoreError>,
     ) -> Result<ContextCompactionResult, CoreError> {
         let prompt = if request.handoff_request.is_some() {
             ash_prompts::HANDOFF_PROMPT
@@ -311,10 +311,14 @@ impl ContextCompactionService for ModelContextCompactionService {
                 ));
             }
         }
-        let response = if let Some(context) = &request.trace_context {
-            let mut attempt = self
-                .trace_recorder
-                .start_attempt(context.clone(), &model_request);
+        let mut attempt = request.trace_context.as_ref().and_then(|context| {
+            crate::diagnostic_model::start_attempt(
+                self.diagnostics.as_deref(),
+                context.clone(),
+                &model_request,
+            )
+        });
+        let response = if request.trace_context.is_some() {
             let response = self.model.stream(
                 model_selection,
                 &model_request,
@@ -330,7 +334,10 @@ impl ContextCompactionService for ModelContextCompactionService {
             self.model
                 .invoke(model_selection, &model_request, cancellation)?
         };
-        record_model_usage(response.usage.clone())?;
+        let receipt = record_model_usage(response.usage.clone())?;
+        if let Some(attempt) = &mut attempt {
+            attempt.accounted(&receipt);
+        }
         if response.tool_calls().next().is_some() {
             return Err(CoreError::Context(
                 "context compaction model returned an unsupported Tool Call".into(),

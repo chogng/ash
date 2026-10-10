@@ -139,37 +139,6 @@ pub trait AgentRuntime {
     fn read_thread(&self, thread_id: &ThreadId) -> Result<ThreadView, CoreError>;
     fn read_started_thread(&self, command_id: &CommandId) -> Result<Option<ThreadView>, CoreError>;
     fn read_session(&self, session_id: &SessionId) -> Result<SessionView, CoreError>;
-    /// Captures durable execution facts without invoking a model or changing execution state.
-    fn read_session_trace(
-        &self,
-        session_id: &SessionId,
-    ) -> Result<ash_rollout_trace::RolloutTrace, CoreError>;
-    /// Reads committed event ranges without replaying complete histories for every page.
-    fn read_session_trace_page(
-        &self,
-        session_id: &SessionId,
-        after: &std::collections::BTreeMap<ThreadId, u64>,
-        limit: usize,
-    ) -> Result<ash_rollout_trace::TracePage, CoreError>;
-    /// Reads opt-in diagnostic observations separately from business history cursors.
-    fn read_trace_diagnostics(
-        &self,
-        session_id: &SessionId,
-        after: u64,
-        limit: usize,
-    ) -> Result<ash_rollout_trace::DiagnosticPage, CoreError>;
-    /// Resolves one authorized immutable payload within the named capture.
-    fn read_trace_payload(
-        &self,
-        session_id: &SessionId,
-        capture_id: &str,
-        payload_id: &str,
-    ) -> Result<serde_json::Value, CoreError>;
-    /// Builds navigation links from retained historical and diagnostic evidence.
-    fn read_trace_graph(
-        &self,
-        session_id: &SessionId,
-    ) -> Result<ash_rollout_trace::TraceGraph, CoreError>;
     fn list_sessions(&self) -> Result<Vec<ash_protocol::Session>, CoreError>;
     fn read_session_catalog(
         &self,

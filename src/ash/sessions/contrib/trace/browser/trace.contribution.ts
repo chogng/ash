@@ -9,7 +9,8 @@ import { URI } from '../../../../base/common/uri.js';
 import { Menus } from '../../../browser/menus.js';
 import { SessionsViewRegistry } from '../../../common/views.js';
 import { ISessionsLayoutService } from '../../../services/layout/common/sessionsLayoutService.js';
-import { AgentTraceNavigationView, createAgentTraceInput, readLastAgentTraceResource, rememberAgentTraceResource } from '../../../../workbench/contrib/trace/browser/agentTraceNavigation.js';
+import { createAgentTraceInput, readLastAgentTraceResource, rememberAgentTraceResource } from '../../../../workbench/contrib/trace/common/trace.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { createAgentTraceResource } from '../../../../workbench/contrib/trace/common/trace.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
@@ -42,14 +43,20 @@ function findTurn(nodes: readonly AgentTreeNode[], threadId: string): string | u
 
 
 const TraceNavigationContainerId = 'sessions.navigation.trace';
-SessionsViewRegistry.registerStaticViewContainer({ id: TraceNavigationContainerId, title: 'Trace', localizationKey: { bundle: 'ash', key: 'agentTrace.navigationTitle' }, location: ViewContainerLocation.Sidebar, mergeViewWithContainerWhenSingleView: true, order: 6 });
-SessionsViewRegistry.registerStaticViews(TraceNavigationContainerId, [{ id: TraceNavigationContainerId + '.view', title: 'Trace', localizationKey: { bundle: 'ash', key: 'agentTrace.navigationTitle' }, canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(AgentTraceNavigationView, [{ resume: 'sessions.open.trace', offline: 'sessions.trace.import', current: 'sessions.trace.open' }]) }]);
+let navigationRegistration: Promise<void> | undefined;
+function ensureTraceNavigation(): Promise<void> {
+	return navigationRegistration ??= import('../../../../workbench/contrib/trace/browser/agentTraceNavigation.js').then(({ AgentTraceNavigationView }) => {
+		SessionsViewRegistry.registerStaticViewContainer({ id: TraceNavigationContainerId, title: 'Trace', localizationKey: { bundle: 'ash', key: 'agentTrace.navigationTitle' }, location: ViewContainerLocation.Sidebar, mergeViewWithContainerWhenSingleView: true, order: 6 });
+		SessionsViewRegistry.registerStaticViews(TraceNavigationContainerId, [{ id: TraceNavigationContainerId + '.view', title: 'Trace', localizationKey: { bundle: 'ash', key: 'agentTrace.navigationTitle' }, canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(AgentTraceNavigationView, [{ resume: 'sessions.open.trace', offline: 'sessions.trace.import', current: 'sessions.trace.open' }]) }]);
+
+	}).catch(error => { navigationRegistration = undefined; throw error; });
+}
 
 registerAction2(class OpenTraceNavigation extends Action2 {
 	constructor() {
 		super({
 			id: 'sessions.open.trace', title: localize2('agentTrace.navigationTitle', 'Trace'), f1: true, icon: Lxicon.history,
-			toggled: ContextKeyExpr.has('sessions.activity.traceSelected'), menu: { id: Menus.ActivityBar, group: 'navigation', order: 60 }
+			toggled: ContextKeyExpr.has('sessions.activity.traceSelected'), menu: { id: Menus.ActivityBar, group: 'navigation', order: 60, when: ContextKeyExpr.has('sessions.traceAvailable') }
 		});
 	}
 	public override async run(accessor: ServicesAccessor): Promise<void> {
@@ -72,7 +79,11 @@ function currentTraceResource(accessor: ServicesAccessor): URI {
 
 async function openTraceEntry(accessor: ServicesAccessor, resource: URI): Promise<void> {
 	const storage = accessor.get(IStorageService);
-	await accessor.get(ISessionsLayoutService).openEntry({
+	const layout = accessor.get(ISessionsLayoutService);
+	const contextKeys = accessor.get(IContextKeyService);
+	await ensureTraceNavigation();
+	contextKeys.createKey<boolean>('sessions.traceAvailable', true).set(true);
+	await layout.openEntry({
 		id: 'trace', activityContext: 'sessions.activity.traceSelected', content: 'editor',
 		sidebarContainerId: TraceNavigationContainerId, restoreCommand: 'sessions.open.trace', focus: 'editor',
 		editorInput: createAgentTraceInput(resource),

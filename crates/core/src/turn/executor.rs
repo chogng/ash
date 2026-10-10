@@ -304,7 +304,7 @@ impl TurnExecutor {
         );
         let compaction = Arc::new(ModelContextCompactionService::new(
             model.clone(),
-            Arc::clone(&threads.trace_recorder),
+            threads.diagnostics.clone(),
         ));
         let code_mode = CodeModeBroker::new(
             Arc::clone(&threads),
@@ -514,7 +514,7 @@ impl TurnExecutor {
         if self.model_compaction {
             executor.compaction = Arc::new(ModelContextCompactionService::new(
                 Arc::clone(&executor.model),
-                Arc::clone(&executor.threads.trace_recorder),
+                executor.threads.diagnostics.clone(),
             ));
         }
         let queued_thread_id = thread_id.clone();
@@ -1194,14 +1194,15 @@ impl TurnExecutor {
                     invocation.context().source_thread_sequence(),
                     cancellation.clone(),
                 );
-                let mut attempt = self.threads.trace_recorder.start_attempt(
-                    ash_rollout_trace::InferenceContext {
+                let mut attempt = crate::diagnostic_model::start_attempt(
+                    self.threads.diagnostics.as_deref(),
+                    core_api::InferenceContext {
                         session_id: invocation.session_id().clone(),
                         thread_id: thread_id.clone(),
                         turn_id: turn_id.clone(),
                         source_thread_sequence: invocation.context().source_thread_sequence(),
                         model: frozen_model.clone(),
-                        purpose: ash_rollout_trace::InferencePurpose::Agent,
+                        purpose: core_api::InferencePurpose::Agent,
                     },
                     &request,
                 );
@@ -1217,7 +1218,8 @@ impl TurnExecutor {
                 crate::diagnostic_model::finish_attempt(&mut attempt, &response);
                 match response {
                     Ok(response) => {
-                        self.threads
+                        let receipt = self
+                            .threads
                             .record_model_invocation(
                                 thread_id,
                                 turn_id,
@@ -1231,6 +1233,9 @@ impl TurnExecutor {
                                 current_unix_ms().map_err(ExecutionFailure::model)?,
                             )
                             .map_err(ExecutionFailure::persistence)?;
+                        if let Some(attempt) = &mut attempt {
+                            attempt.accounted(&receipt);
+                        }
                         check_cancellation(cancellation)?;
                         stream.finish_text();
                         let tool_calls = response.tool_calls().count();
@@ -1576,13 +1581,13 @@ impl TurnExecutor {
             .map_err(ExecutionFailure::persistence)?;
         let request = request
             .clone()
-            .with_trace_context(ash_rollout_trace::InferenceContext {
+            .with_trace_context(core_api::InferenceContext {
                 session_id: snapshot.session_id,
                 thread_id: thread_id.clone(),
                 turn_id: turn_id.clone(),
                 source_thread_sequence: request.source_thread_sequence(),
                 model: request.generator_model().cloned(),
-                purpose: ash_rollout_trace::InferencePurpose::Compaction,
+                purpose: core_api::InferencePurpose::Compaction,
             });
         if let HookEventDecision::Deny { reason } =
             self.compaction_hook(HookEvent::PreCompact, thread_id, turn_id, cancellation)?
@@ -1627,9 +1632,9 @@ impl TurnExecutor {
                     current_unix_ms()?,
                 );
                 match recorded {
-                    Ok(sequence) => {
-                        usage_sequence = Some(sequence);
-                        Ok(())
+                    Ok(receipt) => {
+                        usage_sequence = Some(receipt.sequence);
+                        Ok(receipt)
                     }
                     Err(error) => {
                         usage_recording_error = Some(error.clone());

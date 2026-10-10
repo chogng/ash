@@ -162,14 +162,15 @@ impl ToolModel {
         model_request.reasoning = request.reasoning;
         let billing_scope = model.billing_scope(selection)?;
         let started = timestamp()?;
-        let mut attempt = self.threads.trace_recorder.start_attempt(
-            ash_rollout_trace::InferenceContext {
+        let mut attempt = crate::diagnostic_model::start_attempt(
+            self.threads.diagnostics.as_deref(),
+            core_api::InferenceContext {
                 session_id: request.identity.session_id().clone(),
                 thread_id: thread_id.clone(),
                 turn_id: turn_id.clone(),
                 source_thread_sequence: source_sequence,
                 model: Some(request.model.clone()),
-                purpose: ash_rollout_trace::InferencePurpose::Tool,
+                purpose: core_api::InferencePurpose::Tool,
             },
             &model_request,
         );
@@ -184,7 +185,7 @@ impl ToolModel {
         );
         crate::diagnostic_model::finish_attempt(&mut attempt, &response);
         let completed = timestamp()?;
-        self.threads.record_model_invocation_for_tool(
+        let receipt = self.threads.record_model_invocation_for_tool(
             thread_id,
             turn_id,
             Some(request.model),
@@ -208,6 +209,9 @@ impl ToolModel {
                 Err(_) => ash_protocol::ModelInvocationOutcome::Failed,
             },
         )?;
+        if let Some(attempt) = &mut attempt {
+            attempt.accounted(&receipt);
+        }
         cancellation
             .check()
             .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;

@@ -10,7 +10,6 @@ import { ITurnChangesApi } from "../../../../platform/turnChanges/common/turnCha
 import type { ModelRef, SessionId, ThreadId } from "../common/chatService.js";
 import type { AdvisorConfig, ConfigureAdvisorOptions, ConsultAdvisorOptions, CompactContextOptions, IChatService, InterruptTurnOptions, ResolveInteractionOptions, SlashCommandDefinition, StartTurnOptions, SteerTurnOptions, Thread, ThreadGoalUpdate, ThreadItem, ThreadSubscription, ThreadTranscriptEntry, ThreadTranscriptSnapshot, ThreadTranscriptUpdateEnvelope, ThreadUpdate, ThreadUpdateEnvelope, TurnChangeDetails, TurnChangeSetSummary, TurnCommitSelection, TurnCommitPreview, TurnChangesUpdate } from "../common/chatService.js";
 import type { ResolvedChatContext } from '../common/chatContextService.js';
-import { parseAgentTracePage, parseAgentTraceDiagnosticPage, parseAgentTraceGraph, type AgentTracePage, type AgentTraceDiagnosticPage, type AgentTraceGraph } from '../common/agentTrace.js';
 
 interface SharedThreadSubscription {
 	readonly generation: number;
@@ -89,24 +88,6 @@ export class ChatService extends Disposable implements IChatService {
 	async readThread(sessionId: SessionId, threadId: ThreadId): Promise<{ readonly thread: Thread; readonly transcript: ThreadTranscriptSnapshot; }> {
 		const result = await this.threadApi.read({ sessionId, threadId });
 		return { thread: toThread(result.thread), transcript: toThreadTranscriptSnapshot(result.transcript) };
-	}
-
-	async readTrace(sessionId: SessionId, after: Readonly<Record<string, number>>): Promise<AgentTracePage> {
-		const page = await this.threadApi.readTrace({ sessionId, after: { ...after }, limit: 500 });
-		return parseAgentTracePage(page.trace, page.cursors, page.hasMore, sessionId, after);
-	}
-
-	async readTraceDiagnostics(sessionId: SessionId, after: number): Promise<AgentTraceDiagnosticPage> {
-		const page = await this.threadApi.readTraceDiagnostics({ sessionId, after, limit: 500 });
-		return parseAgentTraceDiagnosticPage(page.diagnostics, page.cursor, page.hasMore, after);
-	}
-
-	async readTracePayload(sessionId: SessionId, captureId: string, payloadId: string): Promise<unknown> {
-		return (await this.threadApi.readTracePayload({ sessionId, captureId, payloadId })).payload;
-	}
-
-	async readTraceGraph(sessionId: SessionId): Promise<AgentTraceGraph> {
-		return parseAgentTraceGraph((await this.threadApi.readTraceGraph({ sessionId })).graph);
 	}
 
 	async subscribeThread(sessionId: SessionId, threadId: ThreadId, afterSequence: number, owner: object): Promise<ThreadSubscription> {

@@ -215,6 +215,7 @@ pub struct AppServer {
     analytics: Arc<analytics::Analytics>,
     feedback: feedback::Feedback,
     pub(super) threads: Arc<ThreadController>,
+    trace_recorder: Arc<ash_rollout_trace::TraceRecorder>,
     thread_worktree_binder: Arc<dyn core_api::ThreadWorktreeBinder>,
     pub(super) multi_agent: Arc<MultiAgentCoordinator>,
     model: Arc<dyn ModelService>,
@@ -584,6 +585,7 @@ impl AppServer {
         let diagnostics = diagnostics::Diagnostics::default();
         let telemetry = ash_otel::Telemetry::new(diagnostics.clone());
         Self {
+            trace_recorder: Arc::new(ash_rollout_trace::TraceRecorder::default()),
             task_delivery: None,
             queue: None,
             queue_directory: None,
@@ -1831,6 +1833,16 @@ impl AppServer {
         self.queue = Some(store);
         self.queue_directory = directory;
         Ok(self)
+    }
+
+    /// Shares the profile recorder already installed as Core's observation port.
+    pub fn with_trace_recorder(mut self, recorder: Arc<ash_rollout_trace::TraceRecorder>) -> Self {
+        self.trace_recorder = recorder;
+        self
+    }
+
+    pub(super) fn trace_reader(&self) -> ash_rollout_trace::TraceReader {
+        ash_rollout_trace::TraceReader::new(self.threads.clone(), self.trace_recorder.clone())
     }
 
     pub fn threads(&self) -> &Arc<ThreadController> {

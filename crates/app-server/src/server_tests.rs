@@ -2205,7 +2205,6 @@ fn session_first_flow_exposes_derived_session_and_canonical_thread_models() {
 
 #[test]
 fn session_trace_pages_preserve_real_turns_forks_and_incremental_history_without_execution() {
-    use core_api::AgentRuntime;
     let model = Arc::new(RecordingModel::default());
     let server = server_with_model(model.clone());
     let mut connection = server.connection();
@@ -2234,10 +2233,7 @@ fn session_trace_pages_preserve_real_turns_forks_and_incremental_history_without
     );
     assert!(fork.get("result").is_some(), "{fork}");
     let identity = ash_protocol::SessionId::new(session_id).unwrap();
-    let expected = server
-        .agent_runtime()
-        .read_session_trace(&identity)
-        .unwrap();
+    let expected = server.trace_reader().read_session_trace(&identity).unwrap();
     let calls_before = model.requests().len();
     let mut cursors = serde_json::json!({});
     let mut events = std::collections::BTreeMap::<String, Vec<serde_json::Value>>::new();
@@ -2299,10 +2295,7 @@ fn session_trace_pages_preserve_real_turns_forks_and_incremental_history_without
         );
     }
     assert_eq!(
-        server
-            .agent_runtime()
-            .read_session_trace(&identity)
-            .unwrap(),
+        server.trace_reader().read_session_trace(&identity).unwrap(),
         expected
     );
     assert_eq!(model.requests().len(), calls_before);
@@ -2379,14 +2372,16 @@ fn session_trace_pages_preserve_real_turns_forks_and_incremental_history_without
 fn session_trace_diagnostics_rpc_pages_payloads_and_graph_preserve_attempt_identity() {
     let root = tempfile::tempdir().unwrap();
     let model = Arc::new(RecordingModel::default());
+    let recorder = Arc::new(ash_rollout_trace::TraceRecorder::new(Some(
+        root.path().into(),
+    )));
     let threads = Arc::new(
-        ThreadController::with_store(Arc::new(InMemoryThreadStore::default())).with_trace_recorder(
-            Arc::new(ash_rollout_trace::TraceRecorder::new(Some(
-                root.path().into(),
-            ))),
-        ),
+        ThreadController::with_store(Arc::new(InMemoryThreadStore::default()))
+            .with_diagnostics(recorder.clone()),
     );
-    let server = AppServer::new(threads, model.clone()).with_ephemeral_env_state();
+    let server = AppServer::new(threads, model.clone())
+        .with_trace_recorder(recorder)
+        .with_ephemeral_env_state();
     let mut connection = server.connection();
     initialize(&server, &mut connection);
     let created = create_session(&server, &mut connection, 2, "diagnostic-session");
@@ -2436,7 +2431,8 @@ fn session_trace_diagnostics_rpc_pages_payloads_and_graph_preserve_attempt_ident
         [
             "modelAttemptStarted",
             "modelRequestPrepared",
-            "modelAttemptCompleted"
+            "modelAttemptCompleted",
+            "modelAttemptAccounted"
         ]
     );
     let reference = &events[1]["event"]["requestPayload"];
@@ -2460,6 +2456,13 @@ fn session_trace_diagnostics_rpc_pages_payloads_and_graph_preserve_attempt_ident
             .unwrap()
             .values()
             .any(|node| node["kind"] == "modelAttempt")
+    );
+    assert!(
+        graph["result"]["graph"]["edges"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|edge| edge["kind"] == "accountsFor")
     );
     for (id, method, params, code) in [
         (

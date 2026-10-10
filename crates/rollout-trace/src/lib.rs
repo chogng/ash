@@ -5,13 +5,17 @@
 //! events can contain sensitive user and tool data. Diagnostic writes are local and opt-in;
 //! exporters and connection authorization remain owned by their product callers.
 
+mod budget;
 mod diagnostics;
 mod error;
 mod page;
+mod reader;
 mod recorder;
 mod reducer;
 mod trace;
+mod worker;
 
+pub use diagnostics::DIAGNOSTIC_TRACE_FORMAT_VERSION;
 pub use diagnostics::DiagnosticError;
 pub use diagnostics::DiagnosticEvent;
 pub use diagnostics::DiagnosticEventKind;
@@ -26,6 +30,7 @@ pub use diagnostics::RecordingStatus;
 pub use error::RolloutTraceError;
 pub use page::TracePage;
 pub use page::read_session_trace_page;
+pub use reader::TraceReader;
 pub use recorder::MAX_PAYLOAD_BYTES;
 pub use recorder::ModelAttemptTrace;
 pub use recorder::RecorderState;
@@ -41,13 +46,11 @@ pub use trace::ROLLOUT_TRACE_FORMAT_VERSION;
 pub use trace::RolloutTrace;
 pub use trace::ThreadRolloutTrace;
 pub use trace::capture_session_trace;
+pub use worker::FlushOutcome;
 
 #[cfg(test)]
 #[path = "trace_tests.rs"]
 mod tests;
-
-#[cfg(test)]
-mod recorder_tests;
 
 #[cfg(test)]
 mod reducer_tests;

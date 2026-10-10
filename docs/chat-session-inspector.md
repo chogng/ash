@@ -28,7 +28,7 @@ Workbench 通用 Agent Sidebar 不受影响。
 Sessions 的“查看执行 Trace”（`sessions.trace.open`）取得当前 Session 与 Thread，并用已有 agent tree
 中的最近 Turn 身份定位，打开独立 Trace 页面；没有当前会话时仍可导入 Trace。
 
-Workbench 和 Sessions 的 Activity Bar 都提供独立 Trace 入口，复用同一个编辑器。Sessions 的
+Workbench 和 Sessions 默认只注册命令。显式打开 Trace 或恢复此前打开的页面后，按需加载编辑器、导航、解析器和样式，并显示 Activity Bar 的独立入口，复用同一个编辑器。Sessions 的
 `sessions.open.trace` 恢复上次复查的 Session／Thread／Turn，不会因切换 Chat 自动替换复查上下文。
 侧栏显示当前复查身份；“查看当前对话”显式定位当前 Chat，“打开离线捕获”打开导入页。
 导航位置随窗口恢复；导入文件正文只保留在编辑器生命周期内，关闭窗口后需要重新导入。
@@ -51,7 +51,7 @@ Workbench 的 `ash.agentTrace.resume` 同样恢复有效位置；无有效位置
 这些决策属于持久执行历史，关闭详细记录仍可查看；“仅显示错误”也包含被拒绝的循环决策。
 完整响应及终止前部分输出的详细正文保留消息身份和阶段，已收到的阶段不会靠正文推测。
 
-界面通过 Chat 领域服务调用 `session/trace/read`，增量读取历史，再按现有 Thread 订阅跟随新事件。
+界面通过独立 `ITraceService` 调用 `session/trace/read` 等只读方法，复用既有 `IThreadApi` 连接，增量读取历史，再按现有 Thread 订阅跟随新事件。
 订阅 snapshot 补齐读取与订阅之间的空窗；共享 Chat 服务传递当前 Session 的 `session/changed`，
 触发读取以发现新子 Thread，编辑器不依赖 Sessions 目录服务。隐藏或关闭
 编辑器释放其订阅，重开读取后续历史；迟到的请求结果不会写回已关闭或切换的编辑器。

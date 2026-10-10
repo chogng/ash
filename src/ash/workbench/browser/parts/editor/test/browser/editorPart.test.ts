@@ -2294,6 +2294,28 @@ test("Editor open error offers a registered Binary Editor for unsafe text conten
 	dom.window.close();
 });
 
+for (const transition of ['replace', 'dispose'] as const) {
+	test(`a lazy pane resolving after ${transition} is disposed before mounting`, async () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		const registry = new EditorPaneRegistry();
+		const pending = deferred<EditorPane>();
+		const entered = deferred<void>();
+		registry.registerEditorPane({ ...descriptor('test.lazy', '.lazy', () => new TestEditorPane('unused')), create: () => { entered.resolve(); return pending.promise; } });
+		const editor = createEditorPart(dom.window.document.body, { registry });
+		const opening = editor.openEditor(input('C:/project/document.lazy'));
+		await entered.promise;
+		if (transition === 'replace') { const replacement = h(dom.window.document, 'div'); replacement.textContent = 'Replacement'; await editor.setContent(replacement); }
+		else { editor.dispose(); }
+		const pane = new TestEditorPane('test.lazy');
+		pending.resolve(pane);
+		await assert.rejects(opening, EditorOpenSupersededError);
+		assert.equal(pane.disposed, true);
+		assert.equal(pane.inputSignal, undefined);
+		if (transition === 'replace') { assert.equal(editor.domNode.textContent, 'Replacement'); editor.dispose(); }
+		dom.window.close();
+	});
+}
+
 test("EditorPart rejects an open superseded by ordinary content", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();

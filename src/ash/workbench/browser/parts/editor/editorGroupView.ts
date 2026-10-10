@@ -497,7 +497,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		let createdPane: EditorPane | undefined;
 		let pane: EditorPane;
 		try {
-			pane = descriptor.create({
+			const created = descriptor.create({
 				input,
 				configurationService: this.configurationService,
 				contextKeyService: this.contextKeyService,
@@ -530,8 +530,14 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 					},
 				} : {}),
 			});
+			pane = created instanceof Promise ? await created : created;
 		} catch (error) {
+			if (this.isDisposed || sequence !== this.openSequence) { throw new EditorOpenSupersededError(input); }
 			return this.showOpenError(input, options, error, existing);
+		}
+		if (this.isDisposed || sequence !== this.openSequence) {
+			pane.dispose();
+			throw new EditorOpenSupersededError(input);
 		}
 		createdPane = pane;
 		if (pane.id !== descriptor.id) {

@@ -11,7 +11,7 @@ export interface IEditorPaneDescriptor {
 	canOpen(input: IResourceEditorInput): EditorPaneMatch;
 	/** Creates a distinct tab identity when this editor opens beside the source. */
 	createInput?(source: IResourceEditorInput): IResourceEditorInput;
-	create(options: EditorPaneCreationOptions): EditorPane;
+	create(options: EditorPaneCreationOptions): EditorPane | Promise<EditorPane>;
 }
 
 export interface IEditorPaneRegistry {

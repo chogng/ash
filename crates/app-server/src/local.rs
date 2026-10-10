@@ -786,6 +786,7 @@ pub struct LocalProfileRuntime {
     profile_root: PathBuf,
     state: Arc<ash_state::StateRuntime>,
     threads: Arc<ThreadController>,
+    trace_recorder: Arc<ash_rollout_trace::TraceRecorder>,
     history: Arc<ash_state::SqliteThreadStore>,
     config: Arc<ConfigStore>,
     network_policy: OutboundNetworkPolicy,
@@ -872,10 +873,11 @@ impl LocalProfileRuntime {
         let network_policy = OutboundNetworkPolicy::new(network_access(&snapshot.values.network));
         let attachments = open_attachments(state.profile_root(), network_policy.clone())?;
         let repository = LocalStateRepository::open(&state).map_err(open_error)?;
+        let trace_recorder = configured_trace_recorder(&snapshot);
         let threads = repository
-            .recover_threads_with_attachments_and_trace_recorder(
+            .recover_threads_with_attachments_and_diagnostics(
                 attachments,
-                configured_trace_recorder(&snapshot),
+                Some(trace_recorder.clone()),
             )
             .map_err(open_error)?;
         threads
@@ -901,6 +903,7 @@ impl LocalProfileRuntime {
             queue: Arc::new(queue::QueueStore::open(&database_path).map_err(open_error)?),
             state,
             threads,
+            trace_recorder,
             history,
             config,
             network_policy,
@@ -1135,61 +1138,65 @@ pub fn open_app_server_with_codebase_providers(
         .as_ref()
         .map(|runtime| runtime.network_policy.clone())
         .unwrap_or_else(|| OutboundNetworkPolicy::new(NetworkAccess::Any));
-    let (database_path, threads, config) = match (&profile_runtime, options.session_state_mode) {
-        (Some(runtime), SessionStateMode::Durable) => (
-            runtime.state.database_path().to_path_buf(),
-            Arc::clone(&runtime.threads),
-            Arc::clone(&runtime.config),
-        ),
-        (Some(_), SessionStateMode::Ephemeral) => unreachable!("validated above"),
-        (None, SessionStateMode::Durable) => {
-            let database_path = state_runtime.database_path().to_path_buf();
-            require_history_owner(&database_path)?;
-            let config = Arc::new(
-                ConfigStore::open_with_paths(
-                    database_path.clone(),
-                    options.profile_root.join("config.toml"),
-                )
-                .map_err(|error| OpenAppServerError(error.0))?,
-            );
-            let snapshot = config
-                .read_snapshot()
-                .map_err(|error| OpenAppServerError(error.0))?;
-            network_policy.update(network_access(&snapshot.values.network));
-            let attachments = open_attachments(&options.profile_root, network_policy.clone())?;
-            let repository = LocalStateRepository::open(&state_runtime).map_err(open_error)?;
-            let threads = repository
-                .recover_threads_with_attachments_and_trace_recorder(
-                    attachments,
-                    configured_trace_recorder(&snapshot),
-                )
-                .map_err(open_error)?;
-            (database_path, threads, config)
-        }
-        (None, SessionStateMode::Ephemeral) => {
-            let database_path = state_runtime.database_path().to_path_buf();
-            let config = Arc::new(
-                ConfigStore::open_with_paths(
-                    database_path.clone(),
-                    options.profile_root.join("config.toml"),
-                )
-                .map_err(|error| OpenAppServerError(error.0))?,
-            );
-            let snapshot = config
-                .read_snapshot()
-                .map_err(|error| OpenAppServerError(error.0))?;
-            network_policy.update(network_access(&snapshot.values.network));
-            let attachments = open_attachments(&options.profile_root, network_policy.clone())?;
-            let threads = Arc::new(
-                ThreadController::with_store_and_attachments(
-                    Arc::new(InMemoryThreadStore::default()),
-                    attachments,
-                )
-                .with_trace_recorder(configured_trace_recorder(&snapshot)),
-            );
-            (database_path, threads, config)
-        }
-    };
+    let (database_path, threads, config, trace_recorder) =
+        match (&profile_runtime, options.session_state_mode) {
+            (Some(runtime), SessionStateMode::Durable) => (
+                runtime.state.database_path().to_path_buf(),
+                Arc::clone(&runtime.threads),
+                Arc::clone(&runtime.config),
+                Arc::clone(&runtime.trace_recorder),
+            ),
+            (Some(_), SessionStateMode::Ephemeral) => unreachable!("validated above"),
+            (None, SessionStateMode::Durable) => {
+                let database_path = state_runtime.database_path().to_path_buf();
+                require_history_owner(&database_path)?;
+                let config = Arc::new(
+                    ConfigStore::open_with_paths(
+                        database_path.clone(),
+                        options.profile_root.join("config.toml"),
+                    )
+                    .map_err(|error| OpenAppServerError(error.0))?,
+                );
+                let snapshot = config
+                    .read_snapshot()
+                    .map_err(|error| OpenAppServerError(error.0))?;
+                network_policy.update(network_access(&snapshot.values.network));
+                let attachments = open_attachments(&options.profile_root, network_policy.clone())?;
+                let repository = LocalStateRepository::open(&state_runtime).map_err(open_error)?;
+                let trace_recorder = configured_trace_recorder(&snapshot);
+                let threads = repository
+                    .recover_threads_with_attachments_and_diagnostics(
+                        attachments,
+                        Some(trace_recorder.clone()),
+                    )
+                    .map_err(open_error)?;
+                (database_path, threads, config, trace_recorder)
+            }
+            (None, SessionStateMode::Ephemeral) => {
+                let database_path = state_runtime.database_path().to_path_buf();
+                let config = Arc::new(
+                    ConfigStore::open_with_paths(
+                        database_path.clone(),
+                        options.profile_root.join("config.toml"),
+                    )
+                    .map_err(|error| OpenAppServerError(error.0))?,
+                );
+                let snapshot = config
+                    .read_snapshot()
+                    .map_err(|error| OpenAppServerError(error.0))?;
+                network_policy.update(network_access(&snapshot.values.network));
+                let attachments = open_attachments(&options.profile_root, network_policy.clone())?;
+                let trace_recorder = configured_trace_recorder(&snapshot);
+                let threads = Arc::new(
+                    ThreadController::with_store_and_attachments(
+                        Arc::new(InMemoryThreadStore::default()),
+                        attachments,
+                    )
+                    .with_diagnostics(trace_recorder.clone()),
+                );
+                (database_path, threads, config, trace_recorder)
+            }
+        };
     threads
         .migrate_model_providers(&model_provider_info::legacy_model_providers())
         .map_err(open_error)?;
@@ -1640,6 +1647,7 @@ pub fn open_app_server_with_codebase_providers(
         ),
         None => AppServer::new(threads, agent_model),
     }
+    .with_trace_recorder(trace_recorder)
     .with_home(home)
     .with_network_diagnostics(network.clone(), application_http.clone(), network_services)
     .with_telemetry(diagnostics, telemetry, analytics)

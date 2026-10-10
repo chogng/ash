@@ -1,4 +1,5 @@
 use super::*;
+use crate::InferencePurpose;
 use ash_protocol::ModelRequest;
 use ash_protocol::ModelStreamEvent;
 use ash_protocol::SessionId;
@@ -187,6 +188,10 @@ fn diagnostic_recovery_does_not_overwrite_orphaned_payloads() {
     let root = crate::tests::temporary_root();
     let recorder = TraceRecorder::new(Some(root.clone()));
     recorder.start_attempt(context(), &request()).fail("first");
+    assert_eq!(
+        recorder.flush(std::time::Duration::from_secs(2)),
+        FlushOutcome::Complete
+    );
     let directory = fs::read_dir(&root).unwrap().next().unwrap().unwrap().path();
     fs::write(
         directory.join("payloads/payload-999.json"),
@@ -251,4 +256,332 @@ fn trace_recorder_reports_actual_directory_state_without_creating_capture_data()
         matches!(recorder.state(), RecorderState::Unavailable { directory, .. } if directory == root)
     );
     fs::remove_file(root).unwrap();
+}
+
+#[test]
+fn hook_evidence_is_opt_in_and_reopens_with_session_identity() {
+    let scope = context();
+    let evidence = serde_json::json!({"program":"hook", "input":"private input", "stderr":"failed", "exitCode":7});
+    let disabled = TraceRecorder::new(None);
+    disabled.record_hook(&scope.session_id, &scope.thread_id, None, "run", &evidence);
+    assert!(
+        disabled
+            .read(&scope.session_id, 0, 10)
+            .unwrap()
+            .diagnostics
+            .events
+            .is_empty()
+    );
+    let root = crate::tests::temporary_root();
+    let recorder = TraceRecorder::new(Some(root.clone()));
+    recorder.record_hook(&scope.session_id, &scope.thread_id, None, "run", &evidence);
+    drop(recorder);
+    let recorder = TraceRecorder::new(Some(root.clone()));
+    let capture = recorder.read(&scope.session_id, 0, 10).unwrap().diagnostics;
+    assert_eq!(capture.events[0].turn_id, None);
+    assert!(
+        matches!(&capture.events[0].event, DiagnosticEventKind::HookRunRecorded { run_id, .. } if run_id == "run")
+    );
+    assert_eq!(
+        recorder
+            .read_payload(
+                &scope.session_id,
+                capture.capture_id.as_ref().unwrap(),
+                &capture.events[0].event.payload().unwrap().payload_id
+            )
+            .unwrap(),
+        evidence
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn disabled_observations_never_initialize_a_worker_or_copy_body_evidence() {
+    let recorder = TraceRecorder::default();
+    let mut input = request();
+    input.instructions = Some("x".repeat(MAX_PAYLOAD_BYTES + 1));
+    recorder.start_attempt(context(), &input).cancel("off");
+    assert!(recorder.worker.get().is_none());
+    assert!(recorder.storage.writers.lock().unwrap().is_empty());
+    assert_eq!(
+        recorder.flush(std::time::Duration::ZERO),
+        FlushOutcome::Complete
+    );
+    assert!(
+        core_api::ExecutionDiagnostics::start_attempt(
+            &recorder,
+            core_api::InferenceContext {
+                session_id: context().session_id,
+                thread_id: context().thread_id,
+                turn_id: context().turn_id,
+                source_thread_sequence: 7,
+                model: None,
+                purpose: core_api::InferencePurpose::Agent,
+            },
+            &input
+        )
+        .is_none()
+    );
+    core_api::ExecutionDiagnostics::record_hook(
+        &recorder,
+        &context().session_id,
+        &context().thread_id,
+        None,
+        "run",
+        &core_api::HookRunEvidence {
+            program: "off".into(),
+            arguments: Vec::new(),
+            directory: std::path::PathBuf::new(),
+            input: input.instructions.unwrap(),
+            stdout: String::new(),
+            stderr: String::new(),
+            exit_code: None,
+            stdout_truncated: false,
+            stderr_truncated: false,
+        },
+    );
+    assert!(recorder.worker.get().is_none());
+}
+
+#[test]
+fn reading_an_enabled_session_before_its_first_observation_is_not_a_storage_failure() {
+    let root = crate::tests::temporary_root();
+    let recorder = TraceRecorder::new(Some(root.clone()));
+    recorder
+        .start_attempt(context(), &request())
+        .cancel("first session");
+    assert_eq!(
+        recorder.flush(std::time::Duration::from_secs(2)),
+        FlushOutcome::Complete
+    );
+    let page = recorder
+        .read(&SessionId::new("unobserved-session").unwrap(), 0, 500)
+        .unwrap();
+    assert_eq!(
+        page.diagnostics.recording_status,
+        RecordingStatus::Recording
+    );
+    assert!(page.diagnostics.events.is_empty());
+    assert_eq!(page.diagnostics.pending_records, 0);
+    drop(recorder);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn exhausted_event_budget_cannot_accumulate_unreferenced_body_files() {
+    let root = crate::tests::temporary_root();
+    let recorder = TraceRecorder::new(Some(root.clone()));
+    let mut attempt = recorder.start_attempt(context(), &request());
+    assert_eq!(
+        recorder.flush(std::time::Duration::from_secs(2)),
+        FlushOutcome::Complete
+    );
+    let writer = recorder
+        .storage
+        .writers
+        .lock()
+        .unwrap()
+        .get(&context().session_id)
+        .unwrap()
+        .clone();
+    let mut state = writer.lock().unwrap();
+    state.event_bytes = MAX_CAPTURE_EVENT_BYTES;
+    let files = fs::read_dir(state.directory.join("payloads"))
+        .unwrap()
+        .count();
+    drop(state);
+    for _ in 0..10 {
+        attempt.prepared_request(&request());
+    }
+    attempt.cancel("limit");
+    assert_eq!(
+        recorder.flush(std::time::Duration::from_secs(2)),
+        FlushOutcome::Complete
+    );
+    let state = writer.lock().unwrap();
+    assert_eq!(
+        fs::read_dir(state.directory.join("payloads"))
+            .unwrap()
+            .count(),
+        files
+    );
+    assert!(state.manifest.dropped_records > 0);
+    drop(state);
+    drop(recorder);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn shutting_down_cannot_accept_unpersisted_late_observations() {
+    let root = crate::tests::temporary_root();
+    let recorder = Arc::new(TraceRecorder::new(Some(root.clone())));
+    let attempts = (0..4)
+        .map(|_| recorder.start_attempt(context(), &request()))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        recorder.flush(std::time::Duration::from_secs(2)),
+        FlushOutcome::Complete
+    );
+    let barrier = Arc::new(std::sync::Barrier::new(5));
+    let producers = attempts
+        .into_iter()
+        .map(|mut attempt| {
+            let barrier = barrier.clone();
+            std::thread::spawn(move || {
+                barrier.wait();
+                for _ in 0..100 {
+                    attempt.prepared_request(&request());
+                }
+                attempt.cancel("late");
+            })
+        })
+        .collect::<Vec<_>>();
+    barrier.wait();
+    recorder.shutdown(std::time::Duration::from_secs(2));
+    for producer in producers {
+        producer.join().unwrap();
+    }
+    assert_eq!(
+        recorder.shutdown(std::time::Duration::from_secs(2)),
+        FlushOutcome::Complete
+    );
+    let page = recorder.read(&context().session_id, 0, 500).unwrap();
+    assert_eq!(page.diagnostics.pending_records, 0);
+    assert_eq!(
+        page.diagnostics.recording_status,
+        RecordingStatus::Unavailable
+    );
+    drop(recorder);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn blocked_storage_cannot_block_observers_and_queue_losses_remain_visible() {
+    let root = crate::tests::temporary_root();
+    let recorder = TraceRecorder::new(Some(root.clone()));
+    let mut attempt = recorder.start_attempt(context(), &request());
+    assert_eq!(
+        recorder.flush(std::time::Duration::from_secs(2)),
+        FlushOutcome::Complete
+    );
+    let writer = recorder
+        .storage
+        .writers
+        .lock()
+        .unwrap()
+        .get(&context().session_id)
+        .unwrap()
+        .clone();
+    let blocked_disk = writer.lock().unwrap();
+    let (finished, completed) = std::sync::mpsc::channel();
+    let producer = std::thread::spawn(move || {
+        for _ in 0..crate::worker::MAX_QUEUE_RECORDS + 8 {
+            attempt.prepared_request(&request());
+        }
+        attempt.cancel("cancel remains independent");
+        finished.send(()).unwrap();
+    });
+    let produced = completed.recv_timeout(std::time::Duration::from_secs(2));
+    let page = recorder.read(&context().session_id, 0, 500).unwrap();
+    assert_eq!(
+        page.diagnostics.recording_status,
+        RecordingStatus::Incomplete
+    );
+    assert!(page.diagnostics.pending_records > 0);
+    assert!(page.diagnostics.dropped_records > 0);
+    assert!(matches!(
+        recorder.flush(std::time::Duration::ZERO),
+        FlushOutcome::TimedOut { .. }
+    ));
+    drop(blocked_disk);
+    producer.join().unwrap();
+    produced.expect("callbacks must finish while storage remains blocked");
+    assert_eq!(
+        recorder.flush(std::time::Duration::from_secs(2)),
+        FlushOutcome::Complete
+    );
+    assert!(
+        recorder
+            .read(&context().session_id, 0, 500)
+            .unwrap()
+            .diagnostics
+            .dropped_records
+            > 0
+    );
+    drop(recorder);
+    let reopened = TraceRecorder::new(Some(root.clone()));
+    assert_eq!(
+        reopened
+            .read(&context().session_id, 0, 500)
+            .unwrap()
+            .diagnostics
+            .recording_status,
+        RecordingStatus::Incomplete
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn active_attempts_and_partial_buffers_share_the_profile_memory_budget() {
+    let root = crate::tests::temporary_root();
+    let recorder = TraceRecorder::new(Some(root.clone()));
+    let attempts = (0..crate::worker::MAX_ACTIVE_ATTEMPTS + 1)
+        .map(|_| recorder.start_attempt(context(), &request()))
+        .collect::<Vec<_>>();
+    assert!(attempts.iter().any(|attempt| attempt.active.is_none()));
+    assert!(
+        attempts
+            .iter()
+            .filter(|attempt| attempt.active.is_some())
+            .count()
+            <= crate::worker::MAX_ACTIVE_ATTEMPTS
+    );
+    drop(attempts);
+    assert_eq!(
+        recorder.flush(std::time::Duration::from_secs(2)),
+        FlushOutcome::Complete
+    );
+    assert!(
+        recorder
+            .read(&context().session_id, 0, 500)
+            .unwrap()
+            .diagnostics
+            .dropped_records
+            > 0
+    );
+    drop(recorder);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn retired_sessions_reject_late_callbacks_and_cleanup_their_owned_capture() {
+    let root = crate::tests::temporary_root();
+    let recorder = TraceRecorder::new(Some(root.clone()));
+    let mut attempt = recorder.start_attempt(context(), &request());
+    assert_eq!(
+        recorder.flush(std::time::Duration::from_secs(2)),
+        FlushOutcome::Complete
+    );
+    let capture = recorder
+        .running_worker()
+        .unwrap()
+        .existing_capture(&context().session_id)
+        .unwrap();
+    let directory = recorder.storage.directory(&context().session_id).unwrap();
+    recorder.remove_session(&context().session_id);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    while capture.cleanup_pending.load(Ordering::Acquire) && std::time::Instant::now() < deadline {
+        std::thread::yield_now();
+    }
+    assert!(!capture.cleanup_pending.load(Ordering::Acquire));
+    assert!(!directory.exists());
+    attempt.prepared_request(&request());
+    attempt.cancel("late");
+    drop(attempt);
+    assert_eq!(
+        recorder.shutdown(std::time::Duration::from_secs(2)),
+        FlushOutcome::Complete
+    );
+    assert!(!directory.exists());
+    fs::remove_dir_all(root).unwrap();
 }

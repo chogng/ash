@@ -2918,7 +2918,9 @@ impl ContextCompactionService for FixedOverflowCompaction {
         &self,
         request: &ContextCompactionRequest,
         _: &CancellationToken,
-        _: &mut dyn FnMut(Option<ModelUsage>) -> Result<(), CoreError>,
+        _: &mut dyn FnMut(
+            Option<ModelUsage>,
+        ) -> Result<core_api::ModelInvocationReceipt, CoreError>,
     ) -> Result<crate::ContextCompactionResult, CoreError> {
         self.calls.fetch_add(1, Ordering::Relaxed);
         assert!(!request.source_items().is_empty());
@@ -2957,7 +2959,9 @@ impl ContextCompactionService for BlockingOverflowCompaction {
         &self,
         _: &ContextCompactionRequest,
         cancellation: &CancellationToken,
-        _: &mut dyn FnMut(Option<ModelUsage>) -> Result<(), CoreError>,
+        _: &mut dyn FnMut(
+            Option<ModelUsage>,
+        ) -> Result<core_api::ModelInvocationReceipt, CoreError>,
     ) -> Result<crate::ContextCompactionResult, CoreError> {
         self.entered.store(true, Ordering::Relaxed);
         self.entered_changed.notify_all();

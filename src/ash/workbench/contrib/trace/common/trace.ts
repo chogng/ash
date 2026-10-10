@@ -1,5 +1,7 @@
 import { URI } from '../../../../base/common/uri.js';
 import { isRecord } from '../../../../base/common/types.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import { localize } from '../../../../nls.js';
 
 /** Opens saved Session history, optionally at a durable Thread, Turn or event identity. */
@@ -52,4 +54,27 @@ export function readAgentTraceLocation(resource: URI): AgentTraceLocation | unde
 		fields[key] = value;
 	}
 	return validateLocation(fields);
+}
+
+export const agentTraceEditorId = 'ash.agentTrace';
+export const traceEditorId = 'workbench.editor.trace';
+export const AgentTraceViewContainerId = 'workbench.view.trace';
+export const ResumeAgentTraceCommandId = 'ash.agentTrace.resume';
+const lastResourceKey = 'agentTrace.lastResource';
+
+export function rememberAgentTraceResource(storage: IStorageService, resource: URI): void {
+	readAgentTraceLocation(resource);
+	storage.store(lastResourceKey, resource.toString(), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+}
+
+export function readLastAgentTraceResource(storage: IStorageService): URI | undefined {
+	const value = storage.get(lastResourceKey, StorageScope.WORKSPACE);
+	if (value === undefined) { return undefined; }
+	try { const resource = URI.parse(value); readAgentTraceLocation(resource); return resource; }
+	catch { return undefined; }
+}
+
+export function createAgentTraceInput(resource: URI): IResourceEditorInput {
+	readAgentTraceLocation(resource);
+	return { resource, label: localize('agentTrace.title', 'Execution Trace'), readOnly: true, showBreadcrumbs: false };
 }

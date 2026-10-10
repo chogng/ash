@@ -20,7 +20,7 @@ export interface AgentTrace {
 
 export interface AgentTracePayloadRef {
 	readonly payloadId: string;
-	readonly kind: 'coreRequest' | 'materializedRequest' | 'modelResponse' | 'partialOutput';
+	readonly kind: 'coreRequest' | 'materializedRequest' | 'modelResponse' | 'partialOutput' | 'hookExecution';
 	readonly byteLength: number;
 	readonly status: 'saved' | 'omitted';
 	readonly digest: string | null;
@@ -31,15 +31,16 @@ export interface AgentTraceDiagnosticEvent {
 	readonly sequence: number;
 	readonly recordedAt: number;
 	readonly threadId: string;
-	readonly turnId: string;
-	readonly event: Readonly<Record<string, unknown>> & { readonly type: string; readonly attemptId: string; };
+	readonly turnId: string | null;
+	readonly event: Readonly<Record<string, unknown>> & { readonly type: string; };
 }
 
 export interface AgentTraceDiagnostics {
-	readonly formatVersion: 1;
+	readonly formatVersion: 1 | 2;
 	readonly captureId: string | null;
 	readonly recordingStatus: 'disabled' | 'recording' | 'incomplete' | 'unavailable';
 	readonly droppedRecords: number;
+	readonly pendingRecords?: number;
 	readonly events: readonly AgentTraceDiagnosticEvent[];
 	readonly payloads?: Readonly<Record<string, unknown>>;
 }
@@ -66,9 +67,9 @@ export interface AgentTraceGraph {
 }
 
 export function diagnosticPayload(record: AgentTraceDiagnosticEvent): AgentTracePayloadRef | undefined {
-	const value = record.event.requestPayload ?? record.event.responsePayload ?? record.event.partialOutput;
+	const value = record.event.requestPayload ?? record.event.responsePayload ?? record.event.partialOutput ?? record.event.executionPayload;
 	if (value === undefined || value === null) { return undefined; }
-	if (!isRecord(value) || typeof value.payloadId !== 'string' || !/^payload-[1-9]\d*$/.test(value.payloadId) || !['coreRequest', 'materializedRequest', 'modelResponse', 'partialOutput'].includes(String(value.kind)) || !integer(value.byteLength) || value.byteLength > 8 * 1024 * 1024 || !['saved', 'omitted'].includes(String(value.status)) || (value.status === 'saved' && (typeof value.digest !== 'string' || !/^sha256:[a-f0-9]{64}$/.test(value.digest)))) { return invalidDiagnostics(); }
+	if (!isRecord(value) || typeof value.payloadId !== 'string' || !/^payload-[1-9]\d*$/.test(value.payloadId) || !['coreRequest', 'materializedRequest', 'modelResponse', 'partialOutput', 'hookExecution'].includes(String(value.kind)) || !integer(value.byteLength) || value.byteLength > 8 * 1024 * 1024 || !['saved', 'omitted'].includes(String(value.status)) || (value.status === 'saved' && (typeof value.digest !== 'string' || !/^sha256:[a-f0-9]{64}$/.test(value.digest)))) { return invalidDiagnostics(); }
 	return value as unknown as AgentTracePayloadRef;
 }
 
@@ -76,14 +77,18 @@ function integer(value: unknown): value is number { return typeof value === 'num
 function invalidDiagnostics(): never { throw new Error(localize('agentTrace.invalidDiagnostics', 'Invalid diagnostic evidence or pagination progress.')); }
 
 export function parseAgentTraceDiagnostics(value: unknown): AgentTraceDiagnostics {
-	if (!isRecord(value) || value.formatVersion !== 1 || (value.captureId !== null && (typeof value.captureId !== 'string' || !value.captureId)) || !['disabled', 'recording', 'incomplete', 'unavailable'].includes(String(value.recordingStatus)) || !integer(value.droppedRecords) || !Array.isArray(value.events) || value.events.length > 32_000 || (value.payloads !== undefined && !isRecord(value.payloads))) { return invalidDiagnostics(); }
+	if (!isRecord(value) || (value.formatVersion !== 1 && value.formatVersion !== 2) || (value.captureId !== null && (typeof value.captureId !== 'string' || !value.captureId)) || !['disabled', 'recording', 'incomplete', 'unavailable'].includes(String(value.recordingStatus)) || !integer(value.droppedRecords) || ((value.formatVersion === 2 || value.pendingRecords !== undefined) && !integer(value.pendingRecords)) || !Array.isArray(value.events) || value.events.length > 32_000 || (value.payloads !== undefined && !isRecord(value.payloads))) { return invalidDiagnostics(); }
 	let previous = 0;
 	const identities = new Set<string>();
 	const payloads = new Set<string>();
 	for (const record of value.events) {
-		if (!isRecord(record) || typeof record.eventId !== 'string' || !record.eventId || identities.has(record.eventId) || !integer(record.sequence) || record.sequence <= previous || !integer(record.recordedAt) || record.recordedAt > 8_640_000_000_000_000 || typeof record.threadId !== 'string' || !record.threadId || typeof record.turnId !== 'string' || !record.turnId || !isRecord(record.event) || !['modelAttemptStarted', 'modelRequestPrepared', 'modelAttemptCompleted', 'modelAttemptFailed', 'modelAttemptCancelled', 'modelAttemptAbandoned'].includes(String(record.event.type)) || typeof record.event.attemptId !== 'string' || !record.event.attemptId) { return invalidDiagnostics(); }
+		if (!isRecord(record) || typeof record.eventId !== 'string' || !record.eventId || identities.has(record.eventId) || !integer(record.sequence) || record.sequence <= previous || !integer(record.recordedAt) || record.recordedAt > 8_640_000_000_000_000 || typeof record.threadId !== 'string' || !record.threadId || (record.turnId !== null && (typeof record.turnId !== 'string' || !record.turnId)) || !isRecord(record.event) || !['modelAttemptStarted', 'modelRequestPrepared', 'modelAttemptCompleted', 'modelAttemptFailed', 'modelAttemptCancelled', 'modelAttemptAbandoned', 'modelAttemptAccounted', 'hookRunRecorded'].includes(String(record.event.type))) { return invalidDiagnostics(); }
 		const event = record as unknown as AgentTraceDiagnosticEvent;
 		const payload = diagnosticPayload(event);
+		if (event.event.type === 'modelAttemptAccounted' && (value.formatVersion !== 2 || typeof event.event.invocationId !== 'string' || !event.event.invocationId || !integer(event.event.sourceThreadSequence) || event.event.sourceThreadSequence === 0 || payload)) { return invalidDiagnostics(); }
+		if (event.event.type === 'hookRunRecorded') {
+			if (typeof event.event.runId !== 'string' || !event.event.runId || payload?.kind !== 'hookExecution') { return invalidDiagnostics(); }
+		} else if (typeof event.event.attemptId !== 'string' || !event.event.attemptId || event.turnId === null) { return invalidDiagnostics(); }
 		if (['modelAttemptStarted', 'modelRequestPrepared', 'modelAttemptCompleted'].includes(event.event.type) && !payload) { return invalidDiagnostics(); }
 		if (payload?.status === 'saved') { payloads.add(payload.payloadId); }
 		identities.add(record.eventId);

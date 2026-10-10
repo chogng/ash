@@ -44,7 +44,7 @@ impl ThreadController {
         time_context: Option<ash_protocol::TimeContext>,
         started_at_unix_ms: u64,
         completed_at_unix_ms: u64,
-    ) -> Result<u64, CoreError> {
+    ) -> Result<core_api::ModelInvocationReceipt, CoreError> {
         self.record_model_invocation_for_tool(
             thread_id,
             turn_id,
@@ -75,7 +75,7 @@ impl ThreadController {
         completed_at_unix_ms: u64,
         tool_call_id: Option<ash_protocol::ToolCallId>,
         outcome: ModelInvocationOutcome,
-    ) -> Result<u64, CoreError> {
+    ) -> Result<core_api::ModelInvocationReceipt, CoreError> {
         static RATE_CARD: OnceLock<Result<RateCard, String>> = OnceLock::new();
         let rate_card = RATE_CARD
             .get_or_init(|| {
@@ -96,7 +96,7 @@ impl ThreadController {
             .expect("generated model invocation ID is non-empty");
         let record = ModelInvocationRecord {
             time_context,
-            invocation_id,
+            invocation_id: invocation_id.clone(),
             tool_call_id,
             thread_id: thread_id.clone(),
             turn_id: turn_id.clone(),
@@ -110,7 +110,7 @@ impl ThreadController {
             input_estimate,
             reference_cost: priced.reference_cost,
         };
-        self.mutate_thread(thread_id, |snapshot| {
+        let sequence = self.mutate_thread(thread_id, |snapshot| {
             self.record_batch(
                 snapshot,
                 vec![ThreadEvent::ModelInvocationRecorded {
@@ -120,6 +120,10 @@ impl ThreadController {
                 }],
             )?;
             Ok(snapshot.sequence)
+        })?;
+        Ok(core_api::ModelInvocationReceipt {
+            invocation_id,
+            sequence,
         })
     }
 
@@ -142,6 +146,7 @@ impl ThreadController {
             0,
             0,
         )
+        .map(|receipt| receipt.sequence)
     }
 
     /// Completes a Turn that intentionally produced no agent message.

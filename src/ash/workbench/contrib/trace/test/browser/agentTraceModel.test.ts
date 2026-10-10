@@ -1,9 +1,64 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
-import { AgentTraceViewModel } from '../../browser/agentTraceModel.js';
-import type { AgentTrace } from '../../../../services/chat/common/agentTrace.js';
+import { readFileSync } from 'node:fs';
+import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
+import { AgentTraceViewModel, recordingLabel, relationLabel } from '../../browser/agentTraceModel.js';
+import type { AgentTrace } from '../../../../services/trace/common/agentTrace.js';
 
 suite('Execution Trace saved execution flow', () => {
+	test('links receipts to the exact committed invocation and leaves mismatches unknown', () => {
+		const model = new AgentTraceViewModel();
+		const ledger = { eventId: 'ledger', sequence: 9, recordedAt: 1, event: { type: 'modelInvocationRecorded', threadId: 'root', turnId: 'turn', record: { invocationId: 'committed' } } };
+		const start = { eventId: 'start', sequence: 1, recordedAt: 0, threadId: 'root', turnId: 'turn', event: { type: 'modelAttemptStarted', attemptId: 'attempt', sourceThreadSequence: 8 } };
+		const receipt = { eventId: 'receipt', sequence: 2, recordedAt: 0, threadId: 'root', turnId: 'turn', event: { type: 'modelAttemptAccounted', attemptId: 'attempt', invocationId: 'committed', sourceThreadSequence: 9 } };
+		const trace: AgentTrace = { formatVersion: 3, sessionId: 's', historyPrefixes: [], threads: [{ threadId: 'root', events: [ledger] }], diagnostics: { formatVersion: 2, captureId: 'c', recordingStatus: 'recording', droppedRecords: 0, pendingRecords: 0, events: [start, receipt] } };
+		model.update(trace);
+		assert.equal(model.relations(model.findEvent('root', 'turn', 'start')!)[0].target.record?.eventId, 'ledger');
+		for (const changed of [{ ...receipt, turnId: 'other' }, { ...receipt, event: { ...receipt.event, sourceThreadSequence: 8 } }]) {
+			model.update({ ...trace, diagnostics: { ...trace.diagnostics!, events: [start, changed] } });
+			assert.deepEqual(model.relations(model.findEvent('root', 'turn', 'start')!), []);
+		}
+	});
+
+	test('leaves duplicate invocation or attempt receipts unlinked', () => {
+		const model = new AgentTraceViewModel();
+		const ledger = { eventId: 'ledger', sequence: 9, recordedAt: 1, event: { type: 'modelInvocationRecorded', threadId: 'root', turnId: 'turn', record: { invocationId: 'committed' } } };
+		const start = { eventId: 'start', sequence: 1, recordedAt: 0, threadId: 'root', turnId: 'turn', event: { type: 'modelAttemptStarted', attemptId: 'attempt', sourceThreadSequence: 8 } };
+		const receipt = { eventId: 'receipt', sequence: 2, recordedAt: 0, threadId: 'root', turnId: 'turn', event: { type: 'modelAttemptAccounted', attemptId: 'attempt', invocationId: 'committed', sourceThreadSequence: 9 } };
+		for (const event of [receipt.event, { ...receipt.event, attemptId: 'other' }, { ...receipt.event, invocationId: 'other' }]) {
+			model.update({ formatVersion: 3, sessionId: 's', historyPrefixes: [], threads: [{ threadId: 'root', events: [ledger] }], diagnostics: { formatVersion: 2, captureId: 'c', recordingStatus: 'recording', droppedRecords: 0, pendingRecords: 0, events: [start, receipt, { ...receipt, eventId: 'duplicate', sequence: 3, event }] } });
+			assert.deepEqual(model.relations(model.findEvent('root', 'turn', 'start')!), []);
+			assert.deepEqual(model.relations(model.findEvent('root', 'turn', 'receipt')!), []);
+		}
+	});
+
+	test('reports pending evidence and accounting relations using the shipped Chinese catalog', () => {
+		setNlsMessages('zh-CN', JSON.parse(readFileSync('localization/zh-CN/chat.json', 'utf8')));
+		try {
+			assert.equal(recordingLabel({ formatVersion: 3, sessionId: 's', historyPrefixes: [], threads: [], diagnostics: { formatVersion: 2, captureId: 'c', recordingStatus: 'incomplete', droppedRecords: 2, pendingRecords: 3, events: [] } }), '诊断证据不完整 · 已省略 2 条记录 · 3 条记录待写入。');
+			assert.equal(relationLabel('accountsFor'), '已提交的模型账目');
+		} finally { resetNlsResolver(); }
+	});
+	test('associates Hook bodies with the exact Thread, Turn and run, and filters blocked runs as errors', () => {
+		const model = new AgentTraceViewModel();
+		const ref = { payloadId: 'payload-1', kind: 'hookExecution' as const, byteLength: 1, status: 'saved' as const, digest: 'sha256:' + '0'.repeat(64) };
+		const trace: AgentTrace = {
+			formatVersion: 3, sessionId: 's', historyPrefixes: [], threads: [{ threadId: 'root', events: [{ eventId: 'blocked', sequence: 1, recordedAt: 1, event: { type: 'hookRunUpdated', threadId: 'root', run: { runId: 'run', turnId: 't', hookId: 'hook', event: 'preToolUse', durationMs: 5, status: { type: 'denied', reason: 'blocked' } } } }] }], diagnostics: {
+				formatVersion: 1, captureId: 'c', recordingStatus: 'recording', droppedRecords: 0, events: [
+					{ eventId: 'wrong-turn', sequence: 1, recordedAt: 1, threadId: 'root', turnId: 'other', event: { type: 'hookRunRecorded', runId: 'run', executionPayload: { ...ref, payloadId: 'payload-2' } } },
+					{ eventId: 'wrong-thread', sequence: 2, recordedAt: 1, threadId: 'other', turnId: 't', event: { type: 'hookRunRecorded', runId: 'run', executionPayload: { ...ref, payloadId: 'payload-3' } } },
+					{ eventId: 'body', sequence: 3, recordedAt: 1, threadId: 'root', turnId: 't', event: { type: 'hookRunRecorded', runId: 'run', executionPayload: ref } },
+				]
+			}
+		};
+		model.update(trace);
+		const entry = model.findEvent('root', 't', 'blocked')!;
+		assert.equal(model.payload(entry, false).record?.eventId, 'body');
+		assert.deepEqual(model.payload(entry, true).ref, ref);
+		model.filter('', true);
+		assert.deepEqual([...model.matched], [entry.id]);
+	});
+
 	test('places model attempts at their saved Thread prefix without using wall-clock order', () => {
 		const model = new AgentTraceViewModel();
 		const trace: AgentTrace = {

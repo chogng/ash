@@ -7,6 +7,7 @@
 - 定义写租约、工作树绑定、消息 checkpoint 和 Thread 更新接口。
 - 统一接口使用的 `CoreError`，复用现有领域值与存储错误。
 - 允许能力实现依赖契约，不引入 `ash-core` 执行代码。
+- `ExecutionDiagnostics`／`ModelAttemptObserver` 是可选的类型化诊断观察契约，不引用具体 Trace、存储或图类型；提交后用 `ModelInvocationReceipt` 提供真实账目身份。回调不返回执行决策或错误，不等待诊断文件 I/O。Changes 的执行观察契约继续独立拥有 fail-closed 语义。
 
 依赖方向为 `ash-core → ash-core-api`、`ash-hooks → ash-core-api`。消费方使用
 `core-api` dependency key 和 `core_api` Rust 路径；Core 不重新导出这些契约。

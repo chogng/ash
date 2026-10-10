@@ -1,3 +1,5 @@
+import '../../../../../editor/test/browser/testEditorDom.js';
+import { IContextKeyService, ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
@@ -8,6 +10,7 @@ import { ISessionsService } from '../../../../services/sessions/browser/sessions
 import '../../browser/trace.contribution.js';
 
 function registerHosts(services: InstantiationService, opened: ISessionsEntry[], stored: Map<string, string>): void {
+	services.registerInstance(IContextKeyService, new ContextKeyService());
 	services.registerInstance(IStorageService, { get: (key: string) => stored.get(key), store: (key: string, value: string) => stored.set(key, value) } as unknown as IStorageService);
 	services.registerInstance(ISessionsLayoutService, { openEntry: async (entry: ISessionsEntry) => { opened.push(entry); } } as unknown as ISessionsLayoutService);
 }

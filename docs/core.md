@@ -115,6 +115,8 @@ Thread owner 和当前执行器，不创建第二份状态，也不增加进程�
 消息 checkpoint 和 Thread 更新契约，以及跨接口使用的 `CoreError`。能力实现直接导入
 `core_api`，Core 不提供旧路径转发。策略接口仅提供版本、权威决策与可选自动审查能力。Core 的 `decide_turn_action`
 统一检查 Turn 冻结版本并应用批准模式；能力实现不能覆盖这些执行规则。
+
+详细诊断通过 `core-api::ExecutionDiagnostics` 可选观察模型和 Hook 边界，调用账目提交后提供真实回执。Core 不持有具体 Recorder，也不计算 Trace 关系图。App Server 组合 rollout-trace 的采集器和只读 `TraceReader`，后者经 `ThreadHistoryReader` 读取同一权威历史；观察失败不改变业务结果，Changes 的 fail-closed 观察边界继续独立。详见 [Trace 架构](trace-design.md)。
 `turn_policy.rs` 中的 `TurnActionPolicy` 组合宿主策略、Code Mode 隔离控制策略和自动审查能力；
 `approval_request.rs` 负责批准请求转换与绑定校验。`ActionPolicyEngine` 的调用和适配由使用它的实现方负责。
 

@@ -24,6 +24,7 @@ pub enum TraceNodeKind {
     ToolResult,
     AgentMessage,
     ModelAttempt,
+    ModelInvocation,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -38,6 +39,7 @@ pub enum TraceEdgeKind {
     Delegates,
     RequestsTool,
     Invokes,
+    AccountsFor,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -77,6 +79,7 @@ pub fn reduce_trace(
 ) -> TraceGraph {
     let mut graph = TraceGraph::default();
     let mut messages = BTreeMap::<String, (Option<String>, Option<String>)>::new();
+    let mut invocations = BTreeMap::new();
     for thread in &trace.threads {
         let owner = format!("thread:{}", thread.thread_id);
         node(
@@ -90,6 +93,44 @@ pub fn reduce_trace(
         );
         for record in &thread.events {
             let event_key = format!("{}:{}", thread.thread_id, record.sequence);
+            if let ThreadEvent::ModelInvocationRecorded {
+                turn_id,
+                record: invocation,
+                ..
+            } = &record.event
+            {
+                let id = format!(
+                    "invocation:{}:{}:{}",
+                    thread.thread_id, turn_id, invocation.invocation_id
+                );
+                node(
+                    &mut graph,
+                    &id,
+                    TraceNodeKind::ModelInvocation,
+                    invocation.invocation_id.as_str(),
+                    thread.thread_id.as_str(),
+                    Some(turn_id.as_str()),
+                    Some(&event_key),
+                );
+                edge(&mut graph, &owner, &id, TraceEdgeKind::Owns);
+                let key = (
+                    thread.thread_id.to_string(),
+                    turn_id.to_string(),
+                    invocation.invocation_id.to_string(),
+                );
+                match invocations.entry(key) {
+                    std::collections::btree_map::Entry::Vacant(entry) => {
+                        entry.insert(Some((id, record.sequence)));
+                    }
+                    std::collections::btree_map::Entry::Occupied(mut entry) => {
+                        entry.insert(None);
+                        graph.warnings.push(format!(
+                            "duplicate model invocation identity: {}",
+                            invocation.invocation_id
+                        ));
+                    }
+                }
+            }
             if let ThreadEvent::ThreadCreated { title, origin, .. } = &record.event {
                 graph.nodes.get_mut(&owner).unwrap().label = title.clone();
                 graph.nodes.get_mut(&owner).unwrap().event_key = Some(event_key.clone());
@@ -274,7 +315,12 @@ pub fn reduce_trace(
         }
     }
     for record in &diagnostics.events {
-        let id = format!("attempt:{}", record.event.attempt_id());
+        let id = format!(
+            "attempt:{}:{}:{}",
+            record.thread_id,
+            record.turn_id.as_ref().map_or("", |turn| turn.as_str()),
+            record.event.attempt_id()
+        );
         let event_key = format!("diagnostic:{}", record.sequence);
         if let DiagnosticEventKind::ModelAttemptStarted { model, .. } = &record.event {
             let label = model.as_ref().map_or_else(
@@ -287,7 +333,7 @@ pub fn reduce_trace(
                 TraceNodeKind::ModelAttempt,
                 &label,
                 record.thread_id.as_str(),
-                Some(record.turn_id.as_str()),
+                record.turn_id.as_ref().map(|id| id.as_str()),
                 Some(&event_key),
             );
             edge(
@@ -301,6 +347,9 @@ pub fn reduce_trace(
             response_payload, ..
         } = &record.event
         {
+            let Some(turn_id) = &record.turn_id else {
+                continue;
+            };
             if response_payload.status != PayloadStatus::Saved {
                 graph.warnings.push(format!(
                     "response evidence omitted: {}",
@@ -324,11 +373,8 @@ pub fn reduce_trace(
                             .and_then(|call| call.get("id"))
                             .and_then(Value::as_str)
                         {
-                            let target = call_key(
-                                record.thread_id.as_str(),
-                                record.turn_id.as_str(),
-                                call_id,
-                            );
+                            let target =
+                                call_key(record.thread_id.as_str(), turn_id.as_str(), call_id);
                             if graph.nodes.contains_key(&target) {
                                 edge(&mut graph, &id, &target, TraceEdgeKind::RequestsTool);
                             }
@@ -336,6 +382,30 @@ pub fn reduce_trace(
                     }
                 }
                 Err(error) => graph.warnings.push(error),
+            }
+        }
+        if let DiagnosticEventKind::ModelAttemptAccounted {
+            invocation_id,
+            source_thread_sequence,
+            ..
+        } = &record.event
+        {
+            let key = (
+                record.thread_id.to_string(),
+                record
+                    .turn_id
+                    .as_ref()
+                    .map_or_else(String::new, ToString::to_string),
+                invocation_id.to_string(),
+            );
+            match invocations.get(&key) {
+                Some(Some((target, sequence))) if sequence == source_thread_sequence => {
+                    edge(&mut graph, &id, target, TraceEdgeKind::AccountsFor)
+                }
+                _ => graph.warnings.push(format!(
+                    "missing committed model invocation: {}:{}:{} at {}",
+                    record.thread_id, key.1, invocation_id, source_thread_sequence
+                )),
             }
         }
     }

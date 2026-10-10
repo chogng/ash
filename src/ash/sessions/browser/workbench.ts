@@ -1,3 +1,5 @@
+import { ITraceService } from '../../workbench/services/trace/common/traceService.js';
+import { AppServerTraceService } from '../../workbench/services/trace/browser/appServerTraceService.js';
 import { IExecutionSettingsService } from '../../platform/execution/common/executionSettingsService.js';
 import { IPromptsService } from '../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
@@ -326,6 +328,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(ModelApiId, options.api.model);
 		services.registerInstance(ISessionApi, options.api.session);
 		services.registerInstance(IThreadApi, options.api.thread);
+		services.registerSingleton(ITraceService, () => services.createInstance(AppServerTraceService));
 		services.registerInstance(ITurnApi, options.api.turn);
 		services.registerInstance(ITurnChangesApi, options.api.turnChanges);
 		services.registerInstance(ServerEventApiId, options.api.events);

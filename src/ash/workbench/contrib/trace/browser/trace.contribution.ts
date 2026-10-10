@@ -1,10 +1,10 @@
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { ViewContainerLocation, ViewsRegistry } from '../../../common/views.js';
-import { AgentTraceNavigationView, AgentTraceViewContainerId, ResumeAgentTraceCommandId, createAgentTraceInput, readLastAgentTraceResource, rememberAgentTraceResource } from './agentTraceNavigation.js';
+import { AgentTraceViewContainerId, ResumeAgentTraceCommandId, createAgentTraceInput, readLastAgentTraceResource, rememberAgentTraceResource, agentTraceEditorId, traceEditorId } from '../common/trace.js';
 import { isHTMLElement } from '../../../../base/browser/dom.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
-import { AgentTraceEditor, agentTraceEditorId } from './agentTraceEditor.js';
+import type { AgentTraceEditor } from './agentTraceEditor.js';
 import { OpenAgentTraceCommandId, createAgentTraceResource, type AgentTraceLocation } from '../common/trace.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
@@ -22,7 +22,7 @@ import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 import { registerEditorPane } from '../../../browser/editor.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
-import { TraceEditor, traceEditorId } from './traceEditor.js';
+
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: 'accessibility.verbosity.trace', defaultValue: true,
@@ -33,8 +33,9 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 registerEditorPane({
 	id: traceEditorId, name: localize('trace.title', 'Trace viewer'),
 	canOpen: input => input.resource.toString() === 'ash-trace:/viewer' ? EditorPaneMatch.Default : EditorPaneMatch.None,
-	create: options => {
+	create: async options => {
 		if (!options.instantiationService) { throw new Error('Trace viewer requires Workbench services'); }
+		const { TraceEditor } = await import('./traceEditor.js');
 		return options.instantiationService.createInstance(new SyncDescriptor(TraceEditor));
 	},
 });
@@ -50,7 +51,7 @@ AccessibleViewRegistry.register({
 	type: AccessibleViewType.Help, priority: 100, name: 'traceHelp',
 	when: ActiveEditorContext.isEqualTo(traceEditorId),
 	getProvider: accessor => {
-		if (!(accessor.get(IEditorPart).activePane instanceof TraceEditor)) { return undefined; }
+		if (accessor.get(IEditorPart).activePane?.id !== traceEditorId) { return undefined; }
 		const focused = accessor.get(ILayoutService).mainContainer.ownerDocument.activeElement;
 		return new AccessibleContentProvider(AccessibleViewProviderId.Trace, { type: AccessibleViewType.Help },
 			() => localize('trace.helpText', 'Enable tracing before starting App Server: set ASH_TRACE_WEBSOCKET_ADDR to 127.0.0.1:4319 and ASH_TRACE_WEBSOCKET_TOKEN to a random 64-digit hexadecimal token. Enter that address and token here. Only new completed spans are received. Connect starts a new capture; Disconnect keeps the capture. Up to 2,000 spans and 8 MiB are retained; dropped spans are counted. Tab moves between controls. Arrow keys, Home and End select spans. The timeline gives each span’s name, result, relative start and duration as text; Span details contains selectable OTLP JSON with trace and parent IDs. Filtering also limits the OTLP export. Tokens and captures are kept only in this editor. Escape closes this help dialog.'),
@@ -62,8 +63,9 @@ registerEditorPane({
 	id: agentTraceEditorId,
 	name: localize('agentTrace.title', 'Execution Trace'),
 	canOpen: input => input.resource.scheme === 'ash-agent-trace' ? EditorPaneMatch.Default : EditorPaneMatch.None,
-	create: options => {
+	create: async options => {
 		if (!options.instantiationService) { throw new Error('Execution Trace requires Workbench services'); }
+		const [{ AgentTraceEditor }] = await Promise.all([import('./agentTraceEditor.js'), ensureTraceNavigation()]);
 		return options.instantiationService.createInstance(AgentTraceEditor);
 	},
 });
@@ -107,8 +109,9 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 		priority: 100,
 		when: ContextKeyExpr.has('agentTraceFocused'),
 		getProvider: accessor => {
-			const pane = accessor.get(IEditorPart).activePane;
-			if (!(pane instanceof AgentTraceEditor)) { return undefined; }
+			const activePane = accessor.get(IEditorPart).activePane;
+			if (activePane?.id !== agentTraceEditorId) { return undefined; }
+			const pane = activePane as AgentTraceEditor;
 			const focused = accessor.get(ILayoutService).mainContainer.ownerDocument.activeElement;
 			return new AccessibleContentProvider(AccessibleViewProviderId.AgentTrace, { type },
 				() => type === AccessibleViewType.View ? pane.getAccessibleContent() : localize('agentTrace.helpText', 'Execution Trace\nRead the selected conversation’s saved execution history. Threads contain Turns and execution events; child Threads are nested beneath their parent. Events preserve each Thread’s sequence. A targeted opening selects the requested Thread, Turn or event after its history loads; a missing target is reported. Display filters keep the located event’s details and report when it is hidden. Tab moves between search, the execution tree and detail tabs. Arrow keys, Home and End navigate the tree; Left and Right collapse or expand it. Detail tabs activate with Enter or Space. Overview is the default; Raw record opens a readonly editor on demand. Errors only shows failed Turns, model calls and tool results. Filtering searches identifiers and event contents. Refresh reads newer durable events. Enable request evidence in Execution trace settings, then restart the owning App Server. Model attempts include failures, cancellations and partial output. Input and Output load the selected saved body on demand; choose a body section to read it. Core requests and materialized requests remain distinct, as do complete responses and partial output. Requests are semantic ModelService input, not HTTP bytes. Relations follows recorded model, tool, Code Mode, terminal and child-agent links. More Actions contains Import, Export and Help. Accessible View includes filtered events outside the mounted tree viewport. Model evidence is placed at its recorded Thread prefix when available. Child Threads keep their own sequence. Relations also shows saved child result returns and joins; result-to-model input links require the loaded Core request body. Unknown associations stay unknown. Hiding or closing the editor stops polling and releases subscriptions. Export freezes all loaded events when clicked, including events hidden by the filter. Relationships exclude events and causal evidence outside that capture, with omissions listed in graph warnings. Only one export runs at a time. The last selected import wins even if an earlier file finishes later. Import opens a version 3 rollout trace from an evaluation or another saved capture. Closing the editor releases its live subscriptions. <keybinding:editor.action.accessibleView> reads the trace; Escape closes this help.'),
@@ -120,7 +123,9 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 
 async function openAgentTrace(accessor: ServicesAccessor, resource: URI): Promise<void> {
 	const storage = accessor.get(IStorageService);
-	await accessor.get(IEditorService).openEditor(createAgentTraceInput(resource), { pinned: true });
+	const editors = accessor.get(IEditorService);
+	await ensureTraceNavigation();
+	await editors.openEditor(createAgentTraceInput(resource), { pinned: true });
 	rememberAgentTraceResource(storage, resource);
 }
 
@@ -131,8 +136,14 @@ registerAction2(class ResumeAgentTrace extends Action2 {
 	}
 });
 
-ViewsRegistry.registerStaticViewContainer({ id: AgentTraceViewContainerId, title: 'Trace', localizationKey: { bundle: 'ash', key: 'agentTrace.navigationTitle' }, location: ViewContainerLocation.Sidebar, mergeViewWithContainerWhenSingleView: true, icon: Lxicon.history, order: 9 });
-ViewsRegistry.registerStaticViews(AgentTraceViewContainerId, [{ id: AgentTraceViewContainerId + '.navigation', title: 'Trace', localizationKey: { bundle: 'ash', key: 'agentTrace.navigationTitle' }, canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(AgentTraceNavigationView, [{ resume: ResumeAgentTraceCommandId, offline: OpenAgentTraceCommandId }]) }]);
+let navigationRegistration: Promise<void> | undefined;
+function ensureTraceNavigation(): Promise<void> {
+	return navigationRegistration ??= import('./agentTraceNavigation.js').then(({ AgentTraceNavigationView }) => {
+		ViewsRegistry.registerStaticViewContainer({ id: AgentTraceViewContainerId, title: 'Trace', localizationKey: { bundle: 'ash', key: 'agentTrace.navigationTitle' }, location: ViewContainerLocation.Sidebar, mergeViewWithContainerWhenSingleView: true, icon: Lxicon.history, order: 9 });
+		ViewsRegistry.registerStaticViews(AgentTraceViewContainerId, [{ id: AgentTraceViewContainerId + '.navigation', title: 'Trace', localizationKey: { bundle: 'ash', key: 'agentTrace.navigationTitle' }, canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(AgentTraceNavigationView, [{ resume: ResumeAgentTraceCommandId, offline: OpenAgentTraceCommandId }]) }]);
+
+	}).catch(error => { navigationRegistration = undefined; throw error; });
+}
 
 AccessibleViewRegistry.register({
 	type: AccessibleViewType.Help, priority: 100, name: 'agentTraceNavigationHelp', when: ContextKeyExpr.has('agentTraceNavigationFocused'),

@@ -154,7 +154,7 @@ impl AppServer {
             snapshot,
             self.active_dir_id().as_ref(),
             self.tool_search_embedding_status(),
-            self.threads.trace_recording_state(),
+            self.trace_recorder.state(),
         ))
     }
 

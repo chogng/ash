@@ -132,13 +132,12 @@ fn both_policies_cross_multiple_windows_in_one_turn_and_restore_without_repeatin
     ] {
         let (store, threads, thread, turn) = window_turn(policy.clone());
         let trace_root = tempfile::tempdir().unwrap();
+        let recorder = Arc::new(ash_rollout_trace::TraceRecorder::new(Some(trace_root.path().into())));
         let threads = Arc::new(
             Arc::try_unwrap(threads)
                 .ok()
                 .expect("controller is unshared before execution")
-                .with_trace_recorder(Arc::new(ash_rollout_trace::TraceRecorder::new(Some(
-                    trace_root.path().into(),
-                )))),
+                .with_diagnostics(recorder.clone()),
         );
         let model = Arc::new(WindowModel {
             ordinary: AtomicUsize::new(0),
@@ -171,7 +170,7 @@ fn both_policies_cross_multiple_windows_in_one_turn_and_restore_without_repeatin
             8
         );
         let requests = model.requests.lock().unwrap();
-        let observed = threads
+        let observed = ash_rollout_trace::TraceReader::new(threads.clone(), recorder)
             .read_trace_diagnostics(&state.session_id, 0, 500)
             .unwrap();
         let attempts = observed

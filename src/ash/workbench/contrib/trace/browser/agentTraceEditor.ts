@@ -1,3 +1,4 @@
+import { ITraceService } from '../../../services/trace/common/traceService.js';
 // Sessions loads a smaller editor bundle; saved bodies still need the shared Find contribution.
 import { CommonFindController } from '../../../../editor/contrib/find/browser/findController.js';
 import './agentTraceEditor.css';
@@ -19,7 +20,7 @@ import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import type { IResourceEditorInput, IEditorPane, IEditorControl } from '../../../common/editor.js';
 import { IChatService } from '../../../services/chat/common/chatService.js';
 import { readAgentTraceLocation, type AgentTraceLocation } from '../common/trace.js';
-import { diagnosticPayload, mergeAgentTrace, mergeAgentTraceDiagnostics, parseAgentTrace, type AgentTrace, type AgentTraceEvent, type AgentTraceGraph } from '../../../services/chat/common/agentTrace.js';
+import { diagnosticPayload, mergeAgentTrace, mergeAgentTraceDiagnostics, parseAgentTrace, type AgentTrace, type AgentTraceEvent, type AgentTraceGraph } from '../../../services/trace/common/agentTrace.js';
 
 import { ObjectTree } from '../../../../base/browser/ui/tree/objectTree.js';
 import { TreeVisibility } from '../../../../base/browser/ui/tree/tree.js';
@@ -38,13 +39,14 @@ import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.j
 import { IModelService } from '../../../../editor/common/services/model.js';
 import type { ITextModel } from '../../../../editor/common/model.js';
 import { CodeEditorWidget } from '../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
-import { AgentTraceViewModel, eventLabel, recordingLabel, evidenceLabel, relationLabel, type TraceEntry } from './agentTraceModel.js';
+import { AgentTraceViewModel, eventLabel, recordingLabel, evidenceLabel, hookStatusLabel, relationLabel, type TraceEntry } from './agentTraceModel.js';
 
 type DetailTab = 'overview' | 'input' | 'output' | 'relations' | 'raw';
 interface TraceRelation { readonly id: string; readonly label: string; readonly target?: TraceEntry; readonly kind?: string; readonly outgoing?: boolean; }
 let detailSequence = 0;
 
-export const agentTraceEditorId = 'ash.agentTrace';
+import { agentTraceEditorId } from '../common/trace.js';
+export { agentTraceEditorId } from '../common/trace.js';
 
 /** Owns a read-only capture and reference-counted subscriptions only while its input is open. */
 export class AgentTraceEditor extends EditorPane implements IEditorPane {
@@ -117,6 +119,7 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 
 	constructor(
 		@IChatService private readonly chat: IChatService,
+		@ITraceService private readonly traces: ITraceService,
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
 		@IAccessibleViewService private readonly accessibleViews: IAccessibleViewService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
@@ -374,7 +377,7 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 		try {
 			let more = true;
 			while (more && revision === this.revision && !this.isDisposed) {
-				const page = await this.chat.readTrace(sessionId, this.cursors);
+				const page = await this.traces.readTrace(sessionId, this.cursors);
 				if (revision !== this.revision || this.isDisposed) { return; }
 				this.trace = mergeAgentTrace(this.trace, page.trace);
 				this.cursors = page.cursors;
@@ -401,7 +404,7 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 			}
 			let diagnosticMore = true;
 			while (diagnosticMore && revision === this.revision && !this.isDisposed) {
-				const page = await this.chat.readTraceDiagnostics(sessionId, this.diagnosticCursor);
+				const page = await this.traces.readTraceDiagnostics(sessionId, this.diagnosticCursor);
 				if (revision !== this.revision || this.isDisposed || !this.trace) { return; }
 				this.trace = { ...this.trace, diagnostics: mergeAgentTraceDiagnostics(this.trace.diagnostics, page.diagnostics), graph: page.diagnostics.events.length ? undefined : this.trace.graph };
 				this.diagnosticCursor = page.cursor;
@@ -549,12 +552,26 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 				field(localize('agentTrace.recordedField', 'Recorded at'), new Date(entry.record.recordedAt).toISOString());
 				const event = entry.record.event;
 				const invocation = isRecord(event.record) ? event.record : undefined;
+				if (event.type === 'hookRunUpdated' && isRecord(event.run)) {
+					const run = event.run;
+					const result = isRecord(run.status) ? run.status : undefined;
+					field(localize('agentTrace.hookId', 'Hook ID'), run.hookId);
+					field(localize('agentTrace.hookRunId', 'Hook run ID'), run.runId);
+					field(localize('agentTrace.hookEvent', 'Hook event'), run.event);
+					field(localize('agentTrace.outcomeField', 'Outcome'), hookStatusLabel(result?.type));
+					field(localize('agentTrace.hookDuration', 'Hook duration (ms)'), run.durationMs);
+					field(localize('agentTrace.hookTool', 'Tool'), run.toolName);
+					field(localize('agentTrace.hookToolCall', 'Tool call ID'), run.toolCallId);
+					field(localize('agentTrace.errorField', 'Error'), result?.reason ?? result?.message);
+				}
 				const error = event.error ?? (isRecord(event.item) && event.item.isError ? event.item.text : undefined);
 				field(localize('agentTrace.errorField', 'Error'), isRecord(error) ? error.message ?? error.type : error);
 				if (isRecord(event.decision)) {
 					field(localize('agentTrace.decisionField', 'Decision'), eventLabel(entry.record));
 				}
-				if (entry.diagnostic) {
+				if (entry.diagnostic?.event.type === 'hookRunRecorded') {
+					field(localize('agentTrace.hookRunId', 'Hook run ID'), entry.diagnostic.event.runId);
+				} else if (entry.diagnostic) {
 					field(localize('agentTrace.attemptIdField', 'Model attempt ID'), entry.diagnostic.event.attemptId);
 					field(localize('agentTrace.prefixField', 'Saved Thread prefix'), entry.diagnostic.event.sourceThreadSequence);
 					field(localize('agentTrace.purposeField', 'Purpose'), entry.diagnostic.event.purpose);
@@ -587,7 +604,11 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 		if (payload) {
 			const label = h(document, 'p'); label.textContent = evidenceLabel(payload.kind); this.detailsDomNode.append(label);
 			if (payload.status === 'omitted') { this.detailsDomNode.append(h(document, 'p', localize('agentTrace.payloadOmitted', 'Payload omitted by the recording limit.'))); }
-			else if (body !== undefined) { this.renderBodySections(body); }
+			else if (body !== undefined) {
+				if (payload.kind === 'hookExecution' && isRecord(body)) {
+					this.renderBodySections(this.tab === 'input' ? { program: body.program, arguments: body.arguments, directory: body.directory, input: body.input } : { exitCode: body.exitCode, stdout: body.stdout, stderr: body.stderr, stdoutTruncated: body.stdoutTruncated, stderrTruncated: body.stderrTruncated });
+				} else { this.renderBodySections(body); }
+			}
 			else if (!this.sessionId || !this.trace?.diagnostics?.captureId) { this.detailsDomNode.append(h(document, 'p', localize('agentTrace.missingEvidence', 'This capture does not include the selected payload.'))); }
 			else { await this.loadEvidence(entry, payload); }
 		} else {
@@ -632,7 +653,7 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 		const request = { identity };
 		this.pendingEvidence = request;
 		try {
-			const evidence = await this.chat.readTracePayload(this.sessionId!, this.trace!.diagnostics!.captureId!, payload.payloadId);
+			const evidence = await this.traces.readTracePayload(this.sessionId!, this.trace!.diagnostics!.captureId!, payload.payloadId);
 			if (revision !== this.revision || this.isDisposed || !this.trace?.diagnostics) { return; }
 			this.trace = { ...this.trace, diagnostics: { ...this.trace.diagnostics, payloads: { ...this.trace.diagnostics.payloads, [payload.payloadId]: evidence } } };
 			this.viewModel.update(this.trace);
@@ -645,7 +666,7 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 		if (!this.trace) { this.relationList.items = []; return; }
 		const revision = this.revision;
 		try {
-			const graph = this.trace.graph ?? (this.sessionId ? await (this.graphRequest ??= this.chat.readTraceGraph(this.sessionId)) : undefined);
+			const graph = this.trace.graph ?? (this.sessionId ? await (this.graphRequest ??= this.traces.readTraceGraph(this.sessionId)) : undefined);
 			if (revision === this.revision) { this.graphRequest = undefined; }
 			if (revision !== this.revision || this.isDisposed || !this.trace || this.tab !== 'relations') { return; }
 			if (graph) { this.trace = { ...this.trace, graph }; this.renderRelationships(graph); }
@@ -691,11 +712,11 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 				if (payload.status !== 'saved') { incomplete = true; continue; }
 				if (Object.hasOwn(payloads, payload.payloadId)) { continue; }
 				if (!sessionId || !capture.diagnostics?.captureId) { incomplete = true; continue; }
-				try { payloads[payload.payloadId] = await this.chat.readTracePayload(sessionId, capture.diagnostics.captureId, payload.payloadId); }
+				try { payloads[payload.payloadId] = await this.traces.readTracePayload(sessionId, capture.diagnostics.captureId, payload.payloadId); }
 				catch { incomplete = true; }
 				if (revision !== this.revision || this.isDisposed) { return; }
 			}
-			let graph = capture.graph ?? (sessionId ? await this.chat.readTraceGraph(sessionId) : undefined);
+			let graph = capture.graph ?? (sessionId ? await this.traces.readTraceGraph(sessionId) : undefined);
 			if (revision !== this.revision || this.isDisposed) { return; }
 			if (graph && sessionId) { graph = graphForCapture(capture, graph); }
 			const artifact = { ...capture, graph, diagnostics: capture.diagnostics && { ...capture.diagnostics, payloads, recordingStatus: incomplete ? 'incomplete' : capture.diagnostics.recordingStatus } };
@@ -783,6 +804,11 @@ function graphForCapture(capture: AgentTrace, graph: AgentTraceGraph): AgentTrac
 		if (edge.kind === 'requestsTool') {
 			const attempt = diagnostics.get(from.eventKey ?? '');
 			return !!attempt && completed.has(JSON.stringify([attempt.threadId, attempt.turnId, attempt.event.attemptId]));
+		}
+		if (edge.kind === 'accountsFor') {
+			const attempt = diagnostics.get(from.eventKey ?? '');
+			const invocation = threads.get(to.threadId)?.events.find(record => `${to.threadId}:${record.sequence}` === to.eventKey);
+			return !!attempt && invocation?.event.type === 'modelInvocationRecorded' && isRecord(invocation.event.record) && [...diagnostics.values()].some(record => record.threadId === to.threadId && record.turnId === to.turnId && record.event.type === 'modelAttemptAccounted' && record.event.attemptId === attempt.event.attemptId && record.event.invocationId === (invocation.event.record as Record<string, unknown>).invocationId && record.event.sourceThreadSequence === invocation.sequence);
 		}
 		if (edge.kind === 'delegates') {
 			return !!threads.get(from.threadId)?.events.some(record => record.event.type === 'delegationStarted' && record.event.childThreadId === to.threadId);

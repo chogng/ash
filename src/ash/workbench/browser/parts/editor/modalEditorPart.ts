@@ -174,7 +174,9 @@ export class ModalEditorPart extends Disposable {
 			return this.currentEntry.instance.pane;
 		}
 
-		const pane = descriptor.create({ ...this.options.paneCreationOptions, input });
+		const created = descriptor.create({ ...this.options.paneCreationOptions, input });
+		const pane = created instanceof Promise ? await created : created;
+		if (this.isDisposed || sequence !== this.openSequence) { pane.dispose(); throw new EditorOpenSupersededError(input); }
 		if (pane.id !== descriptor.id) {
 			pane.dispose();
 			throw new TypeError(`Editor pane factory '${descriptor.id}' created '${pane.id}'`);

@@ -38,31 +38,47 @@ test('Workbench Activity Bar opens shared Trace and retains offline inspection t
 	const page = workbench.page;
 	const bar = page.locator('[data-part="activitybar"]');
 	const entry = bar.getByRole('tab', { name: 'Trace', exact: true });
-	await entry.focus();
-	await entry.press('Enter');
-	const viewer = page.locator('.ash-agent-trace:visible');
-	await expect(viewer).toBeVisible();
-	await expect(page.locator('[data-view-id="workbench.view.trace.navigation"]')).toBeVisible();
-	await expect(entry).toHaveAttribute('aria-selected', 'true');
-	await viewer.locator('input[type=file]').setInputFiles({ name: 'navigation.trace.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(offline)) });
-	await expect(viewer.getByRole('status')).toContainText('Imported');
-	await viewer.getByRole('textbox', { name: 'Filter execution events' }).fill('offline-event');
-	await bar.getByRole('tab', { name: 'Explorer', exact: true }).click();
-	await entry.click();
-	await expect(viewer.getByRole('status')).toContainText('Imported');
-	await expect(viewer.getByRole('textbox', { name: 'Filter execution events' })).toHaveValue('offline-event');
-	const resume = page.getByRole('button', { name: 'Resume execution trace', exact: true });
-	await resume.focus();
-	await page.keyboard.press('Alt+F1');
-	await expect(page.getByRole('dialog', { name: 'Accessibility Help' }).getByRole('textbox')).toHaveValue(/Trace is an independent Activity Bar destination/);
-	await page.keyboard.press('Escape');
-	await expect(resume).toBeFocused();
+	await expect(entry).toHaveCount(0);
+	const scripts = new Set<string>();
+	const cdp = await page.context().newCDPSession(page);
+	cdp.on('Debugger.scriptParsed', ({ url }) => {
+		if (/\/(agentTraceEditor|agentTraceNavigation|traceEditor|agentTrace)-[^/]+\.js(?:$|\?)/.test(url)) scripts.add(url);
+	});
+	try {
+		// Resource Timing omits Electron file loads. Debugger reports loaded scripts in both hosts,
+		// including scripts already parsed before attachment, without reading their contents.
+		await cdp.send('Debugger.enable');
+		expect([...scripts]).toEqual([]);
+		await new QuickAccess(page).runCommand('ash.agentTrace.open');
+		await entry.focus();
+		await entry.press('Enter');
+		const viewer = page.locator('.ash-agent-trace:visible');
+		await expect(viewer).toBeVisible();
+		await expect.poll(() => [...scripts].some(name => /\/agentTraceEditor-/.test(name))).toBe(true);
+		await expect(page.locator('[data-view-id="workbench.view.trace.navigation"]')).toBeVisible();
+		await expect(entry).toHaveAttribute('aria-selected', 'true');
+		await viewer.locator('input[type=file]').setInputFiles({ name: 'navigation.trace.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(offline)) });
+		await expect(viewer.getByRole('status')).toContainText('Imported');
+		await viewer.getByRole('textbox', { name: 'Filter execution events' }).fill('offline-event');
+		await bar.getByRole('tab', { name: 'Explorer', exact: true }).click();
+		await entry.click();
+		await expect(viewer.getByRole('status')).toContainText('Imported');
+		await expect(viewer.getByRole('textbox', { name: 'Filter execution events' })).toHaveValue('offline-event');
+		const resume = page.getByRole('button', { name: 'Resume execution trace', exact: true });
+		await resume.focus();
+		await page.keyboard.press('Alt+F1');
+		await expect(page.getByRole('dialog', { name: 'Accessibility Help' }).getByRole('textbox')).toHaveValue(/Trace is an independent Activity Bar destination/);
+		await page.keyboard.press('Escape');
+		await expect(resume).toBeFocused();
+	} finally { await cdp.detach(); }
 });
 
 test('Sessions Trace is an independent retained page and restores its offline entry after window reopening', async ({ application, target, workbench }) => {
 	let page = await workbench.openAgentsWindow(target.kind);
 	let navigation = page.locator('.ash-sessions-activity-content');
 	let entry = navigation.getByRole('button', { name: 'Trace', exact: true });
+	await expect(entry).toHaveCount(0);
+	await new QuickAccess(page).runCommand('sessions.trace.import');
 	await entry.click();
 	let viewer = page.locator('.ash-agent-trace:visible');
 	await expect(viewer).toBeVisible();

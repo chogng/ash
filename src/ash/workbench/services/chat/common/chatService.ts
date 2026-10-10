@@ -6,7 +6,6 @@ import type { ModelReasoningEffort } from "./modelCatalog.js";
 import type { ResolvedChatContext } from "./chatContextService.js";
 import type { SessionMode } from '../../../../platform/sessions/common/sessionApi.js';
 import type { ApprovalMode } from '../../../../platform/sessions/common/approvalModes.js';
-import type { AgentTracePage, AgentTraceDiagnosticPage, AgentTraceGraph } from './agentTrace.js';
 
 export type { ModelCatalogEntry } from "./modelCatalog.js";
 
@@ -454,10 +453,6 @@ export interface TurnChangesUpdate {
 
 /** Frontend Chat operations, catalogs, and Thread update lifecycle. */
 export interface IChatService {
-	readTrace(sessionId: SessionId, after: Readonly<Record<string, number>>): Promise<AgentTracePage>;
-	readTraceDiagnostics(sessionId: SessionId, after: number): Promise<AgentTraceDiagnosticPage>;
-	readTracePayload(sessionId: SessionId, captureId: string, payloadId: string): Promise<unknown>;
-	readTraceGraph(sessionId: SessionId): Promise<AgentTraceGraph>;
 	/** Session invalidation also discovers Threads that have not yet been subscribed. */
 	readonly onDidChangeSession: Event<{ readonly sessionId: SessionId; readonly agentTreeChanged: boolean; }>;
 	readonly onDidUpdateThread: Event<ThreadUpdateEnvelope>;

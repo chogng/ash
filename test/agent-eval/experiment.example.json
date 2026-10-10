@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "id": "fixed-suite-model-comparison",
+  "variant": "control",
+  "hypothesis": "Changing only the model improves independently verified task completion within the same execution budget.",
+  "changedFactors": ["model"]
+}

@@ -1,10 +1,12 @@
 //! Storage-neutral durable Thread history boundary.
 
 mod error;
+mod history_reader;
 mod recent_tool_calls;
 mod store;
 
 pub use error::ThreadStoreError;
+pub use history_reader::ThreadHistoryReader;
 pub use recent_tool_calls::MAX_RECENT_ARGUMENT_BYTES;
 pub use recent_tool_calls::MAX_RECENT_ARGUMENT_TOTAL_BYTES;
 pub use recent_tool_calls::MAX_RECENT_TOOL_CALLS;

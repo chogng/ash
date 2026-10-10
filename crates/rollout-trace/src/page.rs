@@ -4,7 +4,7 @@ use crate::ThreadRolloutTrace;
 use crate::trace::retained_prefixes;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
-use ash_thread_store::ThreadStore;
+use ash_thread_store::ThreadHistoryReader;
 use std::collections::BTreeMap;
 
 /// A bounded capture with independent durable Thread cursors.
@@ -16,7 +16,7 @@ pub struct TracePage {
 
 /// Reads committed ranges through the store index; prefixes accompany their referring events.
 pub fn read_session_trace_page(
-    store: &dyn ThreadStore,
+    store: &(impl ThreadHistoryReader + ?Sized),
     session_id: &SessionId,
     after: &BTreeMap<ThreadId, u64>,
     limit: usize,

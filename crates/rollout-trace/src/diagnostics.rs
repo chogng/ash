@@ -6,6 +6,9 @@ use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
 
+/// Version 2 adds authoritative accounting links and pending persistence coverage.
+pub const DIAGNOSTIC_TRACE_FORMAT_VERSION: u32 = 2;
+
 /// Explicit completeness of local diagnostic recording, independent from Turn success.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -29,6 +32,7 @@ pub enum InferencePurpose {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PayloadKind {
+    HookExecution,
     CoreRequest,
     MaterializedRequest,
     ModelResponse,
@@ -61,6 +65,10 @@ pub struct PayloadRef {
     rename_all_fields = "camelCase"
 )]
 pub enum DiagnosticEventKind {
+    HookRunRecorded {
+        run_id: String,
+        execution_payload: PayloadRef,
+    },
     ModelAttemptStarted {
         attempt_id: String,
         purpose: InferencePurpose,
@@ -71,6 +79,11 @@ pub enum DiagnosticEventKind {
     ModelRequestPrepared {
         attempt_id: String,
         request_payload: PayloadRef,
+    },
+    ModelAttemptAccounted {
+        attempt_id: String,
+        invocation_id: ash_protocol::ModelInvocationId,
+        source_thread_sequence: u64,
     },
     ModelAttemptCompleted {
         attempt_id: String,
@@ -95,8 +108,10 @@ pub enum DiagnosticEventKind {
 impl DiagnosticEventKind {
     pub fn attempt_id(&self) -> &str {
         match self {
+            Self::HookRunRecorded { run_id, .. } => run_id,
             Self::ModelAttemptStarted { attempt_id, .. }
             | Self::ModelRequestPrepared { attempt_id, .. }
+            | Self::ModelAttemptAccounted { attempt_id, .. }
             | Self::ModelAttemptCompleted { attempt_id, .. }
             | Self::ModelAttemptFailed { attempt_id, .. }
             | Self::ModelAttemptCancelled { attempt_id, .. }
@@ -106,6 +121,10 @@ impl DiagnosticEventKind {
 
     pub fn payload(&self) -> Option<&PayloadRef> {
         match self {
+            Self::ModelAttemptAccounted { .. } => None,
+            Self::HookRunRecorded {
+                execution_payload, ..
+            } => Some(execution_payload),
             Self::ModelAttemptStarted {
                 request_payload, ..
             }
@@ -130,7 +149,7 @@ pub struct DiagnosticEvent {
     pub sequence: u64,
     pub recorded_at: u64,
     pub thread_id: ThreadId,
-    pub turn_id: TurnId,
+    pub turn_id: Option<TurnId>,
     pub event: DiagnosticEventKind,
 }
 
@@ -142,6 +161,9 @@ pub struct DiagnosticTrace {
     pub capture_id: Option<String>,
     pub recording_status: RecordingStatus,
     pub dropped_records: u64,
+    /// Accepted observations that have not completed persistence at the read barrier.
+    #[serde(default)]
+    pub pending_records: u64,
     pub events: Vec<DiagnosticEvent>,
     /// Exporters embed fetched payloads here, making an imported capture self-contained.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -160,6 +182,7 @@ pub enum DiagnosticError {
     InvalidParameters(String),
     NotFound,
     CaptureChanged,
+    Busy,
     Storage(String),
 }
 
@@ -171,6 +194,7 @@ impl std::fmt::Display for DiagnosticError {
             }
             Self::NotFound => formatter.write_str("diagnostic payload not found"),
             Self::CaptureChanged => formatter.write_str("diagnostic capture identity changed"),
+            Self::Busy => formatter.write_str("diagnostic writer busy; retry the read"),
         }
     }
 }

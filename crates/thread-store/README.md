@@ -4,6 +4,7 @@
 - Thread 事件流是对话、Turn、Item、交互、分支关系和 `session_id` 的唯一持久事实源；Session 没有独立事件流。
 - 定义按 Session 读取列表记录及从 Thread 目录重建该记录的契约。每个分支的管理事实来自外层 `ThreadCatalogRecord.manager`，旧嵌套字段不能覆盖它；Session 汇总使用同一批记录。
 - 后端必须 complete-or-none 提交并保留精确顺序；恢复与 reducer 属于 `ash-core`，SQLite 实现属于 `ash-state`。
+- `ThreadHistoryReader` 为同一权威历史提供 Session 目录、事件页和不可变前缀的窄只读契约，供诊断查询使用；不暴露追加能力或另建历史副本。
 - 组合 Agent 关系读取契约；绑定随创建事件提交，Session 的 Thread 成员查询使用成员索引。
 - 追加时同时保存不可变前缀，提供前缀读取及文件引用清理的待办与确认契约。
 

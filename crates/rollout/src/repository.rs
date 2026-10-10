@@ -56,28 +56,26 @@ impl LocalStateRepository {
         &self,
         attachments: Arc<Attachments>,
     ) -> Result<Arc<ThreadController>, LocalStateError> {
-        self.recover_threads_with_attachments_and_trace_recorder(
-            attachments,
-            Arc::new(ash_rollout_trace::TraceRecorder::default()),
-        )
+        self.recover_threads_with_attachments_and_diagnostics(attachments, None)
     }
 
     /// Recovers history with the composition root's optional local diagnostic owner.
-    pub fn recover_threads_with_attachments_and_trace_recorder(
+    pub fn recover_threads_with_attachments_and_diagnostics(
         &self,
         attachments: Arc<Attachments>,
-        recorder: Arc<ash_rollout_trace::TraceRecorder>,
+        diagnostics: Option<Arc<dyn core_api::ExecutionDiagnostics>>,
     ) -> Result<Arc<ThreadController>, LocalStateError> {
         let thread_store: Arc<dyn ThreadStore> = self.thread_store.clone();
         let thread_lease: Arc<dyn WriterLease<ash_protocol::ThreadId>> = self.writer_lease.clone();
-        let threads = Arc::new(
-            ThreadController::with_store_lease_and_attachments(
-                thread_store,
-                thread_lease,
-                attachments,
-            )
-            .with_trace_recorder(recorder),
+        let mut threads = ThreadController::with_store_lease_and_attachments(
+            thread_store,
+            thread_lease,
+            attachments,
         );
+        if let Some(diagnostics) = diagnostics {
+            threads = threads.with_diagnostics(diagnostics);
+        }
+        let threads = Arc::new(threads);
         let mut recovered = BTreeSet::new();
         for thread_id in self.thread_store.missing_catalog_thread_ids()? {
             threads.recover_thread(&thread_id)?;

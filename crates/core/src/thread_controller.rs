@@ -410,7 +410,7 @@ pub struct ThreadController {
     time_context: RwLock<Arc<dyn crate::TimeContextProvider>>,
     checkpoint_sources: RwLock<BTreeMap<ThreadId, Weak<dyn crate::MessageCheckpointSource>>>,
     store: Arc<dyn ThreadStore>,
-    pub(crate) trace_recorder: Arc<ash_rollout_trace::TraceRecorder>,
+    pub(crate) diagnostics: Option<Arc<dyn core_api::ExecutionDiagnostics>>,
     writer_lease: Option<Arc<dyn WriterLease<ThreadId>>>,
     loaded_threads: Arc<loaded_thread::LoadedThreads>,
     agent_spawn_gates: Mutex<BTreeMap<SessionId, Weak<Mutex<()>>>>,
@@ -422,120 +422,13 @@ pub struct ThreadController {
 }
 
 impl ThreadController {
-    /// Reads the canonical store; the returned artifact never becomes a second state owner.
-    pub fn read_session_trace(
-        &self,
-        session_id: &SessionId,
-    ) -> Result<ash_rollout_trace::RolloutTrace, CoreError> {
-        ash_rollout_trace::capture_session_trace(self.store.as_ref(), session_id).map_err(|error| {
-            match error {
-                ash_rollout_trace::RolloutTraceError::InvalidParameters(message) => {
-                    CoreError::InvalidInput(message)
-                }
-                ash_rollout_trace::RolloutTraceError::SessionNotFound(id) => {
-                    CoreError::NotFound(id.to_string())
-                }
-                ash_rollout_trace::RolloutTraceError::ThreadList(source)
-                | ash_rollout_trace::RolloutTraceError::ThreadStore { source, .. } => {
-                    CoreError::ThreadStore(source)
-                }
-            }
-        })
-    }
-
-    /// Attaches the composition root's diagnostic owner; active model attempts retain their handle.
-    pub fn with_trace_recorder(mut self, recorder: Arc<ash_rollout_trace::TraceRecorder>) -> Self {
-        self.trace_recorder = recorder;
+    /// Attaches optional observations without granting control over durable execution.
+    pub fn with_diagnostics(
+        mut self,
+        diagnostics: Arc<dyn core_api::ExecutionDiagnostics>,
+    ) -> Self {
+        self.diagnostics = Some(diagnostics);
         self
-    }
-
-    pub fn trace_recording_state(&self) -> ash_rollout_trace::RecorderState {
-        self.trace_recorder.state()
-    }
-
-    pub fn read_session_trace_page(
-        &self,
-        session_id: &SessionId,
-        after: &BTreeMap<ThreadId, u64>,
-        limit: usize,
-    ) -> Result<ash_rollout_trace::TracePage, CoreError> {
-        ash_rollout_trace::read_session_trace_page(self.store.as_ref(), session_id, after, limit)
-            .map_err(|error| match error {
-                ash_rollout_trace::RolloutTraceError::InvalidParameters(message) => {
-                    CoreError::InvalidInput(message)
-                }
-                ash_rollout_trace::RolloutTraceError::SessionNotFound(id) => {
-                    CoreError::NotFound(id.to_string())
-                }
-                ash_rollout_trace::RolloutTraceError::ThreadList(source)
-                | ash_rollout_trace::RolloutTraceError::ThreadStore { source, .. } => {
-                    CoreError::ThreadStore(source)
-                }
-            })
-    }
-
-    pub fn read_trace_diagnostics(
-        &self,
-        session_id: &SessionId,
-        after: u64,
-        limit: usize,
-    ) -> Result<ash_rollout_trace::DiagnosticPage, CoreError> {
-        self.read_session_catalog(session_id)?
-            .ok_or_else(|| CoreError::NotFound(session_id.to_string()))?;
-        self.trace_recorder
-            .read(session_id, after, limit)
-            .map_err(diagnostic_error)
-    }
-
-    pub fn read_trace_payload(
-        &self,
-        session_id: &SessionId,
-        capture_id: &str,
-        payload_id: &str,
-    ) -> Result<serde_json::Value, CoreError> {
-        self.read_session_catalog(session_id)?
-            .ok_or_else(|| CoreError::NotFound(session_id.to_string()))?;
-        self.trace_recorder
-            .read_payload(session_id, capture_id, payload_id)
-            .map_err(diagnostic_error)
-    }
-
-    pub fn read_trace_graph(
-        &self,
-        session_id: &SessionId,
-    ) -> Result<ash_rollout_trace::TraceGraph, CoreError> {
-        let trace = self.read_session_trace(session_id)?;
-        let mut diagnostics = self
-            .trace_recorder
-            .read(session_id, 0, 500)
-            .map_err(diagnostic_error)?;
-        while diagnostics.has_more {
-            let page = self
-                .trace_recorder
-                .read(session_id, diagnostics.cursor, 500)
-                .map_err(diagnostic_error)?;
-            diagnostics
-                .diagnostics
-                .events
-                .extend(page.diagnostics.events);
-            diagnostics.cursor = page.cursor;
-            diagnostics.has_more = page.has_more;
-        }
-        let capture = diagnostics.diagnostics.capture_id.as_deref().unwrap_or("");
-        let mut graph =
-            ash_rollout_trace::reduce_trace(&trace, &diagnostics.diagnostics, |reference| {
-                self.trace_recorder
-                    .read_payload(session_id, capture, &reference.payload_id)
-                    .map_err(|error| error.to_string())
-            });
-        if diagnostics.diagnostics.recording_status
-            == ash_rollout_trace::RecordingStatus::Unavailable
-        {
-            graph
-                .warnings
-                .push("diagnostic recording unavailable".into());
-        }
-        Ok(graph)
     }
 
     /// Installs the profile's clock/policy owner before accepting user input.
@@ -610,7 +503,7 @@ impl ThreadController {
         let loaded_threads = Arc::new(loaded_thread::LoadedThreads::new(store.clone()));
         Self {
             store,
-            trace_recorder: Arc::new(ash_rollout_trace::TraceRecorder::default()),
+            diagnostics: None,
             turn_tool_models: Mutex::new(BTreeMap::new()),
             checkpoint_sources: RwLock::new(BTreeMap::new()),
             time_context: RwLock::new(Arc::new(crate::context::time::NoTimeContext)),
@@ -647,7 +540,7 @@ impl ThreadController {
         let loaded_threads = Arc::new(loaded_thread::LoadedThreads::new(store.clone()));
         Self {
             store,
-            trace_recorder: Arc::new(ash_rollout_trace::TraceRecorder::default()),
+            diagnostics: None,
             turn_tool_models: Mutex::new(BTreeMap::new()),
             checkpoint_sources: RwLock::new(BTreeMap::new()),
             time_context: RwLock::new(Arc::new(crate::context::time::NoTimeContext)),
@@ -3906,15 +3799,31 @@ fn memory_checkpoints(
         .collect()
 }
 
-fn diagnostic_error(error: ash_rollout_trace::DiagnosticError) -> CoreError {
-    match error {
-        ash_rollout_trace::DiagnosticError::InvalidParameters(message) => {
-            CoreError::InvalidInput(message)
-        }
-        ash_rollout_trace::DiagnosticError::NotFound => CoreError::NotFound(error.to_string()),
-        ash_rollout_trace::DiagnosticError::CaptureChanged => {
-            CoreError::InvalidInput(error.to_string())
-        }
-        ash_rollout_trace::DiagnosticError::Storage(message) => CoreError::Journal(message),
+impl ash_thread_store::ThreadHistoryReader for ThreadController {
+    fn session_catalog(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<Vec<ThreadCatalogRecord>, ThreadStoreError> {
+        self.store.session_catalog(session_id)
+    }
+    fn load(
+        &self,
+        thread_id: &ThreadId,
+    ) -> Result<Vec<ash_history::StoredEvent>, ThreadStoreError> {
+        self.store.load(thread_id)
+    }
+    fn load_range(
+        &self,
+        thread_id: &ThreadId,
+        after: u64,
+        limit: usize,
+    ) -> Result<ash_thread_store::ThreadEventPage, ThreadStoreError> {
+        self.store.load_range(thread_id, after, limit)
+    }
+    fn load_history_prefix(
+        &self,
+        prefix: &ash_protocol::HistoryPrefixRef,
+    ) -> Result<ash_history::HistoryPrefix, ThreadStoreError> {
+        self.store.load_history_prefix(prefix)
     }
 }

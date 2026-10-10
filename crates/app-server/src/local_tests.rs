@@ -5108,14 +5108,14 @@ fn trace_settings_require_profile_owner_restart_and_are_shared_by_directory_host
     );
     assert_eq!(disabled["result"]["revision"], 3);
     assert!(matches!(
-        server.threads().trace_recording_state(),
+        runtime.trace_recorder.state(),
         ash_rollout_trace::RecorderState::Enabled { .. }
     ));
     drop(server);
     drop(runtime);
     let runtime = LocalProfileRuntime::open(profile.path()).unwrap();
     assert_eq!(
-        runtime.threads.trace_recording_state(),
+        runtime.trace_recorder.state(),
         ash_rollout_trace::RecorderState::Disabled
     );
 }

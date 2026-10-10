@@ -190,7 +190,8 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 			if (this.isDisposed || revision !== this.revision) {
 				return;
 			}
-			const pane = EditorPanes.getEditorPane(comparison)!.create(this.options);
+			const pane = await EditorPanes.getEditorPane(comparison)!.create(this.options);
+			if (this.isDisposed || revision !== this.revision) { pane.dispose(); return; }
 			this.comparisonInput = comparison;
 			this.comparison.value = pane;
 			pane.create(this.domNode);

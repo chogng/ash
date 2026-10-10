@@ -1175,7 +1175,6 @@ dependencies = [
  "ash-async-utils",
  "ash-context-engine",
  "ash-protocol",
- "ash-rollout-trace",
  "ash-thread-store",
  "ash-utils-image",
  "serde_json",
@@ -2420,7 +2419,6 @@ dependencies = [
  "ash-core",
  "ash-core-api",
  "ash-protocol",
- "ash-rollout-trace",
  "ash-state",
  "ash-thread-store",
 ]

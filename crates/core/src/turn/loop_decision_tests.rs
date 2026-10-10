@@ -111,7 +111,7 @@ fn repeated_nonterminal_messages_fail_with_retained_content_and_a_durable_limit(
         decisions.last().unwrap().reason,
         TurnLoopReason::ContinuationLimit
     );
-    let trace = threads.read_session_trace(&replay.session_id).unwrap();
+    let trace = ash_rollout_trace::capture_session_trace(threads.as_ref(), &replay.session_id).unwrap();
     let events = &trace.threads[0].events;
     assert!(matches!(
         events.last().unwrap().event,

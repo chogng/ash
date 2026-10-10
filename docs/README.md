@@ -22,6 +22,7 @@
 - **配置与扩展：** [配置](config.md)、[模型接入](model-provider.md)、[登录](login.md)、[Agent 定制](agent-customizations.md)、[Skills](skills.md)、[Plugins](plugins.md)、[Connectors](connectors.md)、[MCP](mcp.md)、[编辑器扩展](editor-extensions.md)。
 - **权限与安全：** [权限](permissions.md)、[沙箱](sandboxing.md)、[环境访问](environment-access.md)、[工作区安全](workspace-security.md)、[凭据](secrets.md)。
 - **界面开发：** [浏览器基础](browser-foundation.md)、[Preferences 与 Settings](preferences-and-settings.md)、[样式职责](ui-styling-ownership.md)、[主题变量](design-tokens.md)、[面板与布局](workbench-pane-composite-design.md)、[菜单](menu-system.md)、[本地化](localization.md)。
+- **Trace 与评测：** [Trace 架构与改造方案](trace-design.md)、[执行 Trace 当前行为](chat-session-inspector.md#执行-trace)、[任务评测](../test/agent-eval/README.md)。
 
 设计文档会区分当前实现和目标设计。功能是否可用应以其中的状态说明及对应实现、测试为准。
 

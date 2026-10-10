@@ -4,41 +4,12 @@ import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
-import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import { IStorageService, StorageScope } from '../../../../platform/storage/common/storage.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import type { IResourceEditorInput } from '../../../common/editor.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
-import { readAgentTraceLocation } from '../common/trace.js';
+import { readAgentTraceLocation, readLastAgentTraceResource } from '../common/trace.js';
 import './agentTraceNavigation.css';
-
-export const AgentTraceViewContainerId = 'workbench.view.trace';
-export const ResumeAgentTraceCommandId = 'ash.agentTrace.resume';
-const lastResourceKey = 'agentTrace.lastResource';
-
-/** Only the read-only locator is durable UI state; captures remain with the editor and ThreadStore. */
-export function rememberAgentTraceResource(storage: IStorageService, resource: URI): void {
-	readAgentTraceLocation(resource);
-	storage.store(lastResourceKey, resource.toString(), StorageScope.WORKSPACE, StorageTarget.MACHINE);
-}
-
-export function readLastAgentTraceResource(storage: IStorageService): URI | undefined {
-	const value = storage.get(lastResourceKey, StorageScope.WORKSPACE);
-	if (value === undefined) { return undefined; }
-	try {
-		const resource = URI.parse(value);
-		readAgentTraceLocation(resource);
-		return resource;
-	} catch {
-		// Invalid saved navigation must never open another resource scheme or break window restoration.
-		return undefined;
-	}
-}
-
-export function createAgentTraceInput(resource: URI): IResourceEditorInput {
-	readAgentTraceLocation(resource);
-	return { resource, label: localize('agentTrace.title', 'Execution Trace'), readOnly: true, showBreadcrumbs: false };
-}
 
 interface TraceNavigationCommands {
 	readonly resume: string;
@@ -68,7 +39,7 @@ export class AgentTraceNavigationView extends ViewPane {
 		}
 		this._register(new Button(this.contentElement, { label: localize('agentTrace.offline', 'Open offline capture'), presentation: 'secondary', onClick: () => { void this.open(this.navigation.offline); } }));
 		this._register(editors.onDidActiveEditorChange(() => this.updateContext()));
-		this._register(storage.onDidChangeValue(event => { if (event.scope === StorageScope.WORKSPACE && event.key === lastResourceKey) { this.updateContext(); } }));
+		this._register(storage.onDidChangeValue(event => { if (event.scope === StorageScope.WORKSPACE && event.key === 'agentTrace.lastResource') { this.updateContext(); } }));
 		this.updateContext();
 	}
 

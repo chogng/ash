@@ -13,7 +13,8 @@ import { IAccessibleViewService, AccessibleViewType } from '../../../../platform
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { exportTrace, TraceConnection, type TraceConnectionState, type TraceSpan } from './traceConnection.js';
 
-export const traceEditorId = 'workbench.editor.trace';
+import { traceEditorId } from '../common/trace.js';
+export { traceEditorId } from '../common/trace.js';
 let nextListId = 0;
 
 /** Developer trace UI; the connection owns the wire contract and bounded capture. */
