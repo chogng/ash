@@ -215,7 +215,7 @@ export const SettingsNavigation = [
 						id: 'editing',
 						get label() { return localize('settings.editor.editing.label', 'Indentation and formatting'); },
 						get description() { return localize('settings.editor.editing.description', 'Configure indentation and save-time formatting.'); },
-						settings: ['editor.indentation', 'editor.tabSize', 'editor.formatOnSave'],
+						settings: ['editor.indentation', 'editor.tabSize', 'editor.formatOnSave', 'editor.selectionClipboard'],
 					},
 				],
 			},

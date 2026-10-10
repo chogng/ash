@@ -134,6 +134,7 @@ const { SettingsTreeModel } = await import('../../browser/settingsTreeModels.js'
 const { PreferencesService } = await import('../../../../services/preferences/browser/preferencesService.js');
 const { BrowserEditorService } = await import('../../../../services/editor/browser/browserEditorService.js');
 const { ILocalizationService: LocalizationServiceId } = await import('../../../../services/localization/common/localizationService.js');
+const { createSettingWidget: instantiateSettingWidget } = await import('../../browser/settingsWidgets.js');
 const { DefaultSettings, SettingsEditorModel } = await import('../../../../services/preferences/common/settingsModels.js');
 const { WorkbenchConfigurationService } = await import('../../../../services/configuration/browser/configurationService.js');
 const { builtinLanguagePackCatalogs } = await import('../../../../services/localization/common/localizationCatalogs.js');
@@ -218,7 +219,6 @@ test('DefaultSettings projects only Configuration Registry metadata', () => {
 
 test('URL rule suggestions follow extension registration without changing saved IDs', async () => {
 	using resources = new DisposableStore();
-	const { createSettingWidget } = await import('../../browser/settingsWidgets.js');
 	const { updateContributedOpeners } = await import('../../../externalUriOpener/common/configuration.js');
 	const configuration = resources.add(new WorkbenchConfigurationService());
 	await configuration.updateValue('workbench.externalUriOpeners', { '*': 'extension:test:viewer' });
@@ -226,11 +226,15 @@ test('URL rule suggestions follow extension registration without changing saved 
 	browserEnvironment.window.document.body.replaceChildren(root);
 	resources.add(toDisposable(() => { updateContributedOpeners([], []); root.remove(); }));
 	const contextView = resources.add(new BrowserContextViewService(root));
-	const widget = resources.add(createSettingWidget(root, new DefaultSettings().get('workbench.externalUriOpeners'), {
+	const widget = resources.add(createSettingWidget(resources, root, new DefaultSettings().get('workbench.externalUriOpeners'), {
 		configurationService: configuration,
 		contextViewProvider: contextView,
 		clipboardService: {
 			readText: async () => '', writeText: async () => { },
+			triggerPaste: () => undefined,
+			read: async () => [],
+			readFindText: async () => '',
+			writeFindText: async () => { },
 			readImage: async () => new Uint8Array(),
 			readResources: async () => ({ resources: [], operation: 'copy' }),
 			writeResources: async () => { }, hasResources: async () => false,
@@ -256,7 +260,6 @@ test('URL rule suggestions follow extension registration without changing saved 
 
 test('Configured markers follow explicit local user overrides and expose one accessible row description', async () => {
 	using resources = new DisposableStore();
-	const { createSettingWidget } = await import('../../browser/settingsWidgets.js');
 	const registry = new ConfigurationRegistry();
 	registry.registerConfiguration({ key: 'status.flag', defaultValue: true, parse: value => value as boolean, scope: ConfigurationScope.LANGUAGE_OVERRIDABLE, setting: { valueType: 'boolean', title: 'Flag', description: '' } });
 	registry.registerConfiguration({ key: 'status.object', defaultValue: {}, parse: value => value as Record<string, unknown>, setting: { valueType: 'stringMap', title: 'Object', description: '', structuredValues: true, keyLabel: 'Key', valueLabel: 'Value', addLabel: 'Add', removeLabel: 'Remove', incompleteMessage: 'Incomplete', duplicateMessage: 'Duplicate' } });
@@ -266,9 +269,15 @@ test('Configured markers follow explicit local user overrides and expose one acc
 	resources.add(toDisposable(() => root.remove()));
 	const contextView = resources.add(new BrowserContextViewService(root));
 	const widgets = new DefaultSettings(registry).all.map(setting => {
-		const widget = resources.add(createSettingWidget(root, setting, {
+		const widget = resources.add(createSettingWidget(resources, root, setting, {
 			configurationService: configuration, contextViewProvider: contextView, contextMenuProvider: { showContextMenu() { } },
-			clipboardService: { readText: async () => '', writeText: async () => { }, readImage: async () => new Uint8Array(), readResources: async () => ({ resources: [], operation: 'copy' }), writeResources: async () => { }, hasResources: async () => false },
+			clipboardService: {
+				triggerPaste: () => undefined,
+				read: async () => [],
+				readText: async () => '', writeText: async () => { }, readFindText: async () => '',
+				writeFindText: async () => { },
+				readImage: async () => new Uint8Array(), readResources: async () => ({ resources: [], operation: 'copy' }), writeResources: async () => { }, hasResources: async () => false
+			},
 			onStatus: () => { },
 		}));
 		root.append(widget.domNode);
@@ -299,7 +308,6 @@ test('Configured markers follow explicit local user overrides and expose one acc
 
 test('Copy Setting as JSON reads the latest local user values and preserves falsy and structured values', async () => {
 	using resources = new DisposableStore();
-	const { createSettingWidget } = await import('../../browser/settingsWidgets.js');
 	const registry = new ConfigurationRegistry();
 	registry.registerConfiguration({
 		key: 'copy.boolean', defaultValue: true, parse: value => value as boolean, scope: ConfigurationScope.LANGUAGE_OVERRIDABLE,
@@ -327,11 +335,15 @@ test('Copy Setting as JSON reads the latest local user values and preserves fals
 	const errors: string[] = [];
 	const widgets = new Map<string, import('../../browser/settingsWidgets.js').SettingWidget>();
 	for (const setting of new DefaultSettings(registry).all) {
-		const widget = resources.add(createSettingWidget(root, setting, {
+		const widget = resources.add(createSettingWidget(resources, root, setting, {
 			configurationService: configuration, contextViewProvider: contextView,
 			contextMenuProvider: { showContextMenu: delegate => { actions = delegate.getActions(); delegate.onHide?.(false); } },
 			clipboardService: {
-				readText: async () => '', writeText: async value => { copied.push(value); }, readImage: async () => new Uint8Array(),
+				triggerPaste: () => undefined,
+				read: async () => [],
+				readText: async () => '', writeText: async value => { copied.push(value); }, readFindText: async () => '',
+				writeFindText: async () => { },
+				readImage: async () => new Uint8Array(),
 				readResources: async () => ({ resources: [], operation: 'copy' }), writeResources: async () => { }, hasResources: async () => false,
 			},
 			onStatus: (message, isError) => { if (isError) errors.push(message); },
@@ -365,7 +377,6 @@ test('Copy Setting as JSON reads the latest local user values and preserves fals
 
 test('Copy Setting as JSON uses the current window default and reports clipboard failures in Chinese', async () => {
 	using resources = new DisposableStore();
-	const { createSettingWidget } = await import('../../browser/settingsWidgets.js');
 	const { ConfigurationService } = await import('../../../../../sessions/services/configuration/browser/configurationService.js');
 	const registry = new ConfigurationRegistry();
 	registry.registerConfiguration({
@@ -384,11 +395,15 @@ test('Copy Setting as JSON uses the current window default and reports clipboard
 	let copied = '';
 	let fail = false;
 	const reported = new DeferredPromise<{ message: string; isError: boolean; }>();
-	const widget = resources.add(createSettingWidget(root, new DefaultSettings(registry).get('copy.window'), {
+	const widget = resources.add(createSettingWidget(resources, root, new DefaultSettings(registry).get('copy.window'), {
 		configurationService: configuration, contextViewProvider: contextView,
 		contextMenuProvider: { showContextMenu: delegate => { actions = delegate.getActions(); delegate.onHide?.(false); } },
 		clipboardService: {
-			readText: async () => '', writeText: async value => { if (fail) throw undefined; copied = value; }, readImage: async () => new Uint8Array(),
+			triggerPaste: () => undefined,
+			read: async () => [],
+			readText: async () => '', writeText: async value => { if (fail) throw undefined; copied = value; }, readFindText: async () => '',
+			writeFindText: async () => { },
+			readImage: async () => new Uint8Array(),
 			readResources: async () => ({ resources: [], operation: 'copy' }), writeResources: async () => { }, hasResources: async () => false,
 		},
 		onStatus: (message, isError) => { void reported.complete({ message, isError }); },
@@ -412,7 +427,7 @@ test('Copy Setting as JSON uses the current window default and reports clipboard
 
 test('Chinese setting actions, search filters and pending saves expose translated labels', async () => {
 	using resources = new DisposableStore();
-	const { createSettingWidget, SettingsSearchWidget } = await import('../../browser/settingsWidgets.js');
+	const { SettingsSearchWidget } = await import('../../browser/settingsWidgets.js');
 	const chinese = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	resources.add(toDisposable(resetNlsResolver));
@@ -433,7 +448,7 @@ test('Chinese setting actions, search filters and pending saves expose translate
 	let status = '';
 	const registered = configurationRegistry.getConfiguration('editor.fontSize') as IRegisteredConfiguration<number> | undefined;
 	assert.ok(registered);
-	const widget = resources.add(createSettingWidget(root, {
+	const widget = resources.add(createSettingWidget(resources, root, {
 		id: registered.key, title: '字号', description: '', valueType: 'number', configuration: registered, minimum: 1, maximum: 10,
 		binding: {
 			id: registered.key, defaultValue: 1, getValue: () => current,
@@ -443,7 +458,11 @@ test('Chinese setting actions, search filters and pending saves expose translate
 	}, {
 		configurationService: configuration, contextViewProvider: contextView, contextMenuProvider,
 		clipboardService: {
-			readText: async () => '', writeText: async () => { }, readImage: async () => new Uint8Array(),
+			triggerPaste: () => undefined,
+			read: async () => [],
+			readText: async () => '', writeText: async () => { }, readFindText: async () => '',
+			writeFindText: async () => { },
+			readImage: async () => new Uint8Array(),
 			readResources: async () => ({ resources: [], operation: 'copy' }),
 			writeResources: async () => { }, hasResources: async () => false,
 		},
@@ -1036,6 +1055,10 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	let hideMenu: ((didCancel: boolean) => void) | undefined;
 	const clipboardService: IClipboardService = {
 		readText: async () => '',
+		triggerPaste: () => undefined,
+		read: async () => [],
+		readFindText: async () => '',
+		writeFindText: async () => { },
 		readImage: async () => new Uint8Array(),
 		readResources: async () => ({ resources: [], operation: 'copy' }),
 		writeResources: async () => { },
@@ -1927,4 +1950,33 @@ test('Custom provider fields and test states use the Chinese catalog', () => {
 		assert.equal(localize('models.discovery.unsupported', 'This endpoint does not provide a model list. Add model IDs manually.'), '此端点不提供模型列表，请手动添加模型 ID。');
 		assert.equal(localize('models.provider.contextWindow', 'Context window (tokens)'), '上下文长度（tokens）');
 	} finally { resetNlsResolver(); }
+});
+
+function createSettingWidget(resources: import('../../../../../base/common/lifecycle.js').DisposableStore, container: HTMLElement, setting: ISetting,
+	options: import('../../browser/settingsWidgets.js').SettingWidgetOptions & {
+		clipboardService: IClipboardService;
+		configurationService: import('../../../../../platform/configuration/common/configuration.js').IConfigurationService;
+		contextMenuProvider: import('../../../../../base/browser/contextmenu.js').IContextMenuProvider;
+		contextViewProvider: import('../../../../../platform/contextview/browser/contextView.js').IContextViewService;
+	}): import('../../browser/settingsWidgets.js').SettingWidget {
+	const services = resources.add(new InstantiationService());
+	services.registerInstance(ClipboardServiceId, options.clipboardService);
+	services.registerInstance(ConfigurationServiceId, options.configurationService);
+	services.registerInstance(IContextViewService, options.contextViewProvider);
+	services.registerInstance(IContextMenuService, { ...options.contextMenuProvider, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, hideContextMenu() { } });
+	return instantiateSettingWidget(container, setting, { onStatus: options.onStatus, onOpenSettings: options.onOpenSettings }, services);
+}
+
+test('Settings widgets require their scoped clipboard registration and clean up when creation fails', async () => {
+	using resources = new DisposableStore();
+	const root = h(browserEnvironment.window.document, 'div');
+	browserEnvironment.window.document.body.append(root);
+	resources.add(toDisposable(() => root.remove()));
+	const services = resources.add(new InstantiationService());
+	const configuration = resources.add(new WorkbenchConfigurationService());
+	services.registerInstance(ConfigurationServiceId, configuration);
+	services.registerInstance(IContextViewService, resources.add(new BrowserContextViewService(root)));
+	services.registerInstance(IContextMenuService, { showContextMenu() { }, hideContextMenu() { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None });
+	assert.throws(() => instantiateSettingWidget(root, new DefaultSettings().get('editor.lineNumbers'), { onStatus() { } }, services), /clipboardService/);
+	assert.equal(root.querySelector('.ash-configuration-setting'), null);
 });

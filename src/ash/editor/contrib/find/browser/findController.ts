@@ -3,6 +3,8 @@ import { Disposable, MutableDisposable } from '../../../../base/common/lifecycle
 import { escapeRegExpCharacters } from '../../../../base/common/strings.js';
 import { localize2 } from '../../../../nls.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
+import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
@@ -44,7 +46,6 @@ import { ReplaceWidgetHistory } from './replaceWidgetHistory.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 
 const SEARCH_STRING_MAX_LENGTH = 524_288;
-let sharedFindTerm = '';
 
 export function getSelectionSearchString(
 	editor: ICodeEditor,
@@ -97,18 +98,32 @@ export class CommonFindController extends Disposable {
 	protected optionsWidget: FindOptionsWidget | null = null;
 	protected readonly selectionScope = this._register(new MutableDisposable<TrackedRange>());
 	private readonly findVisible;
+	private findRequest = 0;
 
-	constructor(protected readonly _editor: ICodeEditor) {
+	constructor(
+		protected readonly _editor: ICodeEditor,
+		@IClipboardService private readonly clipboardService: IClipboardService,
+		@IContextKeyService contextKeyService: IContextKeyService,
+	) {
 		super();
-		this.findVisible = _editor.invokeWithinContext(accessor => CONTEXT_FIND_WIDGET_VISIBLE.bindTo(accessor.get(IContextKeyService)));
+		this.findVisible = CONTEXT_FIND_WIDGET_VISIBLE.bindTo(contextKeyService);
 		this.state.change({ loop: this.findOptions.loop }, false);
 		this.model = this._register(new FindModelBoundToEditorModel(_editor, this.state));
 		this._register(_editor.onDidChangeModel(() => {
+			this.findRequest++;
 			this.selectionScope.clear();
 			this.widget?.updateSearchScopeAvailability();
 		}));
+		this._register(_editor.onDidChangeConfiguration(event => {
+			if (event.hasChanged(EditorOption.find)) {
+				this.findRequest++;
+				this.state.change({ loop: this.findOptions.loop }, false);
+			}
+		}));
 		this._register(this.state.onFindReplaceStateChange(event => {
 			if (event.isRevealed) this.findVisible.set(this.state.isRevealed);
+			if (event.searchString || event.isRevealed) this.findRequest++;
+			if (event.searchString && this.state.searchString) this.setGlobalBufferTerm(this.state.searchString);
 		}));
 	}
 
@@ -147,15 +162,16 @@ export class CommonFindController extends Disposable {
 
 	protected async _start(options: IFindStartOptions, newState: INewFindReplaceState = {}): Promise<void> {
 		if (!this._editor.hasModel()) return;
+		this.findRequest++;
+		const editorModel = this._editor.getModel();
 		const wasVisible = this.state.isRevealed;
 		if (!wasVisible && options.updateSearchScope) this.captureSelectionScope();
 		const selectedText = wasVisible || options.seedSearchStringFromSelection === 'none' ? null
 			: getSelectionSearchString(this._editor, options.seedSearchStringFromSelection, options.seedSearchStringFromNonEmptySelection);
 		const seededText = selectedText && (newState.isRegex ?? this.state.isRegex)
 			? escapeRegExpCharacters(selectedText) : selectedText;
-		const searchString = newState.searchString ?? seededText ?? (
-			options.seedSearchStringFromGlobalClipboard && !this.state.searchString ? sharedFindTerm : this.state.searchString
-		);
+		const searchString = newState.searchString ?? seededText ?? this.state.searchString;
+		const readGlobalTerm = options.seedSearchStringFromGlobalClipboard && newState.searchString === undefined && !seededText;
 		const selection = this.selection;
 		const autoFindInSelection = this.findOptions.autoFindInSelection;
 		const useScope = options.updateSearchScope && !wasVisible && (
@@ -172,6 +188,18 @@ export class CommonFindController extends Disposable {
 			loop: options.loop,
 			...(useScope && range && !range.isEmpty() ? { searchScope: [range] } : {}),
 		}, false);
+		if (readGlobalTerm) {
+			const request = this.findRequest;
+			try {
+				const term = await this.getGlobalBufferTerm();
+				// Showing Find is synchronous. A late read must not undo newer input, close, or model changes.
+				if (!this._store.isDisposed && request === this.findRequest && editorModel === this._editor.getModel() && this.findOptions.globalFindClipboard && term) {
+					this.state.change({ searchString: term }, false);
+				}
+			} catch (error) {
+				onUnexpectedError(error);
+			}
+		}
 	}
 
 	public moveToNextMatch(): boolean {
@@ -206,8 +234,17 @@ export class CommonFindController extends Disposable {
 		this._editor.focus();
 		return true;
 	}
-	public async getGlobalBufferTerm(): Promise<string> { return sharedFindTerm; }
-	public setGlobalBufferTerm(text: string): void { sharedFindTerm = text; }
+	public async getGlobalBufferTerm(): Promise<string> {
+		return this.canUseGlobalFindClipboard ? this.clipboardService.readFindText() : '';
+	}
+	public setGlobalBufferTerm(text: string): void {
+		if (this.canUseGlobalFindClipboard) void this.clipboardService.writeFindText(text).catch(onUnexpectedError);
+	}
+
+	private get canUseGlobalFindClipboard(): boolean {
+		return !this._store.isDisposed && this.findOptions.globalFindClipboard === true && this._editor.hasModel()
+			&& !this._editor.getModel()!.isTooLargeForSyncing();
+	}
 
 	protected get hasSelectionScope(): boolean { return this.selectionScope.value?.range.isEmpty() === false; }
 	private captureSelectionScope(): void {
@@ -223,9 +260,16 @@ export class CommonFindController extends Disposable {
 
 /** Adds the find widget and keyboard behavior to the shared controller. */
 export class FindController extends CommonFindController {
-	constructor(editor: ICodeEditor, storageService: IStorageService | undefined, keybindingService: IKeybindingService, hoverService: IHoverService) {
-		super(editor);
-		const findOptions = editor.getOption(EditorOption.find);
+	constructor(
+		editor: ICodeEditor,
+		searchHistory: FindWidgetSearchHistory | undefined,
+		replaceHistory: ReplaceWidgetHistory | undefined,
+		@IKeybindingService keybindingService: IKeybindingService,
+		@IHoverService hoverService: IHoverService,
+		@IClipboardService clipboardService: IClipboardService,
+		@IContextKeyService contextKeyService: IContextKeyService,
+	) {
+		super(editor, clipboardService, contextKeyService);
 		this.widget = this._register(new FindWidget(editor, {
 			replace: () => this.replace(),
 			replaceAll: () => this.replaceAll(),
@@ -236,8 +280,7 @@ export class FindController extends CommonFindController {
 			toggleSearchScope: () => this.toggleSearchScope(),
 			isSearchScopeAvailable: () => this.hasSelectionScope,
 		}, this.state, this.model, hoverService, keybindingService,
-			storageService && findOptions.history !== 'never' ? FindWidgetSearchHistory.getOrCreate(storageService) : undefined,
-			storageService && findOptions.replaceHistory !== 'never' ? ReplaceWidgetHistory.getOrCreate(storageService) : undefined));
+			searchHistory, replaceHistory));
 		this.optionsWidget = this._register(new FindOptionsWidget(editor, this.state, keybindingService, hoverService));
 	}
 
@@ -275,7 +318,7 @@ function defaultStartOptions(editor: ICodeEditor, replace: boolean, focus: FindS
 		forceRevealReplace: replace,
 		seedSearchStringFromSelection: find.seedSearchStringFromSelection === 'never' ? 'none' : find.seedSearchStringFromSelection === 'always' ? 'multiple' : 'single',
 		seedSearchStringFromNonEmptySelection: false,
-		seedSearchStringFromGlobalClipboard: false,
+		seedSearchStringFromGlobalClipboard: find.globalFindClipboard === true,
 		shouldFocus: focus,
 		shouldAnimate: true,
 		updateSearchScope: true,
@@ -288,9 +331,10 @@ registerEditorContribution({
 	install: context => {
 		if (context.kind !== 'text') return;
 		const storageService = context.instantiationService.invokeFunction(accessor => accessor.getOptional(IStorageService));
-		const keybindingService = context.instantiationService.invokeFunction(accessor => accessor.get(IKeybindingService));
-		const hoverService = context.instantiationService.invokeFunction(accessor => accessor.get(IHoverService));
-		return new FindController(context.editor, storageService, keybindingService, hoverService);
+		const options = context.editor.getOption(EditorOption.find);
+		return context.instantiationService.createInstance(FindController, context.editor,
+			storageService && options.history !== 'never' ? FindWidgetSearchHistory.getOrCreate(storageService) : undefined,
+			storageService && options.replaceHistory !== 'never' ? ReplaceWidgetHistory.getOrCreate(storageService) : undefined);
 	},
 });
 

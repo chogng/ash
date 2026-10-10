@@ -1,3 +1,4 @@
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { DisposableMap, Disposable } from '../../../../base/common/lifecycle.js';
 import type { ISetting } from '../../../services/preferences/common/preferences.js';
 import { createSettingWidget, type SettingWidget, type SettingWidgetOptions } from './settingsWidgets.js';
@@ -6,14 +7,14 @@ import { createSettingWidget, type SettingWidget, type SettingWidgetOptions } fr
 export class SettingsRenderer extends Disposable {
 	private readonly widgets = this._register(new DisposableMap<string, SettingWidget>());
 
-	constructor(private readonly container: HTMLElement, private readonly options: SettingWidgetOptions) {
+	constructor(private readonly container: HTMLElement, private readonly options: SettingWidgetOptions, @IInstantiationService private readonly instantiationService: IInstantiationService) {
 		super();
 	}
 
 	public render(setting: ISetting): HTMLElement {
 		const existing = this.getWidget(setting.id);
 		if (existing) return existing.domNode;
-		const widget = createSettingWidget(this.container, setting, this.options);
+		const widget = createSettingWidget(this.container, setting, this.options, this.instantiationService);
 		this.widgets.set(setting.id, widget);
 		return widget.domNode;
 	}

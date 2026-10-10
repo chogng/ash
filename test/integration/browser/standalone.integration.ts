@@ -355,6 +355,7 @@ interface StandaloneHarness {
 	runTextDrop(enabled: boolean): Promise<{ value: string; dragOverHandled: boolean; dropHandled: boolean; }>;
 	runUriPaste(enabled: boolean): Promise<{ value: string; handled: boolean; }>;
 	startPasteAsPicker(args?: { readonly preferences: readonly string[]; }, plainText?: boolean): void;
+	pasteClipboardFile(mime: string): Promise<{ name: string; bytes: number[]; value: string; }>;
 	runPasteProviderSelector(): Promise<{ value: string; handled: boolean; }>;
 	runPasteSnippetWithAdditionalEdit(): Promise<{ value: string; otherValue: string; handled: boolean; }>;
 	runLineAction(id: string, args?: unknown): Promise<void>;
@@ -2393,6 +2394,30 @@ window.ashStandaloneIntegration = {
 		} finally {
 			callerEditor.updateOptions({ pasteAs: { enabled: true } });
 		}
+	},
+	pasteClipboardFile: async mime => {
+		callerEditor.setValue('old');
+		callerEditor.setSelection(new stanza.Selection(1, 1, 1, 4));
+		callerEditor.focus();
+		const kind = new HierarchicalKind('file.browserTest');
+		let name = '';
+		let bytes: number[] = [];
+		using provider = StandaloneServices.get(ILanguageFeaturesService).documentPasteEditProvider.register({
+			language: callerModel.getLanguageId(), hasAccessToAllModels: true,
+		}, {
+			copyMimeTypes: [], pasteMimeTypes: ['files'], providedPasteEditKinds: [kind],
+			async provideDocumentPasteEdits(_model, _ranges, transfer) {
+				const file = transfer.get(mime)?.asFile();
+				if (!file) {
+					throw new Error(`Missing clipboard file for ${mime}`);
+				}
+				name = file.name;
+				bytes = Array.from(await file.data());
+				return { edits: [{ title: 'Insert Clipboard File', kind, insertText: name }], dispose() { } };
+			},
+		});
+		await callerEditor.getAction('editor.action.pasteAs')!.run({ kind: kind.value });
+		return { name, bytes, value: callerEditor.getValue() };
 	},
 	startPasteAsPicker: (args, plainText) => {
 		callerEditor.setValue('alpha');

@@ -147,7 +147,11 @@ test('Sessions Models switches control the model picker visibility preference', 
 	const { IAccessibleViewService: AccessibleView } = await import('../../../platform/accessibility/browser/accessibleView.js');
 	const copied: string[] = [];
 	services.registerInstance(ClipboardService, {
-		readText: async () => '', writeText: async text => { copied.push(text); }, readImage: async () => new Uint8Array(),
+		triggerPaste: () => undefined,
+		read: async () => [],
+		readText: async () => '', writeText: async text => { copied.push(text); }, readFindText: async () => '',
+		writeFindText: async () => { },
+		readImage: async () => new Uint8Array(),
 		readResources: async () => ({ resources: [], operation: 'copy' }), writeResources: async () => { }, hasResources: async () => false,
 	} satisfies IClipboardService);
 	services.registerInstance(IKeybindingService, {

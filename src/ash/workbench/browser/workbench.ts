@@ -97,7 +97,7 @@ import { IStorageService, StorageScope, StorageTarget, WillSaveStateReason } fro
 import "../../platform/layout/browser/zIndexRegistry.js";
 import { InstantiationService } from "../../platform/instantiation/common/instantiationService.js";
 import { type IInstantiationService } from "../../platform/instantiation/common/instantiation.js";
-import { getSingletonServiceDescriptors } from '../../platform/instantiation/common/extensions.js';
+import { getSingletonServiceDescriptors, InstantiationType } from '../../platform/instantiation/common/extensions.js';
 import { IEmbedderTerminalService, type IEmbedderTerminalOptions } from '../services/terminal/common/embedderTerminalService.js';
 import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
 import { NotificationService } from "../services/notification/common/notificationService.js";
@@ -319,7 +319,7 @@ import { WorkbenchQuickInputService } from "../services/quickinput/browser/quick
 import { ChatContextPickService } from "../services/chat/browser/chatContextPickService.js";
 import { IChatContextPickService } from "../services/chat/common/chatContextService.js";
 import type { IUserKeyboardLayoutApi } from "../../platform/keyboardLayout/common/userKeyboardLayout.js";
-import { BrowserClipboardService } from "../../platform/clipboard/browser/clipboardService.js";
+import { BrowserClipboardService } from "../services/clipboard/browser/clipboardService.js";
 import { IClipboardService } from "../../platform/clipboard/common/clipboardService.js";
 
 /** Host-specific inputs required to construct a workbench. */
@@ -501,6 +501,9 @@ export class Workbench extends Disposable {
 		performance.mark('ash.workbench.constructor-start');
 		this._register(themes);
 		this._register(FormattingConflicts.setFormatterSelector(async formatters => formatters[0]));
+		if (clipboardService) {
+			serviceCollection.set(IClipboardService, clipboardService);
+		}
 		for (const [id, descriptor] of getSingletonServiceDescriptors()) {
 			if (!serviceCollection.has(id)) { serviceCollection.set(id, descriptor); }
 		}
@@ -745,7 +748,9 @@ export class Workbench extends Disposable {
 		services.registerInstance(INotificationService, notificationService);
 		const progressService = this._register(new BrowserProgressService(feedbackHost));
 		services.registerInstance(IProgressService, progressService);
-		services.registerInstance(IClipboardService, clipboardService ?? new BrowserClipboardService(ownerWindow.navigator.clipboard));
+		if (!services.has(IClipboardService)) {
+			services.registerSingleton(IClipboardService, () => services.createInstance(BrowserClipboardService), { instantiation: InstantiationType.Delayed });
+		}
 		const workingCopyBackupTracker = this._register(new WorkingCopyBackupTracker(workingCopyService, workingCopyBackups, ownerWindow, undefined, resource => textModelService.hasPendingSaveRecovery(resource)));
 		this.workingCopyBackupTracker = workingCopyBackupTracker;
 		this._register(textModelService.addSaveCompletionParticipant({ prepare: (model, signal, recovery) => workingCopyBackupTracker.prepareSave(model, signal, recovery) }));

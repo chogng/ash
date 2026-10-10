@@ -10,7 +10,7 @@ import { SettingsSectionRenderer } from '../../../../workbench/contrib/preferenc
 import './media/sessionsPreferences.css';
 import '../../../../workbench/contrib/preferences/browser/media/settingsCard.css';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
-import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
+import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { BrowserContextMenuService } from '../../../../platform/contextview/browser/contextMenuService.js';
 import { ContextView, type ContextViewOptions, type ContextViewHideReason } from '../../../../base/browser/ui/contextview/contextview.js';
 import { Dialog } from '../../../../base/browser/ui/dialog/dialog.js';
@@ -24,7 +24,6 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
-import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
@@ -93,7 +92,6 @@ export class SessionsPreferences extends Disposable {
 		private readonly container: HTMLElement,
 		private readonly showEditor: () => void,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
-		@IClipboardService private readonly clipboardService: IClipboardService,
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
 		@IAccessibleViewService private readonly accessibleView: IAccessibleViewService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
@@ -205,6 +203,7 @@ export class SessionsPreferences extends Disposable {
 			layout: () => contextView.layout(),
 		}])));
 		const contextMenus = resources.add(contentServices.createInstance(BrowserContextMenuService));
+		contentServices.registerInstance(IContextMenuService, contextMenus);
 		resources.add(new SettingsSearchMenu(search, {
 			getValue: () => searchInput.value,
 			setValue: value => { searchInput.value = value; },
@@ -212,10 +211,6 @@ export class SessionsPreferences extends Disposable {
 			contextMenuProvider: contextMenus,
 		}));
 		const settingOptions: SettingWidgetOptions = {
-			clipboardService: this.clipboardService,
-			configurationService: this.configurationService,
-			contextMenuProvider: contextMenus,
-			contextViewProvider: contextView,
 			onStatus: (message, isError) => {
 				status.textContent = message;
 				status.classList.toggle('is-error', isError);
@@ -224,7 +219,7 @@ export class SessionsPreferences extends Disposable {
 			},
 		};
 		const toolCatalog = resources.add(new AgentCapabilitiesSettings(pageContent, this.capabilities, this.remote, this.permissions, this.localization));
-		const renderer = resources.add(new SettingsRenderer(list, settingOptions));
+		const renderer = resources.add(contentServices.createInstance(SettingsRenderer, list, settingOptions));
 		const modelContent = resources.add(this.instantiationService.createInstance(ModelSettingsContent, list));
 		const dictationContent = resources.add(this.instantiationService.createInstance(DictationSettingsContent, list));
 		const customizeContent = resources.add(contentServices.createInstance(SessionsCustomizeContent, list, async () => { dialog.close(); }, this.showEditor));

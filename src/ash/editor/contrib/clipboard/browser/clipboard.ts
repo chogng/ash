@@ -1,5 +1,5 @@
 import { isFirefox } from '../../../../base/browser/browser.js';
-import { addDisposableListener, getActiveDocument, getActiveElement, isEditableElement } from '../../../../base/browser/dom.js';
+import { addDisposableListener, getActiveDocument, getActiveElement, getActiveWindow, getWindow, getWindowId, isEditableElement } from '../../../../base/browser/dom.js';
 import { type IKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
 import { raceCancellation } from '../../../../base/common/async.js';
 import { type CancellationToken } from '../../../../base/common/cancellation.js';
@@ -19,6 +19,7 @@ import { ICodeEditorService } from '../../../browser/services/codeEditorService.
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { Handler, type IEditorContribution } from '../../../common/editorCommon.js';
 import { EditorContextKeys } from '../../../common/editorContextKeys.js';
+import { CopyPasteController } from '../../dropOrPasteInto/browser/copyPasteController.js';
 import { CodeEditorStateFlag, EditorStateCancellationTokenSource } from '../../editorState/browser/editorState.js';
 
 const CLIPBOARD_CONTEXT_MENU_GROUP = '9_cutcopypaste';
@@ -89,7 +90,10 @@ if (PasteAction) {
 		if (!editor) return false;
 		return pasteIntoEditor(editor, accessor.get(IClipboardService));
 	});
-	PasteAction.addImplementation(0, 'generic-dom', () => executeDocumentCommand('paste'));
+	PasteAction.addImplementation(0, 'generic-dom', accessor => {
+		const windowId = getWindowId(getActiveWindow());
+		return windowId === undefined ? false : accessor.get(IClipboardService).triggerPaste(windowId) ?? false;
+	});
 }
 
 async function pasteIntoEditor(editor: ICodeEditor, clipboardService: IClipboardService): Promise<void> {
@@ -97,6 +101,13 @@ async function pasteIntoEditor(editor: ICodeEditor, clipboardService: IClipboard
 	editor.focus();
 	using resources = new DisposableStore();
 	const token = createClipboardCancellation(editor, resources);
+	const windowId = getWindowId(getWindow(editor.getContainerDomNode()));
+	const triggered = windowId === undefined ? undefined : clipboardService.triggerPaste(windowId);
+	if (triggered !== undefined) {
+		await raceCancellation(triggered, token);
+		if (!token.isCancellationRequested) await CopyPasteController.get(editor)?.finishedPaste();
+		return;
+	}
 	NativeEditContextRegistry.get(editor.getId())?.handleWillPaste();
 	const text = await raceCancellation(clipboardService.readText(), token);
 	if (!text || token.isCancellationRequested) return;
@@ -266,7 +277,7 @@ function supportsDocumentCommand(command: 'cut' | 'copy' | 'paste'): boolean {
 }
 
 class ClipboardKeybindings extends Disposable implements IEditorContribution {
-	constructor(private readonly editor: ICodeEditor) {
+	constructor(private readonly editor: ICodeEditor, @IClipboardService private readonly clipboardService: IClipboardService) {
 		super();
 		this._register(editor.onKeyDown(event => this.onKeyDown(event)));
 	}
@@ -276,14 +287,13 @@ class ClipboardKeybindings extends Disposable implements IEditorContribution {
 		if (!NativeEditContextRegistry.get(this.editor.getId())) return;
 		if (event.altKey || event.shiftKey || event.ctrlKey === event.metaKey) return;
 		const key = event.key.toLowerCase();
-		if ((key === 'c' && !CopyAction) || (key === 'x' && !CutAction) || (key === 'v' && !PasteAction)) return;
-		if (key !== 'c' && key !== 'x' && key !== 'v') return;
-		if (key !== 'v' && !this.editor.getOption(EditorOption.emptySelectionClipboard) && this.editor.getSelection()?.isEmpty()) return;
+		// The browser's paste shortcut delivers HTML and files to the input adapter.
+		// Preventing its default action would replace that event with a text-only read.
+		if (key !== 'c' && key !== 'x') return;
+		if ((key === 'c' && !CopyAction) || (key === 'x' && !CutAction)) return;
+		if (!this.editor.getOption(EditorOption.emptySelectionClipboard) && this.editor.getSelection()?.isEmpty()) return;
 		event.stop();
-		const clipboardService = this.editor.invokeWithinContext(accessor => accessor.get(IClipboardService));
-		const operation = key === 'v'
-			? pasteIntoEditor(this.editor, clipboardService)
-			: executeEditorClipboardCommand(this.editor, clipboardService, key === 'c' ? 'copy' : 'cut');
+		const operation = executeEditorClipboardCommand(this.editor, this.clipboardService, key === 'c' ? 'copy' : 'cut');
 		void operation.catch(onUnexpectedError);
 	}
 }

@@ -1,12 +1,48 @@
-import type { IClipboardResources, IClipboardService } from '../common/clipboardService.js';
+import type { IClipboardItem, IClipboardResources, IClipboardService } from '../common/clipboardService.js';
 import { URI } from '../../../base/common/uri.js';
+import { Disposable } from '../../../base/common/lifecycle.js';
+import { getWindowById } from '../../../base/browser/window.js';
 
 /** Browser Clipboard API adapter with explicit availability failure. */
-export class BrowserClipboardService implements IClipboardService {
+export class BrowserClipboardService extends Disposable implements IClipboardService {
+	// Browsers have no system find pasteboard; this term belongs to the window service scope.
+	private findText = '';
+	private readonly typedText = new Map<string, string>();
 	private static readonly fileFormat = 'web application/x-ash-resources';
-	constructor(private readonly clipboard: Clipboard | undefined) { }
+	constructor(private readonly clipboard: Clipboard | undefined) { super(); }
 
-	async readText(): Promise<string> {
+	public triggerPaste(targetWindowId: number): Promise<void> | undefined {
+		const document = getWindowById(targetWindowId)?.window.document;
+		if (!document || typeof document.execCommand !== 'function') {
+			return undefined;
+		}
+		try {
+			return document.execCommand('paste') ? Promise.resolve() : undefined;
+		} catch {
+			return undefined;
+		}
+	}
+
+	public async read(): Promise<readonly IClipboardItem[]> {
+		if (!this.clipboard) throw new Error('The browser clipboard is unavailable');
+		if (typeof this.clipboard.read !== 'function') {
+			return [{ type: 'text/plain', data: new TextEncoder().encode(await this.clipboard.readText()) }];
+		}
+		const result: IClipboardItem[] = [];
+		for (const item of await this.clipboard.read()) {
+			for (const type of item.types) {
+				const blob = await item.getType(type);
+				// Web custom formats carry a transport prefix, not part of the provider MIME type.
+				result.push({ type: type.startsWith('web ') ? type.slice(4) : type, data: new Uint8Array(await blob.arrayBuffer()) });
+			}
+		}
+		return result;
+	}
+
+	async readText(type?: string): Promise<string> {
+		if (type) {
+			return this.typedText.get(type) ?? '';
+		}
 		if (!this.clipboard) throw new Error('The browser clipboard is unavailable');
 		return this.clipboard.readText();
 	}
@@ -19,9 +55,21 @@ export class BrowserClipboardService implements IClipboardService {
 		return new Uint8Array();
 	}
 
-	async writeText(value: string): Promise<void> {
+	async writeText(value: string, type?: string): Promise<void> {
+		if (type) {
+			this.typedText.set(type, value);
+			return;
+		}
 		if (!this.clipboard) throw new Error('The browser clipboard is unavailable');
 		await this.clipboard.writeText(value);
+	}
+
+	async readFindText(): Promise<string> {
+		return this.findText;
+	}
+
+	async writeFindText(text: string): Promise<void> {
+		this.findText = text;
 	}
 
 	async readResources(): Promise<IClipboardResources> {

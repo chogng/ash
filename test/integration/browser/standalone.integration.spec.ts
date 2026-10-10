@@ -133,6 +133,35 @@ test('editor context menu follows language, provider, selection and read-only st
 });
 
 for (const inputKind of ['EditContext', 'textarea'] as const) {
+	test(`${inputKind} browser paste shortcut preserves trusted HTML and undo`, async ({ page, context }) => {
+		if (inputKind === 'textarea') await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+		await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+		await page.goto('/standalone.html');
+		const previous = await page.evaluate(() => navigator.clipboard.readText());
+		try {
+			await page.evaluate(() => window.ashStandaloneIntegration.prepareClipboard('', [[1, 1, 1, 1]]));
+			await page.evaluate(() => navigator.clipboard.write([new ClipboardItem({ 'text/plain': new Blob(['plain'], { type: 'text/plain' }), 'text/html': new Blob(['<b>rich shortcut</b>'], { type: 'text/html' }) })]));
+			const events: { trusted: boolean; html: string; }[] = [];
+			await page.exposeFunction('recordRichPaste', (event: typeof events[number]) => events.push(event));
+			await page.evaluate(() => document.addEventListener('paste', event => {
+				void (window as unknown as { recordRichPaste(event: { trusted: boolean; html: string; }): Promise<void>; }).recordRichPaste({ trusted: event.isTrusted, html: event.clipboardData?.getData('text/html') ?? '' });
+			}, { capture: true }));
+			const input = page.locator('#caller .stanza-editor-input');
+			await input.focus();
+			await input.press('ControlOrMeta+V');
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('plain');
+			expect(events).toHaveLength(1);
+			expect(events[0].trusted).toBe(true);
+			expect(events[0].html).toContain('<b>rich shortcut</b>');
+			await expect(input).toBeFocused();
+			await input.press('ControlOrMeta+Z');
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('');
+		} finally {
+			await page.evaluate(text => navigator.clipboard.writeText(text), previous);
+			await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+		}
+	});
+
 	for (const eolName of ['lf', 'crlf'] as const) {
 		test(`${inputKind} ${eolName} models retain EOL through input, paste, undo and existing text`, async ({ page }) => {
 			if (inputKind === 'textarea') await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
@@ -1895,6 +1924,72 @@ for (const inputKind of ['native', 'textarea'] as const) {
 			});
 		});
 	}
+}
+
+for (const inputKind of ['editContext', 'textarea']) {
+	test(`${inputKind} command Paste As reads system HTML without a paste event and keeps text choice undoable`, async ({ page, context }) => {
+		if (inputKind === 'textarea') await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+		await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+		await page.goto('/standalone.html');
+		const previous = await page.evaluate(() => navigator.clipboard.readText());
+		try {
+			await page.evaluate(async () => {
+				await navigator.clipboard.write([new ClipboardItem({
+					'text/plain': new Blob(['plain choice'], { type: 'text/plain' }),
+					'text/html': new Blob(['<b>rich choice</b>'], { type: 'text/html' }),
+				})]);
+				window.ashStandaloneIntegration.prepareClipboard('old', [[1, 1, 1, 4]]);
+				void window.ashStandaloneIntegration.runLineAction('editor.action.pasteAs');
+			});
+			const picker = page.getByRole('dialog', { name: 'Paste As...' });
+			await expect(picker).toBeVisible();
+			await expect(picker).toContainText('Insert Plain Text');
+			await expect(picker).toContainText('Insert HTML');
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy().value)).toBe('old');
+			await picker.getByRole('combobox').fill('HTML');
+			await picker.getByRole('combobox').press('Enter');
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLineCopy().value)).toBe('<b>rich choice</b>');
+			const input = page.locator('#caller .stanza-editor-input');
+			await expect(input).toBeFocused();
+			await input.press('ControlOrMeta+Z');
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLineCopy().value)).toBe('old');
+			await page.evaluate(async () => {
+				window.ashStandaloneIntegration.prepareClipboard('old', [[1, 1, 1, 4]]);
+				await window.ashStandaloneIntegration.runLineAction('editor.action.pasteAsText');
+			});
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLineCopy().value)).toBe('plain choice');
+			await expect(picker).toHaveCount(0);
+			await expect(input).toBeFocused();
+			await input.press('ControlOrMeta+Z');
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLineCopy().value)).toBe('old');
+		} finally {
+			await page.evaluate(text => navigator.clipboard.writeText(text), previous);
+		}
+	});
+}
+
+for (const mime of ['application/pdf', 'application/x-test-binary']) {
+	test(`command Paste As preserves system ${mime} bytes as a file`, async ({ page, context }) => {
+		await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+		await page.goto('/standalone.html');
+		const previous = await page.evaluate(() => navigator.clipboard.readText());
+		try {
+			const bytes = [255, 128, 0, 80, 68, 70];
+			await page.evaluate(async ({ mime, bytes }) => {
+				await navigator.clipboard.write([new ClipboardItem({
+					[`web ${mime}`]: new Blob([Uint8Array.from(bytes)], { type: mime }),
+				})]);
+			}, { mime, bytes });
+			const name = mime === 'application/pdf' ? 'clipboard.pdf' : 'clipboard.bin';
+			expect(await page.evaluate(mime => window.ashStandaloneIntegration.pasteClipboardFile(mime), mime)).toEqual({ name, bytes, value: name });
+			const input = page.locator('#caller .stanza-editor-input');
+			await expect(input).toBeFocused();
+			await input.press('ControlOrMeta+Z');
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLineCopy().value)).toBe('old');
+		} finally {
+			await page.evaluate(text => navigator.clipboard.writeText(text), previous);
+		}
+	});
 }
 
 test('Paste As chooses an edit before changing the document', async ({ page }) => {

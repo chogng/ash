@@ -10,6 +10,8 @@ import { IElevatedFileService } from './services/files/common/elevatedFileServic
  */
 import "../platform/update/common/update.config.contribution.js";
 import "./workbench.common.main.js";
+import './services/clipboard/electron-browser/clipboardService.js';
+import './contrib/codeEditor/electron-browser/selectionClipboard.js';
 import "./services/update/electron-browser/updateService.js";
 import './services/workspaces/electron-browser/workspacesService.js';
 import './contrib/chat/electron-browser/chat.contribution.js';

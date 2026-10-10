@@ -292,6 +292,26 @@ export const CodeEditorConfiguration = Object.freeze({
 		parse: value => parseBoolean(value, "editor.find.seedSearchStringFromSelection"),
 		setting: booleanSetting("Seed from selection", "Use a single-line selection as the initial Find query."),
 	}),
+	selectionClipboard: configurationRegistry.registerConfiguration<boolean>({
+		key: 'editor.selectionClipboard',
+		defaultValue: true,
+		parse: value => parseBoolean(value, 'editor.selectionClipboard'),
+		setting: {
+			valueType: 'boolean',
+			get title() { return localize({ bundle: 'ash.editor.clipboard', key: 'selection.title' }, 'Selection clipboard'); },
+			get description() { return localize({ bundle: 'ash.editor.clipboard', key: 'selection.description' }, 'On Linux, copy editor selections to the selection clipboard and paste with the middle mouse button.'); },
+		},
+	}),
+	findGlobalClipboard: configurationRegistry.registerConfiguration<boolean>({
+		key: 'editor.find.globalFindClipboard',
+		defaultValue: false,
+		parse: value => parseBoolean(value, 'editor.find.globalFindClipboard'),
+		setting: {
+			valueType: 'boolean',
+			get title() { return localize({ bundle: 'ash.editor.find', key: 'globalFindClipboard.title' }, 'Share find text'); },
+			get description() { return localize({ bundle: 'ash.editor.find', key: 'globalFindClipboard.description' }, 'Share Find queries across editors. On macOS desktop, use the system find pasteboard.'); },
+		},
+	}),
 	findAutoFindInSelection: configurationRegistry.registerConfiguration<boolean>({
 		key: "editor.find.autoFindInSelection",
 		defaultValue: false,

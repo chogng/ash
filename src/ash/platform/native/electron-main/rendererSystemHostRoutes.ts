@@ -1,3 +1,4 @@
+import type { IAuxiliaryWindowsMainService } from '../../auxiliaryWindow/electron-main/auxiliaryWindows.js';
 import { collectElectronMemory } from '../../memory/electron-main/electronMemoryCollector.js';
 import { URI } from '../../../base/common/uri.js';
 import type { BrowserWindow } from 'electron/main';
@@ -9,10 +10,26 @@ import type { DialogRequest } from '../../dialogs/common/dialogs.js';
 export function rendererSystemHostRoutes(
 	window: BrowserWindow,
 	directoryPermissionPrompt: (path: string) => DialogRequest,
+	auxiliaryWindows: IAuxiliaryWindowsMainService,
 ): readonly IpcRoute<unknown, unknown>[] {
-	const clipboard = new ElectronMainClipboardService();
+	const clipboard = new ElectronMainClipboardService(window);
 	const opener = new ElectronOpenerService();
 	const text = (value: unknown): string => { if (typeof value !== 'string' || value.length > 1_000_000) { throw new Error('Invalid host text'); } return value; };
+	const clipboardType = (value: unknown): 'clipboard' | 'selection' | undefined => {
+		if (value !== undefined && value !== 'clipboard' && value !== 'selection') {
+			throw new TypeError('Invalid clipboard type');
+		}
+		return value;
+	};
+	const clipboardWrite = (value: unknown): { text: string; type: 'clipboard' | 'selection' | undefined; } => {
+		if (typeof value === 'string') {
+			return { text: text(value), type: undefined };
+		}
+		if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(key => key !== 'text' && key !== 'type') || !('text' in value)) {
+			throw new TypeError('Invalid clipboard text write');
+		}
+		return { text: text(value.text), type: clipboardType('type' in value ? value.type : undefined) };
+	};
 	const resourceWrite = (value: unknown): { resources: string[]; operation: 'copy' | 'move'; } => {
 		if (!value || typeof value !== 'object' || !('resources' in value) || !('operation' in value)) throw new Error('Invalid clipboard resources');
 		const { resources, operation } = value;
@@ -22,7 +39,26 @@ export function rendererSystemHostRoutes(
 	return [
 		{ channel: 'ash:memory:collect', validate: value => { if (value !== undefined) { throw new Error('Unexpected memory collection arguments'); } }, invoke: () => collectElectronMemory(window) },
 		{ channel: 'ash:host:openExternal', validate: text, invoke: value => opener.openExternal(value as string) },
-		{ channel: 'ash:host:readClipboard', validate: value => { if (value !== undefined) { throw new Error('Unexpected clipboard arguments'); } }, invoke: () => clipboard.readText() },
+		{
+			channel: 'ash:host:triggerPaste',
+			validate: value => {
+				if (value === undefined) return undefined;
+				if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length !== 1 || !('windowName' in value)
+					|| typeof value.windowName !== 'string' || !/^ash-auxiliary-[0-9a-f-]{36}$/.test(value.windowName)) {
+					throw new TypeError('Invalid paste target');
+				}
+				return value.windowName;
+			},
+			invoke: async value => {
+				if (value === undefined) return clipboard.triggerPaste(window.id);
+				// A renderer can select only a live auxiliary window registered under its own workbench.
+				const target = auxiliaryWindows.getWindows().find(candidate => candidate.parentId === window.id && candidate.win.webContents.mainFrame.name === value);
+				if (!target) throw new Error('The paste target window is unavailable');
+				await new ElectronMainClipboardService(target.win).triggerPaste(target.id);
+			},
+		},
+		{ channel: 'ash:host:readClipboard', validate: clipboardType, invoke: value => clipboard.readText(value as ReturnType<typeof clipboardType>) },
+		{ channel: 'ash:host:readClipboardData', validate: value => { if (value !== undefined) throw new Error('Unexpected clipboard arguments'); }, invoke: () => clipboard.read() },
 		{ channel: 'ash:host:readClipboardImage', validate: value => { if (value !== undefined) throw new Error('Unexpected clipboard arguments'); }, invoke: () => clipboard.readImage() },
 		{
 			channel: 'ash:host:screenshot', validate: value => { if (value !== undefined) throw new Error('Unexpected screenshot arguments'); }, invoke: async () => {
@@ -31,7 +67,14 @@ export function rendererSystemHostRoutes(
 				return new Uint8Array((await window.webContents.capturePage()).toPNG());
 			}
 		},
-		{ channel: 'ash:host:writeClipboard', validate: text, invoke: value => clipboard.writeText(value as string) },
+		{ channel: 'ash:host:readFindClipboard', validate: value => { if (value !== undefined) throw new Error('Unexpected find clipboard arguments'); }, invoke: () => clipboard.readFindText() },
+		{ channel: 'ash:host:writeFindClipboard', validate: text, invoke: value => clipboard.writeFindText(value as string) },
+		{
+			channel: 'ash:host:writeClipboard', validate: clipboardWrite, invoke: value => {
+				const { text, type } = value as ReturnType<typeof clipboardWrite>;
+				return clipboard.writeText(text, type);
+			}
+		},
 		{
 			channel: 'ash:host:readClipboardResources', validate: value => { if (value !== undefined) throw new Error('Unexpected clipboard arguments'); }, invoke: async () => {
 				const { resources, operation } = await clipboard.readResources();

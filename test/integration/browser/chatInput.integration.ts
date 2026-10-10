@@ -95,6 +95,10 @@ services.registerInstance(IOpenerService, { open: async (resource, options) => {
 services.registerInstance(ICommandService, { executeCommand: async (id: string, resource?: URI | string) => { recordDestination({ command: id, ...(resource !== undefined ? { resource: resource.toString() } : {}) }); } } as unknown as ICommandService);
 const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DQAAAEgQGALFXOsAAAAABJRU5ErkJggg=='), character => character.charCodeAt(0));
 services.registerInstance(IClipboardService, {
+	triggerPaste: () => undefined,
+	read: async () => [],
+	readFindText: async () => '',
+	writeFindText: async () => { },
 	readImage: async () => new URLSearchParams(location.search).has('emptyClipboard') ? new Uint8Array() : png,
 	readText: async () => '', writeText: async () => { }, readResources: async () => ({ resources: [], operation: 'copy' }), writeResources: async () => { }, hasResources: async () => false,
 });

@@ -421,5 +421,9 @@
     "keyboardLayout.fallbackLayout": "默认布局",
     "keyboardLayout.current": "当前：{0}",
     "keyboardLayout.selected": "{0} · 已选中"
+  },
+  "ash.editor.find": {
+    "globalFindClipboard.title": "共享查找文本",
+    "globalFindClipboard.description": "在编辑器之间共享查找词。macOS 桌面端使用系统查找剪贴板。"
   }
 }

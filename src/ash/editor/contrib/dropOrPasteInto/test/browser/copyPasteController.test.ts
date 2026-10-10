@@ -1,6 +1,13 @@
 import '../../../../test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { test, suiteTeardown } from 'mocha';
+import { BrowserClipboardService } from '../../../../../platform/clipboard/browser/clipboardService.js';
+import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
+import { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
+import { QuickInputController } from '../../../../../platform/quickinput/browser/quickInputController.js';
+import { DeferredPromise } from '../../../../../base/common/async.js';
+import { registerWindow } from '../../../../../base/browser/window.js';
 import { JSDOM } from 'jsdom';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
@@ -16,6 +23,10 @@ import { LanguageFeaturesService } from '../../../../common/services/languageFea
 import { SnippetController2 } from '../../../snippet/browser/snippetController2.js';
 import type { browserEnvironment } from '../../../../test/browser/testEditorDom.js';
 
+const previousClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {} });
+suiteTeardown(() => { if (previousClipboard) Object.defineProperty(navigator, 'clipboard', previousClipboard); else Reflect.deleteProperty(navigator, 'clipboard'); });
+await import('../../../clipboard/browser/clipboard.js');
 await import('../../browser/copyPasteContribution.js');
 const { CopyPasteController } = await import('../../browser/copyPasteController.js');
 const { createTestCodeEditor, registerCodeEditorServices } = await import('../../../../test/browser/testCodeEditor.js');
@@ -43,7 +54,7 @@ test('URI-list paste inserts paths before duplicate plain text', async () => {
 	});
 });
 
-test('Plain text and file-name paste use the default input path', () => {
+test('Plain text and file-name paste use the default input path', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	using closeWindow = toDisposable(() => dom.window.close());
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
@@ -55,6 +66,7 @@ test('Plain text and file-name paste use the default input path', () => {
 	const plain = new TestClipboardData();
 	plain.setData('text/plain', ' ');
 	input.dispatchEvent(clipboardEvent(dom.window, plain));
+	await CopyPasteController.get(editor)!.finishedPaste();
 	let fileReads = 0;
 	const file = {
 		name: 'snippet.ts',
@@ -66,6 +78,7 @@ test('Plain text and file-name paste use the default input path', () => {
 		},
 	};
 	input.dispatchEvent(clipboardEvent(dom.window, new TestClipboardData([file as unknown as File])));
+	await CopyPasteController.get(editor)!.finishedPaste();
 
 	assert.deepEqual({ value: model.getText(), fileReads }, { value: 'alpha snippet.ts', fileReads: 0 });
 });
@@ -345,19 +358,19 @@ test('Paste As requests the selected HTML kind from the rich clipboard', async (
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	using closeWindow = toDisposable(() => dom.window.close());
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	Object.defineProperty(dom.window.navigator, 'clipboard', {
-		configurable: true,
-		value: {
-			read: async () => [{
-				types: ['text/html'],
-				getType: async () => new Blob(['<b>markup</b>'], { type: 'text/html' }),
-			}],
-		},
-	});
+	using registeredWindow = registerWindow(dom.window as unknown as Window);
+	using services = new InstantiationService();
+	using clipboard = new EventClipboard(dom);
+	services.registerInstance(IClipboardService, clipboard);
+	using quickInput = new QuickInputController(dom.window.document.body);
+	services.registerInstance(IQuickInputService, quickInput);
+	registerCodeEditorServices(services);
+
 	using model = new TextModel('old');
-	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model });
+	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, instantiationService: services, model });
 	editor.setSelection(new Selection(1, 1, 1, 4));
 
+	clipboard.data.setData('text/html', '<b>markup</b>');
 	await CopyPasteController.get(editor)!.pasteAs({ only: new HierarchicalKind('html') });
 
 	assert.equal(model.getText(), '<b>markup</b>');
@@ -367,19 +380,20 @@ test('Paste As asks which provider edit to apply when no kind is specified', asy
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	using closeWindow = toDisposable(() => dom.window.close());
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	Object.defineProperty(dom.window.navigator, 'clipboard', {
-		configurable: true,
-		value: {
-			read: async () => [{
-				types: ['text/plain', 'text/html'],
-				getType: async (type: string) => new Blob([type === 'text/html' ? '<b>markup</b>' : 'plain'], { type }),
-			}],
-		},
-	});
+	using registeredWindow = registerWindow(dom.window as unknown as Window);
+	using services = new InstantiationService();
+	using clipboard = new EventClipboard(dom);
+	services.registerInstance(IClipboardService, clipboard);
+	using quickInput = new QuickInputController(dom.window.document.body);
+	services.registerInstance(IQuickInputService, quickInput);
+	registerCodeEditorServices(services);
+
 	using model = new TextModel('old');
-	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model });
+	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, instantiationService: services, model });
 	editor.setSelection(new Selection(1, 1, 1, 4));
 
+	clipboard.data.setData('text/plain', 'plain');
+	clipboard.data.setData('text/html', '<b>markup</b>');
 	const paste = CopyPasteController.get(editor)!.pasteAs();
 	await waitFor(() => dom.window.document.querySelector('.ash-quick-pick') !== null);
 	assert.equal(model.getText(), 'old');
@@ -397,6 +411,13 @@ test('Copy preparation data reaches the matching paste provider', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	using closeWindow = toDisposable(() => dom.window.close());
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using registeredWindow = registerWindow(dom.window as unknown as Window);
+	using services = new InstantiationService();
+	using clipboard = new EventClipboard(dom);
+	services.registerInstance(IClipboardService, clipboard);
+	using quickInput = new QuickInputController(dom.window.document.body);
+	services.registerInstance(IQuickInputService, quickInput);
+	registerCodeEditorServices(services);
 	using model = new TextModel('source');
 	using features = new LanguageFeaturesService();
 	const kind = new HierarchicalKind('text.prepared');
@@ -419,7 +440,7 @@ test('Copy preparation data reaches the matching paste provider', async () => {
 		},
 	};
 	using registration = features.documentPasteEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, provider);
-	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, languageFeaturesService: features });
+	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, instantiationService: services, model, languageFeaturesService: features });
 	editor.setSelection(new Selection(1, 1, 1, 7));
 	const input = editor.controller.editContext.domNode.domNode;
 	input.focus();
@@ -436,18 +457,12 @@ test('Copy preparation data reaches the matching paste provider', async () => {
 	const external = new TestClipboardData();
 	external.setData('text/plain', 'source');
 	input.dispatchEvent(clipboardEvent(dom.window, external));
+	await CopyPasteController.get(editor)!.finishedPaste();
 	assert.deepEqual({ text: model.getText(), provided }, { text: 'source', provided: 1 });
 
-	Object.defineProperty(dom.window.navigator, 'clipboard', {
-		configurable: true,
-		value: {
-			read: async () => [{
-				types: data.types,
-				getType: async (type: string) => new Blob([data.getData(type)], { type }),
-			}],
-		},
-	});
+
 	editor.setSelection(new Selection(1, 1, 1, 7));
+	clipboard.data = data;
 	await CopyPasteController.get(editor)!.pasteAs({ preferences: [kind] });
 	assert.deepEqual({ text: model.getText(), provided }, { text: 'prepared value', provided: 2 });
 });
@@ -456,6 +471,13 @@ test('Paste as Text ignores URI metadata added during copy preparation', async (
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	using closeWindow = toDisposable(() => dom.window.close());
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using registeredWindow = registerWindow(dom.window as unknown as Window);
+	using services = new InstantiationService();
+	using clipboard = new EventClipboard(dom);
+	services.registerInstance(IClipboardService, clipboard);
+	using quickInput = new QuickInputController(dom.window.document.body);
+	services.registerInstance(IQuickInputService, quickInput);
+	registerCodeEditorServices(services);
 	using model = new TextModel('source');
 	using features = new LanguageFeaturesService();
 	using registration = features.documentPasteEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, {
@@ -467,7 +489,7 @@ test('Paste as Text ignores URI metadata added during copy preparation', async (
 		},
 	});
 	using editor = createTestCodeEditor({
-		container: dom.window.document.querySelector<HTMLElement>('main')!, model, languageFeaturesService: features,
+		container: dom.window.document.querySelector<HTMLElement>('main')!, instantiationService: services, model, languageFeaturesService: features,
 	});
 	editor.setSelection(new Selection(1, 1, 1, 7));
 	const input = editor.controller.editContext.domNode.domNode;
@@ -476,16 +498,10 @@ test('Paste as Text ignores URI metadata added during copy preparation', async (
 	const copy = new dom.window.Event('copy', { bubbles: true, cancelable: true });
 	Object.defineProperty(copy, 'clipboardData', { value: data });
 	input.dispatchEvent(copy);
-	Object.defineProperty(dom.window.navigator, 'clipboard', {
-		value: {
-			read: async () => [{
-				types: data.types,
-				getType: async (type: string) => new Blob([data.getData(type)], { type }),
-			}]
-		},
-	});
+
 	model.reset('destination');
 	editor.setSelection(new Selection(1, 1, 1, 12));
+	clipboard.data = data;
 	await editor.getAction('editor.action.pasteAsText')!.run();
 	assert.equal(model.getText(), 'source');
 });
@@ -532,3 +548,269 @@ function clipboardEvent(targetWindow: typeof browserEnvironment.window, clipboar
 	Object.defineProperty(event, 'clipboardData', { configurable: true, value: clipboardData });
 	return event as unknown as ClipboardEvent;
 }
+
+class EventClipboard extends BrowserClipboardService {
+	public data = new TestClipboardData();
+	public resources: readonly URI[] = [];
+	constructor(private readonly dom: JSDOM) { super(undefined); }
+	override async triggerPaste(): Promise<void> {
+		this.dom.window.document.activeElement!.dispatchEvent(clipboardEvent(this.dom.window, this.data));
+	}
+	override async readResources(): Promise<{ resources: readonly URI[]; operation: 'copy'; }> {
+		return { resources: this.resources, operation: 'copy' };
+	}
+	override async readText(): Promise<string> { throw new Error('The command must preserve the paste event formats'); }
+}
+
+test('Paste As merges service resources without replacing event URI data', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	using closeWindow = toDisposable(() => dom.window.close());
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using registeredWindow = registerWindow(dom.window as unknown as Window);
+	using services = new InstantiationService();
+	using clipboard = new EventClipboard(dom);
+	services.registerInstance(IClipboardService, clipboard);
+	using quickInput = new QuickInputController(dom.window.document.body);
+	services.registerInstance(IQuickInputService, quickInput);
+	registerCodeEditorServices(services);
+	using model = new TextModel('');
+	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, instantiationService: services });
+	clipboard.data.setData('text/plain', 'file path fallback');
+	clipboard.resources = [URI.file('/workspace/service.ts')];
+	await CopyPasteController.get(editor)!.pasteAs({ only: new HierarchicalKind('uri') });
+	assert.equal(model.getText(), '/workspace/service.ts');
+	model.setValue('');
+	clipboard.data.setData('text/uri-list', 'file:///workspace/event.ts');
+	await CopyPasteController.get(editor)!.pasteAs({ only: new HierarchicalKind('uri') });
+	assert.equal(model.getText(), '/workspace/event.ts');
+});
+
+test('Paste command resolves after delayed provider edits', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	using closeWindow = toDisposable(() => dom.window.close());
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using registeredWindow = registerWindow(dom.window as unknown as Window);
+	using services = new InstantiationService();
+	using clipboard = new EventClipboard(dom);
+	services.registerInstance(IClipboardService, clipboard);
+	registerCodeEditorServices(services);
+	using features = new LanguageFeaturesService();
+	const started = new DeferredPromise<void>();
+	const release = new DeferredPromise<void>();
+	const kind = new HierarchicalKind('text.waiting');
+	let disposed = 0;
+	using registration = features.documentPasteEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, {
+		copyMimeTypes: [], pasteMimeTypes: ['text/plain'], providedPasteEditKinds: [kind],
+		async provideDocumentPasteEdits() {
+			await started.complete();
+			await release.p;
+			return { edits: [{ title: 'Delayed edit', kind, insertText: 'provided' }], dispose() { disposed++; } };
+		},
+	});
+	using model = new TextModel('');
+	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, instantiationService: services, languageFeaturesService: features });
+	editor.focus();
+	clipboard.data.setData('text/plain', 'raw');
+	let complete = false;
+	const commands = services.get((await import('../../../../../platform/commands/common/commands.js')).ICommandService);
+	const paste = commands.executeCommand('editor.action.clipboardPasteAction').then(() => { complete = true; });
+	await started.p;
+	assert.deepEqual({ text: model.getText(), complete }, { text: '', complete: false });
+	await release.complete();
+	await paste;
+	assert.deepEqual({ text: model.getText(), complete, disposed }, { text: 'provided', complete: true, disposed: 1 });
+});
+
+test('Cancelling a paste ends the command before an uncooperative provider returns and releases its late session', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	using closeWindow = toDisposable(() => dom.window.close());
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using registeredWindow = registerWindow(dom.window as unknown as Window);
+	using services = new InstantiationService();
+	using clipboard = new EventClipboard(dom);
+	services.registerInstance(IClipboardService, clipboard);
+	registerCodeEditorServices(services);
+	using features = new LanguageFeaturesService();
+	const started = new DeferredPromise<void>();
+	const release = new DeferredPromise<void>();
+	const disposed = new DeferredPromise<void>();
+	const kind = new HierarchicalKind('text.delayed');
+	using registration = features.documentPasteEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, {
+		copyMimeTypes: [], pasteMimeTypes: ['text/plain'], providedPasteEditKinds: [kind],
+		async provideDocumentPasteEdits() {
+			await started.complete();
+			await release.p;
+			return { edits: [{ title: 'Delayed edit', kind, insertText: 'stale' }], dispose() { void disposed.complete(); } };
+		},
+	});
+	using model = new TextModel('');
+	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, instantiationService: services, languageFeaturesService: features });
+	editor.focus();
+	clipboard.data.setData('text/plain', 'raw');
+	const commands = services.get((await import('../../../../../platform/commands/common/commands.js')).ICommandService);
+	const paste = commands.executeCommand('editor.action.clipboardPasteAction');
+	await started.p;
+	model.setValue('changed');
+	await paste;
+	assert.equal(model.getText(), 'changed');
+	await release.complete();
+	await disposed.p;
+	assert.equal(model.getText(), 'changed');
+});
+
+
+for (const preference of ['html', 'text', 'picker']) {
+	test(`command Paste As uses rich service data for ${preference} when a paste event cannot be triggered`, async () => {
+		const dom = new JSDOM('<!doctype html><body><main></main></body>');
+		using closeWindow = toDisposable(() => dom.window.close());
+		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+		using registeredWindow = registerWindow(dom.window as unknown as Window);
+		using services = new InstantiationService();
+		using clipboard = new BrowserClipboardService({
+			read: async () => [{ types: ['text/plain', 'text/html'], getType: async (type: string) => new Blob([type === 'text/html' ? '<b>rich</b>' : 'plain']) }],
+			readText: async () => { throw new Error('Paste As must use all MIME types'); },
+		} as unknown as Clipboard);
+		services.registerInstance(IClipboardService, clipboard);
+		using quickInput = new QuickInputController(dom.window.document.body);
+		services.registerInstance(IQuickInputService, quickInput);
+		registerCodeEditorServices(services);
+		using model = new TextModel('old');
+		using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, instantiationService: services, model });
+		editor.setSelection(new Selection(1, 1, 1, 4));
+		const paste = editor.getAction(preference === 'text' ? 'editor.action.pasteAsText' : 'editor.action.pasteAs')!.run(preference === 'html' ? { kind: 'html' } : undefined);
+		if (preference === 'picker') {
+			await waitFor(() => dom.window.document.querySelector('.ash-quick-pick') !== null);
+			assert.equal(model.getText(), 'old');
+			const input = dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick input')!;
+			input.value = 'HTML';
+			input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+			input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+		}
+		await paste;
+		assert.equal(model.getText(), preference === 'text' ? 'plain' : '<b>rich</b>');
+		model.undo();
+		assert.equal(model.getText(), 'old');
+	});
+}
+
+for (const change of ['selection', 'content', 'focus', 'readOnly', 'dispose']) {
+	test(`command Paste As cancels a delayed rich read on ${change}`, async () => {
+		const dom = new JSDOM('<!doctype html><body><main></main><input></body>');
+		using closeWindow = toDisposable(() => dom.window.close());
+		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+		using services = new InstantiationService();
+		const started = new DeferredPromise<void>();
+		const release = new DeferredPromise<ClipboardItem[]>();
+		using clipboard = new BrowserClipboardService({ read: () => { void started.complete(); return release.p; } } as Clipboard);
+		services.registerInstance(IClipboardService, clipboard);
+		registerCodeEditorServices(services);
+		using model = new TextModel('old');
+		using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, instantiationService: services, model });
+		const paste = editor.getAction('editor.action.pasteAs')!.run({ kind: 'html' });
+		await started.p;
+		if (change === 'selection') editor.setPosition({ lineNumber: 1, column: 2 });
+		if (change === 'content') model.setValue('changed');
+		if (change === 'focus') dom.window.document.querySelector('input')!.focus();
+		if (change === 'readOnly') editor.updateOptions({ readOnly: true });
+		if (change === 'dispose') editor.dispose();
+		await paste;
+		await release.complete([{ types: ['text/html'], getType: async () => new Blob(['<b>late</b>']) } as unknown as ClipboardItem]);
+		await Promise.resolve();
+		assert.equal(model.getText(), change === 'content' ? 'changed' : 'old');
+	});
+}
+
+
+test('command Paste As matches copied preparation metadata read from a byte snapshot', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	using closeWindow = toDisposable(() => dom.window.close());
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using services = new InstantiationService();
+	const copied = new TestClipboardData();
+	using clipboard = new BrowserClipboardService({
+		read: async () => [{ types: copied.types, getType: async (type: string) => new Blob([copied.getData(type)]) }],
+	} as unknown as Clipboard);
+	services.registerInstance(IClipboardService, clipboard);
+	registerCodeEditorServices(services);
+	using features = new LanguageFeaturesService();
+	const kind = new HierarchicalKind('prepared');
+	let metadataRemoved = false;
+	using registration = features.documentPasteEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, {
+		copyMimeTypes: ['application/x-test-prepared'], pasteMimeTypes: ['application/x-test-prepared'], providedPasteEditKinds: [kind],
+		async prepareDocumentPaste() {
+			const transfer = new VSDataTransfer();
+			transfer.append('application/x-test-prepared', createStringDataTransferItem('prepared text'));
+			return transfer;
+		},
+		async provideDocumentPasteEdits(_model, _ranges, transfer) {
+			metadataRemoved = !transfer.has('application/x-ash-paste-provider-id') && !transfer.matches('files');
+			return { edits: [{ title: 'Insert prepared text', kind, insertText: await transfer.get('application/x-test-prepared')!.asString() }], dispose() { } };
+		},
+	});
+	using model = new TextModel('source');
+	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, instantiationService: services, model, languageFeaturesService: features });
+	editor.setSelection(new Selection(1, 1, 1, 7));
+	const input = editor.controller.editContext.domNode.domNode;
+	input.focus();
+	const copy = new dom.window.Event('copy', { bubbles: true, cancelable: true });
+	Object.defineProperty(copy, 'clipboardData', { value: copied });
+	input.dispatchEvent(copy);
+	await editor.getAction('editor.action.pasteAs')!.run({ kind: 'prepared' });
+	assert.deepEqual({ text: model.getText(), metadataRemoved }, { text: 'prepared text', metadataRemoved: true });
+	model.undo();
+	assert.equal(model.getText(), 'source');
+});
+
+for (const mime of ['image/png', 'application/pdf', 'application/x-test-binary', 'application/x-test-paste', 'application/json', 'application/vnd.test+xml']) {
+	test(`command Paste As supplies ${mime} to its registered provider`, async () => {
+		const dom = new JSDOM('<!doctype html><body><main></main></body>');
+		using closeWindow = toDisposable(() => dom.window.close());
+		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+		using services = new InstantiationService();
+		const isCustomText = ['application/x-test-paste', 'application/json', 'application/vnd.test+xml'].includes(mime);
+		const bytes = isCustomText ? new TextEncoder().encode('custom metadata') : Uint8Array.of(255, 128, 0, 80, 68, 70);
+		using clipboard = new BrowserClipboardService({
+			read: async () => [{ types: [mime], getType: async () => new Blob([bytes]) }],
+		} as unknown as Clipboard);
+		services.registerInstance(IClipboardService, clipboard);
+		registerCodeEditorServices(services);
+		using features = new LanguageFeaturesService();
+		const kind = new HierarchicalKind('custom');
+		let received: unknown;
+		using registration = features.documentPasteEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, {
+			copyMimeTypes: [], pasteMimeTypes: [isCustomText ? mime : 'files'], providedPasteEditKinds: [kind],
+			async provideDocumentPasteEdits(_model, _ranges, transfer) {
+				const item = transfer.get(mime)!;
+				if (isCustomText) {
+					received = await item.asString();
+				} else {
+					const file = item.asFile()!;
+					received = { bytes: await file.data(), name: file.name, value: item.value, text: await item.asString() };
+				}
+				return { edits: [{ title: 'Insert custom data', kind, insertText: 'provided' }], dispose() { } };
+			},
+		});
+		using model = new TextModel('');
+		using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, instantiationService: services, model, languageFeaturesService: features });
+		await editor.getAction('editor.action.pasteAs')!.run({ kind: 'custom' });
+		const expectedExtension = mime === 'image/png' ? '.png' : mime === 'application/pdf' ? '.pdf' : '.bin';
+		assert.deepEqual({ received, text: model.getText() }, {
+			received: isCustomText ? 'custom metadata' : { bytes, name: `clipboard${expectedExtension}`, value: undefined, text: '' },
+			text: 'provided',
+		});
+	});
+}
+
+test('command Paste As ends quietly when its clipboard read returns empty', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	using closeWindow = toDisposable(() => dom.window.close());
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using services = new InstantiationService();
+	using clipboard = new BrowserClipboardService({ read: async () => [] } as unknown as Clipboard);
+	services.registerInstance(IClipboardService, clipboard);
+	registerCodeEditorServices(services);
+	using model = new TextModel('old');
+	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, instantiationService: services, model });
+	await editor.getAction('editor.action.pasteAs')!.run();
+	assert.deepEqual({ text: model.getText(), notifications: services.get(INotificationService).getNotifications() }, { text: 'old', notifications: [] });
+});

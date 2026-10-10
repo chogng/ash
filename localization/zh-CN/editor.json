@@ -289,8 +289,6 @@
     "dropOrPaste.uris": "插入 URI",
     "dropOrPaste.relativePaths": "插入相对路径",
     "dropOrPaste.html": "插入 HTML",
-    "dropOrPaste.richClipboardUnavailable": "选择性粘贴需要读取剪贴板的权限。",
-    "dropOrPaste.clipboardReadFailed": "无法读取剪贴板：{0}",
     "dropOrPaste.noPasteEdit": "此剪贴板内容没有可用的粘贴方式。",
     "dropOrPaste.pasteFailed": "无法粘贴：{0}",
     "dropOrPaste.dropFailed": "无法拖放内容：{0}",
@@ -802,6 +800,11 @@
     "skills.manageEnablement": "管理技能启停…",
     "skills.discoveryFailed": "无法加载技能文件。请尝试刷新目录。",
     "skills.openFailed": "无法打开技能 {0}。请刷新目录后重试。",
-    "accessibility.editorSaveRecovery": "保存失败时，对话框提供恢复操作。用 Tab 选择可用的覆盖、使用管理员权限重试、另存为或还原，按 Enter 执行。Escape 取消并保留未保存的修改。覆盖使只读文件可写；还原放弃未保存的修改。"
+    "accessibility.editorSaveRecovery": "保存失败时，对话框提供恢复操作。用 Tab 选择可用的覆盖、使用管理员权限重试、另存为或还原，按 Enter 执行。Escape 取消并保留未保存的修改。覆盖使只读文件可写；还原放弃未保存的修改。",
+    "actions.pasteSelectionClipboard": "粘贴选区剪贴板"
+  },
+  "ash.editor.clipboard": {
+    "selection.title": "选区剪贴板",
+    "selection.description": "在 Linux 上，将编辑器选区复制到选区剪贴板，并使用鼠标中键粘贴。"
   }
 }

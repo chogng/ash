@@ -265,5 +265,9 @@
     "categories.browser.description": "Choose where website links open.",
     "categories.voice-input.label": "Voice input",
     "categories.voice-input.description": "Choose local or cloud transcription and manage dictation models."
+  },
+  "ash.editor.find": {
+    "globalFindClipboard.title": "Share find text",
+    "globalFindClipboard.description": "Share Find queries across editors. On macOS desktop, use the system find pasteboard."
   }
 }

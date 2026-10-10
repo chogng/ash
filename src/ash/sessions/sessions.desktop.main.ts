@@ -4,6 +4,7 @@ import { localize2 } from '../nls.js';
 import '../workbench/electron-browser/desktop.contribution.js';
 import '../workbench/contrib/browserView/electron-browser/browserView.contribution.js';
 import './sessions.common.main.js';
+import '../workbench/services/clipboard/electron-browser/clipboardService.js';
 import './browser/parts/menubar.contribution.js';
 import './contrib/openAgentsWindow/electron-browser/openAgentsWindow.contribution.js';
 import { registerOpenAgentsWindowCommand } from './contrib/openAgentsWindow/electron-browser/openAgentsWindowCommand.js';
@@ -14,11 +15,8 @@ import { NativeHostService } from '../workbench/services/host/electron-browser/n
 import { ILanguagePackStore } from '../platform/languagePacks/common/languagePackStore.js';
 import { ElectronLanguagePackStore } from '../platform/languagePacks/electron-browser/languagePackStore.js';
 import { InstantiationType, registerSingleton } from '../platform/instantiation/common/extensions.js';
-import { IClipboardService } from '../platform/clipboard/common/clipboardService.js';
-import { ElectronRendererClipboardService } from '../platform/clipboard/electron-browser/electronRendererClipboardService.js';
 
 registerSingleton(IHostService, NativeHostService, InstantiationType.Delayed);
-registerSingleton(IClipboardService, ElectronRendererClipboardService, InstantiationType.Delayed);
 registerSingleton(ILanguagePackStore, ElectronLanguagePackStore, InstantiationType.Delayed);
 
 registerOpenAgentsWindowCommand();

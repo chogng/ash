@@ -10,7 +10,12 @@ import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { installEditorTestDom } from '../../../../test/browser/editorTestGlobals.js';
 import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
-import { IHoverService } from '../../../../../platform/hover/browser/hoverService.js';
+import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
+import { BrowserClipboardService } from '../../../../../platform/clipboard/browser/clipboardService.js';
+import { FindWidgetSearchHistory } from '../../browser/findWidgetSearchHistory.js';
+import { ReplaceWidgetHistory } from '../../browser/replaceWidgetHistory.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { showHistoryKeybindingHint } from '../../../../../platform/history/browser/historyWidgetKeybindingHint.js';
@@ -355,6 +360,74 @@ test("replace current and replace all use isolated undo transactions", () => {
 	assert.equal(fixture.model.getText(), "a a a");
 });
 
+test('find shares queries through its injected clipboard without changing copied text', async () => {
+	using clipboard = new BrowserClipboardService({ readText: async () => 'copied text' } as Clipboard);
+	using first = createFixture('alpha beta', undefined, undefined, { globalFindClipboard: true }, undefined, clipboard);
+	first.find.setSearchString('beta');
+	assert.equal(await clipboard.readFindText(), 'beta');
+	using second = createFixture('beta alpha beta', undefined, undefined, { globalFindClipboard: true, seedSearchStringFromSelection: 'never' }, undefined, clipboard);
+	const opening = startGlobalFind(second);
+	assert.equal(second.dom.window.document.activeElement, second.searchInput);
+	await opening;
+	assert.equal(second.searchInput.value, 'beta');
+	assert.equal(second.find.getState().matchesCount, 2);
+	assert.equal(await clipboard.readText(), 'copied text');
+	second.find.closeFindWidget();
+	first.find.setSearchString('alpha');
+	await startGlobalFind(second);
+	assert.equal(second.searchInput.value, 'alpha');
+});
+
+test('disabled global find clipboard and explicit queries do not seed from shared text', async () => {
+	using clipboard = new BrowserClipboardService(undefined);
+	await clipboard.writeFindText('shared');
+	using disabled = createFixture('alpha', undefined, undefined, { globalFindClipboard: false }, undefined, clipboard);
+	await startGlobalFind(disabled);
+	disabled.find.setSearchString('local');
+	assert.equal(await disabled.find.getGlobalBufferTerm(), '');
+	assert.equal(await clipboard.readFindText(), 'shared');
+	using enabled = createFixture('alpha', undefined, undefined, { globalFindClipboard: true }, undefined, clipboard);
+	await startGlobalFind(enabled, 'explicit');
+	assert.equal(enabled.searchInput.value, 'explicit');
+	assert.equal(await clipboard.readFindText(), 'explicit');
+});
+
+test('pending global find reads cannot overwrite input, reopen a closed widget, change a new model, or survive disposal', async () => {
+	for (const change of ['input', 'close', 'model', 'dispose', 'new request', 'disable', 'disable and reenable']) {
+		let resolveRead!: (text: string) => void;
+		class PendingFindClipboard extends BrowserClipboardService {
+			override readFindText(): Promise<string> { return new Promise(resolve => { resolveRead = resolve; }); }
+		}
+		using clipboard = new PendingFindClipboard(undefined);
+		using fixture = createFixture('alpha beta', undefined, undefined, { globalFindClipboard: true }, undefined, clipboard);
+		const opening = startGlobalFind(fixture);
+		if (change === 'input') setInputValue(fixture.searchInput, 'alpha');
+		if (change === 'close') fixture.find.closeFindWidget();
+		if (change === 'model') fixture.editor.setModel(null);
+		if (change === 'disable' || change === 'disable and reenable') fixture.editor.updateOptions({ find: { globalFindClipboard: false } });
+		if (change === 'disable and reenable') fixture.editor.updateOptions({ find: { globalFindClipboard: true } });
+		if (change === 'dispose') fixture.find.dispose();
+		if (change === 'new request') await startGlobalFind(fixture, 'newer');
+		resolveRead('stale');
+		await opening;
+		assert.notEqual(fixture.find.getState().searchString, 'stale', change);
+		if (change === 'close') assert.equal(fixture.find.getState().isRevealed, false);
+	}
+});
+
+function startGlobalFind(fixture: Fixture, searchString?: string): Promise<void> {
+	return fixture.find.start({
+		forceRevealReplace: false,
+		seedSearchStringFromSelection: 'none',
+		seedSearchStringFromNonEmptySelection: false,
+		seedSearchStringFromGlobalClipboard: true,
+		shouldFocus: FindStartFocusAction.FocusFindInput,
+		shouldAnimate: false,
+		updateSearchScope: true,
+		loop: true,
+	}, searchString === undefined ? {} : { searchString });
+}
+
 interface Fixture extends Disposable {
 	readonly dom: JSDOM;
 	readonly model: TextModel;
@@ -366,7 +439,7 @@ interface Fixture extends Disposable {
 	readonly find: InstanceType<typeof FindController>;
 }
 
-function createFixture(text: string, anchor = new Position((0) + 1, (0) + 1), active = anchor, options?: IEditorFindOptions, stored?: Map<string, string>): Fixture {
+function createFixture(text: string, anchor = new Position((0) + 1, (0) + 1), active = anchor, options?: IEditorFindOptions, stored?: Map<string, string>, clipboard?: IClipboardService): Fixture {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const resources = new DisposableStore();
 	resources.add(toDisposable(() => dom.window.close()));
@@ -374,7 +447,10 @@ function createFixture(text: string, anchor = new Position((0) + 1, (0) + 1), ac
 		const container = requiredElement<HTMLElement>(dom.window.document, "main");
 		const model = resources.add(new TextModel(text));
 		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+		const services = resources.add(new InstantiationService());
+		if (clipboard) services.registerInstance(IClipboardService, clipboard);
 		const editor = resources.add(createTestCodeEditor({
+			instantiationService: services,
 			container,
 			model,
 			contributions: [],
@@ -384,10 +460,10 @@ function createFixture(text: string, anchor = new Position((0) + 1, (0) + 1), ac
 		editor.layout({ width: 600, height: 120 });
 		editor.setSelection(Selection.fromPositions(anchor, active));
 		const editorInput = requiredElement<HTMLTextAreaElement>(container, ".stanza-editor-input");
-		const keybindings = editor.invokeWithinContext(accessor => accessor.get(IKeybindingService));
-		const hoverService = editor.invokeWithinContext(accessor => accessor.get(IHoverService));
 		const storageService = stored ? new TestHistoryStorageService(stored) : undefined;
-		const find = resources.add(new FindController(editor, storageService, keybindings, hoverService));
+		const find = resources.add(editor.invokeWithinContext(accessor => accessor.get(IInstantiationService)).createInstance(FindController, editor,
+			storageService ? FindWidgetSearchHistory.getOrCreate(storageService) : undefined,
+			storageService ? ReplaceWidgetHistory.getOrCreate(storageService) : undefined));
 		const findElement = requiredElement<HTMLDivElement>(container, ".stanza-editor-find-widget");
 		const searchInput = requiredElement<HTMLInputElement>(findElement, "input[aria-label=\"Find\"]");
 		const replaceInput = requiredElement<HTMLInputElement>(findElement, "input[aria-label=\"Replace\"]");

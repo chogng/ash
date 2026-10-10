@@ -8,6 +8,26 @@ import { loadLocalResource } from '../../browser/resourceLoading.js';
 import { asWebviewUri } from '../../common/webview.js';
 
 suite('Webview resource loading', () => {
+	test('serves shared MIME mappings while preserving script, font and unknown resource types', async () => {
+		const root = URI.file('/workspace/assets');
+		const expected = [
+			['photo.AVIF', 'image/avif'],
+			['script.mjs', 'text/javascript'],
+			['style.css', 'text/css'],
+			['data.json', 'application/json'],
+			['font.woff2', 'font/woff2'],
+			['report.pdf', 'application/pdf'],
+			['unknown.extension', 'application/octet-stream'],
+		] as const;
+		const files = new MemoryFileService(expected.map(([name]) => [URI.joinPath(root, name), name]));
+		using fileService = createTestFileService(files);
+		const responses = await Promise.all(expected.map(async ([name]) => {
+			const result = await loadLocalResource(URI.joinPath(root, name), { roots: [root] }, fileService, CancellationToken.None);
+			return result.status === 200 ? [name, result.mimeType] : [name, result.status];
+		}));
+		assert.deepEqual(responses, expected);
+	});
+
 	test('loads exact bytes with the content type and rejects roots, sibling prefixes and traversal before reading', async () => {
 		const root = URI.parse('file:///workspace/assets');
 		const file = URI.parse('file:///workspace/assets/icon.SVG');

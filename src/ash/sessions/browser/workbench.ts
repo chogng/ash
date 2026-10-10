@@ -18,7 +18,7 @@ import { IKeybindingEditingService, KeybindingsEditingService } from '../../work
 import { ITextModelService } from '../../editor/common/services/resolverService.js';
 import { TextModelResolverService } from '../../workbench/services/textmodelResolver/common/textModelResolverService.js';
 import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
-import { getSingletonServiceDescriptors } from '../../platform/instantiation/common/extensions.js';
+import { getSingletonServiceDescriptors, InstantiationType } from '../../platform/instantiation/common/extensions.js';
 import { IAssetService, type AssetVersion } from '../../platform/assets/common/assetService.js';
 import { IApprovalEnvironmentService } from '../../platform/approvalEnvironment/common/approvalEnvironmentService.js';
 import { IModelApi as ModelApiId, ISessionApi, IThreadApi, ITurnApi } from '../../platform/sessions/common/sessionApi.js';
@@ -194,7 +194,7 @@ import { IAccountService } from '../../platform/accounts/common/accountService.j
 import { IGitHubService } from '../../platform/github/common/githubService.js';
 import { GitHubConnectionService } from '../../workbench/services/accounts/browser/gitHubConnectionService.js';
 import { IGitHubConnectionService } from '../../workbench/services/accounts/common/gitHubConnectionService.js';
-import { BrowserClipboardService } from '../../platform/clipboard/browser/clipboardService.js';
+import { BrowserClipboardService } from '../../workbench/services/clipboard/browser/clipboardService.js';
 import { INativeHostService } from '../../workbench/common/services.js';
 import { ActivityBarPosition } from '../../workbench/common/configuration.js';
 import { ChatService } from "../../workbench/services/chat/browser/chatService.js";
@@ -365,7 +365,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IDecorationsService, this._register(services.createInstance(DecorationsService, ownerDocument)));
 		services.registerSingleton(IResourceLabelService, () => services.createInstance(ResourceLabelService));
 		services.registerSingleton(IUntitledTextEditorService, () => services.createInstance(UntitledTextEditorService));
-		if (!services.has(IClipboardService)) services.registerInstance(IClipboardService, new BrowserClipboardService(ownerWindow.navigator.clipboard));
+		if (!services.has(IClipboardService)) services.registerSingleton(IClipboardService, () => services.createInstance(BrowserClipboardService), { instantiation: InstantiationType.Delayed });
 		const textFiles = this._register(services.createInstance(TextFileService));
 		services.registerInstance(ITextFileService, textFiles);
 		const workingCopies = this._register(services.createInstance(BrowserWorkingCopyService));

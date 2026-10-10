@@ -16,7 +16,6 @@ import type { IDimension } from '../../../../base/browser/dom.js';
 import type { IContextViewProvider } from '../../../../base/browser/ui/contextview/contextview.js';
 import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import { MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { IDirPermissionsService } from '../../../../platform/dirPermissions/common/dirPermissionsService.js';
 import { IAgentCapabilitiesService } from '../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -65,7 +64,6 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 	private contentEmpty!: HTMLParagraphElement;
 	private contentStatus!: HTMLParagraphElement;
 	private readonly configurationService: IConfigurationService;
-	private readonly clipboardService: IClipboardService;
 	private readonly contextMenuProvider: IContextMenuProvider;
 	private readonly contextViewProvider: IContextViewProvider;
 	private element!: HTMLDivElement;
@@ -87,7 +85,6 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 	private sectionToReveal: string | undefined;
 
 	constructor(
-		@IClipboardService clipboardService: IClipboardService,
 		@IConfigurationService configurationService: IConfigurationService,
 		@IContextMenuService contextMenuProvider: IContextMenuProvider,
 		@IContextViewService contextViewProvider: IContextViewProvider,
@@ -114,7 +111,6 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 			}),
 			...gitSettings(gitService),
 		]));
-		this.clipboardService = clipboardService;
 		this.contextMenuProvider = contextMenuProvider;
 		this.contextViewProvider = contextViewProvider;
 	}
@@ -128,13 +124,9 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 			configurationRegistry.getConfiguration(id) !== undefined && this.configurationService.inspect(id).userLocalValue !== undefined,
 		));
 		this.treeModel.setChildren(settingsRootNodes(settingsLayout));
-		const settingsRenderer = this._register(new SettingsRenderer(container, {
-			clipboardService: this.clipboardService,
-			configurationService: this.configurationService,
-			contextMenuProvider: this.contextMenuProvider,
-			contextViewProvider: this.contextViewProvider,
+		const settingsRenderer = this._register(this.instantiationService.createInstance(SettingsRenderer, container, {
 			onStatus: this.settingsModel.reportStatus,
-			onOpenSettings: key => this.preferencesService.openUserSettings({ target: ConfigurationTarget.USER_LOCAL, revealSetting: { key, edit: true } }),
+			onOpenSettings: (key: string) => this.preferencesService.openUserSettings({ target: ConfigurationTarget.USER_LOCAL, revealSetting: { key, edit: true } }),
 		}));
 
 		const ownerDocument = container.ownerDocument;

@@ -85,11 +85,6 @@ registerEditorPane({
 			colorDecoratorsLimit: configuration?.getValue(CodeEditorConfiguration.colorDecoratorsLimit),
 			defaultColorDecorators: configuration?.getValue(CodeEditorConfiguration.defaultColorDecorators),
 			formatOnSave: configuration?.getValue(CodeEditorConfiguration.formatOnSave),
-			find: configuration ? {
-				seedSearchStringFromSelection: configuration.getValue(CodeEditorConfiguration.findSeedFromSelection),
-				autoFindInSelection: configuration.getValue(CodeEditorConfiguration.findAutoFindInSelection),
-				loop: configuration.getValue(CodeEditorConfiguration.findLoop),
-			} : undefined,
 			onSave: options.onSave,
 			onSaveError: saveErrorHandler ? async (error, resource) => { await saveErrorHandler.onSaveError(error, resource); } : undefined,
 			onOpenLocation: options.onOpenLocation,

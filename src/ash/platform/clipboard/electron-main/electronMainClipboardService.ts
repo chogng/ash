@@ -1,13 +1,38 @@
 import { clipboard, ClipboardItem } from "electron";
+import type { BrowserWindow } from 'electron/main';
 import { Schemas } from '../../../base/common/network.js';
 import { URI } from '../../../base/common/uri.js';
-import type { IClipboardResources, IClipboardService } from '../common/clipboardService.js';
+import type { IClipboardItem, IClipboardResources, IClipboardService } from '../common/clipboardService.js';
 
 /** Electron main-process adapter for the system clipboard. */
 export class ElectronMainClipboardService implements IClipboardService {
 	private static readonly fileFormat = 'web application/x-ash-resources';
+	constructor(private readonly window: BrowserWindow) { }
 
-	async readText(): Promise<string> {
+	async triggerPaste(targetWindowId: number): Promise<void> {
+		if (targetWindowId !== this.window.id || this.window.isDestroyed() || this.window.webContents.isDestroyed()) {
+			throw new Error('The paste target window is unavailable');
+		}
+		this.window.webContents.paste();
+	}
+
+	public async read(): Promise<readonly IClipboardItem[]> {
+		const result: IClipboardItem[] = [];
+		for (const item of await clipboard.read()) {
+			for (const type of item.types) {
+				const blob = await item.getType(type);
+				if (blob instanceof Blob) {
+					result.push({ type: type.startsWith('web ') ? type.slice(4) : type, data: new Uint8Array(await blob.arrayBuffer()) });
+				}
+			}
+		}
+		return result;
+	}
+
+	async readText(type?: string): Promise<string> {
+		if (type === 'selection') {
+			return process.platform === 'linux' ? clipboard.selection.readText() : '';
+		}
 		return clipboard.readText();
 	}
 
@@ -20,8 +45,29 @@ export class ElectronMainClipboardService implements IClipboardService {
 		return new Uint8Array();
 	}
 
-	async writeText(value: string): Promise<void> {
+	async writeText(value: string, type?: string): Promise<void> {
+		if (type === 'selection') {
+			if (process.platform === 'linux') {
+				await clipboard.selection.writeText(value);
+			}
+			return;
+		}
 		await clipboard.writeText(value);
+	}
+
+	async readFindText(): Promise<string> {
+		if (process.platform !== 'darwin') return '';
+		for (const item of await clipboard.read()) {
+			if (!item.types.includes('electron application/findtext')) continue;
+			const term = await item.getType('electron application/findtext');
+			if (term instanceof Blob) return term.text();
+		}
+		return '';
+	}
+
+	async writeFindText(text: string): Promise<void> {
+		if (process.platform !== 'darwin') return;
+		await clipboard.write([new ClipboardItem({ 'electron application/findtext': text })]);
 	}
 
 	async readResources(): Promise<IClipboardResources> {

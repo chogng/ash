@@ -1283,7 +1283,7 @@ export class AshApplication extends Disposable {
 			...supervisor.routes(window.webContents, () => ({ workspaceId: workspaceContext.getWorkspace().id, workspaceRoot: workspaceContext.getResolvedWorkspace().folders[0]?.uri.fsPath ?? this.profileRoot })),
 			...appServerBrowserHost.routes(),
 			...windowDisposables.add(new OAuthCallbackHost()).routes(),
-			...rendererSystemHostRoutes(window, path => this.directoryPermissionPrompt(path)),
+			...rendererSystemHostRoutes(window, path => this.directoryPermissionPrompt(path), this.auxiliaryWindowsMainService),
 			hooksConfigurationIpcRoute(this.profileRoot, () => !getWorkspaceRemoteAuthority(workspaceContext.getWorkspace()), openHooksTextFile),
 			...remoteWindowContext.ipcRoutes,
 			...browserViewIpcRoutes(browserViewMainService),
@@ -1529,7 +1529,7 @@ export class AshApplication extends Disposable {
 					const ipcRoutes = [
 						...this.mainProcessIpcRoutes(window),
 						...sessionsRelay.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })),
-						...rendererSystemHostRoutes(window, path => this.directoryPermissionPrompt(path)),
+						...rendererSystemHostRoutes(window, path => this.directoryPermissionPrompt(path), this.auxiliaryWindowsMainService),
 						hooksConfigurationIpcRoute(this.profileRoot, () => !getWorkspaceRemoteAuthority(session.workspaceContext.getWorkspace()), openHooksTextFile),
 						...browserViewIpcRoutes(browserServices.get(IBrowserViewMainService)),
 						...remoteWindowContext.ipcRoutes,

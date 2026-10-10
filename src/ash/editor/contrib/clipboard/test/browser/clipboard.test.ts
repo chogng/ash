@@ -11,6 +11,8 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { ICodeEditorService } from '../../../../browser/services/codeEditorService.js';
 import { installEditorTestDom } from '../../../../test/browser/editorTestGlobals.js';
+import { getWindowId, registerWindow } from '../../../../../base/browser/window.js';
+import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { DisposableTracker, installDisposableTracker } from '../../../../../base/common/lifecycle.js';
 
 const environment = new JSDOM('<!doctype html><body></body>');
@@ -66,6 +68,43 @@ test('clipboard actions use the focused code editor and platform clipboard servi
 	assert.equal(clipboard.text, 'omega');
 	assert.equal(model.getText(), ' beta');
 	dom.window.close();
+});
+
+test('paste commands use the trigger port before text fallback and reach the existing paste event handler', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	using closeWindow = toDisposable(() => dom.window.close());
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using registration = registerWindow(dom.window as unknown as Window);
+	using model = new TextModel('');
+	using services = new InstantiationService();
+	const requests: number[] = [];
+	class EventClipboard extends MemoryClipboardService {
+		override triggerPaste(windowId: number): Promise<void> {
+			requests.push(windowId);
+			const data = new Map([['text/plain', 'event text'], ['text/html', '<b>event text</b>']]);
+			const event = new dom.window.Event('paste', { bubbles: true, cancelable: true });
+			Object.defineProperty(event, 'clipboardData', {
+				value: {
+					types: [...data.keys()], files: [], items: [], getData: (type: string) => data.get(type) ?? '', setData: (type: string, text: string) => data.set(type, text),
+				}
+			});
+			editor.controller.editContext.domNode.domNode.dispatchEvent(event);
+			return Promise.resolve();
+		}
+		override async readText(): Promise<string> { throw new Error('Triggered paste must not read plain text'); }
+	}
+	using codeEditorService = new StandaloneCodeEditorService();
+	services.registerInstance(ICodeEditorService, codeEditorService);
+	services.registerInstance(ILogService, new NullLoggerService());
+	using contextKeys = new ContextKeyService();
+	services.registerInstance(IContextKeyService, contextKeys);
+	services.registerInstance(IClipboardService, new EventClipboard());
+	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, instantiationService: services });
+	editor.focus();
+	let html = '';
+	using paste = editor.onWillPaste(event => { html = event.clipboardData?.getData('text/html') ?? ''; });
+	await PasteAction.runCommand(services, undefined);
+	assert.deepEqual([requests, model.getText(), html], [[getWindowId(dom.window as unknown as Window)], 'event text', '<b>event text</b>']);
 });
 
 test('paste command drops a delayed clipboard read after focus, selection, or model changes', async () => {
@@ -288,6 +327,10 @@ test('clipboard actions contribute the standard editor and simple-editor menu co
 });
 
 class MemoryClipboardService implements IClipboardServiceContract {
+	triggerPaste(_targetWindowId: number): Promise<void> | undefined { return undefined; }
+	async read(): Promise<readonly { type: string; data: Uint8Array; }[]> { return [{ type: 'text/plain', data: new TextEncoder().encode(await this.readText()) }]; }
+	async readFindText(): Promise<string> { return ''; }
+	async writeFindText(): Promise<void> { }
 	async readImage(): Promise<Uint8Array> { return new Uint8Array(); }
 	text = '';
 	async readText(): Promise<string> { return this.text; }
@@ -299,6 +342,10 @@ class MemoryClipboardService implements IClipboardServiceContract {
 }
 
 class DeferredClipboardService implements IClipboardServiceContract {
+	triggerPaste(_targetWindowId: number): Promise<void> | undefined { return undefined; }
+	async read(): Promise<readonly { type: string; data: Uint8Array; }[]> { return [{ type: 'text/plain', data: new TextEncoder().encode(await this.readText()) }]; }
+	async readFindText(): Promise<string> { return ''; }
+	async writeFindText(): Promise<void> { }
 	async readImage(): Promise<Uint8Array> { return new Uint8Array(); }
 	async readResources(): Promise<{ resources: readonly never[]; operation: 'copy'; }> { return { resources: [], operation: 'copy' }; }
 	async writeResources(): Promise<void> { }

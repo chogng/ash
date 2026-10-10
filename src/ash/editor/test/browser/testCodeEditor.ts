@@ -1,3 +1,5 @@
+import { IClipboardService } from '../../../platform/clipboard/common/clipboardService.js';
+import { BrowserClipboardService } from '../../../platform/clipboard/browser/clipboardService.js';
 import { getSingletonServiceDescriptors } from '../../../platform/instantiation/common/extensions.js';
 import { ITextModelService } from '../../common/services/resolverService.js';
 import { InMemoryTextModelService } from '../../common/services/inMemoryTextModelService.js';
@@ -73,6 +75,9 @@ export function createCodeEditorServices(disposables: Pick<DisposableStore, 'add
 export function registerCodeEditorServices(services: InstantiationService): void {
 	if (!services.has(IAccessibilitySignalService)) {
 		services.registerInstance(IAccessibilitySignalService, { playSignal: async () => { }, playSignalLoop: () => Disposable.None });
+	}
+	if (!services.has(IClipboardService)) {
+		services.registerSingleton(IClipboardService, () => new BrowserClipboardService(undefined));
 	}
 	if (!services.has(IDataChannelService)) {
 		services.registerInstance(IDataChannelService, new NullDataChannelService());
