@@ -33,6 +33,8 @@ jobs:
         with:
           override: false
           rustflags: ""
+      - name: Diagnose fcntl probe
+        run: python3 -B scripts/cargo.py test -p ash-mxc-sandbox --lib --locked --target "${{ matrix.target }}" restricted_filesystems_deny_mutating_fcntls -- --test-threads=1 --nocapture
       - name: Test macOS sandbox and PTY boundaries
         run: python3 -B scripts/cargo.py test -p ash-mxc-sandbox --lib --test pty --locked --target "${{ matrix.target }}" -- --test-threads=1
 

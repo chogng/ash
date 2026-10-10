@@ -871,12 +871,46 @@ print('fcntl probes completed')
                         let dir = Dir::open_local(temp.path().join("work")).unwrap();
                         (SandboxScope::single(dir), arguments)
                     };
-                    let output = run(
-                        &scope,
-                        SandboxPolicy::new(access, NetworkAccess::Denied),
-                        "/usr/bin/python3",
-                        &arguments,
-                    );
+                    eprintln!("fcntl probe starting: {access:?}");
+                    let started = Instant::now();
+                    let output = std::thread::scope(|threads| {
+                        let (finished, waiting) = std::sync::mpsc::channel();
+                        threads.spawn(move || {
+                            if waiting.recv_timeout(Duration::from_secs(2)).is_err() {
+                                let listing = std::process::Command::new("/bin/ps")
+                                    .args(["-axo", "pid,ppid,state,etime,comm"])
+                                    .output()
+                                    .unwrap();
+                                let listing = String::from_utf8_lossy(&listing.stdout);
+                                eprintln!("slow fcntl probe ({access:?}):\n{listing}");
+                                for line in listing.lines() {
+                                    let fields: Vec<_> = line.split_whitespace().collect();
+                                    if fields.len() >= 5
+                                        && fields[1] == std::process::id().to_string()
+                                    {
+                                        let sample = std::process::Command::new("/usr/bin/sample")
+                                            .args([fields[0], "1"])
+                                            .output()
+                                            .unwrap();
+                                        eprintln!(
+                                            "sample: {}\n{}",
+                                            String::from_utf8_lossy(&sample.stdout),
+                                            String::from_utf8_lossy(&sample.stderr)
+                                        );
+                                    }
+                                }
+                            }
+                        });
+                        let output = run(
+                            &scope,
+                            SandboxPolicy::new(access, NetworkAccess::Denied),
+                            "/usr/bin/python3",
+                            &arguments,
+                        );
+                        let _ = finished.send(());
+                        output
+                    });
+                    eprintln!("fcntl probe completed: {access:?}, {:?}", started.elapsed());
                     (output.exit_code, output.stdout, output.stderr)
                 }
             };
