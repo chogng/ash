@@ -8,7 +8,8 @@ test('Content search Settings supports search, keyboard help and Chinese labels 
 	let page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = page.locator('.ash-settings-editor');
-	await workbench.settingsEditor.selectCategory('general');
+	await workbench.settingsEditor.selectGroup('features');
+	await workbench.settingsEditor.selectCategory('search');
 	await expect(settings.getByRole('heading', { name: 'Content search', exact: true })).toBeVisible();
 	await expect(settings.getByRole('combobox', { name: 'Search engine', exact: true })).toBeDisabled();
 	const row = settings.locator('[data-settings-item-id="grep.backend"]');
@@ -30,8 +31,11 @@ test('Content search Settings supports search, keyboard help and Chinese labels 
 	({ workbench } = await restartWorkbench());
 	page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
-	await workbench.settingsEditor.selectCategory('general');
+	await workbench.settingsEditor.selectGroup('features');
+	await workbench.settingsEditor.selectCategory('search');
 	const chineseSettings = page.getByRole('dialog', { name: 'Ash 设置' });
+	await expect(chineseSettings.locator('[data-settings-group-id="features"]')).toHaveText('功能');
+	await expect(chineseSettings.locator('[data-settings-category-id="search"]')).toHaveText('搜索');
 	await expect(chineseSettings.getByRole('heading', { name: '内容搜索', exact: true })).toBeVisible();
 	await expect(chineseSettings.getByRole('combobox', { name: '搜索引擎', exact: true })).toBeDisabled();
 	const chineseRefresh = chineseSettings.locator('[data-settings-item-id="grep.backend"]').getByRole('button', { name: '刷新', exact: true });
@@ -44,7 +48,8 @@ test('Content search Settings saves the backend engine and restores it after rel
 	test.skip(target.appServerMode !== 'required', 'Uses the real backend and isolated user configuration.');
 	const page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
-	await workbench.settingsEditor.selectCategory('general');
+	await workbench.settingsEditor.selectGroup('features');
+	await workbench.settingsEditor.selectCategory('search');
 	const settings = page.locator('.ash-settings-editor');
 	const row = settings.locator('[data-settings-item-id="grep.backend"]');
 	const engine = row.getByRole('combobox', { name: 'Search engine', exact: true });
@@ -65,7 +70,8 @@ test('Content search Settings saves the backend engine and restores it after rel
 	await page.reload();
 	await workbench.waitForReady();
 	await workbench.settingsEditor.openUserSettingsUI();
-	await workbench.settingsEditor.selectCategory('general');
+	await workbench.settingsEditor.selectGroup('features');
+	await workbench.settingsEditor.selectCategory('search');
 	await expect(engine).toHaveText('ripgrep');
 	await expect(engine).toBeEnabled();
 	await engine.click();

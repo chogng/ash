@@ -43,7 +43,7 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 
 /** Shared dictation content; each settings host owns navigation, search and setting widgets. */
 export class DictationSettingsContent extends Disposable implements SettingsContent {
-	public readonly categoryId = 'general';
+	public readonly categoryId = 'voice-input';
 	public readonly settingIds = [...Object.values(DictationConfiguration), AccessibilityVerbositySettingId.DictationModels];
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;

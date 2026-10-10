@@ -63,18 +63,6 @@ export const SettingsNavigation = [
 						settings: ['update.policy'],
 					},
 					{
-						id: 'source-control',
-						get label() { return localize('git.settings.group', 'Source Control'); },
-						get description() { return localize('git.settings.groupDescription', 'Configure Git fetching and Source Control diff decorations.'); },
-						settings: ['git.autofetch', 'git.autofetchPeriod', 'scm.diffDecorationsIgnoreTrimWhitespace'],
-					},
-					{
-						id: 'url-opening',
-						get label() { return localize('externalUriOpener.settings.group', 'Links'); },
-						get description() { return localize('externalUriOpener.settings.groupDescription', 'Choose where website links open.'); },
-						settings: ['workbench.externalUriOpeners'],
-					},
-					{
 						id: 'accessibility',
 						label: 'Accessibility',
 						description: 'Adjust screen-reader behavior, motion, transparency, and link visibility.',
@@ -85,12 +73,6 @@ export const SettingsNavigation = [
 						label: 'Interaction',
 						description: 'Tune hover feedback and resize handles.',
 						settings: ['workbench.hover.*', 'workbench.sash.*', 'onboarding.enabled', 'output.smartScroll.enabled'],
-					},
-					{
-						id: 'dictation',
-						get label() { return localize('settings.dictation.group', 'Voice input'); },
-						get description() { return localize('settings.dictation.groupDescription', 'Choose how voice input is transcribed.'); },
-						settings: ['dictation.*'],
 					},
 				],
 			},
@@ -261,7 +243,7 @@ export const SettingsNavigation = [
 			{
 				id: 'editor-search',
 				label: 'Search and replace',
-				description: 'Configure searches in the current file and across the workspace.',
+				description: 'Configure search and replace in the current file.',
 				presentation: 'editor',
 				groups: [
 					{
@@ -269,12 +251,6 @@ export const SettingsNavigation = [
 						get label() { return localize('settings.editor.find.label', 'Current file'); },
 						get description() { return localize('settings.editor.find.description', 'Set defaults for searches inside the active editor.'); },
 						settings: ['editor.find.*'],
-					},
-					{
-						id: 'content-search',
-						get label() { return localize('settings.editor.content-search.label', 'Workspace search'); },
-						get description() { return localize('settings.editor.content-search.description', 'Set defaults for searches across workspace files.'); },
-						settings: ['search.*'],
 					},
 				],
 			},
@@ -315,14 +291,92 @@ export const SettingsNavigation = [
 			{
 				id: 'editor-files',
 				label: 'Files and saving',
-				description: 'Configure file saving, encoding, and Explorer file nesting.',
+				description: 'Configure file saving, encoding, and local history.',
 				presentation: 'editor',
 				groups: [
 					{
 						id: 'files',
 						get label() { return localize('settings.editor.files.label', 'Files and saving'); },
 						get description() { return localize('settings.editor.files.description', 'Configure file editing and save behavior.'); },
-						settings: ['files.*', 'debug.saveBeforeStart', 'explorer.fileNesting.*', 'explorer.autoReveal', 'explorer.autoRevealExclude', 'workbench.localHistory.*'],
+						settings: ['files.*', 'workbench.localHistory.*'],
+					},
+				],
+			},
+		],
+	},
+	{
+		id: 'features',
+		label: 'Features',
+		description: 'Configure individual Workbench features.',
+		categories: [
+			{
+				id: 'explorer',
+				label: 'Explorer',
+				description: 'Configure file nesting and automatic file reveal.',
+				presentation: 'general',
+				groups: [
+					{
+						id: 'explorer',
+						get label() { return localize({ bundle: 'ash.settings', key: 'categories.explorer.label' }, 'Explorer'); },
+						get description() { return localize({ bundle: 'ash.settings', key: 'categories.explorer.description' }, 'Configure file nesting and automatic file reveal.'); },
+						settings: ['explorer.*'],
+					},
+				],
+			},
+			{
+				id: 'search',
+				label: 'Search',
+				description: 'Configure workspace searches and the content search engine.',
+				presentation: 'general',
+				groups: [
+					{
+						id: 'content-search',
+						get label() { return localize('settings.editor.content-search.label', 'Workspace search'); },
+						get description() { return localize('settings.editor.content-search.description', 'Set defaults for searches across workspace files.'); },
+						settings: ['search.*'],
+					},
+				],
+			},
+			{
+				id: 'source-control',
+				label: 'Source Control',
+				description: 'Configure Git fetching and Source Control diff decorations.',
+				presentation: 'general',
+				groups: [
+					{
+						id: 'source-control',
+						get label() { return localize('git.settings.group', 'Source Control'); },
+						get description() { return localize('git.settings.groupDescription', 'Configure Git fetching and Source Control diff decorations.'); },
+						settings: ['git.autofetch', 'git.autofetchPeriod', 'scm.diffDecorationsIgnoreTrimWhitespace'],
+					},
+				],
+			},
+			{
+				id: 'browser',
+				label: 'Browser',
+				description: 'Choose where website links open.',
+				presentation: 'general',
+				groups: [
+					{
+						id: 'url-opening',
+						get label() { return localize('externalUriOpener.settings.group', 'Links'); },
+						get description() { return localize('externalUriOpener.settings.groupDescription', 'Choose where website links open.'); },
+						settings: ['workbench.externalUriOpeners'],
+					},
+				],
+			},
+			{
+				id: 'voice-input',
+				label: 'Voice input',
+				description: 'Choose local or cloud transcription and manage dictation models.',
+				keywords: ['dictation', 'speech', 'transcription'],
+				presentation: 'general',
+				groups: [
+					{
+						id: 'dictation',
+						get label() { return localize('settings.dictation.group', 'Voice input'); },
+						get description() { return localize('settings.dictation.groupDescription', 'Choose how voice input is transcribed.'); },
+						settings: ['dictation.*'],
 					},
 				],
 			},

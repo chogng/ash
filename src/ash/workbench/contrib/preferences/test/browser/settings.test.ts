@@ -604,6 +604,11 @@ test('settingsLayout is the single projection from registered settings to catego
 		'editor-diff',
 		'editor-opening',
 		'editor-files',
+		'explorer',
+		'search',
+		'source-control',
+		'browser',
+		'voice-input',
 		'chat-input',
 		'chat-code-blocks',
 		'agents',
@@ -620,12 +625,12 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.deepEqual(model.settings.map(setting => setting.id), defaults.all.map(setting => setting.id));
 	assert.equal(findSettingCategory(layout, AccessibilityConfiguration.underlineLinks), 'general');
 	assert.equal(findSettingCategory(layout, LocalizationConfiguration.locale), 'general');
-	assert.equal(findSettingCategory(layout, 'workbench.externalUriOpeners'), 'general');
+	assert.equal(findSettingCategory(layout, 'workbench.externalUriOpeners'), 'browser');
 	assert.equal(defaults.get('workbench.externalUriOpeners').valueType, 'stringMap');
 	assert.equal(findSettingCategory(layout, HoverConfiguration.delay), 'general');
 	assert.equal(findSettingCategory(layout, SashConfiguration.size), 'general');
-	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'general');
-	assert.equal(findSettingCategory(layout, DictationConfiguration.localModel), 'general');
+	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'voice-input');
+	assert.equal(findSettingCategory(layout, DictationConfiguration.localModel), 'voice-input');
 	assert.equal(findSettingCategory(layout, 'chat.defaultModel'), 'models');
 	assert.equal(findSettingCategory(layout, 'chat.editing.autoAcceptDelay'), 'agent-defaults');
 	assert.equal(defaults.get('chat.editing.autoAcceptDelay').valueType, 'number');
@@ -662,11 +667,11 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, CodeEditorConfiguration.fontFamily), 'editor-fonts');
 	assert.equal(findSettingCategory(layout, CodeEditorConfiguration.renderWhitespace), 'editor-display');
 	assert.equal(findSettingCategory(layout, CodeEditorConfiguration.renderControlCharacters), 'editor-display');
-	assert.equal(findSettingCategory(layout, ContentSearchConfiguration.maxResults), 'editor-search');
-	assert.equal(findSettingCategory(layout, 'scm.diffDecorationsIgnoreTrimWhitespace'), 'general');
-	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'general');
-	assert.equal(findSettingCategory(layout, DictationConfiguration.cloudProvider), 'general');
-	assert.equal(findSettingCategory(layout, DictationConfiguration.localModel), 'general');
+	assert.equal(findSettingCategory(layout, ContentSearchConfiguration.maxResults), 'search');
+	assert.equal(findSettingCategory(layout, 'scm.diffDecorationsIgnoreTrimWhitespace'), 'source-control');
+	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'voice-input');
+	assert.equal(findSettingCategory(layout, DictationConfiguration.cloudProvider), 'voice-input');
+	assert.equal(findSettingCategory(layout, DictationConfiguration.localModel), 'voice-input');
 	assert.equal(defaults.all.some(setting => setting.id === GitConfiguration.autofetch), false);
 	assert.equal(configurationRegistry.getConfiguration(GitConfiguration.autofetch)?.defaultValue, false);
 	assert.equal(configurationRegistry.getConfiguration(GitConfiguration.autofetchPeriod)?.defaultValue, 180);
@@ -1283,6 +1288,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(agentsGroup.closest('.ash-tree-row')?.getAttribute('aria-expanded'), 'false');
 	assert.equal(root.querySelector('[data-settings-category-id="models"]'), null);
 	await nextTurn();
+	await preferences.openSettings({ section: 'search' });
 	const searchEngine = root.querySelector<HTMLElement>('[data-settings-item-id="grep.backend"] [role="combobox"]');
 	assert.equal(searchEngine?.textContent, 'tgrep (default)');
 	assert.throws(() => configuration.inspect('grep.backend'), /Unknown configuration key/);
@@ -1318,6 +1324,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	await nextTurn();
 	assert.equal(searchEngine.textContent, 'ripgrep');
 	assert.equal((searchEngine as HTMLButtonElement).disabled, false);
+	await preferences.openSettings({ section: 'general' });
 	assert.ok(root.querySelector(`[data-settings-item-id="${AccessibilityConfiguration.underlineLinks}"]`));
 	assert.ok(root.querySelector(`[data-settings-item-id="${HoverConfiguration.delay}"]`));
 	const languageControl = root.querySelector<HTMLElement>('[data-configuration-key="workbench.locale"] [role="combobox"]');
@@ -1345,6 +1352,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	hideMenu?.(false);
 	assert.equal(languageControl.textContent, 'English');
 	assert.equal(configuration.inspect(LocalizationConfiguration.locale).userValue, undefined);
+	await preferences.openSettings({ section: 'source-control' });
 	const autofetchControl = root.querySelector<HTMLElement>(`[data-configuration-key="${GitConfiguration.autofetch}"]`);
 	assert.ok(autofetchControl);
 	const autofetchButton = autofetchControl.querySelector<HTMLButtonElement>('[role="combobox"]');
@@ -1360,6 +1368,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	await nextTurn();
 	assert.equal(autoFetch, 'all');
 
+	await preferences.openSettings({ section: 'general' });
 	const underline = root.querySelector<HTMLInputElement>(`[data-configuration-key="${AccessibilityConfiguration.underlineLinks}"]`);
 	assert.ok(underline);
 	assert.equal(underline.getAttribute('role'), 'switch');
@@ -1546,8 +1555,8 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.match(prompts[0] ?? '', /\/profile\/config.toml.*namespace \(user\)/);
 	await preferences.openSettings();
 	await preferences.openSettings({ section: 'dictation' });
-	assert.equal(root.querySelector('[data-settings-container]')?.getAttribute('data-active-settings-category'), 'general');
-	assert.equal(root.querySelector('[data-tree-id="general"]')?.getAttribute('aria-selected'), 'true');
+	assert.equal(root.querySelector('[data-settings-container]')?.getAttribute('data-active-settings-category'), 'voice-input');
+	assert.equal(root.querySelector('[data-tree-id="voice-input"]')?.getAttribute('aria-selected'), 'true');
 	assert.equal(root.querySelector('[data-settings-category-id="dictation"]'), null);
 	assert.equal(root.querySelector('[data-settings-target-id]'), null);
 	assert.equal(root.querySelector('[data-settings-tree-group-id="dictation"] .ash-settings-tree-group-title')?.textContent, 'Voice input');
@@ -1557,7 +1566,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	dictationSearch.value = 'dictation';
 	dictationSearch.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
 	assert.ok(root.querySelector('[role="grid"][aria-label="Local dictation models"]'));
-	assert.ok(root.querySelector('[data-settings-category-id="general"]'));
+	assert.ok(root.querySelector('[data-settings-category-id="voice-input"]'));
 	dictationSearch.value = '';
 	dictationSearch.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
 	await configuration.updateValue(LocalizationConfiguration.locale, 'en');

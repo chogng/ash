@@ -37,7 +37,7 @@ type Status = 'loading' | 'ready' | 'saving' | 'saved' | 'readFailed' | 'saveFai
 
 /** The backend configuration revision is authoritative; this control never writes frontend settings.json. */
 export class SearchSettingsContent extends Disposable implements SettingsContent {
-	public readonly categoryId = 'general';
+	public readonly categoryId = 'search';
 	public readonly onDidChange = Event.None;
 	private readonly rowDomNode: HTMLElement;
 	private readonly titleDomNode: HTMLElement;

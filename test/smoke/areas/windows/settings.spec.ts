@@ -154,7 +154,7 @@ test('Color settings suggest registered keys and descriptions with keyboard and 
 	await expect(chineseSettings).toBeVisible();
 });
 
-test('Settings sidebar stays at two levels and searches voice input inside Application', async ({ workbench }) => {
+test('Settings sidebar stays at two levels and searches voice input inside Features', async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+,');
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
@@ -167,12 +167,32 @@ test('Settings sidebar stays at two levels and searches voice input inside Appli
 	}
 	await expect(settings.locator('[role="treeitem"][aria-level="3"]')).toHaveCount(0);
 	await expect(settings.locator('[data-settings-target-id]')).toHaveCount(0);
-	await expect(settings.getByRole('heading', { name: 'Voice input', exact: true })).toBeVisible();
+	await workbench.settingsEditor.selectGroup('features');
+	const features = settings.getByRole('treeitem').filter({ has: page.locator('[data-settings-group-id="features"]') });
+	await expect(features).toHaveAttribute('aria-level', '1');
+	await expect(features).toHaveAttribute('aria-expanded', 'true');
+	const navigation = settings.getByRole('tree', { name: 'Settings categories' });
+	await navigation.focus();
+	await navigation.press('ArrowDown');
+	await navigation.press('Enter');
+	await expect(settings.locator('[data-settings-container]')).toHaveAttribute('data-active-settings-category', 'explorer');
+	await expect(settings.locator('[data-configuration-key="explorer.autoReveal"]')).toBeVisible();
+	for (const [category, key] of [
+		['search', 'search.maxResults'],
+		['source-control', 'scm.diffDecorationsIgnoreTrimWhitespace'],
+		['browser', 'workbench.externalUriOpeners'],
+	]) {
+		await workbench.settingsEditor.selectCategory(category!);
+		await expect(settings.locator(`[data-configuration-key="${key}"]`)).toBeVisible();
+	}
+	await expect(settings.locator('[role="treeitem"][aria-level="3"]')).toHaveCount(0);
+	await workbench.settingsEditor.selectCategory('voice-input');
+	await expect(settings.getByRole('heading', { name: 'Voice input', exact: true, level: 3 })).toBeVisible();
 	const search = settings.getByRole('searchbox');
 	for (const query of ['dictation', 'speech', 'Voice input']) {
 		await search.fill(query);
 		await expect(settings.getByRole('grid', { name: 'Local dictation models' })).toBeVisible();
-		await expect(settings.locator('[data-settings-category-id="general"]')).toBeVisible();
+		await expect(settings.locator('[data-settings-category-id="voice-input"]')).toBeVisible();
 	}
 	await search.fill('');
 	await settings.locator('[data-settings-category-id="general"]').click();
@@ -181,15 +201,15 @@ test('Settings sidebar stays at two levels and searches voice input inside Appli
 	await expect(application).not.toHaveAttribute('aria-expanded');
 });
 
-test('Dictation settings entry reveals Voice input in Application', async ({ workbench }) => {
+test('Dictation settings entry reveals Voice input in Features', async ({ workbench }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.chat.open');
 	await workbench.quickaccess.runCommand('workbench.action.chat.dictation.showIntroduction');
 	await page.getByRole('button', { name: 'Model and API settings', exact: true }).click();
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
-	await expect(settings.locator('[data-settings-container]')).toHaveAttribute('data-active-settings-category', 'general');
-	await expect(settings.locator('[data-tree-id="general"]')).toHaveAttribute('aria-selected', 'true');
-	await expect(settings.getByRole('heading', { name: 'Voice input', exact: true })).toBeInViewport();
+	await expect(settings.locator('[data-settings-container]')).toHaveAttribute('data-active-settings-category', 'voice-input');
+	await expect(settings.locator('[data-tree-id="voice-input"]')).toHaveAttribute('aria-selected', 'true');
+	await expect(settings.getByRole('heading', { name: 'Voice input', exact: true, level: 3 })).toBeInViewport();
 	await expect(settings.locator('[data-settings-category-id="dictation"]')).toHaveCount(0);
 });
 
@@ -197,10 +217,11 @@ test('Dictation settings separate local models and cloud API connections with ke
 	const page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
-	await settings.locator('[data-settings-category-id="general"]').click();
+	await workbench.settingsEditor.selectGroup('features');
+	await workbench.settingsEditor.selectCategory('voice-input');
 	const grid = settings.getByRole('grid', { name: 'Local dictation models' });
 	await expect(grid).toBeVisible();
-	await expect(grid).toHaveAttribute('aria-description', 'Press Alt+F1 for accessibility help.');
+	await expect(grid).toHaveAttribute('aria-description', /Press (?:Alt\+|⌥)F1 for accessibility help\./u);
 	const verbosity = settings.getByRole('switch', { name: 'Dictation model accessibility help' });
 	await verbosity.focus();
 	await page.keyboard.press('Space');
@@ -233,7 +254,8 @@ test('Local model management reports backend import errors and unavailable captu
 	const page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
-	await settings.locator('[data-settings-category-id="general"]').click();
+	await workbench.settingsEditor.selectGroup('features');
+	await workbench.settingsEditor.selectCategory('voice-input');
 	const controls = settings.locator('.ash-local-transcription-model-controls');
 	await expect(controls).toBeVisible();
 	const prepare = controls.getByRole('button', { name: 'Install', exact: true });
@@ -272,7 +294,8 @@ test('Desktop Voice imports after Settings closes and shares model deletion with
 	const page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
-	await settings.locator('[data-settings-category-id="general"]').click();
+	await workbench.settingsEditor.selectGroup('features');
+	await workbench.settingsEditor.selectCategory('voice-input');
 	const controls = settings.locator('.ash-local-transcription-model-controls');
 	await controls.locator('summary').click();
 	await controls.getByRole('textbox', { name: 'Prepared Paraformer model directory' }).fill(source);
@@ -294,7 +317,8 @@ test('Desktop Voice imports after Settings closes and shares model deletion with
 	await expect(installed).toContainText('Not installed');
 	await expect(sessionsSettings.locator('.ash-local-transcription-model-status')).toContainText('Model package not installed:');
 	await workbench.settingsEditor.openUserSettingsUI();
-	await settings.locator('[data-settings-category-id="general"]').click();
+	await workbench.settingsEditor.selectGroup('features');
+	await workbench.settingsEditor.selectCategory('voice-input');
 	await expect(controls.getByRole('row').filter({ hasText: 'paraformer-large-online-ec6a3c64' })).toContainText('Not installed');
 	await expect(controls.getByRole('button', { name: 'Install', exact: true })).toBeEnabled();
 });
@@ -462,7 +486,7 @@ test('Editor settings have separate pages with keyboard navigation and global se
 	const navigation = settings.getByRole('tree', { name: 'Settings categories' });
 	await navigation.focus();
 	await navigation.press('Home');
-	for (let index = 0; index < 4; index++) await navigation.press('ArrowDown');
+	for (let index = 0; index < 5; index++) await navigation.press('ArrowDown');
 	await expect(navigation).toHaveAttribute('aria-activedescendant', (await editorGroup.getAttribute('id'))!);
 	await navigation.press('ArrowRight');
 	await expect(editorGroup).toHaveAttribute('aria-expanded', 'true');
@@ -480,7 +504,7 @@ test('Editor settings have separate pages with keyboard navigation and global se
 		['editor-editing', 'editor.tabSize'],
 		['editor-suggestions', 'editor.codeLens'],
 		['editor-language', 'language-servers.configuration'],
-		['editor-search', 'search.maxResults'],
+		['editor-search', 'editor.find.loop'],
 		['editor-diff', 'diffEditor.renderSideBySide'],
 		['editor-opening', 'workbench.editor.showTabs'],
 		['editor-files', 'files.autoSave'],
@@ -541,7 +565,9 @@ test('Settings opens with editor display controls', async ({ target, workbench }
 		await expect(rootTitle).toHaveCount(0);
 		await expect(rootDescription).toHaveCount(0);
 		await expect(page.locator('.ash-settings-page h3')).toHaveText('Application');
-		await expect(page.getByRole('heading', { name: 'Voice input', exact: true })).toBeVisible();
+		await workbench.settingsEditor.selectGroup('features');
+		await workbench.settingsEditor.selectCategory('voice-input');
+		await expect(page.getByRole('heading', { name: 'Voice input', exact: true, level: 3 })).toBeVisible();
 		await expect(page.locator('.ash-settings-content-tree > .is-settings-root > .ash-settings-tree-group-title')).toHaveCount(0);
 		await expect(page.locator('.ash-settings-content-tree > .is-settings-root > .ash-settings-tree-group-description')).toHaveCount(0);
 		const voiceInput = page.locator('.ash-settings-page');
@@ -816,6 +842,8 @@ test.describe('Manage menu', () => {
 		} else {
 			await expect(page.locator('[data-configuration-key="update.policy"]')).toHaveCount(0);
 		}
+		await workbench.settingsEditor.selectGroup('features');
+		await workbench.settingsEditor.selectCategory('source-control');
 		const quickDiffWhitespace = page.locator('[data-configuration-key="scm.diffDecorationsIgnoreTrimWhitespace"]').getByRole('combobox');
 		await expect(quickDiffWhitespace).toHaveCSS('height', '24px');
 		const autoFetchPeriod = page.locator('[data-configuration-key="git.autofetchPeriod"]');
