@@ -156,7 +156,7 @@ pub(super) fn start(
     {
         Ok(writer) => writer,
         Err(error) => {
-            let _ = process.kill();
+            // The failed spawn drops its closure, including stdin, before we reap.
             let _ = process.wait();
             return Err(ClientError::Transport(error.to_string()));
         }
@@ -179,47 +179,19 @@ pub(super) fn start(
         Ok(reader) => reader,
         Err(error) => {
             let _ = commands.send(DriverCommand::Shutdown);
-            let _ = process.kill();
-            let _ = process.wait();
             let _ = writer.join();
+            let _ = process.wait();
             return Err(ClientError::Transport(error.to_string()));
         }
     };
 
-    let mut client = super::AppServerClient::new(SessionTransport {
+    let client = super::AppServerClient::new(SessionTransport {
         in_process: false,
         commands: commands.clone(),
     });
-    let initialized = client.initialize(InitializeParams {
-        client_info,
-        capabilities,
-    });
-    match initialized {
-        Ok(initialized) => {
-            if let Err(compatibility_error) =
-                ensure_protocol_compatible(&initialized, REQUIRED_SESSION_CAPABILITIES)
-            {
-                closing.store(true, Ordering::Release);
-                let _ = commands.send(DriverCommand::Shutdown);
-                let _ = process.kill();
-                let _ = process.wait();
-                let _ = writer.join();
-                let _ = event_pump.join();
-                return Err(ClientError::Protocol(compatibility_error.to_string()));
-            }
-        }
-        Err(error) => {
-            closing.store(true, Ordering::Release);
-            let _ = commands.send(DriverCommand::Shutdown);
-            let _ = process.kill();
-            let _ = process.wait();
-            let _ = writer.join();
-            let _ = event_pump.join();
-            return Err(error);
-        }
-    }
-
-    Ok(AppServerSession {
+    // Register process and driver ownership before initialization so every rejection
+    // follows the same EOF, process wait, and thread join path as a ready session.
+    let mut session = AppServerSession {
         client,
         events: Some(AppServerEvents {
             receiver: event_receiver,
@@ -231,7 +203,22 @@ pub(super) fn start(
         driver: Some(writer),
         event_pump: Some(event_pump),
         process: Some(process),
-    })
+    };
+    let initialized = session.client.initialize(InitializeParams {
+        client_info,
+        capabilities,
+    });
+    let initialization = initialized.and_then(|initialized| {
+        ensure_protocol_compatible(&initialized, REQUIRED_SESSION_CAPABILITIES)
+            .map_err(|error| ClientError::Protocol(error.to_string()))
+    });
+    if let Err(error) = initialization {
+        session
+            .close_and_join()
+            .map_err(|cleanup| ClientError::Transport(format!("{error}; {cleanup}")))?;
+        return Err(error);
+    }
+    Ok(session)
 }
 
 fn write_requests(stdin: ChildStdin, requests: Receiver<DriverCommand>, pending: PendingRequests) {

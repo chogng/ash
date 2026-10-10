@@ -139,6 +139,8 @@ fn initialized(supports_filters: bool) -> Value {
             operating_system: None,
             user_home: None,
             version: "1".into(),
+            operating_system: None,
+            user_home: None,
         },
         protocol_version: ProtocolVersion::current(),
         schema_hash: ash_app_server_protocol::protocol::common::SchemaHash(

@@ -113,7 +113,8 @@ impl AppServerSession {
     ///
     /// The caller chooses the child command. This client owns the child lifetime, validates the
     /// normal initialize/schema handshake, and delivers notifications through the same event API
-    /// as an embedded session.
+    /// as an embedded session. The command must exit on stdin EOF; an intermediary must wait for
+    /// the server it forwards to so that process exit also marks resource cleanup completion.
     pub fn start_stdio(
         command: StdioAppServerCommand,
         client_info: ClientInfo,
@@ -140,6 +141,8 @@ impl AppServerSession {
     }
 
     /// Closes the connection, rejects future requests, and joins both background drivers.
+    ///
+    /// For stdio, closes stdin and waits for the command's EOF cleanup and process exit.
     pub fn shutdown(mut self) -> Result<(), ShutdownError> {
         self.close_and_join()
     }
@@ -251,24 +254,27 @@ impl AppServerSession {
         if let Some(notifications) = &self.notifications {
             notifications.close();
         }
-        if let Some(mut process) = self.process.take() {
-            let _ = process.kill();
-            let _ = process.wait();
-        }
-
+        // The writer owns stdin. EOF lets the server release its resources before the
+        // forwarding command exits; killing that command only reaps the intermediary.
         let driver_panicked = self
             .driver
             .take()
             .map(JoinHandle::join)
             .transpose()
             .is_err();
+        let process_error = self
+            .process
+            .take()
+            .and_then(|mut process| process.wait().err());
         let event_pump_panicked = self
             .event_pump
             .take()
             .map(JoinHandle::join)
             .transpose()
             .is_err();
-        if driver_panicked {
+        if let Some(error) = process_error {
+            Err(ShutdownError::ProcessWait(error.to_string()))
+        } else if driver_panicked {
             Err(ShutdownError::TaskPanicked("connection driver"))
         } else if event_pump_panicked {
             Err(ShutdownError::TaskPanicked("event pump"))
@@ -280,14 +286,17 @@ impl AppServerSession {
 
 impl Drop for AppServerSession {
     fn drop(&mut self) {
+        if self.process.is_some() {
+            // Dropping a stdio session has the same EOF/reaping obligation as shutdown,
+            // including when initialization failed or a reader already stopped.
+            let _ = self.close_and_join();
+            return;
+        }
         if !self.closing.swap(true, Ordering::AcqRel) {
             let _ = self.commands.try_send(DriverCommand::Shutdown);
             #[cfg(any(test, feature = "in-process"))]
             if let Some(notifications) = &self.notifications {
                 notifications.close();
-            }
-            if let Some(process) = self.process.as_mut() {
-                let _ = process.kill();
             }
         }
     }
@@ -436,12 +445,16 @@ impl std::error::Error for TakeEventsError {}
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ShutdownError {
     TaskPanicked(&'static str),
+    ProcessWait(String),
 }
 
 impl fmt::Display for ShutdownError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::TaskPanicked(task) => write!(formatter, "App Server {task} panicked"),
+            Self::ProcessWait(message) => {
+                write!(formatter, "App Server process wait failed: {message}")
+            }
         }
     }
 }

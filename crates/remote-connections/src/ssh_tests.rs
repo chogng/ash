@@ -200,12 +200,21 @@ fn compatibility_probe_requires_matching_protocol_and_generated_schema() {
         .probe_compatibility(client_info(), ClientCapabilities::default())
         .unwrap();
     assert_eq!(initialization.schema_hash.0, schema_hash);
+    assert_initialize_server_closed(&compatible);
 
-    let incompatible = directory.path().join("incompatible-ssh");
-    for (major, hash) in [
-        (APP_SERVER_PROTOCOL_MAJOR + 1, schema_hash.as_str()),
-        (APP_SERVER_PROTOCOL_MAJOR, "different-schema"),
+    for (name, major, hash) in [
+        (
+            "wrong-major",
+            APP_SERVER_PROTOCOL_MAJOR + 1,
+            schema_hash.as_str(),
+        ),
+        (
+            "wrong-schema",
+            APP_SERVER_PROTOCOL_MAJOR,
+            "different-schema",
+        ),
     ] {
+        let incompatible = directory.path().join(name);
         write_initialize_server(&incompatible, major, hash);
         let error = SshAppServerConnectionOptions::new(profile())
             .with_ssh_executable(&incompatible)
@@ -215,6 +224,7 @@ fn compatibility_probe_requires_matching_protocol_and_generated_schema() {
             error.kind(),
             RemoteConnectionFailureKind::ProtocolIncompatible
         );
+        assert_initialize_server_closed(&incompatible);
     }
 }
 
@@ -251,10 +261,40 @@ fn write_initialize_server(path: &Path, protocol_major: u32, server_schema_hash:
     .to_string();
     fs::write(
         path,
-        format!("#!/bin/sh\nIFS= read -r request || exit 65\nprintf '%s\\n' '{response}'\n"),
+        format!(
+            "#!/bin/sh\nexec 9>\"$0.held\"\nprintf '%s' \"$$\" > \"$0.pid\"\nIFS= read -r request || exit 65\nprintf '%s\\n' '{response}'\nwhile IFS= read -r request; do :; done\nexec 9>&-\nprintf closed > \"$0.eof\"\n"
+        ),
     )
     .unwrap();
     let mut permissions = fs::metadata(path).unwrap().permissions();
     permissions.set_mode(0o755);
     fs::set_permissions(path, permissions).unwrap();
+}
+
+#[cfg(unix)]
+fn assert_initialize_server_closed(path: &Path) {
+    use std::process::Command;
+    let filename = path.to_str().unwrap();
+    assert_eq!(
+        fs::read_to_string(format!("{filename}.eof")).unwrap(),
+        "closed"
+    );
+    let pid = fs::read_to_string(format!("{filename}.pid")).unwrap();
+    let process = Command::new("/bin/kill")
+        .args(["-0", &pid])
+        .output()
+        .unwrap();
+    assert!(
+        !process.status.success(),
+        "SSH compatibility process {pid} survived: {process:?}"
+    );
+    let handles = Command::new("lsof")
+        .args(["-t", "--", &format!("{filename}.held")])
+        .output()
+        .unwrap();
+    assert_eq!(handles.status.code(), Some(1), "{handles:?}");
+    assert!(
+        handles.stdout.is_empty() && handles.stderr.is_empty(),
+        "{handles:?}"
+    );
 }

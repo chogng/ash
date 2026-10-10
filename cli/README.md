@@ -178,13 +178,13 @@ just test ash-utils-cli
 just test ash-utils-cargo-bin
 just test ash-cli --lib
 python3 -B scripts/cargo.py build -p ash-cli --bin ash -p ash-app-server --bin ash-app-server
-just test ash-cli --test commands --test stdio
+just test-processes ash-cli --test commands --test stdio
 just rust-warnings ash-cli
 just dependencies
 ```
 
 - `src/cli_tests.rs` 和 `src/exec_tests.rs` 验证命令图、帮助、透传与参数到实际执行模式的转换。
 - `login_tests.rs` 验证精确登录身份、失败与断线处理。
-- `tests/commands.rs` 使用独立的临时 `ASH_HOME`、`CODEX_HOME` 和真实 CLI；夹具启动并回收 daemon，验证跨进程配置、插件权限、会话生命周期、诊断和退出码。
-- `tests/stdio.rs` 保留 App Server stdio 握手与隔离检查；完整 TUI 行为使用产品已有 PTY 场景。
+- `tests/commands.rs` 使用独立的临时 `ASH_HOME`、`CODEX_HOME`、`ZCODE_DATA_BASE_DIR` 和真实 CLI；夹具启动并回收 daemon，验证跨进程配置、插件权限、会话生命周期、诊断和退出码。使用 `test-processes` 在 Cargo 的 Windows Job 外运行，以验证版本切换时 daemon 的独立生命周期；普通 `test` 的 Job 禁止该进程脱离，导致创建失败。
+- `tests/stdio.rs` 验证 App Server stdio 握手、目录隔离，以及显式 shutdown 和 Drop 后立即删除 profile。客户端先关闭 stdin，再等待转发的服务进程退出，确保 Windows SQLite 句柄已释放。Unix 用例另检查 CLI、真实服务端和 SSH 传输的 PID 已退出，并用 `lsof` 检查目录内没有打开的文件；删除成功不能替代句柄检查。真实 OpenSSH 回环用例使用临时密钥和严格 host-key 校验，覆盖 shutdown 与 Drop；独立后台应跨连接保留，随后由正式 stop 命令关闭并回收。夹具所需 `lsof`、`ssh-keygen`、`/usr/bin/ssh` 和 `/usr/sbin/sshd` 缺失时测试失败。运行前同一 profile 构建 CLI、App Server、Remote Server 和 JS Extension Host，并按 Ash 的 runtime lock 准备 ripgrep，通过 `ASH_RG_PATH` 提供给宿主；Linux/macOS 由 `rust-warnings.yml` 的 `stdio-lifecycle` 作业运行完整目标。完整 TUI 行为使用产品已有 PTY 场景。
 - `tests/commands.rs` 中的 `app_` 用例无需 App Server，验证真实 CLI 启动、路径透传、错误和中文帮助。设置 `ASH_CLI_EXECUTABLE` 为编译出的 `ash` 的绝对路径后，执行 `pnpm run test:smoke:ui:no-compile test/smoke/areas/windows/launch.spec.ts --grep 'ash app hands'`，通过真实 Electron 窗口验证交接；Unix 覆盖可执行文件，macOS 另覆盖 `.app` 与 LaunchServices。

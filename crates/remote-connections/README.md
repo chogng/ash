@@ -213,6 +213,8 @@ just test ash-remote-connections
 不得在产品 adapter 中复制一套较弱的下载后校验。`src/tunnel_tests.rs` 使用真实 loopback listener
 覆盖 pending、稳定 ready 和 OpenSSH 提前退出。
 
+Unix 的 SSH 兼容性探测用例在成功、协议版本错误和 schema 错误后检查 EOF 完成标记、子进程退出与文件句柄释放。CLI 的 `tests/stdio.rs` 另使用真实 OpenSSH 回环连接覆盖 shutdown、Drop 及远端后台的正式 stop；Linux/macOS 的完整目标由 `rust-warnings.yml` 的 `stdio-lifecycle` 作业运行，不以删除目录成功代替 PID 和 `lsof` 检查。
+
 ## 本机管理入口
 
 - 本 crate 提供 `ash-remote`，供 Desktop 与脚本调用。
