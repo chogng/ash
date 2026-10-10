@@ -76,6 +76,11 @@ pub enum ToolExecutionAuthority {
     rename_all_fields = "camelCase"
 )]
 pub enum ThreadEvent {
+    /// Hook observations are separate from model-visible conversation items.
+    HookRunUpdated {
+        thread_id: ThreadId,
+        run: crate::HookRunRecord,
+    },
     ThreadCreated {
         /// Absent only in history written before schema version 16.
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -395,6 +400,7 @@ fn legacy_turn_action_policy_revision() -> String {
 impl ThreadEvent {
     pub fn kind(&self) -> &'static str {
         match self {
+            Self::HookRunUpdated { .. } => "hook.run_updated",
             Self::ThreadCreated { .. } => "thread.created",
             Self::AdvisorConfigured { .. } => "advisor.configured",
             Self::ModelProvidersMigrated { .. } => "model.providers_migrated",
@@ -450,6 +456,7 @@ impl ThreadEvent {
 
     pub fn thread_id(&self) -> &ThreadId {
         match self {
+            Self::HookRunUpdated { thread_id, .. } => thread_id,
             Self::ThreadCreated { thread_id, .. }
             | Self::ModelProvidersMigrated { thread_id, .. }
             | Self::AdvisorConfigured { thread_id, .. }

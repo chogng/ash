@@ -110,3 +110,27 @@ test('replacement retains an open dirty model on save failure and undo saves its
 	if (applied.isApplied) { await applied.undo(); }
 	assert.deepEqual({ model: reference.model.getText(), disk: fixture.store.text(resource), dirty: reference.isDirty }, { model: 'needle', disk: 'needle', dirty: false });
 });
+
+test('untitled replacement and undo keep the draft dirty without saving or requesting Save As', async () => {
+	const draft = URI.parse('untitled:/Untitled-1');
+	using fixture = new BulkEditTestServices([]);
+	using reference = await fixture.models.acquire({ resource: draft, initialText: 'needle' }, options.signal);
+	using registration = fixture.workingCopies.register({
+		resource: draft, backupKind: 'text',
+		dispose() { }, [Symbol.dispose]() { },
+		get isDirty() { return reference.isDirty; },
+		get hasExternalChange() { return reference.hasExternalChange; },
+		onDidChangeDirty: reference.onDidChangeDirty, onDidChangeExternalChange: reference.onDidChangeExternalChange,
+		onDidChangeContent: Event.None,
+		backup: () => reference.model.getText(), restoreBackup: text => reference.model.setValue(text),
+		save: async () => { assert.fail('search cannot choose a draft destination'); },
+		revert: signal => reference.revert(signal), saveAs: async () => { assert.fail('search cannot request Save As'); },
+	});
+	const result = new SearchResultImpl([]);
+	const range = { startLineNumber: 0, startColumn: 0, endLineNumber: 0, endColumn: 6 };
+	result.addFileMatch({ resource: draft, results: [{ previewText: 'needle', rangeLocations: [{ source: range, preview: range }] }] });
+	const applied = await new ReplaceService(fixture.models, fixture.service, fixture.workingCopies).replace(result.files[0]!.matches, query, 'value', options);
+	assert.deepEqual({ applied: applied.isApplied, text: reference.model.getText(), dirty: reference.isDirty, saved: fixture.store.saved, errors: applied.saveErrors }, { applied: true, text: 'value', dirty: true, saved: [], errors: [] });
+	if (applied.isApplied) { await applied.undo(); }
+	assert.deepEqual({ text: reference.model.getText(), dirty: reference.isDirty, saved: fixture.store.saved }, { text: 'needle', dirty: true, saved: [] });
+});

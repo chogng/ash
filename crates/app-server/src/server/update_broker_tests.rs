@@ -458,6 +458,7 @@ fn transcript_snapshot_includes_output_assembled_before_a_consumer_subscribes() 
         reference_cost: ash_protocol::ModelReferenceCostSummary::default(),
         goal: None,
         turns: Vec::new(),
+        hook_runs: Vec::new(),
     };
     let snapshot = broker.thread_transcript_snapshot(&thread, true);
 

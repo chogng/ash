@@ -37,7 +37,8 @@ Hook 声明保留各自领域 owner，不为复用界面而伪造配置键或改
 准备、导入、取消及凭据保存仍由所属服务负责，Preferences 只呈现数据和操作。
 
 当前 SettingsEditor 使用 SettingsTree 的条目元数据过滤内容，TOC 从同一棵树读取搜索词。
-GitHub 已使用数据模型与共享 SettingsSectionRenderer；Models、Hooks、Dictation 等仍由
+GitHub 已使用数据模型与共享 SettingsSectionRenderer；Hooks 使用同一 renderer 呈现管理入口，
+事件与声明的 DOM、搜索和样式归 Chat 的 Agent Customizations 编辑器。Models、Dictation 等仍由
 功能模块创建旧 SettingsContent 控件，CSS 跟随这些控件。Sessions 复用部分 renderer 与
 widget，但仍拥有独立布局和部分手工设置模型。这些是当前迁移债务，不能作为新功能
 传入 DOM、widget 或渲染回调的依据。

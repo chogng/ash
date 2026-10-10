@@ -1,5 +1,28 @@
 import { expect, test } from '@playwright/test';
 
+test('Search uses current model occurrences and suppresses stale disk hits without saving', async ({ page }) => {
+	await page.goto('/search.html');
+	await page.evaluate(() => window.ashSearchIntegration.setFileText('中文😀 needle needle'));
+	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
+	await query.fill('needle');
+	await query.press('Enter');
+	await expect(page.getByRole('status')).toHaveText('2 results');
+	const snapshot = await page.evaluate(() => window.ashSearchIntegration.snapshot());
+	expect(snapshot?.content).toContain('1:6-1:12:');
+	expect(snapshot?.content).toContain('1:13-1:19:');
+	expect(await page.evaluate(() => window.ashSearchIntegration.diskText())).toBe('const needle = true;');
+	await page.evaluate(() => window.ashSearchIntegration.setFileText('edited without a match'));
+	await query.press('Enter');
+	await expect(page.getByRole('status')).toHaveText('No results found.');
+	await expect(page.locator('.ash-search-match')).toHaveCount(0);
+	expect(await page.evaluate(() => window.ashSearchIntegration.diskText())).toBe('const needle = true;');
+});
+
+test('Search explains unsaved model search in Chinese accessibility help', async ({ page }) => {
+	await page.goto('/search.html?locale=zh-CN');
+	expect(await page.evaluate(() => window.ashSearchIntegration.help())).toContain('搜索会使用已打开文件和无标题文档的当前编辑器文本，包括工作区外的资源。搜索不会保存文件。替换无标题文档的结果后，草稿仍保持未保存状态。');
+});
+
 test('Search line numbers default off and change live without altering matches or submitting another query', async ({ page }) => {
 	await page.goto('/search.html');
 	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
@@ -562,7 +585,7 @@ test('registered Search keeps query controls and labeled filters usable at the m
 	await expect(page.getByRole('status')).toHaveText('1 results');
 	expect(await page.evaluate(() => window.ashSearchIntegration.queries)).toEqual([{
 		text: 'needle', wholeWord: false, patternKind: 'regex', caseSensitivity: 'sensitive',
-		includePatterns: ['src/**', 'docs/**'], excludePatterns: ['**/*.test.ts'], maxResults: 2000,
+		includePatterns: ['src/**', 'docs/**'], excludePatterns: ['**/*.test.ts'], maxResults: 2000, freshness: 'current',
 	}]);
 	await expect(page.locator('.ash-search-preview mark')).toHaveText('needle');
 	await details.click();
@@ -1017,4 +1040,27 @@ test.describe('Windows search clipboard formatting', () => {
 		await page.evaluate(() => window.ashSearchIntegration.copyAll());
 		expect(await page.evaluate(() => window.ashSearchIntegration.clipboardWrites())).toEqual(['C:\\workspace\\src\\main.ts\r\n  9,1: needle\n  10:  next\r\n\r\nC:\\workspace\\root.ts\r\n  2,1: needle']);
 	});
+});
+
+test('Search opens and dismisses an untitled result without workspace roots in tree and list views', async ({ page }) => {
+	await page.goto('/search.html');
+	await page.evaluate(async () => { window.ashSearchIntegration.closeWorkspace(); await window.ashSearchIntegration.setDraftText('# Search: draft_token', 'untitled:/Search-results.code-search'); await window.ashSearchIntegration.setDraftText('中文😀 draft_token draft_token'); });
+	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
+	await query.fill('draft_token');
+	await query.press('Enter');
+	await expect(page.getByRole('status')).toHaveText('2 results');
+	await expect(page.locator('.ash-search-file-path')).toHaveText('Untitled-1');
+	await page.getByRole('toolbar', { name: 'Search result actions', exact: true }).getByRole('button', { name: 'More Actions', exact: true }).click();
+	await page.evaluate(() => window.ashSearchIntegration.selectTreeView());
+	const tree = page.getByRole('tree', { name: 'Search results', exact: true });
+	await tree.getByRole('treeitem').first().click();
+	await tree.press('ArrowRight');
+	await tree.press('ArrowDown');
+	await tree.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.opened.at(-1)?.resource)).toBe('untitled:/Untitled-1');
+	expect((await page.evaluate(() => window.ashSearchIntegration.snapshot()))?.content).toContain('# File: untitled:/Untitled-1');
+	await page.evaluate(() => window.ashSearchIntegration.dismiss());
+	await expect(page.getByRole('status')).toHaveText('1 results');
+	await query.press('Enter');
+	await expect(page.getByRole('status')).toHaveText('2 results');
 });

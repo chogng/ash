@@ -1,5 +1,7 @@
 # Ash TypeScript extension SDK
 
+This README describes the TypeScript author SDK under root `sdk/typescript`, alongside the Rust SDK in `sdk/rust`. Ash supports both TS/JS and independent Rust extensions: Desktop targets Electron reuse, and the backend targets Rust/V8 without a standalone Node dependency. This move preserves the existing SDK API and runtime behavior; compatibility migration remains separate work. VS Code/Node compatibility and engine execution belong to the product runtime, not the author SDK, and existing VS Code extensions do not have to adopt this SDK. The agreed boundaries are maintained in [the extension architecture](../../docs/editor-extensions.md#共享接入与语言适配的-crate-边界).
+
 Authors import `@ash/extension`, export `activate`, and compile their entry to an ES module.
 A Rust V8 host executes the JavaScript without Node. Editor operations use the initiating
 client; `readTextFile` uses the Rust filesystem service and its current directory grant.

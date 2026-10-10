@@ -71,12 +71,20 @@ def create_package_sources(root: Path) -> Path:
     return root
 
 
-def create_runtime_package(root: Path, target: str) -> Path:
+def create_runtime_package(
+    root: Path,
+    target: str,
+    *,
+    first_party_binary: Path | None = None,
+    symbols_dir: Path | None = None,
+) -> Path:
     spec = target_spec(target)
     inputs = root / "runtime-inputs"
     inputs.mkdir()
 
     def executable(name: str) -> Path:
+        if first_party_binary is not None and name.startswith("ash-"):
+            return first_party_binary
         path = inputs / name
         path.write_bytes(name.encode())
         path.chmod(0o755)
@@ -137,6 +145,7 @@ def create_runtime_package(root: Path, target: str) -> Path:
         voice_host_binary=executable("ash-voice-host"),
         collaboration_server_binary=executable("ash-collaboration-server"),
         livekit={"executable": str(executable("livekit-server"))},
+        symbols_dir=symbols_dir,
     )
     return runtime
 

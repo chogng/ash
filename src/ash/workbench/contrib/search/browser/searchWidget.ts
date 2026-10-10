@@ -58,7 +58,7 @@ export class SearchWidget extends Disposable {
 			icon: Lxicon.chevronRight,
 			iconOnly: true,
 			size: 'small',
-			onClick: () => this.setReplaceExpanded(this.replaceRow.hidden),
+			onClick: () => this.setReplaceExpanded(!!this.replaceRow.hidden),
 		}));
 		queryRow.append(queryField);
 		// History scopes capture their DOM parent at construction, before later focus events.

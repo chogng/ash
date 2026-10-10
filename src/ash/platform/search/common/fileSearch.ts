@@ -12,14 +12,21 @@ export interface FileSearchQuery {
 	readonly maxResults: number;
 }
 
+export interface FileFuzzyQuery {
+	readonly query: string;
+	readonly maxResults: number;
+}
+
 export interface FileSearchResult {
-	readonly matches: readonly { readonly path: string; readonly resource: URI; }[];
+	readonly matches: readonly { readonly path: string; readonly resource: URI; readonly score?: number; }[];
 	readonly totalMatches: number;
 }
 
 /** Cancellable path discovery within one workspace folder, independent of transport DTOs. */
 export interface IFileSearchService {
 	glob(directory: FileSearchDirectory, query: FileSearchQuery, signal?: AbortSignal): Promise<FileSearchResult>;
+	/** Returns the best matching paths first, reusing the configured backend's directory view. */
+	fuzzy(directory: FileSearchDirectory, query: FileFuzzyQuery, signal?: AbortSignal): Promise<FileSearchResult>;
 }
 
 export const IFileSearchService = createServiceIdentifier<IFileSearchService>('fileSearchService');

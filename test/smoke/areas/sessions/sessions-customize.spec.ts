@@ -144,8 +144,8 @@ test('Settings place Advisor in Agents and retain Customize controls across tabs
 	await expect(plugins).toHaveCount(0);
 	const skillList = await skills.getByLabel('Skills', { exact: true }).elementHandle();
 	await tabs.getByRole('tab', { name: 'Hooks', exact: true }).click();
-	await expect(settings.locator('.ash-hooks-event')).not.toHaveCount(0);
-	await expect(settings.getByRole('combobox', { name: 'Configuration scope' })).toBeVisible();
+	await expect(settings.getByRole('button', { name: 'Manage Hooks', exact: true })).toBeVisible();
+	await expect(settings.locator('[data-hook-event]')).toHaveCount(0);
 	await pluginsTab.click();
 	await expect(pluginQuery).toHaveValue('retained query');
 	expect(await pluginQuery.evaluate((element, original) => element === original, queryElement)).toBe(true);
@@ -154,36 +154,38 @@ test('Settings place Advisor in Agents and retain Customize controls across tabs
 	await queryElement?.dispose();
 	await skillList?.dispose();
 	await tabs.getByRole('tab', { name: 'Hooks', exact: true }).click();
+	await settings.getByRole('button', { name: 'Manage Hooks', exact: true }).click();
+	await expect(settings).toHaveCount(0);
+	const hooks = page.locator('.ash-ai-customization-management');
+	await expect(hooks).toBeVisible();
+	await expect(hooks.getByRole('searchbox')).toBeFocused();
+	await expect(hooks.locator('.ash-hooks-event')).toHaveCount(33);
 	if (target.kind === 'electron' || target.appServerMode === 'required') {
-		const scope = settings.getByRole('combobox', { name: 'Configuration scope' });
+		const scope = hooks.getByRole('combobox', { name: 'Configuration scope' });
 		await scope.click();
 		await page.keyboard.press('End');
 		await page.keyboard.press('Enter');
 		if (target.appServerMode === 'required') {
-			const edit = settings.locator('[data-hook-action="edit-scope"]');
+			const edit = hooks.locator('[data-hook-action="edit-scope"]');
 			await expect(edit).toBeEnabled();
 			await edit.click();
-			await expect(settings).toHaveCount(0);
 			await expect(page.getByRole('tab', { name: 'config.toml', exact: true })).toBeVisible();
-			await expect(page.locator('[data-part="editor"] .stanza-editor-input')).toBeFocused();
+			await expect(page.getByRole('textbox', { name: 'config.toml', exact: true })).toBeFocused();
 			await openSettings(page);
 			await settings.getByRole('button', { name: 'Customize', exact: true }).click();
 			await tabs.getByRole('tab', { name: 'Hooks', exact: true }).click();
+			await settings.getByRole('button', { name: 'Manage Hooks', exact: true }).click();
 			await scope.click();
 			await page.keyboard.press('End');
 			await page.keyboard.press('Enter');
 		}
-		const ask = settings.locator('[data-hook-action="ask-scope"]');
+		const ask = hooks.locator('[data-hook-action="ask-scope"]');
 		await expect(ask).toBeEnabled();
 		await ask.click();
-		await expect(settings).toHaveCount(0);
 		const draft = new Editor(page.locator('.ash-sessions-chat-slot :is(.ash-chat,.ash-cowork):visible').first());
 		await expect(draft.input).toBeFocused();
 		await draft.waitForEditorContents(text => text.includes('Help me configure'));
 		await expect(page.locator(':is(.ash-chat-item-userMessage,.ash-cowork-item-userMessage)')).toHaveCount(0);
-	} else {
-		await expect(settings.locator('[data-hook-action="ask-scope"]')).toBeDisabled();
-		await page.keyboard.press('Escape');
 	}
 	await new QuickAccess(page).runCommand('workbench.action.chat.configure.skills');
 	await new QuickAccess(page).select('Manage skill enablement…');
@@ -243,4 +245,11 @@ test('Sessions Customize uses Chinese labels and localized Skills controls', asy
 	await expect(settings.locator('.ash-skills').getByLabel('技能', { exact: true })).toBeVisible();
 	await expect(settings.getByRole('button', { name: '从市场获取技能', exact: true })).toBeVisible();
 	await expect(settings.getByRole('button', { name: '刷新', exact: true })).toBeVisible();
+	await tabs.getByRole('tab', { name: 'Hooks', exact: true }).click();
+	await settings.getByRole('button', { name: '管理 Hooks', exact: true }).click();
+	const hooks = page.locator('.ash-ai-customization-management');
+	await expect(hooks.getByRole('heading', { name: 'Agent 自定义：Hooks' })).toBeVisible();
+	await expect(hooks.getByRole('searchbox', { name: '搜索事件、Hook、命令或路径' })).toBeFocused();
+	await hooks.getByRole('searchbox').press('Alt+F1');
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/配置 Hooks[\s\S]*不会发送/u);
 });

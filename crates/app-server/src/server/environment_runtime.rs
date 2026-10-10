@@ -1245,6 +1245,11 @@ impl AppServer {
             hook_config,
             tools.reloadable.policy(),
         ));
+        hooks.set_run_observer(Arc::new(super::hook_events::HookRunUpdates {
+            threads: Arc::downgrade(&self.threads),
+            updates: Arc::downgrade(&self.updates),
+            published: std::sync::Mutex::new(BTreeMap::new()),
+        }));
         self.multi_agent
             .install_hooks(hooks.clone())
             .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;

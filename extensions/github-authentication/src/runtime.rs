@@ -7,9 +7,9 @@ use ash_login::LoginId;
 use ash_login::extension::AuthenticationEvents;
 use ash_login::extension::AuthenticationRequest;
 use ash_login::extension::AuthenticationResponse;
-use extensions::Extension;
-use extensions::ExtensionContext;
-use extensions::ExtensionError;
+use external_ext_sdk::Extension;
+use external_ext_sdk::ExtensionContext;
+use external_ext_sdk::ExtensionError;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -61,20 +61,20 @@ impl Extension for GitHubAuthenticationExtension {
             .and_then(Option::as_ref)
             .ok_or_else(|| {
                 ExtensionError::new(
-                    extensions::HostErrorCode::ActivationFailed,
+                    external_ext_sdk::HostErrorCode::ActivationFailed,
                     "provider configuration missing",
                 )
             })?;
         let configuration = serde_json::from_str(configuration).map_err(|_| {
             ExtensionError::new(
-                extensions::HostErrorCode::ActivationFailed,
+                external_ext_sdk::HostErrorCode::ActivationFailed,
                 "provider configuration invalid",
             )
         })?;
         let oauth = GitHubOAuth::configured(configuration, services.clone(), services.clone())
             .map_err(|_| {
                 ExtensionError::new(
-                    extensions::HostErrorCode::ActivationFailed,
+                    external_ext_sdk::HostErrorCode::ActivationFailed,
                     "provider configuration invalid",
                 )
             })?;

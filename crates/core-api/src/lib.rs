@@ -59,6 +59,7 @@ pub use hooks::HookEventScope;
 pub use hooks::HookExecutionEvent;
 pub use hooks::HookExecutionObserver;
 pub use hooks::HookRunEvidence;
+pub use hooks::HookRunObserver;
 pub use hooks::HookService;
 pub use hooks::NoHookExecutionObserver;
 pub use hooks::ToolExecutionOutcome;

@@ -112,9 +112,20 @@ async function assembleBundle(stage: string, bundlePath: string, options: Map<st
 		if (entry === '.lease') continue;
 		await cp(join(backend, entry), join(resources, entry), { recursive: true, errorOnExist: true, force: false });
 	}
-	await run('cargo', ['build', '--release', '--target', 'x86_64-pc-windows-msvc', '-p', 'ash-product-update', '--bin', 'ash-update-host'], repositoryRoot);
-	const cargoTarget = resolve(repositoryRoot, process.env.CARGO_TARGET_DIR ?? '.build/cargo');
-	await cp(join(cargoTarget, 'x86_64-pc-windows-msvc', 'release', 'ash-update-host.exe'), join(resources, 'bin', 'ash-update-host.exe'), { errorOnExist: true, force: false });
+	const updateArtifact = join(stage, 'update-host.json');
+	await run(python, [
+		'-B', join(repositoryRoot, 'build', 'release', 'symbols.py'), 'build-update-host',
+		'--target', 'x86_64-pc-windows-msvc', '--artifact-file', updateArtifact,
+	], repositoryRoot);
+	const updateHost: string = JSON.parse(await readFile(updateArtifact, 'utf8')).binary;
+	await cp(updateHost, join(resources, 'bin', 'ash-update-host.exe'), { errorOnExist: true, force: false });
+	if (process.env.ASH_SYMBOLS_DIR) {
+		await run(python, [
+			'-B', join(repositoryRoot, 'build', 'release', 'symbols.py'), 'collect',
+			'--binary', updateHost,
+			'--staged', join(resources, 'bin', 'ash-update-host.exe'), '--target', 'x86_64-pc-windows-msvc',
+		], repositoryRoot);
+	}
 	await writeFile(join(resources, 'update-public-key'), `${updatePublicKey}\n`, { flag: 'wx' });
 	await validateBundle(bundlePath);
 	console.log(`Packaged Windows application: ${bundlePath}`);

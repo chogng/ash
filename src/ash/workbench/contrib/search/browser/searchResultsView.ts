@@ -64,7 +64,7 @@ export class SearchResultsRenderer extends Disposable {
 			labelContainer.className = element.kind === 'file' ? 'ash-search-file-path' : 'ash-search-folder-path';
 			content.append(labelContainer);
 			const parent = element.kind === 'file' ? element.path.slice(0, Math.max(0, element.path.lastIndexOf('/'))) : '';
-			const description = element.kind === 'file' && !options.treeView ? [options.showWorkspace ? element.folder.name : '', parent].filter(Boolean).join(' • ') : undefined;
+			const description = element.kind === 'file' && !options.treeView ? [options.showWorkspace ? element.folder?.name : '', parent].filter(Boolean).join(' • ') : undefined;
 			const label = options.folderNames?.join('/') ?? element.name;
 			resources.add(new IconLabel(labelContainer, {
 				label,

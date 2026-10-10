@@ -122,10 +122,17 @@ export class ChatService extends Disposable implements IChatService {
 	private async releaseThreadSubscription(key: string, subscription: SharedThreadSubscription): Promise<void> {
 		// A pane may close while subscribe is in flight. Release only after that request, and only if no other pane acquired it.
 		await Promise.allSettled(subscription.pending);
+		const state = await this.appServerApi.getConnectionState();
 		if (subscription.owners.size > 0 || this.threadSubscriptions.get(key) !== subscription) return;
 		this.threadSubscriptions.delete(key);
-		if (subscription.generation !== this.appServerApi.connectionGeneration) return;
-		await this.threadApi.unsubscribe({ sessionId: subscription.sessionId, threadId: subscription.threadId });
+		if (state !== 'ready' || subscription.generation !== this.appServerApi.connectionGeneration) return;
+		try {
+			await this.threadApi.unsubscribe({ sessionId: subscription.sessionId, threadId: subscription.threadId });
+		} catch (error) {
+			// Window teardown can close the owning connection after the readiness check.
+			// Disconnection already releases its subscriptions; active-connection failures still surface.
+			if (subscription.generation === this.appServerApi.connectionGeneration && await this.appServerApi.getConnectionState() === 'ready') throw error;
+		}
 	}
 
 	async startTurn(options: StartTurnOptions): Promise<void> {
@@ -360,6 +367,7 @@ function toThreadTranscriptUpdate(update: ThreadTranscriptUpdateEnvelopeDto): Th
 
 function toThreadTranscriptEntry(entry: ThreadTranscriptEntryDto): ThreadTranscriptEntry {
 	switch (entry.type) {
+		case 'hookRun': return { type: 'hookRun', entryId: entry.entryId, turnId: entry.turnId, run: { ...entry.run, status: { ...entry.run.status } } };
 		case "item": return { type: "item", entryId: entry.entryId, turnId: entry.turnId, item: toThreadItem(entry.item), transient: entry.transient };
 		case "turnPlan": return { type: "turnPlan", entryId: entry.entryId, turnId: entry.turnId, plan: { explanation: entry.plan.explanation, steps: entry.plan.steps.map((step) => ({ ...step })) } };
 		case "turnError": return { type: "turnError", entryId: entry.entryId, turnId: entry.turnId, error: { ...entry.error } };

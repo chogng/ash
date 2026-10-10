@@ -5,25 +5,14 @@ import { BrowserContentSearchService, FileContentSearchService } from '../../bro
 import { FileKind } from '../../../files/common/files.js';
 import { URI } from '../../../../base/common/uri.js';
 import type { ContentSearchMatch } from '../../common/search.js';
-import { resetNlsResolver, setNlsMessages } from '../../../../nls.js';
-import translatedWorkbench from '../../../../../../localization/zh-CN/workbench.json' with { type: 'json' };
 import type { IContentSearchApi } from '../../common/searchApi.js';
 import type { ContentSearchFreshness, IContentSearchQuery } from '../../common/search.js';
+
+const folder = { id: 'granted', uri: URI.file('/@browser/granted'), name: 'granted', index: 0 };
 
 const query: IContentSearchQuery = {
 	text: 'needle', patternKind: 'literal', caseSensitivity: 'sensitive', includePatterns: [], excludePatterns: [],
 };
-
-test('browser search explains its empty workspace in the selected display language', async () => {
-	setNlsMessages('zh-CN', translatedWorkbench);
-	try {
-		const service = new FileContentSearchService({
-			async readDirectory() { assert.fail('an empty workspace has no directory to read'); },
-			async readFileBytes() { assert.fail('an empty workspace has no file to read'); },
-		}, { getWorkspace: () => ({ id: 'empty', folders: [] }) });
-		assert.deepEqual(await service.search(query), { resultCount: 0, limitHit: false, error: '请打开文件夹以搜索文件。' });
-	} finally { resetNlsResolver(); }
-});
 
 test('browser file search applies root and nested globs, case, regex, binary exclusion and limits', async () => {
 	const root = URI.file('/@browser/granted');
@@ -38,14 +27,14 @@ test('browser file search applies root and nested globs, case, regex, binary exc
 			return names.map(name => ({ resource: URI.joinPath(directory, name), name, kind: name === 'src' ? FileKind.Directory : FileKind.File }));
 		},
 		async readFileBytes(resource) { return { resource, revision: '1', bytes: bytes.get(resource.path.slice(root.path.length))! }; },
-	}, { getWorkspace: () => ({ id: 'granted', folders: [{ id: 'granted', uri: root, name: 'granted', index: 0 }] }) });
+	});
 	const progress: ContentSearchMatch[] = [];
-	const complete = await service.search({ ...query, text: 'n.eedle|needle', patternKind: 'regex', includePatterns: ['**/*.txt'], excludePatterns: ['src/**'], maxResults: 1 }, { onProgress: matches => progress.push(...matches) });
+	const complete = await service.search(folder, { ...query, text: 'n.eedle|needle', patternKind: 'regex', includePatterns: ['**/*.txt'], excludePatterns: ['src/**'], maxResults: 1 }, { onProgress: matches => progress.push(...matches) });
 	assert.deepEqual({ complete, progress }, {
 		complete: { resultCount: 1, limitHit: true, error: undefined },
 		progress: [{ dirId: 'granted', dirName: 'granted', path: 'main.txt', lineNumber: 1, preview: 'Needle needle', ranges: [{ start: 7, end: 13 }] }],
 	});
-	const binary = await service.search({ ...query, text: 'NEEDLE', caseSensitivity: 'insensitive', includePatterns: ['src/**'] });
+	const binary = await service.search(folder, { ...query, text: 'NEEDLE', caseSensitivity: 'insensitive', includePatterns: ['src/**'] });
 	assert.deepEqual(binary, { resultCount: 1, limitHit: false, error: undefined });
 });
 
@@ -56,8 +45,8 @@ test('browser file search stops delivering lines as soon as its caller cancels',
 	const service = new FileContentSearchService({
 		async readDirectory() { return [{ resource: URI.joinPath(root, 'main.txt'), name: 'main.txt', kind: FileKind.File }]; },
 		async readFileBytes(resource) { return { resource, revision: '1', bytes: new TextEncoder().encode('needle\nneedle') }; },
-	}, { getWorkspace: () => ({ id: 'granted', folders: [{ id: 'granted', uri: root, name: 'granted', index: 0 }] }) });
-	await assert.rejects(service.search(query, { signal: controller.signal, onProgress: () => { delivered++; controller.abort(); } }), { name: 'AbortError' });
+	});
+	await assert.rejects(service.search(folder, query, { signal: controller.signal, onProgress: () => { delivered++; controller.abort(); } }), { name: 'AbortError' });
 	assert.equal(delivered, 1);
 });
 
@@ -70,9 +59,9 @@ test('browser file search returns complete multiline blocks and respects Unicode
 	const service = new FileContentSearchService({
 		async readDirectory() { return [{ resource: URI.joinPath(root, 'main.txt'), name: 'main.txt', kind: FileKind.File }]; },
 		async readFileBytes(resource) { return { resource, revision: '1', bytes: new TextEncoder().encode('中文😀 first\r\nsecond end\r\nfirst\nsecond\nneedles needle 中文needle') }; },
-	}, { getWorkspace: () => ({ id: 'granted', folders: [{ id: 'granted', uri: root, name: 'granted', index: 0 }] }) });
+	});
 	const progress: ContentSearchMatch[] = [];
-	const complete = await service.search({ ...query, text: 'first\nsecond' }, { onProgress: matches => progress.push(...matches) });
+	const complete = await service.search(folder, { ...query, text: 'first\nsecond' }, { onProgress: matches => progress.push(...matches) });
 	assert.deepEqual({ complete, progress }, {
 		complete: { resultCount: 2, limitHit: false, error: undefined },
 		progress: [
@@ -81,10 +70,10 @@ test('browser file search returns complete multiline blocks and respects Unicode
 		],
 	});
 	const regexMatches: ContentSearchMatch[] = [];
-	await service.search({ ...query, text: '(first)\r\n(second)', patternKind: 'regex' }, { onProgress: matches => regexMatches.push(...matches) });
+	await service.search(folder, { ...query, text: '(first)\r\n(second)', patternKind: 'regex' }, { onProgress: matches => regexMatches.push(...matches) });
 	assert.deepEqual(regexMatches, progress);
 	const words: ContentSearchMatch[] = [];
-	await service.search({ ...query, wholeWord: true }, { onProgress: matches => words.push(...matches) });
+	await service.search(folder, { ...query, wholeWord: true }, { onProgress: matches => words.push(...matches) });
 	assert.deepEqual(words[0]!.ranges, [{ start: 8, end: 14 }]);
 });
 
@@ -122,7 +111,7 @@ test('content search forwards freshness and reads all result pages before releas
 		};
 		const service = new BrowserContentSearchService(api);
 		const lines: number[] = [];
-		const result = await service.search({
+		const result = await service.search(folder, {
 			text: 'needle', patternKind: 'literal', caseSensitivity: 'sensitive',
 			includePatterns: [], excludePatterns: [], freshness,
 		}, { onProgress: matches => lines.push(...matches.map(match => match.lineNumber)) });
@@ -141,7 +130,7 @@ test('an already cancelled search creates no backend job', async () => {
 		async read() { assert.fail('cancelled search must not read'); },
 		async cancel() { assert.fail('there is no job to release'); },
 	};
-	await assert.rejects(new BrowserContentSearchService(api).search(query, { signal: controller.signal }), { name: 'AbortError' });
+	await assert.rejects(new BrowserContentSearchService(api).search(folder, query, { signal: controller.signal }), { name: 'AbortError' });
 });
 
 test('cancelling during job creation releases the returned job without reading it', async () => {
@@ -153,7 +142,7 @@ test('cancelling during job creation releases the returned job without reading i
 		async read() { assert.fail('a cancelled job must not be read'); },
 		async cancel(params) { released.push(params.searchId); },
 	};
-	const pending = new BrowserContentSearchService(api).search(query, { signal: controller.signal });
+	const pending = new BrowserContentSearchService(api).search(folder, query, { signal: controller.signal });
 	const rejected = assert.rejects(pending, { name: 'AbortError' });
 	controller.abort();
 	await started.complete({ searchId: 'late-job' });
@@ -171,7 +160,7 @@ test('cancelling a pending start settles promptly and releases its late handle e
 		async read() { assert.fail('late cancelled handles must not be read'); },
 		async cancel(params) { released.push(params.searchId); throw new Error('connection closed during late cleanup'); },
 	};
-	const pending = new BrowserContentSearchService(api).search(query, { signal: controller.signal });
+	const pending = new BrowserContentSearchService(api).search(folder, query, { signal: controller.signal });
 	const settled = pending.catch(error => { failure = error; });
 	try {
 		controller.abort();
@@ -194,7 +183,7 @@ test('a rejected late start keeps the cancellation outcome without releasing an 
 		async read() { assert.fail('cancelled search must not read'); },
 		async cancel() { assert.fail('failed start created no handle'); },
 	};
-	const pending = new BrowserContentSearchService(api).search(query, { signal: controller.signal });
+	const pending = new BrowserContentSearchService(api).search(folder, query, { signal: controller.signal });
 	const rejected = assert.rejects(pending, { name: 'AbortError' });
 	controller.abort();
 	await started.error(new Error('late start failure'));
@@ -212,7 +201,7 @@ test('cancelling an in-flight read suppresses its late results and releases the 
 		read() { void reading.complete(); return response.p; },
 		async cancel(params) { released.push(params.searchId); },
 	};
-	const pending = new BrowserContentSearchService(api).search(query, {
+	const pending = new BrowserContentSearchService(api).search(folder, query, {
 		signal: controller.signal,
 		onProgress: matches => progress.push(...matches.map(match => match.preview)),
 	});
@@ -236,7 +225,7 @@ test('a failed read releases its job and retains the original error if cleanup a
 		async read() { throw failure; },
 		async cancel(params) { released.push(params.searchId); throw new Error('cleanup failed'); },
 	};
-	await assert.rejects(new BrowserContentSearchService(api).search(query), error => error === failure);
+	await assert.rejects(new BrowserContentSearchService(api).search(folder, query), error => error === failure);
 	assert.deepEqual(released, ['failed-job']);
 });
 
@@ -247,7 +236,7 @@ test('a failed start preserves its error without cancelling an unknown job', asy
 		async read() { assert.fail('start failed'); },
 		async cancel() { assert.fail('no job was created'); },
 	};
-	await assert.rejects(new BrowserContentSearchService(api).search(query), error => error === failure);
+	await assert.rejects(new BrowserContentSearchService(api).search(folder, query), error => error === failure);
 });
 
 test('a backend search error is returned and its job is released', async () => {
@@ -257,7 +246,7 @@ test('a backend search error is returned and its job is released', async () => {
 		async read() { return { ...page('backend-error'), error: 'invalid regular expression' }; },
 		async cancel(params) { released.push(params.searchId); },
 	};
-	const result = await new BrowserContentSearchService(api).search(query);
+	const result = await new BrowserContentSearchService(api).search(folder, query);
 	assert.deepEqual({ result, released }, {
 		result: { resultCount: 0, limitHit: false, error: 'invalid regular expression' }, released: ['backend-error'],
 	});
@@ -285,10 +274,10 @@ test('cancelling one concurrent search leaves the other search and its results i
 		async cancel(params) { released.push(params.searchId); },
 	};
 	const service = new BrowserContentSearchService(api);
-	const first = service.search({ ...query, text: 'first' }, { signal: controller.signal });
+	const first = service.search(folder, { ...query, text: 'first' }, { signal: controller.signal });
 	const rejected = assert.rejects(first, { name: 'AbortError' });
 	await firstRead.p;
-	const secondPending = service.search({ ...query, text: 'second' }, {
+	const secondPending = service.search(folder, { ...query, text: 'second' }, {
 		onProgress: matches => progress.push(...matches.map(match => match.preview)),
 	});
 	controller.abort();

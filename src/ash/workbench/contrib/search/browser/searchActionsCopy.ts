@@ -98,7 +98,8 @@ function formatFiles(files: readonly SearchFileMatch[], labels: ILabelService): 
 
 function compareResultFiles(a: SearchFileMatch, b: SearchFileMatch): number {
 	// Copy All keeps the default hierarchy even when the view is flat or sorted by match count.
-	if (a.folder.index !== b.folder.index) { return a.folder.index - b.folder.index; }
+	const rootOrder = (a.folder?.index ?? Number.MAX_SAFE_INTEGER) - (b.folder?.index ?? Number.MAX_SAFE_INTEGER);
+	if (rootOrder) { return rootOrder; }
 	const left = a.path.split('/');
 	const right = b.path.split('/');
 	for (let index = 0; index < Math.min(left.length, right.length); index++) {

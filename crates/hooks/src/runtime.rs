@@ -54,6 +54,7 @@ pub struct DeclarativeHookRuntime {
     thread_dir_bindings: RwLock<BTreeMap<ThreadId, ThreadDirHookBinding>>,
     session_bindings: RwLock<BTreeMap<SessionId, Vec<SessionHookBinding>>>,
     execution_observer: RwLock<Arc<dyn HookExecutionObserver>>,
+    run_observer: RwLock<Option<Arc<dyn core_api::HookRunObserver>>>,
     runs: HookRunLog,
 }
 
@@ -85,6 +86,7 @@ impl DeclarativeHookRuntime {
             thread_dir_bindings: RwLock::new(BTreeMap::new()),
             session_bindings: RwLock::new(BTreeMap::new()),
             execution_observer: RwLock::new(Arc::new(NoHookExecutionObserver)),
+            run_observer: RwLock::new(None),
             runs: HookRunLog::new(),
         }
     }
@@ -164,6 +166,14 @@ impl DeclarativeHookRuntime {
             .unwrap_or_else(std::sync::PoisonError::into_inner) = observer;
     }
 
+    /// Installs the host's history sink independently of the process-write observer.
+    pub fn set_run_observer(&self, observer: Arc<dyn core_api::HookRunObserver>) {
+        *self
+            .run_observer
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(observer);
+    }
+
     /// Replaces session-dir Hook bindings for one Session.
     pub fn replace_session_dirs(
         &self,
@@ -227,6 +237,7 @@ impl DeclarativeHookRuntime {
             thread_dir_bindings: RwLock::new(BTreeMap::new()),
             session_bindings: RwLock::new(BTreeMap::new()),
             execution_observer: RwLock::new(Arc::new(NoHookExecutionObserver)),
+            run_observer: RwLock::new(None),
             runs: HookRunLog::new(),
         }
     }
@@ -318,11 +329,33 @@ impl DeclarativeHookRuntime {
             if hook.enablement != HookEnablement::Enabled || !matches_event(hook, invocation) {
                 continue;
             }
-            let started = self.runs.start(hook);
+            let started = self.runs.start(hook, invocation);
+            let scope = invocation.scope();
+            let run_observer = self
+                .run_observer
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone();
+            let ash_config::HookAction::Process { program, args } = &hook.action;
+            let mut evidence = core_api::HookRunEvidence {
+                program: program.clone(),
+                arguments: args.clone(),
+                directory: process.dir().canonical_path().to_path_buf(),
+                input: String::new(),
+                stdout: String::new(),
+                stderr: String::new(),
+                exit_code: None,
+                stdout_truncated: false,
+                stderr_truncated: false,
+            };
             let result = (|| {
+                if let Some(observer) = &run_observer {
+                    observer.updated(&scope, &started.record, None)?;
+                }
                 let authority =
                     execution_authority(hook, process.dir(), self.policy.as_ref(), cancellation)?;
                 let input = encode_input(hook, invocation, process.dir().canonical_path())?;
+                evidence.input = String::from_utf8_lossy(&input).into_owned();
                 let observer = self
                     .execution_observer
                     .read()
@@ -347,13 +380,23 @@ impl DeclarativeHookRuntime {
                 if let Some(event) = &event {
                     observer.will_execute(event)?;
                 }
-                let result = process.execute(hook, input, authority, cancellation);
+                let result = process.execute(hook, input, authority, cancellation, &mut evidence);
                 if let Some(event) = &event {
                     observer.did_finish(event);
                 }
-                result
+                let decision = result?;
+                if matches!(
+                    invocation,
+                    HookInvocation::AfterTool(_) | HookInvocation::TurnCompleted(_)
+                ) {
+                    require_observational_result(decision.clone(), "observational")?;
+                }
+                Ok(decision)
             })();
-            self.runs.finish(started, &result);
+            let completed = self.runs.finish(started, &result);
+            if let Some(observer) = &run_observer {
+                observer.updated(&scope, &completed, Some(&evidence))?;
+            }
             let decision = result?;
             if matches!(decision, HookDecision::Deny { .. }) {
                 return Ok(decision);

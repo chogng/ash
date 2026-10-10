@@ -1,3 +1,5 @@
+import { EditorPanes } from "../../editor.js";
+import { binaryDiffEditorDescriptor } from "./binaryDiffEditor.js";
 import { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
 import { QuickAccessRegistry } from "../../../../platform/quickinput/common/quickAccess.js";
@@ -21,6 +23,8 @@ import { IEditorPart } from "./editorPart.js";
 import { AllEditorsByMostRecentlyUsedQuickAccess } from "./editorQuickAccess.js";
 import { EditorStatusContribution } from "./editorStatus.js";
 import { DynamicEditorConfigurations } from "./editorConfiguration.js";
+
+EditorPanes.registerEditorPane(binaryDiffEditorDescriptor());
 
 registerDiffEditorCommands();
 

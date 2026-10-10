@@ -12,10 +12,7 @@
 
 ## 快速理解
 
-Editor Extension 的目标为 TS/JS 扩展、TS SDK 和受限 Rust 业务接口。PluginsManager 继续拥有包安装、
-完整性和授权记录；扩展入口由 JS 运行环境执行。现有 executable sidecar + Host 仍在源码中，
-不再作为目标产品扩展入口。新 JS 运行方式、逐扩展授权与源码退场尚未完成，见
-[`编辑器扩展系统`](../../docs/editor-extensions.md#0-确定的产品方向)。
+目标扩展包括 Node 中的 Open VSX / VS Code 兼容 TS/JS 包与独立 Rust 程序中的能力包。PluginsManager 继续统一拥有包安装、完整性、来源授权与租约，能力 runtime 按有效授权注册 Provider，App/TUI 按需消费。Rust 包经 Ash 来源 adapter 接入，不要求 Open VSX 承载 Rust 或建立第二套包生命周期。现有 executable sidecar、Host RPC 和 SDK V8 可作为迁移基础；新的 Rust Provider SDK、生产 launcher 与具体业务拆分尚未完成，见 [扩展架构与编辑器接入](../../docs/editor-extensions.md#0-确定的产品方向)。
 
 Marketplace 是 Plugin 来源，不是产品主领域。`ash-core-plugins` 聚合内置、远端和本地来源，
 远端签名 registry 只是其中一个 adapter；它们不是 client/server 进程对，也不通过 JSONL 相连。

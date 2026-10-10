@@ -121,8 +121,10 @@ export function workspaceRelativePath(root: URI, resource: URI): string {
 	) {
 		throw new Error('Resource must belong to the current workspace filesystem');
 	}
-	const rootPath = (root.scheme === 'file' ? root.path.replaceAll('\\', '/') : root.path).replace(/\/+$/, '');
-	const resourcePath = (resource.scheme === 'file' ? resource.path.replaceAll('\\', '/') : resource.path).replace(/\/+$/, '');
+	// POSIX URI roots retain decoded backslashes; explicit drive and UNC roots retain Windows compatibility.
+	const windowsPath = usesWindowsPathSeparators(root);
+	const rootPath = (windowsPath ? root.path.replaceAll('\\', '/') : root.path).replace(/\/+$/, '');
+	const resourcePath = (windowsPath ? resource.path.replaceAll('\\', '/') : resource.path).replace(/\/+$/, '');
 	const ignoreCase = root.scheme === 'file' && (/^\/[A-Za-z]:\//.test(`${rootPath}/`) || isMacintosh);
 	const comparedRoot = ignoreCase ? rootPath.toLowerCase() : rootPath;
 	const comparedResource = ignoreCase ? resourcePath.toLowerCase() : resourcePath;
@@ -396,8 +398,12 @@ function parseRemoteAuthority(value: unknown): string {
 /** Resolves one slash-separated protocol path beneath a workspace root. */
 export function workspaceResourceFromPath(root: URI, path: string): URI | undefined {
 	if (root.scheme !== "file" && !isRemoteResource(root)) return undefined;
-	const normalizedPath = root.scheme === "file" ? path.replaceAll("\\", "/") : path;
+	const normalizedPath = usesWindowsPathSeparators(root) ? path.replaceAll("\\", "/") : path;
 	const segments = normalizedPath.split("/");
 	if (segments.length === 0 || segments.some(segment => segment.length === 0 || segment === "." || segment === "..")) return undefined;
-	return URI.joinPath(root, ...segments);
+	return segments.reduce((resource, segment) => resource.joinPathSegment(segment), root);
+}
+
+function usesWindowsPathSeparators(resource: URI): boolean {
+	return resource.scheme === 'file' && (resource.authority.length > 0 || /^\/[A-Za-z]:[\/\\]/.test(resource.path));
 }

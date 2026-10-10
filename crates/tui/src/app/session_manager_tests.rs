@@ -760,6 +760,7 @@ fn preview_result(
         usage: Default::default(),
         reference_cost: Default::default(),
         goal: None,
+        hook_runs: Vec::new(),
         turns: vec![],
     };
     let boundary = ThreadHistoryBoundary {

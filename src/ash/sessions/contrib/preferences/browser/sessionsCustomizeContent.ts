@@ -1,11 +1,14 @@
 import { h } from '../../../../base/browser/dom.js';
 import { TabList, type TabListItem } from '../../../../base/browser/ui/tablist/tabList.js';
-import { Emitter } from '../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import type { MarketplaceOpenOptions } from '../../../../platform/marketplace/common/marketplaceService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { HooksSettingsContent } from '../../../../workbench/contrib/hooks/browser/hooksSettingsContent.js';
+import { AICustomizationManagementEditorInput } from '../../../../workbench/contrib/chat/browser/aiCustomization/aiCustomizationManagementEditorInput.js';
+import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
+import { AccessibleViewProviderId, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
+import { SettingsSectionRenderer } from '../../../../workbench/contrib/preferences/browser/settingsSectionRenderer.js';
 import { MarketplaceContent } from '../../../../workbench/contrib/marketplace/browser/marketplaceViewPane.js';
 import { SettingsSearchQuery } from '../../../../workbench/contrib/preferences/browser/settingsSearch.js';
 import { SettingsTree } from '../../../../workbench/contrib/preferences/browser/settingsTree.js';
@@ -30,7 +33,7 @@ export class SessionsCustomizeContent extends Disposable implements SettingsCont
 	private query = new SettingsSearchQuery('');
 	private skills: SkillsSettingsContent | undefined;
 	private plugins: MarketplaceContent | undefined;
-	private hooks: HooksSettingsContent | undefined;
+	private hooks: SettingsSectionRenderer | undefined;
 
 	constructor(container: HTMLElement, private readonly closeSettings: () => Promise<void>, private readonly showEditor: () => void,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
@@ -101,17 +104,31 @@ export class SessionsCustomizeContent extends Disposable implements SettingsCont
 			this._register(this.plugins.onDidChange(() => this.changed.fire()));
 		}
 		if (isActive('hooks') && !this.hooks) {
-			this.hooks = this._register(this.instantiation.createInstance(HooksSettingsContent, this.panel, this.closeSettings));
-			this._register(this.hooks.onDidChange(() => { this.render(); this.changed.fire(); }));
-			// The settings dialog's top layer must release focus to the opened editor.
-			this._register(this.hooks.onDidOpenConfiguration(resource => { void this.closeSettings().then(() => { if (resource) this.showEditor(); }); }));
+			this.hooks = this._register(this.instantiation.createInstance(SettingsSectionRenderer, this.panel, {
+				categoryId: 'hooks',
+				title: localize({ bundle: 'ash.settings', key: 'hooks.aria' }, 'Agent Hooks'),
+				description: localize({ bundle: 'ash.settings', key: 'hooks.managementLink' }, 'Manage Hooks in Agent Customizations.'),
+				help: localize({ bundle: 'ash.settings', key: 'hooks.managementLinkHelp' }, 'Open Manage Hooks to search events, inspect declarations, edit TOML, or ask Ash to configure a Hook.'),
+				onDidChange: Event.None,
+				fields: [{
+					id: 'manage', kind: 'action', label: localize({ bundle: 'ash.settings', key: 'hooks.manage' }, 'Manage Hooks'), enabled: true, run: async () => {
+						// Closing the modal releases its child service scope. Resolve the window owner first.
+						const editors = this.instantiation.invokeFunction(accessor => accessor.get(IEditorService));
+						await this.closeSettings();
+						await editors.openEditor(new AICustomizationManagementEditorInput(), { pinned: true });
+						this.showEditor();
+					}
+				}],
+				setVisible: () => { },
+			}, AccessibleViewProviderId.HooksSettings, AccessibilityVerbositySettingId.HooksSettings));
+
 		}
 		const item = (id: string, title: string, domNode: HTMLElement): SettingsTreeNode<SettingsContentItem> => ({ element: { kind: 'item', id, title, description: domNode.textContent ?? '', value: { domNode } } });
 		const nodes: SettingsTreeNode<SettingsContentItem>[] = [
 			{ element: { kind: 'group', id: 'settings', title: this.tabItems[0].label, description: '' }, children: [] },
 			{ element: { kind: 'group', id: 'plugins', title: this.tabItems[1].label, description: '' }, children: this.plugins ? [item('customize.plugins', this.tabItems[1].label, this.plugins.domNode)] : [] },
 			{ element: { kind: 'group', id: 'skills', title: this.tabItems[2].label, description: '' }, children: this.skills?.getNodes() ?? [] },
-			{ element: { kind: 'group', id: 'hooks', title: this.tabItems[3].label, description: '' }, children: this.hooks?.getNodes(this.query) as readonly SettingsTreeNode<SettingsContentItem>[] ?? [] },
+			{ element: { kind: 'group', id: 'hooks', title: this.tabItems[3].label, description: '' }, children: this.hooks?.getNodes() as readonly SettingsTreeNode<SettingsContentItem>[] ?? [] },
 		];
 		this.treeModel.setChildren(nodes);
 		this.tree.setNavigationTarget(searching ? undefined : this.activeTab);

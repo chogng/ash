@@ -1,5 +1,9 @@
 import { ITraceService } from '../../workbench/services/trace/common/traceService.js';
 import { AppServerTraceService } from '../../workbench/services/trace/browser/appServerTraceService.js';
+import { IContentSearchService } from '../../platform/search/common/search.js';
+import { FileContentSearchService } from '../../platform/search/browser/searchService.js';
+import { ISearchService } from '../../workbench/services/search/common/search.js';
+import { SearchService } from '../../workbench/services/search/common/searchService.js';
 import { IExecutionSettingsService } from '../../platform/execution/common/executionSettingsService.js';
 import { IPromptsService } from '../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
@@ -385,6 +389,8 @@ export abstract class Workbench extends Disposable {
 		}));
 		services.registerInstance(ITextModelResourceService, textModels);
 		services.registerInstance(IFileTextModelService, textModels);
+		services.registerInstance(IContentSearchService, options.api.hasAppServer ? files : new FileContentSearchService(fileService));
+		services.registerInstance(ISearchService, services.createInstance(SearchService));
 		services.registerSingleton(IKeybindingEditingService, () => services.createInstance(KeybindingsEditingService));
 		services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
 		services.registerInstance(IChatService, chat);

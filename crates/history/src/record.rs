@@ -10,8 +10,8 @@ use serde::de::Error;
 use serde::ser::SerializeStruct;
 
 /// Schema version written for newly persisted Thread history records.
-/// Version 23 uses manual/auto permission IDs. Older records retain their hashed byte representation.
-pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 24;
+/// Version 25 adds Hook execution observations. Older records retain their hashed byte representation.
+pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 25;
 
 /// Resolves the identity at the history-version boundary. Legacy branches each receive one
 /// deterministic identity; current records must carry their explicitly allocated identity.

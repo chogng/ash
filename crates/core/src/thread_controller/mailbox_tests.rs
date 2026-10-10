@@ -242,6 +242,7 @@ fn snapshot(thread_id: &ThreadId) -> ThreadSnapshot {
         context_calibrations: Vec::new(),
         turns: Vec::new(),
         items: Vec::new(),
+        hook_runs: Vec::new(),
         context_checkpoints: Vec::new(),
         context_overflow_recoveries: BTreeMap::new(),
         item_sequences: BTreeMap::new(),

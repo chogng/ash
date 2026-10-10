@@ -1,5 +1,7 @@
 {
   "ash": {
+    "accessibility.editorSaveRecovery": "保存失败时，对话框提供恢复操作。用 Tab 选择可用的覆盖、使用管理员权限重试、另存为或还原，按 Enter 执行。Escape 取消并保留未保存的修改。覆盖使只读文件可写；还原放弃未保存的修改。",
+    "actions.pasteSelectionClipboard": "粘贴选区剪贴板",
     "diffEditor.lineHeight.invalid": "差异编辑器行高必须是非负有限数值。",
     "editor.lineHeight.title": "行高",
     "editor.lineHeight.description": "设置编辑器每行的像素高度。设为 0 时根据字号自动计算，小于 8 的值表示字号的倍数。",
@@ -799,9 +801,7 @@
     "skills.selectFile": "选择要打开的技能文件",
     "skills.manageEnablement": "管理技能启停…",
     "skills.discoveryFailed": "无法加载技能文件。请尝试刷新目录。",
-    "skills.openFailed": "无法打开技能 {0}。请刷新目录后重试。",
-    "accessibility.editorSaveRecovery": "保存失败时，对话框提供恢复操作。用 Tab 选择可用的覆盖、使用管理员权限重试、另存为或还原，按 Enter 执行。Escape 取消并保留未保存的修改。覆盖使只读文件可写；还原放弃未保存的修改。",
-    "actions.pasteSelectionClipboard": "粘贴选区剪贴板"
+    "skills.openFailed": "无法打开技能 {0}。请刷新目录后重试。"
   },
   "ash.editor.clipboard": {
     "selection.title": "选区剪贴板",

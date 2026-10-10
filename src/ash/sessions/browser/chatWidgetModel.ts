@@ -185,7 +185,7 @@ export class ChatWidgetModel extends Disposable {
 		return this.selection.kind === "untitled"
 			? this.selection.session.model
 			: this.selectedModels.get(this.selection.active.threadId)
-			?? (this._thread?.threadId === this.selection.active.threadId ? this._thread.turns.at(-1)?.model ?? undefined : undefined)
+			?? (this._thread?.threadId === this.selection.active.threadId ? this._thread.turns.at(-1)?.model : undefined)
 			?? this.selection.active.session.model ?? undefined;
 	}
 
@@ -898,6 +898,7 @@ function sameModel(left: ModelRef | null | undefined, right: ModelRef | null | u
 
 function cloneTranscriptEntry(entry: ThreadTranscriptEntry): ThreadTranscriptEntry {
 	switch (entry.type) {
+		case 'hookRun': return { ...entry, run: { ...entry.run, status: { ...entry.run.status } } };
 		case "item": return { ...entry, item: { ...entry.item } };
 		case "turnPlan": return { ...entry, plan: { explanation: entry.plan.explanation, steps: entry.plan.steps.map((step) => ({ ...step })) } };
 		case "turnError": return { ...entry, error: { ...entry.error } };

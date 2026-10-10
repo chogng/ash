@@ -1,0 +1,17 @@
+.ash-chat-hook {
+	min-width: 0;
+	color: var(--ash-foreground);
+}
+
+.ash-chat-hook summary {
+	cursor: pointer;
+}
+
+.ash-chat-hook summary:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+}
+
+.ash-chat-hook p {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}

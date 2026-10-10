@@ -72,18 +72,19 @@ for (const mode of ['build', 'watch'] as const) {
 
 		const host: typeof import('./host.ts') = await import(pathToFileURL(join(root, 'build/desktop/host.ts')).href);
 		let ready = false;
-		async function untilReady(): Promise<void> {
+		const readyStates: boolean[] = [];
+		async function until(predicate: () => boolean): Promise<void> {
 			for (let attempt = 0; attempt < 200; attempt++) {
-				if (ready) return;
+				if (predicate()) return;
 				await delay(50);
 			}
-			assert.fail('Host did not become ready after regenerating its outputs');
+			assert.fail('Host did not publish the expected compilation state');
 		}
 		if (mode === 'build') {
 			await host.buildHost();
 		} else {
-			watcher = await host.watchHost(value => { ready = value; });
-			await untilReady();
+			watcher = await host.watchHost(value => { ready = value; readyStates.push(value); });
+			await until(() => ready);
 		}
 		assert.match(await readFile(join(output, 'main/src/main.js'), 'utf8'), /version = 1/u);
 		assert.match(await readFile(preloadOutput, 'utf8'), /require\("electron"\)/u);
@@ -92,9 +93,18 @@ for (const mode of ['build', 'watch'] as const) {
 			const preloadModified = (await stat(preloadOutput)).mtimeMs;
 			ready = false;
 			await writeFile(join(desktop, 'src/main.ts'), 'export const version = 2;');
-			await untilReady();
+			await until(() => ready);
 			assert.match(await readFile(join(output, 'main/src/main.js'), 'utf8'), /version = 2/u);
 			assert.equal((await stat(preloadOutput)).mtimeMs, preloadModified, 'Watching keeps unchanged projects incremental');
+
+			readyStates.length = 0;
+			await writeFile(join(desktop, 'src/main.ts'), 'export const version: number = "invalid";');
+			await until(() => readyStates.length >= 2);
+			assert.deepEqual(readyStates, [false, false], 'A failed rebuild must not publish readiness');
+			await writeFile(join(desktop, 'src/main.ts'), 'export const version = 3;');
+			await until(() => ready);
+			assert.match(await readFile(join(output, 'main/src/main.js'), 'utf8'), /version = 3/u);
+			assert.equal((await stat(preloadOutput)).mtimeMs, preloadModified);
 		}
 	});
 }

@@ -20,11 +20,12 @@
 | `HookId`、matcher、action 与 desired enablement   | `ash-config`                     | 消费完整 `HooksConfig` 快照，不读写配置文件    |
 | 匹配、JSON codec、动作评估与沙箱进程              | `ash-hooks`                      | 唯一 Hook 运行时 owner                         |
 | 目录 `ExecuteProcess` capability 与 Authorization | App Server / file-access         | 宿主取得 Authorization 后才能调用 `bind_dir`   |
-| RPC DTO、配置 mutation 与运行状态通知             | App Server protocol / App Server | 当前只组合 runtime，尚未记录 `recent_runs`     |
+| RPC DTO、配置 mutation 与运行状态通知             | App Server protocol / App Server | 组合 runtime，把观察记录送入 Thread 历史和通知 |
 
 依赖方向是 `ash-hooks → ash-core-api`；`ash-core` 消费相同契约，不得反向
-依赖本 crate。Hooks 不依赖 Core 执行实现。`ash-hooks → ash-config` 只消费无运行时状态的声明；有界 `HookRunRecord` 只存在于
-进程内，不写回 Config，也不是持久化 Thread 事实。
+依赖本 crate。Hooks 不依赖 Core 执行实现。`ash-hooks → ash-config` 只消费无运行时状态的声明；
+最近 128 条记录用于进程内诊断，不写回 Config。会话内记录通过 `HookRunObserver` 交给 Core，
+由 Thread 历史保存和恢复。
 
 ## 公共契约
 
@@ -90,7 +91,7 @@ binding。没有目录 binding 时，事件成功执行为空操作；缺少执�
 | `policy::review_request`            | 将 Hook ID、program、arguments 与 canonical directory 绑定为动作摘要 | 不执行进程                                         |
 | `process::HookProcessExecutor`      | 隔离可测试的目录进程 seam                                            | 不成为公共插件扩展面                               |
 | [系统进程执行器](../src/process.rs) | 使用统一 `CommandExecutor`、系统沙箱和固定限制                       | 不读取信任配置或放宽策略决定                       |
-| `records::HookRunLog`               | 保留最近 128 条 running/continued/denied/failed 记录                 | 不成为 durable authority                           |
+| `records::HookRunLog`               | 保留最近 128 条 running/continued/denied/failed/cancelled 记录       | 不成为 durable authority                           |
 
 ```text
 Core typed Hook safe point
@@ -105,6 +106,23 @@ Core typed Hook safe point
       ├─ outcome::parse_output
       └─ records::HookRunLog::finish
 ```
+
+## 运行状态与日志
+
+Runtime 在每次执行前后通知 `HookRunObserver`。App Server 把带 Session 或 Turn 作用域的
+记录提交为 `HookRunUpdated`，复用 Thread 历史、订阅和 transcript；Turn、工具调用与 run ID
+贯穿实时更新和历史回放。Session 事件挂到根 Thread，无 Turn 的记录不插入对话。User 全局
+事件没有 Thread 归属，只保留 runtime 的有界内存记录。
+
+Chat 显示拒绝、失败和取消的折叠摘要，正常继续执行不新增提示。Execution Trace 显示所有
+已归属 Thread 的运行状态、耗时和工具名称。启用既有 `agent.trace` 录制后，Trace 的 Input /
+Output 可读取命令、参数、目录、stdin、stdout、stderr、退出码及截断标记；正文复用已有大小
+上限与按需加载机制。未启用录制时只保存运行状态和反馈，不保存进程输入输出。启动、策略、
+超时或取消错误可能没有进程输出和退出码，不伪造缺失证据。
+
+重启恢复会把未完成的 running 记录追加为 cancelled，不重新运行程序。历史和显示信息不会
+新增模型输入，原有 Hook decision 与工具失败反馈规则保持一致。纯 Hook 观察记录不会使
+自动审批失效；同期用户输入或其他执行事实仍会触发原有的上下文变化检查。
 
 ## 安全与失败语义
 
@@ -138,5 +156,5 @@ shape、capability、sandbox policy 或 stdin 时同步检查 `ash-action-policy
 文档。
 
 当前只支持 process action，以及 macOS、Linux 和 Windows 的系统沙箱。并行 Hook、retry、
-持久化 execution record、环境变量声明、网络 capability、工具输入改写、`afterTool` 上下文注入和外部
+环境变量声明、网络 capability、工具输入改写、`afterTool` 上下文注入和外部
 Hook 方言均未实现；增加这些能力必须先定义当前 consumer、durability、policy 与 secret boundary。

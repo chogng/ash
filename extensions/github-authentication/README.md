@@ -8,7 +8,7 @@ App 的产品启动入口显式选定安装目录中的扩展 executable；`Loca
 
 | 边界          | 复用接口                                                                                                                                                     |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 注册与调用    | `ash-external-ext-sdk::Extension`、`ExtensionContext.data_channels`，注册 `authentication.github`；Host RPC v1 的 `receiveData` 承载闭合的 typed request／response |
+| 注册与调用    | `external_ext_sdk::Extension`、`ExtensionContext.data_channels`，注册 `authentication.github`；Host RPC v1 的 `receiveData` 承载闭合的 typed request／response |
 | 通用认证能力  | `ash-login::extension::{AuthenticationRequest, AuthenticationResponse}`：读账号、开始登录、取消、注销与读取终态                                              |
 | GitHub 消费者 | `GitHubAccountManager`、`GitHubCredentialProvider` 与 `GitHubAuthenticationRequest`；grant 引用绑定主机、账号和授权代次                                      |
 | 通用核心服务  | `ExtensionContext.services` 与 `CoreServiceRequest`：SecretStore、一次 HTTP 请求；不开放 App Server method 或通用 IPC                                        |

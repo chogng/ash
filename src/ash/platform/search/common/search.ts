@@ -1,3 +1,4 @@
+import type { IWorkspaceFolder } from '../../workspace/common/workspace.js';
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
 
 export type ContentSearchPatternKind = "literal" | "regex";
@@ -18,7 +19,7 @@ export interface ContentSearchMatch {
 	readonly ranges: readonly ContentSearchMatchRange[];
 }
 
-/** A content query applied to the current workspace. */
+/** A content query applied to the selected directory. */
 export interface IContentSearchQuery {
 	readonly text: string;
 	readonly wholeWord?: boolean;
@@ -37,7 +38,7 @@ export interface IContentSearchComplete {
 	readonly error: string | undefined;
 }
 
-/** Runtime controls for one cancellable workspace search. */
+/** Runtime controls for one cancellable directory search. */
 export interface IContentSearchOptions {
 	readonly signal?: AbortSignal;
 	readonly onProgress?: (
@@ -45,9 +46,9 @@ export interface IContentSearchOptions {
 	) => void;
 }
 
-/** Renderer-facing workspace search lifecycle independent of Electron IPC. */
+/** Renderer-facing directory search lifecycle independent of Electron IPC. */
 export interface IContentSearchService {
-	search(query: IContentSearchQuery, options?: IContentSearchOptions): Promise<IContentSearchComplete>;
+	search(directory: IWorkspaceFolder, query: IContentSearchQuery, options?: IContentSearchOptions): Promise<IContentSearchComplete>;
 }
 
 export const IContentSearchService = createServiceIdentifier<IContentSearchService>("contentSearchService");
@@ -59,7 +60,7 @@ export interface ContentSearchConfiguration {
 	readonly engine: ContentSearchEngine;
 }
 
-/** Backend-owned preference shared by Agent, editor and Codebase content searches. */
+/** Backend-owned indexed search preference; Current content searches always use ripgrep. */
 export interface IContentSearchConfigurationService {
 	read(): Promise<ContentSearchConfiguration>;
 	configure(engine: ContentSearchEngine, expectedRevision: number): Promise<void>;

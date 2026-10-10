@@ -2,7 +2,7 @@
 
 Agent 能力由 `ext/` 中的 crate 拥有；Core 提交 Thread/Turn 事实并执行工具，App Server 组合扩展和转换产品协议。扩展不能自行签发执行授权。
 
-本页记录当前 Agent 贡献接口，其中仍有进程内 Rust trait 与产品组合；它不等于独立 Rust 扩展运行时。目标产品有 TS/JS 与独立 Rust 程序两类扩展：TS/JS 的目标宿主为 Electron 或 Rust-V8，现有 Node 路径按迁移阶段保留。可选业务通过公开 Provider contract 供 App/TUI 按需消费，见 [扩展架构](../../docs/editor-extensions.md#0-确定的产品方向)。拆出具体服务商能力时保留 Core 的事实提交与最终授权，评估现有贡献接口的复用；不能只把 crate 放到 `ext/` 就宣称已解除核心构建、运行或生命周期依赖，也不要求机械迁移所有 Agent 贡献。
+本页记录当前 Agent 贡献接口，其中仍有进程内 Rust trait 与产品组合；它不等于独立 Rust 扩展运行时。目标产品有 Electron/Rust-V8 中的 TS/JS 与独立 Rust 程序两类扩展，可选业务通过公开 Provider contract 供 App/TUI 按需消费。`external-ext` 系列命名、独立协议和根 `sdk/typescript` / `sdk/rust` 目录由[扩展架构](../../docs/editor-extensions.md#共享接入与语言适配的-crate-边界)维护，名称与目录已迁移，运行时兼容改造仍待实施。拆出具体服务商能力时保留 Core 的事实提交与最终授权，评估现有贡献接口的复用；不能只把 crate 放到 `ext/` 就宣称已解除核心构建、运行或生命周期依赖，也不要求机械迁移所有 Agent 贡献。
 
 ## 职责
 

@@ -285,6 +285,7 @@ export type ThreadCommittedEvent =
 		| "modelResponseEvaluated"
 		| "itemCompleted"
 		| "planUpdated"
+		| 'hookRunUpdated'
 		| "interactionResolved"
 		| "toolExecutionStarted"
 		| "toolExecutionEscalated"
@@ -320,10 +321,32 @@ export interface ThreadUpdateEnvelope {
 }
 
 export type ThreadTranscriptEntry =
+	| { readonly type: 'hookRun'; readonly entryId: string; readonly turnId: string; readonly run: ChatHookRun; }
 	| { readonly type: "item"; readonly entryId: string; readonly turnId: string; readonly item: ThreadItem; readonly transient: boolean; }
 	| { readonly type: "turnPlan"; readonly entryId: string; readonly turnId: string; readonly plan: PlanUpdate; }
 	| { readonly type: "turnError"; readonly entryId: string; readonly turnId: string; readonly error: TurnError; }
 	| { readonly type: "toolOutput"; readonly entryId: string; readonly turnId: string; readonly toolCallId: string; readonly stream: "stdout" | "stderr"; readonly text: string; };
+
+export interface ChatHookRun {
+	readonly runId: string;
+	readonly hookId: string;
+	readonly event: string;
+	readonly status: { readonly type: 'running' | 'continued'; } | { readonly type: 'denied' | 'cancelled'; readonly reason: string; } | { readonly type: 'failed'; readonly message: string; };
+	readonly startedAtUnixMs: number;
+	readonly durationMs: number;
+	readonly turnId: string | null;
+	readonly toolCallId: string | null;
+	readonly toolName: string | null;
+}
+
+/** User-facing Hook feedback; process evidence remains in Execution trace. */
+export interface IChatHookPart {
+	readonly kind: 'hook';
+	readonly hookType: string;
+	readonly stopReason?: string;
+	readonly systemMessage?: string;
+	readonly toolDisplayName?: string;
+}
 
 export interface ThreadTranscriptSnapshot {
 	readonly sessionId: SessionId;

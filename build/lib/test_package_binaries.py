@@ -158,7 +158,11 @@ class CargoBuildTests(unittest.TestCase):
                     )
                 self.assertEqual(int("v8" in packages), v8.call_count)
                 self.assertEqual(int("sherpa-onnx-sys" in packages), speech.call_count)
-                self.assertEqual(bool(packages), bool(run.call_args.kwargs["env"]))
+                environment = run.call_args.kwargs["env"].copy()
+                self.assertEqual(
+                    environment.pop("CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO"), "packed"
+                )
+                self.assertEqual(bool(packages), bool(environment))
 
     def test_mixed_inputs_build_only_missing_binaries_in_one_call(self) -> None:
         prebuilt = self.executable("prebuilt")
@@ -194,7 +198,10 @@ class CargoBuildTests(unittest.TestCase):
             "ash-remote-connections", command[command.index("--package") + 1]
         )
         self.assertEqual(self.spec.target, command[command.index("--target") + 1])
-        self.assertEqual({"V8": "locked"}, run.call_args.kwargs["env"])
+        self.assertEqual(
+            {"V8": "locked", "CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO": "packed"},
+            run.call_args.kwargs["env"],
+        )
         environment.assert_called_once_with(self.spec, set())
 
     def test_success_without_reported_executable_rejects_stale_output(self) -> None:

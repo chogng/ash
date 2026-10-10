@@ -12,6 +12,8 @@ test('the report command opens an editable draft, previews selected diagnostics,
 	await page.getByText('Preview the report that will be submitted', { exact: true }).click();
 	const preview = page.locator('.ash-issue-reporter pre');
 	await expect(preview).toContainText('0.1.0-test'); await expect(preview).toContainText('example.syntax 1.2.3');
+	await expect(preview).toContainText('App Server\nAsh: 0.1.0-test\nOS: windows (x86_64)');
+	await expect(preview).toContainText('Browser: Mozilla/');
 	await page.getByRole('checkbox', { name: 'Include installed extensions' }).uncheck();
 	await expect(preview).not.toContainText('example.syntax');
 	await page.getByRole('button', { name: 'Search similar issues' }).click();
@@ -84,6 +86,8 @@ test('the reporter exposes Chinese form labels and submission guidance', async (
 	await page.getByText('预览将要提交的报告', { exact: true }).click();
 	await expect(page.locator('.ash-issue-reporter pre')).toContainText('类型：缺陷');
 	await expect(page.locator('.ash-issue-reporter pre')).toContainText('系统信息');
+	await expect(page.locator('.ash-issue-reporter pre')).toContainText('App Server\nAsh：0.1.0-test\n操作系统：windows（x86_64）');
+	await expect(page.locator('.ash-issue-reporter pre')).toContainText('浏览器：Mozilla/');
 	await page.getByRole('button', { name: '搜索相似问题' }).click();
 	await expect(page.getByRole('link', { name: 'Existing editor bug（未关闭）' })).toBeVisible();
 	await page.getByRole('button', { name: '提交到 GitHub' }).click();

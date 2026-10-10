@@ -6,6 +6,7 @@ import type { ITunnelService, RemoteTunnel } from '../../../../platform/tunnel/c
 /** Web currently has no tunnel provider; SSH execution belongs to the Desktop host. */
 export class TunnelService extends AbstractDisposable implements ITunnelService {
 	declare public readonly _serviceBrand: undefined;
+	public readonly onDidChange = Event.None;
 	public readonly onTunnelOpened = Event.None;
 	public readonly onTunnelClosed = Event.None;
 
@@ -18,6 +19,9 @@ export class TunnelService extends AbstractDisposable implements ITunnelService 
 		this.assertNotDisposed();
 		return undefined;
 	}
+
+	public async getExistingTunnel(_host: string, _port: number): Promise<undefined> { this.assertNotDisposed(); return undefined; }
+	public async closeAll(): Promise<void> { this.assertNotDisposed(); }
 
 	public async closeTunnel(_remoteHost: string, _remotePort: number): Promise<void> {
 		this.assertNotDisposed();

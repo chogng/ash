@@ -298,7 +298,7 @@ export const SettingsNavigation = [
 						id: 'files',
 						get label() { return localize('settings.editor.files.label', 'Files and saving'); },
 						get description() { return localize('settings.editor.files.description', 'Configure file editing and save behavior.'); },
-						settings: ['files.*', 'workbench.localHistory.*'],
+						settings: ['files.*', 'workbench.localHistory.*', 'debug.saveBeforeStart'],
 					},
 				],
 			},

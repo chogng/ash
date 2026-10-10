@@ -135,7 +135,7 @@ export class ImagePreview extends EditorPane implements IEditorPane {
 	public override layout(_dimension: IDimension): void { this.updateImageGeometry(); }
 	public override setVisible(visibility: boolean): void {
 		super.setVisible(visibility);
-		this.domNode.classList.toggle('hidden', this.domNode.hidden);
+		this.domNode.classList.toggle('hidden', !!this.domNode.hidden);
 	}
 	public override focus(): void { this.viewportDomNode.focus(); }
 

@@ -1,5 +1,6 @@
 use super::*;
 use crate::thread_controller::CommitContextCheckpointRequest;
+use crate::thread_controller::RecordToolExecutionStart;
 use crate::thread_controller::live_interaction;
 use ash_async_utils::CancellationSource;
 use ash_history::StoredEvent;
@@ -2844,4 +2845,165 @@ fn passive_branch_management_follows_wait_stop_completion_and_failure() {
         reopened.read_session_catalog(&session_id).unwrap(),
         threads.read_session_catalog(&session_id).unwrap()
     );
+}
+
+#[test]
+fn hook_observations_recover_without_execution_or_model_visible_items() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let threads = ThreadController::with_store(store.clone());
+    let thread = create_thread(&threads, "Hooks");
+    let turn = start_turn(&threads, &thread, "hook-turn");
+    let scope = core_api::HookEventScope::Turn {
+        session_id: SessionId::new("session_1").unwrap(),
+        thread_id: thread.clone(),
+        turn_id: turn.clone(),
+    };
+    let run = ash_protocol::HookRunRecord {
+        run_id: "hook-run".into(),
+        hook_id: "user:hook:test".into(),
+        event: ash_protocol::HookEvent::PreToolUse,
+        status: ash_protocol::HookRunStatus::Running,
+        started_at_unix_ms: 1,
+        duration_ms: 0,
+        turn_id: Some(turn.clone()),
+        tool_call_id: Some(ToolCallId::new("tool").unwrap()),
+        tool_name: Some("shell-command".into()),
+    };
+    let before = threads.read_thread(&thread).unwrap().items;
+    let mut mismatched = run.clone();
+    mismatched.turn_id = None;
+    assert!(matches!(
+        threads.record_hook_run(&scope, &mismatched, None),
+        Err(CoreError::InvalidInput(_))
+    ));
+    threads.record_hook_run(&scope, &run, None).unwrap();
+    assert_eq!(threads.read_thread(&thread).unwrap().items, before);
+    drop(threads);
+    let restored = ThreadController::with_store(store);
+    let recovered = restored.recover_thread(&thread).unwrap();
+    assert_eq!(recovered.hook_runs[0].run_id, run.run_id);
+    assert!(matches!(
+        recovered.hook_runs[0].status,
+        ash_protocol::HookRunStatus::Cancelled { .. }
+    ));
+    assert_eq!(recovered.items, before);
+    let sequence = recovered.sequence;
+    assert_eq!(restored.recover_thread(&thread).unwrap().sequence, sequence);
+    assert!(
+        !restored
+            .thread_catalog_record(&thread)
+            .unwrap()
+            .requires_startup_recovery
+    );
+}
+
+#[test]
+fn session_hook_without_a_turn_requires_recovery_until_its_completion() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let threads = ThreadController::with_store(store.clone());
+    let thread = create_thread(&threads, "Session Hooks");
+    let scope = core_api::HookEventScope::Session {
+        session_id: SessionId::new("session_1").unwrap(),
+    };
+    let run = ash_protocol::HookRunRecord {
+        run_id: "session-hook".into(),
+        hook_id: "user:hook:test".into(),
+        event: ash_protocol::HookEvent::SessionStart,
+        status: ash_protocol::HookRunStatus::Running,
+        started_at_unix_ms: 1,
+        duration_ms: 0,
+        turn_id: None,
+        tool_call_id: None,
+        tool_name: None,
+    };
+    threads.record_hook_run(&scope, &run, None).unwrap();
+    assert!(
+        threads
+            .thread_catalog_record(&thread)
+            .unwrap()
+            .requires_startup_recovery
+    );
+    drop(threads);
+    let restored = ThreadController::with_store(store);
+    assert!(matches!(
+        restored.recover_thread(&thread).unwrap().hook_runs[0].status,
+        ash_protocol::HookRunStatus::Cancelled { .. }
+    ));
+    assert!(
+        !restored
+            .thread_catalog_record(&thread)
+            .unwrap()
+            .requires_startup_recovery
+    );
+}
+
+#[test]
+fn hook_logs_do_not_invalidate_auto_review_but_concurrent_execution_facts_do() {
+    for changed in [false, true] {
+        let threads = ThreadController::with_store(Arc::new(InMemoryThreadStore::default()));
+        let thread = create_thread(&threads, "review");
+        let turn = start_turn(&threads, &thread, "review-turn");
+        let call = threads
+            .record_tool_call(
+                &thread,
+                &turn,
+                RecordToolCallRequest {
+                    tool_call_id: None,
+                    name: ToolName::new("shell-command").unwrap(),
+                    arguments_json: "{}".into(),
+                    binding: None,
+                },
+            )
+            .unwrap();
+        let reviewed_sequence = threads.read_thread(&thread).unwrap().sequence;
+        let scope = core_api::HookEventScope::Turn {
+            session_id: SessionId::new("session_1").unwrap(),
+            thread_id: thread.clone(),
+            turn_id: turn.clone(),
+        };
+        let mut run = ash_protocol::HookRunRecord {
+            run_id: "review-hook".into(),
+            hook_id: "user:hook:test".into(),
+            event: ash_protocol::HookEvent::PreToolUse,
+            status: ash_protocol::HookRunStatus::Running,
+            started_at_unix_ms: 1,
+            duration_ms: 0,
+            turn_id: Some(turn.clone()),
+            tool_call_id: Some(call.tool_call_id.clone()),
+            tool_name: Some("shell-command".into()),
+        };
+        threads.record_hook_run(&scope, &run, None).unwrap();
+        run.status = ash_protocol::HookRunStatus::Continued;
+        threads.record_hook_run(&scope, &run, None).unwrap();
+        if changed {
+            threads
+                .record_agent_message(&thread, &turn, "concurrent execution fact".into())
+                .unwrap();
+        }
+        let result = threads.record_tool_execution_started(
+            &thread,
+            &turn,
+            RecordToolExecutionStart {
+                tool_call_id: call.tool_call_id.clone(),
+                action_digest: "action".into(),
+                policy_revision: "policy".into(),
+                authority: ash_protocol::ToolExecutionAuthority::AutoReviewed {
+                    assessment_id: "review".into(),
+                },
+                expected_review_sequence: Some(reviewed_sequence),
+            },
+        );
+        if changed {
+            assert!(matches!(result, Err(CoreError::ReviewContextChanged)));
+        } else {
+            result.unwrap();
+            assert!(
+                threads
+                    .read_thread(&thread)
+                    .unwrap()
+                    .started_tool_calls
+                    .contains(&call.tool_call_id)
+            );
+        }
+    }
 }

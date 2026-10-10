@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 import sys
@@ -28,6 +29,7 @@ def build_code_package(
     output: Path,
     cli_binary: Path,
     update_public_key: str,
+    symbols_dir: Path | None = None,
 ) -> None:
     runtime_package = runtime_package.expanduser().resolve()
     output = output.expanduser().resolve()
@@ -66,6 +68,10 @@ def build_code_package(
         shutil.copytree(runtime_package, staging, dirs_exist_ok=True)
         cli = staging / "bin" / spec.cli_name
         shutil.copy2(cli_binary, cli)
+        if symbols_dir is not None:
+            from build.release.symbols import SymbolStore
+
+            SymbolStore(symbols_dir).collect(cli_binary, cli, target)
         components["cli"] = {
             "source": "cargo-build",
             "binarySha256": file_sha256(cli),
@@ -92,9 +98,16 @@ def main(arguments: list[str] | None = None) -> int:
     parser.add_argument("--package-dir", type=Path, required=True)
     parser.add_argument("--cli-bin", type=Path, required=True)
     parser.add_argument("--update-public-key", required=True)
+    parser.add_argument(
+        "--symbols-dir", type=Path, default=os.environ.get("ASH_SYMBOLS_DIR")
+    )
     args = parser.parse_args(arguments)
     build_code_package(
-        args.runtime_package, args.package_dir, args.cli_bin, args.update_public_key
+        args.runtime_package,
+        args.package_dir,
+        args.cli_bin,
+        args.update_public_key,
+        args.symbols_dir,
     )
     print(f"Built Code package at {args.package_dir.resolve()}")
     return 0

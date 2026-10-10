@@ -138,6 +138,7 @@ fn completed_active_turn_only_updates_lifecycle_after_snapshot_mapping() {
         usage: ash_protocol::ModelUsageSummary::default(),
         reference_cost: ash_protocol::ModelReferenceCostSummary::default(),
         goal: None,
+        hook_runs: Vec::new(),
         turns: vec![turn.clone()],
     };
     app.update(ThreadEvent::TranscriptSnapshotReceived(
@@ -337,6 +338,7 @@ fn failed_turn_shows_one_concise_error_on_failure_and_resume() {
         usage: Default::default(),
         reference_cost: Default::default(),
         goal: None,
+        hook_runs: Vec::new(),
         turns: vec![turn.clone()],
     };
     let snapshot =

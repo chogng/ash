@@ -225,6 +225,7 @@ Sherpa ONNX 静态库使用按版本共享的校验缓存，位于 `third_party/
 开发运行版本由发布器按租约回收，保留当前版本与仍在运行的版本。验证脚本应在结束时删除自行创建的临时编译、索引目录，只保留报告和复现材料；`just bench-build` 会自动清理自己的编译目录。开发包的发布与回收规则见 [共享包构建](../build/README.md)和 [Code 构建](../build/code/README.md)。
 
 `just rust-warnings` 检查新生成与已缓存的编译警告，保持 `RUSTFLAGS` 与普通构建一致，避免生成另一套产物。
+
 类型检查、Electron 主进程/preload 编译和开发 watch 使用 TypeScript 7.0.2。工作区将编译器固定在 `@ash/typescript-compiler` npm 别名下，`pnpm exec tsc` 和现有构建/测试脚本均调用 TS7。`typescript` 别名保留 `@typescript/typescript6@6.0.2` 兼容包提供的 TS6 JavaScript API，供本地化提取、热更新分析、格式化和架构测试使用；它提供独立的 `tsc6` 命令。升级时同步根目录和 `build/` 的编译器/API 依赖、`test/scenario/` 的编译器依赖及锁文件，并验证 host watch 的失败与恢复、preload 导入限制和 Web/Electron 启动。
 
 前端与构建工具直接消费 `.build/protocol/typescript/` 的共享生成协议，产物不提交到 Git。正常前端、Rust Just 和打包入口自动准备协议：优先复用本地缓存或源码匹配的后端包，缺少匹配产物时需要 Rust 工具链重新生成。修改后端协议后可运行 `just generate-protocol`，再运行 `pnpm typecheck:protocol`；直接 Cargo 构建前必须先准备。协议生成器与开发后端统一使用 `dev-small` profile，复用相同配置的依赖产物；生成器的 `export` feature 仍保留独立编译变体。受版本控制的图标工厂使用 `pnpm icons:generate` 更新。
@@ -232,6 +233,143 @@ Sherpa ONNX 静态库使用按版本共享的校验缓存，位于 `third_party/
 只构建前端的设备可以使用另一台设备或发布流程生成的完整后端包。解压后设置 `ASH_PROTOCOL_PACKAGE` 为包根目录，再运行现有 pnpm 构建或安装命令；也可直接运行 `python -B build/protocol/generate.py --package-root <包根目录>`。生成器会比较相对路径下的源码内容、Cargo 清单和锁文件、生成器及编译标志，并校验包内每个协议文件的摘要和协议身份。匹配时恢复 `.build/protocol/`，无需 Cargo；源码、输入清单或包内容变化时重新生成，不会把旧包的接口视为当前源码。当前开发包存储中的最新选中包会被自动检查，无需设置环境变量。
 
 开发和发布后端包均携带 `ash-resources/protocol/` 中的 TS 类型、运行时解码器、JSON Schema 和 metadata，以及 `ash-resources/protocol-sources.json` 源码指纹。所有文件进入现有包摘要和 build identity。该复用只免去协议生成所需的 Rust；编译或修改后端仍需要 Rust，运行时继续严格校验协议 major 和 schema hash。
+
+## 发布调试符号与离线崩溃解析
+
+第一阶段已接入 Cargo 发布组包、符号归档和离线工具。release 仅增加 `line-tables-only`、`split-debuginfo = off`、`strip = false`；macOS 发布入口覆盖为 `packed`。优化、LTO、codegen units、开发和测试 profile 保持不变。本机已验证 macOS arm64 的真实 release 程序、内联源码行和受控 abort core；Linux/Windows 与正式签名、上传流程须由发布 CI 验证。统一 panic 采集、Electron 和 JavaScript 符号属于后续阶段。
+
+### 第一阶段使用
+
+本地发布前设置编译身份和符号目录；`ASH_BUILD_ID` 必须为这次编译的新身份，不能在编译结束后才注入。Python 使用仓库虚拟环境的 3.11+ 解释器；Linux/Windows 需 LLVM 的 objcopy、strip、dwarfdump、pdbutil、symbolizer，dump 导入另外需要支持 Python 的 LLDB。工具可通过 `ASH_LLVM_BIN` 指定目录，macOS 可直接使用 Xcode 的 dwarfdump 和 atos。
+
+```sh
+export ASH_BUILD_COMMIT="$(git rev-parse HEAD)"
+export ASH_BUILD_ID="local-$(date -u +%Y%m%dT%H%M%SZ)-$(uuidgen)"
+export ASH_SYMBOLS_DIR="$PWD/.build/releases/symbols/local"
+python -B build/app_server.py --target aarch64-apple-darwin --package-dir .build/releases/runtime
+```
+
+`build/app_server.py`、`build/remote.py`、`build/code/package.py` 支持 `--symbols-dir`，也读取 `ASH_SYMBOLS_DIR`；Desktop 组包读取该环境变量并收集 update host。普通开发组包不开启符号流程。CI 在 release 编译前设置身份和目录，签名完成后执行归档；无精确匹配符号的第一方模块会使归档失败。
+
+```sh
+# 在产品签名和 archive.py 完成之后绑定最终文件；输出归档和外部 .sha256。
+python -B build/release/symbols.py archive \
+  --package ash-app-server=.build/releases/runtime \
+  --archive ash-app-server=.build/releases/ash-app-server.tar.gz \
+  --output .build/releases/assets
+
+# sha256 来自对应 Release companion checksum；.ips 或经典 .crash 报告无需最终程序。
+python -B build/release/symbolicate.py \
+  --symbols <ash-symbols-构建身份.tar.gz> --sha256 <归档SHA256> \
+  --input <报告.ips> --output .build/crash-analysis.json
+```
+
+core/minidump 还需 `--images <最终解压产品根目录>` 和 `--executable <该包的主程序>`。输入按魔数识别，原始报告和 dump 不会改写；输出 JSON 和同名 `.txt`，退出码 0 表示帧全部解析，2 表示仍有未解析帧，其他非零表示输入或工具失败。外部模块缺少供应方符号时保留原始 PC 和原因。ELF core 必须包含模块身份所在的文件映射页；缺页时不会借用用户提供程序的 build-id。LLDB 的 Mach-O stack core 可从 `all image infos` 元数据获取 UUID。
+
+具有模块 ID 的 JSON 也可输入：`schemaVersion: 1`，`modules` 每项含 `format`（`macho`/`elf`/`pe`）、`arch`（`aarch64`/`x86_64`）、`id` 和加载 `base`；`frames` 每项含 `module` 索引、`pc` 和可选 `thread`。ELF 还需按 PT_LOAD 得到的 `loadBias`，或帧中的 `fileAddress`。UUID/build-id 使用无连字符的小写十六进制，PDB ID 为小写 GUID 加十进制 Age，例如 `<guid>-1`。`addressKind: returnAddress` 明确标记原始返回 PC，解析器按架构回退到调用指令；OS 已处理的地址不重复回退。
+
+符号清单绑定最终模块与产品包的 SHA-256、包 `buildId`、Git 提交、编译身份、配置和锁文件摘要、工具版本、CI 来源、源码路径映射与 release OUT_DIR 的生成 Rust 源码。正式 Cargo 入口记录真实产物消息中的 features、有效 profile 和构建命令；手动传入的 prebuilt 程序明确标记未捕获编译调用。Desktop update host 也通过 Cargo 产物消息选择输入，避免猜测输出目录。发布先上传并下载核对符号归档，再上传产品包；Actions artifact 只作任务间运输。保存全部正式及撤回版本的 companion assets 和匹配产品包；本地 `.build/` 清理不替代持久归档。当前覆盖 Cargo 构建；Bazel、第三方源码符号和自动崩溃上传尚未接入。
+
+### Codex 的已有流程与 Ash 的差异
+
+对照 Codex 提交 `c3d3b142d10f4316b46e35aad7e5317e7e506cb7`：
+
+- [release profile](https://github.com/openai/codex/blob/c3d3b142d10f4316b46e35aad7e5317e7e506cb7/codex-rs/Cargo.toml) 保留 `line-tables-only` 调试信息和未剥离符号；发布 CI 为 macOS 覆盖 `split-debuginfo = packed`，其他平台使用 `off`。
+- [符号归档脚本](https://github.com/openai/codex/blob/c3d3b142d10f4316b46e35aad7e5317e7e506cb7/.github/scripts/archive-release-symbols-and-strip-binaries.sh) 保存 macOS dSYM、Linux `.debug` 和 Windows PDB。Unix 分离符号后剥离程序，Linux 还写入 `.gnu_debuglink`。
+- [发布工作流](https://github.com/openai/codex/blob/c3d3b142d10f4316b46e35aad7e5317e7e506cb7/.github/workflows/rust-release.yml) 上传独立符号归档，并将符号产物纳入最终发布资产；Cargo 和 Bazel 产物用不同名称区分。
+- [包级验证](https://github.com/openai/codex/blob/c3d3b142d10f4316b46e35aad7e5317e7e506cb7/scripts/codex_package/smoke_tests/test_codex_package.py) 在 Linux 检查函数及源码行、macOS 检查函数解析、Windows 检查 PDB 与程序匹配。这些检查没有证明所有真实崩溃都能自动采集、展开和解析。
+
+Ash 的 release 使用 Cargo 默认调试信息设置，现有组包与签名会计算和更新文件摘要，目前没有对应的第一方符号归档入口。采用 Codex 的按平台分离方式，但统一在包的 staging 副本上剥离，保留 Cargo/Bazel 原始输出；增加逐模块身份、最终包绑定和真实崩溃验证。LTO、codegen units 与优化级别保持现状，不与符号接入一起调整。
+
+### 生成与组包顺序
+
+release 的候选配置如下；这是计划中的配置，不表示当前已生效：
+
+```toml
+[profile.release]
+debug = "line-tables-only"
+split-debuginfo = "off"
+strip = false
+```
+
+发布入口在 macOS 构建时设置 `CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO=packed`，让 Cargo 在对象文件仍可用时生成可独立归档的 dSYM。Bazel 入口必须生成等价调试产物，不会自动读取 Cargo profile。已有预编译程序必须携带匹配符号，不能对已经剥离的程序事后重建符号。[Cargo 的调试信息与分离规则](https://doc.rust-lang.org/cargo/reference/profiles.html#debug) 保留源码行而不提供完整局部变量，因此发布崩溃解析不承诺变量查看能力。
+
+唯一顺序为：
+
+1. 校验 release 来源、工具链与目标，注入编译身份，构建未剥离程序与符号。
+2. 将程序复制到 staging，从同一次构建提取符号，检查模块 ID 和调试行信息。
+3. 仅修改 staging 中尚未签名的第一方程序：Unix 剥离调试信息，Linux 补 debuglink；保留动态导出和展开所需的元数据。Windows 保留 PE 调试目录，PDB 不进产品包。
+4. 组装产品并生成未签名包的文件摘要；执行现有系统签名，再通过现有签名记录流程刷新摘要和包 `buildId`。Desktop 封装、重签名和 notarization 完成后，再检查其中实际发出的程序。
+5. 对最终包扫描模块 ID 和文件 SHA-256，将最终包身份绑定到符号清单。使用这些最终程序执行符号验证和原有包级验收。
+6. 冻结并归档符号清单和符号文件，验证归档哈希；产品包、更新描述与匹配符号都完成持久保存后，才允许最终发布。
+
+不能在签名或最终包摘要计算后剥离程序。修改一个已签名输入时应重新走 staging、签名和验收流程；引用供应方的已签名外部程序时保留其字节，不把它交给第一方剥离步骤。
+
+| 平台                     | 符号产物         | 匹配身份                        | 提取与检查                                                                              |
+| ------------------------ | ---------------- | ------------------------------- | --------------------------------------------------------------------------------------- |
+| macOS arm64/x64          | `<binary>.dSYM`  | Mach-O UUID 与架构              | Cargo 的 packed dSYM；检查程序和 dSYM UUID 一致，使用 `atos`/LLDB 解析                  |
+| Linux GNU/musl arm64/x64 | `<binary>.debug` | ELF GNU build-id 与架构         | `llvm-objcopy --only-keep-debug`，剥离 staging 后写 debuglink；检查 ID 和 debuglink CRC |
+| Windows MSVC arm64/x64   | PDB              | PE CodeView 与 PDB 的 GUID、Age | 从 PE 引用定位 PDB，校验签名；不能只按文件名猜测或选择最新 PDB                          |
+
+Linux release 必须有非空 GNU build-id；若所选链接器没有生成，在 Linux 发布入口增加对应链接参数并验证，不能对所有平台设置同一链接参数。Windows PDB 必须独立可用，不允许依赖构建机 `.obj` 的 FASTLINK 产物。匹配规则分别参考 [GDB 独立符号文件](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Separate-Debug-Files.html) 和 [LLVM 的 PDB/PE 匹配说明](https://llvm.org/docs/PDB/PdbStream.html#matching-a-pdb-to-its-executable)。
+
+覆盖清单从真实产品组装输入和最终包枚举，不只扫描 CLI。包括 CLI、App Server、daemon、remote、exec server、V8 两个宿主、voice host、collaboration server、Windows sandbox 程序、update host 和其他实际发出的第一方 Rust 程序或动态库。共用同一模块的 Code、App Server、Desktop 包复用符号，但各自记录最终文件摘要和包身份。Remote 后续独立分发也必须提供同样的符号绑定。
+
+静态链接的 Rust 依赖随第一方程序一起解析；预编译 V8/C++、Go LiveKit、Electron、Node、插件及系统库的源码符号需要各自供应方产物，不能通过开启 Rust debug 补回。清单逐项标记覆盖范围和不可用原因，未知外部帧保留原始地址。
+
+### 身份、归档与保存
+
+现有 [`ash-build-identity`](../crates/build-identity/src/lib.rs) 提供编译身份，发布前通过 `ASH_BUILD_COMMIT` 和 `ASH_BUILD_ID` 注入 Git SHA 与构建身份。构建身份由发布任务在编译前确定，记录 CI run、attempt、job、target 和输入配置；同一版本重建不覆盖先前身份。现有 commit 派生的默认 ID 不足以区分同一源码的不同构建。
+
+编译身份、模块 ID 和 [`build/lib/package.py`](../build/lib/package.py) 按最终文件计算的包 `buildId` 分开记录。后者只能在组包或签名后得到，不回填进已编译程序，避免循环依赖。解析匹配以模块 ID 为准，版本与 Git SHA 仅用于检索候选和定位源码。
+
+每次发布构建保存 `ash-symbols-<version>-<target>-<builder>-<build-key>.tar.gz`，在 `.build/releases/symbols/` 下准备；`build-key` 是编译身份 SHA-256 的前 24 个十六进制字符，归档路径独立于产品包。归档包含 `manifest.json`、平台符号、路径映射和必要的生成源码。最终发布程序保留在既有发布包中，可按清单摘要取回用于展开 dump；只保存 `.debug`/PDB 不代替最终程序保存。
+
+`manifest.json` 使用 `schemaVersion`，包含：
+
+- 构建来源：版本、Git SHA、编译身份、target、Cargo/Bazel、Rust/链接器/符号工具版本、实际 profile/flags/features、依赖锁文件摘要和 CI 来源。
+- 模块记录：产品内相对路径、第一方/外部来源、架构、平台模块 ID、PE 引用的 PDB basename、符号相对路径及 SHA-256、覆盖状态。
+- 包绑定：产品、最终包 `buildId`、发布包路径与 SHA-256，以及每个模块在各最终包中的文件 SHA-256。重复模块共用符号记录，签名导致字节变化时分别保留绑定。
+- 源码来源：Git SHA、调试路径到仓库相对路径的映射、构建时生成源码的归档路径及哈希。解析输出指向该提交，不能指向当前工作区的同名文件。
+
+首版沿用 GitHub Release companion assets 保存符号；GitHub Actions artifact 只作任务间传递。保留所有正式发布版本和撤回版本的符号及匹配程序，直到明确终止这些版本的诊断支持，不用“最近一次成功 CI”替代历史产物。资产位置与可见性继承仓库发布策略；若要保持符号私有，则整个归档和查询索引改为受控存储，不同时维护两份独立清单。
+
+归档创建使用临时路径，全部验证成功后原子完成。归档本身的 SHA-256 写在外部发布索引或 checksum 文件中，不放进它自身的 manifest；绑定现有发布来源验证或签名流程。上传后重新核对哈希和可取回性，失败则阻止对应产品发布。产物缓存可以清理，已发布版本的持久符号不能随 Cargo 缓存回收。
+
+### 崩溃输入与离线解析
+
+第一版不要求部署新的崩溃上传服务。解析输入为原始 OS 报告/dump，或具有模块 ID、模块加载信息和原始帧地址的 panic/栈记录。单独一个绝对地址、函数名或版本号不足以精确解析，解析器应报告缺少信息，不能猜测匹配模块。
+
+| 输入             | 采集与解析方式                                                                                               | 边界                                                                                               |
+| ---------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| Rust panic       | 产品宿主统一安装有界 panic hook，保留原有 hook；记录编译身份、线程、模块身份和原始帧，诊断导出时包含这些记录 | 现有代码尚无完整第一方实现；`RUST_BACKTRACE=1` 仅为临时排查入口，文本 backtrace 不保证完整模块信息 |
+| macOS 程序崩溃   | 导入系统 `.ips`/crash report 的线程和 Binary Images，用匹配 dSYM 在 macOS 上运行 `atos`/LLDB                 | 按 UUID 匹配，使用加载地址处理 ASLR；无系统报告时不能声称已捕获                                    |
+| Linux 程序崩溃   | 导入已有 core/`coredumpctl` 导出结果与映射信息，GDB/LLDB 使用最终程序和独立符号展开，再交给地址解析器        | core 是否生成由系统配置决定；产品不默认修改系统 core 策略                                          |
+| Windows 程序崩溃 | 导入 WER/ProcDump 的 `.dmp`，有 Python 支持的 LLDB 使用匹配 EXE/DLL 展开，LLVM 用 PDB 解析                   | WER LocalDumps 默认关闭，按需配置单个程序并说明管理员要求，不默认写全局注册表                      |
+
+WER 的行为与权限参考 [Microsoft 的本地 dump 文档](https://learn.microsoft.com/en-us/windows/win32/wer/collecting-user-mode-dumps)。OS 级信号、访问违规、abort 与被系统终止不能用 Rust panic hook 兜底，也不在信号处理器里调用分配内存、锁或外部工具。panic 记录与 OS dump 使用同一离线模块匹配契约。
+
+解析顺序为：校验归档与清单摘要 → 读取报告内模块身份 → 找到相同架构和 ID 的符号 → 按报告格式处理地址 → 展开及解析帧 → 关联准确提交的源码。ELF 由 LLDB 按 PT_LOAD 展开并导出文件地址，Mach-O 使用 image load address/slide，PE 使用 RVA；不能把三种格式统一成简单减去映射起点。保留原始 PC、调用返回地址类型、模块信息和转换后的地址，按工具约定处理返回地址，不统一盲目减一。
+
+地址解析优先调用 [`llvm-symbolizer`](https://llvm.org/docs/CommandGuide/llvm-symbolizer.html)，保留 Rust demangle 与内联帧；macOS 未安装 LLVM 时使用 `atos -inlineFrames -fullPath`。平台 dump 通过隔离的 LLDB Python 适配器展开，禁用用户初始化脚本和符号文件脚本。输出包含输入哈希、所用归档及模块 ID、函数、源码路径/行号、内联帧和未解析原因，支持 JSON 与可读文本。模块不匹配或归档缺失时保留原帧并返回未完成状态，不选择相同版本的另一个模块。对 OOM kill、SIGKILL 或没有足够栈数据的退出，只报告已有进程退出事实。
+
+诊断共享字段归 `crates/diagnostics`，编译身份仍归 `crates/build-identity`；各产品宿主负责注册 hook，daemon 负责现有子进程退出观察与 stderr 生命周期，不把产品宿主职责迁入 CLI。默认记录有界、无内容的崩溃元数据；dump 可能包含会话内容或凭据，只在用户主动导出时加入，不默认远程上传。解析在产品进程外进行，限制报告/归档大小、路径、解包成员、工具超时和工具输出；取消时终止并回收工具子进程及临时目录，失败保留输入和已完成报告。
+
+### 落点、验收与分步实施
+
+构建所有权保持在 `build/`。[`build/release/symbols.py`](../build/release/symbols.py) 统一生成、staging 剥离、模块校验和最终包绑定；[`build/release/symbolicate.py`](../build/release/symbolicate.py) 负责离线导入与平台工具调用。两者分别服务发布和故障排查，避免在每个 CI shell 中复制平台规则。共享组包逻辑在 [`build/lib/package.py`](../build/lib/package.py) 写摘要前调用前者；CLI 包、Desktop update host 和后端包均传入实际构建输入，而非让脚本猜测 Cargo 输出位置。
+
+[Unix 发布入口](../.github/workflows/platform-checks.yml)、[Windows 发布入口](../.github/workflows/release-windows.yml) 和 [Desktop macOS](../build/desktop/package-darwin.ts)/[Windows](../build/desktop/package-win32.ts) 组包入口接入同一契约，最终发布 job 检查对应符号索引。`platform-checks.yml` 已改为检查 `ash-app-server`，删除历史 `zui` 入口并沿用实际 Python 组包测试；工作流配置检查通过不代表正式发布已运行。GNU/musl、CPU 和构建器逐项声明实际发布覆盖，不因支持列表中存在一个 target 就宣称已经验证。
+
+验收必须使用实际发出的 stripped/signed 程序及 companion symbols，不能只断言符号文件存在：
+
+1. 每个第一方模块校验 ID、哈希、架构和调试行信息；三平台各用独立 release 测试程序验证已知非内联函数及内联函数的源码行，Windows 不能停留在 PDB 路径检查。
+2. 在有 dump 支持的隔离 CI 场景中触发受控 panic 和进程崩溃，验证从报告/dump 到函数、行号和提交的完整流程。测试程序不进入产品，正式包另外执行启动/RPC/原有 smoke 验收。
+3. 验证 ASLR、同版本不同构建、重命名 PDB、错误 UUID/build-id/GUID、损坏归档、缺失符号和缺失源码；错误匹配必须被拒绝。
+4. 验证剥离后启动正常、动态导出及栈展开可用、签名通过、最终包文件摘要与更新描述一致、符号和 source map 未混入默认产品包。给已签名输入做负向测试，确认不会未经重签就改写。
+5. 按既有构建测量流程比较 release 调试信息接入前后的构建时间、峰值内存、最终程序和符号归档大小；测量结论只覆盖实际执行的目标，不顺便调整优化参数。
+
+第一阶段完成 Rust 发布符号、持久归档、精确匹配、手动导入 OS 报告和离线解析；第二阶段统一第一方 panic 记录与诊断导出，使没有 OS dump 的 panic 也能进入同一解析链；第三阶段补 Electron Crashpad、与实际 Electron 版本匹配的供应方符号、Node addon 符号及 JavaScript source map。Electron 的 [crashReporter](https://www.electronjs.org/docs/latest/api/crash-reporter) 可配置只在本地保存报告，不能据此认为独立 Rust 子进程也被覆盖。前端 source map 由前端构建负责，在持久索引中按生成文件哈希绑定后才从用户包排除；第二、三阶段完成前明确报告相应采集和解析缺口。
 
 ## Rust 依赖检查与构建测量
 

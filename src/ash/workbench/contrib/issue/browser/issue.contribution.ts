@@ -11,11 +11,9 @@ import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import { ActiveEditorContext } from '../../../common/contextkeys.js';
 import { IIssueFormService, IWorkbenchIssueService, type IssueReporterData } from '../common/issue.js';
-import { IssueFormService } from './issueFormService.js';
 import { WorkbenchIssueService, issueReporterEditorId } from './issueService.js';
 import { IssueReporterEditorPane } from './issueReporterEditorPane.js';
 
-registerSingleton(IIssueFormService, IssueFormService, InstantiationType.Delayed);
 registerSingleton(IWorkbenchIssueService, WorkbenchIssueService, InstantiationType.Delayed);
 registerEditorPane({
 	id: issueReporterEditorId, name: localize('issue.title', 'Report an issue'),
@@ -48,7 +46,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			const form = accessor.get(IIssueFormService);
 			const focused = pane.getControl().ownerDocument.activeElement;
 			return new AccessibleContentProvider(AccessibleViewProviderId.IssueReporter, { type },
-				() => type === AccessibleViewType.Help ? localize('issue.help', 'Use Tab and Shift+Tab to move between the issue type, title, description, diagnostic checkboxes and actions. Preview shows the exact report that will be sent. Search similar issues works without signing in. Sign in to GitHub before submitting. A successful submission shows the new issue link. Closing this tab keeps your draft until the window closes. Use New report after submission to start another. Escape closes accessibility help.') : `${form.state.issueTitle}\n\n${form.serialize()}\n\n${form.state.similarIssues.map(issue => `${issue.title}\n${issue.html_url}`).join('\n')}`,
+				() => type === AccessibleViewType.Help ? localize('issue.help', 'Use Tab and Shift+Tab to move between the issue type, title, description, diagnostic checkboxes and actions. Preview shows the exact report that will be sent. Search similar issues works without signing in. Sign in to GitHub before submitting. A successful submission shows the new issue link. Closing this tab keeps your draft until the window closes. Use New report after submission to start another. Escape closes accessibility help.') + '\n\n' + localize('issue.diagnosticsHelp', 'System information lists App Server and browser details separately. Desktop reports also include local system and process metrics.') : `${form.state.issueTitle}\n\n${form.serialize()}\n\n${form.state.similarIssues.map(issue => `${issue.title}\n${issue.html_url}`).join('\n')}`,
 				() => { if (focused instanceof HTMLElement && focused.isConnected) { focused.focus(); } }, AccessibilityVerbositySettingId.IssueReporter);
 		},
 	});

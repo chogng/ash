@@ -14,6 +14,7 @@ import { BrowserContextViewService } from '../../../src/ash/platform/contextview
 import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
+import { ILogService, NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
 import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
@@ -45,6 +46,7 @@ if (locale) {
 }
 const resources = new DisposableStore();
 const services = resources.add(new InstantiationService());
+services.registerInstance(ILogService, new NullLoggerService());
 const calls: string[] = [];
 const contexts = resources.add(new ContextKeyService());
 services.registerInstance(IContextKeyService, contexts);

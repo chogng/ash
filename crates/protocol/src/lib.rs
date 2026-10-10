@@ -84,6 +84,8 @@ pub use guardian::RiskLevel;
 pub use guardian::SandboxDenialEvidence;
 pub use guardian::UserAuthorization;
 pub use hook::HookEvent;
+pub use hook::HookRunRecord;
+pub use hook::HookRunStatus;
 pub use ids::AgentId;
 pub use ids::AgentJoinId;
 pub use ids::AgentMessageId;

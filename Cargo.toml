@@ -369,6 +369,7 @@ flate2 = { version = "1", default-features = false, features = ["rust_backend"] 
 pulldown-cmark = { version = "0.13.4", default-features = false }
 ratatui = "0.29.0"
 regex = "1"
+regex-syntax = "0.8"
 reqwest = { version = "0.13.4", default-features = false, features = ["rustls-no-provider"] }
 resvg = { version = "0.47", default-features = false }
 schemars = "1.2.1"
@@ -571,6 +572,12 @@ sleep_inhibitor = { package = "ash-utils-sleep-inhibitor", path = "crates/utils/
 ash-file-access = { path = "crates/file-access" }
 worktree = { path = "crates/worktree" }
 ash-user-verification = { path = "crates/user-verification" }
+
+[profile.release]
+# Preserve source lines for companion symbols; packaging strips only staging copies.
+debug = "line-tables-only"
+split-debuginfo = "off"
+strip = false
 
 [profile.dev]
 # Keep line tables and backtraces without generating full variable debug information.

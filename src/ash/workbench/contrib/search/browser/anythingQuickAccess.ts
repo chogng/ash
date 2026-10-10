@@ -6,7 +6,9 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { ThemeIcon } from '../../../../base/common/themables.js';
 import { localize } from '../../../../nls.js';
 import { FileKind, IFileService } from '../../../../platform/files/common/files.js';
-import { IFileSearchService } from '../../../../platform/search/common/fileSearch.js';
+import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
+import { ISearchService } from '../../../services/search/common/search.js';
+import { QueryBuilder } from '../../../services/search/common/queryBuilder.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import type { AnythingQuickAccessProviderRunOptions, IQuickAccessProvider } from '../../../../platform/quickinput/common/quickAccess.js';
@@ -15,7 +17,6 @@ import { filterQuickPickItems } from '../../../../platform/quickinput/browser/qu
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IEditorGroupsService } from '../../../services/editor/common/editorGroupsService.js';
 import { IHistoryService } from '../../../services/history/common/history.js';
-
 import { IPathService } from '../../../../platform/path/common/pathService.js';
 import { untildify } from '../../../../base/common/labels.js';
 import { Schemas } from '../../../../base/common/network.js';
@@ -30,7 +31,7 @@ export class AnythingQuickAccessProvider implements IQuickAccessProvider {
 	public static readonly PREFIX = '';
 
 	constructor(
-		@IFileSearchService private readonly search: IFileSearchService,
+		@ISearchService private readonly search: ISearchService,
 		@IFileService private readonly files: IFileService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IEditorService private readonly editors: IEditorService,
@@ -76,8 +77,17 @@ export class AnythingQuickAccessProvider implements IQuickAccessProvider {
 			if (!query && !options.includeFolders) { picker.busy = false; return; }
 			picker.busy = true;
 			try {
+				using cancellation = new CancellationTokenSource();
+				const cancel = (): void => cancellation.cancel();
+				controller.signal.addEventListener('abort', cancel, { once: true });
+				signal.addEventListener('abort', cancel, { once: true });
+				using listeners = toDisposable(() => {
+					controller.signal.removeEventListener('abort', cancel);
+					signal.removeEventListener('abort', cancel);
+				});
+				if (signal.aborted || controller.signal.aborted) cancellation.cancel();
 				const isGlob = /[*?{[]/.test(query);
-				const absoluteCandidates: IAnythingQuickPickItem[] = [];
+				const candidates: IAnythingQuickPickItem[] = [];
 				const folder = folders[0]?.uri;
 				const target = query.startsWith('/@browser/') ? URI.from({ scheme: Schemas.file, path: query }) : folder ?? URI.from({ scheme: Schemas.file, path: '/' });
 				const resolvedHome = this.paths.resolvedUserHome;
@@ -95,27 +105,28 @@ export class AnythingQuickAccessProvider implements IQuickAccessProvider {
 						: await this.paths.fileURI(normalized);
 					try {
 						const stat = await this.files.stat(resource);
-						if (stat.kind === FileKind.File || options.includeFolders && stat.kind === FileKind.Directory) absoluteCandidates.push(itemFor(resource, stat.kind));
+						if (stat.kind === FileKind.File || options.includeFolders && stat.kind === FileKind.Directory) candidates.push(itemFor(resource, stat.kind));
 					} catch {
 						// Absolute-path candidates may not exist or may be outside authorized file roots.
 					}
 				}
-				// Subsequence globs search beyond the result limit without a separate frontend file index.
-				const pattern = /[*?{[]/.test(query) ? query : `**/*${[...query].map(character => character.replace(/[\\*?{}[\]]/g, '\\$&')).join('*')}*`;
-				const results = absolute ? [absoluteCandidates] : await Promise.all(folders.map(async folder => {
-					const candidates: IAnythingQuickPickItem[] = [];
-					if (options.includeFolders) {
+				if (options.includeFolders && !absolute) {
+					for (const folder of folders) {
 						candidates.push(itemFor(folder.uri, FileKind.Directory));
 						for (const entry of await this.files.readDirectory(folder.uri)) {
 							if (entry.kind === FileKind.Directory) candidates.push(itemFor(entry.resource, FileKind.Directory));
 						}
 					}
-					if (!query) return candidates;
-					const found = await this.search.glob({ resource: folder.uri, target: { type: 'workspace', dirId: folder.id } }, { includePatterns: [pattern], excludePatterns: [], maxResults: 100 }, controller.signal);
-					for (const file of found.matches) {
+				}
+				if (query && !absolute) {
+					const found = await this.search.fileSearch(new QueryBuilder().file(folders.map(folder => folder.uri), {
+						filePattern: query, shouldGlobMatchFilePattern: isGlob, sortByScore: !isGlob, maxResults: 100,
+					}), cancellation.token);
+					for (const file of found.results) {
 						if (options.includeFolders) {
+							const folder = [...folders].sort((a, b) => b.uri.path.length - a.uri.path.length).find(folder => extUri.isEqualOrParent(file.resource, folder.uri));
 							let parent = dirname(file.resource);
-							while (extUri.isEqualOrParent(parent, folder.uri)) {
+							while (folder && extUri.isEqualOrParent(parent, folder.uri)) {
 								candidates.push(itemFor(parent, FileKind.Directory));
 								if (extUri.isEqual(parent, folder.uri)) break;
 								parent = dirname(parent);
@@ -123,14 +134,13 @@ export class AnythingQuickAccessProvider implements IQuickAccessProvider {
 						}
 						candidates.push(itemFor(file.resource));
 					}
-					return candidates;
-				}));
+				}
 				if (signal.aborted || controller.signal.aborted) return;
-				const candidates = results.flat().filter(item => {
+				const eligibleCandidates = candidates.filter(item => {
 					if (absolute || item.kind !== FileKind.Directory || !query) return true;
 					return /[*?{[]/.test(query) ? match(query, item.resource.path) : filterQuickPickItems([item], query).length > 0;
 				}).filter(eligible);
-				picker.items = [...picks, ...(candidates.length ? [{ type: 'separator' as const, label: localize('quickAccess.workspaceResources', 'Workspace') }, ...candidates] : [])];
+				picker.items = [...picks, ...(eligibleCandidates.length ? [{ type: 'separator' as const, label: localize('quickAccess.workspaceResources', 'Workspace') }, ...eligibleCandidates] : [])];
 			} catch (error) {
 				if (!signal.aborted && !controller.signal.aborted) this.notifications.error(localize('quickAccess.fileSearchFailed', 'Could not search files: {0}', String(error)));
 			} finally {

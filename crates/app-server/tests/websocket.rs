@@ -85,6 +85,16 @@ fn app_server_emits_a_valid_listen_record_and_serves_websocket_requests() {
         let response: serde_json::Value = serde_json::from_str(&response).unwrap();
         assert_eq!(response["id"], 1);
         assert!(response["result"].is_object());
+        let expected_os = match std::env::consts::OS {
+            "windows" => Some("windows"),
+            "macos" => Some("mac"),
+            "linux" => Some("linux"),
+            _ => None,
+        };
+        assert_eq!(
+            response["result"]["serverInfo"]["operatingSystem"],
+            serde_json::json!(expected_os)
+        );
         websocket.close(None).await.unwrap();
     });
 }

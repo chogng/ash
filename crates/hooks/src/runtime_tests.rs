@@ -87,6 +87,7 @@ impl HookProcessExecutor for RecordingProcess {
         _: Vec<u8>,
         _: CommandExecutionAuthority,
         _: &CancellationToken,
+        _: &mut core_api::HookRunEvidence,
     ) -> Result<crate::outcome::HookDecision, CoreError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         self.executions
@@ -437,7 +438,7 @@ fn before_tool_denial_is_typed_and_projected_as_a_terminal_run() {
     );
     let runs = runtime.recent_runs();
     assert_eq!(runs.len(), 1);
-    assert_eq!(runs[0].run_id, "hook-run-1");
+    assert!(runs[0].run_id.starts_with("hook-run-"));
     assert_eq!(runs[0].hook_id, "user:hook:guard");
     assert_eq!(runs[0].event, HookRunEvent::BeforeTool);
     assert_eq!(

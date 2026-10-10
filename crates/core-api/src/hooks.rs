@@ -74,6 +74,16 @@ pub struct HookRunEvidence {
     pub stderr_truncated: bool,
 }
 
+/// Commits Hook observations without taking ownership of Hook execution or Git snapshots.
+pub trait HookRunObserver: Send + Sync {
+    fn updated(
+        &self,
+        scope: &HookEventScope,
+        run: &ash_protocol::HookRunRecord,
+        evidence: Option<&HookRunEvidence>,
+    ) -> Result<(), CoreError>;
+}
+
 /// One Ash lifecycle event emitted by the owner of the corresponding state transition.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HookEventRequest {

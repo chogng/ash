@@ -1,3 +1,12 @@
+import { OperatingSystem } from '../../../../../base/common/platform.js';
+import { createDisconnectedRendererApi } from '../../../../../platform/agentHost/browser/rendererApi.js';
+import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
+import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
+import { IRendererHostService } from '../../../../../platform/renderer/common/rendererHost.js';
+import '../../../../services/path/browser/pathService.js';
+import { resetNlsResolver } from '../../../../../nls.js';
+import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
+import { createSshRemoteWorkspaceUri } from '../../../../../platform/remote/common/remote.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import assert from 'node:assert/strict';
 import { afterEach, suiteTeardown, test } from 'mocha';
@@ -60,7 +69,7 @@ test('Save File command saves the active editor', async () => {
 		const { IEditorPart } = await import('../../../../browser/parts/editor/editorPart.js');
 		await import('../../browser/fileActions.contribution.js');
 		let saves = 0;
-		const services = new InstantiationService();
+		const services = createFileActionServices();
 		services.registerInstance(IEditorPart, {
 			saveActiveEditor: async () => { saves += 1; },
 		} as unknown as EditorPartContract);
@@ -87,7 +96,7 @@ test('Open File command opens every file selected by the dialog', async () => {
 		await import('../../browser/fileActions.contribution.js');
 		const resources = [URI.file('/work/one.md'), URI.file('/work/two.md')];
 		const opened: URI[] = [];
-		const services = new InstantiationService();
+		const services = createFileActionServices();
 		services.registerInstance(IFileDialogService, {
 			pickFileToSave: async () => { throw new Error('Unexpected Save As'); },
 			showSaveConfirm: async () => { throw new Error('Unexpected save confirmation'); },
@@ -119,14 +128,14 @@ for (const fileRoot of fileCommandRoots) {
 			const created: URI[] = [];
 			const opened: URI[] = [];
 			using workspace = new WorkspaceContextService({ id: 'project', uri: root });
-			const services = new InstantiationService();
+			const services = createFileActionServices();
 			using explorerService = createExplorerService(workspace);
 			services.registerInstance(IWorkspaceContextService, workspace);
 			services.registerInstance(IExplorerService, explorerService);
 			services.registerInstance(IQuickInputService, {
 				input: async options => {
 					assert.equal(options.title, 'New File Name');
-					assert.equal(await options.validateInput?.('../escape'), 'Enter a file name without path separators.');
+					assert.equal(await options.validateInput?.('../escape'), 'Enter a valid file name for the target file system.');
 					assert.equal(await options.validateInput?.('new %中.txt'), undefined);
 					return 'new %中.txt';
 				},
@@ -179,14 +188,14 @@ test('New Folder command creates a directory under the selected folder', async (
 		selectResource: async () => { },
 		focus() { },
 	});
-	using services = new InstantiationService();
+	using services = createFileActionServices();
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IExplorerService, explorer);
 	services.registerInstance(IEditorService, { activeEditor: undefined } as EditorServiceContract);
 	services.registerInstance(IQuickInputService, {
 		input: async options => {
 			assert.equal(options.title, 'New Folder Name');
-			assert.equal(await options.validateInput?.('../escape'), 'Enter a name without path separators.');
+			assert.equal(await options.validateInput?.('../escape'), 'Enter a valid name for the target file system.');
 			return 'generated';
 		},
 	} as QuickInputServiceContract);
@@ -216,7 +225,7 @@ test('Explorer copy and cut paste selected files with conflict names', async () 
 	const copied: string[] = [];
 	const renamed: string[] = [];
 	let resourceClipboard: IClipboardResources = { resources: [], operation: 'copy' };
-	using services = new InstantiationService();
+	using services = createFileActionServices();
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IExplorerService, explorer);
 	services.registerInstance(IClipboardService, {
@@ -283,7 +292,7 @@ test('Explorer paste keeps copy and cut operations across windows', async () => 
 	using second = createExplorerService(workspace);
 	using firstView = first.registerView({ getContext: () => [new ExplorerItem(source, '100% ready.bin', FileKind.File)], getAccessibleContent: () => '', selectResource: async () => { }, focus() { } });
 	using secondView = second.registerView({ getContext: () => [new ExplorerItem(pasteDestination, 'destination', FileKind.Directory)], getAccessibleContent: () => '', selectResource: async () => { }, focus() { } });
-	using firstServices = new InstantiationService();
+	using firstServices = createFileActionServices();
 	firstServices.registerInstance(IWorkspaceContextService, workspace);
 	firstServices.registerInstance(IExplorerService, first);
 	firstServices.registerInstance(IClipboardService, clipboard);
@@ -291,7 +300,7 @@ test('Explorer paste keeps copy and cut operations across windows', async () => 
 	await firstCommands.executeCommand(COPY_FILE_COMMAND_ID);
 
 	const operations: string[] = [];
-	using secondServices = new InstantiationService();
+	using secondServices = createFileActionServices();
 	secondServices.registerInstance(IWorkspaceContextService, workspace);
 	secondServices.registerInstance(IExplorerService, second);
 	secondServices.registerInstance(IClipboardService, clipboard);
@@ -332,7 +341,7 @@ test('Explorer cut across nested workspace roots copies before deleting the sour
 	using view = explorer.registerView({ getContext: () => [selected], getAccessibleContent: () => '', selectResource: async () => { }, focus() { } });
 	let clipboardResources: IClipboardResources = { resources: [], operation: 'copy' };
 	const operations: string[] = [];
-	using services = new InstantiationService();
+	using services = createFileActionServices();
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IExplorerService, explorer);
 	services.registerInstance(IClipboardService, {
@@ -373,7 +382,7 @@ test('Explorer paste forwards copy and move requests to the system file transfer
 		using explorer = createExplorerService(workspace);
 		using view = explorer.registerView({ getContext: () => [new ExplorerItem(destination, 'destination', FileKind.Directory)], getAccessibleContent: () => '', selectResource: async () => { }, focus() { } });
 		const pastes: { directory: string; moveRequested: boolean; }[] = [];
-		using services = new InstantiationService();
+		using services = createFileActionServices();
 		services.registerInstance(IWorkspaceContextService, workspace);
 		services.registerInstance(IExplorerService, explorer);
 		services.registerInstance(IClipboardService, {
@@ -418,7 +427,7 @@ test('Explorer paste imports exact bytes from the system file list', async () =>
 		using view = explorer.registerView({ getContext: () => [new ExplorerItem(destination, 'destination', FileKind.Directory)], getAccessibleContent: () => '', selectResource: async () => { }, focus() { } });
 		const writes: { resource: string; bytes: number[]; }[] = [];
 		const attemptedTransfers: string[] = [];
-		using services = new InstantiationService();
+		using services = createFileActionServices();
 		services.registerInstance(IWorkspaceContextService, workspace);
 		services.registerInstance(IExplorerService, explorer);
 		services.registerInstance(IClipboardService, {
@@ -453,7 +462,7 @@ test('Copy Path commands copy the active file and its workspace-relative path', 
 		const file = URI.file('/project/src/main.ts');
 		const copied: string[] = [];
 		using workspace = new WorkspaceContextService({ id: 'project', folders: [{ id: 'project', uri: root, name: 'project', index: 0 }] });
-		const services = new InstantiationService();
+		const services = createFileActionServices();
 		let activeEditor: IResourceEditorInput = { resource: file };
 		services.registerInstance(IEditorService, {
 			get activeEditor() { return activeEditor; },
@@ -516,7 +525,7 @@ for (const fileRoot of fileCommandRoots) {
 			browser.window.HTMLAnchorElement.prototype.click = function () {
 				downloadedName = this.download;
 			};
-			const services = new InstantiationService();
+			const services = createFileActionServices();
 			services.registerInstance(IEditorService, { activeEditor: { resource } } as EditorServiceContract);
 			services.registerInstance(IFileService, {
 				readFileBytes: async requested => {
@@ -554,13 +563,13 @@ test('Explorer menu commands rename, open beside the editor, and delete the sele
 		selectResource: async () => { },
 		focus() { },
 	});
-	using services = new InstantiationService();
+	using services = createFileActionServices();
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IExplorerService, explorer);
 	services.registerInstance(IQuickInputService, {
 		input: async options => {
 			assert.equal(options.value, 'old.ts');
-			assert.equal(await options.validateInput?.('../escape'), 'Enter a file name without path separators.');
+			assert.equal(await options.validateInput?.('../escape'), 'Enter a valid file name for the target file system.');
 			return 'new.ts';
 		},
 	} as QuickInputServiceContract);
@@ -615,7 +624,7 @@ test('Reveal in OS command sends the selected local file to the desktop host', a
 		selectResource: async () => { },
 		focus() { },
 	});
-	using services = new InstantiationService();
+	using services = createFileActionServices();
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IExplorerService, explorer);
 	services.registerInstance(IEditorService, { activeEditor: undefined } as EditorServiceContract);
@@ -648,7 +657,7 @@ test('tab copy actions copy clicked and selected file paths without changing the
 	const group = { id: 'main', inputs: [active, clicked, second], selectedInputs: [active], editors: [active, clicked, second].map(input => ({ input })), activeInput: active };
 	const copied: string[] = [];
 	using workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
-	using services = new InstantiationService();
+	using services = createFileActionServices();
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IEditorGroupsService, { getGroup: (id: string) => id === group.id ? group : undefined } as unknown as IEditorGroupsService);
 	services.registerInstance(IEditorService, { activeEditor: active } as unknown as EditorServiceContract);
@@ -685,7 +694,7 @@ test('Reveal tab menu groups both destinations and targets the clicked inactive 
 		selectResource: async (resource, reveal) => { effects.push(['select', resource?.toString(), reveal]); },
 		focus() { },
 	});
-	using services = new InstantiationService();
+	using services = createFileActionServices();
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IExplorerService, explorer);
 	services.registerInstance(IEditorService, { activeEditor: active } as unknown as EditorServiceContract);
@@ -712,6 +721,105 @@ test('Reveal tab menu groups both destinations and targets the clicked inactive 
 	assert.deepEqual(menus.getMenuActions(MenuId.EditorTitleContext).find(([name]) => name === '2_files')![1].map(action => action.enabled), [false, false]);
 });
 
+for (const scenario of [
+	{ label: 'Windows device alias', os: OperatingSystem.Windows, root: URI.parse('file:///C:/project'), name: 'CON.txt', valid: false },
+	{ label: 'POSIX backslash', os: OperatingSystem.Linux, root: URI.parse('file:///project'), name: 'part\\name.txt', valid: true },
+	{ label: 'SSH on a Windows client', os: OperatingSystem.Windows, root: createSshRemoteWorkspaceUri('build', '/project'), name: 'part\\name.txt', valid: true },
+]) {
+	for (const command of [NEW_FILE_COMMAND_ID, NEW_FOLDER_COMMAND_ID, RENAME_FILE_COMMAND_ID]) {
+		test(`file name rules reach ${command}: ${scenario.label}`, async () => {
+			await import('../../browser/fileActions.contribution.js');
+			using workspace = new WorkspaceContextService({ id: 'test', uri: scenario.root });
+			using explorer = createExplorerService(workspace);
+			const original = scenario.root.joinPathSegment('original.txt');
+			using view = explorer.registerView({
+				getContext: () => command === RENAME_FILE_COMMAND_ID ? [new ExplorerItem(original, 'original.txt', FileKind.File)] : [],
+				getAccessibleContent: () => '', selectResource: async () => { }, focus() { },
+			});
+			using services = createFileActionServices(scenario.os);
+			services.registerInstance(IWorkspaceContextService, workspace);
+			services.registerInstance(IExplorerService, explorer);
+			services.registerInstance(IQuickInputService, {
+				input: async options => {
+					assert.equal(await options.validateInput?.(scenario.name) === undefined, scenario.valid);
+					return scenario.name;
+				},
+			} as QuickInputServiceContract);
+			const effects: string[] = [];
+			services.registerInstance(IFileService, {
+				createFile: async (resource: URI) => { effects.push(resource.path); return { resource, kind: FileKind.File, sizeBytes: 0, readonly: false, modifiedAtMillis: 0 }; },
+				createDirectory: async (resource: URI) => { effects.push(resource.path); return { resource, kind: FileKind.Directory, sizeBytes: 0, readonly: false, modifiedAtMillis: 0 }; },
+				rename: async (_source: URI, target: URI) => { effects.push(target.path); },
+			} as unknown as FileServiceContract);
+			services.registerInstance(IEditorService, { activeEditor: undefined, openEditor: async () => { } } as unknown as EditorServiceContract);
+			using commands = new CommandService(services);
+			if (scenario.valid) {
+				await commands.executeCommand(command);
+				assert.deepEqual(effects, [`/project/${scenario.name}`]);
+			} else {
+				await assert.rejects(commands.executeCommand(command), /valid .*name for the target file system/);
+				assert.deepEqual(effects, []);
+			}
+		});
+	}
+	test(`paste applies destination file name rules: ${scenario.label}`, async () => {
+		await import('../../browser/fileActions.contribution.js');
+		using workspace = new WorkspaceContextService({ id: 'test', uri: scenario.root });
+		using explorer = createExplorerService(workspace);
+		const source = scenario.root.joinPathSegment(scenario.name);
+		const destination = scenario.root.joinPathSegment('destination');
+		using view = explorer.registerView({
+			getContext: () => [new ExplorerItem(destination, 'destination', FileKind.Directory)],
+			getAccessibleContent: () => '', selectResource: async () => { }, focus() { },
+		});
+		using services = createFileActionServices(scenario.os);
+		services.registerInstance(IWorkspaceContextService, workspace);
+		services.registerInstance(IExplorerService, explorer);
+		services.registerInstance(IClipboardService, { readResources: async () => ({ resources: [source], operation: 'copy' }) } as unknown as IClipboardService);
+		const copied: string[] = [];
+		services.registerInstance(IFileService, {
+			stat: async (resource: URI) => {
+				if (resource.path !== source.path) throw new FileNotFoundError(resource);
+				return { resource, kind: FileKind.File, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined };
+			},
+			copy: async (_source: URI, target: URI) => { copied.push(target.path); },
+		} as unknown as FileServiceContract);
+		using commands = new CommandService(services);
+		await commands.executeCommand(PASTE_FILE_COMMAND_ID);
+		assert.deepEqual(copied, scenario.valid ? [destination.joinPathSegment(scenario.name).path] : []);
+	});
+}
+
+test('file name validation reports the target filesystem error in Chinese', async () => {
+	await import('../../browser/fileActions.contribution.js');
+	initializeTestLocalization('zh-CN');
+	try {
+		using workspace = new WorkspaceContextService({ id: 'test', uri: URI.parse('file:///C:/project') });
+		using explorer = createExplorerService(workspace);
+		using services = createFileActionServices(OperatingSystem.Windows);
+		services.registerInstance(IWorkspaceContextService, workspace);
+		services.registerInstance(IExplorerService, explorer);
+		services.registerInstance(IEditorService, { activeEditor: undefined } as EditorServiceContract);
+		services.registerInstance(IQuickInputService, {
+			input: async options => {
+				assert.equal(await options.validateInput?.('CON.txt'), '请输入目标文件系统允许的文件名。');
+				return 'CON.txt';
+			}
+		} as QuickInputServiceContract);
+		using commands = new CommandService(services);
+		await assert.rejects(commands.executeCommand(NEW_FILE_COMMAND_ID), /请输入目标文件系统允许的文件名/);
+	} finally {
+		resetNlsResolver();
+	}
+});
+
 function createExplorerService(workspace: WorkspaceContextService): ExplorerService {
 	return new ExplorerService(workspace, configurations.add(new FileService()), configurations.add(new InMemoryConfigurationService()));
+}
+
+function createFileActionServices(os: OperatingSystem = OperatingSystem.Linux): InstantiationService {
+	const host = createDisconnectedRendererApi();
+	const services = configurations.add(new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors())));
+	services.registerInstance(IRendererHostService, { ...host, hasAppServer: true, appServer: { ...host.appServer, operatingSystem: os } });
+	return services;
 }

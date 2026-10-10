@@ -1,3 +1,4 @@
+import './media/binaryFileEditor.css';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
 import type { IEditorPaneDescriptor } from '../../../../browser/editor.js';

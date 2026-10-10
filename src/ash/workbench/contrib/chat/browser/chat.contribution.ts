@@ -1,3 +1,5 @@
+import './aiCustomization/aiCustomizationManagement.contribution.js';
+import { registerHookActions } from './promptSyntax/hookActions.js';
 import './actions/chatSpeechToTextActions.js';
 import './chatEditing/chatEditing.contribution.js';
 import { registerSkillActions } from './promptSyntax/skillActions.js';
@@ -13,6 +15,7 @@ import { DictationOnboardingService, IDictationOnboardingService } from './speec
 registerSingleton(IChatSpeechToTextService, ChatSpeechToTextService, InstantiationType.Delayed);
 registerSingleton(IDictationOnboardingService, DictationOnboardingService, InstantiationType.Delayed);
 registerSkillActions();
+registerHookActions();
 
 registerWorkbenchContribution('workbench.contrib.chatInputEditor', WorkbenchPhase.BlockStartup, accessor => {
 	const instantiationService = accessor.get(IInstantiationService);

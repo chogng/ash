@@ -1,3 +1,7 @@
+import { createDisconnectedRendererApi } from '../../../platform/agentHost/browser/rendererApi.js';
+import { IRendererHostService } from '../../../platform/renderer/common/rendererHost.js';
+import { IPathService } from '../../../platform/path/common/pathService.js';
+import { BrowserPathService } from '../../../workbench/services/path/browser/pathService.js';
 import { IExecutionSettingsService } from '../../../platform/execution/common/executionSettingsService.js';
 import { IPromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
@@ -15,10 +19,6 @@ import { WorkspaceContextService } from '../../../workbench/services/workspaces/
 import { IDialogService, IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { DialogService } from '../../../workbench/services/dialogs/common/dialogService.js';
 import { FileDialogService } from '../../../workbench/services/dialogs/browser/fileDialogService.js';
-import { BrowserPathService } from '../../../workbench/services/path/browser/pathService.js';
-import { IPathService } from '../../../platform/path/common/pathService.js';
-import { IRendererHostService } from '../../../platform/renderer/common/rendererHost.js';
-import { createDisconnectedRendererApi } from '../../../platform/agentHost/browser/rendererApi.js';
 import type { IWebWorkspaceClient } from '../../../workbench/services/workspaces/browser/workspaceOpenService.js';
 import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
 import { IDictationService } from '../../../platform/dictation/common/dictationService.js';

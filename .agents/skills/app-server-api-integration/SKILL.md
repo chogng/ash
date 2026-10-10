@@ -1,21 +1,22 @@
 ---
 name: app-server-api-integration
-description: Expand a Rust app-server into the desktop product business backend while preserving the TypeScript editor platform. Use for backend ownership decisions, TypeScript host replacement, renderer protocol clients, Main relays, generated bidirectional protocol, domain adapters, integration lifecycle, cancellation, conflict gating, and exact file placement. Do not use for standalone daemon or CLI startup defects, or to move UI, editor models, or extension runtime into Rust.
+description: Integrate Ash desktop domain services with the shared Rust app-server while preserving editor ownership and optional extension providers. Use for backend ownership, renderer protocol clients, Main relays, generated bidirectional protocols, lifecycle and cancellation. Do not use for standalone daemon/CLI startup defects or extension runtime design without app-server integration.
 ---
 
 # App-server API 对接
 
-目标是保留 TypeScript 编辑器前端与桌面平台，把 Rust app-server 扩展成产品业务后端。应由后端长期拥有的业务状态、执行、资源和后台能力迁入 Rust；编辑器模型、扩展运行时、Workbench UI 和 Electron 平台能力留在前端。前端公共接口继续按领域组织，renderer 通过领域 adapter 使用 app-server；生成协议只存在于 adapter 和 protocol client 边界。
+目标是保留 TypeScript 编辑器前端与桌面平台，通过 Rust app-server 接入共享核心服务和可选扩展 Provider。后台状态不自动归入核心：通用机制与权威执行由共享后端拥有，服务商认证/API 等业务由 Provider 唯一拥有。编辑器模型、Workbench UI、扩展 API 的客户端对象和 Electron 平台能力留在前端；TS/JS 与独立 Rust 扩展的执行/监管按 [扩展架构](../extension-architecture/SKILL.md) 决定。前端公共接口继续按领域组织，renderer 通过领域 adapter 使用 app-server；生成协议只存在于 adapter 和 protocol client 边界。
 
 本 skill 只约束桌面前后端接入和迁移。单独修复 `ash-app-server-daemon` 的进程管理、CLI 启动或版本更新缺陷时，按对应 owner 与测试规范处理，不套用下面的跨端迁移门禁和完成标准。
 
 ## 目标产品边界
 
-- Rust 后端默认拥有 Agent、Thread、Turn、Item、Project、Environment、账户会话、模型 catalog 与调用状态、审批与权限、command/process/resource、Agent 发起的 Git/repository/worktree 操作，以及跨窗口存活的搜索、索引、监听、远程连接和恢复。
-- TypeScript 编辑器平台继续拥有 text model、working copy、dirty buffer、undo/diff、Workbench contribution、扩展运行时、SCM/Terminal 的前端 contract、设置、主题、布局、快捷键、可访问性和窗口交互。
+- 共享 Rust 后端拥有 Agent、Thread、Turn、Item、Project、Environment、模型调用契约与状态、审批与最终权限、command/process/resource 和通用 Git、存储与资源机制。跨窗口存活用于决定状态 scope，不把具体服务商业务变成核心依赖。
+- 可选认证、托管平台 API 和产品特有流程由 TS/JS 或 Rust 扩展 Provider 拥有；账号会话由认证 Provider 管理，秘密安全存取与消费者授权由共享服务管理。App/TUI 按需消费，不要求 TUI 默认加载 App 预装能力。
+- TypeScript 编辑器平台继续拥有 text model、working copy、dirty buffer、undo/diff、Workbench contribution、扩展 API 的编辑器对象与客户端注册、SCM/Terminal 前端 contract、设置、主题、布局、快捷键、可访问性和窗口交互。扩展执行位置与宿主由扩展契约决定，不能把“保留 TS 编辑器”理解为只允许 JS 扩展。
 - Main 保留 Electron 与操作系统能力，但压缩为进程启动、窗口生命周期、连接 acquisition、透明 relay 和少量 typed host channel；它不成为业务后端。
 - 通用文件服务、交互式 Terminal 执行层、SCM 执行层和语言服务只有在形成稳定跨进程 contract、不会复制 editor/extension state、且收益明确时才迁入 Rust；不因语言偏好或目录对称迁移。
-- Rust 侧按领域 crate 隔离能力与依赖；`../app-server/` 只负责 connection、typed dispatch 和跨领域 orchestration，不能成为装下所有业务实现的单体 crate。
+- Rust 侧按领域 crate 隔离核心机制；`../app-server/` 只负责 connection、typed dispatch、授权路由和跨领域 orchestration。可选 Provider 实现从共享核心构建与运行依赖中拆出，不能把 app-server 或领域 crate 变成服务商业务集合。
 
 完整迁移判断、保留边界和条件能力见 [连接与所有权](references/connection-architecture.md)。
 
@@ -30,10 +31,11 @@ renderer contribution
   → Main transparent relay
   → renderer 专属 backend connection
   → 一个共享 app-server process
-  → Rust typed dispatch 与领域能力
+  → Rust typed dispatch 与授权路由
+  → 共享核心领域服务 / 有效扩展 Provider
 ```
 
-这条链路直接替换旧 Host 的线上协议和 TypeScript 后端运行层。不得让 Rust 重写旧 Host 协议，不得保留双后端入口，也不得把 Main 变成新的 TypeScript 后端。
+这条链路直接替换旧业务 Host 的线上协议和 TypeScript 后端运行层；扩展 runtime 的职责与迁移由扩展契约决定，不能只删除现有 Node Host 而丢失其消费者行为。不得让 Rust 重写旧业务 Host 协议，不得保留双业务后端入口，也不得把 Main 变成新的 TypeScript 后端。
 
 ## 核心所有权
 
@@ -45,14 +47,14 @@ renderer contribution
 - `src/platform/agentHost/electron-main/appServerConnectionRelay.ts` 为每个 renderer 创建独立 backend connection，并透明转发 frame；它不解析 JSON-RPC。
 - `.build/protocol/typescript/` 是 renderer 可导入的机械生成物，不能留在 `node/` owner 下，也不能手改。
 - `build/protocol/generate.ts` 与 `build/protocol/generate.py` 从 Cargo 的导出依赖图生成 `.build/protocol/`，校验输入和产物缓存，并串行化并发准备。
-- `../app-server-protocol/` 是 method、params、response、notification、server request、错误结构和 decoder 的唯一协议 owner；`../app-server/` 拥有 connection、typed dispatch 和跨领域 orchestration；对应 Rust 领域 crate 拥有领域行为与持久状态。
+- `../app-server-protocol/` 是产品线上 method、params、response、notification、server request、错误结构和 decoder 的唯一协议 owner；`../app-server/` 拥有 connection、typed dispatch 和授权路由。核心领域服务或选定扩展 Provider 拥有对应业务与持久状态，adapter/broker 不建立副本。
 
 只有 backend Thread 进入 Agents Window 时，才在 `src/sessions/` 增加 Provider adapter。Sessions 是条件消费者，不是通用 app-server API，也不是 process、Project 或 connection owner。
 
 ## 不变量
 
-- 一个应用 Host 默认启动一个 app-server process；每个 renderer 使用一条独立 backend connection 和一个 protocol client。Project、Workspace、窗口、领域或 Session 不能成为进程 key。
-- 只有同时满足“跨 renderer 或长期存活”“可形成稳定可序列化 contract”“不依赖 editor/Electron 对象身份”的能力才默认迁入 Rust；IO、并发、安全或持久化收益用于排序，不单独构成迁移理由。
+- 一个应用 Host 默认启动一个 app-server process；每个 renderer 使用一条独立 backend connection 和一个 protocol client。Project、Workspace、窗口、领域或 Session 不能成为 app-server 进程 key。扩展受监督的独立进程不属于第二个 app-server，其 scope 与关闭由扩展契约决定。
+- 先区分核心机制与可选业务，再根据“跨 renderer 或长期存活”“稳定可序列化 contract”“不依赖 editor/Electron 对象身份”判断后台接入与状态 scope；IO、并发、安全、持久化或 Rust 实现不单独构成进入核心的理由。
 - Main 不持有 request ID、pending map、initialize、notification 分类、server request handler 或领域状态。
 - protocol client 不暴露 `invoke(method, unknown)`，不允许调用方自行指定 response 泛型；method → params → response、运行时 decoder 都来自生成器。
 - 后端拥有 durable Project、Thread、Turn、Item、process/resource 和执行状态；前端只保存领域 facade 与 UI 状态。
@@ -68,7 +70,7 @@ renderer contribution
 以下情况必须停下来问用户：
 
 - 目标代码要求 Main 解析或分领域路由 app-server JSON-RPC，而本 skill 要求 renderer protocol client；
-- 只能使用单路 stdio、实验 transport、每窗口进程或 Main 共享线上 connection；
+- app-server 接入只能使用单路 stdio、实验 transport、每窗口 app-server 进程或 Main 共享线上 connection；
 - 正式实现依赖实验 method/field，且用户未决定先稳定还是放弃该能力；
 - 缺少生成 response map、运行时 decoder、结构化错误、取消、资源终止、兼容或 server request 唯一 connection owner；
 - 现有公开 API、身份、生命周期、文件位置或用户改动与最终 owner 冲突，且用户目标尚未决定如何取舍；
@@ -79,8 +81,8 @@ renderer contribution
 
 ## 工作流程
 
-1. 执行冲突门禁，按目标产品边界判断能力应迁入 Rust、留在前端还是需要用户决定；替换 Host 时确认旧协议与 TypeScript runtime 从生产调用链退出。
-2. 找到 renderer 调用方真正依赖的领域 service，固定它的契约、状态、事件、错误、取消和释放语义，并让对应 Rust 领域 crate 成为业务与持久状态 owner。
+1. 执行冲突门禁，按目标边界判断核心机制、可选 Provider 与客户端交互；替换业务 Host 时确认其旧协议与 runtime 从生产调用链退出，扩展 runtime 按公开契约同步迁移消费者与验证。
+2. 找到 renderer 调用方依赖的领域 service，固定契约、状态、事件、错误、取消和释放语义；由核心领域服务或选定扩展 Provider 唯一拥有业务状态，列明 App/TUI 消费与扩展缺失行为。
 3. 固定共享 process、per-renderer connection、renderer protocol client 和关闭语义。
 4. 为每项行为选择 request、notification、显式资源或 server request，并固定身份、顺序与错误。
 5. 核对正式 transport、生成 method map、runtime decoder、initialize 兼容、稳定 API 和 server request owner；缺失时先补后端或停下来问用户。
@@ -102,4 +104,4 @@ renderer contribution
 
 ## 完成标准
 
-完整跨端 API 接入任务的最终答复必须给出：迁入 Rust、保留前端和条件迁移的能力边界；各 Rust 领域 crate 与前端领域 contract 的 owner；退出生产调用链的旧 Host 文件/注册；领域 adapter、renderer protocol client、Main starter/relay、process/connection 拓扑、线上消息、准确文件位置、生成物与 decoder、取消和关闭、dirty file 处理、实际测试，以及仍阻止接入的后端缺口。涉及 Agents Window 时再给出 Provider、Session/Chat/Thread、Project/Workspace/Environment 映射。没有取得冲突决定时不能把跨端接入任务描述为完成。
+完整跨端 API 接入任务的最终答复必须给出：共享核心、可选 Provider、客户端与条件迁移边界；对应领域状态和 contract 的唯一 owner；退出生产调用链的旧业务 Host 文件/注册；领域 adapter、renderer protocol client、Main starter/relay、app-server 与扩展 process/connection 拓扑、线上消息、准确文件位置、生成物与 decoder、取消和关闭、dirty file 处理、实际测试，以及仍阻止接入的缺口。涉及扩展时说明 App/TUI 按需消费、缺失行为与凭据/数据切换；涉及 Agents Window 时再给出其 Provider、Session/Chat/Thread、Project/Workspace/Environment 映射。没有取得冲突决定时不能把跨端接入任务描述为完成。

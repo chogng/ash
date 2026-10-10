@@ -9,6 +9,7 @@ import { IViewsService } from '../../../src/ash/workbench/services/views/common/
 import { TERMINAL_VIEW_ID } from '../../../src/ash/workbench/contrib/terminal/common/terminal.js';
 import { SEARCH_VIEW_ID } from '../../../src/ash/workbench/contrib/search/common/constants.js';
 import { XtermTerminal } from '../../../src/ash/workbench/contrib/terminal/browser/xterm/xtermTerminal.js';
+import { IAccessibilitySignalService } from '../../../src/ash/platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { Disposable } from '../../../src/ash/base/common/lifecycle.js';
 import { IFileSearchService } from '../../../src/ash/platform/search/common/fileSearch.js';
@@ -279,17 +280,18 @@ document.body.append(symbolReads);
 let symbolSource = 'before\nfunction attach() {\n  return 42;\n}\nafter';
 let terminalSource = 'context terminal ready';
 let searchSnapshot: { query: string; content: string; matchCount: number; } | undefined = hasContextSources ? { query: 'needle', content: '# Search: needle\n# File: file:///workspace/main.ts\n  2:1-2:7: needle', matchCount: 1 } : undefined;
-const terminalOutput = resources.add(new Emitter<import('../../../src/ash/platform/terminal/common/terminal.js').IProcessDataEvent>());
 const terminalInstance: ITerminalInstance = {
 	...Disposable.None, id: 'context-shell', dirId: 'workspace', processId: 1, initialCwd: '/workspace', title: 'Shell',
 	profile: { profileId: 'shell', title: 'Shell', isDefault: true }, state: 'running', exitCode: undefined,
-	onDidWriteData: terminalOutput.event, onDidExit: Event.None, onDidChangeCommandStatus: Event.None, onDidChangeState: Event.None,
+	onDidWriteData: Event.None, onDidExit: Event.None, onDidChangeCommandStatus: Event.None, onDidChangeState: Event.None,
+	start: () => { }, clearBuffer: () => terminalScreen?.clearBuffer(), reuseTerminal: async () => { throw new Error('Screen-only fixture has no process to reuse'); },
 	xterm: undefined, xtermReadyPromise: Promise.resolve(undefined), getContribution: () => null, attachToElement: () => { }, detachFromElement: () => { }, sendText: async () => { }, processBinary: async () => { }, resize: () => { }, close: async () => { },
 };
 const terminalHost = document.createElement('div');
 document.body.append(terminalHost);
+services.registerInstance(IAccessibilitySignalService, { playSignal: async () => { }, playSignalLoop: () => Disposable.None });
 const terminalScreen = hasContextSources ? resources.add(services.createInstance(XtermTerminal, terminalHost, terminalInstance)) : undefined;
-if (hasContextSources) terminalOutput.fire({ data: new TextEncoder().encode(`\x1b[32m${terminalSource}\x1b[0m\r\n`), trackCommit: false });
+terminalScreen?.write(`\x1b[32m${terminalSource}\x1b[0m\r\n`);
 const terminalInstances = hasContextSources ? [terminalInstance] : [];
 services.registerInstance(ITerminalService, { instances: terminalInstances } as unknown as ITerminalService);
 services.registerInstance(IViewsService, {
@@ -403,7 +405,7 @@ window.ashChatInputIntegration = {
 	changeContextSources: () => {
 		symbolSource = 'changed source';
 		terminalSource = 'new terminal output';
-		terminalOutput.fire({ data: new TextEncoder().encode(terminalSource), trackCommit: false });
+		terminalScreen?.write(terminalSource);
 		searchSnapshot = undefined;
 		terminalInstances.length = 0;
 	},

@@ -366,6 +366,7 @@ fn selected_rewind_checkpoint_emits_a_typed_rewind_action() {
         usage: ash_protocol::ModelUsageSummary::default(),
         reference_cost: ash_protocol::ModelReferenceCostSummary::default(),
         goal: None,
+        hook_runs: Vec::new(),
         turns: vec![Turn {
             mode: Default::default(),
             advisor: None,

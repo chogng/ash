@@ -12,6 +12,7 @@ import { BareFontInfo, EDITOR_FONT_DEFAULTS } from '../../../../../editor/common
 import { CodeEditorConfiguration } from '../../../codeEditor/common/editorConfiguration.js';
 import { ChatEditorConfiguration } from '../chat.shared.contribution.js';
 import { DomWidget } from '../../../../../platform/domWidget/browser/domWidget.js';
+import { ChatHookContentPart } from './chatContentParts/chatHookContentPart.js';
 
 interface ChatListWidgetOptions {
 	readonly onDidRequestMemoryReference?: (reference: string) => void;
@@ -210,6 +211,11 @@ export class ChatListWidget extends DomWidget {
 		article.dataset.itemId = item.id;
 		if (item.transient) article.dataset.transient = "true";
 		if (item.isError) article.classList.add("error");
+		if (item.type === 'hook' && item.hookPart) {
+			const part = disposables.add(new ChatHookContentPart(article.ownerDocument, item.hookPart));
+			article.append(part.domNode);
+			return new RenderedItem(item, article, disposables);
+		}
 		const label = h(this.element.ownerDocument, item.type === "advisor" ? "summary" : "div");
 		label.className = "ash-chat-item-label";
 		label.textContent = itemLabel(item);
@@ -282,6 +288,7 @@ function sameAction(left: ChatTurnErrorAction | undefined, right: ChatTurnErrorA
 function itemLabel(item: IChatListItem): string {
 	if (item.label) return item.label;
 	switch (item.type) {
+		case 'hook': return 'Hook';
 		case "userMessage":
 		case "userContext":
 		case "userImage":

@@ -1,6 +1,6 @@
 import "./media/quickInput.css";
-import type { CancellationToken } from '../../../../base/common/cancellation.js';
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import type { CancellationToken } from "../../../../base/common/cancellation.js";
 import { QuickInputController } from "../../../../platform/quickinput/browser/quickInputController.js";
 import type {
 	IQuickInputService,

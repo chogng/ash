@@ -6,6 +6,7 @@ on:
     paths:
       - "cli/**"
       - "crates/**"
+      - "sdk/**"
       - "build/**"
       - "bazel/**"
       - "third_party/tgrep/**"
@@ -23,6 +24,7 @@ on:
     paths:
       - "cli/**"
       - "crates/**"
+      - "sdk/**"
       - "build/**"
       - "bazel/**"
       - "third_party/tgrep/**"

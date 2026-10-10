@@ -20,6 +20,7 @@ impl From<crate::ThreadSnapshot> for core_api::ThreadView {
             goal: snapshot.goal,
             advisor: snapshot.advisor,
             items: snapshot.items,
+            hook_runs: snapshot.hook_runs,
             agent,
             turns: snapshot
                 .turns

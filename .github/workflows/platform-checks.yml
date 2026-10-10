@@ -63,7 +63,25 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: gh release upload "$RELEASE_TAG" .build/release-artifacts/* --repo "$GITHUB_REPOSITORY"
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          symbols=(.build/release-artifacts/ash-symbols-*.tar.gz)
+          test "${#symbols[@]}" -gt 0
+          (cd .build/release-artifacts && sha256sum --check ash-symbols-*.sha256)
+          gh release upload "$RELEASE_TAG" .build/release-artifacts/ash-symbols-* --repo "$GITHUB_REPOSITORY"
+          gh release download "$RELEASE_TAG" --pattern 'ash-symbols-*' --dir .build/downloaded-symbols --repo "$GITHUB_REPOSITORY"
+          for symbol in "${symbols[@]}"; do
+            name="$(basename "$symbol")"
+            cmp "$symbol.sha256" ".build/downloaded-symbols/$name.sha256"
+          done
+          (cd .build/downloaded-symbols && sha256sum --check ash-symbols-*.sha256)
+          packages=()
+          for asset in .build/release-artifacts/*; do
+            [[ "$(basename "$asset")" == ash-symbols-* ]] || packages+=("$asset")
+          done
+          gh release upload "$RELEASE_TAG" "${packages[@]}" --repo "$GITHUB_REPOSITORY"
 
   build-windows:
     if: github.event_name == 'release'
@@ -82,6 +100,10 @@ jobs:
       id-token: write
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
+    env:
+      ASH_BUILD_COMMIT: ${{ github.sha }}
+      ASH_BUILD_ID: release-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}-${{ matrix.target }}
+      CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO: ${{ contains(matrix.target, 'apple-darwin') && 'packed' || 'off' }}
     strategy:
       fail-fast: false
       matrix:
@@ -137,6 +159,8 @@ jobs:
             build-essential \
             bubblewrap \
             libcap-dev \
+            llvm \
+            lldb \
             libdbus-1-dev \
             libgtk-3-dev \
             libssl-dev \
@@ -144,18 +168,21 @@ jobs:
             libxkbcommon-dev \
             pkg-config
 
+      - name: Install LLVM symbol tools
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install llvm --yes --no-progress
+          "C:/Program Files/LLVM/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
       - name: Install Windows ARM64 Rust target
         if: runner.os == 'Windows' && matrix.target == 'aarch64-pc-windows-msvc'
         shell: pwsh
         run: rustup target add aarch64-pc-windows-msvc
 
-      - name: Check app target
+      - name: Check App Server target
         shell: bash
-        run: ${{ matrix.python }} -B scripts/cargo.py check -p app --all-targets --target "${{ matrix.target }}"
-
-      - name: Test platform packaging contracts
-        shell: bash
-        run: ${{ matrix.python }} -B scripts/cargo.py test -p zui --lib distribution::tests --target "${{ matrix.target }}"
+        run: ${{ matrix.python }} -B scripts/cargo.py check -p ash-app-server --all-targets --target "${{ matrix.target }}"
 
       - name: Test Ash Code tooling
         shell: bash
@@ -190,6 +217,11 @@ jobs:
           ${{ matrix.python }} -B scripts/cargo.py test -p ash-mxc-sandbox --lib --target "${{ matrix.target }}"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           ./scripts/test-windows-sandbox.ps1 -Target "${{ matrix.target }}"
+
+      - name: Initialize release symbol staging
+        if: github.event_name == 'release' && matrix.release_package != false
+        shell: bash
+        run: echo "ASH_SYMBOLS_DIR=$GITHUB_WORKSPACE/.build/releases/symbols/${{ matrix.target }}" >> "$GITHUB_ENV"
 
       - name: Build Ash Code release package
         if: github.event_name == 'release' && matrix.release_package != false
@@ -375,6 +407,24 @@ jobs:
             --output ".build/releases/ash-desktop-${{ matrix.target }}.update.json" \
             --public-key "$ASH_UPDATE_PUBLIC_KEY"
           cp "$archive" ".build/releases/ash-desktop-${{ matrix.target }}.update.json" ".build/release-artifacts/${{ matrix.target }}/"
+
+      - name: Bind final packages and archive Rust symbols
+        if: github.event_name == 'release' && matrix.release_package != false
+        shell: bash
+        run: |
+          desktop=()
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
+            arch="$(node -p 'process.arch')"
+            desktop=(--desktop "dist/Ash-darwin-${arch}/Ash.app/Contents/Resources" --archive "ash-desktop=.build/releases/Ash-darwin-${arch}.zip")
+          elif [[ "${{ matrix.target }}" == "x86_64-pc-windows-msvc" ]]; then
+            desktop=(--desktop "dist/Ash-win32-x64/resources" --archive "ash-desktop=dist/AshSetup-${GITHUB_REF_NAME#v}-win32-x64.exe")
+          fi
+          ${{ matrix.python }} -B build/release/symbols.py archive \
+            --package "ash-code=.build/releases/ash-code-${{ matrix.target }}" \
+            --package "ash-app-server=.build/releases/runtime-${{ matrix.target }}" \
+            --archive "ash-code=.build/releases/ash-code-${{ matrix.target }}.${{ matrix.archive }}" \
+            --archive "ash-app-server=.build/releases/ash-app-server-${{ matrix.target }}.${{ matrix.archive }}" \
+            "${desktop[@]}" --output ".build/release-artifacts/${{ matrix.target }}"
 
       - name: Upload staged release packages for sanity checks
         if: github.event_name == 'release' && matrix.release_package != false

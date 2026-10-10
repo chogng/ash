@@ -2285,6 +2285,12 @@ use ash_protocol::FrozenSkillActivation;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::HistoryPrefixRef;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::HookEvent;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::HookRunRecord;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::HookRunStatus;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::ImageAttachmentRef;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ImageDetail;
@@ -5490,6 +5496,9 @@ typescript_bindings! {
     crate::protocol::app_tools::AppHostResult,
     TextDocumentsCapability,
     ExtensionClientOperation,
+    external_ext_protocol::services::CoreServiceRequest,
+    external_ext_protocol::services::CoreServiceResponse,
+    external_ext_protocol::services::CoreHttpMethod,
     ExtensionStatusBarEntry,
     ExtensionStatusBarAlignment,
     ExtensionStatusBarCommand,
@@ -6009,6 +6018,9 @@ typescript_bindings! {
     ContextCheckpoint,
     TurnExecutionBinding,
     ThreadEvent,
+    HookEvent,
+    HookRunRecord,
+    HookRunStatus,
     PlanStepStatus,
     PlanStep,
     PlanUpdate,

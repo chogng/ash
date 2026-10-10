@@ -26,8 +26,8 @@ function mockSourceChanges(t: TestContext) {
 		return { close() { } };
 	});
 	t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
-	return (file: string, workspaceManifest = false) => {
-		const directory = workspaceManifest ? repositoryRoot : join(repositoryRoot, 'crates');
+	return (file: string, workspaceManifest = false, sourceRoot = 'crates') => {
+		const directory = workspaceManifest ? repositoryRoot : join(repositoryRoot, sourceRoot);
 		listeners.get(directory)!('change', file);
 	};
 }
@@ -205,6 +205,25 @@ test('a shared contract save survives a later business save in the same batch', 
 	save('app-server/src/server/operations.rs');
 	await completed.promise;
 	assert.deepEqual(commands, ['build/protocol/generate.py', 'build/desktop/develop.py']);
+});
+
+test('a Rust SDK save rebuilds the backend from its root SDK directory', async t => {
+	const commands: string[] = [];
+	const completed = Promise.withResolvers<void>();
+	mockProtocolDirectories(t);
+	const save = mockSourceChanges(t);
+	t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
+		commands.push(args.at(-1)!);
+		const child = new ChildProcess();
+		setImmediate(() => child.emit('close', 0, null));
+		return child;
+	});
+	syncBuiltinESMExports();
+	const stop = await watchAppServer({ skipInitial: true, onDidBuild: async () => completed.resolve() });
+	t.after(stop);
+	save('src/runtime.rs', false, 'sdk/rust');
+	await completed.promise;
+	assert.deepEqual(commands, ['build/desktop/develop.py']);
 });
 
 test('a protocol save during an active backend build exports before the next build', async t => {

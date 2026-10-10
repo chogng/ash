@@ -136,6 +136,8 @@ fn initialized(supports_filters: bool) -> Value {
     serde_json::to_value(InitializeResult {
         server_info: ServerInfo {
             name: "fixture".into(),
+            operating_system: None,
+            user_home: None,
             version: "1".into(),
         },
         protocol_version: ProtocolVersion::current(),

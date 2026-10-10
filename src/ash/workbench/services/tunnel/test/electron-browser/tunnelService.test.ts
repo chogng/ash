@@ -15,6 +15,8 @@ import { TunnelPrivacyId, type RemoteTunnel } from '../../../../../platform/tunn
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { TunnelService } from '../../electron-browser/tunnelService.js';
 import chinese from '../../../../../../../localization/zh-CN/workbench.json' with { type: 'json' };
+import { ITunnelService } from '../../../../../platform/tunnel/common/tunnel.js';
+
 
 test('Tunnel handles share a forward and release the process after the last reference', async () => {
 	using api = new TestChannelOwner();
@@ -307,4 +309,104 @@ function registerMainProcess(services: InstantiationService, owner: TestChannelO
 		},
 		registerChannel: () => { throw new Error('Unexpected channel registration'); },
 	});
+}
+
+function fixture() {
+	const children: Child[] = [];
+	const host = new SshPortForwardingService({
+		getWorkspace: () => ({ id: 'remote', remoteAuthority: 'ssh+fixture' }),
+		sshExecutable: 'ssh',
+		localEnvironment: {},
+		reserveLocalPort: async () => 41_234,
+		spawnProcess: () => {
+			const child = new Child();
+			children.push(child);
+			return child as unknown as ChildProcess;
+		},
+		probeLoopbackListener: async () => 'ready',
+		wait: async () => { },
+	});
+	const channel = remotePortForwardingChannel(() => host);
+	const call = <T>(method: string, params?: unknown): Promise<T> => channel.call<T>('window:1', `ash:remote:tunnel:${method}`, params);
+	const services = new InstantiationService();
+	services.registerInstance(IMainProcessService, {
+		_serviceBrand: undefined,
+		getChannel: () => ({ call: <T>(command: string, value?: unknown) => channel.call<T>('window:1', command, value), listen: <T>(event: string) => channel.listen<T>('window:1', event) }),
+		registerChannel: () => { throw new Error('Unexpected channel registration'); },
+	});
+	const tunnel = services.createInstance(TunnelService);
+	services.registerInstance(ITunnelService, tunnel);
+	return { host, services, tunnel: services.get(ITunnelService), children, call };
+}
+
+test('Workbench tunnel handles share the host forward across loopback aliases and release idempotently', async () => {
+	const f = fixture();
+	using host = f.host;
+	using services = f.services;
+	const [first, second] = await Promise.all([
+		f.tunnel.openTunnel(undefined, 'localhost', 3000),
+		f.tunnel.openTunnel(undefined, '::1', 3000),
+	]);
+	assert.ok(first && typeof first !== 'string');
+	assert.ok(second && typeof second !== 'string');
+	assert.equal(f.children.length, 1);
+	assert.equal(first.localAddress, second.localAddress);
+	const existing = await f.tunnel.getExistingTunnel('127.0.0.1', 3000);
+	assert.ok(existing && typeof existing !== 'string');
+	await first.dispose();
+	await first.dispose();
+	await second.dispose();
+	assert.equal((await f.tunnel.tunnels).length, 1);
+	await existing.dispose();
+	assert.equal(f.children[0].exitCode, 0);
+	assert.deepEqual(await f.tunnel.tunnels, []);
+});
+
+test('Workbench catalog reads acquire no references and Stop invalidates every acquired handle', async () => {
+	const f = fixture();
+	using host = f.host;
+	using services = f.services;
+	const handle = await f.tunnel.openTunnel(undefined, 'localhost', 3000);
+	assert.ok(handle && typeof handle !== 'string');
+	const catalog = await f.tunnel.tunnels;
+	assert.equal(catalog.length, 1);
+	assert.equal(f.children[0].exitCode, null);
+	await f.tunnel.closeTunnel('::1', 3000);
+	await handle.dispose();
+	assert.deepEqual(await f.tunnel.tunnels, []);
+	assert.equal(await f.tunnel.getExistingTunnel('localhost', 3000), undefined);
+	assert.equal(typeof await f.tunnel.openTunnel(undefined, 'public.example', 3000), 'string');
+	assert.equal(f.children.length, 1);
+	const replacement = await f.tunnel.openTunnel(undefined, 'localhost', 3000);
+	assert.ok(replacement && typeof replacement !== 'string');
+	await catalog[0].dispose();
+	assert.equal(f.children[1].exitCode, null);
+	await replacement.dispose();
+	assert.deepEqual(await f.tunnel.tunnels, []);
+});
+
+test('host close IPC validates identities before changing ownership', async () => {
+	const f = fixture();
+	using host = f.host;
+	using services = f.services;
+	await assert.rejects(f.call('close', { id: '' }), /id/);
+	await assert.rejects(f.call('close', { id: 'one', host: 'public.example' }), /id/);
+	assert.equal(f.children.length, 0);
+});
+
+test('tunnel service creation fails immediately when the host boundary is missing', () => {
+	using services = new InstantiationService();
+	assert.throws(() => services.createInstance(TunnelService), /mainProcessService/);
+});
+
+class Child extends EventEmitter {
+	public exitCode: number | null = null;
+	public kill(): boolean {
+		if (this.exitCode === null) {
+			this.exitCode = 0;
+			this.emit('exit', 0);
+			this.emit('close', 0);
+		}
+		return true;
+	}
 }

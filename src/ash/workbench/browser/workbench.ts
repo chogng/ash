@@ -1,5 +1,7 @@
 import { ITraceService } from '../services/trace/common/traceService.js';
 import { AppServerTraceService } from '../services/trace/browser/appServerTraceService.js';
+import { ISearchService } from '../services/search/common/search.js';
+import { SearchService } from '../services/search/common/searchService.js';
 import { IExecutionSettingsService } from '../../platform/execution/common/executionSettingsService.js';
 import { IPromptsService } from '../contrib/chat/common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
@@ -704,8 +706,9 @@ export class Workbench extends Disposable {
 		services.registerInstance(IFileSearchService, api.hasAppServer ? api.fileSearch : services.createInstance(BrowserFileSearchService));
 		services.registerInstance(
 			IContentSearchService,
-			api.hasAppServer ? new BrowserContentSearchService(api.contentSearch, workspaceContext) : new FileContentSearchService(fileService, workspaceContext),
+			api.hasAppServer ? new BrowserContentSearchService(api.contentSearch) : new FileContentSearchService(fileService),
 		);
+		services.registerInstance(ISearchService, services.createInstance(SearchService));
 		services.registerInstance(ITerminalProcessService, api.terminal);
 		const gitService = this._register(services.createInstance(GitService, { api: api.git, appServerApi: api.appServer, eventApi: api.events, workspaceContext, canCloneRepository: nativeHostApi !== undefined }));
 		services.registerInstance(IGitService, gitService);

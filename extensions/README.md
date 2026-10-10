@@ -16,7 +16,7 @@ entry, including `markdown-language-features`, are separately bundled and execut
 browser extension host. This directory holds packages, not the SDK or runtime implementation.
 
 TS/JS packages use the selected extension runtime and public compatibility API. Independent Rust
-capabilities use the [`Rust SDK`](../../sdk/rust/README.md), the same versioned host transport,
+capabilities use the [`Rust SDK`](../sdk/rust/README.md), the same versioned host transport,
 and granted core services. [`github-authentication`](github-authentication/README.md) is the first
 profile-scoped Rust capability: it owns GitHub sessions for App without becoming a default TUI
 startup dependency. See the [architecture decision](../docs/editor-extensions.md#0-确定的产品方向)

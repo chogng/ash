@@ -1,6 +1,11 @@
 import { operatingSystem, OperatingSystem } from '../../../src/ash/base/common/platform.js';
 import { BrowserPathService } from '../../../src/ash/workbench/services/path/browser/pathService.js';
 import { createDisconnectedRendererApi } from '../../../src/ash/platform/agentHost/browser/rendererApi.js';
+import { BrowserFileSearchService } from '../../../src/ash/platform/search/browser/browserFileSearchService.js';
+import { IFileSearchService } from '../../../src/ash/platform/search/common/fileSearch.js';
+import { ISearchService } from '../../../src/ash/workbench/services/search/common/search.js';
+import { SearchService } from '../../../src/ash/workbench/services/search/common/searchService.js';
+import { IFileTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
 import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import type { IAction } from '../../../src/ash/base/common/actions.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
@@ -135,6 +140,7 @@ instantiation.registerInstance(IClipboardService, new BrowserClipboardService({
 instantiation.registerInstance(IStorageService, store.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'search-integration', flushInterval: 0 })));
 const editing = store.add(new BulkEditTestServices([[URI.file('/workspace/src/main.ts'), 'const needle = true;']]));
 instantiation.registerInstance(ITextModelResourceService, editing.models);
+instantiation.registerInstance(IFileTextModelService, editing.models);
 instantiation.registerInstance(IBulkEditService, editing.service);
 instantiation.registerInstance(IWorkingCopyService, editing.workingCopies);
 instantiation.registerInstance(IDialogService, editing.dialogs);
@@ -148,8 +154,11 @@ instantiation.registerInstance(IEditorService, {
 	focusActiveEditor() { },
 });
 instantiation.registerInstance(IContentSearchService, {
-	search: async (query, options) => {
-		queries.push(query);
+	search: async (folder, query, options) => {
+		if (folder.id === 'first') { queries.push(query); }
+		if (folder.id === 'second' && query.text === 'slow') { return { resultCount: 0, limitHit: false, error: undefined }; }
+		const progress = options?.onProgress;
+		options = { ...options, onProgress: matches => progress?.(matches.filter(match => match.dirId === folder.id)) };
 		const first = { dirId: 'first', path: 'src/main.ts', lineNumber: 1, preview: 'const needle = true;', ranges: [{ start: 6, end: 12 }] };
 		if (query.text === 'layout') {
 			const preview = `${'中文😀 long context '.repeat(36)}layout${' trailing text '.repeat(30)}`;
@@ -197,6 +206,8 @@ instantiation.registerInstance(IContentSearchService, {
 		return { resultCount: 1, limitHit: false, error: undefined };
 	},
 });
+instantiation.registerInstance(IFileSearchService, new BrowserFileSearchService(editing.files));
+instantiation.registerInstance(ISearchService, instantiation.createInstance(SearchService));
 const registry = store.add(new WorkbenchViewRegistry());
 registerSearchViews(registry);
 class FixtureView extends ViewPane {
@@ -257,6 +268,15 @@ window.ashSearchIntegration = {
 		return provider?.provideContent();
 	},
 	snapshot: () => pane.getSearchResultSnapshot(),
+	setFileText: async text => {
+		const reference = store.add(await editing.models.acquire({ resource: URI.file('/workspace/src/main.ts') }, new AbortController().signal));
+		reference.model.setValue(text);
+	},
+	setDraftText: async (text, resource = 'untitled:/Untitled-1') => {
+		const reference = store.add(await editing.models.acquire({ resource: URI.parse(resource), initialText: text }, new AbortController().signal));
+		reference.model.setValue(text);
+	},
+	diskText: () => editing.store.text(URI.file('/workspace/src/main.ts')),
 	queries,
 	opened,
 	finishLateSearch: () => finishLateSearch?.(),
@@ -283,6 +303,9 @@ declare global {
 			dismiss(): Promise<void>;
 			help(): string | undefined;
 			snapshot(): { query: string; content: string; matchCount: number; } | undefined;
+			setFileText(text: string): Promise<void>;
+			setDraftText(text: string, resource?: string): Promise<void>;
+			diskText(): string;
 			readonly queries: readonly IContentSearchQuery[];
 			readonly opened: readonly { resource: string; options: EditorOpenOptions | undefined; target: EditorOpenTarget | undefined; }[];
 			finishLateSearch(): void;

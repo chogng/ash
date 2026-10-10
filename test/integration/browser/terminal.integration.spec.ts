@@ -244,7 +244,7 @@ test('Chinese terminal actions create terminals while preserving shell names', a
 	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.counts().creates)).toBe(2);
 });
 
-test('terminal loads xterm on demand and preserves early output, exit and first input', async ({ page }) => {
+test('terminal loads xterm on demand and preserves early display writes and first input', async ({ page }) => {
 	const errors: string[] = [];
 	const requests: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
@@ -256,11 +256,10 @@ test('terminal loads xterm on demand and preserves early output, exit and first 
 	await page.evaluate(() => {
 		window.ashTerminalIntegration.write('first\r\n');
 		window.ashTerminalIntegration.write('second\r\n');
-		window.ashTerminalIntegration.exit();
 	});
 	expect(await page.evaluate(() => window.ashTerminalIntegration.start())).toBe(true);
 	await page.evaluate(() => window.ashTerminalIntegration.ready());
-	await expect(page.locator('.xterm-rows')).toHaveText(/first.*second.*\[process exited with code 0\]/su);
+	await expect(page.locator('.xterm-rows')).toHaveText(/first.*second/su);
 	await expect(page.locator('.xterm-helper-textarea')).toBeFocused();
 	await page.keyboard.type('hello');
 	expect(await page.evaluate(() => window.ashTerminalIntegration.writes.join(''))).toBe('hello');
@@ -487,6 +486,36 @@ test('legacy mouse reports deliver their raw high bytes through xterm onBinary',
 	}).toBe(true);
 	expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes.filter(value => typeof value === 'string'))).toEqual([]);
 	await page.evaluate(() => window.ashTerminalInputIntegration.close());
+});
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`terminal retains process output consumed before screen creation and its exit (${locale})`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto(`/terminal.html?stream&deferred&locale=${locale}`);
+		await page.waitForFunction(() => Boolean(window.ashTerminalStreamIntegration));
+		await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.status())).toEqual({ reads: [0, 1], events: ['succeeded', 'exit'], closes: 0, state: 'exited', remaining: 1 });
+		expect(await page.evaluate(() => window.ashTerminalStreamIntegration.observed())).toBe('中文🙂\r\n');
+		await expect(page.locator('.xterm')).toHaveCount(0);
+		await page.locator('#outside').focus();
+		await page.evaluate(() => window.ashTerminalStreamIntegration.start());
+		await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.snapshot())).toBe(`中文🙂\n\n${locale === 'zh-CN' ? '[进程已退出，代码为 0]' : '[process exited with code 0]'}`);
+		await page.evaluate(() => window.ashTerminalStreamIntegration.close());
+		await expect(page.locator('.ash-terminal-instance')).toHaveCount(0);
+		expect(errors).toEqual([]);
+	});
+}
+
+test('terminal bounds unseen display history while process observers still receive every chunk', async ({ page }) => {
+	await page.goto('/terminal.html?stream&deferred&overflow');
+	await page.waitForFunction(() => Boolean(window.ashTerminalStreamIntegration));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.status().state)).toBe('exited');
+	expect(await page.evaluate(() => window.ashTerminalStreamIntegration.observed())).toMatch(/^line-0\r\n.*line-4099\r\n$/su);
+	await page.evaluate(() => window.ashTerminalStreamIntegration.start());
+	const output = await page.evaluate(() => window.ashTerminalStreamIntegration.snapshot());
+	expect(output).toMatch(/\[terminal output truncated\].*line-5\n.*line-4099/su);
+	expect(output).not.toMatch(/^line-0$/mu);
+	await page.evaluate(() => window.ashTerminalStreamIntegration.close());
 });
 
 test('Shell output waits for xterm loading and preserves split UTF-8 before completion and exit', async ({ page }) => {

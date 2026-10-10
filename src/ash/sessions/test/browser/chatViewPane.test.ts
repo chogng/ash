@@ -1671,6 +1671,7 @@ test("ChatWidgetModel projects a durable Turn failure into the conversation", as
 		advisor: { type: "default" },
 		agentId: "agent-1",
 		origin: { type: "root" },
+		hookRuns: [],
 		referenceCost: { knownAmounts: [], complete: true },
 		sessionId: "session-1",
 		threadId: "thread-1",
@@ -1950,9 +1951,65 @@ for (const reconnect of [false, true]) {
 		await pending.complete(await fake.api.thread.subscribe({ sessionId: 'session-1', threadId: 'thread-1', afterSequence: 0 }));
 		await rejected;
 		await Promise.resolve();
+		if (!reconnect) await waitFor(() => released.length === 1);
 		assert.deepEqual(released, reconnect ? [] : ['thread-1']);
 	});
 }
+
+test('release skips a stopped connection even when its old listener has been disposed', async () => {
+	const fake = fakeApi();
+	const released: string[] = [];
+	let state: AppServerConnectionState = 'ready';
+	using chat = createChatService({
+		...fake.api,
+		appServer: { ...fake.api.appServer, getConnectionState: async () => state },
+		thread: { ...fake.api.thread, unsubscribe: async ({ threadId }) => { released.push(threadId); } },
+	});
+	const owner = {};
+	await chat.subscribeThread('session-1', 'thread-1', 0, owner);
+	state = 'stopped';
+	await chat.unsubscribeThread('session-1', 'thread-1', owner);
+	assert.deepEqual(released, []);
+});
+
+for (const disconnect of [false, true]) {
+	test(`release preserves active failures but accepts connection closure during cleanup (disconnect: ${disconnect})`, async () => {
+		const fake = fakeApi();
+		let state: AppServerConnectionState = 'ready';
+		using chat = createChatService({
+			...fake.api,
+			appServer: { ...fake.api.appServer, getConnectionState: async () => state },
+			thread: { ...fake.api.thread, unsubscribe: async () => { if (disconnect) state = 'stopped'; throw new Error('release failed'); } },
+		});
+		const owner = {};
+		await chat.subscribeThread('session-1', 'thread-1', 0, owner);
+		const closing = chat.unsubscribeThread('session-1', 'thread-1', owner);
+		if (disconnect) await closing;
+		else await assert.rejects(closing, /release failed/);
+	});
+}
+
+test('release retains an owner acquired while checking connection readiness', async () => {
+	const fake = fakeApi();
+	const checking = new DeferredPromise<AppServerConnectionState>();
+	const started = new DeferredPromise<void>();
+	const released: string[] = [];
+	using chat = createChatService({
+		...fake.api,
+		appServer: { ...fake.api.appServer, getConnectionState: () => { void started.complete(); return checking.p; } },
+		thread: { ...fake.api.thread, unsubscribe: async ({ threadId }) => { released.push(threadId); } },
+	});
+	const first = {}, second = {};
+	await chat.subscribeThread('session-1', 'thread-1', 0, first);
+	const closing = chat.unsubscribeThread('session-1', 'thread-1', first);
+	await started.p;
+	await chat.subscribeThread('session-1', 'thread-1', 0, second);
+	await checking.complete('ready');
+	await closing;
+	assert.deepEqual(released, []);
+	await chat.unsubscribeThread('session-1', 'thread-1', second);
+	assert.deepEqual(released, ['thread-1']);
+});
 
 test('closing one conversation owner retains another owner across repeated subscriptions', async () => {
 	const fake = fakeApi();
@@ -3118,6 +3175,7 @@ function thread(agentText?: string): Thread {
 		advisor: { type: "default" },
 		agentId: "agent-1",
 		origin: { type: "root" },
+		hookRuns: [],
 		referenceCost: { knownAmounts: [], complete: true },
 		sessionId: "session-1",
 		threadId: "thread-1",
@@ -3178,6 +3236,7 @@ function threadWithFailure(code: TurnError["code"], retryable: boolean, sequence
 		advisor: { type: "default" },
 		agentId: "agent-1",
 		origin: { type: "root" },
+		hookRuns: [],
 		referenceCost: { knownAmounts: [], complete: true },
 		sessionId: "session-1",
 		threadId: "thread-1",

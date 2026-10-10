@@ -21,6 +21,11 @@ use ts_rs::TS;
     rename_all_fields = "camelCase"
 )]
 pub enum ThreadTranscriptEntry {
+    HookRun {
+        entry_id: String,
+        turn_id: TurnId,
+        run: ash_protocol::HookRunRecord,
+    },
     Item {
         entry_id: String,
         turn_id: TurnId,
@@ -50,6 +55,7 @@ impl ThreadTranscriptEntry {
     pub fn entry_id(&self) -> &str {
         match self {
             Self::Item { entry_id, .. }
+            | Self::HookRun { entry_id, .. }
             | Self::TurnPlan { entry_id, .. }
             | Self::TurnError { entry_id, .. }
             | Self::ToolOutput { entry_id, .. } => entry_id,
@@ -59,6 +65,7 @@ impl ThreadTranscriptEntry {
     pub fn turn_id(&self) -> &TurnId {
         match self {
             Self::Item { turn_id, .. }
+            | Self::HookRun { turn_id, .. }
             | Self::TurnPlan { turn_id, .. }
             | Self::TurnError { turn_id, .. }
             | Self::ToolOutput { turn_id, .. } => turn_id,
@@ -69,7 +76,7 @@ impl ThreadTranscriptEntry {
         match self {
             Self::Item { transient, .. } => *transient,
             Self::ToolOutput { .. } => true,
-            Self::TurnPlan { .. } | Self::TurnError { .. } => false,
+            Self::TurnPlan { .. } | Self::TurnError { .. } | Self::HookRun { .. } => false,
         }
     }
 }
@@ -101,6 +108,17 @@ impl ThreadTranscriptSnapshot {
                         turn_id: turn.turn_id.clone(),
                         item,
                         transient: false,
+                    }),
+            );
+            entries.extend(
+                thread
+                    .hook_runs
+                    .iter()
+                    .filter(|run| run.turn_id.as_ref() == Some(&turn.turn_id))
+                    .map(|run| ThreadTranscriptEntry::HookRun {
+                        entry_id: format!("hook:{}", run.run_id),
+                        turn_id: turn.turn_id.clone(),
+                        run: run.clone(),
                     }),
             );
             if let Some(plan) = &turn.plan {

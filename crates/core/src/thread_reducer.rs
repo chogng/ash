@@ -92,6 +92,7 @@ pub struct ThreadSnapshot {
     pub(crate) goal_budget_limited_turn_id: Option<TurnId>,
     pub(crate) context_calibrations: Vec<ContextCalibration>,
     pub turns: Vec<TurnSnapshot>,
+    pub hook_runs: Vec<ash_protocol::HookRunRecord>,
     pub items: Vec<ThreadItem>,
     pub context_checkpoints: Vec<ContextCheckpoint>,
     pub context_overflow_recoveries: BTreeMap<TurnId, ContextCheckpointId>,
@@ -224,6 +225,7 @@ impl ThreadSnapshot {
             reference_cost: self.reference_cost.clone(),
             goal: self.goal.clone(),
             advisor: self.advisor.clone(),
+            hook_runs: self.hook_runs.clone(),
             turns: self
                 .turns
                 .iter()
@@ -483,6 +485,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     goal_budget_limited_turn_id: None,
                     context_calibrations: Vec::new(),
                     turns: Vec::new(),
+                    hook_runs: Vec::new(),
                     items: Vec::new(),
                     context_checkpoints: Vec::new(),
                     context_overflow_recoveries: BTreeMap::new(),
@@ -591,6 +594,41 @@ pub(crate) fn reduce_thread_event_with_prefix(
             snapshot
                 .history_sources
                 .insert(source.thread_id.clone(), prefix.clone());
+        }
+        ThreadEvent::HookRunUpdated { run, .. } => {
+            if run.run_id.is_empty() || run.hook_id.is_empty() {
+                return Err(CoreError::Journal("Hook identity must not be empty".into()));
+            }
+            if let Some(turn_id) = &run.turn_id {
+                find_turn_mut(&mut snapshot, turn_id)?;
+            }
+            if let Some(previous) = snapshot
+                .hook_runs
+                .iter_mut()
+                .find(|previous| previous.run_id == run.run_id)
+            {
+                if previous.hook_id != run.hook_id
+                    || previous.event != run.event
+                    || previous.turn_id != run.turn_id
+                    || previous.tool_call_id != run.tool_call_id
+                    || previous.tool_name != run.tool_name
+                    || previous.started_at_unix_ms != run.started_at_unix_ms
+                    || previous.status != ash_protocol::HookRunStatus::Running
+                    || run.status == ash_protocol::HookRunStatus::Running
+                {
+                    return Err(CoreError::Journal(
+                        "Hook completion must match one running invocation".into(),
+                    ));
+                }
+                *previous = run.clone();
+            } else {
+                if run.status != ash_protocol::HookRunStatus::Running {
+                    return Err(CoreError::Journal(
+                        "Hook completion requires a recorded start".into(),
+                    ));
+                }
+                snapshot.hook_runs.push(run.clone());
+            }
         }
         ThreadEvent::ThreadCreated { .. } => {
             return Err(CoreError::Journal(

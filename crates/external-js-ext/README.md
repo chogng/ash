@@ -1,5 +1,9 @@
 # Extension hosts
 
+The package and executable are named `ash-external-js-ext`, under `crates/external-js-ext`. Shared extension supervision belongs to `external-ext`; the wire contract remains a separate `external-ext-protocol` crate. Author SDKs live under root `sdk/typescript` and `sdk/rust`, while module loading, VS Code/Node compatibility and V8 execution remain product runtime responsibilities. The rename preserves the current Node and SDK V8 paths; runtime compatibility changes remain separate work. See [the agreed boundaries](../../docs/editor-extensions.md#共享接入与语言适配的-crate-边界).
+
+The target architecture runs TS/JS packages through Electron on Desktop and independent Rust/V8 hosts in the shared backend; optional Rust capability providers remain independent Rust executables. The backend target has no standalone Node dependency. Runtime duties and the uniform VS Code/Node compatibility contract are defined in [the extension architecture](../../docs/editor-extensions.md#运行时职责与兼容契约). This crate currently implements real Node and narrow SDK V8 paths; their presence does not establish that the target migration is complete. A Rust process embedding V8 is still a JS host, not a Rust capability extension.
+
 `ash-external-js-ext` executes ES modules authored with [`@ash/extension`](../../sdk/typescript/README.md)
 in an independent Rust process. It reuses the existing extension supervisor and bounded Host RPC,
 so App Server remains free of the V8 dependency. Code Mode and this host share engine initialization
@@ -210,7 +214,6 @@ Run `just check ash-external-js-ext`, `just test ash-external-js-ext` and
 `just rust-warnings ash-external-js-ext`. Process tests exercise the embedded SDK, package module
 imports, editor versus disk content, hover capability admission and snapshot coordinates, errors,
 revoked authority, deadlines, cancellation and cleanup.
-
 
 `MainThreadDebugService` exposes the canonical DebugService through authenticated
 session, custom-request, name and breakpoint operations. The `debugEvents`

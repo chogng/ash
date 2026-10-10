@@ -10,16 +10,16 @@ use ash_secrets::SecretStore;
 use ash_secrets::SecretStoreError;
 use ash_secrets::SecretStoreErrorKind;
 use ash_secrets::SecretValue;
-use extensions::services::CoreHttpMethod;
-use extensions::services::CoreServiceRequest;
-use extensions::services::CoreServiceResponse;
-use extensions::services::Services;
+use external_ext_sdk::services::CoreHttpMethod;
+use external_ext_sdk::services::CoreServiceRequest;
+use external_ext_sdk::services::CoreServiceResponse;
+use external_ext_sdk::services::Services;
 
-pub(crate) struct CoreServices(pub Services, pub extensions::client::Client);
+pub(crate) struct CoreServices(pub Services, pub external_ext_sdk::client::Client);
 thread_local! {
-    static INVOCATION: std::cell::RefCell<Option<extensions::CancellationToken>> = const { std::cell::RefCell::new(None) };
+    static INVOCATION: std::cell::RefCell<Option<external_ext_sdk::CancellationToken>> = const { std::cell::RefCell::new(None) };
 }
-struct InvocationGuard(Option<extensions::CancellationToken>);
+struct InvocationGuard(Option<external_ext_sdk::CancellationToken>);
 impl Drop for InvocationGuard {
     fn drop(&mut self) {
         INVOCATION.with(|context| context.replace(self.0.take()));
@@ -27,7 +27,7 @@ impl Drop for InvocationGuard {
 }
 impl CoreServices {
     pub(crate) fn with_invocation<T>(
-        token: extensions::CancellationToken,
+        token: external_ext_sdk::CancellationToken,
         operation: impl FnOnce() -> T,
     ) -> T {
         // Provider traits are synchronous. Bind only the current callback thread; detached
@@ -39,7 +39,7 @@ impl CoreServices {
     fn call(
         &self,
         request: CoreServiceRequest,
-    ) -> Result<CoreServiceResponse, extensions::ExtensionError> {
+    ) -> Result<CoreServiceResponse, external_ext_sdk::ExtensionError> {
         let token = INVOCATION.with(|context| context.borrow().clone());
         match token {
             Some(token) => self.1.core_service(request, &token),

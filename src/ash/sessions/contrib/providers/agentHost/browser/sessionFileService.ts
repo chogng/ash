@@ -1,4 +1,7 @@
-import type { FileSearchDirectory, FileSearchQuery, FileSearchResult, IFileSearchService } from '../../../../../platform/search/common/fileSearch.js';
+import { BrowserContentSearchService } from '../../../../../platform/search/browser/searchService.js';
+import type { IContentSearchOptions, IContentSearchQuery, IContentSearchService } from '../../../../../platform/search/common/search.js';
+import type { IWorkspaceFolder } from '../../../../../platform/workspace/common/workspace.js';
+import type { FileFuzzyQuery, FileSearchDirectory, FileSearchQuery, FileSearchResult, IFileSearchService } from '../../../../../platform/search/common/fileSearch.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { AppServerFileSystemProvider } from '../../../../../platform/agentHost/browser/appServerFileSystemProvider.js';
@@ -6,8 +9,9 @@ import type { IFileApi } from '../../../../../platform/files/common/fileApi.js';
 import type { IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
 
 /** Selects the owning Session at the transport boundary; shared file/editor state stays in Workbench. */
-export class SessionFileService extends AppServerFileSystemProvider implements IFileSearchService {
+export class SessionFileService extends AppServerFileSystemProvider implements IFileSearchService, IContentSearchService {
 	private readonly fileSearch: IFileSearchService;
+	private readonly contentSearch: IContentSearchService;
 	constructor(
 		host: IRendererHost,
 		@IWorkspaceContextService workspace: IWorkspaceContextService,
@@ -54,6 +58,15 @@ export class SessionFileService extends AppServerFileSystemProvider implements I
 			},
 		});
 		this.fileSearch = host.fileSearch;
+		this.contentSearch = new BrowserContentSearchService({
+			start: params => host.contentSearch.start(target(params)),
+			read: params => host.contentSearch.read(target(params)),
+			cancel: params => host.contentSearch.cancel(target(params)),
+		});
+	}
+
+	public search(folder: IWorkspaceFolder, query: IContentSearchQuery, options?: IContentSearchOptions) {
+		return this.contentSearch.search(folder, query, options);
 	}
 
 	public glob(directory: FileSearchDirectory, query: FileSearchQuery, signal?: AbortSignal): Promise<FileSearchResult> {
@@ -61,6 +74,13 @@ export class SessionFileService extends AppServerFileSystemProvider implements I
 			return this.fileSearch.glob({ resource: directory.resource, target: { type: 'session', ...sessionDirectoryFor(directory.target.dirId) } }, query, signal);
 		}
 		return this.fileSearch.glob(directory, query, signal);
+	}
+
+	public fuzzy(directory: FileSearchDirectory, query: FileFuzzyQuery, signal?: AbortSignal): Promise<FileSearchResult> {
+		if (directory.target.type === 'workspace' && directory.target.dirId.startsWith('session:')) {
+			return this.fileSearch.fuzzy({ resource: directory.resource, target: { type: 'session', ...sessionDirectoryFor(directory.target.dirId) } }, query, signal);
+		}
+		return this.fileSearch.fuzzy(directory, query, signal);
 	}
 }
 

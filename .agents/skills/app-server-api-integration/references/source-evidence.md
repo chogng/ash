@@ -80,8 +80,8 @@ server notification 可以广播，approval、用户输入等 server request 必
 - desktop starter 不再启动 `node/agentHostMain`；旧 Host protocol、TypeScript runtime 和生产注册必须退场。
 - 生成物从 `node/<backend>/protocol/generated/` 迁到 `common/appServerProtocol/generated/`，生成器保持固定版本和逐字节 CI 检查。
 - 前端每个领域保留自己的 service，adapter 只使用 typed protocol client；Sessions Provider 仅处理 Thread UI。
-- Rust app-server 可以扩展为产品业务后端，但 `../app-server/` 只承担连接、typed dispatch 与跨领域 orchestration；每项业务、存储和资源进入对应 Rust 领域 crate。
-- editor model、working copy、扩展运行时、Workbench UI 和 Electron 对象不因后端扩展而迁入 Rust；通用文件、交互式 Terminal、SCM 与语言服务逐项通过迁移判定，不能默认并入。
+- Rust app-server 只承担连接、typed dispatch、授权路由与跨领域 orchestration；共享机制在核心领域 crate，可选服务商业务目标由独立扩展 Provider 拥有。这里的旧 Host 源码证据不证明两类扩展运行时或业务拆分已完成，目标边界见 [扩展架构](../../extension-architecture/SKILL.md)。
+- editor model、working copy、扩展 API 的客户端对象、Workbench UI 和 Electron 对象不因后端接入而迁入 Rust；TS/JS 扩展宿主与可选 Rust 程序独立于被替换的业务 Host，当前 Node 路径按扩展契约迁移。通用文件、交互式 Terminal、SCM 与语言服务逐项通过职责判定，不能默认并入核心。
 - 正式接入前必须补全跨平台多 connection transport、机器可读启动记录、response map、runtime decoder、兼容契约、所需稳定 API、结构化错误和 server request 唯一 connection owner。
 - 丢弃 Promise 不构成取消；后端落盘修改仍通过前端 file/working-copy owner 处理 dirty 冲突。
 

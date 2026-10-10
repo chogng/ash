@@ -33,6 +33,21 @@ fn tool_call_output_and_result_form_one_exec_cell() {
     let tool_call_id = call_id("call");
     let mut model = TranscriptModel::default();
     model.replace(snapshot(vec![
+        ThreadTranscriptEntry::HookRun {
+            entry_id: "hook:run".into(),
+            turn_id: turn_id.clone(),
+            run: ash_protocol::HookRunRecord {
+                run_id: "run".into(),
+                hook_id: "user:hook:test".into(),
+                event: ash_protocol::HookEvent::PreToolUse,
+                status: ash_protocol::HookRunStatus::Continued,
+                started_at_unix_ms: 1,
+                duration_ms: 2,
+                turn_id: Some(turn_id.clone()),
+                tool_call_id: Some(tool_call_id.clone()),
+                tool_name: Some("exec".into()),
+            },
+        },
         ThreadTranscriptEntry::Item {
             entry_id: "call-entry".into(),
             turn_id: turn_id.clone(),

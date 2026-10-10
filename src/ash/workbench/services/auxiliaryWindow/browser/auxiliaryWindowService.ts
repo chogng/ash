@@ -3,6 +3,7 @@ import { cloneDocumentStyles } from "../../../../base/browser/domStylesheets.js"
 import { observeMutations } from "../../../../base/browser/observer.js";
 import { setIconResolver } from "../../../../base/browser/ui/lxicons/lxicon.js";
 import { getWindowId, registerWindow } from "../../../../base/browser/window.js";
+import { generateUuid } from "../../../../base/common/uuid.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableMap, Disposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
@@ -91,7 +92,7 @@ export class BrowserAuxiliaryWindowService extends Disposable implements IAuxili
 			left === undefined ? undefined : `${positionKeys[0]}=${Math.round(left)}`,
 			top === undefined ? undefined : `${positionKeys[1]}=${Math.round(top)}`,
 		].filter((feature): feature is string => feature !== undefined).join(",");
-		const target = this.opener.open("about:blank", "", features);
+		const target = this.opener.open("about:blank", `ash-auxiliary-${generateUuid()}`, features);
 		if (!target) throw new Error("The browser blocked opening an auxiliary editor window");
 		try {
 			target.opener = null;

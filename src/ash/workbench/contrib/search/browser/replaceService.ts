@@ -8,6 +8,7 @@ import { parseReplaceString, ReplacePattern } from '../../../../editor/contrib/f
 import { ITextModelResourceService, type TextModelReference } from '../../../services/textmodelResolver/common/textModelResourceService.js';
 import { IWorkingCopyService } from '../../../services/workingCopy/common/workingCopyService.js';
 import { localize } from '../../../../nls.js';
+import { Schemas } from '../../../../base/common/network.js';
 import { IReplaceService, type SearchReplaceResult } from './replace.js';
 import type { SearchMatch } from './searchTreeModel/searchResult.js';
 
@@ -62,6 +63,7 @@ export class ReplaceService implements IReplaceService {
 			token: options.signal,
 			showPreview: options.preview,
 			label: localize('search.replaceLabel', 'Replace search results'),
+			skipSaveForResources: acquired.filter(reference => reference.resource.scheme === Schemas.untitled).map(reference => reference.resource),
 		});
 		const saveErrors: string[] = [];
 		if (result.isApplied) {
@@ -70,7 +72,7 @@ export class ReplaceService implements IReplaceService {
 			for (const reference of acquired) {
 				// Bulk edits already save closed files. Open working copies need the
 				// Search command's save step, and retain dirty text if that save fails.
-				if (!affected.has(extUri.getComparisonKey(reference.resource)) || !this.workingCopies.get(reference.resource).length) { continue; }
+				if (reference.resource.scheme === Schemas.untitled || !affected.has(extUri.getComparisonKey(reference.resource)) || !this.workingCopies.get(reference.resource).length) { continue; }
 				try { await reference.save(options.signal); } catch (error) { saveErrors.push(error instanceof Error ? error.message : String(error)); }
 			}
 		}
@@ -81,7 +83,7 @@ export class ReplaceService implements IReplaceService {
 			undo: async () => {
 				await result.undo();
 				for (const resource of result.resources) {
-					if (!this.workingCopies.get(resource).length) { continue; }
+					if (resource.scheme === Schemas.untitled || !this.workingCopies.get(resource).length) { continue; }
 					using reference = await this.models.acquire({ resource }, new AbortController().signal);
 					await reference.save(new AbortController().signal);
 				}

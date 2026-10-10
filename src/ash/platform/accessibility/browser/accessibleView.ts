@@ -3,6 +3,7 @@ import type { Event } from '../../../base/common/event.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
 export const enum AccessibleViewProviderId {
+	ProcessExplorer = 'processExplorer',
 	Disassembly = 'disassembly',
 	GitHub = 'github',
 	GitHubEditor = 'githubEditor',
@@ -70,6 +71,7 @@ export const enum AccessibleViewType {
 }
 
 export const enum AccessibilityVerbositySettingId {
+	ProcessExplorer = 'accessibility.verbosity.processExplorer',
 	Disassembly = 'accessibility.verbosity.disassembly',
 	GitHub = 'accessibility.verbosity.github',
 	GitHubEditor = 'accessibility.verbosity.githubEditor',

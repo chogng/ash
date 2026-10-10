@@ -71,6 +71,7 @@ fn snapshot_preserves_items_and_turn_plans_in_order() {
         usage: ModelUsageSummary::default(),
         reference_cost: ash_protocol::ModelReferenceCostSummary::default(),
         goal: None,
+        hook_runs: Vec::new(),
         turns: vec![ash_protocol::Turn {
             mode: ash_protocol::CollaborationMode::Agent,
             advisor: None,
@@ -515,6 +516,7 @@ fn empty_thread() -> Thread {
         usage: ModelUsageSummary::default(),
         reference_cost: ash_protocol::ModelReferenceCostSummary::default(),
         goal: None,
+        hook_runs: Vec::new(),
         turns: Vec::new(),
     }
 }
@@ -567,6 +569,64 @@ fn encrypted_reasoning_without_a_summary_has_no_visible_transcript_entry() {
         update.changes,
         vec![ThreadTranscriptChange::Remove {
             entry_ids: vec!["item:r1".into()]
+        }]
+    );
+}
+
+#[test]
+fn hook_completion_replaces_its_running_transcript_entry_and_replays_stably() {
+    let mut accumulator = TranscriptAccumulator::new(session_id(), thread_id());
+    let mut run = ash_protocol::HookRunRecord {
+        run_id: "run".into(),
+        hook_id: "user:hook:test".into(),
+        event: ash_protocol::HookEvent::PreToolUse,
+        status: ash_protocol::HookRunStatus::Running,
+        started_at_unix_ms: 1,
+        duration_ms: 0,
+        turn_id: Some(turn_id()),
+        tool_call_id: Some(ToolCallId::new("tool").unwrap()),
+        tool_name: Some("shell-command".into()),
+    };
+    let update = |sequence, run| ThreadUpdateEnvelope {
+        session_id: session_id(),
+        thread_id: thread_id(),
+        durable_sequence: sequence,
+        stream_cursor: None,
+        update: ThreadUpdate::Committed {
+            event: ThreadEvent::HookRunUpdated {
+                thread_id: thread_id(),
+                run,
+            },
+        },
+    };
+    apply(&mut accumulator, update(1, run.clone()));
+    run.status = ash_protocol::HookRunStatus::Denied {
+        reason: "blocked".into(),
+    };
+    run.duration_ms = 7;
+    let TranscriptApplyResult::Applied(completed) = apply(&mut accumulator, update(2, run.clone()))
+    else {
+        panic!("completion must update transcript");
+    };
+    assert_eq!(
+        completed.changes,
+        vec![ThreadTranscriptChange::Upsert {
+            entry: ThreadTranscriptEntry::HookRun {
+                entry_id: "hook:run".into(),
+                turn_id: turn_id(),
+                run: run.clone()
+            }
+        }]
+    );
+    let mut thread = empty_thread();
+    thread.sequence = 2;
+    thread.turns.push(serde_json::from_value(serde_json::json!({"turnId":"turn-1", "status":"completed", "mode":"agent", "kind":"coding", "toolMode":"direct", "approvalMode":"manual", "usage":ModelUsageSummary::default(), "items":[]})).unwrap());
+    thread.hook_runs.push(run);
+    assert_eq!(
+        ThreadTranscriptSnapshot::from_thread(&thread).entries,
+        vec![match completed.changes[0].clone() {
+            ThreadTranscriptChange::Upsert { entry } => entry,
+            _ => unreachable!(),
         }]
     );
 }

@@ -1,4 +1,4 @@
-import { Disposable, DisposableMap } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { extUri } from '../../../../base/common/resources.js';
 import { IBrowserViewService, type BrowserViewEvent, type IBrowserViewCreateOptions, type IBrowserViewInfo } from '../../../../platform/browserView/common/browserView.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -13,6 +13,8 @@ import { localize } from '../../../../nls.js';
 /** Owns renderer inputs and reconnects them to pages which can outlive a renderer reload. */
 export class BrowserViewWorkbenchService extends Disposable implements IBrowserViewWorkbenchService {
 	private readonly inputs = this._register(new DisposableMap<string, BrowserEditorInput>());
+	private readonly retiringInputs = this._register(new DisposableStore());
+	private readonly closingInputs = new Map<string, Promise<void>>();
 	private readonly initialEvents: BrowserViewEvent[] = [];
 	private initialized = false;
 	private initialization: Promise<void> | undefined;
@@ -41,7 +43,11 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 	}
 
 	public initialize(): Promise<void> {
-		this.initialization ??= this.readInitialViews();
+		this.assertNotDisposed();
+		this.initialization ??= this.readInitialViews().catch(error => {
+			this.initialization = undefined;
+			throw error;
+		});
 		return this.initialization;
 	}
 
@@ -52,6 +58,9 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 		// Subscribe before the snapshot and replay everything received while it was in flight.
 		this.initialized = true;
 		for (const event of this.initialEvents.splice(0)) { this.acceptEvent(event); }
+		// Restoration opens the known inputs after initialization; retire snapshot-era tabs first.
+		await Promise.all(this.closingInputs.values());
+		this.assertNotDisposed();
 	}
 
 	public getKnownBrowserViews(): ReadonlyMap<string, BrowserEditorInput> {
@@ -59,6 +68,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 	}
 
 	public getOrCreateLazy(data: IBrowserEditorInputData): BrowserEditorInput {
+		this.assertNotDisposed();
 		let input = this.inputs.get(data.id);
 		if (!input) {
 			input = this.instantiationService.createInstance(BrowserEditorInput, data);
@@ -74,16 +84,24 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 		const input = this.getOrCreateLazy({ id, url: options.initialUrl, title: '', session: options.session });
 		try {
 			await this.service.getOrCreateBrowserView(id, options);
-			await this.editors.openEditor(input, { pinned: true });
+			await this.openEditor(input);
+			this.assertNotDisposed();
+			if (this.inputs.get(id) !== input) { throw new Error('BrowserTargetUnavailable'); }
 			return input;
 		} catch (error) {
-			this.inputs.deleteAndDispose(id);
+			if (this.inputs.get(id) === input) { this.inputs.deleteAndDispose(id); }
 			throw error;
 		}
 	}
 
 	private acceptInfo(info: IBrowserViewInfo): BrowserEditorInput {
 		return this.getOrCreateLazy({ id: info.id, url: info.state.url, title: info.state.title, session: info.session });
+	}
+
+	private async openEditor(input: BrowserEditorInput): Promise<void> {
+		await this.closingInputs.get(input.resource.path.slice(1));
+		if (this.isDisposed || this.inputs.get(input.resource.path.slice(1)) !== input) { return; }
+		await this.editors.openEditor(input, { pinned: true });
 	}
 
 	private acceptEvent(event: BrowserViewEvent): void {
@@ -108,19 +126,25 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 			const known = this.inputs.has(event.info.id);
 			const input = this.acceptInfo(event.info);
 			if (!known) {
-				void this.editors.openEditor(input, { pinned: true }).catch(error => console.error('Failed to open browser editor', error));
+				void this.openEditor(input).catch(error => console.error('Failed to open browser editor', error));
 			}
 		} else if (event.type === 'closed') {
-			const input = this.inputs.get(event.targetId);
+			const input = this.inputs.deleteAndLeak(event.targetId);
 			if (!input) { return; }
-			this.inputs.deleteAndDispose(event.targetId);
-			for (const group of this.editorPart.groups) {
-				for (const candidate of group.inputs) {
-					if (extUri.isEqual(candidate.resource, input.resource)) {
-						void group.closeEditor(candidate).catch(error => console.error('Failed to close browser editor', error));
-					}
+			this.retiringInputs.add(input);
+			// Finish broadcasting Main's close before detaching the model. A replacement must wait for the old tabs.
+			const closing = Promise.resolve().then(async () => {
+				if (this.isDisposed) { return; }
+				for (const group of this.editorPart.groups) {
+					if (group.inputs.includes(input)) { await group.closeEditor(input); }
 				}
-			}
+			}).finally(() => {
+				this.retiringInputs.delete(input);
+				input.dispose();
+				if (this.closingInputs.get(event.targetId) === closing) { this.closingInputs.delete(event.targetId); }
+			});
+			this.closingInputs.set(event.targetId, closing);
+			void closing.catch(error => console.error('Failed to close browser editor', error));
 		} else if (event.type === 'openRequested') {
 			void this.service.getBrowserViews().then(views => {
 				const parent = views.find(view => view.id === event.targetId);

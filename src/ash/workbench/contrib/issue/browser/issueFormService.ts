@@ -1,7 +1,7 @@
 import { CancellationError } from '../../../../base/common/errors.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
-import { IIssueReporterService, IssueReporterError } from '../../../../platform/issue/common/issue.js';
+import { IIssueReporterService, IssueReporterError, type IssueReporterContext } from '../../../../platform/issue/common/issue.js';
 import { IExtensionService } from '../../../services/extensions/common/extensionService.js';
 import { IssueType, type IIssueFormService, type IssueReporterData, type IssueReporterState } from '../common/issue.js';
 import { IssueReporterModel } from './issueReporterModel.js';
@@ -25,14 +25,21 @@ export class IssueFormService extends Disposable implements IIssueFormService {
 		this.initialization = (async () => {
 			try {
 				const context = await this.backend.read();
+				if (this.isDisposed) { return; }
 				// Read the Workbench's catalog without restarting extension activation to collect diagnostics.
 				const catalog = this.extensions.currentCatalog;
 				const extensionInfo = [...catalog.extensions.map(extension => `${extension.id} ${extension.version}`), ...catalog.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`)].join('\n') || localize('issue.noExtensions', 'No extensions installed.');
-				this.model.update({ context, systemInfo: `Ash: ${context.version}\nOS: ${context.os} (${context.arch})\nRenderer: ${navigator.userAgent}`, extensionInfo });
-			} catch (error) { this.model.update({ error: errorMessage(error) }); }
-			finally { this.model.update({ loading: false }); this.initialization = undefined; }
+				const systemInfo = await this.readSystemInfo(context);
+				if (this.isDisposed) { return; }
+				this.model.update({ context, systemInfo, extensionInfo });
+			} catch (error) { if (!this.isDisposed) { this.model.update({ error: errorMessage(error) }); } }
+			finally { if (!this.isDisposed) { this.model.update({ loading: false }); } this.initialization = undefined; }
 		})();
 		return this.initialization;
+	}
+
+	protected async readSystemInfo(context: IssueReporterContext): Promise<string> {
+		return localize('issue.serverSystem', 'App Server\nAsh: {0}\nOS: {1} ({2})\n\nBrowser: {3}', context.version, context.os, context.arch, navigator.userAgent);
 	}
 
 	update(data: Parameters<IIssueFormService['update']>[0]): void {

@@ -20,6 +20,8 @@ type ForwardChange = { readonly kind: 'upsert'; readonly tunnel: Forward; } | { 
 /** Owns Desktop tunnel leases above the authenticated Main channel. */
 export class TunnelService extends Disposable implements ITunnelService {
 	declare public readonly _serviceBrand: undefined;
+	private readonly changed = this._register(new Emitter<void>());
+	public readonly onDidChange = this.changed.event;
 	private readonly opened = this._register(new Emitter<RemoteTunnel>());
 	private readonly closed = this._register(new Emitter<{ host: string; port: number; }>());
 	private readonly forwards = new Map<string, Forward>();
@@ -80,6 +82,21 @@ export class TunnelService extends Disposable implements ITunnelService {
 		return this.createTunnel(forward, true);
 	}
 
+	public async getExistingTunnel(remoteHost: string, remotePort: number): Promise<RemoteTunnel | undefined> {
+		this.assertNotDisposed();
+		if (!isLoopback(remoteHost)) { return undefined; }
+		await this.readTunnels();
+		const forward = [...this.forwards.values()].find(candidate => candidate.remotePort === remotePort);
+		if (!forward) { return undefined; }
+		this.references.set(forward.id, (this.references.get(forward.id) ?? 0) + 1);
+		return this.createTunnel(forward, true);
+	}
+
+	public async closeAll(): Promise<void> {
+		this.assertNotDisposed();
+		await this.channel.call<void>('ash:remote:tunnel:closeAll');
+	}
+
 	public async closeTunnel(remoteHost: string, remotePort: number): Promise<void> {
 		this.assertNotDisposed();
 		if (!isLoopback(remoteHost)) {
@@ -128,11 +145,13 @@ export class TunnelService extends Disposable implements ITunnelService {
 		if (change.kind === 'upsert') {
 			this.forwards.set(change.tunnel.id, change.tunnel);
 			this.opened.fire(this.createTunnel(change.tunnel, false));
+			this.changed.fire();
 			return;
 		}
 		const forward = this.forwards.get(change.id);
 		this.forwards.delete(change.id);
 		this.references.delete(change.id);
+		this.changed.fire();
 		if (forward && ![...this.forwards.values()].some(candidate => candidate.remoteHost === forward.remoteHost && candidate.remotePort === forward.remotePort)) {
 			this.closed.fire({ host: forward.remoteHost, port: forward.remotePort });
 		}
@@ -175,7 +194,7 @@ export class TunnelService extends Disposable implements ITunnelService {
 }
 
 function isLoopback(host: string | undefined): boolean {
-	return host === undefined || host === 'localhost' || host === '127.0.0.1';
+	return host === undefined || host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
 }
 
 function validateForward(value: unknown): Forward {

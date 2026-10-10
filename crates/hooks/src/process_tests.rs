@@ -41,6 +41,17 @@ fn real_process_hooks_execute_inside_the_bound_directory() {
             Vec::new(),
             CommandExecutionAuthority::Unrestricted,
             &cancellation.token(),
+            &mut core_api::HookRunEvidence {
+                program: "/bin/sh".into(),
+                arguments: Vec::new(),
+                directory: root.path().into(),
+                input: String::new(),
+                stdout: String::new(),
+                stderr: String::new(),
+                exit_code: None,
+                stdout_truncated: false,
+                stderr_truncated: false,
+            },
         )
         .unwrap();
     assert_eq!(

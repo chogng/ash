@@ -17,8 +17,12 @@ import { ExplorerService } from './explorerService.js';
 import { OpenEditorsView } from './views/openEditorsView.js';
 import { TextFileEditorTracker } from './editors/textFileEditorTracker.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { EditorPanes } from '../../../browser/editor.js';
+import { binaryFileEditorDescriptor } from './editors/binaryFileEditor.js';
 import './editors/fileEditorHandler.js';
 import "./fileActions.contribution.js";
+
+EditorPanes.registerEditorPane(binaryFileEditorDescriptor());
 
 const configuration = Registry.as<IConfigurationRegistry>(Extensions.Configuration);
 configuration.registerConfiguration({

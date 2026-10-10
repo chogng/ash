@@ -51,11 +51,22 @@ try {
 		], repositoryRoot);
 	}
 	await validateBackend(backend);
-	await run('cargo', ['build', '--release', '--target', target, '-p', 'ash-product-update', '--bin', 'ash-update-host'], repositoryRoot);
-	const cargoTarget = resolve(repositoryRoot, process.env.CARGO_TARGET_DIR ?? '.build/cargo');
+	const updateArtifact = join(stage, 'update-host.json');
+	await run(process.env.PYTHON ?? 'python3', [
+		'-B', join(repositoryRoot, 'build', 'release', 'symbols.py'), 'build-update-host',
+		'--target', target, '--artifact-file', updateArtifact,
+	], repositoryRoot);
+	const updateHost: string = JSON.parse(await readFile(updateArtifact, 'utf8')).binary;
 	const updateBin = join(stage, 'bin');
 	await cp(join(backend, 'bin'), updateBin, { recursive: true });
-	await cp(join(cargoTarget, target, 'release', 'ash-update-host'), join(updateBin, 'ash-update-host'), { errorOnExist: true, force: false });
+	await cp(updateHost, join(updateBin, 'ash-update-host'), { errorOnExist: true, force: false });
+	if (process.env.ASH_SYMBOLS_DIR) {
+		await run(process.env.PYTHON ?? 'python3', [
+			'-B', join(repositoryRoot, 'build', 'release', 'symbols.py'), 'collect',
+			'--binary', updateHost,
+			'--staged', join(updateBin, 'ash-update-host'), '--target', target,
+		], repositoryRoot);
+	}
 	const updateKeyFile = join(stage, 'update-public-key');
 	await writeFile(updateKeyFile, `${updatePublicKey.toLowerCase()}\n`, { flag: 'wx' });
 	const resources = [...(await readdir(backend)).filter(entry => entry !== '.lease' && entry !== 'bin').map(entry => join(backend, entry)), updateBin, updateKeyFile];

@@ -44,10 +44,6 @@ interface PermissionedDirectoryHandle extends FileSystemDirectoryHandle {
 	requestPermission(descriptor?: { mode: 'read' | 'readwrite'; }): Promise<PermissionState>;
 }
 
-interface IterableDirectoryHandle extends FileSystemDirectoryHandle {
-	entries(): AsyncIterableIterator<[string, FileSystemHandle]>;
-}
-
 interface BrowserFileWatch extends DisposableStore {
 	readonly resource: URI;
 	readonly options: IWatchOptions;
@@ -133,7 +129,7 @@ export class HTMLFileSystemProvider extends Disposable implements IFileSystemPro
 		const handle = await this.handle(resource);
 		if (!WebFileSystemAccess.isFileSystemDirectoryHandle(handle)) throw createFileSystemProviderError('Expected a directory', FileSystemProviderErrorCode.FileNotADirectory);
 		const entries: IFileEntry[] = [];
-		for await (const [name, child] of (handle as IterableDirectoryHandle).entries()) {
+		for await (const [name, child] of handle.entries()) {
 			entries.push({
 				resource: childUri(resource, name),
 				name,
@@ -394,7 +390,7 @@ export class HTMLFileSystemProvider extends Disposable implements IFileSystemPro
 		const copyEntry = async (from: FileSystemHandle, toParent: FileSystemDirectoryHandle, toName: string): Promise<void> => {
 			if (WebFileSystemAccess.isFileSystemDirectoryHandle(from)) {
 				const to = await toParent.getDirectoryHandle(toName, { create: true });
-				for await (const [childName, child] of (from as IterableDirectoryHandle).entries()) await copyEntry(child, to, childName);
+				for await (const [childName, child] of from.entries()) await copyEntry(child, to, childName);
 			} else if (WebFileSystemAccess.isFileSystemFileHandle(from)) {
 				const file = await toParent.getFileHandle(toName, { create: true });
 				const writable = await file.createWritable();

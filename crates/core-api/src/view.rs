@@ -52,6 +52,7 @@ pub struct ThreadView {
     pub advisor: ash_protocol::AdvisorSelection,
     pub turns: Vec<TurnView>,
     pub items: Vec<ThreadItem>,
+    pub hook_runs: Vec<ash_protocol::HookRunRecord>,
     pub agent: Option<AgentConfiguration>,
 }
 
@@ -98,6 +99,7 @@ impl ThreadView {
             reference_cost: self.reference_cost.clone(),
             goal: self.goal.clone(),
             advisor: self.advisor.clone(),
+            hook_runs: self.hook_runs.clone(),
             turns: self
                 .turns
                 .iter()

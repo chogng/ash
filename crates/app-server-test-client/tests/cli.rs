@@ -72,6 +72,7 @@ fn initialized() -> Value {
         server_info: ServerInfo {
             name: "test-peer".into(),
             version: "1".into(),
+            operating_system: None,
         },
         protocol_version: ProtocolVersion::current(),
         schema_hash: SchemaHash(app_server_protocol::schema_hash()),

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
-import { Emitter } from "../../../../../base/common/event.js";
+import { Emitter, Event } from "../../../../../base/common/event.js";
 import { Disposable } from "../../../../../base/common/lifecycle.js";
 import type { RemoteConnectionState } from "../../../../../platform/remote/common/remote.js";
 import type { RemoteAgentConnection } from "../../../../../platform/remote/common/remoteAgentApi.js";
@@ -169,6 +169,7 @@ class TestTunnelService extends Disposable implements ITunnelService {
 	public readonly closedIds: string[] = [];
 	public listCount = 0;
 	public pendingOpen: Promise<void> | undefined;
+	public readonly onDidChange = Event.None;
 	public readonly onTunnelOpened = this.opened.event;
 	public readonly onTunnelClosed = this.closed.event;
 
@@ -196,6 +197,8 @@ class TestTunnelService extends Disposable implements ITunnelService {
 		return handle;
 	}
 
+	public async getExistingTunnel(host: string, port: number): Promise<RemoteTunnel | undefined> { return [...this.entries.values()].find(t => t.tunnelRemoteHost === host && t.tunnelRemotePort === port); }
+	public async closeAll(): Promise<void> { await Promise.all([...this.entries.values()].map(t => this.closeTunnel(t.tunnelRemoteHost, t.tunnelRemotePort))); }
 	public async closeTunnel(remoteHost: string, remotePort: number): Promise<void> {
 		const entry = [...this.entries.values()].find(entry => entry.tunnelRemoteHost === remoteHost && entry.tunnelRemotePort === remotePort);
 		if (entry) {

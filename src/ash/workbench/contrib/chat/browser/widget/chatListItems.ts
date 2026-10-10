@@ -1,4 +1,4 @@
-import type { PlanUpdate, ThreadItem, ThreadTranscriptEntry, Turn, TurnError } from "../../../../services/chat/common/chatService.js";
+import type { IChatHookPart, PlanUpdate, ThreadItem, ThreadTranscriptEntry, Turn, TurnError } from "../../../../services/chat/common/chatService.js";
 import { localize } from "../../../../../nls.js";
 
 export type ChatTurnErrorAction =
@@ -14,7 +14,8 @@ interface ChatTurnErrorListItemOptions {
 /** One render-ready committed or transient Thread item. */
 export interface IChatListItem {
 	readonly id: string;
-	readonly type: ThreadItem["type"] | "turnError" | "advisor";
+	readonly type: ThreadItem["type"] | "turnError" | "advisor" | 'hook';
+	readonly hookPart?: IChatHookPart;
 	readonly text: string;
 	readonly transient: boolean;
 	readonly isError?: boolean;
@@ -51,6 +52,7 @@ export function chatTranscriptListItems(entries: readonly ThreadTranscriptEntry[
 	const calls = new Map(entries.flatMap(entry => entry.type === "item" && entry.item.type === "toolCall" && entry.item.name === "advisor" ? [[entry.item.toolCallId, entry] as const] : []));
 	const results = new Set(entries.flatMap(entry => entry.type === "item" && entry.item.type === "toolResult" ? [entry.item.toolCallId] : []));
 	return entries.flatMap(entry => {
+		if (entry.type === 'hookRun' && (entry.run.status.type === 'running' || entry.run.status.type === 'continued')) { return []; }
 		if (entry.type === "item" && entry.item.type === "toolCall" && calls.has(entry.item.toolCallId)) {
 			if (results.has(entry.item.toolCallId)) return [];
 			return [{ id: entry.entryId, type: "advisor" as const, text: "Consulting the selected model…", transient: entry.transient, label: "Advisor" }];
@@ -75,6 +77,7 @@ export function chatTranscriptListItems(entries: readonly ThreadTranscriptEntry[
 /** Maps one backend-assembled transcript entry to Chat presentation. */
 export function chatTranscriptListItem(entry: ThreadTranscriptEntry, options: TranscriptListItemOptions = {}): IChatListItem {
 	switch (entry.type) {
+		case 'hookRun': return chatHookListItem(entry);
 		case "item": return { ...chatListItem(entry.item, entry.transient), id: entry.entryId };
 		case "turnPlan": return { ...chatPlanUpdateListItem(entry.turnId, entry.plan), id: entry.entryId };
 		case "turnError": {
@@ -231,4 +234,18 @@ export function chatListItem(item: ThreadItem, transient = false): IChatListItem
 				isError: item.isError,
 			};
 	}
+}
+
+/** Converts one Hook outcome for both Chat presentations. */
+export function chatHookListItem(entry: Extract<ThreadTranscriptEntry, { readonly type: 'hookRun'; }>): IChatListItem {
+	const run = entry.run;
+	const reason = run.status.type === 'denied' || run.status.type === 'cancelled' ? run.status.reason : run.status.type === 'failed' ? run.status.message : '';
+	return {
+		id: entry.entryId,
+		type: 'hook',
+		text: reason,
+		transient: false,
+		isError: run.status.type === 'denied' || run.status.type === 'failed',
+		hookPart: { kind: 'hook', hookType: run.event, stopReason: run.status.type === 'denied' ? reason : undefined, systemMessage: run.status.type !== 'denied' ? reason : undefined, toolDisplayName: run.toolName ?? undefined },
+	};
 }

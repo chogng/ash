@@ -4,6 +4,8 @@ import { IBrowserViewService, type BrowserViewEvent, type IBrowserViewBounds, ty
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { BrowserEditorInput, IBrowserEditorInputData } from './browserEditorInput.js';
 
+export const BrowserViewEditorId = 'workbench.editor.browser';
+
 export const IBrowserViewWorkbenchService = createServiceIdentifier<IBrowserViewWorkbenchService>('browserViewWorkbenchService');
 
 export interface IBrowserViewWorkbenchService {
@@ -42,18 +44,20 @@ export class BrowserViewModel extends Disposable implements IBrowserViewModel {
 	public readonly onDidEvent = this.events.event;
 	private currentState: IBrowserViewState;
 	private stateRevision = 0;
+	private isClosed = false;
 
 	constructor(private readonly initialInfo: IBrowserViewInfo, @IBrowserViewService private readonly service: IBrowserViewService) {
 		super();
 		this.currentState = initialInfo.state;
 		this._register(service.onDidEvent(event => {
 			const id = event.type === 'created' ? event.info.id : event.type === 'stateChanged' ? event.state.targetId : event.targetId;
-			if (id !== this.id) { return; }
+			if (id !== this.id || this.isClosed) { return; }
 			if (event.type === 'stateChanged' && event.state.targetId === this.id) {
 				this.stateRevision++;
 				this.currentState = event.state;
 				this.stateChanges.fire(event.state);
 			} else if (event.type === 'closed' && event.targetId === this.id) {
+				this.isClosed = true;
 				this.closed.fire();
 			}
 			this.events.fire(event);
@@ -69,6 +73,7 @@ export class BrowserViewModel extends Disposable implements IBrowserViewModel {
 		const revision = this.stateRevision;
 		const state = await this.service.getState(this.id);
 		this.assertNotDisposed();
+		if (this.isClosed) { throw new Error('BrowserTargetUnavailable'); }
 		if (revision === this.stateRevision) {
 			this.currentState = state;
 			this.stateChanges.fire(state);

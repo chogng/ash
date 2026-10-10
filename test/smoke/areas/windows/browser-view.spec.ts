@@ -9,8 +9,13 @@ import type { IBrowserViewInfo } from '../../../../src/ash/platform/browserView/
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { browserNetworkToken, installBrowserNetworkPolicy } from '../../../automation/browserNetwork.js';
+import { installMainChannelTestClient } from '../../../automation/mainProcessIpc.js';
 import { createHash } from 'node:crypto';
 import type { Socket } from 'node:net';
+
+test.beforeEach(async ({ target, workbench }) => {
+	if (target.kind === 'electron') { await installMainChannelTestClient(workbench.page); }
+});
 
 test('agent network authorizes subresources, rejects WebSocket and redirects and releases authority after the tool', async ({ target, application, workbench }) => {
 	test.skip(target.kind !== 'electron', 'Request enforcement belongs to Chromium');
@@ -52,7 +57,7 @@ test('agent network authorizes subresources, rejects WebSocket and redirects and
 	const electron = application as ElectronApplication;
 	const page = workbench.page;
 	const call = (method: string, params: Record<string, unknown>) => page.evaluate(({ method, params }) => {
-		return (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke(`ash:browser-host:${method}`, { id: crypto.randomUUID(), params });
+		return globalThis.ashTestMainProcess.call('browserHost', method, { id: crypto.randomUUID(), params });
 	}, { method, params: { threadId: 'network-test-thread', ...(method === 'close' ? {} : { networkToken: browserNetworkToken }), ...params } });
 	try {
 		await installBrowserNetworkPolicy(electron, url);
@@ -189,7 +194,7 @@ test('sharing a user page exposes only that page to the chosen thread and revoca
 		return views.find(view => view.owner.type === 'user')!;
 	});
 	const call = (method: string, params: Record<string, unknown>) => page.evaluate(({ method, params }) => {
-		return (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke(`ash:browser-host:${method}`, { id: crypto.randomUUID(), params });
+		return globalThis.ashTestMainProcess.call('browserHost', method, { id: crypto.randomUUID(), params });
 	}, { method, params: ['create', 'observe', 'perform'].includes(method) ? { networkToken: browserNetworkToken, ...params } : params });
 	const observe = { threadId: 'share-test-thread', targetId: info.id, includeAccessibilityTree: false, includeDomSnapshot: false, includeScreenshot: false };
 	await expect(call('observe', observe)).rejects.toThrow(/BrowserTargetAccessDenied/);
@@ -228,7 +233,7 @@ test('browser automation runs in one separate process and its crash retains manu
 	const electron = application as ElectronApplication;
 	const page = workbench.page;
 	const invoke = (method: string, params: Record<string, unknown>) => page.evaluate(({ method, params }) => {
-		return (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke(`ash:browser-host:${method}`, { id: crypto.randomUUID(), params: { threadId: 'crash-test-thread', ...params } });
+		return globalThis.ashTestMainProcess.call('browserHost', method, { id: crypto.randomUUID(), params: { threadId: 'crash-test-thread', ...params } });
 	}, { method, params: ['create', 'observe', 'perform'].includes(method) ? { networkToken: browserNetworkToken, ...params } : params });
 	const created = decodeAppServerServerRequestResult('browser/create', await invoke('create', { url: 'about:blank' }));
 	const options = { targetId: created.targetId, includeAccessibilityTree: true, includeDomSnapshot: false, includeScreenshot: false };
@@ -271,9 +276,7 @@ test('desktop browser retains a live page through renderer reload and restores w
 	const url = `http://127.0.0.1:${address.port}/`;
 	try {
 		const page = workbench.page;
-		await page.keyboard.press('ControlOrMeta+Shift+P');
-		await page.getByPlaceholder('Type the name of a command to run').fill('Browser: Open Browser');
-		await page.keyboard.press('Enter');
+		await workbench.quickaccess.runCommand('ash.browser.open');
 		const location = page.locator('.ash-browser-editor').getByRole('textbox', { name: 'Browser address' });
 		await location.fill(url); await location.press('Enter');
 		await expect(page.getByRole('tab', { name: 'Restored browser', exact: true })).toBeVisible();
@@ -316,7 +319,7 @@ test('desktop browser agent observes loaded pages, edits fields and follows navi
 	const page = workbench.page;
 	const electron = application as ElectronApplication;
 	const hostCall = (method: string, params: Record<string, unknown>) => page.evaluate(({ method, params }) => {
-		return (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke(`ash:browser-host:${method}`, { id: crypto.randomUUID(), params: { threadId: 'browser-smoke-thread', ...params } });
+		return globalThis.ashTestMainProcess.call('browserHost', method, { id: crypto.randomUUID(), params: { threadId: 'browser-smoke-thread', ...params } });
 	}, { method, params: ['create', 'observe', 'perform'].includes(method) ? { networkToken: browserNetworkToken, ...params } : params });
 	try {
 		await installBrowserNetworkPolicy(electron, url);
@@ -554,7 +557,9 @@ for (const locale of ['en', 'zh-CN']) {
 				const commands = workbench.quickaccess.element;
 				await expect(commands).toBeVisible();
 				await expect(commands.getByRole('combobox')).toBeFocused();
+				await expect.poll(() => pageView.evaluate(view => view.getVisible())).toBe(false);
 				await page.keyboard.press('Escape');
+				await expect.poll(() => pageView.evaluate(view => view.getVisible())).toBe(true);
 			} finally { await pageView.dispose(); }
 			await testInfo.attach(`browser-keyboard-${locale}`, { body: await page.screenshot(), contentType: 'image/png' });
 			await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
@@ -587,9 +592,7 @@ test('desktop browser opens visible pages, navigates history, resizes and releas
 	const page = workbench.page;
 	try {
 		await installBrowserNetworkPolicy(electron, url);
-		await page.keyboard.press('ControlOrMeta+Shift+P');
-		await page.getByPlaceholder('Type the name of a command to run').fill('Browser: Open Browser');
-		await page.keyboard.press('Enter');
+		await workbench.quickaccess.runCommand('ash.browser.open');
 		const editor = page.locator('.ash-browser-editor');
 		await expect(editor).toBeVisible();
 		await expect(page.getByRole('navigation', { name: 'Editor breadcrumbs' })).toBeHidden();
@@ -614,9 +617,7 @@ test('desktop browser opens visible pages, navigates history, resizes and releas
 		}, url);
 		await location.fill(`${url}second`); await location.press('Enter');
 		await expect(editor.getByRole('status')).toHaveText('Second page');
-		await page.keyboard.press('ControlOrMeta+Shift+P');
-		await page.getByPlaceholder('Type the name of a command to run').fill('Browser: Open Browser');
-		await page.keyboard.press('Enter');
+		await workbench.quickaccess.runCommand('ash.browser.open');
 		await expect(page.getByRole('tab', { name: 'Second page', exact: true })).toHaveCount(1);
 		await expect(page.getByRole('tab', { name: 'Browser', exact: true })).toHaveCount(1);
 		await expect.poll(async () => (await views()).filter(view => view.url === `${url}second` && view.visible).length).toBe(0);
@@ -629,10 +630,9 @@ test('desktop browser opens visible pages, navigates history, resizes and releas
 		await expect(editor.getByRole('status')).toHaveText('First page');
 		await editor.getByRole('button', { name: 'Forward', exact: true }).click();
 		await expect(editor.getByRole('status')).toHaveText('Second page');
-		await page.keyboard.press('ControlOrMeta+Shift+P');
-		await page.getByPlaceholder('Type the name of a command to run').fill('Split Editor Horizontal');
-		await page.keyboard.press('Enter');
+		await workbench.quickaccess.runCommand('workbench.action.splitEditorHorizontal');
 		await expect(page.getByRole('tab', { name: 'Second page', exact: true })).toHaveCount(2);
+		expect((await views()).filter(view => view.url === `${url}second`)).toHaveLength(1);
 		await electron.evaluate(async ({ BrowserWindow }) => {
 			const view = BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).find(child => 'webContents' in child && (child as Electron.WebContentsView).webContents.getURL().endsWith('/second')) as Electron.WebContentsView;
 			await view.webContents.executeJavaScript("window.open('/popup'); undefined", true);
@@ -642,6 +642,12 @@ test('desktop browser opens visible pages, navigates history, resizes and releas
 		await expect.poll(async () => (await views()).filter(view => view.url === `${url}popup`).length).toBe(0);
 		await page.getByRole('button', { name: 'Close Second page', exact: true }).last().click();
 		await expect(page.getByRole('tab', { name: 'Second page', exact: true })).toHaveCount(1);
+		// Closing the compositor's current split must hand its page to the surviving split without another focus action.
+		await expect.poll(async () => {
+			const bounds = await page.locator('.ash-browser-editor:visible .ash-browser-viewport').boundingBox();
+			const view = (await views()).find(view => view.url === `${url}second` && view.visible);
+			return bounds && view ? Math.abs(view.bounds.x - bounds.x) + Math.abs(view.bounds.width - bounds.width) : 1000;
+		}).toBeLessThan(3);
 		await page.getByRole('tab', { name: 'Second page', exact: true }).click();
 		await editor.getByRole('textbox', { name: 'Browser address' }).focus();
 		await expect.poll(async () => (await views()).filter(view => view.url === `${url}second` && view.visible).length).toBe(1);
@@ -661,8 +667,7 @@ test('desktop browser opens visible pages, navigates history, resizes and releas
 		await expect(page.getByRole('tab', { name: 'Second page', exact: true })).toHaveCount(0);
 		await expect.poll(async () => (await views()).filter(view => view.url.startsWith(url)).map(view => view.url)).toEqual([]);
 		const hostCall = (method: string, params: Record<string, unknown>) => page.evaluate(({ method, params }) => {
-			const bridge = (globalThis as unknown as { ash: ISandboxGlobals; }).ash;
-			return bridge.ipcRenderer.invoke(`ash:browser-host:${method}`, { id: crypto.randomUUID(), params: { threadId: 'browser-smoke-thread', ...params } });
+			return globalThis.ashTestMainProcess.call('browserHost', method, { id: crypto.randomUUID(), params: { threadId: 'browser-smoke-thread', ...params } });
 		}, { method, params: ['create', 'observe', 'perform'].includes(method) ? { networkToken: browserNetworkToken, ...params } : params });
 		const created = decodeAppServerServerRequestResult('browser/create', await hostCall('create', { url }));
 		await expect(page.locator('.ash-browser-editor')).toBeVisible();
@@ -678,16 +683,25 @@ test('desktop browser opens visible pages, navigates history, resizes and releas
 		await hostCall('perform', { action: { type: 'typeText', targetId: created.targetId, target: { type: 'element', target: { nodeId } }, text: 'Agent and user share this page' } });
 		const observation = decodeAppServerServerRequestResult('browser/observe', await hostCall('observe', { targetId: created.targetId, includeAccessibilityTree: true, includeDomSnapshot: false, includeScreenshot: false }));
 		expect(observation.accessibilityTree).toContain('Agent and user share this page');
+		await page.evaluate(() => globalThis.ashTestMainProcess.call('browserHost', 'disposeSession', { threadId: 'browser-smoke-thread' }));
+		await expect.poll(() => electron.evaluate(({ BrowserWindow }) => {
+			const view = BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).find(child => 'webContents' in child) as Electron.WebContentsView;
+			return view.webContents.debugger.isAttached();
+		})).toBe(false);
+		await expect(page.locator('.ash-browser-editor')).toBeVisible();
+		expect(decodeAppServerServerRequestResult('browser/observe', await hostCall('observe', { targetId: created.targetId, includeAccessibilityTree: true, includeDomSnapshot: false, includeScreenshot: false })).accessibilityTree).toContain('Agent and user share this page');
+		await workbench.quickaccess.runCommand('workbench.action.splitEditorHorizontal');
+		await expect(page.getByRole('tab', { name: 'First page', exact: true })).toHaveCount(2);
 		await hostCall('close', { targetId: created.targetId });
 		await expect(page.locator('.ash-browser-editor')).toHaveCount(0);
 		await expect.poll(async () => (await views()).filter(view => view.url.startsWith(url)).length).toBe(0);
 		const slow = decodeAppServerServerRequestResult('browser/create', await hostCall('create', { url: 'about:blank' }));
 		const requestId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 		const pending = page.evaluate(({ id, url, targetId }) => {
-			return (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke('ash:browser-host:perform', { id, params: { threadId: 'browser-smoke-thread', networkToken: 'browser-test-authority', action: { type: 'navigate', targetId, url } } }).then(() => 'completed', () => 'cancelled');
+			return globalThis.ashTestMainProcess.call('browserHost', 'perform', { id, params: { threadId: 'browser-smoke-thread', networkToken: 'browser-test-authority', action: { type: 'navigate', targetId, url } } }).then(() => 'completed', () => 'cancelled');
 		}, { id: requestId, url: `${url}slow`, targetId: slow.targetId });
 		await expect.poll(() => finishSlowLoad !== undefined).toBe(true);
-		await page.evaluate(id => (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke('ash:browser-host:cancel', { id }), requestId);
+		await page.evaluate(id => globalThis.ashTestMainProcess.call('browserHost', 'cancel', { id }), requestId);
 		expect(await pending).toBe('cancelled');
 		finishSlowLoad!();
 		await hostCall('close', { targetId: slow.targetId });

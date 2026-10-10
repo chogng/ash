@@ -13,7 +13,7 @@ name = "ash-github-authentication"
 path = "src/main.rs"
 
 [dependencies]
-extensions = { package = "ash-external-ext-sdk", path = "../../sdk/rust" }
+external-ext-sdk = { package = "ash-external-ext-sdk", path = "../../sdk/rust" }
 github.workspace = true
 ash-http-client.workspace = true
 ash-async-utils.workspace = true

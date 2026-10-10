@@ -1,3 +1,7 @@
+import { QueryBuilder } from '../../../workbench/services/search/common/queryBuilder.js';
+import { SearchService } from '../../../workbench/services/search/common/searchService.js';
+import { BulkEditTestServices } from '../../../workbench/contrib/bulkEdit/test/browser/bulkEditTestServices.js';
+import { WorkspaceContextService } from '../../../workbench/services/workspaces/browser/workspaceContextService.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -35,10 +39,14 @@ test('Session files preserve their original directory through selection, directo
 		const calls: unknown[] = [];
 		const host = createDisconnectedRendererApi();
 		const fileHost: IRendererHost = {
-			...host, fileSearch: { glob: async (directory, query, signal) => { calls.push({ target: directory.target, query, aborted: signal?.aborted }); return { matches: [], totalMatches: 0 }; } }, fs: {
+			...host, fileSearch: {
+				glob: async (directory, query, signal) => { calls.push({ target: directory.target, query, aborted: signal?.aborted }); return { matches: [], totalMatches: 0 }; },
+				fuzzy: async (directory, query, signal) => { calls.push({ target: directory.target, query, aborted: signal?.aborted }); return { matches: [], totalMatches: 0 }; },
+			}, fs: {
 				...host.fs,
 				readPathCaseSensitivity: async params => { calls.push(params); return { scopes: [{ path: '.', sensitivity: 'insensitive' }] }; },
 				readBinaryFile: async params => { calls.push(params); return { resource: { resourceId: 'file', mimeType: 'text/plain', size: 8, sha256: 'sha256:file' }, revision: 'rev-1' }; },
+				writeFileElevated: async () => { throw new Error('Unexpected elevated write'); },
 				writeBinaryFile: async params => { calls.push(params); return { revision: 'rev-2', metadata: { fileType: 'file', readonly: false, sizeBytes: 7, modifiedAtMillis: null } }; },
 				copy: async params => { calls.push(params); },
 				pasteSystemFiles: async params => { calls.push(params); return true; },
@@ -65,6 +73,7 @@ test('Session files preserve their original directory through selection, directo
 		await files.readFile(first);
 		const controller = new AbortController();
 		await files.glob({ resource: originalFolder.uri, target: { type: 'workspace', dirId: originalFolder.id } }, { includePatterns: ['**/*.ts'], excludePatterns: [], maxResults: 100 }, controller.signal);
+		await files.fuzzy({ resource: originalFolder.uri, target: { type: 'workspace', dirId: originalFolder.id } }, { query: 'MAIN', maxResults: 10 }, controller.signal);
 		const owner = { sessionId: 'first', path: 'C:/sessions/first' };
 		assert.deepEqual(calls, [
 			{ sessionDirectory: owner, path: 'main.ts' },
@@ -74,6 +83,7 @@ test('Session files preserve their original directory through selection, directo
 			{ sessionDirectory: owner, path: '.', moveRequested: false },
 			{ sessionDirectory: owner, path: 'main.ts' },
 			{ target: { type: 'session', ...owner }, query: { includePatterns: ['**/*.ts'], excludePatterns: [], maxResults: 100 }, aborted: false },
+			{ target: { type: 'session', ...owner }, query: { query: 'MAIN', maxResults: 10 }, aborted: false },
 		]);
 		await assert.rejects(async () => files.copy(first, URI.file('C:/sessions/second/copied.ts')), /between Session/);
 	} finally { browser.window.close(); }
@@ -100,3 +110,41 @@ class MemoryProvider extends Disposable implements ISessionsProvider {
 function session(id: string, root: string): ISession {
 	return { sessionId: id, title: id, status: 'active', nextApprovalMode: 'manual', workspace: { authorityId: 'local', root }, chats: [{ threadId: `${id}-thread`, status: 'active', origin: { type: 'root' } }] };
 }
+
+
+test('Workbench file and content search retain Session directory authorization at the provider boundary', async () => {
+	const uri = URI.file('/sessions/first');
+	const owner = { sessionId: 'first', path: uri.fsPath };
+	const folder = { id: `session:${encodeURIComponent(owner.sessionId)}:${encodeURIComponent(owner.path)}`, name: 'first', index: 0, uri };
+	using workspace = new WorkspaceContextService({ id: 'session', folders: [folder] });
+	using services = new InstantiationService();
+	services.registerInstance(IWorkspaceContextService, workspace);
+	using editing = new BulkEditTestServices([]);
+	const host = createDisconnectedRendererApi();
+	const calls: unknown[] = [];
+	using files = services.createInstance(SessionFileService, {
+		...host,
+		fileSearch: {
+			...host.fileSearch,
+			async fuzzy(directory, query) {
+				calls.push({ target: directory.target, query });
+				return { matches: [{ path: 'main.ts', score: 40, resource: URI.joinPath(uri, 'main.ts') }], totalMatches: 1 };
+			},
+		},
+		contentSearch: {
+			async start(params) { calls.push(params); return { searchId: 'session-query' }; },
+			async read(params) { calls.push(params); return { searchId: params.searchId, matches: [], nextMatch: 0, completed: true, limitHit: false, error: null }; },
+			async cancel(params) { calls.push(params); },
+		},
+	} satisfies IRendererHost);
+	const search = new SearchService(files, workspace, editing.models, files);
+	const result = await search.fileSearch(new QueryBuilder().file([uri], { filePattern: 'main', sortByScore: true, maxResults: 1 }));
+	assert.deepEqual(result.results.map(file => file.resource.toString()), [URI.joinPath(uri, 'main.ts').toString()]);
+	await search.textSearch(new QueryBuilder().text({ pattern: 'needle' }, [uri]));
+	assert.deepEqual(calls[0], { target: { type: 'session', ...owner }, query: { query: 'main', maxResults: 2 } });
+	for (const call of calls.slice(1)) {
+		assert.deepEqual((call as { sessionDirectory: unknown; }).sessionDirectory, owner);
+		assert.equal('dirId' in (call as object), false);
+	}
+	assert.equal(calls.length, 4);
+});

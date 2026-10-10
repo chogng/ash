@@ -7,23 +7,28 @@ import { type RendererHostCapabilities } from "../../renderer/common/rendererHos
 
 /** App Server adapter for App Server-owned DAP processes. */
 export class AppServerDebugAdapterProcessService implements IDebugAdapterProcessService {
+	private readonly workspaceFolders = new Map<string, string | undefined>();
 	constructor(private readonly connection: AppServerProtocolClient, private readonly appServer: IAppServerApi) { }
 
 	async start(options: IDebugAdapterProcessStartOptions): Promise<string> {
-		return (await appServerRequest(this.connection, "debug/adapter/start", { ...options, arguments: [...options.arguments] })).sessionId;
+		const sessionId = (await appServerRequest(this.connection, "debug/adapter/start", { ...options, arguments: [...options.arguments] })).sessionId;
+		this.workspaceFolders.set(sessionId, options.dirId);
+		return sessionId;
 	}
 
 	send(sessionId: string, message: unknown): Promise<void> {
-		return voidResult(appServerRequest(this.connection, "debug/adapter/send", { sessionId, message }));
+		return voidResult(appServerRequest(this.connection, "debug/adapter/send", { ...this.folder(sessionId), sessionId, message }));
 	}
 
 	read(sessionId: string, afterSequence: number, maxMessages: number): Promise<IDebugAdapterProcessReadResult> {
-		return appServerRequest(this.connection, "debug/adapter/read", { sessionId, afterSequence, maxMessages });
+		return appServerRequest(this.connection, "debug/adapter/read", { ...this.folder(sessionId), sessionId, afterSequence, maxMessages });
 	}
 
 	close(sessionId: string): Promise<void> {
-		return voidResult(appServerRequest(this.connection, "debug/adapter/close", { sessionId }));
+		return voidResult(appServerRequest(this.connection, "debug/adapter/close", { ...this.folder(sessionId), sessionId })).finally(() => this.workspaceFolders.delete(sessionId));
 	}
+
+	private folder(sessionId: string): { readonly dirId?: string; } { const dirId = this.workspaceFolders.get(sessionId); return dirId === undefined ? {} : { dirId }; }
 
 	getConnectionState() { return this.appServer.getConnectionState(); }
 

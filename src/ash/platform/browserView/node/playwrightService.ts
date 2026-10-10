@@ -84,7 +84,7 @@ class Connection extends Disposable {
 /** Playwright and element operations stay outside Main and renderer lifetimes. */
 export class PlaywrightService extends Disposable implements IPlaywrightService {
 	private readonly connections = this._register(new DisposableMap<string, Connection>());
-	private readonly operations = new Map<string, AbortController>();
+	private readonly operations = new Map<string, { readonly sessionId: string; readonly cancellation: AbortController; }>();
 	constructor(@IInstantiationService private readonly instantiationService: IInstantiationService) { super(); }
 	public async getObservation(operationId: string, sessionId: string, pageId: string, options: IBrowserViewObservationOptions): Promise<IBrowserViewObservation> {
 		return this.run(operationId, sessionId, pageId, async ({ page, cdp }, signal) => {
@@ -141,13 +141,18 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 			signal.throwIfAborted();
 		});
 	}
-	public async cancelOperation(id: string): Promise<void> { this.operations.get(id)?.abort(new Error('BrowserRequestCancelled')); }
-	public async disposeSession(id: string): Promise<void> { this.connections.deleteAndDispose(id); }
+	public async cancelOperation(id: string): Promise<void> { this.operations.get(id)?.cancellation.abort(new Error('BrowserRequestCancelled')); }
+	public async disposeSession(id: string): Promise<void> {
+		for (const operation of this.operations.values()) {
+			if (operation.sessionId === id) { operation.cancellation.abort(new Error('BrowserRequestCancelled')); }
+		}
+		this.connections.deleteAndDispose(id);
+	}
 	private async run<T>(id: string, sessionId: string, pageId: string, execute: (page: ConnectedPage, signal: AbortSignal) => Promise<T>): Promise<T> {
 		this.assertNotDisposed();
 		if (this.operations.has(id)) { throw new Error('Duplicate browser operation'); }
 		const cancellation = new AbortController();
-		this.operations.set(id, cancellation);
+		this.operations.set(id, { sessionId, cancellation });
 		try {
 			let connection = this.connections.get(sessionId);
 			if (!connection) { connection = this.instantiationService.createInstance(Connection, sessionId); this.connections.set(sessionId, connection); }
@@ -157,7 +162,7 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 		} finally { this.operations.delete(id); }
 	}
 	protected override disposeCore(): void {
-		for (const controller of this.operations.values()) { controller.abort(new Error('BrowserCapabilityUnavailable')); }
+		for (const operation of this.operations.values()) { operation.cancellation.abort(new Error('BrowserCapabilityUnavailable')); }
 		super.disposeCore();
 	}
 }

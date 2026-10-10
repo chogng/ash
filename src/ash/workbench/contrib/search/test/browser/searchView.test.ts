@@ -1,11 +1,16 @@
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 import { BrowserPathService } from '../../../../services/path/browser/pathService.js';
 import { createDisconnectedRendererApi } from '../../../../../platform/agentHost/browser/rendererApi.js';
+import { BrowserFileSearchService } from '../../../../../platform/search/browser/browserFileSearchService.js';
+import { IFileSearchService } from '../../../../../platform/search/common/fileSearch.js';
+import { ISearchService } from '../../../../services/search/common/search.js';
+import { SearchService } from '../../../../services/search/common/searchService.js';
+import { IFileTextModelService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { BrowserContentSearchService } from "../../../../../platform/search/browser/searchService.js";
-import type { IContentSearchQuery, IContentSearchService, ContentSearchMatch } from "../../../../../platform/search/common/search.js";
+import type { IContentSearchQuery, ContentSearchMatch } from "../../../../../platform/search/common/search.js";
 import type { IContentSearchApi } from "../../../../../platform/search/common/searchApi.js";
 import { WorkbenchConfigurationService } from "../../../../../workbench/services/configuration/browser/configurationService.js";
 import { ContentSearchConfiguration } from "../../common/searchConfiguration.js";
@@ -51,6 +56,8 @@ import '../../browser/searchActionsTopBar.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import type { IContentSearchComplete, IContentSearchOptions } from '../../../../../platform/search/common/search.js';
 import type { SearchReplaceResult } from '../../browser/replace.js';
+
+interface ViewSearchProvider { search(query: IContentSearchQuery, options?: IContentSearchOptions): Promise<IContentSearchComplete>; }
 
 const matches: readonly ContentSearchMatch[] = [
 	{
@@ -527,12 +534,12 @@ test("BrowserContentSearchService pulls bounded batches and releases the job", a
 	const service = new BrowserContentSearchService(api);
 	const progress: ContentSearchMatch[] = [];
 
-	const complete = await service.search(query(), {
+	const complete = await service.search({ id: 'workspace', uri: URI.file('/workspace'), name: 'workspace', index: 0 }, query(), {
 		onProgress: (batch) => progress.push(...batch),
 	});
 
 	assert.deepEqual(readCursors, [0, 1]);
-	assert.deepEqual(progress, matches);
+	assert.deepEqual(progress, matches.map(match => ({ ...match, dirName: 'workspace' })));
 	assert.deepEqual(complete, {
 		resultCount: 2,
 		limitHit: true,
@@ -545,7 +552,7 @@ test("SearchView submits typed filters and groups highlighted matches", async ()
 	const browser = new JSDOM("<!doctype html><body></body>", { url: "https://ash.test" });
 	const installedGlobals = installDomGlobals(browser);
 	let submitted: IContentSearchQuery | undefined;
-	const service: IContentSearchService = {
+	const service: ViewSearchProvider = {
 		search: async (searchQuery, options) => {
 			submitted = searchQuery;
 			options?.onProgress?.(matches);
@@ -604,6 +611,7 @@ test("SearchView submits typed filters and groups highlighted matches", async ()
 			includePatterns: ["src/**", "docs/**"],
 			excludePatterns: ["**/*.test.ts"],
 			maxResults: 2_000,
+			freshness: 'current',
 		});
 		assert.equal(
 			pane.element.querySelector(".ash-search-file-path .ash-icon-label-text")?.textContent,
@@ -639,7 +647,7 @@ test("SearchView applies configured query defaults and result limits", async () 
 	await configuration.updateValue(ContentSearchConfiguration.excludePatterns, "**/*.test.ts");
 	await configuration.updateValue(ContentSearchConfiguration.maxResults, 750);
 	let submitted: IContentSearchQuery | undefined;
-	const service: IContentSearchService = {
+	const service: ViewSearchProvider = {
 		search: async searchQuery => {
 			submitted = searchQuery;
 			return { resultCount: 0, limitHit: false, error: undefined };
@@ -667,6 +675,7 @@ test("SearchView applies configured query defaults and result limits", async () 
 			includePatterns: ["src/**", "packages/**"],
 			excludePatterns: ["**/*.test.ts"],
 			maxResults: 750,
+			freshness: 'current',
 		});
 	} finally {
 		browser.window.close();
@@ -728,13 +737,17 @@ function installDomGlobals(browser: JSDOM): readonly string[] {
 	return Object.keys(globals);
 }
 
-function createServices(store: DisposableStore, browser: JSDOM, search: IContentSearchService, configured?: WorkbenchConfigurationService, workspace?: WorkspaceContextService, replace?: IReplaceService): InstantiationService {
+function createServices(store: DisposableStore, browser: JSDOM, search: ViewSearchProvider, configured?: WorkbenchConfigurationService, workspace?: WorkspaceContextService, replace?: IReplaceService): InstantiationService {
 	const configuration = configured ?? store.add(new WorkbenchConfigurationService());
 	const services = store.add(new InstantiationService());
 	services.registerInstance(ICommandService, store.add(new CommandService(services)));
 	const menus: IContextMenuService = { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { }, hideContextMenu() { } };
 	const contextView = store.add(new BrowserContextViewService(browser.window.document.body));
-	services.registerInstance(ContentSearchServiceId, search);
+	services.registerInstance(ContentSearchServiceId, {
+		search: (folder, query, options) => search.search(query, {
+			...options, onProgress: matches => options?.onProgress?.(matches.filter(match => match.dirId === folder.id)),
+		}),
+	});
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IContextKeyService, store.add(new ContextKeyService()));
 	services.registerInstance(IContextMenuService, menus);
@@ -746,6 +759,9 @@ function createServices(store: DisposableStore, browser: JSDOM, search: IContent
 	services.registerInstance(ISearchHistoryService, store.add(services.createInstance(SearchHistoryService)));
 	const editing = store.add(new BulkEditTestServices([]));
 	services.registerInstance(ITextModelResourceService, editing.models);
+	services.registerInstance(IFileTextModelService, editing.models);
+	services.registerInstance(IFileSearchService, new BrowserFileSearchService(editing.files));
+	services.registerInstance(ISearchService, services.createInstance(SearchService));
 	services.registerInstance(IBulkEditService, editing.service);
 	services.registerInstance(IDialogService, editing.dialogs);
 	services.registerInstance(IWorkingCopyService, editing.workingCopies);
@@ -1504,7 +1520,7 @@ test('Expand All runs for empty, partially collapsed and multi-root results with
 			visibleMatches: tree.model.visibleNodes.filter(node => node.element.kind === 'match').length,
 			selection: tree.selection.map(element => element.id), focus: tree.focus?.id,
 			snapshot: view.getSearchResultSnapshot(), searched, inputFocused: browser.window.document.activeElement === queryInput,
-		}, { visibleMatches: 3, selection: [selected.id], focus: selected.id, snapshot: before, searched: 1, inputFocused: true });
+		}, { visibleMatches: 3, selection: [selected.id], focus: selected.id, snapshot: before, searched: 2, inputFocused: true });
 		for (const node of tree.model.rootNodes) { tree.collapseRecursive(node.id); }
 		view.setVisible(false);
 		await command();

@@ -15,6 +15,10 @@ jobs:
     name: Windows release - ${{ matrix.target }}
     runs-on: windows-latest
     timeout-minutes: 60
+    env:
+      ASH_BUILD_COMMIT: ${{ github.sha }}
+      ASH_BUILD_ID: release-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}-${{ matrix.target }}
+      CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO: ${{ contains(matrix.target, 'apple-darwin') && 'packed' || 'off' }}
     strategy:
       fail-fast: false
       matrix:
@@ -31,6 +35,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install LLVM symbol tools
+        shell: pwsh
+        run: |
+          choco install llvm --yes --no-progress
+          "C:/Program Files/LLVM/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
       - name: Install Windows ARM64 Rust target
         if: matrix.target == 'aarch64-pc-windows-msvc'
         shell: pwsh
@@ -40,6 +50,10 @@ jobs:
         uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3
         with:
           install: false
+
+      - name: Initialize release symbol staging
+        shell: bash
+        run: echo "ASH_SYMBOLS_DIR=$GITHUB_WORKSPACE/.build/releases/symbols/${{ matrix.target }}" >> "$GITHUB_ENV"
 
       - name: Build Ash Code release package
         shell: bash
@@ -294,6 +308,23 @@ jobs:
             --output ".build/releases/ash-desktop-${{ matrix.target }}.update.json" \
             --public-key "$ASH_UPDATE_PUBLIC_KEY"
           cp "$archive" ".build/releases/ash-desktop-${{ matrix.target }}.update.json" ".build/release-artifacts/${{ matrix.target }}/"
+
+      - name: Bind final packages and archive Rust symbols
+        shell: bash
+        run: |
+          desktop=()
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
+            arch="$(node -p 'process.arch')"
+            desktop=(--desktop "dist/Ash-darwin-${arch}/Ash.app/Contents/Resources" --archive "ash-desktop=.build/releases/Ash-darwin-${arch}.zip")
+          elif [[ "${{ matrix.target }}" == "x86_64-pc-windows-msvc" ]]; then
+            desktop=(--desktop "dist/Ash-win32-x64/resources" --archive "ash-desktop=dist/AshSetup-${GITHUB_REF_NAME#v}-win32-x64.exe")
+          fi
+          ${{ matrix.python }} -B build/release/symbols.py archive \
+            --package "ash-code=.build/releases/ash-code-${{ matrix.target }}" \
+            --package "ash-app-server=.build/releases/runtime-${{ matrix.target }}" \
+            --archive "ash-code=.build/releases/ash-code-${{ matrix.target }}.${{ matrix.archive }}" \
+            --archive "ash-app-server=.build/releases/ash-app-server-${{ matrix.target }}.${{ matrix.archive }}" \
+            "${desktop[@]}" --output ".build/release-artifacts/${{ matrix.target }}"
 
       - name: Upload staged release packages for sanity checks
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

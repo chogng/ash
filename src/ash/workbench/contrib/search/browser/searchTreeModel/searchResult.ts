@@ -1,8 +1,9 @@
-import { extUri } from '../../../../../base/common/resources.js';
+import { basename, extUri } from '../../../../../base/common/resources.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import type { ContentSearchMatch } from '../../../../../platform/search/common/search.js';
 import type { IWorkspaceFolder } from '../../../../../platform/workspace/common/workspace.js';
+import type { IFileMatch } from '../../../../services/search/common/search.js';
 
 export interface SearchFolderMatch {
 	readonly kind: 'folder';
@@ -18,7 +19,7 @@ export interface SearchFileMatch {
 	readonly resource: URI;
 	readonly name: string;
 	readonly path: string;
-	readonly folder: IWorkspaceFolder;
+	readonly folder: IWorkspaceFolder | undefined;
 	readonly matches: SearchMatch[];
 }
 
@@ -44,6 +45,43 @@ export class SearchResultImpl {
 	public get children(): readonly SearchFolderMatch[] { return [...this.roots.values()]; }
 	public get files(): readonly SearchFileMatch[] { return [...this.fileMatches.values()]; }
 	public get count(): number { return this.matchIds.size; }
+
+	public addFileMatch(file: IFileMatch): void {
+		const folder = [...this.workspaceFolders].sort((a, b) => b.uri.path.length - a.uri.path.length).find(folder => extUri.isEqualOrParent(file.resource, folder.uri));
+		const path = folder ? file.resource.path.slice(folder.uri.path.replace(/\/$/, '').length + 1) : file.resource.path;
+		for (const result of file.results ?? []) {
+			for (const location of result.rangeLocations) {
+				const starts = [0];
+				for (const newline of result.previewText.matchAll(/\r\n|\r|\n/g)) { starts.push(newline.index + newline[0].length); }
+				const offset = (line: number, column: number): number => starts[line]! + column;
+				if (!folder) {
+					const key = extUri.getComparisonKey(file.resource);
+					let retained = this.fileMatches.get(key);
+					if (!retained) {
+						retained = { kind: 'file', id: `file:${key}`, resource: file.resource, name: basename(file.resource), path, folder: undefined, matches: [] };
+						this.fileMatches.set(key, retained);
+					}
+					const source = location.source;
+					const id = JSON.stringify([retained.id, source.startLineNumber, source.startColumn, source.endLineNumber, source.endColumn]);
+					if (!this.matchIds.has(id)) {
+						this.matchIds.add(id);
+						retained.matches.push({
+							kind: 'match', id, file: retained, preview: result.previewText,
+							previewRange: { start: offset(location.preview.startLineNumber, location.preview.startColumn), end: offset(location.preview.endLineNumber, location.preview.endColumn) },
+							range: new Range(source.startLineNumber + 1, source.startColumn + 1, source.endLineNumber + 1, source.endColumn + 1),
+						});
+					}
+					continue;
+				}
+				this.add([{
+					dirId: folder.id, path,
+					lineNumber: location.source.startLineNumber - location.preview.startLineNumber + 1,
+					preview: result.previewText,
+					ranges: [{ start: offset(location.preview.startLineNumber, location.preview.startColumn), end: offset(location.preview.endLineNumber, location.preview.endColumn) }],
+				}]);
+			}
+		}
+	}
 
 	public add(matches: readonly ContentSearchMatch[]): void {
 		for (const match of matches) {
@@ -147,6 +185,21 @@ export class SearchResultImpl {
 		for (const [id, root] of this.roots) {
 			prune(root, selected.has(root));
 			if (!root.children.size) { this.roots.delete(id); }
+		}
+		for (const [key, file] of this.fileMatches) {
+			if (file.folder) { continue; }
+			if (selected.has(file)) {
+				for (const match of file.matches) { this.matchIds.delete(match.id); }
+				this.fileMatches.delete(key);
+				continue;
+			}
+			for (let index = file.matches.length - 1; index >= 0; index--) {
+				if (selected.has(file.matches[index]!)) {
+					this.matchIds.delete(file.matches[index]!.id);
+					file.matches.splice(index, 1);
+				}
+			}
+			if (!file.matches.length) { this.fileMatches.delete(key); }
 		}
 	}
 }

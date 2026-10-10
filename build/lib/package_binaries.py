@@ -20,6 +20,7 @@ from build.protocol.generate import generate_protocol
 
 
 _BINARIES = {
+    "ash-update-host": ("ash-product-update", "--update-host-bin"),
     "ash-package-store": ("ash-package-store", "--package-store-bin"),
     "bwrap": ("ash-bwrap", "--bwrap-bin"),
     "ash-voice-host": ("ash-voice-host", "--voice-host-bin"),
@@ -30,6 +31,10 @@ _BINARIES = {
     "ash-app-server": ("ash-app-server", "--server-bin"),
     "ash-app-server-daemon": ("ash-app-server-daemon", "--app-server-daemon-bin"),
     "ash-code-mode-host": ("ash-code-mode-host", "--code-mode-host-bin"),
+    "ash-github-authentication": (
+        "ash-github-authentication",
+        "--github-authentication-bin",
+    ),
     "ash-external-js-ext": ("ash-external-js-ext", "--external-js-ext-bin"),
     "ash-github-authentication": (
         "ash-github-authentication",
@@ -108,6 +113,8 @@ def build_binaries(
     if "ash-app-server-protocol" in packages:
         generate_protocol(root=repository_root, cargo=cargo)
     environment = cargo_environment(spec, packages)
+    if cargo_profile == "release" and "apple-darwin" in spec.target:
+        environment["CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO"] = "packed"
     with leased_cache(
         repository_root,
         profile="debug" if cargo_profile == "dev" else cargo_profile,
@@ -122,8 +129,15 @@ def build_binaries(
             check=False,
         )
     executables = {}
+    artifacts = []
     for line in result.stdout.splitlines():
         message = parse_cargo_message(line)
+        if (
+            message
+            and message.get("reason") == "compiler-artifact"
+            and message.get("executable")
+        ):
+            artifacts.append(message)
         diagnostic = cargo_rendered_diagnostic(message)
         if diagnostic is not None:
             sys.stderr.write(diagnostic)
@@ -138,6 +152,12 @@ def build_binaries(
         outputs[name] = validate_input_binary(
             executables[name], name, cargo, spec.is_windows
         )
+    if cargo_profile == "release" and environment.get("ASH_SYMBOLS_DIR"):
+        from build.release.symbols import SymbolStore
+
+        SymbolStore(
+            Path(environment["ASH_SYMBOLS_DIR"]), repository_root
+        ).record_compilation(spec.target, command, environment, artifacts)
     return outputs
 
 

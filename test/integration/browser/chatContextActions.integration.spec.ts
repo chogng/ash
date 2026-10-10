@@ -558,7 +558,10 @@ test('long source attachment buttons fit a narrow composer and remain keyboard a
 
 for (const locale of ['en', 'zh-CN']) {
 	test(`terminal, symbols and search results keep snapshots and source buttons after draft restore in ${locale}`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
 		await page.goto(`/chatInput.html?contextSources=1&locale=${locale}`);
+		await expect.poll(async () => ({ ready: await page.evaluate(() => Boolean(window.ashChatInputIntegration)), errors })).toEqual({ ready: true, errors: [] });
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
 		const chinese = locale === 'zh-CN';
 		const add = page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true });

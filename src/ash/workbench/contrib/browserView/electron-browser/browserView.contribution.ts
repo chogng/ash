@@ -17,7 +17,7 @@ import { Registry } from '../../../../platform/registry/common/platform.js';
 import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 
 import { BrowserEditorSerializer, BROWSER_RESOURCE_SCHEME } from '../common/browserEditorInput.js';
-import { IBrowserViewWorkbenchService } from '../common/browserView.js';
+import { BrowserViewEditorId, IBrowserViewWorkbenchService } from '../common/browserView.js';
 import { BrowserViewWorkbenchService } from './browserViewWorkbenchService.js';
 import { EditorInputSerializers } from '../../../services/editor/common/editorInputSerializer.js';
 import { registerSingleton, InstantiationType } from '../../../../platform/instantiation/common/extensions.js';
@@ -52,7 +52,7 @@ registerWorkbenchContribution('workbench.contrib.browserView', WorkbenchPhase.Bl
 	store.add(EditorInputSerializers.register(instantiation.createInstance(BrowserEditorSerializer)));
 	void views.initialize().catch(error => console.error('Failed to read browser pages', error));
 	store.add(EditorPanes.registerEditorPane({
-		id: BrowserEditor.ID, name: 'Browser',
+		id: BrowserViewEditorId, name: 'Browser',
 		canOpen: input => input.resource.scheme === BROWSER_RESOURCE_SCHEME ? EditorPaneMatch.Default : EditorPaneMatch.None,
 		create: () => instantiation.createInstance(BrowserEditor),
 	}));

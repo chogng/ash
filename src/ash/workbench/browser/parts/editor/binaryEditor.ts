@@ -1,3 +1,4 @@
+import './media/binaryEditor.css';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
@@ -66,7 +67,7 @@ export class BaseBinaryResourceEditor extends EditorPane implements IEditorPane 
 			await raceCancellationError(model.resolve(), signal, "Binary editor loading was cancelled");
 			const size = model.getSize();
 			if (size !== undefined && size > MAX_BINARY_EDITOR_BYTES) {
-				throw new Error(`Binary file is too large to preview (${formatByteCount(size)})`);
+				throw new Error(localize('binaryEditor.tooLarge', 'Binary file is too large to preview ({0})', formatByteCount(size)));
 			}
 			const resolved = await raceCancellationError(this.files.readFileBytes(input.resource), signal, "Binary editor loading was cancelled");
 			throwIfCancelled(signal, "Binary editor loading was cancelled");
@@ -74,7 +75,9 @@ export class BaseBinaryResourceEditor extends EditorPane implements IEditorPane 
 			this.model.value = model;
 			this.metadata = formatByteCount(resolved.bytes.length);
 			this.updateAriaLabel();
-			summary.textContent = `${formatByteCount(resolved.bytes.length)} · read-only hexadecimal preview${resolved.bytes.length > visible.length ? ` · first ${formatByteCount(visible.length)}` : ""}`;
+			summary.textContent = resolved.bytes.length > visible.length
+				? localize('binaryEditor.truncatedSummary', '{0} · read-only hexadecimal preview · first {1}', this.metadata, formatByteCount(visible.length))
+				: localize('binaryEditor.summary', '{0} · read-only hexadecimal preview', this.metadata);
 			content.textContent = renderHexDump(visible);
 		} catch (error) {
 			model.dispose();

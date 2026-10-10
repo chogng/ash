@@ -5,6 +5,7 @@ use ash_async_utils::CancellationSource;
 use ash_http_client::HttpClientConfig;
 use ash_http_client::OutboundNetworkSnapshot;
 use ash_http_client::ProxyPolicy;
+use ash_model_provider::ModelProviderError;
 use ash_model_provider::ModelProviderRuntime;
 use ash_model_provider::VoiceSessionLimits;
 use ash_model_provider::provider_api_key_secret_key;
@@ -34,6 +35,7 @@ use tokio::sync::mpsc;
 use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::Message;
 use voice_agent::AgentCommand;
+use voice_agent::AgentError;
 use voice_agent::AgentEvent;
 use voice_agent::VoiceAgent;
 
@@ -56,13 +58,21 @@ async fn stopping_playback_suppresses_late_model_audio_in_the_room() {
     bridge(Ending::StopPlayback).await;
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "requires the pinned LiveKit Server executable"]
+async fn model_failure_survives_a_second_failure_during_finalization() {
+    bridge(Ending::ModelFailure).await;
+}
+
 enum Ending {
     StopPlayback,
     Stop,
     Leave,
+    ModelFailure,
 }
 
 async fn bridge(ending: Ending) {
+    let model_failure = matches!(ending, Ending::ModelFailure);
     let server = server::Server::start();
     server.service.create_room("bridge-test").await.unwrap();
     let permissions = MediaPermissions {
@@ -98,7 +108,7 @@ async fn bridge(ending: Ending) {
         }
     }).await.unwrap();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let provider = ProviderId::new("openai").unwrap();
+    let provider = ProviderId::new("fixture-voice").unwrap();
     let mut config = ModelProviderConfig::new(provider.clone());
     config.base_url = Some(format!("http://{}/v1", listener.local_addr().unwrap()));
     let secrets = Arc::new(MemorySecretStore::default());
@@ -108,11 +118,13 @@ async fn bridge(ending: Ending) {
             &SecretValue::new(b"fixture-voice-key".to_vec()),
         )
         .unwrap();
-    // A provider-declared name different from the built-in default catches runtime hardcoding.
+    // Built-in connections rebuild their catalog, so register an independent fixture provider
+    // to verify that the factory respects its declared voice model instead of hardcoding one.
     let mut definition = ProviderConfigRegistry::builtin()
-        .get(&provider)
+        .get(&ProviderId::new("openai").unwrap())
         .unwrap()
         .clone();
+    definition.id = provider.clone();
     let catalog = definition.voice_models.as_mut().unwrap();
     catalog.models[0].id = ModelId::new("fixture-speech-v2").unwrap();
     catalog.default_model = catalog.models[0].id.clone();
@@ -195,6 +207,17 @@ async fn bridge(ending: Ending) {
                     commentary = true;
                     commentary_tx.take().unwrap().send(()).unwrap();
                     late_rx.take().unwrap().await.unwrap();
+                    if model_failure {
+                        socket
+                            .send(Message::Text(
+                                json!({"type":"error","error":{"code":"audio_session_failed"}})
+                                    .to_string()
+                                    .into(),
+                            ))
+                            .await
+                            .unwrap();
+                        continue;
+                    }
                     let late_audio: Vec<u8> = (0..12_000)
                         .flat_map(|i| {
                             ((i as f64 * 880. * std::f64::consts::TAU / 24_000.)
@@ -207,6 +230,17 @@ async fn bridge(ending: Ending) {
                 }
                 "session.close" => {
                     assert!(heard && commentary);
+                    if model_failure {
+                        socket
+                            .send(Message::Text(
+                                json!({"type":"error","error":{"code":"finalization_rejected"}})
+                                    .to_string()
+                                    .into(),
+                            ))
+                            .await
+                            .unwrap();
+                        continue;
+                    }
                     socket.send(Message::Text(json!({"type":"session.closed","session":{"id":"model"},"reason":"close_requested","usage":{"seconds":3.0}}).to_string().into())).await.unwrap();
                 }
                 other => panic!("unexpected command {other}"),
@@ -347,12 +381,25 @@ async fn bridge(ending: Ending) {
             alice.close().await.unwrap();
             None
         }
+        Ending::ModelFailure => Some(alice),
     };
-    timeout(Duration::from_secs(20), worker)
+    let result = timeout(Duration::from_secs(20), worker)
         .await
         .unwrap()
-        .unwrap()
         .unwrap();
+    if model_failure {
+        assert!(
+            matches!(&result, Err(AgentError::Model(ModelProviderError::InvalidResponse(code))) if code == "audio_session_failed")
+        );
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("audio_session_failed")
+        );
+    } else {
+        result.unwrap();
+    }
     timeout(Duration::from_secs(5), model)
         .await
         .unwrap()
@@ -360,8 +407,12 @@ async fn bridge(ending: Ending) {
     if let Some(alice) = remaining_alice {
         alice.close().await.unwrap();
     }
-    assert!(matches!(
-        events.recv().await,
-        Some(AgentEvent::Closed { seconds: 3.0, .. })
-    ));
+    if model_failure {
+        assert!(events.recv().await.is_none());
+    } else {
+        assert!(matches!(
+            events.recv().await,
+            Some(AgentEvent::Closed { seconds: 3.0, .. })
+        ));
+    }
 }

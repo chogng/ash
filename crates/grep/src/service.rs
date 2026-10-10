@@ -681,6 +681,20 @@ impl Service {
                 "search scope escapes its directory".into(),
             ));
         }
+        // Disk scans share directory admission so worktree removal also waits for rg to exit.
+        // A vacant registration owns no tgrep process, watcher or storage lease.
+        let _directory = {
+            let mut state = self.state.write().unwrap_or_else(|e| e.into_inner());
+            state
+                .indexes
+                .entry(dir.id())
+                .or_insert_with(|| Arc::new(DirectoryIndex::new(dir)))
+                .acquire()?
+        };
+        // Current and explicit-file reads must not start watchers or wait for index preparation.
+        if query.freshness == Freshness::Current || scope.is_file() {
+            return crate::ripgrep::search(&self.ripgrep, dir, query, regex.as_str(), cancellation);
+        }
         match self.index_for(dir, cancellation)? {
             None => crate::ripgrep::search(&self.ripgrep, dir, query, regex.as_str(), cancellation),
             Some(index) => {
@@ -700,7 +714,7 @@ impl Service {
                             .map(String::as_str)
                             .collect::<Vec<_>>(),
                         max_results: query.max_results,
-                        current: query.freshness == Freshness::Current,
+                        current: false,
                     },
                     cancellation,
                 )?;
@@ -791,7 +805,13 @@ pub(crate) fn validate(query: &Query) -> Result<regex::Regex, Error> {
     let insensitive = match query.case_sensitivity {
         CaseSensitivity::Insensitive => true,
         CaseSensitivity::Sensitive => false,
-        CaseSensitivity::Smart => !query.query.chars().any(char::is_uppercase),
+        CaseSensitivity::Smart => {
+            let ast = regex_syntax::ast::parse::Parser::new()
+                .parse(&pattern)
+                .map_err(|e| Error::InvalidInput(e.to_string()))?;
+            regex_syntax::ast::visit(&ast, SmartCase::default())
+                .expect("smart case traversal is infallible")
+        }
     };
     let pattern = if insensitive {
         format!("(?mRi){pattern}")
@@ -799,6 +819,56 @@ pub(crate) fn validate(query: &Query) -> Result<regex::Regex, Error> {
         format!("(?mR){pattern}")
     };
     regex::Regex::new(&pattern).map_err(|e| Error::InvalidInput(e.to_string()))
+}
+
+// Inspect parsed literals before case folding; escape names, properties and flags are syntax.
+#[derive(Default)]
+struct SmartCase {
+    has_literal: bool,
+    has_uppercase: bool,
+}
+
+impl SmartCase {
+    fn literal(&mut self, value: char) {
+        self.has_literal = true;
+        self.has_uppercase |= value.is_uppercase();
+    }
+}
+
+impl regex_syntax::ast::Visitor for SmartCase {
+    type Output = bool;
+    type Err = std::convert::Infallible;
+
+    fn finish(self) -> Result<bool, Self::Err> {
+        Ok(self.has_literal && !self.has_uppercase)
+    }
+
+    fn visit_pre(&mut self, ast: &regex_syntax::ast::Ast) -> Result<(), Self::Err> {
+        if let regex_syntax::ast::Ast::Literal(literal) = ast {
+            self.literal(literal.c);
+        }
+        Ok(())
+    }
+
+    fn visit_class_set_item_pre(
+        &mut self,
+        item: &regex_syntax::ast::ClassSetItem,
+    ) -> Result<(), Self::Err> {
+        match item {
+            regex_syntax::ast::ClassSetItem::Literal(literal) => self.literal(literal.c),
+            regex_syntax::ast::ClassSetItem::Range(range) => {
+                self.literal(range.start.c);
+                self.literal(range.end.c);
+            }
+            regex_syntax::ast::ClassSetItem::Empty(_)
+            | regex_syntax::ast::ClassSetItem::Ascii(_)
+            | regex_syntax::ast::ClassSetItem::Unicode(_)
+            | regex_syntax::ast::ClassSetItem::Perl(_)
+            | regex_syntax::ast::ClassSetItem::Bracketed(_)
+            | regex_syntax::ast::ClassSetItem::Union(_) => {}
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]

@@ -18,7 +18,7 @@
 
 ## 1. 固定迁移边界与领域身份
 
-先用 [连接与所有权](connection-architecture.md) 的迁移判定确认本次能力属于 Rust 产品业务后端、TypeScript 编辑器平台或条件迁移。只有需要跨 renderer 或长期存活、能形成稳定可序列化 contract、且不依赖 editor/Electron 对象身份的能力才默认迁入 Rust。语言偏好、局部性能猜测或目录对称不能决定 owner。
+先用 [连接与所有权](connection-architecture.md) 区分核心机制、可选扩展 Provider 与客户端交互，再决定后台接入与状态 scope。跨 renderer 或长期存活、稳定可序列化 contract、无 editor/Electron 对象依赖用于判断后台执行；这些条件不要求服务商业务进入核心。TS/JS 与 Rust 扩展的执行位置、宿主及完整边界见 [扩展架构](../../extension-architecture/SKILL.md)。
 
 然后列出本次 API 的前端对象、后端对象与稳定 identity。文件、账户、配置、模型、skills、Project、Thread、process 等对象分别由自己的领域 service 表达，不能为了接入 app-server 改叫 Session。
 
@@ -27,7 +27,7 @@
 | 项目 | 必须确定 |
 | --- | --- |
 | 前端对象 | 哪个现有 service 或 contribution 是调用方 |
-| 后端对象 | 哪个 Rust 领域能力决定并保存状态 |
+| 后端对象 | 哪个核心领域服务或扩展 Provider 唯一决定并保存状态 |
 | 迁移收益 | 持久化、并发、IO、安全、恢复或多产品复用中的哪一项真实成立 |
 | 前端保留状态 | 哪些 editor、extension、Workbench 或 Electron 状态不能跨协议复制 |
 | 稳定 identity | ID、URI、path、resource ID 或复合 key |
@@ -81,7 +81,7 @@ src/sessions/contrib/providers/agentHost/browser/
 - process 退出如何关闭全部 connection；
 - backend transport 如何保证跨平台、多 connection、背压和身份校验。
 
-Main 不能持有 protocol pending、执行 initialize 或替领域调用方选择对象。若只能通过单路 stdio、实验 transport、Main protocol multiplex 或每窗口进程实现，停止并询问用户。
+Main 不能持有 protocol pending、执行 initialize 或替领域调用方选择对象。若 app-server 接入只能通过单路 stdio、实验 transport、Main protocol multiplex 或每窗口 app-server 进程实现，按主 skill 的冲突门禁处理；这不禁止扩展 supervisor 启动既定独立 runtime。
 
 ## 4. 选择消息、标识和顺序
 
@@ -146,7 +146,7 @@ build/protocol/generate.py
 ../app-server/src/request_processors/<domain>_processor.rs
 ```
 
-processor 只接收生成类型、机械转换领域值、调用 Rust 领域能力，并把结果或稳定错误转成 response。业务校验、持久化、系统访问和长期状态属于真实领域能力。确有跨请求资源时才增加 `../app-server/src/<domain>_resource.rs`，资源 key 至少包含 `(connection_id, resource_id)`。
+processor 只接收生成类型、机械转换领域值、授权并调用核心领域服务或有效 Provider，再把结果或稳定错误转成 response。具体业务与长期状态属于唯一领域 owner，通用系统访问和安全存储属于共享服务。可选 Provider 实现不链接进 app-server，broker 不另存业务状态。确有跨请求的 connection-owned 资源时才增加 `../app-server/src/<domain>_resource.rs`，资源 key 至少包含 `(connection_id, resource_id)`；Provider 的共享状态 scope 另外由能力契约决定。
 
 正式本地多 connection transport 由以下目录拥有：
 
@@ -270,7 +270,7 @@ handler 必须处理未知 method、未注册 owner、窗口关闭、用户取�
 
 - Main 中的 protocol connection、request pending、initialize 和 method routing；
 - 旧 Host protocol client、action/state envelope、TypeScript Host runtime 启动和生产注册；
-- 每窗口、每 Project、每 Workspace 或每领域 process；
+- 每窗口、每 Project、每 Workspace 或每领域的额外 app-server process；扩展的受监督进程按其 scope 管理，旧业务 Host 退场不代替扩展 runtime 的契约迁移；
 - 多余的 frontend ID → backend ID persistence；Thread UI 中尤其禁止随机 Session ID 映射；
 - 手写线上 DTO、method constant、response map 与 decoder；
 - 绕过领域 service/adapter 的 `invoke`、raw notification 或 universal IPC；
@@ -293,6 +293,7 @@ handler 必须处理未知 method、未注册 owner、窗口关闭、用户取�
 | resource | connection 隔离、重复 ID、start failure、stop 后无事件、connection cleanup |
 | 文件集成 | clean model reload、dirty model 冲突和保存保护 |
 | 双端 | 多窗口同时 initialize、真实 request、catalog notification、cancel/stop、server request、单窗口断开与进程退出 |
+| 扩展能力接入（涉及 Provider 时） | 独立扩展宿主/程序、唯一状态 scope、授权拒绝与撤销、按需激活、App/TUI 相同结果与错误、能力未启用时基础核心无具体扩展启动依赖 |
 
 ## Review 检查
 
@@ -300,7 +301,7 @@ handler 必须处理未知 method、未注册 owner、窗口关闭、用户取�
 
 - Main 没有 protocol parser、request ID、pending、initialize、method switch 或领域状态；
 - 每个 renderer 只有一个 app-server protocol client 和独立 backend connection；
-- 一个 host 默认只有一个 process，Project/Workspace 不启动 process；
+- 一个 host 默认只有一个 app-server process，Project/Workspace 不启动额外 app-server；扩展进程由 supervisor 按有效授权和声明的 scope 管理；
 - Main 只解码生成的启动记录，不解析 stderr banner；endpoint/token 不进入 renderer；
 - 普通调用方只经过所属领域 service 与 adapter，不经过通用 Sessions Provider；
 - 涉及 Agents Window 时，Session ID 统一来自 provider ID 与 provider-owned resource，且没有 frontend Thread mapping store；
@@ -312,5 +313,5 @@ handler 必须处理未知 method、未注册 owner、窗口关闭、用户取�
 - server request 不广播、不依赖 active window，Main host call 不接收线上 union；
 - 只有协议支持取消的操作才承诺结束后端工作；
 - dirty file 冲突经过现有 file/working-copy owner；
-- 没有实验 transport、单路 stdio、每窗口 process、旧 owner 或静默重放作为备用路径；
+- app-server 没有实验 transport、单路 stdio、每窗口 app-server process、旧 owner 或静默重放作为备用路径；扩展 runtime 不借用产品完整连接；
 - 没有未经用户决定仍继续实施的源码、owner、协议或用户改动冲突。

@@ -205,7 +205,7 @@ Agent 回复与计划支持 Markdown 标题、列表、引用、强调、代码�
 
 Agent 回复和计划中的完整 Mermaid 围栏会附带“Open Mermaid in browser”链接。预览文件保存在本机 profile 的 `ash-code/mermaid-previews/`，会话重开后仍可打开。链接只指向 Ash 生成的页面；普通消息中的本地文件链接仍仅显示为可复制文字。预览页从固定版本的 CDN 加载 Mermaid，因此浏览器需要联网才能绘制完整图。
 
-断线后，TUI 丢弃旧连接的待执行请求和操作；存在活动会话时返回其持久化身份，首页尚无会话时返回 `None`，重连后重新进入首页。本地和远程 CLI 在 30 秒窗口内重连；失败时分别给出 `ash resume SESSION_ID THREAD_ID` 或 `ash remote connect ... --resume SESSION_ID THREAD_ID`。正常服务端关闭和协议错误不进入传输重试。
+断线后，TUI 丢弃旧连接的待执行请求和操作；存在活动会话时返回其持久化身份，首页尚无会话时返回 `None`，重连后重新进入首页。本地和远程 CLI 在 30 秒窗口内重连；失败时分别给出 `ash resume SESSION_ID THREAD_ID` 或 `ash remote connect ... --resume SESSION_ID THREAD_ID`。初始化返回结构化 `ServerShuttingDown` 时可在同一期限内重试；本地首次连接和切换工作区也复用这个重试入口。正常服务端关闭和协议错误不进入传输重试。
 
 ## TUI 主题文件
 

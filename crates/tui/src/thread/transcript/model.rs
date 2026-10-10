@@ -187,7 +187,8 @@ impl TranscriptModel {
                 ThreadTranscriptEntry::Item { entry_id, item, .. } => {
                     item.client_id().map(|id| (id.clone(), entry_id.clone()))
                 }
-                ThreadTranscriptEntry::TurnPlan { .. }
+                ThreadTranscriptEntry::HookRun { .. }
+                | ThreadTranscriptEntry::TurnPlan { .. }
                 | ThreadTranscriptEntry::TurnError { .. }
                 | ThreadTranscriptEntry::ToolOutput { .. } => None,
             })
@@ -485,6 +486,9 @@ impl TranscriptModel {
     fn upsert(&mut self, entry: ThreadTranscriptEntry) {
         let render_revision = self.render_revision();
         match entry {
+            // Hook observations are retained by Thread history; terminal tool feedback is
+            // already presented through the canonical ToolResult in this client.
+            ThreadTranscriptEntry::HookRun { .. } => {}
             ThreadTranscriptEntry::Item {
                 entry_id,
                 turn_id,
@@ -772,6 +776,9 @@ fn cell_from_entry(entry: &ThreadTranscriptEntry, render_revision: u64) -> Trans
         CellLifecycle::Final
     };
     let body = match entry {
+        ThreadTranscriptEntry::HookRun { .. } => {
+            unreachable!("Hook observations do not create terminal cells")
+        }
         ThreadTranscriptEntry::Item { item, .. } => match item {
             ThreadItem::UserMessage { text, .. } => TranscriptCellBody::Content(ContentCell {
                 role: MessageRole::User,
@@ -827,7 +834,8 @@ fn cell_from_entry(entry: &ThreadTranscriptEntry, render_revision: u64) -> Trans
         source_entry_id: Some(entry_id),
         client_id: match entry {
             ThreadTranscriptEntry::Item { item, .. } => item.client_id().cloned(),
-            ThreadTranscriptEntry::TurnPlan { .. }
+            ThreadTranscriptEntry::HookRun { .. }
+            | ThreadTranscriptEntry::TurnPlan { .. }
             | ThreadTranscriptEntry::TurnError { .. }
             | ThreadTranscriptEntry::ToolOutput { .. } => None,
         },

@@ -44,6 +44,8 @@ import { registerLocalTranscriptionService } from '../services/localTranscriptio
 import { NativeWorkbenchStorageService } from '../services/storage/electron-browser/storageService.js';
 import { LoggerChannelClient } from '../../platform/log/common/logIpc.js';
 import { ElectronWorkbenchEnvironmentService } from '../services/environment/electron-browser/environmentService.js';
+import { IPlaywrightService } from '../../platform/browserView/common/playwrightService.js';
+import { getSingletonServiceDescriptors } from '../../platform/instantiation/common/extensions.js';
 
 /** Owns desktop startup and the resources of one renderer window. */
 export class DesktopMain extends Disposable {
@@ -67,12 +69,15 @@ export class DesktopMain extends Disposable {
 			const container = document.querySelector<HTMLElement>('#app') ?? document.body;
 			const permissionDialog = this._register(new DirectoryPermissionDialog(container));
 			const transcriptionServices = this._register(new InstantiationService());
-			const profileServices = this._register(new InstantiationService());
+			// Browser requests arrive during backend initialization, before the Parts exist.
+			const profileServices = this._register(new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors().filter(([id]) => id === IPlaywrightService))));
 			const windowId = await invoke<unknown>('ash:ipc:window-id');
 			if (!Number.isSafeInteger(windowId) || (windowId as number) <= 0) { throw new TypeError('Invalid Main IPC window ID'); }
-			const mainProcessService = this._register(profileServices.createInstance(ElectronIPCMainProcessService, windowId as number));
-			profileServices.registerInstance(IMainProcessService, mainProcessService);
+			// The scope releases its dependent services before closing their Main connection.
+			profileServices.registerSingleton(IMainProcessService, () => profileServices.createInstance(ElectronIPCMainProcessService, windowId as number));
+			const mainProcessService = profileServices.get(IMainProcessService);
 			const logger = profileServices.createInstance(LoggerChannelClient);
+			const playwrightService = profileServices.get(IPlaywrightService);
 			const resolver = this._register(profileServices.createInstance(RemoteAuthorityResolverService));
 			profileServices.registerInstance(IRemoteAuthorityResolverService, resolver);
 			const resolverScope = this._register(new MutableDisposable<DisposableStore>());
@@ -93,7 +98,7 @@ export class DesktopMain extends Disposable {
 				const address = resolver.getConnectionData(authority);
 				if (!address) { throw new Error('Remote address was retired before connecting'); }
 				return address;
-			}, async (remoteApi, authority) => localResolver!.startRemoteExtensionHost(remoteApi, authority)));
+			}, async (remoteApi, authority) => localResolver!.startRemoteExtensionHost(remoteApi, authority), playwrightService));
 			performance.mark('ash.desktop.api-ready');
 			const profileFiles = this._register(profileServices.createInstance(FileService));
 			this._register(profileFiles.registerProvider(api.userDataHome.scheme, api.localFiles));
@@ -110,7 +115,7 @@ export class DesktopMain extends Disposable {
 			performance.mark('ash.desktop.workbench-start');
 			const workbench = this._register(await startWorkbench({
 				...this.options,
-				serviceCollection: new ServiceCollection([IMainProcessService, mainProcessService], [IRemoteAuthorityResolverService, resolver]),
+				serviceCollection: new ServiceCollection([IMainProcessService, mainProcessService], [IRemoteAuthorityResolverService, resolver], [IPlaywrightService, playwrightService]),
 				environmentService: new ElectronWorkbenchEnvironmentService(),
 				createURLService: services => {
 					return services.createInstance(RelayURLService, windowId as number);

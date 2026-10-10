@@ -1,3 +1,8 @@
+import { Schemas } from '../../../../base/common/network.js';
+import { ISearchService } from '../../../services/search/common/search.js';
+import { QueryBuilder } from '../../../services/search/common/queryBuilder.js';
+import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
+import { IFileTextModelService } from '../../../services/textmodelResolver/common/textModelResourceService.js';
 import { MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { addDisposableListener, h, text as createText } from "../../../../base/browser/dom.js";
 import { Button } from "../../../../base/browser/ui/button/button.js";
@@ -8,7 +13,7 @@ import { SearchResultsRenderer } from "./searchResultsView.js";
 import { SearchWidget } from "./searchWidget.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
 import { localize } from "../../../../nls.js";
-import { type IContentSearchQuery, type IContentSearchComplete, IContentSearchService } from "../../../../platform/search/common/search.js";
+import { type IContentSearchQuery, type IContentSearchComplete } from "../../../../platform/search/common/search.js";
 import { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import { WorkbenchObjectTree, type ResourceOpenEvent } from "../../../../platform/list/browser/listService.js";
 import { WorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
@@ -38,7 +43,7 @@ import type { IAction } from '../../../../base/common/actions.js';
 
 /** Workspace content-search form and incrementally populated result tree. */
 export class SearchView extends ViewPane {
-	private readonly searchService: IContentSearchService;
+	private readonly searchService: ISearchService;
 	private readonly searchWidget: SearchWidget;
 	private readonly historyInputs = new Map<keyof ISearchHistoryValues, HistoryInputBox<boolean>>();
 	private get queryInput(): HTMLTextAreaElement { return this.searchWidget.searchInput.inputBox.inputElement; }
@@ -82,7 +87,8 @@ export class SearchView extends ViewPane {
 	constructor(
 		container: HTMLElement,
 		options: IViewPaneOptions,
-		@IContentSearchService searchService: IContentSearchService,
+		@ISearchService searchService: ISearchService,
+		@IFileTextModelService private readonly textModels: IFileTextModelService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@IWorkspaceContextService private readonly workspaceContext: IWorkspaceContextService,
 		@IEditorService private readonly editorService: IEditorService,
@@ -130,7 +136,7 @@ export class SearchView extends ViewPane {
 			title: localize("search.details", "Toggle Search Details"),
 			icon: Lxicon.chevronRight,
 			size: "small",
-			onClick: () => this.setDetailsExpanded(this.filtersElement.hidden),
+			onClick: () => this.setDetailsExpanded(!!this.filtersElement.hidden),
 		}));
 		const filters = h(document, "div");
 		this.filtersElement = filters;
@@ -360,24 +366,27 @@ export class SearchView extends ViewPane {
 
 	private async runSearch(query: IContentSearchQuery, controller: AbortController, revision: number): Promise<void> {
 		try {
-			const complete = await this.searchService.search(
-				query,
-				{
-					signal: controller.signal,
-					onProgress: (matches) => {
-						if (
-							this.isDisposed ||
-							revision !== this.searchRevision
-						) return;
-						this.result.add(matches);
-						this.renderResults();
-						this.statusElement.textContent =
-							localize("search.progress", "{0} results…", this.result.count);
-					},
-				},
-			);
+			using cancellation = new CancellationTokenSource();
+			const cancel = (): void => cancellation.cancel();
+			controller.signal.addEventListener('abort', cancel, { once: true });
+			using listener = toDisposable(() => controller.signal.removeEventListener('abort', cancel));
+			if (controller.signal.aborted) { cancellation.cancel(); }
+			const textQuery = new QueryBuilder().text({
+				pattern: query.text, isRegExp: query.patternKind === 'regex', isWordMatch: query.wholeWord,
+				isCaseSensitive: query.caseSensitivity === 'sensitive' || query.caseSensitivity === 'smart' && /\p{Lu}/u.test(query.text),
+			}, this.workspaceContext.getWorkspace().folders.map(folder => folder.uri), {
+				includePattern: query.includePatterns.join(','), excludePattern: query.excludePatterns.join(','), maxResults: query.maxResults,
+				// Generated search drafts contain the query in their header and must not search themselves.
+				extraFileResources: this.textModels.getModels().filter(model => model.uri.scheme !== Schemas.untitled || !model.uri.path.endsWith('.code-search')).map(model => model.uri),
+			});
+			const complete = await this.searchService.textSearch(textQuery, cancellation.token, progress => {
+				if (this.isDisposed || revision !== this.searchRevision || !('resource' in progress)) { return; }
+				this.result.addFileMatch(progress);
+				this.renderResults();
+				this.statusElement.textContent = localize('search.progress', '{0} results…', this.result.count);
+			});
 			if (this.isDisposed || revision !== this.searchRevision) return;
-			this.searchCompletion = complete;
+			this.searchCompletion = { limitHit: complete.limitHit ?? false, error: complete.messages.map(message => message.text).join('\n') || undefined };
 			this.updateSearchResultCount();
 		} catch (error) {
 			if (
@@ -735,7 +744,7 @@ export class SearchView extends ViewPane {
 				if (left.kind === "file" && right.kind === "folder") { return 1; }
 				if (left.kind === "file" && right.kind === "file") {
 					const countOrder = this.sortByCount ? right.matches.length - left.matches.length : 0;
-					return countOrder || left.folder.index - right.folder.index || left.path.localeCompare(right.path);
+					return countOrder || (left.folder?.index ?? Number.MAX_SAFE_INTEGER) - (right.folder?.index ?? Number.MAX_SAFE_INTEGER) || left.path.localeCompare(right.path);
 				}
 				return left.kind !== "match" && right.kind !== "match" ? left.name.localeCompare(right.name) : 0;
 			}).map(element => {
@@ -746,7 +755,8 @@ export class SearchView extends ViewPane {
 		};
 		let roots: readonly RenderableMatch[] = this.result.files;
 		if (this.treeView) {
-			roots = this.result.children.length === 1 ? [...this.result.children[0]!.children.values()] : this.result.children;
+			const outsideWorkspace = this.result.files.filter(file => !file.folder);
+			roots = this.result.children.length === 1 && !outsideWorkspace.length ? [...this.result.children[0]!.children.values()] : [...this.result.children, ...outsideWorkspace];
 		}
 		this.resultRenderer.setLineNumberBudget(Math.max(1, ...this.result.files.flatMap(file => file.matches.map(match => match.range.startLineNumber))));
 		this.folderNames.clear();
@@ -763,9 +773,11 @@ export class SearchView extends ViewPane {
 			};
 			const compress = (entry: ObjectTreeElement<RenderableMatch>): ObjectTreeElement<RenderableMatch> => displayNode(compressTreeElement(compressionInput(entry)));
 			// Workspace roots keep their separate identities; only directory chains beneath them compress.
-			this.tree.setChildren(treeEntries.map(entry => this.result.children.length > 1
-				? { ...entry, children: entry.children?.map(compress) }
-				: compress(entry)));
+			const showWorkspaceRoots = this.result.children.length > 1 || this.result.files.some(file => !file.folder);
+			this.tree.setChildren(treeEntries.map(entry => {
+				if (showWorkspaceRoots && entry.element.kind === 'folder') { return { ...entry, children: entry.children?.map(compress) }; }
+				return compress(entry);
+			}));
 		} else {
 			this.tree.setChildren(treeEntries);
 		}

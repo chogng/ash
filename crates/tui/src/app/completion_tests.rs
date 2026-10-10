@@ -271,6 +271,7 @@ fn status_line_context_follows_thread_snapshots() {
         usage: Default::default(),
         reference_cost: Default::default(),
         goal: None,
+        hook_runs: Vec::new(),
         turns: vec![ash_protocol::Turn {
             mode: Default::default(),
             advisor: None,

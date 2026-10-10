@@ -70,4 +70,6 @@ pub struct Thread {
     #[serde(default)]
     pub advisor: crate::AdvisorSelection,
     pub turns: Vec<Turn>,
+    #[serde(default)]
+    pub hook_runs: Vec<crate::HookRunRecord>,
 }

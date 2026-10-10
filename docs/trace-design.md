@@ -2,7 +2,7 @@
 
 Trace 是内置、可选的诊断能力：共享运行时继续拥有业务事实，Rust 组件按需采集和读取证据，TypeScript 工作台按需呈现，评测工具独立运行。后续根据实际 SDK 需求和收益决定哪些分析或界面适合发布为扩展。
 
-状态：2026-10-09 已实施核心架构迁移、后台采集、真实调用与账目关联、前端按需加载、声明式实验比较及可运行的评测审阅流程。元数据单独录制、公开扩展 API、自动优化器和真实模型质量基准仍属后续工作。使用方式见[执行 Trace](chat-session-inspector.md#执行-trace)、[配置](config.md#执行轨迹记录)、[rollout-trace](../crates/rollout-trace/README.md) 和[任务评测](../test/agent-eval/README.md)。
+状态：2026-10-09 已实施核心架构迁移、后台采集、真实调用与账目关联、前端按需加载、声明式实验比较及可运行的评测审阅流程。元数据单独录制、公开扩展 API、自动优化器和真实模型质量基准仍属后续工作。使用方式见[执行 Trace](chat-session-inspector.md#执行-trace)、[配置](config.md#执行轨迹记录)、[rollout-trace](../crates/rollout-trace/README.md) 和[任务评测](../test/agent-eval/README.md)。设计原因同时记录在根目录 [MIND.md](../MIND.md#trace-的可选性和扩展边界)。
 
 本文记录已实现的边界、设计依据与后续验收。具体契约以对应 owner 的源码为准；标明后续的能力不作为已可调用的 API。
 
@@ -24,12 +24,12 @@ Trace 是内置、可选的诊断能力：共享运行时继续拥有业务事�
 
 实现语言、是否按需启用、是否允许用户安装，以及是否允许第三方参与是不同问题。后端由 Rust 实现、前端由 TypeScript 实现，并不要求它们组成一个新的插件类型。
 
-| 名称                     | Ash 当前含义                                                                                                 | 对 Trace 的处理                                                                                   |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| Agent Extension          | [crates/ext](../crates/docs/extensions.md) 中的 Rust 能力，通过贡献接口参与提示、工具、上下文、生命周期等    | 采集主要观察已有行为，不需要增加模型能力；不为目录统一而迁入 ext，也不默认贡献 Trace 工具或提示词 |
-| Editor Extension／Plugin | [TS/JS SDK 与受限宿主](editor-extensions.md#01-ts-sdk-与-rust-v8-扩展宿主)，包管理、启用、授权和运行相互独立 | 后续可以承载分析器、报告查看器或受限诊断客户端；安装扩展不授予完整会话读取和录制权限              |
-| 内置诊断组件             | Rust 领域实现，由可信宿主组合                                                                                | 本方案采用这一定位，保持采集、存储、读取和资源生命周期的明确 owner                                |
-| Workbench contribution   | 产品提供的 TS 界面和命令                                                                                     | 第一阶段保留此形态并改为按需加载；之后有完整 SDK 契约时再考虑提取成官方扩展                       |
+| 名称                     | Ash 当前含义                                                                                                          | 对 Trace 的处理                                                                                   |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Agent Extension          | [crates/ext](../crates/docs/extensions.md) 中的 Rust 能力，通过贡献接口参与提示、工具、上下文、生命周期等             | 采集主要观察已有行为，不需要增加模型能力；不为目录统一而迁入 ext，也不默认贡献 Trace 工具或提示词 |
+| Editor Extension／Plugin | [Electron/Rust-V8 TS/JS 与独立 Rust 扩展](editor-extensions.md#01-两类目标运行时与现有兼容路径)，Plugin bundle 是可选来源，安装、授权和运行分别管理 | 后续可以承载分析器、报告查看器或受限诊断客户端；安装扩展不授予完整会话读取和录制权限              |
+| 内置诊断组件             | Rust 领域实现，由可信宿主组合                                                                                         | 本方案采用这一定位，保持采集、存储、读取和资源生命周期的明确 owner                                |
+| Workbench contribution   | 产品提供的 TS 界面和命令                                                                                              | 第一阶段保留此形态并改为按需加载；之后有完整 SDK 契约时再考虑提取成官方扩展                       |
 
 现有 [sdk/typescript/index.d.ts](../sdk/typescript/index.d.ts) 没有公开 Trace API。当前复杂 Trace 编辑器也直接使用 Workbench 服务，不能只移动到扩展目录就成为可运行的 SDK 扩展。迁移需要补足读取范围、取消、注册释放、视图承载、错误与兼容性；不能以开放任意 App Server RPC 作为捷径。
 
@@ -163,7 +163,7 @@ Trace 数据访问逐步从 Chat 的综合接口分离到 Trace 所属前端契�
 | [Anthropic Agent Evals](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents) 和 [Tools](https://www.anthropic.com/engineering/writing-tools-for-agents) | 验收实际成果、校准评分器、重复运行、保留未用于调优的任务     | 真实产品任务、正反例、人工审阅与独立验收                                     |
 | [Cursor Harness](https://cursor.com/blog/continually-improving-agent-harness) 与 [CursorBench](https://cursor.com/blog/cursorbench)                                        | 真实任务、模型与工具错误基线、离线和实际使用反馈互相验证     | 版本化任务、条件可比的实验和有分母的过程指标                                 |
 
-OpenAI Cookbook 已在本地，提交为 0eac1447d4e24d06e47c459ca5e98f248b9413cf；已阅读 [Improvement Loop](../../openai-cookbook/examples/agents_sdk/agent_improvement_loop.ipynb) 与 [Macro Evals](../../openai-cookbook/examples/partners/macro_evals_for_agentic_systems/macro_evals_for_agentic_systems.ipynb) 的代码结构。来源中的模拟反馈、生成样本或追加分析 span 不直接变成 Ash 原始事实。
+OpenAI Cookbook 已在本地，提交为 0eac1447d4e24d06e47c459ca5e98f248b9413cf；已阅读 [Improvement Loop](../../openai-cookbook/examples/agents_sdk/agent_improvement_loop.ipynb) 与 [Macro Evals](../../openai-cookbook/examples/partners/macro_evals_for_agentic_systems/macro_evals_for_agentic_systems.ipynb) 的代码结构。SDK、Anthropic Skills 和 Claude Cookbooks 的本地版本见 [MIND](../MIND.md#三家的学习重点和本地参考)。来源中的模拟反馈、生成样本或追加分析 span 不直接变成 Ash 原始事实。
 
 每次实验沿用现有 configuration 与 report，补明确假设、允许变化的因素和不变条件。记录任务／评分器版本、初始文件与上下文、准确模型及推理设置、工具和模式、权限、预算、产品摘要、采集策略及环境。必要条件未知时说明限制，不声称单因素收益。
 

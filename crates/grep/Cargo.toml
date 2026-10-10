@@ -20,6 +20,7 @@ ash-install-context = { workspace = true }
 ash-state = { workspace = true }
 tgrep = { workspace = true }
 regex = { workspace = true }
+regex-syntax = { workspace = true }
 tempfile = { workspace = true }
 ash-file-access = { workspace = true }
 

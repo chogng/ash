@@ -1,4 +1,5 @@
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { CancellationToken, CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { errorHandler } from '../../../../../base/common/errors.js';
 import type { ICodeEditor } from '../../../../../editor/browser/editorBrowser.js';
@@ -715,3 +716,32 @@ function installDomGlobals(dom: JSDOM): void {
 		});
 	}
 }
+
+test('Quick Input token cancellation closes only its prompt and releases the token after acceptance', async () => {
+	const dom = new JSDOM('<!doctype html><body><button>Editor</button></body>');
+	installDomGlobals(dom);
+	using browser = toDisposable(() => dom.window.close());
+	using contextKeys = new ContextKeyService();
+	using service = new WorkbenchQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
+	const editor = dom.window.document.querySelector('button')!;
+	editor.focus();
+	assert.equal(await service.input({ title: 'Already canceled' }, CancellationToken.Cancelled), undefined);
+	assert.equal(dom.window.document.querySelector('.ash-quick-pick'), null);
+	using canceled = new CancellationTokenSource();
+	const pending = service.input({ title: 'Pending', password: true, value: 'draft' }, canceled.token);
+	const input = dom.window.document.querySelector<HTMLInputElement>('input')!;
+	canceled.cancel();
+	assert.equal(await pending, undefined);
+	assert.equal(input.value, '');
+	assert.equal(dom.window.document.activeElement, editor);
+
+	using accepted = new CancellationTokenSource();
+	const value = service.input({ title: 'Accepted', value: 'kept' }, accepted.token);
+	dom.window.document.querySelector('input')!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+	assert.equal(await value, 'kept');
+	const next = service.input({ title: 'Next' });
+	accepted.cancel();
+	assert.equal(dom.window.document.querySelector('input')?.getAttribute('aria-label'), 'Next');
+	dom.window.document.querySelector('input')!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+	assert.equal(await next, undefined);
+});

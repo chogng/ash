@@ -1,5 +1,7 @@
 # `ash-external-ext`
 
+本 crate 位于 `crates/external-ext`，包名为 `ash-external-ext`，Rust 导入名为 `ash_external_ext`，共用 TS/JS 与 Rust 扩展的进程监管语义；语言执行与作者 SDK 分开，进程协议独立保留。重命名保留原有接口与执行行为，App Server 运行管理提取和来源解耦尚未实施。完整命名和来源边界见[共享接入与语言适配的 crate 边界](../../docs/editor-extensions.md#共享接入与语言适配的-crate-边界)。
+
 > 本 README 记录当前可执行 Editor Extension Host v1 的进程、RPC、授权门禁、取消与故障恢复。
 > 作者使用 [`TS SDK`](../../sdk/typescript/README.md)，JS 由独立的
 > [`独立扩展宿主`](../external-js-ext/README.md)执行：Ash SDK 使用 V8，标准 VS Code 扩展使用真实 Node；本 crate 继续承担共用的进程监管。

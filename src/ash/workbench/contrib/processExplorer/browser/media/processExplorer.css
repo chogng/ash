@@ -1,0 +1,57 @@
+.ash-process-explorer {
+	display: flex;
+	box-sizing: border-box;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+	padding: var(--ash-spacing-size80);
+	gap: var(--ash-spacing-size80);
+	color: var(--ash-foreground);
+	background: var(--ash-editor-background);
+	font-size: var(--ash-fontSize-body1);
+}
+
+.ash-process-explorer .process-explorer-toolbar {
+	display: flex;
+	justify-content: flex-end;
+}
+
+.ash-process-explorer .process-explorer-columns,
+.ash-process-explorer .process-explorer-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) repeat(3, minmax(7ch, 9ch));
+	gap: var(--ash-spacing-size80);
+	width: 100%;
+	min-width: 0;
+	font-variant-numeric: tabular-nums;
+}
+
+.ash-process-explorer .process-explorer-columns {
+	box-sizing: border-box;
+	padding: 0 var(--ash-spacing-size80);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-process-explorer .process-explorer-row > span {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ash-process-explorer .process-explorer-columns > span:not(:first-child),
+.ash-process-explorer .process-explorer-row > span:not(:first-child) {
+	text-align: right;
+}
+
+.ash-process-explorer .process-explorer-tree {
+	flex: 1;
+	min-height: 0;
+	border: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
+}
+
+.ash-process-explorer .process-explorer-status {
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
+	overflow-wrap: anywhere;
+}

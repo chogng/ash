@@ -1,5 +1,7 @@
 # Code Mode
 
+Code Mode 继续在独立 Rust Host 中嵌入 V8，由 Rust 管理执行生命周期与中断；App、远程与 TUI 的 Code Mode 不依赖 Electron 或 Node。共享后端保留 Rust + V8 的目标分工见[运行时职责与兼容契约](../../docs/editor-extensions.md#运行时职责与兼容契约)，扩展宿主与 Code Mode 分别拥有执行状态、权限和生命周期。
+
 - 通过独立 Host 执行 JavaScript，客户端不链接 V8。
 - 后端的 `CodeModeHost` 按需启动并复用一个进程；Desktop、Web、TUI 使用同一套后端实现。
 - `CodeModeSession` 属于线程会话，持有 Host 会话和恢复快照；每次执行单独绑定工具权限、回合、通知和取消。

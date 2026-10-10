@@ -167,6 +167,17 @@ impl TranscriptAccumulator {
 
     fn apply_committed(&mut self, event: &ThreadEvent, changes: &mut Vec<ThreadTranscriptChange>) {
         match event {
+            ThreadEvent::HookRunUpdated { run, .. } => {
+                if let Some(turn_id) = &run.turn_id {
+                    changes.push(ThreadTranscriptChange::Upsert {
+                        entry: ThreadTranscriptEntry::HookRun {
+                            entry_id: format!("hook:{}", run.run_id),
+                            turn_id: turn_id.clone(),
+                            run: run.clone(),
+                        },
+                    });
+                }
+            }
             ThreadEvent::ItemCompleted { item, .. } => {
                 let entry_id = item_entry_id(item.item_id().as_str());
                 self.remove_transient_entry(&entry_id);
@@ -387,6 +398,7 @@ impl TranscriptAccumulator {
                 | ThreadTranscriptEntry::TurnPlan { .. }
                 | ThreadTranscriptEntry::TurnError { .. }
                 | ThreadTranscriptEntry::ToolOutput { .. } => None,
+                ThreadTranscriptEntry::HookRun { .. } => None,
             })
             .collect::<Vec<_>>();
         for entry_id in &removed {

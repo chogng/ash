@@ -47,11 +47,13 @@ import { createRemoteConnectionApi } from "../../remote/electron-browser/remoteC
 import type { IWorkspaceTrustRequestService } from '../../workspace/common/workspaceTrust.js';
 import { ILocalTranscriptionService } from '../../localTranscription/common/localTranscription.js';
 import { InstantiationService } from '../../instantiation/common/instantiationService.js';
+import type { IPlaywrightService } from '../../browserView/common/playwrightService.js';
 
 export type ElectronRendererCapabilityContribution = RendererCapabilityContribution;
 
 /** Composes Electron renderer capabilities from domain-owned IPC adapters. */
-export async function createElectronRendererApi(contributions: readonly ElectronRendererCapabilityContribution[], hostCapabilities: { readonly browser: boolean; readonly textDocuments?: boolean; readonly appTools?: boolean; }, workspaceTrust: IWorkspaceTrustRequestService, mainProcessService: IMainProcessService, resolveRemoteAuthority?: (api: IExtensionHostApi, factories: IRemoteSocketFactoryService, authority: string, attempt: number) => Promise<IAddress>, initializeRemoteExtensions?: (api: IExtensionHostApi, authority: string) => Promise<IExtensionHostApi>): Promise<AshElectronRendererApi & IDisposable> {
+export async function createElectronRendererApi(contributions: readonly ElectronRendererCapabilityContribution[], hostCapabilities: { readonly browser: boolean; readonly textDocuments?: boolean; readonly appTools?: boolean; }, workspaceTrust: IWorkspaceTrustRequestService, mainProcessService: IMainProcessService, resolveRemoteAuthority?: (api: IExtensionHostApi, factories: IRemoteSocketFactoryService, authority: string, attempt: number) => Promise<IAddress>, initializeRemoteExtensions?: (api: IExtensionHostApi, authority: string) => Promise<IExtensionHostApi>, playwrightService?: IPlaywrightService): Promise<AshElectronRendererApi & IDisposable> {
+	if (hostCapabilities.browser && !playwrightService) { throw new Error('Browser host requires the Workbench Playwright service'); }
 	performance.mark('ash.rendererApi.start');
 	const resources = new DisposableStore();
 	const remoteConnection = await createRemoteAgentApi().getConnection();
@@ -163,7 +165,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 				windowExtensions = await initializeRemoteExtensions(createAppServerExtensionHostApi(client), remoteConnection.authority);
 			}
 			resources.add(client.onStateChange(state => { if (state === 'crashed') { scheduleRecovery(); } }));
-			if (hostCapabilities.browser) { resources.add(registerAppServerBrowserHost(client)); }
+			if (hostCapabilities.browser) { resources.add(registerAppServerBrowserHost(client, playwrightService!, mainProcessService)); }
 			resources.add(registerAppServerWorkspaceHost(client, () => connecting, workspaceTrust));
 			backend = createRendererHost(client, {
 				externalOpener: { openExternal: target => invoke<boolean>('ash:host:openExternal', target) },

@@ -19,8 +19,8 @@ flowchart TD
     C --> S[源码与 chunk 管理]
     C --> I[符号 / 全文 / 语义索引]
     I --> S
-    G --> T[tgrep 适配实现]
-    G --> R[ripgrep 适配实现]
+    G -->|Indexed 默认| T[tgrep 适配实现]
+    G -->|Current / 单文件| R[ripgrep 适配实现]
 ```
 
 | 能力                 | 职责与依赖边界                                                       |
@@ -32,8 +32,9 @@ flowchart TD
 | 符号、全文和语义索引 | 消费已授权、已复核的源码与 chunk，维护各自查询所需的数据             |
 | Agent / 编辑器       | 选择所需能力，负责请求转换、权限衔接、结果预算和呈现                 |
 
-文件名、文字、符号和向量索引分别由对应能力管理。grep 返回匹配位置；Codebase 保留
-源码与 chunk 身份的所有权，使用当前源码复核候选。
+文件名、文字、符号和向量查询保持各自的契约；不同查询不要求重复扫描同一份文件源。
+TS 文件名查询复用 grep 持有的 tgrep 目录路径视图，评分规则由 file-search 维护，编译进引擎执行。
+grep 返回内容匹配位置；Codebase 保留源码与 chunk 身份的所有权，使用当前源码复核候选。
 
 ### 宿主组装与资源所有权
 
@@ -50,20 +51,42 @@ flowchart TD
 - 请求的权限、取消、分页游标与结果预算分别管理；共享索引不扩大任何调用方的授权范围。
 - 调用入口核验权限，能力内部约束目录范围；未保存内容由持有源码视图的上层合并。
 - 查询契约表达文字/正则、大小写、范围、过滤、上限和新鲜度；引擎命令行参数留在适配实现内部。
-- `Indexed` 允许外部修改短暂滞后，`Current` 搜索当前磁盘；索引就绪只表示覆盖完整。
+- `Indexed` 默认由 tgrep 执行，允许外部修改短暂滞后；`Current` 由 rg 搜索当前磁盘，不创建索引会话。索引就绪只表示覆盖完整。
+
+### rg 与 tgrep 的场景分工
+
+| 查询场景                                         | 默认执行方式                      | 选择理由                                                                                 |
+| ------------------------------------------------ | --------------------------------- | ---------------------------------------------------------------------------------------- |
+| 编辑器跨文件 Current 搜索                        | rg 当前磁盘扫描                   | 读取当前内容；无需准备索引、常驻进程或 watcher                                           |
+| Agent grep、Codebase 文字候选的 Indexed 目录搜索 | tgrep 共享索引                    | 对同一代码库反复查询，用 trigram 筛选减少候选文件读取，为 codebase instant grep 提供加速 |
+| 明确的单文件 scope，或合并未保存文档的内容搜索   | rg 扫描，公共 grep 合并未保存文本 | 返回当前内容和一致的匹配范围，实际新鲜度为 Current                                       |
+| Quick Open / 工作区文件选择器的普通模糊查询      | 复用 tgrep 的目录路径视图         | 复用注册和监听，在引擎内排名并仅返回前 N 项；显式 glob 仍由 file-search 扫描当前路径     |
+
+rg 更适合一次性、小范围及要求当前内容的常规搜索。tgrep 的收益来自已准备索引上的重复查询，
+尤其是能排除多数文件的查询；首次注册和内容准备仍有成本，不能承诺每次查询都即时完成。
+tgrep 还持有常驻进程、watcher、内存中的路径视图及磁盘索引和 worktree 差异缓存。
+共享基础索引能摊薄多个 worktree 的存储，但大量差异、CRLF 内容和宽泛正则会减弱收益。
+这类成本和外部修改的异步可见性，使它适合 Agent / Codebase 的 Indexed 查询，
+而编辑器 Current 搜索保持 rg 的直接读取方式。上游性能数据不能代替 Ash 包内共享模式的实测。
+
+`[grep].backend = "ripgrep"` 是显式关闭索引的选择：Indexed 请求改用 rg 并返回 Current，
+模糊文件查询改为当前磁盘查询；Current 内容搜索始终使用 rg。
+tgrep 的准备失败、协议错误或超时显式返回，不悄悄切换引擎。两个引擎共用公共 grep 的
+模式编译：smart case 只检查字面量和字符范围，忽略 `\S`、Unicode 属性名、捕获组名和注释中的大写。
+`\p{Lu}` 等没有字面量的正则保持大小写敏感；文字搜索按文字本身判断。
 
 ## 实现状态
 
 当前实现按上面的职责关系组装；各入口保留自己的权限、结果预算和展示方式。
 
-| 项目             | 实现                                                                                                                        | 边界                                                               |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| 公共内容搜索     | Agent、编辑器和 Codebase 检索使用公共 grep 服务                                                                             | 共享目录索引，分别管理请求                                         |
-| 配置与组装       | 宿主持有 `EnvRuntimeConfig`、grep 与 file-search；分别注入使用者                                                            | `LocalToolConfig` 只保留工具执行策略，工具组合不向宿主提供公共服务 |
-| Codebase 职责    | `CodebaseRetrievalService` 组合 FTS、grep、符号和语义候选                                                                   | `Codebase` 的源码、chunk 与版本管理不引用 grep                     |
-| 文件路径搜索     | `file-search::Service` 提供 glob / 枚举与模糊搜索入口；Agent、CLI、TUI、Rust 桌面文件面板及 TS 工作区文件选择器调用公共能力 | glob 读当前路径并按修改时间排序；模糊搜索复用请求内的路径索引      |
-| 查询新鲜度       | Rust API 与 RPC 均支持 `Indexed` / `Current`，RPC 成功结果返回实际模式                                                      | 编辑器默认保持当前磁盘搜索；Agent 和 Codebase 使用索引候选         |
-| 索引 glob 与诊断 | tgrep 的正向 glob 保持索引查询；Rust 结果和 RPC 分页提供查询计划及候选统计                                                  | 统计包含已确认的 Ash 写入，描述内容匹配前的文件筛选                |
+| 项目             | 实现                                                                                                                        | 边界                                                                       |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| 公共内容搜索     | Agent、编辑器和 Codebase 检索使用公共 grep 服务                                                                             | Indexed 共享目录索引，Current 使用 rg，分别管理请求                        |
+| 配置与组装       | 宿主持有 `EnvRuntimeConfig`、grep 与 file-search；分别注入使用者                                                            | `LocalToolConfig` 只保留工具执行策略，工具组合不向宿主提供公共服务         |
+| Codebase 职责    | `CodebaseRetrievalService` 组合 FTS、grep、符号和语义候选                                                                   | `Codebase` 的源码、chunk 与版本管理不引用 grep                             |
+| 文件路径搜索     | `file-search::Service` 提供 glob / 枚举与模糊搜索入口；Agent、CLI、TUI、Rust 桌面文件面板及 TS 工作区文件选择器调用公共能力 | glob 读当前路径；TS 模糊查询复用 tgrep 路径视图，TUI handle 保持请求内扫描 |
+| 查询新鲜度       | Rust API 与 RPC 均支持 `Indexed` / `Current`，RPC 成功结果返回实际模式                                                      | 编辑器默认保持当前磁盘搜索；Agent 和 Codebase 使用索引候选                 |
+| 索引 glob 与诊断 | tgrep 的正向 glob 保持索引查询；Rust 结果和 RPC 分页提供查询计划及候选统计                                                  | 统计包含已确认的 Ash 写入，描述内容匹配前的文件筛选                        |
 
 实现入口：[宿主组装](../crates/app-server/src/server/environment_runtime.rs)、
 [检索组合](../crates/codebase/src/retrieval/service.rs)、
@@ -72,21 +95,89 @@ flowchart TD
 
 ## TS 工作区文件查询
 
-聊天“添加上下文 → 工作区文件”通过 `IFileSearchService` 调用 `file/search/glob`，与
+Quick Open 和工作区文件选择器通过 Workbench `ISearchService.fileSearch` 聚合目录，
+单目录由 `IFileSearchService` 调用 `file/search/fuzzy` 或 `file/search/glob`，与
 Agent glob 复用 App Server 持有的 `file-search::Service`。Workbench 显式传入文件夹 `dirId`；
 Sessions 传入绑定原始根目录的 `sessionId` 与路径。App Server 检查对应目录的 `SearchFiles`，
 并在扫描期间持有授权租约；裸路径不能独立授予访问权。
 
-- include/exclude 各最多 64 项、每项最多 1 KiB；结果上限为 1–5,000。选择器每次取 100 个结果。
+- include/exclude 各最多 64 项、每项最多 1 KiB；结果上限为 1–5,000。选择器在所有工作区根之间统一取最多 100 个文件。
 - 空 include 枚举遵守 Git ignore 和隐藏文件规则的文件；正向 glob 保持 rg override 语义。
 - 返回以 `/` 分隔的根目录相对路径及匹配总数；路径排序与 Agent 使用同一实现。
 - 每次请求携带唯一 `operationId`。输入变化、关闭选择器或销毁 Composer 时发出
-  `file/search/glob/cancel`；取消仅作用于当前连接。取消响应确认已收到请求，原请求仍返回终态。
-- 前端丢弃过期结果，不用首批 100 项在本地替代整个工作区查询。普通输入匹配路径片段；
+  对应的 `file/search/glob/cancel` 或 `file/search/fuzzy/cancel`；取消仅作用于当前连接。取消响应确认已收到请求，原请求仍返回终态。
+- 前端丢弃过期结果，不用首批 100 项在本地替代整个工作区查询。普通输入使用 Rust 模糊匹配，返回路径与评分；Workbench 按评分合并、按 URI 去重。
+  多词输入由引擎解释，Quick Open 不再把字符拼成 glob。
+  模糊查询最大 1 KiB，优先使用共享目录索引；禁用索引时查询当前目录。
   `src/*.ts` 等显式 glob 交给后端解释。文件内容快照和未保存编辑器文本继续由前端持有。
 
+普通输入由公共 grep 复用 tgrep 的目录注册和 watcher，在引擎内部评分并返回前 N 项。
+评分与高亮共用 [`file-search` 的纯计算模块](../crates/file-search/src/ranking.rs)，
+目录排除共用 [`discovery.rs`](../crates/file-search/src/discovery.rs)，候选准入归路径发现；
+构建时校验两份源码的哈希并编译进 tgrep。App Server 不再按每次输入传输全部候选路径。
+文件名视图仅读取目录元数据，包含符合 ignore 规则的隐藏、二进制和大文件；
+首次目录注册与路径发现不等待内容索引就绪。评分仍检查完整候选集，但只保存前 N 项，
+IPC 返回量随结果上限变化。批量版本游标仅保留为引擎诊断与测试协议；产品公共入口只返回有界模糊结果。
+文件名和内容独立确认 Ash 通知的写入；外部修改仍可能短暂滞后，引擎错误直接返回。
+TUI 的流式 handle 保留增量匹配，前 N 项与索引、磁盘回退共用分数和路径的选择规则；
+磁盘一次性查询在调用线程内完成发现和评分。未引入持久化文件名索引。
+
+[内容刷新与重建](../crates/tgrep/src/lib.rs) 只在取得待确认版本和更新确认位置时持有短锁，
+RPC 在锁外执行；执行期间到来的写入保留给后续确认，文件名查询和写入通知不等待内容重建。
+[公共 grep](../crates/grep/src/service.rs) 按目录管理查询占用、首次注册和释放等待，
+全局配置锁不跨引擎 I/O。目录释放等待观察取消，取消后恢复该目录准入；
+同仓库的其他 worktree 继续持有自己的注册和存储租约。
+仓库存储缓存只保留弱引用，最后一个目录注册及其待清理操作释放后交还存储租约，
+可直接清理该索引；已有其他注册时仍返回 `InUse`。
+进程池只按同一仓库存储协调首次启动，不同仓库启动互不等待，同键等待会检查取消。
+同一仓库使用两个有界内容 worker，每个 worktree 只允许一次内容核对；重复刷新在原期限内重试，
+重试只要求核对，不重复施加失效通知。不同 worktree 可并行刷新。基础索引发布仍使用上游的仓库锁，
+保证同一份基础数据只有一个构建者。释放使用独立的有界队列；最后一个目录租约等待其读取结束时，
+不占用仓库注册锁，结束等待后重新检查租约。
+取消首次注册后，后台恢复与 detach 继续保留目录占用和存储租约，目录删除会等待这段清理完成。
+
+Ash 待确认提示最多 1,024 条、64 KiB 路径字节；溢出转为带版本的全量核对标记，
+文件名和内容各自确认，刷新期间的新写入保留。文件名变化提示在引擎内也去重并限额。普通文件变化只检查提示路径及其祖先；目录变化核对对应子树。
+纯内容修改保留路径版本；新增目录内的 ignore 文件、规则变更、提示溢出和轮询到期执行完整修复。
+局部修复不推迟下一次完整核对，核对期间到来的通知保留给后续版本。
+文件名操作显式启用请求连接取消：排队请求在读取目录前跳过，已开始的目录修复与评分协作停止，
+未完成的目录清单不发布。Git 或系统调用中的读取需等其返回；最后一个目录租约仍等全部读取结束。
+注册、内容核对和 detach 保留完成与重试语义。
+内容 overlay 同样复用上次成功发布的路径证据和准入规则：普通文件提示只核对相应文件，
+目录提示只发现对应子树；删除或目录替换会移除原有子树，其他文件不重新打开检查元数据。
+祖先中的 ignore 文件变动、新增规则源、Git 已跟踪路径豁免变化、歧义大小写提示、
+提示溢出和定期补偿核对执行完整修复。规则、可见性与内容证据在同一版本发布，
+失效期间的查询门控和取消后的资源释放仍由 tgrep 负责。
+局部核对仍需在内存中处理路径证据、更新 overlay 并保存 checkpoint，不承诺整体耗时只随修改文件数增长。
+
+2026-10-08 在本机 `ci-test` profile 下手工测量：10,000 个已提交文件、约 20 MiB 内容的
+新索引首次注册并读取全部分页耗时约 0.95 秒，拆分前同一 fixture 为 10.2 秒。
+20 次热路径分页收集的中位数为 11.0 ms，P95 为 24.2 ms；拆分前单次完整列表分别为
+6.7 ms 与 7.9 ms。独立对同样数量的路径评分并保留前 100 项，中位数为 2.9 ms，P95 为 5.0 ms。
+测量期间有并发构建，不包含 Renderer 传输，不作为稳定性能基线。文件名冷查询已避开内容构建等待，
+该记录测量的是当时的分页实现，不代表当前普通模糊查询的成本。
+2026-10-09 用同样 10,000 文件 fixture、关闭异步 watcher 以隔离路径提示后测量当前实现：
+热文件名查询取前 100 项，中位数 2.27 ms，P95 2.42 ms；完整分页的 JSON payload 总计
+306,989 字节，前 100 项为 8,201 字节，减少约 97.3%。连续 20 次单文件内容修改后，
+文件名清单仍只有一次完整修复，路径检查次数为 20；带修改确认的查询中位数为 2.47 ms。
+测量包含 Session 与引擎的本机 IPC，不包含 App Server 到 Renderer 的传输。
+分页 payload 用于说明候选传输规模，不是旧版本整体查询时延的基线。
+同日在相同 10,000 文件 fixture 中关闭 watcher，连续 20 次修改一个文件并立即执行内容索引查询：
+内容刷新与查询的中位数从版本 `.3` 的 868.7 ms 降至 `.4` 的 52.9 ms，
+P95 从 923.6 ms 降至 55.6 ms；每次发现的候选路径从 10,000 个降至 1 个，
+新实现的 `metadata_files_checked` 为 1，另外 9,999 个文件保留已确认的内容证据。
+该比较包含 Session 到引擎的 IPC、overlay 发布和 checkpoint 保存，不包含 Renderer，
+是本机单次前后测量，不作为稳定性能基线。
+可分别运行以下手工测量：
+
+```sh
+just test ash-tgrep --profile ci-test --lib shared_file_view_benchmark -- --ignored --nocapture
+just test ash-tgrep --profile ci-test --lib shared_content_refresh_benchmark -- --ignored --nocapture
+just test ash-file-search --profile ci-test --lib shared_path_scoring_benchmark -- --ignored --nocapture
+```
+
 没有 App Server 的独立浏览器运行时由 `BrowserFileSearchService` 遍历浏览器授权资源，
-使用已有前端 matcher；它不承诺 Rust 的 Git ignore/rg override 或修改时间排序语义。
+使用路径子序列评分；它不承诺 Rust 的 Nucleo 排序、Git ignore/rg override 或修改时间排序语义。
 这是运行时组装的实现选择，连接失败不会转入浏览器扫描。前端对已有路径的同步匹配仍在本地；
 文件搜索过滤不作为沙箱的路径权限规则。
 
@@ -97,7 +188,8 @@ Sessions 传入绑定原始根目录的 `sessionId` 与路径。App Server 检�
 
 ```text
 Search UI
-  → IContentSearchService
+  → Workbench ISearchService.textSearch
+  → IContentSearchService（单目录）
   → Renderer protocol client / host relay
   → grep/search/*
   → DirId + Authorization<SearchFiles>
@@ -106,6 +198,17 @@ Search UI
 
 桌面端可以把多个窗口文件夹聚合成一次用户操作，但它必须逐个目录发起搜索并保留目录身份。
 核心搜索服务不创建“主目录”“附加目录”或 Workspace 身份。
+
+`workbench/services/search` 拥有查询构建、窗口工作区目录选择、当前模型与磁盘结果合并，
+以及跨目录的总结果预算。Search 与 Search Editor 都调用 `ISearchService.textSearch`。
+查询开始时读取 `IFileTextModelService` 中位于选定根目录内的当前模型，并合并调用方
+通过 `extraFileResources` 显式传入的已打开资源（包含工作区外文件和 untitled）；同 URI 的磁盘结果
+不再进入结果集，即使当前模型已无命中。模型搜索遵守 include/exclude、大小写、正则和整词选项，
+位置使用 UTF-16；搜索不会保存或修改模型，也不会额外读取工作区外磁盘文件。
+工作区外结果保留原 URI，以文件行进入树和列表，支持打开、隐藏和搜索编辑器序列化。
+替换与撤销 untitled 结果只修改模型，草稿保持未保存；文件资源沿用既有保存语义。
+总预算按命中次数计算，超出预算时释放当前目录任务，不启动剩余目录；恰好达到预算且没有
+额外命中不标为截断。`platform/search` 只执行显式传入的单目录，不持有窗口工作区和总预算。
 
 ## 所有权
 
@@ -227,18 +330,18 @@ Renderer 通过现有 App Server 连接发送生成的类型协议；Electron Ma
 - glob 必须相对所选目录，绝对路径、`..`、前导 `!` 和 NUL 会被拒绝。
 - 单次任务最多返回 5,000 条结果，读取批次最多 200 条。
 - 任务绑定创建它的 App Server connection，其他连接不能读取或取消。
-- 引擎由公共 `[grep].backend` 配置选择；命令通过参数数组启动，不经过 shell。
+- Current 内容搜索始终使用 rg；Indexed 默认使用 tgrep，公共 `[grep].backend = "ripgrep"` 显式关闭索引。命令通过参数数组启动，不经过 shell。
 - RPC 的 `freshness` 可选 `indexed` / `current`，省略时为 `current`；成功查询的读取结果返回实际模式。
 - tgrep 的 Indexed 目录 glob 只筛选遵守 ignore 规则的非隐藏文件；初始化扫描与即时写入保持同一过滤。Current glob 可主动包含被忽略文件；单文件 scope 直接读取。
 - `grep/search/read` 的可选 `indexStats` 包含 `queryPlan`、`rawCandidates`、`candidates`、`totalFiles`，分别表示诊断计划、trigram 候选数、范围与文件过滤后的候选数、索引总文件数。扫描或查询仍在执行时省略；查询结束后的各页保留同一份统计。计划文字不具有稳定语法。
-- 编辑器默认请求 `Current`，直接搜索磁盘；Agent 和 Codebase 文字候选使用 `Indexed`。
+- 编辑器默认请求 `Current`，由 rg 直接搜索磁盘；Agent 和 Codebase 文字候选使用 `Indexed`，默认由 tgrep 执行。单文件 scope 使用 rg 并返回 Current。
 - Agent 存在未保存文档时合并当前磁盘与编辑器内容；文档列表为空时保留请求的 Indexed 模式。
 - 公共结果保留 UTF-8 byte ranges，App Server 协议适配器转换为 UTF-16；前端不重新解释。
 
 ## 公共能力
 
 Agent、Codebase 和编辑器共用 `grep::Search`，并注入同一 `grep::Service`。索引按目录复用，
-没有 Agent 专属后端或索引目录。配置切换更新同一个服务，现有使用者不保留旧引擎。
+没有 Agent 专属后端或索引目录。配置切换更新同一个服务的索引偏好，现有使用者不保留旧索引；Current 内容搜索不受影响。
 
 - `grep/index/status` 返回公共索引状态；`ready` 只表示覆盖完整。
 - `grep/index/rebuild` 重建活动目录的索引。
@@ -246,7 +349,7 @@ Agent、Codebase 和编辑器共用 `grep::Search`，并注入同一 `grep::Serv
 
 原 `[agent].grepBackend` 自动迁移到 `[grep].backend`；公共协议使用 `grepBackend`。
 
-TS 前端可在“设置 → 通用 → 应用 → 内容搜索 → 搜索引擎”选择默认的 tgrep 或 ripgrep。
+TS 前端可在“设置 → 通用 → 应用 → 内容搜索 → 索引搜索引擎”选择默认的 tgrep 或 ripgrep。
 控件通过 `config/read` 和带当前配置 revision 的 `config/update` 直接读写 `[grep].backend`，
 不在前端 `settings.json` 保存副本。保存后读回配置；断连或保存失败时禁用选择并提示刷新。
 
@@ -285,59 +388,3 @@ just test-search-package --package-dir /absolute/path/to/assembled-package
 
 发布工作流在能直接执行目标二进制的构建项中运行打包验证；交叉编译项不冒充运行验证。
 强制终止宿主或遗留 tgrep 都视为失败，清理诊断附加到原始错误。
-
-## 索引刷新、取消与性能测量
-
-[内容刷新与重建](../crates/tgrep/src/lib.rs) 只在取得待确认版本和更新确认位置时持有短锁，
-RPC 在锁外执行；执行期间到来的写入保留给后续确认，文件名查询和写入通知不等待内容重建。
-[公共 grep](../crates/grep/src/service.rs) 按目录管理查询占用、首次注册和释放等待，
-全局配置锁不跨引擎 I/O。目录释放等待观察取消，取消后恢复该目录准入；
-同仓库的其他 worktree 继续持有自己的注册和存储租约。
-仓库存储缓存只保留弱引用，最后一个目录注册及其待清理操作释放后交还存储租约，
-可直接清理该索引；已有其他注册时仍返回 `InUse`。
-进程池只按同一仓库存储协调首次启动，不同仓库启动互不等待，同键等待会检查取消。
-同一仓库使用两个有界内容 worker，每个 worktree 只允许一次内容核对；重复刷新在原期限内重试，
-重试只要求核对，不重复施加失效通知。不同 worktree 可并行刷新。基础索引发布仍使用上游的仓库锁，
-保证同一份基础数据只有一个构建者。释放使用独立的有界队列；最后一个目录租约等待其读取结束时，
-不占用仓库注册锁，结束等待后重新检查租约。
-取消首次注册后，后台恢复与 detach 继续保留目录占用和存储租约，目录删除会等待这段清理完成。
-
-Ash 待确认提示最多 1,024 条、64 KiB 路径字节；溢出转为带版本的全量核对标记，
-文件名和内容各自确认，刷新期间的新写入保留。文件名变化提示在引擎内也去重并限额。普通文件变化只检查提示路径及其祖先；目录变化核对对应子树。
-纯内容修改保留路径版本；新增目录内的 ignore 文件、规则变更、提示溢出和轮询到期执行完整修复。
-局部修复不推迟下一次完整核对，核对期间到来的通知保留给后续版本。
-文件名操作显式启用请求连接取消：排队请求在读取目录前跳过，已开始的目录修复与评分协作停止，
-未完成的目录清单不发布。Git 或系统调用中的读取需等其返回；最后一个目录租约仍等全部读取结束。
-注册、内容核对和 detach 保留完成与重试语义。
-内容 overlay 同样复用上次成功发布的路径证据和准入规则：普通文件提示只核对相应文件，
-目录提示只发现对应子树；删除或目录替换会移除原有子树，其他文件不重新打开检查元数据。
-祖先中的 ignore 文件变动、新增规则源、Git 已跟踪路径豁免变化、歧义大小写提示、
-提示溢出和定期补偿核对执行完整修复。规则、可见性与内容证据在同一版本发布，
-失效期间的查询门控和取消后的资源释放仍由 tgrep 负责。
-局部核对仍需在内存中处理路径证据、更新 overlay 并保存 checkpoint，不承诺整体耗时只随修改文件数增长。
-
-2026-10-08 在本机 `ci-test` profile 下手工测量：10,000 个已提交文件、约 20 MiB 内容的
-新索引首次注册并读取全部分页耗时约 0.95 秒，拆分前同一 fixture 为 10.2 秒。
-20 次热路径分页收集的中位数为 11.0 ms，P95 为 24.2 ms；拆分前单次完整列表分别为
-6.7 ms 与 7.9 ms。独立对同样数量的路径评分并保留前 100 项，中位数为 2.9 ms，P95 为 5.0 ms。
-测量期间有并发构建，不包含 Renderer 传输，不作为稳定性能基线。文件名冷查询已避开内容构建等待，
-该记录测量的是当时的分页实现，不代表当前普通模糊查询的成本。
-2026-10-09 用同样 10,000 文件 fixture、关闭异步 watcher 以隔离路径提示后测量当前实现：
-热文件名查询取前 100 项，中位数 2.27 ms，P95 2.42 ms；完整分页的 JSON payload 总计
-306,989 字节，前 100 项为 8,201 字节，减少约 97.3%。连续 20 次单文件内容修改后，
-文件名清单仍只有一次完整修复，路径检查次数为 20；带修改确认的查询中位数为 2.47 ms。
-测量包含 Session 与引擎的本机 IPC，不包含 App Server 到 Renderer 的传输。
-分页 payload 用于说明候选传输规模，不是旧版本整体查询时延的基线。
-同日在相同 10,000 文件 fixture 中关闭 watcher，连续 20 次修改一个文件并立即执行内容索引查询：
-内容刷新与查询的中位数从版本 `.3` 的 868.7 ms 降至 `.4` 的 52.9 ms，
-P95 从 923.6 ms 降至 55.6 ms；每次发现的候选路径从 10,000 个降至 1 个，
-新实现的 `metadata_files_checked` 为 1，另外 9,999 个文件保留已确认的内容证据。
-该比较包含 Session 到引擎的 IPC、overlay 发布和 checkpoint 保存，不包含 Renderer，
-是本机单次前后测量，不作为稳定性能基线。
-可分别运行以下手工测量：
-
-```sh
-just test ash-tgrep --profile ci-test --lib shared_file_view_benchmark -- --ignored --nocapture
-just test ash-tgrep --profile ci-test --lib shared_content_refresh_benchmark -- --ignored --nocapture
-just test ash-file-search --profile ci-test --lib shared_path_scoring_benchmark -- --ignored --nocapture
-```

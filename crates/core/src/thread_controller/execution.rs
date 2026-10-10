@@ -389,6 +389,30 @@ impl ThreadController {
             .expect("generated interaction request ID is non-empty")
     }
 
+    fn review_context_unchanged(
+        &self,
+        snapshot: &crate::ThreadSnapshot,
+        expected: u64,
+    ) -> Result<bool, CoreError> {
+        if snapshot.sequence == expected {
+            return Ok(true);
+        }
+        if expected > snapshot.sequence {
+            return Ok(false);
+        }
+        // Hook observations advance delivery ordering without changing the reviewed action.
+        // Every other fact still invalidates the review, including concurrent user input.
+        let events = self.store.load(&snapshot.thread_id)?;
+        let intervening = events
+            .iter()
+            .filter(|event| event.sequence > expected && event.sequence <= snapshot.sequence)
+            .collect::<Vec<_>>();
+        Ok(intervening.len() as u64 == snapshot.sequence - expected
+            && intervening
+                .iter()
+                .all(|event| matches!(event.event, ThreadEvent::HookRunUpdated { .. })))
+    }
+
     pub(crate) fn record_tool_execution_started(
         &self,
         thread_id: &ThreadId,
@@ -398,7 +422,9 @@ impl ThreadController {
         self.mutate_thread(thread_id, |snapshot| {
             if start
                 .expected_review_sequence
-                .is_some_and(|expected| snapshot.sequence != expected)
+                .map(|expected| self.review_context_unchanged(snapshot, expected))
+                .transpose()?
+                == Some(false)
             {
                 return Err(CoreError::ReviewContextChanged);
             }
@@ -425,7 +451,9 @@ impl ThreadController {
         self.mutate_thread(thread_id, |snapshot| {
             if escalation
                 .expected_review_sequence
-                .is_some_and(|expected| snapshot.sequence != expected)
+                .map(|expected| self.review_context_unchanged(snapshot, expected))
+                .transpose()?
+                == Some(false)
             {
                 return Err(CoreError::ReviewContextChanged);
             }

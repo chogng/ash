@@ -54,6 +54,7 @@ fn thread(messages: &[&str]) -> Thread {
         usage: ash_protocol::ModelUsageSummary::default(),
         reference_cost: ash_protocol::ModelReferenceCostSummary::default(),
         goal: None,
+        hook_runs: Vec::new(),
         turns: messages
             .iter()
             .enumerate()

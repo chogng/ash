@@ -7,6 +7,7 @@ import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { FileKind, FileNotFoundError, IFileService } from '../../../../platform/files/common/files.js';
 import { ISystemFileTransferService } from '../../../../platform/files/common/systemFileTransferService.js';
+import { IPathService } from '../../../../platform/path/common/pathService.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { IWorkspaceContextService, type IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
@@ -65,6 +66,7 @@ export async function pasteExplorerItems(accessor: ServicesAccessor, fileList?: 
 		: await resolveCreationDirectory(accessor, 'folder');
 	if (!directory) return;
 	const files = accessor.get(IFileService);
+	const paths = accessor.get(IPathService);
 	if (!resources.length && await accessor.get(ISystemFileTransferService).pasteSystemFiles(directory, move)) {
 		explorer.setToCopy([], false);
 		status(localize('accessibility.explorerSystemFilesPasted', 'Files pasted into the selected folder.'));
@@ -73,7 +75,7 @@ export async function pasteExplorerItems(accessor: ServicesAccessor, fileList?: 
 	if (move && !resources.length) return;
 	if (!nativeFiles.length && !resources.length) return;
 	for (const file of nativeFiles) {
-		if (!validFileName(file.name)) continue;
+		if (!await paths.hasValidBasename(directory, file.name)) continue;
 		const target = await availablePasteTarget(files, directory, file.name);
 		await files.writeFileBytes(target, new Uint8Array(await file.arrayBuffer()));
 	}
@@ -81,11 +83,11 @@ export async function pasteExplorerItems(accessor: ServicesAccessor, fileList?: 
 		const local = localClipboard.items.find(item => extUriBiasedIgnorePathCase.isEqual(item.resource, resource));
 		const kind = local?.kind ?? (await files.stat(resource)).kind;
 		const name = local?.name ?? basename(resource);
-		if (!validFileName(name)) continue;
+		if (!await paths.hasValidBasename(directory, name)) continue;
 		if (kind === FileKind.Directory && extUriBiasedIgnorePathCase.isEqualOrParent(directory, resource)) {
 			throw new Error(localize({ bundle: 'ash', key: 'files.pasteIntoSelf' }, 'Cannot paste a folder into itself.'));
 		}
-		const desired = URI.joinPath(directory, name);
+		const desired = directory.joinPathSegment(name);
 		if (cut && extUriBiasedIgnorePathCase.isEqual(desired, resource)) continue;
 		const target = await availablePasteTarget(files, directory, name);
 		const sourceFolder = workspaceContext.getWorkspaceFolder(resource);
@@ -113,7 +115,7 @@ async function availablePasteTarget(files: IFileService, directory: URI, name: s
 	const stem = dot > 0 ? name.slice(0, dot) : name;
 	const extension = dot > 0 ? name.slice(dot) : '';
 	for (let index = 0; index < 10_000; index++) {
-		const candidate = URI.joinPath(directory, index === 0 ? name : `${stem} copy${index === 1 ? '' : ` ${index}`}${extension}`);
+		const candidate = directory.joinPathSegment(index === 0 ? name : `${stem} copy${index === 1 ? '' : ` ${index}`}${extension}`);
 		try { await files.stat(candidate); }
 		catch (error) { if (error instanceof FileNotFoundError) return candidate; throw error; }
 	}
@@ -124,16 +126,17 @@ async function availablePasteTarget(files: IFileService, directory: URI, name: s
 export async function renameExplorerItem(accessor: ServicesAccessor): Promise<void> {
 	const item = accessor.get(IExplorerService).getContext()[0];
 	if (!item || isWorkspaceRoot(accessor, item.resource)) return;
+	const paths = accessor.get(IPathService);
 	const name = await accessor.get(IQuickInputService).input({
 		title: localize({ bundle: 'ash', key: 'files.rename' }, 'Rename'),
 		value: item.name,
-		validateInput: async value => validFileName(value)
+		validateInput: async value => await paths.hasValidBasename(item.resource, value)
 			? undefined
-			: localize({ bundle: 'ash', key: 'workbench.newFileInvalidName' }, 'Enter a file name without path separators.'),
+			: localize({ bundle: 'ash', key: 'workbench.newFileInvalidName' }, 'Enter a valid file name for the target file system.'),
 	});
 	if (name === undefined || name === item.name) return;
-	if (!validFileName(name)) throw new Error(localize({ bundle: 'ash', key: 'workbench.newFileInvalidName' }, 'Enter a file name without path separators.'));
-	await accessor.get(IFileService).rename(item.resource, URI.joinPath(dirname(item.resource), name), 'error');
+	if (!await paths.hasValidBasename(item.resource, name)) throw new Error(localize({ bundle: 'ash', key: 'workbench.newFileInvalidName' }, 'Enter a valid file name for the target file system.'));
+	await accessor.get(IFileService).rename(item.resource, dirname(item.resource).joinPathSegment(name), 'error');
 }
 
 /** Handles {@link DELETE_FILE_COMMAND_ID} with confirmation before permanent deletion. */
@@ -166,18 +169,19 @@ function isWorkspaceRoot(accessor: ServicesAccessor, resource: URI): boolean {
 export async function createNewFile(accessor: ServicesAccessor): Promise<void> {
 	const directory = await resolveCreationDirectory(accessor, 'file');
 	if (!directory) return;
+	const paths = accessor.get(IPathService);
 	const name = await accessor.get(IQuickInputService).input({
 		title: localize({ bundle: 'ash', key: 'workbench.newFileName' }, 'New File Name'),
 		placeHolder: localize({ bundle: 'ash', key: 'workbench.newFileNamePlaceholder' }, 'Enter a file name'),
-		validateInput: async value => validFileName(value)
+		validateInput: async value => await paths.hasValidBasename(directory, value)
 			? undefined
-			: localize({ bundle: 'ash', key: 'workbench.newFileInvalidName' }, 'Enter a file name without path separators.'),
+			: localize({ bundle: 'ash', key: 'workbench.newFileInvalidName' }, 'Enter a valid file name for the target file system.'),
 	});
 	if (name === undefined) return;
-	if (!validFileName(name)) {
-		throw new Error(localize({ bundle: 'ash', key: 'workbench.newFileInvalidName' }, 'Enter a file name without path separators.'));
+	if (!await paths.hasValidBasename(directory, name)) {
+		throw new Error(localize({ bundle: 'ash', key: 'workbench.newFileInvalidName' }, 'Enter a valid file name for the target file system.'));
 	}
-	const resource = URI.joinPath(directory, name);
+	const resource = directory.joinPathSegment(name);
 	await accessor.get(IFileService).createFile(resource, 'error');
 	await accessor.get(IEditorService).openEditor(new FileEditorInput(resource, { label: name }));
 }
@@ -186,16 +190,17 @@ export async function createNewFile(accessor: ServicesAccessor): Promise<void> {
 export async function createNewFolder(accessor: ServicesAccessor): Promise<void> {
 	const directory = await resolveCreationDirectory(accessor, 'folder');
 	if (!directory) return;
+	const paths = accessor.get(IPathService);
 	const name = await accessor.get(IQuickInputService).input({
 		title: localize({ bundle: 'ash', key: 'files.newFolderName' }, 'New Folder Name'),
 		placeHolder: localize({ bundle: 'ash', key: 'files.newFolderPlaceholder' }, 'Enter a folder name'),
-		validateInput: async value => validFileName(value)
+		validateInput: async value => await paths.hasValidBasename(directory, value)
 			? undefined
-			: localize({ bundle: 'ash', key: 'files.invalidName' }, 'Enter a name without path separators.'),
+			: localize({ bundle: 'ash', key: 'files.invalidName' }, 'Enter a valid name for the target file system.'),
 	});
 	if (name === undefined) return;
-	if (!validFileName(name)) throw new Error(localize({ bundle: 'ash', key: 'files.invalidName' }, 'Enter a name without path separators.'));
-	await accessor.get(IFileService).createDirectory(URI.joinPath(directory, name));
+	if (!await paths.hasValidBasename(directory, name)) throw new Error(localize({ bundle: 'ash', key: 'files.invalidName' }, 'Enter a valid name for the target file system.'));
+	await accessor.get(IFileService).createDirectory(directory.joinPathSegment(name));
 }
 
 /** Uses the selected item's directory, then the active editor's workspace root; prompts if roots are ambiguous. */
@@ -220,10 +225,6 @@ async function resolveCreationDirectory(accessor: ServicesAccessor, kind: 'file'
 		? workspace.folders[0]
 		: await pickWorkspaceFolder(quickInput, workspace.folders, kind));
 	return selectedDirectory ?? folder?.uri;
-}
-
-function validFileName(value: string): boolean {
-	return value.length > 0 && value !== '.' && value !== '..' && !/[\\/\u0000-\u001f]/.test(value);
 }
 
 function pickWorkspaceFolder(quickInput: IQuickInputService, folders: readonly IWorkspaceFolder[], kind: 'file' | 'folder'): Promise<IWorkspaceFolder | undefined> {

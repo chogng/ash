@@ -21,6 +21,24 @@ pub(crate) enum HookInvocation<'a> {
 }
 
 impl HookInvocation<'_> {
+    pub(crate) fn scope(&self) -> core_api::HookEventScope {
+        match self {
+            Self::Event(request) => request.scope.clone(),
+            _ => core_api::HookEventScope::Turn {
+                session_id: self.session_id().expect("Turn Hook has a Session").clone(),
+                thread_id: self.thread_id().expect("Turn Hook has a Thread").clone(),
+                turn_id: self.turn_id().expect("Turn Hook has a Turn").clone(),
+            },
+        }
+    }
+
+    pub(crate) fn tool_call_id(&self) -> Option<&ash_protocol::ToolCallId> {
+        match self {
+            Self::BeforeTool(request) => Some(&request.tool_call_id),
+            Self::AfterTool(request) => Some(&request.tool_call_id),
+            Self::TurnCompleted(_) | Self::Event(_) => None,
+        }
+    }
     pub(crate) fn session_id(&self) -> Option<&ash_protocol::SessionId> {
         match self {
             Self::BeforeTool(request) => Some(&request.session_id),

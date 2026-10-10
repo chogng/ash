@@ -34,3 +34,30 @@ test('browser path discovery stops a superseded directory scan', async () => {
 	await assert.rejects(service.glob(folder, { includePatterns: [], excludePatterns: [], maxResults: 100 }, controller.signal), isCancellationError);
 	assert.equal(reads, 1);
 });
+
+test('browser fuzzy discovery ranks before truncation and matches case and Unicode', async () => {
+	const service = new BrowserFileSearchService({
+		async readDirectory(directory) {
+			return ['a_l_p_h_a.bin', 'ALPHA.bin', '中文.bin'].map(name => ({ resource: URI.joinPath(directory, name), name, kind: FileKind.File }));
+		},
+	});
+	const result = await service.fuzzy(folder, { query: 'alpha', maxResults: 1 });
+	assert.deepEqual(result.matches.map(item => item.path), ['ALPHA.bin']);
+	assert.equal(result.totalMatches, 2);
+	assert.deepEqual((await service.fuzzy(folder, { query: '中文', maxResults: 1 })).matches.map(item => item.path), ['中文.bin']);
+});
+
+test('browser fuzzy discovery skips generated directories and stops cancelled scans', async () => {
+	const controller = new AbortController();
+	const visited: string[] = [];
+	const service = new BrowserFileSearchService({
+		async readDirectory(directory) {
+			visited.push(directory.path);
+			if (directory.path === folder.resource.path) { return ['target', 'src'].map(name => ({ resource: URI.joinPath(directory, name), name, kind: FileKind.Directory })); }
+			controller.abort();
+			return [{ resource: URI.joinPath(directory, 'late.ts'), name: 'late.ts', kind: FileKind.File }];
+		},
+	});
+	await assert.rejects(service.fuzzy(folder, { query: 'late', maxResults: 1 }, controller.signal), isCancellationError);
+	assert.deepEqual(visited, [folder.resource.path, folder.resource.path + '/src']);
+});

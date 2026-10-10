@@ -665,8 +665,24 @@ test("Binary content shows an editor error with a working alternative", async ({
 	expect(styles.color).not.toBe("rgba(0, 0, 0, 0)");
 	await alternative.click();
 	await expect(content.locator(".ash-binary-editor-content")).toContainText("48 69 00 ff");
+	expect(await content.getByRole('region').evaluate(element => ({
+		display: getComputedStyle(element).display,
+		direction: getComputedStyle(element).flexDirection,
+		buttonAlignment: getComputedStyle(element.querySelector('.ash-binary-open-as-text')!).alignSelf,
+	}))).toEqual({ display: 'flex', direction: 'column', buttonAlignment: 'flex-start' });
 	await expect(error).toHaveCount(0);
-	await content.getByRole('button', { name: 'Open as Read-Only Text' }).click();
+	for (const theme of ['Ash Light', 'Ash Dark', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
+		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
+		await workbench.quickaccess.input.fill(theme);
+		await workbench.quickaccess.input.press('Enter');
+		await expect(content.getByRole('region')).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect(content.getByRole('region')).not.toHaveCSS('color', 'rgba(0, 0, 0, 0)');
+		await expect(content.locator('.ash-binary-editor-summary')).toHaveCSS('border-bottom-style', 'solid');
+	}
+	const textPreview = content.getByRole('button', { name: 'Open as Read-Only Text' });
+	await textPreview.focus();
+	await expect(textPreview).toBeFocused();
+	await textPreview.press('Enter');
 	await expect(content.locator('.stanza-editor-input')).toBeAttached();
 	await expect(content.locator('.stanza-editor-input')).toHaveAttribute('aria-readonly', 'true');
 	await expect(content.locator('.ash-binary-editor-content')).toHaveCount(0);
@@ -679,14 +695,15 @@ test("Compare open files as binary shows both byte views", async ({ target, work
 	);
 	const page = workbench.page;
 	const explorer = page.locator(".ash-explorer .ash-tree-row");
+	const editor = workbench.editors.groupAt(0).editor;
 	await explorer.filter({ hasText: "main.ts" }).dblclick();
+	await editor.waitForEditorContents(text => text === 'const value = 1;\n');
+	await expect(editor.input).toBeFocused();
 	await explorer.filter({ hasText: "main.rs" }).dblclick();
-	await page.keyboard.press("F1");
+	await editor.waitForEditorContents(text => text.includes('fn main'));
+	await expect(editor.input).toBeFocused();
+	await workbench.quickaccess.runCommand('workbench.action.compareActiveFileAsBinary');
 	const picker = page.locator(".ash-quick-pick");
-	const search = picker.getByRole("combobox");
-	await search.fill("Compare Active File as Binary With");
-	await expect(picker.locator(".ash-quick-pick-row-label", { hasText: "Compare Active File as Binary With" })).toBeVisible();
-	await search.press("Enter");
 	const candidateSearch = picker.getByRole("combobox");
 	await expect(candidateSearch).toHaveAttribute("placeholder", "Select the original file to compare");
 	await candidateSearch.fill("main.ts");
@@ -710,9 +727,8 @@ test("Compare open files as binary shows both byte views", async ({ target, work
 			}
 			const tab = workbench.editors.groupAt(0).tabs.and(workbench.page.getByRole('tab', { selected: true }));
 			await tab.focus();
-			await tab.press('Shift+F10');
-			await workbench.page.getByRole('menu').last().getByRole('menuitem', { name: 'Copy Relative Path', exact: true }).click();
-			expect(await readClipboard()).toBe('main.rs');
+			await workbench.menus.select(application, () => tab.press('Shift+F10'), ['Copy Relative Path']);
+			await expect.poll(readClipboard).toBe('main.rs');
 		}
 	} finally {
 		if (target.kind === 'electron') {
@@ -734,13 +750,11 @@ test("Reopen Editor With switches the active file to Binary Editor", async ({ ta
 	await expect.poll(() => fileRow.count(), { timeout: 15_000 }).toBe(1);
 	await fileRow.click();
 	const content = workbench.editors.groupAt(0).content;
-	await expect(content.locator(".stanza-editor-input")).toBeAttached();
+	await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text === 'const value = 1;\n');
+	await workbench.editors.groupAt(0).editor.waitForEditorFocus();
 
-	await page.keyboard.press("F1");
+	await workbench.quickaccess.runCommand('workbench.action.reopenWithEditor');
 	const picker = page.locator(".ash-quick-pick");
-	await picker.getByRole("combobox").fill("Reopen Editor With");
-	await expect(picker.locator(".ash-quick-pick-row-label", { hasText: "Reopen Editor With..." })).toBeVisible();
-	await page.keyboard.press("Enter");
 	await expect(picker.getByRole("combobox")).toHaveAttribute("placeholder", "Select an editor");
 	await picker.locator(".ash-quick-pick-row-label", { hasText: "Binary Editor" }).click();
 

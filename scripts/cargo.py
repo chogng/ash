@@ -251,6 +251,11 @@ def main(arguments: list[str] | None = None) -> int:
     if target not in TARGETS:
         parser.error(f"unsupported V8 target: {target}")
     environment = os.environ.copy()
+    if (
+        "apple-darwin" in target
+        and profile_from_arguments(cargo_arguments) == "release"
+    ):
+        environment["CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO"] = "packed"
     packages = cargo_command_packages(args.cargo, cargo_arguments, REPOSITORY_ROOT)
     if "ash-app-server-protocol" in packages:
         # Prepare outside Cargo's build lock; the exporter bootstraps without metadata.
@@ -318,6 +323,16 @@ def main(arguments: list[str] | None = None) -> int:
             # Windows Cargo owns a Job that forbids CREATE_BREAKAWAY_FROM_JOB. A process
             # lifecycle test must exercise the daemon's independent lifetime unchanged.
             return run_process_tests(args.cargo, cargo_arguments, environment)
+        if (
+            cargo_arguments[0] == "build"
+            and profile_from_arguments(cargo_arguments) == "release"
+            and environment.get("ASH_SYMBOLS_DIR")
+        ):
+            from build.release.symbols import capture_cargo_build
+
+            return capture_cargo_build(
+                [args.cargo, *cargo_arguments], REPOSITORY_ROOT, environment, target
+            )
         return subprocess.run(
             [args.cargo, *cargo_arguments], cwd=REPOSITORY_ROOT, env=environment
         ).returncode

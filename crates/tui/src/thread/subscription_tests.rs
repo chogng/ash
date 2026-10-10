@@ -440,6 +440,7 @@ fn thread(session_id: &str, thread_id: &str, sequence: u64) -> Thread {
         usage: ash_protocol::ModelUsageSummary::default(),
         reference_cost: ash_protocol::ModelReferenceCostSummary::default(),
         goal: None,
+        hook_runs: Vec::new(),
         turns: Vec::new(),
     }
 }

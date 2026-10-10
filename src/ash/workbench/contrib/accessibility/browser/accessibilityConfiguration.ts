@@ -90,6 +90,19 @@ export const accessibleViewVerbosityEnabled = new RawContextKey<boolean>('access
 export const accessibleViewCurrentProviderId = new RawContextKey<string>('accessibleViewCurrentProviderId', '');
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.ProcessExplorer, defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') { throw new TypeError(localize('processExplorer.verbosityInvalid', 'Process explorer accessibility verbosity must be a boolean.')); }
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('processExplorer.verbosityTitle', 'Process explorer accessibility help'); },
+		get description() { return localize('processExplorer.verbosityDescription', 'Announce how to open accessibility help when the process explorer receives focus.'); },
+	},
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.Scm,
 	defaultValue: true,
 	parse(value: unknown): boolean {

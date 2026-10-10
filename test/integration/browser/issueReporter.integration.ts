@@ -29,6 +29,9 @@ import { IEditorService } from '../../../src/ash/workbench/services/editor/commo
 import { IGitHubConnectionService } from '../../../src/ash/workbench/services/accounts/common/gitHubConnectionService.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { EditorPanes } from '../../../src/ash/workbench/browser/editor.js';
+import { IIssueFormService } from '../../../src/ash/workbench/contrib/issue/common/issue.js';
+import { IssueFormService } from '../../../src/ash/workbench/contrib/issue/browser/issueFormService.js';
+import { SyncDescriptor } from '../../../src/ash/platform/instantiation/common/descriptors.js';
 
 import '../../../src/ash/workbench/contrib/issue/browser/issue.contribution.js';
 
@@ -83,8 +86,8 @@ class ReporterTransport implements AppServerTransport {
 
 if (new URL(location.href).searchParams.get('locale') === 'zh-CN') { setNlsMessages('zh-CN', messages); }
 const resources = new DisposableStore();
-const services = resources.add(new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors())));
-services.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'issue-reporter', flushInterval: 0 })));
+const services = resources.add(new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors(), [IIssueFormService, new SyncDescriptor(IssueFormService)])));
+services.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'issue-reporter-integration', flushInterval: 0 })));
 const transport = new ReporterTransport();
 const client = new AppServerProtocolClient(transport);
 resources.add(toDisposable(() => client.dispose()));

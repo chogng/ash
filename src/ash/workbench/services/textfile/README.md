@@ -14,23 +14,23 @@ or forwarding exports. Rust filesystem transport remains in
 `platform/agentHost/browser/appServerFileSystemProvider.ts` and
 `platform/files/{common,browser}/fileApi.ts`.
 
-| Concern                                                               | Owner                                                     | Status                                                    |
-| --------------------------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------- |
-| Workspace resource reads and atomic writes                            | `IFileService`                                            | ✅                                                        |
-| Bootstrap-text versus file-system resolution                          | `ITextFileService.resolve`                                | ✅                                                        |
-| Text save transport and cancellation                                  | `ITextFileService.save`                                   | ✅                                                        |
-| URI-to-`TextModel` references                                         | `ITextModelService`                                       | ✅, editor-owned                                          |
-| Editor model references                                               | Code and Academic TextModel services                      | ✅, editor-domain-owned                                   |
-| Format-specific dirty state, snapshot saves and explicit reverts      | Code/Academic TextModel services                          | ✅, editor-domain-owned                                   |
-| Shared working-copy lifecycle and resource indexing                   | `IWorkingCopyService`                                     | ✅, Workbench-owned contract, editor-owned implementation |
-| CRLF/LF source-line-ending preservation                               | `ITextModelService`                                       | ✅, editor-owned                                          |
-| Workspace external-change invalidation and clean-model reload         | `IFileService` → `ITextFileService` → `ITextModelService` | ✅, background checks skip dirty text models              |
-| Save conflicts from rejected expected-revision writes                 | `ITextModelService`                                       | ✅, local edits remain open                               |
-| Atomic expected-revision writes                                       | `ITextModelService` → file service → App Server           | ✅                                                        |
-| Crash backup and workspace-scoped recovery                            | `IWorkingCopyBackupService` / `WorkingCopyBackupTracker`  | ✅                                                        |
-| UTF-8 validation, BOM handling, binary detection, and safe size limit | `ITextFileService.resolve`                                | ✅                                                        |
-| Binary preview fallback                                               | `workbench/contrib/binaryEditor`                          | ✅, bounded read-only hex/ascii view                      |
-| Non-UTF-8 decode and original-encoding writeback                      | future TextFile model layer                               | 尚未完成；当前明确拒绝且不会静默转码                      |
+| Concern                                                               | Owner                                                         | Status                                                    |
+| --------------------------------------------------------------------- | ------------------------------------------------------------- | --------------------------------------------------------- |
+| Workspace resource reads and atomic writes                            | `IFileService`                                                | ✅                                                        |
+| Bootstrap-text versus file-system resolution                          | `ITextFileService.resolve`                                    | ✅                                                        |
+| Text save transport and cancellation                                  | `ITextFileService.save`                                       | ✅                                                        |
+| URI-to-`TextModel` references                                         | `ITextModelService`                                           | ✅, editor-owned                                          |
+| Editor model references                                               | Code and Academic TextModel services                          | ✅, editor-domain-owned                                   |
+| Format-specific dirty state, snapshot saves and explicit reverts      | Code/Academic TextModel services                              | ✅, editor-domain-owned                                   |
+| Shared working-copy lifecycle and resource indexing                   | `IWorkingCopyService`                                         | ✅, Workbench-owned contract, editor-owned implementation |
+| CRLF/LF source-line-ending preservation                               | `ITextModelService`                                           | ✅, editor-owned                                          |
+| Workspace external-change invalidation and clean-model reload         | `IFileService` → `ITextFileService` → `ITextModelService`     | ✅, background checks skip dirty text models              |
+| Save conflicts from rejected expected-revision writes                 | `ITextModelService`                                           | ✅, local edits remain open                               |
+| Atomic expected-revision writes                                       | `ITextModelService` → file service → App Server               | ✅                                                        |
+| Crash backup and workspace-scoped recovery                            | `IWorkingCopyBackupService` / `WorkingCopyBackupTracker`      | ✅                                                        |
+| UTF-8 validation, BOM handling, binary detection, and safe size limit | `ITextFileService.resolve`                                    | ✅                                                        |
+| Binary preview fallback                                               | `workbench/contrib/files/browser/editors/binaryFileEditor.ts` | ✅, bounded read-only hex/ascii view                      |
+| Non-UTF-8 decode and original-encoding writeback                      | future TextFile model layer                                   | 尚未完成；当前明确拒绝且不会静默转码                      |
 
 `TextFileService.resolve` validates one `TextFileResolveRequest`, observes cancellation, returns `bootstrapText` without touching the file system, and otherwise checks `IFileService.stat` before one `readFileBytes` call. It rejects resources above the text safety limit, NUL/control-character-heavy samples, and invalid UTF-8; a UTF-8 BOM is separated from document text and the result records `encoding: "utf8bom"` or `"utf8"` plus whether content came from `Bootstrap` or `FileSystem`. `TextFileService.save` validates one `TextFileSaveRequest`, observes cancellation, and restores the requested UTF-8 BOM and delegates exactly one atomic expected-revision write to `IFileService.writeFile`. The resource adapter carries the resolved encoding to the shared model owner and back on save; it keeps no separate file-format cache. `ITextFileService.onDidChangeFiles` forwards coarse App Server filesystem invalidations without introducing a live document cache. A concrete editor owns its reload and conflict policy. For Code text files, watcher and window-focus checks read only clean models; reads that overlap edits leave the model and saved revision untouched. Read errors do not become save conflicts. Only a rejected expected-revision save marks the text model conflicted; save, revert, or undo back to its saved state clears that flag.
 
@@ -80,6 +80,10 @@ skip participants. Cancellation, stale query/resolve results and failures leave 
 cover action order, modes, language overrides, diagnostics, persistence, undo and cancellation.
 
 `test/common/textFileService.test.ts` covers bootstrap precedence, byte delegation, cancellation, UTF-8 BOM handling, binary/invalid UTF-8 rejection, size limits, and failure propagation.
+
+`filesConfiguration/test/common/filesConfigurationService.test.ts` exercises service
+container assembly, missing dependency registrations, read-only save rejection and
+successful-save events through the production implementation.
 `../../../platform/files/test/browser/fileService.test.ts` covers App Server
 invalidation projection.
 `../../contrib/files/test/browser/explorerView.test.ts` verifies that Explorer does not read file

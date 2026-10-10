@@ -5,6 +5,8 @@ import '../workbench/electron-browser/desktop.contribution.js';
 import '../workbench/contrib/browserView/electron-browser/browserView.contribution.js';
 import './sessions.common.main.js';
 import '../workbench/services/clipboard/electron-browser/clipboardService.js';
+import '../workbench/services/process/electron-browser/processService.js';
+import '../workbench/contrib/processExplorer/electron-browser/processExplorer.contribution.js';
 import './browser/parts/menubar.contribution.js';
 import './contrib/openAgentsWindow/electron-browser/openAgentsWindow.contribution.js';
 import { registerOpenAgentsWindowCommand } from './contrib/openAgentsWindow/electron-browser/openAgentsWindowCommand.js';

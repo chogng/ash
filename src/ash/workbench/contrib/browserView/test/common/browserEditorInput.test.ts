@@ -62,7 +62,46 @@ suite('Browser editor page model and restoration', () => {
 		input.dispose();
 		f.events.fire({ type: 'stateChanged', state: { ...f.info.state, title: 'After disposal' } });
 		assert.equal(f.closed, 0);
-		assert.equal(input.label, data.title);
+		assert.equal(input.label, 'Live page');
+	});
+
+	test('a failed snapshot can be retried without retaining the failed model listener', async () => {
+		using f = fixture();
+		const input = f.input(data);
+		let attempts = 0;
+		f.service.getState = async () => {
+			if (++attempts === 1) { throw new Error('Snapshot unavailable'); }
+			return f.info.state;
+		};
+		await assert.rejects(input.resolve(), /Snapshot unavailable/);
+		const model = await input.resolve();
+		let labels = 0;
+		using listener = input.onDidChangeLabel(() => labels++);
+		f.events.fire({ type: 'stateChanged', state: { ...model.state, title: 'Recovered page' } });
+		assert.deepEqual([attempts, labels, input.label], [2, 1, 'Recovered page']);
+	});
+
+	test('closing a page during snapshot discovery rejects resolution instead of reviving it', async () => {
+		using f = fixture();
+		const snapshot = promiseWithResolvers<IBrowserViewInfo['state']>();
+		const requested = promiseWithResolvers<void>();
+		f.service.getState = async () => { requested.resolve(); return snapshot.promise; };
+		const input = f.input(data);
+		const resolution = input.resolve();
+		await requested.promise;
+		f.events.fire({ type: 'closed', targetId: id });
+		snapshot.resolve(f.info.state);
+		await assert.rejects(resolution, /BrowserTargetUnavailable/);
+		assert.throws(() => input.resolve(), /BrowserTargetUnavailable/);
+	});
+
+	test('disposing a resolved input preserves its latest presentation for serialization', async () => {
+		using f = fixture();
+		const input = f.input(data);
+		const model = await input.resolve();
+		f.events.fire({ type: 'stateChanged', state: { ...model.state, url: 'https://example.test/latest', title: 'Latest title' } });
+		input.dispose();
+		assert.deepEqual(input.serialize(), { ...data, url: 'https://example.test/latest', title: 'Latest title' });
 	});
 
 	test('the blank browser tab uses the selected Chinese catalog', () => {

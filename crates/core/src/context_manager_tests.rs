@@ -120,6 +120,7 @@ fn snapshot(sequence: u64, turn_id: TurnId) -> ThreadSnapshot {
             turn_id,
             text: "hello".into(),
         }],
+        hook_runs: Vec::new(),
         context_checkpoints: Vec::new(),
         context_overflow_recoveries: BTreeMap::new(),
         item_sequences: BTreeMap::new(),

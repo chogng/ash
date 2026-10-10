@@ -4,32 +4,34 @@
 
 ## 快速理解
 
-产品保留成熟的 TypeScript 编辑器前端和桌面平台，把 Rust app-server 扩展成业务、执行与后台状态的统一后端。判断一个能力是否迁入 Rust，不看它今天用什么语言实现，而看它是否需要跨 renderer 存活、稳定持久状态、并发或安全边界，并且能否通过稳定协议与编辑器对象解耦。
+产品保留 TypeScript 编辑器前端和桌面平台，经 Rust app-server 接入共享核心机制与可选 Provider。先判断核心、扩展和客户端的职责，再决定后台执行与状态 scope；跨 renderer 存活、稳定持久状态或 Rust 实现不自动要求能力进入核心。目标 TS/JS 与独立 Rust 扩展的完整边界见 [扩展架构](../../extension-architecture/SKILL.md)。
 
 | 能力 | 最终 owner | 决策 |
 | --- | --- | --- |
 | Agent、Thread、Turn、Item、审批、权限和工具执行 | 对应 Rust 领域 crate | 迁入 Rust |
-| Project、Environment、账户会话、模型 catalog 与调用状态 | 对应 Rust 领域 crate | 迁入 Rust |
+| Project、Environment、模型调用契约与状态 | 对应共享 Rust 领域 crate | 接入共享后端 |
+| 服务商认证、账户会话、托管平台 API 与可选业务 | 选定的 TS/JS 或 Rust Provider | 扩展拥有状态，App/TUI 按需消费 |
+| SecretStore、消费者账号/scope 授权 | 共享秘密与权限服务 | 核心机制，不复制 Provider 会话 |
 | command/process/resource、Agent 发起的 Git/repository/worktree 操作 | 对应 Rust 领域 crate | 迁入 Rust |
-| 跨窗口搜索、索引、监听、远程连接和恢复 | 对应 Rust 领域 crate | 迁入 Rust |
+| 跨窗口搜索、索引、监听、远程连接和恢复 | 核心领域服务或可选 Provider，按真实职责决定 | 状态放后台，具体适配不默认进入核心 |
 | text model、working copy、dirty buffer、undo、diff | 前端 editor/file owner | 保留前端 |
 | Workbench UI、contribution、设置、主题、布局、快捷键和可访问性 | 前端 Workbench owner | 保留前端 |
-| 扩展运行时及其对象身份和兼容 contract | 前端 extension owner | 保留前端 |
+| 扩展 API 的编辑器对象、兼容桥与 UI 注册 | 前端 extension owner | 保留客户端，扩展在所选独立宿主或程序执行 |
 | Electron 与操作系统窗口能力 | Main | 保留并压薄 |
 | 通用文件服务、交互式 Terminal 执行层、SCM 执行层、语言服务 | 由完整 contract 与真实收益决定 | 条件迁移，不能默认并入 app-server |
 
-Rust 后端可以成为产品业务后端，但不能成为编辑器对象的远程镜像。`../app-server/` 提供连接、typed dispatch 与跨领域 orchestration；领域行为、存储和资源由对应 crate 隔离。前端领域 service 保持调用方 contract，adapter 只做机械转换。
+Rust 后端不能成为编辑器对象的远程镜像。`../app-server/` 提供连接、typed dispatch、授权路由与跨领域 orchestration；核心服务或扩展 Provider 唯一拥有其状态与资源，broker 不复制业务。前端领域 service 保持调用方 contract，adapter 只做机械转换。
 
 ### 迁移判定
 
-能力同时满足以下条件时默认迁入 Rust：
+先把可选服务商业务归到 Provider；再用以下条件判断能力是否适合后台接入，不能据此将 Provider 实现并入核心：
 
 - 状态需要跨 renderer、窗口关闭或后台任务长期存活；
 - contract 可以由稳定 ID、request、notification、server request 或显式 resource 完整表达；
 - 实现不依赖 text model、dirty buffer、DOM、Electron 对象或扩展进程中的对象身份；
 - Rust 能带来明确的持久化、并发、IO、安全、恢复或多产品复用收益。
 
-能力依赖高频同步 UI 状态、编辑器事务、扩展贡献或系统窗口对象时保留前端。一个能力同时命中两边且不能通过机械 adapter 分开时属于所有权冲突，立即停下来询问用户，不能建立双写状态或通用远程对象层。
+高频同步 UI 状态、编辑器事务、扩展贡献的客户端对象和系统窗口对象保留前端。扩展业务代码可独立执行，共享状态由 Provider 的明确 scope 持有。一个能力同时命中两边且无法确定唯一 owner 时，按主 skill 的冲突门禁处理；不能建立双写状态或通用远程对象层。
 
 ## 端到端结构
 
@@ -42,7 +44,8 @@ flowchart LR
     Port --> Relay[Main transparent relay]
     Relay --> Process[shared app-server process]
     Process --> Dispatch[typed dispatch]
-    Dispatch --> Domain[Rust domain]
+    Dispatch --> Domain[共享核心领域服务]
+    Dispatch --> Provider[有效的 TS/JS 或 Rust Provider]
 ```
 
 账户调用方依赖账户 service，文件调用方依赖文件 service，配置调用方依赖配置 service；它们不依赖 Sessions。每个领域 adapter 消费同一个 renderer protocol client，但只暴露该领域的前端契约。
@@ -65,7 +68,8 @@ flowchart LR
 | 线上协议与生成物 | `../app-server-protocol/` | runtime、renderer 类型 |
 | backend connection 与 typed dispatch | `../app-server/` | renderer/window 状态 |
 | 多 connection transport | `../app-server-transport/` | 领域业务规则 |
-| Rust 领域行为 | 对应领域 crate | IPC、前端类型、JSON-RPC envelope |
+| 共享 Rust 领域行为 | 对应核心领域 crate | IPC、前端类型、具体可选 Provider 实现 |
+| 可选业务、认证会话与后台任务 | 选定扩展 Provider | 核心最终授权、UI 或第二份会话副本 |
 
 前端依赖方向是 `base → platform → editor → workbench`。`src/platform/agentHost/` 的 protocol client、transport 和 starter 不得依赖具体领域或 `src/sessions/`；领域 adapter 依赖 protocol client contract。Sessions 位于 Workbench 之上，只能作为其中一个领域消费者。
 
@@ -131,7 +135,7 @@ build/protocol/generate.py
 
 `<domain>_resource.rs` 只用于跨 request 存活的 watch、process、stream 等资源。普通 request 不创建 resource manager。
 
-新增产品能力时优先在对应 Rust 领域 crate 建立业务 contract，再由 `../app-server-protocol/` 暴露协议，由 `../app-server/` 的 processor 机械调用。不能因为所有前端调用最终经过一个 app-server process，就把账户、Project、文件、执行、SCM、Terminal 或搜索实现堆进 app-server crate。
+新增能力先固定核心机制或扩展 Provider 的公开 contract，再由 `../app-server-protocol/` 暴露产品协议，由 `../app-server/` typed processor 授权并路由。可选业务实现留在独立 Provider，不链接进核心。不能因为调用经过同一个 app-server，就把账号、GitHub、文件、执行、SCM、Terminal 或搜索实现堆进 app-server crate。
 
 ## 旧 Host 退出边界
 
@@ -160,7 +164,7 @@ Main starter 在首次请求时启动一个进程。每个 renderer 通过带 no
 
 同一 renderer 的领域 adapter 复用同一个 protocol client，不能各自创建 connection、pending map、reader 或 reconnect loop。renderer 关闭时只关闭自己的 MessagePort、backend connection、pending、订阅和资源。应用关闭、明确 restart 或 host 致命失败才停止共享进程；进程停止会关闭全部 renderer connection。
 
-领域、Project、Workspace 和 renderer window 都不能启动新进程。只有账户或安全边界要求进程级隔离且协议无法在 connection 或 request 参数表达时，才报告冲突并询问用户是否增加 host process。
+领域、Project、Workspace 和 renderer window 都不能启动额外 app-server 进程。扩展由既定 supervisor 按有效包授权启动独立进程，其状态 scope 与关闭见扩展契约；它们不改变共享 app-server 的拓扑。只有额外 app-server 隔离无法在既定契约表达且用户未决定取舍时，才执行冲突门禁。
 
 ### 多 connection transport 门禁
 
@@ -172,7 +176,7 @@ Main starter 在首次请求时启动一个进程。每个 renderer 通过带 no
 - Main relay 能为每个 renderer 打开独立 connection，且不理解线上 method；
 - transport 有有界队列、背压、身份校验和确定关闭语义。
 
-单路 stdio 不能满足该拓扑。Main protocol multiplex、每窗口一进程或自动 transport 切换都不能成为正式路径。当前后端不满足这些条件时停止前端实现，先按 [前置能力补全](prerequisite-completion.md) 将 token-authenticated loopback WebSocket、机器可读启动记录和三平台测试补进 `../app-server-transport/` 与 `../app-server/`；后端不在授权范围或源码前提冲突时再询问用户。
+单路 stdio 不能满足该 app-server 拓扑。Main protocol multiplex、每窗口一个 app-server 进程或自动 transport 切换都不能成为正式路径；扩展进程可使用其公开契约规定的独立传输。当前后端不满足这些条件时停止前端实现，先按 [前置能力补全](prerequisite-completion.md) 将 token-authenticated loopback WebSocket、机器可读启动记录和三平台测试补进 `../app-server-transport/` 与 `../app-server/`；后端不在授权范围或源码前提冲突时再询问用户。
 
 ## renderer protocol client
 

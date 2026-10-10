@@ -9,12 +9,15 @@ import { IElevatedFileService } from './services/files/common/elevatedFileServic
  * Electron belong in `workbench.common.main.ts`.
  */
 import "./workbench.common.main.js";
+import './services/tunnel/browser/tunnelService.js';
 import './services/workspaces/browser/workspacesService.js';
 import { BrowserHostService } from './services/host/browser/browserHostService.js';
 import { IHostService } from './services/host/browser/host.js';
 import { InstantiationType, registerSingleton } from '../platform/instantiation/common/extensions.js';
 import { ILanguagePackStore } from '../platform/languagePacks/common/languagePackStore.js';
 import { BrowserLanguagePackStore } from '../platform/languagePacks/browser/languagePackStore.js';
+import { IIssueFormService } from './contrib/issue/common/issue.js';
+import { IssueFormService } from './contrib/issue/browser/issueFormService.js';
 import { IRemoteAuthorityResolverService } from '../platform/remote/common/remoteAuthorityResolver.js';
 import { RemoteAuthorityResolverService } from '../platform/remote/browser/remoteAuthorityResolverService.js';
 
@@ -23,6 +26,7 @@ import { TunnelService } from './services/tunnel/browser/tunnelService.js';
 
 registerSingleton(IHostService, BrowserHostService, InstantiationType.Delayed);
 registerSingleton(ILanguagePackStore, BrowserLanguagePackStore, InstantiationType.Delayed);
+registerSingleton(IIssueFormService, IssueFormService, InstantiationType.Delayed);
 
 registerSingleton(IElevatedFileService, BrowserElevatedFileService, InstantiationType.Delayed);
 

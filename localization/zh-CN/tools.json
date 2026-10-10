@@ -1,7 +1,18 @@
 {
   "ash": {
+    "tasks.matcherRegistrationDisposed": "问题匹配器注册已释放",
+    "tasks.matcherContributionsTooLarge": "问题匹配器贡献内容过大",
+    "tasks.matcherContributionArray": "问题匹配器贡献必须是最多含 256 项的数组",
+    "tasks.matcherContributionName": "问题匹配器贡献名称无效",
+    "tasks.matcherContributionDuplicate": "问题匹配器贡献“{0}”已注册",
+    "tasks.matcherContributionLimit": "问题匹配器贡献数量过多",
+    "tasks.matcherBaseCycle": "问题匹配器基础引用“{0}”存在循环",
+    "extensions.problemContributionArray": "{0} 必须是最多含 256 项的数组",
+    "extensions.problemContributionName": "{0} 名称无效",
     "debug.toggleBreakpoint": "切换断点",
     "debug.start": "启动调试",
+    "debug.selectAndStart": "选择并启动调试",
+    "debug.selectConfiguration": "选择调试配置",
     "debug.configure": "打开 launch.json",
     "debug.run": "运行",
     "debug.createLaunch": "创建 launch.json 文件",
@@ -155,6 +166,15 @@
     "debug.disassemblyVerbosityTitle": "反汇编无障碍帮助",
     "debug.disassemblyVerbosityDescription": "反汇编获得焦点时，播报如何打开无障碍帮助。",
     "debug.disassemblyHelp": "反汇编\n使用上、下方向键选择指令。按 F9 切换指令断点。按 Enter 打开该指令的源代码。使用“前面的指令”和“后面的指令”翻页。输入地址并选择“转到地址”，或选择“当前指令”回到暂停的堆栈帧。\n此编辑器处于活动状态且适配器支持逐指令执行时，逐过程（<keybinding:workbench.action.debug.stepOver>）、单步进入（<keybinding:workbench.action.debug.stepInto>）和单步跳出（<keybinding:workbench.action.debug.stepOut>）会按指令执行。\n打开无障碍视图可朗读已加载的指令。按 Escape 关闭此对话框并返回编辑器。",
-    "debug.disassemblyStepOut": "逐指令跳出"
+    "debug.disassemblyStepOut": "逐指令跳出",
+    "configurationResolver.invalidConfiguration": "无法解析配置“{0}”：其值必须是字符串、数字或布尔值。",
+    "extensionHost.activationFailed": "扩展“{0}”激活失败：{1}",
+    "debug.adapterDescriptorUnavailable": "调试适配器工厂未提供适配器。",
+    "configurationResolver.missingExtension": "无法解析扩展“{0}”：其安装目录不可用。",
+    "configurationResolver.missingHome": "执行主机的用户主目录不可用。",
+    "configurationResolver.missingPathPlatform": "执行主机的路径平台不可用。",
+    "configurationResolver.missingEditor": "无法解析“{0}”：请在活动编辑器中打开文件。",
+    "configurationResolver.missingSelection": "无法解析“{0}”：请在活动文本编辑器中选择文本或位置。",
+    "configurationResolver.missingFileFolder": "无法解析“{0}”：活动文件不属于已打开的工作区文件夹。"
   }
 }

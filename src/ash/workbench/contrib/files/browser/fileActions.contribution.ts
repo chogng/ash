@@ -1,4 +1,9 @@
-import { localize2 } from '../../../../nls.js';
+import { DisposableStore } from '../../../../base/common/lifecycle.js';
+import { basename, extUri } from '../../../../base/common/resources.js';
+import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
+import type { IResourceEditorInput } from '../../../common/editor.js';
+import { createBinaryDiffEditorInput } from '../../../common/editor/diffEditorInput.js';
+import { localize, localize2 } from '../../../../nls.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Schemas } from '../../../../base/common/network.js';
@@ -11,7 +16,7 @@ import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import { EditorsVisibleContext, MultipleEditorsSelectedInGroupContext, ResourceSchemeContext, WorkspaceFolderCountContext } from '../../../common/contextkeys.js';
 import { IUntitledTextEditorService } from '../../../services/untitled/common/untitledTextEditorService.js';
 import { UntitledTextEditorInput } from '../../../services/untitled/common/untitledTextEditorInput.js';
-import { ASH_REMOTE_SCHEME } from '../../../../platform/remote/common/remote.js';
+import { ASH_REMOTE_SCHEME, isRemoteResource } from '../../../../platform/remote/common/remote.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { IsWebContext } from '../../../../platform/contextkey/common/contextkeys.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
@@ -23,6 +28,49 @@ import { cancelExplorerCut, CANCEL_CUT_COMMAND_ID, copyExplorerItems, COPY_FILE_
 import { FileDownload } from './fileImportExport.js';
 import { FileEditorInput } from './editors/fileEditorInput.js';
 import { ExplorerFocusedContext } from './files.js';
+
+interface BinaryComparisonItem extends IQuickPickItem {
+	readonly input: IResourceEditorInput;
+}
+
+registerAction2(class CompareBinaryEditorsAction extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.action.compareActiveFileAsBinary',
+			title: localize2({ bundle: 'ash.workbench', key: 'command.CompareBinaryEditorsAction' }, 'Compare Active File as Binary With...'),
+			f1: true,
+		});
+	}
+
+	public override run(accessor: ServicesAccessor): void {
+		const editors = accessor.get(IEditorPart);
+		const modified = editors.activeInput;
+		if (!modified || !isFileInput(modified)) { return; }
+		const candidates = editors.editorsMru
+			.map(editor => editor.input)
+			.filter(input => isFileInput(input) && !extUri.isEqual(input.resource, modified.resource));
+		if (candidates.length === 0) { return; }
+		const picker = accessor.get(IQuickInputService).createQuickPick<BinaryComparisonItem>();
+		const disposables = new DisposableStore();
+		disposables.add(picker);
+		picker.placeholder = localize('files.binaryComparePlaceholder', 'Select the original file to compare');
+		picker.items = candidates.map(input => ({
+			input,
+			label: input.label ?? (basename(input.resource) || input.resource.toString()),
+			detail: input.resource.toString(),
+		}));
+		disposables.add(picker.onDidAccept(item => {
+			picker.hide();
+			void editors.openEditor(createBinaryDiffEditorInput(item.input, modified), { pinned: true });
+		}));
+		disposables.add(picker.onDidHide(() => disposables.dispose()));
+		picker.show();
+	}
+});
+
+function isFileInput(input: IResourceEditorInput): boolean {
+	return input.resource.scheme === Schemas.file || isRemoteResource(input.resource);
+}
 
 registerAction2(class OpenFileAction extends Action2 {
 	constructor() {

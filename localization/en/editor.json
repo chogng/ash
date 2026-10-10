@@ -1,5 +1,7 @@
 {
   "ash": {
+    "accessibility.editorSaveRecovery": "Save failures offer recovery actions in a dialog. Use Tab to choose Overwrite, Retry with administrator permission, Save As, or Revert when available, and Enter to run the selected action. Escape cancels and preserves your unsaved changes. Overwrite makes a read-only file writable; Revert discards unsaved changes.",
+    "actions.pasteSelectionClipboard": "Paste Selection Clipboard",
     "editor.openLink": "Open Link",
     "settings.sessions.layout.group.label": "Sessions layout",
     "settings.sessions.layout.group.description": "Configure the Sessions window layout.",
@@ -32,9 +34,7 @@
     "skills.selectFile": "Select a skill file to open",
     "skills.manageEnablement": "Manage skill enablement…",
     "skills.discoveryFailed": "Unable to load skill files. Try refreshing the catalog.",
-    "skills.openFailed": "Unable to open skill {0}. Refresh the catalog and try again.",
-    "accessibility.editorSaveRecovery": "Save failures offer recovery actions in a dialog. Use Tab to choose Overwrite, Retry with administrator permission, Save As, or Revert when available, and Enter to run the selected action. Escape cancels and preserves your unsaved changes. Overwrite makes a read-only file writable; Revert discards unsaved changes.",
-    "actions.pasteSelectionClipboard": "Paste Selection Clipboard"
+    "skills.openFailed": "Unable to open skill {0}. Refresh the catalog and try again."
   },
   "ash.editor.clipboard": {
     "selection.title": "Selection clipboard",

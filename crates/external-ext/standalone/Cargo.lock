@@ -28,26 +28,6 @@ name = "ash-async-utils"
 version = "0.1.0"
 
 [[package]]
-name = "ash-external-ext-standalone-check"
-version = "0.1.0"
-dependencies = [
- "ash-async-utils",
- "ash-external-ext-protocol",
- "ash-sandboxing",
- "serde_json",
- "thiserror 2.0.19",
-]
-
-[[package]]
-name = "ash-external-ext-protocol"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "thiserror 2.0.19",
-]
-
-[[package]]
 name = "ash-environment"
 version = "0.1.0"
 dependencies = [
@@ -63,6 +43,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "ash-external-ext-protocol"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+]
+
+[[package]]
+name = "ash-external-ext-standalone-check"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-external-ext-protocol",
+ "ash-sandboxing",
+ "serde_json",
+ "thiserror 2.0.19",
+]
+
+[[package]]
 name = "ash-file-access"
 version = "0.1.0"
 dependencies = [
@@ -72,6 +72,14 @@ dependencies = [
  "serde",
  "sha2",
  "ts-rs",
+]
+
+[[package]]
+name = "ash-file-identity"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -90,8 +98,10 @@ name = "ash-sandboxing"
 version = "0.1.0"
 dependencies = [
  "ash-file-access",
+ "ash-file-identity",
  "ash-utils-pty",
  "globset",
+ "serde",
  "winapi-util",
 ]
 

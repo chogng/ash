@@ -27,3 +27,15 @@ test('edited search documents reject invalid headers and read edited source posi
 	assert.deepEqual(searchEditorLocation(text, 2), { resource: URI.file('/workspace/main.ts'), range: new Range(8, 2, 9, 4) });
 	assert.equal(searchEditorLocation(text, 3), undefined);
 });
+
+
+test('search documents retain untitled and outside-workspace URI identity and UTF-16 positions', () => {
+	const query = { text: 'needle', patternKind: 'literal' as const, caseSensitivity: 'sensitive' as const, includePatterns: [], excludePatterns: [], maxResults: 100, freshness: 'current' as const };
+	const results = new SearchResultImpl([]);
+	for (const resource of [URI.parse('untitled:/Untitled-1'), URI.file('/outside/main.ts')]) {
+		results.addFileMatch({ resource, results: [{ previewText: '中文😀 needle', rangeLocations: [{ source: { startLineNumber: 3, startColumn: 5, endLineNumber: 3, endColumn: 11 }, preview: { startLineNumber: 0, startColumn: 5, endLineNumber: 0, endColumn: 11 } }] }] });
+	}
+	const text = serializeSearchResultForEditor(query, results);
+	assert.deepEqual(searchEditorLocation(text, 4), { resource: URI.parse('untitled:/Untitled-1'), range: new Range(4, 6, 4, 12) });
+	assert.deepEqual(searchEditorLocation(text, 7), { resource: URI.file('/outside/main.ts'), range: new Range(4, 6, 4, 12) });
+});

@@ -832,6 +832,7 @@ function threadProjection(sessionId: string, threadId: string): SessionThreadPro
 			advisor: { type: "default" },
 			agentId: "agent-1",
 			origin: { type: "root" },
+			hookRuns: [],
 			referenceCost: { knownAmounts: [], complete: true },
 			sessionId,
 			threadId,

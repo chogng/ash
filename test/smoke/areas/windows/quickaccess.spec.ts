@@ -48,7 +48,7 @@ test('Quick Access cancellation restores focus without running the filtered comm
 	const quickaccess = workbench.quickaccess;
 	const search = workbench.page.getByRole('button', { name: 'Search commands', exact: true });
 	await search.focus();
-	await quickaccess.open('workbench.action.files.newUntitledFile');
+	await quickaccess.open('>workbench.action.files.newUntitledFile');
 	await expect(quickaccess.items).toHaveCount(1);
 	await quickaccess.close();
 

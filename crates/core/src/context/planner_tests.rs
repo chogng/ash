@@ -713,6 +713,7 @@ fn snapshot(current_turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
             })
             .collect(),
         items,
+        hook_runs: Vec::new(),
         context_checkpoints: Vec::new(),
         context_overflow_recoveries: BTreeMap::new(),
         item_sequences,

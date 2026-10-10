@@ -23,7 +23,6 @@
 `options.expectedRevision` 对原始字节执行版本校验；校验和发布由文件系统在同一目录锁内完成，
 冲突返回 `FileSystemRevisionConflict`，不更改原文件。省略 `options` 的旧调用仍采用粘贴规则：
 只允许写入不存在或已有空文件的目标。返回 metadata 和原始字节的 revision，文本保存也可使用该契约。
-
 `options.unlock: true` 是产品宿主或已认证 Web 会话的显式普通覆盖操作，要求已有目标及 `expectedRevision`，
 拒绝 `create` 模式，不接受普通 RPC 或 Agent 连接调用。它仍持有 `WriteFiles` 授权，只请求当前用户的文件权限。
 
@@ -38,14 +37,6 @@ OS 权限拒绝为 `FileSystemPermissionDenied`，文件只读为 `FileSystemWri
 `FileSystemElevationDenied`、`FileSystemElevationUnavailable`、`FileSystemElevationTimedOut`、
 `FileSystemElevationFailed` 和 `FileSystemWriteOutcomeUnknown`。版本冲突仍使用 `FileSystemRevisionConflict`。
 
-`github/session/issues` 列出会话根 Thread 保存的 Issue 身份；
-`github/session/issue/attach` 与 `github/session/issue/detach` 接收 `sessionId`、
-`reference.repository`（host、owner、name）和正整数 `reference.number`。
-主机与仓库名规范化后按身份去重，重复添加和移除幂等，实际变化通过 `session/changed`
-通知订阅窗口。不存在的会话拒绝写入；服务不存标题、状态或账号凭据。客户端添加前通过
-`github/issue/read` 验证访问，实时状态仍按当前账号读取。移除只取消关联，不向 GitHub
-提交关闭或删除操作。关联随根 Thread 删除、恢复和历史迁移；不依赖工作区目录。
-
 `initialize.serverInfo.operatingSystem` 返回当前 App Server 进程的路径平台（`windows`、`mac` 或
 `linux`）。未知平台省略该字段。它不表示客户端平台或另行选择的执行环境。Renderer 协议客户端
 随连接初始化更新该事实，断线时清除；文件名校验从当前连接读取，不单独缓存。SSH 资源仍遵循
@@ -59,14 +50,22 @@ Path Service 使用目标 OS 解释绝对路径与 `~` 输入，路径标签和�
 Electron 单独提供本机 OS home；Web 文件句柄不推断主机目录，SSH 资源保持已有 POSIX 契约。
 Path Service 的资源路径 provider 注册仍没有生产调用方，未扩展该契约。
 
+`github/session/issues` 列出会话根 Thread 保存的 Issue 身份；
+`github/session/issue/attach` 与 `github/session/issue/detach` 接收 `sessionId`、
+`reference.repository`（host、owner、name）和正整数 `reference.number`。
+主机与仓库名规范化后按身份去重，重复添加和移除幂等，实际变化通过 `session/changed`
+通知订阅窗口。不存在的会话拒绝写入；服务不存标题、状态或账号凭据。客户端添加前通过
+`github/issue/read` 验证访问，实时状态仍按当前账号读取。移除只取消关联，不向 GitHub
+提交关闭或删除操作。关联随根 Thread 删除、恢复和历史迁移；不依赖工作区目录。
+
 ## 编译与导出
 
 `file/search/fuzzy` 与 `file/search/glob` 都要求显式选择已授权的 Workspace 或 Session 目录，
 在查询期间持有 `SearchFiles` 授权，并使用当前连接的 `operationId` 取消。
 fuzzy 返回 `matches: [{ path, score }]` 与截断前的 `totalMatches`，成功结果注明实际 `freshness`；
 `path` 相对所选目录，`score` 是 Nucleo 评分，客户端按评分合并已授权目录、按 URI 去重后应用总上限。
-默认复用配置的 tgrep 目录注册，在独立于内容就绪的文件名视图中完成全局评分，只传输有界结果；
-引擎错误直接返回，不发布部分排序。关闭索引时读取当前路径。显式 glob 保持当前磁盘与
+默认复用配置的 tgrep 目录注册，在独立于内容就绪的路径分页上完成全局评分；游标失效时
+返回错误，不发布部分排序。关闭索引时读取当前路径。显式 glob 保持当前磁盘与
 ignore override 语义。对应的 `/cancel` 响应只确认取消请求，原查询仍返回终态。
 
 - 队列、通话、协作和任务交付使用各自的 `*-contract` crate；服务端启用执行 feature 时也不改变协议依赖。协议构建不编译这些领域的执行器、SQLite、工具执行、剪贴板或图片处理；默认与服务端 feature 合并后的依赖边界由 `tests/dependency_boundary.rs` 验证。
@@ -286,15 +285,15 @@ Open VSX JS 扩展在等待时以 `dormant` 返回，无 incarnation、输出或
 初始化契约 `symphony.version = 1` 表示当前 profile 提供内置调度域。
 所有窗口复用既有连接；不创建 Elixir 服务或第二个 Agent App Server。
 
-| 方法 | 行为 |
-| --- | --- |
-| `symphony/read` | 工作流与对话监控快照；累计用量和时长直接读取 Core |
-| `symphony/configure` | 导入绝对路径的 `WORKFLOW.md` 并启用派发 |
-| `symphony/submit` | 创建手动任务；返回对话身份 |
-| `symphony/control` | 保存运行、暂停或完成意图；控制执行使用 Core 的持久命令身份 |
-| `symphony/enable` | 启停工作流后续派发；不停止当前对话 |
-| `symphony/messages` | 当前对话最近的用户与助手消息 |
-| `symphony/changed` | 无载荷的失效通知；客户端先订阅，再重新读取快照 |
+| 方法                 | 行为                                                       |
+| -------------------- | ---------------------------------------------------------- |
+| `symphony/read`      | 工作流与对话监控快照；累计用量和时长直接读取 Core          |
+| `symphony/configure` | 导入绝对路径的 `WORKFLOW.md` 并启用派发                    |
+| `symphony/submit`    | 创建手动任务；返回对话身份                                 |
+| `symphony/control`   | 保存运行、暂停或完成意图；控制执行使用 Core 的持久命令身份 |
+| `symphony/enable`    | 启停工作流后续派发；不停止当前对话                         |
+| `symphony/messages`  | 当前对话最近的用户与助手消息                               |
+| `symphony/changed`   | 无载荷的失效通知；客户端先订阅，再重新读取快照             |
 
 变更方法携带 `commandId`，重复请求核对完整输入指纹。
 任务的 Thread 身份跨暂停、恢复与重试保留；调度域不另存 Token 或消息。

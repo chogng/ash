@@ -76,7 +76,7 @@ export class SearchSettingsContent extends Disposable implements SettingsContent
 		copy.append(this.titleDomNode, this.descriptionDomNode, this.statusDomNode);
 		const controls = h(document, 'div');
 		controls.className = 'ash-search-settings-controls';
-		this.engine = this._register(new SelectBox(controls, { options: [{ value: 'tgrep', label: localize({ bundle: 'ash.settings', key: 'search.default' }, 'tgrep (default)') }, { value: 'ripgrep', label: 'ripgrep' }], ariaLabel: localize({ bundle: 'ash.settings', key: 'search.engine' }, 'Search engine'), presentation: 'field', contextViewProvider: contextView }));
+		this.engine = this._register(new SelectBox(controls, { options: [{ value: 'tgrep', label: localize({ bundle: 'ash.settings', key: 'search.default' }, 'tgrep (default)') }, { value: 'ripgrep', label: 'ripgrep' }], ariaLabel: localize({ bundle: 'ash.settings', key: 'search.engine' }, 'Indexed search engine'), presentation: 'field', contextViewProvider: contextView }));
 		this.refreshButton = this._register(new Button(controls, { label: localize({ bundle: 'ash.settings', key: 'search.refresh' }, 'Refresh'), presentation: 'secondary' }));
 		this.rowDomNode.append(copy, controls);
 		this._register(this.engine.onDidSelect(({ value }) => { void this.configure(value as ContentSearchEngine); }));
@@ -106,7 +106,7 @@ export class SearchSettingsContent extends Disposable implements SettingsContent
 				const focused = document.activeElement;
 				if (!this.visible || !isHTMLElement(focused) || !this.rowDomNode.contains(focused)) { return undefined; }
 				return new AccessibleContentProvider(AccessibleViewProviderId.ContentSearchSettings, { type: AccessibleViewType.Help },
-					() => localize({ bundle: 'ash.settings', key: 'search.help' }, 'Content search settings\nUse Tab to reach Search engine and Refresh. Open Search engine with Enter or Space, use the arrow keys to choose tgrep or ripgrep, and press Enter to save. tgrep is the default. The selected engine is shared by Agent, editor and Codebase content searches. Refresh reads the backend configuration. If saving fails, refresh before trying again. Press Escape to close help and return to the control.'),
+					() => localize({ bundle: 'ash.settings', key: 'search.help' }, 'Content search settings\nUse Tab to reach Indexed search engine and Refresh. Open Indexed search engine with Enter or Space, use the arrow keys to choose tgrep or ripgrep, and press Enter to save. tgrep is the default for Agent and Codebase indexed searches. Choosing ripgrep disables indexes and scans current files. Editor Current searches always use ripgrep. This preference also controls indexed file name searches. Refresh reads the backend configuration. If saving fails, refresh before trying again. Press Escape to close help and return to the control.'),
 					() => focused.focus(), AccessibilityVerbositySettingId.ContentSearchSettings);
 			},
 		}));
@@ -119,8 +119,8 @@ export class SearchSettingsContent extends Disposable implements SettingsContent
 			element: { kind: 'group', id: 'general.content-search', title: localize({ bundle: 'ash.settings', key: 'search.group' }, 'Content search'), description: '' },
 			children: [{
 				element: {
-					kind: 'item', id: 'grep.backend', title: localize({ bundle: 'ash.settings', key: 'search.engine' }, 'Search engine'),
-					description: localize({ bundle: 'ash.settings', key: 'search.description' }, 'Choose the content search engine shared by Agent, editor and Codebase. tgrep is the default; select ripgrep to use rg.'),
+					kind: 'item', id: 'grep.backend', title: localize({ bundle: 'ash.settings', key: 'search.engine' }, 'Indexed search engine'),
+					description: localize({ bundle: 'ash.settings', key: 'search.description' }, 'tgrep accelerates Agent and Codebase indexed searches. Choosing ripgrep disables indexes and scans current files. Editor Current searches always use ripgrep (rg). This preference also controls indexed file name searches.'),
 					keywords: ['tgrep', 'ripgrep', 'rg', 'grep', 'backend', 'content search'], value: { domNode: this.rowDomNode },
 				}
 			}],

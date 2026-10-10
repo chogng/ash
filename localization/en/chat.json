@@ -1,5 +1,8 @@
 {
   "ash": {
+    "agentTrace.incompletePending": "Diagnostic evidence incomplete · {0} records omitted · {1} records pending.",
+    "agentTrace.attemptAccounted": "Model attempt linked to accounting · {0}",
+    "agentTrace.accountsFor": "Committed model accounting",
     "agentTrace.graphScope": "{0} relationship entries excluded: their saved events or causal evidence are outside this capture.",
     "agentTrace.invalidLocation": "Invalid execution trace location. A Turn or event requires its Thread ID.",
     "agentTrace.locationFound": "Located {0}.",

@@ -9,6 +9,8 @@ import type { BrowserView } from '../../browserView/electron-main/browserView.js
 import { IPlaywrightService } from '../../browserView/common/playwrightService.js';
 import { randomUUID } from 'node:crypto';
 import { addAbortListener } from 'node:events';
+import type { IServerChannel } from '../../../base/parts/ipc/common/ipc.js';
+import type { Event } from '../../../base/common/event.js';
 
 /** Owns cancellable browser operations requested by one renderer. */
 export class AppServerBrowserHost extends Disposable {
@@ -104,7 +106,25 @@ export class AppServerBrowserHost extends Disposable {
 	}
 	protected override disposeCore(): void { this.reset(); super.disposeCore(); }
 
-	public routes(): readonly IpcRoute<unknown, unknown>[] {
+	/** The IPC server selects this host using the authenticated window context. */
+	public getChannel(): IServerChannel<string> {
+		const routes = new Map(this.routes().map(route => [route.channel, route]));
+		return {
+			call: async <T>(_context: string, command: string, arg: unknown): Promise<T> => {
+				this.assertNotDisposed();
+				const route = routes.get(command);
+				if (!route) { throw new Error('Unknown browser host command: ' + command); }
+				return await route.invoke(route.validate(arg)) as T;
+			},
+			listen: <T>(_context: string, event: string) => {
+				this.assertNotDisposed();
+				if (event !== 'onDidEvent') { throw new Error('Unknown browser host event: ' + event); }
+				return this.views.onDidEvent as Event<T>;
+			},
+		};
+	}
+
+	private routes(): readonly IpcRoute<unknown, unknown>[] {
 		const operation = (value: unknown): { id: string; params: unknown; } => {
 			if (!isRecord(value) || typeof value.id !== 'string' || !/^[a-f0-9-]{36}$/.test(value.id)) { throw new Error('Invalid browser operation'); }
 			return { id: value.id, params: value.params };
@@ -121,7 +141,17 @@ export class AppServerBrowserHost extends Disposable {
 		};
 		return [
 			{
-				channel: 'ash:browser-host:network', validate: value => {
+				channel: 'disposeSession', validate: value => {
+					if (!isRecord(value) || Object.keys(value).length !== 1 || typeof value.threadId !== 'string' || !value.threadId || value.threadId.length > 512) { throw new TypeError('Invalid browser session'); }
+					return value.threadId;
+				}, invoke: async value => {
+					this.assertNotDisposed();
+					const sessionId = value as string;
+					if (this.sessions.delete(sessionId)) { await this.playwright.disposeSession(sessionId); }
+				},
+			},
+			{
+				channel: 'network', validate: value => {
 					if (!isRecord(value) || Object.keys(value).length !== 3 || typeof value.targetId !== 'string' || typeof value.requestId !== 'string' || typeof value.allowed !== 'boolean') { throw new TypeError('Invalid browser network response'); }
 					return value;
 				}, invoke: value => {
@@ -131,18 +161,18 @@ export class AppServerBrowserHost extends Disposable {
 				},
 			},
 			{
-				channel: 'ash:browser-host:sharing', validate: operation, invoke: value => run(value, async params => {
+				channel: 'sharing', validate: operation, invoke: value => run(value, async params => {
 					const sharing = decodeAppServerServerRequestParams('browser/sharing/set', params);
 					// Revoking a closed page still acknowledges release of the backend's grant record.
 					if (sharing.threadIds.length || this.views.tryGetBrowserView(sharing.targetId)) await this.views.setSharing(sharing.targetId, sharing.threadIds);
 					return null;
 				})
 			},
-			{ channel: 'ash:browser-host:create', validate: operation, invoke: value => run(value, (params, context) => this.create(decodeAppServerServerRequestParams('browser/create', params), context)) },
-			{ channel: 'ash:browser-host:observe', validate: operation, invoke: value => run(value, (params, context) => this.observe(decodeAppServerServerRequestParams('browser/observe', params), context)) },
-			{ channel: 'ash:browser-host:perform', validate: operation, invoke: value => run(value, (params, context) => this.perform(decodeAppServerServerRequestParams('browser/perform', params), context)) },
-			{ channel: 'ash:browser-host:close', validate: operation, invoke: value => run(value, params => this.close(decodeAppServerServerRequestParams('browser/close', params))) },
-			{ channel: 'ash:browser-host:cancel', validate: operation, invoke: value => { this.operations.get(operation(value).id)?.abort(); } },
+			{ channel: 'create', validate: operation, invoke: value => run(value, (params, context) => this.create(decodeAppServerServerRequestParams('browser/create', params), context)) },
+			{ channel: 'observe', validate: operation, invoke: value => run(value, (params, context) => this.observe(decodeAppServerServerRequestParams('browser/observe', params), context)) },
+			{ channel: 'perform', validate: operation, invoke: value => run(value, (params, context) => this.perform(decodeAppServerServerRequestParams('browser/perform', params), context)) },
+			{ channel: 'close', validate: operation, invoke: value => run(value, params => this.close(decodeAppServerServerRequestParams('browser/close', params))) },
+			{ channel: 'cancel', validate: operation, invoke: value => { this.operations.get(operation(value).id)?.abort(); } },
 		];
 	}
 }

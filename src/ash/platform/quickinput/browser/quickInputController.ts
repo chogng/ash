@@ -68,7 +68,9 @@ export class QuickInputController extends Disposable {
 
 	public input(options: IInputOptions, token: CancellationToken = CancellationToken.None): Promise<string | undefined> {
 		this.assertNotDisposed();
-		if (token.isCancellationRequested) return Promise.resolve(undefined);
+		if (token.isCancellationRequested) {
+			return Promise.resolve(undefined);
+		}
 		let cancellation: IDisposable | undefined;
 		const input = new InputQuickInput(this.host, options, {
 			onShow: candidate => this.show(candidate),
@@ -82,11 +84,13 @@ export class QuickInputController extends Disposable {
 		this.quickInputs.add(input);
 		return new Promise((resolve, reject) => {
 			let settled = false;
+			// Cancellation belongs to this prompt, so a late token cannot hide a newer picker.
 			const finish = (value: string | undefined): void => {
 				if (settled) {
 					return;
 				}
 				settled = true;
+				cancellation?.dispose();
 				input.dispose();
 				resolve(value);
 			};
@@ -95,6 +99,7 @@ export class QuickInputController extends Disposable {
 					return;
 				}
 				settled = true;
+				cancellation?.dispose();
 				input.dispose();
 				reject(error);
 			};

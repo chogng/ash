@@ -98,7 +98,7 @@ flowchart TD
 | 系统           | 回答的核心问题                       | 应当拥有                                       | 重点审计边界                                       | 权威文档                                                                                                                               |
 | -------------- | ------------------------------------ | ---------------------------------------------- | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | 模型系统       | 最终使用哪个供应商、模型和调用配置？ | 模型目录、能力、配置解析和运行时选择           | 目录、配置、凭据、供应商适配、传输和重试是否分层   | [`models-manager.md`](models-manager.md)、[`model-provider.md`](model-provider.md)、[`model-provider-info.md`](model-provider-info.md) |
-| 工具系统       | Agent 能看到和调用哪些能力？         | 工具定义、发现、绑定、参数验证、调用和结果契约 | 工具定义、调度、授权、执行与结果持久化是否互相越界 | [`tools.md`](tools.md)                                                                                                                 |
+| 工具系统       | Agent 能看到和调用哪些能力？         | 工具定义、发现、绑定、参数验证、调用和结果契约 | 工具定义、调度、授权、执行与结果持久化是否互相越界 | [工具系统](tools/tools.md)                                                                                                             |
 | 权限系统       | 某个具体动作能否执行？               | 授权规则、批准范围、批准有效期与最终授权决定   | 权限、Guardian、工具调度和沙箱是否都在做最终决定   | [`permissions.md`](permissions.md)、[`guardian.md`](guardian.md)                                                                       |
 | 沙箱系统       | 已获准动作实际能触及什么？           | 文件、网络、进程能力和平台强制执行             | 策略选择、用户批准与操作系统强制执行是否分开       | [`sandboxing.md`](sandboxing.md)                                                                                                       |
 | 配置系统       | 当前作用域下哪个值最终生效？         | 配置来源、优先级、作用域、合并和不可变领域快照 | 通用合并与各领域验证是否有清楚交接                 | [`config.md`](config.md)                                                                                                               |
@@ -106,9 +106,14 @@ flowchart TD
 
 ### 3.3 扩展、接口与产品入口
 
+外部扩展采用 `external-ext` 接入与监管、`external-js-ext` JS 执行和独立 `external-ext-protocol` 通信契约；作者 SDK 位于根 `sdk/typescript` 与 `sdk/rust`，后者包名为 `ash-external-ext-sdk`。Plugin bundle 只是可选来源，扩展运行层不直接依赖 `core-plugins`；当前包安装 owner 保持原职责。名称与目录已迁移；运行时兼容改造尚未实施，详细分工见[共享接入与语言适配](editor-extensions.md#共享接入与语言适配的-crate-边界)。
+
+目标扩展有两类：TS/JS 包在 Desktop 复用 Electron，在共享后端由独立 Rust/V8 宿主执行；Rust 能力由独立 Rust 程序执行。共享后端保留 Rust + V8，Code Mode 服务 App、远程与 TUI，不依赖 Electron 或 Node；标准扩展的 VS Code/Node API 由统一兼容层按公开契约实现，当前 Node 路径尚需迁移。共享核心保留 Agent 权威状态、通用资源机制与最终权限裁决；具体服务商认证、API 和产品工作流由可选 Provider 拥有。App 与 TUI 按能力契约选择和消费扩展，App 默认预装的 GitHub 登录不成为 TUI 的启动依赖。跨客户端复用不要求把 Provider 实现放回核心。完整边界、GitHub 示例和实现缺口见 [扩展架构与编辑器接入](editor-extensions.md#0-确定的产品方向)。
+
 | 系统              | 回答的核心问题                   | 应当拥有                                                                                                                               | 重点审计边界                                                 | 权威文档                                                                                                                                                        |
 | ----------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 扩展系统          | 外部能力如何被发现、激活和撤销？ | Core Plugins 聚合来源并管理 package lifecycle，各领域消费 capability；Plugin 只定义 bundle，Connector 管账号，MCP 管协议，Skill 管指令 | 安装、领域授权、运行时和 Agent 消费是否分层                  | [`core-plugins.md`](../crates/docs/core-plugins.md)、[`plugins.md`](plugins.md)、[`connectors.md`](connectors.md)、[`skills.md`](skills.md)、[`mcp.md`](mcp.md) |
+| 外部扩展系统      | TS/JS 与 Rust 能力如何被激活和撤销？ | `external-ext` 接入与监管、语言适配、独立进程协议和两种作者 SDK；各来源通过产品侧 adapter 接入 | 来源安装与运行授权是否分开，SDK 是否独立于产品实现 | [`editor-extensions.md`](editor-extensions.md) |
+| Plugin 与能力分发 | 集成 bundle 如何安装并交给各领域？ | Core Plugins 管理现有 Plugin package lifecycle；Plugin 定义 bundle，Connector 管账号，MCP 管协议，Skill 管指令 | 包状态是否唯一，来源是否侵入各领域运行实现 | [`core-plugins.md`](../crates/docs/core-plugins.md)、[`plugins.md`](plugins.md)、[`connectors.md`](connectors.md)、[`skills.md`](skills.md)、[`mcp.md`](mcp.md) |
 | App Server 与协议 | 产品入口如何调用同一套权威能力？ | 唯一外部进入/输出边界、对外方法、DTO、事件、订阅、版本和客户端契约                                                                     | 客户端是否绕过门禁，或协议层是否偷偷拥有产品决定或持久化规则 | [`ash-app-server-api.md`](ash-app-server-api.md)、[`app-server-client.md`](app-server-client.md)、[`protocol.md`](protocol.md)                                  |
 | 产品界面          | 用户如何观察和控制这些系统？     | Desktop、CLI、TUI 的交互、呈现和平台适配                                                                                               | 界面是否复制 Core 状态或在本地发明业务规则                   | [`ash-desktop-architecture.md`](ash-desktop-architecture.md)、[`ash-code`](../crates/tui/README.md)                                                             |
 
@@ -202,4 +207,4 @@ flowchart TD
 4. 用真实调用关系检查实现是否仍符合系统边界；
 5. 如果实现无法映射回唯一系统，先记录并解决架构问题，不为现状补一个模糊名称。
 
-完整的文档分层、语言和图表规则见 [`documentation-guidelines.md`](documentation-guidelines.md)。领域身份、Core、协议和 Rust 对外层分别由 [`domain-model.md`](domain-model.md)、[`core.md`](core.md)、[`protocol.md`](protocol.md) 与 [`rust-architecture.md`](rust-architecture.md) 拥有。
+文档职责、位置、写法与验证规则见 [文档写作规范](../.github/instructions/documentation.instructions.md)。领域身份、Core、协议和 Rust 对外层分别由 [`domain-model.md`](domain-model.md)、[`core.md`](core.md)、[`protocol.md`](protocol.md) 与 [`rust-architecture.md`](rust-architecture.md) 拥有。

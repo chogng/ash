@@ -16,6 +16,10 @@ export function remotePortForwardingChannel(getService: (context: string) => Ssh
 					const params = record(value, ['remotePort']);
 					return await service.open({ remotePort: boundedPositiveInteger(params.remotePort, 'remotePort', 65535) }) as T;
 				}
+				case 'ash:remote:tunnel:closeAll':
+					emptyParams(value);
+					await service.closeAll();
+					return undefined as T;
 				case 'ash:remote:tunnel:close': {
 					const params = record(value, ['id']);
 					await service.close(nonEmptyString(params.id, 'id'));

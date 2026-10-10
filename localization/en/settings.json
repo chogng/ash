@@ -1,5 +1,8 @@
 {
   "ash.settings": {
+    "search.engine": "Indexed search engine",
+    "search.description": "tgrep accelerates Agent and Codebase indexed searches. Choosing ripgrep disables indexes and scans current files. Editor Current searches always use ripgrep (rg). This preference also controls indexed file name searches.",
+    "search.help": "Content search settings\nUse Tab to reach Indexed search engine and Refresh. Open Indexed search engine with Enter or Space, use the arrow keys to choose tgrep or ripgrep, and press Enter to save. tgrep is the default for Agent and Codebase indexed searches. Choosing ripgrep disables indexes and scans current files. Editor Current searches always use ripgrep. This preference also controls indexed file name searches. Refresh reads the backend configuration. If saving fails, refresh before trying again. Press Escape to close help and return to the control.",
     "section.on": "On",
     "section.off": "Off",
     "lsp.title": "Language Servers",
@@ -127,7 +130,7 @@
     "categories.hooks.label": "Hooks",
     "categories.hooks.description": "Configure automated actions around agent workflow events.",
     "hooks.disconnected": "App Server is disconnected.",
-    "hooks.help": "Agent Hooks\nUse Tab and Shift+Tab to reach the configuration scope, Edit TOML, Ask Ash, Refresh, and events. Use the Settings search to filter events and declarations. Press Enter or Space on an event or Hook to expand its details. Search filters event names, Hook IDs, commands, and paths. Edit TOML opens the selected configuration; save it, then choose Refresh. Ask Ash appends a configuration request to the current chat draft without sending it. Configured Hooks still require execution permission.",
+    "hooks.help": "Agent Hooks\nUse Tab and Shift+Tab to reach search, the configuration scope, Edit TOML, Ask Ash, Refresh, Configure Hooks, and events. Press Enter or Space on an event or Hook to expand its details. Search filters event names, Hook IDs, commands, and paths. Configure Hooks selects an event, then a Hook or configuration scope. Edit TOML opens the selected configuration; save it, then choose Refresh. Ask Ash appends a configuration request to the current chat draft without sending it. Configured Hooks still require execution permission.",
     "hooks.loading": "Loading Hooks…",
     "hooks.loaded": "{0} event types · {1} configured Hooks",
     "hooks.failed": "Could not load Hooks: {0}",

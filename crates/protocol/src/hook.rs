@@ -3,6 +3,38 @@ use serde::Deserialize;
 use serde::Serialize;
 use ts_rs::TS;
 
+/// Executed Hook state retained in the owning Thread's history.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum HookRunStatus {
+    Running,
+    Continued,
+    Denied { reason: String },
+    Failed { message: String },
+    Cancelled { reason: String },
+}
+
+/// One invocation; identity is stable across live delivery and history replay.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct HookRunRecord {
+    pub run_id: String,
+    pub hook_id: String,
+    pub event: HookEvent,
+    pub status: HookRunStatus,
+    #[ts(type = "number")]
+    pub started_at_unix_ms: u64,
+    #[ts(type = "number")]
+    pub duration_ms: u64,
+    pub turn_id: Option<crate::TurnId>,
+    pub tool_call_id: Option<crate::ToolCallId>,
+    pub tool_name: Option<String>,
+}
+
 /// Safe-point event that may request a Hook execution.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

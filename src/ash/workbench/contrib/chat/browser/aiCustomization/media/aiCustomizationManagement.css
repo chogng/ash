@@ -1,0 +1,69 @@
+.ash-ai-customization-management {
+	min-width: 0;
+	box-sizing: border-box;
+	overflow: auto;
+	padding: var(--ash-spacing-size240);
+	color: var(--ash-foreground);
+}
+
+.ash-ai-customization-management[hidden],
+.ash-hooks-event[hidden],
+.ash-hooks-declaration[hidden] {
+	display: none;
+}
+
+.ash-hooks-toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+	margin-block: var(--ash-spacing-size120);
+}
+
+.ash-hooks-event summary:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: var(--ash-spacing-size20);
+}
+
+.ash-hooks-event {
+	margin-block: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size120);
+	border: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
+	border-radius: var(--ash-cornerRadius-medium);
+	background: var(--ash-editor-widgetBackground);
+}
+
+.ash-hooks-event summary {
+	cursor: pointer;
+	overflow-wrap: anywhere;
+}
+
+.ash-hooks-event > summary {
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-hooks-declaration {
+	margin-block: var(--ash-spacing-size120);
+}
+
+.ash-hooks-declaration dl {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 3fr);
+	gap: var(--ash-spacing-size80) var(--ash-spacing-size160);
+}
+
+.ash-hooks-declaration dt,
+.ash-hooks-declaration dd {
+	margin: 0;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.ash-hooks-declaration dd {
+	font-family: var(--ash-font-family-monospace);
+}
+
+.ash-ai-customization-management > h2 {
+	font-size: var(--ash-fontSize-heading2);
+	font-weight: var(--ash-fontWeight-semiBold);
+	margin: 0 0 var(--ash-spacing-size160);
+}

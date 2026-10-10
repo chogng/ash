@@ -1118,3 +1118,58 @@ fn explicit_unlock_restores_readonly_mode_when_publication_is_denied() {
     assert_eq!(fs::metadata(&target).unwrap().mode() & 0o777, 0o444);
     assert_eq!(fs::read(&target).unwrap(), b"old");
 }
+
+#[test]
+fn path_case_rules_are_read_only_scoped_and_match_observed_directory_lookup() {
+    let directory = TestDir::new();
+    fs::create_dir(directory.path.join("Folder")).unwrap();
+    fs::write(directory.path.join("Folder/MiXeD.txt"), b"contents").unwrap();
+    let files = directory.file_system();
+    let scopes = files
+        .read_path_case_sensitivity(Path::new("Folder/missing/file"))
+        .unwrap();
+    assert_eq!(
+        scopes
+            .iter()
+            .map(|scope| scope.path.as_path())
+            .collect::<Vec<_>>(),
+        [Path::new("."), Path::new("Folder")]
+    );
+    let root_insensitive = files.get_metadata(Path::new("folder")).is_ok();
+    let folder_insensitive = files.get_metadata(Path::new("Folder/mixed.txt")).is_ok();
+    for (scope, insensitive) in scopes.iter().zip([root_insensitive, folder_insensitive]) {
+        if scope.sensitivity != crate::PathCaseSensitivity::Unknown {
+            assert_eq!(
+                scope.sensitivity,
+                if insensitive {
+                    crate::PathCaseSensitivity::Insensitive
+                } else {
+                    crate::PathCaseSensitivity::Sensitive
+                }
+            );
+        }
+    }
+    assert!(!directory.path.join("Folder/missing").exists());
+    assert_eq!(
+        fs::read(directory.path.join("Folder/MiXeD.txt")).unwrap(),
+        b"contents"
+    );
+    assert!(matches!(
+        files.read_path_case_sensitivity(Path::new("../outside")),
+        Err(FileSystemError::InvalidPath(_))
+    ));
+}
+
+#[test]
+fn path_case_queries_require_the_directory_browse_permission() {
+    let directory = TestDir::new();
+    let files = LocalFileSystem::new(ash_file_access::Grant::for_environment(
+        Dir::open_local(&directory.path).unwrap(),
+        ash_file_access::GrantSource::ExplicitUser,
+        ash_file_access::Permissions::new([ash_file_access::Permission::ReadFiles]),
+    ));
+    assert!(matches!(
+        files.read_path_case_sensitivity(Path::new(".")),
+        Err(FileSystemError::PermissionDenied(_))
+    ));
+}

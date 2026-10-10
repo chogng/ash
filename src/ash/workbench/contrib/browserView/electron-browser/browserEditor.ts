@@ -9,12 +9,13 @@ import { addDisposableListener, h, type IDimension } from '../../../../base/brow
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IBrowserViewService, type IBrowserViewState } from '../../../../platform/browserView/common/browserView.js';
 import { BrowserEditorInput } from '../common/browserEditorInput.js';
-import type { IBrowserViewModel } from '../common/browserView.js';
+import { BrowserViewEditorId, type IBrowserViewModel } from '../common/browserView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IDialogService, DialogSeverity } from '../../../../platform/dialogs/common/dialogs.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
-import { IDialogsModel } from '../../../common/dialogs.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { WebContentsViewHost } from './webContentsViewHost.js';
 import { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import type { IAction } from '../../../../base/common/actions.js';
@@ -22,10 +23,9 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import './media/browser.css';
 
-/** Workbench controls and geometry for one Main-owned web page. */
+/** Workbench controls for one Main-owned web page. */
 export class BrowserEditor extends EditorPane implements IEditorPane {
-	static readonly ID = 'ash.editor.browser';
-	readonly id = BrowserEditor.ID;
+	readonly id = BrowserViewEditorId;
 	private domNode!: HTMLDivElement;
 	private addressDomNode!: HTMLInputElement;
 	private viewportDomNode!: HTMLDivElement;
@@ -36,31 +36,21 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 	private navigationActions: readonly IAction[] = [];
 	private model: IBrowserViewModel | undefined;
 	private readonly modelListeners = this._register(new DisposableStore());
-	private targetId: string | undefined;
+	private pageHost!: WebContentsViewHost;
 	private visible = false;
-	private menuVisible = false;
-	private focusOutside = false;
-	private update: Promise<void> = Promise.resolve();
 	private sharingToolbar!: WorkbenchToolBar;
 
 	constructor(
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IDialogService private readonly dialogService: IDialogService,
-		@IDialogsModel private readonly dialogs: IDialogsModel,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@IContextMenuService private readonly menus: IContextMenuService,
 		@IChatSessionNavigationService private readonly conversations: IChatSessionNavigationService,
 		@IBrowserViewService private readonly pageService: IBrowserViewService,
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
 	) {
-		super(BrowserEditor.ID, themeService, storageService);
-		this._register(dialogs.onWillShowDialog(() => this.refreshLayout()));
-		this._register(dialogs.onDidCloseDialog(() => this.refreshLayout()));
-		this._register(menus.onDidShowContextMenu(() => { this.menuVisible = true; this.refreshLayout(); }));
-		this._register(menus.onDidHideContextMenu(() => { this.menuVisible = false; this.refreshLayout(); }));
-		this._register(toDisposable(() => {
-			if (this.targetId && visiblePanes.get(this.targetId) === this) { visiblePanes.delete(this.targetId); }
-		}));
+		super(BrowserViewEditorId, themeService, storageService);
 	}
 
 	public override create(container: HTMLElement): void {
@@ -91,7 +81,8 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 		this.viewportDomNode = h(document, 'div'); this.viewportDomNode.className = 'ash-browser-viewport';
 		this.viewportDomNode.tabIndex = 0;
 		this.viewportDomNode.setAttribute('aria-label', localize({ bundle: 'ash.workbench', key: 'browser.webpage' }, 'Webpage. Press F6 to return to the address field.'));
-		this._register(addDisposableListener(this.viewportDomNode, 'focus', () => { this.focusOutside = false; this.refreshLayout(); void this.update.then(() => this.target().focus()).catch(error => this.report(error)); }));
+		this.pageHost = this._register(this.instantiation.createInstance(WebContentsViewHost, document.defaultView!));
+		this.pageHost.onContainerCreated(this.viewportDomNode);
 		this.domNode.append(toolbar, this.statusDomNode, this.downloadDomNode, this.viewportDomNode); container.append(this.domNode);
 		super.create(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
@@ -102,7 +93,7 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 		this._register(AccessibleViewRegistry.register({
 			// Each split owns a provider; focus selects the relevant pane at invocation time.
 			type: AccessibleViewType.Help, priority: 100, name: 'browserHelp:' + crypto.randomUUID(),
-			when: ActiveEditorContext.isEqualTo(BrowserEditor.ID),
+			when: ActiveEditorContext.isEqualTo(BrowserViewEditorId),
 			getProvider: () => {
 				const focused = document.activeElement;
 				if (!this.visible || !(focused instanceof HTMLElement) || !this.domNode.contains(focused)) { return undefined; }
@@ -113,15 +104,11 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 		const observer = new ResizeObserver(entries => {
 			// The root owns available width. Changing its child's height must not feed back into the observed size.
 			if (entries.some(entry => entry.target === this.domNode)) { toolbar.classList.toggle('compact', toolbar.clientWidth < 320); }
-			this.refreshLayout();
+			this.pageHost.layout();
 		});
-		observer.observe(this.domNode); observer.observe(this.viewportDomNode);
+		observer.observe(this.domNode);
 		this._register(toDisposable(() => observer.disconnect()));
-		this._register(addDisposableListener(document.defaultView!, 'resize', () => this.refreshLayout()));
-		this._register(addDisposableListener<FocusEvent>(document, 'focusin', event => {
-			this.focusOutside = event.target instanceof Node && !this.domNode.contains(event.target);
-			this.refreshLayout();
-		}));
+		this._register(addDisposableListener(this.domNode, 'focusin', () => this.pageHost.setVisible(this.visible)));
 	}
 
 	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
@@ -132,7 +119,7 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 		this.modelListeners.clear();
 		this.model = model;
 		this.addressInput.enabled = true;
-		this.targetId = model.id;
+		this.pageHost.setModel(model);
 		this.setPageActions();
 		this.modelListeners.add(model.onDidChangeState(state => this.render(state)));
 		this.modelListeners.add(model.onDidEvent(event => {
@@ -142,12 +129,23 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 			if (event.type === 'downloadProgress') { this.downloadDomNode.hidden = false; this.downloadDomNode.textContent = localize({ bundle: 'ash.workbench', key: 'browser.downloadProgress' }, '{0}: {1} / {2} bytes ({3})', event.filename, event.receivedBytes, event.totalBytes, downloadState(event.state)); }
 		}));
 		this.render(model.state);
-		this.refreshLayout();
+		this.pageHost.layout();
 	}
-	public override clearInput(): void { this.visible = false; this.addressInput.enabled = false; this.setNavigationActions(); this.refreshLayout(); this.modelListeners.clear(); }
-	public override layout(_dimension: IDimension): void { this.refreshLayout(); }
+	public override clearInput(): void {
+		this.visible = false;
+		this.pageHost.setVisible(false);
+		this.pageHost.setModel(undefined);
+		this.modelListeners.clear();
+		this.model = undefined;
+		this.addressInput.enabled = false;
+		this.addressDomNode.value = '';
+		this.statusDomNode.textContent = '';
+		this.downloadDomNode.hidden = true;
+		this.setNavigationActions();
+	}
+	public override layout(_dimension: IDimension): void { this.pageHost.layout(); }
 	public override setVisible(visibility: boolean): void {
-		super.setVisible(visibility); this.visible = visibility; this.refreshLayout();
+		super.setVisible(visibility); this.visible = visibility; this.pageHost.setVisible(visibility);
 	}
 	public override focus(): void {
 		this.addressDomNode.focus(); this.addressDomNode.select();
@@ -166,8 +164,8 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 		const focused = document.activeElement;
 		await model.loadURL(url);
 		// Navigation can finish after the user moves to another pane, edits the URL or opens an overlay.
-		if (!this.isDisposed && this.visible && this.model === model && document.activeElement === focused && this.addressDomNode.value.trim() === url && !this.menuVisible && this.dialogs.dialogs.length === 0) {
-			this.viewportDomNode.focus();
+		if (!this.isDisposed && this.visible && this.model === model && document.activeElement === focused && this.addressDomNode.value.trim() === url) {
+			this.pageHost.tryFocus();
 		}
 	}
 	private setNavigationActions(state?: IBrowserViewState): void {
@@ -223,23 +221,6 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 		this.setNavigationActions(state);
 		this.statusDomNode.textContent = state.errorDescription ? localize({ bundle: 'ash.workbench', key: 'browser.loadFailure' }, 'Unable to load page: {0}', state.errorDescription) : state.loading ? localize({ bundle: 'ash.workbench', key: 'browser.loading' }, 'Loading page…') : state.title || state.url;
 	}
-	private refreshLayout(): void {
-		if (!this.targetId || !this.viewportDomNode || this.isDisposed) { return; }
-		const targetId = this.targetId;
-		const model = this.target();
-		if (this.visible) { visiblePanes.set(targetId, this); }
-		else if (visiblePanes.get(targetId) === this) { visiblePanes.delete(targetId); }
-		this.update = this.update.then(async () => {
-			if (this.targetId !== targetId || this.isDisposed) { return; }
-			if (visiblePanes.get(targetId) && visiblePanes.get(targetId) !== this) { return; }
-			const bounds = this.viewportDomNode.getBoundingClientRect();
-			const visible = this.visible && !this.menuVisible && !this.focusOutside && this.dialogs.dialogs.length === 0 && bounds.width > 0 && bounds.height > 0;
-			if (visible) {
-				await model.layout({ x: Math.round(bounds.x), y: Math.round(bounds.y), width: Math.round(bounds.width), height: Math.round(bounds.height) });
-			}
-			await model.setVisible(visible);
-		}).catch(error => this.report(error));
-	}
 	private report(error: unknown): void { if (!this.isDisposed) { this.statusDomNode.textContent = error instanceof Error ? error.message : String(error); } }
 	private helpContent(): string {
 		return localize({ bundle: 'ash.workbench', key: 'browser.accessibilityHelp' }, 'Use Tab to move through browser controls. Enter in the address field navigates and focuses the webpage. Ctrl+Shift+P (Command+Shift+P on macOS) opens the Command Palette from the webpage. Ctrl+L (Command+L on macOS) or F6 in the webpage returns to the address field. Back and Forward navigate page history. Close the editor tab to close its webpage. Set workbench.externalUriOpeners to ash.browser.open for websites you want to open here. Webpages use the browser’s accessibility tree. The More Actions menu contains sharing, website permission reset and download cancellation. Share with Agent allows a chosen conversation to observe this page. Agent input and navigation require an isolated Agent page. Revoke all access ends that grant. Website permission dialogs name the requesting site. Reset all website permissions removes its decisions. Downloads ask for a save location; Cancel downloads stops active transfers.');
@@ -249,9 +230,6 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 		return this.dialogService.showMessage({ severity: DialogSeverity.Info, title: localize({ bundle: 'ash.workbench', key: 'browser.accessibilityHelpTitle' }, 'Browser accessibility help'), message: this.helpContent() });
 	}
 }
-
-// A moved tab can create its new pane before the old pane is disposed.
-const visiblePanes = new Map<string, BrowserEditor>();
 
 function downloadState(state: 'progressing' | 'completed' | 'cancelled' | 'interrupted'): string {
 	switch (state) {

@@ -252,6 +252,24 @@ Main 必须：
 Main 不把 `ipcRenderer`、`fs`、`child_process`、`webContents` 或任意 JSON-RPC method
 直接暴露给 Renderer。
 
+Desktop 的系统与进程诊断由 `platform/process/electron-main/processMainService.ts` 拥有，
+经可信窗口的 `process` IPC 通道提供 `IProcessService`；Desktop 与 Sessions 的 Renderer
+入口装载 `workbench/services/process/electron-browser/processService.ts`。采集按请求执行，
+不启动录制或后台轮询，也不复用 `memoryDiagnostics` 的录制状态。进程快照只包含 Desktop
+Main 的子树，保留真实父子关系；独立 daemon 与远端进程不在此树中。OS 查询有五秒超时和
+16 MiB 输出上限，不收集进程命令参数。Windows 使用 CIM 性能计数器，macOS/Linux 使用 `ps`。
+
+问题报告的 Desktop 实现通过构造注入读取本机 OS、CPU、内存、GPU 与进程指标；Browser
+实现只提供浏览器标识。两端分别标注 App Server 的版本、OS 和架构，不将服务器信息作为本机
+信息。系统或进程诊断失败仍保留报告上下文和草稿，并在预览中标注失败。提交与认证继续由
+现有 Rust Issue Reporter 拥有。远端进程聚合与 Workspace 性能扫描尚未实现。
+
+Desktop 和 Agents 窗口通过 `workbench.action.openProcessExplorer` 打开只读进程查看器，
+复用同一个 `IProcessService` 采集通道。界面显示本机进程树、CPU 使用率、驻留内存和 PID；
+打开或手动刷新时采集快照，不轮询。树组件保留折叠与导航状态，可访问视图和复制操作包含
+已折叠的子进程。刷新失败时保留旧快照并标注其来源；编辑器关闭后丢弃未完成的响应。
+进程查看器不提供结束进程操作，Browser 不装载本机进程查看器入口。
+
 本地 daemon 的 TypeScript 对接位于 `platform/app-server-daemon`：创建入口负责包路径、摘要、
 环境变量与 `connect` / `connect-selected` 选择，开发重载器负责明确重启后台。
 `code/electron-main/app.ts` 只装配启动器、窗口连接和重载器；SSH 启动与远程包定位仍由
@@ -425,6 +443,38 @@ Files 的 import 对齐按当前调用职责核对。工作区系统监听、重
 不通过新增空端口补齐 import。通用 `FileService` 和 provider 契约依赖 base，不依赖 RPC。
 `IFileApi` 是 App Server 文件适配边界的 typed RPC 端口，通用 provider 和 `FileService` 使用独立文件契约。
 文件级静态 import 图用于检查循环依赖，目录间的引用方向不能代替这项检查。
+
+Workbench 文本文件的共享服务标识与契约位于 `services/textfile/common/textfiles.ts`，
+唯一解析、保存实现位于 `services/textfile/browser/textFileService.ts`。Workbench 与 Sessions
+通过容器注入 `IFileService`、`IFilesConfigurationService` 和 `IElevatedFileService`，共享 BOM、取消、只读策略和
+revision 冲突行为。已确认保留 Ash 专属的 `services/textfile/common/textFileService.ts`
+请求、结果与错误类型，以及 `AppServerFileSystemProvider` 和 `files/{common,browser}/fileApi.ts`
+的 Rust 适配职责；旧 common 文件不再承载实现，也不转发新 owner 的导出。
+
+VS Code 的 `workbench/services/files` 按生产调用职责对齐：
+
+| 上游文件                                     | Ash 的落位与职责边界                                                                                                                        |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `common/elevatedFileService.ts`              | 同路径 `IElevatedFileService`，保留 `isSupported` / `writeFileElevated`；当前消费方传入 `VSBuffer`，结果沿用 Ash metadata / revision 契约。 |
+| `browser/elevatedFileService.ts`             | Web 注册不支持提权的实现；系统权限保存失败保留 dirty 内容，不显示管理员重试入口。                                                           |
+| `electron-browser/elevatedFileService.ts`    | Electron 本地 `file:` 资源通过具备提权能力的 provider 执行；服务本身不管理模型、OS 进程或临时文件。                                         |
+| `electron-browser/diskFileSystemProvider.ts` | profile 读写由平台 IPC client 访问 Main provider；工作区读写由 Rust 授权。尚无 Renderer 独立磁盘 provider 的调用职责。                      |
+| `electron-browser/watcherClient.ts`          | 工作区 OS 监听由 Rust 持有，profile 监听由 Main 持有；没有 utility worker watcher 的生产调用方。                                            |
+
+显式保存遇到 OS 权限错误后，Workbench 使用现有可访问对话框取得管理员重试选择，再从同一
+工作副本保存队列取得快照，跳过已执行的保存参与者。Ash 目录授权拒绝不能触发 OS 提权。
+`fs/writeFileElevated` 由 Rust 保留 `WriteFiles` 授权，启动当前可执行文件的一次性内部角色，
+通过 macOS 系统授权、Linux pkexec 或 Windows UAC 执行；Main 只转发通信。
+随机 capability 认证的 loopback socket 传输原始字节；capability 存于私有临时文件，完成或取消后清理，凭据、文件内容和密码不进入命令参数。
+helper 在固定目录内准备临时文件，保留权限，校验文件身份和原字节 revision，最终提交前再次检查；
+取消在提交前清理临时文件，提交后等待真实回执，回执丢失则保留 dirty 并要求重读。
+远程 URI 不提供这个编辑器入口，系统监听仍由原 owner 持有。
+
+参考核对使用相邻仓库的公开行为：VS Code 提供 Workbench 提权服务契约和 Web 能力分支；
+Codex 的 `app-server/src/request_processors/fs_processor.rs` 保留 typed 字节写入和授权边界，
+其 Windows elevated sandbox 角色不能直接作为编辑器管理员保存；Zed 的
+`project/src/buffer_store.rs` 在保存前捕获版本、编码和 BOM，`fs/src/fs.rs` 使用目标父目录的
+临时文件原子写入。Ash 按这些可观察约束实现自己的模型快照、Rust 授权和原子发布。
 
 Workspace 内容搜索通过独立的
 `grep/search/start|read|cancel` contract 接入；其 ownership 与限制见
@@ -883,7 +933,9 @@ Renderer 的解析确认不等于服务器输出背压。
 
 SCM 同样通过 `IGitService → GitService → IGitApi` 访问仓库，并由 Service 把 status notification
 和 reconnect lifecycle 投影成前端事件；Search 通过
-`IContentSearchService → BrowserContentSearchService → IContentSearchApi` 消费有界批次。
+`ISearchService.textSearch → IContentSearchService → BrowserContentSearchService → IContentSearchApi`
+消费有界批次。Workbench SearchService 合并当前文件模型与磁盘结果并管理多根总预算，
+platform 的内容搜索服务只执行显式选择的单目录。
 两者的 contrib 都不接触 App Server notification union 或生成 DTO。
 
 SCM 的打开操作由 `scmViewPane.ts` 解释：预览保留列表焦点，双击固定文件，修饰键点击或 Enter
@@ -967,7 +1019,26 @@ Electron Main 是 Browser Target 的唯一权威持有者。
 
 当前已接通 Session、Thread 所有权、Group/CDP、独立进程 Playwright，以及编辑器 Model 和恢复。应用持有一个共享自动化进程，每个窗口持有独立 MessagePort 和 Group 管理器；Playwright 连接按 Thread 管理。Group 只引用该 Thread 的 Agent 页面和用户明确分享给该 Thread 的页面；撤销分享中止访问并移除调试引用，保留用户页面。Chromium target ID 保持原值，通过额外的 `browserViewId` 关联 Ash 页面。
 
+Workbench 的 `services/browserView/electron-browser/playwrightWorkbenchService.ts` 注册 Renderer
+`IPlaywrightService`。Desktop 在后端初始化前通过注入容器创建该服务，并把同一实例交给
+Workbench，避免反向浏览器请求早于编辑器 Parts 就绪。观察和动作经过此服务；创建、关闭、
+分享及网络授权回复通过同一窗口的 `browserHost` 通道。Main IPC 根据可信连接的窗口身份选取
+`AppServerBrowserHost`，保留 Thread 校验、网络租约和页面排队，再调用共享进程。
+Renderer 退场先取消该服务的操作，再释放使用过的 Thread 自动化连接；释放不关闭用户页面，
+共享进程同时取消该 Thread 尚未完成的页面发现。
+
+此处对齐了 VS Code 的 Workbench 服务落位、注册和生命周期。Ash 仍使用领域动作及结构化观察协议；
+上游的任意函数执行、页面摘要和延迟结果接口尚无对应生产调用方，不属于已完成的对齐能力。
+
 `BrowserViewModel` 镜像 Main 状态，`BrowserEditorInput` 懒加载模型，Workbench 服务拥有输入与编辑器组引用。Renderer 重载接回存活的用户页面，不重建网页；最后一个编辑器引用关闭时才销毁页面。后端连接退场时仍关闭 Agent 页面，包括重载导致连接退场的场景。应用重启恢复用户页签的 URL、标题及工作区 Session。Agent 页签只作为用户临时页面恢复，不恢复任务权限或 Agent 登录。`browserViewService.ts` 与 `browserViewIpc.ts` 保留 Ash 可信 IPC 的适配职责；共享进程使用通用 `ProxyChannel`。
+
+`BrowserEditor` 只拥有地址栏、导航与页面操作。`WebContentsViewHost` 借用模型，拥有 Renderer
+中的页面定位、显示和焦点交接；分栏共享同一页面的展示队列，当前宿主隐藏或释放后由剩余宿主接管。
+切换输入先移除旧展示引用，队列重新检查当前归属；定位 IPC 期间发生关闭或归属变化时，不再显示旧页面。
+`overlayManager.ts` 中的 `BrowserOverlayManager` 跟踪 Workbench 菜单、对话框和与页面重叠的
+Quick Input、Hover、通知，遮挡期间隐藏页面，消失后恢复定位和显示，不主动抢回键盘焦点。
+
+Main 的页面关闭通知先送达模型监听者，Workbench 再关闭旧输入的全部页签并释放模型；同 ID 的替代输入等待旧页签关闭后才打开，清理只针对旧实例。输入退场保留最后的 URL、标题和可恢复存储范围。页面发现或状态快照失败允许重试并释放失败模型的监听器，已关闭页面的输入不会因迟到快照或重试重新创建页面。
 
 桌面内置浏览器注册为 `ash.browser.open`，用户通过 `workbench.externalUriOpeners` 按网站选择打开方式。例如：
 

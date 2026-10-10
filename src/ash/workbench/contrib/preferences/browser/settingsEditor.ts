@@ -39,7 +39,9 @@ import { SettingsEditorInput, isSettingsEditorInput } from '../../../services/pr
 import { DefaultSettings, SettingsEditorModel } from '../../../services/preferences/common/settingsModels.js';
 import { SettingsRenderer } from './settingsRenderers.js';
 import { SkillsSettingsContent } from '../../skills/browser/skillsSettingsContent.js';
-import { HooksSettingsContent } from '../../hooks/browser/hooksSettingsContent.js';
+import { Event } from '../../../../base/common/event.js';
+import { AICustomizationManagementEditorInput } from '../../chat/browser/aiCustomization/aiCustomizationManagementEditorInput.js';
+import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { LanguageServerSettingsContent } from '../../language/browser/languageServerSettingsContent.js';
 import { AdvisorSettingsContent } from '../../chat/browser/advisorSettingsContent.js';
 import { ModelSettingsContent } from '../../chat/browser/modelSettingsContent.js';
@@ -220,7 +222,22 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 			this._register(this.instantiationService.createInstance(SkillsSettingsContent, settingsContent)),
 			this._register(this.instantiationService.createInstance(ModelSettingsContent, settingsContent)),
 			this._register(this.instantiationService.createInstance(DictationSettingsContent, settingsContent)),
-			this._register(this.instantiationService.createInstance(HooksSettingsContent, settingsContent, async () => { await this.instantiationService.invokeFunction(accessor => accessor.get(ICommandService).executeCommand(CLOSE_EDITOR_COMMAND_ID)); })),
+			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, {
+				categoryId: 'hooks',
+				title: localize({ bundle: 'ash.settings', key: 'hooks.aria' }, 'Agent Hooks'),
+				description: localize({ bundle: 'ash.settings', key: 'hooks.managementLink' }, 'Manage Hooks in Agent Customizations.'),
+				help: localize({ bundle: 'ash.settings', key: 'hooks.managementLinkHelp' }, 'Open Manage Hooks to search events, inspect declarations, edit TOML, or ask Ash to configure a Hook.'),
+				onDidChange: Event.None,
+				fields: [{
+					id: 'manage', kind: 'action', label: localize({ bundle: 'ash.settings', key: 'hooks.manage' }, 'Manage Hooks'), enabled: true, run: () => this.instantiationService.invokeFunction(async accessor => {
+						const commands = accessor.get(ICommandService);
+						const editors = accessor.get(IEditorService);
+						await commands.executeCommand(CLOSE_EDITOR_COMMAND_ID);
+						await editors.openEditor(new AICustomizationManagementEditorInput(), { pinned: true });
+					})
+				}],
+				setVisible: () => { },
+			}, AccessibleViewProviderId.HooksSettings, AccessibilityVerbositySettingId.HooksSettings)),
 		);
 		this.languageServerSettings = this._register(this.instantiationService.createInstance(LanguageServerSettingsContent, settingsContent));
 		this.contents.push(this.languageServerSettings);

@@ -1,3 +1,8 @@
+import { Schemas } from '../../../../base/common/network.js';
+import { ISearchService } from '../../../services/search/common/search.js';
+import { QueryBuilder } from '../../../services/search/common/queryBuilder.js';
+import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
+import { IFileTextModelService } from '../../../services/textmodelResolver/common/textModelResourceService.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
@@ -12,7 +17,7 @@ import { URI } from '../../../../base/common/uri.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { observeElementSize } from '../../../../base/browser/observer.js';
 import { localize } from '../../../../nls.js';
-import { IContentSearchService, type IContentSearchQuery } from '../../../../platform/search/common/search.js';
+import { type IContentSearchQuery } from '../../../../platform/search/common/search.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -45,7 +50,8 @@ export class SearchEditor extends EditorPane implements IEditorPane {
 
 	constructor(
 		private readonly textEditor: TextResourceEditor,
-		@IContentSearchService private readonly search: IContentSearchService,
+		@ISearchService private readonly search: ISearchService,
+		@IFileTextModelService private readonly textModels: IFileTextModelService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IEditorService private readonly editors: IEditorService,
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
@@ -259,9 +265,23 @@ export class SearchEditor extends EditorPane implements IEditorPane {
 		this.status.textContent = localize('search.searching', 'Searching workspace…');
 		const result = new SearchResultImpl(this.workspace.getWorkspace().folders);
 		try {
-			const complete = await this.search.search(query, { signal: controller.signal, onProgress: matches => result.add(matches) });
+			using cancellation = new CancellationTokenSource();
+			const cancel = (): void => cancellation.cancel();
+			controller.signal.addEventListener('abort', cancel, { once: true });
+			using listener = toDisposable(() => controller.signal.removeEventListener('abort', cancel));
+			const textQuery = new QueryBuilder().text({
+				pattern: query.text, isRegExp: query.patternKind === 'regex', isWordMatch: query.wholeWord,
+				isCaseSensitive: query.caseSensitivity === 'sensitive' || query.caseSensitivity === 'smart' && /\p{Lu}/u.test(query.text),
+			}, this.workspace.getWorkspace().folders.map(folder => folder.uri), {
+				includePattern: query.includePatterns.join(','), excludePattern: query.excludePatterns.join(','), maxResults: query.maxResults,
+				// Generated search drafts contain the query in their header and must not search themselves.
+				extraFileResources: this.textModels.getModels().filter(model => model.uri.scheme !== Schemas.untitled || !model.uri.path.endsWith('.code-search')).map(model => model.uri),
+			});
+			const complete = await this.search.textSearch(textQuery, cancellation.token, progress => {
+				if (!controller.signal.aborted && !this.isDisposed && 'resource' in progress) { result.addFileMatch(progress); }
+			});
 			if (this.isDisposed || controller.signal.aborted || this.controller !== controller) { return; }
-			if (complete.error) { this.status.textContent = complete.error; return; }
+			if (complete.messages.length) { this.status.textContent = complete.messages.map(message => message.text).join('\n'); return; }
 			// Keep edits made while the search was running until the user accepts replacing them.
 			if (model.version !== version) {
 				const confirmed = await this.dialogs.confirm({

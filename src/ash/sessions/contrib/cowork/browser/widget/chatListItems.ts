@@ -1,5 +1,7 @@
 import type { PlanUpdate, ThreadItem, ThreadTranscriptEntry, Turn, TurnError } from "../../../../../workbench/services/chat/common/chatService.js";
 import { localize } from "../../../../../nls.js";
+import { chatHookListItem } from '../../../../../workbench/contrib/chat/browser/widget/chatListItems.js';
+import type { IChatHookPart } from '../../../../../workbench/services/chat/common/chatService.js';
 
 export type ChatTurnErrorAction =
 	| { readonly type: "retry"; readonly label: string; readonly turnId: string; }
@@ -14,7 +16,8 @@ interface ChatTurnErrorListItemOptions {
 /** One render-ready committed or transient Thread item. */
 export interface IChatListItem {
 	readonly id: string;
-	readonly type: ThreadItem["type"] | "turnError" | "advisor";
+	readonly type: ThreadItem["type"] | "turnError" | "advisor" | 'hook';
+	readonly hookPart?: IChatHookPart;
 	readonly text: string;
 	readonly transient: boolean;
 	readonly isError?: boolean;
@@ -51,6 +54,7 @@ export function chatTranscriptListItems(entries: readonly ThreadTranscriptEntry[
 	const calls = new Map(entries.flatMap(entry => entry.type === "item" && entry.item.type === "toolCall" && entry.item.name === "advisor" ? [[entry.item.toolCallId, entry] as const] : []));
 	const results = new Set(entries.flatMap(entry => entry.type === "item" && entry.item.type === "toolResult" ? [entry.item.toolCallId] : []));
 	return entries.flatMap(entry => {
+		if (entry.type === 'hookRun' && (entry.run.status.type === 'running' || entry.run.status.type === 'continued')) { return []; }
 		if (entry.type === "item" && entry.item.type === "toolCall" && calls.has(entry.item.toolCallId)) {
 			if (results.has(entry.item.toolCallId)) return [];
 			return [{ id: entry.entryId, type: "advisor" as const, text: "Consulting the selected model…", transient: entry.transient, label: "Advisor" }];
@@ -75,6 +79,7 @@ export function chatTranscriptListItems(entries: readonly ThreadTranscriptEntry[
 /** Maps one backend-assembled transcript entry to Chat presentation. */
 export function chatTranscriptListItem(entry: ThreadTranscriptEntry, options: TranscriptListItemOptions = {}): IChatListItem {
 	switch (entry.type) {
+		case 'hookRun': return chatHookListItem(entry);
 		case "item": return { ...chatListItem(entry.item, entry.transient), id: entry.entryId };
 		case "turnPlan": return { ...chatPlanUpdateListItem(entry.turnId, entry.plan), id: entry.entryId };
 		case "turnError": {

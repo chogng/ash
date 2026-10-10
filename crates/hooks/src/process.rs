@@ -29,6 +29,7 @@ pub(crate) trait HookProcessExecutor: Send + Sync {
         input: Vec<u8>,
         authority: CommandExecutionAuthority,
         cancellation: &CancellationToken,
+        evidence: &mut core_api::HookRunEvidence,
     ) -> Result<HookDecision, CoreError>;
 }
 
@@ -115,6 +116,7 @@ impl HookProcessExecutor for LocalHookProcessExecutor {
         input: Vec<u8>,
         authority: CommandExecutionAuthority,
         cancellation: &CancellationToken,
+        evidence: &mut core_api::HookRunEvidence,
     ) -> Result<HookDecision, CoreError> {
         let HookAction::Process { program, args } = &hook.action;
         let result = self.executor.execute(
@@ -129,12 +131,21 @@ impl HookProcessExecutor for LocalHookProcessExecutor {
         );
         match result {
             Ok(CommandExecutionOutcome::Completed(output)) => {
+                evidence.stdout = output.stdout.clone();
+                evidence.stderr = output.stderr.clone();
+                evidence.exit_code = output.exit_code;
+                evidence.stdout_truncated = output.stdout_truncated;
+                evidence.stderr_truncated = output.stderr_truncated;
                 parse_output(hook.id.as_str(), output)
             }
             Ok(CommandExecutionOutcome::SandboxDenied(_)) => Err(CoreError::Policy(format!(
                 "Hook '{}' was denied by the directory sandbox",
                 hook.id
             ))),
+            Err(
+                ash_tool_executor::ExecutionError::CancelledBeforeStart(reason)
+                | ash_tool_executor::ExecutionError::CancelledAfterStart(reason),
+            ) => Err(CoreError::Cancelled(reason)),
             Err(error) => Err(CoreError::Execution(hook_execution_error(error))),
         }
     }

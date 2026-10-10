@@ -1,11 +1,9 @@
-import { decodeAppServerServerResponse } from '../../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
-import { OperatingSystem } from '../../../../base/common/platform.js';
-import { createAppServerAppServerApi } from '../../browser/appServerApi.js';
 import { URI } from '../../../../base/common/uri.js';
 import { createTestInitializeResult } from '../common/testAppServerProtocol.js';
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import { CancellationError, isCancellationError } from "../../../../base/common/errors.js";
+import { decodeAppServerServerResponse } from '../../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { isRecord } from "../../../../base/common/types.js";
 import { AppServerRemoteError } from "../../common/appServerError.js";
@@ -16,7 +14,8 @@ import { AppServerProtocolClient } from "../../browser/appServerProtocolClient.j
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { GitHubError, GitHubErrorCode, GitHubIssueState, GitHubMergeMethod } from '../../../github/common/githubService.js';
 import type { BrowserCreateParams } from '../../../../../../.build/protocol/typescript/index.js';
-import { createAppServerSkillOperations } from '../../browser/appServerApi.js';
+import { createAppServerAppServerApi, createAppServerSkillOperations } from '../../browser/appServerApi.js';
+import { OperatingSystem } from '../../../../base/common/platform.js';
 import { createHash } from 'node:crypto';
 
 const pinnedSkill = { id: { source: 'user:skill-source:test', name: 'review' }, version: { type: 'pinnedDigest' as const, digest: `sha256:${'a'.repeat(64)}` } };
@@ -539,6 +538,45 @@ test('server user home rejects relative paths at initialization', async () => {
 	}
 });
 
+test('elevated file cancellation retains the original response and routes to its Session directory', async () => {
+	const transport = new FakeTransport();
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	try {
+		const controller = new AbortController();
+		const sessionDirectory = { sessionId: 'session', path: '/workspace/worktree' };
+		const pending = connected.api.fs.writeFileElevated({ operationId: 'save', sessionDirectory, path: 'notes.txt', dataBase64: 'bmV3', expectedRevision: 'old' }, controller.signal);
+		let settled = false;
+		void pending.then(() => settled = true);
+		controller.abort();
+		assert.deepEqual(transport.requests.at(-1)?.params, { operationId: 'save', sessionDirectory });
+		assert.equal(transport.requests.at(-1)?.method, 'fs/writeFileElevated/cancel');
+		transport.respondAt(-1, null);
+		await Promise.resolve();
+		assert.equal(settled, false);
+		const result = { revision: 'new', metadata: { fileType: 'file', readonly: true, sizeBytes: 3, modifiedAtMillis: 1 } };
+		transport.respondAt(-2, result);
+		assert.deepEqual(await pending, result);
+	} finally { connected.dispose(); }
+});
+
+test('elevated cancellation errors preserve the backend terminal result and never replay a write', async () => {
+	const transport = new FakeTransport();
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	try {
+		const controller = new AbortController();
+		const pending = connected.api.fs.writeFileElevated({ operationId: 'save', dirId: 'workspace', path: 'notes.txt', dataBase64: 'bmV3' }, controller.signal);
+		const rejected = assert.rejects(pending, isCancellationError);
+		controller.abort();
+		assert.deepEqual(transport.requests.at(-1)?.params, { operationId: 'save', dirId: 'workspace' });
+		transport.respondAt(-1, null);
+		transport.rejectAt(-2, { code: -32800, message: 'cancelled before commit', data: { kind: 'RequestCancelled' } });
+		await rejected;
+		assert.equal(transport.requests.filter(request => request.method === 'fs/writeFileElevated').length, 1);
+		await assert.rejects(connected.api.fs.writeFileElevated({ operationId: 'other', dirId: 'workspace', path: 'notes.txt', dataBase64: 'bmV3' }, controller.signal), isCancellationError);
+		assert.equal(transport.requests.filter(request => request.method === 'fs/writeFileElevated').length, 1);
+	} finally { connected.dispose(); }
+});
+
 class FakeTransport implements AppServerTransport {
 	constructor(private readonly initialize: (value: InitializeResult) => unknown = value => value, private readonly initializeDelayMs = 0) { }
 	private readonly listeners = new Map<string, Set<(payload: unknown) => void>>();
@@ -1004,28 +1042,12 @@ test('Call service is assembled from the negotiated contract and ignores stale o
 });
 
 
-test('extension disk requests are rejected before reaching a renderer service', async () => {
-	const transport = new FakeTransport();
-	const connected = await connectWebRendererApi(transport, connectorHostServices);
-	using cleanup = toDisposable(() => connected.dispose());
-	let calls = 0;
-	const registration = connected.api.extensionHost.registerClientHandler(async () => {
-		calls += 1;
-		return { result: 'done' };
-	});
-	try {
-		transport.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: 'extension-disk', method: 'extensionClient/request', params: { extensionId: 'test.editor', activationGeneration: 7, incarnation: 3, operation: { operation: 'readWorkspaceFile', path: 'data.txt' } } }) });
-		await new Promise<void>(resolve => setImmediate(resolve));
-		assert.equal(calls, 0);
-		assert.deepEqual(transport.requests.at(-1)?.error, { code: -32000, message: 'Workspace file requests must be handled by App Server', data: null });
-	} finally { registration.dispose(); }
-});
-
-for (const request of [
-	{ service: 'secretLoad', key: 'token' },
-	{ service: 'httpExecute', method: 'get', url: 'https://api.github.com/user', headers: [], body: [] },
+for (const [operation, message] of [
+	[{ operation: 'readWorkspaceFile', path: 'data.txt' }, 'Workspace file requests must be handled by App Server'],
+	[{ operation: 'coreService', request: { service: 'secretLoad', key: 'token' } }, 'Core service requests must be handled by App Server'],
+	[{ operation: 'coreService', request: { service: 'httpExecute', method: 'get', url: 'https://api.github.com/user', headers: [], body: [] } }, 'Core service requests must be handled by App Server'],
 ] as const) {
-	test(`extension coreService ${request.service} requests are rejected before reaching a renderer service`, async () => {
+	test(`extension ${operation.operation}${'request' in operation ? ` ${operation.request.service}` : ''} requests are rejected before reaching a renderer service`, async () => {
 		const transport = new FakeTransport();
 		const connected = await connectWebRendererApi(transport, connectorHostServices);
 		using cleanup = toDisposable(() => connected.dispose());
@@ -1035,10 +1057,10 @@ for (const request of [
 			return { result: 'done' };
 		});
 		try {
-			transport.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: 'extension-core-service', method: 'extensionClient/request', params: { extensionId: 'test.editor', activationGeneration: 7, incarnation: 3, operation: { operation: 'coreService', request } } }) });
+			transport.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: 'extension-backend', method: 'extensionClient/request', params: { extensionId: 'test.editor', activationGeneration: 7, incarnation: 3, operation } }) });
 			await new Promise<void>(resolve => setImmediate(resolve));
 			assert.equal(calls, 0);
-			assert.deepEqual(transport.requests.at(-1)?.error, { code: -32000, message: 'Core service requests must be handled by App Server', data: null });
+			assert.deepEqual(transport.requests.at(-1)?.error, { code: -32000, message, data: null });
 			assert.equal(await connected.api.extensionHost.getConnectionState(), 'ready');
 		} finally { registration.dispose(); }
 	});
@@ -1086,6 +1108,51 @@ test('file glob cancellation waits for the original terminal reply and rejects l
 	await rejected;
 	const count = transport.requests.length;
 	await assert.rejects(connected.api.fileSearch.glob(folder, query, controller.signal), isCancellationError);
+	assert.equal(transport.requests.length, count);
+});
+
+test('file fuzzy search preserves backend rank and scopes Unicode resources to the selected root', async () => {
+	const transport = new FakeTransport();
+	const connected = await connectWebRendererApi(transport, connectorHostServices, { requestTimeoutMs: 5 });
+	using cleanup = toDisposable(() => connected.dispose());
+	const directory = { resource: URI.file('/workspace'), target: { type: 'workspace' as const, dirId: 'folder' } };
+	const query = { query: '中文 SRC', maxResults: 10 };
+	const pending = connected.api.fileSearch.fuzzy(directory, query);
+	let settled = false;
+	void pending.then(() => { settled = true; }, () => { settled = true; });
+	const request = transport.requests.at(-1)!;
+	assert.equal(request.method, 'file/search/fuzzy');
+	assert.ok(isRecord(request.params));
+	assert.deepEqual(request.params, { operationId: request.params.operationId, target: directory.target, ...query });
+	await new Promise(resolve => setTimeout(resolve, 25));
+	assert.equal(settled, false, 'cold file search must outlive the ordinary RPC deadline');
+	transport.respondAt(-1, { matches: [{ path: 'src/中文.ts', score: 100 }, { path: 'src/中文-notes.ts', score: 90 }], totalMatches: 20, freshness: 'indexed' });
+	const result = await pending;
+	assert.deepEqual(result.matches.map(match => ({ path: match.resource.path, score: match.score })), [{ path: '/workspace/src/中文.ts', score: 100 }, { path: '/workspace/src/中文-notes.ts', score: 90 }]);
+	assert.equal(result.totalMatches, 20);
+});
+
+test('file fuzzy cancellation keeps its request until the terminal reply and discards a late success', async () => {
+	const transport = new FakeTransport();
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	using cleanup = toDisposable(() => connected.dispose());
+	const directory = { resource: URI.file('/workspace'), target: { type: 'workspace' as const, dirId: 'folder' } };
+	const controller = new AbortController();
+	const pending = connected.api.fileSearch.fuzzy(directory, { query: 'stale', maxResults: 10 }, controller.signal);
+	const operation = transport.requests.at(-1)!;
+	controller.abort();
+	assert.equal(transport.requests.at(-1)?.method, 'file/search/fuzzy/cancel');
+	assert.ok(isRecord(operation.params));
+	assert.deepEqual(transport.requests.at(-1)?.params, { operationId: operation.params.operationId });
+	let settled = false;
+	const rejected = assert.rejects(pending, isCancellationError).then(() => { settled = true; });
+	transport.respondAt(-1, null);
+	await Promise.resolve();
+	assert.equal(settled, false);
+	transport.respondAt(-2, { matches: [{ path: 'stale.txt', score: 50 }], totalMatches: 1, freshness: 'indexed' });
+	await rejected;
+	const count = transport.requests.length;
+	await assert.rejects(connected.api.fileSearch.fuzzy(directory, { query: 'stale', maxResults: 10 }, controller.signal), isCancellationError);
 	assert.equal(transport.requests.length, count);
 });
 

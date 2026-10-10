@@ -9,7 +9,7 @@
 | 项目 | 必须明确 |
 | --- | --- |
 | 前端行为 | 领域 service 调用方要完成什么，返回值和可观察副作用是什么 |
-| 后端 owner | 哪个 Rust 领域能力校验、决定并保存状态 |
+| 后端 owner | 哪个核心领域服务或选定扩展 Provider 校验、决定并保存状态；授权 broker 不复制业务状态 |
 | 消息形态 | request、notification、显式资源或 server request |
 | 身份 | 当前领域对象、Project、Thread、Turn、Item、Environment、resource 或 command ID |
 | connection 归属 | 哪个 renderer connection 发起，server request 和资源事件回到哪条 connection |

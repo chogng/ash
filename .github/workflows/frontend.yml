@@ -6,7 +6,7 @@ on:
     paths:
       - "src/**"
       - "test/**"
-      - "sdk/typescript/**"
+      - "sdk/**"
       - "localization/**"
       - "licenses/**"
       - "playwright.config.ts"
@@ -33,7 +33,7 @@ on:
     paths:
       - "src/**"
       - "test/**"
-      - "sdk/typescript/**"
+      - "sdk/**"
       - "localization/**"
       - "licenses/**"
       - "playwright.config.ts"

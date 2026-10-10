@@ -96,7 +96,7 @@ API key 输入框失焦即保存，清空即移除；成功保存不弹通知，
 | 配置目标 | Application、Local User、Remote User、Workspace、Folder 及语言设置入口                                                                             | 当前持久化写入限于 `USER`/`USER_LOCAL`；用户 JSONC 支持合法的语言覆盖块。资源级写入、远程和工作区目标未实现，不能把枚举或空配置层当作能力完成                                                        |
 | 设置目录 | 配置 schema 进入设置模型；模型支持变更事件，渲染根据目标与配置状态更新                                                                             | `DefaultSettings` 只收集声明了 `.setting` 元数据的键；设置模型在创建时固定。布局未匹配到任一此类键会抛错。适用于当前静态目录，尚不是动态配置贡献链路                                                 |
 | 搜索     | 支持配置状态、语言、扩展等语义过滤                                                                                                                 | 当前 `SettingsSearchQuery` 支持设置 ID、普通文本、`@id:` 和 `@modified`；`@lang:` 等仍会被当作普通文本。不能声明支持上游全部过滤条件                                                                 |
-| 领域内容 | 配置系统保持配置语义，各领域保留业务状态                                                                                                           | GitHub 已使用领域数据模型和共享 `SettingsSectionRenderer`；Models、Hooks、Skills 等仍以 `SettingsContent` 接入控件。Workbench 与 Sessions 共享部分 renderer 和内容实现，但 Sessions 仍手工组织设置项 |
+| 领域内容 | 配置系统保持配置语义，各领域保留业务状态                                                                                                           | GitHub 使用领域数据模型和共享 `SettingsSectionRenderer`；Hooks 用共享 renderer 提供管理入口，事件与声明由 Chat 的 Agent Customizations 编辑器呈现。Models、Skills 等仍以 `SettingsContent` 接入控件。Workbench 与 Sessions 共享部分 renderer 和内容实现，但 Sessions 仍手工组织设置项 |
 
 ### 已修复缺陷
 

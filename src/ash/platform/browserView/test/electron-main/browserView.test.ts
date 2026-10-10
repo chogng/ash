@@ -26,6 +26,38 @@ suite('Browser view ownership and operations', () => {
 		assert.throws(() => instantiation.createInstance(AppServerBrowserHost), /browserViewMainService/);
 	});
 
+	test('the renderer channel validates requests, enforces Thread access and returns Main page state', async () => {
+		using f = fixture();
+		await f.create();
+		f.observe = async pageId => ({ targetId: pageId, url: 'https://stale.test/', title: 'Worker title', loading: true });
+		using host = f.createHost();
+		const channel = host.getChannel();
+		const requestId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+		await assert.rejects(channel.call('window:1', 'disposeCore', []), /Unknown browser host command/);
+		await assert.rejects(channel.call('window:1', 'observe', { id: 'invalid', params: {} }), /Invalid browser operation/);
+		await assert.rejects(channel.call('window:1', 'observe', { id: requestId, params: { threadId: 'thread-two', targetId: id, ...observation } }), /BrowserTargetAccessDenied/);
+		assert.deepEqual(await channel.call('window:1', 'observe', { id: requestId, params: { threadId: 'thread-one', targetId: id, ...observation } }), { targetId: id, url: 'https://example.test/', title: 'Example', loading: false });
+		await channel.call('window:1', 'disposeSession', { threadId: 'thread-one' });
+		assert.deepEqual([f.observations, f.retired, f.children.size], [[id], ['thread-one'], 1]);
+	});
+
+	test('the renderer channel streams page closure and cancels loading observations', async () => {
+		using f = fixture();
+		await f.create();
+		f.loading = true;
+		using host = f.createHost();
+		const channel = host.getChannel();
+		const events: BrowserViewEvent[] = [];
+		using listener = channel.listen<BrowserViewEvent>('window:1', 'onDidEvent')(event => events.push(event));
+		const requestId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+		const pending = channel.call('window:1', 'observe', { id: requestId, params: { threadId: 'thread-one', targetId: id, ...observation } });
+		const rejected = assert.rejects(pending, /BrowserRequestCancelled/);
+		await channel.call('window:1', 'cancel', { id: requestId });
+		await rejected;
+		await f.manager.destroyBrowserView(id);
+		assert.equal(events.some(event => event.type === 'closed' && event.targetId === id), true);
+	});
+
 	test('one id has one page, including simultaneous creation', async () => {
 		using f = fixture();
 		await Promise.all([f.manager.getOrCreateBrowserView(id, { initialUrl: 'https://example.test/', ...agent }), f.manager.getOrCreateBrowserView(id, { initialUrl: 'https://ignored.test/', ...agent })]);
@@ -167,13 +199,11 @@ suite('Browser view ownership and operations', () => {
 		await f.create();
 		f.loading = true;
 		using host = f.createHost();
-		const routes = host.routes();
-		const observe = routes.find(r => r.channel === 'ash:browser-host:observe')!;
-		const cancel = routes.find(r => r.channel === 'ash:browser-host:cancel')!;
+		const channel = host.getChannel();
 		const requestId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-		const pending = observe.invoke(observe.validate({ id: requestId, params: { threadId: 'thread-one', targetId: id, ...observation } }));
+		const pending = channel.call('window:1', 'observe', { id: requestId, params: { threadId: 'thread-one', targetId: id, ...observation } });
 		await Promise.resolve();
-		await cancel.invoke(cancel.validate({ id: requestId }));
+		await channel.call('window:1', 'cancel', { id: requestId });
 		await assert.rejects(Promise.resolve(pending), /BrowserRequestCancelled/);
 		f.loading = false;
 		f.contents.emit('did-stop-loading');

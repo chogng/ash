@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { WebviewProtocolProvider } from '../../platform/webview/electron-main/webviewProtocolProvider.js';
 import { isAdmin, performShellCommand } from '../../platform/native/electron-main/nativeHostMainService.js';
 import { ChecksumService, checksumChannel } from '../../platform/checksum/node/checksumService.js';
+import { ProcessMainService } from '../../platform/process/electron-main/processMainService.js';
 import { URLHandlerChannel, URLHandlerChannelClient } from '../../platform/url/common/urlIpc.js';
 import type { IOpenURLOptions } from '../../platform/url/common/url.js';
 import { hooksConfigurationIpcRoute, openHooksTextFile } from '../../platform/hooks/electron-main/hooksConfigurationIpc.js';
@@ -35,7 +36,7 @@ import { BROWSER_VIEW_EVENT_CHANNEL } from "../../platform/browserView/common/br
 import { browserViewIpcRoutes } from "../../platform/browserView/electron-main/browserViewIpc.js";
 import { BrowserViewMainService, IBrowserViewMainService } from "../../platform/browserView/electron-main/browserViewMainService.js";
 import { Client as MessagePortClient } from '../../base/parts/ipc/common/ipc.mp.js';
-import { ProxyChannel } from '../../base/parts/ipc/common/ipc.js';
+import { ProxyChannel, type IServerChannel } from '../../base/parts/ipc/common/ipc.js';
 import { UtilityProcess } from '../../platform/utilityProcess/electron-main/utilityProcess.js';
 import { BrowserViewGroupMainService } from '../../platform/browserView/electron-main/browserViewGroupMainService.js';
 import { IPlaywrightService } from '../../platform/browserView/common/playwrightService.js';
@@ -155,6 +156,7 @@ interface WorkbenchWindowRecord {
 	readonly remoteConnections: IRemoteConnectionApi;
 	windowsStateHandler: WindowsStateHandler;
 	windowStateTracking: IDisposable;
+	browserHostChannel?: IServerChannel<string>;
 	openWorkspace?: (root: string) => Promise<void>;
 	replaceWorkspace?: (workspace: IAnyWorkspaceIdentifier) => Promise<boolean>;
 }
@@ -393,6 +395,10 @@ export class AshApplication extends Disposable {
 		await this.loggerService.initialize();
 		throwIfCancelled(token);
 		this.mainProcessIpcServer.registerChannel('logger', new LoggerChannel(this.loggerService));
+		this.mainProcessIpcServer.registerChannel('browserHost', {
+			call: <T>(context: string, command: string, arg: unknown) => this.getBrowserHostChannel(context).call<T>(context, command, arg),
+			listen: <T>(context: string, event: string, arg: unknown) => this.getBrowserHostChannel(context).listen<T>(context, event, arg),
+		});
 		this.logService.info('lifecycle', 'Desktop startup', { appServer: this.appServerStartupMode });
 		await this.createPersistentServices(token);
 		throwIfCancelled(token);
@@ -432,6 +438,7 @@ export class AshApplication extends Disposable {
 		this.mainProcessIpcServer.registerChannel('keyboardLayout', keyboardLayoutChannel(this.nativeKeyboardLayout));
 		this.mainProcessIpcServer.registerChannel('userKeyboardLayout', userKeyboardLayoutChannel(this.services.userKeyboardLayout));
 		this.mainProcessIpcServer.registerChannel('update', new UpdateChannel(this.updateMainService));
+		this.mainProcessIpcServer.registerChannel('process', ProxyChannel.fromService(new ProcessMainService(), this._store));
 		const localeValue = configurationValues(this.services.configuration.read().document)[LocalizationConfiguration.locale];
 		const locale = typeof localeValue === 'string' ? normalizeLocale(localeValue) : 'en';
 		const catalog = builtinLanguagePackCatalogs.find(catalog => catalog.locale.toLowerCase() === locale.toLowerCase()) ?? await new LanguagePackStore(this.profileRoot).read(locale);
@@ -1160,6 +1167,7 @@ export class AshApplication extends Disposable {
 		// A worker crash retires its debugger leases, while the user's live pages remain in Main.
 		browserPort.once('close', () => browserGroups.dispose());
 		const appServerBrowserHost = windowDisposables.add(browserServices.createInstance(AppServerBrowserHost));
+		record.browserHostChannel = appServerBrowserHost.getChannel();
 		windowDisposables.add(supervisor.onStateChange(state => {
 			if (state === 'crashed' || state === 'restarting' || state === 'stopping' || state === 'stopped') appServerBrowserHost.reset();
 		}));
@@ -1281,7 +1289,6 @@ export class AshApplication extends Disposable {
 			...this.mainProcessIpcRoutes(window),
 			...workspaceHost.routes(),
 			...supervisor.routes(window.webContents, () => ({ workspaceId: workspaceContext.getWorkspace().id, workspaceRoot: workspaceContext.getResolvedWorkspace().folders[0]?.uri.fsPath ?? this.profileRoot })),
-			...appServerBrowserHost.routes(),
 			...windowDisposables.add(new OAuthCallbackHost()).routes(),
 			...rendererSystemHostRoutes(window, path => this.directoryPermissionPrompt(path), this.auxiliaryWindowsMainService),
 			hooksConfigurationIpcRoute(this.profileRoot, () => !getWorkspaceRemoteAuthority(workspaceContext.getWorkspace()), openHooksTextFile),
@@ -1400,6 +1407,13 @@ export class AshApplication extends Disposable {
 		windowDisposables.add(toDisposable(() => webContents.off('will-navigate', preventNavigation)));
 		webContents.on('did-create-window', onDidCreateWindow);
 		windowDisposables.add(toDisposable(() => webContents.off('did-create-window', onDidCreateWindow)));
+	}
+
+	private getBrowserHostChannel(context: string): IServerChannel<string> {
+		const match = /^window:([1-9][0-9]*)$/.exec(context);
+		const channel = match ? this.workbenchWindowData.get(Number(match[1]))?.browserHostChannel : undefined;
+		if (!channel) { throw new Error('BrowserCapabilityUnavailable'); }
+		return channel;
 	}
 
 	private createBrowserServices(window: BrowserWindow, workspaceContext: WorkspaceContextMainService, remotePortForwardingService: SshPortForwardingService, windowDisposables: DisposableStore): InstantiationService {

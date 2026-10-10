@@ -17,10 +17,10 @@ Ash 的共享核心服务 App、TUI 与其他客户端，拥有 Agent 执行、�
 
 TS/JS 扩展沿用 Open VSX 包与 VS Code API，运行时职责按第 0.1 节分配给 Electron、Rust 和 V8。Rust 扩展承接从核心拆出的可选后端能力，运行编译后的独立程序，不需要 Node、V8 或 JS 包装。App 和 TUI 经公开能力契约按需使用同一个 Provider；客户端只选择和呈现能力，不复制其业务状态。编辑器文档、未保存文本和撤销仍由 TS 编辑器服务拥有。
 
-下面第 0 节是目标架构，其余实现记录不表示迁移已经完成。Open VSX 来源已接入；包能否运行仍取决于实际入口、API、平台与授权。GitHub 认证试点已复用公共 Rust SDK 与生产 launcher；通用第三方 Rust 安装和其他服务商能力迁移尚未完成。
+下面第 0 节是目标架构，其余实现记录不表示迁移已经完成。Open VSX 来源已接入；包能否运行仍取决于实际入口、API、平台与授权。Rust SDK 与产品 launcher 已用于独立 GitHub 认证试点；通用第三方 Rust 包安装、隔离与其余服务商能力迁移尚未完成。
 
 当前代码同时存在声明式目录、可信浏览器 Worker 和 Rust 可执行扩展 Host。声明式目录只读取
-`package.json` 与资源；内置 Markdown 预览已经走浏览器 Worker。现有 `ash-external-ext-sdk` 是此前的 Rust 编辑器作者 SDK，需按新的 Rust 能力扩展契约评估复用，不能把旧命令/Hover 示例视为新的认证 Provider 已可用。TS SDK v1 与 Rust V8 宿主已实现命令、悬停 Provider、文档快照、
+`package.json` 与资源；内置 Markdown 预览已经走浏览器 Worker。现有 `ash-external-ext-sdk` 的注册、typed DataChannels、scoped Services 与 stdio runtime 已被 Rust 认证试点复用，继续作为 Rust 作者接口建设；旧命令/Hover 示例本身不证明其他业务契约已完成。TS SDK v1 与 Rust V8 宿主已实现命令、悬停 Provider、文档快照、
 授权磁盘读取、通知、Quick Pick 和停用释放；本地包安装、启用、授权和 macOS、64 位 Windows JS 系统隔离已接入。目标是建设统一的 VS Code/Node API 兼容层，由 Electron、Rust 和 V8 按执行位置承担职责；当前真实 Node 与受限 V8/Worker 路径仍需迁移，不能直接删除已有行为和权限保障。
 Open VSX 已接入现有 Rust 包管理。VSIX 安装先加载受支持的声明式贡献；用户另外启用并授权后，标准包由产品 Node Host 执行，兼容范围取决于所用 VS Code API。Node 路径支持 macOS、Linux 和 64 位 Windows；本轮验证平台是 macOS。
 现有 Host RPC v1 的细节在下文作为当前实现记录保留；可以复用其监管与取消机制，但窄编辑器契约不能代替 Rust 能力扩展的完整业务契约。
@@ -156,23 +156,43 @@ Rust 扩展的边界是独立程序与版本化协议，不建立稳定 Rust dyn
 
 #### 共享接入与语言适配的 crate 边界
 
-建议采用一个扩展接入体系，共享包管理、有效授权、能力协商、调用身份和生命周期；TS/JS 兼容宿主与 Rust 作者 SDK 分开。共享接入统一的是能力与监管语义，不要求两类扩展使用同一个引擎、作者 API 或包格式。这样安装、撤权和恢复无需维护两套规则，JS 兼容细节也不会进入 Rust 插件或共享核心的依赖。
+产品继续支持 TS/JS 和 Rust 两类扩展，采用一个外部扩展接入体系，共享能力协商、调用身份、激活、取消、撤权与恢复语义；TS/JS 兼容实现与 Rust 作者 SDK 分开。`external` 表示扩展在共享核心之外执行，包含产品预装、本地与市场来源，不表示仅支持第三方或远程扩展。共享接入不要求两类扩展使用同一个引擎、作者 API 或包格式，也不要求 Rust 扩展包装成 JS。
 
 当前 `sdk/rust`（`ash-external-ext-sdk`）是 Rust 作者 SDK，已有 `Extension`、typed DataChannels、scoped Services 和 stdio runtime，并被 GitHub 认证扩展使用；它不是产品侧的扩展管理中心。保留这个依赖方向，不把 VS Code/Node 兼容、V8、安装 authority 或 App Server 组合放进作者 SDK。
 
-| 所属位置                                         | 职责与依赖边界                                                                                                                   |
-| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
-| `ash-core-plugins` 的 Manager 与来源 adapter     | 统一精确包身份、安装、启用、授权和版本切换；不同包格式在各自 adapter 规范化，不新建 TS/JS 与 Rust 各自的包 authority             |
-| `ash-extension-catalog`                          | 静态目录快照和资源读取；不承担可执行扩展管理或代码执行                                                                           |
-| `ash-external-ext-protocol` 与各能力领域契约 | 共享版本化生命周期、身份、取消与错误；业务请求/响应保持 typed 契约，不用任意 method/JSON 通道代替能力定义                        |
-| `ash-external-ext`                      | 共用启动门禁、进程监管、incarnation、取消、释放与有界恢复；launcher 接入 Electron/Rust-V8 宿主或 Rust executable，不实现语言 API |
-| `ash-external-js-ext` 与桌面侧兼容实现         | TS/JS 激活、模块与依赖加载、VS Code/Node API 兼容；通过公开能力接口接入系统机制和编辑器 owner                                    |
-| `ash-external-ext-sdk`                                 | Rust 作者注册、typed capability 调用、回调与 stdio runtime；Rust 插件依赖 SDK 和必要领域契约，不依赖产品宿主或 V8                |
-| `ash-v8-runtime`                                 | Rust JS 宿主与 Code Mode 共用引擎初始化设施；不承担扩展管理、Node API 或两者的执行状态                                           |
+运行 crate 与作者 SDK 已按下表重命名和搬迁，Cargo package 沿用产品 `ash-` 前缀。本次仅迁移目录、包名、可执行文件名及其消费者与构建引用；VS Code/Node 兼容改造、App Server 运行管理提取和来源解耦仍是后续工作。
 
-产品组合继续由 App Server 与各客户端宿主完成：取得有效包与授权，按声明的 scope 和执行位置选定 launcher，完成激活后发布能力注册，再通过领域契约调用；停用、撤权和更新按第 0.0 节使旧身份失效并释放实例。运行状态与恢复由 supervisor 拥有，包状态由 Manager 拥有，业务状态归 Provider；不新增同时复制这些状态的统一 `Extensions` 对象。前端编辑器注册仍由已有 TS owner 接入。
+| 当前目录 / 包名 | 职责 |
+| --- | --- |
+| `crates/external-ext` / `ash-external-ext` | 共用启动门禁、进程监管、取消、释放和有界恢复；产品组合与 fleet 仍在 App Server，后续按接入与路由职责提取，不复制领域业务或语言 API |
+| `crates/external-js-ext` / `ash-external-js-ext` | TS/JS 激活、模块与依赖加载、VS Code/Node API 兼容；当前仍保留真实 Node 与窄 SDK V8 路径，Electron 侧实现仍按前端平台职责放在 `src/` |
+| `crates/external-ext-protocol` / `ash-external-ext-protocol` | 扩展进程通信的版本化生命周期、调用身份、错误与取消；业务请求/响应保留 typed 领域契约 |
+| `sdk/typescript` / `@ash/extension` | TS/JS 作者使用的公共声明、API 包装与注册/释放接口 |
+| `sdk/rust` / `ash-external-ext-sdk` | Rust 作者注册、typed capability 调用、回调与 stdio runtime；不依赖产品宿主或 V8 |
 
-这是 crate 组织建议，不表示源码重组已经完成。现阶段复用已有边界，不仅为统一命名创建空的总入口 crate。若以后要把 `extensions` 名称用于产品侧管理，应将作者 SDK 单独命名并同步迁移真实消费者，再按具体管理契约确定组合位置；不能直接扩张现有 SDK。确有多个宿主需要复用同一 JS 兼容实现时，再按这个完整职责提取兼容库；Rust 作者 SDK 不因此依赖它。
+`host` 不必出现在 crate 名中；具体类型只有确实表达承载扩展的执行环境时才使用它。Rust 扩展运行自己的 executable，由共享接入层监管，不另建 `external-rs-ext` 执行器。`ash-extension-catalog` 保持静态目录快照和资源读取职责；`ash-v8-runtime` 保持引擎初始化设施职责，不承担扩展管理、Node API 或 Code Mode/扩展的执行状态。
+
+协议独立保留，不并入根 `ash-protocol`。扩展进程通信有自身消费者、版本协商和生命周期，Rust SDK、监管器与 JS 执行程序共同依赖这个轻量契约；根 `ash-protocol` 继续维护 Thread、Turn 等共享领域事实。通用 ID 按真实共享需求复用，不复制类型，也不让作者 SDK 为扩展通信而依赖整套产品协议。重命名本身不改变 wire 格式或版本；接口变化另按兼容与能力协商规则处理。
+
+外部扩展运行体系独立于 Plugin bundle。内置、本地、Open VSX 和 Plugin 来源在产品组合层通过 adapter 提供已验证的精确包、入口、来源租约与有效授权；运行层不解释 Plugin manifest，不直接依赖 `ash-core-plugins`。Plugin bundle 可以携带扩展，但不是运行扩展的必要条件。当前 `core-plugins` 已拥有的包存储、安装状态和来源授权继续由它维护，本次决策不修改该 crate，也不把同一包的状态复制到扩展运行层；后续迁移只在消费者与来源适配边界落实解耦。
+
+产品组合继续由 App Server 与各客户端宿主完成：从来源 adapter 取得有效包与授权，按声明的 scope 和执行位置选定 launcher，完成激活后发布能力注册，再通过领域契约调用；停用、撤权和更新按第 0.0 节使旧身份失效并释放实例。运行状态与恢复由 supervisor 拥有，包状态归对应来源的安装 authority，业务状态归 Provider；不新增同时复制这些状态的统一 `Extensions` 对象。前端编辑器注册仍由已有 TS owner 接入。
+
+#### 根目录 SDK 与运行时实现
+
+根目录采用 `sdk/typescript` 与 `sdk/rust` 组织两种语言的作者接口，不采用 `typescript-runtime` 或 `rust-runtime` 命名。SDK 可以封装通信、取消与公共对象的生命周期；V8 引擎、进程监管、Node API 模拟、模块解析和产品授权留在运行时 owner。面向作者的 JS 包装可以在 TypeScript SDK 中维护，产品提供的 `vscode`/Node 兼容实现属于 `external-js-ext` 与桌面兼容层。现成 VS Code 扩展沿用公开 API，不要求改写为 `@ash/extension`。
+
+```text
+sdk/
+  typescript/                 # TS/JS 作者接口
+  rust/                       # Rust 作者 SDK
+crates/
+  external-ext/               # 产品侧接入与监管
+  external-js-ext/            # Rust/V8 JS 执行与运行时兼容
+  external-ext-protocol/      # 独立扩展进程通信契约
+```
+
+上述目录已迁移。Rust SDK 仍属于根 Cargo workspace；目录移出 `crates/` 不改变依赖与构建约束。Cargo/Bazel、JS 包路径、构建与打包清单、消费者、示例、测试和文档链接已同步使用新名称；通信格式与现有授权、取消和恢复行为保持原契约。确有多个执行宿主需要复用同一兼容实现时再提取完整的兼容库，不为命名创建空壳；Rust 作者 SDK 不因此依赖 JS 运行时。
 
 #### 现有 TS SDK 与 Rust V8 扩展宿主
 
@@ -485,7 +505,7 @@ SDK 按此身份隔离工厂与 socket，连接关闭时由 Rust 发送 `remoteR
 | 能力                                                                                      | 权威所有者                                                    | 不负责                                              |
 | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------- | --------------------------------------------------- |
 | 内置静态资源源码与上游 provenance                                                         | 根目录 `extensions/`                                          | 运行时扫描、Extension API                           |
-| 此前的 Rust 编辑器作者接口、回调分发与激活作用域（待评估复用）                            | `ash-external-ext-sdk`                                              | 不证明新的 Rust 业务 Provider 已可用；目标见第 0 节 |
+| Rust 作者接口、回调分发、scoped Services 与 typed DataChannels（认证试点已复用）           | `sdk/rust` / `ash-external-ext-sdk`     | 不拥有产品监管或最终授权；通用第三方支持仍需验证 |
 | 静态包扫描、路径/文件类型校验、快照、摘要与目录代次                                       | `ash-extension-catalog`                                       | Editor 贡献语义、任意代码执行                       |
 | 静态可信根选择和顺序                                                                      | App Server 产品组合根                                         | 由 Renderer 提交任意主机路径                        |
 | Plugin 静态目录选择                                                                       | `ash-core-plugins` activation authority + App Server provider | 解析静态 `package.json`、授予代码执行               |
@@ -697,7 +717,7 @@ Host exit、invalid protocol 或 unknown outcome 会清空旧 registration，终
 | Marketplace executable consumer adapter 与独立 admission         | 已实现             | exact sidecar/executable binding、双 lease 与 deferred uninstall tests                                                |
 | Host RPC v1、独立进程监管、取消、配额、restart                   | 已实现             | `ash-external-ext` standalone tests                                                                          |
 | TS 作者 SDK 与 Rust V8 执行                                      | 已实现（v1）       | 独立进程测试覆盖 ESM、命令、前端文档、Rust 读取、服务错误、取消、超时与停用                                           |
-| Rust 能力扩展 SDK 与业务 Provider contract                       | 目标待实现         | 旧 SDK 的命令、Hover、Output 可供复用评估；反向调用补充未完成验证，不能证明认证 Provider 可用                         |
+| Rust 能力扩展 SDK 与业务 Provider contract                       | 认证试点已接入，通用支持待补齐 | SDK 已迁入 `sdk/rust`；独立 GitHub 认证程序与产品 launcher 已组合，第三方安装、隔离与其他能力契约仍需各自验证 |
 | 扩展命名 Output event stream                                     | 已实现             | process-fenced create/append/replace/clear/show/dispose、bounded retention 与 Workbench sequence projection tests     |
 | App Server Host fleet、目录 Grant gate、async invoke/cancel/read | 已实现             | exact operation broker、连接配额/TTL、退役取消与 changed notification                                                 |
 | Workbench Commands/Language/Tasks/Testing bridge                 | 已实现（窄契约）   | 原子投影、取消、stale fence 与 last-good 测试；Testing 仅 task-backed profile                                         |
@@ -720,7 +740,7 @@ per-platform artifact selector、跨重启 invocation 恢复或多个扩展共�
 目标分工由第 0 节维护。实现时完成以下内容：
 
 - 按第 0.1 节的职责分配建设统一 VS Code/Node API 兼容层，Desktop 复用 Electron，后端使用 Rust/V8；按公开契约实现与验证，不按扩展增加特判。保留已有权限语义，同步调用方、打包、CI 和测试，再移除后端真实 Node 路径。
-- 为 Rust 独立程序补公开能力 SDK、Provider 契约、来源 adapter、生产 launcher 和资源限制；评估复用旧 `ash-external-ext-sdk` 与 Host RPC，不按旧 Rust 编辑器 SDK 原样恢复建设。
+- 沿 `sdk/rust` 与认证试点完善 Provider 契约、来源 adapter、第三方 launcher 和资源限制；独立协议继续保留，不重建第二套作者 SDK 或进程通信。
 - 将 GitHub 认证与托管平台业务从内置服务接入可选扩展；共享核心保留通用 Git、HTTP、SecretStore、执行与授权机制。复用已有业务实现，但改变其组合与状态 owner，不在核心和扩展各维护一份。
 - 保持 Open VSX 来源 adapter、VSIX 格式和 Rust 安装生命周期；进一步完成 API 与运行环境支持
   检查，用真实扩展验证可运行范围。

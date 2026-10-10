@@ -6,7 +6,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { tmpdir } from 'node:os';
 import { launchElectron } from '../../../automation/playwrightElectron.js';
-import type { ISandboxGlobals } from "../../../../src/ash/base/parts/sandbox/electron-browser/sandboxTypes.js";
+import { installMainChannelTestClient } from '../../../automation/mainProcessIpc.js';
 import { decodeAppServerServerRequestResult } from '../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import type { Page } from '@playwright/test';
 import { appServerDaemonExecutablePath, appServerExecutablePath } from '../../../../src/ash/platform/app-server-daemon/node/appServerDaemonPackage.js';
@@ -22,7 +22,7 @@ test('two desktops isolate browser targets and closing one preserves the other',
 	const desktops: Awaited<ReturnType<typeof launchElectron>>[] = [];
 	const closed = new Set<Awaited<ReturnType<typeof launchElectron>>>();
 	const hostCall = (page: Page, method: string, params: Record<string, unknown>) => page.evaluate(({ method, params }) => {
-		return (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke(`ash:browser-host:${method}`, { id: crypto.randomUUID(), params: { threadId: 'browser-window-thread', ...params } });
+		return globalThis.ashTestMainProcess.call('browserHost', method, { id: crypto.randomUUID(), params: { threadId: 'browser-window-thread', ...params } });
 	}, { method, params });
 	try {
 		await promisify(execFile)(daemon, ['start'], { env: environment, windowsHide: true, timeout: 30_000 });
@@ -31,6 +31,8 @@ test('two desktops isolate browser targets and closing one preserves the other',
 		}
 		const first = desktops[0]!.driver.workbench.page;
 		const second = desktops[1]!.driver.workbench.page;
+		await installMainChannelTestClient(first);
+		await installMainChannelTestClient(second);
 		const created = decodeAppServerServerRequestResult('browser/create', await hostCall(second, 'create', { url: 'about:blank' }));
 		await expect(second.getByRole('tab', { name: 'Browser', exact: true })).toHaveCount(1);
 		await expect(first.getByRole('tab', { name: 'Browser', exact: true })).toHaveCount(0);

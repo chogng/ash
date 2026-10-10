@@ -5,6 +5,7 @@ import { ScrollableElement } from "../../../../../base/browser/ui/scrollbar/scro
 import { Disposable, DisposableMap, DisposableStore } from "../../../../../base/common/lifecycle.js";
 import type { URI } from '../../../../../base/common/uri.js';
 import type { ChatTurnErrorAction, IChatListItem } from "./chatListItems.js";
+import { ChatHookContentPart } from '../../../../../workbench/contrib/chat/browser/widget/chatContentParts/chatHookContentPart.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ChatMarkdownDecorationsRenderer } from './chatContentParts/chatMarkdownDecorationsRenderer.js';
 import { DomWidget } from '../../../../../platform/domWidget/browser/domWidget.js';
@@ -185,6 +186,11 @@ export class ChatListWidget extends DomWidget {
 		article.dataset.itemId = item.id;
 		if (item.transient) article.dataset.transient = "true";
 		if (item.isError) article.classList.add("error");
+		if (item.type === 'hook' && item.hookPart) {
+			const part = disposables.add(new ChatHookContentPart(article.ownerDocument, item.hookPart));
+			article.append(part.domNode);
+			return new RenderedItem(item, article, disposables);
+		}
 		const label = h(this.element.ownerDocument, item.type === "advisor" ? "summary" : "div");
 		label.className = "ash-cowork-item-label";
 		label.textContent = itemLabel(item);
@@ -257,6 +263,7 @@ function sameAction(left: ChatTurnErrorAction | undefined, right: ChatTurnErrorA
 function itemLabel(item: IChatListItem): string {
 	if (item.label) return item.label;
 	switch (item.type) {
+		case 'hook': return 'Hook';
 		case "userMessage":
 		case "userContext":
 		case "userImage":

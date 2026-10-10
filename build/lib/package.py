@@ -77,6 +77,7 @@ def build_package_directory(
     livekit: Optional[Dict[str, str]] = None,
     remote_runtime_bundle: Optional[Path] = None,
     remote_runtime_release: Optional[Dict[str, str]] = None,
+    symbols_dir: Optional[Path] = None,
     github_authentication_binary: Optional[Path] = None,
 ) -> None:
     if github_authentication_binary is None:
@@ -156,6 +157,7 @@ def build_package_directory(
             "target": spec.target,
             "platform": "win32" if spec.is_windows else spec.operating_system.value,
             "executables": executables,
+            "symbolsDir": str(symbols_dir) if symbols_dir is not None else None,
             "ripgrep": runtime,
             "tgrep": {
                 "executable": str(tgrep.executable),
@@ -199,7 +201,7 @@ def build_package_directory(
         assemble_package(staging, inputs)
         validate_package_directory(staging, spec)
         staging.rename(output)
-    except Exception:
+    except BaseException:
         shutil.rmtree(staging, ignore_errors=True)
         raise
 
@@ -382,6 +384,26 @@ def assemble_package(staging: Path, inputs: dict) -> None:
         destination = staging / license["destination"]
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source_root / license["source"], destination)
+
+    if inputs.get("symbolsDir"):
+        from build.release.symbols import SymbolStore
+
+        if options["buildProfile"] != "release":
+            raise RuntimeError("Companion symbols require the release profile")
+        store = SymbolStore(Path(inputs["symbolsDir"]), source_root)
+        for component, relative in LAYOUT["binaries"].items():
+            if component != "livekit":
+                store.collect(
+                    Path(executables[component]),
+                    staging / relative.format(exe=suffix),
+                    target,
+                )
+        if is_windows:
+            for component, name in (
+                ("windowsSandbox", "ash-windows-sandbox.exe"),
+                ("windowsSandboxService", "ash-windows-sandbox-service.exe"),
+            ):
+                store.collect(Path(executables[component]), binary_dir / name, target)
 
     components = {
         "tgrep": {

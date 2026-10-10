@@ -14,7 +14,7 @@
 > MCP runtime：[`mcp.md`](mcp.md)
 > Skill runtime：[`skills.md`](skills.md)
 > Config authority 与 runtime snapshot 接入：[`config.md`](config.md)
-> Editor Extension 的 TS/JS 运行方向与当前实现：[`editor-extensions.md`](editor-extensions.md)
+> 两类扩展、共享核心与客户端的目标边界和当前实现：[`editor-extensions.md`](editor-extensions.md)
 > 可执行 Host runtime 实现：[`crates/external-ext/README.md`](../crates/external-ext/README.md)
 
 ## 快速理解
@@ -23,9 +23,8 @@ Plugin 是可同时携带多种 capability 的集成 bundle。`ash-plugin` 定�
 `ash-core-plugins` 聚合内置 Ash catalog 与其他来源，统一拥有安装、更新、启用、授权和 activation。
 Marketplace 只是 Plugin 来源，Skill、MCP、Connector 等运行方不解释 Marketplace。
 
-Editor Extension 已确定采用 TS/JS 扩展和 TS SDK：界面与文档调用 TS 服务，后端业务通过受限接口
-请求 Rust。包管理仍由本系统负责，扩展运行不要求作者编写 Rust。下文的 `editorExtensions[]` 与
-可执行 Host 是仍在源码中的既有契约，退出目标产品扩展方向；它们不作为第三方 JS 运行的授权依据。
+目标有两类可执行扩展：TS/JS 包在 Desktop 复用 Electron、在后端使用独立 Rust/V8 宿主；Rust 能力包运行自己的独立程序。两者共享外部扩展接入语义，App 和 TUI 按需消费。Plugin 是可携带扩展的分发 bundle，不是外部扩展运行的必要条件；目标 `external-ext` 运行层通过产品侧来源 adapter 接入，不直接依赖 `core-plugins`。现有 Plugin 包状态和来源授权继续归本系统，不复制到扩展运行层，也不因这次命名决策修改 `core-plugins`。确定的命名与根目录 SDK 布局见[扩展接入边界](editor-extensions.md#共享接入与语言适配的-crate-边界)。
+下文的 `editorExtensions[]` 和 Host RPC v1 是既有契约。Rust SDK 与产品 launcher 已被独立认证试点复用；通用第三方安装和系统隔离仍未完成，不能把一个独立程序声明当作完整运行支持。
 职责与安全要求见 [`确定的产品方向`](editor-extensions.md#0-确定的产品方向)。
 
 第三方 Editor Extension 来源已接入 Open VSX。来源 adapter 与 VSIX 安装复用 Rust 包管理生命周期，
@@ -55,7 +54,7 @@ Plugin 的定义与产品生命周期分别由两个 crate 拥有，来源不会
 | Built-in / remote Marketplace Plugin bundle | `ash-core-plugins`      | Skill/MCP/Connector/Theme/Language/Editor Extension 各领域     |
 | Local Plugin v1                             | `ash-core-plugins`      | App Server 交给各领域；enable/grant 后形成 activation snapshot |
 
-所有来源都可以提供 Skill、Connector、MCP、可执行 Editor Extension 或静态资源。
+所有来源都可以提供 Skill、Connector、MCP、可执行 Editor Extension 或静态资源。目标 Rust 能力扩展由 Ash 来源 adapter 或产品预装包接入，同样复用 Manager 的精确包安装与租约；不要求 Open VSX 提供 Rust 包，不新建一套安装、启用或授权 authority。
 `ash-core-plugins` 先形成统一 installed Plugin 与 activation，再按 capability 交给各领域。
 
 Plugin 不是：
@@ -98,8 +97,9 @@ language/TextMate/snippet/theme/debugger 资源。Plugin v1 现在可用 `declar
 这共享 install/enable/grant/revocation lifecycle，但不合并两种 manifest，也不把静态内容变成可执行
 runtime。其 canonical 文档是 [`editor-extensions.md`](editor-extensions.md)。
 
-Legacy Plugin v1 提供显式 `editorExtensions[]`：`runtime: javascript` 指向用 TS SDK 编写并编译为 ESM 的 JS，
-由产品的 Rust V8 宿主执行；`runtime: hostRpc` 指向自己实现共享协议的独立程序。两者不启动 Node。
+Legacy Plugin v1 提供显式 `editorExtensions[]`：`runtime: javascript` 默认执行 Ash SDK ESM，
+当前仍由受限 Rust V8 宿主执行；显式 `api: vscode` 加载包根标准 `package.json`，由真实 Node Host 执行受支持的标准入口。
+`runtime: hostRpc` 指向自己实现共享协议的独立程序；它不是新的 Rust 能力扩展 API 或生产支持承诺。
 compatibility authority 只验证并授权声明，
 `ash-external-ext` supervisor 才拥有逐扩展进程隔离、RPC、crash recovery 和 provider
 lifecycle。静态 `package.json` catalog 不会被隐式转换成该 executable declaration。
@@ -108,10 +108,9 @@ lifecycle。静态 `package.json` catalog 不会被隐式转换成该 executable
 directory，目录必须包含 regular `package.json`。它不需要 `process` permission；安装只存储 bytes，
 enable + grant 后才进入静态 catalog，disable、grant revoke、package revoke、update 或 uninstall 会使
 下一次 catalog refresh 移除旧 exact package。Workbench 监听 Plugin activation generation 并自动刷新。
-生产第三方执行还必须由产品注入能够实施 sandbox、memory/CPU/process hard limits 和 process-tree
+独立可执行扩展的生产执行还必须由产品注入能够实施 sandbox、memory/CPU/process hard limits 和 process-tree
 termination 的 platform launcher；没有该 launcher 时 Host capability 必须为 false，不能用
-`TrustedDevelopmentLauncher` 降级。该 v1 是 Ash executable RPC，不是 VS Code/Node Extension
-Host。
+`TrustedDevelopmentLauncher` 降级。Node 扩展按其精确包执行授权契约运行，不声称拥有 SDK V8 的系统沙箱。该 Host RPC v1 是 Ash 的内部程序契约；Node 的 VS Code API 兼容由单独桥接提供。
 
 安装、启用、授权和调用是四个不同动作：
 
@@ -315,8 +314,16 @@ Manifest 必须 strict-parse：
 
 `editorExtensions[]` 是 strict typed control-plane declaration：ID 与 entrypoint 各自唯一；entrypoint
 必须是包内 regular file。`runtime` 必须显式声明为 `javascript` 或 `hostRpc`，不根据文件名猜测。
-`hostRpc` 要求完全相同路径的 `process` permission；JS 入口必须是 `.js` 或 `.mjs`，SDK v1 只允许
-`command` 与 `languageProvider` ceiling，语言作者 API 当前只开放 hover；读取工作区还需要 `directory: read` 与当前目录读授权。`runtimeApiVersion` 仅接受数值 `1`；activation event 和 capability ceiling 都必须 non-empty、unique、bounded。v1 triggers 是
+`hostRpc` 要求完全相同路径的 `process` permission。JavaScript 入口的 `api` 默认为 `ash`，使用 ESM
+`.js` 或 `.mjs`；显式 `api: vscode` 使用标准 `require('vscode')`，并接受 `.cjs`。标准扩展的
+`package.json` 位于插件包根，入口仍由 `entrypoint` 指定；安装不会自动启用或授权执行。
+标准 manifest 的命令标题和激活事件用于首次调用前的发现，实际回调由对应 Node Host 激活，
+该包的静态声明同时进入既有 Extension catalog，problem matcher 等贡献与脚本共享 enable/grant
+和撤销生命周期，无需再声明一个独立启用的 `declarativeExtensions` 载体。一个插件包只有一个
+标准包根 manifest，因此只允许一个 `api: vscode` 入口；其他 Ash SDK 入口仍可并存。
+声明式 `declarativeExtensions` 仍只加载资源。`api` 不适用于 `hostRpc`。
+JS v1 允许 command、languageProvider、statusBar、taskProvider 和 debugAdapter ceiling；
+读取工作区还需要 `directory: read` 与当前目录读授权。`runtimeApiVersion` 仅接受数值 `1`；activation event 和 capability ceiling 都必须 non-empty、unique、bounded。v1 triggers 是
 `startup`、`onCommand`、`onLanguage`、`onDemand`、`onDebugType`、`onTaskType` 和
 `onTestProfile`。除 `startup` 外，trigger 不得请求 ceiling 中未声明的 capability。
 

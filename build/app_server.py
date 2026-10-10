@@ -171,6 +171,9 @@ def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Names
         type=Path,
         default=REPOSITORY_ROOT / "third_party/.cache/tgrep",
     )
+    parser.add_argument(
+        "--symbols-dir", type=Path, default=os.environ.get("ASH_SYMBOLS_DIR")
+    )
     return parser.parse_args(arguments)
 
 
@@ -268,6 +271,7 @@ def build_package(args: argparse.Namespace) -> int:
         protocol_metadata=protocol_metadata,
         update_public_key=args.update_public_key,
         build_profile=args.cargo_profile,
+        symbols_dir=args.symbols_dir,
         windows_sandbox_service_binary=binaries.get("ash-windows-sandbox-service"),
         windows_sandbox_binary=binaries["ash-windows-sandbox"]
         if spec.is_windows

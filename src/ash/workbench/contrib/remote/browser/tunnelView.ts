@@ -152,7 +152,7 @@ export class TunnelPanel extends ViewPane {
 		this.closingAll = true;
 		this.error = undefined;
 		this.render();
-		void this.tunnelService.tunnels.then(tunnels => Promise.all(tunnels.map(tunnel => this.tunnelService.closeTunnel(tunnel.tunnelRemoteHost, tunnel.tunnelRemotePort)))).then(() => {
+		void this.tunnelService.closeAll().then(() => {
 			if (this.isCurrentConnection(connectionRevision)) this.tunnels.clear();
 		}, error => {
 			if (this.isCurrentConnection(connectionRevision)) {

@@ -1639,6 +1639,7 @@ dependencies = [
  "dunce",
  "globset",
  "regex",
+ "regex-syntax",
  "serde_json",
  "tempfile",
 ]

@@ -278,7 +278,8 @@ class AgentEvalReviewTests(unittest.TestCase):
                 ("trace", "trace.json"),
                 ("changes", "changes.patch"),
             ):
-                path = new.parent / "runs/case-1" / artifact
+                # Report links use canonical paths, including macOS /var aliases.
+                path = (new.parent / "runs/case-1" / artifact).resolve()
                 self.assertIn(f"[{label}]({path.as_posix()})", report)
             result = review.read_json(output / "comparison.json")
             self.assertEqual(result["gate"]["recoveredTrials"], 1)

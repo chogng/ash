@@ -22,7 +22,7 @@ import { createExtensionSnippetProvider, parseExtensionSnippetFile } from "../..
 import { ExtensionThemeRegistry, parseExtensionTheme } from "../../common/extensionTheme.js";
 import { ExtensionDebugAdapterRegistry } from "../../common/extensionDebugAdapter.js";
 import { DebugAdapterFactoriesRegistry } from "../../../debug/common/debugAdapterFactory.js";
-import { parseProblemMatchers } from '../../../../contrib/tasks/common/problemMatcher.js';
+import { parseProblemMatchers } from '../../../tasks/common/problemMatcher.js';
 import { WatchingProblemCollector } from '../../../../contrib/tasks/common/problemCollectors.js';
 import { MarkerService } from '../../../../../platform/markers/common/markers.js';
 import type { ITextMateService } from "../../../textMate/common/textMateService.js";

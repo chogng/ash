@@ -422,6 +422,76 @@ pub struct ThreadController {
 }
 
 impl ThreadController {
+    /// Commits display-only observations in the same writer order as Turn and tool facts.
+    pub fn record_hook_run(
+        &self,
+        scope: &core_api::HookEventScope,
+        run: &ash_protocol::HookRunRecord,
+        evidence: Option<&core_api::HookRunEvidence>,
+    ) -> Result<Option<ThreadUpdateEnvelope>, CoreError> {
+        let (session_id, thread_id) = match scope {
+            core_api::HookEventScope::User => return Ok(None),
+            core_api::HookEventScope::Session { session_id } => {
+                if run.turn_id.is_some() {
+                    return Err(CoreError::InvalidInput(
+                        "Session Hook cannot own a Turn".into(),
+                    ));
+                }
+                let Some(root) = self
+                    .list_session_threads(session_id)?
+                    .into_iter()
+                    .find(|thread| thread.origin.is_root())
+                else {
+                    return Ok(None);
+                };
+                (session_id, root.thread_id)
+            }
+            core_api::HookEventScope::Turn {
+                session_id,
+                thread_id,
+                turn_id,
+            } => {
+                if run.turn_id.as_ref() != Some(turn_id) {
+                    return Err(CoreError::InvalidInput(
+                        "Hook Turn identity does not match its scope".into(),
+                    ));
+                }
+                (session_id, thread_id.clone())
+            }
+        };
+        let event = ThreadEvent::HookRunUpdated {
+            thread_id: thread_id.clone(),
+            run: run.clone(),
+        };
+        let sequence = self.mutate_thread(&thread_id, |snapshot| {
+            if &snapshot.session_id != session_id {
+                return Err(CoreError::InvalidInput(
+                    "Hook Session does not own this Thread".into(),
+                ));
+            }
+            self.record_batch(snapshot, vec![event.clone()])?;
+            Ok(snapshot.sequence)
+        })?;
+        if let Some(evidence) = evidence {
+            if let Some(diagnostics) = &self.diagnostics {
+                diagnostics.record_hook(
+                    session_id,
+                    &thread_id,
+                    run.turn_id.as_ref(),
+                    &run.run_id,
+                    evidence,
+                );
+            }
+        }
+        Ok(Some(ThreadUpdateEnvelope {
+            session_id: session_id.clone(),
+            thread_id,
+            durable_sequence: sequence,
+            stream_cursor: None,
+            update: ThreadUpdate::Committed { event },
+        }))
+    }
+
     /// Attaches optional observations without granting control over durable execution.
     pub fn with_diagnostics(
         mut self,
@@ -1218,6 +1288,10 @@ impl ThreadController {
                 || goal
                     .token_budget
                     .is_some_and(|budget| goal.tokens_used >= budget)
+                || snapshot
+                    .hook_runs
+                    .iter()
+                    .any(|run| run.status == ash_protocol::HookRunStatus::Running)
                 || snapshot.turns.iter().any(|turn| {
                     !matches!(
                         turn.status,
@@ -2482,6 +2556,23 @@ impl ThreadController {
             .map_err(|_| CoreError::Journal("loaded Thread state lock poisoned".into()))?;
         let mut snapshot = self.load_snapshot(thread_id)?;
         let mut recovery_events = Vec::new();
+        for run in snapshot
+            .hook_runs
+            .iter()
+            .filter(|run| run.status == ash_protocol::HookRunStatus::Running)
+        {
+            let mut interrupted = run.clone();
+            interrupted.status = ash_protocol::HookRunStatus::Cancelled {
+                reason: "Hook owner stopped before recording completion".into(),
+            };
+            interrupted.duration_ms = u64::try_from(self.timestamp()?.0)
+                .unwrap_or(u64::MAX)
+                .saturating_sub(run.started_at_unix_ms);
+            recovery_events.push(ThreadEvent::HookRunUpdated {
+                thread_id: thread_id.clone(),
+                run: interrupted,
+            });
+        }
         for turn in snapshot.turns.clone() {
             if !matches!(
                 turn.status,
@@ -3164,6 +3255,10 @@ fn thread_requires_startup_recovery(snapshot: &ThreadSnapshot) -> bool {
         .goal
         .as_ref()
         .is_some_and(|goal| goal.status.is_active())
+        || snapshot
+            .hook_runs
+            .iter()
+            .any(|run| run.status == ash_protocol::HookRunStatus::Running)
         || snapshot.turns.iter().any(|turn| {
             matches!(
                 turn.status,

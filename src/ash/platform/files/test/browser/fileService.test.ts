@@ -82,6 +82,42 @@ test("workspaceResourceFromPath rejects invalid protocol path segments", () => {
 	assert.equal(workspaceResourceFromPath(URI.parse("file:///C:/project"), "src\\..\\main.ts"), undefined);
 });
 
+test('AppServer file operations and notifications preserve POSIX basenames on disk', async () => {
+	const root = URI.parse('file:///work');
+	const originalName = 'part\\name.txt';
+	const renamedName = `renamed-${originalName}`;
+	const source = root.joinPathSegment(originalName);
+	const target = root.joinPathSegment(renamedName);
+	using workspace = new WorkspaceContextService({ id: 'project', uri: root });
+	using changes = new Emitter<FsChanged>();
+	const requests: unknown[] = [];
+	using provider = new AppServerFileSystemProvider({
+		workspaceContextService: workspace,
+		resourceApi: unavailableResourceApi(),
+		onDidChange: changes.event,
+		api: {
+			...createDisconnectedFileApi(() => { throw new Error('Unexpected file operation'); }),
+			createFile: async params => {
+				requests.push(params);
+				return { fileType: 'file', sizeBytes: 0, readonly: false, modifiedAtMillis: null };
+			},
+			rename: async params => { requests.push(params); },
+			readDirectory: async () => ({ entries: [{ name: renamedName, fileType: 'file' }] }),
+		},
+	});
+	const notifications: string[][] = [];
+	using listener = provider.onDidChangeFiles(event => notifications.push(event.resources?.map(resource => resource.path) ?? []));
+	await provider.createFile(source, 'error');
+	await provider.rename(source, target, 'error');
+	changes.fire({ type: 'pathsChanged', dirId: 'project', paths: [renamedName] });
+	assert.deepEqual(requests, [
+		{ dirId: 'project', path: originalName, existing: 'error' },
+		{ dirId: 'project', source: originalName, target: renamedName, existing: 'error' },
+	]);
+	assert.deepEqual((await provider.readDirectory(root)).map(entry => ({ name: entry.name, path: entry.resource.path })), [{ name: renamedName, path: target.path }]);
+	assert.deepEqual(notifications, [[target.path]]);
+});
+
 test("AppServerFileSystemProvider maps wire entries back to resource URIs", async () => {
 	const root = URI.parse("file:///C:/project");
 	const releasedResources: string[] = [];

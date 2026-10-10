@@ -2,6 +2,7 @@ import { chromium, expect, test } from '@playwright/test';
 
 test('picked-folder file streams preserve the requested byte range', async ({ page }) => {
 	await page.goto('/files.html');
+	await expect.poll(() => page.evaluate(() => Boolean(window.ashFilesIntegration))).toBe(true);
 	await page.evaluate(() => window.ashFilesIntegration.prepareBrowserWatch('unavailable'));
 	await page.evaluate(() => window.ashFilesIntegration.changeBrowserFile('range.txt', '0123456789'));
 	expect(await page.evaluate(() => window.ashFilesIntegration.readBrowserStream('range.txt', 2, 5))).toEqual([50, 51, 52, 53, 54]);
@@ -242,6 +243,12 @@ test('binary comparison reloads both byte previews and resolves their file paths
 		await expect(sides.first().locator('.ash-binary-editor-content')).toContainText('48 69');
 		await expect(sides.last().locator('.ash-binary-editor-content')).toContainText('48 69 00 ff');
 		await expect(sides.last().getByRole('region')).toBeFocused();
+		// This page imports the pane directly; its styles must not depend on product contributions.
+		expect(await sides.last().getByRole('region').evaluate(element => ({
+			display: getComputedStyle(element).display,
+			direction: getComputedStyle(element).flexDirection,
+			font: getComputedStyle(element.querySelector('.ash-binary-editor-content')!).fontFamily,
+		}))).toEqual({ display: 'flex', direction: 'column', font: 'monospace' });
 		const boxes = await sides.evaluateAll(elements => elements.map(element => ({ left: element.getBoundingClientRect().left, right: element.getBoundingClientRect().right })));
 		expect(boxes[1]!.left).toBeGreaterThanOrEqual(boxes[0]!.right);
 	}

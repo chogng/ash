@@ -24,6 +24,7 @@ export default defineConfig({
 				language: resolve(import.meta.dirname, "language.html"),
 				marketplace: resolve(import.meta.dirname, "marketplace.html"),
 				issueReporter: resolve(import.meta.dirname, 'issueReporter.html'),
+				processExplorer: resolve(import.meta.dirname, 'processExplorer.html'),
 				advisor: resolve(import.meta.dirname, "advisor.html"),
 				agentTrace: resolve(import.meta.dirname, 'agentTrace.html'),
 				chatInput: resolve(import.meta.dirname, "chatInput.html"),

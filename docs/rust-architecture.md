@@ -37,6 +37,8 @@ Desktop UI、Electron IPC、`ash-code` 的 TUI 宿主和第三方网页 UI 不�
 
 ## 2. crate 边界
 
+外部扩展的目标运行 crate 为 `external-ext`、`external-js-ext` 和独立 `external-ext-protocol`；Rust 作者 SDK 已迁入根 `sdk/rust`，包名为 `ash-external-ext-sdk`，与 `sdk/typescript` 并列，仍属于 Cargo workspace。产品监管不进入作者 SDK，协议不并入根 `ash-protocol`，运行层不直接依赖 `core-plugins`；名称、目录与相关构建引用已迁移；来源解耦和运行时兼容改造尚未实施。确定的职责与现有入口见[扩展接入边界](editor-extensions.md#共享接入与语言适配的-crate-边界)，以下树形图记录当前布局。
+
 ```text
 crates/
 ├── protocol/             # canonical shared domain contract
@@ -101,6 +103,8 @@ crates/
 ├── exec/                  # target headless Agent runner
 ├── tool-executor/         # target local process execution boundary
 ```
+
+根 `sdk/typescript/` 与 `sdk/rust/` 提供两类扩展的作者接口；Rust SDK 仍是同一 Cargo workspace 的成员。
 
 `cli/` 是命令入口，`crates/tui` 与终端辅助 crate 拥有终端呈现。它们和后端共享根 Cargo workspace，但后端不能反向依赖终端呈现或命令入口。
 
@@ -208,7 +212,7 @@ Canonical 产品模型、command/event/update/request 的分类、ID/cursor 语�
 它不能反向依赖这些执行或 I/O crate。
 
 工具 host contract、registry/binding、executor interface、MCP/dynamic conversion、tool search、
-Plugin discovery、code mode 与图片精度由 [`tools.md`](tools.md) 维护。`ash-tools` 复用 protocol
+Plugin discovery、code mode 与图片精度由 [工具系统](tools/tools.md) 维护。`ash-tools` 复用 protocol
 identity/content，不拥有 Core 调度、MCP session、Plugin authority 或 provider wire。
 
 ## 4. 核心
@@ -284,7 +288,7 @@ revision/generation/receipt contract；desired document 的唯一 authority 是 
 ## 6. Sequence 与并发
 
 Sequence、cursor、ID 和 optimistic concurrency 的领域语义统一见
-[`protocol.md`](protocol.md#5-sequencecursor-与-id)。存储实现必须为每个 aggregate
+[`protocol.md`](protocol.md#1-唯一事实源)。存储实现必须为每个 aggregate
 提供独立 writer lease，使不同 Thread 可以并发且不会占用 Session revision。
 
 Fork 在 Session lineage 中保存 `parentThreadId + parentSequence`。该 parent sequence 是一个
@@ -301,7 +305,7 @@ Session plan(creating)
 ## 7. 类型化命令重放
 
 Command identity、receipt 和 replay 规则统一见
-[`protocol.md`](protocol.md#41-command请求改变状态)。store adapter 负责把
+[`protocol.md`](protocol.md#3-commandevent-与-update)。store adapter 负责把
 typed receipt 与首个业务 event 原子提交，reducer recovery 恢复稳定结果；Config authority
 沿用相同模式。Config、Plugin、MCP 与 Skill 的 authority 分布、snapshot reconcile 和 safe-point
 组合由 [`config.md`](config.md) 统一规定。

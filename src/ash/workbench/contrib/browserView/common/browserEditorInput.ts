@@ -1,6 +1,6 @@
 import type { IResourceEditorInput } from '../../../common/editor.js';
 import { Emitter } from '../../../../base/common/event.js';
-import { MutableDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IBrowserViewService, BrowserViewStorageScope, normalizeBrowserViewUrl, type IBrowserViewSessionOptions } from '../../../../platform/browserView/common/browserView.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -26,10 +26,12 @@ export class BrowserEditorInput extends EditorInput {
 	private readonly labelChange = this._register(new Emitter<void>());
 	readonly onDidChangeLabel = this.labelChange.event;
 	private readonly model = this._register(new MutableDisposable<BrowserViewModel>());
+	private readonly modelListeners = this._register(new DisposableStore());
 	private resolution: Promise<IBrowserViewModel> | undefined;
+	private isClosed = false;
 
 	constructor(
-		private readonly data: IBrowserEditorInputData,
+		private data: IBrowserEditorInputData,
 		@IBrowserViewService private readonly service: IBrowserViewService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
@@ -47,8 +49,12 @@ export class BrowserEditorInput extends EditorInput {
 
 	public resolve(): Promise<IBrowserViewModel> {
 		this.assertNotDisposed();
+		if (this.isClosed) { throw new Error('BrowserTargetUnavailable'); }
 		if (!this.resolution) {
-			this.resolution = this.resolveModel();
+			this.resolution = this.resolveModel().catch(error => {
+				this.resolution = undefined;
+				throw error;
+			});
 		}
 		return this.resolution;
 	}
@@ -58,9 +64,16 @@ export class BrowserEditorInput extends EditorInput {
 		this.assertNotDisposed();
 		const model = this.instantiationService.createInstance(BrowserViewModel, info);
 		this.model.value = model;
-		model.onDidChangeState(() => this.labelChange.fire(), undefined, this._store);
-		await model.initialize();
-		return model;
+		this.modelListeners.add(model.onDidChangeState(() => this.labelChange.fire()));
+		this.modelListeners.add(model.onDidClose(() => { this.isClosed = true; }));
+		try {
+			await model.initialize();
+			return model;
+		} catch (error) {
+			this.modelListeners.clear();
+			this.model.clear();
+			throw error;
+		}
 	}
 
 	public serialize(): IBrowserEditorInputData {
@@ -69,6 +82,12 @@ export class BrowserEditorInput extends EditorInput {
 		// Restoring a tab restores user presentation, never an agent's authority or in-memory login.
 		const restoredSession = session.scope === BrowserViewStorageScope.Agent ? { scope: BrowserViewStorageScope.Ephemeral as const } : session;
 		return { id: this.data.id, url: info?.state.url ?? this.data.url, title: info?.state.title ?? this.data.title, session: restoredSession };
+	}
+
+	protected override disposeCore(): void {
+		// Model detachment must not replace the last displayed URL/title with the restoration snapshot.
+		this.data = this.serialize();
+		super.disposeCore();
 	}
 }
 

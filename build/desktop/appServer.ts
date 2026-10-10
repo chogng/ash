@@ -8,9 +8,9 @@ import { pythonCommand } from '../python.ts';
 const repositoryRoot = resolve(import.meta.dirname, '../..');
 const terminalCrates = new Set<string>(JSON.parse(readFileSync(resolve(repositoryRoot, 'build/source-layout.json'), 'utf8')).terminalCrates);
 const sharedRustSource = resolve(repositoryRoot, 'crates');
+const rustSdkSource = resolve(repositoryRoot, 'sdk/rust');
 const configuredTargetDirectory = process.env.CARGO_TARGET_DIR?.trim();
 const targetDirectory = resolve(repositoryRoot, configuredTargetDirectory || '.build/cargo');
-const watchedTargetDirectory = relativeWatchedDirectory(sharedRustSource, targetDirectory);
 const debounceMs = 250;
 
 /** Prepare before selecting a runtime: file watchers only observe changes after startup. */
@@ -65,10 +65,12 @@ export async function watchAppServer(options: { skipInitial?: boolean; javascrip
 	const cancellation = new AbortController();
 	const watchers: FSWatcher[] = [];
 
-	watchers.push(
-		watch(sharedRustSource, { recursive: true }, (_event, file) => requestBuild(sharedRustSource, file, fileName => shouldRebuildAppServer(fileName, watchedTargetDirectory))),
-		watch(repositoryRoot, (_event, file) => requestBuild(repositoryRoot, file, shouldRebuildWorkspaceManifest)),
-	);
+	// The Rust author SDK remains a backend build input after leaving crates/.
+	for (const source of [sharedRustSource, rustSdkSource]) {
+		const ignoredTarget = relativeWatchedDirectory(source, targetDirectory);
+		watchers.push(watch(source, { recursive: true }, (_event, file) => requestBuild(source, file, fileName => shouldRebuildAppServer(fileName, ignoredTarget))));
+	}
+	watchers.push(watch(repositoryRoot, (_event, file) => requestBuild(repositoryRoot, file, shouldRebuildWorkspaceManifest)));
 	console.log('[app-server] Watching Rust App Server sources');
 	if (buildRequested) void drainBuilds();
 	return stop;

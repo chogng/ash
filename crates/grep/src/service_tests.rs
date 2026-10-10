@@ -40,6 +40,103 @@ fn query(text: &str) -> Query {
 }
 
 #[test]
+fn current_and_explicit_file_queries_do_not_open_index_sessions() {
+    let (_temporary, root) = fixture();
+    fs::write(root.canonical_path().join("source.rs"), "needle\n").unwrap();
+    let service = Service::new(Backend::Tgrep, ripgrep(), None).unwrap();
+    let token = CancellationSource::new().token();
+    let mut request = query("needle");
+    request.freshness = Freshness::Current;
+    let current = service.search(&root, &request, &token).unwrap();
+    assert_eq!(current.matches.len(), 1);
+    assert_eq!(current.freshness, Freshness::Current);
+    assert!(current.index_stats.is_none());
+    assert!(!service.index_status(&root, &token).unwrap().active);
+    assert!(service.repositories.lock().unwrap().is_empty());
+
+    request.freshness = Freshness::Indexed;
+    request.scope = "source.rs".into();
+    let file = service.search(&root, &request, &token).unwrap();
+    assert_eq!(file.matches, current.matches);
+    assert_eq!(file.freshness, Freshness::Current);
+    assert!(file.index_stats.is_none());
+    assert!(!service.index_status(&root, &token).unwrap().active);
+    assert!(service.repositories.lock().unwrap().is_empty());
+
+    request.scope = PathBuf::new();
+    let indexed = service.search(&root, &request, &token).unwrap();
+    assert_eq!(indexed.matches, current.matches);
+    assert_eq!(indexed.freshness, Freshness::Indexed);
+    assert!(indexed.index_stats.is_some());
+    assert_eq!(service.state.read().unwrap().indexes.len(), 1);
+}
+
+#[test]
+fn smart_case_uses_literals_instead_of_regex_syntax() {
+    for (pattern, text, expected) in [
+        (r"foo\S", "FOOa", true),
+        (r"foo\S", "Foo ", false),
+        (r"\p{Greek}foo", "ΩFOO", true),
+        (r"(?P<Upper>foo)", "FOO", true),
+        (r"(?x)foo # UPPER comment", "FOO", true),
+        (r"[a-z]foo", "AFOO", true),
+        (r"[A-Z]foo", "AFOO", false),
+        (r"\x{41}foo", "afoo", false),
+        (r"\p{Lu}", "a", false),
+        (r"\p{Lu}", "A", true),
+        ("éfoo", "ÉFOO", true),
+        ("Éfoo", "éfoo", false),
+        ("Foo", "foo", false),
+        (r"(?i:FOO)", "foo", true),
+    ] {
+        let mut request = query(pattern);
+        request.case_sensitivity = CaseSensitivity::Smart;
+        assert_eq!(
+            validate(&request).unwrap().is_match(text),
+            expected,
+            "{pattern}: {text}"
+        );
+    }
+    let mut request = query(r"foo\S");
+    request.pattern = Pattern::Literal;
+    request.case_sensitivity = CaseSensitivity::Smart;
+    assert!(!validate(&request).unwrap().is_match(r"FOO\S"));
+    request.query = "foo.s".into();
+    assert!(validate(&request).unwrap().is_match("FOO.S"));
+}
+
+#[test]
+fn smart_case_agrees_for_indexed_current_and_unsaved_content() {
+    let (_temporary, root) = fixture();
+    fs::write(
+        root.canonical_path().join("source.rs"),
+        "FOOa\nΩFOO\nÉFOO\n",
+    )
+    .unwrap();
+    let service = Service::new(Backend::Tgrep, ripgrep(), None).unwrap();
+    let token = CancellationSource::new().token();
+    for (pattern, line) in [(r"foo\S", 1), (r"\p{Greek}foo", 2), ("éfoo", 3)] {
+        let mut request = query(pattern);
+        request.case_sensitivity = CaseSensitivity::Smart;
+        let indexed = service.search(&root, &request, &token).unwrap();
+        assert_eq!(indexed.matches.len(), 1, "{pattern}");
+        assert_eq!(indexed.matches[0].line_number, line);
+        assert_eq!(indexed.freshness, Freshness::Indexed);
+        request.freshness = Freshness::Current;
+        let current = service.search(&root, &request, &token).unwrap();
+        assert_eq!(current.matches, indexed.matches, "{pattern}");
+        let document = DocumentContent {
+            path: root.canonical_path().join("source.rs"),
+            text: "FOOa\nΩFOO\nÉFOO\n".into(),
+        };
+        let unsaved = service
+            .search_with_documents(&root, &request, &[document], &token)
+            .unwrap();
+        assert_eq!(unsaved.matches, indexed.matches, "{pattern}");
+    }
+}
+
+#[test]
 fn file_and_content_queries_share_a_registration_and_disabled_index_is_explicit() {
     let (_temporary, root) = fixture();
     fs::write(root.canonical_path().join("image.png"), [0, 255, 0]).unwrap();
@@ -406,6 +503,72 @@ fn jobs_page_more_than_agent_limit_and_enforce_ownership() {
         jobs.read(Owner::new(1), &id, 0, 100),
         Err(JobError::NotFound)
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn current_ripgrep_queries_are_cancelled_and_drained_before_directory_release() {
+    use std::os::unix::fs::PermissionsExt;
+    for backend in [Backend::Tgrep, Backend::Ripgrep] {
+        let (_temporary, root) = fixture();
+        let executable = root.canonical_path().join("slow-search");
+        let marker = root.canonical_path().join("pid");
+        fs::write(&executable, "#!/bin/sh\necho $$ > pid\nexec sleep 30\n").unwrap();
+        fs::set_permissions(&executable, fs::Permissions::from_mode(0o755)).unwrap();
+        let service = Service::new(
+            backend,
+            RipgrepExecutable::from_path(&executable).unwrap(),
+            None,
+        )
+        .unwrap();
+        let cancellation = CancellationSource::new();
+        let token = cancellation.token();
+        let mut request = query("needle");
+        request.freshness = Freshness::Current;
+        let drain = CancellationSource::new();
+        std::thread::scope(|threads| {
+            let worker = threads.spawn(|| service.search(&root, &request, &token));
+            let deadline = Instant::now() + Duration::from_secs(5);
+            let pid = loop {
+                if let Some(pid) = fs::read_to_string(&marker)
+                    .ok()
+                    .and_then(|value| value.trim().parse::<u32>().ok())
+                {
+                    break pid;
+                }
+                assert!(Instant::now() < deadline, "rg did not start: {backend:?}");
+                std::thread::sleep(Duration::from_millis(5));
+            };
+            let release =
+                threads.spawn(|| service.release_directory(root.canonical_path(), &drain.token()));
+            loop {
+                let state = service.state.read().unwrap();
+                let directory = state.indexes.get(&root.id()).unwrap();
+                let draining = directory.state.lock().unwrap().admission == Admission::Draining;
+                drop(state);
+                if draining {
+                    break;
+                }
+                assert!(Instant::now() < deadline, "release did not wait for rg");
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            assert!(!release.is_finished());
+            assert!(service.search(&root, &request, &token).is_err());
+            cancellation.cancel();
+            assert!(matches!(worker.join().unwrap(), Err(Error::Cancelled(_))));
+            release.join().unwrap().unwrap();
+            assert!(
+                !std::process::Command::new("kill")
+                    .args(["-0", &pid.to_string()])
+                    .stderr(std::process::Stdio::null())
+                    .status()
+                    .unwrap()
+                    .success()
+            );
+        });
+        assert!(service.state.read().unwrap().indexes.is_empty());
+        assert!(service.repositories.lock().unwrap().is_empty());
+    }
 }
 
 #[cfg(unix)]
