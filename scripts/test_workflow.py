@@ -99,12 +99,12 @@ fn input_keeps_its_bottom_rule() {
         output = self.output.getvalue()
         for expected in (
             "Cargo package: ash-tui",
-            self.source,
+            str(Path(self.source)),
             "AGENTS.md",
             "testing.md",
             "rust.md",
             "tui.md",
-            ".agents/skills/test-tui/SKILL.md",
+            str(Path(".agents/skills/test-tui/SKILL.md")),
         ):
             self.assertIn(expected, output)
         self.assertNotIn("frontend.md", output)
