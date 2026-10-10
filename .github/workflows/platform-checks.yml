@@ -10,7 +10,8 @@ permissions:
 
 jobs:
   sanity:
-    needs: check
+    # Both platform checks and release builds must pass before verifying uploaded packages.
+    needs: [check, build-windows]
     if: github.event_name == 'release'
     uses: ./.github/workflows/release-sanity.yml
     with:
@@ -36,6 +37,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: gh release upload "$RELEASE_TAG" .build/release-artifacts/* --repo "$GITHUB_REPOSITORY"
+
+  build-windows:
+    if: github.event_name == 'release'
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/release-windows.yml
+    secrets:
+      ASH_UPDATE_SIGNING_KEY: ${{ secrets.ASH_UPDATE_SIGNING_KEY }}
 
   check:
     name: ${{ matrix.target }} (${{ matrix.runner }})
@@ -73,18 +83,13 @@ jobs:
             python: python
             archive: tar.gz
             update_format: tar-gz
+            release_package: false
           - runner: windows-11-arm
             target: aarch64-pc-windows-msvc
             python: python
             archive: tar.gz
             update_format: tar-gz
             release_package: false
-          - runner: windows-latest
-            target: aarch64-pc-windows-msvc
-            python: python
-            archive: tar.gz
-            update_format: tar-gz
-            checks: false
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -117,17 +122,14 @@ jobs:
         run: rustup target add aarch64-pc-windows-msvc
 
       - name: Check app target
-        if: matrix.checks != false
         shell: bash
         run: ${{ matrix.python }} -B scripts/cargo.py check -p app --all-targets --target "${{ matrix.target }}"
 
       - name: Test platform packaging contracts
-        if: matrix.checks != false
         shell: bash
         run: ${{ matrix.python }} -B scripts/cargo.py test -p zui --lib distribution::tests --target "${{ matrix.target }}"
 
       - name: Test Ash Code tooling
-        if: matrix.checks != false
         shell: bash
         run: ${{ matrix.python }} -B scripts/test-python.py code
 
@@ -137,17 +139,15 @@ jobs:
           install: false
 
       - name: Test build tooling
-        if: matrix.checks != false
         shell: bash
         run: ${{ matrix.python }} -B scripts/test-python.py build
 
       - name: Verify App Server protocol artifacts
-        if: matrix.checks != false
         shell: bash
         run: ${{ matrix.python }} -B scripts/cargo.py test -p ash-app-server-protocol --lib tests::schema_fixtures_match_the_generators --locked --target "${{ matrix.target }}" -- --exact
 
       - name: Test Linux managed network boundary
-        if: matrix.checks != false && runner.os == 'Linux'
+        if: runner.os == 'Linux'
         shell: bash
         run: |
           ${{ matrix.python }} -B scripts/cargo.py build -p ash-network-proxy --example probe --target "${{ matrix.target }}"
@@ -156,7 +156,7 @@ jobs:
           ${{ matrix.python }} -B scripts/cargo.py test -p ash-mxc-sandbox --test linux --target "${{ matrix.target }}" -- --ignored
 
       - name: Test Windows account execution and cleanup
-        if: matrix.checks != false && runner.os == 'Windows'
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           ${{ matrix.python }} -B scripts/cargo.py test -p ash-mxc-sandbox --lib --target "${{ matrix.target }}"
@@ -173,7 +173,7 @@ jobs:
           test "${GITHUB_REF_NAME}" = "v${version}"
           test "${#ASH_UPDATE_PUBLIC_KEY}" = 64
           ${{ matrix.python }} -B scripts/cargo.py build --package ash-cli --bin ash --profile release --target "${{ matrix.target }}"
-          cli=".build/cargo/${{ matrix.target }}/release/ash${{ runner.os == 'Windows' && '.exe' || '' }}"
+          cli=".build/cargo/${{ matrix.target }}/release/ash"
           runtime=".build/releases/runtime-${{ matrix.target }}"
           package=".build/releases/ash-code-${{ matrix.target }}"
           ${{ matrix.python }} -B build/app_server.py \
@@ -187,7 +187,7 @@ jobs:
           ${{ matrix.python }} -B scripts/cargo.py build --package ash-update-sign --bin ash-update-sign
 
       - name: Verify bundled search through App Server RPC
-        if: github.event_name == 'release' && matrix.release_package != false && matrix.checks != false
+        if: github.event_name == 'release' && matrix.release_package != false
         shell: bash
         run: |
           ${{ matrix.python }} -B build/search_smoke.py \
@@ -227,42 +227,6 @@ jobs:
             --issuer "$ASH_MACOS_NOTARY_ISSUER"
           echo "ASH_MACOS_NOTARY_PROFILE=ash-release" >> "$GITHUB_ENV"
 
-      - name: Sign in to Azure for Windows release signing
-        if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'Windows'
-        uses: Azure/login@93381592711f247e165c389ebb30b596c84cdc48 # v3.0.0
-        with:
-          client-id: ${{ vars.ASH_AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.ASH_AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.ASH_AZURE_SUBSCRIPTION_ID }}
-
-      - name: Sign Windows executables with Artifact Signing
-        if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'Windows'
-        uses: Azure/artifact-signing-action@208f8af4bf26cf2af8597424e3cb5582801523ba # v2.0.0
-        with:
-          endpoint: ${{ vars.ASH_WINDOWS_SIGNING_ENDPOINT }}
-          signing-account-name: ${{ vars.ASH_WINDOWS_SIGNING_ACCOUNT }}
-          certificate-profile-name: ${{ vars.ASH_WINDOWS_CERTIFICATE_PROFILE }}
-          files-folder: ${{ github.workspace }}\.build\releases\ash-code-${{ matrix.target }}
-          files-folder-filter: exe
-          files-folder-recurse: true
-          file-digest: SHA256
-          timestamp-rfc3161: http://timestamp.acs.microsoft.com
-          timestamp-digest: SHA256
-
-      - name: Sign Windows App Server runtime executables
-        if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'Windows'
-        uses: Azure/artifact-signing-action@208f8af4bf26cf2af8597424e3cb5582801523ba # v2.0.0
-        with:
-          endpoint: ${{ vars.ASH_WINDOWS_SIGNING_ENDPOINT }}
-          signing-account-name: ${{ vars.ASH_WINDOWS_SIGNING_ACCOUNT }}
-          certificate-profile-name: ${{ vars.ASH_WINDOWS_CERTIFICATE_PROFILE }}
-          files-folder: ${{ github.workspace }}\.build\releases\runtime-${{ matrix.target }}
-          files-folder-filter: exe
-          files-folder-recurse: true
-          file-digest: SHA256
-          timestamp-rfc3161: http://timestamp.acs.microsoft.com
-          timestamp-digest: SHA256
-
       - name: Apply system signatures
         if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'macOS'
         shell: bash
@@ -275,22 +239,6 @@ jobs:
           ${{ matrix.python }} -B build/sign.py \
             --package-dir ".build/releases/runtime-${{ matrix.target }}" \
             --target "${{ matrix.target }}"
-
-      - name: Verify and record Windows signatures
-        if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $signTool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1
-          if (-not $signTool) { throw "signtool.exe is not installed" }
-          $env:ASH_WINDOWS_SIGNTOOL = $signTool.FullName
-          ${{ matrix.python }} -B build/sign.py `
-            --package-dir ".build/releases/ash-code-${{ matrix.target }}" `
-            --target "${{ matrix.target }}" `
-            --verify-only
-          ${{ matrix.python }} -B build/sign.py `
-            --package-dir ".build/releases/runtime-${{ matrix.target }}" `
-            --target "${{ matrix.target }}" `
-            --verify-only
 
       - name: Build Code and App Server release archives
         if: github.event_name == 'release' && matrix.release_package != false
@@ -320,7 +268,7 @@ jobs:
           ASH_UPDATE_PUBLIC_KEY: ${{ vars.ASH_UPDATE_PUBLIC_KEY }}
           ASH_UPDATE_SIGNING_KEY: ${{ secrets.ASH_UPDATE_SIGNING_KEY }}
         run: |
-          signer=".build/cargo/debug/ash-update-sign${{ runner.os == 'Windows' && '.exe' || '' }}"
+          signer=".build/cargo/debug/ash-update-sign"
           "$signer" \
             --repository chogng/ash \
             --product ash-code \
@@ -359,7 +307,7 @@ jobs:
             ".build/release-artifacts/${{ matrix.target }}/"
 
       - name: Install Desktop packaging dependencies
-        if: github.event_name == 'release' && matrix.release_package != false && (runner.os == 'macOS' || runner.os == 'Windows')
+        if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'macOS'
         shell: bash
         run: pnpm install --frozen-lockfile
 
@@ -395,120 +343,6 @@ jobs:
             --release-tag "$GITHUB_REF_NAME" \
             --target "${{ matrix.target }}" \
             --format zip \
-            --archive "$archive" \
-            --output ".build/releases/ash-desktop-${{ matrix.target }}.update.json" \
-            --public-key "$ASH_UPDATE_PUBLIC_KEY"
-          cp "$archive" ".build/releases/ash-desktop-${{ matrix.target }}.update.json" ".build/release-artifacts/${{ matrix.target }}/"
-
-      - name: Package Windows Desktop bundle
-        if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'Windows'
-        shell: bash
-        env:
-          ASH_UPDATE_PUBLIC_KEY: ${{ vars.ASH_UPDATE_PUBLIC_KEY }}
-        run: pnpm package:win32:bundle
-
-      - name: Sign Windows Desktop executables
-        if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'Windows'
-        uses: Azure/artifact-signing-action@208f8af4bf26cf2af8597424e3cb5582801523ba # v2.0.0
-        with:
-          endpoint: ${{ vars.ASH_WINDOWS_SIGNING_ENDPOINT }}
-          signing-account-name: ${{ vars.ASH_WINDOWS_SIGNING_ACCOUNT }}
-          certificate-profile-name: ${{ vars.ASH_WINDOWS_CERTIFICATE_PROFILE }}
-          files-folder: ${{ github.workspace }}\dist\Ash-win32-x64
-          files-folder-filter: exe
-          files-folder-recurse: true
-          file-digest: SHA256
-          timestamp-rfc3161: http://timestamp.acs.microsoft.com
-          timestamp-digest: SHA256
-
-      - name: Sign Windows Desktop libraries
-        if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'Windows'
-        uses: Azure/artifact-signing-action@208f8af4bf26cf2af8597424e3cb5582801523ba # v2.0.0
-        with:
-          endpoint: ${{ vars.ASH_WINDOWS_SIGNING_ENDPOINT }}
-          signing-account-name: ${{ vars.ASH_WINDOWS_SIGNING_ACCOUNT }}
-          certificate-profile-name: ${{ vars.ASH_WINDOWS_CERTIFICATE_PROFILE }}
-          files-folder: ${{ github.workspace }}\dist\Ash-win32-x64
-          files-folder-filter: dll
-          files-folder-recurse: true
-          file-digest: SHA256
-          timestamp-rfc3161: http://timestamp.acs.microsoft.com
-          timestamp-digest: SHA256
-
-      - name: Sign Windows Desktop Node modules
-        if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'Windows'
-        uses: Azure/artifact-signing-action@208f8af4bf26cf2af8597424e3cb5582801523ba # v2.0.0
-        with:
-          endpoint: ${{ vars.ASH_WINDOWS_SIGNING_ENDPOINT }}
-          signing-account-name: ${{ vars.ASH_WINDOWS_SIGNING_ACCOUNT }}
-          certificate-profile-name: ${{ vars.ASH_WINDOWS_CERTIFICATE_PROFILE }}
-          files-folder: ${{ github.workspace }}\dist\Ash-win32-x64
-          files-folder-filter: node
-          files-folder-recurse: true
-          file-digest: SHA256
-          timestamp-rfc3161: http://timestamp.acs.microsoft.com
-          timestamp-digest: SHA256
-
-      - name: Verify and package Windows Desktop installer
-        if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $signTool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1
-          if (-not $signTool) { throw "signtool.exe is not installed" }
-          Get-ChildItem dist/Ash-win32-x64 -File -Recurse | Where-Object { $_.Extension -in '.exe', '.dll', '.node' } | ForEach-Object {
-            & $signTool.FullName verify /pa /all /v $_.FullName
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          }
-          # Desktop verifies the signed daemon and backend against package metadata at startup.
-          $env:ASH_WINDOWS_SIGNTOOL = $signTool.FullName
-          python -B build/sign.py --package-dir dist/Ash-win32-x64/resources --target x86_64-pc-windows-msvc --verify-only
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          pnpm package:win32:verify
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          pnpm package:win32:installer
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-      - name: Sign Windows Desktop installer
-        if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'Windows'
-        uses: Azure/artifact-signing-action@208f8af4bf26cf2af8597424e3cb5582801523ba # v2.0.0
-        with:
-          endpoint: ${{ vars.ASH_WINDOWS_SIGNING_ENDPOINT }}
-          signing-account-name: ${{ vars.ASH_WINDOWS_SIGNING_ACCOUNT }}
-          certificate-profile-name: ${{ vars.ASH_WINDOWS_CERTIFICATE_PROFILE }}
-          files-folder: ${{ github.workspace }}\dist
-          files-folder-filter: exe
-          files-folder-recurse: false
-          file-digest: SHA256
-          timestamp-rfc3161: http://timestamp.acs.microsoft.com
-          timestamp-digest: SHA256
-
-      - name: Verify Windows Desktop installer signature
-        if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $signTool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1
-          if (-not $signTool) { throw "signtool.exe is not installed" }
-          $installer = "dist/AshSetup-$($env:GITHUB_REF_NAME.TrimStart('v'))-win32-x64.exe"
-          & $signTool.FullName verify /pa /all /v $installer
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-      - name: Sign and stage Windows Desktop update
-        if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'Windows'
-        shell: bash
-        env:
-          ASH_UPDATE_PUBLIC_KEY: ${{ vars.ASH_UPDATE_PUBLIC_KEY }}
-          ASH_UPDATE_SIGNING_KEY: ${{ secrets.ASH_UPDATE_SIGNING_KEY }}
-        run: |
-          archive="dist/AshSetup-${GITHUB_REF_NAME#v}-win32-x64.exe"
-          signer=".build/cargo/debug/ash-update-sign.exe"
-          "$signer" \
-            --repository chogng/ash \
-            --product ash-desktop \
-            --channel latest \
-            --version "${GITHUB_REF_NAME#v}" \
-            --release-tag "$GITHUB_REF_NAME" \
-            --target "${{ matrix.target }}" \
-            --format windows-exe \
             --archive "$archive" \
             --output ".build/releases/ash-desktop-${{ matrix.target }}.update.json" \
             --public-key "$ASH_UPDATE_PUBLIC_KEY"

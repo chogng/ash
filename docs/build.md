@@ -266,14 +266,15 @@ just bench-build ash-cli --profile dev-small --jobs 4 --compare .build/build-hea
 
 ### CI 检查
 
-| 工作流                                                              | 覆盖                                                                   |
-| ------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| [frontend.yml](../.github/workflows/frontend.yml)                   | TypeScript 构建工具、编辑器、前端单测和 Browser/Electron UI Playwright |
-| [tooling.yml](../.github/workflows/tooling.yml)                     | Python 检查及构建、包布局、签名契约测试                                |
-| [bazel-boundary.yml](../.github/workflows/bazel-boundary.yml)       | App 边界、发布契约和 CLI/TUI PTY 场景                                  |
-| [platform-checks.yml](../.github/workflows/platform-checks.yml)     | 平台验证和发布包签名、上传                                             |
-| [rust-warnings.yml](../.github/workflows/rust-warnings.yml)         | Rust warning 检查和 TUI 测试                                           |
-| [rust-build-health.yml](../.github/workflows/rust-build-health.yml) | 依赖检查、Rust 测试和构建性能比较                                      |
+| 工作流                                                              | 覆盖                                                                     |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| [frontend.yml](../.github/workflows/frontend.yml)                   | TypeScript 构建工具、编辑器、前端单测和 Browser/Electron UI Playwright   |
+| [tooling.yml](../.github/workflows/tooling.yml)                     | Python 检查及构建、包布局、签名契约测试                                  |
+| [bazel-boundary.yml](../.github/workflows/bazel-boundary.yml)       | App 边界、发布契约和 CLI/TUI PTY 场景                                    |
+| [platform-checks.yml](../.github/workflows/platform-checks.yml)     | 跨平台验证、Linux/macOS 发布构建，以及统一发布验证和上传                 |
+| [release-windows.yml](../.github/workflows/release-windows.yml)     | 由主流程调用，构建并签名 Windows Code/App Server 包及 x64 Desktop 安装器 |
+| [rust-warnings.yml](../.github/workflows/rust-warnings.yml)         | Rust warning 检查和 TUI 测试                                             |
+| [rust-build-health.yml](../.github/workflows/rust-build-health.yml) | 依赖检查、Rust 测试和构建性能比较                                        |
 
 相关文件变更推送到 main 后，性能检查在同一 runner 和工具链下对协议包前后版本各测三轮；耗时中位数同时增加超过 25% 和两秒时失败。具体触发条件和平台分工以工作流为准。
 
