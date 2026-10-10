@@ -77,7 +77,7 @@ impl StdioExtensionHostProcess {
                     windows_sandbox::LockedProcessSources::Embedded
                 }
                 super::LaunchRuntime::JavaScript => windows_sandbox::LockedProcessSources::Package,
-                super::LaunchRuntime::Executable => {
+                super::LaunchRuntime::Executable | super::LaunchRuntime::Vscode => {
                     return Err(ExtensionHostError::IsolationUnavailable);
                 }
             };
