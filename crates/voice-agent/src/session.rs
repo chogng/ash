@@ -161,7 +161,7 @@ impl VoiceAgent {
                     }
                     VoiceEvent::Usage { seconds } => emit(events, AgentEvent::Usage { seconds })?,
                     VoiceEvent::Closed { reason, seconds } => { emit(events, AgentEvent::Closed { reason, seconds })?; return Ok(()); }
-                    VoiceEvent::Error { .. } => return Err(ash_model_provider::ModelProviderError::InvalidResponse("Live session reported an error".into()).into()),
+                    VoiceEvent::Error { code } => return Err(ash_model_provider::ModelProviderError::InvalidResponse(code).into()),
                     VoiceEvent::Other { .. } => {}
                 },
                 _ = clock.tick() => {

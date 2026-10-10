@@ -13,6 +13,28 @@ use crate::wire::ControlResponse;
 use crate::wire::ControlState;
 
 #[test]
+fn stopping_connection_returns_the_request_identity_and_structured_cause() {
+    let mut output = Vec::new();
+    super::reject_stopping_connection(
+        br#"{"jsonrpc":"2.0","id":42,"method":"initialize","params":{}}
+"#
+        .as_slice(),
+        &mut output,
+    )
+    .unwrap();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&output).unwrap(),
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":42,
+            "error":{"code":-32600,"message":"Local App Server daemon is stopping","data":{"kind":"ServerShuttingDown"}}
+        })
+    );
+    let mut output = Vec::new();
+    assert!(super::reject_stopping_connection(b"{}".as_slice(), &mut output).is_err());
+    assert!(output.is_empty());
+}
+
+#[test]
 fn control_reads_distinguish_shutdown_eof_from_malformed_responses() {
     for response in [b"".as_slice(), b"{".as_slice()] {
         let profile = tempfile::tempdir().unwrap();
@@ -122,7 +144,10 @@ fn failed_initialization_reaps_only_the_new_backend() {
     std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
     let options = ConnectionOptions::new(root.path(), None, GrantSource::HostConfiguration, None);
     let error = super::run_lifecycle(LifecycleCommand::Start, options, &executable).unwrap_err();
-    assert!(error.contains("exited before initialization"), "{error}");
+    assert!(
+        error.to_string().contains("exited before initialization"),
+        "{error}"
+    );
     let endpoint = EndpointPaths::prepare(root.path()).unwrap();
     assert!(!endpoint.pid.exists());
     assert!(!endpoint.socket.exists());

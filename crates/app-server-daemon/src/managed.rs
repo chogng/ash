@@ -260,7 +260,11 @@ impl ManagedEndpoint {
             let pending = self.pending.pop_front().expect("pending prelude exists");
             match pending.poll(&self.profile_root, &self.record, &self.stopping) {
                 Ok(PreludeProgress::Pending(pending)) => self.pending.push_back(pending),
-                Ok(PreludeProgress::Connection(connection)) => return Ok(Some(connection)),
+                Ok(PreludeProgress::Connection(connection)) => {
+                    if !self.is_stopping() {
+                        return Ok(Some(connection));
+                    }
+                }
                 Ok(PreludeProgress::Control) => {}
                 Err(error) => eprintln!("managed App Server prelude failed: {error}"),
             }

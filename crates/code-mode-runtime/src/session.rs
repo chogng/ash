@@ -84,7 +84,16 @@ pub(super) struct ToolCompletion {
 }
 
 impl RuntimeState {
+    pub(super) fn has_exited(scope: &v8::PinScope<'_, '_>) -> bool {
+        scope
+            .get_slot::<Self>()
+            .is_some_and(|state| state.exit_requested)
+    }
+
     pub(super) fn push_output(&mut self, item: OutputItem) -> Result<(), String> {
+        if self.exit_requested {
+            return Ok(());
+        }
         let item_bytes = serde_json::to_vec(&item)
             .map_err(|error| format!("failed to measure Code Mode output: {error}"))?
             .len();

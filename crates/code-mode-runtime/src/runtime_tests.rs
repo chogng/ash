@@ -488,6 +488,83 @@ fn output_limit_is_enforced_inside_the_runtime() {
 }
 
 #[test]
+fn exit_in_conversions_and_parallel_promises_preserves_only_prior_effects() {
+    for source in [
+        "await Promise.resolve(); exit();",
+        "await Promise.all([Promise.resolve().then(() => exit()), Promise.resolve().then(() => { store('saved', 0); text('late'); })]);",
+        "await new Promise(() => { exit(); });",
+        "text({toJSON() { exit(); }});",
+        "notify({toJSON() { exit(); }});",
+        "store('saved', {toJSON() { exit(); }});",
+        "store({toString() { exit(); }}, 0);",
+        "await tools.echo({toJSON() { exit(); }});",
+        "image({get image_url() { exit(); }});",
+        "throw {get stack() { exit(); }, toString() { for (;;) {} }};",
+    ] {
+        let invoker = std::sync::Arc::new(RecordingInvoker::default());
+        let (runtime, session_id) = runtime(&invoker);
+        let started = runtime
+            .execute(request(
+                &session_id,
+                &format!(
+                    "store('saved', 42); text('before'); {source} store('saved', 0); text('after');"
+                ),
+            ))
+            .unwrap();
+        let response = wait_for_result(&runtime, started.cell_id);
+        assert!(
+            matches!(response, RuntimeResponse::Result { content_items, error_text: None, .. }
+                if content_items == vec![OutputItem::Text { text: "before".into() }]),
+            "{source}"
+        );
+        assert_eq!(
+            runtime.store_snapshot().unwrap()["saved"],
+            serde_json::json!(42),
+            "{source}"
+        );
+        assert!(invoker.calls.lock().unwrap().is_empty(), "{source}");
+        let next = runtime
+            .execute(request(&session_id, "text(load('saved'));"))
+            .unwrap();
+        assert!(
+            matches!(wait_for_result(&runtime, next.cell_id), RuntimeResponse::Result {
+            content_items, error_text: None, ..
+        } if content_items == vec![OutputItem::Text { text: "42".into() }])
+        );
+    }
+}
+
+#[test]
+fn exit_during_exception_formatting_preserves_getter_output_and_stores() {
+    let invoker = std::sync::Arc::new(RecordingInvoker::default());
+    let (runtime, session_id) = runtime(&invoker);
+    let started = runtime
+        .execute(request(
+            &session_id,
+            r#"
+            text('before'); store('saved', 0);
+            throw {
+                get stack() { text('formatting'); store('saved', 42); exit(); },
+                toString() { text('late'); store('saved', -1); return 'failure'; }
+            };
+            "#,
+        ))
+        .unwrap();
+    assert!(matches!(
+        wait_for_result(&runtime, started.cell_id),
+        RuntimeResponse::Result { content_items, error_text: None, .. }
+            if content_items == vec![
+                OutputItem::Text { text: "before".into() },
+                OutputItem::Text { text: "formatting".into() },
+            ]
+    ));
+    assert_eq!(
+        runtime.store_snapshot().unwrap()["saved"],
+        serde_json::json!(42)
+    );
+}
+
+#[test]
 fn execution_timeout_terminates_cpu_bound_javascript() {
     let invoker = std::sync::Arc::new(RecordingInvoker::default());
     let session_id = CodeModeSessionId::new("timeout-session").unwrap();

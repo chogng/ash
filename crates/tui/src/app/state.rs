@@ -2083,7 +2083,6 @@ impl App {
         self.thread.cells().len()
     }
 
-    #[cfg(test)]
     pub(crate) fn status(&self) -> &Status {
         &self.status
     }

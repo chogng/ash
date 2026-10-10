@@ -9,6 +9,9 @@ pub(super) fn tool_callback(
     args: v8::FunctionCallbackArguments,
     mut retval: v8::ReturnValue<v8::Value>,
 ) {
+    if RuntimeState::has_exited(scope) {
+        return;
+    }
     let Ok(index) = v8::Local::<v8::Uint32>::try_from(args.data()) else {
         throw_type_error(scope, "invalid tool callback data");
         return;
@@ -24,6 +27,10 @@ pub(super) fn tool_callback(
             }
         }
     };
+    // Serializing arguments can run getters or toJSON(), including exit().
+    if RuntimeState::has_exited(scope) {
+        return;
+    }
     let Some(resolver) = v8::PromiseResolver::new(scope) else {
         throw_type_error(scope, "failed to create Code Mode tool Promise");
         return;
@@ -105,6 +112,9 @@ pub(super) fn text_callback(
     args: v8::FunctionCallbackArguments,
     mut retval: v8::ReturnValue<v8::Value>,
 ) {
+    if RuntimeState::has_exited(scope) {
+        return;
+    }
     let value = if args.length() == 0 {
         v8::undefined(scope).into()
     } else {
@@ -131,6 +141,9 @@ pub(super) fn image_callback(
     args: v8::FunctionCallbackArguments,
     mut retval: v8::ReturnValue<v8::Value>,
 ) {
+    if RuntimeState::has_exited(scope) {
+        return;
+    }
     let value = if args.length() == 0 {
         v8::undefined(scope).into()
     } else {
@@ -170,6 +183,9 @@ pub(super) fn store_callback(
     args: v8::FunctionCallbackArguments,
     _retval: v8::ReturnValue<v8::Value>,
 ) {
+    if RuntimeState::has_exited(scope) {
+        return;
+    }
     if args.length() < 2 {
         throw_type_error(scope, "store expects a key and a value");
         return;
@@ -179,6 +195,9 @@ pub(super) fn store_callback(
         return;
     };
     let key = key.to_rust_string_lossy(scope);
+    if RuntimeState::has_exited(scope) {
+        return;
+    }
     let value = if args.get(1).is_undefined() {
         None
     } else {
@@ -191,6 +210,9 @@ pub(super) fn store_callback(
         }
     };
     let error = if let Some(state) = scope.get_slot_mut::<RuntimeState>() {
+        if state.exit_requested {
+            return;
+        }
         let previous = match &value {
             Some(value) => state.stored_values.insert(key.clone(), value.clone()),
             None => state.stored_values.remove(&key),
@@ -225,6 +247,9 @@ pub(super) fn load_callback(
     args: v8::FunctionCallbackArguments,
     mut retval: v8::ReturnValue<v8::Value>,
 ) {
+    if RuntimeState::has_exited(scope) {
+        return;
+    }
     if args.length() == 0 {
         throw_type_error(scope, "load expects a key");
         return;
@@ -234,6 +259,9 @@ pub(super) fn load_callback(
         return;
     };
     let key = key.to_rust_string_lossy(scope);
+    if RuntimeState::has_exited(scope) {
+        return;
+    }
     let value = scope
         .get_slot::<RuntimeState>()
         .and_then(|state| state.stored_values.get(&key))
@@ -253,6 +281,9 @@ pub(super) fn notify_callback(
     args: v8::FunctionCallbackArguments,
     mut retval: v8::ReturnValue<v8::Value>,
 ) {
+    if RuntimeState::has_exited(scope) {
+        return;
+    }
     let value = if args.length() == 0 {
         v8::undefined(scope).into()
     } else {
@@ -274,6 +305,9 @@ pub(super) fn notify_callback(
             throw_type_error(scope, "runtime state unavailable");
             return;
         };
+        if state.exit_requested {
+            return;
+        }
         let next_bytes = state
             .output_bytes
             .checked_add(text.len())
@@ -305,6 +339,9 @@ pub(super) fn yield_callback(
     _args: v8::FunctionCallbackArguments,
     mut retval: v8::ReturnValue<v8::Value>,
 ) {
+    if RuntimeState::has_exited(scope) {
+        return;
+    }
     let Some(resolver) = v8::PromiseResolver::new(scope) else {
         throw_type_error(scope, "failed to create Code Mode yield promise");
         return;
@@ -341,3 +378,7 @@ pub(super) fn exit_callback(
         let _ = script.run(scope);
     }
 }
+
+#[cfg(test)]
+#[path = "callbacks_tests.rs"]
+mod tests;

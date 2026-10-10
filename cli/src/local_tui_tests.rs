@@ -9,6 +9,10 @@ use ash_protocol::ThreadId;
 #[test]
 fn local_reconnect_retries_only_transport_failures() {
     assert!(matches!(
+        classify_error(ClientError::ServerShuttingDown),
+        Failure::Retryable(_)
+    ));
+    assert!(matches!(
         classify_error(ClientError::Transport("closed".into())),
         Failure::Retryable(message) if message == "transport error: closed"
     ));

@@ -4,6 +4,7 @@
 - 串行化生命周期操作，所选服务探测成功后才返回 ready。Agent 连接验证 initialize 和必需能力；Execution 连接验证执行协议，不打开 Agent 历史。普通 start/connect 复用同一 profile 已运行且协议与必需能力兼容的进程；`ensure-selected` 在可执行文件内容变化时更换运行代次，`restart` 总是更换运行代次。
 - 提供同用户控制端点与 stdio 连接程序；`ManagedEndpoint` 由后台服务进程持有。
 - `ManagedEndpoint` 非阻塞轮询连接握手与控制响应，同时最多保留 32 个待完成握手，每个握手期限为 5 秒；未完成握手不会阻止其他连接或停止命令，也不增加握手线程。
+- 停止宽限期继续响应控制请求并拒绝新业务连接。生命周期 API 返回 `LifecycleError::ServerShuttingDown`；stdio 连接程序将其作为初始化请求的 JSON-RPC 错误返回，保留请求 ID，错误码为 `-32600`、`data.kind` 为 `ServerShuttingDown`，由客户端决定是否重试。
 - `ManagedEndpoint` 在运行期间每秒检查日志，超过 1 MiB 时在原文件上清空；后台继承的 stdout/stderr 文件句柄继续可写，无需重启。该限额是按轮询周期维护的预算，周期内的写入可以暂时超过限额。
 - 启动失败时终止并回收新子进程，仅清理该代记录；仍存活或已被后继进程替换的记录受到保护。
 - Windows 通过同一进程句柄读取创建时间、验证身份、终止并等待退出；后台启动要求脱离控制程序的 Job。Unix 验证启动身份后终止。

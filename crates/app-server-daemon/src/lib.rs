@@ -4,6 +4,7 @@ mod client;
 mod development;
 mod endpoint;
 mod installation;
+mod lifecycle_error;
 mod managed;
 mod process;
 mod update;
@@ -12,6 +13,7 @@ mod wire;
 use std::path::Path;
 use std::path::PathBuf;
 
+pub use lifecycle_error::LifecycleError;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -216,27 +218,35 @@ pub struct LifecycleOutput {
 }
 
 /// Runs one serialized lifecycle operation for the selected profile.
+/// Start, version and selection distinguish a retiring generation with
+/// `LifecycleError::ServerShuttingDown`; other failures preserve their diagnostic message.
 #[cfg(any(unix, windows))]
 pub fn run_lifecycle(
     command: LifecycleCommand,
     options: ConnectionOptions,
     backend_executable: &Path,
-) -> Result<LifecycleOutput, String> {
+) -> Result<LifecycleOutput, LifecycleError> {
     client::run_lifecycle(command, options, backend_executable)
 }
 
 /// Connects stdio to a ready daemon, starting and probing it first when necessary.
+/// For Agent connections refused during shutdown, consumes the first JSON-RPC request
+/// and writes a structured failure with its ID before returning the stopping error.
 #[cfg(any(unix, windows))]
-pub fn connect(options: ConnectionOptions, backend_executable: &Path) -> Result<(), String> {
+pub fn connect(
+    options: ConnectionOptions,
+    backend_executable: &Path,
+) -> Result<(), LifecycleError> {
     client::connect(options, backend_executable)
 }
 
 /// Connects through the selected package generation, replacing a stale managed process first.
+/// Agent shutdown refusal uses the same stdio error response as [`connect`].
 #[cfg(any(unix, windows))]
 pub fn connect_selected(
     options: ConnectionOptions,
     backend_executable: &Path,
-) -> Result<(), String> {
+) -> Result<(), LifecycleError> {
     client::connect_selected(options, backend_executable)
 }
 
@@ -261,12 +271,15 @@ pub fn run_lifecycle(
     _command: LifecycleCommand,
     _options: ConnectionOptions,
     _backend_executable: &Path,
-) -> Result<LifecycleOutput, String> {
+) -> Result<LifecycleOutput, LifecycleError> {
     Err("Local App Server daemon requires Unix-domain socket support".into())
 }
 
 #[cfg(not(any(unix, windows)))]
-pub fn connect(_options: ConnectionOptions, _backend_executable: &Path) -> Result<(), String> {
+pub fn connect(
+    _options: ConnectionOptions,
+    _backend_executable: &Path,
+) -> Result<(), LifecycleError> {
     Err("Local App Server daemon requires Unix-domain socket support".into())
 }
 
@@ -274,7 +287,7 @@ pub fn connect(_options: ConnectionOptions, _backend_executable: &Path) -> Resul
 pub fn connect_selected(
     _options: ConnectionOptions,
     _backend_executable: &Path,
-) -> Result<(), String> {
+) -> Result<(), LifecycleError> {
     Err("Local App Server daemon requires Unix-domain socket support".into())
 }
 

@@ -17,6 +17,7 @@ use serde_json::json;
 
 use crate::ConnectionOptions;
 use crate::LifecycleCommand;
+use crate::LifecycleError;
 use crate::LifecycleOutput;
 use crate::LifecycleStatus;
 use crate::endpoint::EndpointPaths;
@@ -58,7 +59,7 @@ pub(crate) fn run_lifecycle(
     command: LifecycleCommand,
     options: ConnectionOptions,
     backend_executable: &Path,
-) -> Result<LifecycleOutput, String> {
+) -> Result<LifecycleOutput, LifecycleError> {
     let endpoint = EndpointPaths::prepare(options.profile_root())?;
     let _operation_lock = endpoint.acquire_operation_lock()?;
     match command {
@@ -75,20 +76,24 @@ pub(crate) fn run_lifecycle(
             output.status = LifecycleStatus::Restarted;
             Ok(output)
         }
-        LifecycleCommand::Stop => stop_unlocked(&endpoint),
+        LifecycleCommand::Stop => stop_unlocked(&endpoint).map_err(Into::into),
         LifecycleCommand::Version => version_unlocked(&endpoint, &options),
     }
 }
 
-pub(crate) fn connect(options: ConnectionOptions, backend_executable: &Path) -> Result<(), String> {
-    run_lifecycle(LifecycleCommand::Start, options.clone(), backend_executable)?;
-    connect_ready(&options)
+pub(crate) fn connect(
+    options: ConnectionOptions,
+    backend_executable: &Path,
+) -> Result<(), LifecycleError> {
+    let result = run_lifecycle(LifecycleCommand::Start, options.clone(), backend_executable)
+        .and_then(|_| connect_ready(&options));
+    connection_result(result, &options)
 }
 
 pub(crate) fn connect_selected(
     options: ConnectionOptions,
     backend_executable: &Path,
-) -> Result<(), String> {
+) -> Result<(), LifecycleError> {
     connect_selected_with_digest(options, backend_executable, PackageDigest::NotProvided)
 }
 
@@ -96,23 +101,69 @@ pub(crate) fn connect_selected_with_digest(
     options: ConnectionOptions,
     backend_executable: &Path,
     package_digest: PackageDigest<'_>,
-) -> Result<(), String> {
-    let endpoint = EndpointPaths::prepare(options.profile_root())?;
-    {
-        let _operation_lock = endpoint.acquire_operation_lock()?;
-        ensure_selected_unlocked(&endpoint, &options, backend_executable, package_digest)?;
-    }
-    connect_ready(&options)
+) -> Result<(), LifecycleError> {
+    let result = (|| {
+        let endpoint = EndpointPaths::prepare(options.profile_root())?;
+        {
+            let _operation_lock = endpoint.acquire_operation_lock()?;
+            ensure_selected_unlocked(&endpoint, &options, backend_executable, package_digest)?;
+        }
+        connect_ready(&options)
+    })();
+    connection_result(result, &options)
 }
 
-fn connect_ready(options: &ConnectionOptions) -> Result<(), String> {
+fn connection_result(
+    result: Result<(), LifecycleError>,
+    options: &ConnectionOptions,
+) -> Result<(), LifecycleError> {
+    if result == Err(LifecycleError::ServerShuttingDown)
+        && !matches!(options.role(), crate::ConnectionRole::Execution { .. })
+    {
+        // The carrier is also the initialization peer. Reply with the caller's ID
+        // before closing stdout so clients receive the cause rather than an unexplained EOF.
+        reject_stopping_connection(std::io::stdin().lock(), &mut std::io::stdout().lock())?;
+    }
+    result
+}
+
+fn reject_stopping_connection(
+    input: impl std::io::Read,
+    output: &mut impl std::io::Write,
+) -> Result<(), String> {
+    use ash_app_server_protocol::protocol::error::AppServerError;
+    use ash_app_server_protocol::protocol::error::AppServerErrorName;
+    use ash_app_server_protocol::rpc::JsonRpcFailure;
+    use ash_app_server_protocol::rpc::JsonRpcRequest;
+    use std::io::BufRead;
+    let mut line = String::new();
+    std::io::BufReader::new(input.take(1024 * 1024 + 1))
+        .read_line(&mut line)
+        .map_err(|error| error.to_string())?;
+    if line.len() > 1024 * 1024 || !line.ends_with('\n') {
+        return Err("Invalid initialization request".into());
+    }
+    let request: JsonRpcRequest<serde_json::Value> =
+        serde_json::from_str(&line).map_err(|error| error.to_string())?;
+    let mut error = AppServerError::new(-32600, AppServerErrorName::ServerShuttingDown);
+    error.message = crate::LifecycleError::ServerShuttingDown.to_string();
+    serde_json::to_writer(&mut *output, &JsonRpcFailure::new(request.id, error))
+        .map_err(|error| error.to_string())?;
+    output.write_all(b"\n").map_err(|error| error.to_string())?;
+    output.flush().map_err(|error| error.to_string())
+}
+
+fn connect_ready(options: &ConnectionOptions) -> Result<(), LifecycleError> {
     let endpoint = EndpointPaths::prepare(options.profile_root())?;
     let control = request_control(&endpoint, ControlCommand::Status)?
         .ok_or("App Server exited before the connection scope could be checked")?;
+    if control.state == ControlState::Stopping {
+        return Err(LifecycleError::ServerShuttingDown);
+    }
     control.validate_connection(options)?;
     let stream = connect_existing(&endpoint.socket)?
         .ok_or_else(|| "Local App Server daemon exited before the client connected".to_string())?;
-    proxy_stdio(stream, options).map_err(|error| error.to_string())
+    proxy_stdio(stream, options).map_err(|error| error.to_string().into())
 }
 
 pub(crate) fn launch_web(
@@ -233,10 +284,10 @@ fn start_unlocked(
     endpoint: &EndpointPaths,
     options: &ConnectionOptions,
     backend_executable: &Path,
-) -> Result<LifecycleOutput, String> {
+) -> Result<LifecycleOutput, LifecycleError> {
     if let Some(control) = request_control(endpoint, ControlCommand::Status)? {
         if control.state == ControlState::Stopping {
-            return Err("Local App Server daemon is stopping".into());
+            return Err(LifecycleError::ServerShuttingDown);
         }
         validate_managed_response(endpoint, &control)?;
         let probe = probe_app_server(endpoint, options)
@@ -252,7 +303,7 @@ fn start_unlocked(
     let selected =
         crate::installation::selected_backend(options.profile_root(), backend_executable)?;
     let daemon = resolve_backend_executable(&selected, PackageDigest::NotProvided)?;
-    start_new_unlocked(endpoint, options, &daemon)
+    start_new_unlocked(endpoint, options, &daemon).map_err(Into::into)
 }
 
 fn start_new_unlocked(
@@ -317,7 +368,7 @@ fn ensure_selected_unlocked(
     options: &ConnectionOptions,
     backend_executable: &Path,
     package_digest: PackageDigest<'_>,
-) -> Result<LifecycleOutput, String> {
+) -> Result<LifecycleOutput, LifecycleError> {
     let installed = crate::installation::install_from_client(
         options.profile_root(),
         backend_executable,
@@ -327,7 +378,7 @@ fn ensure_selected_unlocked(
     let mut replaced = false;
     if let Some(control) = request_control(endpoint, ControlCommand::Status)? {
         if control.state == ControlState::Stopping {
-            return Err("Local App Server daemon is stopping".into());
+            return Err(LifecycleError::ServerShuttingDown);
         }
         let record = validate_managed_response(endpoint, &control)?;
         if validate_executable_identity(&record, &selected.identity).is_ok() {
@@ -425,7 +476,7 @@ fn stop_recorded_process(endpoint: &EndpointPaths) -> Result<LifecycleOutput, St
 fn version_unlocked(
     endpoint: &EndpointPaths,
     options: &ConnectionOptions,
-) -> Result<LifecycleOutput, String> {
+) -> Result<LifecycleOutput, LifecycleError> {
     let installed_version = crate::installation::installed_version(options.profile_root())?;
     let Some(control) = request_control(endpoint, ControlCommand::Status)? else {
         remove_stale_process_record(&endpoint.pid)?;
@@ -434,7 +485,7 @@ fn version_unlocked(
         return Ok(output);
     };
     if control.state == ControlState::Stopping {
-        return Err("Local App Server daemon is stopping".into());
+        return Err(LifecycleError::ServerShuttingDown);
     }
     validate_managed_response(endpoint, &control)?;
     let probe =

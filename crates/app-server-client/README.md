@@ -8,6 +8,8 @@
 
 产品宿主使用单独打包的 `ash-app-server` 程序；普通客户端依赖不编译服务实现。协议契约见 [`docs/ash-app-server-api.md`](../../docs/ash-app-server-api.md)。
 
+初始化遇到 `-32600` 与 `data.kind = ServerShuttingDown` 时保留为 `ClientError::ServerShuttingDown`，不从消息文字猜测停止状态。连接重试期限与用户提示由 CLI 或其他产品客户端拥有。
+
 ```text
 just test ash-app-server-client
 ```

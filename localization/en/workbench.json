@@ -3,6 +3,7 @@
     "tunnel.invalidPort": "Remote port must be an integer from 1 to 65535.",
     "tunnel.unsupportedOptions": "SSH forwarding supports private loopback ports with an automatically assigned local port.",
     "extensionHost.browser.productSsh": "The product SSH extension must execute in the V8 host",
+    "appServer.shuttingDown": "App Server is stopping. Wait for it to finish, then reconnect.",
     "tasks.configurationChanged": "Task configuration changed while preparing the task. The task was not started. Run the task again.",
     "tasks.unsupportedExecution": "Task '{0}' was not started because Ash does not yet support: {1}. Update .vscode/tasks.json and run the task again.",
     "files.saveBackupFailedTitle": "File saved; recovery backup incomplete",

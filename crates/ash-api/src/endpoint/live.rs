@@ -104,6 +104,11 @@ impl LiveSession {
             "delegation":{"type":"client"},"store":false
         }}), cancellation).await?;
         let started = socket.receive(cancellation).await?;
+        if started["type"] == "error" {
+            return Err(ApiError::InvalidResponse(
+                text(&started["error"], "code")?.into(),
+            ));
+        }
         if started["type"] != "session.started" {
             return Err(ApiError::InvalidResponse(
                 "Live session did not start".into(),
@@ -185,29 +190,42 @@ impl LiveSession {
         result
     }
 
-    /// Waits for authoritative final usage; a transport close alone is not successful finalization.
+    /// Waits for authoritative final usage within one deadline covering send, receive and cleanup.
+    /// A transport close alone is not successful finalization.
     pub async fn close(&mut self, cancellation: &CancellationToken) -> Result<LiveEvent, ApiError> {
         let mut socket = self.socket.take().ok_or_else(closed)?;
-        socket
-            .send(json!({"type":"session.close"}), cancellation)
-            .await?;
-        let result = tokio::time::timeout(std::time::Duration::from_secs(15), async {
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(15);
+        tokio::time::timeout_at(
+            deadline,
+            socket.send(json!({"type":"session.close"}), cancellation),
+        )
+        .await
+        .map_err(|_| finalization_timeout())??;
+        let result = tokio::time::timeout_at(deadline, async {
             loop {
                 let value = socket.receive(cancellation).await?;
                 let event = decode(&value, &self.session_id)?;
                 if matches!(event, LiveEvent::Closed { .. }) {
                     return Ok(event);
                 }
-                if matches!(event, LiveEvent::Error { .. }) {
-                    return Err(ApiError::InvalidResponse("Live close was rejected".into()));
+                if let LiveEvent::Error { code } = event {
+                    return Err(ApiError::InvalidResponse(code));
                 }
             }
         })
         .await
-        .map_err(|_| ApiError::Transport("Live finalization timed out".into()))?;
-        socket.shutdown(cancellation).await?;
-        result
+        .unwrap_or_else(|_| Err(finalization_timeout()));
+        // Close the transport even after rejection, while retaining the provider's
+        // more specific failure if the close handshake also fails.
+        let shutdown = tokio::time::timeout_at(deadline, socket.shutdown(cancellation))
+            .await
+            .unwrap_or_else(|_| Err(finalization_timeout()));
+        result.and_then(|event| shutdown.map(|()| event))
     }
+}
+
+fn finalization_timeout() -> ApiError {
+    ApiError::Transport("Live finalization timed out".into())
 }
 
 fn context(kind: &str, id: String, content: String) -> Result<Value, ApiError> {

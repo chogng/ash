@@ -35,8 +35,7 @@ fn run_entry(mut dir_root: PathBuf, profile_root: PathBuf, entry: Entry) -> Resu
     }
     let executable =
         env::current_exe().map_err(|error| format!("could not resolve ash executable: {error}"))?;
-    let mut session =
-        connect(&executable, &dir_root, &profile_root).map_err(|error| error.to_string())?;
+    let mut session = connect_or_reconnect(&executable, &dir_root, &profile_root)?;
     let announcement = crate::announcement::start()?;
     let (updater, notices) = match crate::update::AutomaticUpdater::start(session.client()) {
         Some((updater, notices)) => (Some(updater), Some(notices)),
@@ -75,8 +74,7 @@ fn run_entry(mut dir_root: PathBuf, profile_root: PathBuf, entry: Entry) -> Resu
             ash_tui::TuiExit::OpenWorkspace { path } => {
                 dir_root = std::fs::canonicalize(path)
                     .map_err(|error| format!("could not open worktree: {error}"))?;
-                session = connect(&executable, &dir_root, &profile_root)
-                    .map_err(|error| error.to_string())?;
+                session = connect_or_reconnect(&executable, &dir_root, &profile_root)?;
                 if let Some(updater) = &updater {
                     updater.replace_client(session.client());
                 }
@@ -149,6 +147,22 @@ fn connect(
     )
 }
 
+fn connect_or_reconnect(
+    executable: &std::path::Path,
+    dir_root: &std::path::Path,
+    profile_root: &std::path::Path,
+) -> Result<AppServerSession, String> {
+    match connect(executable, dir_root, profile_root) {
+        Err(ClientError::ServerShuttingDown) => reconnect(
+            executable,
+            dir_root,
+            profile_root,
+            &ClientError::ServerShuttingDown.to_string(),
+        ),
+        result => result.map_err(|error| error.to_string()),
+    }
+}
+
 fn reconnect(
     executable: &std::path::Path,
     dir_root: &std::path::Path,
@@ -173,7 +187,9 @@ fn reconnect(
 
 fn classify_error(error: ClientError) -> Failure {
     match error {
-        ClientError::Transport(_) => Failure::Retryable(error.to_string()),
+        ClientError::Transport(_) | ClientError::ServerShuttingDown => {
+            Failure::Retryable(error.to_string())
+        }
         ClientError::Protocol(_) | ClientError::Server { .. } => Failure::Terminal(format!(
             "Local App Server reconnect stopped because the server rejected the connection: {error}"
         )),

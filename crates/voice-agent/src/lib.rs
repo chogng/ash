@@ -17,6 +17,6 @@ pub enum AgentError {
     Consumer,
     #[error("voice agent media failed")]
     Media(#[from] livekit_client::MediaError),
-    #[error("voice agent model session failed")]
+    #[error("voice agent model session failed: {0}")]
     Model(#[from] ash_model_provider::ModelProviderError),
 }

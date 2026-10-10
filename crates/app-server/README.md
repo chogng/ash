@@ -100,6 +100,7 @@ Windows 的后台进程生命周期集成测试使用 `just test-processes ash-a
 - 防休眠能力由 [sleep-inhibitor](../utils/sleep-inhibitor/README.md) 提供；系统拒绝获取时记录警告，任务按正常执行规则继续。
 
 - `ASH_EXEC_ENVIRONMENTS` 指定宿主配置的执行环境列表，格式见 [exec-server](../exec-server/README.md)。
+- 每个配置条目的初始装配通过 App Server 的 stderr 启动日志记录传输类型、成功或失败和耗时；计时包含凭据准备、握手及目标身份校验，完成后只记录一次，不包含工具请求的连接替换。日志不包含地址、路径、凭据或远端回复正文。当前同步装配没有取消接口。
 - Core 审批后调用显式选定的环境，执行结果仍写回当前 Thread。
 - 执行目标在装配时固定身份、实例、根目录和权限上限；审批摘要包含这份绑定，切换当前工作区不会改写目标。
 - `environment_runtime` 保留授权、配置激活与 Agent 工具装配；`WorkspaceRuntime` 组合就近索引、搜索、Git 与监听，`ExecutionRuntime` 组合目录绑定的终端与调试资源。

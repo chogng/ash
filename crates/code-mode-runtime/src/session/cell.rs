@@ -234,6 +234,12 @@ pub(super) fn run_cell(
     };
 
     loop {
+        if RuntimeState::has_exited(scope) {
+            let response = result_response(scope, cell_id, None);
+            send_result(scope, &event_tx, response);
+            done.store(true, Ordering::Release);
+            return;
+        }
         if let Err(error) = apply_available_tool_completions(scope) {
             let response = RuntimeResponse::Result {
                 cell_id: cell_id.clone(),
@@ -245,6 +251,14 @@ pub(super) fn run_cell(
             return;
         }
         scope.perform_microtask_checkpoint();
+        // An exit during a microtask can leave the outer Promise pending even
+        // after V8 has cleared its interrupt. Never wait on an exited isolate.
+        if RuntimeState::has_exited(scope) {
+            let response = result_response(scope, cell_id, None);
+            send_result(scope, &event_tx, response);
+            done.store(true, Ordering::Release);
+            return;
+        }
         if memory_limit_exceeded.load(Ordering::Acquire) {
             let response = RuntimeResponse::Result {
                 cell_id,
@@ -284,11 +298,10 @@ pub(super) fn run_cell(
                         content_items: take_output_items(scope),
                     }
                 } else {
-                    RuntimeResponse::Result {
-                        cell_id: cell_id.clone(),
-                        content_items: take_output_items(scope),
-                        error_text: Some(value_to_error_text(scope, error)),
-                    }
+                    // Formatting can run a stack getter that emits output and
+                    // exits. Capture output only after that JavaScript returns.
+                    let error_text = value_to_error_text(scope, error);
+                    result_response(scope, cell_id.clone(), Some(error_text))
                 };
                 send_result(scope, &event_tx, response);
                 done.store(true, Ordering::Release);

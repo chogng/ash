@@ -15,6 +15,44 @@ use crossterm::event::MouseButton;
 use crossterm::event::MouseEvent;
 use crossterm::event::MouseEventKind;
 
+#[test]
+fn terminal_program_status_follows_turns_and_user_action_including_submission_failure() {
+    use crate::terminal::ProgramStatus;
+    use crate::thread::TurnActivity;
+    use crate::thread::interaction::approval::Approval;
+    use crate::thread::interaction::approval::ApprovalSpec;
+    let mut app = App::new();
+    assert_eq!(super::program_status(&app), ProgramStatus::Idle);
+    app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
+    assert_eq!(super::program_status(&app), ProgramStatus::Working);
+    app.update(ThreadEvent::ApprovalRequested(Approval::new(
+        ApprovalSpec {
+            title: "Approval".into(),
+            reason: "Run tests".into(),
+            details: Vec::new(),
+        },
+    )));
+    assert_eq!(super::program_status(&app), ProgramStatus::Blocked);
+    let Some(AppCommand::Thread(crate::thread::Command::ResolveRequest(response))) =
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("approval must submit");
+    };
+    assert_eq!(super::program_status(&app), ProgramStatus::Working);
+    app.update(ThreadEvent::RequestSubmissionFailed {
+        request: response.identity(),
+        error: "offline".into(),
+    });
+    assert_eq!(super::program_status(&app), ProgramStatus::Blocked);
+    app.update(ThreadEvent::RequestResolved(response.identity()));
+    app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Cancelling));
+    assert_eq!(super::program_status(&app), ProgramStatus::Working);
+    app.update(ThreadEvent::TurnCompleted);
+    assert_eq!(super::program_status(&app), ProgramStatus::Idle);
+    app.update(ThreadEvent::TurnFailed);
+    assert_eq!(super::program_status(&app), ProgramStatus::Idle);
+}
+
 // Run under a PTY so TerminalSession emits the actual mouse-mode protocol.
 #[test]
 #[ignore = "requires a PTY with a nonzero window size"]

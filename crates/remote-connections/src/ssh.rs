@@ -213,6 +213,7 @@ impl RemoteConnectionError {
         match error {
             ClientError::Transport(message) => Self::transport(message),
             ClientError::Protocol(message) => Self::protocol_incompatible(message),
+            ClientError::ServerShuttingDown => Self::transport(error.to_string()),
             ClientError::Server { code, message } => {
                 Self::server_rejected(format!("server error {code}: {message}"))
             }

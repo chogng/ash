@@ -317,6 +317,129 @@ async fn live_uses_its_own_start_audio_delegation_and_finalization_contract() {
     assert!(!session.is_open());
     server.await.unwrap();
 }
+
+#[tokio::test]
+async fn live_preserves_provider_rejection_codes_during_start_and_close() {
+    for during_start in [true, false] {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let target = ResolvedApiTarget::new(
+            format!("http://{}/v1", listener.local_addr().unwrap()),
+            Vec::new(),
+            ash_client::RequestBinding::new(
+                ash_client::RequestPurpose::Model,
+                ash_client::RequestIdentity::Anonymous,
+            ),
+        );
+        let server = tokio::spawn(async move {
+            let (tcp, _) = listener.accept().await.unwrap();
+            let mut socket = tokio_tungstenite::accept_async(tcp).await.unwrap();
+            assert_eq!(read(&mut socket).await["type"], "session.start");
+            if !during_start {
+                send(&mut socket, json!({"type":"session.started","session":{"id":"live-1","model":"gpt-live-1"}})).await;
+                assert_eq!(read(&mut socket).await["type"], "session.close");
+            }
+            send(
+                &mut socket,
+                json!({"type":"error","error":{"code":"voice_quota_exceeded"}}),
+            )
+            .await;
+            if !during_start {
+                assert!(socket.next().await.unwrap().unwrap().is_close());
+            }
+        });
+        let token = CancellationSource::new().token();
+        let session = LiveSession::connect(
+            &connector(),
+            &target,
+            "gpt-live-1",
+            &LiveConfig {
+                instructions: String::new(),
+                voice: "marin".into(),
+            },
+            limits(),
+            &token,
+        )
+        .await;
+        let error = if during_start {
+            session.err().expect("startup must fail")
+        } else {
+            let mut session = session.unwrap();
+            let error = session.close(&token).await.unwrap_err();
+            assert!(!session.is_open());
+            error
+        };
+        assert!(matches!(error, ApiError::InvalidResponse(code) if code == "voice_quota_exceeded"));
+        tokio::time::timeout(Duration::from_secs(5), server)
+            .await
+            .unwrap()
+            .unwrap();
+    }
+}
+#[tokio::test]
+async fn live_close_has_one_total_deadline_and_retires_the_session_on_timeout() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let target = ResolvedApiTarget::new(
+        format!("http://{}/v1", listener.local_addr().unwrap()),
+        Vec::new(),
+        ash_client::RequestBinding::new(
+            ash_client::RequestPurpose::Model,
+            ash_client::RequestIdentity::Anonymous,
+        ),
+    );
+    let (closing, requested) = tokio::sync::oneshot::channel();
+    let server = tokio::spawn(async move {
+        let (tcp, _) = listener.accept().await.unwrap();
+        let mut socket = tokio_tungstenite::accept_async(tcp).await.unwrap();
+        assert_eq!(read(&mut socket).await["type"], "session.start");
+        send(
+            &mut socket,
+            json!({"type":"session.started","session":{"id":"deadline","model":"gpt-live-1"}}),
+        )
+        .await;
+        assert_eq!(read(&mut socket).await["type"], "session.close");
+        closing.send(()).unwrap();
+        // Keep the transport alive without supplying authoritative final usage.
+        // Cleanup must not restart its independently configured 60-second idle timeout.
+        let _ = socket.next().await;
+    });
+    let token = CancellationSource::new().token();
+    let mut session = LiveSession::connect(
+        &connector(),
+        &target,
+        "gpt-live-1",
+        &LiveConfig {
+            instructions: String::new(),
+            voice: "marin".into(),
+        },
+        WebSocketSessionConfig::default(),
+        &token,
+    )
+    .await
+    .unwrap();
+    let started = std::time::Instant::now();
+    let worker = tokio::spawn(async move {
+        let error = session.close(&token).await.unwrap_err();
+        assert!(!session.is_open());
+        error
+    });
+    tokio::time::timeout(Duration::from_secs(5), requested)
+        .await
+        .unwrap()
+        .unwrap();
+    let error = tokio::time::timeout(Duration::from_secs(17), worker)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        matches!(error, ApiError::Transport(message) if message == "Live finalization timed out")
+    );
+    assert!(started.elapsed() < Duration::from_secs(18));
+    tokio::time::timeout(Duration::from_secs(5), server)
+        .await
+        .unwrap()
+        .unwrap();
+}
+
 fn connector() -> WebSocketConnector {
     WebSocketConnector::new(
         OutboundNetworkSnapshot::new(

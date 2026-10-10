@@ -58,18 +58,22 @@ fn selection_keeps_a_runtime_leased_after_the_pointer_changes() {
         .write(true)
         .open(root.path().join("publish.lock"))
         .unwrap();
-    publication.try_lock().unwrap();
+    lock_after_inherited_handles_close(&publication);
     drop(selected);
+    lock_after_inherited_handles_close(&lease);
+}
+
+fn lock_after_inherited_handles_close(file: &std::fs::File) {
     // Parallel process tests can fork while the lease is held. The child retains
-    // the file description until exec closes it, so OS release is not immediate.
+    // both publication and runtime file descriptions until exec closes them.
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
     loop {
-        match lease.try_lock() {
+        match file.try_lock() {
             Ok(()) => break,
             Err(std::fs::TryLockError::WouldBlock) if std::time::Instant::now() < deadline => {
                 std::thread::sleep(std::time::Duration::from_millis(1));
             }
-            Err(error) => panic!("released runtime lease remained unavailable: {error}"),
+            Err(error) => panic!("released lock remained unavailable: {error}"),
         }
     }
 }

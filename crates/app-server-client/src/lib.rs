@@ -65,6 +65,8 @@ use ash_app_server_protocol::protocol::environment::{
     SessionDirMoveParams, SessionDirMoveResult, SessionDirMutationResult,
     SessionDirPermissionsSetParams, SessionDirRemoveParams,
 };
+use ash_app_server_protocol::protocol::error::AppServerErrorData;
+use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::fs::{
     FsGetMetadataParams, FsGetMetadataResult, FsReadBinaryFileParams, FsReadBinaryFileResult,
     FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult,
@@ -362,7 +364,12 @@ impl<T: Clone> Clone for AppServerClient<T> {
 pub enum ClientError {
     Transport(String),
     Protocol(String),
-    Server { code: i64, message: String },
+    /// The server is retiring its current generation; a later connection may succeed.
+    ServerShuttingDown,
+    Server {
+        code: i64,
+        message: String,
+    },
 }
 
 impl<T: JsonRpcTransport> AppServerClient<T> {
@@ -1615,19 +1622,7 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         match response {
             JsonRpcResponse::Success(response) => serde_json::from_value(response.result)
                 .map_err(|error| ClientError::Protocol(error.to_string())),
-            JsonRpcResponse::Failure(response) => Err(ClientError::Server {
-                code: response
-                    .error
-                    .get("code")
-                    .and_then(Value::as_i64)
-                    .unwrap_or(-32000),
-                message: response
-                    .error
-                    .get("message")
-                    .and_then(Value::as_str)
-                    .unwrap_or("unknown error")
-                    .into(),
-            }),
+            JsonRpcResponse::Failure(response) => Err(server_error(&response.error)),
         }
     }
 
@@ -1670,19 +1665,25 @@ fn decode_call_response<R: for<'a> serde::Deserialize<'a>>(
     match response {
         JsonRpcResponse::Success(response) => serde_json::from_value(response.result)
             .map_err(|error| ClientError::Protocol(error.to_string())),
-        JsonRpcResponse::Failure(response) => Err(ClientError::Server {
-            code: response
-                .error
-                .get("code")
-                .and_then(Value::as_i64)
-                .unwrap_or(-32000),
-            message: response
-                .error
-                .get("message")
-                .and_then(Value::as_str)
-                .unwrap_or("unknown error")
-                .to_owned(),
-        }),
+        JsonRpcResponse::Failure(response) => Err(server_error(&response.error)),
+    }
+}
+
+fn server_error(error: &Value) -> ClientError {
+    let is_stopping = error
+        .get("data")
+        .and_then(|data| serde_json::from_value::<AppServerErrorData>(data.clone()).ok())
+        .is_some_and(|data| data.kind == AppServerErrorName::ServerShuttingDown);
+    if error.get("code").and_then(Value::as_i64) == Some(-32600) && is_stopping {
+        return ClientError::ServerShuttingDown;
+    }
+    ClientError::Server {
+        code: error.get("code").and_then(Value::as_i64).unwrap_or(-32000),
+        message: error
+            .get("message")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown error")
+            .into(),
     }
 }
 
@@ -1691,6 +1692,7 @@ impl fmt::Display for ClientError {
         match self {
             Self::Transport(message) => write!(formatter, "transport error: {message}"),
             Self::Protocol(message) => write!(formatter, "protocol error: {message}"),
+            Self::ServerShuttingDown => formatter.write_str("Local App Server daemon is stopping"),
             Self::Server { code, message } => {
                 write!(formatter, "server error {code}: {message}")
             }

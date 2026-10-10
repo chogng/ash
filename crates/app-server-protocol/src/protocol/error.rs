@@ -61,6 +61,7 @@ pub enum AppServerErrorName {
     AutomationBusy,
     AutomationOperationFailed,
     ServerOverloaded,
+    ServerShuttingDown,
     RequestCancelled,
     NotInitialized,
     AlreadyInitialized,

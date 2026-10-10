@@ -1,3 +1,4 @@
+use crate::session::RuntimeState;
 use ash_code_mode_protocol::OutputItem;
 use serde_json::Value as JsonValue;
 
@@ -67,6 +68,9 @@ pub(super) fn normalize_image(
         let image_url = object
             .get(scope, url_key.into())
             .ok_or_else(|| IMAGE_HELPER_ERROR.to_string())?;
+        if RuntimeState::has_exited(scope) {
+            return Err(String::new());
+        }
         if !image_url.is_string() {
             return Err(IMAGE_HELPER_ERROR.into());
         }
@@ -113,6 +117,9 @@ pub(super) fn value_to_error_text(
     scope: &mut v8::PinScope<'_, '_>,
     value: v8::Local<'_, v8::Value>,
 ) -> String {
+    if RuntimeState::has_exited(scope) {
+        return String::new();
+    }
     if value.is_object()
         && let Ok(object) = v8::Local::<v8::Object>::try_from(value)
         && let Some(key) = v8::String::new(scope, "stack")
@@ -121,10 +128,18 @@ pub(super) fn value_to_error_text(
     {
         return stack.to_rust_string_lossy(scope);
     }
+    // The stack getter can exit and V8 may clear termination while unwinding.
+    // Do not call a user-defined toString() after that successful exit.
+    if RuntimeState::has_exited(scope) {
+        return String::new();
+    }
     value.to_rust_string_lossy(scope)
 }
 
 pub(super) fn throw_type_error(scope: &mut v8::PinScope<'_, '_>, message: &str) {
+    if RuntimeState::has_exited(scope) {
+        return;
+    }
     if let Some(message) = v8::String::new(scope, message) {
         scope.throw_exception(message.into());
     }

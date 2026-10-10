@@ -9,6 +9,7 @@
 - 按端点维护路径、协议头和字段支持。
 - 实现 Responses、Chat Completions、Anthropic Messages 的 HTTP／SSE 调用与响应解码。
 - 实现 Responses WebSocket 续接、Realtime GA 文本／音频事件会话，以及 OpenAI／xAI 流式听写协议。
+- 实现 GPT-Live 会话；关闭消息发送、最终用量接收与连接清理共用 15 秒总期限。关闭开始即取走连接，失败或超时后不能复用该会话。
 - 实现 OpenAI、Anthropic、Gemini、Kimi 和 Z.AI 的输入 token 计数协议。
 
 上层提供 `ModelRequest` 与带凭据的 `ResolvedApiTarget`。Provider、模型、凭据和 base URL 的选择属于运行时；HTTP／WebSocket 连接、TLS、代理与 SSE 分帧分别由底层客户端承担。
@@ -195,7 +196,7 @@ unknown optional event、terminal EOF、malformed JSON 与 Anthropic block lifec
 conformance fixture 还覆盖 instructions、Tool Call/Result、图片、refusal、错误分类、未物化附件拒绝
 和 prompt-cache scope，并通过 injected `OperationClient` 验证 request 与 response shape。
 
-当前 HTTP/SSE、Responses WebSocket、Realtime GA 与两种听写会话已有调用实现。NDJSON、WebRTC、GPT-Live 和更多服务操作不在本轮实现范围。新增能力必须继续保持 canonical domain、wire codec、
+当前 HTTP/SSE、Responses WebSocket、Realtime GA、GPT-Live 与两种听写会话已有调用实现。NDJSON、WebRTC 和更多服务操作不在本轮实现范围。新增能力必须继续保持 canonical domain、wire codec、
 operation framing、transport 四层分离。
 
 ## 请求头契约

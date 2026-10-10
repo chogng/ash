@@ -118,6 +118,9 @@ fn remote_runtime_probe_is_shell_quoted_and_reports_a_resolved_executable() {
 
 #[test]
 fn remote_connection_errors_keep_stable_failure_categories() {
+    let stopping = super::RemoteConnectionError::from_client_error(
+        ash_app_server_client::ClientError::ServerShuttingDown,
+    );
     let transport = super::RemoteConnectionError::from_client_error(
         ash_app_server_client::ClientError::Transport("ssh failed".into()),
     );
@@ -132,6 +135,7 @@ fn remote_connection_errors_keep_stable_failure_categories() {
     );
 
     assert_eq!(transport.kind(), RemoteConnectionFailureKind::Transport);
+    assert_eq!(stopping.kind(), RemoteConnectionFailureKind::Transport);
     assert_eq!(
         protocol.kind(),
         RemoteConnectionFailureKind::ProtocolIncompatible

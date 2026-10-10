@@ -71,6 +71,22 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 struct MockTransport(VecDeque<String>);
 
+#[test]
+fn stopping_initialization_preserves_structured_cause_independently_of_message() {
+    for message in ["Local App Server daemon is stopping", "diagnostic changed"] {
+        let wire = serde_json::json!({"jsonrpc":"2.0","id":1,"error":{"code":-32600,"message":message,"data":{"kind":"ServerShuttingDown"}}}).to_string();
+        let mut client = AppServerClient::new(MockTransport(VecDeque::from([wire])));
+        let result: Result<serde_json::Value, _> =
+            client.call(ClientMethod::Initialize, serde_json::json!({}));
+        assert_eq!(result, Err(ClientError::ServerShuttingDown));
+    }
+    let wire = serde_json::json!({"jsonrpc":"2.0","id":1,"error":{"code":-32600,"message":"Local App Server daemon is stopping"}}).to_string();
+    let mut client = AppServerClient::new(MockTransport(VecDeque::from([wire])));
+    let result: Result<serde_json::Value, _> =
+        client.call(ClientMethod::Initialize, serde_json::json!({}));
+    assert!(matches!(result, Err(ClientError::Server { .. })));
+}
+
 impl JsonRpcTransport for MockTransport {
     fn round_trip(&mut self, _: &str) -> Result<String, ClientError> {
         self.0

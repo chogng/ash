@@ -6,6 +6,52 @@ use crate::wire::write_json_line;
 use std::net::Shutdown;
 
 #[test]
+fn stopping_endpoint_keeps_control_responsive_and_rejects_business_admission() {
+    let profile = tempfile::tempdir().unwrap();
+    let mut endpoint = ManagedEndpoint::bind(profile.path()).unwrap();
+    let mut stop = UnixStream::connect(&endpoint.endpoint.socket).unwrap();
+    stop.set_read_timeout(Some(Duration::from_secs(1))).unwrap();
+    write_json_line(&mut stop, &ControlPrelude::new(ControlCommand::Stop)).unwrap();
+    assert!(endpoint.poll_connection().unwrap().is_none());
+    let mut response = String::new();
+    BufReader::new(stop).read_line(&mut response).unwrap();
+    assert_eq!(
+        serde_json::from_str::<ControlResponse>(&response)
+            .unwrap()
+            .state,
+        ControlState::Stopping
+    );
+    let mut business = UnixStream::connect(&endpoint.endpoint.socket).unwrap();
+    business
+        .set_read_timeout(Some(Duration::from_secs(1)))
+        .unwrap();
+    let options =
+        ConnectionOptions::new(profile.path(), None, GrantSource::HostConfiguration, None);
+    write_json_line(&mut business, &ConnectionPrelude::from_options(&options)).unwrap();
+    assert!(endpoint.poll_connection().unwrap().is_none());
+    assert_eq!(business.read(&mut [0_u8; 1]).unwrap(), 0);
+    let worker = std::thread::spawn(move || {
+        let executable = std::env::current_exe().unwrap();
+        for command in [
+            crate::LifecycleCommand::Start,
+            crate::LifecycleCommand::Version,
+        ] {
+            assert_eq!(
+                crate::run_lifecycle(command, options.clone(), &executable),
+                Err(crate::LifecycleError::ServerShuttingDown)
+            );
+        }
+    });
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !worker.is_finished() {
+        assert!(Instant::now() < deadline);
+        assert!(endpoint.poll_connection().unwrap().is_none());
+        std::thread::yield_now();
+    }
+    worker.join().unwrap();
+}
+
+#[test]
 fn polling_reclaims_oversized_logs_without_restart_and_preserves_the_writer() {
     let profile = tempfile::tempdir().unwrap();
     let mut endpoint = ManagedEndpoint::bind(profile.path()).unwrap();

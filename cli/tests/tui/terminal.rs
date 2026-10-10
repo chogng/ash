@@ -13,6 +13,69 @@ use std::time::Instant;
 const DICTATION_MODEL_ID: &str = "paraformer-large-online-ec6a3c64";
 
 #[test]
+fn actual_tui_terminal_program_status_tracks_work_and_clears_on_exit_in_both_modes() {
+    for mode in ["fullscreen", "inline"] {
+        let gate = Gate::new();
+        let server = ScenarioServer::start([HttpResponse::streaming(
+            ["OSC-7501-DONE"],
+            Some(gate.clone()),
+        )]);
+        let fixture = Fixture::new();
+        fixture.write_config(&server.base_url());
+        fixture.append_config(&format!(
+            "\n[tui]\nscreenMode = \"{mode}\"\nautoUpdate = \"never\"\n"
+        ));
+        let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+        process.wait_for_stable_screen("? for shortcuts");
+        let idle = "\x1b]7501;state=idle:app=ash\x1b\\";
+        assert!(process.raw_text().contains(idle));
+        #[cfg(unix)]
+        {
+            let clear = "\x1b]7501;state=clear\x1b\\";
+            let before = process.raw_text().matches(idle).count();
+            process.send(&[0x1a]);
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while !process.raw_text().contains(clear) {
+                assert!(
+                    Instant::now() < deadline,
+                    "suspend must clear terminal status"
+                );
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            // Resume after observing release, including hosts that ignore SIGTSTP
+            // for an orphaned PTY process group.
+            process.continue_process();
+            while process.raw_text().matches(idle).count() <= before {
+                assert!(Instant::now() < deadline, "resume must report idle again");
+                std::thread::sleep(Duration::from_millis(20));
+            }
+        }
+        process.submit("Report terminal status");
+        gate.wait_until_reached();
+        process.wait_for_screen("OSC-7501-DONE");
+        assert!(
+            process
+                .raw_text()
+                .contains("\x1b]7501;state=working:app=ash\x1b\\")
+        );
+        gate.release();
+        process.wait_for_stable_screen("OSC-7501-DONE");
+        let cleared_before_exit = process
+            .raw_text()
+            .matches("\x1b]7501;state=clear\x1b\\")
+            .count();
+        process.quit();
+        let raw = process.raw_text();
+        assert!(
+            raw.matches(idle).count() >= if cfg!(unix) { 3 } else { 2 },
+            "completion must restore idle"
+        );
+        assert!(raw.matches("\x1b]7501;state=clear\x1b\\").count() > cleared_before_exit);
+        assert_eq!(server.request_count(), 1);
+    }
+}
+
+#[test]
 fn actual_tui_announcement_is_fetched_once_and_preserves_input_in_both_modes() {
     for (mode, language, prefix) in [
         ("fullscreen", "en", "Announcement:"),

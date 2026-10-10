@@ -75,6 +75,9 @@ pub(crate) fn run(profile_root: PathBuf, product_services: Option<PathBuf>) -> R
     loop {
         connection_workers.reap();
         if endpoint.is_stopping() {
+            // Keep lifecycle status observable during the grace period. The
+            // endpoint rejects business admission after the stop flag is set.
+            let _ = endpoint.poll_connection()?;
             if stopping_since.is_none() {
                 execution.stop()?;
             }

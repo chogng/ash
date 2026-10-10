@@ -869,6 +869,18 @@ impl TuiProcess {
     }
 
     #[cfg(unix)]
+    pub fn continue_process(&mut self) {
+        let pid = self.child.child.process_id().expect("running TUI process");
+        assert!(
+            std::process::Command::new("kill")
+                .args(["-CONT", &pid.to_string()])
+                .status()
+                .unwrap()
+                .success()
+        );
+    }
+
+    #[cfg(unix)]
     pub fn terminate(&mut self) {
         let pid = self.child.child.process_id().expect("running TUI process");
         assert!(

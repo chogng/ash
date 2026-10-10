@@ -314,12 +314,36 @@ fn draw_terminal(
         app.fullscreen.clear();
     }
     terminal.set_screen_mode(app.screen_mode())?;
+    terminal.set_program_status(program_status(app))?;
     terminal.set_mouse_mode(app.mouse_mode())?;
     terminal.set_cursor_color(app.render_context().cursor_color())?;
     match app.screen_mode() {
         terminal::ScreenMode::Fullscreen => terminal
             .draw(|terminal_frame, links| frame::draw_with_links(terminal_frame, app, links)),
         terminal::ScreenMode::Inline => output.draw(terminal, app),
+    }
+}
+
+fn program_status(app: &App) -> terminal::ProgramStatus {
+    use super::state::Status;
+    let request_submitting = app
+        .chat_panel
+        .approval_view()
+        .map(|view| view.submitting)
+        .or_else(|| app.chat_panel.query_view().map(|view| view.submitting));
+    if let Some(submitting) = request_submitting {
+        return if submitting {
+            terminal::ProgramStatus::Working
+        } else {
+            terminal::ProgramStatus::Blocked
+        };
+    }
+    match app.status() {
+        Status::WaitingForApproval | Status::WaitingForUserInput | Status::WaitingForCapability => {
+            terminal::ProgramStatus::Blocked
+        }
+        Status::Working | Status::Cancelling => terminal::ProgramStatus::Working,
+        Status::Ready | Status::Error => terminal::ProgramStatus::Idle,
     }
 }
 

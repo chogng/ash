@@ -352,12 +352,33 @@ fn stop_closes_active_connections_after_its_bounded_grace_window() {
     reader.read_line(&mut initialize).unwrap();
     assert!(initialize.contains("\"result\""));
 
-    let stop_options = options.clone();
-    let stopped = std::thread::spawn(move || {
-        run_lifecycle(LifecycleCommand::Stop, stop_options, executable).unwrap()
-    })
-    .join()
+    // Request stop directly so the lifecycle lock stays available during the grace period.
+    let mut control = UnixStream::connect(daemon_endpoint_path(&profile).unwrap()).unwrap();
+    control
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .unwrap();
+    writeln!(
+        control,
+        "{}",
+        json!({"version": 1, "kind": "control", "command": "stop"})
+    )
     .unwrap();
+    control.flush().unwrap();
+    let mut acknowledged = String::new();
+    BufReader::new(control)
+        .read_line(&mut acknowledged)
+        .unwrap();
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&acknowledged).unwrap()["state"],
+        "stopping"
+    );
+    for command in [LifecycleCommand::Start, LifecycleCommand::Version] {
+        assert_eq!(
+            run_lifecycle(command, options.clone(), executable),
+            Err(ash_app_server_daemon::LifecycleError::ServerShuttingDown)
+        );
+    }
+    let stopped = run_lifecycle(LifecycleCommand::Stop, options.clone(), executable).unwrap();
     assert_eq!(stopped.status, LifecycleStatus::Stopped);
     // Notifications already queued before stop may still be readable from the socket buffer.
     let mut closed = false;
@@ -403,7 +424,9 @@ fn failed_initialize_cleans_the_published_backend_before_retry() {
     let executable = Path::new(env!("CARGO_BIN_EXE_ash-app-server"));
     let error = run_lifecycle(LifecycleCommand::Start, options.clone(), executable).unwrap_err();
     assert!(
-        error.contains("product services configuration is invalid"),
+        error
+            .to_string()
+            .contains("product services configuration is invalid"),
         "{error}"
     );
     let endpoint = daemon_endpoint_path(&profile).unwrap();

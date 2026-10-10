@@ -27,6 +27,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Position;
 use ratatui::layout::Rect;
 use std::io;
+use std::io::IsTerminal;
 use std::io::Stdout;
 use std::io::Write;
 
@@ -45,6 +46,7 @@ pub(crate) struct TerminalSession {
     inline_height: u16,
     inline_active: bool,
     inline_overlay_active: bool,
+    program_status: super::program_status::StatusReporter,
 }
 
 impl TerminalSession {
@@ -66,6 +68,7 @@ impl TerminalSession {
             inline_height,
             inline_active: mode == ScreenMode::Inline,
             inline_overlay_active: false,
+            program_status: Default::default(),
         };
         session
             .terminal
@@ -246,6 +249,8 @@ impl TerminalSession {
 
     /// Restores the parent terminal, suspends this process, and reacquires TUI modes on resume.
     pub(crate) fn suspend(&mut self) -> io::Result<()> {
+        // Clear before releasing terminal ownership; the next draw restores the current state.
+        self.program_status.clear(&mut io::stdout())?;
         self.cursor_color.set(&mut io::stdout(), None)?;
         if self.modes.mode == ScreenMode::Inline {
             self.terminal.clear()?;
@@ -265,10 +270,18 @@ impl TerminalSession {
         self.invalidate();
         self.terminal.clear()
     }
+
+    pub(crate) fn set_program_status(&mut self, status: super::ProgramStatus) -> io::Result<()> {
+        if io::stdout().is_terminal() {
+            self.program_status.set(&mut io::stdout(), status)?;
+        }
+        Ok(())
+    }
 }
 
 impl Drop for TerminalSession {
     fn drop(&mut self) {
+        let _ = self.program_status.clear(&mut io::stdout());
         let _ = self.cursor_color.set(&mut io::stdout(), None);
         if self.inline_active {
             let _ = self.terminal.clear();

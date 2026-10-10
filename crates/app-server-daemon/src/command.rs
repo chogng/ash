@@ -66,7 +66,7 @@ pub fn run_command(
         _ => return Err("SSH connection requires ASH_REMOTE_HOST and ASH_REMOTE_RUNTIME".into()),
     }
     match command {
-        Command::Connect => crate::connect(options, backend_executable),
+        Command::Connect => crate::connect(options, backend_executable).map_err(Into::into),
         Command::ConnectSelected => crate::client::connect_selected_with_digest(
             options,
             backend_executable,
@@ -74,7 +74,8 @@ pub fn run_command(
                 .as_deref()
                 .map(crate::process::PackageDigest::Expected)
                 .unwrap_or(crate::process::PackageDigest::NotProvided),
-        ),
+        )
+        .map_err(Into::into),
         Command::Update => {
             let output = crate::update::install_stable(options.profile_root(), backend_executable)?;
             println!(

@@ -2,6 +2,17 @@ use super::AppServerError;
 use super::AppServerErrorName;
 
 #[test]
+fn server_shutdown_preserves_invalid_request_code_and_structured_kind() {
+    let error = AppServerError::new(-32600, AppServerErrorName::ServerShuttingDown);
+    assert_eq!(
+        serde_json::to_value(&error).unwrap(),
+        serde_json::json!({
+            "code": -32600, "message": "ServerShuttingDown", "data": {"kind":"ServerShuttingDown"}
+        })
+    );
+}
+
+#[test]
 fn error_kind_is_structured_separately_from_diagnostic_message() {
     let error = AppServerError::new(-32013, AppServerErrorName::ResourceNotFound);
 

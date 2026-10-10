@@ -514,54 +514,110 @@ enum EndpointConfig {
 }
 
 pub(crate) fn load_environments(path: &Path) -> Result<Vec<ExecutionEnvironment>, String> {
+    load_environments_observed(path, &mut |measurement| {
+        // Standalone App Server startup has no global log logger. Its existing
+        // stderr diagnostic stream remains separate from the stdio RPC transport.
+        eprintln!(
+            "Ash execution environment initial_connection: transport={:?} outcome={:?} elapsed_micros={}",
+            measurement.transport,
+            measurement.outcome,
+            measurement.elapsed.as_micros(),
+        );
+    })
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ConnectionTransport {
+    Tcp,
+    Ssh,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ConnectionOutcome {
+    Success,
+    Failure,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ConnectionMeasurement {
+    transport: ConnectionTransport,
+    outcome: ConnectionOutcome,
+    elapsed: Duration,
+}
+
+// The host owns configured environment installation, including credential preparation
+// and the expected identity check. Measure that whole operation once; pooled socket
+// replacement and tool requests are not new installations. This synchronous loader
+// has no cancellation contract, so it does not invent cancellation outcomes.
+fn load_environments_observed(
+    path: &Path,
+    observer: &mut impl FnMut(ConnectionMeasurement),
+) -> Result<Vec<ExecutionEnvironment>, String> {
     let bytes = std::fs::read(path).map_err(|error| error.to_string())?;
     let entries: Vec<EndpointConfig> =
         serde_json::from_slice(&bytes).map_err(|error| error.to_string())?;
     entries
         .into_iter()
         .map(|entry| {
-            let (environment, client) = match entry {
-                EndpointConfig::Tcp {
-                    environment,
-                    address,
-                    token_file,
-                } => {
-                    let token_path = if token_file.is_absolute() {
-                        token_file
-                    } else {
-                        path.parent()
-                            .ok_or("Execution configuration path has no parent")?
-                            .join(token_file)
-                    };
-                    let token =
-                        std::fs::read_to_string(token_path).map_err(|error| error.to_string())?;
-                    let endpoint = exec_server::RemoteEndpoint::new(address, token.trim().into())
-                        .map_err(|error| error.to_string())?;
-                    (environment, exec_server::ExecClient::connect(endpoint))
-                }
-                EndpointConfig::Ssh {
-                    environment,
-                    host,
-                    root,
-                    runtime,
-                    ssh_executable,
-                } => {
-                    let mut target =
-                        exec_server::SshEndpoint::new(&host, &root, &runtime, &environment)
-                            .map_err(|error| error.to_string())?;
-                    if let Some(executable) = ssh_executable {
-                        target = target.with_executable(executable);
-                    }
-                    (environment, exec_server::ExecClient::connect_ssh(target))
-                }
+            let transport = match &entry {
+                EndpointConfig::Tcp { .. } => ConnectionTransport::Tcp,
+                EndpointConfig::Ssh { .. } => ConnectionTransport::Ssh,
             };
-            let client = client.map_err(|error| error.to_string())?;
-            if client.info().environment_id != environment {
-                return Err("execution environment identity mismatch".into());
-            }
-            Ok(ExecutionEnvironment::Remote(client))
+            let started = Instant::now();
+            let result = connect_environment(path, entry);
+            observer(ConnectionMeasurement {
+                transport,
+                outcome: if result.is_ok() {
+                    ConnectionOutcome::Success
+                } else {
+                    ConnectionOutcome::Failure
+                },
+                elapsed: started.elapsed(),
+            });
+            result
         })
         .collect()
+}
+
+fn connect_environment(path: &Path, entry: EndpointConfig) -> Result<ExecutionEnvironment, String> {
+    let (environment, client) = match entry {
+        EndpointConfig::Tcp {
+            environment,
+            address,
+            token_file,
+        } => {
+            let token_path = if token_file.is_absolute() {
+                token_file
+            } else {
+                path.parent()
+                    .ok_or("Execution configuration path has no parent")?
+                    .join(token_file)
+            };
+            let token = std::fs::read_to_string(token_path).map_err(|error| error.to_string())?;
+            let endpoint = exec_server::RemoteEndpoint::new(address, token.trim().into())
+                .map_err(|error| error.to_string())?;
+            (environment, exec_server::ExecClient::connect(endpoint))
+        }
+        EndpointConfig::Ssh {
+            environment,
+            host,
+            root,
+            runtime,
+            ssh_executable,
+        } => {
+            let mut target = exec_server::SshEndpoint::new(&host, &root, &runtime, &environment)
+                .map_err(|error| error.to_string())?;
+            if let Some(executable) = ssh_executable {
+                target = target.with_executable(executable);
+            }
+            (environment, exec_server::ExecClient::connect_ssh(target))
+        }
+    };
+    let client = client.map_err(|error| error.to_string())?;
+    if client.info().environment_id != environment {
+        return Err("execution environment identity mismatch".into());
+    }
+    Ok(ExecutionEnvironment::Remote(client))
 }
 
 pub(crate) fn port(

@@ -1,5 +1,6 @@
 mod event_source;
 mod hyperlinks;
+mod program_status;
 mod scrollback;
 mod session;
 mod terminal_probe;
@@ -7,6 +8,7 @@ pub(crate) mod text;
 
 pub(crate) use event_source::TerminalEvent;
 pub(crate) use event_source::TerminalEventSource;
+pub(crate) use program_status::ProgramStatus;
 pub(crate) use session::TerminalSession;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
