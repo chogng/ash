@@ -12,6 +12,7 @@ use serde::Serialize;
 use std::io::Read;
 use std::path::PathBuf;
 use std::time::Duration;
+use ureq_update as ureq;
 
 const REPOSITORY: &str = "chogng/ash";
 const RELEASE_API: &str = "https://api.github.com/repos/chogng/ash/releases?per_page=20";
@@ -267,13 +268,24 @@ fn resolve_release(
 
 fn fetch(url: &str, limit: u64) -> Result<Vec<u8>, String> {
     let response = ureq::get(url)
-        .set("User-Agent", "Ash-Desktop-Update")
-        .set("Accept", "application/vnd.github+json")
-        .timeout(Duration::from_secs(15))
+        .header("User-Agent", "Ash-Desktop-Update")
+        .header("Accept", "application/vnd.github+json")
+        .config()
+        .proxy(None)
+        .timeout_connect(Some(Duration::from_secs(30)))
+        .max_redirects(5)
+        .tls_config(
+            ureq::tls::TlsConfig::builder()
+                .root_certs(ureq::tls::RootCerts::PlatformVerifier)
+                .build(),
+        )
+        .timeout_global(Some(Duration::from_secs(15)))
+        .build()
         .call()
         .map_err(|error| format!("could not fetch update release: {error}"))?;
     let mut bytes = Vec::new();
     response
+        .into_body()
         .into_reader()
         .take(limit + 1)
         .read_to_end(&mut bytes)

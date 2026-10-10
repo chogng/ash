@@ -381,6 +381,24 @@ fn upstream_workflow_loads_unchanged_and_first_attempt_has_no_follow_up_context(
 }
 
 #[test]
+fn liquid_registers_keep_tag_state_and_reset_between_workflow_invocations() {
+    let root = tempfile::tempdir().unwrap();
+    let mut plan = workflow(&root, "");
+    let mut item = issue("LIN-1", "Todo", 1);
+    item.labels = vec!["one".into(), "one".into(), "two".into()];
+    // cycle, increment and ifchanged use different typed runtime registers.
+    // They must coexist during one render, without leaking state into a retry.
+    plan.prompt = "{% for label in issue.labels %}{% cycle 'a', 'b' %}:{% increment step %}:{% ifchanged %}{{ label }}{% endifchanged %};{% endfor %}".into();
+
+    for attempt in [None, Some(1), Some(2)] {
+        assert_eq!(
+            plan.render(&item, attempt).unwrap(),
+            "a:0:one;b:1:;a:2:two;"
+        );
+    }
+}
+
+#[test]
 fn liquid_filters_and_strict_errors_match_the_workflow_contract() {
     let root = tempfile::tempdir().unwrap();
     let mut plan = workflow(&root, "");

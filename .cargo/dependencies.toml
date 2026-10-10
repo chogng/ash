@@ -104,8 +104,8 @@ reason = "Current upstream API families: 0.4.1 via glib-macros; 0.5.0 via clap_d
 
 [[multiple_versions]]
 name = "itertools"
-versions = ["0.11.0", "0.12.1", "0.13.0", "0.14.0"]
-reason = "0.11 via LiveKit pbjson-build; 0.12 via LiveKit prost 0.12; 0.13 via bindgen/ratatui; 0.14 via prost 0.14/tokenizers."
+versions = ["0.11.0", "0.12.1", "0.13.0", "0.14.0", "0.15.0"]
+reason = "0.11 via LiveKit pbjson-build; 0.12 via LiveKit prost 0.12; 0.13 via bindgen/ratatui; 0.14 via prost 0.14/tokenizers; 0.15 via the Liquid upstream fix that removes anymap2."
 
 [[multiple_versions]]
 name = "jni-sys"
@@ -133,11 +133,6 @@ versions = ["7.1.3", "8.0.0"]
 reason = "Current upstream API families: 7.1.3 via ansi-to-tui, cexpr, spm_precompiled; 8.0.0 via tree_magic_mini. Review the introducing packages together before changing this set."
 
 [[multiple_versions]]
-name = "openssl-probe"
-versions = ["0.1.6", "0.2.1"]
-reason = "Current upstream API families: 0.1.6 via rustls-native-certs; 0.2.1 via rustls-native-certs. Review the introducing packages together before changing this set."
-
-[[multiple_versions]]
 name = "phf"
 versions = ["0.12.1", "0.13.1"]
 reason = "Current upstream API families: 0.12.1 via chrono-tz; 0.13.1 via accesskit_atspi_common, hayro-interpret, typst-library. Review the introducing packages together before changing this set."
@@ -153,11 +148,6 @@ versions = ["0.4.0", "1.0.1"]
 reason = "Current upstream API families: 0.4.0 via rfd; 1.0.1 via ash-agent, ash-app-server, ash-async-utils and other importers. Review the introducing packages together before changing this set."
 
 [[multiple_versions]]
-name = "quick-xml"
-versions = ["0.38.4", "0.41.0"]
-reason = "Current upstream API families: 0.38.4 via citationberg; 0.41.0 via plist, wayland-scanner. Review the introducing packages together before changing this set."
-
-[[multiple_versions]]
 name = "r-efi"
 versions = ["5.3.0", "6.0.0"]
 reason = "Current upstream API families: 5.3.0 via getrandom; 6.0.0 via getrandom. Review the introducing packages together before changing this set."
@@ -165,7 +155,7 @@ reason = "Current upstream API families: 5.3.0 via getrandom; 6.0.0 via getrando
 [[multiple_versions]]
 name = "rand"
 versions = ["0.10.2", "0.8.7", "0.9.5"]
-reason = "Current upstream API families: 0.10.2 via quinn-proto; 0.8.7 via lipsum, phf_generator, secret-service and other importers; 0.9.5 via candle-core, float8, half and other importers. Review the introducing packages together before changing this set."
+reason = "Current upstream API families: 0.10.2 via quinn-proto; 0.8.7 via lipsum, phf_generator, secret-service and other importers; 0.9.5 via float8, half and other importers. Review the introducing packages together before changing this set."
 
 [[multiple_versions]]
 name = "rand_chacha"
@@ -191,11 +181,6 @@ reason = "Current upstream API families: 0.20.0 via fontconfig-parser; 0.21.1 vi
 name = "rustix"
 versions = ["0.38.44", "1.1.4"]
 reason = "Current upstream API families: 0.38.44 via calloop, calloop-wayland-source, crossterm and other importers; 1.1.4 via ash-app-server-daemon, ash-app-server-transport, ash-remote-server and other importers. Review the introducing packages together before changing this set."
-
-[[multiple_versions]]
-name = "rustls-native-certs"
-versions = ["0.7.3", "0.8.4"]
-reason = "Current upstream API families: 0.7.3 via ash-http-client, ureq; 0.8.4 via rustls-platform-verifier. Review the introducing packages together before changing this set."
 
 [[multiple_versions]]
 name = "security-framework"
@@ -266,6 +251,11 @@ reason = "Current upstream API families: 0.20.2 via proc-macro-crate, toml; 0.25
 name = "unicode-width"
 versions = ["0.1.14", "0.2.0"]
 reason = "Current upstream API families: 0.1.14 via unicode-truncate; 0.2.0 via ash-editor, ash-terminal, ash-terminal-runtime and other importers. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "ureq"
+versions = ["2.12.1", "3.4.2"]
+reason = "2.12 remains inside ash-http-client's custom rustls/SSRF connector adapter; the ureq-update workspace alias uses 3.4 for product-update, app-server-daemon and CLI updates with OS trust. Old native-certs is disabled and rustls-pemfile is removed."
 
 [[multiple_versions]]
 name = "untrusted"
@@ -360,7 +350,7 @@ reason = "Current upstream API families: 3.0.0 via zbus; 4.3.4 via atspi-common,
 [[multiple_versions]]
 name = "zip"
 versions = ["2.4.2", "4.6.1"]
-reason = "2.4 is a sherpa-onnx-sys build dependency for its prebuilt ONNX library; 4.6 serves Ash CLI/plugins; 7.2 serves candle-core model artifacts."
+reason = "2.4 is a sherpa-onnx-sys build dependency for its prebuilt ONNX library; 4.6 serves Ash CLI/plugins."
 
 [[multiple_versions]]
 name = "zvariant"
@@ -386,7 +376,7 @@ reason = "cap-std 4.0.3 uses io-lifetimes 3 through cap-primitives/io-extras; it
 [[multiple_versions]]
 name = "fixedbitset"
 versions = ["0.4.2", "0.5.7"]
-reason = "0.4 via petgraph 0.6 for LiveKit protobuf builds; 0.5 via petgraph 0.8 for candle-onnx and tree_magic_mini."
+reason = "0.4 via petgraph 0.6 for LiveKit protobuf builds; 0.5 via petgraph 0.8 for tree_magic_mini."
 
 [[multiple_versions]]
 name = "jni"
@@ -396,17 +386,17 @@ reason = "0.21 via LiveKit device-info; 0.22 via android-activity and rustls-pla
 [[multiple_versions]]
 name = "petgraph"
 versions = ["0.6.5", "0.8.3"]
-reason = "0.6 via LiveKit prost-build 0.12; 0.8 via candle-onnx prost-build 0.14 and tree_magic_mini."
+reason = "0.6 via LiveKit prost-build 0.12; 0.8 via tree_magic_mini."
 
 [[multiple_versions]]
 name = "prost"
 versions = ["0.12.6", "0.14.4"]
-reason = "0.12 is LiveKit protocol/pbjson wire-code generation; 0.14 is candle-onnx and input-classifier model data. Do not interchange generated messages."
+reason = "0.12 is LiveKit protocol/pbjson wire-code generation; 0.14 is OpenTelemetry and tonic-prost telemetry messages. Do not interchange generated messages."
 
 [[multiple_versions]]
 name = "prost-derive"
 versions = ["0.12.6", "0.14.4"]
-reason = "Derive implementations matching the separate LiveKit prost 0.12 and model-data prost 0.14 runtimes."
+reason = "Derive implementations matching the separate LiveKit prost 0.12 and OpenTelemetry prost 0.14 runtimes."
 
 [[multiple_versions]]
 name = "reqwest"
@@ -435,7 +425,7 @@ reason = "Derive macros paired with asn1-rs 0.6 and 0.7 in the WebRTC certificat
 
 [[multiple_versions]]
 name = "chacha20"
-versions = ["0.10.1", "0.9.1"]
+versions = ["0.10.2", "0.9.1"]
 reason = "0.9 through rtc-dtls -> chacha20poly1305; 0.10 through rtc's rand 0.10."
 
 [[multiple_versions]]

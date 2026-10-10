@@ -4,6 +4,64 @@ use std::sync::Mutex;
 use tempfile::TempDir;
 
 #[test]
+fn http_transport_enforces_status_and_size_for_metadata_and_archives() {
+    for archive in [false, true] {
+        for (body, status, valid) in [
+            (&b"abc"[..], 200, true),
+            (&b"abcd"[..], 200, false),
+            (&b"abc"[..], 503, false),
+        ] {
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            let url = format!("http://{}/update", listener.local_addr().unwrap());
+            let worker = std::thread::spawn(move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(3)))
+                    .unwrap();
+                let mut request = Vec::new();
+                while !request.ends_with(b"\r\n\r\n") {
+                    let mut byte = [0];
+                    stream.read_exact(&mut byte).unwrap();
+                    request.push(byte[0]);
+                }
+                let request = String::from_utf8(request).unwrap().to_ascii_lowercase();
+                assert!(request.contains("user-agent: ash-code-updater"));
+                assert!(request.contains(if archive {
+                    "accept: application/octet-stream"
+                } else {
+                    "accept: application/vnd.github+json"
+                }));
+                write!(
+                    stream,
+                    "HTTP/1.1 {status} Response\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    body.len()
+                )
+                .unwrap();
+                let _ = stream.write_all(body);
+            });
+            if archive {
+                let directory = TempDir::new().unwrap();
+                let path = directory.path().join("update.zip");
+                let result = HttpTransport.fetch_file(&url, &path, 3);
+                assert_eq!(result.is_ok(), valid, "{result:?}");
+                if let Ok(downloaded) = result {
+                    assert_eq!(downloaded.size, 3);
+                    assert_eq!(downloaded.sha256, Sha256::digest(body).as_slice());
+                    assert_eq!(fs::read(path).unwrap(), body);
+                }
+            } else {
+                let result = HttpTransport.fetch(&url, 3);
+                assert_eq!(result.is_ok(), valid, "{result:?}");
+                if let Ok(bytes) = result {
+                    assert_eq!(bytes, body);
+                }
+            }
+            worker.join().unwrap();
+        }
+    }
+}
+
+#[test]
 fn signed_release_requires_the_installed_key_and_exact_identity() {
     let target = current_target().unwrap();
     let bytes = signed_update("0.2.0", target, 17, &"11".repeat(32));

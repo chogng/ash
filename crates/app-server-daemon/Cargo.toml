@@ -35,7 +35,7 @@ ash-uds = { workspace = true }
 flate2 = { workspace = true }
 semver = { workspace = true }
 tar = { workspace = true }
-ureq = { workspace = true }
+ureq-update = { workspace = true }
 zip = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]

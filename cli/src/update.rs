@@ -19,6 +19,7 @@ use std::thread;
 use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
+use ureq_update as ureq;
 
 const REPOSITORY: &str = "chogng/ash";
 const RELEASE_API: &str = "https://api.github.com/repos/chogng/ash/releases/latest";
@@ -663,11 +664,21 @@ struct HttpTransport;
 impl Transport for HttpTransport {
     fn fetch(&self, url: &str, maximum: usize) -> Result<Vec<u8>, String> {
         let response = ureq::get(url)
-            .set("Accept", "application/vnd.github+json")
-            .set("User-Agent", "ash-code-updater")
+            .header("Accept", "application/vnd.github+json")
+            .header("User-Agent", "ash-code-updater")
+            .config()
+            .proxy(None)
+            .timeout_connect(Some(Duration::from_secs(30)))
+            .max_redirects(5)
+            .tls_config(
+                ureq::tls::TlsConfig::builder()
+                    .root_certs(ureq::tls::RootCerts::PlatformVerifier)
+                    .build(),
+            )
+            .build()
             .call()
             .map_err(|error| format!("could not download {url}: {error}"))?;
-        let mut reader = response.into_reader().take(maximum as u64 + 1);
+        let mut reader = response.into_body().into_reader().take(maximum as u64 + 1);
         let mut bytes = Vec::new();
         reader
             .read_to_end(&mut bytes)
@@ -680,11 +691,21 @@ impl Transport for HttpTransport {
 
     fn fetch_file(&self, url: &str, path: &Path, maximum: usize) -> Result<DownloadedFile, String> {
         let response = ureq::get(url)
-            .set("Accept", "application/octet-stream")
-            .set("User-Agent", "ash-code-updater")
+            .header("Accept", "application/octet-stream")
+            .header("User-Agent", "ash-code-updater")
+            .config()
+            .proxy(None)
+            .timeout_connect(Some(Duration::from_secs(30)))
+            .max_redirects(5)
+            .tls_config(
+                ureq::tls::TlsConfig::builder()
+                    .root_certs(ureq::tls::RootCerts::PlatformVerifier)
+                    .build(),
+            )
+            .build()
             .call()
             .map_err(|error| format!("could not download {url}: {error}"))?;
-        let mut reader = response.into_reader().take(maximum as u64 + 1);
+        let mut reader = response.into_body().into_reader().take(maximum as u64 + 1);
         let mut file = OpenOptions::new()
             .write(true)
             .create_new(true)

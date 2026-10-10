@@ -33,7 +33,7 @@ serde_json = { workspace = true }
 sha2 = { workspace = true }
 signal-hook = { workspace = true }
 tar = { workspace = true }
-ureq = { workspace = true }
+ureq-update = { workspace = true }
 zip = { workspace = true }
 ash-app-server-client = { workspace = true }
 ash-app-server-protocol = { workspace = true }

@@ -85,6 +85,27 @@ mod tests {
     }
 
     #[test]
+    fn generated_typed_array_bindings_preserve_backing_store_bytes() {
+        initialize_v8();
+        let isolate = &mut v8::Isolate::new(Default::default());
+        v8::scope!(let scope, isolate);
+        let context = v8::Context::new(scope, Default::default());
+        let scope = &mut v8::ContextScope::new(scope, context);
+        let buffer = v8::ArrayBuffer::new(scope, 3);
+        for (cell, byte) in buffer.get_backing_store().iter().zip([7, 11, 13]) {
+            cell.set(byte);
+        }
+        let array = v8::Uint8Array::new(scope, buffer, 1, 2).unwrap();
+        assert_eq!(array.length(), 2);
+        let value: v8::Local<v8::Value> = array.into();
+        assert!(value.is_uint8_array());
+        let restored = v8::Local::<v8::Uint8Array>::try_from(value).unwrap();
+        let mut bytes = [0; 2];
+        assert_eq!(restored.copy_contents(&mut bytes), 2);
+        assert_eq!(bytes, [11, 13]);
+    }
+
+    #[test]
     fn evaluates_string_concatenation() {
         assert_eq!(evaluate_expression("'hello ' + 'world'"), "hello world");
     }

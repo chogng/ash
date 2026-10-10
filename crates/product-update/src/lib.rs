@@ -27,6 +27,7 @@ use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
+use ureq_update as ureq;
 
 const SCHEMA_VERSION: u8 = 1;
 const MAX_PACKAGE_BYTES: u64 = 4 * 1024 * 1024 * 1024;
@@ -124,12 +125,22 @@ pub fn stage_verified_package(
     directory: &Path,
 ) -> Result<PathBuf, UpdateError> {
     let response = ureq::get(&package.url)
-        .set("User-Agent", "Ash-Product-Update")
-        .set("Accept", "application/octet-stream")
-        .timeout(Duration::from_secs(900))
+        .header("User-Agent", "Ash-Product-Update")
+        .header("Accept", "application/octet-stream")
+        .config()
+        .proxy(None)
+        .timeout_connect(Some(Duration::from_secs(30)))
+        .max_redirects(5)
+        .tls_config(
+            ureq::tls::TlsConfig::builder()
+                .root_certs(ureq::tls::RootCerts::PlatformVerifier)
+                .build(),
+        )
+        .timeout_global(Some(Duration::from_secs(900)))
+        .build()
         .call()
         .map_err(|error| UpdateError::new(format!("could not download signed update: {error}")))?;
-    stage_package_reader(package, directory, response.into_reader())
+    stage_package_reader(package, directory, response.into_body().into_reader())
 }
 
 fn stage_package_reader(
@@ -413,6 +424,10 @@ impl fmt::Display for UpdateError {
 }
 
 impl Error for UpdateError {}
+
+#[cfg(test)]
+#[path = "download_tests.rs"]
+mod download_tests;
 
 #[cfg(all(test, feature = "signing"))]
 #[path = "product_update_tests.rs"]

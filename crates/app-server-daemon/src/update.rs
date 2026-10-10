@@ -12,6 +12,7 @@ use std::thread;
 use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
+use ureq_update as ureq;
 
 use ash_app_server_protocol::protocol::initialize::APP_SERVER_PROTOCOL_MAJOR;
 use ash_package_store::PackageStore;
@@ -179,13 +180,24 @@ fn install_stable_with_mode(
         "https://github.com/{REPOSITORY}/releases/download/ash-app-server-stable/ash-app-server-stable-{target}.update.json"
     );
     let response = ureq::get(&descriptor_url)
-        .set("User-Agent", "Ash-App-Server-Update")
-        .set("Accept", "application/json")
-        .timeout(Duration::from_secs(15))
+        .header("User-Agent", "Ash-App-Server-Update")
+        .header("Accept", "application/json")
+        .config()
+        .proxy(None)
+        .timeout_connect(Some(Duration::from_secs(30)))
+        .max_redirects(5)
+        .tls_config(
+            ureq::tls::TlsConfig::builder()
+                .root_certs(ureq::tls::RootCerts::PlatformVerifier)
+                .build(),
+        )
+        .timeout_global(Some(Duration::from_secs(15)))
+        .build()
         .call()
         .map_err(|error| format!("could not fetch App Server update: {error}"))?;
     let mut descriptor = Vec::new();
     response
+        .into_body()
         .into_reader()
         .take(MAX_DESCRIPTOR_BYTES + 1)
         .read_to_end(&mut descriptor)

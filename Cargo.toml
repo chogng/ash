@@ -1,5 +1,7 @@
 [workspace]
-exclude = ["crates/vendor/mxc"]
+exclude = [
+    "crates/vendor/mxc",
+]
 members = [
     "crates/exec-server",
     "crates/exec-server-protocol",
@@ -381,8 +383,8 @@ shell-words = "=1.1.1"
 signal-hook = "0.3"
 syntect = { version = "5.3.0", default-features = false, features = ["default-fancy"] }
 sysinfo = { version = "0.39.6", default-features = false, features = ["system"] }
-rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
-rustls-native-certs = "0.7"
+rustls = { version = "0.23.45", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-native-certs = "0.8.4"
 rustls-platform-verifier = "0.7.0"
 rustix = "1.1.4"
 rmcp = { version = "=3.0.0-beta.3", default-features = false }
@@ -421,7 +423,11 @@ uds_windows = "1.2.1"
 zbus = "5.19"
 url = "2"
 urlencoding = "2"
-ureq = { version = "2.12", features = ["json", "native-certs"] }
+# ash-http-client supplies its own OS verifier, custom roots and client identity.
+ureq = { version = "2.12", features = ["json"] }
+# Update hosts use the maintained HTTP API without changing the shared transport
+# adapter's custom TLS/SSRF connector contract. Configure OS trust in every agent.
+ureq-update = { package = "ureq", version = "3.4.2", features = ["json", "platform-verifier"] }
 vte = "0.15.0"
 wl-clipboard-rs = "0.9.3"
 windows = "0.62"
@@ -640,6 +646,16 @@ opt-level = 0
 # exceed macOS's 16 MiB DWARF unwind offset limit. Keep the TUI's package override.
 inherits = "test"
 debug = "limited"
+
+[patch.crates-io]
+# citationberg 0.7.0 still resolves vulnerable quick-xml 0.38. This upstream fix
+# switches to 0.41 without changing citationberg's API; remove after a fixed release.
+citationberg = { git = "https://github.com/typst/citationberg", rev = "06a591e2f237d25e1dfdedac3f3d1494c496c52d" }
+# Upstream PR #637 removes anymap2 while preserving Liquid's typed registers.
+# Pin core and its derive crate together so the optional derive feature has one source.
+# This PR is not yet merged; remove these pins after an upstream release includes it.
+liquid-core = { git = "https://github.com/cobalt-org/liquid-rust", rev = "d5cc65ca890024cd7abdd41a8f7ea45827fd20e4" }
+liquid-derive = { git = "https://github.com/cobalt-org/liquid-rust", rev = "d5cc65ca890024cd7abdd41a8f7ea45827fd20e4" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

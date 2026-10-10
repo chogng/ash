@@ -495,11 +495,16 @@ fn system_certificate_verifier(
 fn system_certificate_verifier(
     extra_roots: Vec<rustls::pki_types::CertificateDer<'static>>,
 ) -> Result<Arc<dyn rustls::client::danger::ServerCertVerifier>, HttpClientError> {
-    let certificates = rustls_native_certs::load_native_certs().map_err(|_| {
-        HttpClientError::InvalidConfiguration("failed to load system certificate roots".into())
-    })?;
+    let certificates = rustls_native_certs::load_native_certs();
+    // Keep the previous all-or-error loading policy, rather than silently trusting
+    // a partial store when the new loader also returns usable certificates.
+    if !certificates.errors.is_empty() {
+        return Err(HttpClientError::InvalidConfiguration(
+            "failed to load system certificate roots".into(),
+        ));
+    }
     let mut roots = rustls::RootCertStore::empty();
-    let (valid_count, _) = roots.add_parsable_certificates(certificates);
+    let (valid_count, _) = roots.add_parsable_certificates(certificates.certs);
     if valid_count == 0 {
         return Err(HttpClientError::InvalidConfiguration(
             "system certificate roots are empty".into(),

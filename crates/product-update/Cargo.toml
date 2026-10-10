@@ -22,7 +22,7 @@ serde_json = { workspace = true }
 sha2 = { workspace = true }
 toml = { workspace = true }
 url = { workspace = true }
-ureq = { workspace = true }
+ureq-update = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

@@ -8,14 +8,16 @@
 
 `runtime-lock.json` 为每个 Ash 发布目标锁定一份启用 V8 沙箱的静态库压缩包和对应 Rust binding，并记录 SHA-256。当前文件来自 OpenAI Codex 的 `rusty-v8-v152.2.0` release，因为 `rusty_v8` 上游没有发布这一版本的沙箱组合产物。
 
-| 场景 | 下载位置 | 最终产品里有什么 |
-| --- | --- | --- |
-| Desktop 本地调试 | `third_party/.cache/v8/v<version>/` | V8 静态链接进本地可执行文件；缓存文件不进 Git |
-| 直接运行 Cargo | `.cargo/config.toml` 将同一目录配置为 `rusty_v8` 本地镜像 | V8 静态链接进构建结果；已有缓存不会访问上游 |
-| Python 发布构建 | `third_party/.cache/v8/v<version>/`，可用参数覆盖缓存根目录 | V8 静态链接进发布可执行文件；不会额外复制 archive 或 binding 到安装包 |
-| Bazel | 预编译输入使用 Bazel repository cache；Windows 宿主固定使用 MSVC 配对 | V8 静态链接进 Bazel 产物 |
+| 场景             | 下载位置                                                              | 最终产品里有什么                                                      |
+| ---------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Desktop 本地调试 | `third_party/.cache/v8/v<version>/`                                   | V8 静态链接进本地可执行文件；缓存文件不进 Git                         |
+| 直接运行 Cargo   | `.cargo/config.toml` 将同一目录配置为 `rusty_v8` 本地镜像             | V8 静态链接进构建结果；已有缓存不会访问上游                           |
+| Python 发布构建  | `third_party/.cache/v8/v<version>/`，可用参数覆盖缓存根目录           | V8 静态链接进发布可执行文件；不会额外复制 archive 或 binding 到安装包 |
+| Bazel            | 预编译输入使用 Bazel repository cache；Windows 宿主固定使用 MSVC 配对 | V8 静态链接进 Bazel 产物                                              |
 
 下载器先校验已有缓存；缓存缺失或摘要不匹配时重新下载，并在原子替换前再次校验。默认包装入口显式传递已校验的 archive、binding 路径和 `RUSTY_V8_ARCHIVE_SHA256`，让上游再次验证静态库，并避免 Cargo 恢复缓存时误用旧 binding。`V8_FROM_SOURCE=1` 明确选择源码构建并跳过预编译产物解析。
+
+Rust binding crate 使用 crates.io 发布的 v8 152.2.0，不维护本地源码副本；引擎版本、静态库 ABI 和锁定配对保持一致。`V8_FROM_SOURCE=1` 使用发布包自带的源码与上游构建入口。停止维护宏依赖的逐项审查见 [依赖安全策略](../../.cargo/deny.toml)。
 
 显式设置 `RUSTY_V8_ARCHIVE`、`RUSTY_V8_SRC_BINDING_PATH`、`RUSTY_V8_SRC_BINDING_URL`、`RUSTY_V8_MIRROR` 或 `RUSTY_V8_MIRROR_TAG` 时，包装入口直接使用 [rusty_v8 上游的输入选择规则](https://github.com/denoland/rusty_v8/blob/v152.2.0/README.md#the-rusty_v8_archive-environment-variable)，不下载默认配对或改写这些设置。`RUSTY_V8_ARCHIVE` 可以单独指向包含 archive 和 binding 的目录；指定 binding 路径优先于 binding URL，镜像模板、tag 和 fallback 由上游处理。调用方负责提供匹配目标、版本和功能配置的输入，以及需要的 `RUSTY_V8_ARCHIVE_SHA256`。
 
@@ -136,15 +138,15 @@ Python 模板依赖和生成器路径统一使用 Ash 的 Python 3.12 工具链�
 
 与上述 Codex tag 的源码生产方式对比如下。入口对齐不等于全部平台已经验证：
 
-| 环节 | Codex | Ash 当前状态 |
-| --- | --- | --- |
-| Linux/macOS 产物生产 | Bazel 源码配对目标 | 发布复用本地 Bazel 源码图，保存原始 archive |
-| Linux/macOS binding | 使用固定 crate 的 release binding | 相同；不在发布时运行 bindgen |
-| 本地源码反馈 | Bazel 跟踪各个 C++ 动作 | 相同依赖闭包；Linux GNU/musl x64 源码、Cargo 与 Bazel 消费探针已通过 |
-| Windows MSVC | 上游 Cargo/GN | 源码生产保留同一路线；Bazel 独立 MSVC 宿主消费预编译 archive，GNU 客户端通过 IPC 调用 |
-| C++ 配置范围 | 发布命令统一配置 Chromium libc++ | Ash 只在 V8 archive 依赖闭包启用，避免影响外围 Rust 构建工具 |
-| Python | workflow 使用 3.12，V8 模板依赖补丁使用 3.11 | workflow、Bazel 解释器与模板依赖统一为精确 3.12 |
-| 沙箱探针 | 调用所链接库的 `v8__V8__IsSandboxEnabled()` | 已使用相同检查，验证静态库配置与 Rust feature 一致 |
+| 环节                 | Codex                                        | Ash 当前状态                                                                          |
+| -------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Linux/macOS 产物生产 | Bazel 源码配对目标                           | 发布复用本地 Bazel 源码图，保存原始 archive                                           |
+| Linux/macOS binding  | 使用固定 crate 的 release binding            | 相同；不在发布时运行 bindgen                                                          |
+| 本地源码反馈         | Bazel 跟踪各个 C++ 动作                      | 相同依赖闭包；Linux GNU/musl x64 源码、Cargo 与 Bazel 消费探针已通过                  |
+| Windows MSVC         | 上游 Cargo/GN                                | 源码生产保留同一路线；Bazel 独立 MSVC 宿主消费预编译 archive，GNU 客户端通过 IPC 调用 |
+| C++ 配置范围         | 发布命令统一配置 Chromium libc++             | Ash 只在 V8 archive 依赖闭包启用，避免影响外围 Rust 构建工具                          |
+| Python               | workflow 使用 3.12，V8 模板依赖补丁使用 3.11 | workflow、Bazel 解释器与模板依赖统一为精确 3.12                                       |
+| 沙箱探针             | 调用所链接库的 `v8__V8__IsSandboxEnabled()`  | 已使用相同检查，验证静态库配置与 Rust feature 一致                                    |
 
 `.github/workflows/rusty-v8-release.yml` 覆盖锁定文件中的全部 8 个沙箱目标。
 Linux/macOS 使用 `build/v8/release.py bazel-stage` 构建原始配对目标，先构建，

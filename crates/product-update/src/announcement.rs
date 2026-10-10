@@ -7,6 +7,7 @@ use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::io::Read;
 use std::time::Duration;
+use ureq_update as ureq;
 
 /// Publisher-authored plain text, keyed by the exact UI locale (for example `zh-CN`).
 /// A missing locale means the announcement is not displayed in that language.
@@ -74,16 +75,25 @@ impl AnnouncementDocument {
                 "announcement URL must be credential-free HTTPS or loopback HTTP",
             ));
         }
-        let response = ureq::AgentBuilder::new()
-            .redirects(0)
+        let response = ureq::get(endpoint)
+            .header("User-Agent", "Ash-Announcements")
+            .config()
+            .proxy(None)
+            .timeout_connect(Some(Duration::from_secs(30)))
+            .tls_config(
+                ureq::tls::TlsConfig::builder()
+                    .root_certs(ureq::tls::RootCerts::PlatformVerifier)
+                    .build(),
+            )
+            .max_redirects(0)
+            .max_redirects_will_error(false)
+            .timeout_global(Some(Duration::from_secs(2)))
             .build()
-            .get(endpoint)
-            .set("User-Agent", "Ash-Announcements")
-            .timeout(Duration::from_secs(2))
             .call()
             .map_err(|error| UpdateError::new(format!("could not fetch announcements: {error}")))?;
         let mut bytes = Vec::new();
         response
+            .into_body()
             .into_reader()
             .take(64 * 1024 + 1)
             .read_to_end(&mut bytes)
