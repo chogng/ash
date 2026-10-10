@@ -5,7 +5,7 @@ applyTo: "**/*.ts,**/*.tsx,**/*.cts,**/*.mts,**/package.json,**/tsconfig*.json"
 
 # TypeScript Testing Guidelines
 
-Read `testing.instructions.md` first. This file adds TypeScript-specific commands and test conventions.
+Read and follow [Testing Guidelines](testing.instructions.md) first, including validation reuse and confirmation before expanding scope. This file adds TypeScript-specific commands and test conventions.
 
 ## Validation
 

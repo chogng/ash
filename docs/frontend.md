@@ -28,9 +28,9 @@
 
 1. 执行 `pnpm dev:web`，打开 5173；也可用 F5 的 `Ash Web (Chrome)` 启动和调试。
 2. 通过 File → Open Folder 选择并授权项目目录。浏览器文件服务直接读写目录，页面 URL 的 `folder` 参数保存工作区身份；刷新恢复目录、编辑器和已持久化的未保存内容。再次选择同一目录会复用身份，Close Folder 清除当前目录。
-3. 保存 TypeScript 或 CSS 后由 Vite 更新。另开终端运行 `pnpm typecheck:web:watch`，持续检查类型；`pnpm typecheck:web` 执行一次完整检查。
+3. 保存 TypeScript 或 CSS 后由 Vite 更新。复用已有编辑器或 watch 的类型诊断；需要持续检查而尚无对应任务时运行 `pnpm typecheck:web:watch`，需要单次类型检查时运行 `pnpm typecheck:web`。
 4. 开发过程中执行 `pnpm test:web:dev --grep '<场景标题>'`，通过现有 Playwright Browser UI 项目直接验证 Vite 开发入口。
-5. 提交前执行 `pnpm build:web` 和 `pnpm test:web --grep '<场景标题>'`，验证生产资源。已有构建时用 `pnpm test:smoke:browser:no-compile`；`pnpm start:web` 启动生产资源预览。
+5. 提交前按 [验证范围规则](../.github/instructions/testing.instructions.md#learnings) 检查是否仍需补充生产资源验证。需要时执行 `pnpm test:web --grep '<场景标题>'`，其前置步骤会构建 Web 和编译测试，无需先单独执行 `pnpm build:web`。已有匹配当前源码和构建模式的产物及已编译测试时，用 `pnpm test:smoke:browser:no-compile --grep '<场景标题>'`；相关输入未变且测试已经通过时直接复用结果。`pnpm start:web` 启动生产资源预览。
 
 F5 先准备生成资源，再由 VS Code 调试器直接启动 Vite；服务就绪后启动 Chrome 调试。Vite 输出显示在“调试控制台”，F5 配置关闭输出颜色，保证 VS Code 的 `serverReadyAction` 能匹配就绪地址。停止 Vite 或 Chrome 调试会一起结束这两个会话并释放服务端口。手动执行 `pnpm dev:web` 或运行 `Run Ash Web` 任务时，服务由对应终端或任务管理，需要用 `Ctrl+C` 或“终止任务”停止。F5 和手动启动共用 5173，选择一种启动方式；已有服务占用端口时启动会报错。
 

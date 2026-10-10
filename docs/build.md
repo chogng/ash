@@ -99,6 +99,14 @@ pnpm 根据 `devEngines.runtime` 下载并使用固定的 Node 版本，通常�
 
 Electron、Browser、编辑器的构建和测试命令，以及测试是否启动 App Server，见 [前端验证命令](frontend.md#常用命令)。
 
+#### 提交前本地验证与 CI
+
+交付前在当前平台完成受影响范围的必要验证；已有诊断和通过结果覆盖当前输入时直接复用，无需为提交或推送重复构建。Rust 包复用下方的 `just verify`，前端按改动选择已有类型检查、构建和 Playwright 入口。扩大到全量、跨平台或预计长时间验证前按 [测试规范](../.github/instructions/testing.instructions.md#learnings) 取得用户确认；人工审阅改动和结果是另一个环节，不代替测试范围确认或行为验证。
+
+推送后，[已配置的 CI](#ci-检查) 继续验证提交的代码及对应平台、工作流环境。Windows 本地结果不代表 Linux 或 macOS 通过；本地执行构建、测试命令也不代表 GitHub 上的调度、权限、签名或上传流程已通过。工作流是否触发及覆盖哪些目标，以其事件和路径条件为准。
+
+交付说明列出实际执行的命令、平台和结果。剩余验证应注明具体工作流或作业、平台或目标及本地无法覆盖的原因；缺少依赖或既有失败造成的阻塞也要明确说明。完整要求见 [测试规范](../.github/instructions/testing.instructions.md#本地结果与-ci-覆盖)。
+
 #### 固定开发步骤
 
 以下入口由 [`scripts/workflow.py`](../scripts/workflow.py) 组织现有命令：
