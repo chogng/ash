@@ -82,7 +82,7 @@ def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Names
         help="Prebuilt isolated Code Mode Host executable. If omitted, Cargo builds it.",
     )
     parser.add_argument(
-        "--js-extension-host-bin",
+        "--external-js-ext-bin",
         type=Path,
         help="Prebuilt Rust/V8 JavaScript extension host. If omitted, Cargo builds it.",
     )
@@ -184,7 +184,7 @@ def build_package(args: argparse.Namespace) -> int:
         "ash-app-server": args.server_bin,
         "ash-app-server-daemon": args.app_server_daemon_bin,
         "ash-code-mode-host": args.code_mode_host_bin,
-        "ash-js-extension-host": args.js_extension_host_bin,
+        "ash-external-js-ext": args.external_js_ext_bin,
         "ash-remote": args.remote_bin,
         "ash-remote-host": None,
         "ash-remote-server": args.remote_server_bin,
@@ -249,7 +249,7 @@ def build_package(args: argparse.Namespace) -> int:
         binaries["ash-exec-server"],
         binaries["ash-app-server-daemon"],
         binaries["ash-code-mode-host"],
-        binaries["ash-js-extension-host"],
+        binaries["ash-external-js-ext"],
         ripgrep,
         tgrep,
         node,

@@ -149,7 +149,7 @@ fn effective_javascript_package_launches_product_host_with_exact_identity_and_re
     std::fs::create_dir_all(root.path().join("example")).unwrap();
     std::fs::write(
         root.path().join(".ash-plugin/plugin.json"),
-        include_bytes!("../../../../../extension-sdk/example/.ash-plugin/plugin.json"),
+        include_bytes!("../../../../../sdk/typescript/example/.ash-plugin/plugin.json"),
     )
     .unwrap();
     std::fs::write(
@@ -202,7 +202,7 @@ fn effective_javascript_package_launches_product_host_with_exact_identity_and_re
     let deployment = &snapshot.deployments[0];
     assert_eq!(deployment.id, "ash/sdk-example:inspect");
     assert!(deployment.command.executable().ends_with(format!(
-        "ash-js-extension-host{}",
+        "ash-external-js-ext{}",
         std::env::consts::EXE_SUFFIX
     )));
     let arguments: Vec<_> = deployment
@@ -305,7 +305,7 @@ fn sdk_task_and_debug_packages_wait_for_their_declared_activation_event() {
         let root = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(root.path().join(".ash-plugin")).unwrap();
         let mut manifest: serde_json::Value = serde_json::from_slice(include_bytes!(
-            "../../../../../extension-sdk/example/.ash-plugin/plugin.json"
+            "../../../../../sdk/typescript/example/.ash-plugin/plugin.json"
         ))
         .unwrap();
         let contribution = &mut manifest["contributions"]["editorExtensions"][0];

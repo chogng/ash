@@ -16,7 +16,7 @@ pub struct ExtensionClientRequestParams {
     #[schemars(range(min = 1))]
     #[ts(type = "number")]
     pub incarnation: u64,
-    pub operation: extension_protocol::ExtensionClientOperation,
+    pub operation: external_ext_protocol::ExtensionClientOperation,
 }
 
 /// Editor intent delivered to Rust; it never grants execution authority.
@@ -69,7 +69,7 @@ pub enum ExtensionHostDebugActivationPhaseDto {
 pub struct ExtensionHostActivateParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub initialization: Option<extension_protocol::ExtensionHostInitialization>,
+    pub initialization: Option<external_ext_protocol::ExtensionHostInitialization>,
     #[schemars(length(min = 1, max = 256))]
     pub extension_id: String,
     #[schemars(range(min = 1))]
@@ -347,7 +347,7 @@ pub enum ExtensionHostRegistrationKindDto {
     StatusBar {
         #[ts(type = "number")]
         revision: u64,
-        entries: Vec<extension_protocol::ExtensionStatusBarEntry>,
+        entries: Vec<external_ext_protocol::ExtensionStatusBarEntry>,
     },
     TextDocumentEvents {},
     TaskEvents {},

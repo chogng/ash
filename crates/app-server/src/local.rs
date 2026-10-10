@@ -1895,11 +1895,9 @@ pub fn open_app_server_with_codebase_providers(
         let directory = executable
             .parent()
             .ok_or_else(|| OpenAppServerError("missing product executable directory".into()))?;
-        let mut launcher =
-            ash_editor_extension_host::ProductJavaScriptLauncher::new(directory.join(format!(
-                "ash-js-extension-host{}",
-                std::env::consts::EXE_SUFFIX
-            )));
+        let mut launcher = ash_external_ext::ProductJavaScriptLauncher::new(directory.join(
+            format!("ash-external-js-ext{}", std::env::consts::EXE_SUFFIX),
+        ));
         if let Some(node) = &managed_node {
             let bootstrap = InstallContext::current()
                 .bundled_resource("extension-host/node.mjs")
@@ -1923,8 +1921,8 @@ pub fn open_app_server_with_codebase_providers(
             .with_built_in_editor_extensions()
             .with_extension_host_runtime(
                 Arc::new(launcher),
-                ash_editor_extension_host::ExtensionHostLimits::default(),
-                ash_editor_extension_host::RestartPolicy::default(),
+                ash_external_ext::ExtensionHostLimits::default(),
+                ash_external_ext::RestartPolicy::default(),
             )
             .map_err(OpenAppServerError)?;
     }

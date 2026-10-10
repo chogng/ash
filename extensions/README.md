@@ -15,8 +15,8 @@ The declarative loader reads resources without executing package code. Packages 
 entry, including `markdown-language-features`, are separately bundled and executed by the TS
 browser extension host. This directory holds packages, not the SDK or runtime implementation.
 
-Authors use the [`TS SDK`](../extension-sdk/README.md); compiled JavaScript runs in a separate
-[`Rust V8 host`](../crates/js-extension-host/README.md) without Node. Editor and UI services remain
+Authors use the [`TS SDK`](../sdk/typescript/README.md); compiled JavaScript runs in a separate
+[`Rust V8 host`](../crates/external-js-ext/README.md) without Node. Editor and UI services remain
 in TS; GitHub requests, Git, credentials, storage, and authorized system operations use Rust
 backend APIs. The existing trusted Worker path does not yet establish third-party permission
 isolation. See the [architecture decision](../docs/editor-extensions.md#0-确定的产品方向).

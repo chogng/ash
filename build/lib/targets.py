@@ -99,7 +99,7 @@ class TargetSpec:
 
     @property
     def js_extension_host_name(self) -> str:
-        return "ash-js-extension-host" + self.executable_suffix
+        return "ash-external-js-ext" + self.executable_suffix
 
     @property
     def ripgrep_name(self) -> str:

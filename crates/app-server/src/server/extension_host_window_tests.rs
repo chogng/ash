@@ -6,21 +6,21 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 use std::time::Instant;
 
-use ash_editor_extension_host::ActivateParams;
-use ash_editor_extension_host::ExtensionCapability;
-use ash_editor_extension_host::ExtensionHostLimits;
-use ash_editor_extension_host::ExtensionLaunchCommand;
-use ash_editor_extension_host::PackageBinding;
-use ash_editor_extension_host::ProductJavaScriptLauncher;
-use ash_editor_extension_host::RestartPolicy;
+use ash_external_ext::ActivateParams;
+use ash_external_ext::ExtensionCapability;
+use ash_external_ext::ExtensionHostLimits;
+use ash_external_ext::ExtensionLaunchCommand;
+use ash_external_ext::PackageBinding;
+use ash_external_ext::ProductJavaScriptLauncher;
+use ash_external_ext::RestartPolicy;
 use ash_file_access::Dir;
 use ash_file_access::Grant;
 use ash_file_access::GrantSource;
 use ash_file_access::Permission;
 use ash_file_access::Permissions;
-use extension_protocol::ExtensionClientOperation;
-use extension_protocol::ExtensionClientResult;
-use extension_protocol::ExtensionHostInitialization;
+use external_ext_protocol::ExtensionClientOperation;
+use external_ext_protocol::ExtensionClientResult;
+use external_ext_protocol::ExtensionHostInitialization;
 use serde_json::Value;
 use serde_json::json;
 
@@ -120,12 +120,12 @@ fn install_node_fixture(root: &Path) -> (ProductJavaScriptLauncher, EditorExtens
         .expect("Node is required for standard extension lifecycle tests");
     assert!(output.status.success());
     let node = PathBuf::from(String::from_utf8(output.stdout).unwrap().trim());
-    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../js-extension-host/src");
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../external-js-ext/src");
     for (from, to) in [("node.mjs", "node.mjs"), ("vscode.js", "vscode.mjs")] {
         std::fs::copy(source.join(from), root.join(to)).unwrap();
     }
     std::fs::copy(
-        source.join("../../../extension-sdk/index.js"),
+        source.join("../../../sdk/typescript/index.js"),
         root.join("sdk.mjs"),
     )
     .unwrap();
@@ -156,7 +156,7 @@ exports.activate = context => {
 "#,
     )
     .unwrap();
-    let product = root.join("ash-js-extension-host");
+    let product = root.join("ash-external-js-ext");
     let launcher = ProductJavaScriptLauncher::new(product.clone())
         .with_node_runtime(node, root.join("node.mjs"), BTreeMap::new())
         .unwrap();
@@ -351,7 +351,7 @@ fn standard_extensions_keep_window_facts_callbacks_and_lifetimes_separate() {
     runtime.close_owner(11);
     assert_eq!(
         first_supervisor.snapshot().status,
-        ash_editor_extension_host::ExtensionHostStatus::Stopped
+        ash_external_ext::ExtensionHostStatus::Stopped
     );
     assert_eq!(
         runtime.snapshot_for(11).extensions[0].lifecycle,
@@ -394,12 +394,12 @@ fn standard_extensions_keep_window_facts_callbacks_and_lifetimes_separate() {
 
 struct DeniedActivation;
 
-impl ash_editor_extension_host::ActivationAuthority for DeniedActivation {
+impl ash_external_ext::ActivationAuthority for DeniedActivation {
     fn authorizes(&self) -> bool {
         false
     }
 
-    fn acquire(&self) -> Option<Box<dyn ash_editor_extension_host::ActivationLease>> {
+    fn acquire(&self) -> Option<Box<dyn ash_external_ext::ActivationLease>> {
         None
     }
 }

@@ -42,7 +42,7 @@ registerWorkbenchContribution('workbench.contrib.marketplace', WorkbenchPhase.Bl
 				title: localize({ bundle: 'ash.marketplace', key: 'installLocalExtension' }, 'Install extension from workspace'),
 				message: localize({ bundle: 'ash.marketplace', key: 'localExtensionPath' }, 'Enter the extension package path relative to the selected workspace directory.'),
 				detail: localize({ bundle: 'ash.marketplace', key: 'localExtensionInstallNotice' }, 'The package must contain .ash-plugin/plugin.json. Installation copies the package into your profile; enablement and permissions are managed separately.'),
-				inputs: [{ placeholder: '.build/extension-sdk' }],
+				inputs: [{ placeholder: '.build/sdk/typescript' }],
 				primaryButton: localize({ bundle: 'ash.marketplace', key: 'install' }, 'Install'),
 			});
 			if (!input.confirmed) { return; }

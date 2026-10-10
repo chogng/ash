@@ -184,39 +184,39 @@ use ash_protocol::SymphonyTaskStatus;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::SymphonyWorkflow;
 #[cfg(any(test, feature = "export"))]
-use extension_protocol::ExtensionClientOperation;
+use external_ext_protocol::ExtensionClientOperation;
 #[cfg(any(test, feature = "export"))]
-use extension_protocol::ExtensionClientResult;
+use external_ext_protocol::ExtensionClientResult;
 #[cfg(any(test, feature = "export"))]
-use extension_protocol::ExtensionConfigurationTarget;
+use external_ext_protocol::ExtensionConfigurationTarget;
 #[cfg(any(test, feature = "export"))]
-use extension_protocol::ExtensionDebugSessionOptions;
+use external_ext_protocol::ExtensionDebugSessionOptions;
 #[cfg(any(test, feature = "export"))]
-use extension_protocol::ExtensionDiagnostic;
+use external_ext_protocol::ExtensionDiagnostic;
 #[cfg(any(test, feature = "export"))]
-use extension_protocol::ExtensionDiagnosticEntry;
+use external_ext_protocol::ExtensionDiagnosticEntry;
 #[cfg(any(test, feature = "export"))]
-use extension_protocol::ExtensionDiagnosticSeverity;
+use external_ext_protocol::ExtensionDiagnosticSeverity;
 #[cfg(any(test, feature = "export"))]
-use extension_protocol::ExtensionDocumentEdit;
+use external_ext_protocol::ExtensionDocumentEdit;
 #[cfg(any(test, feature = "export"))]
-use extension_protocol::ExtensionDocumentSnapshot;
+use external_ext_protocol::ExtensionDocumentSnapshot;
 #[cfg(any(test, feature = "export"))]
-use extension_protocol::ExtensionHostInitialization;
+use external_ext_protocol::ExtensionHostInitialization;
 #[cfg(any(test, feature = "export"))]
-use extension_protocol::ExtensionMessageSeverity;
+use external_ext_protocol::ExtensionMessageSeverity;
 #[cfg(any(test, feature = "export"))]
-use extension_protocol::ExtensionStatusBarAlignment;
+use external_ext_protocol::ExtensionStatusBarAlignment;
 #[cfg(any(test, feature = "export"))]
-use extension_protocol::ExtensionStatusBarCommand;
+use external_ext_protocol::ExtensionStatusBarCommand;
 #[cfg(any(test, feature = "export"))]
-use extension_protocol::ExtensionStatusBarEntry;
+use external_ext_protocol::ExtensionStatusBarEntry;
 #[cfg(any(test, feature = "export"))]
-use extension_protocol::ExtensionTextEdit;
+use external_ext_protocol::ExtensionTextEdit;
 #[cfg(any(test, feature = "export"))]
-use extension_protocol::ExtensionTextPosition;
+use external_ext_protocol::ExtensionTextPosition;
 #[cfg(any(test, feature = "export"))]
-use extension_protocol::ExtensionWorkspaceFolder;
+use external_ext_protocol::ExtensionWorkspaceFolder;
 #[cfg(any(test, feature = "export"))]
 use guardian_environment::CommandEvidence;
 #[cfg(any(test, feature = "export"))]

@@ -1,0 +1,11 @@
+load("//:defs.bzl", "ash_v8_host")
+
+exports_files(["src/node.mjs", "src/vscode.js"], visibility = ["//crates/external-ext:__pkg__"])
+
+ash_v8_host(
+    name = "ash-external-js-ext",
+    crate_name = "ash_external_js_ext",
+    crate_root = "src/main.rs",
+    data = ["//sdk/typescript:index.js", "//extensions:remote-ssh/src/extension.js", "//extensions:remote-ssh/package.json", "src/commonjs.js", "src/fixed_buffers.js", "src/vscode.js"],
+    deps = [],
+)

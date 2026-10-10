@@ -441,8 +441,8 @@ dependencies = [
  "ash-debug-adapter",
  "ash-diagnostics",
  "ash-diff",
- "ash-editor-extension-host",
- "ash-editor-extension-protocol",
+ "ash-external-ext",
+ "ash-external-ext-protocol",
  "ash-exec-server",
  "ash-exec-server-protocol",
  "ash-execpolicy",
@@ -619,7 +619,7 @@ dependencies = [
  "ash-call-contract",
  "ash-collaboration-contract",
  "ash-diagnostics",
- "ash-editor-extension-protocol",
+ "ash-external-ext-protocol",
  "ash-environment",
  "ash-extension-items",
  "ash-features",
@@ -1236,11 +1236,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "ash-editor-extension-host"
+name = "ash-external-ext"
 version = "0.1.0"
 dependencies = [
  "ash-async-utils",
- "ash-editor-extension-protocol",
+ "ash-external-ext-protocol",
  "ash-sandboxing",
  "ash-windows-sandbox",
  "getrandom 0.2.17",
@@ -1249,7 +1249,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ash-editor-extension-protocol"
+name = "ash-external-ext-protocol"
 version = "0.1.0"
 dependencies = [
  "schemars",
@@ -1367,11 +1367,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "ash-extensions"
+name = "ash-external-ext-sdk"
 version = "0.1.0"
 dependencies = [
- "ash-editor-extension-host",
- "ash-editor-extension-protocol",
+ "ash-external-ext",
+ "ash-external-ext-protocol",
  "serde",
  "serde_json",
  "thiserror 2.0.19",
@@ -1786,11 +1786,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "ash-js-extension-host"
+name = "ash-external-js-ext"
 version = "0.1.0"
 dependencies = [
- "ash-editor-extension-host",
- "ash-editor-extension-protocol",
+ "ash-external-ext",
+ "ash-external-ext-protocol",
  "ash-file-access",
  "ash-file-system",
  "ash-sandboxing",

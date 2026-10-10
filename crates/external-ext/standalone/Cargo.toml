@@ -1,0 +1,18 @@
+[package]
+name = "ash-external-ext-standalone-check"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+doctest = false
+path = "../src/lib.rs"
+
+[dependencies]
+ash-async-utils = { path = "../../async-utils" }
+ash-sandboxing = { path = "../../sandboxing" }
+external-ext-protocol = { package = "ash-external-ext-protocol", path = "../../external-ext-protocol" }
+serde_json = "1"
+thiserror = "2"
+
+[workspace]

@@ -1,0 +1,6 @@
+exports_files(["index.js"], visibility = ["//crates/external-js-ext:__pkg__", "//crates/external-ext:__pkg__", "//crates/app-server:__pkg__"])
+
+exports_files(
+    ["example/.ash-plugin/plugin.json"],
+    visibility = ["//crates/plugin:__pkg__", "//crates/app-server:__pkg__"],
+)

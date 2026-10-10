@@ -9,7 +9,7 @@ for (const [locale, installTitle, manageTitle, enable, grant, permission, disabl
 		await page.evaluate(() => window.ashMarketplaceIntegration.startCommand('ash.extensions.installLocal'));
 		const installation = page.getByRole('dialog', { name: installTitle, exact: true });
 		await expect(installation).toContainText('.ash-plugin/plugin.json');
-		await installation.getByRole('textbox').fill('.build/extension-sdk');
+		await installation.getByRole('textbox').fill('.build/sdk/typescript');
 		await installation.getByRole('textbox').press('Enter');
 		const installedMessage = page.getByRole('dialog').filter({ hasText: 'acme/sdk 1.0.0' });
 		await expect(installedMessage).toBeVisible();
@@ -17,7 +17,7 @@ for (const [locale, installTitle, manageTitle, enable, grant, permission, disabl
 		await page.evaluate(() => window.ashMarketplaceIntegration.waitCommand());
 		expect(await page.evaluate(() => window.ashMarketplaceIntegration.localPackages().map(({ enabled, granted }) => ({ enabled, granted })))).toEqual([{ enabled: false, granted: false }]);
 		const request = await page.evaluate(() => window.ashMarketplaceIntegration.requests.find((entry: any) => entry[0] === 'pluginInstall')) as [string, Record<string, unknown>];
-		expect(request[1]).toMatchObject({ expectedRevision: 0, path: '.build/extension-sdk', dirId: null });
+		expect(request[1]).toMatchObject({ expectedRevision: 0, path: '.build/sdk/typescript', dirId: null });
 		expect(request[1].commandId).toMatch(/^desktop-plugin-install-/u);
 		for (const action of [enable, grant]) {
 			await page.evaluate(() => window.ashMarketplaceIntegration.startCommand('ash.extensions.manageLocal'));

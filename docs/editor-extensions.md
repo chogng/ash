@@ -6,8 +6,8 @@
 > 静态包与资源实现见 [`crates/extension-catalog/README.md`](../crates/extension-catalog/README.md)，
 > Workbench 接入见 [`src/ash/workbench/services/extensions/README.md`](../src/ash/workbench/services/extensions/README.md)。
 > 进程监管与权限门禁继续复用
-> [`crates/editor-extension-host/README.md`](../crates/editor-extension-host/README.md)；作者接口见
-> [`TS SDK`](../extension-sdk/README.md)，JS 执行见 [`Rust V8 宿主`](../crates/js-extension-host/README.md)。
+> [`crates/external-ext/README.md`](../crates/external-ext/README.md)；作者接口见
+> [`TS SDK`](../sdk/typescript/README.md)，JS 执行见 [`Rust V8 宿主`](../crates/external-js-ext/README.md)。
 > Marketplace 安装由 [`core-plugins.md`](../crates/docs/core-plugins.md) 维护，
 > Plugin 来源授权由 [`plugins.md`](plugins.md) 维护。
 
@@ -20,7 +20,7 @@
 它使用的贡献、API、运行入口和权限是否被 Ash 支持，不能由市场来源决定。
 
 当前代码同时存在声明式目录、可信浏览器 Worker 和 Rust 可执行扩展 Host。声明式目录只读取
-`package.json` 与资源；内置 Markdown 预览已经走浏览器 Worker。此前新增的 `ash-extensions` Rust
+`package.json` 与资源；内置 Markdown 预览已经走浏览器 Worker。此前新增的 `ash-external-ext-sdk` Rust
 作者 SDK 不再作为产品扩展入口继续建设。TS SDK v1 与 Rust V8 宿主已实现命令、悬停 Provider、文档快照、
 授权磁盘读取、通知、Quick Pick 和停用释放；本地包安装、启用、授权和 macOS、64 位 Windows JS 系统隔离已接入。完整 API、其余系统的 JS 隔离和旧作者 SDK 源码退场尚未完成。
 Open VSX 已接入现有 Rust 包管理。VSIX 安装先加载受支持的声明式贡献；macOS 与 64 位 Windows 用户另外启用并授权后，可执行使用受支持 VS Code API 的 CommonJS JavaScript 包。
@@ -139,7 +139,7 @@ Disposable 放入 `context.subscriptions`；每个命令收到独立的调用上
 256 KiB UTF-8。文件读取必须同时满足 Plugin 的 `directory: read` 声明与当前目录的 `ReadFiles` 授权；
 工作区切换不会把在途请求转到另一个文件服务。撤销目录授权后读请求失败。
 
-包中用 `runtime: javascript` 明确选择产品打包的 `ash-js-extension-host`，入口为 `.js` 或 `.mjs` ESM。
+包中用 `runtime: javascript` 明确选择产品打包的 `ash-external-js-ext`，入口为 `.js` 或 `.mjs` ESM。
 相对模块只能来自包快照，`@ash/extension` 由宿主提供；不支持 Node、CommonJS 或动态导入。
 激活阶段只完成本地初始化和命令注册，模块顶层初始化必须完成后再激活。注册的 dispose 立即撤销回调，
 对外注册快照在停用或重启时整体更新。`deactivate` 即使失败仍释放 subscriptions；异步停用不能等待外部服务。
@@ -164,7 +164,7 @@ macOS 产品宿主先读取包快照并初始化 V8，再通过 Seatbelt 禁止�
 共享、可调整大小的缓冲区和 WebAssembly 不开放，因为其分配绕过该 ArrayBuffer 接口。独立可执行扩展的原有系统硬限制不变。
 其他系统目前拒绝产品 JS 执行；Open VSX 下载包不会自动选用此入口。
 
-作者可运行 `pnpm --dir extension-sdk build:example`，得到 `.build/extension-sdk/` 下的 JS 与 Plugin manifest。
+作者可运行 `pnpm --dir sdk/typescript build:example`，得到 `.build/sdk/typescript/` 下的 JS 与 Plugin manifest。
 真实子进程测试覆盖 SDK→前端文档调用、SDK→Rust 磁盘读取、错误、取消、新运行实例和停用释放；
 当前不是完整 VS Code API，也尚未向公共 npm registry 发布 SDK。
 
@@ -173,7 +173,7 @@ Remote 的可安装入口属于 TS/JS 扩展：它可在激活时注册
 capability，并在命令回调中通过 `call.workspace.openRemoteConnection(authority)` 请求打开连接。
 扩展负责解析用户意图和组织流程；返回值仅包含已保存的 `connectionName`。Rust 宿主校验注册能力、
 调用身份与生命周期，Workbench 校验目标并展示确认，连接 host 执行现有 SSH 路径。连接目录和
-凭据不会成为扩展自己的状态。具体格式与示例见 [SDK](../extension-sdk/README.md)。
+凭据不会成为扩展自己的状态。具体格式与示例见 [SDK](../sdk/typescript/README.md)。
 
 此处接通的是已保存 SSH 目标的连接意图接口。`extensions/remote-ssh` 使用同一 TS/JS SDK，
 源码与 SDK 编译进产品 V8 宿主，通过 `--builtin remote-ssh` 加载；App Server 同时校验包含
@@ -394,14 +394,14 @@ Open VSX JS 扩展由 App Server 在 Rust 中匹配激活事件。启用且授�
 立即启动的 `*`，并从标准 commands、languages 贡献生成隐式事件。健康轮询和失败重试不会启动
 等待中的扩展，匹配事件也不能绕过精确包授权。切换目录后激活代际仍单调递增，迟到的旧事件
 不能使用新目录中的扩展。其他激活事件类型尚未实现，本地 SDK 与独立
-可执行扩展仍沿用现有启动方式。`ash-editor-extension-host` 只监管进程，不监听编辑器事件。
+可执行扩展仍沿用现有启动方式。`ash-external-ext` 只监管进程，不监听编辑器事件。
 
 ## 2. 当前实现所有权
 
 | 能力                                                                                      | 权威所有者                                                    | 不负责                                            |
 | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------- |
 | 内置静态资源源码与上游 provenance                                                         | 根目录 `extensions/`                                          | 运行时扫描、Extension API                         |
-| 此前的 Rust 作者接口、回调分发与激活作用域（待退场）                                      | `ash-extensions`                                              | 不再承担目标产品 SDK；目标分工见第 0 节           |
+| 此前的 Rust 作者接口、回调分发与激活作用域（待退场）                                      | `ash-external-ext-sdk`                                              | 不再承担目标产品 SDK；目标分工见第 0 节           |
 | 静态包扫描、路径/文件类型校验、快照、摘要与目录代次                                       | `ash-extension-catalog`                                       | Editor 贡献语义、任意代码执行                     |
 | 静态可信根选择和顺序                                                                      | App Server 产品组合根                                         | 由 Renderer 提交任意主机路径                      |
 | Plugin 静态目录选择                                                                       | `ash-core-plugins` activation authority + App Server provider | 解析静态 `package.json`、授予代码执行             |
@@ -411,7 +411,7 @@ Open VSX JS 扩展由 App Server 在 Rust 中匹配激活事件。启用且授�
 | Marketplace package artifact/install/update/uninstall 与 capability lease                 | `ash-core-plugins`                                            | Editor Extension enable/grant、启动进程           |
 | Marketplace Editor Extension enable/grant generation、通知与 lease                        | 产品注入的 `MarketplaceEditorExtensionAdmission`              | package 安装、目录权限、进程隔离                  |
 | Legacy Plugin 本地 package 与 enable/grant generation                                     | `ash-core-plugins` compatibility authority                    | 远端 Marketplace 安装、启动进程                   |
-| 可执行进程、Host RPC、incarnation、取消和 crash recovery                                  | `ash-editor-extension-host`                                   | package discovery、目录权限决定、领域 payload     |
+| 可执行进程、Host RPC、incarnation、取消和 crash recovery                                  | `ash-external-ext`                                   | package discovery、目录权限决定、领域 payload     |
 | source normalization + Dir Authorization adapter、Host fleet 与客户端 RPC                 | App Server composition                                        | OS sandbox implementation、Workbench UI           |
 | 生产 sandbox、hard resources 与 killable process tree                                     | 注入的 platform `ExtensionHostLauncher`                       | package enable/grant 或 provider semantics        |
 | Host snapshot normalization 与 transport                                                  | `platform/extensionHost` adapter                              | 领域 provider ownership                           |
@@ -500,7 +500,7 @@ request ID、无效 Output 操作、超限 frame/Output 队列或未声明 capab
 这两类注册分别要求 manifest 声明 `dataChannel`、`linkPresentationProvider` capability。数据通道只
 接收前端发布的数据；链接供应商只接收正在展示的匹配 URI。查询结果按平台类型校验后以文本更新链接，
 不会执行扩展返回的 HTML。订阅队列、更新周期、取消与迟到结果隔离约定见
-[Host RPC v1](../crates/editor-extension-host/README.md#4-host-rpc-v1)。产品不收集或上传遥测；
+[Host RPC v1](../crates/external-ext/README.md#4-host-rpc-v1)。产品不收集或上传遥测；
 `editTelemetry` 目前只发布补全接受状态与持续时间，扩展订阅不等同于新增产品遥测采集。
 
 扩展命名 Output 是带背压的事件流，不是静态 registration kind，也不扩大 manifest capability ceiling。
@@ -604,7 +604,7 @@ Host exit、invalid protocol 或 unknown outcome 会清空旧 registration，终
 | Plugin executable declaration 与 exact process permission        | 已实现             | `ash-plugin` manifest/package tests                                                                                   |
 | Plugin executable authority                                      | 已实现             | `ash-core-plugins` authority tests                                                                                    |
 | Marketplace executable consumer adapter 与独立 admission         | 已实现             | exact sidecar/executable binding、双 lease 与 deferred uninstall tests                                                |
-| Host RPC v1、独立进程监管、取消、配额、restart                   | 已实现             | `ash-editor-extension-host` standalone tests                                                                          |
+| Host RPC v1、独立进程监管、取消、配额、restart                   | 已实现             | `ash-external-ext` standalone tests                                                                          |
 | TS 作者 SDK 与 Rust V8 执行                                      | 已实现（v1）       | 独立进程测试覆盖 ESM、命令、前端文档、Rust 读取、服务错误、取消、超时与停用                                           |
 | Rust 作者 SDK 与共用 wire contract                               | 已停止该产品方向   | 基础命令、Hover、Output 曾通过独立进程测试；反向调用补充已暂停，未完成验证，源码尚未退场                              |
 | 扩展命名 Output event stream                                     | 已实现             | process-fenced create/append/replace/clear/show/dispose、bounded retention 与 Workbench sequence projection tests     |
@@ -660,11 +660,11 @@ Open VSX 安装与基础 JS 执行已接入，不表示全部扩展 API、平台
 迁移时按实际受影响包选择对应检查，TS/JS 扩展还必须验证真实 Web/Electron 入口与第 0 节权限行为。
 
 ```text
-pnpm --dir extension-sdk typecheck
-pnpm --dir extension-sdk build:example
-just check ash-js-extension-host
-just test ash-js-extension-host
-just rust-warnings ash-js-extension-host
+pnpm --dir sdk/typescript typecheck
+pnpm --dir sdk/typescript build:example
+just check ash-external-js-ext
+just test ash-external-js-ext
+just rust-warnings ash-external-js-ext
 just test ash-code-mode-runtime
 just test ash-extension-catalog
 just test ash-plugin
@@ -674,10 +674,10 @@ just test ash-app-server marketplace
 just test ash-app-server product_services
 just generate-protocol
 pnpm typecheck:renderer
-just test ash-editor-extension-protocol
-just test ash-editor-extension-host
-just test ash-extensions
-powershell -NoProfile -ExecutionPolicy Bypass -File crates/editor-extension-host/check-standalone.ps1
+just test ash-external-ext-protocol
+just test ash-external-ext
+just test ash-external-ext-sdk
+powershell -NoProfile -ExecutionPolicy Bypass -File crates/external-ext/check-standalone.ps1
 pnpm test:extensions
 pnpm typecheck:extensions
 pnpm test:unit
@@ -702,4 +702,4 @@ Desktop 的 `NativeExtensionService` 在远端 Workbench 启动前选择本地�
 执行当前 incarnation 的解析，平台 `RemoteAuthorityResolverService` 保存地址与错误，
 `MainThreadManagedSockets` 绑定受管工厂。Rust 在私有调用边界注入 backend connection owner；
 SDK 按此身份隔离工厂与 socket，连接关闭时由 Rust 发送 `remoteReleaseOwner`。断线重连重新解析，
-旧结果不能恢复已退役端点。公开声明、调用顺序与当前支持限制见 [SDK](../extension-sdk/README.md)。
+旧结果不能恢复已退役端点。公开声明、调用顺序与当前支持限制见 [SDK](../sdk/typescript/README.md)。

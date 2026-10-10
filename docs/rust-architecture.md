@@ -71,6 +71,9 @@ crates/
 ├── app-server-transport/
 ├── app-server-client/
 ├── app-server/
+├── external-ext/         # 共用进程监管；产品组合仍在 App Server
+├── external-js-ext/      # TS/JS 执行；现有 Node 与窄 SDK V8 路径
+├── external-ext-protocol/ # 独立、版本化的扩展进程通信
 ├── queue/                # 持久用户消息队列、租约和交付恢复
 ├── features/             # 功能身份、阶段、默认值和用户覆盖
 ├── diagnostics/          # 有界无内容诊断快照

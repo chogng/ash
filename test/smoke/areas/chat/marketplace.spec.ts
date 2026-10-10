@@ -197,7 +197,7 @@ test('Open VSX JavaScript extension starts on first command, survives restart an
 	const profile = await application.evaluate(({ app }) => app.getPath('userData'));
 	const processes = async (): Promise<number> => {
 		const { stdout } = await promisify(execFile)('ps', ['-axo', 'command=']);
-		return stdout.split('\n').filter(line => line.includes('/ash-js-extension-host ') && line.includes(`--extension-id marketplace:${packageId}:vscode`) && line.includes(profile)).length;
+		return stdout.split('\n').filter(line => line.includes('/ash-external-js-ext ') && line.includes(`--extension-id marketplace:${packageId}:vscode`) && line.includes(profile)).length;
 	};
 	await workbench.quickaccess.runCommand('ash.plugins.open');
 	let marketplace = page.locator('.ash-marketplace');

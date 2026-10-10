@@ -107,7 +107,7 @@ class PackageTests(unittest.TestCase):
                 "ash-app-server",
                 "ash-app-server-daemon",
                 "ash-code-mode-host",
-                "ash-js-extension-host",
+                "ash-external-js-ext",
                 "ash-voice-host",
                 "ash-collaboration-server",
                 "ash-remote",
@@ -355,7 +355,7 @@ class PackageTests(unittest.TestCase):
                 daemon_binary,
                 code_mode_host_binary,
                 executable_file(
-                    root / "js-extension-host-source", b"ash-js-extension-host"
+                    root / "external-js-ext-source", b"ash-external-js-ext"
                 ),
                 ripgrep,
                 test_tgrep_resolution(root),
@@ -560,7 +560,7 @@ class PackageTests(unittest.TestCase):
                 executable_file(root / "daemon-source", b"ash-app-server-daemon"),
                 executable_file(root / "code-mode-host-source", b"ash-code-mode-host"),
                 executable_file(
-                    root / "js-extension-host-source", b"ash-js-extension-host"
+                    root / "external-js-ext-source", b"ash-external-js-ext"
                 ),
                 resolve_ripgrep(
                     spec,
@@ -618,7 +618,7 @@ class PackageTests(unittest.TestCase):
                 metadata["remoteRuntimeCatalog"],
             )
             self.assertEqual(
-                b"ash-js-extension-host",
+                b"ash-external-js-ext",
                 (output / "bin" / spec.js_extension_host_name).read_bytes(),
             )
             self.assertEqual(
@@ -801,7 +801,7 @@ class PackageTests(unittest.TestCase):
                 daemon_binary,
                 code_mode_host_binary,
                 executable_file(
-                    root / "js-extension-host-source", b"ash-js-extension-host"
+                    root / "external-js-ext-source", b"ash-external-js-ext"
                 ),
                 ripgrep,
                 test_tgrep_resolution(root),
@@ -873,7 +873,7 @@ class PackageTests(unittest.TestCase):
                 daemon_binary,
                 code_mode_host_binary,
                 executable_file(
-                    root / "js-extension-host-source", b"ash-js-extension-host"
+                    root / "external-js-ext-source", b"ash-external-js-ext"
                 ),
                 ripgrep,
                 test_tgrep_resolution(root),

@@ -31,7 +31,7 @@ Trace 是内置、可选的诊断能力：共享运行时继续拥有业务事�
 | 内置诊断组件             | Rust 领域实现，由可信宿主组合                                                                                | 本方案采用这一定位，保持采集、存储、读取和资源生命周期的明确 owner                                |
 | Workbench contribution   | 产品提供的 TS 界面和命令                                                                                     | 第一阶段保留此形态并改为按需加载；之后有完整 SDK 契约时再考虑提取成官方扩展                       |
 
-现有 [extension-sdk/index.d.ts](../extension-sdk/index.d.ts) 没有公开 Trace API。当前复杂 Trace 编辑器也直接使用 Workbench 服务，不能只移动到扩展目录就成为可运行的 SDK 扩展。迁移需要补足读取范围、取消、注册释放、视图承载、错误与兼容性；不能以开放任意 App Server RPC 作为捷径。
+现有 [sdk/typescript/index.d.ts](../sdk/typescript/index.d.ts) 没有公开 Trace API。当前复杂 Trace 编辑器也直接使用 Workbench 服务，不能只移动到扩展目录就成为可运行的 SDK 扩展。迁移需要补足读取范围、取消、注册释放、视图承载、错误与兼容性；不能以开放任意 App Server RPC 作为捷径。
 
 Rust 内部贡献接口也不是可下载 Rust 动态库或稳定插件 ABI。当前 [LifecycleObserver 和 ToolLifecycleContributor](../crates/ext/extension-api/src/lifecycle.rs) 观察已提交的部分事实，不覆盖完整模型请求、准备后的请求和每次失败 attempt。为 Trace 扩大整个 Agent Extension API 会增加无关耦合。
 

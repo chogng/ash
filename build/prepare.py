@@ -219,9 +219,9 @@ def package_sources(root: Path) -> list[Path]:
         root / "build/prepare.py",
         root / "Cargo.toml",
         # The JS host embeds this module; SDK edits must rebuild the backend package.
-        root / "crates/js-extension-host/src/node.mjs",
-        root / "crates/js-extension-host/src/vscode.js",
-        root / "extension-sdk/index.js",
+        root / "crates/external-js-ext/src/node.mjs",
+        root / "crates/external-js-ext/src/vscode.js",
+        root / "sdk/typescript/index.js",
     ]
     sources += [
         path
@@ -337,7 +337,7 @@ def development_binary_inputs(spec: TargetSpec) -> dict[str, None]:
             "ash-exec-server",
             "ash-app-server-daemon",
             "ash-code-mode-host",
-            "ash-js-extension-host",
+            "ash-external-js-ext",
             "ash-voice-host",
             "ash-collaboration-server",
         ]
@@ -474,7 +474,7 @@ def prepare_development_package(args: argparse.Namespace, *, root: Path = ROOT) 
             binaries["ash-exec-server"],
             binaries["ash-app-server-daemon"],
             binaries["ash-code-mode-host"],
-            binaries["ash-js-extension-host"],
+            binaries["ash-external-js-ext"],
             ripgrep,
             tgrep,
             node,

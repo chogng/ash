@@ -15,7 +15,7 @@
 > Skill runtime：[`skills.md`](skills.md)
 > Config authority 与 runtime snapshot 接入：[`config.md`](config.md)
 > Editor Extension 的 TS/JS 运行方向与当前实现：[`editor-extensions.md`](editor-extensions.md)
-> 可执行 Host runtime 实现：[`crates/editor-extension-host/README.md`](../crates/editor-extension-host/README.md)
+> 可执行 Host runtime 实现：[`crates/external-ext/README.md`](../crates/external-ext/README.md)
 
 ## 快速理解
 
@@ -82,7 +82,7 @@ flowchart TD
     C -. "references exact MCP" .-> R
     C -->|"connected"| B["Ready MCP binding"]
     R -->|"standalone activation"| T["Tool Registry / Core"]
-    E --> H["ash-editor-extension-host supervisor"]
+    E --> H["ash-external-ext supervisor"]
     D --> X["ash-extension-catalog immutable snapshot"]
     B --> R
 ```
@@ -101,7 +101,7 @@ runtime。其 canonical 文档是 [`editor-extensions.md`](editor-extensions.md)
 Legacy Plugin v1 提供显式 `editorExtensions[]`：`runtime: javascript` 指向用 TS SDK 编写并编译为 ESM 的 JS，
 由产品的 Rust V8 宿主执行；`runtime: hostRpc` 指向自己实现共享协议的独立程序。两者不启动 Node。
 compatibility authority 只验证并授权声明，
-`ash-editor-extension-host` supervisor 才拥有逐扩展进程隔离、RPC、crash recovery 和 provider
+`ash-external-ext` supervisor 才拥有逐扩展进程隔离、RPC、crash recovery 和 provider
 lifecycle。静态 `package.json` catalog 不会被隐式转换成该 executable declaration。
 
 `declarativeExtensions[]` 是另一条显式 bridge：每项只有 manifest-local ID 和 package-relative
@@ -835,7 +835,7 @@ crates/core-plugins/src/
 
 - ✅ Plugin manifest/immutable package 对可执行 Editor Extension program 的 strict declaration；
 - ✅ exact process permission、Host RPC API v1、activation/capability ceiling 与 regular-file 校验；
-- 委托 `ash-editor-extension-host`：进程隔离、RPC、crash supervisor、provider lifecycle；
+- 委托 `ash-external-ext`：进程隔离、RPC、crash supervisor、provider lifecycle；
 - ❌ generic Node/WASM loader、VS Code Extension API compatibility 与 `workspaceContains` scanner。
 
 其余能力只有在具体需求有独立 threat model 和 stable port 后，才分别评审：

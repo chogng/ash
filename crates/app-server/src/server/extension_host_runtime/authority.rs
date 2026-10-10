@@ -1,11 +1,11 @@
 use std::num::NonZeroU64;
 use std::sync::Arc;
 
-use ash_editor_extension_host::ActivationAuthority;
-use ash_editor_extension_host::ActivationLease;
-use ash_editor_extension_host::ExtensionActivationSpec;
-use ash_editor_extension_host::ExtensionHostError;
-use ash_editor_extension_host::ExtensionLaunchCommand;
+use ash_external_ext::ActivationAuthority;
+use ash_external_ext::ActivationLease;
+use ash_external_ext::ExtensionActivationSpec;
+use ash_external_ext::ExtensionHostError;
+use ash_external_ext::ExtensionLaunchCommand;
 use ash_file_access::Authorization;
 
 use super::source::EditorExtensionDeployment;

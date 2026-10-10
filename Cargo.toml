@@ -70,7 +70,7 @@ members = [
     "crates/code-mode-protocol",
     "crates/code-mode-runtime",
     "crates/v8-runtime",
-    "crates/js-extension-host",
+    "crates/external-js-ext",
     "crates/v8-poc",
     "crates/chatgpt",
     "crates/glm",
@@ -98,9 +98,9 @@ members = [
     "crates/debug-adapter",
     "crates/testing",
     "crates/extension-catalog",
-    "crates/editor-extension-host",
-    "crates/editor-extension-protocol",
-    "crates/extensions",
+    "crates/external-ext",
+    "crates/external-ext-protocol",
+    "sdk/rust",
     "crates/environment",
     "crates/ext/extension-api",
     "crates/ext/connectors",
@@ -476,8 +476,8 @@ ash-exec = { path = "crates/exec" }
 ash-execpolicy = { path = "crates/execpolicy" }
 ash-tool-executor = { path = "crates/tool-executor" }
 extension-catalog = { package = "ash-extension-catalog", path = "crates/extension-catalog" }
-ash-editor-extension-host = { path = "crates/editor-extension-host" }
-extension-protocol = { package = "ash-editor-extension-protocol", path = "crates/editor-extension-protocol" }
+ash-external-ext = { path = "crates/external-ext" }
+external-ext-protocol = { package = "ash-external-ext-protocol", path = "crates/external-ext-protocol" }
 ash-file-identity = { path = "crates/file-identity" }
 ash-file-search = { path = "crates/file-search" }
 ash-file-system = { path = "crates/file-system" }

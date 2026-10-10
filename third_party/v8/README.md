@@ -2,7 +2,7 @@
 
 本目录拥有 Code Mode 使用的 `rusty_v8` 输入锁定规则和可选 Bazel 源码构建图，不拥有 JavaScript 执行语义、工具审批或运行时生命周期。运行时实现由 `ash-code-mode-runtime` crate 负责。
 
-产品通过独立的 `ash-code-mode-host` 和 `ash-js-extension-host` 执行 V8。App Server 只依赖 Host 客户端与共享会话接口，不链接 V8，避免与 WebRTC 所带的 Abseil 静态符号冲突。
+产品通过独立的 `ash-code-mode-host` 和 `ash-external-js-ext` 执行 V8。App Server 只依赖 Host 客户端与共享会话接口，不链接 V8，避免与 WebRTC 所带的 Abseil 静态符号冲突。
 
 ## 构建和打包行为
 
@@ -46,7 +46,7 @@ bazel info execution_root
 工具组件。上述文件集合仅包含两个宿主，查询路径相对于 Bazel 的 execution root；
 incoming platform 转换的输出可能位于带配置后缀的目录，不能拼接旧 wrapper 路径。
 将查询到的文件分别传给 `build/app_server.py`
-的 `--code-mode-host-bin`、`--js-extension-host-bin`。打包器保留这两个独立
+的 `--code-mode-host-bin`、`--external-js-ext-bin`。打包器保留这两个独立
 可执行文件及其规范名称，不复制 V8 archive/binding。Windows Cargo 开发打包
 也显式选择 MSVC 目标，避免继承调用者的 `CARGO_BUILD_TARGET=gnullvm`。
 

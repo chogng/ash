@@ -12,13 +12,13 @@ JS 扩展使用独立的 `spawn_locked_process` / `finish_locked_process_startup
 这条路径不安装账户或服务，不需要管理员权限，不修改产品安装目录；进程结束后移除本次包 ACL
 授权和 AppContainer 配置。执行错误不弹系统错误窗口。它不替代下文的 Shell 账户执行策略。
 
-真实进程验证由 `js-extension-host` 承担，包括文档事件、诊断、补全、内存预算和超时恢复。
+真实进程验证由 `external-js-ext` 承担，包括文档事件、诊断、补全、内存预算和超时恢复。
 单独运行 Windows 隔离测试前先构建探针：
 
 ```powershell
-python -B scripts/cargo.py build -p ash-js-extension-host --example windows_isolation_probe
-just test ash-js-extension-host --bin ash-js-extension-host windows_tests
-just test ash-js-extension-host --test host
+python -B scripts/cargo.py build -p ash-external-js-ext --example windows_isolation_probe
+just test ash-external-js-ext --bin ash-external-js-ext windows_tests
+just test ash-external-js-ext --test host
 ```
 
 2026-10-02 在 Windows 11 23H2 x64 完成了新版服务路径的管理员实机验收：34 项账户单测、9 项服务测试和 10 项完整执行用例全部通过，运行器更新后复测全部执行用例，服务程序更新后再验证实际执行。服务、账户和安装目录已清理，WFP 删除逐项查询确认；具体证据见 [本轮验收记录](../../docs/windows-sandbox-acceptance-runbook.md#2026-10-02-服务及账户管理员验收)。随后安装 WSL2 并重跑完整入口，额外验证受限账户在禁止与允许网络下均不能进入调用者发行版或系统发行版；普通调用者的相同命令先成功执行，见 [WSL 记录](../../docs/windows-sandbox-acceptance-runbook.md#2026-10-02-wsl2-实机验收)。这些结果不证明 PSEC 或其他 Windows 系统通过，也不代表全部 WSL 入口已穷尽。

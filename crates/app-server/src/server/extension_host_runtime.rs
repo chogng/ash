@@ -10,17 +10,17 @@ use std::time::Duration;
 
 use ash_core_plugins::PluginActivationAuthority;
 use ash_core_plugins::PluginsManager;
-use ash_editor_extension_host::CancelReason;
-use ash_editor_extension_host::ExtensionHostError;
-use ash_editor_extension_host::ExtensionHostLauncher;
-use ash_editor_extension_host::ExtensionHostLimits;
-use ash_editor_extension_host::ExtensionHostStatus;
-use ash_editor_extension_host::ExtensionHostSupervisor;
-use ash_editor_extension_host::ExtensionInvocation;
-use ash_editor_extension_host::ExtensionInvocationTarget;
-use ash_editor_extension_host::LanguageProviderOperation;
-use ash_editor_extension_host::RegistrationKind;
-use ash_editor_extension_host::RestartPolicy;
+use ash_external_ext::CancelReason;
+use ash_external_ext::ExtensionHostError;
+use ash_external_ext::ExtensionHostLauncher;
+use ash_external_ext::ExtensionHostLimits;
+use ash_external_ext::ExtensionHostStatus;
+use ash_external_ext::ExtensionHostSupervisor;
+use ash_external_ext::ExtensionInvocation;
+use ash_external_ext::ExtensionInvocationTarget;
+use ash_external_ext::LanguageProviderOperation;
+use ash_external_ext::RegistrationKind;
+use ash_external_ext::RestartPolicy;
 use ash_file_access::Authorization;
 use ash_file_access::Permission;
 use serde_json::Value;
@@ -202,7 +202,7 @@ impl ExtensionHostRuntime {
         environment: Option<BTreeMap<String, Option<String>>>,
     ) -> Result<Self, ExtensionHostError> {
         if let Some(environment) = &environment {
-            extension_protocol::validate_environment(environment)
+            external_ext_protocol::validate_environment(environment)
                 .map_err(|error| ExtensionHostError::InvalidProtocol(error.to_string()))?;
         }
         limits.validate()?;
@@ -252,7 +252,7 @@ impl ExtensionHostRuntime {
             .map_err(|_| ExtensionHostError::SpawnFailed)?;
         let weak = Arc::downgrade(&inner);
         let worker = std::thread::Builder::new()
-            .name("ash-editor-extension-hosts".into())
+            .name("ash-external-exts".into())
             .spawn(move || {
                 runtime_worker(
                     weak,
@@ -409,8 +409,8 @@ impl ExtensionHostRuntime {
         extension_id: &str,
         generation: u64,
         event: source::ActivationEvent,
-        initialization: Option<extension_protocol::ExtensionHostInitialization>,
-        files: Result<Arc<dyn ash_file_system::FileSystem>, ash_editor_extension_host::HostFailure>,
+        initialization: Option<external_ext_protocol::ExtensionHostInitialization>,
+        files: Result<Arc<dyn ash_file_system::FileSystem>, ash_external_ext::HostFailure>,
     ) -> Result<ExtensionHostFleetSnapshot, ExtensionHostRuntimeError> {
         // Serialize duplicate first-use calls per extension. Holding the fleet gate while
         // activate awaits editor IO would deadlock commands that activate another extension.
@@ -482,7 +482,7 @@ impl ExtensionHostRuntime {
                         workspace_read,
                         files,
                     };
-                    let handler: Arc<ash_editor_extension_host::ExtensionBackgroundClientHandler> =
+                    let handler: Arc<ash_external_ext::ExtensionBackgroundClientHandler> =
                         Arc::new(move |context, operation, token, timeout| {
                             binding.request(context, operation, token, timeout)
                         });
@@ -554,7 +554,7 @@ impl ExtensionHostRuntime {
         &self,
         owner: u64,
         request: ExtensionHostInvocationRequest,
-        files: Result<Arc<dyn ash_file_system::FileSystem>, ash_editor_extension_host::HostFailure>,
+        files: Result<Arc<dyn ash_file_system::FileSystem>, ash_external_ext::HostFailure>,
     ) -> Result<String, ExtensionHostRuntimeError> {
         self.inner.start_invocation(owner, request, files)
     }
@@ -691,19 +691,19 @@ struct EditorClientBinding {
     owner: u64,
     extension_id: String,
     workspace_read: source::WorkspaceReadAccess,
-    files: Result<Arc<dyn ash_file_system::FileSystem>, ash_editor_extension_host::HostFailure>,
+    files: Result<Arc<dyn ash_file_system::FileSystem>, ash_external_ext::HostFailure>,
 }
 
 impl EditorClientBinding {
     fn request(
         &self,
-        context: ash_editor_extension_host::HostEventContext,
-        operation: extension_protocol::ExtensionClientOperation,
+        context: ash_external_ext::HostEventContext,
+        operation: external_ext_protocol::ExtensionClientOperation,
         token: &ash_async_utils::CancellationToken,
         timeout: Duration,
-    ) -> Result<extension_protocol::ExtensionClientResult, ash_editor_extension_host::HostFailure>
-    {
-        if let extension_protocol::ExtensionClientOperation::ReadWorkspaceFile { path } = &operation
+    ) -> Result<external_ext_protocol::ExtensionClientResult, ash_external_ext::HostFailure> {
+        if let external_ext_protocol::ExtensionClientOperation::ReadWorkspaceFile { path } =
+            &operation
         {
             return client::read_workspace_file(self.workspace_read, &self.files, path, token);
         }
@@ -724,16 +724,12 @@ impl EditorClientBinding {
                 use crate::client_host::ClientHostError;
                 let code = match error {
                     ClientHostError::Cancelled(_) | ClientHostError::CapabilityUnavailable => {
-                        ash_editor_extension_host::HostErrorCode::Cancelled
+                        ash_external_ext::HostErrorCode::Cancelled
                     }
-                    ClientHostError::TimedOut => {
-                        ash_editor_extension_host::HostErrorCode::DeadlineExceeded
-                    }
-                    ClientHostError::Failed(_) => {
-                        ash_editor_extension_host::HostErrorCode::Internal
-                    }
+                    ClientHostError::TimedOut => ash_external_ext::HostErrorCode::DeadlineExceeded,
+                    ClientHostError::Failed(_) => ash_external_ext::HostErrorCode::Internal,
                 };
-                ash_editor_extension_host::HostFailure {
+                ash_external_ext::HostFailure {
                     code,
                     message: "editor service request failed".into(),
                 }
@@ -746,7 +742,7 @@ impl RuntimeInner {
         self: &Arc<Self>,
         owner: u64,
         mut request: ExtensionHostInvocationRequest,
-        files: Result<Arc<dyn ash_file_system::FileSystem>, ash_editor_extension_host::HostFailure>,
+        files: Result<Arc<dyn ash_file_system::FileSystem>, ash_external_ext::HostFailure>,
     ) -> Result<String, ExtensionHostRuntimeError> {
         let _gate = self
             .reconcile_gate
@@ -844,10 +840,7 @@ impl RuntimeInner {
             .spawn(move || {
                 let result = handle.wait_with_client(|operation, token, remaining| {
                     binding.request(
-                        ash_editor_extension_host::HostEventContext::new(
-                            incarnation,
-                            activation_generation,
-                        ),
+                        ash_external_ext::HostEventContext::new(incarnation, activation_generation),
                         operation,
                         token,
                         remaining,
@@ -879,7 +872,7 @@ impl RuntimeInner {
     fn complete_invocation(
         &self,
         id: &str,
-        result: Result<ash_editor_extension_host::InvokeResult, ExtensionHostError>,
+        result: Result<ash_external_ext::InvokeResult, ExtensionHostError>,
     ) {
         if let Ok(mut sessions) = self.sessions.lock() {
             sessions.complete(id, result);
@@ -1091,7 +1084,7 @@ fn runtime_worker(
 }
 
 fn cancel_handles(
-    handles: Vec<Arc<ash_editor_extension_host::ExtensionInvocationHandle>>,
+    handles: Vec<Arc<ash_external_ext::ExtensionInvocationHandle>>,
     reason: CancelReason,
 ) {
     for handle in handles {

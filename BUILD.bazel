@@ -129,7 +129,7 @@ filegroup(
     name = "v8_host_binaries",
     srcs = [
         "//crates/code-mode-host:ash-code-mode-host",
-        "//crates/js-extension-host:ash-js-extension-host",
+        "//crates/external-js-ext:ash-external-js-ext",
     ],
     visibility = ["//visibility:public"],
 )

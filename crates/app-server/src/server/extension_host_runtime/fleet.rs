@@ -2,9 +2,9 @@ use std::collections::BTreeMap;
 use std::num::NonZeroU64;
 use std::sync::Arc;
 
-use ash_editor_extension_host::CancelReason;
-use ash_editor_extension_host::ExtensionHostError;
-use ash_editor_extension_host::ExtensionHostSupervisor;
+use ash_external_ext::CancelReason;
+use ash_external_ext::ExtensionHostError;
+use ash_external_ext::ExtensionHostSupervisor;
 use ash_file_access::Authorization;
 
 use super::ExtensionHostRuntimeError;
@@ -155,23 +155,20 @@ impl RuntimeInner {
             let mut limits = self.limits.clone();
             if prepared.command.is_vscode() {
                 // prepare_extension has checked exact artifact consent and the live workspace lease.
-                limits.isolation =
-                    ash_editor_extension_host::ProcessIsolationPolicy::AuthorizedNode;
+                limits.isolation = ash_external_ext::ProcessIsolationPolicy::AuthorizedNode;
                 limits.maximum_environment_entries = 256;
                 limits.maximum_environment_bytes = 128 * 1024;
             } else if prepared.command.is_javascript()
                 && matches!(
                     limits.isolation,
-                    ash_editor_extension_host::ProcessIsolationPolicy::RequirePlatformEnforcement(
-                        _
-                    )
+                    ash_external_ext::ProcessIsolationPolicy::RequirePlatformEnforcement(_)
                 )
             {
                 // JS uses the product engine's storage budgets; arbitrary executables
                 // retain the whole-process platform limits and cannot select this policy.
                 limits.isolation =
-                    ash_editor_extension_host::ProcessIsolationPolicy::RequireJavaScriptEnforcement(
-                        ash_editor_extension_host::JavaScriptMemoryLimits::default(),
+                    ash_external_ext::ProcessIsolationPolicy::RequireJavaScriptEnforcement(
+                        ash_external_ext::JavaScriptMemoryLimits::default(),
                     );
             }
             ExtensionHostSupervisor::new(

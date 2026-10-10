@@ -5,10 +5,10 @@ use super::projection::runtime_failure;
 use super::registration_allows_operation;
 use super::sessions::InvocationSessionStore;
 use super::source::stable_extension_id;
-use ash_editor_extension_host::ExtensionHostError;
-use ash_editor_extension_host::InvokeResult;
-use ash_editor_extension_host::LanguageProviderOperation;
-use ash_editor_extension_host::RegistrationKind;
+use ash_external_ext::ExtensionHostError;
+use ash_external_ext::InvokeResult;
+use ash_external_ext::LanguageProviderOperation;
+use ash_external_ext::RegistrationKind;
 use serde_json::json;
 use std::time::Duration;
 use std::time::Instant;
@@ -76,7 +76,7 @@ fn detaching_an_owner_releases_terminal_sessions_immediately() {
 
     assert!(
         sessions
-            .detach_owner(7, ash_editor_extension_host::CancelReason::Shutdown)
+            .detach_owner(7, ash_external_ext::CancelReason::Shutdown)
             .is_empty()
     );
     sessions.reserve("replacement".into(), 8, 1).unwrap();
@@ -117,7 +117,7 @@ fn invocation_operations_are_brokered_by_registration_kind() {
     ));
     assert!(!registration_allows_operation(&remote, "remoteWrite"));
     let opener = RegistrationKind::ExternalUriOpener {
-        schemes: vec![ash_editor_extension_host::ExternalUriScheme::Https],
+        schemes: vec![ash_external_ext::ExternalUriScheme::Https],
         label: "Acme browser".into(),
     };
     assert!(registration_allows_operation(&opener, "canOpenExternalUri"));
@@ -243,15 +243,13 @@ fn host_failures_are_sanitized_before_projection() {
 }
 
 struct CountingLauncher(std::sync::atomic::AtomicUsize);
-impl ash_editor_extension_host::ExtensionHostLauncher for CountingLauncher {
+impl ash_external_ext::ExtensionHostLauncher for CountingLauncher {
     fn spawn(
         &self,
-        _: &ash_editor_extension_host::ExtensionLaunchCommand,
-        _: &ash_editor_extension_host::ExtensionHostLimits,
-    ) -> Result<
-        std::sync::Arc<dyn ash_editor_extension_host::ExtensionHostProcess>,
-        ExtensionHostError,
-    > {
+        _: &ash_external_ext::ExtensionLaunchCommand,
+        _: &ash_external_ext::ExtensionHostLimits,
+    ) -> Result<std::sync::Arc<dyn ash_external_ext::ExtensionHostProcess>, ExtensionHostError>
+    {
         self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Err(ExtensionHostError::SpawnFailed)
     }
@@ -259,8 +257,8 @@ impl ash_editor_extension_host::ExtensionHostLauncher for CountingLauncher {
 
 #[test]
 fn product_ssh_is_available_without_a_directory_and_is_rebound_after_unbind() {
-    use ash_editor_extension_host::ExtensionHostLimits;
-    use ash_editor_extension_host::RestartPolicy;
+    use ash_external_ext::ExtensionHostLimits;
+    use ash_external_ext::RestartPolicy;
     use ash_file_access::Dir;
     use ash_file_access::Grant;
     use ash_file_access::GrantSource;
@@ -334,7 +332,7 @@ fn lazy_activation_checks_generation_and_event_and_health_never_launches_dormant
 }
 
 fn assert_lazy_activation_fence(event: super::source::ActivationEvent) {
-    use ash_editor_extension_host::{
+    use ash_external_ext::{
         ExtensionHostLimits, ExtensionHostSupervisor, ExtensionLaunchCommand, RestartPolicy,
     };
     use ash_file_access::{Dir, Grant, GrantSource, Permission, Permissions};
@@ -367,10 +365,10 @@ fn assert_lazy_activation_fence(event: super::source::ActivationEvent) {
         directory.path(),
     )
     .unwrap();
-    let params = ash_editor_extension_host::ActivateParams {
+    let params = ash_external_ext::ActivateParams {
         initialization: None,
         extension_id: "lazy".into(),
-        package: ash_editor_extension_host::PackageBinding {
+        package: ash_external_ext::PackageBinding {
             package_id: "lazy@1".into(),
             package_digest: format!("sha256:{}", "a".repeat(64)),
             entrypoint: "main.js".into(),
@@ -383,12 +381,12 @@ fn assert_lazy_activation_fence(event: super::source::ActivationEvent) {
             "onDebugInitialConfigurations".into(),
             "onDebugDynamicConfigurations:node".into(),
         ],
-        capabilities: vec![ash_editor_extension_host::ExtensionCapability::Command],
+        capabilities: vec![ash_external_ext::ExtensionCapability::Command],
     };
     let supervisor = ExtensionHostSupervisor::new(
         launcher.clone(),
         command,
-        ash_editor_extension_host::ExtensionActivationSpec::new(
+        ash_external_ext::ExtensionActivationSpec::new(
             params,
             std::num::NonZeroU64::new(7).unwrap(),
             Arc::new(AllowedActivation),
@@ -532,19 +530,19 @@ fn assert_lazy_activation_fence(event: super::source::ActivationEvent) {
 
 struct AllowedActivation;
 struct AllowedLease;
-impl ash_editor_extension_host::ActivationLease for AllowedLease {}
-impl ash_editor_extension_host::ActivationAuthority for AllowedActivation {
+impl ash_external_ext::ActivationLease for AllowedLease {}
+impl ash_external_ext::ActivationAuthority for AllowedActivation {
     fn authorizes(&self) -> bool {
         true
     }
-    fn acquire(&self) -> Option<Box<dyn ash_editor_extension_host::ActivationLease>> {
+    fn acquire(&self) -> Option<Box<dyn ash_external_ext::ActivationLease>> {
         Some(Box::new(AllowedLease))
     }
 }
 
 #[test]
 fn directory_changes_do_not_reuse_extension_activation_generations() {
-    use ash_editor_extension_host::{ExtensionHostLimits, RestartPolicy};
+    use ash_external_ext::{ExtensionHostLimits, RestartPolicy};
     use ash_file_access::{Dir, Grant, GrantSource, Permission, Permissions};
     use std::sync::Arc;
     let first = tempfile::tempdir().unwrap();
@@ -621,9 +619,9 @@ fn extension_activation_accepts_authenticated_editor_transports_without_promotin
     }
 }
 
-fn test_files_unavailable() -> ash_editor_extension_host::HostFailure {
-    ash_editor_extension_host::HostFailure {
-        code: ash_editor_extension_host::HostErrorCode::OperationNotSupported,
+fn test_files_unavailable() -> ash_external_ext::HostFailure {
+    ash_external_ext::HostFailure {
+        code: ash_external_ext::HostErrorCode::OperationNotSupported,
         message: "test has no filesystem".into(),
     }
 }
@@ -639,8 +637,8 @@ fn remote_extension_start_is_connection_owned_and_close_retires_only_its_fleet()
             None,
             None,
             Arc::new(CountingLauncher(std::sync::atomic::AtomicUsize::new(0))),
-            ash_editor_extension_host::ExtensionHostLimits::default(),
-            ash_editor_extension_host::RestartPolicy::default(),
+            ash_external_ext::ExtensionHostLimits::default(),
+            ash_external_ext::RestartPolicy::default(),
             Arc::clone(&server.updates),
             Arc::clone(&server.client_host),
             Default::default(),

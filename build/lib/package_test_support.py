@@ -30,9 +30,9 @@ def create_package_sources(root: Path) -> Path:
             ignore=shutil.ignore_patterns("node_modules", "__pycache__"),
         )
     for name in (
-        "crates/js-extension-host/src/node.mjs",
-        "crates/js-extension-host/src/vscode.js",
-        "extension-sdk/index.js",
+        "crates/external-js-ext/src/node.mjs",
+        "crates/external-js-ext/src/vscode.js",
+        "sdk/typescript/index.js",
     ):
         destination = root / name
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -103,7 +103,7 @@ def create_runtime_package(root: Path, target: str) -> Path:
         executable("ash-exec-server"),
         executable("ash-app-server-daemon"),
         executable("ash-code-mode-host"),
-        executable("ash-js-extension-host"),
+        executable("ash-external-js-ext"),
         ExecutableResolution(rg, "test", "local-override", _digest(rg)),
         ExecutableResolution(tgrep, "test", "local-override", _digest(tgrep)),
         NodeResolution(

@@ -15,7 +15,7 @@ name = "ash_app_server"
 path = "src/lib.rs"
 
 [dependencies]
-extension-protocol.workspace = true
+external-ext-protocol.workspace = true
 ash-utils-image = { workspace = true }
 assets = { workspace = true }
 testing = { workspace = true }
@@ -106,7 +106,7 @@ ash-client = { workspace = true }
 ash-diff = { workspace = true }
 ash-debug-adapter = { workspace = true }
 extension-catalog = { workspace = true }
-ash-editor-extension-host = { workspace = true }
+ash-external-ext = { workspace = true }
 ash-extension-api = { workspace = true }
 ash-mcp-extension = { workspace = true }
 ash-file-system = { workspace = true }

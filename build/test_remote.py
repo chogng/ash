@@ -85,7 +85,7 @@ class RemotePackageTests(unittest.TestCase):
                     "ash-remote-server",
                     "ash-exec-server",
                     "ash-code-mode-host",
-                    "ash-js-extension-host",
+                    "ash-external-js-ext",
                     "ash-voice-host",
                     "ash-collaboration-server",
                 )

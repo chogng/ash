@@ -2,7 +2,7 @@ use super::MAX_FILE_BYTES;
 use super::WorkspaceReadAccess;
 use super::read_workspace_file;
 use ash_async_utils::CancellationSource;
-use ash_editor_extension_host::HostErrorCode;
+use ash_external_ext::HostErrorCode;
 use ash_file_access::Dir;
 use ash_file_access::Grant;
 use ash_file_access::GrantSource;
@@ -10,7 +10,7 @@ use ash_file_access::Permission;
 use ash_file_access::Permissions;
 use ash_file_system::FileSystem;
 use ash_file_system::LocalFileSystem;
-use extension_protocol::ExtensionClientResult;
+use external_ext_protocol::ExtensionClientResult;
 use std::sync::Arc;
 
 #[test]

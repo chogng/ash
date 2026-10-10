@@ -1,6 +1,0 @@
-exports_files(["index.js"], visibility = ["//crates/js-extension-host:__pkg__", "//crates/app-server:__pkg__"])
-
-exports_files(
-    ["example/.ash-plugin/plugin.json"],
-    visibility = ["//crates/plugin:__pkg__", "//crates/app-server:__pkg__"],
-)

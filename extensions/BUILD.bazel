@@ -1,6 +1,6 @@
 exports_files(
     ["remote-ssh/src/extension.js", "remote-ssh/package.json"],
-    visibility = ["//crates/app-server:__pkg__", "//crates/js-extension-host:__pkg__"],
+    visibility = ["//crates/app-server:__pkg__", "//crates/external-js-ext:__pkg__"],
 )
 
 filegroup(

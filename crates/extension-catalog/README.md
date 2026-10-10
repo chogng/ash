@@ -9,7 +9,7 @@
 目录，把有效 package 冻结成 generation-bound 内存快照，并返回 manifest descriptor、诊断和有界
 资源 bytes。它不拥有 JSON-RPC、connection resource、Workbench、TextMate、安装 authority 或扩展代码执行。
 
-扩展作者使用 [`ash-extensions`](../extensions/README.md) SDK；本 crate 是产品侧的包目录实现，不是作者接口。
+扩展作者使用 [`ash-external-ext-sdk`](../../sdk/rust/README.md) SDK；本 crate 是产品侧的包目录实现，不是作者接口。
 
 ## 1. 边界与公共契约
 
@@ -141,7 +141,7 @@ precedence、不可变单代 snapshot、完整 package digest、typed diagnostic
 resource read 已实现。当前不持久化 catalog，不保留旧 generation，也不自行提供远端 registry、下载、
 enable/disable、signature/revocation、permission grant 或任意代码执行；这些 lifecycle decisions 由
 provider 上游的 `ash-core-plugins` authority 完成。Executable Editor Extension 由独立的
-[`ash-editor-extension-host`](../editor-extension-host/README.md) 监管；静态 catalog 不会隐式进入该
+[`ash-external-ext`](../external-ext/README.md) 监管；静态 catalog 不会隐式进入该
 执行边界。
 
 未来若 App 需要同一静态 package 语义，应直接依赖本 crate；这只是明确的 extension point，当前

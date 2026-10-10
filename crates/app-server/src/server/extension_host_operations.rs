@@ -22,16 +22,16 @@ use ash_app_server_protocol::protocol::extension_host::ExtensionHostReconcilePar
 use ash_app_server_protocol::protocol::extension_host::ExtensionHostRegistrationDescriptorDto;
 use ash_app_server_protocol::protocol::extension_host::ExtensionHostRegistrationKindDto;
 use ash_app_server_protocol::protocol::extension_host::ExtensionHostSnapshotDto;
-use ash_editor_extension_host::CancelReason;
-use ash_editor_extension_host::ExtensionHostError;
-use ash_editor_extension_host::ExternalUriScheme;
-use ash_editor_extension_host::HostOutputChannelKind;
-use ash_editor_extension_host::HostOutputOperation;
-use ash_editor_extension_host::HostOutputSeverity;
-use ash_editor_extension_host::LanguageProviderOperation;
-use ash_editor_extension_host::RegistrationDescriptor;
-use ash_editor_extension_host::RegistrationKind;
-use ash_editor_extension_host::SequencedExtensionHostOutputEvent;
+use ash_external_ext::CancelReason;
+use ash_external_ext::ExtensionHostError;
+use ash_external_ext::ExternalUriScheme;
+use ash_external_ext::HostOutputChannelKind;
+use ash_external_ext::HostOutputOperation;
+use ash_external_ext::HostOutputSeverity;
+use ash_external_ext::LanguageProviderOperation;
+use ash_external_ext::RegistrationDescriptor;
+use ash_external_ext::RegistrationKind;
+use ash_external_ext::SequencedExtensionHostOutputEvent;
 use serde_json::Value;
 
 use super::AppServer;
@@ -63,7 +63,7 @@ impl AppServer {
         }
         let mut params: ash_app_server_protocol::protocol::extension_host::ExtensionHostStartParams =
             decode(params)?;
-        extension_protocol::validate_environment(&params.environment)
+        external_ext_protocol::validate_environment(&params.environment)
             .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
         // Explicit window overrides share the developer-process authentication boundary.
         // A renderer cannot reintroduce host control credentials excluded by the launcher.
@@ -184,12 +184,11 @@ impl AppServer {
                     params.activation_generation,
                     event,
                     params.initialization,
-                    self.file_system_service_for(None).map_err(|_| {
-                        ash_editor_extension_host::HostFailure {
-                            code: ash_editor_extension_host::HostErrorCode::OperationNotSupported,
+                    self.file_system_service_for(None)
+                        .map_err(|_| ash_external_ext::HostFailure {
+                            code: ash_external_ext::HostErrorCode::OperationNotSupported,
                             message: "workspace filesystem is unavailable".into(),
-                        }
-                    }),
+                        }),
                 )
                 .map_err(runtime_rpc_error)?,
         ))
@@ -235,12 +234,11 @@ impl AppServer {
                 },
                 // Capture the initiating workspace service once. A later workspace selection
                 // must never change the authority of an in-flight extension command.
-                self.file_system_service_for(None).map_err(|_| {
-                    ash_editor_extension_host::HostFailure {
-                        code: ash_editor_extension_host::HostErrorCode::OperationNotSupported,
+                self.file_system_service_for(None)
+                    .map_err(|_| ash_external_ext::HostFailure {
+                        code: ash_external_ext::HostErrorCode::OperationNotSupported,
                         message: "workspace filesystem is unavailable".into(),
-                    }
-                }),
+                    }),
             )
             .map_err(runtime_rpc_error)?;
         result(&ExtensionHostInvokeStartResult { invocation_id })

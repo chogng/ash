@@ -2,11 +2,11 @@ use std::path::Path;
 use std::sync::Arc;
 
 use ash_async_utils::CancellationToken;
-use ash_editor_extension_host::HostErrorCode;
-use ash_editor_extension_host::HostFailure;
+use ash_external_ext::HostErrorCode;
+use ash_external_ext::HostFailure;
 use ash_file_system::FileSystem;
 use ash_file_system::FileSystemError;
-use extension_protocol::ExtensionClientResult;
+use external_ext_protocol::ExtensionClientResult;
 
 use super::source::WorkspaceReadAccess;
 
@@ -85,7 +85,7 @@ pub(super) fn read_workspace_file(
     // Escaped control characters can exceed the wire quota even within the disk byte limit.
     let encoded = serde_json::to_vec(&result)
         .map_err(|_| failure(HostErrorCode::Internal, "workspace result encoding failed"))?;
-    if encoded.len() > extension_protocol::ProtocolLimits::default().maximum_payload_bytes {
+    if encoded.len() > external_ext_protocol::ProtocolLimits::default().maximum_payload_bytes {
         return Err(failure(
             HostErrorCode::QuotaExceeded,
             "file exceeds the SDK response limit",

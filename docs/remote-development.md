@@ -70,7 +70,7 @@ manifest capability 保留原有名称；已保存连接使用 `remoteConnection
 解析器重复前缀会使整批注册替换失败，不能按加载顺序覆盖。取消、断开、停用或重启会退役旧
 实例及在途解析；确认后已交给 host 的新窗口有独立生命周期。`ssh` 前缀保留给产品内置解析器。
 已保存连接选择器不接受凭据、SSH 参数、任意命令或 socket。标准 resolver 可返回连接端点或
-受管消息通道，token 只用于其授权连接。用法见 [SDK](../extension-sdk/README.md)。
+受管消息通道，token 只用于其授权连接。用法见 [SDK](../sdk/typescript/README.md)。
 
 内置 `extensions/remote-ssh` 通过同一 SDK 在 Rust V8 宿主注册 `ssh`，模块与 SDK 随产品
 编译分发，核心不直接解析这个前缀。App Server 的产品授权仅选择固定编译模块，宿主核对

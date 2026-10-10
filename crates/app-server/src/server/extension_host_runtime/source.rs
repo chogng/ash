@@ -8,13 +8,13 @@ use ash_core_plugins::PluginActivationAuthority;
 use ash_core_plugins::PluginInvocationFence;
 use ash_core_plugins::PluginInvocationLease;
 use ash_core_plugins::PluginsManager;
-use ash_editor_extension_host::ActivateParams;
-use ash_editor_extension_host::ActivationAuthority;
-use ash_editor_extension_host::ActivationLease;
-use ash_editor_extension_host::ExtensionCapability;
-use ash_editor_extension_host::ExtensionHostError;
-use ash_editor_extension_host::ExtensionLaunchCommand;
-use ash_editor_extension_host::PackageBinding;
+use ash_external_ext::ActivateParams;
+use ash_external_ext::ActivationAuthority;
+use ash_external_ext::ActivationLease;
+use ash_external_ext::ExtensionCapability;
+use ash_external_ext::ExtensionHostError;
+use ash_external_ext::ExtensionLaunchCommand;
+use ash_external_ext::PackageBinding;
 use ash_plugin::EditorExtensionActivationEvent;
 use ash_plugin::EditorExtensionApi;
 use ash_plugin::EditorExtensionCapability;
@@ -88,7 +88,7 @@ fn product_ssh_deployment(
 ) -> Result<EditorExtensionDeployment, ExtensionHostRuntimeError> {
     let source = include_str!("../../../../../extensions/remote-ssh/src/extension.js");
     let manifest = include_str!("../../../../../extensions/remote-ssh/package.json");
-    let sdk = include_str!("../../../../../extension-sdk/index.js");
+    let sdk = include_str!("../../../../../sdk/typescript/index.js");
     let digest = format!(
         "sha256:{:x}",
         Sha256::digest(format!("{manifest}\0{source}\0{sdk}"))
@@ -101,7 +101,7 @@ fn product_ssh_deployment(
         package_digest: digest.clone(),
         command: ExtensionLaunchCommand::product_javascript(
             directory.join(format!(
-                "ash-js-extension-host{}",
+                "ash-external-js-ext{}",
                 std::env::consts::EXE_SUFFIX
             )),
             "remote-ssh",
@@ -248,7 +248,7 @@ pub(super) fn plugin_deployments(
                         .parent()
                         .ok_or(ExtensionHostRuntimeError::Internal)?;
                     let executable = directory.join(format!(
-                        "ash-js-extension-host{}",
+                        "ash-external-js-ext{}",
                         std::env::consts::EXE_SUFFIX
                     ));
                     let root = package

@@ -49,7 +49,7 @@ any other producer. Adding Language Server fields, App Server DTOs, or producer-
 specific filtering here would signal an ownership regression.
 
 Executable extensions use the process-fenced stream documented in
-[`../../../../../../crates/editor-extension-host/README.md`](../../../../../crates/editor-extension-host/README.md).
+[`../../../../../../crates/external-ext/README.md`](../../../../../crates/external-ext/README.md).
 `AppServerExtensionHostService` alone translates those transport events into
 caller-owned channels; the generic Output service does not know Host RPC DTOs.
 

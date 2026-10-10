@@ -13,12 +13,12 @@ use ash_core_plugins::PackageRef;
 use ash_core_plugins::PluginPackageService;
 use ash_core_plugins::PluginsManager;
 use ash_core_plugins::ReleaseCapabilityRequest;
-use ash_editor_extension_host::ActivateParams;
-use ash_editor_extension_host::ActivationAuthority;
-use ash_editor_extension_host::ActivationLease;
-use ash_editor_extension_host::ExtensionCapability;
-use ash_editor_extension_host::ExtensionLaunchCommand;
-use ash_editor_extension_host::PackageBinding;
+use ash_external_ext::ActivateParams;
+use ash_external_ext::ActivationAuthority;
+use ash_external_ext::ActivationLease;
+use ash_external_ext::ExtensionCapability;
+use ash_external_ext::ExtensionLaunchCommand;
+use ash_external_ext::PackageBinding;
 use serde::Deserialize;
 
 use crate::server::extension_host_runtime::source::ActivationPlan;
@@ -160,7 +160,7 @@ pub(crate) fn deployments(
             .parent()
             .ok_or("missing product executable directory")?
             .join(format!(
-                "ash-js-extension-host{}",
+                "ash-external-js-ext{}",
                 std::env::consts::EXE_SUFFIX
             ));
         let root = source

@@ -3,10 +3,10 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use ash_editor_extension_host::CancelReason;
-use ash_editor_extension_host::ExtensionHostError;
-use ash_editor_extension_host::ExtensionInvocationHandle;
-use ash_editor_extension_host::InvokeResult;
+use ash_external_ext::CancelReason;
+use ash_external_ext::ExtensionHostError;
+use ash_external_ext::ExtensionInvocationHandle;
+use ash_external_ext::InvokeResult;
 use serde_json::Value;
 
 use super::ExtensionHostInvocationCancelDisposition;

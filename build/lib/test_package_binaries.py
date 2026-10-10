@@ -75,7 +75,7 @@ class CargoBuildTests(unittest.TestCase):
     @patch.dict("os.environ", {"CARGO_BUILD_TARGET": "x86_64-pc-windows-gnullvm"})
     def test_windows_development_hosts_select_msvc_and_matching_cache(self) -> None:
         spec = TARGETS["x86_64-pc-windows-msvc"]
-        names = ("ash-code-mode-host", "ash-js-extension-host")
+        names = ("ash-code-mode-host", "ash-external-js-ext")
         executables = {name: self.executable(name + ".exe") for name in names}
         messages = "\n".join(
             json.dumps(
@@ -152,7 +152,7 @@ class CargoBuildTests(unittest.TestCase):
                     build_binaries(
                         self.root,
                         self.spec,
-                        {"ash-js-extension-host": prebuilt, name: None},
+                        {"ash-external-js-ext": prebuilt, name: None},
                         cargo="cargo",
                         cargo_profile="release",
                     )

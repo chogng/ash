@@ -1,9 +1,9 @@
-use ash_editor_extension_host::ExtensionHostError;
-use ash_editor_extension_host::ExtensionHostSnapshot;
-use ash_editor_extension_host::ExtensionHostStatus;
-use ash_editor_extension_host::HostErrorCode;
-use ash_editor_extension_host::RegistrationDescriptor;
-use ash_editor_extension_host::SequencedExtensionHostOutputEvent;
+use ash_external_ext::ExtensionHostError;
+use ash_external_ext::ExtensionHostSnapshot;
+use ash_external_ext::ExtensionHostStatus;
+use ash_external_ext::HostErrorCode;
+use ash_external_ext::RegistrationDescriptor;
+use ash_external_ext::SequencedExtensionHostOutputEvent;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(in crate::server) struct ExtensionHostFleetSnapshot {

@@ -468,7 +468,7 @@ fn javascript_entry_uses_sdk_without_requesting_execution_of_its_source_file() {
 #[test]
 fn sdk_example_manifest_declares_the_supported_javascript_contract() {
     let manifest = PluginManifest::from_json(include_bytes!(
-        "../../../../extension-sdk/example/.ash-plugin/plugin.json"
+        "../../../../sdk/typescript/example/.ash-plugin/plugin.json"
     ))
     .unwrap();
     assert_eq!(

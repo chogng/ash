@@ -5,21 +5,21 @@ use super::registration_dto;
 use ash_app_server_protocol::protocol::extension_host::ExtensionHostCancellationReasonDto;
 use ash_app_server_protocol::protocol::extension_host::ExtensionHostFailureCodeDto;
 use ash_app_server_protocol::protocol::extension_host::ExtensionHostOutputOperationDto;
-use ash_editor_extension_host::CancelReason;
-use ash_editor_extension_host::ExtensionHostOutputEvent;
-use ash_editor_extension_host::HostEventContext;
-use ash_editor_extension_host::HostOutputOperation;
-use ash_editor_extension_host::HostOutputSeverity;
-use ash_editor_extension_host::RegistrationDescriptor;
-use ash_editor_extension_host::RegistrationKind;
-use ash_editor_extension_host::SequencedExtensionHostOutputEvent;
+use ash_external_ext::CancelReason;
+use ash_external_ext::ExtensionHostOutputEvent;
+use ash_external_ext::HostEventContext;
+use ash_external_ext::HostOutputOperation;
+use ash_external_ext::HostOutputSeverity;
+use ash_external_ext::RegistrationDescriptor;
+use ash_external_ext::RegistrationKind;
+use ash_external_ext::SequencedExtensionHostOutputEvent;
 
 #[test]
 fn channel_and_link_registrations_preserve_frontend_subscription_fields() {
     for (kind, expected) in [
         (
             RegistrationKind::ExternalUriOpener {
-                schemes: vec![ash_editor_extension_host::ExternalUriScheme::Https],
+                schemes: vec![ash_external_ext::ExternalUriScheme::Https],
                 label: "Acme browser".into(),
             },
             serde_json::json!({"registrationId":"provider","kind":"externalUriOpener","schemes":["https"],"label":"Acme browser"}),

@@ -1362,9 +1362,9 @@ impl AppServer {
     /// App Server advertises no executable Extension Host capability and never starts package code.
     pub fn with_extension_host_runtime(
         mut self,
-        launcher: Arc<dyn ash_editor_extension_host::ExtensionHostLauncher>,
-        limits: ash_editor_extension_host::ExtensionHostLimits,
-        restart_policy: ash_editor_extension_host::RestartPolicy,
+        launcher: Arc<dyn ash_external_ext::ExtensionHostLauncher>,
+        limits: ash_external_ext::ExtensionHostLimits,
+        restart_policy: ash_external_ext::RestartPolicy,
     ) -> Result<Self, String> {
         let marketplace_source =
             self.plugins_manager.is_some() && self.marketplace_editor_extension_admission.is_some();

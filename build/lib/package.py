@@ -340,9 +340,9 @@ def assemble_package(staging: Path, inputs: dict) -> None:
     extension_host = resources / "extension-host"
     extension_host.mkdir()
     for source, destination in (
-        ("crates/js-extension-host/src/node.mjs", "node.mjs"),
-        ("crates/js-extension-host/src/vscode.js", "vscode.mjs"),
-        ("extension-sdk/index.js", "sdk.mjs"),
+        ("crates/external-js-ext/src/node.mjs", "node.mjs"),
+        ("crates/external-js-ext/src/vscode.js", "vscode.mjs"),
+        ("sdk/typescript/index.js", "sdk.mjs"),
     ):
         source_path = source_root / source
         if source_path.is_symlink() or not source_path.is_file():

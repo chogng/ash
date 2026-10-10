@@ -83,10 +83,10 @@ fn signed_product_sidecar_requires_independent_admission_and_manager_lease() {
     assert_eq!(
         deployment.params.capabilities,
         [
-            ash_editor_extension_host::ExtensionCapability::Command,
-            ash_editor_extension_host::ExtensionCapability::DataChannel,
-            ash_editor_extension_host::ExtensionCapability::LinkPresentationProvider,
-            ash_editor_extension_host::ExtensionCapability::ExternalUriOpener,
+            ash_external_ext::ExtensionCapability::Command,
+            ash_external_ext::ExtensionCapability::DataChannel,
+            ash_external_ext::ExtensionCapability::LinkPresentationProvider,
+            ash_external_ext::ExtensionCapability::ExternalUriOpener,
         ]
     );
     assert!(deployment.authority.authorizes());

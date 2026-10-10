@@ -21,6 +21,6 @@ jobs:
       - name: Install pinned Rust toolchain
         run: rustup show active-toolchain
       - name: Test Marketplace capability crates
-        run: cargo test --locked -p ash-plugins -p ash-marketplace-client -p ash-marketplace-manager -p ash-extension-catalog -p ash-extensions -p ash-app-server-protocol
+        run: cargo test --locked -p ash-plugins -p ash-marketplace-client -p ash-marketplace-manager -p ash-extension-catalog -p ash-external-ext-sdk -p ash-app-server-protocol
       - name: Lint Marketplace capability crates
-        run: cargo clippy --locked -p ash-plugins -p ash-marketplace-client -p ash-marketplace-manager -p ash-extension-catalog -p ash-extensions -p ash-app-server-protocol --all-targets --no-deps -- -D warnings
+        run: cargo clippy --locked -p ash-plugins -p ash-marketplace-client -p ash-marketplace-manager -p ash-extension-catalog -p ash-external-ext-sdk -p ash-app-server-protocol --all-targets --no-deps -- -D warnings

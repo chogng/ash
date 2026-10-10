@@ -70,7 +70,7 @@ JSON artifact messages; a successful build without a requested artifact is rejec
 Windows builds explicitly select the package's MSVC target, including development
 host builds, so an inherited GNU Cargo default cannot select a V8 source build.
 The two standalone V8 hosts may also be supplied from Bazel's
-`//:v8_host_binaries` via `--code-mode-host-bin` and `--js-extension-host-bin`.
+`//:v8_host_binaries` via `--code-mode-host-bin` and `--external-js-ext-bin`.
 Those targets select MSVC for the complete host closure while the surrounding
 Bazel product can keep its GNU ABI; the package communicates with them over IPC.
 The upstream Rust rule produces the canonical `.exe` names directly. Resolve
