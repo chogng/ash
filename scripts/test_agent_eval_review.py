@@ -273,7 +273,13 @@ class AgentEvalReviewTests(unittest.TestCase):
                 0,
             )
             report = (output / "comparison.md").read_text()
-            self.assertIn(str(new.parent / "runs/case-1/trace.json"), report)
+            for label, artifact in (
+                ("result", "result.json"),
+                ("trace", "trace.json"),
+                ("changes", "changes.patch"),
+            ):
+                path = new.parent / "runs/case-1" / artifact
+                self.assertIn(f"[{label}]({path.as_posix()})", report)
             result = review.read_json(output / "comparison.json")
             self.assertEqual(result["gate"]["recoveredTrials"], 1)
             self.assertNotIn("current", result)

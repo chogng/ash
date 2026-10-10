@@ -701,9 +701,9 @@ def main(arguments: list[str] | None = None) -> int:
                 "runs": [
                     {
                         **run,
-                        "artifactDirectory": str(
-                            run_directory(args.current.resolve(), run)
-                        ),
+                        "artifactDirectory": run_directory(
+                            args.current.resolve(), run
+                        ).as_posix(),
                     }
                     for run in result["current"]["runs"]
                 ],
